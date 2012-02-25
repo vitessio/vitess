@@ -1,0 +1,11 @@
+Metadata-Version: 1.0
+Name: bson
+Version: 0.3.2
+Summary: BSON codec for Python
+Home-page: http://github.com/martinkou/bson
+Author: Kou Man Tong
+Author-email: martinkou@tixxme.com
+License: BSD
+Description: Independent BSON codec for Python that doesn't depend on MongoDB.
+Keywords: BSON codec
+Platform: Any
