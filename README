@@ -1,0 +1,6 @@
+This the source code repository for the vitess project.
+For documentation on how install and use vitess,
+visit http://code.google.com/p/vitess/.
+
+Unless otherwise noted, the vitess source files are distributed
+under the BSD-style license found in the LICENSE file.
