@@ -1,9 +1,6 @@
 {
+  "dbname": "vt_sougou",
   "charset": "utf8",
-  "dbname": "<test db name>",
-  "host": "localhost",
-  "pass": "<password>",
-  "port": 3306,
-  "uname": "<user name>",
-  "unix_socket": ""
+  "unix_socket": "/vt/vt_19b6ab37/mysql.sock",
+  "uname": "vt_dba"
 }

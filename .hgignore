@@ -1,0 +1,13 @@
+/(build|dist)/
+^(build|dist)/
+\.py[co]$
+\.[a568]$
+\.out$
+\.output$
+\.o$
+_obj/
+/_cgo_
+\.cgo\d\.(go|c)$
+\.sgo\.go$
+go/vt/sqlparser/sql.go$
+\.swp$
