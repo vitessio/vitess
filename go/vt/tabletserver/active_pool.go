@@ -33,16 +33,16 @@ package tabletserver
 
 import (
 	"fmt"
-	"vitess/relog"
-	"vitess/timer"
 	"sync"
 	"time"
+	"vitess/relog"
+	"vitess/timer"
 )
 
 type ActivePool struct {
 	sync.Mutex
-	Connections map[int64]*ActiveConnection
-	Timeout     time.Duration
+	connections map[int64]*ActiveConnection
+	timeout     time.Duration
 	pool        *ConnectionPool
 	ticks       *timer.Timer
 }
@@ -54,14 +54,14 @@ type ActiveConnection struct {
 
 func NewActivePool(queryTimeout, idleTimeout time.Duration) *ActivePool {
 	return &ActivePool{
-		Timeout: queryTimeout,
+		timeout: queryTimeout,
 		pool:    NewConnectionPool(1, idleTimeout),
 		ticks:   timer.NewTimer(idleTimeout / 10),
 	}
 }
 
 func (self *ActivePool) Open(ConnFactory CreateConnectionFunc) {
-	self.Connections = make(map[int64]*ActiveConnection)
+	self.connections = make(map[int64]*ActiveConnection)
 	self.pool.Open(ConnFactory)
 	go self.QueryKiller()
 }
@@ -71,7 +71,7 @@ func (self *ActivePool) Close() {
 	self.pool.Close()
 	self.Lock()
 	defer self.Unlock()
-	self.Connections = nil
+	self.connections = nil
 }
 
 func (self *ActivePool) QueryKiller() {
@@ -101,9 +101,9 @@ func (self *ActivePool) ScanForTimeout() (id int64) {
 	self.Lock()
 	defer self.Unlock()
 	t := time.Now()
-	for _, conn := range self.Connections {
-		if conn.startTime.Add(self.Timeout).Sub(t) < 0 {
-			delete(self.Connections, conn.id)
+	for _, conn := range self.connections {
+		if conn.startTime.Add(self.timeout).Sub(t) < 0 {
+			delete(self.connections, conn.id)
 			return conn.id
 		}
 	}
@@ -113,20 +113,33 @@ func (self *ActivePool) ScanForTimeout() (id int64) {
 func (self *ActivePool) Put(id int64) {
 	self.Lock()
 	defer self.Unlock()
-	self.Connections[id] = &ActiveConnection{id, time.Now()}
+	self.connections[id] = &ActiveConnection{id, time.Now()}
 }
 
 func (self *ActivePool) Remove(id int64) {
 	self.Lock()
 	defer self.Unlock()
-	delete(self.Connections, id)
+	delete(self.connections, id)
 }
 
 func (self *ActivePool) SetTimeout(timeout time.Duration) {
-	self.Timeout = timeout
+	self.Lock()
+	defer self.Unlock()
+	self.timeout = timeout
 	self.ticks.SetInterval(timeout / 10)
 }
 
 func (self *ActivePool) SetIdleTimeout(idleTimeout time.Duration) {
 	self.pool.SetIdleTimeout(idleTimeout)
+}
+
+func (self *ActivePool) StatsJSON() string {
+	t := self.Stats()
+	return fmt.Sprintf("{\"Timeout\": %v}", float64(t)/1e9)
+}
+
+func (self *ActivePool) Stats() (timeout time.Duration) {
+	self.Lock()
+	defer self.Unlock()
+	return self.timeout
 }

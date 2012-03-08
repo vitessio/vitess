@@ -32,11 +32,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"fmt"
+	"sync"
+	"time"
 	"vitess/relog"
 	"vitess/stats"
 	"vitess/timer"
-	"sync"
-	"time"
 )
 
 /* Function naming convention:
@@ -46,51 +47,53 @@ SafeFunctions() return os.Error instead of throwing exceptions
 */
 
 var (
-	BEGIN =    []byte("begin")
-	COMMIT =   []byte("commit")
+	BEGIN    = []byte("begin")
+	COMMIT   = []byte("commit")
 	ROLLBACK = []byte("rollback")
 )
 
 type ActiveTxPool struct {
-	sync.Mutex
-	Capacity    int
-	Connections map[int64]*TxConnection
-	Count       int
-	LastId      int64
-	Timeout     time.Duration
+	mu          sync.Mutex
+	connections map[int64]*TxConnection
+	capacity    int
+	size        int
+	lastId      int64
+	timeout     time.Duration
 	ticks       *timer.Timer
 	txStats     *stats.Timings
 }
 
 func NewActiveTxPool(capacity int, timeout time.Duration) *ActiveTxPool {
 	return &ActiveTxPool{
-		Capacity:    capacity,
-		Connections: make(map[int64]*TxConnection, capacity),
-		LastId:      time.Now().UnixNano(),
-		Timeout:     timeout,
+		capacity:    capacity,
+		connections: make(map[int64]*TxConnection, capacity),
+		lastId:      time.Now().UnixNano(),
+		timeout:     timeout,
 		ticks:       timer.NewTimer(timeout / 10),
 		txStats:     stats.NewTimings("Transactions"),
 	}
 }
 
 func (self *ActiveTxPool) Open() {
-	relog.Info("Starting transaction id: %d", self.LastId)
+	relog.Info("Starting transaction id: %d", self.lastId)
 	go self.TransactionKiller()
 }
 
 func (self *ActiveTxPool) Close() {
 	self.ticks.Close()
-	self.Lock()
-	defer self.Unlock()
-	for tid, conn := range self.Connections {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	// This should be empty. Just a failsafe.
+	for tid, conn := range self.connections {
 		conn.Smart().Close()
 		self.discard(tid)
 	}
 }
 
 func (self *ActiveTxPool) WaitForEmpty() {
-	for self.Count != 0 {
-		// Intentionally inefficient, but code is simple
+	for self.Size() != 0 {
+		// Inefficient but simple
 		<-time.After(1e9)
 	}
 }
@@ -107,14 +110,15 @@ func (self *ActiveTxPool) TransactionKiller() {
 }
 
 func (self *ActiveTxPool) ScanForTimeout() (conn *TxConnection) {
-	self.Lock()
-	defer self.Unlock()
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	t := time.Now()
-	for _, conn = range self.Connections {
+	for _, conn = range self.connections {
 		if conn.InUse {
 			continue
 		}
-		if conn.StartTime.Add(self.Timeout).Sub(t) < 0 {
+		if conn.StartTime.Add(self.timeout).Sub(t) < 0 {
 			conn.InUse = true
 			return conn
 		}
@@ -124,19 +128,16 @@ func (self *ActiveTxPool) ScanForTimeout() (conn *TxConnection) {
 
 func (self *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
 	defer handleError(&err)
-	if self.Count >= self.Capacity {
-		panic(NewTabletError(FAIL, "Unexpected: Transaction pool connection limit exceeded"))
-	}
 	if _, err := conn.Smart().ExecuteFetch(BEGIN, 10000); err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
 
-	self.Lock()
-	defer self.Unlock()
-	self.LastId++
-	self.Connections[self.LastId] = NewTxConnection(conn, self.LastId, self)
-	self.Count++
-	return self.LastId, nil
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.lastId++
+	self.connections[self.lastId] = NewTxConnection(conn, self.lastId, self)
+	self.size++
+	return self.lastId, nil
 }
 
 // An unpleasant dependency to SchemaInfo. Avoiding it makes the code worse
@@ -170,9 +171,10 @@ func (self *ActiveTxPool) Rollback(transactionId int64) {
 }
 
 func (self *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
-	self.Lock()
-	defer self.Unlock()
-	txConn, ok := self.Connections[transactionId]
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	txConn, ok := self.connections[transactionId]
 	if !ok {
 		panic(NewTabletError(FAIL, "Transaction %d not found", transactionId))
 	}
@@ -184,35 +186,36 @@ func (self *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
 }
 
 func (self *ActiveTxPool) Put(transactionId int64) {
-	self.Lock()
-	defer self.Unlock()
-	conn, ok := self.Connections[transactionId]
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	txConn, ok := self.connections[transactionId]
 	if !ok {
 		panic(NewTabletError(FAIL, "Transaction %d not found", transactionId))
 	}
-	if conn.Smart().IsClosed {
+	if txConn.Smart().IsClosed {
 		relog.Info("abandoning transaction %d", transactionId)
 		killStats.Add("Transactions", 1)
 		self.discard(transactionId)
 	} else {
-		conn.InUse = false
+		txConn.InUse = false
 	}
 }
 
 func (self *ActiveTxPool) Discard(transactionId int64) {
-	self.Lock()
-	defer self.Unlock()
+	self.mu.Lock()
+	defer self.mu.Unlock()
 	self.discard(transactionId)
 }
 
 func (self *ActiveTxPool) discard(transactionId int64) {
-	conn, ok := self.Connections[transactionId]
+	conn, ok := self.connections[transactionId]
 	if !ok {
 		return
 	}
 	conn.InUse = false
-	delete(self.Connections, transactionId)
-	self.Count--
+	delete(self.connections, transactionId)
+	self.size--
 	conn.PoolConnection.Recycle()
 }
 
@@ -220,12 +223,33 @@ func (self *ActiveTxPool) SetCapacity(capacity int) {
 	if capacity <= 0 {
 		panic(NewTabletError(FAIL, "Capacity out of range %d", capacity))
 	}
-	self.Capacity = capacity
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.capacity = capacity
 }
 
 func (self *ActiveTxPool) SetTimeout(timeout time.Duration) {
-	self.Timeout = timeout
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.timeout = timeout
 	self.ticks.SetInterval(timeout / 10)
+}
+
+func (self *ActiveTxPool) StatsJSON() string {
+	s, c, t := self.Stats()
+	return fmt.Sprintf("{\"Size\": %v, \"Capacity\": %v, \"Timeout\": %v}", s, c, float64(t)/1e9)
+}
+
+func (self *ActiveTxPool) Stats() (size, capacity int, timeout time.Duration) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	return self.size, self.capacity, self.timeout
+}
+
+func (self *ActiveTxPool) Size() int {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	return int(self.size)
 }
 
 type TxConnection struct {

@@ -35,7 +35,7 @@ import (
 	"bytes"
 	"expvar"
 	"fmt"
-	"sync/atomic"
+	"sync"
 )
 
 type Histogram struct {
@@ -43,8 +43,11 @@ type Histogram struct {
 	labels     []string
 	countLabel string
 	totalLabel string
-	buckets    []int64
-	total      int64
+
+	// mu controls buckets & total
+	mu      sync.Mutex
+	buckets []int64
+	total   int64
 }
 
 func NewHistogram(name string, cutoffs []int64) *Histogram {
@@ -58,12 +61,12 @@ func NewHistogram(name string, cutoffs []int64) *Histogram {
 
 func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLabel, totalLabel string) *Histogram {
 	h := &Histogram{
-		cutoffs,
-		labels,
-		countLabel,
-		totalLabel,
-		make([]int64, len(labels)),
-		0,
+		cutoffs:    cutoffs,
+		labels:     labels,
+		countLabel: countLabel,
+		totalLabel: totalLabel,
+		buckets:    make([]int64, len(labels)),
+		total:      0,
 	}
 	if name != "" {
 		expvar.Publish(name, h)
@@ -74,9 +77,11 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 func (h *Histogram) Add(value int64) {
 	for i := range h.labels {
 		if i == len(h.labels)-1 || value <= h.cutoffs[i] {
-			atomic.AddInt64(&h.buckets[i], 1)
-			atomic.AddInt64(&h.total, value)
-			break
+			h.mu.Lock()
+			h.buckets[i] += 1
+			h.total += value
+			h.mu.Unlock()
+			return
 		}
 	}
 }
@@ -87,6 +92,9 @@ func (h *Histogram) String() string {
 }
 
 func (h *Histogram) MarshalJSON() ([]byte, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
 	totalCount := int64(0)
@@ -101,6 +109,9 @@ func (h *Histogram) MarshalJSON() ([]byte, error) {
 }
 
 func (h *Histogram) Count() (count int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	for _, v := range h.buckets {
 		count += v
 	}

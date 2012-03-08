@@ -74,9 +74,10 @@ func (rt *Rates) Track() {
 }
 
 func (rt *Rates) snapshot() {
-	currentCounts := rt.countTracker.Counts()
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+
+	currentCounts := rt.countTracker.Counts()
 	rt.timeStamps.Add(time.Now().UnixNano())
 	for k, v := range currentCounts {
 		if values, ok := rt.counts[k]; ok {
@@ -91,6 +92,7 @@ func (rt *Rates) snapshot() {
 func (rt *Rates) String() string {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
+
 	timeStamps := rt.timeStamps.Values()
 	if len(timeStamps) <= 1 {
 		return "{}"

@@ -32,7 +32,6 @@ include $(GOTOP)/Make.inc
 TARG=vitess/cache
 
 GOFILES=\
-	cache.go\
 	lru_cache.go\
 
 include Make.deps

@@ -36,16 +36,15 @@ import (
 	"expvar"
 	"fmt"
 	"sync"
-	"sync/atomic"
 )
 
 type Counters struct {
-	mu     sync.RWMutex
-	counts map[string][]int64 // slice lets us use pointers
+	mu     sync.Mutex
+	counts map[string]int64
 }
 
 func NewCounters(name string) *Counters {
-	c := &Counters{counts: make(map[string][]int64)}
+	c := &Counters{counts: make(map[string]int64)}
 	if name != "" {
 		expvar.Publish(name, c)
 	}
@@ -53,8 +52,9 @@ func NewCounters(name string) *Counters {
 }
 
 func (c *Counters) String() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
 	firstValue := true
@@ -64,42 +64,25 @@ func (c *Counters) String() string {
 		} else {
 			fmt.Fprintf(b, ", ")
 		}
-		fmt.Fprintf(b, "\"%v\": %v", k, v[0])
+		fmt.Fprintf(b, "\"%v\": %v", k, v)
 	}
 	fmt.Fprintf(b, "}")
 	return b.String()
 }
 
 func (c *Counters) Add(name string, value int64) {
-	c.mu.RLock()
-	v, ok := c.counts[name]
-	c.mu.RUnlock()
-
-	if ok {
-		atomic.AddInt64(&v[0], value)
-	} else {
-		c.create(name, value)
-	}
-}
-
-func (c *Counters) create(name string, value int64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if v, ok := c.counts[name]; ok {
-		atomic.AddInt64(&v[0], value)
-	} else {
-		v = make([]int64, 1)
-		v[0] = value
-		c.counts[name] = v
-	}
+	c.counts[name] += value
 }
 
 func (c *Counters) Counts() map[string]int64 {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	counts := make(map[string]int64, len(c.counts))
 	for k, v := range c.counts {
-		counts[k] = v[0]
+		counts[k] = v
 	}
 	return counts
 }

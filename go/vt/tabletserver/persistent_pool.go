@@ -32,55 +32,55 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"fmt"
 	"sync"
-	"sync/atomic"
 )
 
 // This is a blend of ConnectionPool and TransactionPool
 // We trust the caller to not close this pool while it's busy
 type PersistentPool struct {
 	sync.Mutex
-	Connections map[int64]*PersistentConnection
-	LastId      int64
-	ConnFactory CreateConnectionFunc
+	connections map[int64]*PersistentConnection
+	lastId      int64
+	connFactory CreateConnectionFunc
 }
 
 func NewPersistentPool() *PersistentPool {
 	return &PersistentPool{
-		Connections: make(map[int64]*PersistentConnection),
-		LastId:      1,
+		connections: make(map[int64]*PersistentConnection),
+		lastId:      1,
 	}
 }
 
-func (self *PersistentPool) Open(ConnFactory CreateConnectionFunc) {
-	self.ConnFactory = ConnFactory
-	self.Connections = make(map[int64]*PersistentConnection)
+func (self *PersistentPool) Open(connFactory CreateConnectionFunc) {
+	self.connFactory = connFactory
+	self.connections = make(map[int64]*PersistentConnection)
 }
 
 func (self *PersistentPool) Close() {
-	for _, conn := range self.Connections {
+	for _, conn := range self.connections {
 		conn.Close()
 	}
-	self.ConnFactory = nil
-	self.Connections = nil
+	self.connFactory = nil
+	self.connections = nil
 }
 
 func (self *PersistentPool) CreateConnection() (connectionId int64) {
-	conn, err := self.ConnFactory()
+	conn, err := self.connFactory()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
 	self.Lock()
 	defer self.Unlock()
-	atomic.AddInt64(&self.LastId, 1)
-	self.Connections[connectionId] = &PersistentConnection{SmartConnection: conn, ConnectionId: self.LastId, Pool: self}
-	return connectionId
+	self.lastId++
+	self.connections[self.lastId] = &PersistentConnection{SmartConnection: conn, ConnectionId: self.lastId, Pool: self}
+	return self.lastId
 }
 
 func (self *PersistentPool) CloseConnection(connectionId int64) {
 	self.Lock()
 	defer self.Unlock()
-	conn, ok := self.Connections[connectionId]
+	conn, ok := self.connections[connectionId]
 	if !ok {
 		return
 	}
@@ -88,13 +88,13 @@ func (self *PersistentPool) CloseConnection(connectionId int64) {
 		panic(NewTabletError(FAIL, "Persistent connection %d is in use", connectionId))
 	}
 	conn.Close()
-	delete(self.Connections, connectionId)
+	delete(self.connections, connectionId)
 }
 
 func (self *PersistentPool) Get(connectionId int64) PoolConnection {
 	self.Lock()
 	defer self.Unlock()
-	conn, ok := self.Connections[connectionId]
+	conn, ok := self.connections[connectionId]
 	if !ok {
 		panic(NewTabletError(FAIL, "Connection %d not found", connectionId))
 	}
@@ -105,11 +105,19 @@ func (self *PersistentPool) Get(connectionId int64) PoolConnection {
 	return conn
 }
 
+func (self *PersistentPool) StatsJSON() string {
+	return fmt.Sprintf("{\"Size\": %v}", len(self.connections))
+}
+
+func (self *PersistentPool) Stats() (size int) {
+	return len(self.connections)
+}
+
 // We trust the caller to always put() back what they Get() through conn.Recycle()
 func (self *PersistentPool) put(connectionId int64) {
 	self.Lock()
 	defer self.Unlock()
-	if conn, ok := self.Connections[connectionId]; ok {
+	if conn, ok := self.connections[connectionId]; ok {
 		conn.InUse = false
 	}
 }

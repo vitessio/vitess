@@ -34,16 +34,16 @@ package tabletserver
 import (
 	"fmt"
 	"net/http"
-	"vitess/cache"
 	"sync"
 	"sync/atomic"
 	"time"
+	"vitess/cache"
 )
 
 type Consolidator struct {
 	mu             sync.Mutex
 	queries        map[string]*Result
-	consolidations cache.Cache
+	consolidations *cache.LRUCache
 }
 
 func NewConsolidator() *Consolidator {

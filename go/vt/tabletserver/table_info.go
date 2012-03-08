@@ -33,17 +33,17 @@ package tabletserver
 
 import (
 	"fmt"
+	"sync"
 	"vitess/cache"
 	"vitess/mysql"
 	"vitess/relog"
 	"vitess/vt/schema"
-	"sync"
 )
 
 type TableInfo struct {
 	sync.RWMutex
 	*schema.Table
-	RowCache cache.Cache
+	RowCache *cache.LRUCache
 	Fields   []mysql.Field
 	// stats updated by sqlquery.go
 	hits, misses int64

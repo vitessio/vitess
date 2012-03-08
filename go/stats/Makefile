@@ -36,6 +36,7 @@ GOFILES=\
 	histogram.go\
 	rates.go\
 	ring.go\
+	strfunc.go\
 	timings.go\
 
 include $(GOTOP)/Make.pkg

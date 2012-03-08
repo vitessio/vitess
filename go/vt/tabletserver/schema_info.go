@@ -34,20 +34,20 @@ package tabletserver
 import (
 	"fmt"
 	"net/http"
+	"sync"
+	"time"
 	"vitess/cache"
 	"vitess/relog"
 	"vitess/timer"
 	"vitess/vt/schema"
 	"vitess/vt/sqlparser"
-	"sync"
-	"time"
 )
 
 type SchemaInfo struct {
 	sync.Mutex
 	Tables           map[string]*TableInfo
 	QueryCacheSize   int
-	Queries          cache.Cache
+	Queries          *cache.LRUCache
 	ConnFactory      CreateConnectionFunc
 	SchemaReloadTime time.Duration
 	LastReload       time.Time

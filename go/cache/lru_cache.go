@@ -43,15 +43,9 @@ import (
 	"time"
 )
 
-type entry struct {
-	key           string
-	value         Value
-	size          int
-	time_accessed time.Time
-}
+type LRUCache struct {
+	mu sync.Mutex
 
-// This type is not exported; use New below.
-type lruCache struct {
 	// list & table of *entry objects
 	list  *list.List
 	table map[string]*list.Element
@@ -62,20 +56,36 @@ type lruCache struct {
 
 	// How many bytes we are limiting the cache to.
 	capacity uint64
-	lock     sync.Mutex
 }
 
-func NewLRUCache(capacity uint64) Cache {
-	return &lruCache{
+// Values that go into LRUCache need to satisfy this interface.
+type Value interface {
+	Size() int
+}
+
+type Item struct {
+	Key   string
+	Value Value
+}
+
+type entry struct {
+	key           string
+	value         Value
+	size          int
+	time_accessed time.Time
+}
+
+func NewLRUCache(capacity uint64) *LRUCache {
+	return &LRUCache{
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
 		capacity: capacity,
 	}
 }
 
-func (self *lruCache) Get(key string) (v Value, ok bool) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) Get(key string) (v Value, ok bool) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	element := self.table[key]
 	if element == nil {
@@ -85,9 +95,9 @@ func (self *lruCache) Get(key string) (v Value, ok bool) {
 	return element.Value.(*entry).value, true
 }
 
-func (self *lruCache) Set(key string, value Value) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) Set(key string, value Value) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	if element := self.table[key]; element != nil {
 		self.updateInplace(element, value)
@@ -96,9 +106,9 @@ func (self *lruCache) Set(key string, value Value) {
 	}
 }
 
-func (self *lruCache) SetIfAbsent(key string, value Value) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) SetIfAbsent(key string, value Value) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	if element := self.table[key]; element != nil {
 		self.moveToFront(element)
@@ -107,9 +117,9 @@ func (self *lruCache) SetIfAbsent(key string, value Value) {
 	}
 }
 
-func (self *lruCache) Delete(key string) bool {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) Delete(key string) bool {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	element := self.table[key]
 	if element == nil {
@@ -119,60 +129,56 @@ func (self *lruCache) Delete(key string) bool {
 	self.list.Remove(element)
 	delete(self.table, key)
 	self.size -= uint64(element.Value.(*entry).size)
-
 	return true
 }
 
-func (self *lruCache) Clear() {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) Clear() {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
 	self.list.Init()
 	self.table = make(map[string]*list.Element)
 	self.size = 0
 }
 
-func (self *lruCache) SetCapacity(capacity uint64) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) SetCapacity(capacity uint64) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	self.capacity = capacity
 	self.checkCapacity()
 }
 
-func (self *lruCache) String() string {
-	lastElem := self.list.Back()
-	if lastElem == nil {
-		return fmt.Sprintf("{\"Length\": %v, \"Size\": %v, \"Capacity\": %v, \"OldestAccess\": null}",
-			self.Len(),
-			self.Size(),
-			self.Capacity(),
-		)
+func (self *LRUCache) Stats() (length, size, capacity uint64, oldest time.Time) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if lastElem := self.list.Back(); lastElem != nil {
+		oldest = lastElem.Value.(*entry).time_accessed
 	}
-	lastValue := lastElem.Value.(*entry)
-	return fmt.Sprintf("{\"Length\": %v, \"Size\": %v, \"Capacity\": %v, \"OldestAccess\": \"%v\"}",
-		self.Len(),
-		self.Size(),
-		self.Capacity(),
-		lastValue.time_accessed.Format(time.ANSIC),
-	)
+	return uint64(self.list.Len()), self.size, self.capacity, oldest
 }
 
-func (self *lruCache) Keys() []string {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) StatsJSON() string {
+	l, s, c, o := self.Stats()
+	return fmt.Sprintf("{\"Length\": %v, \"Size\": %v, \"Capacity\": %v, \"OldestAccess\": \"%v\"}", l, s, c, o)
+}
 
-	keys := make([]string, 0, self.Len())
+func (self *LRUCache) Keys() []string {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	keys := make([]string, 0, self.list.Len())
 	for e := self.list.Front(); e != nil; e = e.Next() {
 		keys = append(keys, e.Value.(*entry).key)
 	}
 	return keys
 }
 
-func (self *lruCache) Items() []Item {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (self *LRUCache) Items() []Item {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 
-	items := make([]Item, 0, self.Len())
+	items := make([]Item, 0, self.list.Len())
 	for e := self.list.Front(); e != nil; e = e.Next() {
 		v := e.Value.(*entry)
 		items = append(items, Item{Key: v.key, Value: v.value})
@@ -180,27 +186,22 @@ func (self *lruCache) Items() []Item {
 	return items
 }
 
-func (self *lruCache) Len() uint64 { return uint64(self.list.Len()) }
-
-func (self *lruCache) Size() uint64 { return self.size }
-
-func (self *lruCache) Capacity() uint64 { return self.capacity }
-
-func (self *lruCache) updateInplace(element *list.Element, value Value) {
+func (self *LRUCache) updateInplace(element *list.Element, value Value) {
 	valueSize := value.Size()
 	sizeDiff := valueSize - element.Value.(*entry).size
 	element.Value.(*entry).value = value
 	element.Value.(*entry).size = valueSize
 	self.size += uint64(sizeDiff)
 	self.moveToFront(element)
+	self.checkCapacity()
 }
 
-func (self *lruCache) moveToFront(element *list.Element) {
+func (self *LRUCache) moveToFront(element *list.Element) {
 	self.list.MoveToFront(element)
 	element.Value.(*entry).time_accessed = time.Now()
 }
 
-func (self *lruCache) addNew(key string, value Value) {
+func (self *LRUCache) addNew(key string, value Value) {
 	newEntry := &entry{key, value, value.Size(), time.Now()}
 	element := self.list.PushFront(newEntry)
 	self.table[key] = element
@@ -208,13 +209,13 @@ func (self *lruCache) addNew(key string, value Value) {
 	self.checkCapacity()
 }
 
-func (self *lruCache) checkCapacity() {
+func (self *LRUCache) checkCapacity() {
 	// Partially duplicated from Delete
 	for self.size > self.capacity {
 		delElem := self.list.Back()
 		delValue := delElem.Value.(*entry)
-		self.size -= uint64(delValue.size)
 		self.list.Remove(delElem)
 		delete(self.table, delValue.key)
+		self.size -= uint64(delValue.size)
 	}
 }

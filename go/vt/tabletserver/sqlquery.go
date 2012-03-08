@@ -36,14 +36,14 @@ import (
 	"expvar"
 	"fmt"
 	"math/rand"
-	"vitess/mysql"
-	"vitess/relog"
-	"vitess/stats"
-	"vitess/vt/sqlparser"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+	"vitess/mysql"
+	"vitess/relog"
+	"vitess/stats"
+	"vitess/vt/sqlparser"
 )
 
 const (
@@ -61,7 +61,7 @@ const (
 // RPC API
 type SqlQuery struct {
 	mu            sync.RWMutex
-	state         int
+	state         int32 // Use sync/atomic to acces this variable
 	sessionId     int64
 	schemaInfo    *SchemaInfo
 	connPool      *ConnectionPool
@@ -70,7 +70,7 @@ type SqlQuery struct {
 	activeTxPool  *ActiveTxPool
 	activePool    *ActivePool
 	consolidator  *Consolidator
-	maxResultSize int
+	maxResultSize int32 // Use sync/atomic
 }
 
 // stats are globals to allow anybody to set them
@@ -95,8 +95,8 @@ func NewSqlQuery(poolSize, transactionCap int, transactionTimeout float64, maxRe
 	self.activeTxPool = NewActiveTxPool(transactionCap, time.Duration(transactionTimeout*1e9))
 	self.activePool = NewActivePool(time.Duration(queryTimeout*1e9), time.Duration(idleTimeout*1e9))
 	self.consolidator = NewConsolidator()
-	self.maxResultSize = maxResultSize
-	expvar.Publish("Voltron", self)
+	self.maxResultSize = int32(maxResultSize)
+	expvar.Publish("Voltron", stats.StrFunc(func() string { return self.statsJSON() }))
 	queryStats = stats.NewTimings("Queries")
 	stats.NewRates("QPS", queryStats, 15, 60e9)
 	waitStats = stats.NewTimings("Waits")
@@ -117,7 +117,7 @@ type CompiledPlan struct {
 func (self *SqlQuery) allowQueries(ConnFactory CreateConnectionFunc, cachingInfo map[string]uint64) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	self.state = INIT_FAILED
+	atomic.StoreInt32(&self.state, INIT_FAILED)
 
 	start := time.Now().UnixNano()
 	self.schemaInfo.Open(ConnFactory, cachingInfo)
@@ -129,19 +129,19 @@ func (self *SqlQuery) allowQueries(ConnFactory CreateConnectionFunc, cachingInfo
 	self.activePool.Open(ConnFactory)
 	self.sessionId = Rand()
 	relog.Info("Session id: %d", self.sessionId)
-	self.state = OPEN
+	atomic.StoreInt32(&self.state, OPEN)
 }
 
 func (self *SqlQuery) disallowQueries() {
 	// set this before obtaining lock so new incoming requests
 	// can serve "unavailable" immediately
-	self.state = SHUTTING_DOWN
+	atomic.StoreInt32(&self.state, SHUTTING_DOWN)
 	relog.Info("Stopping query service: %d", self.sessionId)
 	self.activeTxPool.WaitForEmpty()
 
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	self.state = CLOSED
+	atomic.StoreInt32(&self.state, CLOSED)
 	self.activePool.Close()
 	self.schemaInfo.Close()
 	self.activeTxPool.Close()
@@ -152,7 +152,7 @@ func (self *SqlQuery) disallowQueries() {
 }
 
 func (self *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
-	switch self.state {
+	switch atomic.LoadInt32(&self.state) {
 	case INIT_FAILED:
 		panic(NewTabletError(FATAL, "init failed"))
 	case CLOSED:
@@ -168,7 +168,7 @@ func (self *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 }
 
 func (self *SqlQuery) reloadSchema() {
-	if self.state != OPEN {
+	if atomic.LoadInt32(&self.state) != OPEN {
 		return
 	}
 	self.mu.RLock()
@@ -430,7 +430,7 @@ func (self *SqlQuery) Ping(query *string, reply *string) error {
 // DDL
 
 func (self *SqlQuery) createTable(tableName string, cacheSize uint64) {
-	if self.state != OPEN {
+	if atomic.LoadInt32(&self.state) != OPEN {
 		return
 	}
 	self.mu.RLock()
@@ -439,7 +439,7 @@ func (self *SqlQuery) createTable(tableName string, cacheSize uint64) {
 }
 
 func (self *SqlQuery) dropTable(tableName string) {
-	if self.state != OPEN {
+	if atomic.LoadInt32(&self.state) != OPEN {
 		return
 	}
 	self.mu.RLock()
@@ -448,7 +448,7 @@ func (self *SqlQuery) dropTable(tableName string) {
 }
 
 func (self *SqlQuery) setRowCache(tableName string, cacheSize uint64) {
-	if self.state != OPEN {
+	if atomic.LoadInt32(&self.state) != OPEN {
 		return
 	}
 	self.mu.RLock()
@@ -595,10 +595,10 @@ func (self *SqlQuery) execDMLPKRows(conn *SmartConnection, plan *CompiledPlan, p
 func (self *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
-		self.connPool.Resize(int(plan.SetValue.(float64)))
+		self.connPool.SetCapacity(int(plan.SetValue.(float64)))
 		return &QueryResult{}
 	case "vt_transaction_cap":
-		self.txPool.Resize(int(plan.SetValue.(float64)))
+		self.txPool.SetCapacity(int(plan.SetValue.(float64)))
 		self.activeTxPool.SetCapacity(int(plan.SetValue.(float64)))
 		return &QueryResult{}
 	case "vt_transaction_timeout":
@@ -611,11 +611,11 @@ func (self *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
 		self.schemaInfo.SetSchemaReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
 		return &QueryResult{}
 	case "vt_max_result_size":
-		val := int(plan.SetValue.(float64))
+		val := int32(plan.SetValue.(float64))
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
-		self.maxResultSize = val
+		atomic.StoreInt32(&self.maxResultSize, val)
 		return &QueryResult{}
 	case "vt_query_timeout":
 		self.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
@@ -668,7 +668,7 @@ func (self *SqlQuery) directFetch(conn *SmartConnection, parsed_query *sqlparser
 }
 
 func (self *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) []byte {
-	bindVars[MAX_RESULT_NAME] = self.maxResultSize + 1
+	bindVars[MAX_RESULT_NAME] = atomic.LoadInt32(&self.maxResultSize) + 1
 	sql, err := parsed_query.GenerateQuery(bindVars, listVars)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
@@ -685,29 +685,30 @@ func (self *SqlQuery) executeSql(conn *SmartConnection, sql []byte) (*QueryResul
 	connid := conn.Id()
 	self.activePool.Put(connid)
 	defer self.activePool.Remove(connid)
-	result, err := conn.ExecuteFetch(sql, self.maxResultSize)
+	result, err := conn.ExecuteFetch(sql, int(atomic.LoadInt32(&self.maxResultSize)))
 	if err != nil {
 		return nil, NewTabletErrorSql(FAIL, err)
 	}
 	return result, nil
 }
 
-func (self *SqlQuery) String() string {
+func (self *SqlQuery) statsJSON() string {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	fmt.Fprintf(buf, "{")
-	fmt.Fprintf(buf, "\n \"IsOpen\": %v,", self.state)
+	fmt.Fprintf(buf, "\n \"IsOpen\": %v,", atomic.LoadInt32(&self.state))
+	// SchemaReloadTime & LastSchemaReload are unprotected reads, but we'll be deprecating them soon.
 	fmt.Fprintf(buf, "\n \"SchemaReloadTime\": %v,", float64(self.schemaInfo.SchemaReloadTime)/1e9)
 	fmt.Fprintf(buf, "\n \"LastSchemaReload\": \"%v\",", self.schemaInfo.LastReload)
-	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", self.schemaInfo.Queries)
-	fmt.Fprintf(buf, "\n \"ConnPool\": {\"Connections\": %v, \"Capacity\": %v, \"Available\": %v, \"IdleTimeout\": %v},", self.connPool.Count, self.connPool.Size, len(self.connPool.Connections), float64(self.connPool.IdleTimeout)/1e9)
-	fmt.Fprintf(buf, "\n \"TxPool\": {\"Connections\": %v, \"Capacity\": %v,\"Available\": %v,  \"IdleTimeout\": %v},", self.txPool.Count, self.txPool.Size, len(self.txPool.Connections), float64(self.txPool.IdleTimeout)/1e9)
-	fmt.Fprintf(buf, "\n \"ActiveTxPool\": {\"Size\": %v, \"Capacity\": %v, \"Timeout\": %v},", self.activeTxPool.Count, self.activeTxPool.Capacity, float64(self.activeTxPool.Timeout)/1e9)
-	fmt.Fprintf(buf, "\n \"ActivePool\": {\"Timeout\": %v},", float64(self.activePool.Timeout)/1e9)
-	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", self.maxResultSize)
-	fmt.Fprintf(buf, "\n \"PersistentConnections\": %v", len(self.persPool.Connections))
+	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", self.schemaInfo.Queries.StatsJSON())
+	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", self.connPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"TxPool\": %v,", self.txPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", self.activeTxPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", self.activePool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", atomic.LoadInt32(&self.maxResultSize))
+	fmt.Fprintf(buf, "\n \"PersistentPool\": %v", self.persPool.StatsJSON())
 	fmt.Fprintf(buf, "\n}")
 	return buf.String()
 }

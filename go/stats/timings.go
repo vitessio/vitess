@@ -36,12 +36,11 @@ import (
 	"expvar"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 type Timings struct {
-	mu         sync.RWMutex
+	mu         sync.Mutex
 	TotalCount int64
 	TotalTime  int64
 	Histograms map[string]*Histogram
@@ -56,30 +55,18 @@ func NewTimings(name string) *Timings {
 }
 
 func (t *Timings) Add(name string, elapsed time.Duration) {
-	t.mu.RLock()
-	hist, ok := t.Histograms[name]
-	t.mu.RUnlock()
-
-	elapsedNs := int64(elapsed)
-	if ok {
-		hist.Add(elapsedNs)
-	} else {
-		t.create(name, elapsedNs)
-	}
-	atomic.AddInt64(&t.TotalCount, 1)
-	atomic.AddInt64(&t.TotalTime, elapsedNs)
-}
-
-func (t *Timings) create(name string, elapsedNs int64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if hist, ok := t.Histograms[name]; ok {
-		hist.Add(elapsedNs)
-	} else {
+
+	hist, ok := t.Histograms[name]
+	if !ok {
 		hist = NewGenericHistogram("", bucketCutoffs, bucketLabels, "Count", "Time")
-		hist.Add(elapsedNs)
 		t.Histograms[name] = hist
 	}
+	elapsedNs := int64(elapsed)
+	hist.Add(elapsedNs)
+	t.TotalCount++
+	t.TotalTime += elapsedNs
 }
 
 func (t *Timings) Record(name string, startTime time.Time) {
@@ -89,6 +76,7 @@ func (t *Timings) Record(name string, startTime time.Time) {
 func (t *Timings) String() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	data, err := json.MarshalIndent(t, "", " ")
 	if err != nil {
 		data, _ = json.Marshal(err.Error())
@@ -97,8 +85,9 @@ func (t *Timings) String() string {
 }
 
 func (t *Timings) Counts() map[string]int64 {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	counts := make(map[string]int64, len(t.Histograms)+1)
 	for k, v := range t.Histograms {
 		counts[k] = v.Count()

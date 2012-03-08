@@ -32,69 +32,64 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
-	"vitess/relog"
+	"fmt"
 	"sync/atomic"
 	"time"
+	"vitess/relog"
 )
 
-const MAX_POOL_SIZE = 5000
+const MAX_POOL_CAP = 5000
 
 type ConnectionPool struct {
-	Connections chan *PooledConnection
-	Size, Count int64
-	ConnFactory CreateConnectionFunc
-	IdleTimeout time.Duration
+	connections    chan *PooledConnection
+	capacity, size int64 // Use sync/atomic for these
+	connFactory    CreateConnectionFunc
+	idleTimeout    int64 // Use sync/atomic
 }
 
-func NewConnectionPool(size int, idleTimeout time.Duration) *ConnectionPool {
-	if size <= 0 || size > MAX_POOL_SIZE {
-		panic(NewTabletError(FAIL, "Size %v out of range", size))
+func NewConnectionPool(capacity int, idleTimeout time.Duration) *ConnectionPool {
+	if capacity <= 0 || capacity > MAX_POOL_CAP {
+		panic(NewTabletError(FAIL, "Capacity %v out of range", capacity))
 	}
-	return &ConnectionPool{Size: int64(size), IdleTimeout: idleTimeout}
+	return &ConnectionPool{capacity: int64(capacity), idleTimeout: int64(idleTimeout)}
 }
 
-func (self *ConnectionPool) Open(ConnFactory CreateConnectionFunc) {
-	self.Connections = make(chan *PooledConnection, MAX_POOL_SIZE)
-	self.Count = 0
-	self.ConnFactory = ConnFactory
+func (self *ConnectionPool) Open(connFactory CreateConnectionFunc) {
+	self.connections = make(chan *PooledConnection, MAX_POOL_CAP)
+	self.size = 0
+	self.connFactory = connFactory
 }
 
 // We trust the caller to not close this pool while it's busy
 func (self *ConnectionPool) Close() {
-	for self.Count != 0 {
-		conn := <-self.Connections
+	for atomic.LoadInt64(&self.size) > 0 {
+		conn := <-self.connections
 		conn.Close()
-		atomic.AddInt64(&self.Count, -1)
+		atomic.AddInt64(&self.size, -1)
 	}
-	self.Connections = nil
-	self.ConnFactory = nil
+	self.connections = nil
+	self.connFactory = nil
 }
 
-func (self *ConnectionPool) connectAll() {
-	for self.Count < self.Size {
-		self.Connections <- NewPooledConnection(self)
-		atomic.AddInt64(&self.Count, 1)
+func (self *ConnectionPool) SetCapacity(capacity int) {
+	if capacity <= 0 || capacity > MAX_POOL_CAP {
+		panic(NewTabletError(FAIL, "Capacity %v out of range", capacity))
 	}
-}
-
-func (self *ConnectionPool) Resize(size int) {
-	if size <= 0 || size > MAX_POOL_SIZE {
-		panic(NewTabletError(FAIL, "Size %v out of range", size))
-	}
-	self.Size = int64(size)
+	atomic.StoreInt64(&self.capacity, int64(capacity))
 }
 
 func (self *ConnectionPool) Get() PoolConnection {
 	conn := self.TryGet()
 	if conn == nil {
 		defer waitStats.Record("ConnPool", time.Now())
-		conn = <-self.Connections
+		conn = <-self.connections
 	}
 	return conn
 }
 
 func (self *ConnectionPool) TryGet() PoolConnection {
-	if self.IdleTimeout <= 0 {
+	idleTimeout := time.Duration(atomic.LoadInt64(&self.idleTimeout))
+	if idleTimeout <= 0 {
 		return self.tryget()
 	}
 	for {
@@ -102,10 +97,10 @@ func (self *ConnectionPool) TryGet() PoolConnection {
 		if conn == nil {
 			return nil
 		}
-		if conn.TimeUsed.Add(self.IdleTimeout).Sub(time.Now()) < 0 {
+		if conn.TimeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
 			killStats.Add("Connections", 1)
 			conn.Close()
-			atomic.AddInt64(&self.Count, -1)
+			atomic.AddInt64(&self.size, -1)
 			relog.Info("discarding idle connection")
 			continue
 		}
@@ -116,12 +111,18 @@ func (self *ConnectionPool) TryGet() PoolConnection {
 
 func (self *ConnectionPool) tryget() (conn *PooledConnection) {
 	select {
-	case conn = <-self.Connections:
+	case conn = <-self.connections:
 		return conn
 	default:
-		if self.Count < self.Size {
-			conn = NewPooledConnection(self)
-			atomic.AddInt64(&self.Count, 1)
+		if atomic.LoadInt64(&self.size) < atomic.LoadInt64(&self.capacity) {
+			// Prevent thundering herd: optimistically increment
+			// size before opening connection
+			atomic.AddInt64(&self.size, 1)
+			var err error
+			if conn, err = NewPooledConnection(self); err != nil {
+				atomic.AddInt64(&self.size, -1)
+				panic(NewTabletErrorSql(FATAL, err))
+			}
 			return conn
 		}
 	}
@@ -134,18 +135,27 @@ func (self *ConnectionPool) put(conn *PooledConnection) {
 	if conn.Pool != self {
 		panic(NewTabletError(FATAL, "Connection doesn't belong to pool"))
 	}
-	if self.Count > self.Size {
+	if atomic.LoadInt64(&self.size) > atomic.LoadInt64(&self.capacity) {
 		conn.Close()
 	}
 	if conn.IsClosed {
-		atomic.AddInt64(&self.Count, -1)
+		atomic.AddInt64(&self.size, -1)
 	} else {
-		self.Connections <- conn
+		self.connections <- conn
 	}
 }
 
 func (self *ConnectionPool) SetIdleTimeout(idleTimeout time.Duration) {
-	self.IdleTimeout = idleTimeout
+	atomic.StoreInt64(&self.idleTimeout, int64(idleTimeout))
+}
+
+func (self *ConnectionPool) StatsJSON() string {
+	s, c, a, i := self.Stats()
+	return fmt.Sprintf("{\"Connections\": %v, \"Capacity\": %v, \"Available\": %v, \"IdleTimeout\": %v}", s, c, a, float64(i)/1e9)
+}
+
+func (self *ConnectionPool) Stats() (size, capacity, available int64, idleTimeout time.Duration) {
+	return atomic.LoadInt64(&self.size), atomic.LoadInt64(&self.capacity), int64(len(self.connections)), time.Duration(atomic.LoadInt64(&self.idleTimeout))
 }
 
 type PooledConnection struct {
@@ -154,16 +164,17 @@ type PooledConnection struct {
 	TimeUsed time.Time
 }
 
-func NewPooledConnection(pool *ConnectionPool) *PooledConnection {
-	dbConn, err := pool.ConnFactory()
+func NewPooledConnection(pool *ConnectionPool) (*PooledConnection, error) {
+	dbConn, err := pool.connFactory()
 	if err != nil {
-		panic(NewTabletErrorSql(FATAL, err))
+		return nil, err
 	}
-	return &PooledConnection{
+	p := &PooledConnection{
 		SmartConnection: dbConn,
 		Pool:            pool,
 		TimeUsed:        time.Now(),
 	}
+	return p, nil
 }
 
 func (self *PooledConnection) Recycle() {
