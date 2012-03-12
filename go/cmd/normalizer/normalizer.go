@@ -35,12 +35,12 @@ package main
 
 import (
 	"bufio"
-	"vitess/bson"
+	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 	"flag"
 	"fmt"
 	"io"
 	"os"
-	"vitess/vt/sqlparser"
 	"strconv"
 	"strings"
 )

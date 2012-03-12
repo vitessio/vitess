@@ -32,9 +32,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
-	"vitess/mysql"
-	"vitess/relog"
-	"vitess/stats"
+	"code.google.com/p/vitess/go/mysql"
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/stats"
 	"time"
 )
 

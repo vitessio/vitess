@@ -32,12 +32,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/cache"
+	"code.google.com/p/vitess/go/mysql"
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/schema"
 	"fmt"
 	"sync"
-	"vitess/cache"
-	"vitess/mysql"
-	"vitess/relog"
-	"vitess/vt/schema"
 )
 
 type TableInfo struct {

@@ -100,7 +100,7 @@ func (self *Logfile) Write(b []byte) (n int, err error) {
 	self.Lock()
 	if self.handle == nil {
 		self.Unlock()
-		return 0, os.EINVAL
+		return 0, os.ErrInvalid
 	}
 	n, err = self.handle.Write(b)
 	self.Unlock()

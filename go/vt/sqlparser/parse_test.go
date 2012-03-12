@@ -33,11 +33,11 @@ package sqlparser
 
 import (
 	"bufio"
+	"code.google.com/p/vitess/go/vt/schema"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"vitess/vt/schema"
 	"sort"
 	"strings"
 	"testing"

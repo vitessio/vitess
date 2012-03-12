@@ -32,12 +32,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/cache"
 	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
-	"vitess/cache"
 )
 
 type Consolidator struct {

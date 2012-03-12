@@ -51,9 +51,11 @@ var signalHandlerMap map[os.Signal]SignalHandler
 
 func init() {
 	signalHandlerMap = make(map[os.Signal]SignalHandler)
-	SetSignalHandler(os.UnixSignal(syscall.SIGINT), DefaultSignalHandler)
-	SetSignalHandler(os.UnixSignal(syscall.SIGTERM), DefaultSignalHandler)
-	go signalDispatcher(signal.Incoming)
+	SetSignalHandler(syscall.SIGINT, DefaultSignalHandler)
+	SetSignalHandler(syscall.SIGTERM, DefaultSignalHandler)
+	c := make(chan os.Signal)
+	signal.Notify(c)
+	go signalDispatcher(c)
 }
 
 func DefaultSignalHandler(signal os.Signal) {

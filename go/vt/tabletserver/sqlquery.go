@@ -33,6 +33,10 @@ package tabletserver
 
 import (
 	"bytes"
+	"code.google.com/p/vitess/go/mysql"
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 	"expvar"
 	"fmt"
 	"math/rand"
@@ -40,10 +44,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"vitess/mysql"
-	"vitess/relog"
-	"vitess/stats"
-	"vitess/vt/sqlparser"
 )
 
 const (

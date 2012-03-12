@@ -32,12 +32,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/timer"
 	"fmt"
 	"sync"
 	"time"
-	"vitess/relog"
-	"vitess/stats"
-	"vitess/timer"
 )
 
 /* Function naming convention:

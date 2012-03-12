@@ -27,23 +27,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-include $(GOTOP)/Make.inc
-
-TARG=vitess/vt/sqlparser
-
-GOFILES=\
-	token.go\
-	ast.go\
-	sql.go\
-	router.go\
-	execution.go\
-	parsed_query.go\
-
-CLEANFILES+=sql.go
-
-include Make.deps
-include $(GOTOP)/Make.pkg
-include $(GOTOP)/Makedeps.inc
+MAKEFLAGS = -s
 
 sql.go: sql.y
-	goyacc -o sql.go sql.y
+	go tool yacc -o sql.go sql.y
+
+clean:
+	rm -f y.output sql.go

@@ -32,15 +32,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/cache"
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/timer"
+	"code.google.com/p/vitess/go/vt/schema"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
-	"vitess/cache"
-	"vitess/relog"
-	"vitess/timer"
-	"vitess/vt/schema"
-	"vitess/vt/sqlparser"
 )
 
 type SchemaInfo struct {

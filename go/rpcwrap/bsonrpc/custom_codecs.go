@@ -33,8 +33,8 @@ package bsonrpc
 
 import (
 	"bytes"
+	"code.google.com/p/vitess/go/bson"
 	"net/rpc"
-	"vitess/bson"
 )
 
 type RequestBson struct {

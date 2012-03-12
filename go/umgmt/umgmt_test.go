@@ -29,18 +29,49 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-package main
+package umgmt
 
 import (
-	"vitess/relog"
-	"vitess/umgmt"
+	"code.google.com/p/vitess/go/relog"
+	"testing"
+	"time"
 )
 
-func main() {
-	umgmt.AddShutdownCallback(umgmt.ShutdownCallback(func() error { log.Stderr("testserver GracefulShutdown callback"); return nil }))
-	err := umgmt.ListenAndServe("/tmp/test-umgmt.sock")
+func serve() {
+	AddShutdownCallback(ShutdownCallback(func() error { relog.Error("testserver GracefulShutdown callback"); return nil }))
+	err := ListenAndServe("/tmp/test-sock")
 	if err != nil {
 		relog.Fatal("listen err:%v", err)
 	}
 	relog.Info("test server finished")
+}
+
+func TestUmgmt(t *testing.T) {
+	go serve()
+	time.Sleep(1e9)
+
+	client, err := Dial("/tmp/test-sock")
+	if err != nil {
+		t.Fatalf("can't connect %v", err)
+	}
+	request := new(Request)
+	reply := new(Reply)
+
+	callErr := client.Call("UmgmtService.Ping", request, reply)
+	if callErr != nil {
+		t.Fatalf("callErr: %v", callErr)
+	}
+	relog.Info("reply: %v", reply.Message)
+
+	callErr = client.Call("UmgmtService.CloseListeners", reply, reply)
+	if callErr != nil {
+		t.Fatalf("callErr: %v", callErr)
+	}
+	relog.Info("reply: %v", reply.Message)
+	time.Sleep(5e9)
+	callErr = client.Call("UmgmtService.GracefulShutdown", reply, reply)
+	if callErr != nil {
+		t.Fatalf("callErr: %v", callErr)
+	}
+	relog.Info("reply: %v", reply.Message)
 }

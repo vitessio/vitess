@@ -32,8 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/relog"
 	"net/rpc"
-	"vitess/relog"
 )
 
 var SqlQueryRpcService *SqlQuery

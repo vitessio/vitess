@@ -43,7 +43,7 @@ import (
 	"net/rpc"
 	"strings"
 
-	"vitess/vt/tabletserver"
+	"code.google.com/p/vitess/go/vt/tabletserver"
 )
 
 type Driver struct {

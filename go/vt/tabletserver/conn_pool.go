@@ -32,10 +32,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/relog"
 	"fmt"
 	"sync/atomic"
 	"time"
-	"vitess/relog"
 )
 
 const MAX_POOL_CAP = 5000

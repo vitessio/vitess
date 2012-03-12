@@ -33,10 +33,10 @@ package bsonrpc
 
 import (
 	"bytes"
+	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/rpcwrap"
 	"io"
 	"net/rpc"
-	"vitess/bson"
-	"vitess/rpcwrap"
 )
 
 const (

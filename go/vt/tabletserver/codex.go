@@ -33,9 +33,9 @@ package tabletserver
 
 import (
 	"bytes"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 	"encoding/base64"
 	"fmt"
-	"vitess/vt/sqlparser"
 	"strconv"
 )
 

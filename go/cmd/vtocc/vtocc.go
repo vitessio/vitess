@@ -32,6 +32,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package main
 
 import (
+	"code.google.com/p/vitess/go/logfile"
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
+	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
+	"code.google.com/p/vitess/go/sighandler"
+	"code.google.com/p/vitess/go/snitch"
+	"code.google.com/p/vitess/go/umgmt"
+	ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
@@ -46,14 +54,6 @@ import (
 	_ "net/http/pprof"
 	"net/rpc"
 	"os"
-	"vitess/logfile"
-	"vitess/relog"
-	"vitess/rpcwrap/bsonrpc"
-	"vitess/rpcwrap/jsonrpc"
-	"vitess/sighandler"
-	"vitess/snitch"
-	"vitess/umgmt"
-	ts "vitess/vt/tabletserver"
 	"runtime"
 	"syscall"
 	"time"
@@ -233,7 +233,7 @@ func main() {
 		umgmt.StartHttpServer(fmt.Sprintf(":%v", config.Port))
 	})
 	umgmt.AddStartupCallback(func() {
-		sighandler.SetSignalHandler(os.UnixSignal(syscall.SIGTERM),
+		sighandler.SetSignalHandler(syscall.SIGTERM,
 			umgmt.SigTermHandler)
 	})
 	umgmt.AddCloseCallback(func() {

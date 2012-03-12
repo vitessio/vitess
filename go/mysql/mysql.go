@@ -36,8 +36,8 @@ package mysql
 import "C"
 
 import (
+	"code.google.com/p/vitess/go/hack"
 	"fmt"
-	"vitess/hack"
 	"unsafe"
 )
 

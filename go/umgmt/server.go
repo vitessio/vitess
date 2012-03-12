@@ -45,6 +45,7 @@ initialization to this module via AddStartupCallback().
 package umgmt
 
 import (
+	"code.google.com/p/vitess/go/relog"
 	"container/list"
 	"errors"
 	"fmt"
@@ -52,7 +53,6 @@ import (
 	"net"
 	"net/rpc"
 	"os"
-	"vitess/relog"
 	"reflect"
 	"sync"
 	"syscall"
@@ -206,13 +206,13 @@ func (server *UmgmtServer) Serve() error {
 	for !server.quit {
 		conn, err := server.listener.Accept()
 		if err != nil {
-			if checkError(err, os.EINVAL) {
+			if checkError(err, syscall.EINVAL) {
 				if server.quit {
 					return nil
 				}
 				return err
 			}
-			// os.EMFILE, os.ENFILE could happen here if you run out of file descriptors
+			// syscall.EMFILE, syscall.ENFILE could happen here if you run out of file descriptors
 			relog.Error("accept error %v", err)
 			continue
 		}
@@ -272,7 +272,7 @@ func ListenAndServe(addr string) error {
 	for i := 2; i > 0; i-- {
 		l, e := net.Listen("unix", addr)
 		if e != nil {
-			if checkError(e, os.EADDRINUSE) {
+			if checkError(e, syscall.EADDRINUSE) {
 				var clientErr error
 				umgmtClient, clientErr = Dial(addr)
 				if clientErr == nil {
@@ -286,7 +286,7 @@ func ListenAndServe(addr string) error {
 						time.Sleep(rebindDelay)
 					}
 					continue
-				} else if checkError(clientErr, os.ECONNREFUSED) {
+				} else if checkError(clientErr, syscall.ECONNREFUSED) {
 					if unlinkErr := syscall.Unlink(addr); unlinkErr != nil {
 						relog.Error("can't unlink %v err:%v", addr, unlinkErr)
 					}

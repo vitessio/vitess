@@ -32,12 +32,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package umgmt
 
 import (
+	"code.google.com/p/vitess/go/relog"
 	"expvar"
 	"net"
 	"net/http"
-	"os"
-	"vitess/relog"
 	"sync"
+	"syscall"
 )
 
 var connectionCount = expvar.NewInt("connection-count")
@@ -122,7 +122,7 @@ func StartHttpServer(addr string) {
 			switch e := httpErr.(type) {
 			case *net.OpError:
 				switch e.Err {
-				case os.EADDRINUSE:
+				case syscall.EADDRINUSE:
 					relog.Fatal("StartHttpServer failed: %v", e)
 				}
 			case error:
@@ -131,9 +131,9 @@ func StartHttpServer(addr string) {
 				switch e {
 				// FIXME(msolomon) this needs to be migrated into the system library
 				// because this needs to be properly handled in the accept loop.
-				case os.EMFILE, os.ENFILE:
+				case syscall.EMFILE, syscall.ENFILE:
 					relog.Error("non-fatal error serving HTTP: %s", e.Error())
-				case os.EINVAL:
+				case syscall.EINVAL:
 					// nothing - listener was probably closed
 				default:
 					relog.Error("http.ListenAndServe: " + httpErr.Error())

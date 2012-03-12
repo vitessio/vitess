@@ -32,9 +32,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package jsonrpc
 
 import (
+	"code.google.com/p/vitess/go/rpcwrap"
 	"net/rpc"
 	oldjson "net/rpc/jsonrpc"
-	"vitess/rpcwrap"
 )
 
 func DialHTTP(network, address string) (*rpc.Client, error) {

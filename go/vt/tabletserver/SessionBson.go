@@ -33,7 +33,7 @@ package tabletserver
 
 import (
 	"bytes"
-	"vitess/bson"
+	"code.google.com/p/vitess/go/bson"
 )
 
 type Session struct {

@@ -39,7 +39,7 @@ import (
 	"net/http"
 	"net/rpc"
 
-	"vitess/relog"
+	"code.google.com/p/vitess/go/relog"
 )
 
 const (

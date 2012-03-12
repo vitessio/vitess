@@ -33,8 +33,8 @@ package tabletserver
 
 import (
 	"bytes"
-	"vitess/bson"
-	"vitess/mysql"
+	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/mysql"
 	"testing"
 )
 

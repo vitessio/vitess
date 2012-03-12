@@ -32,11 +32,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package umgmt
 
 import (
+	"code.google.com/p/vitess/go/relog"
 	"errors"
 	"io"
 	"net"
 	"net/rpc"
-	"vitess/relog"
 )
 
 type Client struct {

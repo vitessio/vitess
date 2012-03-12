@@ -32,9 +32,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package snitch
 
 import (
+	"code.google.com/p/vitess/go/relog"
 	"fmt"
 	"net/http"
-	"vitess/relog"
 	"runtime"
 )
 

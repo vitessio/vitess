@@ -32,9 +32,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package sqlparser
 
 import (
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/schema"
 	"fmt"
-	"vitess/relog"
-	"vitess/vt/schema"
 	"strconv"
 )
 

@@ -27,16 +27,12 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# turn off the default dependencies inside make
-MAKEFLAGS = -r
+MAKEFLAGS = -s
 
-include $(GOTOP)/Make.inc
+all:
+	cd $(GOTOP)/vt/sqlparser; $(MAKE)
+	go build
 
-TARG=normalizer
-
-GOFILES=\
-	normalizer.go\
-
-include Make.deps
-include $(GOTOP)/Make.cmd
-include $(GOTOP)/Makedeps.inc
+clean:
+	go clean
+	cd $(GOTOP)/vt/sqlparser; $(MAKE) clean
