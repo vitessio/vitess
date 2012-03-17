@@ -32,11 +32,12 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/timer"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -53,24 +54,20 @@ var (
 )
 
 type ActiveTxPool struct {
-	mu          sync.Mutex
-	connections map[int64]*TxConnection
-	capacity    int
-	size        int
-	lastId      int64
-	timeout     time.Duration
-	ticks       *timer.Timer
-	txStats     *stats.Timings
+	pool    *pools.Numbered
+	lastId  int64
+	timeout int64
+	ticks   *timer.Timer
+	txStats *stats.Timings
 }
 
-func NewActiveTxPool(capacity int, timeout time.Duration) *ActiveTxPool {
+func NewActiveTxPool(timeout time.Duration) *ActiveTxPool {
 	return &ActiveTxPool{
-		capacity:    capacity,
-		connections: make(map[int64]*TxConnection, capacity),
-		lastId:      time.Now().UnixNano(),
-		timeout:     timeout,
-		ticks:       timer.NewTimer(timeout / 10),
-		txStats:     stats.NewTimings("Transactions"),
+		pool:    pools.NewNumbered(),
+		lastId:  time.Now().UnixNano(),
+		timeout: int64(timeout),
+		ticks:   timer.NewTimer(timeout / 10),
+		txStats: stats.NewTimings("Transactions"),
 	}
 }
 
@@ -81,72 +78,46 @@ func (self *ActiveTxPool) Open() {
 
 func (self *ActiveTxPool) Close() {
 	self.ticks.Close()
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	// This should be empty. Just a failsafe.
-	for tid, conn := range self.connections {
-		conn.Smart().Close()
-		self.discard(tid)
+	for _, v := range self.pool.GetTimedout(time.Duration(0)) {
+		conn := v.(*TxConnection)
+		conn.Close()
+		conn.discard()
 	}
 }
 
 func (self *ActiveTxPool) WaitForEmpty() {
-	for self.Size() != 0 {
-		// Inefficient but simple
-		<-time.After(1e9)
-	}
+	self.pool.WaitForEmpty()
 }
 
 func (self *ActiveTxPool) TransactionKiller() {
 	for self.ticks.Next() {
-		for conn := self.ScanForTimeout(); conn != nil; conn = self.ScanForTimeout() {
-			relog.Info("killing transaction %d", conn.TransactionId)
+		for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
+			conn := v.(*TxConnection)
+			relog.Info("killing transaction %d", conn.transactionId)
 			killStats.Add("Transactions", 1)
-			conn.Smart().Close()
-			self.Discard(conn.TransactionId)
+			conn.Close()
+			conn.discard()
 		}
 	}
-}
-
-func (self *ActiveTxPool) ScanForTimeout() (conn *TxConnection) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	t := time.Now()
-	for _, conn = range self.connections {
-		if conn.InUse {
-			continue
-		}
-		if conn.StartTime.Add(self.timeout).Sub(t) < 0 {
-			conn.InUse = true
-			return conn
-		}
-	}
-	return nil
 }
 
 func (self *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
 	defer handleError(&err)
-	if _, err := conn.Smart().ExecuteFetch(BEGIN, 10000); err != nil {
+	if _, err := conn.ExecuteFetch(BEGIN, 10000); err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
-
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.lastId++
-	self.connections[self.lastId] = NewTxConnection(conn, self.lastId, self)
-	self.size++
-	return self.lastId, nil
+	transactionId = atomic.AddInt64(&self.lastId, 1)
+	self.pool.Register(transactionId, newTxConnection(conn, transactionId, self))
+	return transactionId, nil
 }
 
 // An unpleasant dependency to SchemaInfo. Avoiding it makes the code worse
 func (self *ActiveTxPool) Commit(transactionId int64, schemaInfo *SchemaInfo) {
 	conn := self.Get(transactionId)
-	defer self.Discard(transactionId)
-	self.txStats.Add("Completed", time.Now().Sub(conn.StartTime))
+	defer conn.discard()
+	self.txStats.Add("Completed", time.Now().Sub(conn.startTime))
 	defer func() {
-		for tableName, invalidList := range conn.DirtyTables {
+		for tableName, invalidList := range conn.dirtyTables {
 			tableInfo := schemaInfo.GetTable(tableName)
 			for key := range invalidList {
 				tableInfo.RowCache.Delete(key)
@@ -154,134 +125,88 @@ func (self *ActiveTxPool) Commit(transactionId int64, schemaInfo *SchemaInfo) {
 			schemaInfo.Put(tableInfo)
 		}
 	}()
-	if _, err := conn.Smart().ExecuteFetch(COMMIT, 10000); err != nil {
-		conn.Smart().Close()
+	if _, err := conn.ExecuteFetch(COMMIT, 10000); err != nil {
+		conn.Close()
 		panic(NewTabletErrorSql(FAIL, err))
 	}
 }
 
 func (self *ActiveTxPool) Rollback(transactionId int64) {
 	conn := self.Get(transactionId)
-	defer self.Discard(transactionId)
-	self.txStats.Add("Aborted", time.Now().Sub(conn.StartTime))
-	if _, err := conn.Smart().ExecuteFetch(ROLLBACK, 10000); err != nil {
-		conn.Smart().Close()
+	defer conn.discard()
+	self.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
+	if _, err := conn.ExecuteFetch(ROLLBACK, 10000); err != nil {
+		conn.Close()
 		panic(NewTabletErrorSql(FAIL, err))
 	}
 }
 
+// You must call Recycle on TxConnection once done.
 func (self *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	txConn, ok := self.connections[transactionId]
-	if !ok {
-		panic(NewTabletError(FAIL, "Transaction %d not found", transactionId))
+	v, err := self.pool.Get(transactionId)
+	if err != nil {
+		panic(NewTabletError(FAIL, "Transaction %d: %v", transactionId, err))
 	}
-	if txConn.InUse {
-		panic(NewTabletError(FAIL, "Connection for transaction %d is in use", transactionId))
-	}
-	txConn.InUse = true
-	return txConn
+	return v.(*TxConnection)
 }
 
-func (self *ActiveTxPool) Put(transactionId int64) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	txConn, ok := self.connections[transactionId]
-	if !ok {
-		panic(NewTabletError(FAIL, "Transaction %d not found", transactionId))
-	}
-	if txConn.Smart().IsClosed {
-		relog.Info("abandoning transaction %d", transactionId)
-		killStats.Add("Transactions", 1)
-		self.discard(transactionId)
-	} else {
-		txConn.InUse = false
-	}
-}
-
-func (self *ActiveTxPool) Discard(transactionId int64) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.discard(transactionId)
-}
-
-func (self *ActiveTxPool) discard(transactionId int64) {
-	conn, ok := self.connections[transactionId]
-	if !ok {
-		return
-	}
-	conn.InUse = false
-	delete(self.connections, transactionId)
-	self.size--
-	conn.PoolConnection.Recycle()
-}
-
-func (self *ActiveTxPool) SetCapacity(capacity int) {
-	if capacity <= 0 {
-		panic(NewTabletError(FAIL, "Capacity out of range %d", capacity))
-	}
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.capacity = capacity
+func (self *ActiveTxPool) Timeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&self.timeout))
 }
 
 func (self *ActiveTxPool) SetTimeout(timeout time.Duration) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.timeout = timeout
+	atomic.StoreInt64(&self.timeout, int64(timeout))
 	self.ticks.SetInterval(timeout / 10)
 }
 
 func (self *ActiveTxPool) StatsJSON() string {
-	s, c, t := self.Stats()
-	return fmt.Sprintf("{\"Size\": %v, \"Capacity\": %v, \"Timeout\": %v}", s, c, float64(t)/1e9)
+	s, t := self.Stats()
+	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, float64(t)/1e9)
 }
 
-func (self *ActiveTxPool) Stats() (size, capacity int, timeout time.Duration) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	return self.size, self.capacity, self.timeout
-}
-
-func (self *ActiveTxPool) Size() int {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	return int(self.size)
+func (self *ActiveTxPool) Stats() (size int, timeout time.Duration) {
+	return self.pool.Stats(), self.Timeout()
 }
 
 type TxConnection struct {
 	PoolConnection
-	TransactionId int64
-	Pool          *ActiveTxPool
-	InUse         bool
-	StartTime     time.Time
-	DirtyTables   map[string]DirtyKeys
+	transactionId int64
+	pool          *ActiveTxPool
+	inUse         bool
+	startTime     time.Time
+	dirtyTables   map[string]DirtyKeys
 }
 
-func NewTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
+func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
 	return &TxConnection{
 		PoolConnection: conn,
-		TransactionId:  transactionId,
-		Pool:           pool,
-		StartTime:      time.Now(),
-		DirtyTables:    make(map[string]DirtyKeys),
+		transactionId:  transactionId,
+		pool:           pool,
+		startTime:      time.Now(),
+		dirtyTables:    make(map[string]DirtyKeys),
 	}
 }
 
 func (self *TxConnection) DirtyKeys(tableName string) DirtyKeys {
-	if list, ok := self.DirtyTables[tableName]; ok {
+	if list, ok := self.dirtyTables[tableName]; ok {
 		return list
 	}
 	list := make(DirtyKeys)
-	self.DirtyTables[tableName] = list
+	self.dirtyTables[tableName] = list
 	return list
 }
 
 func (self *TxConnection) Recycle() {
-	self.Pool.Put(self.TransactionId)
+	if self.IsClosed() {
+		self.discard()
+	} else {
+		self.pool.pool.Put(self.transactionId)
+	}
+}
+
+func (self *TxConnection) discard() {
+	self.pool.pool.Unregister(self.transactionId)
+	self.PoolConnection.Recycle()
 }
 
 type DirtyKeys map[string]bool

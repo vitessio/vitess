@@ -65,7 +65,7 @@ type SqlQuery struct {
 	sessionId     int64
 	schemaInfo    *SchemaInfo
 	connPool      *ConnectionPool
-	persPool      *PersistentPool
+	reservedPool  *ReservedPool
 	txPool        *ConnectionPool
 	activeTxPool  *ActiveTxPool
 	activePool    *ActivePool
@@ -90,9 +90,9 @@ func NewSqlQuery(poolSize, transactionCap int, transactionTimeout float64, maxRe
 	self := &SqlQuery{}
 	self.schemaInfo = NewSchemaInfo(queryCacheSize, time.Duration(schemaReloadTime*1e9))
 	self.connPool = NewConnectionPool(poolSize, time.Duration(idleTimeout*1e9))
-	self.persPool = NewPersistentPool()
+	self.reservedPool = NewReservedPool()
 	self.txPool = NewConnectionPool(transactionCap, time.Duration(idleTimeout*1e9)) // connections in pool has to be > transactionCap
-	self.activeTxPool = NewActiveTxPool(transactionCap, time.Duration(transactionTimeout*1e9))
+	self.activeTxPool = NewActiveTxPool(time.Duration(transactionTimeout * 1e9))
 	self.activePool = NewActivePool(time.Duration(queryTimeout*1e9), time.Duration(idleTimeout*1e9))
 	self.consolidator = NewConsolidator()
 	self.maxResultSize = int32(maxResultSize)
@@ -123,7 +123,7 @@ func (self *SqlQuery) allowQueries(ConnFactory CreateConnectionFunc, cachingInfo
 	self.schemaInfo.Open(ConnFactory, cachingInfo)
 	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	self.connPool.Open(ConnFactory)
-	self.persPool.Open(ConnFactory)
+	self.reservedPool.Open(ConnFactory)
 	self.txPool.Open(ConnFactory)
 	self.activeTxPool.Open()
 	self.activePool.Open(ConnFactory)
@@ -146,7 +146,7 @@ func (self *SqlQuery) disallowQueries() {
 	self.schemaInfo.Close()
 	self.activeTxPool.Close()
 	self.txPool.Close()
-	self.persPool.Close()
+	self.reservedPool.Close()
 	self.connPool.Close()
 	self.sessionId = 0
 }
@@ -195,7 +195,7 @@ func (self *SqlQuery) Begin(session *Session, transactionId *int64) (err error) 
 	defer self.mu.RUnlock()
 	var conn PoolConnection
 	if session.ConnectionId != 0 {
-		conn = self.persPool.Get(session.ConnectionId)
+		conn = self.reservedPool.Get(session.ConnectionId)
 	} else if conn = self.txPool.TryGet(); conn == nil {
 		panic(NewTabletError(FAIL, "Transaction pool connection limit exceeded"))
 	}
@@ -226,22 +226,22 @@ func (self *SqlQuery) Rollback(session *Session, noOutput *string) (err error) {
 	return nil
 }
 
-func (self *SqlQuery) CreatePersistent(session *Session, connectionId *int64) (err error) {
+func (self *SqlQuery) CreateReserved(session *Session, connectionId *int64) (err error) {
 	defer handleError(&err)
 	self.checkState(session.SessionId, false)
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	*connectionId = self.persPool.CreateConnection()
+	*connectionId = self.reservedPool.CreateConnection()
 	return nil
 }
 
-func (self *SqlQuery) ClosePersistent(session *Session, noOutput *string) (err error) {
+func (self *SqlQuery) CloseReserved(session *Session, noOutput *string) (err error) {
 	defer handleError(&err)
 	self.checkState(session.SessionId, false)
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 	*noOutput = ""
-	self.persPool.CloseConnection(session.ConnectionId)
+	self.reservedPool.CloseConnection(session.ConnectionId)
 	return nil
 }
 
@@ -284,22 +284,22 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
 			defer queryStats.Record("PASS_DML", time.Now())
-			*reply = *self.directFetch(conn.Smart(), plan.FullQuery, plan.BindVars, nil, nil)
+			*reply = *self.directFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
 		case sqlparser.PLAN_INSERT_PK:
 			defer queryStats.Record("PLAN_INSERT_PK", time.Now())
-			*reply = *self.execInsertPK(conn.Smart(), plan, invalidator)
+			*reply = *self.execInsertPK(conn, plan, invalidator)
 		case sqlparser.PLAN_INSERT_SUBQUERY:
 			defer queryStats.Record("PLAN_INSERT_SUBQUERY", time.Now())
-			*reply = *self.execInsertSubquery(conn.Smart(), plan, invalidator)
+			*reply = *self.execInsertSubquery(conn, plan, invalidator)
 		case sqlparser.PLAN_DML_PK:
 			defer queryStats.Record("DML_PK", time.Now())
-			*reply = *self.execDMLPK(conn.Smart(), plan, invalidator)
+			*reply = *self.execDMLPK(conn, plan, invalidator)
 		case sqlparser.PLAN_DML_SUBQUERY:
 			defer queryStats.Record("DML_SUBQUERY", time.Now())
-			*reply = *self.execDMLSubquery(conn.Smart(), plan, invalidator)
+			*reply = *self.execDMLSubquery(conn, plan, invalidator)
 		default: // select or set in a transaction, just count as select
 			defer queryStats.Record("PASS_SELECT", time.Now())
-			*reply = *self.directFetch(conn.Smart(), plan.FullQuery, plan.BindVars, nil, nil)
+			*reply = *self.directFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
 		}
 	} else {
 		switch plan.PlanId {
@@ -515,13 +515,13 @@ func (self *SqlQuery) execCacheResult(plan *CompiledPlan) (result *QueryResult) 
 	return result
 }
 
-func (self *SqlQuery) execInsertPK(conn *SmartConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (self *SqlQuery) execInsertPK(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
 	normalizePKRows(plan.TableInfo, pkRows)
 	return self.execInsertPKRows(conn, plan, pkRows, invalidator)
 }
 
-func (self *SqlQuery) execInsertSubquery(conn *SmartConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (self *SqlQuery) execInsertSubquery(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
 	innerResult := self.directFetch(conn, plan.Subquery, plan.BindVars, nil, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
@@ -539,7 +539,7 @@ func (self *SqlQuery) execInsertSubquery(conn *SmartConnection, plan *CompiledPl
 	return self.execInsertPKRows(conn, plan, pkRows, invalidator)
 }
 
-func (self *SqlQuery) execInsertPKRows(conn *SmartConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
+func (self *SqlQuery) execInsertPKRows(conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
 	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = self.directFetch(conn, plan.OuterQuery, plan.BindVars, nil, bsc)
@@ -552,7 +552,7 @@ func (self *SqlQuery) execInsertPKRows(conn *SmartConnection, plan *CompiledPlan
 	return result
 }
 
-func (self *SqlQuery) execDMLPK(conn *SmartConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (self *SqlQuery) execDMLPK(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
 	normalizePKRows(plan.TableInfo, pkRows)
 	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
@@ -567,12 +567,12 @@ func (self *SqlQuery) execDMLPK(conn *SmartConnection, plan *CompiledPlan, inval
 	return result
 }
 
-func (self *SqlQuery) execDMLSubquery(conn *SmartConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (self *SqlQuery) execDMLSubquery(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
 	innerResult := self.directFetch(conn, plan.Subquery, plan.BindVars, nil, nil)
 	return self.execDMLPKRows(conn, plan, innerResult.Rows, invalidator)
 }
 
-func (self *SqlQuery) execDMLPKRows(conn *SmartConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
+func (self *SqlQuery) execDMLPKRows(conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
 	if len(pkRows) == 0 {
 		return &QueryResult{RowsAffected: 0}
 	}
@@ -599,7 +599,6 @@ func (self *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
 		return &QueryResult{}
 	case "vt_transaction_cap":
 		self.txPool.SetCapacity(int(plan.SetValue.(float64)))
-		self.activeTxPool.SetCapacity(int(plan.SetValue.(float64)))
 		return &QueryResult{}
 	case "vt_transaction_timeout":
 		self.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
@@ -635,13 +634,13 @@ func (self *SqlQuery) qFetch(plan *CompiledPlan, parsed_query *sqlparser.ParsedQ
 	if ok {
 		var conn PoolConnection
 		if plan.ConnectionId != 0 {
-			conn = self.persPool.Get(plan.ConnectionId)
+			conn = self.reservedPool.Get(plan.ConnectionId)
 		} else {
 			conn = self.connPool.Get()
 		}
 		defer conn.Recycle()
 		var err *TabletError
-		result, err = self.executeSql(conn.Smart(), sql)
+		result, err = self.executeSql(conn, sql)
 		q.Result = result
 		q.Err = err
 		q.Broadcast()
@@ -658,7 +657,7 @@ func (self *SqlQuery) qFetch(plan *CompiledPlan, parsed_query *sqlparser.ParsedQ
 	return result
 }
 
-func (self *SqlQuery) directFetch(conn *SmartConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
+func (self *SqlQuery) directFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
 	sql := self.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	result, err := self.executeSql(conn, sql)
 	if err != nil {
@@ -681,7 +680,7 @@ func (self *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bind
 	return sql
 }
 
-func (self *SqlQuery) executeSql(conn *SmartConnection, sql []byte) (*QueryResult, *TabletError) {
+func (self *SqlQuery) executeSql(conn PoolConnection, sql []byte) (*QueryResult, *TabletError) {
 	connid := conn.Id()
 	self.activePool.Put(connid)
 	defer self.activePool.Remove(connid)
@@ -708,7 +707,7 @@ func (self *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", self.activeTxPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", self.activePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", atomic.LoadInt32(&self.maxResultSize))
-	fmt.Fprintf(buf, "\n \"PersistentPool\": %v", self.persPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"ReservedPool\": %v", self.reservedPool.StatsJSON())
 	fmt.Fprintf(buf, "\n}")
 	return buf.String()
 }

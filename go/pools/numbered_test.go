@@ -29,60 +29,61 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-package tabletserver
+package pools
 
 import (
-	"code.google.com/p/vitess/go/pools"
+	"testing"
 	"time"
 )
 
-// ConnectionPool re-exposes RoundRobin as a pool of DBConnection objects
-type ConnectionPool struct {
-	*pools.RoundRobin
-}
+func TestNumbered(t *testing.T) {
+	id := int64(0)
+	p := NewNumbered()
 
-func NewConnectionPool(capacity int, idleTimeout time.Duration) *ConnectionPool {
-	return &ConnectionPool{pools.NewRoundRobin(capacity, nil, idleTimeout)}
-}
-
-func (self *ConnectionPool) Open(connFactory CreateConnectionFunc) {
-	f := func() (pools.Resource, error) {
-		c, err := connFactory()
-		if err != nil {
-			return nil, err
-		}
-		return &pooledConnection{*c, self}, nil
+	var err error
+	if err = p.Register(id, id); err != nil {
+		t.Errorf("Error %v", err)
 	}
-	self.SetFactory(f)
-}
-
-// You must call Recycle on the PoolConnection once done.
-func (self *ConnectionPool) Get() PoolConnection {
-	r, err := self.RoundRobin.Get()
-	if err != nil {
-		panic(NewTabletErrorSql(FATAL, err))
+	if err = p.Register(id, id); err.Error() != "already present" {
+		t.Errorf("Expecting 'already present', received '%v'", err)
 	}
-	return r.(*pooledConnection)
-}
-
-// You must call Recycle on the PoolConnection once done.
-func (self *ConnectionPool) TryGet() PoolConnection {
-	r, err := self.RoundRobin.TryGet()
-	if err != nil {
-		panic(NewTabletErrorSql(FATAL, err))
+	var v interface{}
+	if v, err = p.Get(id); err != nil {
+		t.Errorf("Error %v", err)
 	}
-	if r == nil {
-		return nil
+	if v.(int64) != id {
+		t.Errorf("Expecting %v, received %v", id, v.(int64))
 	}
-	return r.(*pooledConnection)
-}
+	if v, err = p.Get(id); err.Error() != "in use" {
+		t.Errorf("Expecting 'in use', received '%v'", err)
+	}
+	p.Put(id)
+	if v, err = p.Get(1); err.Error() != "not found" {
+		t.Errorf("Expecting 'not found', received '%v'", err)
+	}
+	p.Unregister(1) // Should not fail
+	p.Unregister(0)
 
-// pooledConnection re-exposes DBConnection as a PoolConnection
-type pooledConnection struct {
-	DBConnection
-	pool *ConnectionPool
-}
+	p.Register(id, id)
+	id++
+	p.Register(id, id)
+	time.Sleep(3e8)
+	id++
+	p.Register(id, id)
+	time.Sleep(1e8)
+	vals := p.GetTimedout(time.Duration(2e8))
+	if len(vals) != 2 {
+		t.Errorf("Expecting 2, received %v", len(vals))
+	}
+	for _, v := range vals {
+		p.Unregister(v.(int64))
+	}
 
-func (self *pooledConnection) Recycle() {
-	self.pool.Put(self)
+	if p.Stats() != 1 {
+		t.Errorf("Expecting 1, received %v", p.Stats())
+	}
+	go func() {
+		p.Unregister(2)
+	}()
+	p.WaitForEmpty()
 }

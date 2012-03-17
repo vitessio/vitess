@@ -32,114 +32,87 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
+	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/timer"
 	"fmt"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
 type ActivePool struct {
-	sync.Mutex
-	connections map[int64]*ActiveConnection
-	timeout     time.Duration
-	pool        *ConnectionPool
-	ticks       *timer.Timer
-}
-
-type ActiveConnection struct {
-	id        int64
-	startTime time.Time
+	pool     *pools.Numbered
+	timeout  int64
+	connPool *ConnectionPool
+	ticks    *timer.Timer
 }
 
 func NewActivePool(queryTimeout, idleTimeout time.Duration) *ActivePool {
 	return &ActivePool{
-		timeout: queryTimeout,
-		pool:    NewConnectionPool(1, idleTimeout),
-		ticks:   timer.NewTimer(idleTimeout / 10),
+		pool:     pools.NewNumbered(),
+		timeout:  int64(queryTimeout),
+		connPool: NewConnectionPool(1, idleTimeout),
+		ticks:    timer.NewTimer(idleTimeout / 10),
 	}
 }
 
 func (self *ActivePool) Open(ConnFactory CreateConnectionFunc) {
-	self.connections = make(map[int64]*ActiveConnection)
-	self.pool.Open(ConnFactory)
+	self.connPool.Open(ConnFactory)
 	go self.QueryKiller()
 }
 
 func (self *ActivePool) Close() {
 	self.ticks.Close()
-	self.pool.Close()
-	self.Lock()
-	defer self.Unlock()
-	self.connections = nil
+	self.connPool.Close()
+	self.pool = pools.NewNumbered()
 }
 
 func (self *ActivePool) QueryKiller() {
 	for self.ticks.Next() {
-		for {
-			connid := self.ScanForTimeout()
-			if connid == 0 {
-				break
-			}
-			killStats.Add("Queries", 1)
-			self.kill(connid)
+		for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
+			self.kill(v.(int64))
 		}
 	}
 }
 
 func (self *ActivePool) kill(connid int64) {
+	self.Remove(connid)
+	killStats.Add("Queries", 1)
 	relog.Info("killing query %d", connid)
-	killConn := self.pool.Get()
+	killConn := self.connPool.Get()
 	defer killConn.Recycle()
 	sql := []byte(fmt.Sprintf("kill %d", connid))
-	if _, err := killConn.Smart().ExecuteFetch(sql, 10000); err != nil {
+	if _, err := killConn.ExecuteFetch(sql, 10000); err != nil {
 		relog.Error("Could not kill query %d: %v", connid, err)
 	}
 }
 
-func (self *ActivePool) ScanForTimeout() (id int64) {
-	self.Lock()
-	defer self.Unlock()
-	t := time.Now()
-	for _, conn := range self.connections {
-		if conn.startTime.Add(self.timeout).Sub(t) < 0 {
-			delete(self.connections, conn.id)
-			return conn.id
-		}
-	}
-	return 0
-}
-
 func (self *ActivePool) Put(id int64) {
-	self.Lock()
-	defer self.Unlock()
-	self.connections[id] = &ActiveConnection{id, time.Now()}
+	self.pool.Register(id, id)
 }
 
 func (self *ActivePool) Remove(id int64) {
-	self.Lock()
-	defer self.Unlock()
-	delete(self.connections, id)
+	self.pool.Unregister(id)
+}
+
+func (self *ActivePool) Timeout() time.Duration {
+	return time.Duration(atomic.LoadInt64(&self.timeout))
 }
 
 func (self *ActivePool) SetTimeout(timeout time.Duration) {
-	self.Lock()
-	defer self.Unlock()
-	self.timeout = timeout
+	atomic.StoreInt64(&self.timeout, int64(timeout))
 	self.ticks.SetInterval(timeout / 10)
 }
 
 func (self *ActivePool) SetIdleTimeout(idleTimeout time.Duration) {
-	self.pool.SetIdleTimeout(idleTimeout)
+	self.connPool.SetIdleTimeout(idleTimeout)
 }
 
 func (self *ActivePool) StatsJSON() string {
-	t := self.Stats()
-	return fmt.Sprintf("{\"Timeout\": %v}", float64(t)/1e9)
+	s, t := self.Stats()
+	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, float64(t)/1e9)
 }
 
-func (self *ActivePool) Stats() (timeout time.Duration) {
-	self.Lock()
-	defer self.Unlock()
-	return self.timeout
+func (self *ActivePool) Stats() (size int, timeout time.Duration) {
+	return self.pool.Stats(), self.Timeout()
 }

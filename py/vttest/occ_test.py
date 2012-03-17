@@ -170,7 +170,7 @@ class TestVtocc(framework.TestCase):
     self.assertEqual(cu.rowcount, 2)
     self.assertEqual(vstart.mget("Queries.TotalCount", 0)+1, vend.Queries.TotalCount)
     self.assertEqual(vstart.mget("Queries.Histograms.PASS_SELECT.Count", 0)+1, vend.Queries.Histograms.PASS_SELECT.Count)
-    self.assertNotEqual(vend.Voltron.ConnPool.Connections, 0)
+    self.assertNotEqual(vend.Voltron.ConnPool.Size, 0)
 
   def test_commit(self):
     vstart = self.debug_vars()
@@ -187,7 +187,7 @@ class TestVtocc(framework.TestCase):
     self.assertEqual(cu.rowcount, 3)
     vend = self.debug_vars()
     # We should have at least one connection
-    self.assertNotEqual(vend.Voltron.TxPool.Connections, 0)
+    self.assertNotEqual(vend.Voltron.TxPool.Size, 0)
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+2, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Completed.Count", 0)+2, vend.Transactions.Histograms.Completed.Count)
     self.assertEqual(vstart.mget("Queries.TotalCount", 0)+4, vend.Queries.TotalCount)
@@ -219,7 +219,7 @@ class TestVtocc(framework.TestCase):
     cu = self.execute("select * from vtocc_test")
     self.assertEqual(cu.rowcount, 3)
     vend = self.debug_vars()
-    self.assertNotEqual(vend.Voltron.TxPool.Connections, 0)
+    self.assertNotEqual(vend.Voltron.TxPool.Size, 0)
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+1, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Aborted.Count", 0)+1, vend.Transactions.Histograms.Aborted.Count)
 
@@ -273,8 +273,7 @@ class TestVtocc(framework.TestCase):
     self.execute("select 1 from dual")
     vend = self.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 1)
-    self.assertEqual(vstart.mget("Waits.TotalCount", 0)+1, vend.Waits.TotalCount)
-    self.assertEqual(vstart.mget("Waits.Histograms.ConnPool.Count", 0)+1, vend.Waits.Histograms.ConnPool.Count)
+    self.assertEqual(vstart.Voltron.ConnPool.WaitCount+1, vend.Voltron.ConnPool.WaitCount)
     self.execute("set vt_pool_size=16")
     vend = self.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 16)
@@ -297,11 +296,9 @@ class TestVtocc(framework.TestCase):
     self.execute("commit")
     vend = self.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 1)
-    self.assertEqual(vend.Voltron.ActiveTxPool.Capacity, 1)
     self.execute("set vt_transaction_cap=20")
     vend = self.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 20)
-    self.assertEqual(vend.Voltron.ActiveTxPool.Capacity, 20)
 
   def test_transaction_timeout(self):
     vstart = self.debug_vars()
@@ -419,7 +416,6 @@ class TestVtocc(framework.TestCase):
     vend = self.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1)
     self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1)
-    self.assertEqual(vstart.mget("Kills.Connections", 0)+1, vend.Kills.Connections)
     self.execute("set vt_idle_timeout=1800")
     vend = self.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1800)

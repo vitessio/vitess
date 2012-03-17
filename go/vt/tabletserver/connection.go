@@ -46,24 +46,26 @@ func init() {
 }
 
 type PoolConnection interface {
-	// Smart has to return a physical struct so there's no ambiguity about the object type
-	Smart() *SmartConnection
+	ExecuteFetch(query []byte, maxrows int) (*QueryResult, error)
+	Id() int64
+	Close()
+	IsClosed() bool
 	Recycle()
 }
 
-type CreateConnectionFunc func() (connection *SmartConnection, err error)
+type CreateConnectionFunc func() (connection *DBConnection, err error)
 
-type SmartConnection struct {
-	Conn     *mysql.Connection
-	IsClosed bool
+// DBConnection re-exposes mysql.Connection with some wrapping.
+type DBConnection struct {
+	*mysql.Connection
 }
 
-func (self *SmartConnection) ExecuteFetch(query []byte, maxrows int) (*QueryResult, error) {
+func (self *DBConnection) ExecuteFetch(query []byte, maxrows int) (*QueryResult, error) {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
 	}
-	mqr, err := self.Conn.ExecuteFetch(query, maxrows)
+	mqr, err := self.Connection.ExecuteFetch(query, maxrows)
 	if err != nil {
 		mysqlStats.Record("Exec", start)
 		if sqlErr, ok := err.(*mysql.SqlError); ok {
@@ -81,20 +83,8 @@ func (self *SmartConnection) ExecuteFetch(query []byte, maxrows int) (*QueryResu
 	return &qr, nil
 }
 
-func (self *SmartConnection) Id() int64 {
-	return self.Conn.Id()
-}
-
-func (self *SmartConnection) Close() {
-	if self.IsClosed {
-		return
-	}
-	self.IsClosed = true
-	self.Conn.Close()
-}
-
 // CreateConnection returns a connection for running user queries. No DDL.
-func CreateConnection(socketPath, dbName string) (*SmartConnection, error) {
+func CreateConnection(socketPath, dbName string) (*DBConnection, error) {
 	info := map[string]interface{}{
 		"host":        "localhost",
 		"port":        0,
@@ -105,12 +95,12 @@ func CreateConnection(socketPath, dbName string) (*SmartConnection, error) {
 		"charset":     "utf8",
 	}
 	c, err := mysql.Connect(info)
-	return &SmartConnection{Conn: c}, err
+	return &DBConnection{c}, err
 }
 
 // ConnectionCreator creates a closure that wraps CreateConnection
 func ConnectionCreator(socketPath, dbName string) CreateConnectionFunc {
-	return func() (connection *SmartConnection, err error) {
+	return func() (connection *DBConnection, err error) {
 		return CreateConnection(socketPath, dbName)
 	}
 }
@@ -118,7 +108,7 @@ func ConnectionCreator(socketPath, dbName string) CreateConnectionFunc {
 /* CreateSuperConnection retuns a connection for doing DDLs and maintenence operations
 where you need full control over mysql.
 */
-func CreateSuperConnection(socketPath, dbName string) (*SmartConnection, error) {
+func CreateSuperConnection(socketPath, dbName string) (*DBConnection, error) {
 	info := map[string]interface{}{
 		"host":        "localhost",
 		"port":        0,
@@ -129,23 +119,23 @@ func CreateSuperConnection(socketPath, dbName string) (*SmartConnection, error) 
 		"charset":     "utf8",
 	}
 	c, err := mysql.Connect(info)
-	return &SmartConnection{Conn: c}, err
+	return &DBConnection{c}, err
 }
 
 // SuperConnectionCreator is a closure that wraps CreateSuperConnection
 func SuperConnectionCreator(socketPath, dbName string) CreateConnectionFunc {
-	return func() (connection *SmartConnection, err error) {
+	return func() (connection *DBConnection, err error) {
 		return CreateSuperConnection(socketPath, dbName)
 	}
 }
 
-func CreateGenericConnection(info map[string]interface{}) (*SmartConnection, error) {
+func CreateGenericConnection(info map[string]interface{}) (*DBConnection, error) {
 	c, err := mysql.Connect(info)
-	return &SmartConnection{Conn: c}, err
+	return &DBConnection{c}, err
 }
 
 func GenericConnectionCreator(info map[string]interface{}) CreateConnectionFunc {
-	return func() (connection *SmartConnection, err error) {
+	return func() (connection *DBConnection, err error) {
 		return CreateGenericConnection(info)
 	}
 }

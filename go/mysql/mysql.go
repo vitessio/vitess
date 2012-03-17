@@ -160,6 +160,10 @@ func (self *Connection) Close() {
 	self.handle = nil
 }
 
+func (self *Connection) IsClosed() bool {
+	return self.handle == nil
+}
+
 func (self *Connection) buildFields(result *C.MYSQL_RES) (fields []Field) {
 	nfields := int(C.mysql_num_fields(result))
 	cfieldsptr := C.mysql_fetch_fields(result)

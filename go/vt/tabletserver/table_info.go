@@ -49,7 +49,7 @@ type TableInfo struct {
 	hits, misses int64
 }
 
-func NewTableInfo(conn *SmartConnection, tableName string, cacheSize uint64) (self *TableInfo) {
+func NewTableInfo(conn *DBConnection, tableName string, cacheSize uint64) (self *TableInfo) {
 	self = loadTableInfo(conn, tableName)
 	if cacheSize != 0 {
 		self.initRowCache(conn, cacheSize)
@@ -57,7 +57,7 @@ func NewTableInfo(conn *SmartConnection, tableName string, cacheSize uint64) (se
 	return self
 }
 
-func loadTableInfo(conn *SmartConnection, tableName string) (self *TableInfo) {
+func loadTableInfo(conn *DBConnection, tableName string) (self *TableInfo) {
 	self = &TableInfo{Table: schema.NewTable(tableName)}
 	if tableName == "dual" {
 		return self
@@ -71,7 +71,7 @@ func loadTableInfo(conn *SmartConnection, tableName string) (self *TableInfo) {
 	return self
 }
 
-func (self *TableInfo) fetchColumns(conn *SmartConnection) bool {
+func (self *TableInfo) fetchColumns(conn *DBConnection) bool {
 	columns, err := conn.ExecuteFetch([]byte(fmt.Sprintf("describe %s", self.Name)), 10000)
 	if err != nil {
 		relog.Warning("%s", err.Error())
@@ -83,7 +83,7 @@ func (self *TableInfo) fetchColumns(conn *SmartConnection) bool {
 	return true
 }
 
-func (self *TableInfo) fetchIndexes(conn *SmartConnection) bool {
+func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 	indexes, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show index from %s", self.Name)), 10000)
 	if err != nil {
 		relog.Warning("%s", err.Error())
@@ -113,7 +113,7 @@ func (self *TableInfo) fetchIndexes(conn *SmartConnection) bool {
 	return true
 }
 
-func (self *TableInfo) initRowCache(conn *SmartConnection, cacheSize uint64) {
+func (self *TableInfo) initRowCache(conn *DBConnection, cacheSize uint64) {
 	if self.PKColumns == nil {
 		relog.Warning("Table %s has no primary key. Will not be cached.", self.Name)
 		return
