@@ -27,7 +27,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-exec_cases = [
+nocache_cases = [
   # union
   [
     'select /* union */ eid, id from vtocc_a union select eid, id from vtocc_b', {},
@@ -224,7 +224,7 @@ exec_cases = [
   [
     "insert into vtocc_c(name, eid, foo) values (%(name)s, '9', 'aaa')", { "name": "bbb"},
     [],
-    ["insert into vtocc_c(name, eid, foo) values ('bbb', '9', 'aaa') /* _stream vtocc_c (eid name ) (9 'bbb' ); */"],
+    ["insert into vtocc_c(name, eid, foo) values ('bbb', '9', 'aaa') /* _stream vtocc_c (eid name ) (9 'YmJi' ); */"],
   ],
   ['commit'],
   ['select * from vtocc_c where eid = 9', {}, [(9, 'bbb', 'aaa')]],

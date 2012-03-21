@@ -1,0 +1,9 @@
+create table a(abcd)#{"Action": "CREATE", "NewName": "a"}
+drop  table b#{"Action": "DROP", "TableName": "b"}
+alter table c alter foo#{"Action": "ALTER", "TableName": "c", "NewTable": "c"}
+alter table c comment 'aa'#{"Action": "ALTER", "TableName": "c", "NewTable": "c"}
+drop index a on b#{"Action": "ALTER", "TableName": "b", "NewName": "b"}
+rename table a to b#{"Action": "RENAME", "TableName": "a", "NewTable": "b"}
+alter table a rename b#{"Action": "RENAME", "TableName": "a", "NewTable": "b"}
+alter table a rename to b#{"Action": "RENAME", "TableName": "a", "NewTable": "b"}
+syntax error#{"Action": "NONE"}

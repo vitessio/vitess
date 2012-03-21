@@ -51,6 +51,7 @@ const (
 	PLAN_INSERT_PK
 	PLAN_INSERT_SUBQUERY
 	PLAN_SET
+	PLAN_DDL
 )
 
 func (self PlanType) IsSelect() bool {
@@ -138,7 +139,11 @@ func DDLParse(sql string) (plan *DDLPlan) {
 	}
 	switch rootNode.Type {
 	case CREATE, ALTER, DROP:
-		return &DDLPlan{Action: rootNode.Type, TableName: string(rootNode.At(0).Value)}
+		return &DDLPlan{
+			Action:    rootNode.Type,
+			TableName: string(rootNode.At(0).Value),
+			NewName:   string(rootNode.At(0).Value),
+		}
 	case RENAME:
 		return &DDLPlan{
 			Action:    rootNode.Type,
@@ -164,8 +169,10 @@ func (self *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
 		return self.execAnalyzeDelete(getTable)
 	case SET:
 		return self.execAnalyzeSet()
+	case CREATE, ALTER, DROP, RENAME:
+		return &ExecPlan{PlanId: PLAN_DDL}
 	}
-	panic(NewParserError("Invalid DQL"))
+	panic(NewParserError("Invalid SQL"))
 }
 
 func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
@@ -206,13 +213,7 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	// The plan has improved
 	plan.PlanId = PLAN_SELECT_CACHE_RESULT
 	plan.ColumnNumbers = selects
-	plan.OuterQuery = self.GenerateDefaultQuery()
-
-	// order
-	if self.At(SELECT_ORDER_OFFSET).Len() != 0 {
-		plan.Reason = REASON_ORDER
-		return plan
-	}
+	plan.OuterQuery = self.GenerateDefaultQuery(tableInfo)
 
 	// where
 	conditions := self.At(SELECT_WHERE_OFFSET).execAnalyzeWhere()
@@ -223,15 +224,22 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 
 	if pkValues := getPKValues(conditions, tableInfo.Indexes[0]); pkValues != nil {
 		plan.PlanId = PLAN_SELECT_PK
-		plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo.Indexes[0])
+		plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
 		plan.PKValues = pkValues
 		return plan
 	}
 
-	if getIndexMatch(conditions, tableInfo.Indexes) > 0 {
+	// order
+	orders := self.At(SELECT_ORDER_OFFSET).execAnalyzeOrder()
+	if orders == nil {
+		plan.Reason = REASON_ORDER
+		return plan
+	}
+
+	if getIndexMatch(conditions, orders, tableInfo.Indexes) > 0 {
 		// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index
 		plan.PlanId = PLAN_SELECT_SUBQUERY
-		plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo.Indexes[0])
+		plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
 		plan.Subquery = self.GenerateSelectSubquery(tableInfo)
 		return plan
 	}
@@ -272,7 +280,7 @@ func (self *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 		plan.Subquery = rowValues.GenerateSelectLimitQuery()
 		// Column list syntax is a subset of select expressions
 		plan.ColumnNumbers = columns.execAnalyzeSelectExpressions(tableInfo)
-		plan.SubqueryPKColumns = getPKValuesFromColumns(columns, tableInfo.Indexes[0])
+		plan.SubqueryPKColumns = getPKColumnsFromColumns(columns, tableInfo.Indexes[0])
 		return plan
 	}
 
@@ -624,7 +632,7 @@ func hasINClause(conditions []*Node) bool {
 func (self *Node) parseList() (values interface{}, isList bool) {
 	vals := make([]interface{}, self.Len())
 	for i := 0; i < self.Len(); i++ {
-		vals[i] = string(self.At(i).Value)
+		vals[i] = asInterface(self.At(i))
 	}
 	return vals, true
 }
@@ -644,10 +652,45 @@ func (self *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues 
 			if pkValues == nil {
 				pkValues = make([]interface{}, len(pkIndex.Columns))
 			}
-			pkValues[index] = string(value.Value)
+			if pkValues[index] != nil {
+				relog.Warning("ambiguous update expression %v", self.At(i).At(0))
+				return nil, false
+			}
+			pkValues[index] = asInterface(value)
 		}
 	}
 	return pkValues, true
+}
+
+//-----------------------------------------------
+// Order
+
+func (self *Node) execAnalyzeOrder() (orders []*Node) {
+	orders = make([]*Node, 0, 8)
+	if self.Len() == 0 {
+		return orders
+	}
+	orderList := self.At(0)
+	for i := 0; i < orderList.Len(); i++ {
+		if order := orderList.At(i).execAnalyzeOrderExpression(); order != nil {
+			orders = append(orders, order)
+		} else {
+			return nil
+		}
+	}
+	return orders
+}
+
+func (self *Node) execAnalyzeOrderExpression() (order *Node) {
+	switch self.Type {
+	case ID:
+		return self
+	case '.':
+		return self.At(1).execAnalyzeOrderExpression()
+	case '(', ASC, DESC:
+		return self.At(0).execAnalyzeOrderExpression()
+	}
+	return nil
 }
 
 //-----------------------------------------------
@@ -720,7 +763,7 @@ func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interfac
 		}
 		switch condition.Type {
 		case '=':
-			pkValues[index] = string(condition.At(1).Value)
+			pkValues[index] = asInterface(condition.At(1))
 		case IN:
 			pkValues[index], _ = condition.At(1).At(0).parseList()
 		}
@@ -731,12 +774,23 @@ func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interfac
 	return nil
 }
 
-func getIndexMatch(conditions []*Node, indexes []*schema.Index) (indexId int) {
+func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) (indexId int) {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		matchFound := false
 		for _, index := range indexScores {
 			if index.FindMatch(string(condition.At(0).Value)) != -1 {
+				matchFound = true
+			}
+		}
+		if !matchFound {
+			return -1
+		}
+	}
+	for _, order := range orders {
+		matchFound := false
+		for _, index := range indexScores {
+			if index.FindMatch(string(order.Value)) != -1 {
 				matchFound = true
 			}
 		}
@@ -756,7 +810,7 @@ func getIndexMatch(conditions []*Node, indexes []*schema.Index) (indexId int) {
 	return highScorer
 }
 
-func getPKValuesFromColumns(columns *Node, pkIndex *schema.Index) (columnNumbers []int) {
+func getPKColumnsFromColumns(columns *Node, pkIndex *schema.Index) (columnNumbers []int) {
 	columnNumbers = make([]int, len(pkIndex.Columns))
 	for i, _ := range columnNumbers {
 		columnNumbers[i] = -1
@@ -791,7 +845,7 @@ func getInsertPKValues(columns *Node, rowList *Node, pkIndex *schema.Index) (pkV
 				relog.Warning("insert is too complex %v", node)
 				return nil
 			}
-			pkValues[index] = string(value.Value)
+			pkValues[index] = asInterface(value)
 		} else { // composite
 			values := make([]interface{}, rowList.Len())
 			for j := 0; j < rowList.Len(); j++ {
@@ -801,7 +855,7 @@ func getInsertPKValues(columns *Node, rowList *Node, pkIndex *schema.Index) (pkV
 					relog.Warning("insert is too complex %v", node)
 					return nil
 				}
-				values[j] = string(value.Value)
+				values[j] = asInterface(value)
 			}
 			pkValues[index] = values
 		}
@@ -831,14 +885,16 @@ func (self *Node) GenerateSelectLimitQuery() *ParsedQuery {
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateDefaultQuery() *ParsedQuery {
+func (self *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer()
 	limit := self.At(SELECT_LIMIT_OFFSET)
 	if limit.Len() == 0 {
 		limit.PushLimit()
 		defer limit.Pop()
 	}
-	Fprintf(buf, "select * from %v%v%v%v",
+	fmt.Fprintf(buf, "select ")
+	writeColumnList(buf, tableInfo.Columns)
+	Fprintf(buf, " from %v%v%v%v",
 		self.At(SELECT_FROM_OFFSET),
 		self.At(SELECT_WHERE_OFFSET),
 		self.At(SELECT_ORDER_OFFSET),
@@ -846,10 +902,12 @@ func (self *Node) GenerateDefaultQuery() *ParsedQuery {
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateSelectOuterQuery(pkIndex *schema.Index) *ParsedQuery {
+func (self *Node) GenerateSelectOuterQuery(tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer()
-	Fprintf(buf, "select * from %v where ", self.At(SELECT_FROM_OFFSET))
-	generatePKWhere(buf, pkIndex)
+	fmt.Fprintf(buf, "select ")
+	writeColumnList(buf, tableInfo.Columns)
+	Fprintf(buf, " from %v where ", self.At(SELECT_FROM_OFFSET))
+	generatePKWhere(buf, tableInfo.Indexes[0])
 	return NewParsedQuery(buf)
 }
 
@@ -940,15 +998,42 @@ func GenerateSubquery(columns []string, table *Node, where *Node, order *Node, l
 		defer limit.Pop()
 	}
 	fmt.Fprintf(buf, "select ")
-	i := 0
-	for i = 0; i < len(columns)-1; i++ {
-		fmt.Fprintf(buf, "%s, ", columns[i])
-	}
-	fmt.Fprintf(buf, "%s from ", columns[i])
-
-	Fprintf(buf, "%v%v%v%v", table, where, order, limit)
+	writeColumnList(buf, columns)
+	Fprintf(buf, " from %v%v%v%v", table, where, order, limit)
 	if for_update {
 		Fprintf(buf, " for update")
 	}
 	return NewParsedQuery(buf)
+}
+
+func writeColumnList(buf *TrackedBuffer, columns []string) {
+	i := 0
+	for i = 0; i < len(columns)-1; i++ {
+		fmt.Fprintf(buf, "%s, ", columns[i])
+	}
+	fmt.Fprintf(buf, "%s", columns[i])
+}
+
+func asInterface(node *Node) interface{} {
+	switch node.Type {
+	case STRING, VALUE_ARG:
+		return string(node.Value)
+	case NUMBER:
+		return tonumber(node.Value)
+	}
+	panic(NewParserError("Unexpected node %v", node))
+}
+
+// duplicated in vt/tabletserver/codex.go
+func tonumber(val []byte) (number interface{}) {
+	var err error
+	if val[0] == '-' {
+		number, err = strconv.ParseInt(string(val), 0, 64)
+	} else {
+		number, err = strconv.ParseUint(string(val), 0, 64)
+	}
+	if err != nil {
+		panic(NewParserError("%s", err))
+	}
+	return number
 }

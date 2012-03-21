@@ -58,30 +58,27 @@ func initTables() {
 	a := schema.NewTable("a")
 	a.Version = 0
 	a.Columns = append(a.Columns, "eid", "id", "name", "foo")
-	a.ColumnIsNumber = append(a.ColumnIsNumber, true, true, false, false)
+	a.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER, schema.CAT_OTHER, schema.CAT_OTHER)
 	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}})
 	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}})
 	a.PKColumns = append(a.PKColumns, 0, 1)
 	a.CacheType = 1
-	a.CacheSize = 1024
 	schem["a"] = a
 
 	b := schema.NewTable("b")
 	b.Version = 0
 	b.Columns = append(a.Columns, "eid", "id")
-	b.ColumnIsNumber = append(a.ColumnIsNumber, true, true)
+	b.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER)
 	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}})
 	b.PKColumns = append(a.PKColumns, 0, 1)
 	b.CacheType = 0
-	b.CacheSize = 0
 	schem["b"] = b
 
 	c := schema.NewTable("c")
 	c.Version = 0
 	c.Columns = append(a.Columns, "eid", "id")
-	c.ColumnIsNumber = append(a.ColumnIsNumber, true, true)
+	c.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER)
 	c.CacheType = 0
-	c.CacheSize = 0
 	schem["c"] = c
 }
 
@@ -108,6 +105,36 @@ func TestExec(t *testing.T) {
 			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
 		}
 		//fmt.Printf("%s#%s\n", tcase.input, out)
+	}
+}
+
+var actionToString = map[int]string{
+	CREATE: "CREATE",
+	ALTER:  "ALTER",
+	DROP:   "DROP",
+	RENAME: "RENAME",
+	0:      "NONE",
+}
+
+func TestDDL(t *testing.T) {
+	for tcase := range iterateFile("test/ddl_cases.txt") {
+		plan := DDLParse(tcase.input)
+		expected := make(map[string]interface{})
+		err := json.Unmarshal([]byte(tcase.output), &expected)
+		if err != nil {
+			panic(fmt.Sprintf("Error marshalling %v", plan))
+		}
+		matchString(t, tcase.lineno, expected["Action"], actionToString[plan.Action])
+		matchString(t, tcase.lineno, expected["TableName"], plan.TableName)
+		matchString(t, tcase.lineno, expected["NewName"], plan.NewName)
+	}
+}
+
+func matchString(t *testing.T, line int, expected interface{}, actual string) {
+	if expected != nil {
+		if expected.(string) != actual {
+			t.Error(fmt.Sprintf("Line %d: expected: %v, received %s", line, expected, actual))
+		}
 	}
 }
 

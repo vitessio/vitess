@@ -57,7 +57,7 @@ type Result struct {
 	consolidator *Consolidator
 	sql          string
 	Result       *QueryResult
-	Err          *TabletError
+	Err          error
 }
 
 func (self *Consolidator) Create(sql string) (r *Result, created bool) {

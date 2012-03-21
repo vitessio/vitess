@@ -75,13 +75,19 @@ type fifoWrapper struct {
 // capacity is the maximum number of resources RoundRobin will create.
 // factory will be the function used to create resources.
 // If a resource is unused beyond idleTimeout, it's discarded.
-func NewRoundRobin(capacity int, factory Factory, idleTimeout time.Duration) *RoundRobin {
+func NewRoundRobin(capacity int, idleTimeout time.Duration) *RoundRobin {
 	return &RoundRobin{
 		resources:   make(chan fifoWrapper, capacity),
-		factory:     factory,
 		size:        0,
 		idleTimeout: int64(idleTimeout),
 	}
+}
+
+// Open starts allowing the creation of resources
+func (self *RoundRobin) Open(factory Factory) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.factory = factory
 }
 
 // Close empties the pool calling Close on all its resources.
@@ -94,6 +100,11 @@ func (self *RoundRobin) Close() {
 		fw.resource.Close()
 		atomic.AddInt64(&self.size, -1)
 	}
+	self.factory = nil
+}
+
+func (self *RoundRobin) IsClosed() bool {
+	return self.factory == nil
 }
 
 // Get will return the next available resource. If none is available, and capacity
@@ -183,12 +194,6 @@ func (self *RoundRobin) SetCapacity(capacity int) {
 		break
 	}
 	self.resources = nr
-}
-
-func (self *RoundRobin) SetFactory(factory Factory) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.factory = factory
 }
 
 func (self *RoundRobin) SetIdleTimeout(idleTimeout time.Duration) {

@@ -38,7 +38,8 @@ import time
 import urllib2
 import MySQLdb as mysql
 from vttest import framework
-from vttest import exec_cases
+from vttest import cache_cases
+from vttest import nocache_cases
 from vtdb import vt_occ2 as db
 from vtdb import dbexceptions
 
@@ -83,6 +84,7 @@ class TestVtocc(framework.TestCase):
     finally:
       mcu.close()
 
+    self.memcached = subprocess.Popen(["memcached", "-s", self.cfg["memcache"]])
     occ_args = [
       vttop+"/go/cmd/vtocc/vtocc",
       "-config", "occ.json",
@@ -115,6 +117,8 @@ class TestVtocc(framework.TestCase):
       pass
     if getattr(self, "vtocc", None):
       self.vtocc.terminate()
+    if getattr(self, "memcached", None):
+      self.memcached.terminate()
 
   def mysql_connect(self, cfg):
     return mysql.connect(
@@ -138,6 +142,9 @@ class TestVtocc(framework.TestCase):
 
   def debug_vars(self):
     return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/vars")))
+
+  def table_stats(self):
+    return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/schema/tables")))
 
   def test_data(self):
     cu = self.execute("select * from vtocc_test where intval=1")
@@ -337,28 +344,6 @@ class TestVtocc(framework.TestCase):
     self.assertEqual(vend.Voltron.QueryCache.Size, 2)
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 5000)
 
-  def test_schema_reload_time(self):
-    mcu = self.mysql_conn.cursor()
-    mcu.execute("create table vtocc_temp(intval int)")
-    self.execute("set vt_schema_reload_time=1")
-    vend = self.debug_vars()
-    self.assertEqual(vend.Voltron.SchemaReloadTime, 1)
-    # This should not throw an exception
-    try:
-      for i in range(10):
-        try:
-          self.execute("select * from vtocc_temp")
-          self.execute("set vt_schema_reload_time=600")
-          vend = self.debug_vars()
-          self.assertEqual(vend.Voltron.SchemaReloadTime, 600)
-          break
-        except db.MySQLErrors.DatabaseError, e:
-          self.assertContains(e[1], "not found in schema")
-          time.sleep(1)
-    finally:
-      mcu.execute("drop table vtocc_temp")
-      mcu.close()
-
   def test_max_result_size(self):
     self.execute("set vt_max_result_size=2")
     vend = self.debug_vars()
@@ -432,10 +417,18 @@ class TestVtocc(framework.TestCase):
     self.assertEqual(vstart.mget("Waits.TotalCount", 0)+1, vend.Waits.TotalCount)
     self.assertEqual(vstart.mget("Waits.Histograms.Consolidations.Count", 0)+1, vend.Waits.Histograms.Consolidations.Count)
 
-  def test_execution(self):
+  def test_nocache(self):
+    self.run_suite(nocache_cases.nocache_cases)
+
+  def test_cache(self):
+    self.run_suite(cache_cases.cache_cases)
+
+  def run_suite(self, cases):
     curs = self.conn.cursor()
     error_count = 0
-    for case in exec_cases.exec_cases:
+    for case in cases:
+      if len(case) == 5:
+        tstart = self.table_stats()[case[4][0]]
       if len(case) == 1:
         curs.execute(case[0])
         continue
@@ -446,7 +439,7 @@ class TestVtocc(framework.TestCase):
       results = []
       for row in curs:
         results.append(row)
-      if results != case[2]:
+      if case[2] is not None and results != case[2]:
         print "Function: test_execution: FAIL: %s:\n%s\n%s"%(case[0], case[2], results)
         error_count += 1
       if len(case) == 3:
@@ -455,6 +448,11 @@ class TestVtocc(framework.TestCase):
       if querylog != case[3]:
         print "Function: test_execution: FAIL: %s:\n%s\n%s"%(case[0], case[3], querylog)
         error_count += 1
+      if len(case) == 4:
+        continue
+      tend = self.table_stats()[case[4][0]]
+      self.assertEqual(tstart["Hits"]+case[4][1], tend["Hits"])
+      self.assertEqual(tstart["Misses"]+case[4][2], tend["Misses"])
     if error_count != 0:
       self.assertFail("test_execution errors: %d"%(error_count))
 

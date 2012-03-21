@@ -37,7 +37,7 @@ import (
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	"code.google.com/p/vitess/go/sighandler"
-	"code.google.com/p/vitess/go/snitch"
+	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
 	ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"crypto/md5"
@@ -50,7 +50,6 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net/http"
 	_ "net/http/pprof"
 	"net/rpc"
 	"os"
@@ -89,12 +88,12 @@ const (
 type configType struct {
 	Port               int
 	UmgmtSocket        string
+	CachePoolCap       int
 	PoolSize           int
 	TransactionCap     int
 	TransactionTimeout float64
 	MaxResultSize      int
 	QueryCacheSize     int
-	SchemaReloadTime   float64
 	QueryTimeout       float64
 	IdleTimeout        float64
 }
@@ -102,12 +101,12 @@ type configType struct {
 var config configType = configType{
 	6510,
 	"/tmp/vtocc-%08x-umgmt.sock",
+	1000,
 	16,
 	20,
 	30,
 	10000,
 	5000,
-	30 * 60,
 	0,
 	30 * 60,
 }
@@ -193,23 +192,20 @@ func main() {
 		relog.Info("set max-open-fds = %v", *maxOpenFds)
 	}
 
-	snitch.RegisterCommand("reload_schema", "Rescan the schema for new tables", ReloadHandler)
-	snitch.Register()
-
 	qm := &OccManager{config, dbconfig}
 	rpc.Register(qm)
 
 	ts.StartQueryService(
+		config.CachePoolCap,
 		config.PoolSize,
 		config.TransactionCap,
 		config.TransactionTimeout,
 		config.MaxResultSize,
 		config.QueryCacheSize,
-		config.SchemaReloadTime,
 		config.QueryTimeout,
 		config.IdleTimeout,
 	)
-	ts.AllowQueries(ts.GenericConnectionCreator(dbconfig), nil)
+	ts.AllowQueries(dbconfig)
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()
@@ -265,11 +261,6 @@ func unmarshalFile(name string, val interface{}) {
 	relog.Info("config: %s\n", data)
 }
 
-func ReloadHandler(response http.ResponseWriter, request *http.Request) {
-	ts.ReloadSchema()
-	response.Write([]byte("schema reloaded"))
-}
-
 type OccManager struct {
 	config   configType
 	dbconfig map[string]interface{}
@@ -280,11 +271,5 @@ func (self *OccManager) GetSessionId(dbname *string, sessionId *int64) error {
 		return errors.New(fmt.Sprintf("db name mismatch, expecting %v, received %v", self.dbconfig["dbname"].(string), *dbname))
 	}
 	*sessionId = ts.GetSessionId()
-	return nil
-}
-
-func (self *OccManager) ReloadSchema(unusedInput *string, unusedOutput *string) error {
-	*unusedOutput = ""
-	ts.ReloadSchema()
 	return nil
 }

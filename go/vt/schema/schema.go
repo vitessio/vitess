@@ -39,15 +39,21 @@ import (
 	"time"
 )
 
+// Column categories
+const (
+	CAT_OTHER = iota
+	CAT_NUMBER
+	CAT_BINARY
+)
+
 type Table struct {
 	Version        int64
 	Name           string
 	Columns        []string
-	ColumnIsNumber []bool
+	ColumnCategory []int
 	Indexes        []*Index
 	PKColumns      []int
 	CacheType      int
-	CacheSize      uint64
 }
 
 func NewTable(name string) *Table {
@@ -55,7 +61,7 @@ func NewTable(name string) *Table {
 		Version:        time.Now().UnixNano(),
 		Name:           name,
 		Columns:        make([]string, 0, 16),
-		ColumnIsNumber: make([]bool, 0, 16),
+		ColumnCategory: make([]int, 0, 16),
 		Indexes:        make([]*Index, 0, 8),
 	}
 }
@@ -63,9 +69,13 @@ func NewTable(name string) *Table {
 func (self *Table) AddColumn(name string, column_type string) {
 	self.Columns = append(self.Columns, name)
 	if strings.Contains(column_type, "int") {
-		self.ColumnIsNumber = append(self.ColumnIsNumber, true)
+		self.ColumnCategory = append(self.ColumnCategory, CAT_NUMBER)
+	} else if strings.HasPrefix(column_type, "binary") {
+		self.ColumnCategory = append(self.ColumnCategory, CAT_BINARY)
+	} else if strings.HasPrefix(column_type, "varbinary") {
+		self.ColumnCategory = append(self.ColumnCategory, CAT_BINARY)
 	} else {
-		self.ColumnIsNumber = append(self.ColumnIsNumber, false)
+		self.ColumnCategory = append(self.ColumnCategory, CAT_OTHER)
 	}
 }
 

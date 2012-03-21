@@ -34,177 +34,117 @@ package tabletserver
 import (
 	"code.google.com/p/vitess/go/cache"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/timer"
 	"code.google.com/p/vitess/go/vt/schema"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 )
 
 type SchemaInfo struct {
-	sync.Mutex
-	Tables           map[string]*TableInfo
-	QueryCacheSize   int
-	Queries          *cache.LRUCache
-	ConnFactory      CreateConnectionFunc
-	SchemaReloadTime time.Duration
-	LastReload       time.Time
-	ticks            *timer.Timer
+	mu             sync.Mutex
+	tables         map[string]*TableInfo
+	queryCacheSize int
+	queries        *cache.LRUCache
+	connFactory    CreateConnectionFunc
+	cachePool      *CachePool
 }
 
-func NewSchemaInfo(queryCacheSize int, schemaReloadTime time.Duration) *SchemaInfo {
-	self := &SchemaInfo{
-		QueryCacheSize:   queryCacheSize,
-		SchemaReloadTime: schemaReloadTime,
-		ticks:            timer.NewTimer(schemaReloadTime),
-	}
-	http.Handle("/debug/query_cache", self)
+func NewSchemaInfo(queryCacheSize int) *SchemaInfo {
+	self := &SchemaInfo{queryCacheSize: queryCacheSize}
+	http.Handle("/debug/schema/", self)
 	return self
 }
 
-func (self *SchemaInfo) Open(ConnFactory CreateConnectionFunc, cachingInfo map[string]uint64) {
-	conn, err := ConnFactory()
+func (self *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePool) {
+	conn, err := connFactory()
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get connection: %v", err))
 	}
 	defer conn.Close()
 
-	if cachingInfo == nil {
-		cachingInfo = make(map[string]uint64)
-	}
-	self.LastReload = time.Now()
+	self.cachePool = cachePool
 	tables, err := conn.ExecuteFetch([]byte("show tables"), 10000)
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
-	self.Tables = make(map[string]*TableInfo, len(tables.Rows))
-	self.Tables["dual"] = NewTableInfo(conn, "dual", 0)
+	self.tables = make(map[string]*TableInfo, len(tables.Rows))
+	self.tables["dual"] = NewTableInfo(conn, "dual", self.cachePool)
 	for _, row := range tables.Rows {
 		tableName := row[0].(string)
-		tableInfo := NewTableInfo(conn, tableName, cachingInfo[tableName])
+		tableInfo := NewTableInfo(conn, tableName, self.cachePool)
 		if tableInfo == nil {
 			continue
 		}
-		self.Tables[tableName] = tableInfo
+		self.tables[tableName] = tableInfo
 	}
-	self.Queries = cache.NewLRUCache(uint64(self.QueryCacheSize))
-	self.ConnFactory = ConnFactory
-	go self.SchemaReloader()
+	self.queries = cache.NewLRUCache(uint64(self.queryCacheSize))
+	self.connFactory = connFactory
 }
 
 func (self *SchemaInfo) Close() {
-	self.ticks.Close()
-	self.Tables = nil
-	self.Queries = nil
-	self.ConnFactory = nil
+	self.tables = nil
+	self.queries = nil
+	self.connFactory = nil
 }
 
-func (self *SchemaInfo) SchemaReloader() {
-	for self.ticks.Next() {
-		self.Reload()
-	}
-}
-
-func (self *SchemaInfo) Reload() {
-	conn, err := self.ConnFactory()
-	if err != nil {
-		relog.Error("Could not get connection for reload: %v", err)
-		return
-	}
-	defer conn.Close()
-
-	query_for_schema_reload := fmt.Sprintf("show table status where unix_timestamp(create_time) > %v", self.LastReload.Unix())
-	self.LastReload = time.Now()
-	tables, err := conn.ExecuteFetch([]byte(query_for_schema_reload), 10000)
-	if err != nil {
-		relog.Error("Could not get table list for reload: %v", err)
-		return
-	}
-	if len(tables.Rows) == 0 {
-		return
-	}
-	for _, row := range tables.Rows {
-		tableName := row[0].(string)
-		relog.Info("Reloading: %s", tableName)
-		tableInfo := self.get(tableName)
-		if tableInfo != nil {
-			self.Put(tableInfo)
-			self.AlterTable(tableName, 0)
-		} else {
-			self.CreateTable(tableName, 0)
-		}
-	}
-}
-
-func (self *SchemaInfo) CreateTable(tableName string, cacheSize uint64) {
-	conn, err := self.ConnFactory()
+func (self *SchemaInfo) CreateTable(tableName string) {
+	conn, err := self.connFactory()
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get connection for create table %s: %v", tableName, err))
 	}
 	defer conn.Close()
+	self.createTable(conn, tableName)
+}
 
-	tableInfo := NewTableInfo(conn, tableName, cacheSize)
+func (self *SchemaInfo) createTable(conn *DBConnection, tableName string) {
+	tableInfo := NewTableInfo(conn, tableName, self.cachePool)
 	if tableInfo == nil {
-		panic(NewTabletError(FATAL, "Could not create table %s", tableName))
+		panic(NewTabletError(FATAL, "Could not read table info: %s", tableName))
 	}
-	self.Lock()
-	defer self.Unlock()
-	if _, ok := self.Tables[tableName]; ok {
+	if tableInfo.CacheType != 0 {
+		relog.Info("Initialized cached table: %s", tableInfo.Cache.prefix)
+	} else {
+		relog.Info("Initialized table: %s", tableName)
+	}
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if _, ok := self.tables[tableName]; ok {
 		panic(NewTabletError(FAIL, "Table %s already exists", tableName))
 	}
-	self.Tables[tableName] = tableInfo
+	self.tables[tableName] = tableInfo
 }
 
 func (self *SchemaInfo) DropTable(tableName string) {
-	self.Lock()
-	defer self.Unlock()
-	tableInfo, ok := self.Tables[tableName]
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	tableInfo, ok := self.tables[tableName]
 	if !ok {
 		panic(NewTabletError(FAIL, "Table %s doesn't exists", tableName))
 	}
-	delete(self.Tables, tableName)
+	delete(self.tables, tableName)
 
 	tableInfo.Lock()
 	defer tableInfo.Unlock()
-	self.Queries.Clear()
+	self.queries.Clear()
+	relog.Info("Table %s forgotten", tableName)
 }
 
-func (self *SchemaInfo) AlterTable(tableName string, cacheSize uint64) {
+func (self *SchemaInfo) AlterTable(tableName string) {
 	self.DropTable(tableName)
-
-	self.CreateTable(tableName, cacheSize)
-}
-
-func (self *SchemaInfo) SetRowCache(tableName string, cacheSize uint64) {
-	if self.simpleSetRowCache(tableName, cacheSize) {
-		return
-	}
-	self.DropTable(tableName)
-	self.CreateTable(tableName, cacheSize)
-}
-
-func (self *SchemaInfo) simpleSetRowCache(tableName string, cacheSize uint64) bool {
-	tableInfo := self.get(tableName)
-	defer self.Put(tableInfo)
-	if tableInfo.CacheType == 1 && cacheSize != 0 {
-		tableInfo.RowCache.SetCapacity(cacheSize)
-		return true
-	}
-	return false
+	self.CreateTable(tableName)
 }
 
 // Caller for GetPlan must call Put(tableInfo) to release lock on TableInfo
 func (self *SchemaInfo) GetPlan(sql string, mustCache bool) (*sqlparser.ExecPlan, *TableInfo) {
-	self.Lock()
-	defer self.Unlock()
+	self.mu.Lock()
+	defer self.mu.Unlock()
 	if plan := self.getQuery(sql); plan != nil {
 		return plan, self.get(plan.TableName)
 	}
 
 	GetTable := func(tableName string) (table *schema.Table, ok bool) {
-		tableInfo, ok := self.Tables[tableName]
+		tableInfo, ok := self.tables[tableName]
 		if !ok {
 			return nil, false
 		}
@@ -214,22 +154,24 @@ func (self *SchemaInfo) GetPlan(sql string, mustCache bool) (*sqlparser.ExecPlan
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
-
+	if plan.PlanId == sqlparser.PLAN_DDL {
+		return plan, nil
+	}
 	if mustCache {
-		self.Queries.Set(sql, plan)
+		self.queries.Set(sql, plan)
 	}
 	return plan, self.get(plan.TableName)
 }
 
 // Caller for GetTable must call Put(tableInfo) to release lock on TableInfo
 func (self *SchemaInfo) GetTable(tableName string) *TableInfo {
-	self.Lock()
-	defer self.Unlock()
+	self.mu.Lock()
+	defer self.mu.Unlock()
 	return self.get(tableName)
 }
 
 func (self *SchemaInfo) get(tableName string) *TableInfo {
-	tableInfo, ok := self.Tables[tableName]
+	tableInfo, ok := self.tables[tableName]
 	if ok {
 		tableInfo.RLock()
 	}
@@ -243,7 +185,7 @@ func (self *SchemaInfo) Put(tableInfo *TableInfo) {
 }
 
 func (self *SchemaInfo) getQuery(sql string) *sqlparser.ExecPlan {
-	if cacheResult, ok := self.Queries.Get(sql); ok {
+	if cacheResult, ok := self.queries.Get(sql); ok {
 		return cacheResult.(*sqlparser.ExecPlan)
 	}
 	return nil
@@ -253,25 +195,39 @@ func (self *SchemaInfo) SetQueryCacheSize(size int) {
 	if size <= 0 {
 		panic(NewTabletError(FAIL, "cache size %v out of range", size))
 	}
-	self.QueryCacheSize = size
-	self.Queries.SetCapacity(uint64(size))
-}
-
-func (self *SchemaInfo) SetSchemaReloadTime(reload_time time.Duration) {
-	self.SchemaReloadTime = reload_time
-	self.ticks.Trigger()
-	self.ticks.SetInterval(reload_time)
+	self.queryCacheSize = size
+	self.queries.SetCapacity(uint64(size))
 }
 
 func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	keys := self.Queries.Keys()
-	response.Header().Set("Content-Type", "text/plain")
-	if keys == nil {
-		response.Write([]byte("empty\n"))
-		return
-	}
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
-	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%s\n", v)))
+	if request.URL.Path == "/debug/schema/query_cache" {
+		keys := self.queries.Keys()
+		response.Header().Set("Content-Type", "text/plain")
+		if keys == nil {
+			response.Write([]byte("empty\n"))
+			return
+		}
+		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
+		for _, v := range keys {
+			response.Write([]byte(fmt.Sprintf("%s\n", v)))
+		}
+	} else { // tables
+		response.Header().Set("Content-Type", "text/plain")
+		self.mu.Lock()
+		tstats := make(map[string]struct{ hits, misses int64 })
+		var temp struct{ hits, misses int64 }
+		for k, v := range self.tables {
+			if v.CacheType != 0 {
+				temp.hits, temp.misses = v.Stats()
+				tstats[k] = temp
+			}
+		}
+		self.mu.Unlock()
+		response.Write([]byte("{\n"))
+		for k, v := range tstats {
+			fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Misses\": %v},\n", k, v.hits, v.misses)
+		}
+		fmt.Fprintf(response, "\"dual\": null\n")
+		response.Write([]byte("}\n"))
 	}
 }

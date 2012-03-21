@@ -33,6 +33,7 @@ package tabletserver
 
 import (
 	"bytes"
+	"code.google.com/p/vitess/go/vt/schema"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"encoding/base64"
 	"fmt"
@@ -110,7 +111,7 @@ func normalizeRows(tableInfo *TableInfo, columnNumbers []int, rows [][]interface
 			panic(NewTabletError(FAIL, "data inconsistency %d vs %d", len(row), len(columnNumbers)))
 		}
 		for j, cell := range row {
-			if tableInfo.ColumnIsNumber[columnNumbers[j]] {
+			if tableInfo.ColumnCategory[columnNumbers[j]] == schema.CAT_NUMBER {
 				switch val := cell.(type) {
 				case string:
 					row[j] = tonumber(val)
@@ -125,8 +126,8 @@ func normalizeRows(tableInfo *TableInfo, columnNumbers []int, rows [][]interface
 func buildKey(tableInfo *TableInfo, row []interface{}) (key string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	for i, pkValue := range row {
-		encodePKValue(buf, pkValue, tableInfo.ColumnIsNumber[tableInfo.PKColumns[i]])
-		buf.WriteByte(',')
+		encodePKValue(buf, pkValue, tableInfo.ColumnCategory[tableInfo.PKColumns[i]])
+		buf.WriteByte('.')
 	}
 	return buf.String()
 }
@@ -157,15 +158,16 @@ func buildPKValueList(buf *bytes.Buffer, tableInfo *TableInfo, pkValueList [][]i
 			if pkValue == nil {
 				continue
 			}
-			encodePKValue(buf, pkValue, tableInfo.ColumnIsNumber[tableInfo.PKColumns[j]])
+			encodePKValue(buf, pkValue, tableInfo.ColumnCategory[tableInfo.PKColumns[j]])
 			buf.WriteString(" ")
 		}
 		buf.WriteString(")")
 	}
 }
 
-func encodePKValue(buf *bytes.Buffer, pkValue interface{}, isNumber bool) {
-	if isNumber {
+func encodePKValue(buf *bytes.Buffer, pkValue interface{}, category int) {
+	switch category {
+	case schema.CAT_NUMBER:
 		switch val := pkValue.(type) {
 		case int, int32, int64, uint, uint32, uint64:
 			sqlparser.EncodeValue(buf, val)
@@ -176,26 +178,26 @@ func encodePKValue(buf *bytes.Buffer, pkValue interface{}, isNumber bool) {
 		default:
 			panic(NewTabletError(FAIL, "Type %T disallowed for pk columns", val))
 		}
-	} else {
-		buf.WriteString("'")
+	case schema.CAT_BINARY:
+		buf.WriteByte('\'')
+		encoder := base64.NewEncoder(base64.StdEncoding, buf)
+		defer encoder.Close()
 		switch val := pkValue.(type) {
-		case int, int32, int64, uint, uint32, uint64:
-			sqlparser.EncodeValue(buf, val)
 		case string:
-			for i := 0; i < len(val); i++ {
-				escapeWrite(buf, val[i])
-			}
+			encoder.Write([]byte(val))
 		case []byte:
-			for i := 0; i < len(val); i++ {
-				escapeWrite(buf, val[i])
-			}
+			encoder.Write(val)
 		default:
-			panic(NewTabletError(FAIL, "Type %T disallowed for pk columns", val))
+			panic(NewTabletError(FAIL, "Type %T disallowed for non-number pk columns", val))
 		}
-		buf.WriteString("'")
+		buf.WriteByte('\'')
+	default:
+		// This should never happen
+		panic(NewTabletError(FAIL, "Unsupported db column type"))
 	}
 }
 
+// duplicated in vt/sqlparser/execution.go
 func tonumber(val string) (number interface{}) {
 	var err error
 	if val[0] == '-' {
@@ -207,21 +209,6 @@ func tonumber(val string) (number interface{}) {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	return number
-}
-
-func escapeWrite(buf *bytes.Buffer, b byte) {
-	switch b {
-	case '\'':
-		buf.WriteString("\\'")
-	case '\\':
-		buf.WriteString("\\\\")
-	case '/':
-		buf.WriteString("\\/")
-	case '*':
-		buf.WriteString("\\*")
-	default:
-		buf.WriteByte(b)
-	}
 }
 
 func base64Decode(b []byte) string {

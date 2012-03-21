@@ -120,7 +120,7 @@ func (self *ActiveTxPool) Commit(transactionId int64, schemaInfo *SchemaInfo) {
 		for tableName, invalidList := range conn.dirtyTables {
 			tableInfo := schemaInfo.GetTable(tableName)
 			for key := range invalidList {
-				tableInfo.RowCache.Delete(key)
+				tableInfo.Cache.Delete(key)
 			}
 			schemaInfo.Put(tableInfo)
 		}

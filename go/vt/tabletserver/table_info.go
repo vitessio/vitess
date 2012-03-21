@@ -32,36 +32,36 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/cache"
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/schema"
 	"fmt"
+	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 )
 
 type TableInfo struct {
 	sync.RWMutex
 	*schema.Table
-	RowCache *cache.LRUCache
-	Fields   []mysql.Field
+	Cache  *RowCache
+	Fields []mysql.Field
 	// stats updated by sqlquery.go
 	hits, misses int64
 }
 
-func NewTableInfo(conn *DBConnection, tableName string, cacheSize uint64) (self *TableInfo) {
-	self = loadTableInfo(conn, tableName)
-	if cacheSize != 0 {
-		self.initRowCache(conn, cacheSize)
+func NewTableInfo(conn *DBConnection, tableName string, cachePool *CachePool) (self *TableInfo) {
+	if tableName == "dual" {
+		return &TableInfo{Table: schema.NewTable(tableName)}
 	}
+	self = loadTableInfo(conn, tableName)
+	self.initRowCache(conn, cachePool)
 	return self
 }
 
 func loadTableInfo(conn *DBConnection, tableName string) (self *TableInfo) {
 	self = &TableInfo{Table: schema.NewTable(tableName)}
-	if tableName == "dual" {
-		return self
-	}
 	if !self.fetchColumns(conn) {
 		return nil
 	}
@@ -113,10 +113,53 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 	return true
 }
 
-func (self *TableInfo) initRowCache(conn *DBConnection, cacheSize uint64) {
-	if self.PKColumns == nil {
-		relog.Warning("Table %s has no primary key. Will not be cached.", self.Name)
+const base_show_tables = "select table_type, create_time, table_comment from information_schema.tables where table_schema = database()"
+
+func (self *TableInfo) initRowCache(conn *DBConnection, cachePool *CachePool) {
+	if cachePool.IsClosed() {
 		return
+	}
+
+	metaRows, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, self.Name)), 1)
+	if err != nil {
+		relog.Warning("Failed to fetch table info for %s, table will not be cached: %s", self.Name, err.Error())
+		return
+	}
+	if len(metaRows.Rows) != 1 {
+		panic(err)
+	}
+	metaRow := metaRows.Rows[0]
+
+	comment := metaRow[2].(string)
+	if strings.Contains(comment, "vtocc_nocache") {
+		relog.Info("%s commented as vtocc_nocache. Will not be cached.", self.Name)
+		return
+	}
+
+	tableType := metaRow[0].(string)
+	if tableType == "VIEW" {
+		relog.Info("%s is a view. Will not be cached.", self.Name)
+		return
+	}
+
+	createTime := metaRow[1]
+	if createTime == nil {
+		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
+		return
+	}
+	ts, err := time.Parse("2006-01-02 15:04:05", createTime.(string))
+	if err != nil {
+		relog.Warning("Time read error %v. Will not be cached.", err, self.Name)
+		return
+	}
+	if self.PKColumns == nil {
+		relog.Info("Table %s has no primary key. Will not be cached.", self.Name)
+		return
+	}
+	for col := range self.PKColumns {
+		if self.ColumnCategory[col] == schema.CAT_OTHER {
+			relog.Info("Table %s pk has unsupported column types. Will not be cached.", self.Name)
+		}
 	}
 	rowInfo, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %s where 1!=1", self.Name)), 10000)
 	if err != nil {
@@ -125,17 +168,19 @@ func (self *TableInfo) initRowCache(conn *DBConnection, cacheSize uint64) {
 	}
 	self.Fields = rowInfo.Fields
 	self.CacheType = 1
-	self.CacheSize = cacheSize
-	self.RowCache = cache.NewLRUCache(self.CacheSize)
+	self.Cache = NewRowCache(self.Name, ts, cachePool)
 }
 
-func (self *TableInfo) String() string {
-	if self.RowCache == nil {
-		return fmt.Sprintf("{}")
+func (self *TableInfo) StatsJSON() string {
+	if self.Cache == nil {
+		return fmt.Sprintf("null")
 	}
-	return fmt.Sprintf("{\"RowCache\": %v, \"Hits\": %v, \"Misses\": %v}",
-		self.RowCache,
+	return fmt.Sprintf("{\"Hits\": %v, \"Misses\": %v}",
 		&self.hits,
 		&self.misses,
 	)
+}
+
+func (self *TableInfo) Stats() (hits, misses int64) {
+	return atomic.LoadInt64(&self.hits), atomic.LoadInt64(&self.misses)
 }

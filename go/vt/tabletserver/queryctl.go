@@ -38,18 +38,18 @@ import (
 
 var SqlQueryRpcService *SqlQuery
 
-func StartQueryService(poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, schemaReloadTime, queryTimeout, idleTimeout float64) {
+func StartQueryService(cachePoolCap, poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, queryTimeout, idleTimeout float64) {
 	if SqlQueryRpcService != nil {
 		relog.Warning("RPC service already up %v", SqlQueryRpcService)
 		return
 	}
-	SqlQueryRpcService = NewSqlQuery(poolSize, transactionCap, transactionTimeout, maxResultSize, queryCacheSize, schemaReloadTime, queryTimeout, idleTimeout)
+	SqlQueryRpcService = NewSqlQuery(cachePoolCap, poolSize, transactionCap, transactionTimeout, maxResultSize, queryCacheSize, queryTimeout, idleTimeout)
 	rpc.Register(SqlQueryRpcService)
 }
 
-func AllowQueries(ConnFactory CreateConnectionFunc, cachingInfo map[string]uint64) {
+func AllowQueries(dbconfig map[string]interface{}) {
 	defer logError()
-	SqlQueryRpcService.allowQueries(ConnFactory, cachingInfo)
+	SqlQueryRpcService.allowQueries(dbconfig)
 }
 
 func DisallowQueries() {
@@ -57,29 +57,6 @@ func DisallowQueries() {
 	SqlQueryRpcService.disallowQueries()
 }
 
-func ReloadSchema() {
-	defer logError()
-	SqlQueryRpcService.reloadSchema()
-}
-
 func GetSessionId() int64 {
 	return SqlQueryRpcService.sessionId
-}
-
-func CreateTable(tableName string, cacheSize uint64) (err error) {
-	defer handleError(&err)
-	SqlQueryRpcService.createTable(tableName, cacheSize)
-	return nil
-}
-
-func DropTable(tableName string) (err error) {
-	defer handleError(&err)
-	SqlQueryRpcService.dropTable(tableName)
-	return nil
-}
-
-func SetRowCache(tableName string, cacheSize uint64) (err error) {
-	defer handleError(&err)
-	SqlQueryRpcService.setRowCache(tableName, cacheSize)
-	return nil
 }

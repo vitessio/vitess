@@ -116,7 +116,14 @@ func (self *QueryResult) encodeRowBson(row []interface{}, buf *bytes.Buffer) {
 			bson.EncodePrefix(buf, bson.Null, bson.Itoa(i))
 		} else {
 			bson.EncodePrefix(buf, bson.Binary, bson.Itoa(i))
-			bson.EncodeString(buf, v.(string))
+			switch vv := v.(type) {
+			case string:
+				bson.EncodeString(buf, vv)
+			case []byte:
+				bson.EncodeBinary(buf, vv)
+			default:
+				panic(bson.NewBsonError("Unrecognized type %T", v))
+			}
 		}
 	}
 	buf.WriteByte(0)
