@@ -45,8 +45,9 @@ import (
 type TableInfo struct {
 	sync.RWMutex
 	*schema.Table
-	Cache  *RowCache
-	Fields []mysql.Field
+	Cache      *RowCache
+	Fields     []mysql.Field
+	CreateTime time.Time
 	// stats updated by sqlquery.go
 	hits, misses int64
 }
@@ -168,6 +169,7 @@ func (self *TableInfo) initRowCache(conn *DBConnection, cachePool *CachePool) {
 	}
 	self.Fields = rowInfo.Fields
 	self.CacheType = 1
+	self.CreateTime = ts
 	self.Cache = NewRowCache(self.Name, ts, cachePool)
 }
 

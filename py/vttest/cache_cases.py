@@ -28,6 +28,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 cache_cases = [
+  ["alter table vtocc_cached comment 'new'"],
   # SELECT_PK (empty cache)
   [
     "select * from vtocc_cached where eid = 2 and bid = 'foo'", {},

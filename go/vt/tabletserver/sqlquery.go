@@ -445,6 +445,7 @@ func (self *SqlQuery) execDDL(ddl string) *QueryResult {
 	// Stolen from Execute
 	conn = self.activeTxPool.Get(txid)
 	defer conn.Recycle()
+	self.schemaInfo.ThrottleCheck(ddlPlan.TableName)
 	result, err := self.executeSql(conn, []byte(ddl))
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))

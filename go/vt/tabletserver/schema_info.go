@@ -39,6 +39,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 )
 
 type SchemaInfo struct {
@@ -86,6 +87,24 @@ func (self *SchemaInfo) Close() {
 	self.tables = nil
 	self.queries = nil
 	self.connFactory = nil
+}
+
+// ThrottleCheck prevents DDLs from being applied more than once per second
+// on a row cached tablebecause we rely on create_time to be unique
+// for every ddl application.
+func (self *SchemaInfo) ThrottleCheck(tableName string) {
+	self.mu.Lock()
+	tableInfo, ok := self.tables[tableName]
+	if !ok {
+		self.mu.Unlock()
+		return
+	}
+	if tableInfo.CacheType != 0 {
+		self.mu.Unlock()
+		time.Sleep(11e8)
+		return
+	}
+	self.mu.Unlock()
 }
 
 func (self *SchemaInfo) CreateTable(tableName string) {

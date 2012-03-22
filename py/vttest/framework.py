@@ -71,9 +71,6 @@ class TestCase(object):
         except TestException, e:
           print e
           error_count += 1
-    except:
-      error_count += 1
-      raise
     finally:
       self.tearDown()
       if error_count == 0:

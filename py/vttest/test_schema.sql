@@ -34,3 +34,5 @@ drop table vtocc_b
 drop table vtocc_c
 drop table vtocc_d
 drop table vtocc_cached
+drop table vtocc_cached2
+drop table vtocc_nocache
