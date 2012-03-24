@@ -37,24 +37,23 @@ import (
 	"code.google.com/p/vitess/go/vt/schema"
 	"fmt"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type TableInfo struct {
-	sync.RWMutex
 	*schema.Table
-	Cache      *RowCache
-	Fields     []mysql.Field
-	CreateTime time.Time
+	Cache  *RowCache
+	Fields []mysql.Field
+	// This is different from the create_time in the schema
+	TimeCreated time.Time
 	// stats updated by sqlquery.go
-	hits, misses int64
+	hits, absent, misses int64
 }
 
 func NewTableInfo(conn *DBConnection, tableName string, cachePool *CachePool) (self *TableInfo) {
 	if tableName == "dual" {
-		return &TableInfo{Table: schema.NewTable(tableName)}
+		return &TableInfo{Table: schema.NewTable(tableName), TimeCreated: time.Now()}
 	}
 	self = loadTableInfo(conn, tableName)
 	self.initRowCache(conn, cachePool)
@@ -62,7 +61,7 @@ func NewTableInfo(conn *DBConnection, tableName string, cachePool *CachePool) (s
 }
 
 func loadTableInfo(conn *DBConnection, tableName string) (self *TableInfo) {
-	self = &TableInfo{Table: schema.NewTable(tableName)}
+	self = &TableInfo{Table: schema.NewTable(tableName), TimeCreated: time.Now()}
 	if !self.fetchColumns(conn) {
 		return nil
 	}
@@ -169,7 +168,6 @@ func (self *TableInfo) initRowCache(conn *DBConnection, cachePool *CachePool) {
 	}
 	self.Fields = rowInfo.Fields
 	self.CacheType = 1
-	self.CreateTime = ts
 	self.Cache = NewRowCache(self.Name, ts, cachePool)
 }
 
@@ -177,12 +175,10 @@ func (self *TableInfo) StatsJSON() string {
 	if self.Cache == nil {
 		return fmt.Sprintf("null")
 	}
-	return fmt.Sprintf("{\"Hits\": %v, \"Misses\": %v}",
-		&self.hits,
-		&self.misses,
-	)
+	h, a, m := self.Stats()
+	return fmt.Sprintf("{\"Hits\": %v, \"Absent\": %v, \"Misses\": %v}", h, a, m)
 }
 
-func (self *TableInfo) Stats() (hits, misses int64) {
-	return atomic.LoadInt64(&self.hits), atomic.LoadInt64(&self.misses)
+func (self *TableInfo) Stats() (hits, absent, misses int64) {
+	return atomic.LoadInt64(&self.hits), atomic.LoadInt64(&self.absent), atomic.LoadInt64(&self.misses)
 }

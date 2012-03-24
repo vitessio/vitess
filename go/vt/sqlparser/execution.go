@@ -259,11 +259,7 @@ func (self *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	columns := self.At(INSERT_COLUMN_LIST_OFFSET)
-	if columns.Len() == 0 {
-		relog.Warning("insert column list not specified for table %s", tableName)
-		return plan
-	}
+	columnNumbers := self.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
 
 	if self.At(INSERT_ON_DUP_OFFSET).Len() != 0 {
 		var ok bool
@@ -279,13 +275,20 @@ func (self *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 		plan.OuterQuery = self.GenerateInsertOuterQuery()
 		plan.Subquery = rowValues.GenerateSelectLimitQuery()
 		// Column list syntax is a subset of select expressions
-		plan.ColumnNumbers = columns.execAnalyzeSelectExpressions(tableInfo)
-		plan.SubqueryPKColumns = getPKColumnsFromColumns(columns, tableInfo.Indexes[0])
+		if self.At(INSERT_COLUMN_LIST_OFFSET).Len() != 0 {
+			plan.ColumnNumbers = self.At(INSERT_COLUMN_LIST_OFFSET).execAnalyzeSelectExpressions(tableInfo)
+		} else {
+			// SELECT_STAR node will expand into all columns
+			n := NewSimpleParseNode(NODE_LIST, "")
+			n.Push(NewSimpleParseNode(SELECT_STAR, "*"))
+			plan.ColumnNumbers = n.execAnalyzeSelectExpressions(tableInfo)
+		}
+		plan.SubqueryPKColumns = columnNumbers
 		return plan
 	}
 
 	rowList := rowValues.At(0) // VALUES->NODE_LIST
-	if pkValues := getInsertPKValues(columns, rowList, tableInfo.Indexes[0]); pkValues != nil {
+	if pkValues := getInsertPKValues(columnNumbers, rowList); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
 		plan.PKValues = pkValues
@@ -375,6 +378,7 @@ func (self *Node) execAnalyzeSet() (plan *ExecPlan) {
 	plan.SetKey = string(update_expression.At(0).Value) // ID
 	expression := update_expression.At(1)
 	if expression.Type == NUMBER {
+		// TODO: Try integer conversions first
 		if val, err := strconv.ParseFloat(string(expression.Value), 64); err == nil {
 			plan.SetValue = val
 		}
@@ -643,21 +647,19 @@ func (self *Node) parseList() (values interface{}, isList bool) {
 func (self *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
 	for i := 0; i < self.Len(); i++ {
 		columnName := string(self.At(i).At(0).Value)
-		if index := pkIndex.FindColumn(columnName); index != -1 {
-			value := self.At(i).At(1).execAnalyzeValue()
-			if value == nil {
-				relog.Warning("expression is too complex %v", self.At(i).At(0))
-				return nil, false
-			}
-			if pkValues == nil {
-				pkValues = make([]interface{}, len(pkIndex.Columns))
-			}
-			if pkValues[index] != nil {
-				relog.Warning("ambiguous update expression %v", self.At(i).At(0))
-				return nil, false
-			}
-			pkValues[index] = asInterface(value)
+		index := pkIndex.FindColumn(columnName)
+		if index == -1 {
+			continue
 		}
+		value := self.At(i).At(1).execAnalyzeValue()
+		if value == nil {
+			relog.Warning("expression is too complex %v", self.At(i).At(0))
+			return nil, false
+		}
+		if pkValues == nil {
+			pkValues = make([]interface{}, len(pkIndex.Columns))
+		}
+		pkValues[index] = asInterface(value)
 	}
 	return pkValues, true
 }
@@ -691,6 +693,56 @@ func (self *Node) execAnalyzeOrderExpression() (order *Node) {
 		return self.At(0).execAnalyzeOrderExpression()
 	}
 	return nil
+}
+
+//-----------------------------------------------
+// Insert
+
+func (self *Node) getInsertPKColumns(tableInfo *schema.Table) (columnNumbers []int) {
+	if self.Len() == 0 {
+		return tableInfo.PKColumns
+	}
+	pkIndex := tableInfo.Indexes[0]
+	columnNumbers = make([]int, len(pkIndex.Columns))
+	for i, _ := range columnNumbers {
+		columnNumbers[i] = -1
+	}
+	for i, column := range self.Sub {
+		index := pkIndex.FindColumn(string(column.Value))
+		if index == -1 {
+			continue
+		}
+		columnNumbers[index] = i
+	}
+	return columnNumbers
+}
+
+func getInsertPKValues(columnNumbers []int, rowList *Node) (pkValues []interface{}) {
+	pkValues = make([]interface{}, len(columnNumbers))
+	for index, columnNumber := range columnNumbers {
+		if columnNumber == -1 {
+			continue
+		}
+		values := make([]interface{}, rowList.Len())
+		for j := 0; j < rowList.Len(); j++ {
+			if columnNumber >= rowList.At(j).At(0).Len() { // NODE_LIST->'('->NODE_LIST
+				panic(NewParserError("Column count doesn't match value count"))
+			}
+			node := rowList.At(j).At(0).At(columnNumber) // NODE_LIST->'('->NODE_LIST->Value
+			value := node.execAnalyzeValue()
+			if value == nil {
+				relog.Warning("insert is too complex %v", node)
+				return nil
+			}
+			values[j] = asInterface(value)
+		}
+		if len(values) == 1 {
+			pkValues[index] = values[0]
+		} else {
+			pkValues[index] = values
+		}
+	}
+	return pkValues
 }
 
 //-----------------------------------------------
@@ -808,59 +860,6 @@ func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) 
 		}
 	}
 	return highScorer
-}
-
-func getPKColumnsFromColumns(columns *Node, pkIndex *schema.Index) (columnNumbers []int) {
-	columnNumbers = make([]int, len(pkIndex.Columns))
-	for i, _ := range columnNumbers {
-		columnNumbers[i] = -1
-	}
-	for i, column := range columns.Sub {
-		index := pkIndex.FindColumn(string(column.Value))
-		if index == -1 {
-			continue
-		}
-		columnNumbers[index] = i
-	}
-	return columnNumbers
-}
-
-func getInsertPKValues(columns *Node, rowList *Node, pkIndex *schema.Index) (pkValues []interface{}) {
-	for i := 0; i < rowList.Len(); i++ {
-		if columns.Len() != rowList.At(i).At(0).Len() { // NODE_LIST->'('->NODE_LIST
-			panic(NewParserError("number of columns does not match number of values"))
-		}
-	}
-
-	pkValues = make([]interface{}, len(pkIndex.Columns))
-	for i := 0; i < columns.Len(); i++ {
-		index := pkIndex.FindColumn(string(columns.At(i).Value))
-		if index == -1 {
-			continue
-		}
-		if rowList.Len() == 1 { // simple
-			node := rowList.At(0).At(0).At(i) // NODE_LIST->'('->NODE_LIST->Value
-			value := node.execAnalyzeValue()
-			if value == nil {
-				relog.Warning("insert is too complex %v", node)
-				return nil
-			}
-			pkValues[index] = asInterface(value)
-		} else { // composite
-			values := make([]interface{}, rowList.Len())
-			for j := 0; j < rowList.Len(); j++ {
-				node := rowList.At(j).At(0).At(i) // NODE_LIST->'('->NODE_LIST->Value
-				value := node.execAnalyzeValue()
-				if value == nil {
-					relog.Warning("insert is too complex %v", node)
-					return nil
-				}
-				values[j] = asInterface(value)
-			}
-			pkValues[index] = values
-		}
-	}
-	return pkValues
 }
 
 //-----------------------------------------------

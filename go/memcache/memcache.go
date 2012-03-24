@@ -145,6 +145,10 @@ func (self *Connection) Delete(key string) (deleted bool, err error) {
 }
 
 func (self *Connection) store(command, key string, flags uint16, value []byte) (stored bool) {
+	if len(value) > 1000000 {
+		return false
+	}
+
 	// <command name> <key> <flags> <exptime> <bytes> [noreply]\r\n
 	self.writestrings(command, " ", key, " ")
 	self.write(strconv.AppendUint(nil, uint64(flags), 10))
@@ -199,12 +203,12 @@ func (self *Connection) read(count int) []byte {
 	b := make([]byte, count)
 	total := 0
 	for i := 0; i < 10; i++ {
-		n, err := self.buffered.Read(b)
+		n, err := self.buffered.Read(b[total:])
 		if err != nil {
 			panic(NewMemcacheError("%s", err))
 		}
 		total += n
-		if total == count {
+		if total >= count {
 			break
 		}
 	}

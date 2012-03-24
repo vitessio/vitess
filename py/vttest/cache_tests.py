@@ -18,6 +18,8 @@ class TestCache(framework.TestCase):
       self.env.execute("select bid, eid from vtocc_cached where eid = 1 and bid = 1")
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Type")
+    else:
+      self.assertFail("Did not receive exception")
 
   def test_nocache(self):
     try:
@@ -59,7 +61,7 @@ class TestCache(framework.TestCase):
       except KeyError:
         pass
       else:
-        assertFail("KeyError expected")
+        self.assertFail("Did not receive exception")
     finally:
       self.env.execute("alter table vtocc_cached comment ''")
 
@@ -85,7 +87,7 @@ class TestCache(framework.TestCase):
       except KeyError:
         pass
       else:
-        assertFail("KeyError expected")
+        self.assertFail("Did not receive exception")
       # Verify row cache is working
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       tstart = self.env.table_stats()["vtocc_cached2"]
@@ -113,7 +115,7 @@ class TestCache(framework.TestCase):
     finally:
       self.env.execute("rollback")
 
-  def test_sqls(self):
+  def test_cache_sqls(self):
     error_count = self.env.run_cases(cache_cases.cache_cases)
     if error_count != 0:
       self.assertFail("test_execution errors: %d"%(error_count))

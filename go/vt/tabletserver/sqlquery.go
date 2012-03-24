@@ -254,7 +254,6 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
 	basePlan, tableInfo := self.schemaInfo.GetPlan(query.Sql, len(query.BindVariables) != 0)
-	defer self.schemaInfo.Put(tableInfo)
 	if basePlan.PlanId == sqlparser.PLAN_DDL {
 		defer queryStats.Record("DDL", time.Now())
 		*reply = *self.execDDL(query.Sql)
@@ -397,7 +396,6 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	if tableInfo == nil {
 		return NewTabletError(FAIL, "Table %s not found", cacheInvalidate.Table)
 	}
-	defer self.schemaInfo.Put(tableInfo)
 	if tableInfo != nil && tableInfo.Cache != nil {
 		for i, val := range cacheInvalidate.Keys {
 			switch v := val.(type) {
@@ -443,17 +441,15 @@ func (self *SqlQuery) execDDL(ddl string) *QueryResult {
 	defer self.activeTxPool.Commit(txid, self.schemaInfo)
 
 	// Stolen from Execute
+	self.schemaInfo.ThrottleDDL(ddlPlan.TableName)
 	conn = self.activeTxPool.Get(txid)
 	defer conn.Recycle()
-	self.schemaInfo.ThrottleCheck(ddlPlan.TableName)
 	result, err := self.executeSql(conn, []byte(ddl))
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
 
-	if ddlPlan.Action != sqlparser.CREATE { // ALTER, RENAME, DROP
-		self.schemaInfo.DropTable(ddlPlan.TableName)
-	}
+	self.schemaInfo.DropTable(ddlPlan.TableName)
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
 		self.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
@@ -479,29 +475,54 @@ func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (r
 	result.Fields = applyFieldFilter(plan.ColumnNumbers, tableInfo.Fields)
 	normalizePKRows(plan.TableInfo, pkRows)
 	rows := make([][]interface{}, 0, len(pkRows))
-	var hits, misses int64
+	var hits, absent, misses int64
 	readTime := time.Now()
 	for _, pk := range pkRows {
 		key := buildKey(tableInfo, pk)
 		if cacheRow := tableInfo.Cache.Get(key); cacheRow != nil {
+			//self.validateRow(plan, cacheRow, pk)
 			rows = append(rows, applyFilter(plan.ColumnNumbers, cacheRow))
 			hits++
 		} else {
 			resultFromdb := self.qFetch(plan, plan.OuterQuery, pk)
-			for _, row := range resultFromdb.Rows {
-				pkRow := applyFilter(tableInfo.PKColumns, row)
-				key := buildKey(tableInfo, pkRow)
-				tableInfo.Cache.Set(key, row, readTime)
-				rows = append(rows, applyFilter(plan.ColumnNumbers, row))
+			if len(resultFromdb.Rows) == 0 {
+				absent++
+				continue
 			}
+			row := resultFromdb.Rows[0]
+			pkRow := applyFilter(tableInfo.PKColumns, row)
+			key := buildKey(tableInfo, pkRow)
+			tableInfo.Cache.Set(key, row, readTime)
+			rows = append(rows, applyFilter(plan.ColumnNumbers, row))
 			misses++
 		}
 	}
 	atomic.AddInt64(&tableInfo.hits, hits)
+	atomic.AddInt64(&tableInfo.absent, absent)
 	atomic.AddInt64(&tableInfo.misses, misses)
 	result.RowsAffected = uint64(len(rows))
 	result.Rows = rows
 	return result
+}
+
+func (self *SqlQuery) validateRow(plan *CompiledPlan, cacheRow []interface{}, pk []interface{}) (dbrow []interface{}) {
+	resultFromdb := self.qFetch(plan, plan.OuterQuery, pk)
+	if len(resultFromdb.Rows) != 1 {
+		relog.Warning("dbrow not found for: %v", pk)
+		return
+	}
+	dbrow = resultFromdb.Rows[0]
+	for i := 0; i < len(cacheRow); i++ {
+		if cacheRow[i] == nil && dbrow[i] == nil {
+			continue
+		}
+		if (cacheRow[i] == nil && dbrow[i] != nil) || (cacheRow[i] != nil && dbrow[i] == nil) || string(cacheRow[i].([]byte)) != dbrow[i] {
+			relog.Warning("query: %v", plan.FullQuery)
+			relog.Warning("mismatch for: %v, column: %v cache: %s, db: %s", pk, i, cacheRow[i], dbrow[i])
+			return dbrow
+		}
+	}
+	return dbrow
 }
 
 func (self *SqlQuery) execCacheResult(plan *CompiledPlan) (result *QueryResult) {
@@ -549,8 +570,9 @@ func (self *SqlQuery) execInsertPKRows(conn PoolConnection, plan *CompiledPlan, 
 	// TODO: We need to do this only if insert has on duplicate key clause
 	if invalidator != nil {
 		for _, pk := range pkRows {
-			key := buildKey(plan.TableInfo, pk)
-			invalidator.Delete(key)
+			if key := buildKey(plan.TableInfo, pk); key != "" {
+				invalidator.Delete(key)
+			}
 		}
 	}
 	return result

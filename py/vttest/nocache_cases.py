@@ -168,7 +168,7 @@ nocache_cases = [
   [
     "insert /* simple */ into vtocc_a values (2, 1, 'aaaa', 'bbbb')", {},
     [],
-    ["insert /* simple */ into vtocc_a values (2, 1, 'aaaa', 'bbbb')"],
+    ["insert /* simple */ into vtocc_a values (2, 1, 'aaaa', 'bbbb') /* _stream vtocc_a (eid id ) (2 1 ); */"],
   ],
   ['commit'],
   ['select * from vtocc_a where eid = 2 and id = 1', {}, [(2L, 1L, 'aaaa', 'bbbb')]],

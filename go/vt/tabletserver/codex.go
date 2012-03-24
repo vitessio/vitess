@@ -126,6 +126,9 @@ func normalizeRows(tableInfo *TableInfo, columnNumbers []int, rows [][]interface
 func buildKey(tableInfo *TableInfo, row []interface{}) (key string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	for i, pkValue := range row {
+		if pkValue == nil { // Can happen for inserts with auto_increment columns
+			return ""
+		}
 		encodePKValue(buf, pkValue, tableInfo.ColumnCategory[tableInfo.PKColumns[i]])
 		buf.WriteByte('.')
 	}
@@ -178,7 +181,7 @@ func encodePKValue(buf *bytes.Buffer, pkValue interface{}, category int) {
 		default:
 			panic(NewTabletError(FAIL, "Type %T disallowed for pk columns", val))
 		}
-	case schema.CAT_BINARY:
+	default:
 		buf.WriteByte('\'')
 		encoder := base64.NewEncoder(base64.StdEncoding, buf)
 		defer encoder.Close()
@@ -191,9 +194,6 @@ func encodePKValue(buf *bytes.Buffer, pkValue interface{}, category int) {
 			panic(NewTabletError(FAIL, "Type %T disallowed for non-number pk columns", val))
 		}
 		buf.WriteByte('\'')
-	default:
-		// This should never happen
-		panic(NewTabletError(FAIL, "Unsupported db column type"))
 	}
 }
 

@@ -122,7 +122,6 @@ func (self *ActiveTxPool) Commit(transactionId int64, schemaInfo *SchemaInfo) {
 			for key := range invalidList {
 				tableInfo.Cache.Delete(key)
 			}
-			schemaInfo.Put(tableInfo)
 		}
 	}()
 	if _, err := conn.ExecuteFetch(COMMIT, 10000); err != nil {

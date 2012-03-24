@@ -89,22 +89,23 @@ func (self *SchemaInfo) Close() {
 	self.connFactory = nil
 }
 
-// ThrottleCheck prevents DDLs from being applied more than once per second
-// on a row cached tablebecause we rely on create_time to be unique
-// for every ddl application.
-func (self *SchemaInfo) ThrottleCheck(tableName string) {
-	self.mu.Lock()
-	tableInfo, ok := self.tables[tableName]
-	if !ok {
+// ThrottleDDL prevents consecutive alters of a table
+// within the second. This helps us ensure create_time
+// always new. This is not foolproof. Parallel requests
+// can still bypass this.
+func (self *SchemaInfo) ThrottleDDL(tableName string) {
+	for {
+		self.mu.Lock()
+		tableInfo, ok := self.tables[tableName]
 		self.mu.Unlock()
-		return
+		if !ok {
+			return
+		}
+		if time.Now().Unix() > tableInfo.TimeCreated.Unix()+1 {
+			return
+		}
+		time.Sleep(1e9)
 	}
-	if tableInfo.CacheType != 0 {
-		self.mu.Unlock()
-		time.Sleep(11e8)
-		return
-	}
-	self.mu.Unlock()
 }
 
 func (self *SchemaInfo) CreateTable(tableName string) {
@@ -137,29 +138,16 @@ func (self *SchemaInfo) createTable(conn *DBConnection, tableName string) {
 func (self *SchemaInfo) DropTable(tableName string) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	tableInfo, ok := self.tables[tableName]
-	if !ok {
-		panic(NewTabletError(FAIL, "Table %s doesn't exists", tableName))
-	}
 	delete(self.tables, tableName)
-
-	tableInfo.Lock()
-	defer tableInfo.Unlock()
 	self.queries.Clear()
 	relog.Info("Table %s forgotten", tableName)
 }
 
-func (self *SchemaInfo) AlterTable(tableName string) {
-	self.DropTable(tableName)
-	self.CreateTable(tableName)
-}
-
-// Caller for GetPlan must call Put(tableInfo) to release lock on TableInfo
 func (self *SchemaInfo) GetPlan(sql string, mustCache bool) (*sqlparser.ExecPlan, *TableInfo) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	if plan := self.getQuery(sql); plan != nil {
-		return plan, self.get(plan.TableName)
+		return plan, self.tables[plan.TableName]
 	}
 
 	GetTable := func(tableName string) (table *schema.Table, ok bool) {
@@ -179,28 +167,13 @@ func (self *SchemaInfo) GetPlan(sql string, mustCache bool) (*sqlparser.ExecPlan
 	if mustCache {
 		self.queries.Set(sql, plan)
 	}
-	return plan, self.get(plan.TableName)
+	return plan, self.tables[plan.TableName]
 }
 
-// Caller for GetTable must call Put(tableInfo) to release lock on TableInfo
 func (self *SchemaInfo) GetTable(tableName string) *TableInfo {
 	self.mu.Lock()
 	defer self.mu.Unlock()
-	return self.get(tableName)
-}
-
-func (self *SchemaInfo) get(tableName string) *TableInfo {
-	tableInfo, ok := self.tables[tableName]
-	if ok {
-		tableInfo.RLock()
-	}
-	return tableInfo
-}
-
-func (self *SchemaInfo) Put(tableInfo *TableInfo) {
-	if tableInfo != nil {
-		tableInfo.RUnlock()
-	}
+	return self.tables[tableName]
 }
 
 func (self *SchemaInfo) getQuery(sql string) *sqlparser.ExecPlan {
@@ -233,20 +206,23 @@ func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Re
 	} else { // tables
 		response.Header().Set("Content-Type", "text/plain")
 		self.mu.Lock()
-		tstats := make(map[string]struct{ hits, misses int64 })
-		var temp struct{ hits, misses int64 }
+		tstats := make(map[string]struct{ hits, absent, misses int64 })
+		var temp, totals struct{ hits, absent, misses int64 }
 		for k, v := range self.tables {
 			if v.CacheType != 0 {
-				temp.hits, temp.misses = v.Stats()
+				temp.hits, temp.absent, temp.misses = v.Stats()
 				tstats[k] = temp
+				totals.hits += temp.hits
+				totals.absent += temp.absent
+				totals.misses += temp.misses
 			}
 		}
 		self.mu.Unlock()
 		response.Write([]byte("{\n"))
 		for k, v := range tstats {
-			fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Misses\": %v},\n", k, v.hits, v.misses)
+			fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v},\n", k, v.hits, v.absent, v.misses)
 		}
-		fmt.Fprintf(response, "\"dual\": null\n")
+		fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v}\n", totals.hits, totals.absent, totals.misses)
 		response.Write([]byte("}\n"))
 	}
 }

@@ -43,7 +43,7 @@ import (
 const (
 	CAT_OTHER = iota
 	CAT_NUMBER
-	CAT_BINARY
+	CAT_VARBINARY
 )
 
 type Table struct {
@@ -70,10 +70,8 @@ func (self *Table) AddColumn(name string, column_type string) {
 	self.Columns = append(self.Columns, name)
 	if strings.Contains(column_type, "int") {
 		self.ColumnCategory = append(self.ColumnCategory, CAT_NUMBER)
-	} else if strings.HasPrefix(column_type, "binary") {
-		self.ColumnCategory = append(self.ColumnCategory, CAT_BINARY)
 	} else if strings.HasPrefix(column_type, "varbinary") {
-		self.ColumnCategory = append(self.ColumnCategory, CAT_BINARY)
+		self.ColumnCategory = append(self.ColumnCategory, CAT_VARBINARY)
 	} else {
 		self.ColumnCategory = append(self.ColumnCategory, CAT_OTHER)
 	}
