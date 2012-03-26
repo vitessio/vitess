@@ -339,12 +339,12 @@ select * from a where eid = id
 select * from a where eid=1 and foo='b'
 {
   "PlanId": "SELECT_CACHE_RESULT",
-  "Reason": "NOINDEX_MATCH",
+  "Reason": "PKINDEX",
   "TableName": "a",
   "FullQuery": "select * from a where eid = 1 and foo = 'b' limit :_vtMaxResultSize",
   "OuterQuery": "select eid, id, name, foo from a where eid = 1 and foo = 'b' limit :_vtMaxResultSize",
   "Subquery": null,
-  "IndexUsed": "",
+  "IndexUsed": "PRIMARY",
   "ColumnNumbers": [
     0,
     1,
@@ -655,6 +655,52 @@ select * from a where eid=1 and name='foo' limit 10
   "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
   "Subquery": "select eid, id from a use index (a_name) where eid = 1 and name = 'foo' limit 10",
   "IndexUsed": "a_name",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# no index match
+select * from a where foo='bar'
+{
+  "PlanId":"SELECT_CACHE_RESULT",
+  "Reason":"NOINDEX_MATCH",
+  "TableName":"a",
+  "FullQuery":"select * from a where foo = 'bar' limit :_vtMaxResultSize",
+  "OuterQuery":"select eid, id, name, foo from a where foo = 'bar' limit :_vtMaxResultSize",
+  "Subquery":null,
+  "IndexUsed":"",
+  "ColumnNumbers":[
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues":null,
+  "SecondaryPKValues":null,
+  "SubqueryPKColumns":null,
+  "SetKey":"",
+  "SetValue":null
+}
+
+# covering index in where through data column
+select * from a where name = 'foo' and id = 1
+{
+  "PlanId": "SELECT_SUBQUERY",
+  "Reason": "DEFAULT",
+  "TableName": "a",
+  "FullQuery": "select * from a where name = 'foo' and id = 1 limit :_vtMaxResultSize",
+  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
+  "Subquery": "select eid, id from a use index (b_name) where name = 'foo' and id = 1 limit :_vtMaxResultSize",
+  "IndexUsed": "b_name",
   "ColumnNumbers": [
     0,
     1,

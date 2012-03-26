@@ -115,6 +115,12 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 	for i, pkCol := range pkIndex.Columns {
 		self.PKColumns[i] = self.FindColumn(pkCol)
 	}
+	// Primary key contains all table columns
+	pkIndex.DataColumns = self.Columns
+	// Secondary indices contain all primary key columns
+	for i := 1; i < len(self.Indexes); i++ {
+		self.Indexes[i].DataColumns = pkIndex.Columns
+	}
 	return true
 }
 

@@ -87,11 +87,11 @@ const (
 	REASON_FOR_UPDATE
 	REASON_WHERE
 	REASON_ORDER
+	REASON_PKINDEX
 	REASON_NOINDEX_MATCH
 	REASON_TABLE_NOINDEX
 	REASON_PK_CHANGE
 	REASON_HAS_HINTS
-	REASON_PKINDEX
 )
 
 var reasonName = map[ReasonType]string{
@@ -805,7 +805,10 @@ func (self *IndexScore) FindMatch(columnName string) int {
 	if index := self.Index.FindColumn(columnName); index != -1 {
 		self.ColumnMatch[index] = true
 		return index
-	} else {
+	}
+	// If the column is among the data columns, we can still use
+	// the index without going to the main table
+	if index := self.Index.FindDataColumn(columnName); index == -1 {
 		self.MatchFailed = true
 	}
 	return -1
@@ -865,31 +868,22 @@ func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interfac
 func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) string {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
-		matchFound := false
 		for _, index := range indexScores {
-			if index.FindMatch(string(condition.At(0).Value)) != -1 {
-				matchFound = true
-			}
-		}
-		if !matchFound {
-			return ""
+			index.FindMatch(string(condition.At(0).Value))
 		}
 	}
 	for _, order := range orders {
-		matchFound := false
 		for _, index := range indexScores {
-			if index.FindMatch(string(order.Value)) != -1 {
-				matchFound = true
-			}
-		}
-		if !matchFound {
-			return ""
+			index.FindMatch(string(order.Value))
 		}
 	}
 	highScore := NO_MATCH
 	highScorer := -1
 	for i, index := range indexScores {
 		curScore := index.GetScore()
+		if curScore == NO_MATCH {
+			continue
+		}
 		if curScore == PERFECT_SCORE {
 			highScorer = i
 			break

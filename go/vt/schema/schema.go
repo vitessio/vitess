@@ -96,10 +96,11 @@ type Index struct {
 	Name        string
 	Columns     []string
 	Cardinality []uint64
+	DataColumns []string
 }
 
 func NewIndex(name string) *Index {
-	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8)}
+	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8), nil}
 }
 
 func (self *Index) AddColumn(name string, cardinality uint64) {
@@ -109,6 +110,15 @@ func (self *Index) AddColumn(name string, cardinality uint64) {
 
 func (self *Index) FindColumn(name string) int {
 	for i, colName := range self.Columns {
+		if name == colName {
+			return i
+		}
+	}
+	return -1
+}
+
+func (self *Index) FindDataColumn(name string) int {
+	for i, colName := range self.DataColumns {
 		if name == colName {
 			return i
 		}

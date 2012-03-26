@@ -60,10 +60,10 @@ func initTables() {
 	a.Version = 0
 	a.Columns = append(a.Columns, "eid", "id", "name", "foo")
 	a.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER, schema.CAT_OTHER, schema.CAT_OTHER)
-	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}})
-	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}, []uint64{1, 1}})
-	a.Indexes = append(a.Indexes, &schema.Index{"b_name", []string{"name"}, []uint64{3}})
-	a.Indexes = append(a.Indexes, &schema.Index{"c_name", []string{"name"}, []uint64{2}})
+	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, a.Columns})
+	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}, []uint64{1, 1}, a.Indexes[0].Columns})
+	a.Indexes = append(a.Indexes, &schema.Index{"b_name", []string{"name"}, []uint64{3}, a.Indexes[0].Columns})
+	a.Indexes = append(a.Indexes, &schema.Index{"c_name", []string{"name"}, []uint64{2}, a.Indexes[0].Columns})
 	a.PKColumns = append(a.PKColumns, 0, 1)
 	a.CacheType = 1
 	schem["a"] = a
@@ -72,7 +72,7 @@ func initTables() {
 	b.Version = 0
 	b.Columns = append(a.Columns, "eid", "id")
 	b.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER)
-	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}})
+	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, b.Columns})
 	b.PKColumns = append(a.PKColumns, 0, 1)
 	b.CacheType = 0
 	schem["b"] = b
