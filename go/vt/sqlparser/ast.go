@@ -158,6 +158,16 @@ func (self *Node) Format(buf *TrackedBuffer) {
 		Fprintf(buf, "%s table %v", self.Value, self.At(0))
 	case RENAME:
 		Fprintf(buf, "%s table %v %v", self.Value, self.At(0), self.At(1))
+	case TABLE_EXPR:
+		Fprintf(buf, "%v", self.At(0))
+		if self.At(1) != nil {
+			Fprintf(buf, " as %v", self.At(1))
+		}
+		Fprintf(buf, "%v", self.At(2))
+	case USE:
+		if self.Len() != 0 {
+			Fprintf(buf, " use index %v", self.At(0))
+		}
 	case WHERE, HAVING:
 		if self.Len() > 0 {
 			Fprintf(buf, " %s %v", self.Value, self.At(0))
@@ -248,7 +258,7 @@ func (self *Node) Format(buf *TrackedBuffer) {
 	}
 }
 
-// Mimics fmt.Fprintf, but limited to Value & yySymtype
+// Mimics fmt.Fprintf, but limited to Value & Node
 func Fprintf(buf *TrackedBuffer, format string, values ...interface{}) {
 	end := len(format)
 	fieldnum := 0

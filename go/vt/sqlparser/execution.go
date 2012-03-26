@@ -58,8 +58,28 @@ func (self PlanType) IsSelect() bool {
 	return self == PLAN_PASS_SELECT || self == PLAN_SELECT_CACHE_RESULT || self == PLAN_SELECT_PK || self == PLAN_SELECT_SUBQUERY
 }
 
+var planName = map[PlanType]string{
+	PLAN_PASS_SELECT:         "PASS_SELECT",
+	PLAN_PASS_DML:            "PASS_DML",
+	PLAN_SELECT_CACHE_RESULT: "SELECT_CACHE_RESULT",
+	PLAN_SELECT_PK:           "SELECT_PK",
+	PLAN_SELECT_SUBQUERY:     "SELECT_SUBQUERY",
+	PLAN_DML_PK:              "DML_PK",
+	PLAN_DML_SUBQUERY:        "DML_SUBQUERY",
+	PLAN_INSERT_PK:           "INSERT_PK",
+	PLAN_INSERT_SUBQUERY:     "INSERT_SUBQUERY",
+	PLAN_SET:                 "SET",
+	PLAN_DDL:                 "DDL",
+}
+
+func (self PlanType) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%s\"", planName[self])), nil
+}
+
+type ReasonType int
+
 const (
-	REASON_DEFAULT = iota
+	REASON_DEFAULT ReasonType = iota
 	REASON_SELECT
 	REASON_TABLE
 	REASON_NOCACHE
@@ -70,11 +90,33 @@ const (
 	REASON_NOINDEX_MATCH
 	REASON_TABLE_NOINDEX
 	REASON_PK_CHANGE
+	REASON_HAS_HINTS
+	REASON_PKINDEX
 )
+
+var reasonName = map[ReasonType]string{
+	REASON_DEFAULT:       "DEFAULT",
+	REASON_SELECT:        "SELECT",
+	REASON_TABLE:         "TABLE",
+	REASON_NOCACHE:       "NOCACHE",
+	REASON_SELECT_LIST:   "SELECT_LIST",
+	REASON_FOR_UPDATE:    "FOR_UPDATE",
+	REASON_WHERE:         "WHERE",
+	REASON_ORDER:         "ORDER",
+	REASON_PKINDEX:       "PKINDEX",
+	REASON_NOINDEX_MATCH: "NOINDEX_MATCH",
+	REASON_TABLE_NOINDEX: "TABLE_NOINDEX",
+	REASON_PK_CHANGE:     "PK_CHANGE",
+	REASON_HAS_HINTS:     "HAS_HINTS",
+}
+
+func (self ReasonType) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%s\"", reasonName[self])), nil
+}
 
 type ExecPlan struct {
 	PlanId    PlanType
-	Reason    int
+	Reason    ReasonType
 	TableName string
 
 	// PLAN_PASS_*
@@ -83,6 +125,7 @@ type ExecPlan struct {
 	// For anything that's not PLAN_PASS_*
 	OuterQuery *ParsedQuery
 	Subquery   *ParsedQuery
+	IndexUsed  string
 
 	// For selects, columns to be returned
 	// For PLAN_INSERT_SUBQUERY, columns to be inserted
@@ -185,7 +228,7 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// from
-	tableName := self.At(SELECT_FROM_OFFSET).execAnalyzeFrom()
+	tableName, hasHints := self.At(SELECT_FROM_OFFSET).execAnalyzeFrom()
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -229,6 +272,12 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
+	// TODO: Analyze hints to improve plan.
+	if hasHints {
+		plan.Reason = REASON_HAS_HINTS
+		return plan
+	}
+
 	// order
 	orders := self.At(SELECT_ORDER_OFFSET).execAnalyzeOrder()
 	if orders == nil {
@@ -236,15 +285,19 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	if getIndexMatch(conditions, orders, tableInfo.Indexes) > 0 {
-		// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index
-		plan.PlanId = PLAN_SELECT_SUBQUERY
-		plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
-		plan.Subquery = self.GenerateSelectSubquery(tableInfo)
+	plan.IndexUsed = getIndexMatch(conditions, orders, tableInfo.Indexes)
+	if plan.IndexUsed == "" {
+		plan.Reason = REASON_NOINDEX_MATCH
 		return plan
 	}
-
-	plan.Reason = REASON_NOINDEX_MATCH
+	if plan.IndexUsed == "PRIMARY" {
+		plan.Reason = REASON_PKINDEX
+		return plan
+	}
+	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
+	plan.PlanId = PLAN_SELECT_SUBQUERY
+	plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
+	plan.Subquery = self.GenerateSelectSubquery(tableInfo, plan.IndexUsed)
 	return plan
 }
 
@@ -454,48 +507,28 @@ func (self *Node) execAnalyzeSelectExpression() (name string) {
 //-----------------------------------------------
 // From
 
-type TableInfo struct {
-	Name  string
-	Alias string
-}
-
-func (self TableInfo) String() string {
-	if self.Alias == "" {
-		return fmt.Sprintf("%s", self.Name)
-	}
-	return fmt.Sprintf("%s as %s", self.Name, self.Alias)
-}
-
-func (self *Node) execAnalyzeFrom() (tablename string) {
+func (self *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
 	if self.Len() > 1 {
-		return ""
+		return "", false
 	}
-
-	list := make([]TableInfo, 0, 8)
-	list = self.At(0).collectTableName(list)
-	if len(list) > 1 {
-		return ""
+	if self.At(0).Type != TABLE_EXPR {
+		return "", false
 	}
-
-	return list[0].Name
+	hasHints = (self.At(0).At(2).Len() > 0)
+	return self.At(0).At(0).collectTableName(), hasHints
 }
 
-func (self *Node) collectTableName(list []TableInfo) []TableInfo {
+func (self *Node) collectTableName() string {
 	switch self.Type {
-	case ID:
-		list = append(list, TableInfo{string(self.Value), ""})
-	case '.':
-		list = append(list, TableInfo{string(self.At(1).Value), ""})
-	case '(':
-		list = append(list, TableInfo{"", ""})
-	case JOIN, LEFT, RIGHT, CROSS, NATURAL:
-		list = self.At(0).collectTableName(list)
-		list = self.At(1).collectTableName(list)
 	case AS:
-		list = self.At(0).collectTableName(list)
-		list[len(list)-1].Alias = string(self.At(1).Value)
+		return self.At(0).collectTableName()
+	case ID:
+		return string(self.Value)
+	case '.':
+		return string(self.At(1).Value)
 	}
-	return list
+	// sub-select
+	return ""
 }
 
 //-----------------------------------------------
@@ -754,6 +787,13 @@ type IndexScore struct {
 	MatchFailed bool
 }
 
+type scoreValue int64
+
+const (
+	NO_MATCH      = scoreValue(-1)
+	PERFECT_SCORE = scoreValue(0)
+)
+
 func NewIndexScore(index *schema.Index) *IndexScore {
 	return &IndexScore{index, make([]bool, len(index.Columns)), false}
 }
@@ -771,23 +811,19 @@ func (self *IndexScore) FindMatch(columnName string) int {
 	return -1
 }
 
-func (self *IndexScore) GetScore() int {
+func (self *IndexScore) GetScore() scoreValue {
 	if self.MatchFailed {
-		return 0
+		return NO_MATCH
 	}
-	score := 0
-	for _, indexColumn := range self.ColumnMatch {
+	score := NO_MATCH
+	for i, indexColumn := range self.ColumnMatch {
 		if indexColumn {
-			score++
+			score = scoreValue(self.Index.Cardinality[i])
 			continue
 		}
-		break
+		return score
 	}
-	if score == len(self.ColumnMatch) {
-		// All columns matched
-		return 1000
-	}
-	return score
+	return PERFECT_SCORE
 }
 
 func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
@@ -820,13 +856,13 @@ func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interfac
 			pkValues[index], _ = condition.At(1).At(0).parseList()
 		}
 	}
-	if pkIndexScore.GetScore() == 1000 {
+	if pkIndexScore.GetScore() == PERFECT_SCORE {
 		return pkValues
 	}
 	return nil
 }
 
-func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) (indexId int) {
+func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) string {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		matchFound := false
@@ -836,7 +872,7 @@ func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) 
 			}
 		}
 		if !matchFound {
-			return -1
+			return ""
 		}
 	}
 	for _, order := range orders {
@@ -847,19 +883,27 @@ func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) 
 			}
 		}
 		if !matchFound {
-			return -1
+			return ""
 		}
 	}
-	highScore := 0
+	highScore := NO_MATCH
 	highScorer := -1
 	for i, index := range indexScores {
 		curScore := index.GetScore()
-		if curScore > highScore {
+		if curScore == PERFECT_SCORE {
+			highScorer = i
+			break
+		}
+		// Prefer secondary index over primary key
+		if curScore >= highScore {
 			highScore = curScore
 			highScorer = i
 		}
 	}
-	return highScorer
+	if highScorer == -1 {
+		return ""
+	}
+	return indexes[highScorer].Name
 }
 
 //-----------------------------------------------
@@ -953,7 +997,16 @@ func writeArg(buf *TrackedBuffer, arg string) {
 	buf.bind_locations = append(buf.bind_locations, BindLocation{start, end - start})
 }
 
-func (self *Node) GenerateSelectSubquery(tableInfo *schema.Table) *ParsedQuery {
+func (self *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) *ParsedQuery {
+	hint := NewSimpleParseNode(USE, "use")
+	hint.Push(NewSimpleParseNode(COLUMN_LIST, ""))
+	hint.At(0).Push(NewSimpleParseNode(ID, index))
+	table_expr := self.At(SELECT_FROM_OFFSET).At(0)
+	savedHint := table_expr.Sub[2]
+	table_expr.Sub[2] = hint
+	defer func() {
+		table_expr.Sub[2] = savedHint
+	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
 		self.At(SELECT_FROM_OFFSET),

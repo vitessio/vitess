@@ -105,7 +105,7 @@ const (
 
 %left <node> UNION MINUS EXCEPT INTERSECT
 %left <node> ','
-%left <node> JOIN LEFT RIGHT INNER OUTER CROSS NATURAL
+%left <node> JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE
 %left <node> ON
 %left <node> AND OR
 %right <node> NOT
@@ -123,7 +123,7 @@ const (
 
 // Fake Tokens
 %token <node> NODE_LIST UPLUS UMINUS SELECT_STAR NO_DISTINCT FUNCTION FOR_UPDATE NOT_FOR_UPDATE
-%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST
+%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST, TABLE_EXPR
 
 %type <node> command
 %type <node> select_statement insert_statement update_statement delete_statement set_statement
@@ -131,7 +131,7 @@ const (
 %type <node> comment_opt comment_list
 %type <node> union_op distinct_opt
 %type <node> select_expression_list select_expression expression as_opt
-%type <node> table_expression_list table_expression join_type simple_table_expression
+%type <node> table_expression_list table_expression join_type simple_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <node> values parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
 %type <node> unary_operator column_name value
@@ -353,10 +353,19 @@ table_expression_list:
 	}
 
 table_expression:
-	simple_table_expression
-| simple_table_expression as_opt ID
+	simple_table_expression index_hint_list
+  {
+    $$ = NewSimpleParseNode(TABLE_EXPR, "")
+    $$.Push($1)
+    $$.Push(nil)
+    $$.Push($2)
+  }
+| simple_table_expression as_opt ID index_hint_list
 	{
-		$$ = NewSimpleParseNode(AS, "as").PushTwo($1, $3)
+    $$ = NewSimpleParseNode(TABLE_EXPR, "")
+    $$.Push($1)
+    $$.Push($3)
+    $$.Push($4)
 	}
 | table_expression join_type table_expression %prec JOIN
 	{
@@ -411,6 +420,15 @@ ID
 	{
 		$$ = $1.Push($2)
 	}
+
+index_hint_list:
+  {
+		$$ = NewSimpleParseNode(USE, "use")
+  }
+| USE INDEX '(' column_list ')'
+  {
+    $$.Push($4)
+  }
 
 where_expression_opt:
 	{

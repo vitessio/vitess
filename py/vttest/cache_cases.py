@@ -65,7 +65,10 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'efgh'), (2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001", "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"],
+    [
+      "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
+      "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"
+    ],
     ['vtocc_cached', 1, 0, 1],
   ], # (2.bar, 2.foo)
 
@@ -73,7 +76,7 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'efgh'), (2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001"],
+    ["select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001"],
     ['vtocc_cached', 2, 0, 0],
   ], # (2.bar, 2.foo)
 
@@ -93,14 +96,22 @@ cache_cases = [
     ['vtocc_cached', 1, 0, 0],
   ], # (1.foo, 2.bar, 2.foo)
 
-  # SELECT_CACHE_RESULT
+  # SELECT_CACHE_RESULT (it currently doesn't cache)
   ['select * from vtocc_cached'],
   [
     "select eid, bid, name, foo from vtocc_cached", {},
     None,
     ["select eid, bid, name, foo from vtocc_cached limit 10001"],
     ['vtocc_cached', 0, 0, 0],
-  ], # all rows
+  ], # (1.foo, 2.bar, 2.foo)
+
+  # verify 1.bar is not cached
+  [
+    "select bid, eid from vtocc_cached where eid = 1 and bid = 'bar'", {},
+    [('bar', 1)],
+    ["select eid, bid, name, foo from vtocc_cached where eid = 1 and bid = 'bar'"],
+    ['vtocc_cached', 0, 0, 1],
+  ], # (1.foo, 1.bar, 2.foo, 2.bar)
 
   # update
   ['begin'],
@@ -109,7 +120,10 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'fghi'), (2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001", "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"],
+    [
+      "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
+      "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"
+    ],
     ['vtocc_cached', 1, 0, 1],
   ], # (1.foo, 2.foo)
 
@@ -117,7 +131,10 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'fghi'), (2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001", "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"],
+    [
+      "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
+      "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"
+    ],
     ['vtocc_cached', 1, 0, 1],
   ], # (1.foo, 2.foo)
 
@@ -126,7 +143,10 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'fghi'), (2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001", "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"],
+    [
+      "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
+      "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"
+    ],
     ['vtocc_cached', 1, 0, 1],
   ], # (1.foo, 2.bar, 2.foo)
 
@@ -134,7 +154,7 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'fghi'), (2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001"],
+    ["select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001"],
     ['vtocc_cached', 2, 0, 0],
   ], # (1.foo, 2.bar, 2.foo)
 
@@ -145,7 +165,7 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'fghi'), (2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001"],
+    ["select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001"],
     ['vtocc_cached', 2, 0, 0],
   ], # (1.foo, 2.bar, 2.foo)
 
@@ -156,7 +176,7 @@ cache_cases = [
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'foo', 'abcd2', 'efgh')],
-    ["select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001"],
+    ["select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001"],
     ['vtocc_cached', 1, 0, 0],
   ],
   ["begin"],
@@ -171,7 +191,7 @@ cache_cases = [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'efgh'), (2L, 'foo', 'abcd2', 'fghi')],
     [
-      "select eid, bid from vtocc_cached where eid = 2 and name = 'abcd2' limit 10001",
+      "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
       "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'",
       "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'foo'"
     ],

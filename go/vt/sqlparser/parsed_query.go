@@ -33,6 +33,7 @@ package sqlparser
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -96,6 +97,10 @@ func (self *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, lis
 	}
 	buf.WriteString(self.Query[current:])
 	return buf.Bytes(), nil
+}
+
+func (self *ParsedQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(self.Query)
 }
 
 func EncodeValue(buf *bytes.Buffer, value interface{}) error {

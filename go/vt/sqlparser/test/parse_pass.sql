@@ -17,6 +17,8 @@ select /* a.* */ a.* from t
 select /* select with bool expr */ a = b from t
 select /* parenthesis */ 1 from (t)
 select /* table list */ 1 from t1, t2
+select /* use */ 1 from t1 use index (a) where b = 1
+select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1
 select /* table alias */ 1 from t t1#select /* table alias */ 1 from t as t1
 select /* table alias with as */ 1 from t as t1
 select /* join */ 1 from t1 join t2

@@ -36,6 +36,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/schema"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -97,7 +98,11 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 			currentIndex = self.AddIndex(indexName)
 			currentName = indexName
 		}
-		currentIndex.AddColumn(row[4].(string))
+		cardinality, err := strconv.ParseUint(row[6].(string), 0, 64)
+		if err != nil {
+			relog.Warning("%s", err)
+		}
+		currentIndex.AddColumn(row[4].(string), cardinality)
 	}
 	if len(self.Indexes) == 0 {
 		return true

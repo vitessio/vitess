@@ -93,16 +93,18 @@ func (self *Table) AddIndex(name string) (index *Index) {
 }
 
 type Index struct {
-	Name    string
-	Columns []string
+	Name        string
+	Columns     []string
+	Cardinality []uint64
 }
 
 func NewIndex(name string) *Index {
-	return &Index{name, make([]string, 0, 8)}
+	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8)}
 }
 
-func (self *Index) AddColumn(name string) {
+func (self *Index) AddColumn(name string, cardinality uint64) {
 	self.Columns = append(self.Columns, name)
+	self.Cardinality = append(self.Cardinality, cardinality)
 }
 
 func (self *Index) FindColumn(name string) int {

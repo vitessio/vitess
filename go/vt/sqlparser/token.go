@@ -83,6 +83,7 @@ var keywords = map[string]int{
 	"outer":   OUTER,
 	"cross":   CROSS,
 	"natural": NATURAL,
+	"use":     USE,
 	"on":      ON,
 	"into":    INTO,
 

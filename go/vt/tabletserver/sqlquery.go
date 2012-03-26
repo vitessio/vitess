@@ -308,7 +308,8 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 			*reply = *self.execSubquery(plan)
 		case sqlparser.PLAN_SELECT_CACHE_RESULT:
 			defer queryStats.Record("SELECT_CACHE_RESULT", time.Now())
-			*reply = *self.execCacheResult(plan)
+			// It may not be worth caching the results. So, just pass through.
+			*reply = *self.qFetch(plan, plan.FullQuery, nil)
 		case sqlparser.PLAN_SET:
 			defer queryStats.Record("SET", time.Now())
 			*reply = *self.execSet(plan)

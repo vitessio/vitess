@@ -33,6 +33,7 @@ package sqlparser
 
 import (
 	"bufio"
+	"bytes"
 	"code.google.com/p/vitess/go/vt/schema"
 	"encoding/json"
 	"fmt"
@@ -59,8 +60,10 @@ func initTables() {
 	a.Version = 0
 	a.Columns = append(a.Columns, "eid", "id", "name", "foo")
 	a.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER, schema.CAT_OTHER, schema.CAT_OTHER)
-	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}})
-	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}})
+	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}})
+	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}, []uint64{1, 1}})
+	a.Indexes = append(a.Indexes, &schema.Index{"b_name", []string{"name"}, []uint64{3}})
+	a.Indexes = append(a.Indexes, &schema.Index{"c_name", []string{"name"}, []uint64{2}})
 	a.PKColumns = append(a.PKColumns, 0, 1)
 	a.CacheType = 1
 	schem["a"] = a
@@ -69,7 +72,7 @@ func initTables() {
 	b.Version = 0
 	b.Columns = append(a.Columns, "eid", "id")
 	b.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER)
-	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}})
+	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}})
 	b.PKColumns = append(a.PKColumns, 0, 1)
 	b.CacheType = 0
 	schem["b"] = b
@@ -89,7 +92,7 @@ func tableGetter(name string) (*schema.Table, bool) {
 
 func TestExec(t *testing.T) {
 	initTables()
-	for tcase := range iterateFile("test/exec_cases.txt") {
+	for tcase := range iterateJSONFile("test/exec_cases.txt") {
 		plan, err := ExecParse(tcase.input, tableGetter)
 		var out string
 		if err != nil {
@@ -97,14 +100,14 @@ func TestExec(t *testing.T) {
 		} else {
 			bout, err := json.Marshal(plan)
 			if err != nil {
-				panic(fmt.Sprintf("Error marshalling %v", plan))
+				panic(fmt.Sprintf("Error marshalling %v: %v", plan, err))
 			}
 			out = string(bout)
 		}
 		if out != tcase.output {
 			t.Error(fmt.Sprintf("Line:%v\n%s\n%s", tcase.lineno, tcase.output, out))
 		}
-		//fmt.Printf("%s#%s\n", tcase.input, out)
+		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
 }
 
@@ -233,6 +236,58 @@ func iterateFile(name string) (testCaseIterator chan testCase) {
 				continue
 			}
 			testCaseIterator <- testCase{lineno, input, output}
+		}
+	}()
+	return testCaseIterator
+}
+
+func iterateJSONFile(name string) (testCaseIterator chan testCase) {
+	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
+	if err != nil {
+		panic(fmt.Sprintf("Could not open file %s", name))
+	}
+	testCaseIterator = make(chan testCase)
+	go func() {
+		defer close(testCaseIterator)
+
+		r := bufio.NewReader(fd)
+		lineno := 0
+		for {
+			binput, _, err := r.ReadLine()
+			input := string(binput)
+			lineno++
+			if err != nil {
+				if err != io.EOF {
+					panic(fmt.Sprintf("Error reading file %s: %s", name, err.Error()))
+				}
+				break
+			}
+			if input == "" || input[0] == '#' {
+				//fmt.Printf("%s\n", input)
+				continue
+			}
+			var output []byte
+			for {
+				l, err := r.ReadBytes('\n')
+				lineno++
+				if err != nil {
+					panic(fmt.Sprintf("Error reading file %s: %s", name, err.Error()))
+				}
+				output = append(output, l...)
+				if l[0] == '}' {
+					output = output[:len(output)-1]
+					b := bytes.NewBuffer(make([]byte, 0, 64))
+					if err := json.Compact(b, output); err == nil {
+						output = b.Bytes()
+					}
+					break
+				}
+				if l[0] == '"' {
+					output = output[1 : len(output)-2]
+					break
+				}
+			}
+			testCaseIterator <- testCase{lineno, input, string(output)}
 		}
 	}()
 	return testCaseIterator
