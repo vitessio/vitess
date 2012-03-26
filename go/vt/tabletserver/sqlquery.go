@@ -398,16 +398,10 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 		return NewTabletError(FAIL, "Table %s not found", cacheInvalidate.Table)
 	}
 	if tableInfo != nil && tableInfo.Cache != nil {
-		for i, val := range cacheInvalidate.Keys {
-			switch v := val.(type) {
-			case string:
-				cacheInvalidate.Keys[i] = base64Decode([]byte(v))
-			case []byte:
-				cacheInvalidate.Keys[i] = base64Decode(v)
-			}
+		for _, val := range cacheInvalidate.Keys {
+			// TODO: Validate val
+			tableInfo.Cache.Delete(val.(string))
 		}
-		key := buildKey(tableInfo, cacheInvalidate.Keys)
-		tableInfo.Cache.Delete(key)
 	}
 	return nil
 }
