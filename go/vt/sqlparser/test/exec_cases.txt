@@ -829,6 +829,29 @@ select * from a where eid between 1 and 2 and name='foo'
   "SetValue": null
 }
 
+# order by (pk)
+select * from a where eid=1 and id=1 order by name
+{
+  "PlanId": "SELECT_CACHE_RESULT",
+  "Reason": "PKINDEX",
+  "TableName": "a",
+  "FullQuery": "select * from a where eid = 1 and id = 1 order by name asc limit :_vtMaxResultSize",
+  "OuterQuery": "select eid, id, name, foo from a where eid = 1 and id = 1 order by name asc limit :_vtMaxResultSize",
+  "Subquery": null,
+  "IndexUsed": "PRIMARY",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # order by
 select * from a where eid=1 order by name
 {

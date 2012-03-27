@@ -265,23 +265,25 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	if pkValues := getPKValues(conditions, tableInfo.Indexes[0]); pkValues != nil {
-		plan.PlanId = PLAN_SELECT_PK
-		plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
-		plan.PKValues = pkValues
+	// order
+	orders := self.At(SELECT_ORDER_OFFSET).execAnalyzeOrder()
+	if orders == nil {
+		plan.Reason = REASON_ORDER
 		return plan
+	}
+
+	if len(orders) == 0 { // Only do pk analysis if there's no order by clause
+		if pkValues := getPKValues(conditions, tableInfo.Indexes[0]); pkValues != nil {
+			plan.PlanId = PLAN_SELECT_PK
+			plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
+			plan.PKValues = pkValues
+			return plan
+		}
 	}
 
 	// TODO: Analyze hints to improve plan.
 	if hasHints {
 		plan.Reason = REASON_HAS_HINTS
-		return plan
-	}
-
-	// order
-	orders := self.At(SELECT_ORDER_OFFSET).execAnalyzeOrder()
-	if orders == nil {
-		plan.Reason = REASON_ORDER
 		return plan
 	}
 

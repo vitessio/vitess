@@ -75,6 +75,11 @@ func (self *RowCache) Get(key string) (row []interface{}) {
 }
 
 func (self *RowCache) Set(key string, row []interface{}, readTime time.Time) {
+	// This value is hardcoded for now.
+	// We're assuming it's not worth caching rows that are too large.
+	if rowLen(row) > 4000 {
+		return
+	}
 	conn := self.cachePool.Get()
 	defer conn.Recycle()
 	mkey := self.prefix + key
@@ -116,4 +121,20 @@ func (self *RowCache) Delete(key string) {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
 	}
+}
+
+func rowLen(row []interface{}) int {
+	length := 0
+	for _, v := range row {
+		if v == nil {
+			continue
+		}
+		switch col := v.(type) {
+		case string:
+			length += len(col)
+		case []byte:
+			length += len(col)
+		}
+	}
+	return length
 }

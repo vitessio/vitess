@@ -36,6 +36,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/schema"
 	"code.google.com/p/vitess/go/vt/sqlparser"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -202,8 +203,16 @@ func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Re
 		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 		for _, v := range keys {
 			response.Write([]byte(fmt.Sprintf("%s\n", v)))
+			if plan := self.getQuery(v); plan != nil {
+				if b, err := json.MarshalIndent(plan, "", "  "); err != nil {
+					response.Write([]byte(err.Error()))
+				} else {
+					response.Write(b)
+					response.Write(([]byte)("\n\n"))
+				}
+			}
 		}
-	} else { // tables
+	} else if request.URL.Path == "/debug/schema/tables" {
 		response.Header().Set("Content-Type", "text/plain")
 		self.mu.Lock()
 		tstats := make(map[string]struct{ hits, absent, misses int64 })
@@ -224,5 +233,7 @@ func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Re
 		}
 		fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v}\n", totals.hits, totals.absent, totals.misses)
 		response.Write([]byte("}\n"))
+	} else {
+		response.WriteHeader(http.StatusNotFound)
 	}
 }
