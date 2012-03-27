@@ -108,29 +108,29 @@ func (self *Connection) Get(key string) (value []byte, flags uint16, err error) 
 	return value, flags, nil
 }
 
-func (self *Connection) Set(key string, flags uint16, value []byte) (stored bool, err error) {
+func (self *Connection) Set(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("set", key, flags, value), nil
+	return self.store("set", key, flags, timeout, value), nil
 }
 
-func (self *Connection) Add(key string, flags uint16, value []byte) (stored bool, err error) {
+func (self *Connection) Add(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("add", key, flags, value), nil
+	return self.store("add", key, flags, timeout, value), nil
 }
 
-func (self *Connection) Replace(key string, flags uint16, value []byte) (stored bool, err error) {
+func (self *Connection) Replace(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("replace", key, flags, value), nil
+	return self.store("replace", key, flags, timeout, value), nil
 }
 
-func (self *Connection) Append(key string, flags uint16, value []byte) (stored bool, err error) {
+func (self *Connection) Append(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("append", key, flags, value), nil
+	return self.store("append", key, flags, timeout, value), nil
 }
 
-func (self *Connection) Prepend(key string, flags uint16, value []byte) (stored bool, err error) {
+func (self *Connection) Prepend(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("prepend", key, flags, value), nil
+	return self.store("prepend", key, flags, timeout, value), nil
 }
 
 func (self *Connection) Delete(key string) (deleted bool, err error) {
@@ -144,7 +144,7 @@ func (self *Connection) Delete(key string) (deleted bool, err error) {
 	return strings.HasPrefix(reply, "DELETED"), nil
 }
 
-func (self *Connection) store(command, key string, flags uint16, value []byte) (stored bool) {
+func (self *Connection) store(command, key string, flags uint16, timeout uint64, value []byte) (stored bool) {
 	if len(value) > 1000000 {
 		return false
 	}
@@ -152,7 +152,9 @@ func (self *Connection) store(command, key string, flags uint16, value []byte) (
 	// <command name> <key> <flags> <exptime> <bytes> [noreply]\r\n
 	self.writestrings(command, " ", key, " ")
 	self.write(strconv.AppendUint(nil, uint64(flags), 10))
-	self.writestring(" 0 ")
+	self.writestring(" ")
+	self.write(strconv.AppendUint(nil, timeout, 10))
+	self.writestring(" ")
 	self.write(strconv.AppendInt(nil, int64(len(value)), 10))
 	self.writestring("\r\n")
 	// <data block>\r\n

@@ -43,10 +43,17 @@ type CreateCacheFunc func() (*memcache.Connection, error)
 // CachePool re-exposes RoundRobin as a pool of Memcache connection objects
 type CachePool struct {
 	*pools.RoundRobin
+	DeleteExpiry uint64
 }
 
-func NewCachePool(capacity int, idleTimeout time.Duration) *CachePool {
-	return &CachePool{pools.NewRoundRobin(capacity, idleTimeout)}
+func NewCachePool(capacity int, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
+	seconds := uint64(queryTimeout/time.Second)
+	// Add an additional 15 second grace period for
+	// memcache expiry of deleted items
+	if seconds != 0 {
+		seconds += 15
+	}
+	return &CachePool{pools.NewRoundRobin(capacity, idleTimeout), seconds}
 }
 
 func (self *CachePool) Open(connFactory CreateCacheFunc) {

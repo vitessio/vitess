@@ -44,7 +44,7 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 	defer cmd.Process.Kill()
-	time.Sleep(1e9)
+	time.Sleep(time.Second)
 
 	c, err := Connect("/tmp/vtocc_cache.sock")
 	if err != nil {
@@ -53,7 +53,7 @@ func TestMemcache(t *testing.T) {
 	}
 
 	// Set
-	stored, err := c.Set("Hello", 0, []byte("world"))
+	stored, err := c.Set("Hello", 0, 0, []byte("world"))
 	if err != nil {
 		t.Errorf("Set: %v", err)
 		return
@@ -64,7 +64,7 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Hello", "world")
 
 	// Add
-	stored, err = c.Add("Hello", 0, []byte("Jupiter"))
+	stored, err = c.Add("Hello", 0, 0, []byte("Jupiter"))
 	if err != nil {
 		t.Errorf("Add: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Hello", "world")
 
 	// Replace
-	stored, err = c.Replace("Hello", 0, []byte("World"))
+	stored, err = c.Replace("Hello", 0, 0, []byte("World"))
 	if err != nil {
 		t.Errorf("Replace: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Hello", "World")
 
 	// Append
-	stored, err = c.Append("Hello", 0, []byte("!"))
+	stored, err = c.Append("Hello", 0, 0, []byte("!"))
 	if err != nil {
 		t.Errorf("Append: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Hello", "World!")
 
 	// Prepend
-	stored, err = c.Prepend("Hello", 0, []byte("Hello, "))
+	stored, err = c.Prepend("Hello", 0, 0, []byte("Hello, "))
 	if err != nil {
 		t.Errorf("Prepend: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Hello", "")
 
 	// Flags
-	stored, err = c.Set("Hello", 0xFFFF, []byte("world"))
+	stored, err = c.Set("Hello", 0xFFFF, 0, []byte("world"))
 	if err != nil {
 		t.Errorf("Set: %v", err)
 		return
@@ -133,6 +133,19 @@ func TestMemcache(t *testing.T) {
 	if string(b) != "world" {
 		t.Errorf("Expecting world, Received %s", b)
 	}
+
+	// timeout
+	stored, err = c.Set("Lost", 0, 1, []byte("World"))
+	if err != nil {
+		t.Errorf("Set: %v", err)
+		return
+	}
+	if !stored {
+		t.Errorf("Expecting true, received %v", stored)
+	}
+	expect(t, c, "Lost", "World")
+	time.Sleep(2*time.Second)
+	expect(t, c, "Lost", "")
 }
 
 func expect(t *testing.T, c *Connection, key, value string) {

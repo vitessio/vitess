@@ -89,7 +89,7 @@ type CacheInvalidator interface {
 
 func NewSqlQuery(cachePoolCap, poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, queryTimeout, idleTimeout float64) *SqlQuery {
 	self := &SqlQuery{}
-	self.cachePool = NewCachePool(cachePoolCap, time.Duration(idleTimeout*1e9))
+	self.cachePool = NewCachePool(cachePoolCap, time.Duration(queryTimeout*1e9), time.Duration(idleTimeout*1e9))
 	self.schemaInfo = NewSchemaInfo(queryCacheSize)
 	self.connPool = NewConnectionPool(poolSize, time.Duration(idleTimeout*1e9))
 	self.reservedPool = NewReservedPool()

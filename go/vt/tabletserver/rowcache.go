@@ -103,7 +103,7 @@ func (self *RowCache) Set(key string, row []interface{}, readTime time.Time) {
 	if err != nil {
 		panic(NewTabletError(FATAL, "%s", err))
 	}
-	_, err = conn.Set(mkey, 0, b)
+	_, err = conn.Set(mkey, 0, 0, b)
 	if err != nil {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
@@ -116,7 +116,7 @@ func (self *RowCache) Delete(key string) {
 	mkey := self.prefix + key
 
 	b := strconv.AppendInt(nil, time.Now().UnixNano(), 10)
-	_, err := conn.Set(mkey, RC_DELETED, b)
+	_, err := conn.Set(mkey, RC_DELETED, self.cachePool.DeleteExpiry, b)
 	if err != nil {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
