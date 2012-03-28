@@ -141,7 +141,7 @@ class TestNocache(framework.TestCase):
     vstart = self.env.debug_vars()
     self.env.execute("set vt_pool_size=1")
     try:
-      self.env.execute("select sleep(4) from dual")
+      self.env.execute("select sleep(3) from dual")
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError):
       pass
     else:
@@ -279,7 +279,7 @@ class TestNocache(framework.TestCase):
     vstart = self.env.debug_vars()
     for i in range(2):
       try:
-        self.env.execute("select sleep(4) from dual")
+        self.env.execute("select sleep(3) from dual")
       except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError):
         pass
     vend = self.env.debug_vars()

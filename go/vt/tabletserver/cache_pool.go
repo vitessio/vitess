@@ -47,7 +47,7 @@ type CachePool struct {
 }
 
 func NewCachePool(capacity int, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
-	seconds := uint64(queryTimeout/time.Second)
+	seconds := uint64(queryTimeout / time.Second)
 	// Add an additional 15 second grace period for
 	// memcache expiry of deleted items
 	if seconds != 0 {

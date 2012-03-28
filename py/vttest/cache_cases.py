@@ -125,29 +125,15 @@ cache_cases = [
       "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"
     ],
     ['vtocc_cached', 1, 0, 1],
-  ], # (1.foo, 2.foo)
+  ], # (1.foo, 2.foo, 2.bar)
 
-  # cache should still not be updated
-  [
-    "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
-    [(2L, 'bar', 'abcd2', 'fghi'), (2L, 'foo', 'abcd2', 'efgh')],
-    [
-      "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
-      "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"
-    ],
-    ['vtocc_cached', 1, 0, 1],
-  ], # (1.foo, 2.foo)
-
-  # cache can be updated after 100ms
+  # Verify cache
   ["select sleep(0.2) from dual"],
   [
     "select * from vtocc_cached where eid = 2 and name = 'abcd2'", {},
     [(2L, 'bar', 'abcd2', 'fghi'), (2L, 'foo', 'abcd2', 'efgh')],
-    [
-      "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
-      "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"
-    ],
-    ['vtocc_cached', 1, 0, 1],
+    ["select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001"],
+    ['vtocc_cached', 2, 0, 0],
   ], # (1.foo, 2.bar, 2.foo)
 
   # this will use the cache

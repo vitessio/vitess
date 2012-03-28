@@ -46,8 +46,8 @@ type RowCache struct {
 	cachePool *CachePool
 }
 
-func NewRowCache(tableName string, createTime time.Time, cachePool *CachePool) *RowCache {
-	prefix := tableName + "." + strconv.FormatInt(createTime.Unix(), 10) + "."
+func NewRowCache(tableName string, hash string, cachePool *CachePool) *RowCache {
+	prefix := hash + "."
 	return &RowCache{prefix, cachePool}
 }
 
@@ -94,7 +94,8 @@ func (self *RowCache) Set(key string, row []interface{}, readTime time.Time) {
 		if err != nil {
 			panic(NewTabletError(FATAL, "%s", err))
 		}
-		if readTime.UnixNano() <= int64(ut+1e8) {
+		// allow upto 1ms rounding error
+		if readTime.UnixNano() <= int64(ut+1e6) {
 			return
 		}
 	}

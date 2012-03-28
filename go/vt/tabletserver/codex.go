@@ -130,7 +130,9 @@ func buildKey(tableInfo *TableInfo, row []interface{}) (key string) {
 			return ""
 		}
 		encodePKValue(buf, pkValue, tableInfo.ColumnCategory[tableInfo.PKColumns[i]])
-		buf.WriteByte('.')
+		if i != len(row)-1 {
+			buf.WriteByte('.')
+		}
 	}
 	return buf.String()
 }

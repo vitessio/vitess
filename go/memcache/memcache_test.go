@@ -144,7 +144,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Expecting true, received %v", stored)
 	}
 	expect(t, c, "Lost", "World")
-	time.Sleep(2*time.Second)
+	time.Sleep(2 * time.Second)
 	expect(t, c, "Lost", "")
 }
 

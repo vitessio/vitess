@@ -40,8 +40,9 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
-	"time"
 )
+
+const base_show_tables = "select table_name, table_type, create_time, table_comment from information_schema.tables where table_schema = database()"
 
 type SchemaInfo struct {
 	mu             sync.Mutex
@@ -66,15 +67,22 @@ func (self *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CacheP
 	defer conn.Close()
 
 	self.cachePool = cachePool
-	tables, err := conn.ExecuteFetch([]byte("show tables"), 10000)
+	tables, err := conn.ExecuteFetch([]byte(base_show_tables), 10000)
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
 	self.tables = make(map[string]*TableInfo, len(tables.Rows))
-	self.tables["dual"] = NewTableInfo(conn, "dual", self.cachePool)
+	self.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", nil, "", self.cachePool)
 	for _, row := range tables.Rows {
 		tableName := row[0].(string)
-		tableInfo := NewTableInfo(conn, tableName, self.cachePool)
+		tableInfo := NewTableInfo(
+			conn,
+			tableName,
+			row[1].(string), // table_type
+			row[2],          // create_time
+			row[3].(string), // table_comment
+			self.cachePool,
+		)
 		if tableInfo == nil {
 			continue
 		}
@@ -90,25 +98,6 @@ func (self *SchemaInfo) Close() {
 	self.connFactory = nil
 }
 
-// ThrottleDDL prevents consecutive alters of a table
-// within the second. This helps us ensure create_time
-// always new. This is not foolproof. Parallel requests
-// can still bypass this.
-func (self *SchemaInfo) ThrottleDDL(tableName string) {
-	for {
-		self.mu.Lock()
-		tableInfo, ok := self.tables[tableName]
-		self.mu.Unlock()
-		if !ok {
-			return
-		}
-		if time.Now().Unix() > tableInfo.TimeCreated.Unix()+1 {
-			return
-		}
-		time.Sleep(1e9)
-	}
-}
-
 func (self *SchemaInfo) CreateTable(tableName string) {
 	conn, err := self.connFactory()
 	if err != nil {
@@ -119,7 +108,21 @@ func (self *SchemaInfo) CreateTable(tableName string) {
 }
 
 func (self *SchemaInfo) createTable(conn *DBConnection, tableName string) {
-	tableInfo := NewTableInfo(conn, tableName, self.cachePool)
+	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName)), 1)
+	if err != nil {
+		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
+	}
+	if len(tables.Rows) != 1 {
+		panic(NewTabletError(FAIL, "meta roww for %s: %v", tableName, len(tables.Rows)))
+	}
+	tableInfo := NewTableInfo(
+		conn,
+		tableName,
+		tables.Rows[0][1].(string), // table_type
+		tables.Rows[0][2],          // create_time
+		tables.Rows[0][3].(string), // table_comment
+		self.cachePool,
+	)
 	if tableInfo == nil {
 		panic(NewTabletError(FATAL, "Could not read table info: %s", tableName))
 	}

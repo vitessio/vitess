@@ -95,6 +95,8 @@ class TestCache(framework.TestCase):
       tend = self.env.table_stats()["vtocc_cached2"]
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
     finally:
+      # alter table so there's no hash collision when renamed
+      self.env.execute("alter table vtocc_cached2 comment 'renmaed'")
       self.env.execute("rename table vtocc_cached2 to vtocc_cached")
 
     # Verify row cache is working again

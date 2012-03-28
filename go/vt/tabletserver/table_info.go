@@ -35,34 +35,36 @@ import (
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/schema"
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 )
+
+var hashRegistry map[string]string = make(map[string]string)
 
 type TableInfo struct {
 	*schema.Table
 	Cache  *RowCache
 	Fields []mysql.Field
-	// This is different from the create_time in the schema
-	TimeCreated time.Time
 	// stats updated by sqlquery.go
 	hits, absent, misses int64
 }
 
-func NewTableInfo(conn *DBConnection, tableName string, cachePool *CachePool) (self *TableInfo) {
+func NewTableInfo(conn *DBConnection, tableName string, tableType string, createTime interface{}, comment string, cachePool *CachePool) (self *TableInfo) {
 	if tableName == "dual" {
-		return &TableInfo{Table: schema.NewTable(tableName), TimeCreated: time.Now()}
+		return &TableInfo{Table: schema.NewTable(tableName)}
 	}
 	self = loadTableInfo(conn, tableName)
-	self.initRowCache(conn, cachePool)
+	self.initRowCache(conn, tableType, createTime, comment, cachePool)
 	return self
 }
 
 func loadTableInfo(conn *DBConnection, tableName string) (self *TableInfo) {
-	self = &TableInfo{Table: schema.NewTable(tableName), TimeCreated: time.Now()}
+	self = &TableInfo{Table: schema.NewTable(tableName)}
 	if !self.fetchColumns(conn) {
 		return nil
 	}
@@ -124,45 +126,21 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 	return true
 }
 
-const base_show_tables = "select table_type, create_time, table_comment from information_schema.tables where table_schema = database()"
-
-func (self *TableInfo) initRowCache(conn *DBConnection, cachePool *CachePool) {
+func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, createTime interface{}, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}
 
-	metaRows, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, self.Name)), 1)
-	if err != nil {
-		relog.Warning("Failed to fetch table info for %s, table will not be cached: %s", self.Name, err.Error())
-		return
-	}
-	if len(metaRows.Rows) != 1 {
-		panic(err)
-	}
-	metaRow := metaRows.Rows[0]
-
-	comment := metaRow[2].(string)
 	if strings.Contains(comment, "vtocc_nocache") {
 		relog.Info("%s commented as vtocc_nocache. Will not be cached.", self.Name)
 		return
 	}
 
-	tableType := metaRow[0].(string)
 	if tableType == "VIEW" {
 		relog.Info("%s is a view. Will not be cached.", self.Name)
 		return
 	}
 
-	createTime := metaRow[1]
-	if createTime == nil {
-		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
-		return
-	}
-	ts, err := time.Parse("2006-01-02 15:04:05", createTime.(string))
-	if err != nil {
-		relog.Warning("Time read error %v. Will not be cached.", err, self.Name)
-		return
-	}
 	if self.PKColumns == nil {
 		relog.Info("Table %s has no primary key. Will not be cached.", self.Name)
 		return
@@ -172,14 +150,39 @@ func (self *TableInfo) initRowCache(conn *DBConnection, cachePool *CachePool) {
 			relog.Info("Table %s pk has unsupported column types. Will not be cached.", self.Name)
 		}
 	}
+
 	rowInfo, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %s where 1!=1", self.Name)), 10000)
 	if err != nil {
 		relog.Warning("Failed to fetch column info for %s, table will not be cached: %s", self.Name, err.Error())
 		return
 	}
+	thash := self.computePrefix(conn, createTime)
+	if thash == "" {
+		return
+	}
+
 	self.Fields = rowInfo.Fields
 	self.CacheType = 1
-	self.Cache = NewRowCache(self.Name, ts, cachePool)
+	self.Cache = NewRowCache(self.Name, thash, cachePool)
+}
+
+func (self *TableInfo) computePrefix(conn *DBConnection, createTime interface{}) string {
+	if createTime == nil {
+		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
+		return ""
+	}
+	createTable, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show create table %s", self.Name)), 10000)
+	if err != nil {
+		relog.Warning("Couldnt read table info: %v", err)
+		return ""
+	}
+	thash := base64fnv(createTable.Rows[0][1].(string) + createTime.(string))
+	if _, ok := hashRegistry[thash]; ok {
+		relog.Warning("Hash collision for %s (schema revert?). Will not be cached", self.Name)
+		return ""
+	}
+	hashRegistry[thash] = self.Name
+	return thash
 }
 
 func (self *TableInfo) StatsJSON() string {
@@ -192,4 +195,18 @@ func (self *TableInfo) StatsJSON() string {
 
 func (self *TableInfo) Stats() (hits, absent, misses int64) {
 	return atomic.LoadInt64(&self.hits), atomic.LoadInt64(&self.absent), atomic.LoadInt64(&self.misses)
+}
+
+func base64fnv(s string) string {
+	h := fnv.New32a()
+	h.Write(([]byte)(s))
+	v := h.Sum32()
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, v)
+	b64 := make([]byte, base64.StdEncoding.EncodedLen(len(b)))
+	base64.StdEncoding.Encode(b64, b)
+	for b64[len(b64)-1] == '=' {
+		b64 = b64[:len(b64)-1]
+	}
+	return string(b64)
 }

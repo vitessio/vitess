@@ -436,7 +436,6 @@ func (self *SqlQuery) execDDL(ddl string) *QueryResult {
 	defer self.activeTxPool.Commit(txid, self.schemaInfo)
 
 	// Stolen from Execute
-	self.schemaInfo.ThrottleDDL(ddlPlan.TableName)
 	conn = self.activeTxPool.Get(txid)
 	defer conn.Recycle()
 	result, err := self.executeSql(conn, []byte(ddl))

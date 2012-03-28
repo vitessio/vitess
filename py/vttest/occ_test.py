@@ -137,7 +137,7 @@ class TestEnv(object):
       charset=cfg.get('charset', ''))
 
   def connect(self):
-    return db.connect("localhost:9461", 3, dbname=self.cfg.get('dbname', None))
+    return db.connect("localhost:9461", 2, dbname=self.cfg.get('dbname', None))
 
   def execute(self, query, binds=None):
     if binds is None:
@@ -189,7 +189,7 @@ class TestEnv(object):
         print "Function: run_cases(%d): FAIL: %s:\nAbsent: %s!=%s"%(count, case[0], tstart["Absent"]+case[4][2], tend["Absent"])
         error_count += 1
       if tstart["Misses"]+case[4][3] != tend["Misses"]:
-        print "Function: run_cases(%d): FAIL: %s:\nMisses: %s!=%s"%(count, case[0], tstart["Misses"]+case[4][2], tend["Misses"])
+        print "Function: run_cases(%d): FAIL: %s:\nMisses: %s!=%s"%(count, case[0], tstart["Misses"]+case[4][3], tend["Misses"])
         error_count += 1
     return error_count
 
