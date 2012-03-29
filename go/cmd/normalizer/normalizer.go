@@ -97,9 +97,14 @@ func Normalize(sql string) (string, map[string]interface{}, error) {
 		return "", nil, nil
 	} else {
 		lstr := strings.ToLower(sql)
-		switch lstr {
-		case "begin", "commit", "rollback":
-			return lstr, nil, nil
+		if strings.HasPrefix(lstr, "begin") {
+			return "begin", nil, nil
+		}
+		if strings.HasPrefix(lstr, "commit") {
+			return "commit", nil, nil
+		}
+		if strings.HasPrefix(lstr, "rollback") {
+			return "rollback", nil, nil
 		}
 		if strings.HasPrefix(lstr, "use") {
 			return "", nil, nil

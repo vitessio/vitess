@@ -357,14 +357,14 @@ table_expression:
   {
     $$ = NewSimpleParseNode(TABLE_EXPR, "")
     $$.Push($1)
-    $$.Push(nil)
+    $$.Push(NewSimpleParseNode(NODE_LIST, "node_list"))
     $$.Push($2)
   }
 | simple_table_expression as_opt ID index_hint_list
 	{
     $$ = NewSimpleParseNode(TABLE_EXPR, "")
     $$.Push($1)
-    $$.Push($3)
+    $$.Push(NewSimpleParseNode(NODE_LIST, "node_list").Push($3))
     $$.Push($4)
 	}
 | table_expression join_type table_expression %prec JOIN

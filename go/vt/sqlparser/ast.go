@@ -160,8 +160,8 @@ func (self *Node) Format(buf *TrackedBuffer) {
 		Fprintf(buf, "%s table %v %v", self.Value, self.At(0), self.At(1))
 	case TABLE_EXPR:
 		Fprintf(buf, "%v", self.At(0))
-		if self.At(1) != nil {
-			Fprintf(buf, " as %v", self.At(1))
+		if self.At(1).Len() == 1 {
+			Fprintf(buf, " as %v", self.At(1).At(0))
 		}
 		Fprintf(buf, "%v", self.At(2))
 	case USE:
