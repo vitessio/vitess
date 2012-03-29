@@ -393,15 +393,41 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	*noOutput = ""
 	self.mu.RLock()
 	defer self.mu.RUnlock()
+	if self.cachePool.IsClosed() {
+		return nil
+	}
 	tableInfo := self.schemaInfo.GetTable(cacheInvalidate.Table)
 	if tableInfo == nil {
 		return NewTabletError(FAIL, "Table %s not found", cacheInvalidate.Table)
 	}
-	if tableInfo != nil && tableInfo.Cache != nil {
-		for _, val := range cacheInvalidate.Keys {
-			// TODO: Validate val
-			tableInfo.Cache.Delete(val.(string))
-		}
+	if tableInfo == nil || tableInfo.Cache == nil {
+		return nil
+	}
+	for _, val := range cacheInvalidate.Keys {
+		// TODO: Validate val
+		tableInfo.Cache.Delete(val.(string))
+	}
+	return nil
+}
+
+type DDLInvalidate struct {
+	DDL string
+}
+
+func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (err error) {
+	defer handleError(&err)
+	self.checkState(self.sessionId, false)
+	*noOutput = ""
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	ddlPlan := sqlparser.DDLParse(ddl.DDL)
+	if ddlPlan.Action == 0 {
+		panic(NewTabletError(FAIL, "DDL is not understood"))
+	}
+	self.schemaInfo.DropTable(ddlPlan.TableName)
+	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
+		self.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 	return nil
 }

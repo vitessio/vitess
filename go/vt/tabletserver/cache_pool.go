@@ -35,8 +35,11 @@ import (
 	"code.google.com/p/vitess/go/memcache"
 	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
+	"net/http"
 	"time"
 )
+
+const statsURL = "/debug/memcache/"
 
 type CreateCacheFunc func() (*memcache.Connection, error)
 
@@ -68,6 +71,7 @@ func (self *CachePool) Open(connFactory CreateCacheFunc) {
 		return &Cache{c, self}, nil
 	}
 	self.RoundRobin.Open(f)
+	http.Handle(statsURL, self)
 }
 
 // You must call Recycle on the *Cache once done.
@@ -77,6 +81,27 @@ func (self *CachePool) Get() *Cache {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
 	return r.(*Cache)
+}
+
+func (self *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	defer func() {
+		if x := recover(); x != nil {
+			response.Write(([]byte)(x.(error).Error()))
+		}
+	}()
+	response.Header().Set("Content-Type", "text/plain")
+	command := request.URL.Path[len(statsURL):]
+	if command == "stats" {
+		command = ""
+	}
+	conn := self.Get()
+	defer conn.Recycle()
+	r, err := conn.Stats(command)
+	if err != nil {
+		response.Write(([]byte)(err.Error()))
+	} else {
+		response.Write(r)
+	}
 }
 
 // Cache re-exposes memcache.Connection

@@ -146,6 +146,19 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Lost", "World")
 	time.Sleep(2 * time.Second)
 	expect(t, c, "Lost", "")
+
+	// stats
+	_, err = c.Stats("")
+	if err != nil {
+		t.Errorf("Stats: %v", err)
+		return
+	}
+
+	_, err = c.Stats("slabs")
+	if err != nil {
+		t.Errorf("Stats: %v", err)
+		return
+	}
 }
 
 func expect(t *testing.T, c *Connection, key, value string) {

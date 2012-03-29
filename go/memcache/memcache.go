@@ -144,6 +144,28 @@ func (self *Connection) Delete(key string) (deleted bool, err error) {
 	return strings.HasPrefix(reply, "DELETED"), nil
 }
 
+func (self *Connection) Stats(argument string) (result []byte, err error) {
+	defer handleError(&err)
+	if argument == "" {
+		self.writestrings("stats\r\n")
+	} else {
+		self.writestrings("stats ", argument, "\r\n")
+	}
+	self.flush()
+	for {
+		l := self.readline()
+		if strings.HasPrefix(l, "END") {
+			break
+		}
+		if strings.Contains(l, "ERROR") {
+			return nil, NewMemcacheError(l)
+		}
+		result = append(result, l...)
+		result = append(result, '\n')
+	}
+	return result, err
+}
+
 func (self *Connection) store(command, key string, flags uint16, timeout uint64, value []byte) (stored bool) {
 	if len(value) > 1000000 {
 		return false
