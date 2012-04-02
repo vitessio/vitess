@@ -147,6 +147,49 @@ func TestMemcache(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	expect(t, c, "Lost", "")
 
+	// cas
+	stored, err = c.Set("Data", 0, 0, []byte("Set"))
+	if err != nil {
+		t.Errorf("Set: %v", err)
+		return
+	}
+	if !stored {
+		t.Errorf("Expecting true, received %v", stored)
+	}
+	expect(t, c, "Data", "Set")
+	b, f, cas, err := c.Gets("Data")
+	if err != nil {
+		t.Errorf("Gets: %v", err)
+		return
+	}
+	if cas == 0 {
+		t.Errorf("Expecting non-zero for cas")
+	}
+	stored, err = c.Cas("Data", 0, 0, []byte("not set"), 12345)
+	if err != nil {
+		t.Errorf("Set: %v", err)
+		return
+	}
+	if stored {
+		t.Errorf("Expecting false, received %v", stored)
+	}
+	expect(t, c, "Data", "Set")
+	stored, err = c.Cas("Data", 0, 0, []byte("Changed"), cas)
+	if err != nil {
+		t.Errorf("Set: %v", err)
+		return
+	}
+	expect(t, c, "Data", "Changed")
+	stored, err = c.Set("Data", 0, 0, []byte("Overwritten"))
+	if err != nil {
+		t.Errorf("Set: %v", err)
+		return
+	}
+	if !stored {
+		t.Errorf("Expecting true, received %v", stored)
+	}
+	expect(t, c, "Data", "Overwritten")
+
 	// stats
 	_, err = c.Stats("")
 	if err != nil {

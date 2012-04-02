@@ -506,10 +506,9 @@ func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (r
 	normalizePKRows(plan.TableInfo, pkRows)
 	rows := make([][]interface{}, 0, len(pkRows))
 	var hits, absent, misses int64
-	readTime := time.Now()
 	for _, pk := range pkRows {
 		key := buildKey(tableInfo, pk)
-		if cacheRow := tableInfo.Cache.Get(key); cacheRow != nil {
+		if cacheRow, cas := tableInfo.Cache.Get(key); cacheRow != nil {
 			/*if dbrow := self.validateRow(plan, cacheRow, pk); dbrow != nil {
 				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
 			}*/
@@ -523,8 +522,11 @@ func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (r
 			}
 			row := resultFromdb.Rows[0]
 			pkRow := applyFilter(tableInfo.PKColumns, row)
-			key := buildKey(tableInfo, pkRow)
-			tableInfo.Cache.Set(key, row, readTime)
+			newKey := buildKey(tableInfo, pkRow)
+			if newKey != key {
+				relog.Warning("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, key, newKey)
+			}
+			tableInfo.Cache.Set(newKey, row, cas)
 			rows = append(rows, applyFilter(plan.ColumnNumbers, row))
 			misses++
 		}
@@ -557,15 +559,15 @@ func (self *SqlQuery) validateRow(plan *CompiledPlan, cacheRow []interface{}, pk
 	return dbrow
 }
 
+// TODO: Delete this unused function once we know that we won't need it for sure.
 func (self *SqlQuery) execCacheResult(plan *CompiledPlan) (result *QueryResult) {
-	readTime := time.Now()
 	result = self.qFetch(plan, plan.OuterQuery, nil)
 	tableInfo := plan.TableInfo
 	result.Fields = applyFieldFilter(plan.ColumnNumbers, result.Fields)
 	for i, row := range result.Rows {
 		pkRow := applyFilter(tableInfo.PKColumns, row)
 		key := buildKey(tableInfo, pkRow)
-		tableInfo.Cache.Set(key, row, readTime)
+		tableInfo.Cache.Set(key, row, 0)
 		result.Rows[i] = applyFilter(plan.ColumnNumbers, row)
 	}
 	return result

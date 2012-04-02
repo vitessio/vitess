@@ -80,57 +80,44 @@ func (self *Connection) IsClosed() bool {
 
 func (self *Connection) Get(key string) (value []byte, flags uint16, err error) {
 	defer handleError(&err)
-	// get <key>*\r\n
-	self.writestrings("get ", key, "\r\n")
-	header := self.readline()
-	if strings.HasPrefix(header, "VALUE") {
-		// VALUE <key> <flags> <bytes> [<cas unique>]\r\n
-		chunks := strings.Split(header, " ")
-		if len(chunks) < 4 {
-			panic(NewMemcacheError("Malformed response: %s", string(header)))
-		}
-		flags64, err := strconv.ParseUint(chunks[2], 10, 16)
-		if err != nil {
-			panic(NewMemcacheError("%v", err))
-		}
-		flags = uint16(flags64)
-		size, err := strconv.ParseUint(chunks[3], 10, 64)
-		if err != nil {
-			panic(NewMemcacheError("%v", err))
-		}
-		// <data block>\r\n
-		value = self.read(int(size) + 2)[:size]
-		header = self.readline()
-	}
-	if !strings.HasPrefix(header, "END") {
-		panic(NewMemcacheError("Malformed response: %s", string(header)))
-	}
-	return value, flags, nil
+	value, flags, _ = self.get("get", key)
+	return
+}
+
+func (self *Connection) Gets(key string) (value []byte, flags uint16, cas uint64, err error) {
+	defer handleError(&err)
+	value, flags, cas = self.get("gets", key)
+	return
 }
 
 func (self *Connection) Set(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("set", key, flags, timeout, value), nil
+	return self.store("set", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Add(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("add", key, flags, timeout, value), nil
+	return self.store("add", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Replace(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("replace", key, flags, timeout, value), nil
+	return self.store("replace", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Append(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("append", key, flags, timeout, value), nil
+	return self.store("append", key, flags, timeout, value, 0), nil
 }
 
 func (self *Connection) Prepend(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
-	return self.store("prepend", key, flags, timeout, value), nil
+	return self.store("prepend", key, flags, timeout, value, 0), nil
+}
+
+func (self *Connection) Cas(key string, flags uint16, timeout uint64, value []byte, cas uint64) (stored bool, err error) {
+	defer handleError(&err)
+	return self.store("cas", key, flags, timeout, value, cas), nil
 }
 
 func (self *Connection) Delete(key string) (deleted bool, err error) {
@@ -166,7 +153,42 @@ func (self *Connection) Stats(argument string) (result []byte, err error) {
 	return result, err
 }
 
-func (self *Connection) store(command, key string, flags uint16, timeout uint64, value []byte) (stored bool) {
+func (self *Connection) get(command, key string) (value []byte, flags uint16, cas uint64) {
+	// get(s) <key>*\r\n
+	self.writestrings(command, " ", key, "\r\n")
+	header := self.readline()
+	if strings.HasPrefix(header, "VALUE") {
+		// VALUE <key> <flags> <bytes> [<cas unique>]\r\n
+		chunks := strings.Split(header, " ")
+		if len(chunks) < 4 {
+			panic(NewMemcacheError("Malformed response: %s", string(header)))
+		}
+		flags64, err := strconv.ParseUint(chunks[2], 10, 16)
+		if err != nil {
+			panic(NewMemcacheError("%v", err))
+		}
+		flags = uint16(flags64)
+		size, err := strconv.ParseUint(chunks[3], 10, 64)
+		if err != nil {
+			panic(NewMemcacheError("%v", err))
+		}
+		if len(chunks) == 5 {
+			cas, err = strconv.ParseUint(chunks[4], 10, 64)
+			if err != nil {
+				panic(NewMemcacheError("%v", err))
+			}
+		}
+		// <data block>\r\n
+		value = self.read(int(size) + 2)[:size]
+		header = self.readline()
+	}
+	if !strings.HasPrefix(header, "END") {
+		panic(NewMemcacheError("Malformed response: %s", string(header)))
+	}
+	return value, flags, cas
+}
+
+func (self *Connection) store(command, key string, flags uint16, timeout uint64, value []byte, cas uint64) (stored bool) {
 	if len(value) > 1000000 {
 		return false
 	}
@@ -178,6 +200,10 @@ func (self *Connection) store(command, key string, flags uint16, timeout uint64,
 	self.write(strconv.AppendUint(nil, timeout, 10))
 	self.writestring(" ")
 	self.write(strconv.AppendInt(nil, int64(len(value)), 10))
+	if cas != 0 {
+		self.writestring(" ")
+		self.write(strconv.AppendUint(nil, cas, 10))
+	}
 	self.writestring("\r\n")
 	// <data block>\r\n
 	self.write(value)

@@ -33,8 +33,6 @@ package tabletserver
 
 import (
 	"code.google.com/p/vitess/go/bson"
-	"strconv"
-	"time"
 )
 
 const (
@@ -51,60 +49,56 @@ func NewRowCache(tableName string, hash string, cachePool *CachePool) *RowCache 
 	return &RowCache{prefix, cachePool}
 }
 
-func (self *RowCache) Get(key string) (row []interface{}) {
+func (self *RowCache) Get(key string) (row []interface{}, cas uint64) {
 	conn := self.cachePool.Get()
 	defer conn.Recycle()
 	mkey := self.prefix + key
 
-	b, f, err := conn.Get(mkey)
+	b, f, cas, err := conn.Gets(mkey)
 	if err != nil {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
 	}
 	if b == nil {
-		return nil
+		return nil, 0
 	}
 	if f == RC_DELETED {
-		return nil
+		// The row was recently invalidated.
+		// If the caller reads the row from db, they can update it
+		// back as long as it's not updated again.
+		return nil, cas
 	}
 	err = bson.Unmarshal(b, &row)
 	if err != nil {
 		panic(NewTabletError(FATAL, "%s", err))
 	}
-	return row
+	// No cas. If you've read the row, we don't expect you to update it back.
+	return row, 0
 }
 
-func (self *RowCache) Set(key string, row []interface{}, readTime time.Time) {
+func (self *RowCache) Set(key string, row []interface{}, cas uint64) {
 	// This value is hardcoded for now.
 	// We're assuming it's not worth caching rows that are too large.
-	if rowLen(row) > 4000 {
+	if rowLen(row) > 8000 {
 		return
 	}
 	conn := self.cachePool.Get()
 	defer conn.Recycle()
 	mkey := self.prefix + key
 
-	b, f, err := conn.Get(mkey)
+	b, err := bson.Marshal(row)
 	if err != nil {
-		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
-	}
-	if f == RC_DELETED {
-		ut, err := strconv.ParseUint(string(b), 10, 64)
-		if err != nil {
-			panic(NewTabletError(FATAL, "%s", err))
-		}
-		// allow upto 1ms rounding error
-		if readTime.UnixNano() <= int64(ut+1e6) {
-			return
-		}
 	}
 
-	b, err = bson.Marshal(row)
-	if err != nil {
-		panic(NewTabletError(FATAL, "%s", err))
+	if cas == 0 {
+		// Either caller didn't find the value at all
+		// or they didn't look for it in the first place.
+		_, err = conn.Add(mkey, 0, 0, b)
+	} else {
+		// Caller is trying to update a row that recently changed.
+		_, err = conn.Cas(mkey, 0, 0, b, cas)
 	}
-	_, err = conn.Set(mkey, 0, 0, b)
 	if err != nil {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
@@ -116,8 +110,7 @@ func (self *RowCache) Delete(key string) {
 	defer conn.Recycle()
 	mkey := self.prefix + key
 
-	b := strconv.AppendInt(nil, time.Now().UnixNano(), 10)
-	_, err := conn.Set(mkey, RC_DELETED, self.cachePool.DeleteExpiry, b)
+	_, err := conn.Set(mkey, RC_DELETED, self.cachePool.DeleteExpiry, nil)
 	if err != nil {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
