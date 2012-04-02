@@ -33,11 +33,13 @@ package tabletserver
 
 import (
 	"bytes"
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/schema"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"encoding/base64"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 func buildValueList(pkValues []interface{}, bindVars map[string]interface{}) [][]interface{} {
@@ -99,6 +101,15 @@ func resolveValue(value interface{}, bindVars map[string]interface{}) interface{
 		}
 	}
 	return value
+}
+
+func copyRows(rows [][]interface{}) (result [][]interface{}) {
+	result = make([][]interface{}, len(rows))
+	for i, row := range rows {
+		result[i] = make([]interface{}, len(row))
+		copy(result[i], row)
+	}
+	return result
 }
 
 func normalizePKRows(tableInfo *TableInfo, pkRows [][]interface{}) {
@@ -186,7 +197,6 @@ func encodePKValue(buf *bytes.Buffer, pkValue interface{}, category int) {
 	default:
 		buf.WriteByte('\'')
 		encoder := base64.NewEncoder(base64.StdEncoding, buf)
-		defer encoder.Close()
 		switch val := pkValue.(type) {
 		case string:
 			encoder.Write([]byte(val))
@@ -195,8 +205,42 @@ func encodePKValue(buf *bytes.Buffer, pkValue interface{}, category int) {
 		default:
 			panic(NewTabletError(FAIL, "Type %T disallowed for non-number pk columns", val))
 		}
+		encoder.Close()
 		buf.WriteByte('\'')
 	}
+}
+
+func validateKey(tableInfo *TableInfo, key string) (newKey string) {
+	if key == "" {
+		// TODO: Verify auto-increment table
+		return
+	}
+	pieces := strings.Split(key, ".")
+	if len(pieces) != len(tableInfo.PKColumns) {
+		// TODO: Verify auto-increment table
+		return ""
+	}
+	pkValues := make([]interface{}, len(tableInfo.PKColumns))
+	for i, piece := range pieces {
+		if piece[0] == '\'' {
+			/*var err error
+			pkValues[i], err = base64.StdEncoding.DecodeString(piece[1 : len(piece)-1])
+			if err != nil {
+				relog.Warning("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
+				return
+			}*/
+			pkValues[i] = piece[1 : len(piece)-1]
+		} else if piece == "null" {
+			// TODO: Verify auto-increment table
+			return ""
+		} else {
+			pkValues[i] = piece
+		}
+	}
+	if newKey = buildKey(tableInfo, pkValues); newKey != key {
+		relog.Warning("Error: Key mismatch, received: %s, computed: %s", key, newKey)
+	}
+	return buildKey(tableInfo, pkValues)
 }
 
 // duplicated in vt/sqlparser/execution.go

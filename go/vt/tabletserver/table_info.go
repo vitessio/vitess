@@ -148,6 +148,7 @@ func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, create
 	for col := range self.PKColumns {
 		if self.ColumnCategory[col] == schema.CAT_OTHER {
 			relog.Info("Table %s pk has unsupported column types. Will not be cached.", self.Name)
+			return
 		}
 	}
 

@@ -76,7 +76,7 @@ type SqlQuery struct {
 
 // stats are globals to allow anybody to set them
 var queryStats, waitStats *stats.Timings
-var killStats, errorStats *stats.Counters
+var killStats, errorStats, invalidationStats *stats.Counters
 var resultStats *stats.Histogram
 
 var resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
@@ -104,6 +104,7 @@ func NewSqlQuery(cachePoolCap, poolSize, transactionCap int, transactionTimeout 
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
 	errorStats = stats.NewCounters("Errors")
+	invalidationStats = stats.NewCounters("Invalidations")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
 	return self
 }
@@ -393,6 +394,7 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	*noOutput = ""
 	self.mu.RLock()
 	defer self.mu.RUnlock()
+
 	if self.cachePool.IsClosed() {
 		return nil
 	}
@@ -400,12 +402,19 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	if tableInfo == nil {
 		return NewTabletError(FAIL, "Table %s not found", cacheInvalidate.Table)
 	}
-	if tableInfo == nil || tableInfo.Cache == nil {
+	if tableInfo.CacheType == 0 {
 		return nil
 	}
+	invalidationStats.Add("DML", 1)
 	for _, val := range cacheInvalidate.Keys {
-		// TODO: Validate val
-		tableInfo.Cache.Delete(val.(string))
+		newKey := validateKey(tableInfo, val.(string))
+		if newKey != "" {
+			tableInfo.Cache.Delete(newKey)
+		}
+		/*
+		if k := val.(string); k != "" {
+			tableInfo.Cache.Delete(k)
+		}*/
 	}
 	return nil
 }
@@ -425,6 +434,7 @@ func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (er
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
+	invalidationStats.Add("DDL", 1)
 	self.schemaInfo.DropTable(ddlPlan.TableName)
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
 		self.schemaInfo.CreateTable(ddlPlan.NewName)
@@ -486,7 +496,7 @@ func (self *SqlQuery) execPK(plan *CompiledPlan) (result *QueryResult) {
 
 func (self *SqlQuery) execSubquery(plan *CompiledPlan) (result *QueryResult) {
 	innerResult := self.qFetch(plan, plan.Subquery, nil)
-	return self.fetchPKRows(plan, innerResult.Rows)
+	return self.fetchPKRows(plan, copyRows(innerResult.Rows))
 }
 
 func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (result *QueryResult) {
@@ -500,7 +510,9 @@ func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (r
 	for _, pk := range pkRows {
 		key := buildKey(tableInfo, pk)
 		if cacheRow := tableInfo.Cache.Get(key); cacheRow != nil {
-			//self.validateRow(plan, cacheRow, pk)
+			/*if dbrow := self.validateRow(plan, cacheRow, pk); dbrow != nil {
+				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
+			}*/
 			rows = append(rows, applyFilter(plan.ColumnNumbers, cacheRow))
 			hits++
 		} else {
@@ -528,8 +540,8 @@ func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (r
 func (self *SqlQuery) validateRow(plan *CompiledPlan, cacheRow []interface{}, pk []interface{}) (dbrow []interface{}) {
 	resultFromdb := self.qFetch(plan, plan.OuterQuery, pk)
 	if len(resultFromdb.Rows) != 1 {
-		relog.Warning("dbrow not found for: %v", pk)
-		return
+		relog.Warning("unexpected number of rows for %v: %d", pk, len(resultFromdb.Rows))
+		return nil
 	}
 	dbrow = resultFromdb.Rows[0]
 	for i := 0; i < len(cacheRow); i++ {

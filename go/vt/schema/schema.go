@@ -105,6 +105,9 @@ func NewIndex(name string) *Index {
 
 func (self *Index) AddColumn(name string, cardinality uint64) {
 	self.Columns = append(self.Columns, name)
+	if cardinality == 0 {
+		cardinality = uint64(len(self.Cardinality) + 1)
+	}
 	self.Cardinality = append(self.Cardinality, cardinality)
 }
 
