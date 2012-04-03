@@ -640,4 +640,19 @@ nocache_cases = [
   ],
   ['commit'],
   ['select * from vtocc_d', {}, []],
+
+  # missing values
+  ['begin'],
+  [
+    "insert into vtocc_e(foo) values ('foo')", {},
+    [],
+    ["insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */"],
+  ],
+  [
+    "insert into vtocc_e(foo) select foo from vtocc_a", {},
+    [],
+    ["select foo from vtocc_a limit 10001", "insert into vtocc_e(foo) values ('efgh'), ('fghi') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ) (null 1 'bmFtZQ==' ); */"],
+  ],
+  ['delete from vtocc_e'],
+  ['commit'],
 ]

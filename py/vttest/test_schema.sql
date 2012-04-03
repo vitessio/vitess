@@ -7,8 +7,9 @@ commit
 
 create table vtocc_a(eid bigint, id int, name varchar(128), foo varbinary(128), primary key(eid, id)) comment 'vtocc_nocache'
 create table vtocc_b(eid bigint, id int, primary key(eid, id)) comment 'vtocc_nocache'
-create table vtocc_c(eid bigint, name varbinary(128), foo varbinary(128), primary key(eid, name)) comment 'vtocc_nocache'
+create table vtocc_c(eid bigint, name varchar(128), foo varbinary(128), primary key(eid, name)) comment 'vtocc_nocache'
 create table vtocc_d(eid bigint, id int) comment 'vtocc_nocache'
+create table vtocc_e(eid bigint auto_increment, id int default 1, name varchar(128) default 'name', foo varchar(128), primary key(eid, id, name)) comment 'vtocc_nocache'
 begin
 delete from vtocc_a
 delete from vtocc_c
@@ -33,6 +34,7 @@ drop table vtocc_a
 drop table vtocc_b
 drop table vtocc_c
 drop table vtocc_d
+drop table vtocc_e
 drop table vtocc_cached
 drop table vtocc_cached2
 drop table vtocc_nocache

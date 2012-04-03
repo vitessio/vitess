@@ -57,10 +57,12 @@ func initTables() {
 	schem = make(map[string]*schema.Table)
 
 	a := schema.NewTable("a")
-	a.Version = 0
-	a.Columns = append(a.Columns, "eid", "id", "name", "foo")
-	a.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER, schema.CAT_OTHER, schema.CAT_OTHER)
-	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, a.Columns})
+	a.AddColumn("eid", "int", "0", "")
+	a.AddColumn("id", "int", "0", "")
+	a.AddColumn("name", "varchar(10)", "0", "")
+	a.AddColumn("foo", "varchar(10)", "0", "")
+	acolumns := []string{"eid", "id", "name", "foo"}
+	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, acolumns})
 	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}, []uint64{1, 1}, a.Indexes[0].Columns})
 	a.Indexes = append(a.Indexes, &schema.Index{"b_name", []string{"name"}, []uint64{3}, a.Indexes[0].Columns})
 	a.Indexes = append(a.Indexes, &schema.Index{"c_name", []string{"name"}, []uint64{2}, a.Indexes[0].Columns})
@@ -69,18 +71,17 @@ func initTables() {
 	schem["a"] = a
 
 	b := schema.NewTable("b")
-	b.Version = 0
-	b.Columns = append(a.Columns, "eid", "id")
-	b.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER)
-	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, b.Columns})
+	b.AddColumn("eid", "int", "0", "")
+	b.AddColumn("id", "int", "0", "")
+	bcolumns := []string{"eid", "id"}
+	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, bcolumns})
 	b.PKColumns = append(a.PKColumns, 0, 1)
 	b.CacheType = 0
 	schem["b"] = b
 
 	c := schema.NewTable("c")
-	c.Version = 0
-	c.Columns = append(a.Columns, "eid", "id")
-	c.ColumnCategory = append(a.ColumnCategory, schema.CAT_NUMBER, schema.CAT_NUMBER)
+	b.AddColumn("eid", "int", "0", "")
+	b.AddColumn("id", "int", "0", "")
 	c.CacheType = 0
 	schem["c"] = c
 }

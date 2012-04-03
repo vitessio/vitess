@@ -1046,7 +1046,11 @@ func GenerateSubquery(columns []string, table *Node, where *Node, order *Node, l
 		defer limit.Pop()
 	}
 	fmt.Fprintf(buf, "select ")
-	writeColumnList(buf, columns)
+	i := 0
+	for i = 0; i < len(columns)-1; i++ {
+		fmt.Fprintf(buf, "%s, ", columns[i])
+	}
+	fmt.Fprintf(buf, "%s", columns[i])
 	Fprintf(buf, " from %v%v%v%v", table, where, order, limit)
 	if for_update {
 		Fprintf(buf, " for update")
@@ -1054,12 +1058,12 @@ func GenerateSubquery(columns []string, table *Node, where *Node, order *Node, l
 	return NewParsedQuery(buf)
 }
 
-func writeColumnList(buf *TrackedBuffer, columns []string) {
+func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {
 	i := 0
 	for i = 0; i < len(columns)-1; i++ {
-		fmt.Fprintf(buf, "%s, ", columns[i])
+		fmt.Fprintf(buf, "%s, ", columns[i].Name)
 	}
-	fmt.Fprintf(buf, "%s", columns[i])
+	fmt.Fprintf(buf, "%s", columns[i].Name)
 }
 
 func asInterface(node *Node) interface{} {
@@ -1072,7 +1076,7 @@ func asInterface(node *Node) interface{} {
 	panic(NewParserError("Unexpected node %v", node))
 }
 
-// duplicated in vt/tabletserver/codex.go
+// duplicated in multipe packages
 func tonumber(val []byte) (number interface{}) {
 	var err error
 	if val[0] == '-' {

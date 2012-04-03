@@ -122,7 +122,7 @@ func normalizeRows(tableInfo *TableInfo, columnNumbers []int, rows [][]interface
 			panic(NewTabletError(FAIL, "data inconsistency %d vs %d", len(row), len(columnNumbers)))
 		}
 		for j, cell := range row {
-			if tableInfo.ColumnCategory[columnNumbers[j]] == schema.CAT_NUMBER {
+			if tableInfo.Columns[columnNumbers[j]].Category == schema.CAT_NUMBER {
 				switch val := cell.(type) {
 				case string:
 					row[j] = tonumber(val)
@@ -134,13 +134,26 @@ func normalizeRows(tableInfo *TableInfo, columnNumbers []int, rows [][]interface
 	}
 }
 
+func fillPKDefaults(tableInfo *TableInfo, pkRows [][]interface{}) {
+	for _, row := range pkRows {
+		for j, cell := range row {
+			if tableInfo.Columns[tableInfo.PKColumns[j]].IsAuto {
+				continue
+			}
+			if cell == nil {
+				row[j] = tableInfo.Columns[tableInfo.PKColumns[j]].Default
+			}
+		}
+	}
+}
+
 func buildKey(tableInfo *TableInfo, row []interface{}) (key string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	for i, pkValue := range row {
 		if pkValue == nil { // Can happen for inserts with auto_increment columns
 			return ""
 		}
-		encodePKValue(buf, pkValue, tableInfo.ColumnCategory[tableInfo.PKColumns[i]])
+		encodePKValue(buf, pkValue, tableInfo.Columns[tableInfo.PKColumns[i]].Category)
 		if i != len(row)-1 {
 			buf.WriteByte('.')
 		}
@@ -152,11 +165,7 @@ func buildStreamComment(tableInfo *TableInfo, pkValueList [][]interface{}, secon
 	buf := bytes.NewBuffer(make([]byte, 0, 256))
 	fmt.Fprintf(buf, " /* _stream %s (", tableInfo.Name)
 	// We assume the first index exists, and is the pk
-	for i, pkName := range tableInfo.Indexes[0].Columns {
-		// Skip column if its value is nil
-		if pkValueList[0][i] == nil {
-			continue
-		}
+	for _, pkName := range tableInfo.Indexes[0].Columns {
 		buf.WriteString(pkName)
 		buf.WriteString(" ")
 	}
@@ -172,9 +181,10 @@ func buildPKValueList(buf *bytes.Buffer, tableInfo *TableInfo, pkValueList [][]i
 		buf.WriteString(" (")
 		for j, pkValue := range pkValues {
 			if pkValue == nil {
+				buf.WriteString("null ")
 				continue
 			}
-			encodePKValue(buf, pkValue, tableInfo.ColumnCategory[tableInfo.PKColumns[j]])
+			encodePKValue(buf, pkValue, tableInfo.Columns[tableInfo.PKColumns[j]].Category)
 			buf.WriteString(" ")
 		}
 		buf.WriteString(")")
@@ -243,7 +253,7 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 	return buildKey(tableInfo, pkValues)
 }
 
-// duplicated in vt/sqlparser/execution.go
+// duplicated in multipe packages
 func tonumber(val string) (number interface{}) {
 	var err error
 	if val[0] == '-' {

@@ -81,7 +81,7 @@ func (self *TableInfo) fetchColumns(conn *DBConnection) bool {
 		return false
 	}
 	for _, row := range columns.Rows {
-		self.AddColumn(row[0].(string), row[1].(string))
+		self.AddColumn(row[0].(string), row[1].(string), row[4], row[5].(string))
 	}
 	return true
 }
@@ -118,7 +118,9 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 		self.PKColumns[i] = self.FindColumn(pkCol)
 	}
 	// Primary key contains all table columns
-	pkIndex.DataColumns = self.Columns
+	for _, col := range self.Columns {
+		pkIndex.DataColumns = append(pkIndex.DataColumns, col.Name)
+	}
 	// Secondary indices contain all primary key columns
 	for i := 1; i < len(self.Indexes); i++ {
 		self.Indexes[i].DataColumns = pkIndex.Columns
@@ -146,7 +148,7 @@ func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, create
 		return
 	}
 	for col := range self.PKColumns {
-		if self.ColumnCategory[col] == schema.CAT_OTHER {
+		if self.Columns[col].Category == schema.CAT_OTHER {
 			relog.Info("Table %s pk has unsupported column types. Will not be cached.", self.Name)
 			return
 		}

@@ -35,8 +35,8 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
+	"strconv"
 	"strings"
-	"time"
 )
 
 // Column categories
@@ -46,40 +46,54 @@ const (
 	CAT_VARBINARY
 )
 
+type TableColumn struct {
+	Name     string
+	Category int
+	IsAuto   bool
+	Default  interface{}
+}
+
 type Table struct {
-	Version        int64
-	Name           string
-	Columns        []string
-	ColumnCategory []int
-	Indexes        []*Index
-	PKColumns      []int
-	CacheType      int
+	Name      string
+	Columns   []TableColumn
+	Indexes   []*Index
+	PKColumns []int
+	CacheType int
 }
 
 func NewTable(name string) *Table {
 	return &Table{
-		Version:        time.Now().UnixNano(),
-		Name:           name,
-		Columns:        make([]string, 0, 16),
-		ColumnCategory: make([]int, 0, 16),
-		Indexes:        make([]*Index, 0, 8),
+		Name:    name,
+		Columns: make([]TableColumn, 0, 16),
+		Indexes: make([]*Index, 0, 8),
 	}
 }
 
-func (self *Table) AddColumn(name string, column_type string) {
-	self.Columns = append(self.Columns, name)
-	if strings.Contains(column_type, "int") {
-		self.ColumnCategory = append(self.ColumnCategory, CAT_NUMBER)
-	} else if strings.HasPrefix(column_type, "varbinary") {
-		self.ColumnCategory = append(self.ColumnCategory, CAT_VARBINARY)
+func (self *Table) AddColumn(name string, columnType string, defval interface{}, extra string) {
+	index := len(self.Columns)
+	self.Columns = append(self.Columns, TableColumn{Name: name})
+	if strings.Contains(columnType, "int") {
+		self.Columns[index].Category = CAT_NUMBER
+	} else if strings.HasPrefix(columnType, "varbinary") {
+		self.Columns[index].Category = CAT_VARBINARY
 	} else {
-		self.ColumnCategory = append(self.ColumnCategory, CAT_OTHER)
+		self.Columns[index].Category = CAT_OTHER
+	}
+	if defval != nil {
+		if self.Columns[index].Category == CAT_NUMBER {
+			self.Columns[index].Default = tonumber(defval.(string))
+		} else {
+			self.Columns[index].Default = defval
+		}
+	}
+	if extra == "auto_increment" {
+		self.Columns[index].IsAuto = true
 	}
 }
 
 func (self *Table) FindColumn(name string) int {
-	for i, colName := range self.Columns {
-		if name == colName {
+	for i, col := range self.Columns {
+		if col.Name == name {
 			return i
 		}
 	}
@@ -127,4 +141,14 @@ func (self *Index) FindDataColumn(name string) int {
 		}
 	}
 	return -1
+}
+
+// duplicated in multipe packages
+func tonumber(val string) (number interface{}) {
+	if val[0] == '-' {
+		number, _ = strconv.ParseInt(val, 0, 64)
+	} else {
+		number, _ = strconv.ParseUint(val, 0, 64)
+	}
+	return number
 }

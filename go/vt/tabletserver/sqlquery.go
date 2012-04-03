@@ -606,6 +606,7 @@ func (self *SqlQuery) execInsertSubquery(conn PoolConnection, plan *CompiledPlan
 }
 
 func (self *SqlQuery) execInsertPKRows(conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
+	fillPKDefaults(plan.TableInfo, pkRows)
 	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = self.directFetch(conn, plan.OuterQuery, plan.BindVars, nil, bsc)
