@@ -157,28 +157,37 @@ class TestEnv(object):
     error_count = 0
     count = 0
     for case in cases:
+      if options.verbose:
+        print case[0]
       count += 1
+
       if len(case) == 5:
         tstart = self.table_stats()[case[4][0]]
+
       if len(case) == 1:
         curs.execute(case[0])
         continue
       self.querylog.reset()
       curs.execute(case[0], case[1])
+
       if len(case) == 2:
         continue
-      results = []
-      for row in curs:
-        results.append(row)
-      if case[2] is not None and results != case[2]:
-        print "Function: run_cases(%d): FAIL: %s:\n%s\n%s"%(count, case[0], case[2], results)
-        error_count += 1
+      if case[2] is not None:
+        results = []
+        for row in curs:
+          results.append(row)
+        if results != case[2]:
+          print "Function: run_cases(%d): FAIL: %s:\n%s\n%s"%(count, case[0], case[2], results)
+          error_count += 1
+
       if len(case) == 3:
         continue
-      querylog = normalizelog(self.querylog.read())
-      if querylog != case[3]:
-        print "Function: run_cases(%d): FAIL: %s:\n%s\n%s"%(count, case[0], case[3], querylog)
-        error_count += 1
+      if case[3] is not None:
+        querylog = normalizelog(self.querylog.read())
+        if querylog != case[3]:
+          print "Function: run_cases(%d): FAIL: %s:\n%s\n%s"%(count, case[0], case[3], querylog)
+          error_count += 1
+
       if len(case) == 4:
         continue
       tend = self.table_stats()[case[4][0]]
@@ -190,6 +199,9 @@ class TestEnv(object):
         error_count += 1
       if tstart["Misses"]+case[4][3] != tend["Misses"]:
         print "Function: run_cases(%d): FAIL: %s:\nMisses: %s!=%s"%(count, case[0], tstart["Misses"]+case[4][3], tend["Misses"])
+        error_count += 1
+      if tstart["Invalidations"]+case[4][4] != tend["Invalidations"]:
+        print "Function: run_cases(%d): FAIL: %s:\nInvalidations: %s!=%s"%(count, case[0], tstart["Invalidations"]+case[4][4], tend["Invalidations"])
         error_count += 1
     return error_count
 

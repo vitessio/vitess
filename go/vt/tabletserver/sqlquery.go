@@ -76,7 +76,7 @@ type SqlQuery struct {
 
 // stats are globals to allow anybody to set them
 var queryStats, waitStats *stats.Timings
-var killStats, errorStats, invalidationStats *stats.Counters
+var killStats, errorStats *stats.Counters
 var resultStats *stats.Histogram
 
 var resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
@@ -104,7 +104,6 @@ func NewSqlQuery(cachePoolCap, poolSize, transactionCap int, transactionTimeout 
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
 	errorStats = stats.NewCounters("Errors")
-	invalidationStats = stats.NewCounters("Invalidations")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
 	return self
 }
@@ -197,8 +196,17 @@ func (self *SqlQuery) Commit(session *Session, noOutput *string) (err error) {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 	*noOutput = ""
-	self.activeTxPool.Commit(session.TransactionId, self.schemaInfo)
-	return nil
+	dirtyTables, err := self.activeTxPool.SafeCommit(session.TransactionId)
+	for tableName, invalidList := range dirtyTables {
+		tableInfo := self.schemaInfo.GetTable(tableName)
+		invalidations := int64(0)
+		for key := range invalidList {
+			tableInfo.Cache.Delete(key)
+			invalidations++
+		}
+		atomic.AddInt64(&tableInfo.invalidations, invalidations)
+	}
+	return err
 }
 
 func (self *SqlQuery) Rollback(session *Session, noOutput *string) (err error) {
@@ -405,17 +413,18 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	if tableInfo.CacheType == 0 {
 		return nil
 	}
-	invalidationStats.Add("DML", 1)
+	invalidations := int64(0)
 	for _, val := range cacheInvalidate.Keys {
 		newKey := validateKey(tableInfo, val.(string))
 		if newKey != "" {
 			tableInfo.Cache.Delete(newKey)
 		}
-		/*
-		if k := val.(string); k != "" {
+		invalidations++
+		/*if k := val.(string); k != "" {
 			tableInfo.Cache.Delete(k)
 		}*/
 	}
+	atomic.AddInt64(&tableInfo.invalidations, invalidations)
 	return nil
 }
 
@@ -434,7 +443,6 @@ func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (er
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
-	invalidationStats.Add("DDL", 1)
 	self.schemaInfo.DropTable(ddlPlan.TableName)
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
 		self.schemaInfo.CreateTable(ddlPlan.NewName)
@@ -469,7 +477,7 @@ func (self *SqlQuery) execDDL(ddl string) *QueryResult {
 		panic(err)
 	}
 	// Stolen from Commit
-	defer self.activeTxPool.Commit(txid, self.schemaInfo)
+	defer self.activeTxPool.SafeCommit(txid)
 
 	// Stolen from Execute
 	conn = self.activeTxPool.Get(txid)

@@ -218,23 +218,24 @@ func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Re
 	} else if request.URL.Path == "/debug/schema/tables" {
 		response.Header().Set("Content-Type", "text/plain")
 		self.mu.Lock()
-		tstats := make(map[string]struct{ hits, absent, misses int64 })
-		var temp, totals struct{ hits, absent, misses int64 }
+		tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
+		var temp, totals struct{ hits, absent, misses, invalidations int64 }
 		for k, v := range self.tables {
 			if v.CacheType != 0 {
-				temp.hits, temp.absent, temp.misses = v.Stats()
+				temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
 				tstats[k] = temp
 				totals.hits += temp.hits
 				totals.absent += temp.absent
 				totals.misses += temp.misses
+				totals.invalidations += temp.invalidations
 			}
 		}
 		self.mu.Unlock()
 		response.Write([]byte("{\n"))
 		for k, v := range tstats {
-			fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v},\n", k, v.hits, v.absent, v.misses)
+			fmt.Fprintf(response, "\"%s\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v},\n", k, v.hits, v.absent, v.misses, v.invalidations)
 		}
-		fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v}\n", totals.hits, totals.absent, totals.misses)
+		fmt.Fprintf(response, "\"Totals\": {\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}\n", totals.hits, totals.absent, totals.misses, totals.invalidations)
 		response.Write([]byte("}\n"))
 	} else {
 		response.WriteHeader(http.StatusNotFound)

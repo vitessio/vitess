@@ -111,23 +111,15 @@ func (self *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, e
 	return transactionId, nil
 }
 
-// An unpleasant dependency to SchemaInfo. Avoiding it makes the code worse
-func (self *ActiveTxPool) Commit(transactionId int64, schemaInfo *SchemaInfo) {
+func (self *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
+	defer handleError(&err)
 	conn := self.Get(transactionId)
 	defer conn.discard()
 	self.txStats.Add("Completed", time.Now().Sub(conn.startTime))
-	defer func() {
-		for tableName, invalidList := range conn.dirtyTables {
-			tableInfo := schemaInfo.GetTable(tableName)
-			for key := range invalidList {
-				tableInfo.Cache.Delete(key)
-			}
-		}
-	}()
-	if _, err := conn.ExecuteFetch(COMMIT, 10000); err != nil {
+	if _, err = conn.ExecuteFetch(COMMIT, 10000); err != nil {
 		conn.Close()
-		panic(NewTabletErrorSql(FAIL, err))
 	}
+	return conn.dirtyTables, err
 }
 
 func (self *ActiveTxPool) Rollback(transactionId int64) {

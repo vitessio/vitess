@@ -51,7 +51,7 @@ type TableInfo struct {
 	Cache  *RowCache
 	Fields []mysql.Field
 	// stats updated by sqlquery.go
-	hits, absent, misses int64
+	hits, absent, misses, invalidations int64
 }
 
 func NewTableInfo(conn *DBConnection, tableName string, tableType string, createTime interface{}, comment string, cachePool *CachePool) (self *TableInfo) {
@@ -190,12 +190,12 @@ func (self *TableInfo) StatsJSON() string {
 	if self.Cache == nil {
 		return fmt.Sprintf("null")
 	}
-	h, a, m := self.Stats()
-	return fmt.Sprintf("{\"Hits\": %v, \"Absent\": %v, \"Misses\": %v}", h, a, m)
+	h, a, m, i := self.Stats()
+	return fmt.Sprintf("{\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}", h, a, m, i)
 }
 
-func (self *TableInfo) Stats() (hits, absent, misses int64) {
-	return atomic.LoadInt64(&self.hits), atomic.LoadInt64(&self.absent), atomic.LoadInt64(&self.misses)
+func (self *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
+	return atomic.LoadInt64(&self.hits), atomic.LoadInt64(&self.absent), atomic.LoadInt64(&self.misses), atomic.LoadInt64(&self.invalidations)
 }
 
 func base64fnv(s string) string {
