@@ -282,6 +282,9 @@ func (self *Tokenizer) scanBindVar(Type int) *Node {
 	for self.Next(); isLetter(self.lastChar) || isDigit(self.lastChar) || self.lastChar == '.'; self.Next() {
 		buffer.WriteByte(byte(self.lastChar))
 	}
+	if buffer.Len() == 1 {
+		return NewParseNode(LEX_ERROR, buffer.Bytes())
+	}
 	if keywordId, found := keywords[buffer.String()]; found {
 		return NewParseNode(keywordId, buffer.Bytes())
 	}

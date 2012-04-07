@@ -38,7 +38,6 @@ package pools
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -46,6 +45,8 @@ import (
 type Factory func() (Resource, error)
 
 // Every resource needs to suport the Resource interface.
+// Thread synchronization between Close() and IsClosed()
+// is the responsibility the caller.
 type Resource interface {
 	Close()
 	IsClosed() bool
@@ -53,17 +54,16 @@ type Resource interface {
 
 // RoundRobin allows you to use a pool of resources in a round robin fashion.
 type RoundRobin struct {
-	// mu controls resources & factory
-	// Use Lock to modify, RLock otherwise
-	mu        sync.RWMutex
-	resources chan fifoWrapper
-	factory   Factory
-
-	// Use sync/atomic to access the following vars
+	mu          sync.Mutex
+	available   *sync.Cond
+	resources   chan fifoWrapper
 	size        int64
-	waitCount   int64
-	waitTime    int64
-	idleTimeout int64
+	factory     Factory
+	idleTimeout time.Duration
+
+	// stats
+	waitCount int64
+	waitTime  time.Duration
 }
 
 type fifoWrapper struct {
@@ -76,11 +76,13 @@ type fifoWrapper struct {
 // factory will be the function used to create resources.
 // If a resource is unused beyond idleTimeout, it's discarded.
 func NewRoundRobin(capacity int, idleTimeout time.Duration) *RoundRobin {
-	return &RoundRobin{
+	r := &RoundRobin{
 		resources:   make(chan fifoWrapper, capacity),
 		size:        0,
-		idleTimeout: int64(idleTimeout),
+		idleTimeout: idleTimeout,
 	}
+	r.available = sync.NewCond(&r.mu)
+	return r
 }
 
 // Open starts allowing the creation of resources
@@ -93,12 +95,16 @@ func (self *RoundRobin) Open(factory Factory) {
 // Close empties the pool calling Close on all its resources.
 // It waits for all resources to be returned (Put).
 func (self *RoundRobin) Close() {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-	for atomic.LoadInt64(&self.size) > 0 {
-		fw := <-self.resources
-		fw.resource.Close()
-		atomic.AddInt64(&self.size, -1)
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	for self.size > 0 {
+		select {
+		case fw := <-self.resources:
+			go fw.resource.Close()
+			self.size--
+		default:
+			self.available.Wait()
+		}
 	}
 	self.factory = nil
 }
@@ -111,43 +117,48 @@ func (self *RoundRobin) IsClosed() bool {
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will indefinitely wait till the next resource becomes available.
 func (self *RoundRobin) Get() (resource Resource, err error) {
-	if resource, err = self.TryGet(); err != nil {
-		return nil, err
-	}
-	if resource == nil {
-		defer self.recordWait(time.Now())
-		self.mu.RLock()
-		defer self.mu.RUnlock()
-		resource = (<-self.resources).resource
-	}
-	return resource, nil
+	return self.get(true)
 }
 
-// Get will return the next available resource. If none is available, and capacity
+// TryGet will return the next available resource. If none is available, and capacity
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will return nil with no error.
 func (self *RoundRobin) TryGet() (resource Resource, err error) {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-	idleTimeout := time.Duration(atomic.LoadInt64(&self.idleTimeout))
+	return self.get(false)
+}
+
+func (self *RoundRobin) get(wait bool) (resource Resource, err error) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	// Any waits in this loop will release the lock, and it will be
+	// reacquired before the waits return.
 	for {
 		select {
 		case fw := <-self.resources:
-			if idleTimeout > 0 && fw.timeUsed.Add(idleTimeout).Sub(time.Now()) < 0 {
-				fw.resource.Close()
-				atomic.AddInt64(&self.size, -1)
+			// Found a free resource in the channel
+			if self.idleTimeout > 0 && fw.timeUsed.Add(self.idleTimeout).Sub(time.Now()) < 0 {
+				// resource has been idle for too long. Discard & go for next.
+				go fw.resource.Close()
+				self.size--
 				continue
 			}
 			return fw.resource, nil
 		default:
-			if atomic.LoadInt64(&self.size) >= int64(cap(self.resources)) {
+			// resource channel is empty
+			if self.size >= int64(cap(self.resources)) {
+				// The pool is full
+				if wait {
+					start := time.Now()
+					self.available.Wait()
+					self.recordWait(start)
+					continue
+				}
 				return nil, nil
 			}
-			// Prevent thundering herd: optimistically increment
-			// size before creating resource
-			atomic.AddInt64(&self.size, 1)
-			if resource, err = self.factory(); err != nil {
-				atomic.AddInt64(&self.size, -1)
+			// Pool is not full. Create a resource.
+			if resource, err = self.waitForCreate(); err == nil {
+				// Creation successful. Account for this by incrementing size.
+				self.size++
 			}
 			return resource, err
 		}
@@ -155,19 +166,35 @@ func (self *RoundRobin) TryGet() (resource Resource, err error) {
 	panic("unreachable")
 }
 
+func (self *RoundRobin) recordWait(start time.Time) {
+	self.waitCount++
+	self.waitTime += time.Now().Sub(start)
+}
+
+func (self *RoundRobin) waitForCreate() (resource Resource, err error) {
+	// Prevent thundering herd: increment size before creating resource, and decrement after.
+	self.size++
+	self.mu.Unlock()
+	defer func() {
+		self.mu.Lock()
+		self.size--
+	}()
+	return self.factory()
+}
+
 // Put will return a resource to the pool. You MUST return every resource to the pool,
-// even if it's closed. If a resource is closed, Put will discard it.
+// even if it's closed. If a resource is closed, Put will discard it. Thread synchronization
+// between Close() and IsClosed() is the caller's responsibility.
 func (self *RoundRobin) Put(resource Resource) {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-	if atomic.LoadInt64(&self.size) > int64(cap(self.resources)) {
-		resource.Close()
-		// Better not trust the resource to return true for IsClosed.
-		atomic.AddInt64(&self.size, -1)
-		return
-	}
-	if resource.IsClosed() {
-		atomic.AddInt64(&self.size, -1)
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	defer self.available.Signal()
+
+	if self.size > int64(cap(self.resources)) {
+		go resource.Close()
+		self.size--
+	} else if resource.IsClosed() {
+		self.size--
 	} else {
 		self.resources <- fifoWrapper{resource, time.Now()}
 	}
@@ -178,7 +205,12 @@ func (self *RoundRobin) Put(resource Resource) {
 func (self *RoundRobin) SetCapacity(capacity int) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
+	defer self.available.Broadcast()
+
 	nr := make(chan fifoWrapper, capacity)
+	// This loop transfers resources from the old channel
+	// to the new one, until it fills up or runs out.
+	// It discards extras, if any.
 	for {
 		select {
 		case fw := <-self.resources:
@@ -186,7 +218,7 @@ func (self *RoundRobin) SetCapacity(capacity int) {
 				nr <- fw
 			} else {
 				go fw.resource.Close()
-				atomic.AddInt64(&self.size, -1)
+				self.size--
 			}
 			continue
 		default:
@@ -197,7 +229,9 @@ func (self *RoundRobin) SetCapacity(capacity int) {
 }
 
 func (self *RoundRobin) SetIdleTimeout(idleTimeout time.Duration) {
-	atomic.StoreInt64(&self.idleTimeout, int64(idleTimeout))
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	self.idleTimeout = idleTimeout
 }
 
 func (self *RoundRobin) StatsJSON() string {
@@ -206,13 +240,7 @@ func (self *RoundRobin) StatsJSON() string {
 }
 
 func (self *RoundRobin) Stats() (size, capacity, available, waitCount int64, waitTime, idleTimeout time.Duration) {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-	return atomic.LoadInt64(&self.size), int64(cap(self.resources)), int64(len(self.resources)), atomic.LoadInt64(&self.waitCount), time.Duration(atomic.LoadInt64(&self.waitTime)), time.Duration(atomic.LoadInt64(&self.idleTimeout))
-}
-
-func (self *RoundRobin) recordWait(start time.Time) {
-	diff := int64(time.Now().Sub(start))
-	atomic.AddInt64(&self.waitCount, 1)
-	atomic.AddInt64(&self.waitTime, diff)
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	return self.size, int64(cap(self.resources)), int64(len(self.resources)), self.waitCount, self.waitTime, self.idleTimeout
 }

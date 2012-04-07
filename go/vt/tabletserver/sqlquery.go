@@ -241,7 +241,11 @@ func (self *SqlQuery) CloseReserved(session *Session, noOutput *string) (err err
 func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			terr := x.(*TabletError)
+			terr, ok := x.(*TabletError)
+			if !ok {
+				relog.Error("Uncaught panic for %v", query)
+				panic(x)
+			}
 			err = terr
 			terr.RecordStats()
 			if terr.ErrorType == RETRY || terr.SqlError == DUPLICATE_KEY { // suppress these errors in logs

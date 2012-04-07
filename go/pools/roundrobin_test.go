@@ -63,7 +63,8 @@ func FailFactory() (Resource, error) {
 
 func TestPool(t *testing.T) {
 	lastId = 0
-	p := NewRoundRobin(5, PoolFactory, time.Duration(10e9))
+	p := NewRoundRobin(5, time.Duration(10e9))
+	p.Open(PoolFactory)
 	defer p.Close()
 
 	for i := 0; i < 2; i++ {
@@ -137,7 +138,7 @@ func TestPool(t *testing.T) {
 
 	r, _ = p.Get()
 	// p is empty
-	p.SetFactory(FailFactory)
+	p.Open(FailFactory)
 	if _, err := p.Get(); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %c", err)
 	}

@@ -55,6 +55,7 @@ func init() {
 		{"gc", "Force garbage collection", GcHandler},
 		{"panic", "Force panic (will crash app)", PanicHandler},
 	}
+	Register()
 }
 
 func SnitchHandler(response http.ResponseWriter, request *http.Request) {
@@ -83,7 +84,10 @@ func GcHandler(response http.ResponseWriter, request *http.Request) {
 }
 
 func PanicHandler(response http.ResponseWriter, request *http.Request) {
-	panic("intentional")
+	// Make the panic happen in a goroutine. Otherwise, http framework traps it.
+	go func() {
+		panic("intentional")
+	}()
 }
 
 func RegisterCommand(path, description string, handler http.HandlerFunc) {
