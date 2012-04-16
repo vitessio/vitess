@@ -61,6 +61,11 @@ func FailFactory() (Resource, error) {
 	return nil, errors.New("Failed")
 }
 
+func SlowFailFactory() (Resource, error) {
+	time.Sleep(1e8)
+	return nil, errors.New("Failed")
+}
+
 func TestPool(t *testing.T) {
 	lastId = 0
 	p := NewRoundRobin(5, time.Duration(10e9))
@@ -135,15 +140,32 @@ func TestPool(t *testing.T) {
 	}
 	p.Put(r)
 	// p = [6]
+}
 
-	r, _ = p.Get()
-	// p is empty
+func TestPoolFail(t *testing.T) {
+	p := NewRoundRobin(5, time.Duration(10e9))
 	p.Open(FailFactory)
+	defer p.Close()
 	if _, err := p.Get(); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %c", err)
 	}
-	p.Put(r)
-	// p = [6]
+}
+
+func TestPoolFullFail(t *testing.T) {
+	p := NewRoundRobin(2, time.Duration(10e9))
+	p.Open(SlowFailFactory)
+	defer p.Close()
+	ch := make(chan bool)
+	// The third get should not wait indefinitely
+	for i := 0; i < 3; i++ {
+		go func() {
+			p.Get()
+			ch <- true
+		}()
+	}
+	for i := 0; i < 3; i++ {
+		<-ch
+	}
 }
 
 func ResourceWait(p *RoundRobin, t *testing.T, ch chan bool) {

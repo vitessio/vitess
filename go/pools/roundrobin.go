@@ -140,6 +140,8 @@ func (self *RoundRobin) get(wait bool) (resource Resource, err error) {
 				// resource has been idle for too long. Discard & go for next.
 				go fw.resource.Close()
 				self.size--
+				// Nobody else should be waiting, but signal anyway.
+				self.available.Signal()
 				continue
 			}
 			return fw.resource, nil
@@ -156,10 +158,13 @@ func (self *RoundRobin) get(wait bool) (resource Resource, err error) {
 				return nil, nil
 			}
 			// Pool is not full. Create a resource.
-			if resource, err = self.waitForCreate(); err == nil {
-				// Creation successful. Account for this by incrementing size.
-				self.size++
+			if resource, err = self.waitForCreate(); err != nil {
+				// size was decremented, and somebody could be waiting.
+				self.available.Signal()
+				return nil, err
 			}
+			// Creation successful. Account for this by incrementing size.
+			self.size++
 			return resource, err
 		}
 	}
@@ -187,8 +192,8 @@ func (self *RoundRobin) waitForCreate() (resource Resource, err error) {
 // between Close() and IsClosed() is the caller's responsibility.
 func (self *RoundRobin) Put(resource Resource) {
 	self.mu.Lock()
-	defer self.mu.Unlock()
 	defer self.available.Signal()
+	defer self.mu.Unlock()
 
 	if self.size > int64(cap(self.resources)) {
 		go resource.Close()
@@ -196,6 +201,9 @@ func (self *RoundRobin) Put(resource Resource) {
 	} else if resource.IsClosed() {
 		self.size--
 	} else {
+		if len(self.resources) == cap(self.resources) {
+			panic("unexpected")
+		}
 		self.resources <- fifoWrapper{resource, time.Now()}
 	}
 }
@@ -204,8 +212,8 @@ func (self *RoundRobin) Put(resource Resource) {
 // You can use it to expand or shrink.
 func (self *RoundRobin) SetCapacity(capacity int) {
 	self.mu.Lock()
-	defer self.mu.Unlock()
 	defer self.available.Broadcast()
+	defer self.mu.Unlock()
 
 	nr := make(chan fifoWrapper, capacity)
 	// This loop transfers resources from the old channel
