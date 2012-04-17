@@ -100,9 +100,12 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 			currentIndex = self.AddIndex(indexName)
 			currentName = indexName
 		}
-		cardinality, err := strconv.ParseUint(row[6].(string), 0, 64)
-		if err != nil {
-			relog.Warning("%s", err)
+		var cardinality uint64
+		if row[6] != nil {
+			cardinality, err = strconv.ParseUint(row[6].(string), 0, 64)
+			if err != nil {
+				relog.Warning("%s", err)
+			}
 		}
 		currentIndex.AddColumn(row[4].(string), cardinality)
 	}
