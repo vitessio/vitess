@@ -257,10 +257,6 @@ func init() {
 	defaultService.done = make(chan bool, 1)
 }
 
-func WaitForShutdown() {
-	<-defaultService.done
-}
-
 func ListenAndServe(addr string) error {
 	rpc.Register(&defaultService)
 	DefaultServer = new(UmgmtServer)
@@ -328,7 +324,12 @@ func ListenAndServe(addr string) error {
 			umgmtClient.Close()
 		}()
 	}
-	return DefaultServer.Serve()
+	err := DefaultServer.Serve()
+	// If we exitted gracefully, wait for the service to finish callbacks.
+	if err == nil {
+		<-defaultService.done
+	}
+	return err
 }
 
 func AddListener(listener io.Closer) {
