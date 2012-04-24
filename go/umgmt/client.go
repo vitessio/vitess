@@ -62,6 +62,22 @@ func (client *Client) Close() error {
 	return nil
 }
 
+func (client *Client) Ping() (string, error) {
+	request := new(Request)
+	reply := new(Reply)
+	err := client.Call("UmgmtService.Ping", request, reply)
+	if err != nil {
+		relog.Error("rpc err: %v", err)
+		return "ERROR", err
+	}
+	if reply.ErrorCode != 0 {
+		relog.Error("Ping err: %v %v", reply.ErrorCode, reply.Message)
+		return "ERROR", errors.New(reply.Message)
+	}
+	return reply.Message, nil
+
+}
+
 func (client *Client) CloseListeners() error {
 	request := new(Request)
 	reply := new(Reply)
