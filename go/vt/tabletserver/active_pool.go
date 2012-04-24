@@ -82,7 +82,7 @@ func (self *ActivePool) kill(connid int64) {
 	killConn := self.connPool.Get()
 	defer killConn.Recycle()
 	sql := []byte(fmt.Sprintf("kill %d", connid))
-	if _, err := killConn.ExecuteFetch(sql, 10000); err != nil {
+	if _, err := killConn.ExecuteFetch(sql, 10000, false); err != nil {
 		relog.Error("Could not kill query %d: %v", connid, err)
 	}
 }

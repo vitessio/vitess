@@ -102,7 +102,7 @@ func (self *Query) UnmarshalBson(buf *bytes.Buffer) {
 func (self *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
 	switch kind {
 	case bson.Object:
-		if err := bson.UnmarshalFromStream(buf, &self.BindVariables); err != nil {
+		if err := bson.UnmarshalFromBuffer(buf, &self.BindVariables); err != nil {
 			panic(err)
 		}
 	case bson.Null:

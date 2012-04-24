@@ -75,7 +75,7 @@ func loadTableInfo(conn *DBConnection, tableName string) (self *TableInfo) {
 }
 
 func (self *TableInfo) fetchColumns(conn *DBConnection) bool {
-	columns, err := conn.ExecuteFetch([]byte(fmt.Sprintf("describe %s", self.Name)), 10000)
+	columns, err := conn.ExecuteFetch([]byte(fmt.Sprintf("describe %s", self.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
 		return false
@@ -87,7 +87,7 @@ func (self *TableInfo) fetchColumns(conn *DBConnection) bool {
 }
 
 func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
-	indexes, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show index from %s", self.Name)), 10000)
+	indexes, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show index from %s", self.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
 		return false
@@ -157,7 +157,7 @@ func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, create
 		}
 	}
 
-	rowInfo, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %s where 1!=1", self.Name)), 10000)
+	rowInfo, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %s where 1!=1", self.Name)), 10000, true)
 	if err != nil {
 		relog.Warning("Failed to fetch column info for %s, table will not be cached: %s", self.Name, err.Error())
 		return
@@ -177,7 +177,7 @@ func (self *TableInfo) computePrefix(conn *DBConnection, createTime interface{})
 		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
 		return ""
 	}
-	createTable, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show create table %s", self.Name)), 10000)
+	createTable, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show create table %s", self.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("Couldnt read table info: %v", err)
 		return ""

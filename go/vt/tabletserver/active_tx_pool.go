@@ -103,7 +103,7 @@ func (self *ActiveTxPool) TransactionKiller() {
 
 func (self *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
 	defer handleError(&err)
-	if _, err := conn.ExecuteFetch(BEGIN, 10000); err != nil {
+	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
 	transactionId = atomic.AddInt64(&self.lastId, 1)
@@ -116,7 +116,7 @@ func (self *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[strin
 	conn := self.Get(transactionId)
 	defer conn.discard()
 	self.txStats.Add("Completed", time.Now().Sub(conn.startTime))
-	if _, err = conn.ExecuteFetch(COMMIT, 10000); err != nil {
+	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
 	}
 	return conn.dirtyTables, err
@@ -126,7 +126,7 @@ func (self *ActiveTxPool) Rollback(transactionId int64) {
 	conn := self.Get(transactionId)
 	defer conn.discard()
 	self.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
-	if _, err := conn.ExecuteFetch(ROLLBACK, 10000); err != nil {
+	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
 		conn.Close()
 		panic(NewTabletErrorSql(FAIL, err))
 	}

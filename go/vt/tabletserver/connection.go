@@ -46,7 +46,7 @@ func init() {
 }
 
 type PoolConnection interface {
-	ExecuteFetch(query []byte, maxrows int) (*QueryResult, error)
+	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error)
 	Id() int64
 	Close()
 	IsClosed() bool
@@ -60,12 +60,12 @@ type DBConnection struct {
 	*mysql.Connection
 }
 
-func (self *DBConnection) ExecuteFetch(query []byte, maxrows int) (*QueryResult, error) {
+func (self *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error) {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
 	}
-	mqr, err := self.Connection.ExecuteFetch(query, maxrows)
+	mqr, err := self.Connection.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		mysqlStats.Record("Exec", start)
 		if sqlErr, ok := err.(*mysql.SqlError); ok {

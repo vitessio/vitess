@@ -33,7 +33,6 @@ package tabletserver
 
 import (
 	"bytes"
-	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/vt/sqlparser"
@@ -109,8 +108,8 @@ func NewSqlQuery(cachePoolCap, poolSize, transactionCap int, transactionTimeout 
 }
 
 type CompiledPlan struct {
-	*sqlparser.ExecPlan
-	TableInfo     *TableInfo
+	Query string
+	*ExecPlan
 	BindVars      map[string]interface{}
 	TransactionId int64
 	ConnectionId  int64
@@ -238,22 +237,25 @@ func (self *SqlQuery) CloseReserved(session *Session, noOutput *string) (err err
 	return nil
 }
 
-func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			terr, ok := x.(*TabletError)
-			if !ok {
-				relog.Error("Uncaught panic for %v", query)
-				panic(x)
-			}
-			err = terr
-			terr.RecordStats()
-			if terr.ErrorType == RETRY || terr.SqlError == DUPLICATE_KEY { // suppress these errors in logs
-				return
-			}
-			relog.Error("%s: %v", terr.Message, query)
+func handleExecError(query *Query, err *error) {
+	if x := recover(); x != nil {
+		terr, ok := x.(*TabletError)
+		if !ok {
+			relog.Error("Uncaught panic for %v", query)
+			panic(x)
 		}
-	}()
+		*err = terr
+		terr.RecordStats()
+		if terr.ErrorType == RETRY || terr.SqlError == DUPLICATE_KEY { // suppress these errors in logs
+			return
+		}
+		relog.Error("%s: %v", terr.Message, query)
+	}
+}
+
+func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
+	defer handleExecError(query, &err)
+
 	// allow shutdown state if we're in a transaction
 	allowShutdown := (query.TransactionId != 0)
 	self.checkState(query.SessionId, allowShutdown)
@@ -266,25 +268,25 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 	}
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
-	basePlan, tableInfo := self.schemaInfo.GetPlan(query.Sql, len(query.BindVariables) != 0)
+	basePlan := self.schemaInfo.GetPlan(query.Sql, len(query.BindVariables) != 0)
 	if basePlan.PlanId == sqlparser.PLAN_DDL {
 		defer queryStats.Record("DDL", time.Now())
 		*reply = *self.execDDL(query.Sql)
 		return nil
 	}
 
-	plan := &CompiledPlan{basePlan, tableInfo, query.BindVariables, query.TransactionId, query.ConnectionId}
+	plan := &CompiledPlan{query.Sql, basePlan, query.BindVariables, query.TransactionId, query.ConnectionId}
 	if query.TransactionId != 0 {
 		// Need upfront connection for DMLs and transactions
 		conn := self.activeTxPool.Get(query.TransactionId)
 		defer conn.Recycle()
 		var invalidator CacheInvalidator
-		if tableInfo != nil && tableInfo.CacheType != 0 {
+		if plan.TableInfo != nil && plan.TableInfo.CacheType != 0 {
 			invalidator = conn.DirtyKeys(plan.TableName)
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			if tableInfo != nil && tableInfo.CacheType != 0 {
+			if plan.TableInfo != nil && plan.TableInfo.CacheType != 0 {
 				panic(NewTabletError(FAIL, "DML too complex for cached table"))
 			}
 			defer queryStats.Record("PASS_DML", time.Now())
@@ -303,7 +305,7 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 			*reply = *self.execDMLSubquery(conn, plan, invalidator)
 		default: // select or set in a transaction, just count as select
 			defer queryStats.Record("PASS_SELECT", time.Now())
-			*reply = *self.directFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
+			*reply = *self.fullFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
 		}
 	} else {
 		switch plan.PlanId {
@@ -312,7 +314,7 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 				panic(NewTabletError(FAIL, "Disallowed outside transaction: %s", query.Sql))
 			}
 			defer queryStats.Record("PASS_SELECT", time.Now())
-			*reply = *self.qFetch(plan, plan.FullQuery, nil)
+			*reply = *self.execSelect(plan)
 		case sqlparser.PLAN_SELECT_PK:
 			defer queryStats.Record("SELECT_PK", time.Now())
 			*reply = *self.execPK(plan)
@@ -322,7 +324,7 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 		case sqlparser.PLAN_SELECT_CACHE_RESULT:
 			defer queryStats.Record("SELECT_CACHE_RESULT", time.Now())
 			// It may not be worth caching the results. So, just pass through.
-			*reply = *self.qFetch(plan, plan.FullQuery, nil)
+			*reply = *self.execSelect(plan)
 		case sqlparser.PLAN_SET:
 			defer queryStats.Record("SET", time.Now())
 			*reply = *self.execSet(plan)
@@ -486,7 +488,7 @@ func (self *SqlQuery) execDDL(ddl string) *QueryResult {
 	// Stolen from Execute
 	conn = self.activeTxPool.Get(txid)
 	defer conn.Recycle()
-	result, err := self.executeSql(conn, []byte(ddl))
+	result, err := self.executeSql(conn, []byte(ddl), false)
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
@@ -514,7 +516,10 @@ func (self *SqlQuery) execSubquery(plan *CompiledPlan) (result *QueryResult) {
 func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (result *QueryResult) {
 	result = &QueryResult{}
 	tableInfo := plan.TableInfo
-	result.Fields = applyFieldFilter(plan.ColumnNumbers, tableInfo.Fields)
+	if plan.Fields == nil {
+		panic("unexpected")
+	}
+	result.Fields = plan.Fields
 	normalizePKRows(plan.TableInfo, pkRows)
 	rows := make([][]interface{}, 0, len(pkRows))
 	var hits, absent, misses int64
@@ -571,17 +576,21 @@ func (self *SqlQuery) validateRow(plan *CompiledPlan, cacheRow []interface{}, pk
 	return dbrow
 }
 
-// TODO: Delete this unused function once we know that we won't need it for sure.
-func (self *SqlQuery) execCacheResult(plan *CompiledPlan) (result *QueryResult) {
-	result = self.qFetch(plan, plan.OuterQuery, nil)
-	tableInfo := plan.TableInfo
-	result.Fields = applyFieldFilter(plan.ColumnNumbers, result.Fields)
-	for i, row := range result.Rows {
-		pkRow := applyFilter(tableInfo.PKColumns, row)
-		key := buildKey(tableInfo, pkRow)
-		tableInfo.Cache.Set(key, row, 0)
-		result.Rows[i] = applyFilter(plan.ColumnNumbers, row)
+func (self *SqlQuery) execSelect(plan *CompiledPlan) (result *QueryResult) {
+	if plan.Fields != nil {
+		result = self.qFetch(plan, plan.FullQuery, nil)
+		result.Fields = plan.Fields
+		return
 	}
+	var conn PoolConnection
+	if plan.ConnectionId != 0 {
+		conn = self.reservedPool.Get(plan.ConnectionId)
+	} else {
+		conn = self.connPool.Get()
+	}
+	defer conn.Recycle()
+	result = self.fullFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
+	self.schemaInfo.SetFields(plan.Query, plan.ExecPlan, result.Fields)
 	return result
 }
 
@@ -709,7 +718,7 @@ func (self *SqlQuery) qFetch(plan *CompiledPlan, parsed_query *sqlparser.ParsedQ
 			conn = self.connPool.Get()
 		}
 		defer conn.Recycle()
-		q.Result, q.Err = self.executeSql(conn, sql)
+		q.Result, q.Err = self.executeSql(conn, sql, false)
 		q.Broadcast()
 	} else {
 		q.Wait()
@@ -722,7 +731,17 @@ func (self *SqlQuery) qFetch(plan *CompiledPlan, parsed_query *sqlparser.ParsedQ
 
 func (self *SqlQuery) directFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
 	sql := self.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
-	result, err := self.executeSql(conn, sql)
+	result, err := self.executeSql(conn, sql, false)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
+// fullFetch also fetches field info
+func (self *SqlQuery) fullFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
+	sql := self.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+	result, err := self.executeSql(conn, sql, true)
 	if err != nil {
 		panic(err)
 	}
@@ -743,11 +762,11 @@ func (self *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bind
 	return sql
 }
 
-func (self *SqlQuery) executeSql(conn PoolConnection, sql []byte) (*QueryResult, error) {
+func (self *SqlQuery) executeSql(conn PoolConnection, sql []byte, wantfields bool) (*QueryResult, error) {
 	connid := conn.Id()
 	self.activePool.Put(connid)
 	defer self.activePool.Remove(connid)
-	result, err := conn.ExecuteFetch(sql, int(atomic.LoadInt32(&self.maxResultSize)))
+	result, err := conn.ExecuteFetch(sql, int(atomic.LoadInt32(&self.maxResultSize)), wantfields)
 	if err != nil {
 		return nil, NewTabletErrorSql(FAIL, err)
 	}
@@ -771,27 +790,6 @@ func (self *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "\n \"ReservedPool\": %v", self.reservedPool.StatsJSON())
 	fmt.Fprintf(buf, "\n}")
 	return buf.String()
-}
-
-func applyFieldFilter(columnNumbers []int, input []mysql.Field) (output []mysql.Field) {
-	output = make([]mysql.Field, len(columnNumbers))
-	for colIndex, colPointer := range columnNumbers {
-		if colPointer >= 0 {
-			output[colIndex] = input[colPointer]
-		}
-		output[colIndex] = input[colPointer]
-	}
-	return output
-}
-
-func applyFilter(columnNumbers []int, input []interface{}) (output []interface{}) {
-	output = make([]interface{}, len(columnNumbers))
-	for colIndex, colPointer := range columnNumbers {
-		if colPointer >= 0 {
-			output[colIndex] = input[colPointer]
-		}
-	}
-	return output
 }
 
 func Rand() int64 {

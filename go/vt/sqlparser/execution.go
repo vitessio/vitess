@@ -149,10 +149,6 @@ type ExecPlan struct {
 	SetValue interface{}
 }
 
-func (self *ExecPlan) Size() int {
-	return 1
-}
-
 type DDLPlan struct {
 	Action    int
 	TableName string

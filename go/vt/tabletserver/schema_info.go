@@ -33,6 +33,7 @@ package tabletserver
 
 import (
 	"code.google.com/p/vitess/go/cache"
+	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/schema"
 	"code.google.com/p/vitess/go/vt/sqlparser"
@@ -43,6 +44,16 @@ import (
 )
 
 const base_show_tables = "select table_name, table_type, create_time, table_comment from information_schema.tables where table_schema = database()"
+
+type ExecPlan struct {
+	*sqlparser.ExecPlan
+	TableInfo *TableInfo
+	Fields    []mysql.Field
+}
+
+func (self *ExecPlan) Size() int {
+	return 1
+}
 
 type SchemaInfo struct {
 	mu             sync.Mutex
@@ -67,7 +78,7 @@ func (self *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CacheP
 	defer conn.Close()
 
 	self.cachePool = cachePool
-	tables, err := conn.ExecuteFetch([]byte(base_show_tables), 10000)
+	tables, err := conn.ExecuteFetch([]byte(base_show_tables), 10000, false)
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
@@ -108,7 +119,7 @@ func (self *SchemaInfo) CreateTable(tableName string) {
 }
 
 func (self *SchemaInfo) createTable(conn *DBConnection, tableName string) {
-	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName)), 1)
+	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName)), 1, false)
 	if err != nil {
 		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
 	}
@@ -147,31 +158,43 @@ func (self *SchemaInfo) DropTable(tableName string) {
 	relog.Info("Table %s forgotten", tableName)
 }
 
-func (self *SchemaInfo) GetPlan(sql string, mustCache bool) (*sqlparser.ExecPlan, *TableInfo) {
+func (self *SchemaInfo) GetPlan(sql string, mustCache bool) (plan *ExecPlan) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 	if plan := self.getQuery(sql); plan != nil {
-		return plan, self.tables[plan.TableName]
+		return plan
 	}
 
+	var tableInfo *TableInfo
 	GetTable := func(tableName string) (table *schema.Table, ok bool) {
-		tableInfo, ok := self.tables[tableName]
+		tableInfo, ok = self.tables[tableName]
 		if !ok {
 			return nil, false
 		}
 		return tableInfo.Table, true
 	}
-	plan, err := sqlparser.ExecParse(sql, GetTable)
+	splan, err := sqlparser.ExecParse(sql, GetTable)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
+	plan = &ExecPlan{splan, tableInfo, nil}
+	if plan.PlanId.IsSelect() && plan.ColumnNumbers != nil {
+		plan.Fields = applyFieldFilter(plan.ColumnNumbers, tableInfo.Fields)
+	}
 	if plan.PlanId == sqlparser.PLAN_DDL {
-		return plan, nil
+		return plan
 	}
 	if mustCache {
 		self.queries.Set(sql, plan)
 	}
-	return plan, self.tables[plan.TableName]
+	return plan
+}
+
+func (self *SchemaInfo) SetFields(sql string, plan *ExecPlan, fields []mysql.Field) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	newPlan := &ExecPlan{plan.ExecPlan, plan.TableInfo, fields}
+	self.queries.Set(sql, newPlan)
 }
 
 func (self *SchemaInfo) GetTable(tableName string) *TableInfo {
@@ -180,9 +203,9 @@ func (self *SchemaInfo) GetTable(tableName string) *TableInfo {
 	return self.tables[tableName]
 }
 
-func (self *SchemaInfo) getQuery(sql string) *sqlparser.ExecPlan {
+func (self *SchemaInfo) getQuery(sql string) *ExecPlan {
 	if cacheResult, ok := self.queries.Get(sql); ok {
-		return cacheResult.(*sqlparser.ExecPlan)
+		return cacheResult.(*ExecPlan)
 	}
 	return nil
 }
@@ -240,4 +263,26 @@ func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Re
 	} else {
 		response.WriteHeader(http.StatusNotFound)
 	}
+}
+
+// Convenience functions
+func applyFieldFilter(columnNumbers []int, input []mysql.Field) (output []mysql.Field) {
+	output = make([]mysql.Field, len(columnNumbers))
+	for colIndex, colPointer := range columnNumbers {
+		if colPointer >= 0 {
+			output[colIndex] = input[colPointer]
+		}
+		output[colIndex] = input[colPointer]
+	}
+	return output
+}
+
+func applyFilter(columnNumbers []int, input []interface{}) (output []interface{}) {
+	output = make([]interface{}, len(columnNumbers))
+	for colIndex, colPointer := range columnNumbers {
+		if colPointer >= 0 {
+			output[colIndex] = input[colPointer]
+		}
+	}
+	return output
 }

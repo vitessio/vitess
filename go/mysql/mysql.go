@@ -116,7 +116,7 @@ func Connect(info map[string]interface{}) (conn *Connection, err error) {
 	return conn, nil
 }
 
-func (self *Connection) ExecuteFetch(query []byte, maxrows int) (qr *QueryResult, err error) {
+func (self *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *QueryResult, err error) {
 	defer handleError(&err)
 	self.validate()
 
@@ -140,7 +140,9 @@ func (self *Connection) ExecuteFetch(query []byte, maxrows int) (qr *QueryResult
 	if qr.RowsAffected > uint64(maxrows) {
 		return nil, &SqlError{0, fmt.Sprintf("Row count exceeded %d", maxrows), string(query)}
 	}
-	qr.Fields = self.buildFields(result)
+	if wantfields {
+		qr.Fields = self.buildFields(result)
+	}
 	qr.Rows = self.fetchAll(result)
 	return qr, nil
 }
