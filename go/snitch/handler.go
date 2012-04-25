@@ -55,7 +55,7 @@ func init() {
 		{"gc", "Force garbage collection", GcHandler},
 		{"panic", "Force panic (will crash app)", PanicHandler},
 	}
-	Register()
+	http.Handle("/debug/snitch", http.HandlerFunc(SnitchHandler))
 }
 
 func SnitchHandler(response http.ResponseWriter, request *http.Request) {
@@ -92,10 +92,6 @@ func PanicHandler(response http.ResponseWriter, request *http.Request) {
 
 func RegisterCommand(path, description string, handler http.HandlerFunc) {
 	cmdList = append(cmdList, SnitchCmd{path, description, handler})
-}
-
-func Register() {
-	http.Handle("/debug/snitch", http.HandlerFunc(SnitchHandler))
 }
 
 // JsonFunc wraps a func() string to create value that satisfies expvar.Var
