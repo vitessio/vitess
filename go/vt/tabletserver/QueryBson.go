@@ -34,6 +34,7 @@ package tabletserver
 import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/bytes2"
 )
 
 type Query struct {
@@ -44,7 +45,7 @@ type Query struct {
 	SessionId     int64
 }
 
-func (self *Query) MarshalBson(buf *bytes.Buffer) {
+func (self *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Binary, "Sql")
@@ -66,7 +67,7 @@ func (self *Query) MarshalBson(buf *bytes.Buffer) {
 	lenWriter.RecordLen()
 }
 
-func (self *Query) encodeBindVariablesBson(buf *bytes.Buffer) {
+func (self *Query) encodeBindVariablesBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for k, v := range self.BindVariables {
 		bson.EncodeField(buf, k, v)

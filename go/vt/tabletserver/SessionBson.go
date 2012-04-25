@@ -34,6 +34,7 @@ package tabletserver
 import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/bytes2"
 )
 
 type Session struct {
@@ -42,7 +43,7 @@ type Session struct {
 	SessionId     int64
 }
 
-func (self *Session) MarshalBson(buf *bytes.Buffer) {
+func (self *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Long, "TransactionId")

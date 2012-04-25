@@ -34,6 +34,7 @@ package memcache
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -251,19 +252,8 @@ func (self *Connection) readline() string {
 func (self *Connection) read(count int) []byte {
 	self.flush()
 	b := make([]byte, count)
-	total := 0
-	for i := 0; i < 10; i++ {
-		n, err := self.buffered.Read(b[total:])
-		if err != nil {
-			panic(NewMemcacheError("%s", err))
-		}
-		total += n
-		if total >= count {
-			break
-		}
-	}
-	if total != count {
-		panic(NewMemcacheError("Unifinished read"))
+	if _, err := io.ReadFull(self.buffered, b); err != nil {
+		panic(NewMemcacheError("%s", err))
 	}
 	return b
 }

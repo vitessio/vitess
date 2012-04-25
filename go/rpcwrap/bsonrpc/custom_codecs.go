@@ -34,6 +34,7 @@ package bsonrpc
 import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/bytes2"
 	"net/rpc"
 )
 
@@ -41,7 +42,7 @@ type RequestBson struct {
 	*rpc.Request
 }
 
-func (self *RequestBson) MarshalBson(buf *bytes.Buffer) {
+func (self *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Binary, "ServiceMethod")
@@ -76,7 +77,7 @@ type ResponseBson struct {
 	*rpc.Response
 }
 
-func (self *ResponseBson) MarshalBson(buf *bytes.Buffer) {
+func (self *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Binary, "ServiceMethod")

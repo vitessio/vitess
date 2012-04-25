@@ -29,55 +29,71 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Package hack gives you some efficient functionality at the cost 
-// breaking some go rules
+// Package bytes2 gives you alternate implementations of functionality
+// similar to go's bytes package
 
-package hack
+package bytes2
 
 import (
-	"reflect"
-	"unsafe"
+	"testing"
 )
 
-// StringArena lets you consolidate allocations for a group of strings
-// that have similar life length
-type StringArena struct {
-	buf []byte
-	str string
-}
-
-// NewStringArena creates an arena of the specified size.
-func NewStringArena(size int) *StringArena {
-	self := &StringArena{buf: make([]byte, 0, size)}
-	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&self.buf))
-	pstring := (*reflect.StringHeader)(unsafe.Pointer(&self.str))
-	pstring.Data = pbytes.Data
-	pstring.Len = pbytes.Cap
-	return self
-}
-
-// NewString copies a byte slice into the arena and returns it as a string.
-// If the arena is full, it returns a traditional go string.
-func (self *StringArena) NewString(b []byte) string {
-	if len(self.buf)+len(b) > cap(self.buf) {
-		return string(b)
+func TestWrite(t *testing.T) {
+	cw := NewChunkedWriter(5)
+	cw.Write([]byte("1234"))
+	if string(cw.Bytes()) != "1234" {
+		t.Errorf("Expecting 1234, received %s", cw.Bytes())
 	}
-	start := len(self.buf)
-	self.buf = append(self.buf, b...)
-	return self.str[start : start+len(b)]
+	cw.WriteString("56")
+	if string(cw.Bytes()) != "123456" {
+		t.Errorf("Expecting 123456, received %s", cw.Bytes())
+	}
+	if cw.Len() != 6 {
+		t.Errorf("Expecting 6, received %d", cw.Len())
+	}
 }
 
-// SpaceLeft returns the amount of space left in the arena.
-func (self *StringArena) SpaceLeft() int {
-	return cap(self.buf) - len(self.buf)
+func TestTruncate(t *testing.T) {
+	cw := NewChunkedWriter(3)
+	cw.WriteString("123456789")
+	cw.Truncate(8)
+	if string(cw.Bytes()) != "12345678" {
+		t.Errorf("Expecting 12345678, received %s", cw.Bytes())
+	}
+	cw.Truncate(5)
+	if string(cw.Bytes()) != "12345" {
+		t.Errorf("Expecting 12345, received %s", cw.Bytes())
+	}
+	cw.Truncate(2)
+	if string(cw.Bytes()) != "12" {
+		t.Errorf("Expecting 12345, received %s", cw.Bytes())
+	}
+	cw.Reset()
+	if cw.Len() != 0 {
+		t.Errorf("Expecting 0, received %d", cw.Len())
+	}
 }
 
-// String force casts a []byte to a string.
-// USE AT YOUR OWN RISK
-func String(b []byte) (s string) {
-	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&b))
-	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	pstring.Data = pbytes.Data
-	pstring.Len = pbytes.Len
-	return
+func TestReserve(t *testing.T) {
+	cw := NewChunkedWriter(4)
+	b := cw.Reserve(2)
+	b[0] = '1'
+	b[1] = '2'
+	cw.WriteByte('3')
+	b = cw.Reserve(2)
+	b[0] = '4'
+	b[1] = '5'
+	if string(cw.Bytes()) != "12345" {
+		t.Errorf("Expecting 12345, received %s", cw.Bytes())
+	}
+}
+
+func TestWriteTo(t *testing.T) {
+	cw1 := NewChunkedWriter(4)
+	cw1.WriteString("123456789")
+	cw2 := NewChunkedWriter(5)
+	cw1.WriteTo(cw2)
+	if string(cw2.Bytes()) != "123456789" {
+		t.Errorf("Expecting 123456789, received %s", cw2.Bytes())
+	}
 }

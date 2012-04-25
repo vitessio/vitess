@@ -32,8 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package bsonrpc
 
 import (
-	"bytes"
 	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/bytes2"
 	"code.google.com/p/vitess/go/rpcwrap"
 	"io"
 	"net/rpc"
@@ -54,7 +54,7 @@ func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 const DefaultBufferSize = 4096
 
 func (self *ClientCodec) WriteRequest(r *rpc.Request, body interface{}) error {
-	buf := bytes.NewBuffer(make([]byte, 0, DefaultBufferSize))
+	buf := bytes2.NewChunkedWriter(DefaultBufferSize)
 	if err := bson.MarshalToBuffer(buf, &RequestBson{r}); err != nil {
 		return err
 	}
@@ -79,10 +79,11 @@ func (self *ClientCodec) Close() error {
 
 type ServerCodec struct {
 	rwc io.ReadWriteCloser
+	cw  *bytes2.ChunkedWriter
 }
 
 func NewServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
-	return &ServerCodec{conn}
+	return &ServerCodec{conn, bytes2.NewChunkedWriter(DefaultBufferSize)}
 }
 
 func (self *ServerCodec) ReadRequestHeader(r *rpc.Request) error {
@@ -94,14 +95,14 @@ func (self *ServerCodec) ReadRequestBody(body interface{}) error {
 }
 
 func (self *ServerCodec) WriteResponse(r *rpc.Response, body interface{}) error {
-	buf := bytes.NewBuffer(make([]byte, 0, DefaultBufferSize))
-	if err := bson.MarshalToBuffer(buf, &ResponseBson{r}); err != nil {
+	if err := bson.MarshalToBuffer(self.cw, &ResponseBson{r}); err != nil {
 		return err
 	}
-	if err := bson.MarshalToBuffer(buf, body); err != nil {
+	if err := bson.MarshalToBuffer(self.cw, body); err != nil {
 		return err
 	}
-	_, err := buf.WriteTo(self.rwc)
+	_, err := self.cw.WriteTo(self.rwc)
+	self.cw.Reset()
 	return err
 }
 

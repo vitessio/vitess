@@ -34,12 +34,13 @@ package tabletserver
 import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/bytes2"
 	"code.google.com/p/vitess/go/mysql"
 )
 
 type QueryResult mysql.QueryResult
 
-func MarshalFieldBson(self mysql.Field, buf *bytes.Buffer) {
+func MarshalFieldBson(self mysql.Field, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Binary, "Name")
@@ -70,7 +71,7 @@ func UnmarshalFieldBson(self *mysql.Field, buf *bytes.Buffer) {
 	}
 }
 
-func (self *QueryResult) MarshalBson(buf *bytes.Buffer) {
+func (self *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Array, "Fields")
@@ -89,7 +90,7 @@ func (self *QueryResult) MarshalBson(buf *bytes.Buffer) {
 	lenWriter.RecordLen()
 }
 
-func (self *QueryResult) encodeFieldsBson(buf *bytes.Buffer) {
+func (self *QueryResult) encodeFieldsBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range self.Fields {
 		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
@@ -99,7 +100,7 @@ func (self *QueryResult) encodeFieldsBson(buf *bytes.Buffer) {
 	lenWriter.RecordLen()
 }
 
-func (self *QueryResult) encodeRowsBson(buf *bytes.Buffer) {
+func (self *QueryResult) encodeRowsBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range self.Rows {
 		bson.EncodePrefix(buf, bson.Array, bson.Itoa(i))
@@ -109,7 +110,7 @@ func (self *QueryResult) encodeRowsBson(buf *bytes.Buffer) {
 	lenWriter.RecordLen()
 }
 
-func (self *QueryResult) encodeRowBson(row []interface{}, buf *bytes.Buffer) {
+func (self *QueryResult) encodeRowBson(row []interface{}, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range row {
 		if v == nil {

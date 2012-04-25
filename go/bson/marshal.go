@@ -32,7 +32,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 package bson
 
 import (
-	"bytes"
+	"code.google.com/p/vitess/go/bytes2"
 	"io"
 	"math"
 	"reflect"
@@ -44,35 +44,33 @@ import (
 // and can later be used to record the number of bytes written
 // in conformance to BSON spec
 type LenWriter struct {
-	Buf       *bytes.Buffer
-	LenOffset int
+	buf *bytes2.ChunkedWriter
+	off int
+	b   []byte
 }
 
 var emptyWORD32 = make([]byte, _WORD32)
 var emptyWORD64 = make([]byte, _WORD64)
 
-func NewLenWriter(buf *bytes.Buffer) LenWriter {
-	LenOffset := buf.Len()
-	buf.Write(emptyWORD32)
-	return LenWriter{buf, LenOffset}
+func NewLenWriter(buf *bytes2.ChunkedWriter) LenWriter {
+	off := buf.Len()
+	b := buf.Reserve(_WORD32)
+	return LenWriter{buf, off, b}
 }
 
 func (self LenWriter) RecordLen() {
-	buf := self.Buf.Bytes()
-	final_len := len(buf)
-	w32 := buf[self.LenOffset : self.LenOffset+_WORD32]
-	Pack.PutUint32(w32, uint32(final_len-self.LenOffset))
+	Pack.PutUint32(self.b, uint32(self.buf.Len()-self.off))
 }
 
 type Marshaler interface {
-	MarshalBson(buf *bytes.Buffer)
+	MarshalBson(buf *bytes2.ChunkedWriter)
 }
 
 type SimpleContainer struct {
 	_Val_ interface{}
 }
 
-func (self *SimpleContainer) MarshalBson(buf *bytes.Buffer) {
+func (self *SimpleContainer) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := NewLenWriter(buf)
 	EncodeField(buf, "_Val_", self._Val_)
 	buf.WriteByte(0)
@@ -82,7 +80,7 @@ func (self *SimpleContainer) MarshalBson(buf *bytes.Buffer) {
 const DefaultBufferSize = 1024 * 16
 
 func MarshalToStream(writer io.Writer, val interface{}) (err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, DefaultBufferSize))
+	buf := bytes2.NewChunkedWriter(DefaultBufferSize)
 	if err = MarshalToBuffer(buf, val); err != nil {
 		return err
 	}
@@ -91,12 +89,12 @@ func MarshalToStream(writer io.Writer, val interface{}) (err error) {
 }
 
 func Marshal(val interface{}) (encoded []byte, err error) {
-	buf := bytes.NewBuffer(make([]byte, 0, DefaultBufferSize))
+	buf := bytes2.NewChunkedWriter(DefaultBufferSize)
 	err = MarshalToBuffer(buf, val)
 	return buf.Bytes(), err
 }
 
-func MarshalToBuffer(buf *bytes.Buffer, val interface{}) (err error) {
+func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 	defer handleError(&err)
 
 	if val == nil {
@@ -131,7 +129,7 @@ func MarshalToBuffer(buf *bytes.Buffer, val interface{}) (err error) {
 	return nil
 }
 
-func EncodeField(buf *bytes.Buffer, key string, val interface{}) {
+func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 	switch v := val.(type) {
 	case []byte:
 		EncodePrefix(buf, Binary, key)
@@ -183,24 +181,26 @@ CompositeType:
 	}
 }
 
-func EncodePrefix(buf *bytes.Buffer, etype byte, key string) {
-	buf.WriteByte(etype)
-	buf.WriteString(key)
-	buf.WriteByte(0)
+func EncodePrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
+	b := buf.Reserve(len(key) + 2)
+	b[0] = etype
+	copy(b[1:], key)
+	b[len(b)-1] = 0
 }
 
-func EncodeFloat64(buf *bytes.Buffer, val float64) {
+func EncodeFloat64(buf *bytes2.ChunkedWriter, val float64) {
 	bits := math.Float64bits(val)
 	putUint64(buf, bits)
 }
 
-func EncodeString(buf *bytes.Buffer, val string) {
-	putUint32(buf, uint32(len(val)))
-	buf.WriteByte(0)
-	buf.WriteString(val)
+func EncodeString(buf *bytes2.ChunkedWriter, val string) {
+	b := buf.Reserve(len(val) + _WORD32 + 1)
+	Pack.PutUint32(b, uint32(len(val)))
+	b[_WORD32] = 0
+	copy(b[_WORD32+1:], val)
 }
 
-func EncodeBool(buf *bytes.Buffer, val bool) {
+func EncodeBool(buf *bytes2.ChunkedWriter, val bool) {
 	if val {
 		buf.WriteByte(1)
 	} else {
@@ -208,26 +208,27 @@ func EncodeBool(buf *bytes.Buffer, val bool) {
 	}
 }
 
-func EncodeUint32(buf *bytes.Buffer, val uint32) {
+func EncodeUint32(buf *bytes2.ChunkedWriter, val uint32) {
 	putUint32(buf, val)
 }
 
-func EncodeUint64(buf *bytes.Buffer, val uint64) {
+func EncodeUint64(buf *bytes2.ChunkedWriter, val uint64) {
 	putUint64(buf, val)
 }
 
-func EncodeTime(buf *bytes.Buffer, val time.Time) {
+func EncodeTime(buf *bytes2.ChunkedWriter, val time.Time) {
 	mtime := val.UnixNano() / 1e6
 	putUint64(buf, uint64(mtime))
 }
 
-func EncodeBinary(buf *bytes.Buffer, val []byte) {
-	putUint32(buf, uint32(len(val)))
-	buf.WriteByte(0)
-	buf.Write(val)
+func EncodeBinary(buf *bytes2.ChunkedWriter, val []byte) {
+	b := buf.Reserve(len(val) + _WORD32 + 1)
+	Pack.PutUint32(b, uint32(len(val)))
+	b[_WORD32] = 0
+	copy(b[_WORD32+1:], val)
 }
 
-func EncodeStruct(buf *bytes.Buffer, val reflect.Value) {
+func EncodeStruct(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	lenWriter := NewLenWriter(buf)
 	t := val.Type()
 	for i := 0; i < t.NumField(); i++ {
@@ -238,7 +239,7 @@ func EncodeStruct(buf *bytes.Buffer, val reflect.Value) {
 	lenWriter.RecordLen()
 }
 
-func EncodeMap(buf *bytes.Buffer, val reflect.Value) {
+func EncodeMap(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	lenWriter := NewLenWriter(buf)
 	mt := val.Type()
 	if mt.Key() != reflect.TypeOf("") {
@@ -253,7 +254,7 @@ func EncodeMap(buf *bytes.Buffer, val reflect.Value) {
 	lenWriter.RecordLen()
 }
 
-func EncodeSlice(buf *bytes.Buffer, val reflect.Value) {
+func EncodeSlice(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	lenWriter := NewLenWriter(buf)
 	for i := 0; i < val.Len(); i++ {
 		EncodeField(buf, itoaIntened(i), val.Index(i).Interface())
@@ -262,18 +263,12 @@ func EncodeSlice(buf *bytes.Buffer, val reflect.Value) {
 	lenWriter.RecordLen()
 }
 
-func putUint32(buf *bytes.Buffer, val uint32) {
-	l := buf.Len()
-	buf.Write(emptyWORD32)
-	w32 := buf.Bytes()[l : l+_WORD32]
-	Pack.PutUint32(w32, val)
+func putUint32(buf *bytes2.ChunkedWriter, val uint32) {
+	Pack.PutUint32(buf.Reserve(_WORD32), val)
 }
 
-func putUint64(buf *bytes.Buffer, val uint64) {
-	l := buf.Len()
-	buf.Write(emptyWORD64)
-	w64 := buf.Bytes()[l : l+_WORD64]
-	Pack.PutUint64(w64, val)
+func putUint64(buf *bytes2.ChunkedWriter, val uint64) {
+	Pack.PutUint64(buf.Reserve(_WORD64), val)
 }
 
 var intStrMap map[int]string
