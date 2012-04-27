@@ -230,7 +230,7 @@ func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Re
 		for _, v := range keys {
 			response.Write([]byte(fmt.Sprintf("%s\n", v)))
 			if plan := self.getQuery(v); plan != nil {
-				if b, err := json.MarshalIndent(plan, "", "  "); err != nil {
+				if b, err := json.MarshalIndent(plan.ExecPlan, "", "  "); err != nil {
 					response.Write([]byte(err.Error()))
 				} else {
 					response.Write(b)
