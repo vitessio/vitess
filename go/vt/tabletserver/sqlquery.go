@@ -86,10 +86,10 @@ type CacheInvalidator interface {
 	Delete(key string) bool
 }
 
-func NewSqlQuery(cachePoolCap, poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, queryTimeout, idleTimeout float64) *SqlQuery {
+func NewSqlQuery(cachePoolCap, poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, schemaReloadTime, queryTimeout, idleTimeout float64) *SqlQuery {
 	self := &SqlQuery{}
 	self.cachePool = NewCachePool(cachePoolCap, time.Duration(queryTimeout*1e9), time.Duration(idleTimeout*1e9))
-	self.schemaInfo = NewSchemaInfo(queryCacheSize)
+	self.schemaInfo = NewSchemaInfo(queryCacheSize, time.Duration(schemaReloadTime*1e9))
 	self.connPool = NewConnectionPool(poolSize, time.Duration(idleTimeout*1e9))
 	self.reservedPool = NewReservedPool()
 	self.txPool = NewConnectionPool(transactionCap, time.Duration(idleTimeout*1e9)) // connections in pool has to be > transactionCap
@@ -311,7 +311,7 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_SELECT:
 			if plan.Reason == sqlparser.REASON_FOR_UPDATE {
-				panic(NewTabletError(FAIL, "Disallowed outside transaction: %s", query.Sql))
+				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
 			defer queryStats.Record("PASS_SELECT", time.Now())
 			*reply = *self.execSelect(plan)
@@ -684,6 +684,9 @@ func (self *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
 		return &QueryResult{}
 	case "vt_transaction_timeout":
 		self.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		return &QueryResult{}
+	case "vt_schema_reload_time":
+		self.schemaInfo.SetReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
 		return &QueryResult{}
 	case "vt_query_cache_size":
 		self.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))

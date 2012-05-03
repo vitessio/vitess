@@ -194,10 +194,9 @@ func EncodeFloat64(buf *bytes2.ChunkedWriter, val float64) {
 }
 
 func EncodeString(buf *bytes2.ChunkedWriter, val string) {
-	b := buf.Reserve(len(val) + _WORD32 + 1)
-	Pack.PutUint32(b, uint32(len(val)))
-	b[_WORD32] = 0
-	copy(b[_WORD32+1:], val)
+	putUint32(buf, uint32(len(val)))
+	buf.WriteByte(0)
+	buf.WriteString(val)
 }
 
 func EncodeBool(buf *bytes2.ChunkedWriter, val bool) {
@@ -222,10 +221,9 @@ func EncodeTime(buf *bytes2.ChunkedWriter, val time.Time) {
 }
 
 func EncodeBinary(buf *bytes2.ChunkedWriter, val []byte) {
-	b := buf.Reserve(len(val) + _WORD32 + 1)
-	Pack.PutUint32(b, uint32(len(val)))
-	b[_WORD32] = 0
-	copy(b[_WORD32+1:], val)
+	putUint32(buf, uint32(len(val)))
+	buf.WriteByte(0)
+	buf.Write(val)
 }
 
 func EncodeStruct(buf *bytes2.ChunkedWriter, val reflect.Value) {

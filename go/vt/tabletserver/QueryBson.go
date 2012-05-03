@@ -35,6 +35,7 @@ import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
+	"fmt"
 )
 
 type Query struct {
@@ -111,4 +112,31 @@ func (self *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
 	default:
 		panic(bson.NewBsonError("Unexpected data type %v for Query.BindVariables", kind))
 	}
+}
+
+// String prints a readable version of Query, and also truncates
+// data if it's too long
+func (self *Query) String() string {
+	buf := bytes2.NewChunkedWriter(1024)
+	fmt.Fprintf(buf, "Sql: %#v, BindVars: {", self.Sql)
+	for k, v := range self.BindVariables {
+		switch val := v.(type) {
+		case []byte:
+			fmt.Fprintf(buf, "%s: %#v, ", k, slimit(string(val)))
+		case string:
+			fmt.Fprintf(buf, "%s: %#v, ", k, slimit(val))
+		default:
+			fmt.Fprintf(buf, "%s: %v, ", k, v)
+		}
+	}
+	fmt.Fprintf(buf, "}")
+	return string(buf.Bytes())
+}
+
+func slimit(s string) string {
+	l := len(s)
+	if l > 256 {
+		l = 256
+	}
+	return s[:l]
 }

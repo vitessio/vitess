@@ -94,6 +94,7 @@ type configType struct {
 	TransactionTimeout float64
 	MaxResultSize      int
 	QueryCacheSize     int
+	SchemaReloadTime   float64
 	QueryTimeout       float64
 	IdleTimeout        float64
 }
@@ -107,6 +108,7 @@ var config configType = configType{
 	30,
 	10000,
 	5000,
+	30 * 60,
 	0,
 	30 * 60,
 }
@@ -202,6 +204,7 @@ func main() {
 		config.TransactionTimeout,
 		config.MaxResultSize,
 		config.QueryCacheSize,
+		config.SchemaReloadTime,
 		config.QueryTimeout,
 		config.IdleTimeout,
 	)

@@ -35,15 +35,18 @@ import (
 	"code.google.com/p/vitess/go/cache"
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/timer"
 	"code.google.com/p/vitess/go/vt/schema"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
+	"time"
 )
 
-const base_show_tables = "select table_name, table_type, create_time, table_comment from information_schema.tables where table_schema = database()"
+const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
 
 type ExecPlan struct {
 	*sqlparser.ExecPlan
@@ -62,10 +65,17 @@ type SchemaInfo struct {
 	queries        *cache.LRUCache
 	connFactory    CreateConnectionFunc
 	cachePool      *CachePool
+	reloadTime     time.Duration
+	lastChange     time.Time
+	ticks          *timer.Timer
 }
 
-func NewSchemaInfo(queryCacheSize int) *SchemaInfo {
-	self := &SchemaInfo{queryCacheSize: queryCacheSize}
+func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration) *SchemaInfo {
+	self := &SchemaInfo{
+		queryCacheSize: queryCacheSize,
+		reloadTime:     reloadTime,
+		ticks:          timer.NewTimer(reloadTime),
+	}
 	http.Handle("/debug/schema/", self)
 	return self
 }
@@ -86,6 +96,7 @@ func (self *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CacheP
 	self.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", nil, "", self.cachePool)
 	for _, row := range tables.Rows {
 		tableName := row[0].(string)
+		self.updateLastChange(row[2])
 		tableInfo := NewTableInfo(
 			conn,
 			tableName,
@@ -101,12 +112,59 @@ func (self *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CacheP
 	}
 	self.queries = cache.NewLRUCache(uint64(self.queryCacheSize))
 	self.connFactory = connFactory
+	go self.Reloader()
+}
+
+func (self *SchemaInfo) updateLastChange(createTime interface{}) {
+	if createTime == nil {
+		return
+	}
+	t, err := strconv.ParseInt(createTime.(string), 10, 64)
+	if err != nil {
+		relog.Warning("Could not parse time %s: %v", createTime.(string), err)
+		return
+	}
+	if self.lastChange.Unix() < t {
+		self.lastChange = time.Unix(t, 0)
+	}
 }
 
 func (self *SchemaInfo) Close() {
+	self.ticks.Close()
 	self.tables = nil
 	self.queries = nil
 	self.connFactory = nil
+}
+
+func (self *SchemaInfo) Reloader() {
+	for self.ticks.Next() {
+		self.Reload()
+	}
+}
+
+func (self *SchemaInfo) Reload() {
+	conn, err := self.connFactory()
+	if err != nil {
+		relog.Error("Could not get connection for reload: %v", err)
+		return
+	}
+	defer conn.Close()
+	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, self.lastChange.Unix())), 1000, false)
+	if err != nil {
+		relog.Warning("Could not get table list for reload: %v", err)
+	}
+	for _, row := range tables.Rows {
+		tableName := row[0].(string)
+		self.updateLastChange(row[2])
+		relog.Info("Reloading: %s", tableName)
+		self.mu.Lock()
+		_, ok := self.tables[tableName]
+		self.mu.Unlock()
+		if ok {
+			self.DropTable(tableName)
+		}
+		self.createTable(conn, tableName)
+	}
 }
 
 func (self *SchemaInfo) CreateTable(tableName string) {
@@ -216,6 +274,12 @@ func (self *SchemaInfo) SetQueryCacheSize(size int) {
 	}
 	self.queryCacheSize = size
 	self.queries.SetCapacity(uint64(size))
+}
+
+func (self *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
+	self.reloadTime = reloadTime
+	self.ticks.Trigger()
+	self.ticks.SetInterval(reloadTime)
 }
 
 func (self *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Request) {

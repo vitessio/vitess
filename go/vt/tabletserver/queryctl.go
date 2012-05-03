@@ -38,12 +38,12 @@ import (
 
 var SqlQueryRpcService *SqlQuery
 
-func StartQueryService(cachePoolCap, poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, queryTimeout, idleTimeout float64) {
+func StartQueryService(cachePoolCap, poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, schemaReloadTime, queryTimeout, idleTimeout float64) {
 	if SqlQueryRpcService != nil {
 		relog.Warning("RPC service already up %v", SqlQueryRpcService)
 		return
 	}
-	SqlQueryRpcService = NewSqlQuery(cachePoolCap, poolSize, transactionCap, transactionTimeout, maxResultSize, queryCacheSize, queryTimeout, idleTimeout)
+	SqlQueryRpcService = NewSqlQuery(cachePoolCap, poolSize, transactionCap, transactionTimeout, maxResultSize, queryCacheSize, schemaReloadTime, queryTimeout, idleTimeout)
 	rpc.Register(SqlQueryRpcService)
 }
 

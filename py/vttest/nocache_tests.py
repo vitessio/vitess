@@ -213,6 +213,26 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.QueryCache.Size, 2)
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 5000)
 
+  def test_schema_reload_time(self):
+    mcu = self.env.mysql_conn.cursor()
+    mcu.execute("create table vtocc_temp(intval int)")
+    # This should cause a reload
+    self.env.execute("set vt_schema_reload_time=600")
+    try:
+      for i in range(10):
+        try:
+          self.env.execute("select * from vtocc_temp")
+        except db.MySQLErrors.DatabaseError, e:
+          self.assertContains(e[1], "not found in schema")
+          time.sleep(1)
+        else:
+          break
+      # Should not throw an exception
+      self.env.execute("select * from vtocc_temp")
+    finally:
+      mcu.execute("drop table vtocc_temp")
+      mcu.close()
+
   def test_max_result_size(self):
     self.env.execute("set vt_max_result_size=2")
     vend = self.env.debug_vars()

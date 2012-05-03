@@ -39,6 +39,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"hash/fnv"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -172,6 +173,8 @@ func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, create
 	self.Cache = NewRowCache(self.Name, thash, cachePool)
 }
 
+var autoIncr = regexp.MustCompile("auto_increment=\\d+")
+
 func (self *TableInfo) computePrefix(conn *DBConnection, createTime interface{}) string {
 	if createTime == nil {
 		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
@@ -182,7 +185,10 @@ func (self *TableInfo) computePrefix(conn *DBConnection, createTime interface{})
 		relog.Warning("Couldnt read table info: %v", err)
 		return ""
 	}
-	thash := base64fnv(createTable.Rows[0][1].(string) + createTime.(string))
+	// Normalize & remove auto_increment because it changes on every insert
+	norm1 := strings.ToLower(createTable.Rows[0][1].(string))
+	norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
+	thash := base64fnv(norm2 + createTime.(string))
 	if _, ok := hashRegistry[thash]; ok {
 		relog.Warning("Hash collision for %s (schema revert?). Will not be cached", self.Name)
 		return ""
