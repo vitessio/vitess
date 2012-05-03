@@ -159,6 +159,9 @@ func (self *LRUCache) Stats() (length, size, capacity uint64, oldest time.Time) 
 }
 
 func (self *LRUCache) StatsJSON() string {
+	if self == nil {
+		return "{}"
+	}
 	l, s, c, o := self.Stats()
 	return fmt.Sprintf("{\"Length\": %v, \"Size\": %v, \"Capacity\": %v, \"OldestAccess\": \"%v\"}", l, s, c, o)
 }

@@ -233,13 +233,13 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 	pkValues := make([]interface{}, len(tableInfo.PKColumns))
 	for i, piece := range pieces {
 		if piece[0] == '\'' {
-			/*var err error
+			var err error
 			pkValues[i], err = base64.StdEncoding.DecodeString(piece[1 : len(piece)-1])
 			if err != nil {
 				relog.Warning("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
 				return
-			}*/
-			pkValues[i] = piece[1 : len(piece)-1]
+			}
+			//pkValues[i] = piece[1 : len(piece)-1]
 		} else if piece == "null" {
 			// TODO: Verify auto-increment table
 			return ""

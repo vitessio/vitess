@@ -196,8 +196,16 @@ func (self *SqlQuery) Commit(session *Session, noOutput *string) (err error) {
 	defer self.mu.RUnlock()
 	*noOutput = ""
 	dirtyTables, err := self.activeTxPool.SafeCommit(session.TransactionId)
+	self.invalidateRows(dirtyTables)
+	return err
+}
+
+func (self *SqlQuery) invalidateRows(dirtyTables map[string]DirtyKeys) {
 	for tableName, invalidList := range dirtyTables {
 		tableInfo := self.schemaInfo.GetTable(tableName)
+		if tableInfo == nil {
+			continue
+		}
 		invalidations := int64(0)
 		for key := range invalidList {
 			tableInfo.Cache.Delete(key)
@@ -205,7 +213,6 @@ func (self *SqlQuery) Commit(session *Session, noOutput *string) (err error) {
 		}
 		atomic.AddInt64(&tableInfo.invalidations, invalidations)
 	}
-	return err
 }
 
 func (self *SqlQuery) Rollback(session *Session, noOutput *string) (err error) {
@@ -397,6 +404,39 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResult) (er
 	return nil
 }
 
+type SlaveTxCommand struct {
+	Command string
+}
+
+// slaveDirtyRows is a global variable used by:
+// SkaveTx, Invalidate, InvalidateForDDL
+// If code evolves, we'll need to unglobalize it.
+var slaveDirtyRows map[string]DirtyKeys
+
+func (self *SqlQuery) SlaveTx(cmd *SlaveTxCommand, noOutput *string) (err error) {
+	defer handleError(&err)
+	self.checkState(self.sessionId, false)
+	*noOutput = ""
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	if self.cachePool.IsClosed() {
+		return nil
+	}
+	switch cmd.Command {
+	case "begin":
+		slaveDirtyRows = make(map[string]DirtyKeys)
+	case "commit":
+		self.invalidateRows(slaveDirtyRows)
+		slaveDirtyRows = nil
+	case "rollback":
+		slaveDirtyRows = nil
+	default:
+		panic(NewTabletError(FAIL, "Unknown tx command: %s", cmd.Command))
+	}
+	return nil
+}
+
 type CacheInvalidate struct {
 	Table string
 	Keys  []interface{}
@@ -418,6 +458,9 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	}
 	if tableInfo.CacheType == 0 {
 		return nil
+	}
+	if slaveDirtyRows == nil {
+		return NewTabletError(FAIL, "Not in transaction")
 	}
 	invalidations := int64(0)
 	for _, val := range cacheInvalidate.Keys {
@@ -453,6 +496,9 @@ func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (er
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
 		self.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
+	// DDL == auto-commit
+	self.invalidateRows(slaveDirtyRows)
+	slaveDirtyRows = nil
 	return nil
 }
 
