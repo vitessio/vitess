@@ -74,8 +74,9 @@ func (cw *ChunkedWriter) Len() int {
 }
 
 func (cw *ChunkedWriter) Reset() {
-	cw.bufs[0] = cw.bufs[0][:0]
-	cw.bufs = cw.bufs[:1]
+	b := cw.bufs[0][:0]
+	cw.bufs = make([][]byte, 1)
+	cw.bufs[0] = b
 }
 
 func (cw *ChunkedWriter) Truncate(n int) {
