@@ -122,7 +122,8 @@ class TestEnv(object):
       pass
     if getattr(self, "vtocc", None):
       self.vtocc.terminate()
-    self.vtstderr.close()
+    if getattr(self, "vtstderr", None):
+      self.vtstderr.close()
     if getattr(self, "memcached", None):
       self.memcached.terminate()
 
