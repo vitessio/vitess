@@ -256,7 +256,9 @@ class TestNocache(framework.TestCase):
       cu.execute("begin", {})
       cu.execute("select sleep(2) from vtocc_test", {})
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Query")
+      if "error: Query" not in e[1] and "error: Lost connection" not in e[1]:
+        print e[1]
+        self.assertFail("Query not killed as expected")
     else:
       self.assertFail("Did not receive exception")
 
