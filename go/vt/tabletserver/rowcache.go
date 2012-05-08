@@ -153,7 +153,7 @@ func encodeRow(row []interface{}, max int) (b []byte) {
 	pack.PutUint32(b, uint32(len(row)))
 	for i, v := range row {
 		if v == nil {
-			pack.PutUint32(b[4 + i*4:], 0xFFFFFFFF)
+			pack.PutUint32(b[4+i*4:], 0xFFFFFFFF)
 			continue
 		}
 		var clen int
@@ -165,17 +165,17 @@ func encodeRow(row []interface{}, max int) (b []byte) {
 			clen = len(col)
 			data = append(data, col...)
 		}
-		pack.PutUint32(b[4 + i*4:], uint32(clen))
+		pack.PutUint32(b[4+i*4:], uint32(clen))
 	}
 	return b
 }
 
 func decodeRow(b []byte) (row []interface{}) {
 	rowlen := pack.Uint32(b)
-	data := b[4 + rowlen*4:]
+	data := b[4+rowlen*4:]
 	row = make([]interface{}, rowlen)
 	for i, _ := range row {
-		length := pack.Uint32(b[4 + i*4:])
+		length := pack.Uint32(b[4+i*4:])
 		if length == 0xFFFFFFFF {
 			continue
 		}

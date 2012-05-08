@@ -44,14 +44,13 @@ var (
 	dot       = []byte(".")
 )
 
-
 type ErrorTrace interface {
-  Error() string
+	Error() string
 	StackTrace() string
 }
 
 type errorTrace struct {
-	err error
+	err        error
 	stackTrace string
 }
 
