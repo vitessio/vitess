@@ -68,7 +68,7 @@ func (e errorTrace) String() string {
 }
 
 func NewErrorTrace(err error) ErrorTrace {
-	return errorTrace{panicErr.(error), string(Stack(5))}
+	return errorTrace{err.(error), string(Stack(5))}
 }
 
 // Taken from runtime/debug.
