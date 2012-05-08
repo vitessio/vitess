@@ -151,7 +151,7 @@ func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, create
 		relog.Info("Table %s has no primary key. Will not be cached.", self.Name)
 		return
 	}
-	for col := range self.PKColumns {
+	for _, col := range self.PKColumns {
 		if self.Columns[col].Category == schema.CAT_OTHER {
 			relog.Info("Table %s pk has unsupported column types. Will not be cached.", self.Name)
 			return
