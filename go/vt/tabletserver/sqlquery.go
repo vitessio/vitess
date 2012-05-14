@@ -346,8 +346,9 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 }
 
 type QueryList []Query
+type QueryResultList []QueryResult
 
-func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResult) (err error) {
+func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (err error) {
 	defer handleError(&err)
 	ql := *queryList
 	if len(ql) == 0 {
@@ -363,6 +364,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResult) (er
 		ConnectionId:  ql[0].ConnectionId,
 		SessionId:     ql[0].SessionId,
 	}
+	*reply = make([]QueryResult, 0, len(ql))
 	for _, query := range ql {
 		trimmed := strings.ToLower(strings.Trim(query.Sql, " \t\n"))
 		switch trimmed {
@@ -374,6 +376,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResult) (er
 				return err
 			}
 			begin_called = true
+			*reply = append(*reply, QueryResult{})
 		case "commit":
 			if !begin_called {
 				panic(NewTabletError(FAIL, "Cannot commit without begin"))
@@ -383,6 +386,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResult) (er
 			}
 			session.TransactionId = 0
 			begin_called = false
+			*reply = append(*reply, QueryResult{})
 		default:
 			query.TransactionId = session.TransactionId
 			query.ConnectionId = session.ConnectionId
@@ -394,7 +398,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResult) (er
 				}
 				return err
 			}
-			reply.RowsAffected += localReply.RowsAffected
+			*reply = append(*reply, localReply)
 		}
 	}
 	if begin_called {
