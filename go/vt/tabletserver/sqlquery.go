@@ -366,7 +366,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 	}
 	*reply = make([]QueryResult, 0, len(ql))
 	for _, query := range ql {
-		trimmed := strings.ToLower(strings.Trim(query.Sql, " \t\n"))
+		trimmed := strings.ToLower(strings.Trim(query.Sql, " \t\r\n"))
 		switch trimmed {
 		case "begin":
 			if session.TransactionId != 0 {
