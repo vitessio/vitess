@@ -44,34 +44,35 @@ var (
 	dot       = []byte(".")
 )
 
-type ErrorTrace interface {
+type PanicError interface {
 	Error() string
 	String() string
 	StackTrace() string
 }
 
-type errorTrace struct {
+type panicError struct {
 	err        error
 	stackTrace string
 }
 
-func (e errorTrace) Error() string {
+func (e panicError) Error() string {
 	return e.err.Error()
 }
 
-func (e errorTrace) StackTrace() string {
+func (e panicError) StackTrace() string {
 	return e.stackTrace
 }
 
-func (e errorTrace) String() string {
+func (e panicError) String() string {
 	return fmt.Sprintf("%v\n%v", e.err, e.stackTrace)
 }
 
-func NewErrorTrace(err error) ErrorTrace {
-	return errorTrace{err.(error), string(Stack(5))}
+func NewPanicError(err error) PanicError {
+	// magic 5 trims off just enough stack data to be clear
+	return panicError{err.(error), string(Stack(5))}
 }
 
-// Taken from runtime/debug.
+// Taken from runtime/debug.go
 func Stack(calldepth int) []byte {
 	return stack(calldepth)
 }
