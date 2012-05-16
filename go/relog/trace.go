@@ -46,6 +46,7 @@ var (
 
 type ErrorTrace interface {
 	Error() string
+	String() string
 	StackTrace() string
 }
 
