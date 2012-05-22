@@ -419,7 +419,8 @@ var slaveDirtyRows map[string]DirtyKeys
 
 func (self *SqlQuery) SlaveTx(cmd *SlaveTxCommand, noOutput *string) (err error) {
 	defer handleError(&err)
-	self.checkState(self.sessionId, false)
+	allowShutdown := (cmd.Command == "commit")
+	self.checkState(self.sessionId, allowShutdown)
 	*noOutput = ""
 	self.mu.RLock()
 	defer self.mu.RUnlock()
