@@ -213,8 +213,14 @@ func (self *Node) Format(buf *TrackedBuffer) {
 		if self.Len() != 0 {
 			Fprintf(buf, " on duplicate key update %v", self.At(0))
 		}
-	case NUMBER, NULL, ID, SELECT_STAR, NO_DISTINCT, COMMENT, FOR_UPDATE, NOT_FOR_UPDATE, TABLE:
+	case NUMBER, NULL, SELECT_STAR, NO_DISTINCT, COMMENT, FOR_UPDATE, NOT_FOR_UPDATE, TABLE:
 		Fprintf(buf, "%s", self.Value)
+	case ID:
+		if _, ok := keywords[string(self.Value)]; ok {
+			Fprintf(buf, "`%s`", self.Value)
+		} else {
+			Fprintf(buf, "%s", self.Value)
+		}
 	case VALUE_ARG:
 		buf.bind_locations = append(buf.bind_locations, BindLocation{buf.Len(), len(self.Value)})
 		Fprintf(buf, "%s", self.Value)

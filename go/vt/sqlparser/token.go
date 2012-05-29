@@ -247,8 +247,12 @@ func (self *Tokenizer) Scan() (parseNode *Node) {
 			} else {
 				return NewSimpleParseNode(LEX_ERROR, "Unexpected character '!'")
 			}
-		case '\'':
-			return self.scanString()
+		case '\'', '"':
+			return self.scanString(ch)
+		case '`':
+			tok := self.scanString(ch)
+			tok.Type = ID
+			return tok
 		default:
 			return NewSimpleParseNode(LEX_ERROR, fmt.Sprintf("Unexpected character '%c'", ch))
 		}
@@ -353,13 +357,13 @@ exit:
 	return NewParseNode(NUMBER, buffer.Bytes())
 }
 
-func (self *Tokenizer) scanString() *Node {
+func (self *Tokenizer) scanString(delim uint16) *Node {
 	buffer := bytes.NewBuffer(make([]byte, 0, 8))
 	for {
 		ch := self.lastChar
 		self.Next()
-		if ch == '\'' {
-			if self.lastChar == '\'' {
+		if ch == delim {
+			if self.lastChar == delim {
 				self.Next()
 			} else {
 				break
@@ -436,7 +440,7 @@ func (self *Tokenizer) Next() {
 }
 
 func isLetter(ch uint16) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '@'
 }
 
 func digitVal(ch uint16) int {

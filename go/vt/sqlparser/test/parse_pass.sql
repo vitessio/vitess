@@ -1,6 +1,9 @@
 select 1 from t
 select -1 from t where b = -2
 select /* simplest */ 1 from t
+select /* back-quote */ 1 from `t`#select /* back-quote */ 1 from t
+select /* back-quote keyword */ 1 from `from`#select /* back-quote keyword */ 1 from `from`
+select /* @ */ @@a from b
 select 1 /* drop this comment */ from t#select 1 from t
 select /* union */ 1 from t union select 1 from t
 select /* union all */ 1 from t union all select 1 from t
@@ -77,7 +80,10 @@ select /* function with distinct */ count(distinct a) from t
 select /* a */ a from t
 select /* a.b */ a.b from t
 select /* string */ 'a' from t
+select /* double quoted string */ "a" from t#select /* double quoted string */ 'a' from t
 select /* quote quote in string */ 'a''a' from t#select /* quote quote in string */ 'a\'a' from t
+select /* double quote quote in string */ "a""a" from t#select /* double quote quote in string */ 'a\"a' from t
+select /* quote in double quoted string */ "a'a" from t#select /* quote in double quoted string */ 'a\'a' from t
 select /* backslash quote in string */ 'a\'a' from t
 select /* literal backslash in string */ 'a\\na' from t
 select /* all escapes */ '\0\'\"\b\n\r\t\Z\\' from t
