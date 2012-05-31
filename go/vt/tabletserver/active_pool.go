@@ -52,7 +52,7 @@ func NewActivePool(queryTimeout, idleTimeout time.Duration) *ActivePool {
 		pool:     pools.NewNumbered(),
 		timeout:  int64(queryTimeout),
 		connPool: NewConnectionPool(1, idleTimeout),
-		ticks:    timer.NewTimer(idleTimeout / 10),
+		ticks:    timer.NewTimer(queryTimeout / 10),
 	}
 }
 
