@@ -41,6 +41,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 )
 
 func init() {
@@ -58,12 +59,22 @@ const (
 	NONE
 )
 
-var levelPrefixes = []string{
-	"DEBUG: ",
-	"INFO: ",
-	"WARNING: ",
-	"ERROR: ",
-	"FATAL: ",
+var levelNames = []string{
+	"DEBUG",
+	"INFO",
+	"WARNING",
+	"ERROR",
+	"FATAL",
+	"NONE",
+}
+
+var levelPrefixes []string
+
+func init() {
+	levelPrefixes = make([]string, len(levelNames))
+	for i, name := range levelNames {
+		levelPrefixes[i] = name + ": "
+	}
 }
 
 func Debug(format string, args ...interface{}) {
@@ -139,4 +150,14 @@ func (self *Logger) SetPrefix(prefix string) {
 
 func (self *Logger) SetLevel(level int) {
 	self.level = level
+}
+
+func LogNameToLogLevel(name string) int {
+	s := strings.ToUpper(name)
+	for i, level := range levelNames {
+		if level == s {
+			return i
+		}
+	}
+	panic(fmt.Errorf("no log level: %v", name))
 }
