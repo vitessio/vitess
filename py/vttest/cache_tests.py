@@ -1,7 +1,7 @@
 from vtdb import vt_occ2 as db
 
-from vttest import framework
-from vttest import cache_cases
+import framework
+import cache_cases
 
 class TestCache(framework.TestCase):
   def setUp(self):

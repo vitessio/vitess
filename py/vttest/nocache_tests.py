@@ -2,8 +2,8 @@ import time
 
 from vtdb import vt_occ2 as db
 
-from vttest import framework
-from vttest import nocache_cases
+import framework
+import nocache_cases
 
 class TestNocache(framework.TestCase):
   def setUp(self):

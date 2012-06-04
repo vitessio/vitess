@@ -41,9 +41,9 @@ import MySQLdb as mysql
 from vtdb import vt_occ2 as db
 from vtdb import dbexceptions
 
-from vttest import framework
-from vttest import cache_tests
-from vttest import nocache_tests
+import framework
+import cache_tests
+import nocache_tests
 
 parser = optparse.OptionParser(usage="usage: %prog [options]")
 parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False)

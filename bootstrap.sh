@@ -34,19 +34,28 @@ if [ ! -f bootstrap.sh ]; then
   exit 1
 fi
 
-if [ ! -d dist ]; then
-  mkdir dist
-fi
-
 . ./dev.env
 
+if [ ! -d $VTROOT/dist ]; then
+  mkdir $VTROOT/dist
+fi
+
 #install bson
-bson_dist=$VTTOP/dist/py-vt-bson-0.3.2
+bson_dist=$VTROOT/dist/py-vt-bson-0.3.2
 if [ -d $bson_dist ]; then
   echo "skipping bson python build"
 else
   cd $VTTOP/third_party/py/bson-0.3.2 && \
     python ./setup.py install --prefix=$bson_dist
+fi
+
+#install vtdb
+vtdb_dist=$VTROOT/dist/py-vtdb
+if [ -d $vtdb_dist ]; then
+  echo "skipping vtdb build"
+else
+  cd $VTTOP/py && \
+    python ./setup.py install --prefix=$vtdb_dist
 fi
 
 echo "source dev.env in your shell to complete the setup."
