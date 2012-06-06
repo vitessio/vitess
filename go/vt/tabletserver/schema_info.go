@@ -182,7 +182,7 @@ func (self *SchemaInfo) createTable(conn *DBConnection, tableName string) {
 		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
 	}
 	if len(tables.Rows) != 1 {
-		panic(NewTabletError(FAIL, "meta roww for %s: %v", tableName, len(tables.Rows)))
+		panic(NewTabletError(FAIL, "rows for %s !=1: %v", tableName, len(tables.Rows)))
 	}
 	tableInfo := NewTableInfo(
 		conn,

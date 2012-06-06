@@ -488,7 +488,7 @@ type DDLInvalidate struct {
 
 func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (err error) {
 	defer handleError(&err)
-	self.checkState(self.sessionId, false)
+	self.checkState(self.sessionId, true) // Accept DDLs in shut down mode
 	*noOutput = ""
 	self.mu.RLock()
 	defer self.mu.RUnlock()
