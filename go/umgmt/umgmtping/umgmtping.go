@@ -1,8 +1,8 @@
 package main
 
 import (
-	"flag"
 	"code.google.com/p/vitess/go/umgmt"
+	"flag"
 )
 
 var sockPath = flag.String("sock-path", "", "")
