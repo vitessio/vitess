@@ -44,6 +44,10 @@ type SqlQuery struct {
 	activePool    *ActivePool
 	consolidator  *Consolidator
 	maxResultSize int32 // Use sync/atomic
+
+	// Vars for handling invalidations
+	slaveDirtyRows map[string]DirtyKeys
+	dbName         string
 }
 
 // stats are globals to allow anybody to set them
@@ -107,6 +111,7 @@ func (self *SqlQuery) allowQueries(dbconfig map[string]interface{}) {
 	self.sessionId = Rand()
 	relog.Info("Session id: %d", self.sessionId)
 	atomic.StoreInt32(&self.state, OPEN)
+	self.dbName = dbconfig["dbname"].(string)
 }
 
 func (self *SqlQuery) disallowQueries() {
@@ -126,6 +131,7 @@ func (self *SqlQuery) disallowQueries() {
 	self.reservedPool.Close()
 	self.connPool.Close()
 	self.sessionId = 0
+	self.dbName = ""
 }
 
 func (self *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
@@ -382,13 +388,9 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 }
 
 type SlaveTxCommand struct {
-	Command string
+	Database string
+	Command  string
 }
-
-// slaveDirtyRows is a global variable used by:
-// SkaveTx, Invalidate, InvalidateForDDL
-// If code evolves, we'll need to unglobalize it.
-var slaveDirtyRows map[string]DirtyKeys
 
 func (self *SqlQuery) SlaveTx(cmd *SlaveTxCommand, noOutput *string) (err error) {
 	defer handleError(&err)
@@ -398,17 +400,17 @@ func (self *SqlQuery) SlaveTx(cmd *SlaveTxCommand, noOutput *string) (err error)
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	if self.cachePool.IsClosed() {
+	if self.cachePool.IsClosed() || cmd.Database != self.dbName {
 		return nil
 	}
 	switch cmd.Command {
 	case "begin":
-		slaveDirtyRows = make(map[string]DirtyKeys)
+		self.slaveDirtyRows = make(map[string]DirtyKeys)
 	case "commit":
-		self.invalidateRows(slaveDirtyRows)
-		slaveDirtyRows = nil
+		self.invalidateRows(self.slaveDirtyRows)
+		self.slaveDirtyRows = nil
 	case "rollback":
-		slaveDirtyRows = nil
+		self.slaveDirtyRows = nil
 	default:
 		panic(NewTabletError(FAIL, "Unknown tx command: %s", cmd.Command))
 	}
@@ -416,8 +418,9 @@ func (self *SqlQuery) SlaveTx(cmd *SlaveTxCommand, noOutput *string) (err error)
 }
 
 type CacheInvalidate struct {
-	Table string
-	Keys  []interface{}
+	Database string
+	Table    string
+	Keys     []interface{}
 }
 
 func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *string) (err error) {
@@ -427,7 +430,7 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	if self.cachePool.IsClosed() {
+	if self.cachePool.IsClosed() || cacheInvalidate.Database != self.dbName {
 		return nil
 	}
 	tableInfo := self.schemaInfo.GetTable(cacheInvalidate.Table)
@@ -437,7 +440,7 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	if tableInfo.CacheType == 0 {
 		return nil
 	}
-	if slaveDirtyRows == nil {
+	if self.slaveDirtyRows == nil {
 		return NewTabletError(FAIL, "Not in transaction")
 	}
 	invalidations := int64(0)
@@ -447,16 +450,14 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 			tableInfo.Cache.Delete(newKey)
 		}
 		invalidations++
-		/*if k := val.(string); k != "" {
-			tableInfo.Cache.Delete(k)
-		}*/
 	}
 	atomic.AddInt64(&tableInfo.invalidations, invalidations)
 	return nil
 }
 
 type DDLInvalidate struct {
-	DDL string
+	Database string
+	DDL      string
 }
 
 func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (err error) {
@@ -466,7 +467,12 @@ func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (er
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	ddlPlan := sqlparser.DDLParse(ddl.DDL)
+	if ddl.Database != self.dbName {
+		return nil
+	}
+
+	ddlDecoded := base64Decode([]byte(ddl.DDL))
+	ddlPlan := sqlparser.DDLParse(ddlDecoded)
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
@@ -475,8 +481,8 @@ func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (er
 		self.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 	// DDL == auto-commit
-	self.invalidateRows(slaveDirtyRows)
-	slaveDirtyRows = nil
+	self.invalidateRows(self.slaveDirtyRows)
+	self.slaveDirtyRows = nil
 	return nil
 }
 
