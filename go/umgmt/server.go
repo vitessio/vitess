@@ -139,6 +139,9 @@ func (service *UmgmtService) closeListeners() (err error) {
 }
 
 func (service *UmgmtService) gracefulShutdown() {
+	service.mutex.Lock()
+	defer func() { service.done <- true }()
+	defer service.mutex.Unlock()
 	for e := service.shutdownCallbacks.Front(); e != nil; e = e.Next() {
 		if callback, ok := e.Value.(ShutdownCallback); ok {
 			callbackErr := callback()
@@ -149,7 +152,6 @@ func (service *UmgmtService) gracefulShutdown() {
 			relog.Error("bad callback %T %v", callback, callback)
 		}
 	}
-	service.done <- true
 }
 
 func SetLameDuckPeriod(f float32) {
@@ -217,6 +219,15 @@ func (server *UmgmtServer) Close() (err error) {
 }
 
 func (server *UmgmtServer) handleGracefulShutdown() error {
+	server.Lock()
+	conns := make([]net.Conn, 0, len(server.connMap))
+	for conn := range server.connMap {
+		conns = append(conns, conn)
+	}
+	server.Unlock()
+	// Closing the connection locks the connMap with an http connection.
+	// Operating on a copy of the list is fine for now, but this indicates the locking
+	// should be simplified if possible.
 	for conn := range server.connMap {
 		conn.Close()
 	}
