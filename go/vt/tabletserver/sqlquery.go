@@ -388,7 +388,6 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 }
 
 type SlaveTxCommand struct {
-	Database string
 	Command  string
 }
 
@@ -400,7 +399,7 @@ func (self *SqlQuery) SlaveTx(cmd *SlaveTxCommand, noOutput *string) (err error)
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	if self.cachePool.IsClosed() || cmd.Database != self.dbName {
+	if self.cachePool.IsClosed() {
 		return nil
 	}
 	switch cmd.Command {
