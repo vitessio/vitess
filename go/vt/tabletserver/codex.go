@@ -242,8 +242,9 @@ func tonumber(val string) (number interface{}) {
 
 func base64Decode(b []byte) string {
 	decodedKey := make([]byte, base64.StdEncoding.DecodedLen(len(b)))
-	if _, err := base64.StdEncoding.Decode(decodedKey, b); err != nil {
+	n, err := base64.StdEncoding.Decode(decodedKey, b)
+	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
-	return string(decodedKey)
+	return string(decodedKey[:n])
 }
