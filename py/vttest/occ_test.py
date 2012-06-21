@@ -66,7 +66,7 @@ class TestEnv(object):
       self.memcached = subprocess.Popen(["memcached", "-s", self.cfg["memcache"]])
     occ_args = [
       vttop+"/go/cmd/vtocc/vtocc",
-      "-config", "occ.json",
+      "-port", "9461",
       "-dbconfig", options.dbconfig,
       "-logfile", LOGFILE,
       "-querylog", QUERYLOGFILE,

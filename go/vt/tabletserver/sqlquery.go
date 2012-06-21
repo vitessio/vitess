@@ -63,17 +63,17 @@ type CacheInvalidator interface {
 	Delete(key string) bool
 }
 
-func NewSqlQuery(cachePoolCap, poolSize, transactionCap int, transactionTimeout float64, maxResultSize, queryCacheSize int, schemaReloadTime, queryTimeout, idleTimeout float64) *SqlQuery {
+func NewSqlQuery(config Config) *SqlQuery {
 	self := &SqlQuery{}
-	self.cachePool = NewCachePool(cachePoolCap, time.Duration(queryTimeout*1e9), time.Duration(idleTimeout*1e9))
-	self.schemaInfo = NewSchemaInfo(queryCacheSize, time.Duration(schemaReloadTime*1e9))
-	self.connPool = NewConnectionPool(poolSize, time.Duration(idleTimeout*1e9))
+	self.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	self.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9))
+	self.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	self.reservedPool = NewReservedPool()
-	self.txPool = NewConnectionPool(transactionCap, time.Duration(idleTimeout*1e9)) // connections in pool has to be > transactionCap
-	self.activeTxPool = NewActiveTxPool(time.Duration(transactionTimeout * 1e9))
-	self.activePool = NewActivePool(time.Duration(queryTimeout*1e9), time.Duration(idleTimeout*1e9))
+	self.txPool = NewConnectionPool(config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
+	self.activeTxPool = NewActiveTxPool(time.Duration(config.TransactionTimeout * 1e9))
+	self.activePool = NewActivePool(time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	self.consolidator = NewConsolidator()
-	self.maxResultSize = int32(maxResultSize)
+	self.maxResultSize = int32(config.MaxResultSize)
 	expvar.Publish("Voltron", stats.StrFunc(func() string { return self.statsJSON() }))
 	queryStats = stats.NewTimings("Queries")
 	stats.NewRates("QPS", queryStats, 15, 60e9)
@@ -148,6 +148,14 @@ func (self *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	if sessionId != self.sessionId {
 		panic(NewTabletError(RETRY, "Invalid session Id %v", sessionId))
 	}
+}
+
+func (self *SqlQuery) GetSessionId(dbName *string, sessionId *int64) error {
+	if *dbName != self.dbName {
+		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", self.dbName, *dbName)
+	}
+	*sessionId = self.sessionId
+	return nil
 }
 
 func (self *SqlQuery) Begin(session *Session, transactionId *int64) (err error) {
