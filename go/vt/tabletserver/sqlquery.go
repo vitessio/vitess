@@ -46,7 +46,6 @@ type SqlQuery struct {
 	maxResultSize int32 // Use sync/atomic
 
 	// Vars for handling invalidations
-	slaveDirtyRows map[string]DirtyKeys
 	dbName         string
 }
 
@@ -399,35 +398,12 @@ type SlaveTxCommand struct {
 	Command  string
 }
 
-func (self *SqlQuery) SlaveTx(cmd *SlaveTxCommand, noOutput *string) (err error) {
-	defer handleError(&err)
-	allowShutdown := (cmd.Command == "commit")
-	self.checkState(self.sessionId, allowShutdown)
-	*noOutput = ""
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-
-	if self.cachePool.IsClosed() {
-		return nil
-	}
-	switch cmd.Command {
-	case "begin":
-		self.slaveDirtyRows = make(map[string]DirtyKeys)
-	case "commit":
-		self.invalidateRows(self.slaveDirtyRows)
-		self.slaveDirtyRows = nil
-	case "rollback":
-		self.slaveDirtyRows = nil
-	default:
-		panic(NewTabletError(FAIL, "Unknown tx command: %s", cmd.Command))
-	}
-	return nil
-}
-
 type CacheInvalidate struct {
 	Database string
-	Table    string
-	Keys     []interface{}
+	Dmls     []struct {
+		Table    string
+		Keys     []interface{}
+	}
 }
 
 func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *string) (err error) {
@@ -440,25 +416,24 @@ func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *str
 	if self.cachePool.IsClosed() || cacheInvalidate.Database != self.dbName {
 		return nil
 	}
-	tableInfo := self.schemaInfo.GetTable(cacheInvalidate.Table)
-	if tableInfo == nil {
-		return NewTabletError(FAIL, "Table %s not found", cacheInvalidate.Table)
-	}
-	if tableInfo.CacheType == 0 {
-		return nil
-	}
-	if self.slaveDirtyRows == nil {
-		return NewTabletError(FAIL, "Not in transaction")
-	}
-	invalidations := int64(0)
-	for _, val := range cacheInvalidate.Keys {
-		newKey := validateKey(tableInfo, val.(string))
-		if newKey != "" {
-			tableInfo.Cache.Delete(newKey)
+	for _, dml := range cacheInvalidate.Dmls {
+		invalidations := int64(0)
+		tableInfo := self.schemaInfo.GetTable(dml.Table)
+		if tableInfo == nil {
+			return NewTabletError(FAIL, "Table %s not found", dml.Table)
 		}
-		invalidations++
+		if tableInfo.CacheType == 0 {
+			break
+		}
+		for _, val := range dml.Keys {
+			newKey := validateKey(tableInfo, val.(string))
+			if newKey != "" {
+				tableInfo.Cache.Delete(newKey)
+			}
+			invalidations++
+		}
+		atomic.AddInt64(&tableInfo.invalidations, invalidations)
 	}
-	atomic.AddInt64(&tableInfo.invalidations, invalidations)
 	return nil
 }
 
@@ -487,9 +462,6 @@ func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (er
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
 		self.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
-	// DDL == auto-commit
-	self.invalidateRows(self.slaveDirtyRows)
-	self.slaveDirtyRows = nil
 	return nil
 }
 
