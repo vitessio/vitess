@@ -178,13 +178,17 @@ type UmgmtServer struct {
 
 func (server *UmgmtServer) Serve() error {
 	relog.Info("started umgmt server: %v", server.listener.Addr())
-	for !server.quit {
+	for {
 		conn, err := server.listener.Accept()
 		if err != nil {
-			if checkError(err, syscall.EINVAL) {
+			// Accept() on a closed socket is EINVAL.
+			if err == syscall.EINVAL {
+				server.Lock()
 				if server.quit {
-					return nil
+					// If we are quitting, the EINVAL is expected.
+					err = nil
 				}
+				server.Unlock()
 				return err
 			}
 			// syscall.EMFILE, syscall.ENFILE could happen here if you run out of file descriptors
@@ -211,9 +215,7 @@ func (server *UmgmtServer) Close() (err error) {
 
 	server.quit = true
 	if server.listener != nil {
-		err = server.listener.Close()
-		// NOTE(msolomon) don't worry about the error here, it's not important
-		server.listener = nil
+		server.listener.Close()
 	}
 	return
 }
@@ -252,6 +254,10 @@ func ListenAndServe(addr string) error {
 	for i := 2; i > 0; i-- {
 		l, e := net.Listen("unix", addr)
 		if e != nil {
+			if umgmtClient != nil {
+				umgmtClient.Close()
+			}
+
 			if checkError(e, syscall.EADDRINUSE) {
 				var clientErr error
 				umgmtClient, clientErr = Dial(addr)
