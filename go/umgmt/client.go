@@ -5,7 +5,6 @@
 package umgmt
 
 import (
-	"errors"
 	"io"
 	"net"
 	"net/rpc"
@@ -45,7 +44,6 @@ func (client *Client) Ping() (string, error) {
 		return "ERROR", err
 	}
 	return reply.Message, nil
-
 }
 
 func (client *Client) CloseListeners() error {
@@ -54,13 +52,8 @@ func (client *Client) CloseListeners() error {
 	err := client.Call("UmgmtService.CloseListeners", request, reply)
 	if err != nil {
 		relog.Error("CloseListeners err: %v", err)
-		return err
 	}
-	if reply.ErrorCode != 0 {
-		relog.Error("CloseListeners err: %v %v", reply.ErrorCode, reply.Message)
-		return errors.New(reply.Message)
-	}
-	return nil
+	return err
 }
 
 func (client *Client) GracefulShutdown() error {
@@ -68,8 +61,7 @@ func (client *Client) GracefulShutdown() error {
 	reply := new(Reply)
 	err := client.Call("UmgmtService.GracefulShutdown", request, reply)
 	if err != nil {
-		relog.Error("rpc err: %v", err)
-		return err
+		relog.Error("GracefulShutdown err: %v", err)
 	}
-	return nil
+	return err
 }

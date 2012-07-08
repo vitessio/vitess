@@ -29,18 +29,12 @@ import (
 	"code.google.com/p/vitess/go/relog"
 )
 
-const (
-	CloseFailed = 1
-)
 
-var lameDuckPeriod time.Duration
-var rebindDelay time.Duration
 
 type Request struct{}
 
 type Reply struct {
-	ErrorCode int
-	Message   string
+	Message string
 }
 
 type UmgmtListener interface {
@@ -57,6 +51,9 @@ type UmgmtService struct {
 	shutdownCallbacks []UmgmtCallback
 	closeCallbacks    []UmgmtCallback
 	done              chan bool
+
+	_lameDuckPeriod time.Duration
+	_rebindDelay time.Duration
 }
 
 func newService() *UmgmtService {
@@ -73,6 +70,18 @@ func newService() *UmgmtService {
 // type UmgmtService2 interface {
 // 	Ping(request *Request, reply *Reply) os.Error
 // }
+
+func (service *UmgmtService) lameDuckPeriod() time.Duration {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+	return service._lameDuckPeriod
+}
+
+func (service *UmgmtService)rebindDelay() time.Duration {
+	service.mutex.Lock()
+	defer service.mutex.Unlock()
+	return service._rebindDelay
+}
 
 func (service *UmgmtService) addListener(l UmgmtListener) {
 	service.mutex.Lock()
@@ -107,13 +116,7 @@ func (service *UmgmtService) Ping(request *Request, reply *Reply) error {
 func (service *UmgmtService) CloseListeners(request *Request, reply *Reply) (err error) {
 	// NOTE(msolomon) block this method because we assume that when it returns to the client
 	// that there is a very high chance that the listeners have actually closed.
-  // FIXME(msolomon) use normal error handling
-	closeErr := service.closeListeners()
-	if closeErr != nil {
-		reply.ErrorCode = CloseFailed
-		reply.Message = closeErr.Error()
-	}
-	return closeErr
+	return service.closeListeners()
 }
 
 func (service *UmgmtService) closeListeners() (err error) {
@@ -155,20 +158,6 @@ func (service *UmgmtService) gracefulShutdown() {
 	service.shutdownCallbacks = service.shutdownCallbacks[:0]
 }
 
-func SetLameDuckPeriod(f float32) {
-	lameDuckPeriod = time.Duration(f * 1.0e9)
-}
-
-func SetRebindDelay(f float32) {
-	rebindDelay = time.Duration(f * 1.0e9)
-}
-
-func SigTermHandler(signal os.Signal) {
-	relog.Info("SigTermHandler")
-	defaultService.closeListeners()
-	time.Sleep(lameDuckPeriod)
-	defaultService.gracefulShutdown()
-}
 
 
 
@@ -268,6 +257,7 @@ func ListenAndServe(addr string) error {
 						relog.Error("closeErr:%v", closeErr)
 					}
 					// wait for rpc to finish
+					rebindDelay := defaultService.rebindDelay()
 					if rebindDelay > 0.0 {
 						relog.Info("delaying rebind: %vs", rebindDelay)
 						time.Sleep(rebindDelay)
@@ -306,7 +296,7 @@ func ListenAndServe(addr string) error {
 
 	if umgmtClient != nil {
 		go func() {
-			time.Sleep(lameDuckPeriod)
+			time.Sleep(defaultService.lameDuckPeriod())
 			umgmtClient.GracefulShutdown()
 			umgmtClient.Close()
 		}()
@@ -333,6 +323,25 @@ func AddStartupCallback(f UmgmtCallback) {
 
 func AddCloseCallback(f UmgmtCallback) {
 	defaultService.addCloseCallback(f)
+}
+
+func SetLameDuckPeriod(f float32) {
+	defaultService.mutex.Lock()
+	defaultService._lameDuckPeriod = time.Duration(f * 1.0e9)
+	defaultService.mutex.Unlock()
+}
+
+func SetRebindDelay(f float32) {
+	defaultService.mutex.Lock()
+	defaultService._rebindDelay = time.Duration(f * 1.0e9)
+	defaultService.mutex.Unlock()
+}
+
+func SigTermHandler(signal os.Signal) {
+	relog.Info("SigTermHandler")
+	defaultService.closeListeners()
+	time.Sleep(defaultService.lameDuckPeriod())
+	defaultService.gracefulShutdown()
 }
 
 // this is a temporary hack around a few different ways of wrapping
