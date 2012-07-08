@@ -5,11 +5,12 @@
 package umgmt
 
 import (
-	"code.google.com/p/vitess/go/relog"
 	"errors"
 	"io"
 	"net"
 	"net/rpc"
+
+	"code.google.com/p/vitess/go/relog"
 )
 
 type Client struct {
@@ -43,10 +44,6 @@ func (client *Client) Ping() (string, error) {
 		relog.Error("rpc err: %v", err)
 		return "ERROR", err
 	}
-	if reply.ErrorCode != 0 {
-		relog.Error("Ping err: %v %v", reply.ErrorCode, reply.Message)
-		return "ERROR", errors.New(reply.Message)
-	}
 	return reply.Message, nil
 
 }
@@ -56,7 +53,7 @@ func (client *Client) CloseListeners() error {
 	reply := new(Reply)
 	err := client.Call("UmgmtService.CloseListeners", request, reply)
 	if err != nil {
-		relog.Error("rpc err: %v", err)
+		relog.Error("CloseListeners err: %v", err)
 		return err
 	}
 	if reply.ErrorCode != 0 {
@@ -73,10 +70,6 @@ func (client *Client) GracefulShutdown() error {
 	if err != nil {
 		relog.Error("rpc err: %v", err)
 		return err
-	}
-	if reply.ErrorCode != 0 {
-		relog.Error("GracefulShutdown err: %v %v", reply.ErrorCode, reply.Message)
-		return errors.New(reply.Message)
 	}
 	return nil
 }

@@ -5,46 +5,50 @@
 package umgmt
 
 import (
-	"code.google.com/p/vitess/go/relog"
 	"testing"
-	"time"
 )
 
-func serve() {
-	AddShutdownCallback(ShutdownCallback(func() error { relog.Error("testserver GracefulShutdown callback"); return nil }))
+var ready = make(chan bool)
+
+func serve(t *testing.T) {
+	AddStartupCallback(func() { ready <- true })
+	AddShutdownCallback(func() { t.Log("test server GracefulShutdown callback") })
 	err := ListenAndServe("/tmp/test-sock")
 	if err != nil {
-		relog.Fatal("listen err:%v", err)
+		t.Fatalf("listen err: %v", err)
 	}
-	relog.Info("test server finished")
+	t.Log("test server finished")
 }
 
 func TestUmgmt(t *testing.T) {
-	go serve()
-	time.Sleep(1e9)
+	go serve(t)
+	<-ready
 
 	client, err := Dial("/tmp/test-sock")
 	if err != nil {
 		t.Fatalf("can't connect %v", err)
 	}
 	request := new(Request)
-	reply := new(Reply)
 
+	reply := new(Reply)
 	callErr := client.Call("UmgmtService.Ping", request, reply)
 	if callErr != nil {
 		t.Fatalf("callErr: %v", callErr)
 	}
-	relog.Info("reply: %v", reply.Message)
+	t.Logf("Ping reply: %v", reply.Message)
 
+	reply = new(Reply)
 	callErr = client.Call("UmgmtService.CloseListeners", reply, reply)
 	if callErr != nil {
 		t.Fatalf("callErr: %v", callErr)
 	}
-	relog.Info("reply: %v", reply.Message)
-	time.Sleep(5e9)
+	t.Logf("CloseListeners reply: %v", reply.Message)
+
+
+	reply = new(Reply)
 	callErr = client.Call("UmgmtService.GracefulShutdown", reply, reply)
 	if callErr != nil {
 		t.Fatalf("callErr: %v", callErr)
 	}
-	relog.Info("reply: %v", reply.Message)
+	t.Logf("GracefulShutdown reply: %v", reply.Message)
 }
