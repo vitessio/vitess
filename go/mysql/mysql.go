@@ -111,6 +111,11 @@ import (
 	"unsafe"
 )
 
+func init() {
+	// This needs to be called before threads begin to spawn.
+	C.mysql_library_init(0, nil, nil)
+}
+
 type SqlError struct {
 	Num     int
 	Message string
