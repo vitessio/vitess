@@ -12,9 +12,9 @@ import (
 	"net/rpc"
 	"syscall"
 
-	"code.google.com/p/vitess.x/go/vt/mysqlctl"
-	"code.google.com/p/vitess.x/go/vt/tabletmanager"
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"

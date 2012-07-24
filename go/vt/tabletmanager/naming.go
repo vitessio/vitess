@@ -5,7 +5,7 @@
 package tabletmanager
 
 import (
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/zk"
 
 //	"launchpad.net/gozk/zookeeper"
 )

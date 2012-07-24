@@ -152,7 +152,7 @@ func Init(mt *Mysqld) error {
 		// FIXME(msolomon) validate permissions?
 	}
 
-	cnfTemplatePath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess.x/config/mycnf")
+	cnfTemplatePath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/config/mycnf")
 	configData, err := MakeMycnfForMysqld(mt, cnfTemplatePath, "tablet uid?")
 	if err == nil {
 		err = ioutil.WriteFile(mt.config.MycnfPath, []byte(configData), 0664)
@@ -162,7 +162,7 @@ func Init(mt *Mysqld) error {
 		return err
 	}
 
-	dbTbzPath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess.x/data/bootstrap/mysql-db-dir.tbz")
+	dbTbzPath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/data/bootstrap/mysql-db-dir.tbz")
 	relog.Info("decompress bootstrap db %v", dbTbzPath)
 	args := []string{"-xj", "-C", mt.config.DataDir, "-f", dbTbzPath}
 	_, tarErr := execCmd("tar", args, []string{}, "")
@@ -174,7 +174,7 @@ func Init(mt *Mysqld) error {
 		relog.Error("failed starting, check %v", mt.config.ErrorLogPath())
 		return err
 	}
-	schemaPath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess.x/data/bootstrap/_vt_schema.sql")
+	schemaPath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/data/bootstrap/_vt_schema.sql")
 	schema, err := ioutil.ReadFile(schemaPath)
 	if err != nil {
 		return err

@@ -5,7 +5,7 @@
 package main
 
 import (
-	"code.google.com/p/vitess.x/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/relog"
 	"flag"
 	"log"

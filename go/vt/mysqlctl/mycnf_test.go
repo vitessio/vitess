@@ -17,7 +17,7 @@ func TestMycnf(t *testing.T) {
 	vtRepl.EndKey = ""
 
 	tablet0 := NewMysqld(NewMycnf(0, 6802, "", vtRepl), nil, nil)
-	cnfTemplatePath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess.x/config/mycnf")
+	cnfTemplatePath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/config/mycnf")
 	// FIXME(msolomon) make a path that has a chance of succeeding elsewhere
 	data, err := MakeMycnfForMysqld(tablet0, cnfTemplatePath, "test header")
 	if err != nil {

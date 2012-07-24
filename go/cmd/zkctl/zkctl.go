@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"code.google.com/p/vitess.x/go/zk/zkctl"
+	"code.google.com/p/vitess/go/zk/zkctl"
 	"code.google.com/p/vitess/go/relog"
 )
 

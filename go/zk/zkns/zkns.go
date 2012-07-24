@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/zk"
 )
 
 type ZknsAddr struct {

@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/zk"
 )
 
 /* Functions for extracting and deriving zk paths. */

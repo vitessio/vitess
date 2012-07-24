@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"path"
 
-	"code.google.com/p/vitess.x/go/vt/naming"
-	"code.google.com/p/vitess.x/go/zk"
-	"code.google.com/p/vitess.x/go/zk/zkns"
+	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/zk"
+	"code.google.com/p/vitess/go/zk/zkns"
 	"launchpad.net/gozk/zookeeper"
 )
 

@@ -26,8 +26,8 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess.x/go/vt/naming"
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -71,7 +71,7 @@ func (agent *ActionAgent) Tablet() *TabletInfo {
 // FIXME(msolomon) need a real path discovery mechanism, a config file
 // or more command line args.
 func (agent *ActionAgent) resolvePaths() error {
-	vtActionBinPaths := []string{os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess.x/go/cmd/vtaction/vtaction"),
+	vtActionBinPaths := []string{os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/go/cmd/vtaction/vtaction"),
 		"/usr/local/bin/vtaction"}
 	for _, path := range vtActionBinPaths {
 		if _, err := os.Stat(path); err == nil {

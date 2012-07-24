@@ -17,10 +17,10 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess.x/go/vt/naming"
-	tm "code.google.com/p/vitess.x/go/vt/tabletmanager"
-	wr "code.google.com/p/vitess.x/go/vt/wrangler"
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/vt/naming"
+	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	wr "code.google.com/p/vitess/go/vt/wrangler"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )

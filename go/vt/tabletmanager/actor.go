@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"path"
 
-	"code.google.com/p/vitess.x/go/vt/mysqlctl"
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )

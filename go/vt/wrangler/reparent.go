@@ -62,10 +62,10 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess.x/go/vt/mysqlctl"
-	vtrpc "code.google.com/p/vitess.x/go/vt/rpc"
-	tm "code.google.com/p/vitess.x/go/vt/tabletmanager"
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
+	vtrpc "code.google.com/p/vitess/go/vt/rpc"
+	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 )
 

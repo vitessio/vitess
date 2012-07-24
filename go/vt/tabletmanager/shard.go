@@ -10,8 +10,8 @@ import (
 	"path"
 	"strings"
 
-	"code.google.com/p/vitess.x/go/vt/naming"
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )

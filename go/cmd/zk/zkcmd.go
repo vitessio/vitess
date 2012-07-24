@@ -16,7 +16,7 @@ import (
 	"time"
 
 	opts "code.google.com/p/opts-go"
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/zk"
 
 	"launchpad.net/gozk/zookeeper"
 )

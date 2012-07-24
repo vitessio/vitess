@@ -14,14 +14,14 @@ import (
 	"net/rpc"
 	"os"
 
-	"code.google.com/p/vitess.x/go/zk"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	_ "code.google.com/p/vitess/go/snitch"
 
-	"code.google.com/p/vitess.x/go/vt/mysqlctl"
-	"code.google.com/p/vitess.x/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 var port = flag.Int("port", 0, "port for debug http server")
