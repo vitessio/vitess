@@ -53,9 +53,9 @@ const (
 // Can this db type be trivially reassigned without changes to the replication grpah?
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_EXPERIMENTAL:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_BACKUP, TYPE_EXPERIMENTAL:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_BACKUP, TYPE_EXPERIMENTAL:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_BACKUP, TYPE_EXPERIMENTAL:
 			return true
 		}
 	case TYPE_SCRAP:
