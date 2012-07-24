@@ -1,0 +1,20 @@
+# replica.cnf - reserved for future tuning
+
+relay-log = {{.RelayLogPath}}
+relay-log-index =  {{.RelayLogIndexPath}}
+relay-log-info-file =  {{.RelayLogInfoPath}}
+
+# required if this master is chained
+# probably safe to turn on all the time at the expense of some disk I/O
+# note: this is in the master conf too
+log-slave-updates
+
+#slave_compressed_protocol
+
+# Specific to vt to enable RBR and cache invalidation
+# vt_enable_binlog_splitter_rbr = 1
+# vt_shard_key_range_start = {{.StartKey}}
+# vt_shard_key_range_end = {{.EndKey}}
+# vt_enable_send_cache_invalidation = 1
+# vt_host = {{.VtHost}} #localhost
+# vt_port = {{.VtPort}} # 6702
