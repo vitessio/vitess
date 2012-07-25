@@ -13,6 +13,7 @@ import (
 	"net/rpc"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/rpcwrap/auth"
 )
 
 const (
@@ -57,7 +58,12 @@ type ServerCodecFactory func(conn io.ReadWriteCloser) rpc.ServerCodec
 
 // ServeRPC handles rpc requests using the hijack scheme of rpc
 func ServeRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetRpcPath(codecName), &rpcHandler{cFactory})
+	http.Handle(GetRpcPath(codecName), &rpcHandler{cFactory, false})
+}
+
+// ServeRPC handles rpc requests using the hijack scheme of rpc
+func ServeAuthRPC(codecName string, cFactory ServerCodecFactory) {
+	http.Handle(GetAuthRpcPath(codecName), &rpcHandler{cFactory, true})
 }
 
 // ServeHTTP handles rpc requests in HTTP compliant POST form
@@ -67,6 +73,7 @@ func ServeHTTP(codecName string, cFactory ServerCodecFactory) {
 
 type rpcHandler struct {
 	cFactory ServerCodecFactory
+	useAuth  bool
 }
 
 func (self *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
@@ -76,11 +83,27 @@ func (self *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 		return
 	}
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
-	rpc.ServeCodec(self.cFactory(NewBufferedConnection(conn)))
+	codec := self.cFactory(NewBufferedConnection(conn))
+
+	if self.useAuth {
+		if authenticated, err := auth.Authenticate(codec); !authenticated {
+			if err != nil {
+				relog.Error("authentication erred at %s: %v", req.RemoteAddr, err)
+			}
+			codec.Close()
+			return
+		}
+	}
+
+	rpc.ServeCodec(codec)
 }
 
 func GetRpcPath(codecName string) string {
 	return "/_" + codecName + "_rpc_"
+}
+
+func GetAuthRpcPath(codecName string) string {
+	return GetRpcPath(codecName) + "/auth"
 }
 
 type httpHandler struct {
