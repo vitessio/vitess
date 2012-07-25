@@ -1,0 +1,62 @@
+# basic config parameters for all db instances in the grid
+
+back_log = 50
+binlog_format = statement
+character_set_server = utf8
+collation_server = utf8_general_ci
+connect_timeout = 30
+datadir = {{.DataDir}}
+default-storage-engine = innodb
+expire_logs_days = 3
+innodb_additional_mem_pool_size = 32M
+innodb_autoextend_increment = 64M
+innodb_buffer_pool_size = 64M
+innodb_data_file_path = ibdata1:10M:autoextend
+innodb_data_home_dir = {{.InnodbDataHomeDir}}
+innodb_file_per_table
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+innodb_lock_wait_timeout = 20
+innodb_log_buffer_size = 64M
+innodb_log_file_size = 64M
+innodb_log_files_in_group = 2
+innodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}
+innodb_max_dirty_pages_pct = 75
+innodb_support_xa = no
+innodb_thread_concurrency = 20
+key_buffer = 32M
+log-error = {{.ErrorLogPath}}
+long_query_time = 2
+max_allowed_packet = 16M
+max_connections = 100
+net_write_timeout = 60
+pid-file = {{.PidFile}}
+port = {{.MysqlPort}}
+query_cache_size = 128M
+query_cache_type = 2
+# all db instances should start in read-only mode - once the db is started and
+# fully functional, we'll push it into read-write mode
+read-only
+read_buffer_size = 1M
+read_rnd_buffer_size = 1M
+server-id = {{.ServerId}}
+skip-name-resolve
+# we now need networking for replication. this is a tombstone to simpler times.
+#skip_networking
+# all db instances should skip the slave startup - that way we can do any
+# out-of-bounds checking before we restart everything - in case we need to do
+# some extra work to skip mangled transactions or fudge the slave start
+skip_slave_start
+slave_net_timeout = 60
+slow-query-log
+slow-query-log-file = {{.SlowLogPath}}
+socket = {{.SocketPath}}
+sort_buffer_size = 2M
+table_cache = 2048
+thread_cache = 200
+thread_concurrency = 24
+tmp_table_size = 32M
+transaction-isolation = REPEATABLE-READ
+# READ-COMMITTED would be better, but mysql 5.1 disables this with statement based replication
+# READ-UNCOMMTTED might be better
+lower_case_table_names = 1
