@@ -7,7 +7,6 @@ import shlex
 import signal
 import socket
 from subprocess import check_call, Popen, CalledProcessError, PIPE
-import threading
 import sys
 import time
 
@@ -70,14 +69,6 @@ def run_bg(cmd, **kargs):
   proc = Popen(args=args, **kargs)
   proc.args = args
   _add_proc(proc)
-  if options.verbose:
-    def x():
-      rc = proc.wait()
-      if rc not in (0, -9):
-        sys.stderr.write("proc failed: %s %s\n" % (proc.returncode, proc.args))
-    t = threading.Thread(target=x)
-    t.daemon = True
-    t.start()
   return proc
 
 
@@ -114,8 +105,11 @@ def wait_procs(proc_list, raise_on_error=True):
   for proc in proc_list:
     proc.wait()
   for proc in proc_list:
-    if proc.returncode and raise_on_error:
-      raise CalledProcessError(proc.returncode, proc.args)
+    if proc.returncode:
+      if options.verbose and proc.returncode not in (-9,):
+        sys.stderr.write("proc failed: %s %s\n" % (proc.returncode, proc.args))
+      if raise_on_error:
+        raise CalledProcessError(proc.returncode, proc.args)
 
 def setup():
   setup_procs = []
