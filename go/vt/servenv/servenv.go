@@ -42,7 +42,7 @@ var (
 func Init(logPrefix string) {
 	f, err := logfile.Open(*logfileName, *logFrequency, *logMaxSize, *logMaxFiles)
 	if err != nil {
-		panic(fmt.Sprintf("unable to open logfile %s", *logfileName))
+		panic(fmt.Sprintf("unable to open logfile %s: %v", *logfileName, err))
 	}
 	logger := relog.New(f, logPrefix + " ",
 		log.Ldate|log.Lmicroseconds|log.Lshortfile, relog.DEBUG)
