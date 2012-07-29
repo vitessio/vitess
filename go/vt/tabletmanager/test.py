@@ -279,6 +279,9 @@ def run_test_reparent_graceful():
 def run_test_reparent_down_master():
   _wipe_zk()
 
+
+  run(vttop+'/go/cmd/vtctl/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
   # Start up a master mysql and vttablet
   run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
   agent_62344 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')

@@ -48,7 +48,32 @@ func VtRootFromShardPath(zkShardPath string) string {
 	return strings.Join(pathParts[:len(pathParts)-4], "/")
 }
 
-// /vt/tablets/<tablet uid>
+func VtRootFromKeyspacePath(zkKeyspacePath string) string {
+	defer func() {
+		if e := recover(); e != nil {
+			panic(fmt.Errorf("invalid keyspace path: %v %v", zkKeyspacePath, e))
+		}
+	}()
+
+	pathParts := strings.Split(zkKeyspacePath, "/")
+	if pathParts[len(pathParts)-2] != "keyspaces" {
+		panic(fmt.Errorf("invalid keyspace path: %v", zkKeyspacePath))
+	}
+
+	if pathParts[2] != "global" {
+		panic(fmt.Errorf("invalid keyspace path - not global: %v", zkKeyspacePath))
+	}
+
+	return strings.Join(pathParts[:len(pathParts)-2], "/")
+}
+
+
+// /zk/global/vt/keyspaces/<keyspace name>
+func MustBeKeyspacePath(zkKeyspacePath string) {
+	VtRootFromKeyspacePath(zkKeyspacePath)
+}
+
+// /zk/<cell>/vt/tablets/<tablet uid>
 func MustBeTabletPath(zkTabletPath string) {
 	VtRootFromTabletPath(zkTabletPath)
 }

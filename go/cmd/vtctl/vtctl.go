@@ -58,6 +58,11 @@ Shards:
     specify which shard to reparent and which tablet should be the new master
 
 
+Keyspaces:
+  CreateKeyspace <zk keyspaces path>/<name> <shard count>
+    e.g. CreateKeyspace /zk/global/vt/keyspaces/my_keyspace 4
+
+
 Generic:
   PurgeActions <zk action path>
     remove all actions - be careful, this is powerful cleanup magic
@@ -111,6 +116,20 @@ func confirm(prompt string) bool {
 
 	line, _ := stdin.ReadString('\n')
 	return strings.ToLower(strings.TrimSpace(line)) == "yes"
+}
+
+// this is a placeholder implementation. right now very little information
+// is needed for a keyspace.
+func createKeyspace(zconn zk.Conn, path string) error {
+	tm.MustBeKeyspacePath(path)
+	_, err := zk.CreateRecursive(zconn, path, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) && !*force {
+			relog.Fatal("keyspace already exists: %v", path)
+		}
+		relog.Fatal("error creating keyspace: %v", err)
+	}
+	return nil
 }
 
 func initTablet(zconn zk.Conn, path, hostname, mysqlPort, vtPort, keyspace, shardId, tabletType, parentAlias string, update bool) error {
@@ -440,6 +459,11 @@ func main() {
 	var err error
 
 	switch args[0] {
+	case "CreateKeyspace":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires 1 arg", args[0])
+		}
+		err = createKeyspace(zconn, args[1])
 	case "InitTablet":
 		if len(args) != 9 {
 			relog.Fatal("action %v requires 8 args", args[0])
