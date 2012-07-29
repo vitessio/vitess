@@ -79,6 +79,9 @@ Generic:
 
   ListScrap <zk vt path>
     list all scrap tablet paths
+
+  DumpTablets <zk vt path>
+    list all tablets in an awk-friendly way
 `
 
 var noWaitForAction = flag.Bool("no-wait", false,
@@ -226,11 +229,13 @@ func getTabletMap(zconn zk.Conn, tabletPaths []string) map[string]*tm.TabletInfo
 	return tabletMap
 }
 
-func listScrap(zconn zk.Conn, zkVtPath string) error {
+
+// return a sorted list of tablets
+func getAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 	zkTabletsPath := path.Join(zkVtPath, "tablets")
 	children, _, err := zconn.Children(zkTabletsPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sort.Strings(children)
@@ -240,40 +245,51 @@ func listScrap(zconn zk.Conn, zkVtPath string) error {
 	}
 
 	tabletMap := getTabletMap(zconn, tabletPaths)
-
+	tablets := make([]*tm.TabletInfo, 0, len(tabletPaths))
 	for _, tabletPath := range tabletPaths {
 		tabletInfo, ok := tabletMap[tabletPath]
-		if ok && tabletInfo.Type == tm.TYPE_SCRAP {
-			fmt.Println(tabletPath)
+		if !ok {
+			relog.Warning("failed to load tablet %v", tabletPath)
+		}
+		tablets = append(tablets, tabletInfo)
+	}
+
+	return tablets, nil
+}
+
+
+func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) error {
+	tablets, err := getAllTablets(zconn, zkVtPath)
+	if err != nil {
+		return err
+	}
+	for _, tablet := range tablets {
+		if tablet.Type == dbType {
+			fmt.Println(tablet.Path())
 		}
 	}
 
 	return nil
 }
 
-func listIdle(zconn zk.Conn, zkVtPath string) error {
-	zkTabletsPath := path.Join(zkVtPath, "tablets")
-	children, _, err := zconn.Children(zkTabletsPath)
+func dumpTablets(zconn zk.Conn, zkVtPath string) error {
+	tablets, err := getAllTablets(zconn, zkVtPath)
 	if err != nil {
 		return err
 	}
-
-	sort.Strings(children)
-	tabletPaths := make([]string, len(children))
-	for i, child := range children {
-		tabletPaths[i] = path.Join(zkTabletsPath, child)
-	}
-
-	tabletMap := getTabletMap(zconn, tabletPaths)
-
-	for _, tabletPath := range tabletPaths {
-		tabletInfo, ok := tabletMap[tabletPath]
-		if ok && tabletInfo.Type == tm.TYPE_IDLE {
-			fmt.Println(tabletPath)
-		}
+	for _, tablet := range tablets {
+		fmt.Printf("%v %v %v %v %v\n", tablet.Path(), tablet.Keyspace, tablet.Shard, tablet.Type, tablet.Addr)
 	}
 
 	return nil
+}
+
+func listScrap(zconn zk.Conn, zkVtPath string) error {
+	return listTabletsByType(zconn, zkVtPath, tm.TYPE_SCRAP)
+}
+
+func listIdle(zconn zk.Conn, zkVtPath string) error {
+	return listTabletsByType(zconn, zkVtPath, tm.TYPE_IDLE)
 }
 
 func validateZk(zconn zk.Conn, ai *tm.ActionInitiator, zkVtPath string) error {
@@ -526,6 +542,11 @@ func main() {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}
 		err = listIdle(zconn, args[1])
+	case "DumpTablets":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk vt path>", args[0])
+		}
+		err = dumpTablets(zconn, args[1])
 	case "WaitForAction":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk action path>", args[0])
