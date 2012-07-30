@@ -14,6 +14,8 @@ import (
 
 const (
 	TABLET_ACTION_PING        = "Ping"
+	TABLET_ACTION_SLEEP       = "Sleep"
+
 	TABLET_ACTION_SET_RDONLY  = "SetReadOnly"
 	TABLET_ACTION_SET_RDWR    = "SetReadWrite"
 	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
@@ -25,12 +27,20 @@ const (
 
 	// Shard actions - involve all tablets in a shard
 	SHARD_ACTION_REPARENT = "ReparentShard"
+
+	ACTION_STATE_QUEUED = ActionState("") // All actions are queued initially
+	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process
+	ACTION_STATE_FAILED = ActionState("Failed")
 )
+
+type ActionState string
+
 
 type ActionNode struct {
 	Action     string
 	ActionGuid string
 	Error      string
+	State      ActionState
 	Args       map[string]string
 	path       string // path in zookeeper representing this action
 }

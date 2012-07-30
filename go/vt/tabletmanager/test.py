@@ -12,6 +12,9 @@ import time
 
 import MySQLdb
 
+
+devnull = open('/dev/null', 'w')
+
 class TestError(Exception):
   pass
 
@@ -196,6 +199,35 @@ def run_test_sanity():
 
   agent_62344.kill()
 
+
+def run_test_restart_during_action():
+  # Start up a master mysql and vttablet
+  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
+  run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_nj/vt')
+  agent_62344 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+
+  run(vttop+'/go/cmd/vtctl/vtctl Ping /zk/test_nj/vt/tablets/0000062344')
+
+  # schedule long action
+  run(vttop+'/go/cmd/vtctl/vtctl -no-wait Sleep /zk/test_nj/vt/tablets/0000062344 15s', stdout=devnull)
+  # ping blocks until the sleep finishes unless we have a schedule race
+  action_path, _ = run(vttop+'/go/cmd/vtctl/vtctl -no-wait Ping /zk/test_nj/vt/tablets/0000062344', trap_output=True)
+
+  # kill agent leaving vtaction running
+  agent_62344.kill()
+
+  # restart agent
+  agent_62344 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+
+  # we expect this action with a short wait time to fail. this isn't the best
+  # and has some potential for flakiness.
+  run_fail(vttop+'/go/cmd/vtctl/vtctl -wait-time 2s WaitForAction ' + action_path)
+  agent_62344.kill()
+
+
+
+
 def _wipe_zk():
   run(vttop+'/go/cmd/zk/zk rm -rf /zk/test_nj/vt')
   run(vttop+'/go/cmd/zk/zk rm -rf /zk/test_ny/vt')
@@ -347,6 +379,7 @@ def run_test_reparent_down_master():
 def run_all():
   run_test_sanity()
   run_test_sanity() # run twice to check behavior with existing znode data
+  run_test_restart_during_action()
   run_test_reparent_graceful()
   run_test_reparent_down_master()
 

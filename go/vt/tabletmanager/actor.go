@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"time"
 
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/zk"
@@ -47,7 +48,7 @@ func NewTabletActor(mysqld *mysqlctl.Mysqld, zconn zk.Conn) *TabletActor {
 // resolvable. For instance, if your zk connection fails, better to just fail. If data
 // is corrupt, you can't fix it gracefully.
 func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error {
-	data, _, zkErr := ta.zconn.Get(actionPath)
+	data, stat, zkErr := ta.zconn.Get(actionPath)
 	if zkErr != nil {
 		relog.Error("HandleAction failed: %v", zkErr)
 		return zkErr
@@ -59,10 +60,35 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error
 		return err
 	}
 
+	switch actionNode.State {
+	case ACTION_STATE_RUNNING:
+		relog.Warning("HandleAction waiting for running action: %v", actionPath)
+		return WaitForCompletion(ta.zconn, actionPath, 0)
+	case ACTION_STATE_FAILED:
+		return fmt.Errorf(actionNode.Error)
+	}
+
+
+	// Claim the action by this process.
+	actionNode.State = ACTION_STATE_RUNNING
+	newData := ActionNodeToJson(actionNode)
+	_, zkErr = ta.zconn.Set(actionPath, newData, stat.Version())
+	if zkErr != nil {
+		if zookeeper.IsError(zkErr, zookeeper.ZBADVERSION) {
+			// The action is schedule by another actor. Most likely
+			// the tablet restarted during an action. Just wait for completion.
+			relog.Warning("HandleAction waiting for scheduled action: %v", actionPath)
+			return WaitForCompletion(ta.zconn, actionPath, 0)
+		} else {
+			return zkErr
+		}
+	}
+
 	ta.zkTabletPath = TabletPathFromActionPath(actionPath)
 	ta.zkVtRoot = VtRootFromTabletPath(ta.zkTabletPath)
 
 	relog.Info("HandleAction: %v %v", actionPath, data)
+
 
 	// validate actions, but don't write this back into zk
 	if actionNode.Action != action || actionNode.ActionGuid != actionGuid {
@@ -76,11 +102,12 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error
 		// on failure, set an error field on the node - let other tools deal
 		// with it.
 		actionNode.Error = actionErr.Error()
+		actionNode.State = ACTION_STATE_FAILED
 	} else {
 		actionNode.Error = ""
 	}
 
-	newData := ActionNodeToJson(actionNode)
+	newData = ActionNodeToJson(actionNode)
 	if newData != data {
 		_, zkErr = ta.zconn.Set(actionPath, newData, -1)
 		if zkErr != nil {
@@ -113,6 +140,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
+	case TABLET_ACTION_SLEEP:
+		err = ta.sleep(actionNode.Args)
 	case TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
 	case TABLET_ACTION_SET_RDWR:
@@ -132,6 +161,19 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	}
 
 	return
+}
+
+func (ta *TabletActor) sleep(args map[string]string) error {
+	duration, ok := args["Duration"]
+	if !ok {
+		return fmt.Errorf("missing Duration in args")
+	}
+	d, err := time.ParseDuration(duration)
+	if err != nil {
+		return err
+	}
+	time.Sleep(d)
+	return nil
 }
 
 func (ta *TabletActor) setReadOnly(rdonly bool) error {

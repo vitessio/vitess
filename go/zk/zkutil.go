@@ -206,6 +206,9 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 
 			_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 			if err != nil {
+				if zookeeper.IsError(err, zookeeper.ZCLOSING) {
+					return
+				}
 				log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
 				time.Sleep(30*time.Second)
 			} else {

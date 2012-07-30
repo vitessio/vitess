@@ -34,6 +34,11 @@ func (cc *ConnCache) ConnForPath(zkPath string) (*zookeeper.Conn, error) {
 	zcell := ZkCellFromZkPath(zkPath)
 
 	cc.mutex.Lock()
+	if cc.zconnCellMap == nil {
+		cc.mutex.Unlock()
+		return nil, &zookeeper.Error{Op:"dial", Code:zookeeper.ZCLOSING}
+	}
+
 	conn, ok := cc.zconnCellMap[zcell]
 	if !ok {
 		conn = &cachedConn{}
@@ -71,12 +76,20 @@ func (cc *ConnCache) ConnForPath(zkPath string) (*zookeeper.Conn, error) {
 
 func (cc *ConnCache) handleSessionEvents(cell string, conn *zookeeper.Conn, session <-chan zookeeper.Event) {
 	for event := range session {
-		if !event.Ok() {
+		switch event.State {
+		case zookeeper.STATE_EXPIRED_SESSION:
 			conn.Close()
+			fallthrough
+		case zookeeper.STATE_CLOSED:
 			cc.mutex.Lock()
-			delete(cc.zconnCellMap, cell)
+			if cc.zconnCellMap != nil {
+				delete(cc.zconnCellMap, cell)
+			}
 			cc.mutex.Unlock()
 			log.Printf("zk conn cache: session for cell %v ended: %v", cell, event)
+			return
+		default:
+			log.Printf("zk conn cache: session for cell %v event: %v", cell, event)
 		}
 	}
 }

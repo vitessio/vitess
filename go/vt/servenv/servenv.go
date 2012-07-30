@@ -40,6 +40,10 @@ var (
 )
 
 func Init(logPrefix string) {
+	if logPrefix != "" {
+		logPrefix += " "
+	}
+	logPrefix += fmt.Sprintf("[%v]", os.Getpid())
 	f, err := logfile.Open(*logfileName, *logFrequency, *logMaxSize, *logMaxFiles)
 	if err != nil {
 		panic(fmt.Sprintf("unable to open logfile %s: %v", *logfileName, err))

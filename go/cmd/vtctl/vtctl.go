@@ -49,6 +49,9 @@ Tablets:
     check that the agent is awake and responding - can be blocked by other in-flight
     operations.
 
+  Sleep <zk tablet path> <duration>
+    block the action queue for the specified duration
+
 
 Shards:
   RebuildShard <zk shard path>
@@ -479,6 +482,14 @@ func main() {
 			relog.Fatal("action %v requires args", args[0])
 		}
 		actionPath, err = ai.Ping(args[1])
+	case "Sleep":
+		if len(args) != 3 {
+			relog.Fatal("action %v requires 2 args", args[0])
+		}
+		duration, err := time.ParseDuration(args[2])
+		if err == nil {
+			actionPath, err = ai.Sleep(args[1], duration)
+		}
 	case tm.TABLET_ACTION_SET_RDONLY:
 		if len(args) != 2 {
 			relog.Fatal("action %v requires args", args[0])
@@ -586,8 +597,9 @@ func main() {
 		relog.Fatal("action failed: %v %v", args[0], err)
 	}
 	if actionPath != "" {
-		relog.Info("action created: %v", actionPath)
-		if !*noWaitForAction {
+		if *noWaitForAction {
+			fmt.Println(actionPath)
+		} else {
 			err := ai.WaitForCompletion(actionPath, *waitTime)
 			if err != nil {
 				relog.Fatal(err.Error())

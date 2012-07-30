@@ -81,6 +81,11 @@ func (ai *ActionInitiator) Ping(zkTabletPath string) (actionPath string, err err
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PING})
 }
 
+func (ai *ActionInitiator) Sleep(zkTabletPath string, duration time.Duration) (actionPath string, err error) {
+	args := map[string]string{"Duration": duration.String()}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLEEP, Args: args})
+}
+
 func (ai *ActionInitiator) ChangeType(zkTabletPath string, dbType TabletType) (actionPath string, err error) {
 	args := map[string]string{"DbType": string(dbType)}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, Args: args})
@@ -120,6 +125,10 @@ func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (acti
 }
 
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
+	return WaitForCompletion(ai.zconn, actionPath, waitTime)
+}
+
+func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration) error {
 	// If there is no duration specified, block for a sufficiently long time.
 	if waitTime <= 0 {
 		waitTime = 24 * time.Hour
@@ -127,10 +136,9 @@ func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Du
 	timer := time.NewTimer(waitTime)
 	defer timer.Stop()
 	for {
-		data, _, watch, err := ai.zconn.GetW(actionPath)
+		data, _, watch, err := zconn.GetW(actionPath)
 		if err != nil {
-			zkErr := err.(*zookeeper.Error)
-			if zkErr.Code == zookeeper.ZNONODE {
+			if zookeeper.IsError(err, zookeeper.ZNONODE) {
 				return nil
 			}
 			return fmt.Errorf("action err: %v %v", actionPath, err)
