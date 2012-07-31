@@ -13,6 +13,7 @@ import (
 	"net/rpc"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/rpcwrap/auth"
 )
 
 const (
@@ -57,7 +58,12 @@ type ServerCodecFactory func(conn io.ReadWriteCloser) rpc.ServerCodec
 
 // ServeRPC handles rpc requests using the hijack scheme of rpc
 func ServeRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetRpcPath(codecName), &rpcHandler{cFactory})
+	http.Handle(GetRpcPath(codecName), &rpcHandler{cFactory, false})
+}
+
+// ServeRPC handles rpc requests using the hijack scheme of rpc
+func ServeAuthRPC(codecName string, cFactory ServerCodecFactory) {
+	http.Handle(GetAuthRpcPath(codecName), &rpcHandler{cFactory, true})
 }
 
 // ServeHTTP handles rpc requests in HTTP compliant POST form
@@ -65,22 +71,64 @@ func ServeHTTP(codecName string, cFactory ServerCodecFactory) {
 	http.Handle(GetHttpPath(codecName), &httpHandler{cFactory})
 }
 
-type rpcHandler struct {
-	cFactory ServerCodecFactory
+// AuthenticatedServer is an rpc.Server instance that serves
+// authenticated calls.
+var AuthenticatedServer = rpc.NewServer()
+
+// RegisterAuthenticated registers a receiver with the authenticated
+// rpc server.
+func RegisterAuthenticated(rcvr interface{}) error {
+	// TODO(szopa): This should be removed after the transition
+	// period, when all the clients know about authentication.
+	if err := rpc.Register(rcvr); err != nil {
+		return err
+	}
+	return AuthenticatedServer.Register(rcvr)
 }
 
-func (self *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
+// ServeCodec calls ServeCodec for the appropriate server
+// (authenticated or default).
+func (h *rpcHandler) ServeCodec(c rpc.ServerCodec) {
+	if h.useAuth {
+		AuthenticatedServer.ServeCodec(c)
+	} else {
+		rpc.ServeCodec(c)
+	}
+}
+
+type rpcHandler struct {
+	cFactory ServerCodecFactory
+	useAuth  bool
+}
+
+func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	conn, _, err := c.(http.Hijacker).Hijack()
 	if err != nil {
 		relog.Error("rpc hijacking %s: %v", req.RemoteAddr, err)
 		return
 	}
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
-	rpc.ServeCodec(self.cFactory(NewBufferedConnection(conn)))
+	codec := h.cFactory(NewBufferedConnection(conn))
+
+	if h.useAuth {
+		if authenticated, err := auth.Authenticate(codec); !authenticated {
+			if err != nil {
+				relog.Error("authentication erred at %s: %v", req.RemoteAddr, err)
+			}
+			codec.Close()
+			return
+		}
+	}
+
+	h.ServeCodec(codec)
 }
 
 func GetRpcPath(codecName string) string {
 	return "/_" + codecName + "_rpc_"
+}
+
+func GetAuthRpcPath(codecName string) string {
+	return GetRpcPath(codecName) + "/auth"
 }
 
 type httpHandler struct {
