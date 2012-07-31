@@ -13,6 +13,7 @@ import (
 	"syscall"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/rpcwrap"
 	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
@@ -53,7 +54,7 @@ func main() {
 
 	config, dbconfig := ts.Init()
 	qm := &OccManager{config, dbconfig}
-	rpc.Register(qm)
+	rpcwrap.RegisterAuthenticated(qm)
 	ts.StartQueryService(config)
 	ts.AllowQueries(dbconfig)
 
@@ -66,9 +67,8 @@ func main() {
 			relog.Error("could not load authentication credentials, not starting rpc servers: %v", err)
 		}
 		serveAuthRPC()
-	} else {
-		serveRPC()
 	}
+	serveRPC()
 
 	relog.Info("started vtocc %v", *port)
 

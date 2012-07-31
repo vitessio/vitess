@@ -6,7 +6,7 @@ package tabletserver
 
 import (
 	"code.google.com/p/vitess/go/relog"
-	"net/rpc"
+	"code.google.com/p/vitess/go/rpcwrap"
 )
 
 var SqlQueryRpcService *SqlQuery
@@ -17,7 +17,7 @@ func StartQueryService(config Config) {
 		return
 	}
 	SqlQueryRpcService = NewSqlQuery(config)
-	rpc.Register(SqlQueryRpcService)
+	rpcwrap.RegisterAuthenticated(SqlQueryRpcService)
 }
 
 func AllowQueries(dbconfig map[string]interface{}) {

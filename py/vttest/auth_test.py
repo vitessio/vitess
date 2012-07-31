@@ -92,7 +92,11 @@ class TestAuthentication(unittest.TestCase):
     else:
       self.fail("Too many requests were allowed (%s)." % (i + 1))
 
-  
+  def test_authenticated_methods_are_available(self):
+    self.authenticate("ala", "ma kota")
+    self.call('OccManager.GetSessionId', '<test db name>')
+
+
 if __name__=="__main__":
   parser = optparse.OptionParser(usage="usage: %prog [options]")
   parser.add_option("-c", "--dbconfig", action="store", dest="dbconfig", default="dbtest.json",

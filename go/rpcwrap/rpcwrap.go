@@ -71,21 +71,46 @@ func ServeHTTP(codecName string, cFactory ServerCodecFactory) {
 	http.Handle(GetHttpPath(codecName), &httpHandler{cFactory})
 }
 
+// AuthenticatedServer is an rpc.Server instance that serves
+// authenticated calls.
+var AuthenticatedServer = rpc.NewServer()
+
+// RegisterAuthenticated registers a receiver with the authenticated
+// rpc server.
+func RegisterAuthenticated(rcvr interface{}) error {
+	// TODO(szopa): This should be removed after the transition
+	// period, when all the clients know about authentication.
+	if err := rpc.Register(rcvr); err != nil {
+		return err
+	}
+	return AuthenticatedServer.Register(rcvr)
+}
+
+// ServeCodec calls ServeCodec for the appropriate server
+// (authenticated or default).
+func (h *rpcHandler) ServeCodec(c rpc.ServerCodec) {
+	if h.useAuth {
+		AuthenticatedServer.ServeCodec(c)
+	} else {
+		rpc.ServeCodec(c)
+	}
+}
+
 type rpcHandler struct {
 	cFactory ServerCodecFactory
 	useAuth  bool
 }
 
-func (self *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
+func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	conn, _, err := c.(http.Hijacker).Hijack()
 	if err != nil {
 		relog.Error("rpc hijacking %s: %v", req.RemoteAddr, err)
 		return
 	}
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
-	codec := self.cFactory(NewBufferedConnection(conn))
+	codec := h.cFactory(NewBufferedConnection(conn))
 
-	if self.useAuth {
+	if h.useAuth {
 		if authenticated, err := auth.Authenticate(codec); !authenticated {
 			if err != nil {
 				relog.Error("authentication erred at %s: %v", req.RemoteAddr, err)
@@ -95,7 +120,7 @@ func (self *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	rpc.ServeCodec(codec)
+	h.ServeCodec(codec)
 }
 
 func GetRpcPath(codecName string) string {

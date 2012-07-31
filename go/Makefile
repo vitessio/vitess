@@ -7,7 +7,9 @@ MAKEFLAGS = -s
 all:
 	cd cmd/normalizer; $(MAKE)
 	cd cmd/vtocc; $(MAKE)
+	cd cmd/vttablet; $(MAKE)
 
 clean:
 	cd cmd/normalizer; $(MAKE) clean
 	cd cmd/vtocc; $(MAKE) clean
+	cd cmd/vttablet; $(MAKE) clean
