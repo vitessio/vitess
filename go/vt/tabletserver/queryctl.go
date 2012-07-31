@@ -9,6 +9,18 @@ import (
 	"net/rpc"
 )
 
+type Config struct {
+	CachePoolCap       int
+	PoolSize           int
+	TransactionCap     int
+	TransactionTimeout float64
+	MaxResultSize      int
+	QueryCacheSize     int
+	SchemaReloadTime   float64
+	QueryTimeout       float64
+	IdleTimeout        float64
+}
+
 var SqlQueryRpcService *SqlQuery
 
 func StartQueryService(config Config) {
