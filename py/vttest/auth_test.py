@@ -1,3 +1,4 @@
+# coding: utf-8
 import hmac
 import json
 import optparse
@@ -52,7 +53,7 @@ class TestAuthentication(unittest.TestCase):
                                      "-auth-credentials", authcredentials,
                                      "-dbconfig", dbconfig,
                                      "-logfile", LOGFILE,
-                                     "-querylog", QUERYLOGFILE], 
+                                     "-querylog", QUERYLOGFILE],
                                     stderr=klass.vtstderr)
     time.sleep(1)
 
@@ -66,11 +67,14 @@ class TestAuthentication(unittest.TestCase):
 
   def authenticate(self, user, password):
     challenge = self.call('AuthenticatorCRAMMD5.GetNewChallenge', "").reply['Challenge']
-    proof = user + " " + hmac.HMAC(password, challenge).hexdigest()
+    proof = user + " " + hmac.HMAC(str(password), challenge).hexdigest()
     return self.call('AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
 
   def test_correct_credentials(self):
-    response = self.authenticate("ala", "ma kota")
+    self.authenticate("ala", "ma kota")
+
+  def test_secondary_credentials(self):
+    self.authenticate("ala", u"miala kota")
 
   def test_incorrect_user(self):
     self.assertRaises(gorpc.AppError, self.authenticate, "romek", "ma raka")
