@@ -1,6 +1,5 @@
 package main
 
-
 import (
 	"encoding/json"
 	"fmt"
@@ -22,7 +21,9 @@ func exportZkns(zconn zk.Conn, zkVtRoot string) error {
 	zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt", zkCell)
 
 	children, err := zk.ChildrenRecursive(zconn, vtNsPath)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	for _, child := range children {
 		addrPath := path.Join(vtNsPath, child)
@@ -35,7 +36,9 @@ func exportZkns(zconn zk.Conn, zkVtRoot string) error {
 		}
 
 		addrs, err := naming.ReadAddrs(zconn, addrPath)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		vtoccAddrs := LegacyZknsAddrs{make([]string, 0, 8)}
 		defaultAddrs := LegacyZknsAddrs{make([]string, 0, 8)}
@@ -43,21 +46,38 @@ func exportZkns(zconn zk.Conn, zkVtRoot string) error {
 		// Write the individual endpoints
 		for i, entry := range addrs.Entries {
 			zknsAddrPath := fmt.Sprintf("%v/%v/%v", zknsRootPath, child, i)
-			zknsAddr := zkns.ZknsAddr{Host:entry.Host, Port:entry.NamedPortMap["_mysql"], NamedPortMap:entry.NamedPortMap}
+			zknsAddr := zkns.ZknsAddr{Host: entry.Host, Port: entry.NamedPortMap["_mysql"], NamedPortMap: entry.NamedPortMap}
 			err := WriteAddr(zconn, zknsAddrPath, &zknsAddr)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			defaultAddrs.Endpoints = append(defaultAddrs.Endpoints, zknsAddrPath)
-			vtoccAddrs.Endpoints = append(vtoccAddrs.Endpoints, zknsAddrPath + ":_vtocc")
+			vtoccAddrs.Endpoints = append(vtoccAddrs.Endpoints, zknsAddrPath+":_vtocc")
+		}
+
+		for i := len(addrs.Entries); i < 10; i++ {
+			zknsAddrPath := fmt.Sprintf("%v/%v/%v", zknsRootPath, child, i)
+			err := zconn.Delete(zknsAddrPath, -1)
+			if zookeeper.IsError(err, zookeeper.ZNONODE) {
+				break
+			}
+			if err != nil {
+				return err
+			}
 		}
 
 		// Write the VDNS entries for both vtocc and mysql
 		vtoccVdnsPath := fmt.Sprintf("%v/%v/_vtocc.vdns", zknsRootPath, child)
 		err = WriteAddrs(zconn, vtoccVdnsPath, &vtoccAddrs)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 
 		defaultVdnsPath := fmt.Sprintf("%v/%v.vdns", zknsRootPath, child)
 		err = WriteAddrs(zconn, defaultVdnsPath, &defaultAddrs)
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
