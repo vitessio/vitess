@@ -28,7 +28,7 @@ const (
 )
 
 var (
-	port = flag.Int("port", 6510, "tcp port to serve on")
+	port           = flag.Int("port", 6510, "tcp port to serve on")
 	lameDuckPeriod = flag.Float64("lame-duck-period", DefaultLameDuckPeriod,
 		"how long to give in-flight transactions to finish")
 	rebindDelay = flag.Float64("rebind-delay", DefaultRebindDelay,

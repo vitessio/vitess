@@ -14,8 +14,8 @@ import (
 	"os/user"
 	"time"
 
-	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 

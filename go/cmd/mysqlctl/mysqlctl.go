@@ -5,8 +5,8 @@
 package main
 
 import (
-	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"flag"
 	"log"
 	"os"

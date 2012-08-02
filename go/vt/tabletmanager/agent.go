@@ -26,9 +26,9 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -205,7 +205,6 @@ func (agent *ActionAgent) verifyZkServingAddrs() error {
 	return err
 }
 
-
 var skipUpdateErr = fmt.Errorf("skip update")
 
 // A function conforming to the RetryChange protocl. If the data returned
@@ -331,8 +330,6 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 
 	go agent.actionEventLoop()
 }
-
-
 
 func (agent *ActionAgent) actionEventLoop() {
 	for {

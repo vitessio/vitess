@@ -16,9 +16,9 @@ import (
 	"net"
 	"path"
 
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkns"
-	"code.google.com/p/vitess/go/relog"
 )
 
 type VtnsAddr struct {

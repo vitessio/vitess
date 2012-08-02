@@ -12,15 +12,15 @@ import (
 	"net/rpc"
 	"syscall"
 
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	"code.google.com/p/vitess/go/sighandler"
 	_ "code.google.com/p/vitess/go/snitch"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
+	"code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/zk"
 	//ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"code.google.com/p/vitess/go/umgmt"
 )

@@ -67,7 +67,6 @@ func ReadAddrs(zconn zk.Conn, zkPath string) (*ZknsAddrs, error) {
 	return addrs, nil
 }
 
-
 // byPriorityWeight sorts records by ascending priority and weight.
 type byPriorityWeight []*net.SRV
 

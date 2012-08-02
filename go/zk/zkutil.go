@@ -161,11 +161,10 @@ func ObtainQueueLock(zconn Conn, zkPath string, wait bool) (bool, error) {
 	return false, fmt.Errorf("empty queue node: %v", queueNode)
 }
 
-
 func CreatePidNode(zconn Conn, zkPath string) error {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("failed creating pid node %v: %v", zkPath, err )
+		return fmt.Errorf("failed creating pid node %v: %v", zkPath, err)
 	}
 	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
 
@@ -197,7 +196,7 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 					if event.Type == zookeeper.EVENT_DELETED {
 						// Another process took over (most likely), but no sense in starting
 						// a data race. Just stop watching.
-						log.Printf("INFO: pid watcher stopped, pid node deleted %v: %v", zkPath)
+						log.Printf("INFO: pid watcher stopped on delete: %v", zkPath)
 						return
 					}
 					continue
@@ -210,7 +209,7 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 					return
 				}
 				log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
-				time.Sleep(30*time.Second)
+				time.Sleep(30 * time.Second)
 			} else {
 				log.Printf("INFO: recreated pid node: %v", zkPath)
 			}

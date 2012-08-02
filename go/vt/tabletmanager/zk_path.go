@@ -67,7 +67,6 @@ func VtRootFromKeyspacePath(zkKeyspacePath string) string {
 	return strings.Join(pathParts[:len(pathParts)-2], "/")
 }
 
-
 // /zk/global/vt/keyspaces/<keyspace name>
 func MustBeKeyspacePath(zkKeyspacePath string) {
 	VtRootFromKeyspacePath(zkKeyspacePath)

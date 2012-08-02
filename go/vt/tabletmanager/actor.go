@@ -10,9 +10,9 @@ import (
 	"path"
 	"time"
 
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -68,7 +68,6 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error
 		return fmt.Errorf(actionNode.Error)
 	}
 
-
 	// Claim the action by this process.
 	actionNode.State = ACTION_STATE_RUNNING
 	newData := ActionNodeToJson(actionNode)
@@ -88,7 +87,6 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error
 	ta.zkVtRoot = VtRootFromTabletPath(ta.zkTabletPath)
 
 	relog.Info("HandleAction: %v %v", actionPath, data)
-
 
 	// validate actions, but don't write this back into zk
 	if actionNode.Action != action || actionNode.ActionGuid != actionGuid {

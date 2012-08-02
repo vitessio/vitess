@@ -44,7 +44,6 @@ func TestUmgmt(t *testing.T) {
 	}
 	t.Logf("CloseListeners reply: %v", reply.Message)
 
-
 	reply = new(Reply)
 	callErr = client.Call("UmgmtService.GracefulShutdown", reply, reply)
 	if callErr != nil {

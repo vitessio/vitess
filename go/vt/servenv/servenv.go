@@ -48,7 +48,7 @@ func Init(logPrefix string) {
 	if err != nil {
 		panic(fmt.Sprintf("unable to open logfile %s: %v", *logfileName, err))
 	}
-	logger := relog.New(f, logPrefix + " ",
+	logger := relog.New(f, logPrefix+" ",
 		log.Ldate|log.Lmicroseconds|log.Lshortfile, relog.DEBUG)
 	relog.SetLogger(logger)
 

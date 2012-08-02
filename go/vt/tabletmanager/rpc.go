@@ -10,9 +10,9 @@ package tabletmanager
 import (
 	"fmt"
 
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/rpc"
-	"code.google.com/p/vitess/go/relog"
 )
 
 type TabletManager struct {

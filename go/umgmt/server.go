@@ -29,8 +29,6 @@ import (
 	"code.google.com/p/vitess/go/relog"
 )
 
-
-
 type Request struct{}
 
 type Reply struct {
@@ -53,7 +51,7 @@ type UmgmtService struct {
 	done              chan bool
 
 	_lameDuckPeriod time.Duration
-	_rebindDelay time.Duration
+	_rebindDelay    time.Duration
 }
 
 func newService() *UmgmtService {
@@ -77,7 +75,7 @@ func (service *UmgmtService) lameDuckPeriod() time.Duration {
 	return service._lameDuckPeriod
 }
 
-func (service *UmgmtService)rebindDelay() time.Duration {
+func (service *UmgmtService) rebindDelay() time.Duration {
 	service.mutex.Lock()
 	defer service.mutex.Unlock()
 	return service._rebindDelay
@@ -157,9 +155,6 @@ func (service *UmgmtService) gracefulShutdown() {
 	// Prevent duplicate execution.
 	service.shutdownCallbacks = service.shutdownCallbacks[:0]
 }
-
-
-
 
 type UmgmtServer struct {
 	sync.Mutex

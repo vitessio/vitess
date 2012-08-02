@@ -14,11 +14,11 @@ import (
 	"net/rpc"
 	"os"
 
-	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	_ "code.google.com/p/vitess/go/snitch"
+	"code.google.com/p/vitess/go/zk"
 
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/tabletmanager"
@@ -72,8 +72,7 @@ func main() {
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfPath)
 	if mycnfErr != nil {
-		relog.Error("mycnf read failed: %v", mycnfErr)
-		return
+		relog.Fatal("mycnf read failed: %v", mycnfErr)
 	}
 	dbaconfig := map[string]interface{}{
 		"uname":       "vt_dba",

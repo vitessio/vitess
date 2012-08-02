@@ -139,8 +139,6 @@ func (tablet *Tablet) Hostname() string {
 	return host
 }
 
-
-
 type TabletInfo struct {
 	zkVtRoot string // zk path to vt subtree - /zk/test/vt for instance
 	version  int    // zk node version - used to prevent stomping concurrent writes

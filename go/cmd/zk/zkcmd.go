@@ -104,7 +104,7 @@ func init() {
 	opts.Description = doc
 	cmdMap = map[string]cmdFunc{
 		"cat":   cmdCat,
-		"chmod":   cmdChmod,
+		"chmod": cmdChmod,
 		"cp":    cmdCp,
 		"edit":  cmdEdit,
 		"elock": cmdElock,
@@ -520,7 +520,7 @@ func cmdStat(args []string) {
 	if len(args) == 0 {
 		log.Fatal("stat: no path specified")
 	}
-	
+
 	hasError := false
 	for _, arg := range args {
 		zkPath := fixZkPath(arg)
@@ -554,7 +554,7 @@ var charPermMap map[string]uint32
 var permCharMap map[uint32]string
 
 func init() {
-	charPermMap =  map[string]uint32 {
+	charPermMap = map[string]uint32{
 		"r": zookeeper.PERM_READ,
 		"w": zookeeper.PERM_WRITE,
 		"d": zookeeper.PERM_DELETE,
@@ -567,16 +567,15 @@ func init() {
 	}
 }
 
-
 func fmtAcl(acl zookeeper.ACL) string {
 	s := ""
-	
+
 	for _, perm := range []uint32{zookeeper.PERM_READ, zookeeper.PERM_WRITE, zookeeper.PERM_DELETE, zookeeper.PERM_CREATE, zookeeper.PERM_ADMIN} {
-		if acl.Perms & perm != 0{
-		s += permCharMap[perm]
-	} else {
-		s += "-"
-	}
+		if acl.Perms&perm != 0 {
+			s += permCharMap[perm]
+		} else {
+			s += "-"
+		}
 	}
 	return s
 }
@@ -596,7 +595,7 @@ func cmdChmod(args []string) {
 	} else if mode[1] != '-' {
 		log.Fatal("chmod: invalid mode")
 	}
-	
+
 	var permMask uint32
 	for _, c := range mode[2:] {
 		permMask |= charPermMap[string(c)]

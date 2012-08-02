@@ -17,11 +17,11 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	wr "code.google.com/p/vitess/go/vt/wrangler"
 	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -251,7 +251,6 @@ func getTabletMap(zconn zk.Conn, tabletPaths []string) map[string]*tm.TabletInfo
 	return tabletMap
 }
 
-
 // return a sorted list of tablets
 func getAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 	zkTabletsPath := path.Join(zkVtPath, "tablets")
@@ -278,7 +277,6 @@ func getAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 
 	return tablets, nil
 }
-
 
 func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) error {
 	tablets, err := getAllTablets(zconn, zkVtPath)

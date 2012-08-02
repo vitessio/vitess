@@ -20,12 +20,12 @@ ConnCache guarantees that you have at most one zookeeper connection per cell.
 */
 
 type cachedConn struct {
-	mutex  sync.Mutex // used to notify if multiple goroutine simultaneously want a connection
+	mutex sync.Mutex // used to notify if multiple goroutine simultaneously want a connection
 	zconn *zookeeper.Conn
 }
 
 type ConnCache struct {
-	mutex           sync.Mutex
+	mutex          sync.Mutex
 	zconnCellMap   map[string]*cachedConn // map cell name to connection
 	connectTimeout time.Duration
 }
@@ -36,7 +36,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (*zookeeper.Conn, error) {
 	cc.mutex.Lock()
 	if cc.zconnCellMap == nil {
 		cc.mutex.Unlock()
-		return nil, &zookeeper.Error{Op:"dial", Code:zookeeper.ZCLOSING}
+		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZCLOSING}
 	}
 
 	conn, ok := cc.zconnCellMap[zcell]
@@ -111,6 +111,6 @@ func (cc *ConnCache) Close() error {
 
 func NewConnCache(connectTimeout time.Duration) *ConnCache {
 	return &ConnCache{
-		zconnCellMap: make(map[string]*cachedConn),
+		zconnCellMap:   make(map[string]*cachedConn),
 		connectTimeout: connectTimeout}
 }

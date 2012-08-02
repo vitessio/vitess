@@ -46,7 +46,7 @@ type SqlQuery struct {
 	maxResultSize int32 // Use sync/atomic
 
 	// Vars for handling invalidations
-	dbName         string
+	dbName string
 }
 
 // stats are globals to allow anybody to set them
@@ -395,14 +395,14 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 }
 
 type SlaveTxCommand struct {
-	Command  string
+	Command string
 }
 
 type CacheInvalidate struct {
 	Database string
 	Dmls     []struct {
-		Table    string
-		Keys     []interface{}
+		Table string
+		Keys  []interface{}
 	}
 }
 
