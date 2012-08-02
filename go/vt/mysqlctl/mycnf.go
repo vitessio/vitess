@@ -133,6 +133,14 @@ func (cnf *Mycnf) PidFile() string {
 	return path.Join(cnf.TabletDir, "mysql.pid")
 }
 
+func (cnf *Mycnf) MysqlAddr() string {
+	host, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	return fmt.Sprintf("%v:%v", host, cnf.MysqlPort)
+}
+
 /*
   Join cnf files cnfPaths and subsitute in the right values.
 */

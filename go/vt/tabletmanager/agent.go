@@ -44,9 +44,9 @@ type ActionAgent struct {
 }
 
 // bindAddr: the address for the query service advertised by this agent
-func NewActionAgent(zconn zk.Conn, zkTabletPath string) *ActionAgent {
+func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfPath string) *ActionAgent {
 	actionPath := TabletActionPath(zkTabletPath)
-	return &ActionAgent{zconn: zconn, zkTabletPath: zkTabletPath, zkActionPath: actionPath}
+	return &ActionAgent{zconn: zconn, zkTabletPath: zkTabletPath, zkActionPath: actionPath, MycnfPath: mycnfPath}
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -83,6 +83,7 @@ func (agent *ActionAgent) resolvePaths() error {
 		return errors.New("no vtaction binary found")
 	}
 
+	/* FIXME: Delete commented out code
 	mycnfPaths := []string{fmt.Sprintf("/vt/vt_%010d/my.cnf", agent.Tablet().Uid),
 		"/var/lib/mysql/my.cnf", "/etc/my.cnf"}
 	for _, path := range mycnfPaths {
@@ -93,7 +94,7 @@ func (agent *ActionAgent) resolvePaths() error {
 	}
 	if agent.MycnfPath == "" {
 		return errors.New("no my.cnf found")
-	}
+	}*/
 	return nil
 }
 

@@ -13,7 +13,6 @@ package mysqlctl
 
 import (
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -222,9 +221,5 @@ func Reinit(mt *Mysqld) error {
 }
 
 func (mysqld *Mysqld) Addr() string {
-	host, err := os.Hostname()
-	if err != nil {
-		panic(err)
-	}
-	return fmt.Sprintf("%v:%v", host, mysqld.config.MysqlPort)
+	return mysqld.config.MysqlAddr()
 }
