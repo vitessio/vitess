@@ -3,6 +3,7 @@
 # be found in the LICENSE file.
 
 from itertools import izip
+import hmac
 import logging
 
 from net import bsonrpc
@@ -19,10 +20,17 @@ class TabletConnection(object):
   session_id = 0
   default_cursorclass = cursor.TabletCursor
 
-  def __init__(self, addr, dbname, timeout):
+  def __init__(self, addr, dbname, timeout, user=None, password=None):
     self.addr = addr
     self.dbname = dbname
     self.timeout = timeout
+
+    if bool(user) != bool(password):
+      raise ValueError("You must provide either both or none of user and password.")
+    self.user = user
+    self.password = password
+    self.use_auth = bool(user)
+
     self.client = bsonrpc.BsonRpcClient(self.uri, self.timeout)
     self.cursorclass = self.default_cursorclass
 
@@ -31,13 +39,23 @@ class TabletConnection(object):
       self.client.close()
     self.transaction_id = 0
     self.session_id = 0
+    if self.use_auth:
+      self.authenticate()
 
   # You need to obtain and set the session_id for things to work.
   def set_session_id(self, session_id):
     self.session_id = session_id
 
+  def authenticate(self):
+    challenge = self.client.call('AuthenticatorCRAMMD5.GetNewChallenge', "").reply['Challenge']
+    # CRAM-MD5 authentication.
+    proof = self.user + " " + hmac.HMAC(self.password, challenge).hexdigest()
+    self.client.call('AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
+
   @property
   def uri(self):
+    if self.use_auth:
+      return 'http://%s/_bson_rpc_/auth' % self.addr
     return 'http://%s/_bson_rpc_' % self.addr
 
   def close(self):
