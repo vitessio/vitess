@@ -5,11 +5,14 @@
 MAKEFLAGS = -s
 
 all:
-	cd cmd/normalizer; $(MAKE)
-	cd cmd/vtocc; $(MAKE)
-	cd cmd/vttablet; $(MAKE)
+	cd vt/sqlparser; $(MAKE)
+	cd cmd/normalizer; go build
+	cd cmd/vtocc; go build
+	cd cmd/vttablet; go build
+
 
 clean:
-	cd cmd/normalizer; $(MAKE) clean
-	cd cmd/vtocc; $(MAKE) clean
-	cd cmd/vttablet; $(MAKE) clean
+	cd vt/sqlparser; $(MAKE) clean
+	cd cmd/normalizer; go clean
+	cd cmd/vtocc; go clean
+	cd cmd/vttablet; go clean

@@ -9,6 +9,5 @@ _obj/
 /_cgo_
 \.cgo\d\.(go|c)$
 \.sgo\.go$
-go/vt/sqlparser/sql.go$
 _testmain.go$
 \.swp$

@@ -15,20 +15,23 @@ import (
 // necessary because of net/rpc requirements.
 type UnusedArgument string
 
+// cramMD5Credentials maps usernames to lists of secrets.
+type cramMD5Credentials map[string][]string
+
 // AuthenticatorCRAMMD5 is an authenticator that uses the SASL
 // CRAM-MD5 authentication mechanism.
 type AuthenticatorCRAMMD5 struct {
-	credentials map[string]string
+	Credentials cramMD5Credentials
 }
 
-// LoadCredentials loads credentials stored in the JSON file named
-// filename into a.
-func (a *AuthenticatorCRAMMD5) LoadCredentials(filename string) error {
+// Load loads the contents of a JSON file named
+// filename into c.
+func (c *cramMD5Credentials) Load(filename string) error {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return err
 	}
-	if err = json.Unmarshal(data, &a.credentials); err != nil {
+	if err = json.Unmarshal(data, c); err != nil {
 		return err
 	}
 	relog.Info("Loaded credentials from %s.", filename)
@@ -49,15 +52,14 @@ var (
 // authenticate.
 var AuthenticationFailed = errors.New("authentication error: authentication failed")
 
-
 func NewAuthenticatorCRAMMD5() *AuthenticatorCRAMMD5 {
-	return &AuthenticatorCRAMMD5{make(map[string]string)}
+	return &AuthenticatorCRAMMD5{make(cramMD5Credentials)}
 }
 
 // LoadCredentials loads credentials stored in the JSON file named
 // filename into the default authenticator.
 func LoadCredentials(filename string) error {
-	return DefaultAuthenticatorCRAMMD5.LoadCredentials(filename)
+	return DefaultAuthenticatorCRAMMD5.Credentials.Load(filename)
 }
 
 // Authenticate returns true if it the client manages to authenticate
@@ -90,7 +92,7 @@ func (a *AuthenticatorCRAMMD5) GetNewChallenge(_ UnusedArgument, reply *GetNewCh
 // Authenticate checks if the client proof is correct.
 func (a *AuthenticatorCRAMMD5) Authenticate(req *AuthenticateRequest, reply *AuthenticateReply) error {
 	username := strings.SplitN(req.Proof, " ", 2)[0]
-	secret, ok := a.credentials[username]
+	secrets, ok := a.Credentials[username]
 	if !ok {
 		relog.Warning("failed authentication attempt: wrong user: %s", username)
 		return AuthenticationFailed
@@ -99,12 +101,13 @@ func (a *AuthenticatorCRAMMD5) Authenticate(req *AuthenticateRequest, reply *Aut
 		relog.Warning("failed authentication attempt: challenge was not issued")
 		return AuthenticationFailed
 	}
-
-	if expected := CRAMMD5GetExpected(username, secret, req.state.challenge); expected != req.Proof {
-		relog.Warning("failed authentication attempt: wrong proof: %s", req.Proof)
-		return AuthenticationFailed
+	for _, secret := range secrets {
+		if expected := CRAMMD5GetExpected(username, secret, req.state.challenge); expected == req.Proof {
+			return nil
+		}
 	}
-	return nil
+	relog.Warning("failed authentication attempt: wrong proof")
+	return AuthenticationFailed
 }
 
 type GetNewChallengeReply struct {
