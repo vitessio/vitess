@@ -62,8 +62,6 @@ class BindVarsProxy(object):
   def export_bind_vars(self):
     return dict([(k, self.bind_vars[k]) for k in self.accessed_keys])
 
-class AuthenticationError(Exception):
-  pass
 
 # Provide compatibility with the MySQLdb query param style and prune bind_vars
 class VtOCCConnection(tablet2.TabletConnection):
