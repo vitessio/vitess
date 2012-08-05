@@ -109,7 +109,7 @@ func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) {
 	tmp := newShard()
 	for _, ti := range shardTablets {
 		tablet := ti.Tablet
-		cell := ti.Cell()
+		cell := tablet.Cell
 		alias := TabletAlias{cell, tablet.Uid}
 		switch tablet.Type {
 		case TYPE_MASTER:

@@ -56,7 +56,6 @@ func actionGuid() string {
 	return fmt.Sprintf("%v-%v-%v", now, username, hostname)
 }
 
-// FIXME(msolomon) do we care if the action is queued?
 func (ai *ActionInitiator) writeTabletAction(zkTabletPath string, node *ActionNode) (actionPath string, err error) {
 	node.ActionGuid = actionGuid()
 	data := ActionNodeToJson(node)
@@ -66,7 +65,6 @@ func (ai *ActionInitiator) writeTabletAction(zkTabletPath string, node *ActionNo
 	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
-// FIXME(msolomon) do we care if the action is queued?
 func (ai *ActionInitiator) writeShardAction(zkShardPath string, node *ActionNode) (actionPath string, err error) {
 	MustBeShardPath(zkShardPath)
 	node.ActionGuid = actionGuid()
@@ -160,7 +158,8 @@ func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration)
 			case zookeeper.EVENT_DELETED:
 				return nil
 			default:
-				// FIXME(msolomon) handle zk disconnect
+				// Log unexpected events. Reconnects are handled by zk.Conn, so
+				// calling GetW again will handle a disconnect.
 				relog.Warning("unexpected zk event: %v", actionEvent)
 			}
 		case <-timer.C:
