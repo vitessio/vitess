@@ -17,17 +17,17 @@ import (
 	"path"
 	"syscall"
 
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	"code.google.com/p/vitess/go/sighandler"
 	_ "code.google.com/p/vitess/go/snitch"
-	"code.google.com/p/vitess/go/vt/servenv"
-	ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"code.google.com/p/vitess/go/umgmt"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/servenv"
+	"code.google.com/p/vitess/go/vt/tabletmanager"
+	ts "code.google.com/p/vitess/go/vt/tabletserver"
+	"code.google.com/p/vitess/go/zk"
 )
 
 const (
@@ -121,7 +121,7 @@ func initAgent(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
 	agent.Start(bindAddr, mycnf.MysqlAddr())
 
 	dbaconfig := map[string]interface{}{
-		"uname": "vt_dba",
+		"uname":   "vt_dba",
 		"charset": "utf8",
 	}
 	if _, ok := dbcreds["dba"]; ok {

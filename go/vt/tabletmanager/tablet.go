@@ -262,7 +262,6 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 	return nil
 }
 
-
 // Create a new tablet and all associated global zk paths for the replication graph.
 func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 	MustBeTabletPath(zkTabletPath)
