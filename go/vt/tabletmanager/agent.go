@@ -148,7 +148,7 @@ func (agent *ActionAgent) handleActionQueue() (<-chan zookeeper.Event, error) {
 		sort.Strings(children)
 		for _, child := range children {
 			actionPath := agent.zkActionPath + "/" + child
-			actionId, err := strconv.ParseUint(child, 0, 64)
+			_, err := strconv.ParseUint(child, 10, 64)
 			if err != nil {
 				// This is handy if you want to restart a stuck queue.
 				// FIXME(msolomon) could listen on the queue node for a change
