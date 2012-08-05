@@ -313,7 +313,8 @@ func listIdle(zconn zk.Conn, zkVtPath string) error {
 }
 
 func validateZk(zconn zk.Conn, ai *tm.ActionInitiator, zkVtPath string) error {
-	// FIXME(msolomon) validate the replication view
+	// FIXME(msolomon) validate the replication setup pulled from production
+	// against what is recorded in the replication graph.
 	zkTabletsPath := path.Join(zkVtPath, "tablets")
 	tabletUids, _, err := zconn.Children(zkTabletsPath)
 	if err != nil {

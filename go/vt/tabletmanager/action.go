@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	// FIXME(msolomon) why is ActionState a type, but Action is not?
 	TABLET_ACTION_PING  = "Ping"
 	TABLET_ACTION_SLEEP = "Sleep"
 

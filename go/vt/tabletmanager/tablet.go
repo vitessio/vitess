@@ -157,11 +157,6 @@ func (ti *TabletInfo) ShardPath() string {
 	return ShardPath(ti.zkVtRoot, ti.Keyspace, ti.Shard)
 }
 
-// FIXME(msolomon) may not be necessary - we have cell aliased on the tablet info itself
-func (ti *TabletInfo) Cell() string {
-	return zk.ZkCellFromZkPath(ti.zkVtRoot)
-}
-
 // This is the path that indicates the tablet's position in the shard replication graph.
 // This is too complicated for zk_path, so it's on this struct.
 func (ti *TabletInfo) ReplicationPath() string {
@@ -216,6 +211,7 @@ func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
 	return &TabletInfo{zkVtRoot, stat.Version(), tablet}, nil
 }
 
+// Update tablet data only - not associated paths.
 func UpdateTablet(zconn zk.Conn, zkTabletPath string, tablet *TabletInfo) error {
 	MustBeTabletPath(zkTabletPath)
 	version := -1
@@ -223,7 +219,6 @@ func UpdateTablet(zconn zk.Conn, zkTabletPath string, tablet *TabletInfo) error 
 		version = tablet.version
 	}
 
-	// FIXME(msolomon) update replication path?
 	_, err := zconn.Set(zkTabletPath, tablet.Json(), version)
 	return err
 }
@@ -267,6 +262,8 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 	return nil
 }
 
+
+// Create a new tablet and all associated global zk paths for the replication graph.
 func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 	MustBeTabletPath(zkTabletPath)
 
