@@ -21,8 +21,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,13 +114,17 @@ func (agent *ActionAgent) dispatchAction(actionPath string) {
 		return
 	}
 
+	logfile := flag.Lookup("logfile").Value.String()
+	if !strings.HasPrefix(logfile, "/dev") {
+		logfile = path.Join(path.Dir(logfile), "vtaction.log")
+	}
 	cmd := []string{
 		agent.vtActionBinPath,
 		"-action", actionNode.Action,
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
 		"-mycnf-path", agent.MycnfPath,
-		"-logfile", flag.Lookup("logfile").Value.String(),
+		"-logfile", logfile,
 	}
 	relog.Info("action launch %v", cmd)
 	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)
