@@ -67,6 +67,16 @@ class BindVarsProxy(object):
 class VtOCCConnection(tablet2.TabletConnection):
   max_attempts = 2
 
+  # Number of seconds after which we consider a connection permanently dead.
+  @property
+  def max_recovery_time(self):
+    return self.timeout * 2
+
+  # Track failures so that connections don't go on trying to recover
+  # forever. This is the time that a connection first experienced a
+  # failure after presumably being healthy.
+  _time_failed = 0
+
   def dial(self):
     tablet2.TabletConnection.dial(self)
     try:
@@ -76,9 +86,17 @@ class VtOCCConnection(tablet2.TabletConnection):
       raise dbexceptions.OperationalError(*e.args)
 
   def _convert_error(self, exception, *error_hints):
+    now = time.time()
+    if not self._time_failed:
+      self._time_failed = now
+    elif (now - self._time_failed) > self.max_recovery_time:
+      self.close()
+      raise MySQLErrors.OperationalError(2003, str(exception),
+                                         'max recovery time exceeded')
+
     message = str(exception[0]).lower()
 
-    # NOTE(msolomon) extract a mysql error code so we can push this up the code
+    # NOTE(msolomon) Extract a mysql error code to push up the code
     # stack. At this point, this is almost exclusively for handling integrity
     # errors from duplicate key inserts.
     match = _errno_pattern.search(message)
@@ -135,26 +153,31 @@ class VtOCCConnection(tablet2.TabletConnection):
     attempt = 0
     while True:
       try:
-        return tablet2.TabletConnection.begin(self)
+        result = tablet2.TabletConnection.begin(self)
+        self._time_failed = 0
+        return result
       except dbexceptions.OperationalError, e:
         error_type, e = self._convert_error(e, 'begin')
-        if error_type == ERROR_RETRY:
+        if error_type != ERROR_RETRY:
+          raise e
+        while True:
           attempt += 1
-          if attempt < self.max_attempts:
-            try:
-              time.sleep(RECONNECT_DELAY)
-              self.dial()
-            except dbexceptions.OperationalError, dial_error:
-              logging.warning('error dialing vtocc on begin %s (%s)',
-                              self.addr, dial_error)
-            continue
-          logging.warning('Failing with 2003 on begin')
-          raise MySQLErrors.OperationalError(2003, str(e), self.addr, 'begin')
-        raise e
+          if attempt >= self.max_attempts:
+            logging.warning('Failing with 2003 on begin %s', self.addr)
+            raise MySQLErrors.OperationalError(2003, str(e), self.addr, 'begin')
+          try:
+            time.sleep(RECONNECT_DELAY)
+            self.dial()
+            break
+          except dbexceptions.OperationalError, dial_error:
+            logging.warning('error dialing vtocc on begin %s (%s)',
+                            self.addr, dial_error)
 
   def commit(self):
     try:
-      return tablet2.TabletConnection.commit(self)
+      result = tablet2.TabletConnection.commit(self)
+      self._time_failed = 0
+      return result
     except dbexceptions.OperationalError, e:
       error_type, e = self._convert_error(e, 'commit')
       raise e
@@ -172,22 +195,61 @@ class VtOCCConnection(tablet2.TabletConnection):
     attempt = 0
     while True:
       try:
-        return tablet2.TabletConnection._execute(self, sql, sane_bind_vars)
+        result = tablet2.TabletConnection._execute(self, sql, sane_bind_vars)
+        self._time_failed = 0
+        return result
       except dbexceptions.OperationalError, e:
         error_type, e = self._convert_error(e, sql, sane_bind_vars)
-        if error_type == ERROR_RETRY:
+        if error_type != ERROR_RETRY:
+          raise e
+        while True:
           attempt += 1
-          if attempt < self.max_attempts:
-            try:
-              time.sleep(RECONNECT_DELAY)
-              self.dial()
-            except dbexceptions.OperationalError, dial_error:
-              logging.warning('error dialing vtocc on execute %s (%s)',
-                              self.addr, dial_error)
-            continue
-          logging.warning('Failing with 2003 on %s: %s, %s', str(e), sql, sane_bind_vars)
-          raise MySQLErrors.OperationalError(2003, str(e), self.addr, sql, sane_bind_vars)
-        raise e
+          if attempt >= self.max_attempts:
+            logging.warning('Failing with 2003 on %s: %s, %s', str(e), sql, sane_bind_vars)
+            raise MySQLErrors.OperationalError(2003, str(e), self.addr, sql, sane_bind_vars)
+          try:
+            time.sleep(RECONNECT_DELAY)
+            self.dial()
+            break
+          except dbexceptions.OperationalError, dial_error:
+            logging.warning('error dialing vtocc on execute %s (%s)',
+                            self.addr, dial_error)
+
+  # FIXME(msolomon) vile, copy-pasted from above
+  def _execute_batch(self, sql_list, bind_variables_list):
+    sane_sql_list = []
+    sane_bind_vars_list = []
+    for sql, bind_variables in zip(sql_list, bind_variables_list):
+      bind_vars_proxy = BindVarsProxy(bind_variables)
+      try:
+        # convert bind style from %(name)s to :name
+        sane_sql_list.append(sql % bind_vars_proxy)
+      except KeyError, e:
+        raise dbexceptions.InterfaceError(e[0], sql, bind_variables)
+      sane_bind_vars_list.append(bind_vars_proxy.export_bind_vars())
+
+    attempt = 0
+    while True:
+      try:
+        result = tablet2.TabletConnection._execute_batch(self, sane_sql_list, sane_bind_vars_list)
+        self._time_failed = 0
+        return result
+      except dbexceptions.OperationalError, e:
+        error_type, e = self._convert_error(e, sql_list, sane_bind_vars_list)
+        if error_type != ERROR_RETRY:
+          raise e
+        while True:
+          attempt += 1
+          if attempt >= self.max_attempts:
+            logging.warning('Failing with 2003 on %s: %s, %s', str(e), sql_list, sane_bind_vars_list)
+            raise MySQLErrors.OperationalError(2003, str(e), self.addr, sql_list, sane_bind_vars_list)
+          try:
+            time.sleep(RECONNECT_DELAY)
+            self.dial()
+            break
+          except dbexceptions.OperationalError, dial_error:
+            logging.warning('error dialing vtocc on execute %s (%s)',
+                            self.addr, dial_error)
 
 def connect(addr, timeout, dbname=None, user=None, password=None):
   conn = VtOCCConnection(addr, dbname, timeout, user=user, password=password)

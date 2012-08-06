@@ -145,6 +145,41 @@ class TabletConnection(object):
       raise
     return results, rowcount, lastrowid, fields
 
+  def _execute_batch(self, sql_list, bind_variables_list):
+    query_list = []
+    for sql, bind_vars in zip(sql_list, bind_variables_list):
+      req = self._make_req()
+      req['Sql'] = sql
+      req['BindVariables'] = field_types.convert_bind_vars(bind_vars)
+      query_list.append(req)
+
+    rowsets = []
+
+    try:
+      response = self.client.call('SqlQuery.ExecuteBatch', query_list)
+      for reply in response.reply:
+        fields = []
+        conversions = []
+        results = []
+        rowcount = 0
+
+        for field in reply['Fields']:
+          fields.append((field['Name'], field['Type']))
+          conversions.append(field_types.conversions.get(field['Type']))
+
+        for row in reply['Rows']:
+          results.append(tuple(_make_row(row, conversions)))
+
+        rowcount = reply['RowsAffected']
+        lastrowid = reply['InsertId']
+        rowsets.append((results, rowcount, lastrowid, fields))
+    except gorpc.GoRpcError, e:
+      raise dbexceptions.OperationalError(*e.args)
+    except:
+      logging.exception('gorpc low-level error')
+      raise
+    return rowsets
+
 
 def _make_row(row, conversions):
   converted_row = []
