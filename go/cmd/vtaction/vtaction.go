@@ -34,7 +34,7 @@ var logLevel = flag.String("log.level", "debug", "set log level")
 var logFilename = flag.String("logfile", "/dev/stderr", "log path")
 
 // FIXME(msolomon) temporary, until we are starting mysql ourselves
-var mycnfPath = flag.String("mycnf-path", "/etc/my.cnf", "path to my.cnf")
+var mycnfFile = flag.String("mycnf-file", "/etc/my.cnf", "path to my.cnf")
 
 func init() {
 	expvar.NewString("binary-name").Set("vtaction")
@@ -70,13 +70,13 @@ func main() {
 		}
 	}()
 
-	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfPath)
+	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
 		relog.Fatal("mycnf read failed: %v", mycnfErr)
 	}
 	dbaconfig := map[string]interface{}{
 		"uname":       "vt_dba",
-		"unix_socket": mycnf.SocketPath,
+		"unix_socket": mycnf.SocketFile,
 		"pass":        "",
 		"dbname":      "",
 		"charset":     "utf8",

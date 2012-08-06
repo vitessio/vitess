@@ -38,8 +38,8 @@ type ActionAgent struct {
 	zconn           zk.Conn
 	zkTabletPath    string // FIXME(msolomon) use tabletInfo
 	zkActionPath    string
-	vtActionBinPath string // path to vtaction binary
-	MycnfPath       string // path to my.cnf file
+	vtActionBinFile string // path to vtaction binary
+	MycnfFile       string // path to my.cnf file
 
 	mutex   sync.Mutex
 	_tablet *TabletInfo // must be accessed with lock - TabletInfo objects are not synchronized.
@@ -48,7 +48,7 @@ type ActionAgent struct {
 // bindAddr: the address for the query service advertised by this agent
 func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfPath string) *ActionAgent {
 	actionPath := TabletActionPath(zkTabletPath)
-	return &ActionAgent{zconn: zconn, zkTabletPath: zkTabletPath, zkActionPath: actionPath, MycnfPath: mycnfPath}
+	return &ActionAgent{zconn: zconn, zkTabletPath: zkTabletPath, zkActionPath: actionPath, MycnfFile: mycnfPath}
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -77,24 +77,24 @@ func (agent *ActionAgent) resolvePaths() error {
 		"/usr/local/bin/vtaction"}
 	for _, path := range vtActionBinPaths {
 		if _, err := os.Stat(path); err == nil {
-			agent.vtActionBinPath = path
+			agent.vtActionBinFile = path
 			break
 		}
 	}
-	if agent.vtActionBinPath == "" {
+	if agent.vtActionBinFile == "" {
 		return errors.New("no vtaction binary found")
 	}
 
 	/* FIXME: Delete commented out code
-	mycnfPaths := []string{fmt.Sprintf("/vt/vt_%010d/my.cnf", agent.Tablet().Uid),
+	mycnfFile := []string{fmt.Sprintf("/vt/vt_%010d/my.cnf", agent.Tablet().Uid),
 		"/var/lib/mysql/my.cnf", "/etc/my.cnf"}
-	for _, path := range mycnfPaths {
+	for _, path := range mycnfFile {
 		if _, err := os.Stat(path); err == nil {
-			agent.MycnfPath = path
+			agent.MycnfFile = path
 			break
 		}
 	}
-	if agent.MycnfPath == "" {
+	if agent.MycnfFile == "" {
 		return errors.New("no my.cnf found")
 	}*/
 	return nil
@@ -119,12 +119,12 @@ func (agent *ActionAgent) dispatchAction(actionPath string) {
 		logfile = path.Join(path.Dir(logfile), "vtaction.log")
 	}
 	cmd := []string{
-		agent.vtActionBinPath,
+		agent.vtActionBinFile,
 		"-action", actionNode.Action,
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
-		"-mycnf-path", agent.MycnfPath,
-		"-logfile", logfile,
+		"-mycnf-file", agent.MycnfFile,
+		"-logfile", flag.Lookup("logfile").Value.String(),
 	}
 	relog.Info("action launch %v", cmd)
 	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)

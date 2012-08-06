@@ -33,11 +33,11 @@ type Mycnf struct {
 	ServerId              uint
 	TabletDir             string
 	DataDir               string
-	MycnfPath             string
+	MycnfFile             string
 	InnodbDataHomeDir     string
 	InnodbLogGroupHomeDir string
 	DatabaseName          string // for replication
-	SocketPath            string
+	SocketFile            string
 	MysqlPort             int
 	VtHost                string
 	VtPort                int
@@ -59,10 +59,10 @@ func NewMycnf(uid uint, mysqlPort int, keyspace string, vtRepl VtReplParams) *My
 	cnf.MysqlPort = mysqlPort
 	cnf.TabletDir = fmt.Sprintf("/vt/vt_%010d", uid)
 	cnf.DataDir = path.Join(cnf.TabletDir, "data")
-	cnf.MycnfPath = path.Join(cnf.TabletDir, "my.cnf")
+	cnf.MycnfFile = path.Join(cnf.TabletDir, "my.cnf")
 	cnf.InnodbDataHomeDir = path.Join(cnf.TabletDir, innodbDataSubdir)
 	cnf.InnodbLogGroupHomeDir = path.Join(cnf.TabletDir, innodbLogSubdir)
-	cnf.SocketPath = path.Join(cnf.TabletDir, "mysql.sock")
+	cnf.SocketFile = path.Join(cnf.TabletDir, "mysql.sock")
 	// this might be empty if you aren't assigned to a keyspace
 	cnf.DatabaseName = keyspace
 	cnf.VtHost = vtRepl.TabletHost
@@ -144,13 +144,13 @@ func (cnf *Mycnf) MysqlAddr() string {
 /*
   Join cnf files cnfPaths and subsitute in the right values.
 */
-func MakeMycnf(cnfPaths []string, mycnf *Mycnf, header string) (string, error) {
+func MakeMycnf(cnfFiles []string, mycnf *Mycnf, header string) (string, error) {
 	myTemplateSource := new(bytes.Buffer)
 	for _, line := range strings.Split(header, "\n") {
 		fmt.Fprintf(myTemplateSource, "## %v\n", strings.TrimSpace(line))
 	}
 	myTemplateSource.WriteString("[mysqld]\n")
-	for _, path := range cnfPaths {
+	for _, path := range cnfFiles {
 		data, dataErr := ioutil.ReadFile(path)
 		if dataErr != nil {
 			return "", dataErr
@@ -171,29 +171,29 @@ func MakeMycnf(cnfPaths []string, mycnf *Mycnf, header string) (string, error) {
 	return mycnfData.String(), nil
 }
 
-/* Create a config for this instance. Search cnfPath for the appropriate
+/* Create a config for this instance. Search cnfFiles for the appropriate
 cnf template files.
 */
-func MakeMycnfForMysqld(mysqld *Mysqld, cnfPath, header string) (string, error) {
+func MakeMycnfForMysqld(mysqld *Mysqld, cnfFiles, header string) (string, error) {
 	// FIXME(msolomon) determine config list from mysqld struct
 	cnfs := []string{"default", "master", "replica"}
 	paths := make([]string, len(cnfs))
 	for i, name := range cnfs {
-		paths[i] = fmt.Sprintf("%v/%v.cnf", cnfPath, name)
+		paths[i] = fmt.Sprintf("%v/%v.cnf", cnfFiles, name)
 	}
 	return MakeMycnf(paths, mysqld.config, header)
 }
 
-func ReadMycnf(cnfPath string) (*Mycnf, error) {
-	f, err := os.Open(cnfPath)
+func ReadMycnf(cnfFile string) (*Mycnf, error) {
+	f, err := os.Open(cnfFile)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
 	buf := bufio.NewReader(f)
-	mycnf := &Mycnf{SocketPath: "/var/lib/mysql/mysql.sock",
-		MycnfPath: cnfPath,
+	mycnf := &Mycnf{SocketFile: "/var/lib/mysql/mysql.sock",
+		MycnfFile: cnfFile,
 		// FIXME(msolomon) remove this whole method, just asking for trouble
 		VtHost: "localhost",
 		VtPort: 6612,
@@ -221,7 +221,7 @@ func ReadMycnf(cnfPath string) (*Mycnf, error) {
 		} else if bytes.HasPrefix(line, []byte("innodb_data_home_dir")) {
 			mycnf.InnodbDataHomeDir = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
 		} else if bytes.HasPrefix(line, []byte("socket")) {
-			mycnf.SocketPath = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
+			mycnf.SocketFile = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
 		}
 	}
 

@@ -40,10 +40,10 @@ var (
 	lameDuckPeriod = flag.Float64("lame-duck-period", DefaultLameDuckPeriod, "how long to give in-flight transactions to finish")
 	rebindDelay    = flag.Float64("rebind-delay", DefaultRebindDelay, "artificial delay before rebinding a hijacked listener")
 	tabletPath     = flag.String("tablet-path", "", "path to zk node representing the tablet")
-	qsConfigFile   = flag.String("qsconfig", "", "config file name for the query service")
-	dbCredsFile    = flag.String("dbcreds", "", "db connection credentials file")
-	mycnfFile      = flag.String("mycnf", "", "my.cnf file")
-	queryLog       = flag.String("querylog", "", "for testing: log all queries to this file")
+	qsConfigFile   = flag.String("queryserver-config-file", "", "config file name for the query service")
+	dbCredsFile    = flag.String("db-credentials-file", "", "db connection credentials file")
+	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
+	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 )
 
 var qsConfig ts.Config = ts.Config{
@@ -127,7 +127,7 @@ func initAgent(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
 	if _, ok := dbcreds["dba"]; ok {
 		dbaconfig = dbcreds["dba"].(map[string]interface{})
 	}
-	dbaconfig["unix_socket"] = mycnf.SocketPath
+	dbaconfig["unix_socket"] = mycnf.SocketFile
 	mysqld := mysqlctl.NewMysqld(mycnf, dbaconfig)
 
 	// The TabletManager rpc service allow other processes to query for management
@@ -150,7 +150,7 @@ func initQueryService(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
 		return
 	}
 	appconfig := dbcreds["app"].(map[string]interface{})
-	appconfig["unix_socket"] = mycnf.SocketPath
+	appconfig["unix_socket"] = mycnf.SocketFile
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
 			ts.QueryLogger = relog.New(f, "", log.Ldate|log.Lmicroseconds, relog.DEBUG)

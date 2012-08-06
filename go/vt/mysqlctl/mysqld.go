@@ -48,7 +48,7 @@ func Start(mt *Mysqld) error {
 	dir := os.ExpandEnv("$VTROOT/dist/vt-mysql")
 	name := dir + "/bin/mysqld_safe"
 	arg := []string{
-		"--defaults-file=" + mt.config.MycnfPath}
+		"--defaults-file=" + mt.config.MycnfFile}
 	env := []string{
 		os.ExpandEnv("LD_LIBRARY_PATH=$VTROOT/dist/vt-mysql/lib/mysql"),
 	}
@@ -73,14 +73,14 @@ func Start(mt *Mysqld) error {
 	// we are in good shape
 	for i := 0; i < MysqlWaitTime; i++ {
 		time.Sleep(1e9)
-		_, statErr := os.Stat(mt.config.SocketPath)
+		_, statErr := os.Stat(mt.config.SocketFile)
 		if statErr == nil {
 			return nil
 		} else if statErr.(*os.PathError).Err != syscall.ENOENT {
 			return statErr
 		}
 	}
-	return errors.New(name + ": deadline exceeded waiting for " + mt.config.SocketPath)
+	return errors.New(name + ": deadline exceeded waiting for " + mt.config.SocketFile)
 }
 
 /* waitForMysqld: should the function block until mysqld has stopped?
@@ -90,7 +90,7 @@ flushed - on the order of 20-30 minutes.
 func Shutdown(mt *Mysqld, waitForMysqld bool) error {
 	relog.Info("mysqlctl.Shutdown")
 	// possibly mysql is already shutdown, check for a few files first
-	_, socketPathErr := os.Stat(mt.config.SocketPath)
+	_, socketPathErr := os.Stat(mt.config.SocketFile)
 	_, pidPathErr := os.Stat(mt.config.PidFile())
 	if socketPathErr != nil && pidPathErr != nil {
 		relog.Warning("assuming shutdown - no socket, no pid file")
@@ -100,7 +100,7 @@ func Shutdown(mt *Mysqld, waitForMysqld bool) error {
 	dir := os.ExpandEnv("$VTROOT/dist/vt-mysql")
 	name := dir + "/bin/mysqladmin"
 	arg := []string{
-		"-u", "vt_dba", "-S", mt.config.SocketPath,
+		"-u", "vt_dba", "-S", mt.config.SocketFile,
 		"shutdown"}
 	env := []string{
 		os.ExpandEnv("LD_LIBRARY_PATH=$VTROOT/dist/vt-mysql/lib/mysql"),
@@ -114,7 +114,7 @@ func Shutdown(mt *Mysqld, waitForMysqld bool) error {
 	// we can't call wait() in a process we didn't start.
 	if waitForMysqld {
 		for i := 0; i < MysqlWaitTime; i++ {
-			_, statErr := os.Stat(mt.config.SocketPath)
+			_, statErr := os.Stat(mt.config.SocketFile)
 			// NOTE: dreaded PathError :(
 			if statErr != nil && statErr.(*os.PathError).Err == syscall.ENOENT {
 				return nil
@@ -154,10 +154,10 @@ func Init(mt *Mysqld) error {
 	cnfTemplatePath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/config/mycnf")
 	configData, err := MakeMycnfForMysqld(mt, cnfTemplatePath, "tablet uid?")
 	if err == nil {
-		err = ioutil.WriteFile(mt.config.MycnfPath, []byte(configData), 0664)
+		err = ioutil.WriteFile(mt.config.MycnfFile, []byte(configData), 0664)
 	}
 	if err != nil {
-		relog.Error("failed creating %v: %v", mt.config.MycnfPath, err)
+		relog.Error("failed creating %v: %v", mt.config.MycnfFile, err)
 		return err
 	}
 

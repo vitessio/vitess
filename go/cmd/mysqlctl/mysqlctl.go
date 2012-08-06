@@ -34,7 +34,7 @@ func main() {
 	mycnf := mysqlctl.NewMycnf(uint(*tabletUid), *mysqlPort, *keyspace, vtRepl)
 	dbaconfig := map[string]interface{}{
 		"uname":       "vt_dba",
-		"unix_socket": mycnf.SocketPath,
+		"unix_socket": mycnf.SocketFile,
 		"pass":        "",
 		"dbname":      "",
 		"charset":     "utf8",
