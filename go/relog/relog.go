@@ -15,6 +15,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"syscall"
 )
 
 func init() {
@@ -133,4 +134,22 @@ func LogNameToLogLevel(name string) int {
 		}
 	}
 	panic(fmt.Errorf("no log level: %v", name))
+}
+
+
+// Replace stdout and stderr with a file. This overwrites the actual file
+// descriptors which means even top level panic output will show up in
+// these files.
+func HijackStdio(fOut *os.File, fErr *os.File) error {
+	if fOut != nil {
+		if err := syscall.Dup2(int(fOut.Fd()), int(os.Stdout.Fd())); err != nil {
+			return err
+		}
+	}
+	if fErr != nil {
+		if err := syscall.Dup2(int(fErr.Fd()), int(os.Stderr.Fd())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
