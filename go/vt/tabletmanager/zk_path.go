@@ -107,7 +107,6 @@ func ShardActionPath(zkShardPath string) string {
 	return path.Join(zkShardPath, "action")
 }
 
-// FIXME(msolomon) this is really weak
 // Tablet aliases are the nodes that point into /vt/tablets/<uid> from the keyspace
 // Note that these are *global*
 func IsTabletReplicationPath(zkReplicationPath string) bool {

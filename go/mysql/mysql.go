@@ -308,7 +308,7 @@ func (self *Connection) validate() {
 func mapCString(info map[string]interface{}, key string) *C.char {
 	ival, ok := info[key]
 	if !ok {
-		panic(NewSqlError(0, "Missing connection parameter %s", key))
+		ival = ""
 	}
 	sval, ok := ival.(string)
 	if !ok {
@@ -323,7 +323,7 @@ func mapCString(info map[string]interface{}, key string) *C.char {
 func mapint(info map[string]interface{}, key string) int {
 	ival, ok := info[key]
 	if !ok {
-		panic(NewSqlError(0, "Missing connection parameter %s", key))
+		ival = int(0)
 	}
 	intval, ok := ival.(int)
 	if !ok {
