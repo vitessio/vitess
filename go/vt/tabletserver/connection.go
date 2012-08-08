@@ -58,14 +58,12 @@ func (self *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields boo
 
 // CreateConnection returns a connection for running user queries. No DDL.
 func CreateConnection(socketPath, dbName string) (*DBConnection, error) {
-	info := map[string]interface{}{
-		"host":        "localhost",
-		"port":        0,
-		"unix_socket": socketPath,
-		"uname":       "vt_app",
-		"pass":        "",
-		"dbname":      dbName,
-		"charset":     "utf8",
+	info := mysql.ConnectionParams{
+		Host:       "localhost",
+		UnixSocket: socketPath,
+		Uname:      "vt_app",
+		Dbname:     dbName,
+		Charset:    "utf8",
 	}
 	c, err := mysql.Connect(info)
 	return &DBConnection{c}, err
@@ -82,14 +80,12 @@ func ConnectionCreator(socketPath, dbName string) CreateConnectionFunc {
 where you need full control over mysql.
 */
 func CreateSuperConnection(socketPath, dbName string) (*DBConnection, error) {
-	info := map[string]interface{}{
-		"host":        "localhost",
-		"port":        0,
-		"unix_socket": socketPath,
-		"uname":       "vt_dba",
-		"pass":        "",
-		"dbname":      dbName,
-		"charset":     "utf8",
+	info := mysql.ConnectionParams{
+		Host:       "localhost",
+		UnixSocket: socketPath,
+		Uname:      "vt_dba",
+		Dbname:     dbName,
+		Charset:    "utf8",
 	}
 	c, err := mysql.Connect(info)
 	return &DBConnection{c}, err
@@ -102,12 +98,12 @@ func SuperConnectionCreator(socketPath, dbName string) CreateConnectionFunc {
 	}
 }
 
-func CreateGenericConnection(info map[string]interface{}) (*DBConnection, error) {
+func CreateGenericConnection(info mysql.ConnectionParams) (*DBConnection, error) {
 	c, err := mysql.Connect(info)
 	return &DBConnection{c}, err
 }
 
-func GenericConnectionCreator(info map[string]interface{}) CreateConnectionFunc {
+func GenericConnectionCreator(info mysql.ConnectionParams) CreateConnectionFunc {
 	return func() (connection *DBConnection, err error) {
 		return CreateGenericConnection(info)
 	}

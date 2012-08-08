@@ -6,6 +6,7 @@ package main
 
 import (
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/dbcredentials"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"flag"
 	"log"
@@ -32,16 +33,11 @@ func main() {
 	vtRepl.StartKey = "\"\""
 	vtRepl.EndKey = "\"\""
 	mycnf := mysqlctl.NewMycnf(uint(*tabletUid), *mysqlPort, *keyspace, vtRepl)
-	dbaconfig := map[string]interface{}{
-		"uname":       "vt_dba",
-		"unix_socket": mycnf.SocketFile,
-		"pass":        "",
-		"dbname":      "",
-		"charset":     "utf8",
-		"host":        "",
-		"port":        0,
+	dbcreds, err := dbcredentials.Init(mycnf)
+	if err != nil {
+		relog.Fatal("%s", err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbaconfig)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcreds.Dba)
 
 	action := flag.Arg(0)
 	switch action {

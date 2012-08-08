@@ -87,14 +87,12 @@ func (self *Cache) Recycle() {
 	self.pool.Put(self)
 }
 
-func CacheCreator(dbconfig map[string]interface{}) CreateCacheFunc {
-	iaddress, ok := dbconfig["memcache"]
-	if !ok {
+func CacheCreator(dbconfig DBConfig) CreateCacheFunc {
+	if dbconfig.Memcache == "" {
 		return nil
 	}
 	relog.Info("Row cache is enabled")
-	address := iaddress.(string)
 	return func() (*memcache.Connection, error) {
-		return memcache.Connect(address)
+		return memcache.Connect(dbconfig.Memcache)
 	}
 }

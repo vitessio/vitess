@@ -6,10 +6,8 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	_ "net/http/pprof"
 	"net/rpc"
@@ -23,6 +21,7 @@ import (
 	"code.google.com/p/vitess/go/sighandler"
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
+	"code.google.com/p/vitess/go/vt/dbcredentials"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
 	"code.google.com/p/vitess/go/vt/tabletmanager"
@@ -41,7 +40,6 @@ var (
 	rebindDelay    = flag.Float64("rebind-delay", DefaultRebindDelay, "artificial delay before rebinding a hijacked listener")
 	tabletPath     = flag.String("tablet-path", "", "path to zk node representing the tablet")
 	qsConfigFile   = flag.String("queryserver-config-file", "", "config file name for the query service")
-	dbCredsFile    = flag.String("db-credentials-file", "", "db connection credentials file")
 	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
 	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 )
@@ -63,12 +61,13 @@ func main() {
 
 	env.Init("vttablet")
 	mycnf := readMycnf()
-
-	dbcreds := make(map[string]interface{})
-	unmarshalFile(*dbCredsFile, &dbcreds)
+	dbcreds, err := dbcredentials.Init(mycnf)
+	if err != nil {
+		relog.Fatal("%s", err)
+	}
 
 	initAgent(dbcreds, mycnf)
-	initQueryService(dbcreds, mycnf)
+	initQueryService(dbcreds)
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()
@@ -107,7 +106,7 @@ func readMycnf() *mysqlctl.Mycnf {
 	return mycnf
 }
 
-func initAgent(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
+func initAgent(dbcreds dbcredentials.DBCredentials, mycnf *mysqlctl.Mycnf) {
 	zconn := zk.NewMetaConn(5e9)
 	umgmt.AddCloseCallback(func() {
 		zconn.Close()
@@ -117,18 +116,9 @@ func initAgent(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
 
 	// Action agent listens to changes in zookeeper and makes modifcations to this
 	// tablet.
-	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile)
+	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbcredentials.DBCredsFile)
 	agent.Start(bindAddr, mycnf.MysqlAddr())
-
-	dbaconfig := map[string]interface{}{
-		"uname":   "vt_dba",
-		"charset": "utf8",
-	}
-	if _, ok := dbcreds["dba"]; ok {
-		dbaconfig = dbcreds["dba"].(map[string]interface{})
-	}
-	dbaconfig["unix_socket"] = mycnf.SocketFile
-	mysqld := mysqlctl.NewMysqld(mycnf, dbaconfig)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcreds.Dba)
 
 	// The TabletManager rpc service allow other processes to query for management
 	// related data. It might be co-registered with the query server.
@@ -136,8 +126,10 @@ func initAgent(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
 	rpc.Register(tm)
 }
 
-func initQueryService(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
-	unmarshalFile(*qsConfigFile, &qsConfig)
+func initQueryService(dbcreds dbcredentials.DBCredentials) {
+	if err := dbcredentials.ReadJson(*qsConfigFile, &qsConfig); err != nil {
+		relog.Fatal("%s", err)
+	}
 	ts.StartQueryService(qsConfig)
 	usefulLameDuckPeriod := float64(qsConfig.QueryTimeout + 1)
 	if usefulLameDuckPeriod > *lameDuckPeriod {
@@ -145,12 +137,10 @@ func initQueryService(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
 		relog.Info("readjusted -lame-duck-period to %f", *lameDuckPeriod)
 	}
 
-	if _, ok := dbcreds["app"]; !ok {
-		relog.Info("dbcreds has no app credentials. Skipping start of query service")
+	if dbcreds.App.Dbname == "" {
+		relog.Info("db-credentials-file has no dbname. Skipping start of query service")
 		return
 	}
-	appconfig := dbcreds["app"].(map[string]interface{})
-	appconfig["unix_socket"] = mycnf.SocketFile
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
 			ts.QueryLogger = relog.New(f, "", log.Ldate|log.Lmicroseconds, relog.DEBUG)
@@ -158,22 +148,8 @@ func initQueryService(dbcreds map[string]interface{}, mycnf *mysqlctl.Mycnf) {
 			relog.Fatal("Error opening file %v: %v", *queryLog, err)
 		}
 	}
-	ts.AllowQueries(appconfig)
+	ts.AllowQueries(dbcreds.App)
 	umgmt.AddCloseCallback(func() {
 		ts.DisallowQueries()
 	})
-}
-
-func unmarshalFile(name string, val interface{}) {
-	if name != "" {
-		data, err := ioutil.ReadFile(name)
-		if err != nil {
-			relog.Fatal("could not read %v: %v", val, err)
-		}
-		if err = json.Unmarshal(data, val); err != nil {
-			relog.Fatal("could not read %s: %v", val, err)
-		}
-	}
-	data, _ := json.MarshalIndent(val, "", "  ")
-	relog.Info("config: %s\n", data)
 }

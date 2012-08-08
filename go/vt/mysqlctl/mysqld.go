@@ -35,7 +35,7 @@ type Mysqld struct {
 	createConnection CreateConnection
 }
 
-func NewMysqld(config *Mycnf, dbaconfig map[string]interface{}) *Mysqld {
+func NewMysqld(config *Mycnf, dbaconfig mysql.ConnectionParams) *Mysqld {
 	createSuperConnection := func() (*mysql.Connection, error) {
 		return mysql.Connect(dbaconfig)
 	}

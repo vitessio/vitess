@@ -6,9 +6,6 @@ package tabletserver
 
 import (
 	"bytes"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/stats"
-	"code.google.com/p/vitess/go/vt/sqlparser"
 	"expvar"
 	"fmt"
 	"math/rand"
@@ -16,6 +13,10 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -91,8 +92,8 @@ type CompiledPlan struct {
 	ConnectionId  int64
 }
 
-func (self *SqlQuery) allowQueries(dbconfig map[string]interface{}) {
-	connFactory := GenericConnectionCreator(dbconfig)
+func (self *SqlQuery) allowQueries(dbconfig DBConfig) {
+	connFactory := GenericConnectionCreator(dbconfig.MysqlParams())
 	cacheFactory := CacheCreator(dbconfig)
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -110,7 +111,7 @@ func (self *SqlQuery) allowQueries(dbconfig map[string]interface{}) {
 	self.sessionId = Rand()
 	relog.Info("Session id: %d", self.sessionId)
 	atomic.StoreInt32(&self.state, OPEN)
-	self.dbName = dbconfig["dbname"].(string)
+	self.dbName = dbconfig.Dbname
 }
 
 func (self *SqlQuery) disallowQueries() {

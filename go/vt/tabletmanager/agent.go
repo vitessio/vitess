@@ -39,16 +39,22 @@ type ActionAgent struct {
 	zkTabletPath    string // FIXME(msolomon) use tabletInfo
 	zkActionPath    string
 	vtActionBinFile string // path to vtaction binary
-	MycnfFile       string // path to my.cnf file
+	MycnfFile       string // my.cnf file
+	DBCredsFile     string // File that contains db connection credentials
 
 	mutex   sync.Mutex
 	_tablet *TabletInfo // must be accessed with lock - TabletInfo objects are not synchronized.
 }
 
 // bindAddr: the address for the query service advertised by this agent
-func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfPath string) *ActionAgent {
+func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbCredsFile string) *ActionAgent {
 	actionPath := TabletActionPath(zkTabletPath)
-	return &ActionAgent{zconn: zconn, zkTabletPath: zkTabletPath, zkActionPath: actionPath, MycnfFile: mycnfPath}
+	return &ActionAgent{
+		zconn:        zconn,
+		zkTabletPath: zkTabletPath,
+		zkActionPath: actionPath,
+		MycnfFile:    mycnfFile,
+		DBCredsFile:  dbCredsFile}
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -125,6 +131,9 @@ func (agent *ActionAgent) dispatchAction(actionPath string) {
 		"-action-guid", actionNode.ActionGuid,
 		"-mycnf-file", agent.MycnfFile,
 		"-logfile", flag.Lookup("logfile").Value.String(),
+	}
+	if agent.DBCredsFile != "" {
+		cmd = append(cmd, "-db-credentials-file", agent.DBCredsFile)
 	}
 	relog.Info("action launch %v", cmd)
 	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)
