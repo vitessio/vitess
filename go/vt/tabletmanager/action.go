@@ -24,6 +24,7 @@ const (
 	TABLET_ACTION_DEMOTE_MASTER = "DemoteMaster"
 	TABLET_ACTION_PROMOTE_SLAVE = "PromoteSlave"
 	TABLET_ACTION_RESTART_SLAVE = "RestartSlave"
+	TABLET_ACTION_BREAK_SLAVES  = "BreakSlaves"
 	TABLET_ACTION_SCRAP         = "Scrap"
 
 	// Shard actions - involve all tablets in a shard

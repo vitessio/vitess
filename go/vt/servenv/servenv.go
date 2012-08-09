@@ -32,6 +32,7 @@ var (
 		"rotation frequency in seconds")
 	logMaxSize  = flag.Int64("logfile.maxsize", 0, "max file size in bytes")
 	logMaxFiles = flag.Int64("logfile.maxfiles", 0, "max number of log files")
+	logLevel = flag.String("log.level", "WARNING", "set log level")
 
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024,
 		"profile every n bytes allocated")

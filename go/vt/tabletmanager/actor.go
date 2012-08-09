@@ -152,6 +152,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.promoteSlave(actionNode.Args)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode.Args)
+	case TABLET_ACTION_BREAK_SLAVES:
+		err = ta.mysqld.BreakSlaves()
 	case TABLET_ACTION_SCRAP:
 		err = ta.scrap()
 	default:
@@ -217,6 +219,7 @@ func (ta *TabletActor) demoteMaster() error {
 	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 }
 
+
 type RestartSlaveData struct {
 	ReplicationState *mysqlctl.ReplicationState
 	WaitPosition     *mysqlctl.ReplicationPosition
@@ -253,6 +256,7 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	if err != nil {
 		return err
 	}
+	relog.Debug("PromoteSlave %#v", *rsd)
 	// This data is valuable - commit it to zk first.
 	_, err = ta.zconn.Create(zkRestartSlaveDataPath, toJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {

@@ -34,9 +34,29 @@ func (tm *TabletManager) wrapErr(err error) error {
 	return fmt.Errorf("%v (%v)", err, tm.addr)
 }
 
+
 // Return slave position in terms of the master logs.
 func (tm *TabletManager) SlavePosition(_ *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) (err error) {
 	relog.Debug("SlavePosition")
+	position, err := tm.mysqld.SlaveStatus()
+	if err == nil {
+		*reply = *position
+	}
+	return tm.wrapErr(err)
+}
+
+type SlavePositionReq struct {
+	ReplicationPosition mysqlctl.ReplicationPosition
+	WaitTimeout int // seconds, zero to wait indefinitely
+}
+
+// Return slave position in terms of the master logs after waiting to catch up.
+func (tm *TabletManager) WaitSlavePosition(args *SlavePositionReq, reply *mysqlctl.ReplicationPosition) (err error) {
+	relog.Debug("WaitSlavePosition")
+
+	if err := tm.mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {
+		relog.Warning("WaitMasterPos failed: %v", err)
+	}
 	position, err := tm.mysqld.SlaveStatus()
 	if err == nil {
 		*reply = *position
@@ -51,5 +71,11 @@ func (tm *TabletManager) MasterPosition(_ *rpc.UnusedRequest, reply *mysqlctl.Re
 		*reply = *position
 	}
 	relog.Debug("MasterPosition %#v %v", reply, err)
+	return tm.wrapErr(err)
+}
+
+func (tm *TabletManager) StopSlave(_ *rpc.UnusedRequest, _ *rpc.UnusedResponse) (err error) {
+	relog.Debug("StopSlave")
+	err = tm.mysqld.StopSlave()
 	return tm.wrapErr(err)
 }

@@ -101,6 +101,10 @@ func (ai *ActionInitiator) DemoteMaster(zkTabletPath string) (actionPath string,
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_DEMOTE_MASTER})
 }
 
+func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_BREAK_SLAVES})
+}
+
 func (ai *ActionInitiator) PromoteSlave(zkTabletPath, zkShardActionPath string) (actionPath string, err error) {
 	args := map[string]string{"ShardActionPath": zkShardActionPath}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE, Args: args})
