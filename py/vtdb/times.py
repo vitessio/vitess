@@ -2,11 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-"""times module
-
-This module provides some Date and Time interface for vtdb
-
-Use Python datetime module to handle date and time columns."""
+# times module
+#
+# This module provides some Date and Time interface for vtdb
+#
+# Use Python datetime module to handle date and time columns.
 
 from datetime import date, datetime, time, timedelta
 from math import modf
@@ -21,16 +21,16 @@ Timestamp = datetime
 DateTimeDeltaType = timedelta
 DateTimeType = datetime
 
+# Convert UNIX ticks into a date instance.
 def DateFromTicks(ticks):
-  """Convert UNIX ticks into a date instance."""
   return date(*localtime(ticks)[:3])
 
+# Convert UNIX ticks into a time instance.
 def TimeFromTicks(ticks):
-  """Convert UNIX ticks into a time instance."""
   return time(*localtime(ticks)[3:6])
 
+# Convert UNIX ticks into a datetime instance.
 def TimestampFromTicks(ticks):
-  """Convert UNIX ticks into a datetime instance."""
   return datetime(*localtime(ticks)[:6])
 
 def DateTimeOrNone(s):

@@ -20,6 +20,7 @@ import (
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/zk"
 
+	"code.google.com/p/vitess/go/vt/dbcredentials"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/tabletmanager"
 )
@@ -34,7 +35,7 @@ var logLevel = flag.String("log.level", "debug", "set log level")
 var logFilename = flag.String("logfile", "/dev/stderr", "log path")
 
 // FIXME(msolomon) temporary, until we are starting mysql ourselves
-var mycnfPath = flag.String("mycnf-path", "/etc/my.cnf", "path to my.cnf")
+var mycnfFile = flag.String("mycnf-file", "/etc/my.cnf", "path to my.cnf")
 
 func init() {
 	expvar.NewString("binary-name").Set("vtaction")
@@ -58,7 +59,20 @@ func main() {
 		log.Ldate|log.Lmicroseconds|log.Lshortfile,
 		relog.LogNameToLogLevel(*logLevel))
 	relog.SetLogger(logger)
-	relog.Info("started vtaction %v", os.Args)
+
+	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
+	if mycnfErr != nil {
+		relog.Fatal("mycnf read failed: %v", mycnfErr)
+	}
+	dbcreds, credsErr := dbcredentials.Init(mycnf)
+	if err != nil {
+		relog.Fatal("%s", credsErr)
+	}
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcreds.Dba)
+
+	zconn := zk.NewMetaConn(5e9)
+	defer zconn.Close()
+	actor := tabletmanager.NewTabletActor(mysqld, zconn)
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
@@ -70,25 +84,7 @@ func main() {
 		}
 	}()
 
-	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfPath)
-	if mycnfErr != nil {
-		relog.Fatal("mycnf read failed: %v", mycnfErr)
-	}
-	dbaconfig := map[string]interface{}{
-		"uname":       "vt_dba",
-		"unix_socket": mycnf.SocketPath,
-		"pass":        "",
-		"dbname":      "",
-		"charset":     "utf8",
-		"host":        "",
-		"port":        0,
-	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbaconfig)
-
-	zconn := zk.NewMetaConn(5e9)
-	defer zconn.Close()
-	actor := tabletmanager.NewTabletActor(mysqld, zconn)
-
+	relog.Info("started vtaction %v", os.Args)
 	actionErr := actor.HandleAction(*actionNode, *action, *actionGuid)
 	if actionErr != nil {
 		relog.Fatal("action error: %v", actionErr)

@@ -144,6 +144,16 @@ func handleError(err *error) {
 	}
 }
 
+type ConnectionParams struct {
+	Host       string `json:"host"`
+	Port       int    `json:"port"`
+	Uname      string `json:"uname"`
+	Pass       string `json:"pass"`
+	Dbname     string `json:"dbname"`
+	UnixSocket string `json:"unix_socket"`
+	Charset    string `json:"charset"`
+}
+
 type Connection struct {
 	handle *C.MYSQL
 }
@@ -160,26 +170,26 @@ type Field struct {
 	Type int64
 }
 
-func Connect(info map[string]interface{}) (conn *Connection, err error) {
+func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer handleError(&err)
 
-	host := mapCString(info, "host")
+	host := C.CString(params.Host)
 	defer cfree(host)
-	port := mapint(info, "port")
-	uname := mapCString(info, "uname")
+	port := C.uint(params.Port)
+	uname := C.CString(params.Uname)
 	defer cfree(uname)
-	pass := mapCString(info, "pass")
+	pass := C.CString(params.Pass)
 	defer cfree(pass)
-	dbname := mapCString(info, "dbname")
+	dbname := C.CString(params.Dbname)
 	defer cfree(dbname)
-	unix_socket := mapCString(info, "unix_socket")
+	unix_socket := C.CString(params.UnixSocket)
 	defer cfree(unix_socket)
-	charset := mapCString(info, "charset")
+	charset := C.CString(params.Charset)
 	defer cfree(charset)
 
 	conn = &Connection{}
 	conn.handle = C.mysql_init(nil)
-	if C.vt_mysql_real_connect(conn.handle, host, uname, pass, dbname, C.uint(port), unix_socket, 0) == nil {
+	if C.vt_mysql_real_connect(conn.handle, host, uname, pass, dbname, port, unix_socket, 0) == nil {
 		defer conn.Close()
 		return nil, conn.lastError(nil)
 	}
@@ -303,33 +313,6 @@ func (self *Connection) validate() {
 	if self.handle == nil {
 		panic(NewSqlError(2006, "Connection is closed"))
 	}
-}
-
-func mapCString(info map[string]interface{}, key string) *C.char {
-	ival, ok := info[key]
-	if !ok {
-		ival = ""
-	}
-	sval, ok := ival.(string)
-	if !ok {
-		panic(NewSqlError(0, "Expecting string for %s, received %T", key, ival))
-	}
-	if sval == "" {
-		return nil
-	}
-	return C.CString(sval)
-}
-
-func mapint(info map[string]interface{}, key string) int {
-	ival, ok := info[key]
-	if !ok {
-		ival = int(0)
-	}
-	intval, ok := ival.(int)
-	if !ok {
-		panic(NewSqlError(0, "Expecting int for %s, received %T", key, ival))
-	}
-	return intval
 }
 
 func cfree(str *C.char) {

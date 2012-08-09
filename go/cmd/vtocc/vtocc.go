@@ -43,26 +43,22 @@ var (
 	queryLog       = flag.String("querylog", "", "for testing: log all queries to this file")
 )
 
-var config ts.Config = ts.Config{
-	1000,
-	16,
-	20,
-	30,
-	10000,
-	5000,
-	30 * 60,
-	0,
-	30 * 60,
+var config = ts.Config{
+	CachePoolCap:       1000,
+	PoolSize:           16,
+	TransactionCap:     20,
+	TransactionTimeout: 30,
+	MaxResultSize:      10000,
+	QueryCacheSize:     5000,
+	SchemaReloadTime:   30 * 60,
+	QueryTimeout:       0,
+	IdleTimeout:        30 * 60,
 }
 
-var dbconfig map[string]interface{} = map[string]interface{}{
-	"host":        "localhost",
-	"port":        0,
-	"unix_socket": "",
-	"uname":       "vt_app",
-	"pass":        "",
-	"dbname":      "",
-	"charset":     "utf8",
+var dbconfig = ts.DBConfig{
+	Host:    "localhost",
+	Uname:   "vt_app",
+	Charset: "utf8",
 }
 
 func serveAuthRPC() {
@@ -90,10 +86,6 @@ func main() {
 	}
 	unmarshalFile(*configFile, &config)
 	unmarshalFile(*dbConfigFile, &dbconfig)
-	// work-around for jsonism
-	if v, ok := dbconfig["port"].(float64); ok {
-		dbconfig["port"] = int(v)
-	}
 	qm := &OccManager{config, dbconfig}
 	rpcwrap.RegisterAuthenticated(qm)
 	ts.StartQueryService(config)
@@ -156,13 +148,13 @@ func unmarshalFile(name string, val interface{}) {
 // OccManager is deprecated. Use SqlQuery.GetSessionId instead.
 type OccManager struct {
 	config   ts.Config
-	dbconfig map[string]interface{}
+	dbconfig ts.DBConfig
 }
 
 func (m *OccManager) GetSessionId(dbname *string, sessionId *int64) error {
-	if *dbname != m.dbconfig["dbname"].(string) {
+	if *dbname != m.dbconfig.Dbname {
 		return errors.New(fmt.Sprintf("db name mismatch, expecting %v, received %v",
-			m.dbconfig["dbname"].(string), *dbname))
+			m.dbconfig.Dbname, *dbname))
 	}
 	*sessionId = ts.GetSessionId()
 	return nil
