@@ -250,63 +250,6 @@ def _check_db_addr(db_addr, expected_addr):
   if stdout != expected_addr:
     raise TestError('wrong zk address', db_addr, stdout, expected_addr)
 
-def run_test_reparent_graceful():
-  _wipe_zk()
-
-  # Start up a master mysql and vttablet
-  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
-  agent_62344 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
-  # Create a few slaves for testing reparenting.
-  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace 0 replica /zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-62344')
-  agent_62044 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
-
-  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000041983 localhost 3702 6702 test_keyspace 0 replica /zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-62344')
-  agent_41983 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6702 -tablet-path /zk/test_nj/vt/tablets/0000041983 -logfile /vt/vt_0000041983/vttablet.log')
-
-  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_ny/vt/tablets/0000031981 localhost 3703 6703 test_keyspace 0 replica /zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-62344')
-  agent_31983 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6703 -tablet-path /zk/test_ny/vt/tablets/0000031981 -logfile /vt/vt_0000031981/vttablet.log')
-
-  # Recompute the shard layout node - until you do that, it might not be valid.
-  run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  _check_zk(ping_tablets=True)
-
-  # Force the slaves to reparent assuming that all the datasets are identical.
-  pause("force ReparentShard?")
-  run(vttop+'/go/cmd/vtctl/vtctl -force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062344')
-  _check_zk()
-
-  expected_addr = hostname + ':6700'
-  _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
-
-  # Convert a replica to a spare. That should leave only one node serving traffic,
-  # but still needs to appear in the replication graph.
-  run(vttop+'/go/cmd/vtctl/vtctl ChangeType /zk/test_nj/vt/tablets/0000041983 spare')
-  _check_zk()
-  expected_addr = hostname + ':6701'
-  _check_db_addr('test_keyspace.0.replica:_vtocc', expected_addr)
-
-  # Perform a graceful reparent operation.
-  pause("graceful ReparentShard?")
-  run(vttop+'/go/cmd/vtctl/vtctl ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062044')
-  _check_zk()
-
-  expected_addr = hostname + ':6701'
-  _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
-
-  agent_62344.kill()
-  agent_62044.kill()
-  agent_41983.kill()
-  agent_31983.kill()
-
-  # Test address correction.
-  agent_62044 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6773 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
-  # Wait a moment for address to reregister.
-  time.sleep(1.0)
-
-  expected_addr = hostname + ':6773'
-  _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
-
-  agent_62044.kill()
 
 def run_test_reparent_down_master():
   _wipe_zk()
@@ -376,11 +319,80 @@ def run_test_reparent_down_master():
   agent_31983.kill()
 
 
+def run_test_reparent_graceful_range_based():
+  shard_id = '0000000000000000-FFFFFFFFFFFFFFFF'
+  _run_test_reparent_graceful(shard_id)
+
+def run_test_reparent_graceful():
+  shard_id = '0'
+  _run_test_reparent_graceful(shard_id)
+
+def _run_test_reparent_graceful(shard_id):
+  _wipe_zk()
+
+  # Start up a master mysql and vttablet
+  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace %(shard_id)s master ""' % vars())
+  agent_62344 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+  # Create a few slaves for testing reparenting.
+  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace %(shard_id)s replica /zk/global/vt/keyspaces/test_keyspace/shards/%(shard_id)s/test_nj-62344' % vars())
+  agent_62044 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
+
+  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000041983 localhost 3702 6702 test_keyspace %(shard_id)s replica /zk/global/vt/keyspaces/test_keyspace/shards/%(shard_id)s/test_nj-62344' % vars())
+  agent_41983 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6702 -tablet-path /zk/test_nj/vt/tablets/0000041983 -logfile /vt/vt_0000041983/vttablet.log')
+
+  run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_ny/vt/tablets/0000031981 localhost 3703 6703 test_keyspace %(shard_id)s replica /zk/global/vt/keyspaces/test_keyspace/shards/%(shard_id)s/test_nj-62344' % vars())
+  agent_31983 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6703 -tablet-path /zk/test_ny/vt/tablets/0000031981 -logfile /vt/vt_0000031981/vttablet.log')
+
+  # Recompute the shard layout node - until you do that, it might not be valid.
+  run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+  _check_zk(ping_tablets=True)
+
+  # Force the slaves to reparent assuming that all the datasets are identical.
+  pause("force ReparentShard?")
+  run(vttop+'/go/cmd/vtctl/vtctl -force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s /zk/test_nj/vt/tablets/0000062344' % shard_id)
+  _check_zk()
+
+  expected_addr = hostname + ':6700'
+  _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+
+  # Convert a replica to a spare. That should leave only one node serving traffic,
+  # but still needs to appear in the replication graph.
+  run(vttop+'/go/cmd/vtctl/vtctl ChangeType /zk/test_nj/vt/tablets/0000041983 spare')
+  _check_zk()
+  expected_addr = hostname + ':6701'
+  _check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
+
+  # Perform a graceful reparent operation.
+  pause("graceful ReparentShard?")
+  run(vttop+'/go/cmd/vtctl/vtctl ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s /zk/test_nj/vt/tablets/0000062044' % shard_id)
+  _check_zk()
+
+  expected_addr = hostname + ':6701'
+  _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+
+  agent_62344.kill()
+  agent_62044.kill()
+  agent_41983.kill()
+  agent_31983.kill()
+
+  # Test address correction.
+  agent_62044 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6773 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
+  # Wait a moment for address to reregister.
+  time.sleep(1.0)
+
+  expected_addr = hostname + ':6773'
+  _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+
+  agent_62044.kill()
+
+
+
 def run_all():
   run_test_sanity()
   run_test_sanity() # run twice to check behavior with existing znode data
   run_test_restart_during_action()
   run_test_reparent_graceful()
+  run_test_reparent_graceful_range_based()
   run_test_reparent_down_master()
 
 
