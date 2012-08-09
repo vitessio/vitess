@@ -77,9 +77,7 @@ func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosit
 		return err
 	}
 
-	cmd := fmt.Sprintf("SELECT MASTER_POS_WAIT('%v', %v)",
-		waitPosition.MasterLogFile, waitPosition.MasterLogPosition)
-	if err := mysqld.executeSuperQuery(cmd); err != nil {
+	if err := mysqld.WaitMasterPos(waitPosition, 0); err != nil {
 		return err
 	}
 

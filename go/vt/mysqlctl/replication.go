@@ -34,6 +34,7 @@ const (
 type ReplicationPosition struct {
 	MasterLogFile     string
 	MasterLogPosition uint
+	ReadMasterLogPosition uint // how much has been read, but not applied
 }
 
 func (rp ReplicationPosition) MapKey() string {
@@ -573,6 +574,24 @@ func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 	return rowMap, nil
 }
 
+func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout int) error {
+	cmd := fmt.Sprintf("SELECT MASTER_POS_WAIT('%v', %v, %v)",
+		rp.MasterLogFile, rp.MasterLogPosition, waitTimeout)
+	rows, err := mysqld.fetchSuperQuery(cmd)
+	if err != nil {
+		return err
+	}
+	if len(rows) != 1 {
+		return fmt.Errorf("WaitMasterPos returned unexpected row count: %v", len(rows))
+	}
+	if rows[0][0] == nil {
+		return fmt.Errorf("WaitMasterPos failed: replication stopped")
+	} else if rows[0][0].(string) == "-1" {
+		return fmt.Errorf("WaitMasterPos failed: timed out")
+	}
+	return nil
+}
+
 func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 	fields, err := mysqld.slaveStatus()
 	if err != nil {
@@ -582,6 +601,8 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 	pos.MasterLogFile = fields["Relay_Master_Log_File"]
 	temp, _ := strconv.ParseUint(fields["Exec_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPosition = uint(temp)
+	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
+	pos.ReadMasterLogPosition = uint(temp)
 	return pos, nil
 }
 
@@ -780,4 +801,26 @@ func (mysqld *Mysqld) ResetKeyRange() error {
 		return err
 	}
 	return nil
+}
+
+// Force all slaves to error and stop. This is extreme, but helpful for emergencies
+// and tests.
+// Insert a row, block the propogation of its subsequent delete and reinsert it. This 
+// forces a failue on slaves only.
+func (mysqld *Mysqld) BreakSlaves() error {
+	now := time.Now().UnixNano()
+	note := "force slave halt" // Any this is why we always leave a note...
+
+	insertSql := fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, '%v')", 
+		now, note)
+	deleteSql := fmt.Sprintf("DELETE FROM _vt.replication_log WHERE time_created_ns = %v", now)
+
+	cmds := []string{
+		insertSql, 
+		"SET sql_log_bin = 0",
+		deleteSql,
+		"SET sql_log_bin = 1",
+		insertSql}
+
+	return mysqld.executeSuperQueryList(cmds);
 }

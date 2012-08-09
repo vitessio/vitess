@@ -58,6 +58,7 @@ if no connection to N is available, ???
 import (
 	"fmt"
 	"net/rpc"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -232,6 +233,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		masterPosition, err = getMasterPosition(masterTablet.Tablet)
 		if err != nil {
 			// FIXME(msolomon) handle the case where the master is failed, not demoted.
+			// Suggest retry, or scrap master and force reparenting.
 			return err
 		}
 	}
@@ -239,6 +241,24 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	if masterTablet.Uid != masterElectTablet.Uid {
 		relog.Debug("check slaves %v", zkMasterTabletPath)
 		err = checkSlaveConsistency(slaveTabletMap, masterPosition)
+		if err != nil {
+			return err
+		}
+	} else {
+		// We are forcing a reparenting. Make sure that all slaves stop so
+		// no data is accidentally replicated through before we call RestartSlave.
+		err = stopSlaves(slaveTabletMap)
+		if err != nil {
+			return err
+		}
+
+		// Force slaves to break, just in case they were not advertised in
+		// the replication graph.
+		relog.Debug("break slaves %v", zkMasterTabletPath)
+		actionPath, err := wr.ai.BreakSlaves(zkMasterTabletPath)
+		if err == nil {
+			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+		}
 		if err != nil {
 			return err
 		}
@@ -365,28 +385,64 @@ type rpcContext struct {
 	err      error
 }
 
+
+func mapKeys(m interface{}) []interface{} {
+	keys := make([]interface{}, 0, 16)
+	mapVal := reflect.ValueOf(m)
+	for _, kv := range mapVal.MapKeys() {
+		keys = append(keys, kv.Interface())
+	}
+	return keys
+}
+
+func mapStrKeys(m interface{}) []string {
+	keys := make([]string, 0, 16)
+	mapVal := reflect.ValueOf(m)
+	for _, kv := range mapVal.MapKeys() {
+		keys = append(keys, fmt.Sprintf("%v", kv.Interface()))
+	}
+	return keys
+}
+
 /* Check all the tablets to see if we can proceed with reparenting.
    masterPosition is supplied from the demoted master if we are doing this gracefully.
 */
 func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
-	relog.Debug("checkSlaveConsistency %#v %#v", tabletMap, masterPosition)
+	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
 	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
 	defer timer.Stop()
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
 	calls := make(chan *rpcContext, len(tabletMap))
-	for _, tablet := range tabletMap {
-		go func() {
-			ctx := &rpcContext{tablet: tablet}
-			ctx.client, ctx.err = rpc.DialHTTP("tcp", tablet.Addr)
-			if ctx.err == nil {
-				ctx.position = new(mysqlctl.ReplicationPosition)
+	f := func(tablet *tm.TabletInfo) {
+		ctx := &rpcContext{tablet: tablet}
+		ctx.client, ctx.err = rpc.DialHTTP("tcp", tablet.Addr)
+		if ctx.err == nil {
+			ctx.position = new(mysqlctl.ReplicationPosition)
+			if masterPosition != nil {
+				// If the master position is known, do our best to wait for replication to catch up.
+				args := &tm.SlavePositionReq{*masterPosition, int(SLAVE_STATUS_DEADLINE / 1e9)}
+				ctx.err = ctx.client.Call("TabletManager.WaitSlavePosition", args, ctx.position)
+			} else {
 				ctx.err = ctx.client.Call("TabletManager.SlavePosition", vtrpc.NilRequest, ctx.position)
-				ctx.client.Close()
+				if ctx.err == nil {
+					// In the case where a master is down, look for the last bit of data copied and wait
+					// for that to apply. That gives us a chance to wait for all data.
+					lastDataPos := *ctx.position
+					lastDataPos.MasterLogPosition = lastDataPos.ReadMasterLogPosition
+					args := &tm.SlavePositionReq{lastDataPos, int(SLAVE_STATUS_DEADLINE / 1e9)}
+					ctx.err = ctx.client.Call("TabletManager.WaitSlavePosition", args, ctx.position)
+				}
 			}
-			calls <- ctx
-		}()
+			ctx.client.Close()
+		}
+		calls <- ctx
+	}
+
+	for _, tablet := range tabletMap {
+		// Pass loop variable explicitly so we don't have a concurrency issue.
+		go f(tablet)
 	}
 
 	replies := make([]*rpcContext, 0, len(tabletMap))
@@ -433,11 +489,51 @@ func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *my
 		// sounds like you pick the latest group and reclone.
 		items := make([]string, 0, 32)
 		for slaveMapKey, uids := range positionMap {
-			items = append(items, fmt.Sprintf("%v (%v)", slaveMapKey, uids))
+			items = append(items, fmt.Sprintf("%v %v", slaveMapKey, uids))
 		}
 		sort.Strings(items)
 		// FIXME(msolomon) add instructions how to do so.
-		return fmt.Errorf("inconsistent slaves, mark some offline (%v) %v %#v", replyErrorCount, strings.Join(items, ", "), positionMap)
+		return fmt.Errorf("inconsistent slaves, mark some offline (rpc error count: %v) %v", replyErrorCount, strings.Join(items, ", "))
 	}
 	return nil
+}
+
+
+/* Shut off all replication. */
+func stopSlaves(tabletMap map[uint]*tm.TabletInfo) error {
+	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
+
+	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
+	errs := make(chan error, len(tabletMap))
+	f := func(tablet *tm.TabletInfo) {
+		client, err := rpc.DialHTTP("tcp", tablet.Addr)
+		if err == nil {
+			err = client.Call("TabletManager.StopSlave", vtrpc.NilRequest, vtrpc.NilResponse)
+			client.Close()
+		}
+		if err != nil {
+			relog.Debug("TabletManager.StopSlave failed: %v", err)
+		}
+		errs <- err
+	}
+
+	for _, tablet := range tabletMap {
+		// Pass loop variable explicitly so we don't have a concurrency issue.
+		go f(tablet)
+	}
+
+	// wait for responses
+	var err error
+	for i := 0; i < len(tabletMap); i++ {
+		select {
+		case <-timer.C:
+			break
+		case lastErr := <-errs:
+			if err == nil && lastErr != nil {
+				err = lastErr
+			}
+		}
+	}
+
+	return err
 }
