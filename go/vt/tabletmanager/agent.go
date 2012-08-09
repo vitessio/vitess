@@ -130,7 +130,7 @@ func (agent *ActionAgent) dispatchAction(actionPath string) {
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
 		"-mycnf-file", agent.MycnfFile,
-		"-logfile", flag.Lookup("logfile").Value.String(),
+		"-logfile", logfile,
 	}
 	if agent.DBCredsFile != "" {
 		cmd = append(cmd, "-db-credentials-file", agent.DBCredsFile)
