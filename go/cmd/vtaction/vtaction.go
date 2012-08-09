@@ -20,7 +20,7 @@ import (
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/zk"
 
-	"code.google.com/p/vitess/go/vt/dbcredentials"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/tabletmanager"
 )
@@ -64,11 +64,11 @@ func main() {
 	if mycnfErr != nil {
 		relog.Fatal("mycnf read failed: %v", mycnfErr)
 	}
-	dbcreds, credsErr := dbcredentials.Init(mycnf)
+	dbcfgs, cfErr := dbconfigs.Init(mycnf)
 	if err != nil {
-		relog.Fatal("%s", credsErr)
+		relog.Fatal("%s", cfErr)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcreds.Dba)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba)
 
 	zconn := zk.NewMetaConn(5e9)
 	defer zconn.Close()

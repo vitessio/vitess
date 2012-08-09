@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package dbcredentials is reusable by vt tools to load
-// the db credentials file.
-package dbcredentials
+// Package dbconfigs is reusable by vt tools to load
+// the db configs file.
+package dbconfigs
 
 import (
 	"encoding/json"
@@ -18,23 +18,23 @@ import (
 	"code.google.com/p/vitess/go/vt/tabletserver"
 )
 
-var DBCredsFile = flag.String("db-credentials-file", "", "db connection credentials file")
+var DBConfigsFile = flag.String("db-configs-file", "", "db connection configs file")
 
-type DBCredentials struct {
+type DBConfigs struct {
 	App      tabletserver.DBConfig  `json:"app"`
 	Dba      mysql.ConnectionParams `json:"dba"`
 	Repl     mysql.ConnectionParams `json:"repl"`
 	Memcache string                 `json:"memcache"`
 }
 
-func Init(mycnf *mysqlctl.Mycnf) (dbcreds DBCredentials, err error) {
-	dbcreds.Dba = mysql.ConnectionParams{
+func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
+	dbcfgs.Dba = mysql.ConnectionParams{
 		Uname:   "vt_dba",
 		Charset: "utf8",
 	}
-	err = ReadJson(*DBCredsFile, &dbcreds)
-	dbcreds.App.UnixSocket = mycnf.SocketFile
-	dbcreds.Dba.UnixSocket = mycnf.SocketFile
+	err = ReadJson(*DBConfigsFile, &dbcfgs)
+	dbcfgs.App.UnixSocket = mycnf.SocketFile
+	dbcfgs.Dba.UnixSocket = mycnf.SocketFile
 	return
 }
 

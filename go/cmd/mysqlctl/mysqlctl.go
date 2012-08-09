@@ -6,7 +6,7 @@ package main
 
 import (
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/dbcredentials"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"flag"
 	"log"
@@ -33,11 +33,11 @@ func main() {
 	vtRepl.StartKey = "\"\""
 	vtRepl.EndKey = "\"\""
 	mycnf := mysqlctl.NewMycnf(uint(*tabletUid), *mysqlPort, *keyspace, vtRepl)
-	dbcreds, err := dbcredentials.Init(mycnf)
+	dbcfgs, err := dbconfigs.Init(mycnf)
 	if err != nil {
 		relog.Fatal("%s", err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcreds.Dba)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba)
 
 	action := flag.Arg(0)
 	switch action {

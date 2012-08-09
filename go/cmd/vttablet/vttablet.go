@@ -21,7 +21,7 @@ import (
 	"code.google.com/p/vitess/go/sighandler"
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
-	"code.google.com/p/vitess/go/vt/dbcredentials"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
 	"code.google.com/p/vitess/go/vt/tabletmanager"
@@ -61,13 +61,13 @@ func main() {
 
 	env.Init("vttablet")
 	mycnf := readMycnf()
-	dbcreds, err := dbcredentials.Init(mycnf)
+	dbcfgs, err := dbconfigs.Init(mycnf)
 	if err != nil {
 		relog.Fatal("%s", err)
 	}
 
-	initAgent(dbcreds, mycnf)
-	initQueryService(dbcreds)
+	initAgent(dbcfgs, mycnf)
+	initQueryService(dbcfgs)
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()
@@ -106,7 +106,7 @@ func readMycnf() *mysqlctl.Mycnf {
 	return mycnf
 }
 
-func initAgent(dbcreds dbcredentials.DBCredentials, mycnf *mysqlctl.Mycnf) {
+func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 	zconn := zk.NewMetaConn(5e9)
 	umgmt.AddCloseCallback(func() {
 		zconn.Close()
@@ -116,9 +116,9 @@ func initAgent(dbcreds dbcredentials.DBCredentials, mycnf *mysqlctl.Mycnf) {
 
 	// Action agent listens to changes in zookeeper and makes modifcations to this
 	// tablet.
-	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbcredentials.DBCredsFile)
+	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DBConfigsFile)
 	agent.Start(bindAddr, mycnf.MysqlAddr())
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcreds.Dba)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba)
 
 	// The TabletManager rpc service allow other processes to query for management
 	// related data. It might be co-registered with the query server.
@@ -126,8 +126,8 @@ func initAgent(dbcreds dbcredentials.DBCredentials, mycnf *mysqlctl.Mycnf) {
 	rpc.Register(tm)
 }
 
-func initQueryService(dbcreds dbcredentials.DBCredentials) {
-	if err := dbcredentials.ReadJson(*qsConfigFile, &qsConfig); err != nil {
+func initQueryService(dbcfgs dbconfigs.DBConfigs) {
+	if err := dbconfigs.ReadJson(*qsConfigFile, &qsConfig); err != nil {
 		relog.Fatal("%s", err)
 	}
 	ts.StartQueryService(qsConfig)
@@ -137,8 +137,8 @@ func initQueryService(dbcreds dbcredentials.DBCredentials) {
 		relog.Info("readjusted -lame-duck-period to %f", *lameDuckPeriod)
 	}
 
-	if dbcreds.App.Dbname == "" {
-		relog.Info("db-credentials-file has no dbname. Skipping start of query service")
+	if dbcfgs.App.Dbname == "" {
+		relog.Info("db-configs-file has no dbname. Skipping start of query service")
 		return
 	}
 	if *queryLog != "" {
@@ -148,7 +148,7 @@ func initQueryService(dbcreds dbcredentials.DBCredentials) {
 			relog.Fatal("Error opening file %v: %v", *queryLog, err)
 		}
 	}
-	ts.AllowQueries(dbcreds.App)
+	ts.AllowQueries(dbcfgs.App)
 	umgmt.AddCloseCallback(func() {
 		ts.DisallowQueries()
 	})
