@@ -1,0 +1,3 @@
+[hooks]
+pre-commit.gofmt = ./misc/hg/gofmt-hook
+pretxncommit.gofmt = ./misc/hg/gofmt-hook

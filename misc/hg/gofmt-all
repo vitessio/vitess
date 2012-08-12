@@ -1,0 +1,3 @@
+#!/bin/bash
+
+find . -name '*.go' -exec gofmt -w {} \;
