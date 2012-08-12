@@ -219,7 +219,6 @@ func (ta *TabletActor) demoteMaster() error {
 	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 }
 
-
 type RestartSlaveData struct {
 	ReplicationState *mysqlctl.ReplicationState
 	WaitPosition     *mysqlctl.ReplicationPosition

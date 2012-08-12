@@ -34,7 +34,6 @@ func (tm *TabletManager) wrapErr(err error) error {
 	return fmt.Errorf("%v (%v)", err, tm.addr)
 }
 
-
 // Return slave position in terms of the master logs.
 func (tm *TabletManager) SlavePosition(_ *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) (err error) {
 	relog.Debug("SlavePosition")
@@ -47,7 +46,7 @@ func (tm *TabletManager) SlavePosition(_ *rpc.UnusedRequest, reply *mysqlctl.Rep
 
 type SlavePositionReq struct {
 	ReplicationPosition mysqlctl.ReplicationPosition
-	WaitTimeout int // seconds, zero to wait indefinitely
+	WaitTimeout         int // seconds, zero to wait indefinitely
 }
 
 // Return slave position in terms of the master logs after waiting to catch up.

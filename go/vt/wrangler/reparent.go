@@ -385,7 +385,6 @@ type rpcContext struct {
 	err      error
 }
 
-
 func mapKeys(m interface{}) []interface{} {
 	keys := make([]interface{}, 0, 16)
 	mapVal := reflect.ValueOf(m)
@@ -497,7 +496,6 @@ func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *my
 	}
 	return nil
 }
-
 
 /* Shut off all replication. */
 func stopSlaves(tabletMap map[uint]*tm.TabletInfo) error {

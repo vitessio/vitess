@@ -32,8 +32,8 @@ const (
 )
 
 type ReplicationPosition struct {
-	MasterLogFile     string
-	MasterLogPosition uint
+	MasterLogFile         string
+	MasterLogPosition     uint
 	ReadMasterLogPosition uint // how much has been read, but not applied
 }
 
@@ -811,16 +811,16 @@ func (mysqld *Mysqld) BreakSlaves() error {
 	now := time.Now().UnixNano()
 	note := "force slave halt" // Any this is why we always leave a note...
 
-	insertSql := fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, '%v')", 
+	insertSql := fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, '%v')",
 		now, note)
 	deleteSql := fmt.Sprintf("DELETE FROM _vt.replication_log WHERE time_created_ns = %v", now)
 
 	cmds := []string{
-		insertSql, 
+		insertSql,
 		"SET sql_log_bin = 0",
 		deleteSql,
 		"SET sql_log_bin = 1",
 		insertSql}
 
-	return mysqld.executeSuperQueryList(cmds);
+	return mysqld.executeSuperQueryList(cmds)
 }
