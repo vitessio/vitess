@@ -11,6 +11,12 @@ fi
 
 . ./dev.env
 
+diff misc/hg/hooks.hgrc .hg/hgrc | grep -qle '<'
+if [ $? != 1 ]; then
+  echo "installing hgrc hooks"
+  cat misc/hg/hooks.hgrc >> .hg/hgrc
+fi
+
 if [ ! -d $VTROOT/dist ]; then
   mkdir $VTROOT/dist
 fi
