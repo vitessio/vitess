@@ -125,7 +125,7 @@ func (self *ActiveTxPool) SetTimeout(timeout time.Duration) {
 
 func (self *ActiveTxPool) StatsJSON() string {
 	s, t := self.Stats()
-	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, float64(t)/1e9)
+	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
 }
 
 func (self *ActiveTxPool) Stats() (size int, timeout time.Duration) {

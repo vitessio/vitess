@@ -217,7 +217,7 @@ func (self *RoundRobin) SetIdleTimeout(idleTimeout time.Duration) {
 
 func (self *RoundRobin) StatsJSON() string {
 	s, c, a, wc, wt, it := self.Stats()
-	return fmt.Sprintf("{\"Size\": %v, \"Capacity\": %v, \"Available\": %v, \"WaitCount\": %v, \"WaitTime\": %v, \"IdleTimeout\": %v}", s, c, a, wc, float64(wt)/1e9, float64(it)/1e9)
+	return fmt.Sprintf("{\"Size\": %v, \"Capacity\": %v, \"Available\": %v, \"WaitCount\": %v, \"WaitTime\": %v, \"IdleTimeout\": %v}", s, c, a, wc, int64(wt), int64(it))
 }
 
 func (self *RoundRobin) Stats() (size, capacity, available, waitCount int64, waitTime, idleTimeout time.Duration) {

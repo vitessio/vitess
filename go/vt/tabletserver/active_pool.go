@@ -83,7 +83,7 @@ func (self *ActivePool) SetIdleTimeout(idleTimeout time.Duration) {
 
 func (self *ActivePool) StatsJSON() string {
 	s, t := self.Stats()
-	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, float64(t)/1e9)
+	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
 }
 
 func (self *ActivePool) Stats() (size int, timeout time.Duration) {
