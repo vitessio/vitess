@@ -25,6 +25,7 @@ select /* use */ 1 from t1 as t2 use index (a), t3 use index (b) where b = 1
 select /* table alias */ 1 from t t1#select /* table alias */ 1 from t as t1
 select /* table alias with as */ 1 from t as t1
 select /* join */ 1 from t1 join t2
+select /* straight_join */ 1 from t1 straight_join t2
 select /* left join */ 1 from t1 left join t2
 select /* left outer join */ 1 from t1 left outer join t2#select /* left outer join */ 1 from t1 left join t2
 select /* right join */ 1 from t1 right join t2

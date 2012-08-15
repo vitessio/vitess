@@ -177,7 +177,7 @@ func (self *Node) Format(buf *TrackedBuffer) {
 				Fprintf(buf, "%v", self.At(i))
 			}
 		}
-	case JOIN, LEFT, RIGHT, CROSS, NATURAL:
+	case JOIN, STRAIGHT_JOIN, LEFT, RIGHT, CROSS, NATURAL:
 		Fprintf(buf, "%v %s %v", self.At(0), self.Value, self.At(1))
 		if self.Len() > 2 {
 			Fprintf(buf, " on %v", self.At(2))

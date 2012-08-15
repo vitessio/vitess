@@ -105,7 +105,7 @@ const (
 
 %left <node> UNION MINUS EXCEPT INTERSECT
 %left <node> ','
-%left <node> JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE
+%left <node> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE
 %left <node> ON
 %left <node> AND OR
 %right <node> NOT
@@ -381,6 +381,7 @@ table_expression:
 
 join_type:
 	JOIN
+| STRAIGHT_JOIN
 | LEFT JOIN
 	{
 		$$ = NewSimpleParseNode(LEFT, "left join")
