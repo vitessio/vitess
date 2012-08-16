@@ -5,10 +5,10 @@
 package jsonrpc
 
 import (
+	"code.google.com/p/vitess/go/rpcplus"
 	"encoding/json"
 	"errors"
 	"io"
-	"net/rpc"
 	"sync"
 )
 
@@ -33,7 +33,7 @@ type serverCodec struct {
 }
 
 // NewServerCodec returns a new rpc.ServerCodec using JSON-RPC on conn.
-func NewServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
+func NewServerCodec(conn io.ReadWriteCloser) rpcplus.ServerCodec {
 	return &serverCodec{
 		dec:     json.NewDecoder(conn),
 		enc:     json.NewEncoder(conn),
@@ -64,7 +64,15 @@ type serverResponse struct {
 	Error  interface{}      `json:"error"`
 }
 
-func (c *serverCodec) ReadRequestHeader(r *rpc.Request) error {
+type serverStreamResponse struct {
+	Id     *json.RawMessage `json:"id"`
+	Result interface{}      `json:"result"`
+	Error  interface{}      `json:"error"`
+	Subseq uint64           `json:"subseq"`
+	End    bool             `json:"end"`
+}
+
+func (c *serverCodec) ReadRequestHeader(r *rpcplus.Request) error {
 	c.req.reset()
 	if err := c.dec.Decode(&c.req); err != nil {
 		return err
@@ -99,7 +107,7 @@ func (c *serverCodec) ReadRequestBody(x interface{}) error {
 
 var null = json.RawMessage([]byte("null"))
 
-func (c *serverCodec) WriteResponse(r *rpc.Response, x interface{}) error {
+func (c *serverCodec) WriteResponse(r *rpcplus.Response, x interface{}) error {
 	var resp serverResponse
 	c.mutex.Lock()
 	b, ok := c.pending[r.Seq]
@@ -124,6 +132,37 @@ func (c *serverCodec) WriteResponse(r *rpc.Response, x interface{}) error {
 	return c.enc.Encode(resp)
 }
 
+func (c *serverCodec) WriteStreamResponse(r *rpcplus.Response, sr *rpcplus.StreamResponse, x interface{}) error {
+	var resp serverStreamResponse
+	c.mutex.Lock()
+	b, ok := c.pending[r.Seq]
+	if !ok {
+		c.mutex.Unlock()
+		return errors.New("invalid sequence number in response")
+	}
+	if r.Error != "" || sr.End {
+		delete(c.pending, r.Seq)
+	}
+	c.mutex.Unlock()
+
+	if b == nil {
+		// Invalid request so no id.  Use JSON null.
+		b = &null
+	}
+	resp.Id = b
+	resp.Result = x
+	if sr != nil {
+		resp.Subseq = sr.Subseq
+		resp.End = sr.End
+	}
+	if r.Error == "" {
+		resp.Error = nil
+	} else {
+		resp.Error = r.Error
+	}
+	return c.enc.Encode(resp)
+}
+
 func (c *serverCodec) Close() error {
 	return c.c.Close()
 }
@@ -132,5 +171,5 @@ func (c *serverCodec) Close() error {
 // ServeConn blocks, serving the connection until the client hangs up.
 // The caller typically invokes ServeConn in a go statement.
 func ServeConn(conn io.ReadWriteCloser) {
-	rpc.ServeCodec(NewServerCodec(conn))
+	rpcplus.ServeCodec(NewServerCodec(conn))
 }

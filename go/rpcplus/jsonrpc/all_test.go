@@ -5,12 +5,12 @@
 package jsonrpc
 
 import (
+	"code.google.com/p/vitess/go/rpcplus"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
-	"net/rpc"
 	"testing"
 )
 
@@ -46,8 +46,21 @@ func (t *Arith) Error(args *Args, reply *Reply) error {
 	panic("ERROR")
 }
 
+func (t *Arith) Thrive(args *Args, sendNonFinalReply func(reply interface{}) error, reply *Reply) error {
+	for i := 0; i < args.A-1; i++ {
+		r := &Reply{C: i}
+		err := sendNonFinalReply(r)
+		if err != nil {
+			return err
+		}
+	}
+
+	reply.C = args.A - 1
+	return nil
+}
+
 func init() {
-	rpc.Register(new(Arith))
+	rpcplus.Register(new(Arith))
 }
 
 func TestServer(t *testing.T) {
@@ -166,6 +179,39 @@ func TestUnexpectedError(t *testing.T) {
 	cli, srv := myPipe()
 	go cli.PipeWriter.CloseWithError(errors.New("unexpected error!")) // reader will get this error
 	ServeConn(srv)                                                    // must return, not loop
+}
+
+func TestStreamingCall(t *testing.T) {
+	// Assume server is okay (TestServer is above).
+	// Test client against server.
+	cli, srv := net.Pipe()
+	go ServeConn(srv)
+
+	client := NewClient(cli)
+	defer client.Close()
+
+	args := &Args{7, 0}
+	rowChan := make(chan *Reply, 10)
+	c := client.StreamGo("Arith.Thrive", args, rowChan)
+
+	// fetch all the rows
+	count := 0
+	for row := range rowChan {
+		if row.C != count {
+			t.Fatal("unexpected value:", row.C)
+		}
+		count += 1
+
+		// log.Println("Values: ", row.C, row.Index)
+	}
+
+	if c.Error != nil {
+		t.Fatal("unexpected error:", c.Error.Error())
+	}
+
+	if count != 7 {
+		t.Fatal("Didn't receive the right number of packets back:", count)
+	}
 }
 
 // Copied from package net.

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package rpc
+package rpcplus
 
 import (
 	"errors"
@@ -316,6 +316,15 @@ func (codec *CodecEmulator) WriteResponse(resp *Response, reply interface{}) err
 	return nil
 }
 
+func (codec *CodecEmulator) WriteStreamResponse(resp *Response, sresp *StreamResponse, reply interface{}) error {
+	if resp.Error != "" {
+		codec.err = errors.New(resp.Error)
+	} else {
+		*codec.reply = *(reply.(*Reply))
+	}
+	return nil
+}
+
 func (codec *CodecEmulator) Close() error {
 	return nil
 }
@@ -387,6 +396,11 @@ func (WriteFailCodec) WriteRequest(*Request, interface{}) error {
 }
 
 func (WriteFailCodec) ReadResponseHeader(*Response) error {
+	select {}
+	panic("unreachable")
+}
+
+func (WriteFailCodec) ReadStreamResponseHeader(*StreamResponse) error {
 	select {}
 	panic("unreachable")
 }
