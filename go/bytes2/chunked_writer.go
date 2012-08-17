@@ -9,6 +9,7 @@ package bytes2
 
 import (
 	"code.google.com/p/vitess/go/hack"
+	"fmt"
 	"io"
 	"unicode/utf8"
 )
@@ -89,7 +90,7 @@ func (cw *ChunkedWriter) WriteString(p string) (n int, err error) {
 
 func (cw *ChunkedWriter) Reserve(n int) (b []byte) {
 	if n > cap(cw.bufs[0]) {
-		panic("bytes.ChunkedBuffer: Reserve request too high")
+		panic(fmt.Sprintf("bytes.ChunkedBuffer: Reserve request too high: %d > %d", n, cap(cw.bufs[0])))
 	}
 	lastbuf := cw.bufs[len(cw.bufs)-1]
 	if n > cap(lastbuf)-len(lastbuf) {

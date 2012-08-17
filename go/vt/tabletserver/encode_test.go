@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/bytes2"
 	"code.google.com/p/vitess/go/mysql"
 	"testing"
 )
@@ -21,13 +22,13 @@ func TestQuery(t *testing.T) {
 	bv := make(map[string]interface{})
 	bv["foo"] = int64(20)
 	in := &Query{"abcd", bv, 24, 0, 0}
-	encoded := bytes.NewBuffer(make([]byte, 0, 8))
+	encoded := bytes2.NewChunkedWriter(16)
 	in.MarshalBson(encoded)
 	expected, _ := bson.Marshal(in)
 	compare(t, encoded.Bytes(), expected)
 
 	var ret Query
-	ret.UnmarshalBson(encoded)
+	ret.UnmarshalBson(bytes.NewBuffer(encoded.Bytes()))
 	assertTrue(ret.Sql == in.Sql, "Sql", t)
 	assertTrue(ret.BindVariables["foo"] == in.BindVariables["foo"], "bind vars", t)
 }
@@ -42,13 +43,13 @@ func TestQueryResult(t *testing.T) {
 	rows[0][0] = "val0"
 	rows[0][1] = "val1"
 	in := &QueryResult{fields, 5, 0, rows}
-	encoded := bytes.NewBuffer(make([]byte, 0, 8))
+	encoded := bytes2.NewChunkedWriter(16)
 	in.MarshalBson(encoded)
 	expected, _ := bson.Marshal(in)
 	compare(t, encoded.Bytes(), expected)
 
 	var ret QueryResult
-	ret.UnmarshalBson(encoded)
+	ret.UnmarshalBson(bytes.NewBuffer(encoded.Bytes()))
 	assertTrue(ret.Fields[1].Name == in.Fields[1].Name, "fields", t)
 	assertTrue(ret.Rows[0][1] == in.Rows[0][1], "rows", t)
 }
@@ -70,7 +71,7 @@ func BenchmarkMarshal(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		encoded := bytes.NewBuffer(make([]byte, 0, 8))
+		encoded := bytes2.NewChunkedWriter(8)
 		in.MarshalBson(encoded)
 	}
 }
