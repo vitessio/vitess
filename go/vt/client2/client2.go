@@ -46,7 +46,8 @@ func NewDriver(address string) *Driver {
 	return &Driver{address}
 }
 
-func (self Driver) Open(name string) (driver.Conn, error) {
+// driver.Driver interface
+func (*Driver) Open(name string) (driver.Conn, error) {
 	conn := &Conn{}
 	connValues := strings.Split(name, "/")
 	if len(connValues) != 2 {
@@ -62,126 +63,135 @@ func (self Driver) Open(name string) (driver.Conn, error) {
 	return conn, nil
 }
 
-func (self *Conn) Prepare(query string) (driver.Stmt, error) {
-	return Stmt{self, query}, nil
+// driver.Conn interface
+func (conn *Conn) Prepare(query string) (driver.Stmt, error) {
+	return &Stmt{conn, query}, nil
 }
 
-func (self *Conn) Close() error {
-	self.Session = tabletserver.Session{0, 0, 0}
-	return self.rpcClient.Close()
+func (conn *Conn) Close() error {
+	conn.Session = tabletserver.Session{0, 0, 0}
+	return conn.rpcClient.Close()
 }
 
-func (self *Conn) Execute(query string, bindVars map[string]interface{}) (*tabletserver.QueryResult, error) {
+func (conn *Conn) execute(query string, bindVars map[string]interface{}) (*tabletserver.QueryResult, error) {
 	var result tabletserver.QueryResult
 	req := &tabletserver.Query{
 		Sql:           query,
 		BindVariables: bindVars,
-		TransactionId: self.TransactionId,
-		ConnectionId:  self.ConnectionId,
-		SessionId:     self.SessionId,
+		TransactionId: conn.TransactionId,
+		ConnectionId:  conn.ConnectionId,
+		SessionId:     conn.SessionId,
 	}
-	if err := self.rpcClient.Call("SqlQuery.Execute", req, &result); err != nil {
+	if err := conn.rpcClient.Call("SqlQuery.Execute", req, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-func (self *Conn) Exec(query string, args []interface{}) (*Result, error) {
+// driver.Execer interface
+func (conn *Conn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	bindVars := make(map[string]interface{})
 	for i, v := range args {
 		bindVars[fmt.Sprintf("v%d", i)] = v
 	}
-	qr, err := self.Execute(query, bindVars)
+	qr, err := conn.execute(query, bindVars)
 	if err != nil {
-		return nil, err
+		return &Result{}, err
 	}
 	return &Result{qr, 0}, nil
 }
 
-func (self *Conn) Begin() (driver.Tx, error) {
-	if self.TransactionId != 0 {
-		return Tx{}, errors.New("already in a transaction")
+func (conn *Conn) Begin() (driver.Tx, error) {
+	if conn.TransactionId != 0 {
+		return &Tx{}, errors.New("already in a transaction")
 	}
-	if err := self.rpcClient.Call("SqlQuery.Begin", &self.Session, &self.TransactionId); err != nil {
-		return Tx{}, err
+	if err := conn.rpcClient.Call("SqlQuery.Begin", &conn.Session, &conn.TransactionId); err != nil {
+		return &Tx{}, err
 	}
-	return Tx{self}, nil
+	return &Tx{conn}, nil
 }
 
-func (self *Conn) Commit() error {
-	if self.TransactionId == 0 {
+func (conn *Conn) Commit() error {
+	if conn.TransactionId == 0 {
 		return errors.New("not in a transaction")
 	}
-	defer func() { self.TransactionId = 0 }()
+	defer func() { conn.TransactionId = 0 }()
 	var noOutput string
-	return self.rpcClient.Call("SqlQuery.Commit", &self.Session, &noOutput)
+	return conn.rpcClient.Call("SqlQuery.Commit", &conn.Session, &noOutput)
 }
 
-func (self *Conn) Rollback() error {
-	if self.TransactionId == 0 {
+func (conn *Conn) Rollback() error {
+	if conn.TransactionId == 0 {
 		return errors.New("not in a transaction")
 	}
-	defer func() { self.TransactionId = 0 }()
+	defer func() { conn.TransactionId = 0 }()
 	var noOutput string
-	return self.rpcClient.Call("SqlQuery.Rollback", &self.Session, &noOutput)
+	return conn.rpcClient.Call("SqlQuery.Rollback", &conn.Session, &noOutput)
 }
 
-func (self Stmt) Close() error {
+// driver.Stmt interface
+func (*Stmt) Close() error {
 	return nil
 }
 
-func (self Stmt) NumInput() int {
+func (*Stmt) NumInput() int {
 	return -1
 }
 
-func (self Stmt) Exec(args []interface{}) (driver.Result, error) {
-	return self.conn.Exec(self.query, args)
+func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
+	return stmt.conn.Exec(stmt.query, args)
 }
 
-func (self Stmt) Query(args []interface{}) (driver.Rows, error) {
-	return self.conn.Exec(self.query, args)
+func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
+	// we use driver.Execer interface, we know it's a Result return,
+	// and our Result implements driver.Rows
+	res, err := stmt.conn.Exec(stmt.query, args)
+	return res.(*Result), err
 }
 
-func (self Tx) Commit() error {
-	return self.conn.Commit()
+// driver.Tx interface (forwarded to Conn)
+func (tx *Tx) Commit() error {
+	return tx.conn.Commit()
 }
 
-func (self Tx) Rollback() error {
-	return self.conn.Rollback()
+func (tx *Tx) Rollback() error {
+	return tx.conn.Rollback()
 }
 
-func (self *Result) LastInsertId() (int64, error) {
-	return int64(self.qr.InsertId), nil
+// driver.Result interface
+func (result *Result) LastInsertId() (int64, error) {
+	return int64(result.qr.InsertId), nil
 }
 
-func (self *Result) RowsAffected() (int64, error) {
-	return int64(self.qr.RowsAffected), nil
+func (result *Result) RowsAffected() (int64, error) {
+	return int64(result.qr.RowsAffected), nil
 }
 
-func (self *Result) Columns() (cols []string) {
-	cols = make([]string, len(self.qr.Fields))
-	for i, f := range self.qr.Fields {
+// driver.Rows interface
+func (result *Result) Columns() (cols []string) {
+	cols = make([]string, len(result.qr.Fields))
+	for i, f := range result.qr.Fields {
 		cols[i] = f.Name
 	}
 	return cols
 }
 
-func (self *Result) Close() error {
-	self.index = 0
+func (result *Result) Close() error {
+	result.index = 0
 	return nil
 }
 
-func (self *Result) Next(dest []interface{}) error {
-	if len(dest) != len(self.qr.Fields) {
+func (result *Result) Next(dest []driver.Value) error {
+	if len(dest) != len(result.qr.Fields) {
 		return errors.New("length mismatch")
 	}
-	if self.index >= len(self.qr.Rows) {
+	if result.index >= len(result.qr.Rows) {
 		return io.EOF
 	}
-	defer func() { self.index++ }()
-	for i, v := range self.qr.Rows[self.index] {
+	defer func() { result.index++ }()
+	for i, v := range result.qr.Rows[result.index] {
 		if v != nil {
-			dest[i] = convert(int(self.qr.Fields[i].Type), v.(string))
+			dest[i] = convert(int(result.qr.Fields[i].Type), v.(string))
 		}
 	}
 	return nil
