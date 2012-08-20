@@ -9,12 +9,6 @@ import (
 	"time"
 )
 
-func assertTrue(tf bool, msg string, t *testing.T) {
-	if !tf {
-		t.Error(msg)
-	}
-}
-
 func TestVariety(t *testing.T) {
 	in := map[string]string{"Val": "test"}
 	encoded := VerifyMarshal(t, in)
