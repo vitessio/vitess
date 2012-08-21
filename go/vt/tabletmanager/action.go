@@ -29,6 +29,11 @@ const (
 
 	// Shard actions - involve all tablets in a shard
 	SHARD_ACTION_REPARENT = "ReparentShard"
+	// Recompute derived shard-wise data
+	SHARD_ACTION_REBUILD = "RebuildShard"
+
+	// Keyspace actions - require very high level locking for consistency
+	KEYSPACE_ACTION_REBUILD = "RebuildKeyspace"
 
 	ACTION_STATE_QUEUED  = ActionState("")        // All actions are queued initially
 	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process

@@ -396,7 +396,7 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	return nil
 }
 
-// Make this external, since in needs to be forced from time to time.
+// Make this external, since these transitions need to be forced from time to time.
 func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType) error {
 	tablet, err := ReadTablet(zconn, zkTabletPath)
 	if err != nil {

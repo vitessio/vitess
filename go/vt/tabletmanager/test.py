@@ -178,6 +178,8 @@ def teardown():
 
 def run_test_sanity():
   # Start up a master mysql and vttablet
+  run(vttop+'/go/cmd/vtctl/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
   run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
   run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
   run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_nj/vt')
@@ -202,6 +204,8 @@ def run_test_sanity():
 
 def run_test_restart_during_action():
   # Start up a master mysql and vttablet
+  run(vttop+'/go/cmd/vtctl/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
   run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
   run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
   run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_nj/vt')
@@ -253,7 +257,6 @@ def _check_db_addr(db_addr, expected_addr):
 
 def run_test_reparent_down_master():
   _wipe_zk()
-
 
   run(vttop+'/go/cmd/vtctl/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
@@ -329,6 +332,8 @@ def run_test_reparent_graceful():
 
 def _run_test_reparent_graceful(shard_id):
   _wipe_zk()
+
+  run(vttop+'/go/cmd/vtctl/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
   # Start up a master mysql and vttablet
   run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace %(shard_id)s master ""' % vars())

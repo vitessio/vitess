@@ -41,11 +41,15 @@ func NewAddrs() *VtnsAddrs {
 	return &VtnsAddrs{Entries: make([]VtnsAddr, 0, 8), version: -1}
 }
 
-func ZkPathForVtShard(cell, keyspace, shard string) string {
+func ZkPathForVtKeyspace(cell, keyspace string) string {
 	if cell == "" {
 		cell = "local"
 	}
-	return fmt.Sprintf("/zk/%v/vt/ns/%v/%v", cell, keyspace, shard)
+	return fmt.Sprintf("/zk/%v/vt/ns/%v", cell, keyspace)
+}
+
+func ZkPathForVtShard(cell, keyspace, shard string) string {
+	return path.Join(ZkPathForVtKeyspace(cell, keyspace), shard)
 }
 
 func ZkPathForVtName(cell, keyspace, shard, dbType string) string {

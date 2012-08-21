@@ -65,6 +65,9 @@ Keyspaces:
   CreateKeyspace <zk keyspaces path>/<name> <shard count>
     e.g. CreateKeyspace /zk/global/vt/keyspaces/my_keyspace 4
 
+  RebuildKeyspace <zk keyspace path>
+    rebuild the shard, this may trigger an update to all connected clients
+
 
 Generic:
   PurgeActions <zk action path>
@@ -125,13 +128,18 @@ func confirm(prompt string) bool {
 // is needed for a keyspace.
 func createKeyspace(zconn zk.Conn, path string) error {
 	tm.MustBeKeyspacePath(path)
-	_, err := zk.CreateRecursive(zconn, path, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	actionPath := tm.KeyspaceActionPath(path)
+	_, err := zk.CreateRecursive(zconn, actionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) && !*force {
-			relog.Fatal("keyspace already exists: %v", path)
+		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			if !*force {
+				relog.Fatal("keyspace already exists: %v", path)
+			}
+		} else {
+			relog.Fatal("error creating keyspace: %v %v", path, err)
 		}
-		relog.Fatal("error creating keyspace: %v", err)
 	}
+
 	return nil
 }
 
@@ -198,7 +206,7 @@ func purgeActions(zconn zk.Conn, zkActionPath string) error {
 	return nil
 }
 
-func changeType(zconn zk.Conn, ai *tm.ActionInitiator, zkTabletPath, dbType string) error {
+func changeType(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkTabletPath, dbType string) error {
 	if *force {
 		return tm.ChangeType(zconn, zkTabletPath, tm.TabletType(dbType))
 	} else {
@@ -218,8 +226,15 @@ func changeType(zconn zk.Conn, ai *tm.ActionInitiator, zkTabletPath, dbType stri
 	if err != nil {
 		relog.Warning("%v: %v", zkTabletPath, err)
 	}
-	err = tm.RebuildShard(zconn, tabletInfo.ShardPath())
-	return err
+
+	if _, err := wrangler.RebuildShard(tabletInfo.ShardPath()); err != nil {
+		return err
+	}
+	if _, err := wrangler.RebuildKeyspace(tabletInfo.KeyspacePath()); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func getTabletMap(zconn zk.Conn, tabletPaths []string) map[string]*tm.TabletInfo {
@@ -348,7 +363,7 @@ func validateZk(zconn zk.Conn, ai *tm.ActionInitiator, zkVtPath string) error {
 			if err != nil {
 				return err
 			}
-			aliases, err := tm.FindAllTabletAliasesInShard(zconn, shardInfo)
+			aliases, err := tm.FindAllTabletAliasesInShard(zconn, shardInfo.ShardPath())
 			if err != nil {
 				return err
 			}
@@ -503,7 +518,7 @@ func main() {
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk tablet path> <db type>", args[0])
 		}
-		err = changeType(zconn, ai, args[1], args[2])
+		err = changeType(zconn, ai, wrangler, args[1], args[2])
 	case "DemoteMaster":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk tablet path>", args[0])
@@ -518,7 +533,12 @@ func main() {
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
-		err = tm.RebuildShard(zconn, args[1])
+		actionPath, err = wrangler.RebuildShard(args[1])
+	case "RebuildKeyspace":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk keyspace path>", args[0])
+		}
+		actionPath, err = wrangler.RebuildKeyspace(args[1])
 	case "ReparentShard":
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk shard path> <zk tablet path>", args[0])

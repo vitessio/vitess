@@ -91,6 +91,7 @@ func (wr *Wrangler) readTablet(zkTabletPath string) (*tm.TabletInfo, error) {
  Create the reparenting action and launch a goroutine to coordinate the procedure.
  The actionNode can be watched for updates.
  TODO(msolomon): We could supply a channel of updates to cut out zk round trips.
+
 force: true if we are trying to skip sanity checks - mostly for test setups
 */
 func (wr *Wrangler) ReparentShard(zkShardPath, zkTabletPath string, force bool) (actionPath string, err error) {
@@ -132,6 +133,9 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkTabletPath string, force bool) 
 		panic(fmt.Errorf("failed to obtain action lock: %v", actionPath))
 	}
 
+	// This method communicates via the action error in zk so that vtctl can initiate the
+	// action and then choose how to wait.
+	// FIXME(msolomon) if you don't wait, then this will fail
 	go wr.reparentShardHandler(shardInfo, tablet, actionPath)
 	return
 }
@@ -186,7 +190,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	}
 
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
-	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo)
+	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
 	relog.Debug("shardUids: %v", tabletAliases)
 	if err != nil {
 		return err

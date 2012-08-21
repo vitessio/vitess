@@ -107,6 +107,19 @@ func ShardActionPath(zkShardPath string) string {
 	return path.Join(zkShardPath, "action")
 }
 
+// zkVtRoot: /zk/XX/vt
+func KeyspacePath(zkVtRoot, keyspace string) string {
+	keyspacePath := path.Join("/zk/global/vt", "keyspaces", keyspace)
+	MustBeKeyspacePath(keyspacePath)
+	return keyspacePath
+}
+
+// zkKeyspacePath: /zk/global/vt/keyspaces/XX
+func KeyspaceActionPath(zkKeyspacePath string) string {
+	MustBeKeyspacePath(zkKeyspacePath)
+	return path.Join(zkKeyspacePath, "action")
+}
+
 // Tablet aliases are the nodes that point into /vt/tablets/<uid> from the keyspace
 // Note that these are *global*
 func IsTabletReplicationPath(zkReplicationPath string) bool {

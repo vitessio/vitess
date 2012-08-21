@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path"
 
+	"code.google.com/p/vitess/go/vt/shard"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -116,6 +117,8 @@ type Tablet struct {
 	Type     TabletType
 
 	State TabletState
+
+	shard.KeyRange
 }
 
 func (tablet *Tablet) IsServingType() bool {
@@ -157,6 +160,10 @@ func (ti *TabletInfo) ShardPath() string {
 	return ShardPath(ti.zkVtRoot, ti.Keyspace, ti.Shard)
 }
 
+func (ti *TabletInfo) KeyspacePath() string {
+	return KeyspacePath(ti.zkVtRoot, ti.Keyspace)
+}
+
 // This is the path that indicates the tablet's position in the shard replication graph.
 // This is too complicated for zk_path, so it's on this struct.
 func (ti *TabletInfo) ReplicationPath() string {
@@ -188,7 +195,7 @@ func NewTablet(cell string, uid uint, parent TabletAlias, vtAddr, mysqlAddr, key
 		}
 	}
 
-	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, keyspace, shardId, tabletType, state}
+	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, keyspace, shardId, tabletType, state, shard.KeyRange{}}
 }
 
 func tabletFromJson(data string) *Tablet {

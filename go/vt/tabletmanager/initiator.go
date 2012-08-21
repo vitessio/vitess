@@ -75,6 +75,16 @@ func (ai *ActionInitiator) writeShardAction(zkShardPath string, node *ActionNode
 	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
+func (ai *ActionInitiator) writeKeyspaceAction(zkKeyspacePath string, node *ActionNode) (actionPath string, err error) {
+	MustBeKeyspacePath(zkKeyspacePath)
+	node.ActionGuid = actionGuid()
+	data := ActionNodeToJson(node)
+	actionPath = KeyspaceActionPath(zkKeyspacePath)
+	// Action paths end in a trailing slash to that when we create
+	// sequential nodes, they are created as children, not siblings.
+	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+}
+
 func (ai *ActionInitiator) Ping(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PING})
 }
@@ -124,6 +134,18 @@ func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (acti
 	node := &ActionNode{Action: SHARD_ACTION_REPARENT}
 	node.Args = map[string]string{"tabletPath": zkTabletPath}
 	return ai.writeShardAction(zkShardPath, node)
+}
+
+func (ai *ActionInitiator) RebuildShard(zkShardPath string) (actionPath string, err error) {
+	MustBeShardPath(zkShardPath)
+	node := &ActionNode{Action: SHARD_ACTION_REBUILD}
+	return ai.writeShardAction(zkShardPath, node)
+}
+
+func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath string, err error) {
+	MustBeKeyspacePath(zkKeyspacePath)
+	node := &ActionNode{Action: KEYSPACE_ACTION_REBUILD}
+	return ai.writeKeyspaceAction(zkKeyspacePath, node)
 }
 
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
