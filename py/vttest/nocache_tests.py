@@ -188,11 +188,11 @@ class TestNocache(framework.TestCase):
     else:
       self.assertFail("Did not receive exception")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 1)
+    self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 1000000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)
     self.env.execute("set vt_transaction_timeout=30")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 30)
+    self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 30000000000)
 
   def test_query_cache(self):
     vstart = self.env.debug_vars()
@@ -278,11 +278,11 @@ class TestNocache(framework.TestCase):
       self.assertFail("Did not receive exception")
 
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActivePool.Timeout, 1)
+    self.assertEqual(vend.Voltron.ActivePool.Timeout, 1000000000)
     self.assertEqual(vstart.mget("Kills.Queries", 0)+1, vend.Kills.Queries)
     self.env.execute("set vt_query_timeout=30")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActivePool.Timeout, 30)
+    self.assertEqual(vend.Voltron.ActivePool.Timeout, 30000000000)
 
   def test_idle_timeout(self):
     vstart = self.env.debug_vars()
@@ -290,12 +290,12 @@ class TestNocache(framework.TestCase):
     time.sleep(2)
     self.env.execute("select 1 from dual")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1)
-    self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1)
+    self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1000000000)
+    self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1000000000)
     self.env.execute("set vt_idle_timeout=1800")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1800)
-    self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1800)
+    self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1800000000000)
+    self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1800000000000)
 
   def test_consolidation(self):
     vstart = self.env.debug_vars()
