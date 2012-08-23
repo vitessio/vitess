@@ -150,11 +150,19 @@ func (self *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	}
 }
 
-func (self *SqlQuery) GetSessionId(dbName *string, sessionId *int64) error {
-	if *dbName != self.dbName {
-		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", self.dbName, *dbName)
+type SessionParams struct {
+	DbName string
+}
+
+type SessionInfo struct {
+	SessionId int64
+}
+
+func (self *SqlQuery) GetSessionId(sessionParams *SessionParams, sessionInfo *SessionInfo) error {
+	if sessionParams.DbName != self.dbName {
+		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", self.dbName, sessionParams.DbName)
 	}
-	*sessionId = self.sessionId
+	sessionInfo.SessionId = self.sessionId
 	return nil
 }
 
@@ -212,12 +220,16 @@ func (self *SqlQuery) Rollback(session *Session, noOutput *string) (err error) {
 	return nil
 }
 
-func (self *SqlQuery) CreateReserved(session *Session, connectionId *int64) (err error) {
+type ConnectionInfo struct {
+	ConnectionId int64
+}
+
+func (self *SqlQuery) CreateReserved(session *Session, connectionInfo *ConnectionInfo) (err error) {
 	defer handleError(&err)
 	self.checkState(session.SessionId, false)
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	*connectionId = self.reservedPool.CreateConnection()
+	connectionInfo.ConnectionId = self.reservedPool.CreateConnection()
 	return nil
 }
 
@@ -332,12 +344,17 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 	return nil
 }
 
-type QueryList []Query
-type QueryResultList []QueryResult
+type QueryList struct {
+	List []Query
+}
+
+type QueryResultList struct {
+	List []QueryResult
+}
 
 func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (err error) {
 	defer handleError(&err)
-	ql := *queryList
+	ql := queryList.List
 	if len(ql) == 0 {
 		panic(NewTabletError(FAIL, "Empty query list"))
 	}
@@ -351,7 +368,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 		ConnectionId:  ql[0].ConnectionId,
 		SessionId:     ql[0].SessionId,
 	}
-	*reply = make([]QueryResult, 0, len(ql))
+	reply.List = make([]QueryResult, 0, len(ql))
 	for _, query := range ql {
 		trimmed := strings.ToLower(strings.Trim(query.Sql, " \t\r\n"))
 		switch trimmed {
@@ -363,7 +380,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 				return err
 			}
 			begin_called = true
-			*reply = append(*reply, QueryResult{})
+			reply.List = append(reply.List, QueryResult{})
 		case "commit":
 			if !begin_called {
 				panic(NewTabletError(FAIL, "Cannot commit without begin"))
@@ -373,7 +390,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 			}
 			session.TransactionId = 0
 			begin_called = false
-			*reply = append(*reply, QueryResult{})
+			reply.List = append(reply.List, QueryResult{})
 		default:
 			query.TransactionId = session.TransactionId
 			query.ConnectionId = session.ConnectionId
@@ -385,7 +402,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 				}
 				return err
 			}
-			*reply = append(*reply, localReply)
+			reply.List = append(reply.List, localReply)
 		}
 	}
 	if begin_called {

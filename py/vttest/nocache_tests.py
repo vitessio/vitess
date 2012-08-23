@@ -308,6 +308,12 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vstart.mget("Waits.TotalCount", 0)+1, vend.Waits.TotalCount)
     self.assertEqual(vstart.mget("Waits.Histograms.Consolidations.Count", 0)+1, vend.Waits.Histograms.Consolidations.Count)
 
+  def test_batch(self):
+    queries = ["select * from vtocc_a where id = %(a)s", "select * from vtocc_b where id = %(b)s"]
+    bvars = [{"a":2}, {"b":2}]
+    results = self.env.conn._execute_batch(queries, bvars)
+    self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
+
   def test_sqls(self):
     error_count = self.env.run_cases(nocache_cases.nocache_cases)
     if error_count != 0:

@@ -57,9 +57,12 @@ func (*Driver) Open(name string) (driver.Conn, error) {
 	if conn.rpcClient, err = rpc.DialHTTP("tcp", connValues[0]); err != nil {
 		return nil, err
 	}
-	if err = conn.rpcClient.Call("OccManager.GetSessionId", connValues[1], &conn.SessionId); err != nil {
+	sessionParams := tabletserver.SessionParams{DbName: connValues[1]}
+	var sessionInfo tabletserver.SessionInfo
+	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
 		return nil, err
 	}
+	conn.SessionId = sessionInfo.SessionId
 	return conn, nil
 }
 
@@ -73,7 +76,9 @@ func (conn *Conn) Close() error {
 	return conn.rpcClient.Close()
 }
 
-func (conn *Conn) execute(query string, bindVars map[string]interface{}) (*tabletserver.QueryResult, error) {
+// ExecBind can be used to execute queries with explicitly named bind vars.
+// You will need to bypass go's database api to use this function.
+func (conn *Conn) ExecBind(query string, bindVars map[string]interface{}) (*tabletserver.QueryResult, error) {
 	var result tabletserver.QueryResult
 	req := &tabletserver.Query{
 		Sql:           query,
@@ -94,7 +99,7 @@ func (conn *Conn) Exec(query string, args []driver.Value) (driver.Result, error)
 	for i, v := range args {
 		bindVars[fmt.Sprintf("v%d", i)] = v
 	}
-	qr, err := conn.execute(query, bindVars)
+	qr, err := conn.ExecBind(query, bindVars)
 	if err != nil {
 		return &Result{}, err
 	}

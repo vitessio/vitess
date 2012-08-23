@@ -80,8 +80,8 @@ class VtOCCConnection(tablet2.TabletConnection):
   def dial(self):
     tablet2.TabletConnection.dial(self)
     try:
-      response = self.client.call('SqlQuery.GetSessionId', self.dbname)
-      self.set_session_id(response.reply)
+      response = self.client.call('SqlQuery.GetSessionId', {"DbName": self.dbname})
+      self.set_session_id(response.reply["SessionId"])
     except gorpc.GoRpcError, e:
       raise dbexceptions.OperationalError(*e.args)
 

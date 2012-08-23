@@ -75,7 +75,11 @@ class TabletConnection(object):
     req = self._make_req()
     try:
       response = self.client.call('SqlQuery.Begin', req)
-      self.transaction_id = response.reply
+      # FIXME(sougou): Temp hack for backward compatibility
+      if type(response.reply) == dict:
+        self.transaction_id = respponse.reply["TransactionId"]
+      else:
+        self.transaction_id = response.reply
     except gorpc.GoRpcError, e:
       raise dbexceptions.OperationalError(*e.args)
 
@@ -156,8 +160,9 @@ class TabletConnection(object):
     rowsets = []
 
     try:
-      response = self.client.call('SqlQuery.ExecuteBatch', query_list)
-      for reply in response.reply:
+      req = {"List": query_list}
+      response = self.client.call('SqlQuery.ExecuteBatch', req)
+      for reply in response.reply["List"]:
         fields = []
         conversions = []
         results = []
