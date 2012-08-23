@@ -78,20 +78,24 @@ func (cnf *ZkConfig) WriteMyid() error {
 }
 
 /*
-  Join cnf files cnfPaths and subsitute in the right values.
+  Search for first existing file in cnfFiles and subsitute in the right values.
 */
-func MakeZooCfg(cnfPaths []string, cnf *ZkConfig, header string) (string, error) {
+func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error) {
 	myTemplateSource := new(bytes.Buffer)
 	for _, line := range strings.Split(header, "\n") {
 		fmt.Fprintf(myTemplateSource, "## %v\n", strings.TrimSpace(line))
 	}
-	for _, path := range cnfPaths {
+	var dataErr error
+	for _, path := range cnfFiles {
 		data, dataErr := ioutil.ReadFile(path)
 		if dataErr != nil {
-			return "", dataErr
+			continue
 		}
 		myTemplateSource.WriteString("## " + path + "\n")
 		myTemplateSource.Write(data)
+	}
+	if dataErr != nil {
+		return "", dataErr
 	}
 
 	myTemplate, err := template.New("foo").Parse(myTemplateSource.String())
@@ -108,19 +112,8 @@ func MakeZooCfg(cnfPaths []string, cnf *ZkConfig, header string) (string, error)
 
 const GUESS_MYID = 0
 
-func MakeZooCfgForString(cmdLine, cnfPath, header string) (string, error) {
-	cnfs := []string{"zoo"}
-	paths := make([]string, len(cnfs))
-	for i, name := range cnfs {
-		paths[i] = fmt.Sprintf("%v/%v.cfg", cnfPath, name)
-	}
-	zkConfig := MakeZkConfigFromString(cmdLine, GUESS_MYID)
-	return MakeZooCfg(paths, zkConfig, header)
-}
-
 /*
-  Create a config for this instance. Search cnfPath for the appropriate
-  cnf template files.
+  Create a config for this instance.
 
   <server_id>@<hostname>:<leader_port>:<election_port>:<client_port>
 
@@ -141,6 +134,8 @@ func MakeZkConfigFromString(cmdLine string, myId uint) *ZkConfig {
 			serverId = serverId % 1000
 			zkConfig.Global = true
 		}
+		myId = myId % 1000
+
 		zkServer := zkServerAddr{ServerId: uint(serverId), ClientPort: 2181,
 			LeaderPort: 2888, ElectionPort: 3888}
 		switch len(zkAddrParts) {
