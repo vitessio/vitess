@@ -106,10 +106,10 @@ var stdin *bufio.Reader
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(os.Stdout, "Usage of %s:\n", os.Args[0])
+		// FIXME(msolomon) PrintDefaults needs to go to stdout
 		flag.PrintDefaults()
-		fmt.Fprintf(os.Stderr, usage)
-
+		fmt.Fprintf(os.Stdout, usage)
 	}
 	stdin = bufio.NewReader(os.Stdin)
 }
