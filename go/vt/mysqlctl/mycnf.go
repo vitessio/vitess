@@ -205,8 +205,9 @@ func ReadMycnf(cnfFile string) (*Mycnf, error) {
 	mycnf := &Mycnf{SocketFile: "/var/lib/mysql/mysql.sock",
 		MycnfFile: cnfFile,
 		// FIXME(msolomon) remove this whole method, just asking for trouble
-		VtHost: "localhost",
-		VtPort: 6612,
+		VtHost:    "localhost",
+		VtPort:    6612,
+		MysqlPort: 3306,
 	}
 	for {
 		line, _, err := buf.ReadLine()

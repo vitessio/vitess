@@ -297,16 +297,12 @@ def run_test_reparent_down_master():
   # Force the scrap action in zk even though tablet is not accessible.
   run(vttop+'/go/cmd/vtctl/vtctl -force ScrapTablet /zk/test_nj/vt/tablets/0000062344')
 
-  run(vttop+'/go/cmd/vtctl/vtctl -force ChangeType /zk/test_nj/vt/tablets/0000062344 idle')
-
-  idle_tablets, _ = run(vttop+'/go/cmd/vtctl/vtctl ListIdle /zk/test_nj/vt', trap_output=True)
-  if '0000062344' not in idle_tablets:
-    raise TestError('idle tablet not found', idle_tablets)
+  run_fail(vttop+'/go/cmd/vtctl/vtctl -force ChangeType /zk/test_nj/vt/tablets/0000062344 idle')
 
   # Remove pending locks (make this the force option to ReparentShard?)
   run(vttop+'/go/cmd/vtctl/vtctl -force PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
 
-  # Scrapping a tablet shouldn't take it out of the servering graph.
+  # Scrapping a tablet shouldn't take it out of the serving graph.
   expected_addr = hostname + ':6700'
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
@@ -316,6 +312,12 @@ def run_test_reparent_down_master():
   _check_zk()
   expected_addr = hostname + ':6701'
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
+
+  run(vttop+'/go/cmd/vtctl/vtctl -force ChangeType /zk/test_nj/vt/tablets/0000062344 idle')
+
+  idle_tablets, _ = run(vttop+'/go/cmd/vtctl/vtctl ListIdle /zk/test_nj/vt', trap_output=True)
+  if '0000062344' not in idle_tablets:
+    raise TestError('idle tablet not found', idle_tablets)
 
   agent_62044.kill()
   agent_41983.kill()

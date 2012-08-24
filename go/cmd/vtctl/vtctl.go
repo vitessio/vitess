@@ -384,7 +384,7 @@ func validateZk(zconn zk.Conn, ai *tm.ActionInitiator, zkVtPath string) error {
 				if tabletInfo.Parent.Uid == tm.NO_TABLET {
 					if masterAlias.Cell != "" {
 						someErrors = true
-						relog.Error("%v: already have a master %v", zkTabletPath, masterAlias)
+						relog.Error("%v: already has a master %v", zkTabletPath, masterAlias)
 					} else {
 						masterAlias = alias
 					}

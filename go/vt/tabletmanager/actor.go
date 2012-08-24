@@ -12,6 +12,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/shard"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -367,6 +368,11 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	if err != nil {
 		return err
 	}
+	if tablet.Type == TYPE_IDLE {
+		// The transition to idle removes all the data necessary to compute the derived
+		// paths. Once that happens, there is no value to scrapping.
+		return fmt.Errorf("cannot scrap idle tablet: %v", zkTabletPath)
+	}
 	tablet.Type = TYPE_SCRAP
 	err = UpdateTablet(zconn, zkTabletPath, tablet)
 	if err != nil {
@@ -403,8 +409,26 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType) error {
 		return err
 	}
 	if !IsTrivialTypeChange(tablet.Type, newType) {
-		return fmt.Errorf("cannot change tablet type %v -> %v", tablet.Type, newType)
+		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, zkTabletPath)
 	}
 	tablet.Type = newType
+	if newType == TYPE_IDLE {
+		if tablet.Parent.Uid == NO_TABLET {
+			// With a master the node cannot be set to idle unless we have already removed all of
+			// the derived paths. The global replication path is a good indication that this has
+			// been resolved.
+			stat, err := zconn.Exists(tablet.ReplicationPath())
+			if err != nil {
+				return err
+			}
+			if stat != nil && stat.NumChildren() != 0 {
+				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, zkTabletPath)
+			}
+		}
+		tablet.Parent = TabletAlias{}
+		tablet.Keyspace = ""
+		tablet.Shard = ""
+		tablet.KeyRange = shard.KeyRange{}
+	}
 	return UpdateTablet(zconn, zkTabletPath, tablet)
 }

@@ -232,13 +232,20 @@ func RebuildShard(zconn zk.Conn, zkShardPath string) error {
 		zkSgShardPath := naming.ZkPathForVtShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 		children, _, err := zconn.Children(zkSgShardPath)
 		if err != nil {
-			if err.(*zookeeper.Error).Code != zookeeper.ZNONODE {
+			if !zookeeper.IsError(err, zookeeper.ZNONODE) {
 				relog.Warning("unable to list existing db types: %v", err)
 			}
 		} else {
 			for _, child := range children {
 				existingDbTypePaths[path.Join(zkSgShardPath, child)] = true
 			}
+		}
+
+		// Check IsServingType after we have populated existingDbTypePaths
+		// so we properly prune data if the definition of serving type
+		// changes.
+		if !tablet.IsServingType() {
+			continue
 		}
 
 		zkPath := naming.ZkPathForVtName(tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, string(tablet.Type))

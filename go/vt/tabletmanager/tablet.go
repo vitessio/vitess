@@ -17,7 +17,7 @@ import (
 type TabletType string
 
 const (
-	// idle
+	// idle -  no keyspace, shard or type assigned
 	TYPE_IDLE = TabletType("idle")
 
 	// primary copy of data
@@ -240,22 +240,26 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 
 	zkPaths := []string{
 		TabletActionPath(zkTabletPath),
-		ShardActionPath(tablet.ShardPath()),
 	}
 
-	if tablet.Type != TYPE_SCRAP {
-		if zkTabletReplicationPath != "" && zkTabletReplicationPath != tablet.ReplicationPath() {
-			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
-				tablet.ReplicationPath(), zkTabletReplicationPath)
-		}
-		// Unless we are scrapped, check with are in the replication graph
-		zkPaths = append(zkPaths, tablet.ReplicationPath())
-	} else {
-		// Scrap nodes should not appear in the replication graph unless an action is running.
-		_, _, err := zconn.Get(tablet.ReplicationPath())
-		if !(err != nil && err.(*zookeeper.Error).Code == zookeeper.ZNONODE) {
-			return fmt.Errorf("unexpected replication path found for scrap tablet: %v",
-				tablet.ReplicationPath())
+	// Idle tablets have no information to generate valid replication paths.
+	if tablet.Type != TYPE_IDLE {
+		zkPaths = append(zkPaths, ShardActionPath(tablet.ShardPath()))
+
+		if tablet.Type != TYPE_SCRAP {
+			if zkTabletReplicationPath != "" && zkTabletReplicationPath != tablet.ReplicationPath() {
+				return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
+					tablet.ReplicationPath(), zkTabletReplicationPath)
+			}
+			// Unless we are scrapped or idle, check we are in the replication graph
+			zkPaths = append(zkPaths, tablet.ReplicationPath())
+		} else {
+			// Scrap nodes should not appear in the replication graph unless an action is running.
+			_, _, err := zconn.Get(tablet.ReplicationPath())
+			if !zookeeper.IsError(err, zookeeper.ZNONODE) {
+				return fmt.Errorf("unexpected replication path found for scrap tablet: %v",
+					tablet.ReplicationPath())
+			}
 		}
 	}
 
