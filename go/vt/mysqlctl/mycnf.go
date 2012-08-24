@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"path"
 	"strconv"
@@ -134,11 +135,20 @@ func (cnf *Mycnf) PidFile() string {
 }
 
 func (cnf *Mycnf) MysqlAddr() string {
-	host, err := os.Hostname()
+	return fmt.Sprintf("%v:%v", fqdn(), cnf.MysqlPort)
+}
+
+func fqdn() string {
+	hostname, err := os.Hostname()
 	if err != nil {
 		panic(err)
 	}
-	return fmt.Sprintf("%v:%v", host, cnf.MysqlPort)
+
+	cname, err := net.LookupCNAME(hostname)
+	if err != nil {
+		panic(err)
+	}
+	return strings.TrimRight(cname, ".")
 }
 
 /*

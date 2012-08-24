@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"path"
 	"strconv"
@@ -158,7 +159,7 @@ func MakeZkConfigFromString(cmdLine string, myId uint) *ZkConfig {
 		}
 		zkConfig.Servers = append(zkConfig.Servers, zkServer)
 	}
-	hostname, _ := os.Hostname()
+	hostname := fqdn()
 	for _, zkServer := range zkConfig.Servers {
 		if (myId > 0 && myId == zkServer.ServerId) || (myId == 0 && zkServer.Hostname == hostname) {
 			zkConfig.ServerId = zkServer.ServerId
@@ -170,4 +171,17 @@ func MakeZkConfigFromString(cmdLine string, myId uint) *ZkConfig {
 		panic(fmt.Errorf("no zk server found for host %v in config %v", hostname, cmdLine))
 	}
 	return zkConfig
+}
+
+func fqdn() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+
+	cname, err := net.LookupCNAME(hostname)
+	if err != nil {
+		panic(err)
+	}
+	return strings.TrimRight(cname, ".")
 }

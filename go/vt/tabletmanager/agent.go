@@ -288,15 +288,24 @@ func splitHostPort(addr string) (string, int) {
 	return host, int(p)
 }
 
+func fqdn() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+
+	cname, err := net.LookupCNAME(hostname)
+	if err != nil {
+		panic(err)
+	}
+	return strings.TrimRight(cname, ".")
+}
+
 // Resolve an address where the host has been left blank, like ":3306"
 func resolveAddr(addr string) string {
 	host, port := splitHostPort(addr)
 	if host == "" {
-		hostname, err := os.Hostname()
-		if err != nil {
-			panic(err)
-		}
-		host = hostname
+		host = fqdn()
 	}
 	return fmt.Sprintf("%v:%v", host, port)
 }
