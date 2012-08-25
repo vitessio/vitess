@@ -368,35 +368,35 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type == TYPE_IDLE {
-		// The transition to idle removes all the data necessary to compute the derived
-		// paths. Once that happens, there is no value to scrapping.
-		return fmt.Errorf("cannot scrap idle tablet: %v", zkTabletPath)
-	}
+
+	wasIdle := tablet.Type == TYPE_IDLE
 	tablet.Type = TYPE_SCRAP
+	// Update the tablet first, since that is canonical.
 	err = UpdateTablet(zconn, zkTabletPath, tablet)
 	if err != nil {
 		return err
 	}
 
-	err = zconn.Delete(tablet.ReplicationPath(), -1)
-	if err != nil {
-		switch err.(*zookeeper.Error).Code {
-		case zookeeper.ZNONODE:
-			relog.Debug("no replicationpath: %v", tablet.ReplicationPath())
-			return nil
-		case zookeeper.ZNOTEMPTY:
-			// If you are forcing the scrapping of a master, you can't update the
-			// replication graph yet, since other nodes are still under the impression
-			// they are slaved to this tablet.
-			// If the node was not empty, we can't do anything about it - the replication
-			// graph needs to be fixed by reparenting. If the action was forced, assume
-			// the user knows best and squelch the error.
-			if tablet.Parent.Uid == NO_TABLET && force {
+	if !wasIdle {
+		err = zconn.Delete(tablet.ReplicationPath(), -1)
+		if err != nil {
+			switch err.(*zookeeper.Error).Code {
+			case zookeeper.ZNONODE:
+				relog.Debug("no replication path: %v", tablet.ReplicationPath())
 				return nil
+			case zookeeper.ZNOTEMPTY:
+				// If you are forcing the scrapping of a master, you can't update the
+				// replication graph yet, since other nodes are still under the impression
+				// they are slaved to this tablet.
+				// If the node was not empty, we can't do anything about it - the replication
+				// graph needs to be fixed by reparenting. If the action was forced, assume
+				// the user knows best and squelch the error.
+				if tablet.Parent.Uid == NO_TABLET && force {
+					return nil
+				}
+			default:
+				return err
 			}
-		default:
-			return err
 		}
 	}
 	return nil

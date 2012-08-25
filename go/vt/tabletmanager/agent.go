@@ -185,16 +185,14 @@ func (agent *ActionAgent) verifyZkPaths() error {
 		panic(fmt.Errorf("agent._tablet is nil"))
 	}
 
-	zkReplicationPath := tablet.ReplicationPath()
-
-	_, err := agent.zconn.Create(zkReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNODEEXISTS {
+	if err := Validate(agent.zconn, agent.zkTabletPath, ""); err != nil {
 		return err
 	}
 
-	// Ensure that the action node is there.
-	_, err = agent.zconn.Create(agent.zkActionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNODEEXISTS {
+	// Ensure that the action node is there. There is no conflict creating
+	// this node.
+	_, err := agent.zconn.Create(agent.zkActionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
 	return nil

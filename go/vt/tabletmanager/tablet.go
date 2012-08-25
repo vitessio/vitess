@@ -129,6 +129,14 @@ func (tablet *Tablet) IsServingType() bool {
 	return false
 }
 
+func (tablet *Tablet) IsReplicatingType() bool {
+	switch tablet.Type {
+	case TYPE_IDLE, TYPE_SCRAP:
+		return false
+	}
+	return true
+}
+
 func (tablet *Tablet) String() string {
 	return fmt.Sprintf("Tablet{%v}", tablet.Uid)
 }
@@ -283,12 +291,14 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 		return err
 	}
 
-	// FIXME(msolomon) pull out into a list of required path and make the agent guarantee existence.
-
 	// Create /vt/tablets/<uid>/action
 	_, err = zconn.Create(TabletActionPath(zkTabletPath), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		return err
+	}
+
+	if !tablet.IsReplicatingType() {
+		return nil
 	}
 
 	zkVtRootPath := VtRootFromTabletPath(zkTabletPath)
@@ -296,24 +306,21 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 	shardPath := ShardPath(zkVtRootPath, tablet.Keyspace, tablet.Shard)
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>
 	_, err = zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && err.(*zookeeper.Error).Code == zookeeper.ZNODEEXISTS {
-		// If the node exists, bully for us
-		err = nil
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		return err
 	}
 
 	shardActionPath := ShardActionPath(shardPath)
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>/action
 	_, err = zk.CreateRecursive(zconn, shardActionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && err.(*zookeeper.Error).Code == zookeeper.ZNODEEXISTS {
-		// If the node exists, bully for us
-		err = nil
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		return err
 	}
 
 	_, err = zk.CreateRecursive(zconn, TabletReplicationPath(zkVtRootPath, tablet), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && err.(*zookeeper.Error).Code == zookeeper.ZNODEEXISTS {
-		// If the node exists, bully for us
-		err = nil
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		return err
 	}
 
-	return err
+	return nil
 }
