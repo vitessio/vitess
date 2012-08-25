@@ -264,7 +264,7 @@ func RebuildShard(zconn zk.Conn, zkShardPath string) error {
 		data := toJson(addrs)
 		_, err = zk.CreateRecursive(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
-			if err.(*zookeeper.Error).Code == zookeeper.ZNODEEXISTS {
+			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				// Node already exists - just stomp away. Multiple writers shouldn't be here.
 				// We use RetryChange here because it won't update the node unnecessarily.
 				f := func(oldValue string, oldStat *zookeeper.Stat) (string, error) {

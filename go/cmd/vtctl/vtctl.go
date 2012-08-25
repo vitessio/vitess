@@ -161,7 +161,7 @@ func initTablet(zconn zk.Conn, path, hostname, mysqlPort, vtPort, keyspace, shar
 	tablet := tm.NewTablet(cell, uint(uid), parent, fmt.Sprintf("%v:%v", hostname, vtPort), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
 	err = tm.CreateTablet(zconn, path, tablet)
 	if err != nil {
-		if zkErr, ok := err.(*zookeeper.Error); ok && zkErr.Code == zookeeper.ZNODEEXISTS {
+		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			if update {
 				oldTablet, err := tm.ReadTablet(zconn, path)
 				if err != nil {

@@ -30,7 +30,7 @@ func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeep
 		for _, p := range parts[2 : len(parts)-1] {
 			tmpPath = path.Join(tmpPath, p)
 			_, err = zconn.Create(tmpPath, "", flags, aclv)
-			if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNODEEXISTS {
+			if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				return "", err
 			}
 		}
@@ -44,7 +44,7 @@ func CreateOrUpdate(zconn Conn, zkPath, value string, flags int, aclv []zookeepe
 	} else {
 		pathCreated, err = zconn.Create(zkPath, value, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	}
-	if err != nil && err.(*zookeeper.Error).Code == zookeeper.ZNODEEXISTS {
+	if err != nil && zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		pathCreated = ""
 		_, err = zconn.Set(zkPath, value, -1)
 	}
@@ -108,7 +108,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	if err == nil {
 		return nil
 	}
-	if err.(*zookeeper.Error).Code != zookeeper.ZNOTEMPTY {
+	if !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
 		return err
 	}
 	// Remove the ability for other nodes to get created while we are trying to delete.
@@ -129,7 +129,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	}
 
 	err = zconn.Delete(zkPath, version)
-	if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNOTEMPTY {
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
 		err = fmt.Errorf("nodes getting recreated underneath delete (app race condition): %v", zkPath)
 	}
 	return err
@@ -172,7 +172,7 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 	// help hunt down any config issues present at startup
 	_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
-		if err.(*zookeeper.Error).Code == zookeeper.ZNODEEXISTS {
+		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = zconn.Delete(zkPath, -1)
 		}
 		if err != nil {

@@ -267,7 +267,7 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	if tablet.Parent.Uid != NO_TABLET {
 		oldReplicationPath := tablet.ReplicationPath()
 		err = ta.zconn.Delete(oldReplicationPath, -1)
-		if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNONODE {
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return err
 		}
 	}
@@ -288,7 +288,7 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	// we've updated the tablet.
 	newReplicationPath := tablet.ReplicationPath()
 	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNODEEXISTS {
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
 
@@ -326,7 +326,7 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 		// Remove tablet from the replication graph.
 		oldReplicationPath := tablet.ReplicationPath()
 		err = ta.zconn.Delete(oldReplicationPath, -1)
-		if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNONODE {
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return err
 		}
 
@@ -351,7 +351,7 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 	// we've updated the tablet.
 	newReplicationPath := tablet.ReplicationPath()
 	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNODEEXISTS {
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
 

@@ -177,7 +177,7 @@ func cmdWait(args []string) {
 		_, _, wait, err = zconn.GetW(zkPath)
 	}
 	if err != nil {
-		if err.(*zookeeper.Error).Code == zookeeper.ZNONODE {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			_, wait, err = zconn.ExistsW(zkPath)
 		} else {
 			log.Fatalf("wait: error %v: %v", zkPath, err)
@@ -392,7 +392,7 @@ func cmdTouch(args []string) {
 	version := -1
 	create := false
 	if err != nil {
-		if err.(*zookeeper.Error).Code == zookeeper.ZNONODE {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			create = true
 		} else {
 			log.Fatalf("touch: cannot access %v: %v", zkPath, err)
@@ -658,7 +658,7 @@ func getPathData(filePath string) (string, error) {
 func setPathData(filePath, data string) error {
 	if isZkFile(filePath) {
 		_, err := zconn.Set(filePath, data, -1)
-		if err != nil && err.(*zookeeper.Error).Code == zookeeper.ZNONODE {
+		if err != nil && zookeeper.IsError(err, zookeeper.ZNONODE) {
 			_, err = zk.CreateRecursive(zconn, filePath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		}
 		return err
@@ -805,7 +805,7 @@ func cmdUnzip(args []string) {
 			zkPath = path.Join(dstPath, zkPath)
 		}
 		_, err = zk.CreateRecursive(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil && err.(*zookeeper.Error).Code != zookeeper.ZNODEEXISTS {
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			log.Fatal("unzip: zk create failed: %v", err)
 		}
 		_, err = zconn.Set(zkPath, string(data), -1)
