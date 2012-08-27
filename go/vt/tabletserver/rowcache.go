@@ -5,8 +5,8 @@
 package tabletserver
 
 import (
-	"encoding/binary"
 	"code.google.com/p/vitess/go/stats"
+	"encoding/binary"
 	"time"
 )
 
