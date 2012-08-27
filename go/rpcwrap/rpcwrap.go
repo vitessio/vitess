@@ -10,9 +10,9 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/rpc"
 
 	"code.google.com/p/vitess/go/relog"
+	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/auth"
 )
 

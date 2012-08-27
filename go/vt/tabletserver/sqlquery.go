@@ -344,6 +344,55 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 	return nil
 }
 
+// the first StreamQueryResult will have Fields set (and Row nil)
+// the subsequent StreamQueryResult will have Row set (and Fields nil)
+func (self *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}) error) (err error) {
+
+	defer handleExecError(query, &err)
+
+	// check cases we don't handle yet
+	if query.TransactionId != 0 {
+		return NewTabletError(FAIL, "Transactions not supported with streaming")
+	}
+	if query.ConnectionId != 0 {
+		return NewTabletError(FAIL, "Persistent connections not supported with streaming")
+	}
+
+	// allow shutdown state if we're in a transaction
+	allowShutdown := (query.TransactionId != 0)
+	self.checkState(query.SessionId, allowShutdown)
+
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
+	if query.BindVariables == nil { // will help us avoid repeated nil checks
+		query.BindVariables = make(map[string]interface{})
+	}
+	// cheap hack: strip trailing comment into a special bind var
+	stripTrailing(query)
+	fullQuery := self.schemaInfo.GetStreamPlan(query.Sql)
+	defer queryStats.Record("SELECT_STREAM", time.Now())
+
+	// does the real work: first get a connection
+	conn := self.connPool.Get()
+	defer conn.Recycle()
+
+	// then setup the callback and stream!
+	callback := func(sqr *StreamQueryResult) (err error) {
+		err = sendReply(sqr)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	err = self.fullStreamFetch(conn, fullQuery, query.BindVariables, nil, nil, callback)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 type QueryList struct {
 	List []Query
 }
@@ -778,6 +827,11 @@ func (self *SqlQuery) fullFetch(conn PoolConnection, parsed_query *sqlparser.Par
 	return result
 }
 
+func (self *SqlQuery) fullStreamFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(*StreamQueryResult) error) error {
+	sql := self.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+	return self.executeStreamSql(conn, sql, callback)
+}
+
 func (self *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) []byte {
 	bindVars[MAX_RESULT_NAME] = atomic.LoadInt32(&self.maxResultSize) + 1
 	sql, err := parsed_query.GenerateQuery(bindVars, listVars)
@@ -801,6 +855,17 @@ func (self *SqlQuery) executeSql(conn PoolConnection, sql []byte, wantfields boo
 		return nil, NewTabletErrorSql(FAIL, err)
 	}
 	return result, nil
+}
+
+func (self *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback func(*StreamQueryResult) error) error {
+	connid := conn.Id()
+	self.activePool.Put(connid)
+	defer self.activePool.Remove(connid)
+	err := conn.ExecuteStreamFetch(sql, callback)
+	if err != nil {
+		return NewTabletErrorSql(FAIL, err)
+	}
+	return nil
 }
 
 func (self *SqlQuery) statsJSON() string {

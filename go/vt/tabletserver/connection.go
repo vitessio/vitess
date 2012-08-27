@@ -20,6 +20,7 @@ func init() {
 
 type PoolConnection interface {
 	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error)
+	ExecuteStreamFetch(query []byte, callback func(*StreamQueryResult) error) error
 	Id() int64
 	Close()
 	IsClosed() bool
@@ -33,6 +34,17 @@ type DBConnection struct {
 	*mysql.Connection
 }
 
+func (conn *DBConnection) handleError(err error) {
+	if sqlErr, ok := err.(*mysql.SqlError); ok {
+		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
+			conn.Close()
+		}
+		if sqlErr.Number() == 1317 { // Query was interrupted
+			conn.Close()
+		}
+	}
+}
+
 func (self *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error) {
 	start := time.Now()
 	if QueryLogger != nil {
@@ -41,19 +53,48 @@ func (self *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields boo
 	mqr, err := self.Connection.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		mysqlStats.Record("Exec", start)
-		if sqlErr, ok := err.(*mysql.SqlError); ok {
-			if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
-				self.Close()
-			}
-			if sqlErr.Number() == 1317 { // Query was interrupted
-				self.Close()
-			}
-		}
+		self.handleError(err)
 		return nil, err
 	}
 	mysqlStats.Record("Exec", start)
 	qr := QueryResult(*mqr)
 	return &qr, nil
+}
+
+func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*StreamQueryResult) error) error {
+	start := time.Now()
+	if QueryLogger != nil {
+		QueryLogger.Info("%s", query)
+	}
+
+	mresult, mfields, err := conn.Connection.ExecuteStreamFetch(query)
+	if err != nil {
+		mysqlStats.Record("ExecStream", start)
+		conn.handleError(err)
+		return err
+	}
+	defer mresult.Close()
+
+	// first call the callback with the fields
+	err = callback(&StreamQueryResult{mfields, nil})
+	if err != nil {
+		return err
+	}
+
+	// then get all the rows
+	colCount := len(mfields)
+	for {
+		row := mresult.FetchNext(colCount)
+		if row == nil {
+			// last one for sure, let's see if it was an error
+			return conn.Connection.LastErrorOrNil(query)
+		}
+		err = callback(&StreamQueryResult{nil, row})
+		if err != nil {
+			return err
+		}
+	}
+	panic("unreachable")
 }
 
 // CreateConnection returns a connection for running user queries. No DDL.

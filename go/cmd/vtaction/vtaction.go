@@ -11,10 +11,10 @@ import (
 	"log"
 	"net/http"
 	_ "net/http/pprof"
-	"net/rpc"
 	"os"
 
 	"code.google.com/p/vitess/go/relog"
+	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	_ "code.google.com/p/vitess/go/snitch"

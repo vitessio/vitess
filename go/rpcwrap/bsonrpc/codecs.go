@@ -5,11 +5,12 @@
 package bsonrpc
 
 import (
+	"io"
+
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
+	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap"
-	"io"
-	"net/rpc"
 )
 
 const (
@@ -67,7 +68,7 @@ func (self *ServerCodec) ReadRequestBody(body interface{}) error {
 	return bson.UnmarshalFromStream(self.rwc, body)
 }
 
-func (self *ServerCodec) WriteResponse(r *rpc.Response, body interface{}) error {
+func (self *ServerCodec) WriteResponse(r *rpc.Response, body interface{}, last bool) error {
 	if err := bson.MarshalToBuffer(self.cw, &ResponseBson{r}); err != nil {
 		return err
 	}

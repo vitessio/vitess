@@ -221,6 +221,16 @@ func (self *SchemaInfo) GetPlan(sql string, mustCache bool) (plan *ExecPlan) {
 	return plan
 }
 
+// GetStreamPlan is similar to GetPlan, but doesn't use the cache
+// and doesn't enforce a limit. It also just returns the parsed query.
+func (self *SchemaInfo) GetStreamPlan(sql string) *sqlparser.ParsedQuery {
+	fullQuery, err := sqlparser.StreamExecParse(sql)
+	if err != nil {
+		panic(NewTabletError(FAIL, "%s", err))
+	}
+	return fullQuery
+}
+
 func (self *SchemaInfo) SetFields(sql string, plan *ExecPlan, fields []mysql.Field) {
 	self.mu.Lock()
 	defer self.mu.Unlock()

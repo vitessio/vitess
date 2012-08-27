@@ -5,10 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/rpc"
 	"strings"
 
 	"code.google.com/p/vitess/go/relog"
+	rpc "code.google.com/p/vitess/go/rpcplus"
 )
 
 // UnusedArgument is a type used to indicate an argument that is
@@ -184,9 +184,9 @@ func (c *authenticatedCodec) ReadRequestBody(body interface{}) error {
 	return err
 }
 
-func (c *authenticatedCodec) WriteResponse(r *rpc.Response, body interface{}) error {
+func (c *authenticatedCodec) WriteResponse(r *rpc.Response, body interface{}, last bool) error {
 	c.transferState(body)
-	return c.ServerCodec.WriteResponse(r, body)
+	return c.ServerCodec.WriteResponse(r, body, last)
 }
 
 // transferState transfers the authentication state from body

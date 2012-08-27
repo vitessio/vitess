@@ -144,6 +144,27 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	return plan, nil
 }
 
+func StreamExecParse(sql string) (fullQuery *ParsedQuery, err error) {
+	defer handleError(&err)
+
+	tree, err := Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+
+	switch tree.Type {
+	case SELECT, UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT:
+	default:
+		return nil, NewParserError("%s not allowed for streaming", string(tree.Value))
+	}
+
+	if tree.At(SELECT_FOR_UPDATE_OFFSET).Type == FOR_UPDATE {
+		return nil, NewParserError("Select for Update Disallowed with streaming")
+	}
+
+	return tree.GenerateFullQuery(), nil
+}
+
 func DDLParse(sql string) (plan *DDLPlan) {
 	rootNode, err := Parse(sql)
 	if err != nil {

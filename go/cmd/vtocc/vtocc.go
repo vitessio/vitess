@@ -12,11 +12,11 @@ import (
 	"io/ioutil"
 	"log"
 	_ "net/http/pprof"
-	"net/rpc"
 	"os"
 	"syscall"
 
 	"code.google.com/p/vitess/go/relog"
+	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap"
 	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"

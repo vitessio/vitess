@@ -10,12 +10,12 @@ import (
 	"fmt"
 	"log"
 	_ "net/http/pprof"
-	"net/rpc"
 	"os"
 	"path"
 	"syscall"
 
 	"code.google.com/p/vitess/go/relog"
+	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	"code.google.com/p/vitess/go/sighandler"

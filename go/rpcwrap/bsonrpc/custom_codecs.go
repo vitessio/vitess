@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
-	"net/rpc"
+	rpc "code.google.com/p/vitess/go/rpcplus"
 )
 
 type RequestBson struct {

@@ -13,6 +13,15 @@ import (
 
 type QueryResult mysql.QueryResult
 
+// StreamQueryResult is used to return values for streaming queries.
+// Exactly one of Fields and Row will be nil:
+// - Fields will be set on the first returned value (and Row nil)
+// - Row will be set for each database value (and Fields nil)
+type StreamQueryResult struct {
+	Fields []mysql.Field
+	Row    []interface{}
+}
+
 func MarshalFieldBson(self mysql.Field, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -48,7 +57,7 @@ func (self *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Array, "Fields")
-	self.encodeFieldsBson(buf)
+	encodeFieldsBson(self.Fields, buf)
 
 	bson.EncodePrefix(buf, bson.Long, "RowsAffected")
 	bson.EncodeUint64(buf, uint64(self.RowsAffected))
@@ -57,15 +66,28 @@ func (self *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeUint64(buf, uint64(self.InsertId))
 
 	bson.EncodePrefix(buf, bson.Array, "Rows")
-	self.encodeRowsBson(buf)
+	encodeRowsBson(self.Rows, buf)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func (self *QueryResult) encodeFieldsBson(buf *bytes2.ChunkedWriter) {
+func (sqr *StreamQueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range self.Fields {
+
+	bson.EncodePrefix(buf, bson.Array, "Fields")
+	encodeFieldsBson(sqr.Fields, buf)
+
+	bson.EncodePrefix(buf, bson.Array, "Row")
+	encodeRowBson(sqr.Row, buf)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func encodeFieldsBson(fields []mysql.Field, buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+	for i, v := range fields {
 		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
 		MarshalFieldBson(v, buf)
 	}
@@ -73,17 +95,17 @@ func (self *QueryResult) encodeFieldsBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (self *QueryResult) encodeRowsBson(buf *bytes2.ChunkedWriter) {
+func encodeRowsBson(rows [][]interface{}, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range self.Rows {
+	for i, v := range rows {
 		bson.EncodePrefix(buf, bson.Array, bson.Itoa(i))
-		self.encodeRowBson(v, buf)
+		encodeRowBson(v, buf)
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func (self *QueryResult) encodeRowBson(row []interface{}, buf *bytes2.ChunkedWriter) {
+func encodeRowBson(row []interface{}, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range row {
 		if v == nil {
@@ -112,13 +134,13 @@ func (self *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Fields":
-			self.Fields = self.decodeFieldsBson(buf, kind)
+			self.Fields = decodeFieldsBson(buf, kind)
 		case "RowsAffected":
 			self.RowsAffected = bson.DecodeUint64(buf, kind)
 		case "InsertId":
 			self.InsertId = bson.DecodeUint64(buf, kind)
 		case "Rows":
-			self.Rows = self.decodeRowsBson(buf, kind)
+			self.Rows = decodeRowsBson(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -126,7 +148,25 @@ func (self *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (self *QueryResult) decodeFieldsBson(buf *bytes.Buffer, kind byte) []mysql.Field {
+func (sqr *StreamQueryResult) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "Fields":
+			sqr.Fields = decodeFieldsBson(buf, kind)
+		case "Row":
+			sqr.Row = decodeRowBson(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+
+func decodeFieldsBson(buf *bytes.Buffer, kind byte) []mysql.Field {
 	switch kind {
 	case bson.Array:
 		// valid
@@ -152,7 +192,7 @@ func (self *QueryResult) decodeFieldsBson(buf *bytes.Buffer, kind byte) []mysql.
 	return fields
 }
 
-func (self *QueryResult) decodeRowsBson(buf *bytes.Buffer, kind byte) [][]interface{} {
+func decodeRowsBson(buf *bytes.Buffer, kind byte) [][]interface{} {
 	switch kind {
 	case bson.Array:
 		// valid
@@ -167,13 +207,13 @@ func (self *QueryResult) decodeRowsBson(buf *bytes.Buffer, kind byte) [][]interf
 	kind = bson.NextByte(buf)
 	for i := 0; kind != bson.EOO; i++ {
 		bson.ExpectIndex(buf, i)
-		rows = append(rows, self.decodeRowBson(buf, kind))
+		rows = append(rows, decodeRowBson(buf, kind))
 		kind = bson.NextByte(buf)
 	}
 	return rows
 }
 
-func (self *QueryResult) decodeRowBson(buf *bytes.Buffer, kind byte) []interface{} {
+func decodeRowBson(buf *bytes.Buffer, kind byte) []interface{} {
 	switch kind {
 	case bson.Array:
 		// valid

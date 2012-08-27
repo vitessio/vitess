@@ -5,9 +5,9 @@
 package jsonrpc
 
 import (
+	rpc "code.google.com/p/vitess/go/rpcplus"
+	oldjson "code.google.com/p/vitess/go/rpcplus/jsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap"
-	"net/rpc"
-	oldjson "net/rpc/jsonrpc"
 )
 
 func DialHTTP(network, address string) (*rpc.Client, error) {

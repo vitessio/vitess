@@ -13,19 +13,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/rpc"
+	"log"
 	"strings"
 
+	"code.google.com/p/vitess/go/rpcplus"
+	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/vt/tabletserver"
 )
 
 type Driver struct {
-	address string
+	Stream bool
 }
 
 type Conn struct {
-	rpcClient *rpc.Client
+	rpcClient *rpcplus.Client
 	tabletserver.Session
+	Stream bool
 }
 
 type Stmt struct {
@@ -42,19 +45,24 @@ type Result struct {
 	index int
 }
 
-func NewDriver(address string) *Driver {
-	return &Driver{address}
+type StreamResult struct {
+	call    *rpcplus.Call
+	sr      chan *tabletserver.StreamQueryResult
+	columns *tabletserver.StreamQueryResult
 }
 
-// driver.Driver interface
-func (*Driver) Open(name string) (driver.Conn, error) {
-	conn := &Conn{}
+func NewDriver(stream bool) *Driver {
+	return &Driver{stream}
+}
+
+func (driver *Driver) Open(name string) (driver.Conn, error) {
+	conn := &Conn{Stream: driver.Stream}
 	connValues := strings.Split(name, "/")
 	if len(connValues) != 2 {
 		return nil, errors.New("Incorrectly formatted name")
 	}
 	var err error
-	if conn.rpcClient, err = rpc.DialHTTP("tcp", connValues[0]); err != nil {
+	if conn.rpcClient, err = bsonrpc.DialHTTP("tcp", connValues[0]); err != nil {
 		return nil, err
 	}
 	sessionParams := tabletserver.SessionParams{DbName: connValues[1]}
@@ -99,6 +107,26 @@ func (conn *Conn) Exec(query string, args []driver.Value) (driver.Result, error)
 	for i, v := range args {
 		bindVars[fmt.Sprintf("v%d", i)] = v
 	}
+
+	if conn.Stream {
+		req := &tabletserver.Query{
+			Sql:           query,
+			BindVariables: bindVars,
+			TransactionId: conn.TransactionId,
+			ConnectionId:  conn.ConnectionId,
+			SessionId:     conn.SessionId,
+		}
+		sr := make(chan *tabletserver.StreamQueryResult, 10)
+		c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
+
+		// read the columns, or grab the error
+		cols, ok := <-sr
+		if !ok {
+			return &StreamResult{}, c.Error
+		}
+		return &StreamResult{c, sr, cols}, nil
+	}
+
 	qr, err := conn.ExecBind(query, bindVars)
 	if err != nil {
 		return &Result{}, err
@@ -150,7 +178,11 @@ func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
 func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
 	// we use driver.Execer interface, we know it's a Result return,
 	// and our Result implements driver.Rows
+	// (or a StreamResult that does too)
 	res, err := stmt.conn.Exec(stmt.query, args)
+	if stmt.conn.Stream {
+		return res.(*StreamResult), err
+	}
 	return res.(*Result), err
 }
 
@@ -197,6 +229,51 @@ func (result *Result) Next(dest []driver.Value) error {
 	for i, v := range result.qr.Rows[result.index] {
 		if v != nil {
 			dest[i] = convert(int(result.qr.Fields[i].Type), v.(string))
+		}
+	}
+	return nil
+}
+
+// driver.Result interface
+func (*StreamResult) LastInsertId() (int64, error) {
+	return 0, errors.New("no LastInsertId available after streaming statement")
+}
+
+func (*StreamResult) RowsAffected() (int64, error) {
+	return 0, errors.New("no RowsAffected available after streaming statement")
+}
+
+// driver.Rows interface
+func (sr *StreamResult) Columns() (cols []string) {
+	cols = make([]string, len(sr.columns.Fields))
+	for i, f := range sr.columns.Fields {
+		cols[i] = f.Name
+	}
+	return cols
+}
+
+func (*StreamResult) Close() error {
+	return nil
+}
+
+func (sr *StreamResult) Next(dest []driver.Value) error {
+	if len(dest) != len(sr.columns.Fields) {
+		return errors.New("length mismatch")
+	}
+
+	cols, ok := <-sr.sr
+	if !ok {
+		// if there was an error, we return that, otherwise
+		// we return EOF
+		if sr.call.Error != nil {
+			log.Printf("Error reading the next value: %v", sr.call.Error.Error())
+			return sr.call.Error
+		}
+		return io.EOF
+	}
+	for i, v := range cols.Row {
+		if v != nil {
+			dest[i] = convert(int(sr.columns.Fields[i].Type), v.(string))
 		}
 	}
 	return nil
