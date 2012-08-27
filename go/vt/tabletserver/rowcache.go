@@ -6,7 +6,11 @@ package tabletserver
 
 import (
 	"encoding/binary"
+	"code.google.com/p/vitess/go/stats"
+	"time"
 )
+
+var cacheStats = stats.NewTimings("Cache")
 
 var pack = binary.BigEndian
 
@@ -29,6 +33,7 @@ func (self *RowCache) Get(key string) (row []interface{}, cas uint64) {
 	defer conn.Recycle()
 	mkey := self.prefix + key
 
+	defer cacheStats.Record("Exec", time.Now())
 	b, f, cas, err := conn.Gets(mkey)
 	if err != nil {
 		conn.Close()
