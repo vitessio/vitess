@@ -15,19 +15,21 @@
 
 		- the method is exported.
 		- the method has two arguments, both exported (or builtin) types.
-		- the method's second argument is a pointer.
+		- the method's second argument is either a pointer, or a function pointer.
 		- the method has return type error.
 
-	In effect, the method must look schematically like
+	In effect, the method must look schematically like one of these two:
 
 		func (t *T) MethodName(argType T1, replyType *T2) error
+		func (t *T) MethodName(argType T1, sendReply func(interface{}) error) error
 
 	where T, T1 and T2 can be marshaled by encoding/gob.
 	These requirements apply even if a different codec is used.
 	(In the future, these requirements may soften for custom codecs.)
 
 	The method's first argument represents the arguments provided by the caller; the
-	second argument represents the result parameters to be returned to the caller.
+	second argument represents the result parameters to be returned to the caller,
+	or the function to call to send results.
 	The method's return value, if non-nil, is passed back as a string that the client
 	sees as if created by errors.New.  If an error is returned, the reply parameter
 	will not be sent back to the client.
@@ -41,11 +43,12 @@
 	both steps for a raw network connection (an HTTP connection).  The resulting
 	Client object has two methods, Call and Go, that specify the service and method to
 	call, a pointer containing the arguments, and a pointer to receive the result
-	parameters.
+	parameters. It also has a StreamGo method, that specifies a reply channel
+	to receive the results in the case of streaming RPCs.
 
 	The Call method waits for the remote call to complete while the Go method
 	launches the call asynchronously and signals completion using the Call
-	structure's Done channel.
+	structure's Done channel. The StreamGo method is always asynchronous.
 
 	Unless an explicit codec is set up, package encoding/gob is used to
 	transport the data.
@@ -181,11 +184,7 @@ type Response struct {
 	next          *Response // for free list in Server
 }
 
-// StreamResponse is an additional header written only for Streaming responses.
-type StreamResponse struct {
-	Subseq uint64 // packet number incremented by server
-	End    bool   // true if this is the last packet
-}
+const lastStreamResponseError = "_EndOfStream_"
 
 // Server represents an RPC Server.
 type Server struct {
@@ -278,54 +277,9 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 		if method.PkgPath != "" {
 			continue
 		}
-
-		// if Method has three ins, then it's possibly a non-streaming method
-		// if method has four ins, then it's possibly a streaming method
-		if mtype.NumIn() == 3 {
-			// Method needs three ins: receiver, *args, *reply.
-			// First arg need not be a pointer, handled below
-			// Second arg must be a pointer.
-			replyType = mtype.In(2)
-			if replyType.Kind() != reflect.Ptr {
-				log.Println("method", mname, "reply type not a pointer:", replyType)
-				continue
-			}
-
-		} else if mtype.NumIn() == 4 {
-			// Method needs five ins: receiver, *args, sendNonFinalReply func, *finalReply
-			stream = true
-			// First arg need not be a pointer, handled below
-			// Second arg needs to be a function with the right parameters
-			funcType := mtype.In(2)
-			if funcType.Kind() != reflect.Func {
-				log.Println("method", mname, "sendNonFinalReply type not a func:", funcType)
-				continue
-			}
-			if funcType.NumIn() != 1 {
-				log.Println("method", mname, "sendNonFinalReply has wrong number of ins:", funcType.NumIn())
-				continue
-			}
-			if funcType.In(0).Kind() != reflect.Interface {
-				log.Println("method", mname, "sendNonFinalReply parameter type not an interface:", funcType.In(0))
-				continue
-			}
-			if funcType.NumOut() != 1 {
-				log.Println("method", mname, "sendNonFinalReply has wrong number of outs:", funcType.NumOut())
-				continue
-			}
-			if returnType := funcType.Out(0); returnType != typeOfError {
-				log.Println("method", mname, "sendNonFinalReply returns", returnType.String(), "not error")
-				continue
-			}
-
-			// Third arg must be a pointer, to the same type as the function
-			replyType = mtype.In(3)
-			if replyType.Kind() != reflect.Ptr {
-				log.Println("method", mname, "reply type not a pointer:", replyType)
-				continue
-			}
-
-		} else {
+		// Method needs three ins: receiver, *args, *reply.
+		// Or: receiver, *args, sendReply func.
+		if mtype.NumIn() != 3 {
 			log.Println("method", mname, "has wrong number of ins:", mtype.NumIn())
 			continue
 		}
@@ -336,6 +290,35 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 			log.Println(mname, "argument type not exported:", argType)
 			continue
 		}
+
+		// the second argument will tell us if it's a streaming call
+		// or a regular call
+		replyType = mtype.In(2)
+		if replyType.Kind() == reflect.Func {
+			// this is a streaming call
+			stream = true
+			if replyType.NumIn() != 1 {
+				log.Println("method", mname, "sendReply has wrong number of ins:", replyType.NumIn())
+				continue
+			}
+			if replyType.In(0).Kind() != reflect.Interface {
+				log.Println("method", mname, "sendReply parameter type not an interface:", replyType.In(0))
+				continue
+			}
+			if replyType.NumOut() != 1 {
+				log.Println("method", mname, "sendReply has wrong number of outs:", replyType.NumOut())
+				continue
+			}
+			if returnType := replyType.Out(0); returnType != typeOfError {
+				log.Println("method", mname, "sendReply returns", returnType.String(), "not error")
+				continue
+			}
+
+		} else if replyType.Kind() != reflect.Ptr {
+			log.Println("method", mname, "reply type not a pointer:", replyType)
+			continue
+		}
+
 		// Reply type must be exported.
 		if !isExportedOrBuiltinType(replyType) {
 			log.Println("method", mname, "reply type not exported:", replyType)
@@ -368,7 +351,7 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 // contains an error when it is used.
 var invalidRequest = struct{}{}
 
-func (server *Server) sendResponse(sending *sync.Mutex, req *Request, reply interface{}, codec ServerCodec, errmsg string) {
+func (server *Server) sendResponse(sending *sync.Mutex, req *Request, reply interface{}, codec ServerCodec, errmsg string, last bool) (err error) {
 	resp := server.getResponse()
 	// Encode the response header
 	resp.ServiceMethod = req.ServiceMethod
@@ -378,31 +361,13 @@ func (server *Server) sendResponse(sending *sync.Mutex, req *Request, reply inte
 	}
 	resp.Seq = req.Seq
 	sending.Lock()
-	err := codec.WriteResponse(resp, reply)
+	err = codec.WriteResponse(resp, reply, last)
 	if err != nil {
 		log.Println("rpc: writing response:", err)
 	}
 	sending.Unlock()
 	server.freeResponse(resp)
-}
-
-func (server *Server) sendStreamResponse(sending *sync.Mutex, req *Request, reply interface{}, codec ServerCodec, errmsg string, subseq uint64, end bool) {
-	resp := server.getResponse()
-	// Encode the response header
-	resp.ServiceMethod = req.ServiceMethod
-	if errmsg != "" {
-		resp.Error = errmsg
-		reply = invalidRequest
-	}
-	resp.Seq = req.Seq
-	streamResponse := &StreamResponse{Subseq: subseq, End: end}
-	sending.Lock()
-	err := codec.WriteStreamResponse(resp, streamResponse, reply)
-	if err != nil {
-		log.Println("rpc: writing response:", err)
-	}
-	sending.Unlock()
-	server.freeResponse(resp)
+	return err
 }
 
 func (m *methodType) NumCalls() (n uint) {
@@ -426,14 +391,14 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 		if errInter != nil {
 			errmsg = errInter.(error).Error()
 		}
-		server.sendResponse(sending, req, replyv.Interface(), codec, errmsg)
+		server.sendResponse(sending, req, replyv.Interface(), codec, errmsg, true)
 		server.freeRequest(req)
 	} else {
 		// declare a local error to see if we errored out already
+		// keep track of the type, to make sure we return
+		// the same one consistently
 		var lastError error
-
-		// declare a sequence number
-		var subseq uint64 = 0
+		var firstType reflect.Type
 
 		sendReply := func(oneReply interface{}) error {
 
@@ -444,23 +409,28 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 
 			// check the oneReply has the right type using reflection
 			typ := reflect.TypeOf(oneReply)
-			if mtype.ReplyType != typ {
-				log.Println("passing wrong type to sendNonFinalReply",
-					mtype.ReplyType, "!=", typ)
-				lastError = errors.New("rpc: passing wrong type to sendNonFinalReply")
+			if firstType == nil {
+				firstType = typ
+			} else {
+				if firstType != typ {
+					log.Println("passing wrong type to sendReply",
+						firstType, "!=", typ)
+					lastError = errors.New("rpc: passing wrong type to sendReply")
+					return lastError
+				}
+			}
+
+			lastError = server.sendResponse(sending, req, oneReply, codec, "", false)
+			if lastError != nil {
 				return lastError
 			}
 
-			server.sendStreamResponse(sending, req, oneReply, codec, "",
-				subseq, false)
-
 			// we manage to send, we're good
-			subseq += 1
 			return nil
 		}
 
 		// Invoke the method, providing a new value for the reply.
-		returnValues := function.Call([]reflect.Value{s.rcvr, argv, reflect.ValueOf(sendReply), replyv})
+		returnValues := function.Call([]reflect.Value{s.rcvr, argv, reflect.ValueOf(sendReply)})
 		errInter := returnValues[0].Interface()
 		errmsg := ""
 		if errInter != nil {
@@ -469,11 +439,15 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 		} else if lastError != nil {
 			// we had an error inside sendReply, we use that
 			errmsg = lastError.Error()
+		} else {
+			// no error, we send the special EOS error
+			errmsg = lastStreamResponseError
 		}
 
-		// this is the last packet
-		server.sendStreamResponse(sending, req, replyv.Interface(), codec, errmsg,
-			subseq, true)
+		// this is the last packet, we don't do anything with
+		// the error here (well sendStreamResponse will log it
+		// already)
+		server.sendResponse(sending, req, nil, codec, errmsg, true)
 		server.freeRequest(req)
 	}
 }
@@ -493,21 +467,8 @@ func (c *gobServerCodec) ReadRequestBody(body interface{}) error {
 	return c.dec.Decode(body)
 }
 
-func (c *gobServerCodec) WriteResponse(r *Response, body interface{}) (err error) {
+func (c *gobServerCodec) WriteResponse(r *Response, body interface{}, last bool) (err error) {
 	if err = c.enc.Encode(r); err != nil {
-		return
-	}
-	if err = c.enc.Encode(body); err != nil {
-		return
-	}
-	return c.encBuf.Flush()
-}
-
-func (c *gobServerCodec) WriteStreamResponse(r *Response, sr *StreamResponse, body interface{}) (err error) {
-	if err = c.enc.Encode(r); err != nil {
-		return
-	}
-	if err = c.enc.Encode(sr); err != nil {
 		return
 	}
 	if err = c.enc.Encode(body); err != nil {
@@ -546,7 +507,7 @@ func (server *Server) ServeCodec(codec ServerCodec) {
 			}
 			// send a response if we actually managed to read a header.
 			if req != nil {
-				server.sendResponse(sending, req, invalidRequest, codec, err.Error())
+				server.sendResponse(sending, req, invalidRequest, codec, err.Error(), true)
 				server.freeRequest(req)
 			}
 			continue
@@ -567,7 +528,7 @@ func (server *Server) ServeRequest(codec ServerCodec) error {
 		}
 		// send a response if we actually managed to read a header.
 		if req != nil {
-			server.sendResponse(sending, req, invalidRequest, codec, err.Error())
+			server.sendResponse(sending, req, invalidRequest, codec, err.Error(), true)
 			server.freeRequest(req)
 		}
 		return err
@@ -643,7 +604,9 @@ func (server *Server) readRequest(codec ServerCodec) (service *service, mtype *m
 		argv = argv.Elem()
 	}
 
-	replyv = reflect.New(mtype.ReplyType.Elem())
+	if !mtype.stream {
+		replyv = reflect.New(mtype.ReplyType.Elem())
+	}
 	return
 }
 
@@ -716,8 +679,7 @@ func RegisterName(name string, rcvr interface{}) error {
 type ServerCodec interface {
 	ReadRequestHeader(*Request) error
 	ReadRequestBody(interface{}) error
-	WriteResponse(*Response, interface{}) error
-	WriteStreamResponse(*Response, *StreamResponse, interface{}) error
+	WriteResponse(*Response, interface{}, bool) error
 
 	Close() error
 }

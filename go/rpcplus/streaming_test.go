@@ -18,7 +18,7 @@ type StreamingArgs struct {
 	Count int
 	// next two values have to be between 0 and Count-2 to trigger anything
 	ErrorAt   int // will trigger an error at the given spot,
-	BadTypeAt int // will send the wrong type in sendNonFinalReply
+	BadTypeAt int // will send the wrong type in sendReply
 }
 
 type StreamingReply struct {
@@ -28,31 +28,28 @@ type StreamingReply struct {
 
 type StreamingArith int
 
-func (t *StreamingArith) Thrive(args StreamingArgs, sendNonFinalReply func(reply interface{}) error, reply *StreamingReply) error {
+func (t *StreamingArith) Thrive(args StreamingArgs, sendReply func(reply interface{}) error) error {
 
-	for i := 0; i < args.Count-1; i++ {
+	for i := 0; i < args.Count; i++ {
 		if i == args.ErrorAt {
 			return errors.New("Triggered error in middle")
 		}
 		if i == args.BadTypeAt {
 			// send args instead of response
 			sr := new(StreamingArgs)
-			err := sendNonFinalReply(sr)
+			err := sendReply(sr)
 			if err != nil {
 				return err
 			}
 		}
 		// log.Println("  Sending sample", i)
 		sr := &StreamingReply{C: args.A, Index: i}
-		err := sendNonFinalReply(sr)
+		err := sendReply(sr)
 		if err != nil {
 			return err
 		}
 	}
 
-	// log.Println("  Sending last sample")
-	reply.C = args.A
-	reply.Index = args.Count - 1
 	return nil
 }
 
@@ -213,7 +210,7 @@ func TestBadTypeByServer(t *testing.T) {
 	if count != 30 {
 		t.Fatal("received error before the right time:", count)
 	}
-	if c.Error.Error() != "rpc: passing wrong type to sendNonFinalReply" {
+	if c.Error.Error() != "rpc: passing wrong type to sendReply" {
 		t.Fatal("received wrong error message:", c.Error)
 	}
 

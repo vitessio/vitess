@@ -307,16 +307,7 @@ func (codec *CodecEmulator) ReadRequestBody(argv interface{}) error {
 	return nil
 }
 
-func (codec *CodecEmulator) WriteResponse(resp *Response, reply interface{}) error {
-	if resp.Error != "" {
-		codec.err = errors.New(resp.Error)
-	} else {
-		*codec.reply = *(reply.(*Reply))
-	}
-	return nil
-}
-
-func (codec *CodecEmulator) WriteStreamResponse(resp *Response, sresp *StreamResponse, reply interface{}) error {
+func (codec *CodecEmulator) WriteResponse(resp *Response, reply interface{}, last bool) error {
 	if resp.Error != "" {
 		codec.err = errors.New(resp.Error)
 	} else {
@@ -396,11 +387,6 @@ func (WriteFailCodec) WriteRequest(*Request, interface{}) error {
 }
 
 func (WriteFailCodec) ReadResponseHeader(*Response) error {
-	select {}
-	panic("unreachable")
-}
-
-func (WriteFailCodec) ReadStreamResponseHeader(*StreamResponse) error {
 	select {}
 	panic("unreachable")
 }

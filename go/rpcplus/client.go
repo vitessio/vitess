@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -51,7 +50,6 @@ type Client struct {
 	pending  map[uint64]*Call
 	closing  bool
 	shutdown bool
-	done     chan *Client
 }
 
 // A ClientCodec implements writing of RPC requests and
@@ -65,7 +63,6 @@ type Client struct {
 type ClientCodec interface {
 	WriteRequest(*Request, interface{}) error
 	ReadResponseHeader(*Response) error
-	ReadStreamResponseHeader(*StreamResponse) error
 	ReadResponseBody(interface{}) error
 
 	Close() error
@@ -137,13 +134,8 @@ func (client *Client) input() {
 			// We've got an error response. Give this to the request;
 			// any subsequent requests will get the ReadResponseBody
 			// error if there is one.
-			call.Error = ServerError(response.Error)
-			if call.Stream {
-				streamResponse := StreamResponse{}
-				err = client.codec.ReadStreamResponseHeader(&streamResponse)
-				if err != nil {
-					err = errors.New("reading stream header: " + err.Error())
-				}
+			if !(call.Stream && response.Error == lastStreamResponseError) {
+				call.Error = ServerError(response.Error)
 			}
 			err = client.codec.ReadResponseBody(nil)
 			if err != nil {
@@ -151,46 +143,24 @@ func (client *Client) input() {
 			}
 			call.done()
 		case call.Stream:
-			streamResponse := StreamResponse{}
-			err = client.codec.ReadStreamResponseHeader(&streamResponse)
-			// check the sequence number is increasing
-			if err == nil && streamResponse.Subseq != call.Subseq {
-				err = errors.New(fmt.Sprintf("invalid Subseq number: %d != %d",
-					streamResponse.Subseq, call.Subseq))
-			} else {
-				call.Subseq += 1
-			}
+			// call.Reply is a chan *T2
+			// we need to create a T2 and get a *T2 back
+			value := reflect.New(reflect.TypeOf(call.Reply).Elem().Elem()).Interface()
+			err = client.codec.ReadResponseBody(value)
 			if err != nil {
-				call.Error = errors.New("reading stream header: " + err.Error())
+				call.Error = errors.New("reading body " + err.Error())
 			} else {
-				// call.Reply is a chan *T2
-				// we need to create a T2 and get a *T2 back
-				value := reflect.New(reflect.TypeOf(call.Reply).Elem().Elem()).Interface()
-				err = client.codec.ReadResponseBody(value)
-				if err != nil {
-					call.Error = errors.New("reading body " + err.Error())
-				} else {
-					// writing on the channel could block forever. For
-					// instance, if a client calls 'close', this might block
-					// forever.  the current suggestion is for the
-					// client to drain the receiving channel in that case
-					reflect.ValueOf(call.Reply).Send(reflect.ValueOf(value))
+				// writing on the channel could block forever. For
+				// instance, if a client calls 'close', this might block
+				// forever.  the current suggestion is for the
+				// client to drain the receiving channel in that case
+				reflect.ValueOf(call.Reply).Send(reflect.ValueOf(value))
+			}
 
-					// what we wanted is this code, but not possible:
-					// select {
-					//  case reflect.ValueOf(call.Reply).Send(reflect.ValueOf(value)):
-					//  case _ = <-client.done:
-					// }
-				}
-			}
-			if err != nil || streamResponse.End {
-				call.done()
-			} else {
-				// re add to the map, we will get more
-				client.mutex.Lock()
-				client.pending[seq] = call
-				client.mutex.Unlock()
-			}
+			// re add to the map, we will get more
+			client.mutex.Lock()
+			client.pending[seq] = call
+			client.mutex.Unlock()
 		default:
 			err = client.codec.ReadResponseBody(call.Reply)
 			if err != nil {
@@ -248,10 +218,6 @@ func NewClientWithCodec(codec ClientCodec) *Client {
 	client := &Client{
 		codec:   codec,
 		pending: make(map[uint64]*Call),
-		// This is not used. It was meant to be closed with Client.close(),
-		// in order to signal the sending go routine in case it was stuck
-		// on a channel write. But because of reflection, this doesn't work
-		//		done:    make(chan *Client),
 	}
 	go client.input()
 	return client
@@ -276,10 +242,6 @@ func (c *gobClientCodec) WriteRequest(r *Request, body interface{}) (err error) 
 
 func (c *gobClientCodec) ReadResponseHeader(r *Response) error {
 	return c.dec.Decode(r)
-}
-
-func (c *gobClientCodec) ReadStreamResponseHeader(sr *StreamResponse) error {
-	return c.dec.Decode(sr)
 }
 
 func (c *gobClientCodec) ReadResponseBody(body interface{}) error {
@@ -341,7 +303,6 @@ func (client *Client) Close() error {
 	}
 	client.closing = true
 	client.mutex.Unlock()
-	// close(client.done) // to signal whoever is blocked
 	return client.codec.Close()
 }
 

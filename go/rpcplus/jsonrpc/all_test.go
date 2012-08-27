@@ -46,16 +46,15 @@ func (t *Arith) Error(args *Args, reply *Reply) error {
 	panic("ERROR")
 }
 
-func (t *Arith) Thrive(args *Args, sendNonFinalReply func(reply interface{}) error, reply *Reply) error {
-	for i := 0; i < args.A-1; i++ {
+func (t *Arith) Thrive(args *Args, sendReply func(reply interface{}) error) error {
+	for i := 0; i < args.A; i++ {
 		r := &Reply{C: i}
-		err := sendNonFinalReply(r)
+		err := sendReply(r)
 		if err != nil {
 			return err
 		}
 	}
 
-	reply.C = args.A - 1
 	return nil
 }
 
@@ -202,7 +201,7 @@ func TestStreamingCall(t *testing.T) {
 		}
 		count += 1
 
-		// log.Println("Values: ", row.C, row.Index)
+		// log.Println("Values: ", row)
 	}
 
 	if c.Error != nil {

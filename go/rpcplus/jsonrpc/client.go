@@ -7,12 +7,13 @@
 package jsonrpc
 
 import (
-	"code.google.com/p/vitess/go/rpcplus"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"sync"
+
+	rpc "code.google.com/p/vitess/go/rpcplus"
 )
 
 type clientCodec struct {
@@ -32,8 +33,8 @@ type clientCodec struct {
 	pending map[uint64]string // map request id to method name
 }
 
-// NewClientCodec returns a new rpcplus.ClientCodec using JSON-RPC on conn.
-func NewClientCodec(conn io.ReadWriteCloser) rpcplus.ClientCodec {
+// NewClientCodec returns a new rpc.ClientCodec using JSON-RPC on conn.
+func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 	return &clientCodec{
 		dec:     json.NewDecoder(conn),
 		enc:     json.NewEncoder(conn),
@@ -48,7 +49,7 @@ type clientRequest struct {
 	Id     uint64         `json:"id"`
 }
 
-func (c *clientCodec) WriteRequest(r *rpcplus.Request, param interface{}) error {
+func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) error {
 	c.mutex.Lock()
 	c.pending[r.Seq] = r.ServiceMethod
 	c.mutex.Unlock()
@@ -62,19 +63,15 @@ type clientResponse struct {
 	Id     uint64           `json:"id"`
 	Result *json.RawMessage `json:"result"`
 	Error  interface{}      `json:"error"`
-	Subseq uint64           `json:"subseq,omitempty""`
-	End    bool             `json:"end,omitempty""`
 }
 
 func (r *clientResponse) reset() {
 	r.Id = 0
 	r.Result = nil
 	r.Error = nil
-	r.Subseq = 0
-	r.End = false
 }
 
-func (c *clientCodec) ReadResponseHeader(r *rpcplus.Response) error {
+func (c *clientCodec) ReadResponseHeader(r *rpc.Response) error {
 	c.resp.reset()
 	if err := c.dec.Decode(&c.resp); err != nil {
 		return err
@@ -100,15 +97,6 @@ func (c *clientCodec) ReadResponseHeader(r *rpcplus.Response) error {
 	return nil
 }
 
-func (c *clientCodec) ReadStreamResponseHeader(r *rpcplus.StreamResponse) error {
-	if r == nil {
-		return nil
-	}
-	r.Subseq = c.resp.Subseq
-	r.End = c.resp.End
-	return nil
-}
-
 func (c *clientCodec) ReadResponseBody(x interface{}) error {
 	if x == nil {
 		return nil
@@ -120,14 +108,14 @@ func (c *clientCodec) Close() error {
 	return c.c.Close()
 }
 
-// NewClient returns a new rpcplus.Client to handle requests to the
+// NewClient returns a new rpc.Client to handle requests to the
 // set of services at the other end of the connection.
-func NewClient(conn io.ReadWriteCloser) *rpcplus.Client {
-	return rpcplus.NewClientWithCodec(NewClientCodec(conn))
+func NewClient(conn io.ReadWriteCloser) *rpc.Client {
+	return rpc.NewClientWithCodec(NewClientCodec(conn))
 }
 
 // Dial connects to a JSON-RPC server at the specified network address.
-func Dial(network, address string) (*rpcplus.Client, error) {
+func Dial(network, address string) (*rpc.Client, error) {
 	conn, err := net.Dial(network, address)
 	if err != nil {
 		return nil, err
