@@ -228,7 +228,7 @@ func EncodeMap(buf *bytes2.ChunkedWriter, val reflect.Value) {
 func EncodeSlice(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	lenWriter := NewLenWriter(buf)
 	for i := 0; i < val.Len(); i++ {
-		EncodeField(buf, itoaIntened(i), val.Index(i).Interface())
+		EncodeField(buf, Itoa(i), val.Index(i).Interface())
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -242,27 +242,24 @@ func putUint64(buf *bytes2.ChunkedWriter, val uint64) {
 	Pack.PutUint64(buf.Reserve(_WORD64), val)
 }
 
-var intStrMap map[int]string
+var intStrMap [intAliasSize+1]string
 
 const (
 	intAliasSize = 1024
 )
 
 func init() {
-	intStrMap = make(map[int]string, intAliasSize)
-	for i := 0; i < intAliasSize; i++ {
+	for i := 0; i <= intAliasSize; i++ {
 		intStrMap[i] = strconv.Itoa(i)
 	}
 }
 
-func itoaIntened(i int) string {
-	if str, ok := intStrMap[i]; ok {
-		return str
+func Itoa(i int) string {
+	if i <= intAliasSize {
+		return intStrMap[i]
 	}
 	return strconv.Itoa(i)
 }
-
-var Itoa = itoaIntened
 
 /*
 func strInterned(buf []byte) string {
