@@ -64,24 +64,24 @@ type CacheInvalidator interface {
 }
 
 func NewSqlQuery(config Config) *SqlQuery {
-	self := &SqlQuery{}
-	self.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
-	self.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9))
-	self.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
-	self.reservedPool = NewReservedPool()
-	self.txPool = NewConnectionPool(config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
-	self.activeTxPool = NewActiveTxPool(time.Duration(config.TransactionTimeout * 1e9))
-	self.activePool = NewActivePool(time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
-	self.consolidator = NewConsolidator()
-	self.maxResultSize = int32(config.MaxResultSize)
-	expvar.Publish("Voltron", stats.StrFunc(func() string { return self.statsJSON() }))
+	sq := &SqlQuery{}
+	sq.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	sq.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9))
+	sq.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
+	sq.reservedPool = NewReservedPool()
+	sq.txPool = NewConnectionPool(config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
+	sq.activeTxPool = NewActiveTxPool(time.Duration(config.TransactionTimeout * 1e9))
+	sq.activePool = NewActivePool(time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	sq.consolidator = NewConsolidator()
+	sq.maxResultSize = int32(config.MaxResultSize)
+	expvar.Publish("Voltron", stats.StrFunc(func() string { return sq.statsJSON() }))
 	queryStats = stats.NewTimings("Queries")
 	stats.NewRates("QPS", queryStats, 15, 60e9)
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
 	errorStats = stats.NewCounters("Errors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
-	return self
+	return sq
 }
 
 type CompiledPlan struct {
@@ -92,50 +92,50 @@ type CompiledPlan struct {
 	ConnectionId  int64
 }
 
-func (self *SqlQuery) allowQueries(dbconfig DBConfig) {
+func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 	connFactory := GenericConnectionCreator(dbconfig.MysqlParams())
 	cacheFactory := CacheCreator(dbconfig)
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	atomic.StoreInt32(&self.state, INIT_FAILED)
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+	atomic.StoreInt32(&sq.state, INIT_FAILED)
 
 	start := time.Now().UnixNano()
-	self.cachePool.Open(cacheFactory)
-	self.schemaInfo.Open(connFactory, self.cachePool)
+	sq.cachePool.Open(cacheFactory)
+	sq.schemaInfo.Open(connFactory, sq.cachePool)
 	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
-	self.connPool.Open(connFactory)
-	self.reservedPool.Open(connFactory)
-	self.txPool.Open(connFactory)
-	self.activeTxPool.Open()
-	self.activePool.Open(connFactory)
-	self.sessionId = Rand()
-	relog.Info("Session id: %d", self.sessionId)
-	atomic.StoreInt32(&self.state, OPEN)
-	self.dbName = dbconfig.Dbname
+	sq.connPool.Open(connFactory)
+	sq.reservedPool.Open(connFactory)
+	sq.txPool.Open(connFactory)
+	sq.activeTxPool.Open()
+	sq.activePool.Open(connFactory)
+	sq.sessionId = Rand()
+	relog.Info("Session id: %d", sq.sessionId)
+	atomic.StoreInt32(&sq.state, OPEN)
+	sq.dbName = dbconfig.Dbname
 }
 
-func (self *SqlQuery) disallowQueries() {
+func (sq *SqlQuery) disallowQueries() {
 	// set this before obtaining lock so new incoming requests
 	// can serve "unavailable" immediately
-	atomic.StoreInt32(&self.state, SHUTTING_DOWN)
-	relog.Info("Stopping query service: %d", self.sessionId)
-	self.activeTxPool.WaitForEmpty()
+	atomic.StoreInt32(&sq.state, SHUTTING_DOWN)
+	relog.Info("Stopping query service: %d", sq.sessionId)
+	sq.activeTxPool.WaitForEmpty()
 
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	atomic.StoreInt32(&self.state, CLOSED)
-	self.activePool.Close()
-	self.schemaInfo.Close()
-	self.activeTxPool.Close()
-	self.txPool.Close()
-	self.reservedPool.Close()
-	self.connPool.Close()
-	self.sessionId = 0
-	self.dbName = ""
+	sq.mu.Lock()
+	defer sq.mu.Unlock()
+	atomic.StoreInt32(&sq.state, CLOSED)
+	sq.activePool.Close()
+	sq.schemaInfo.Close()
+	sq.activeTxPool.Close()
+	sq.txPool.Close()
+	sq.reservedPool.Close()
+	sq.connPool.Close()
+	sq.sessionId = 0
+	sq.dbName = ""
 }
 
-func (self *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
-	switch atomic.LoadInt32(&self.state) {
+func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
+	switch atomic.LoadInt32(&sq.state) {
 	case INIT_FAILED:
 		panic(NewTabletError(FATAL, "init failed"))
 	case CLOSED:
@@ -145,7 +145,7 @@ func (self *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 			panic(NewTabletError(RETRY, "unavailable"))
 		}
 	}
-	if sessionId != self.sessionId {
+	if sessionId != sq.sessionId {
 		panic(NewTabletError(RETRY, "Invalid session Id %v", sessionId))
 	}
 }
@@ -158,46 +158,46 @@ type SessionInfo struct {
 	SessionId int64
 }
 
-func (self *SqlQuery) GetSessionId(sessionParams *SessionParams, sessionInfo *SessionInfo) error {
-	if sessionParams.DbName != self.dbName {
-		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", self.dbName, sessionParams.DbName)
+func (sq *SqlQuery) GetSessionId(sessionParams *SessionParams, sessionInfo *SessionInfo) error {
+	if sessionParams.DbName != sq.dbName {
+		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", sq.dbName, sessionParams.DbName)
 	}
-	sessionInfo.SessionId = self.sessionId
+	sessionInfo.SessionId = sq.sessionId
 	return nil
 }
 
-func (self *SqlQuery) Begin(session *Session, transactionId *int64) (err error) {
+func (sq *SqlQuery) Begin(session *Session, transactionId *int64) (err error) {
 	defer handleError(&err)
-	self.checkState(session.SessionId, false)
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.checkState(session.SessionId, false)
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 	var conn PoolConnection
 	if session.ConnectionId != 0 {
-		conn = self.reservedPool.Get(session.ConnectionId)
-	} else if conn = self.txPool.TryGet(); conn == nil {
+		conn = sq.reservedPool.Get(session.ConnectionId)
+	} else if conn = sq.txPool.TryGet(); conn == nil {
 		panic(NewTabletError(FAIL, "Transaction pool connection limit exceeded"))
 	}
-	if *transactionId, err = self.activeTxPool.SafeBegin(conn); err != nil {
+	if *transactionId, err = sq.activeTxPool.SafeBegin(conn); err != nil {
 		conn.Recycle()
 		return err
 	}
 	return nil
 }
 
-func (self *SqlQuery) Commit(session *Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Commit(session *Session, noOutput *string) (err error) {
 	defer handleError(&err)
-	self.checkState(session.SessionId, true)
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.checkState(session.SessionId, true)
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 	*noOutput = ""
-	dirtyTables, err := self.activeTxPool.SafeCommit(session.TransactionId)
-	self.invalidateRows(dirtyTables)
+	dirtyTables, err := sq.activeTxPool.SafeCommit(session.TransactionId)
+	sq.invalidateRows(dirtyTables)
 	return err
 }
 
-func (self *SqlQuery) invalidateRows(dirtyTables map[string]DirtyKeys) {
+func (sq *SqlQuery) invalidateRows(dirtyTables map[string]DirtyKeys) {
 	for tableName, invalidList := range dirtyTables {
-		tableInfo := self.schemaInfo.GetTable(tableName)
+		tableInfo := sq.schemaInfo.GetTable(tableName)
 		if tableInfo == nil {
 			continue
 		}
@@ -210,13 +210,13 @@ func (self *SqlQuery) invalidateRows(dirtyTables map[string]DirtyKeys) {
 	}
 }
 
-func (self *SqlQuery) Rollback(session *Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Rollback(session *Session, noOutput *string) (err error) {
 	defer handleError(&err)
-	self.checkState(session.SessionId, true)
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.checkState(session.SessionId, true)
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 	*noOutput = ""
-	self.activeTxPool.Rollback(session.TransactionId)
+	sq.activeTxPool.Rollback(session.TransactionId)
 	return nil
 }
 
@@ -224,22 +224,22 @@ type ConnectionInfo struct {
 	ConnectionId int64
 }
 
-func (self *SqlQuery) CreateReserved(session *Session, connectionInfo *ConnectionInfo) (err error) {
+func (sq *SqlQuery) CreateReserved(session *Session, connectionInfo *ConnectionInfo) (err error) {
 	defer handleError(&err)
-	self.checkState(session.SessionId, false)
-	self.mu.RLock()
-	defer self.mu.RUnlock()
-	connectionInfo.ConnectionId = self.reservedPool.CreateConnection()
+	sq.checkState(session.SessionId, false)
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
+	connectionInfo.ConnectionId = sq.reservedPool.CreateConnection()
 	return nil
 }
 
-func (self *SqlQuery) CloseReserved(session *Session, noOutput *string) (err error) {
+func (sq *SqlQuery) CloseReserved(session *Session, noOutput *string) (err error) {
 	defer handleError(&err)
-	self.checkState(session.SessionId, false)
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.checkState(session.SessionId, false)
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 	*noOutput = ""
-	self.reservedPool.CloseConnection(session.ConnectionId)
+	sq.reservedPool.CloseConnection(session.ConnectionId)
 	return nil
 }
 
@@ -259,32 +259,32 @@ func handleExecError(query *Query, err *error) {
 	}
 }
 
-func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
+func (sq *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 	defer handleExecError(query, &err)
 
 	// allow shutdown state if we're in a transaction
 	allowShutdown := (query.TransactionId != 0)
-	self.checkState(query.SessionId, allowShutdown)
+	sq.checkState(query.SessionId, allowShutdown)
 
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
-	basePlan := self.schemaInfo.GetPlan(query.Sql, len(query.BindVariables) != 0)
+	basePlan := sq.schemaInfo.GetPlan(query.Sql, len(query.BindVariables) != 0)
 	if basePlan.PlanId == sqlparser.PLAN_DDL {
 		defer queryStats.Record("DDL", time.Now())
-		*reply = *self.execDDL(query.Sql)
+		*reply = *sq.execDDL(query.Sql)
 		return nil
 	}
 
 	plan := &CompiledPlan{query.Sql, basePlan, query.BindVariables, query.TransactionId, query.ConnectionId}
 	if query.TransactionId != 0 {
 		// Need upfront connection for DMLs and transactions
-		conn := self.activeTxPool.Get(query.TransactionId)
+		conn := sq.activeTxPool.Get(query.TransactionId)
 		defer conn.Recycle()
 		var invalidator CacheInvalidator
 		if plan.TableInfo != nil && plan.TableInfo.CacheType != 0 {
@@ -296,22 +296,22 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 				panic(NewTabletError(FAIL, "DML too complex for cached table"))
 			}
 			defer queryStats.Record("PASS_DML", time.Now())
-			*reply = *self.directFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
+			*reply = *sq.directFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
 		case sqlparser.PLAN_INSERT_PK:
 			defer queryStats.Record("PLAN_INSERT_PK", time.Now())
-			*reply = *self.execInsertPK(conn, plan, invalidator)
+			*reply = *sq.execInsertPK(conn, plan, invalidator)
 		case sqlparser.PLAN_INSERT_SUBQUERY:
 			defer queryStats.Record("PLAN_INSERT_SUBQUERY", time.Now())
-			*reply = *self.execInsertSubquery(conn, plan, invalidator)
+			*reply = *sq.execInsertSubquery(conn, plan, invalidator)
 		case sqlparser.PLAN_DML_PK:
 			defer queryStats.Record("DML_PK", time.Now())
-			*reply = *self.execDMLPK(conn, plan, invalidator)
+			*reply = *sq.execDMLPK(conn, plan, invalidator)
 		case sqlparser.PLAN_DML_SUBQUERY:
 			defer queryStats.Record("DML_SUBQUERY", time.Now())
-			*reply = *self.execDMLSubquery(conn, plan, invalidator)
+			*reply = *sq.execDMLSubquery(conn, plan, invalidator)
 		default: // select or set in a transaction, just count as select
 			defer queryStats.Record("PASS_SELECT", time.Now())
-			*reply = *self.fullFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
+			*reply = *sq.fullFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
 		}
 	} else {
 		switch plan.PlanId {
@@ -320,20 +320,20 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
 			defer queryStats.Record("PASS_SELECT", time.Now())
-			*reply = *self.execSelect(plan)
+			*reply = *sq.execSelect(plan)
 		case sqlparser.PLAN_SELECT_PK:
 			defer queryStats.Record("SELECT_PK", time.Now())
-			*reply = *self.execPK(plan)
+			*reply = *sq.execPK(plan)
 		case sqlparser.PLAN_SELECT_SUBQUERY:
 			defer queryStats.Record("SELECT_SUBQUERY", time.Now())
-			*reply = *self.execSubquery(plan)
+			*reply = *sq.execSubquery(plan)
 		case sqlparser.PLAN_SELECT_CACHE_RESULT:
 			defer queryStats.Record("SELECT_CACHE_RESULT", time.Now())
 			// It may not be worth caching the results. So, just pass through.
-			*reply = *self.execSelect(plan)
+			*reply = *sq.execSelect(plan)
 		case sqlparser.PLAN_SET:
 			defer queryStats.Record("SET", time.Now())
-			*reply = *self.execSet(plan)
+			*reply = *sq.execSet(plan)
 		default:
 			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))
 		}
@@ -346,7 +346,7 @@ func (self *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 
 // the first StreamQueryResult will have Fields set (and Row nil)
 // the subsequent StreamQueryResult will have Row set (and Fields nil)
-func (self *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}) error) (err error) {
+func (sq *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}) error) (err error) {
 
 	defer handleExecError(query, &err)
 
@@ -360,21 +360,21 @@ func (self *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface
 
 	// allow shutdown state if we're in a transaction
 	allowShutdown := (query.TransactionId != 0)
-	self.checkState(query.SessionId, allowShutdown)
+	sq.checkState(query.SessionId, allowShutdown)
 
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 
 	if query.BindVariables == nil { // will help us avoid repeated nil checks
 		query.BindVariables = make(map[string]interface{})
 	}
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
-	fullQuery := self.schemaInfo.GetStreamPlan(query.Sql)
+	fullQuery := sq.schemaInfo.GetStreamPlan(query.Sql)
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
 	// does the real work: first get a connection
-	conn := self.connPool.Get()
+	conn := sq.connPool.Get()
 	defer conn.Recycle()
 
 	// then setup the callback and stream!
@@ -385,7 +385,7 @@ func (self *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface
 		}
 		return nil
 	}
-	err = self.fullStreamFetch(conn, fullQuery, query.BindVariables, nil, nil, callback)
+	err = sq.fullStreamFetch(conn, fullQuery, query.BindVariables, nil, nil, callback)
 	if err != nil {
 		return err
 	}
@@ -401,15 +401,15 @@ type QueryResultList struct {
 	List []QueryResult
 }
 
-func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (err error) {
+func (sq *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (err error) {
 	defer handleError(&err)
 	ql := queryList.List
 	if len(ql) == 0 {
 		panic(NewTabletError(FAIL, "Empty query list"))
 	}
-	self.checkState(ql[0].SessionId, false)
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.checkState(ql[0].SessionId, false)
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 	begin_called := false
 	var noOutput string
 	session := Session{
@@ -425,7 +425,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 			if session.TransactionId != 0 {
 				panic(NewTabletError(FAIL, "Nested transactions disallowed"))
 			}
-			if err = self.Begin(&session, &session.TransactionId); err != nil {
+			if err = sq.Begin(&session, &session.TransactionId); err != nil {
 				return err
 			}
 			begin_called = true
@@ -434,7 +434,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 			if !begin_called {
 				panic(NewTabletError(FAIL, "Cannot commit without begin"))
 			}
-			if err = self.Commit(&session, &noOutput); err != nil {
+			if err = sq.Commit(&session, &noOutput); err != nil {
 				return err
 			}
 			session.TransactionId = 0
@@ -445,9 +445,9 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 			query.ConnectionId = session.ConnectionId
 			query.SessionId = session.SessionId
 			var localReply QueryResult
-			if err = self.Execute(&query, &localReply); err != nil {
+			if err = sq.Execute(&query, &localReply); err != nil {
 				if begin_called {
-					self.Rollback(&session, &noOutput)
+					sq.Rollback(&session, &noOutput)
 				}
 				return err
 			}
@@ -455,7 +455,7 @@ func (self *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList)
 		}
 	}
 	if begin_called {
-		self.Rollback(&session, &noOutput)
+		sq.Rollback(&session, &noOutput)
 		panic(NewTabletError(FAIL, "begin called with no commit"))
 	}
 	return nil
@@ -473,19 +473,19 @@ type CacheInvalidate struct {
 	}
 }
 
-func (self *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *string) (err error) {
+func (sq *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *string) (err error) {
 	defer handleError(&err)
-	self.checkState(self.sessionId, false)
+	sq.checkState(sq.sessionId, false)
 	*noOutput = ""
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 
-	if self.cachePool.IsClosed() || cacheInvalidate.Database != self.dbName {
+	if sq.cachePool.IsClosed() || cacheInvalidate.Database != sq.dbName {
 		return nil
 	}
 	for _, dml := range cacheInvalidate.Dmls {
 		invalidations := int64(0)
-		tableInfo := self.schemaInfo.GetTable(dml.Table)
+		tableInfo := sq.schemaInfo.GetTable(dml.Table)
 		if tableInfo == nil {
 			return NewTabletError(FAIL, "Table %s not found", dml.Table)
 		}
@@ -509,14 +509,14 @@ type DDLInvalidate struct {
 	DDL      string
 }
 
-func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (err error) {
+func (sq *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (err error) {
 	defer handleError(&err)
-	self.checkState(self.sessionId, true) // Accept DDLs in shut down mode
+	sq.checkState(sq.sessionId, true) // Accept DDLs in shut down mode
 	*noOutput = ""
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 
-	if ddl.Database != self.dbName {
+	if ddl.Database != sq.dbName {
 		return nil
 	}
 
@@ -525,14 +525,14 @@ func (self *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (er
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
-	self.schemaInfo.DropTable(ddlPlan.TableName)
+	sq.schemaInfo.DropTable(ddlPlan.TableName)
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
-		self.schemaInfo.CreateTable(ddlPlan.NewName)
+		sq.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 	return nil
 }
 
-func (self *SqlQuery) Ping(query *string, reply *string) error {
+func (sq *SqlQuery) Ping(query *string, reply *string) error {
 	*reply = "pong: " + *query
 	return nil
 }
@@ -540,38 +540,38 @@ func (self *SqlQuery) Ping(query *string, reply *string) error {
 //-----------------------------------------------
 // DDL
 
-func (self *SqlQuery) execDDL(ddl string) *QueryResult {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+func (sq *SqlQuery) execDDL(ddl string) *QueryResult {
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 	ddlPlan := sqlparser.DDLParse(ddl)
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
 
 	// Stolen from Begin
-	conn := self.txPool.TryGet()
+	conn := sq.txPool.TryGet()
 	if conn == nil {
 		panic(NewTabletError(FAIL, "Transaction pool connection limit exceeded"))
 	}
-	txid, err := self.activeTxPool.SafeBegin(conn)
+	txid, err := sq.activeTxPool.SafeBegin(conn)
 	if err != nil {
 		conn.Recycle()
 		panic(err)
 	}
 	// Stolen from Commit
-	defer self.activeTxPool.SafeCommit(txid)
+	defer sq.activeTxPool.SafeCommit(txid)
 
 	// Stolen from Execute
-	conn = self.activeTxPool.Get(txid)
+	conn = sq.activeTxPool.Get(txid)
 	defer conn.Recycle()
-	result, err := self.executeSql(conn, []byte(ddl), false)
+	result, err := sq.executeSql(conn, []byte(ddl), false)
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
 
-	self.schemaInfo.DropTable(ddlPlan.TableName)
+	sq.schemaInfo.DropTable(ddlPlan.TableName)
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
-		self.schemaInfo.CreateTable(ddlPlan.NewName)
+		sq.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
 	return result
 }
@@ -579,17 +579,17 @@ func (self *SqlQuery) execDDL(ddl string) *QueryResult {
 //-----------------------------------------------
 // Execution
 
-func (self *SqlQuery) execPK(plan *CompiledPlan) (result *QueryResult) {
+func (sq *SqlQuery) execPK(plan *CompiledPlan) (result *QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
-	return self.fetchPKRows(plan, pkRows)
+	return sq.fetchPKRows(plan, pkRows)
 }
 
-func (self *SqlQuery) execSubquery(plan *CompiledPlan) (result *QueryResult) {
-	innerResult := self.qFetch(plan, plan.Subquery, nil)
-	return self.fetchPKRows(plan, copyRows(innerResult.Rows))
+func (sq *SqlQuery) execSubquery(plan *CompiledPlan) (result *QueryResult) {
+	innerResult := sq.qFetch(plan, plan.Subquery, nil)
+	return sq.fetchPKRows(plan, copyRows(innerResult.Rows))
 }
 
-func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (result *QueryResult) {
+func (sq *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (result *QueryResult) {
 	result = &QueryResult{}
 	tableInfo := plan.TableInfo
 	if plan.Fields == nil {
@@ -602,13 +602,13 @@ func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (r
 	for _, pk := range pkRows {
 		key := buildKey(tableInfo, pk)
 		if cacheRow, cas := tableInfo.Cache.Get(key); cacheRow != nil {
-			/*if dbrow := self.validateRow(plan, cacheRow, pk); dbrow != nil {
+			/*if dbrow := sq.validateRow(plan, cacheRow, pk); dbrow != nil {
 				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
 			}*/
 			rows = append(rows, applyFilter(plan.ColumnNumbers, cacheRow))
 			hits++
 		} else {
-			resultFromdb := self.qFetch(plan, plan.OuterQuery, pk)
+			resultFromdb := sq.qFetch(plan, plan.OuterQuery, pk)
 			if len(resultFromdb.Rows) == 0 {
 				absent++
 				continue
@@ -632,8 +632,8 @@ func (self *SqlQuery) fetchPKRows(plan *CompiledPlan, pkRows [][]interface{}) (r
 	return result
 }
 
-func (self *SqlQuery) validateRow(plan *CompiledPlan, cacheRow []interface{}, pk []interface{}) (dbrow []interface{}) {
-	resultFromdb := self.qFetch(plan, plan.OuterQuery, pk)
+func (sq *SqlQuery) validateRow(plan *CompiledPlan, cacheRow []interface{}, pk []interface{}) (dbrow []interface{}) {
+	resultFromdb := sq.qFetch(plan, plan.OuterQuery, pk)
 	if len(resultFromdb.Rows) != 1 {
 		relog.Warning("unexpected number of rows for %v: %d", pk, len(resultFromdb.Rows))
 		return nil
@@ -652,32 +652,32 @@ func (self *SqlQuery) validateRow(plan *CompiledPlan, cacheRow []interface{}, pk
 	return dbrow
 }
 
-func (self *SqlQuery) execSelect(plan *CompiledPlan) (result *QueryResult) {
+func (sq *SqlQuery) execSelect(plan *CompiledPlan) (result *QueryResult) {
 	if plan.Fields != nil {
-		result = self.qFetch(plan, plan.FullQuery, nil)
+		result = sq.qFetch(plan, plan.FullQuery, nil)
 		result.Fields = plan.Fields
 		return
 	}
 	var conn PoolConnection
 	if plan.ConnectionId != 0 {
-		conn = self.reservedPool.Get(plan.ConnectionId)
+		conn = sq.reservedPool.Get(plan.ConnectionId)
 	} else {
-		conn = self.connPool.Get()
+		conn = sq.connPool.Get()
 	}
 	defer conn.Recycle()
-	result = self.fullFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
-	self.schemaInfo.SetFields(plan.Query, plan.ExecPlan, result.Fields)
+	result = sq.fullFetch(conn, plan.FullQuery, plan.BindVars, nil, nil)
+	sq.schemaInfo.SetFields(plan.Query, plan.ExecPlan, result.Fields)
 	return result
 }
 
-func (self *SqlQuery) execInsertPK(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execInsertPK(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
 	normalizePKRows(plan.TableInfo, pkRows)
-	return self.execInsertPKRows(conn, plan, pkRows, invalidator)
+	return sq.execInsertPKRows(conn, plan, pkRows, invalidator)
 }
 
-func (self *SqlQuery) execInsertSubquery(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
-	innerResult := self.directFetch(conn, plan.Subquery, plan.BindVars, nil, nil)
+func (sq *SqlQuery) execInsertSubquery(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+	innerResult := sq.directFetch(conn, plan.Subquery, plan.BindVars, nil, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
 		return &QueryResult{RowsAffected: 0}
@@ -691,14 +691,14 @@ func (self *SqlQuery) execInsertSubquery(conn PoolConnection, plan *CompiledPlan
 		pkRows[i] = applyFilter(plan.SubqueryPKColumns, innerRow)
 	}
 	plan.BindVars["_rowValues"] = innerRows
-	return self.execInsertPKRows(conn, plan, pkRows, invalidator)
+	return sq.execInsertPKRows(conn, plan, pkRows, invalidator)
 }
 
-func (self *SqlQuery) execInsertPKRows(conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execInsertPKRows(conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
 	fillPKDefaults(plan.TableInfo, pkRows)
 	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
-	result = self.directFetch(conn, plan.OuterQuery, plan.BindVars, nil, bsc)
+	result = sq.directFetch(conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	// TODO: We need to do this only if insert has on duplicate key clause
 	if invalidator != nil {
 		for _, pk := range pkRows {
@@ -710,12 +710,12 @@ func (self *SqlQuery) execInsertPKRows(conn PoolConnection, plan *CompiledPlan, 
 	return result
 }
 
-func (self *SqlQuery) execDMLPK(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execDMLPK(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
 	normalizePKRows(plan.TableInfo, pkRows)
 	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
-	result = self.directFetch(conn, plan.OuterQuery, plan.BindVars, nil, bsc)
+	result = sq.directFetch(conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	if invalidator != nil {
 		for _, pk := range pkRows {
 			key := buildKey(plan.TableInfo, pk)
@@ -725,12 +725,12 @@ func (self *SqlQuery) execDMLPK(conn PoolConnection, plan *CompiledPlan, invalid
 	return result
 }
 
-func (self *SqlQuery) execDMLSubquery(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
-	innerResult := self.directFetch(conn, plan.Subquery, plan.BindVars, nil, nil)
-	return self.execDMLPKRows(conn, plan, innerResult.Rows, invalidator)
+func (sq *SqlQuery) execDMLSubquery(conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+	innerResult := sq.directFetch(conn, plan.Subquery, plan.BindVars, nil, nil)
+	return sq.execDMLPKRows(conn, plan, innerResult.Rows, invalidator)
 }
 
-func (self *SqlQuery) execDMLPKRows(conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execDMLPKRows(conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
 	if len(pkRows) == 0 {
 		return &QueryResult{RowsAffected: 0}
 	}
@@ -741,7 +741,7 @@ func (self *SqlQuery) execDMLPKRows(conn PoolConnection, plan *CompiledPlan, pkR
 		singleRow[0] = pkRow
 		secondaryList := buildSecondaryList(singleRow, plan.SecondaryPKValues, plan.BindVars)
 		bsc := buildStreamComment(plan.TableInfo, singleRow, secondaryList)
-		rowsAffected += self.directFetch(conn, plan.OuterQuery, plan.BindVars, pkRow, bsc).RowsAffected
+		rowsAffected += sq.directFetch(conn, plan.OuterQuery, plan.BindVars, pkRow, bsc).RowsAffected
 		if invalidator != nil {
 			key := buildKey(plan.TableInfo, pkRow)
 			invalidator.Delete(key)
@@ -750,54 +750,54 @@ func (self *SqlQuery) execDMLPKRows(conn PoolConnection, plan *CompiledPlan, pkR
 	return &QueryResult{RowsAffected: rowsAffected}
 }
 
-func (self *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
+func (sq *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
-		self.connPool.SetCapacity(int(plan.SetValue.(float64)))
+		sq.connPool.SetCapacity(int(plan.SetValue.(float64)))
 		return &QueryResult{}
 	case "vt_transaction_cap":
-		self.txPool.SetCapacity(int(plan.SetValue.(float64)))
+		sq.txPool.SetCapacity(int(plan.SetValue.(float64)))
 		return &QueryResult{}
 	case "vt_transaction_timeout":
-		self.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		sq.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
 		return &QueryResult{}
 	case "vt_schema_reload_time":
-		self.schemaInfo.SetReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
+		sq.schemaInfo.SetReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
 		return &QueryResult{}
 	case "vt_query_cache_size":
-		self.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))
+		sq.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))
 		return &QueryResult{}
 	case "vt_max_result_size":
 		val := int32(plan.SetValue.(float64))
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
-		atomic.StoreInt32(&self.maxResultSize, val)
+		atomic.StoreInt32(&sq.maxResultSize, val)
 		return &QueryResult{}
 	case "vt_query_timeout":
-		self.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		sq.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
 		return &QueryResult{}
 	case "vt_idle_timeout":
-		self.connPool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		self.txPool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		self.activePool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		sq.connPool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		sq.txPool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		sq.activePool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
 		return &QueryResult{}
 	}
-	return self.qFetch(plan, plan.FullQuery, nil)
+	return sq.qFetch(plan, plan.FullQuery, nil)
 }
 
-func (self *SqlQuery) qFetch(plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []interface{}) (result *QueryResult) {
-	sql := self.generateFinalSql(parsed_query, plan.BindVars, listVars, nil)
-	q, ok := self.consolidator.Create(string(sql))
+func (sq *SqlQuery) qFetch(plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []interface{}) (result *QueryResult) {
+	sql := sq.generateFinalSql(parsed_query, plan.BindVars, listVars, nil)
+	q, ok := sq.consolidator.Create(string(sql))
 	if ok {
 		var conn PoolConnection
 		if plan.ConnectionId != 0 {
-			conn = self.reservedPool.Get(plan.ConnectionId)
+			conn = sq.reservedPool.Get(plan.ConnectionId)
 		} else {
-			conn = self.connPool.Get()
+			conn = sq.connPool.Get()
 		}
 		defer conn.Recycle()
-		q.Result, q.Err = self.executeSql(conn, sql, false)
+		q.Result, q.Err = sq.executeSql(conn, sql, false)
 		q.Broadcast()
 	} else {
 		q.Wait()
@@ -808,9 +808,9 @@ func (self *SqlQuery) qFetch(plan *CompiledPlan, parsed_query *sqlparser.ParsedQ
 	return q.Result
 }
 
-func (self *SqlQuery) directFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
-	sql := self.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
-	result, err := self.executeSql(conn, sql, false)
+func (sq *SqlQuery) directFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
+	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+	result, err := sq.executeSql(conn, sql, false)
 	if err != nil {
 		panic(err)
 	}
@@ -818,22 +818,22 @@ func (self *SqlQuery) directFetch(conn PoolConnection, parsed_query *sqlparser.P
 }
 
 // fullFetch also fetches field info
-func (self *SqlQuery) fullFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
-	sql := self.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
-	result, err := self.executeSql(conn, sql, true)
+func (sq *SqlQuery) fullFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
+	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+	result, err := sq.executeSql(conn, sql, true)
 	if err != nil {
 		panic(err)
 	}
 	return result
 }
 
-func (self *SqlQuery) fullStreamFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(*StreamQueryResult) error) error {
-	sql := self.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
-	return self.executeStreamSql(conn, sql, callback)
+func (sq *SqlQuery) fullStreamFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(*StreamQueryResult) error) error {
+	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
+	return sq.executeStreamSql(conn, sql, callback)
 }
 
-func (self *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) []byte {
-	bindVars[MAX_RESULT_NAME] = atomic.LoadInt32(&self.maxResultSize) + 1
+func (sq *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) []byte {
+	bindVars[MAX_RESULT_NAME] = atomic.LoadInt32(&sq.maxResultSize) + 1
 	sql, err := parsed_query.GenerateQuery(bindVars, listVars)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
@@ -846,21 +846,21 @@ func (self *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bind
 	return sql
 }
 
-func (self *SqlQuery) executeSql(conn PoolConnection, sql []byte, wantfields bool) (*QueryResult, error) {
+func (sq *SqlQuery) executeSql(conn PoolConnection, sql []byte, wantfields bool) (*QueryResult, error) {
 	connid := conn.Id()
-	self.activePool.Put(connid)
-	defer self.activePool.Remove(connid)
-	result, err := conn.ExecuteFetch(sql, int(atomic.LoadInt32(&self.maxResultSize)), wantfields)
+	sq.activePool.Put(connid)
+	defer sq.activePool.Remove(connid)
+	result, err := conn.ExecuteFetch(sql, int(atomic.LoadInt32(&sq.maxResultSize)), wantfields)
 	if err != nil {
 		return nil, NewTabletErrorSql(FAIL, err)
 	}
 	return result, nil
 }
 
-func (self *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback func(*StreamQueryResult) error) error {
+func (sq *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback func(*StreamQueryResult) error) error {
 	connid := conn.Id()
-	self.activePool.Put(connid)
-	defer self.activePool.Remove(connid)
+	sq.activePool.Put(connid)
+	defer sq.activePool.Remove(connid)
 	err := conn.ExecuteStreamFetch(sql, callback)
 	if err != nil {
 		return NewTabletErrorSql(FAIL, err)
@@ -868,21 +868,21 @@ func (self *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback
 	return nil
 }
 
-func (self *SqlQuery) statsJSON() string {
-	self.mu.RLock()
-	defer self.mu.RUnlock()
+func (sq *SqlQuery) statsJSON() string {
+	sq.mu.RLock()
+	defer sq.mu.RUnlock()
 
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	fmt.Fprintf(buf, "{")
-	fmt.Fprintf(buf, "\n \"IsOpen\": %v,", atomic.LoadInt32(&self.state))
-	fmt.Fprintf(buf, "\n \"CachePool\": %v,", self.cachePool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", self.schemaInfo.queries.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", self.connPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"TxPool\": %v,", self.txPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", self.activeTxPool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", self.activePool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", atomic.LoadInt32(&self.maxResultSize))
-	fmt.Fprintf(buf, "\n \"ReservedPool\": %v", self.reservedPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"IsOpen\": %v,", atomic.LoadInt32(&sq.state))
+	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.cachePool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.schemaInfo.queries.StatsJSON())
+	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", sq.connPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"TxPool\": %v,", sq.txPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", sq.activeTxPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", sq.activePool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", atomic.LoadInt32(&sq.maxResultSize))
+	fmt.Fprintf(buf, "\n \"ReservedPool\": %v", sq.reservedPool.StatsJSON())
 	fmt.Fprintf(buf, "\n}")
 	return buf.String()
 }

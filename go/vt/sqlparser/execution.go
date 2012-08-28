@@ -27,8 +27,8 @@ const (
 	PLAN_DDL
 )
 
-func (self PlanType) IsSelect() bool {
-	return self == PLAN_PASS_SELECT || self == PLAN_SELECT_CACHE_RESULT || self == PLAN_SELECT_PK || self == PLAN_SELECT_SUBQUERY
+func (pt PlanType) IsSelect() bool {
+	return pt == PLAN_PASS_SELECT || pt == PLAN_SELECT_CACHE_RESULT || pt == PLAN_SELECT_PK || pt == PLAN_SELECT_SUBQUERY
 }
 
 var planName = map[PlanType]string{
@@ -45,8 +45,8 @@ var planName = map[PlanType]string{
 	PLAN_DDL:                 "DDL",
 }
 
-func (self PlanType) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", planName[self])), nil
+func (pt PlanType) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%s\"", planName[pt])), nil
 }
 
 type ReasonType int
@@ -83,8 +83,8 @@ var reasonName = map[ReasonType]string{
 	REASON_HAS_HINTS:     "HAS_HINTS",
 }
 
-func (self ReasonType) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", reasonName[self])), nil
+func (rt ReasonType) MarshalJSON() ([]byte, error) {
+	return ([]byte)(fmt.Sprintf("\"%s\"", reasonName[rt])), nil
 }
 
 type ExecPlan struct {
@@ -190,35 +190,35 @@ func DDLParse(sql string) (plan *DDLPlan) {
 //-----------------------------------------------
 // Implementation
 
-func (self *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
-	switch self.Type {
+func (node *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
+	switch node.Type {
 	case SELECT, UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT:
-		return self.execAnalyzeSelect(getTable)
+		return node.execAnalyzeSelect(getTable)
 	case INSERT:
-		return self.execAnalyzeInsert(getTable)
+		return node.execAnalyzeInsert(getTable)
 	case UPDATE:
-		return self.execAnalyzeUpdate(getTable)
+		return node.execAnalyzeUpdate(getTable)
 	case DELETE:
-		return self.execAnalyzeDelete(getTable)
+		return node.execAnalyzeDelete(getTable)
 	case SET:
-		return self.execAnalyzeSet()
+		return node.execAnalyzeSet()
 	case CREATE, ALTER, DROP, RENAME:
 		return &ExecPlan{PlanId: PLAN_DDL}
 	}
 	panic(NewParserError("Invalid SQL"))
 }
 
-func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
+func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
-	plan = &ExecPlan{PlanId: PLAN_PASS_SELECT, FullQuery: self.GenerateSelectLimitQuery()}
+	plan = &ExecPlan{PlanId: PLAN_PASS_SELECT, FullQuery: node.GenerateSelectLimitQuery()}
 
-	if !self.execAnalyzeSelectStructure() {
+	if !node.execAnalyzeSelectStructure() {
 		plan.Reason = REASON_SELECT
 		return plan
 	}
 
 	// from
-	tableName, hasHints := self.At(SELECT_FROM_OFFSET).execAnalyzeFrom()
+	tableName, hasHints := node.At(SELECT_FROM_OFFSET).execAnalyzeFrom()
 	if tableName == "" {
 		plan.Reason = REASON_TABLE
 		return plan
@@ -226,7 +226,7 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	// Don't improve the plan if the select is for update
-	if self.At(SELECT_FOR_UPDATE_OFFSET).Type == FOR_UPDATE {
+	if node.At(SELECT_FOR_UPDATE_OFFSET).Type == FOR_UPDATE {
 		plan.Reason = REASON_FOR_UPDATE
 		return plan
 	}
@@ -238,7 +238,7 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Select expressions
-	selects := self.At(SELECT_EXPR_OFFSET).execAnalyzeSelectExpressions(tableInfo)
+	selects := node.At(SELECT_EXPR_OFFSET).execAnalyzeSelectExpressions(tableInfo)
 	if selects == nil {
 		plan.Reason = REASON_SELECT_LIST
 		return plan
@@ -246,17 +246,17 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	// The plan has improved
 	plan.PlanId = PLAN_SELECT_CACHE_RESULT
 	plan.ColumnNumbers = selects
-	plan.OuterQuery = self.GenerateDefaultQuery(tableInfo)
+	plan.OuterQuery = node.GenerateDefaultQuery(tableInfo)
 
 	// where
-	conditions := self.At(SELECT_WHERE_OFFSET).execAnalyzeWhere()
+	conditions := node.At(SELECT_WHERE_OFFSET).execAnalyzeWhere()
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
 	}
 
 	// order
-	orders := self.At(SELECT_ORDER_OFFSET).execAnalyzeOrder()
+	orders := node.At(SELECT_ORDER_OFFSET).execAnalyzeOrder()
 	if orders == nil {
 		plan.Reason = REASON_ORDER
 		return plan
@@ -265,7 +265,7 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	if len(orders) == 0 { // Only do pk analysis if there's no order by clause
 		if pkValues := getPKValues(conditions, tableInfo.Indexes[0]); pkValues != nil {
 			plan.PlanId = PLAN_SELECT_PK
-			plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
+			plan.OuterQuery = node.GenerateSelectOuterQuery(tableInfo)
 			plan.PKValues = pkValues
 			return plan
 		}
@@ -288,14 +288,14 @@ func (self *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
 	plan.PlanId = PLAN_SELECT_SUBQUERY
-	plan.OuterQuery = self.GenerateSelectOuterQuery(tableInfo)
-	plan.Subquery = self.GenerateSelectSubquery(tableInfo, plan.IndexUsed)
+	plan.OuterQuery = node.GenerateSelectOuterQuery(tableInfo)
+	plan.Subquery = node.GenerateSelectSubquery(tableInfo, plan.IndexUsed)
 	return plan
 }
 
-func (self *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
-	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: self.GenerateFullQuery()}
-	tableName := string(self.At(INSERT_TABLE_OFFSET).Value)
+func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
+	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: node.GenerateFullQuery()}
+	tableName := string(node.At(INSERT_TABLE_OFFSET).Value)
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -304,24 +304,24 @@ func (self *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	columnNumbers := self.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
+	columnNumbers := node.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
 
-	if self.At(INSERT_ON_DUP_OFFSET).Len() != 0 {
+	if node.At(INSERT_ON_DUP_OFFSET).Len() != 0 {
 		var ok bool
-		if plan.SecondaryPKValues, ok = self.At(INSERT_ON_DUP_OFFSET).At(0).execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
+		if plan.SecondaryPKValues, ok = node.At(INSERT_ON_DUP_OFFSET).At(0).execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
 			plan.Reason = REASON_PK_CHANGE
 			return plan
 		}
 	}
 
-	rowValues := self.At(INSERT_VALUES_OFFSET) // VALUES/SELECT
+	rowValues := node.At(INSERT_VALUES_OFFSET) // VALUES/SELECT
 	if rowValues.Type == SELECT {
 		plan.PlanId = PLAN_INSERT_SUBQUERY
-		plan.OuterQuery = self.GenerateInsertOuterQuery()
+		plan.OuterQuery = node.GenerateInsertOuterQuery()
 		plan.Subquery = rowValues.GenerateSelectLimitQuery()
 		// Column list syntax is a subset of select expressions
-		if self.At(INSERT_COLUMN_LIST_OFFSET).Len() != 0 {
-			plan.ColumnNumbers = self.At(INSERT_COLUMN_LIST_OFFSET).execAnalyzeSelectExpressions(tableInfo)
+		if node.At(INSERT_COLUMN_LIST_OFFSET).Len() != 0 {
+			plan.ColumnNumbers = node.At(INSERT_COLUMN_LIST_OFFSET).execAnalyzeSelectExpressions(tableInfo)
 		} else {
 			// SELECT_STAR node will expand into all columns
 			n := NewSimpleParseNode(NODE_LIST, "")
@@ -341,11 +341,11 @@ func (self *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func (self *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
+func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
-	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: self.GenerateFullQuery()}
+	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: node.GenerateFullQuery()}
 
-	tableName := string(self.At(UPDATE_TABLE_OFFSET).Value)
+	tableName := string(node.At(UPDATE_TABLE_OFFSET).Value)
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -355,16 +355,16 @@ func (self *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	var ok bool
-	if plan.SecondaryPKValues, ok = self.At(UPDATE_LIST_OFFSET).execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
+	if plan.SecondaryPKValues, ok = node.At(UPDATE_LIST_OFFSET).execAnalyzeUpdateExpressions(tableInfo.Indexes[0]); !ok {
 		plan.Reason = REASON_PK_CHANGE
 		return plan
 	}
 
 	plan.PlanId = PLAN_DML_SUBQUERY
-	plan.OuterQuery = self.GenerateUpdateOuterQuery(tableInfo.Indexes[0])
-	plan.Subquery = self.GenerateUpdateSubquery(tableInfo)
+	plan.OuterQuery = node.GenerateUpdateOuterQuery(tableInfo.Indexes[0])
+	plan.Subquery = node.GenerateUpdateSubquery(tableInfo)
 
-	conditions := self.At(UPDATE_WHERE_OFFSET).execAnalyzeWhere()
+	conditions := node.At(UPDATE_WHERE_OFFSET).execAnalyzeWhere()
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
@@ -380,11 +380,11 @@ func (self *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func (self *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
+func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
-	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: self.GenerateFullQuery()}
+	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: node.GenerateFullQuery()}
 
-	tableName := string(self.At(DELETE_TABLE_OFFSET).Value)
+	tableName := string(node.At(DELETE_TABLE_OFFSET).Value)
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -394,10 +394,10 @@ func (self *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	plan.PlanId = PLAN_DML_SUBQUERY
-	plan.OuterQuery = self.GenerateDeleteOuterQuery(tableInfo.Indexes[0])
-	plan.Subquery = self.GenerateDeleteSubquery(tableInfo)
+	plan.OuterQuery = node.GenerateDeleteOuterQuery(tableInfo.Indexes[0])
+	plan.Subquery = node.GenerateDeleteSubquery(tableInfo)
 
-	conditions := self.At(DELETE_WHERE_OFFSET).execAnalyzeWhere()
+	conditions := node.At(DELETE_WHERE_OFFSET).execAnalyzeWhere()
 	if conditions == nil {
 		plan.Reason = REASON_WHERE
 		return plan
@@ -413,9 +413,9 @@ func (self *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	return plan
 }
 
-func (self *Node) execAnalyzeSet() (plan *ExecPlan) {
-	plan = &ExecPlan{PlanId: PLAN_SET, FullQuery: self.GenerateFullQuery()}
-	update_list := self.At(1)  // NODE_LIST
+func (node *Node) execAnalyzeSet() (plan *ExecPlan) {
+	plan = &ExecPlan{PlanId: PLAN_SET, FullQuery: node.GenerateFullQuery()}
+	update_list := node.At(1)  // NODE_LIST
 	if update_list.Len() > 1 { // Multiple set values
 		return
 	}
@@ -431,30 +431,30 @@ func (self *Node) execAnalyzeSet() (plan *ExecPlan) {
 	return plan
 }
 
-func (self *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *schema.Table {
+func (node *ExecPlan) setTableInfo(tableName string, getTable TableGetter) *schema.Table {
 	tableInfo, ok := getTable(tableName)
 	if !ok {
 		panic(NewParserError("Table %s not found in schema", tableName))
 	}
-	self.TableName = tableInfo.Name
+	node.TableName = tableInfo.Name
 	return tableInfo
 }
 
 //-----------------------------------------------
 // Select
 
-func (self *Node) execAnalyzeSelectStructure() bool {
-	switch self.Type {
+func (node *Node) execAnalyzeSelectStructure() bool {
+	switch node.Type {
 	case UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT:
 		return false
 	}
-	if self.At(SELECT_DISTINCT_OFFSET).Type == DISTINCT {
+	if node.At(SELECT_DISTINCT_OFFSET).Type == DISTINCT {
 		return false
 	}
-	if self.At(SELECT_GROUP_OFFSET).Len() > 0 {
+	if node.At(SELECT_GROUP_OFFSET).Len() > 0 {
 		return false
 	}
-	if self.At(SELECT_HAVING_OFFSET).Len() > 0 {
+	if node.At(SELECT_HAVING_OFFSET).Len() > 0 {
 		return false
 	}
 	return true
@@ -463,10 +463,10 @@ func (self *Node) execAnalyzeSelectStructure() bool {
 //-----------------------------------------------
 // Select Expressions
 
-func (self *Node) execAnalyzeSelectExpressions(table *schema.Table) (selects []int) {
-	selects = make([]int, 0, self.Len())
-	for i := 0; i < self.Len(); i++ {
-		if name := self.At(i).execAnalyzeSelectExpression(); name != "" {
+func (node *Node) execAnalyzeSelectExpressions(table *schema.Table) (selects []int) {
+	selects = make([]int, 0, node.Len())
+	for i := 0; i < node.Len(); i++ {
+		if name := node.At(i).execAnalyzeSelectExpression(); name != "" {
 			if name == "*" {
 				for colIndex := range table.Columns {
 					selects = append(selects, colIndex)
@@ -484,14 +484,14 @@ func (self *Node) execAnalyzeSelectExpressions(table *schema.Table) (selects []i
 	return selects
 }
 
-func (self *Node) execAnalyzeSelectExpression() (name string) {
-	switch self.Type {
+func (node *Node) execAnalyzeSelectExpression() (name string) {
+	switch node.Type {
 	case ID, SELECT_STAR:
-		return string(self.Value)
+		return string(node.Value)
 	case '.':
-		return self.At(1).execAnalyzeSelectExpression()
+		return node.At(1).execAnalyzeSelectExpression()
 	case AS:
-		return self.At(0).execAnalyzeSelectExpression()
+		return node.At(0).execAnalyzeSelectExpression()
 	}
 	return ""
 }
@@ -499,25 +499,25 @@ func (self *Node) execAnalyzeSelectExpression() (name string) {
 //-----------------------------------------------
 // From
 
-func (self *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
-	if self.Len() > 1 {
+func (node *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
+	if node.Len() > 1 {
 		return "", false
 	}
-	if self.At(0).Type != TABLE_EXPR {
+	if node.At(0).Type != TABLE_EXPR {
 		return "", false
 	}
-	hasHints = (self.At(0).At(2).Len() > 0)
-	return self.At(0).At(0).collectTableName(), hasHints
+	hasHints = (node.At(0).At(2).Len() > 0)
+	return node.At(0).At(0).collectTableName(), hasHints
 }
 
-func (self *Node) collectTableName() string {
-	switch self.Type {
+func (node *Node) collectTableName() string {
+	switch node.Type {
 	case AS:
-		return self.At(0).collectTableName()
+		return node.At(0).collectTableName()
 	case ID:
-		return string(self.Value)
+		return string(node.Value)
 	case '.':
-		return string(self.At(1).Value)
+		return string(node.At(1).Value)
 	}
 	// sub-select
 	return ""
@@ -526,18 +526,18 @@ func (self *Node) collectTableName() string {
 //-----------------------------------------------
 // Where
 
-func (self *Node) execAnalyzeWhere() (conditions []*Node) {
-	if self.Len() == 0 {
+func (node *Node) execAnalyzeWhere() (conditions []*Node) {
+	if node.Len() == 0 {
 		return nil
 	}
-	return self.At(0).execAnalyzeBoolean()
+	return node.At(0).execAnalyzeBoolean()
 }
 
-func (self *Node) execAnalyzeBoolean() (conditions []*Node) {
-	switch self.Type {
+func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
+	switch node.Type {
 	case AND:
-		left := self.At(0).execAnalyzeBoolean()
-		right := self.At(1).execAnalyzeBoolean()
+		left := node.At(0).execAnalyzeBoolean()
+		right := node.At(1).execAnalyzeBoolean()
 		if left == nil || right == nil {
 			return nil
 		}
@@ -546,61 +546,61 @@ func (self *Node) execAnalyzeBoolean() (conditions []*Node) {
 		}
 		return append(left, right...)
 	case '(':
-		return self.At(0).execAnalyzeBoolean()
+		return node.At(0).execAnalyzeBoolean()
 	case '=', '<', '>', LE, GE, NULL_SAFE_EQUAL, LIKE:
-		left := self.At(0).execAnalyzeID()
-		right := self.At(1).execAnalyzeValue()
+		left := node.At(0).execAnalyzeID()
+		right := node.At(1).execAnalyzeValue()
 		if left == nil || right == nil {
 			return nil
 		}
-		node := NewParseNode(self.Type, self.Value)
-		node.PushTwo(left, right)
-		return []*Node{node}
+		n := NewParseNode(node.Type, node.Value)
+		n.PushTwo(left, right)
+		return []*Node{n}
 	case IN:
-		return self.execAnalyzeIN()
+		return node.execAnalyzeIN()
 	case BETWEEN:
-		left := self.At(0).execAnalyzeID()
-		right1 := self.At(1).execAnalyzeValue()
-		right2 := self.At(2).execAnalyzeValue()
+		left := node.At(0).execAnalyzeID()
+		right1 := node.At(1).execAnalyzeValue()
+		right2 := node.At(2).execAnalyzeValue()
 		if left == nil || right1 == nil || right2 == nil {
 			return nil
 		}
-		return []*Node{self}
+		return []*Node{node}
 	}
 	return nil
 }
 
-func (self *Node) execAnalyzeIN() []*Node {
+func (node *Node) execAnalyzeIN() []*Node {
 	// simple
-	if self.At(0).Type != '(' { // IN->ID
-		left := self.At(0).execAnalyzeID()
-		right := self.At(1).execAnalyzeSimpleINList() // IN->'('
+	if node.At(0).Type != '(' { // IN->ID
+		left := node.At(0).execAnalyzeID()
+		right := node.At(1).execAnalyzeSimpleINList() // IN->'('
 		if left == nil || right == nil {
 			return nil
 		}
-		node := NewParseNode(self.Type, self.Value)
-		node.PushTwo(left, right)
-		return []*Node{node}
+		n := NewParseNode(node.Type, node.Value)
+		n.PushTwo(left, right)
+		return []*Node{n}
 	}
 
 	// composite
-	idList := self.At(0).At(0) // IN->'('->NODE_LIST
+	idList := node.At(0).At(0) // IN->'('->NODE_LIST
 	conditions := make([]*Node, idList.Len())
 	for i := 0; i < idList.Len(); i++ {
 		left := idList.At(i).execAnalyzeID()
-		right := self.execBuildINList(i)
+		right := node.execBuildINList(i)
 		if left == nil || right == nil {
 			return nil
 		}
-		node := NewParseNode(self.Type, self.Value)
-		node.PushTwo(left, right)
-		conditions[i] = node
+		n := NewParseNode(node.Type, node.Value)
+		n.PushTwo(left, right)
+		conditions[i] = n
 	}
 	return conditions
 }
 
-func (self *Node) execBuildINList(index int) *Node {
-	valuesList := self.At(1).At(0) // IN->'('->NODE_LIST
+func (node *Node) execBuildINList(index int) *Node {
+	valuesList := node.At(1).At(0) // IN->'('->NODE_LIST
 	newList := NewSimpleParseNode(NODE_LIST, "node_list")
 	for i := 0; i < valuesList.Len(); i++ {
 		if valuesList.At(i).Type != '(' { // NODE_LIST->'('
@@ -621,30 +621,30 @@ func (self *Node) execBuildINList(index int) *Node {
 	return INList
 }
 
-func (self *Node) execAnalyzeSimpleINList() *Node {
-	list := self.At(0) // '('->NODE_LIST
+func (node *Node) execAnalyzeSimpleINList() *Node {
+	list := node.At(0) // '('->NODE_LIST
 	for i := 0; i < list.Len(); i++ {
-		if node := list.At(i).execAnalyzeValue(); node == nil {
+		if n := list.At(i).execAnalyzeValue(); n == nil {
 			return nil
 		}
 	}
-	return self
+	return node
 }
 
-func (self *Node) execAnalyzeID() *Node {
-	switch self.Type {
+func (node *Node) execAnalyzeID() *Node {
+	switch node.Type {
 	case ID:
-		return self
+		return node
 	case '.':
-		return self.At(1).execAnalyzeID()
+		return node.At(1).execAnalyzeID()
 	}
 	return nil
 }
 
-func (self *Node) execAnalyzeValue() *Node {
-	switch self.Type {
+func (node *Node) execAnalyzeValue() *Node {
+	switch node.Type {
 	case STRING, NUMBER, VALUE_ARG:
-		return self
+		return node
 	}
 	return nil
 }
@@ -658,10 +658,10 @@ func hasINClause(conditions []*Node) bool {
 	return false
 }
 
-func (self *Node) parseList() (values interface{}, isList bool) {
-	vals := make([]interface{}, self.Len())
-	for i := 0; i < self.Len(); i++ {
-		vals[i] = asInterface(self.At(i))
+func (node *Node) parseList() (values interface{}, isList bool) {
+	vals := make([]interface{}, node.Len())
+	for i := 0; i < node.Len(); i++ {
+		vals[i] = asInterface(node.At(i))
 	}
 	return vals, true
 }
@@ -669,16 +669,16 @@ func (self *Node) parseList() (values interface{}, isList bool) {
 //-----------------------------------------------
 // Update expressions
 
-func (self *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
-	for i := 0; i < self.Len(); i++ {
-		columnName := string(self.At(i).At(0).Value)
+func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues []interface{}, ok bool) {
+	for i := 0; i < node.Len(); i++ {
+		columnName := string(node.At(i).At(0).Value)
 		index := pkIndex.FindColumn(columnName)
 		if index == -1 {
 			continue
 		}
-		value := self.At(i).At(1).execAnalyzeValue()
+		value := node.At(i).At(1).execAnalyzeValue()
 		if value == nil {
-			relog.Warning("expression is too complex %v", self.At(i).At(0))
+			relog.Warning("expression is too complex %v", node.At(i).At(0))
 			return nil, false
 		}
 		if pkValues == nil {
@@ -692,12 +692,12 @@ func (self *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues 
 //-----------------------------------------------
 // Order
 
-func (self *Node) execAnalyzeOrder() (orders []*Node) {
+func (node *Node) execAnalyzeOrder() (orders []*Node) {
 	orders = make([]*Node, 0, 8)
-	if self.Len() == 0 {
+	if node.Len() == 0 {
 		return orders
 	}
-	orderList := self.At(0)
+	orderList := node.At(0)
 	for i := 0; i < orderList.Len(); i++ {
 		if order := orderList.At(i).execAnalyzeOrderExpression(); order != nil {
 			orders = append(orders, order)
@@ -708,14 +708,14 @@ func (self *Node) execAnalyzeOrder() (orders []*Node) {
 	return orders
 }
 
-func (self *Node) execAnalyzeOrderExpression() (order *Node) {
-	switch self.Type {
+func (node *Node) execAnalyzeOrderExpression() (order *Node) {
+	switch node.Type {
 	case ID:
-		return self
+		return node
 	case '.':
-		return self.At(1).execAnalyzeOrderExpression()
+		return node.At(1).execAnalyzeOrderExpression()
 	case '(', ASC, DESC:
-		return self.At(0).execAnalyzeOrderExpression()
+		return node.At(0).execAnalyzeOrderExpression()
 	}
 	return nil
 }
@@ -723,8 +723,8 @@ func (self *Node) execAnalyzeOrderExpression() (order *Node) {
 //-----------------------------------------------
 // Insert
 
-func (self *Node) getInsertPKColumns(tableInfo *schema.Table) (columnNumbers []int) {
-	if self.Len() == 0 {
+func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (columnNumbers []int) {
+	if node.Len() == 0 {
 		return tableInfo.PKColumns
 	}
 	pkIndex := tableInfo.Indexes[0]
@@ -732,7 +732,7 @@ func (self *Node) getInsertPKColumns(tableInfo *schema.Table) (columnNumbers []i
 	for i, _ := range columnNumbers {
 		columnNumbers[i] = -1
 	}
-	for i, column := range self.Sub {
+	for i, column := range node.Sub {
 		index := pkIndex.FindColumn(string(column.Value))
 		if index == -1 {
 			continue
@@ -790,30 +790,30 @@ func NewIndexScore(index *schema.Index) *IndexScore {
 	return &IndexScore{index, make([]bool, len(index.Columns)), false}
 }
 
-func (self *IndexScore) FindMatch(columnName string) int {
-	if self.MatchFailed {
+func (is *IndexScore) FindMatch(columnName string) int {
+	if is.MatchFailed {
 		return -1
 	}
-	if index := self.Index.FindColumn(columnName); index != -1 {
-		self.ColumnMatch[index] = true
+	if index := is.Index.FindColumn(columnName); index != -1 {
+		is.ColumnMatch[index] = true
 		return index
 	}
 	// If the column is among the data columns, we can still use
 	// the index without going to the main table
-	if index := self.Index.FindDataColumn(columnName); index == -1 {
-		self.MatchFailed = true
+	if index := is.Index.FindDataColumn(columnName); index == -1 {
+		is.MatchFailed = true
 	}
 	return -1
 }
 
-func (self *IndexScore) GetScore() scoreValue {
-	if self.MatchFailed {
+func (is *IndexScore) GetScore() scoreValue {
+	if is.MatchFailed {
 		return NO_MATCH
 	}
 	score := NO_MATCH
-	for i, indexColumn := range self.ColumnMatch {
+	for i, indexColumn := range is.ColumnMatch {
 		if indexColumn {
-			score = scoreValue(self.Index.Cardinality[i])
+			score = scoreValue(is.Index.Cardinality[i])
 			continue
 		}
 		return score
@@ -893,30 +893,29 @@ func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) 
 }
 
 //-----------------------------------------------
-// Query Generation
-
-func (self *Node) GenerateFullQuery() *ParsedQuery {
+// Query Generation 
+func (node *Node) GenerateFullQuery() *ParsedQuery {
 	buf := NewTrackedBuffer()
-	self.Format(buf)
+	node.Format(buf)
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateSelectLimitQuery() *ParsedQuery {
+func (node *Node) GenerateSelectLimitQuery() *ParsedQuery {
 	buf := NewTrackedBuffer()
-	if self.Type == SELECT {
-		limit := self.At(SELECT_LIMIT_OFFSET)
+	if node.Type == SELECT {
+		limit := node.At(SELECT_LIMIT_OFFSET)
 		if limit.Len() == 0 {
 			limit.PushLimit()
 			defer limit.Pop()
 		}
 	}
-	self.Format(buf)
+	node.Format(buf)
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
+func (node *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer()
-	limit := self.At(SELECT_LIMIT_OFFSET)
+	limit := node.At(SELECT_LIMIT_OFFSET)
 	if limit.Len() == 0 {
 		limit.PushLimit()
 		defer limit.Pop()
@@ -924,42 +923,42 @@ func (self *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
 	Fprintf(buf, " from %v%v%v%v",
-		self.At(SELECT_FROM_OFFSET),
-		self.At(SELECT_WHERE_OFFSET),
-		self.At(SELECT_ORDER_OFFSET),
+		node.At(SELECT_FROM_OFFSET),
+		node.At(SELECT_WHERE_OFFSET),
+		node.At(SELECT_ORDER_OFFSET),
 		limit)
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateSelectOuterQuery(tableInfo *schema.Table) *ParsedQuery {
+func (node *Node) GenerateSelectOuterQuery(tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer()
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
-	Fprintf(buf, " from %v where ", self.At(SELECT_FROM_OFFSET))
+	Fprintf(buf, " from %v where ", node.At(SELECT_FROM_OFFSET))
 	generatePKWhere(buf, tableInfo.Indexes[0])
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateInsertOuterQuery() *ParsedQuery {
+func (node *Node) GenerateInsertOuterQuery() *ParsedQuery {
 	buf := NewTrackedBuffer()
 	Fprintf(buf, "insert %vinto %v%v values ",
-		self.At(INSERT_COMMENT_OFFSET), self.At(INSERT_TABLE_OFFSET), self.At(INSERT_COLUMN_LIST_OFFSET))
+		node.At(INSERT_COMMENT_OFFSET), node.At(INSERT_TABLE_OFFSET), node.At(INSERT_COLUMN_LIST_OFFSET))
 	writeArg(buf, "_rowValues")
-	Fprintf(buf, "%v", self.At(INSERT_ON_DUP_OFFSET))
+	Fprintf(buf, "%v", node.At(INSERT_ON_DUP_OFFSET))
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateUpdateOuterQuery(pkIndex *schema.Index) *ParsedQuery {
+func (node *Node) GenerateUpdateOuterQuery(pkIndex *schema.Index) *ParsedQuery {
 	buf := NewTrackedBuffer()
 	Fprintf(buf, "update %v%v set %v where ",
-		self.At(UPDATE_COMMENT_OFFSET), self.At(UPDATE_TABLE_OFFSET), self.At(UPDATE_LIST_OFFSET))
+		node.At(UPDATE_COMMENT_OFFSET), node.At(UPDATE_TABLE_OFFSET), node.At(UPDATE_LIST_OFFSET))
 	generatePKWhere(buf, pkIndex)
 	return NewParsedQuery(buf)
 }
 
-func (self *Node) GenerateDeleteOuterQuery(pkIndex *schema.Index) *ParsedQuery {
+func (node *Node) GenerateDeleteOuterQuery(pkIndex *schema.Index) *ParsedQuery {
 	buf := NewTrackedBuffer()
-	Fprintf(buf, "delete %vfrom %v where ", self.At(DELETE_COMMENT_OFFSET), self.At(DELETE_TABLE_OFFSET))
+	Fprintf(buf, "delete %vfrom %v where ", node.At(DELETE_COMMENT_OFFSET), node.At(DELETE_TABLE_OFFSET))
 	generatePKWhere(buf, pkIndex)
 	return NewParsedQuery(buf)
 }
@@ -983,11 +982,11 @@ func writeArg(buf *TrackedBuffer, arg string) {
 	buf.bind_locations = append(buf.bind_locations, BindLocation{start, end - start})
 }
 
-func (self *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) *ParsedQuery {
+func (node *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) *ParsedQuery {
 	hint := NewSimpleParseNode(USE, "use")
 	hint.Push(NewSimpleParseNode(COLUMN_LIST, ""))
 	hint.At(0).Push(NewSimpleParseNode(ID, index))
-	table_expr := self.At(SELECT_FROM_OFFSET).At(0)
+	table_expr := node.At(SELECT_FROM_OFFSET).At(0)
 	savedHint := table_expr.Sub[2]
 	table_expr.Sub[2] = hint
 	defer func() {
@@ -995,38 +994,38 @@ func (self *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) 
 	}()
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		self.At(SELECT_FROM_OFFSET),
-		self.At(SELECT_WHERE_OFFSET),
-		self.At(SELECT_ORDER_OFFSET),
-		self.At(SELECT_LIMIT_OFFSET),
+		node.At(SELECT_FROM_OFFSET),
+		node.At(SELECT_WHERE_OFFSET),
+		node.At(SELECT_ORDER_OFFSET),
+		node.At(SELECT_LIMIT_OFFSET),
 		false,
 	)
 }
 
-func (self *Node) GenerateUpdateSubquery(tableInfo *schema.Table) *ParsedQuery {
+func (node *Node) GenerateUpdateSubquery(tableInfo *schema.Table) *ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		self.At(UPDATE_TABLE_OFFSET),
-		self.At(UPDATE_WHERE_OFFSET),
-		self.At(UPDATE_ORDER_OFFSET),
-		self.At(UPDATE_LIMIT_OFFSET),
+		node.At(UPDATE_TABLE_OFFSET),
+		node.At(UPDATE_WHERE_OFFSET),
+		node.At(UPDATE_ORDER_OFFSET),
+		node.At(UPDATE_LIMIT_OFFSET),
 		true,
 	)
 }
 
-func (self *Node) GenerateDeleteSubquery(tableInfo *schema.Table) *ParsedQuery {
+func (node *Node) GenerateDeleteSubquery(tableInfo *schema.Table) *ParsedQuery {
 	return GenerateSubquery(
 		tableInfo.Indexes[0].Columns,
-		self.At(DELETE_TABLE_OFFSET),
-		self.At(DELETE_WHERE_OFFSET),
-		self.At(DELETE_ORDER_OFFSET),
-		self.At(DELETE_LIMIT_OFFSET),
+		node.At(DELETE_TABLE_OFFSET),
+		node.At(DELETE_WHERE_OFFSET),
+		node.At(DELETE_ORDER_OFFSET),
+		node.At(DELETE_LIMIT_OFFSET),
 		true,
 	)
 }
 
-func (self *Node) PushLimit() {
-	self.Push(NewSimpleParseNode(VALUE_ARG, ":_vtMaxResultSize"))
+func (node *Node) PushLimit() {
+	node.Push(NewSimpleParseNode(VALUE_ARG, ":_vtMaxResultSize"))
 }
 
 func GenerateSubquery(columns []string, table *Node, where *Node, order *Node, limit *Node, for_update bool) *ParsedQuery {

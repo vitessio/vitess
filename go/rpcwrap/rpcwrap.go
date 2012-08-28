@@ -135,9 +135,9 @@ type httpHandler struct {
 	cFactory ServerCodecFactory
 }
 
-func (self *httpHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
+func (hh *httpHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	conn := &httpConnectionBroker{c, req.Body}
-	codec := self.cFactory(conn)
+	codec := hh.cFactory(conn)
 	if err := rpc.ServeRequest(codec); err != nil {
 		relog.Error("rpcwrap: %v", err)
 	}
@@ -149,7 +149,7 @@ type httpConnectionBroker struct {
 	io.Reader
 }
 
-func (self *httpConnectionBroker) Close() error {
+func (*httpConnectionBroker) Close() error {
 	return nil
 }
 

@@ -22,20 +22,20 @@ type StreamQueryResult struct {
 	Row    []interface{}
 }
 
-func MarshalFieldBson(self mysql.Field, buf *bytes2.ChunkedWriter) {
+func MarshalFieldBson(field mysql.Field, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Binary, "Name")
-	bson.EncodeString(buf, self.Name)
+	bson.EncodeString(buf, field.Name)
 
 	bson.EncodePrefix(buf, bson.Long, "Type")
-	bson.EncodeUint64(buf, uint64(self.Type))
+	bson.EncodeUint64(buf, uint64(field.Type))
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func UnmarshalFieldBson(self *mysql.Field, buf *bytes.Buffer) {
+func UnmarshalFieldBson(field *mysql.Field, buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
 	kind := bson.NextByte(buf)
@@ -43,9 +43,9 @@ func UnmarshalFieldBson(self *mysql.Field, buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Name":
-			self.Name = bson.DecodeString(buf, kind)
+			field.Name = bson.DecodeString(buf, kind)
 		case "Type":
-			self.Type = bson.DecodeInt64(buf, kind)
+			field.Type = bson.DecodeInt64(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -53,20 +53,20 @@ func UnmarshalFieldBson(self *mysql.Field, buf *bytes.Buffer) {
 	}
 }
 
-func (self *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Array, "Fields")
-	encodeFieldsBson(self.Fields, buf)
+	encodeFieldsBson(qr.Fields, buf)
 
 	bson.EncodePrefix(buf, bson.Long, "RowsAffected")
-	bson.EncodeUint64(buf, uint64(self.RowsAffected))
+	bson.EncodeUint64(buf, uint64(qr.RowsAffected))
 
 	bson.EncodePrefix(buf, bson.Long, "InsertId")
-	bson.EncodeUint64(buf, uint64(self.InsertId))
+	bson.EncodeUint64(buf, uint64(qr.InsertId))
 
 	bson.EncodePrefix(buf, bson.Array, "Rows")
-	encodeRowsBson(self.Rows, buf)
+	encodeRowsBson(qr.Rows, buf)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -126,7 +126,7 @@ func encodeRowBson(row []interface{}, buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (self *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
+func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
 	kind := bson.NextByte(buf)
@@ -134,13 +134,13 @@ func (self *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Fields":
-			self.Fields = decodeFieldsBson(buf, kind)
+			qr.Fields = decodeFieldsBson(buf, kind)
 		case "RowsAffected":
-			self.RowsAffected = bson.DecodeUint64(buf, kind)
+			qr.RowsAffected = bson.DecodeUint64(buf, kind)
 		case "InsertId":
-			self.InsertId = bson.DecodeUint64(buf, kind)
+			qr.InsertId = bson.DecodeUint64(buf, kind)
 		case "Rows":
-			self.Rows = decodeRowsBson(buf, kind)
+			qr.Rows = decodeRowsBson(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}

@@ -131,15 +131,15 @@ func NewSqlError(number int, format string, args ...interface{}) *SqlError {
 	return &SqlError{Num: number, Message: fmt.Sprintf(format, args...)}
 }
 
-func (self *SqlError) Error() string {
-	if self.Query == "" {
-		return fmt.Sprintf("%v (errno %v)", self.Message, self.Num)
+func (se *SqlError) Error() string {
+	if se.Query == "" {
+		return fmt.Sprintf("%v (errno %v)", se.Message, se.Num)
 	}
-	return fmt.Sprintf("%v (errno %v) during query: %s", self.Message, self.Num, self.Query)
+	return fmt.Sprintf("%v (errno %v) during query: %s", se.Message, se.Num, se.Query)
 }
 
-func (self *SqlError) Number() int {
-	return self.Num
+func (se *SqlError) Number() int {
+	return se.Num
 }
 
 func handleError(err *error) {
@@ -206,35 +206,35 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	return conn, nil
 }
 
-func (self *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *QueryResult, err error) {
+func (conn *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *QueryResult, err error) {
 	defer handleError(&err)
-	self.validate()
+	conn.validate()
 
-	if C.vt_mysql_real_query(self.handle, (*C.char)(unsafe.Pointer(&query[0])), C.ulong(len(query))) != 0 {
-		return nil, self.lastError(query)
+	if C.vt_mysql_real_query(conn.handle, (*C.char)(unsafe.Pointer(&query[0])), C.ulong(len(query))) != 0 {
+		return nil, conn.lastError(query)
 	}
 
-	result := C.vt_mysql_store_result(self.handle)
+	result := C.vt_mysql_store_result(conn.handle)
 	if result == nil {
-		if int(C.vt_mysql_field_count(self.handle)) != 0 { // Query was supposed to return data, but it didn't
-			return nil, self.lastError(query)
+		if int(C.vt_mysql_field_count(conn.handle)) != 0 { // Query was supposed to return data, but it didn't
+			return nil, conn.lastError(query)
 		}
 		qr = &QueryResult{}
-		qr.RowsAffected = uint64(C.vt_mysql_affected_rows(self.handle))
-		qr.InsertId = uint64(C.vt_mysql_insert_id(self.handle))
+		qr.RowsAffected = uint64(C.vt_mysql_affected_rows(conn.handle))
+		qr.InsertId = uint64(C.vt_mysql_insert_id(conn.handle))
 		return qr, nil
 	}
 	r := &Result{result}
 	defer C.vt_mysql_free_result(result)
 	qr = &QueryResult{}
-	qr.RowsAffected = uint64(C.vt_mysql_affected_rows(self.handle))
+	qr.RowsAffected = uint64(C.vt_mysql_affected_rows(conn.handle))
 	if qr.RowsAffected > uint64(maxrows) {
 		return nil, &SqlError{0, fmt.Sprintf("Row count exceeded %d", maxrows), string(query)}
 	}
 	if wantfields {
-		qr.Fields = self.buildFields(result)
+		qr.Fields = conn.buildFields(result)
 	}
-	qr.Rows = r.fetchAll(self)
+	qr.Rows = r.fetchAll(conn)
 	return qr, nil
 }
 
@@ -260,26 +260,26 @@ func (conn *Connection) ExecuteStreamFetch(query []byte) (result *Result, fields
 	return &Result{r}, conn.buildFields(r), nil
 }
 
-func (self *Connection) Id() int64 {
-	if self.handle == nil {
+func (conn *Connection) Id() int64 {
+	if conn.handle == nil {
 		return 0
 	}
-	return int64(C.vt_mysql_thread_id(self.handle))
+	return int64(C.vt_mysql_thread_id(conn.handle))
 }
 
-func (self *Connection) Close() {
-	if self.handle == nil {
+func (conn *Connection) Close() {
+	if conn.handle == nil {
 		return
 	}
-	C.vt_mysql_close(self.handle)
-	self.handle = nil
+	C.vt_mysql_close(conn.handle)
+	conn.handle = nil
 }
 
-func (self *Connection) IsClosed() bool {
-	return self.handle == nil
+func (conn *Connection) IsClosed() bool {
+	return conn.handle == nil
 }
 
-func (self *Connection) buildFields(result *C.MYSQL_RES) (fields []Field) {
+func (conn *Connection) buildFields(result *C.MYSQL_RES) (fields []Field) {
 	nfields := int(C.vt_mysql_num_fields(result))
 	cfieldsptr := C.vt_mysql_fetch_fields(result)
 	cfields := (*[1 << 30]C.MYSQL_FIELD)(unsafe.Pointer(cfieldsptr))
@@ -294,9 +294,9 @@ func (self *Connection) buildFields(result *C.MYSQL_RES) (fields []Field) {
 	return fields
 }
 
-func (self *Connection) lastError(query []byte) error {
-	if err := C.vt_mysql_error(self.handle); *err != 0 {
-		return &SqlError{Num: int(C.vt_mysql_errno(self.handle)), Message: C.GoString(err), Query: string(query)}
+func (conn *Connection) lastError(query []byte) error {
+	if err := C.vt_mysql_error(conn.handle); *err != 0 {
+		return &SqlError{Num: int(C.vt_mysql_errno(conn.handle)), Message: C.GoString(err), Query: string(query)}
 	}
 	return &SqlError{0, "Dummy", string(query)}
 }
@@ -308,8 +308,8 @@ func (conn *Connection) LastErrorOrNil(query []byte) error {
 	return nil
 }
 
-func (self *Connection) validate() {
-	if self.handle == nil {
+func (conn *Connection) validate() {
+	if conn.handle == nil {
 		panic(NewSqlError(2006, "Connection is closed"))
 	}
 }

@@ -27,7 +27,7 @@ func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 
 const DefaultBufferSize = 4096
 
-func (self *ClientCodec) WriteRequest(r *rpc.Request, body interface{}) error {
+func (cc *ClientCodec) WriteRequest(r *rpc.Request, body interface{}) error {
 	buf := bytes2.NewChunkedWriter(DefaultBufferSize)
 	if err := bson.MarshalToBuffer(buf, &RequestBson{r}); err != nil {
 		return err
@@ -35,20 +35,20 @@ func (self *ClientCodec) WriteRequest(r *rpc.Request, body interface{}) error {
 	if err := bson.MarshalToBuffer(buf, body); err != nil {
 		return err
 	}
-	_, err := buf.WriteTo(self.rwc)
+	_, err := buf.WriteTo(cc.rwc)
 	return err
 }
 
-func (self *ClientCodec) ReadResponseHeader(r *rpc.Response) error {
-	return bson.UnmarshalFromStream(self.rwc, &ResponseBson{r})
+func (cc *ClientCodec) ReadResponseHeader(r *rpc.Response) error {
+	return bson.UnmarshalFromStream(cc.rwc, &ResponseBson{r})
 }
 
-func (self *ClientCodec) ReadResponseBody(body interface{}) error {
-	return bson.UnmarshalFromStream(self.rwc, body)
+func (cc *ClientCodec) ReadResponseBody(body interface{}) error {
+	return bson.UnmarshalFromStream(cc.rwc, body)
 }
 
-func (self *ClientCodec) Close() error {
-	return self.rwc.Close()
+func (cc *ClientCodec) Close() error {
+	return cc.rwc.Close()
 }
 
 type ServerCodec struct {
@@ -60,28 +60,28 @@ func NewServerCodec(conn io.ReadWriteCloser) rpc.ServerCodec {
 	return &ServerCodec{conn, bytes2.NewChunkedWriter(DefaultBufferSize)}
 }
 
-func (self *ServerCodec) ReadRequestHeader(r *rpc.Request) error {
-	return bson.UnmarshalFromStream(self.rwc, &RequestBson{r})
+func (sc *ServerCodec) ReadRequestHeader(r *rpc.Request) error {
+	return bson.UnmarshalFromStream(sc.rwc, &RequestBson{r})
 }
 
-func (self *ServerCodec) ReadRequestBody(body interface{}) error {
-	return bson.UnmarshalFromStream(self.rwc, body)
+func (sc *ServerCodec) ReadRequestBody(body interface{}) error {
+	return bson.UnmarshalFromStream(sc.rwc, body)
 }
 
-func (self *ServerCodec) WriteResponse(r *rpc.Response, body interface{}, last bool) error {
-	if err := bson.MarshalToBuffer(self.cw, &ResponseBson{r}); err != nil {
+func (sc *ServerCodec) WriteResponse(r *rpc.Response, body interface{}, last bool) error {
+	if err := bson.MarshalToBuffer(sc.cw, &ResponseBson{r}); err != nil {
 		return err
 	}
-	if err := bson.MarshalToBuffer(self.cw, body); err != nil {
+	if err := bson.MarshalToBuffer(sc.cw, body); err != nil {
 		return err
 	}
-	_, err := self.cw.WriteTo(self.rwc)
-	self.cw.Reset()
+	_, err := sc.cw.WriteTo(sc.rwc)
+	sc.cw.Reset()
 	return err
 }
 
-func (self *ServerCodec) Close() error {
-	return self.rwc.Close()
+func (sc *ServerCodec) Close() error {
+	return sc.rwc.Close()
 }
 
 func DialHTTP(network, address string) (*rpc.Client, error) {

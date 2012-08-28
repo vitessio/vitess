@@ -45,15 +45,15 @@ func (conn *DBConnection) handleError(err error) {
 	}
 }
 
-func (self *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error) {
+func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error) {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
 	}
-	mqr, err := self.Connection.ExecuteFetch(query, maxrows, wantfields)
+	mqr, err := dbc.Connection.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		mysqlStats.Record("Exec", start)
-		self.handleError(err)
+		dbc.handleError(err)
 		return nil, err
 	}
 	mysqlStats.Record("Exec", start)
