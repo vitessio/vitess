@@ -1,4 +1,5 @@
 # init
+set storage_engine=InnoDB
 create table vtocc_test(intval int, floatval float, charval varchar(256), binval varbinary(256), primary key(intval)) comment 'vtocc_nocache'
 begin
 delete from vtocc_test
