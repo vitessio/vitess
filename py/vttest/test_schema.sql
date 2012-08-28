@@ -29,6 +29,8 @@ insert into vtocc_cached values (2, 'foo', 'abcd2', 'efgh')
 insert into vtocc_cached values (2, 'bar', 'abcd2', 'efgh')
 commit
 
+create table vtocc_big(id int, string1 varchar(128), string2 varchar(100), string3 char(1), string4 varchar(50), string5 varchar(50), date1 date, string6 varchar(16), string7 varchar(120), bigint1 bigint(20), bigint2 bigint(20), date2 date, integer1 int, tinyint1 tinyint(4), primary key(id)) comment 'vtocc_big'
+
 # clean
 drop table vtocc_test
 drop table vtocc_a
@@ -39,3 +41,4 @@ drop table vtocc_e
 drop table vtocc_cached
 drop table vtocc_cached2
 drop table vtocc_nocache
+drop table vtocc_big

@@ -19,6 +19,7 @@ from vtdb import dbexceptions
 import framework
 import cache_tests
 import nocache_tests
+import stream_tests
 
 parser = optparse.OptionParser(usage="usage: %prog [options]")
 parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False)
@@ -115,10 +116,10 @@ class TestEnv(object):
   def connect(self):
     return db.connect("localhost:9461", 2, dbname=self.cfg.get('dbname', None))
 
-  def execute(self, query, binds=None):
+  def execute(self, query, binds=None, cursorclass=None):
     if binds is None:
       binds = {}
-    curs = self.conn.cursor()
+    curs = self.conn.cursor(cursorclass=cursorclass)
     curs.execute(query, binds)
     return curs
 
@@ -195,6 +196,12 @@ try:
   env.setUp()
   try:
     t = nocache_tests.TestNocache(options.testcase, options.verbose)
+    t.set_env(env)
+    t.run()
+  except KeyError:
+    pass
+  try:
+    t = stream_tests.TestStream(options.testcase, options.verbose)
     t.set_env(env)
     t.run()
   except KeyError:

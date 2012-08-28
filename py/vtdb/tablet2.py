@@ -185,6 +185,44 @@ class TabletConnection(object):
       raise
     return rowsets
 
+  # we return the fields for the response, and the column conversions
+  # the conversions will need to be passed back to _stream_next
+  # (that way we avoid using a member variable here for such a corner case)
+  def _stream_execute(self, sql, bind_variables):
+    new_binds = field_types.convert_bind_vars(bind_variables)
+    req = self._make_req()
+    req['Sql'] = sql
+    req['BindVariables'] = new_binds
+
+    fields = []
+    conversions = []
+    try:
+      self.client.stream_call('SqlQuery.StreamExecute', req)
+      first_response = self.client.stream_next()
+      reply = first_response.reply
+
+      for field in reply['Fields']:
+        fields.append((field['Name'], field['Type']))
+        conversions.append(field_types.conversions.get(field['Type']))
+
+    except gorpc.GoRpcError, e:
+      raise dbexceptions.OperationalError(*e.args)
+    except:
+      logging.exception('gorpc low-level error')
+      raise
+    return fields, conversions
+
+  def _stream_next(self, conversions):
+    try:
+      response = self.client.stream_next()
+      if response is None:
+        return None
+      return tuple(_make_row(response.reply['Row'], conversions))
+    except gorpc.GoRpcError, e:
+      raise dbexceptions.OperationalError(*e.args)
+    except:
+      logging.exception('gorpc low-level error')
+      raise
 
 def _make_row(row, conversions):
   converted_row = []

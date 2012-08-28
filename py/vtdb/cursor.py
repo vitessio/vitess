@@ -143,3 +143,93 @@ class BatchQueryItem(object):
     self.bind_variables = bind_variables
     self.key = key
     self.keys = keys
+
+class StreamCursor(object):
+  arraysize = 1
+  conversions = None
+  connection = None
+  description = None
+  index = None
+
+  def __init__(self, connection):
+    self.connection = connection
+
+  def close(self):
+    self.connection = None
+
+  # pass kargs here in case higher level APIs need to push more data through
+  # for instance, a key value for shard mapping
+  def execute(self, sql, bind_variables, **kargs):
+    self.description = None
+
+    # these special queries will all fail on the server side,
+    # as we don't support transactions with streaming
+    sql_check = sql.strip().lower()
+    if sql_check == 'begin':
+      self.connection.begin()
+      return
+    elif sql_check == 'commit':
+      self.connection.commit()
+      return
+    elif sql_check == 'rollback':
+      self.connection.rollback()
+      return
+
+    self.description, self.conversions = self.connection._stream_execute(sql, bind_variables, **kargs)
+    self.index = 0
+    return 0
+
+  def fetchone(self):
+    if self.conversions is None:
+      raise dbexceptions.ProgrammingError('fetch called before execute')
+
+    self.index += 1
+    return self.connection._stream_next(self.conversions)
+
+  def fetchmany(self, size=None):
+    if size is None:
+      size = self.arraysize
+    result = []
+    for i in xrange(size):
+      row = self.fetchone()
+      if row is None:
+        break
+      result.append(row)
+    return result
+
+  def fetchall(self):
+    result = []
+    while True:
+      row = self.fetchone()
+      if row is None:
+        break
+      result.append(row)
+    return result
+
+  def callproc(self):
+    raise dbexceptions.NotSupportedError
+
+  def executemany(self, *pargs):
+    raise dbexceptions.NotSupportedError
+
+  def nextset(self):
+    raise dbexceptions.NotSupportedError
+
+  def setinputsizes(self, sizes):
+    pass
+
+  def setoutputsize(self, size, column=None):
+    pass
+
+  @property
+  def rownumber(self):
+    return self.index
+
+  def __iter__(self):
+    return self
+
+  def next(self):
+    val = self.fetchone()
+    if val is None:
+      raise StopIteration
+    return val

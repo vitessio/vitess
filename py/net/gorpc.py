@@ -9,12 +9,10 @@
 
 import errno
 import socket
-import struct
 import time
 import urlparse
 
-_len = len
-_join = ''.join
+_lastStreamResponseError = "_EndOfStream_"
 
 class GoRpcError(Exception):
   pass
@@ -61,11 +59,6 @@ class GoRpcResponse(object):
   def sequence_id(self):
     return self.header['Seq']
 
-
-# FIXME(msolomon) This is a bson-ism, fix for future protocols.
-len_struct = struct.Struct('<i')
-unpack_length = len_struct.unpack_from
-len_struct_size = len_struct.size
 default_read_buffer_size = 8192
 
 # A single socket wrapper to handle request/response conversation for this
@@ -73,17 +66,16 @@ default_read_buffer_size = 8192
 class _GoRpcConn(object):
   def __init__(self, timeout):
     self.conn = None
-    self.timeout = timeout
-    self.start_time = None
+    # NOTE(msolomon) since the deadlines are approximate in the code, set
+    # timeout to oversample to minimize waiting in the extreme failure mode.
+    self.socket_timeout = timeout / 10.0
+    self.buf = []
 
   def dial(self, uri):
     parts = urlparse.urlparse(uri)
     netloc = parts.netloc.split(':')
-    # NOTE(msolomon) since the deadlines are approximate in the code, set
-    # timeout to oversample to minimize waiting in the extreme failure mode.
-    socket_timeout = self.timeout / 10.0
     self.conn = socket.create_connection((netloc[0], int(netloc[1])),
-                                         socket_timeout)
+                                         self.socket_timeout)
     self.conn.sendall('CONNECT %s HTTP/1.0\n\n' % parts.path)
     while True:
       data = self.conn.recv(1024)
@@ -97,74 +89,36 @@ class _GoRpcConn(object):
       self.conn.close()
       self.conn = None
 
-  def _check_deadline_exceeded(self):
-    if (time.time() - self.start_time) > self.timeout:
-      raise socket.timeout('deadline exceeded')
-    return False
-
   def write_request(self, request_data):
-    self.start_time = time.time()
     self.conn.sendall(request_data)
 
-  # FIXME(msolomon) This makes a couple of assumptions from bson encoding.
-  def read_response(self):
-    if self.start_time is None:
-      raise GoRpcError('no request pending')
-
+  # tries to read some bytes, returns None if it can't because of a timeout
+  def read_some(self, size=None):
+    if size is None:
+      size = default_read_buffer_size
     try:
-      buf = []
-      buf_write = buf.append
-      data, data_len = _read_more(self.conn, buf, buf_write)
+      data = self.conn.recv(size)
+      if not data:
+        # We only read when we expect data - if we get nothing this probably
+        # indicates that the server hung up. This exception ensure the client
+        # tears down properly.
+        raise socket.error(errno.EPIPE, 'unexpected EOF in read')
+    except socket.timeout:
+      # catch the timeout and return empty data for now - this breaks the call
+      # and lets the deadline get caught with reasonable precision.
+      return None
 
-      # must read at least enough to get the length
-      while data_len < len_struct_size and not self._check_deadline_exceeded():
-        data, data_len = _read_more(self.conn, buf, buf_write)
-
-      # header_len is the size of the entire header including the length
-      # add on an extra len_struct_size to get enough of the body to read size
-      header_len = unpack_length(data)[0]
-      while (data_len < (header_len + len_struct_size) and
-             not self._check_deadline_exceeded()):
-        data, data_len = _read_more(self.conn, buf, buf_write)
-
-      # body_len is the size of the entire body - same as above
-      body_len = unpack_length(data, header_len)[0]
-      total_len = header_len + body_len
-      while data_len < total_len and not self._check_deadline_exceeded():
-        data, data_len = _read_more(self.conn, buf, buf_write)
-
-      return data
-    finally:
-      self.start_time = None
-
-def _read_more(conn, buf, buf_write):
-  try:
-    data = conn.recv(default_read_buffer_size)
-    if not data:
-      # We only read when we expect data - if we get nothing this probably
-      # indicates that the server hung up. This exception ensure the client
-      # tears down properly.
-      raise socket.error(errno.EPIPE, 'unexpected EOF in read')
-  except socket.timeout:
-    # catch the timeout and return empty data for now - this breaks the call
-    # and lets the deadline get caught with reasonable precision.
-    data = ''
-
-  if buf:
-    buf_write(data)
-    data = _join(buf)
-  else:
-    buf_write(data)
-  return data, _len(data)
-
+    return data
 
 class GoRpcClient(object):
   def __init__(self, uri, timeout):
     self.uri = uri
     self.timeout = timeout
+    self.start_time = None
     # FIXME(msolomon) make this random initialized?
     self.seq = 0
     self._conn = None
+    self.data = None
 
   @property
   def conn(self):
@@ -177,6 +131,7 @@ class GoRpcClient(object):
     if self._conn:
       self._conn.close()
       self._conn = None
+    self.start_time = None
 
   def next_sequence_id(self):
     self.seq += 1
@@ -186,9 +141,51 @@ class GoRpcClient(object):
   def encode_request(self, req):
     raise NotImplementedError
 
-  # fill response with decoded data
+  # fill response with decoded data, and returns a tuple
+  # (bytes to consume if a response was read,
+  #  how many bytes are still to read if no response was read and we know)
   def decode_response(self, response, data):
     raise NotImplementedError
+
+  def _check_deadline_exceeded(self):
+    if (time.time() - self.start_time) > self.timeout:
+      raise socket.timeout('deadline exceeded')
+    return False
+
+  # logic to read the next response off the wire
+  def read_response(self, response):
+    if self.start_time is None:
+      raise GoRpcError('no request pending')
+
+    # get some data if we don't have any so we have somewhere to start
+    if self.data is None:
+      while True:
+        self.data = self.conn.read_some()
+        if self.data:
+          break
+        self._check_deadline_exceeded()
+
+    # now try to decode, and read more if we need to
+    while True:
+      consumed, extra_needed = self.decode_response(response, self.data)
+      if consumed:
+        data_len = len(self.data)
+        if data_len > consumed:
+          # we have extra data, keep it
+          self.data = self.data[consumed:]
+        else:
+          # no extra data, nothing to keep
+          self.data = None
+        return
+      else:
+        # we don't have enough data, read more, and check the timeout
+        # every time
+        while True:
+          more_data = self.conn.read_some(extra_needed)
+          if more_data:
+            break
+          self._check_deadline_exceeded()
+        self.data += more_data
 
   # Perform an rpc, raising a GoRpcError, on errant situations.
   # Pass in a response object if you don't want a generic one created.
@@ -196,16 +193,17 @@ class GoRpcClient(object):
     try:
       h = make_header(method, self.next_sequence_id())
       req = GoRpcRequest(h, request)
+      self.start_time = time.time()
       self.conn.write_request(self.encode_request(req))
-      data = self.conn.read_response()
       if response is None:
         response = GoRpcResponse()
-      self.decode_response(response, data)
-    except socket.timeout, e:
+      self.read_response(response)
+      self.start_time = None
+    except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
       self.close()
       raise TimeoutError(e, self.timeout, method)
-    except socket.error, e:
+    except socket.error as e:
       # tear down - better chance of recovery by reconnecting
       self.close()
       raise GoRpcError(e, method)
@@ -218,4 +216,52 @@ class GoRpcClient(object):
       self.close()
       raise GoRpcError('request sequence mismatch', response.sequence_id,
                        req.sequence_id, method)
+    return response
+
+  # Perform a streaming rpc call
+  # This method doesn't fetch any result, use stream_next to get them
+  def stream_call(self, method, request):
+    try:
+      h = make_header(method, self.next_sequence_id())
+      req = GoRpcRequest(h, request)
+      self.start_time = time.time()
+      self.conn.write_request(self.encode_request(req))
+    except socket.timeout as e:
+      # tear down - can't guarantee a clean conversation
+      self.close()
+      raise TimeoutError(e, self.timeout, method)
+    except socket.error as e:
+      # tear down - better chance of recovery by reconnecting
+      self.close()
+      raise GoRpcError(e, method)
+
+  # Returns the next value, or None if we're done.
+  def stream_next(self):
+    try:
+      response = GoRpcResponse()
+      self.read_response(response)
+    except socket.timeout as e:
+      # tear down - can't guarantee a clean conversation
+      self.close()
+      raise TimeoutError(e, self.timeout)
+    except socket.error as e:
+      # tear down - better chance of recovery by reconnecting
+      self.close()
+      raise GoRpcError(e)
+
+    if response.sequence_id != self.seq:
+      # tear down - off-by-one error in the connection somewhere
+      self.close()
+      raise GoRpcError('request sequence mismatch', response.sequence_id,
+                       self.req)
+
+    if response.error:
+      if response.error == _lastStreamResponseError:
+        return None
+      else:
+        raise AppError(response.error)
+      self.start_time = None
+    else:
+      self.start_time = time.time()
+
     return response
