@@ -242,7 +242,7 @@ func putUint64(buf *bytes2.ChunkedWriter, val uint64) {
 	Pack.PutUint64(buf.Reserve(_WORD64), val)
 }
 
-var intStrMap [intAliasSize+1]string
+var intStrMap [intAliasSize + 1]string
 
 const (
 	intAliasSize = 1024
