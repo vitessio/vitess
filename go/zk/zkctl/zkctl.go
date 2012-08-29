@@ -59,6 +59,7 @@ func (zkd *Zkd) Start() error {
 	// if the wrangler process dies. this pretty much the same as mysqld_safe.
 	dirs := []string{
 		os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/go/zk/zkctl"),
+		os.ExpandEnv("$VTROOT/bin"),
 		os.ExpandEnv("/usr/local/bin"),
 	}
 
@@ -133,6 +134,7 @@ func (zkd *Zkd) Shutdown() error {
 func (zkd *Zkd) makeCfg() (string, error) {
 	cnfTemplatePaths := []string{
 		os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/config/zkcfg/zoo.cfg"),
+		os.ExpandEnv("$VTROOT/share/vt/zkcfg/zoo.cfg"),
 		os.ExpandEnv("/usr/local/share/vt/zkcfg/zoo.cfg"),
 	}
 	return MakeZooCfg(cnfTemplatePaths, zkd.config,

@@ -84,6 +84,7 @@ func (agent *ActionAgent) Tablet() *TabletInfo {
 func (agent *ActionAgent) resolvePaths() error {
 	vtActionBinPaths := []string{
 		os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/go/cmd/vtaction/vtaction"),
+		os.ExpandEnv("$VTROOT/bin/vtaction"),
 		"/usr/local/bin/vtaction"}
 	for _, path := range vtActionBinPaths {
 		if _, err := os.Stat(path); err == nil {
