@@ -371,6 +371,7 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 
 	wasIdle := tablet.Type == TYPE_IDLE
 	tablet.Type = TYPE_SCRAP
+	tablet.Parent = TabletAlias{}
 	// Update the tablet first, since that is canonical.
 	err = UpdateTablet(zconn, zkTabletPath, tablet)
 	if err != nil {
