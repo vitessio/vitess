@@ -137,6 +137,10 @@ func (tablet *Tablet) IsReplicatingType() bool {
 	return true
 }
 
+func (tablet *Tablet) IsAssigned() bool {
+	return tablet.Keyspace != "" && tablet.Shard != ""
+}
+
 func (tablet *Tablet) String() string {
 	return fmt.Sprintf("Tablet{%v}", tablet.Uid)
 }
@@ -250,24 +254,22 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 		TabletActionPath(zkTabletPath),
 	}
 
-	// Idle tablets have no information to generate valid replication paths.
-	if tablet.Type != TYPE_IDLE {
+	// Some tablets have no information to generate valid replication paths.
+	if tablet.IsReplicatingType() {
 		zkPaths = append(zkPaths, ShardActionPath(tablet.ShardPath()))
-
-		if tablet.Type != TYPE_SCRAP {
-			if zkTabletReplicationPath != "" && zkTabletReplicationPath != tablet.ReplicationPath() {
-				return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
-					tablet.ReplicationPath(), zkTabletReplicationPath)
-			}
-			// Unless we are scrapped or idle, check we are in the replication graph
-			zkPaths = append(zkPaths, tablet.ReplicationPath())
-		} else {
-			// Scrap nodes should not appear in the replication graph unless an action is running.
-			_, _, err := zconn.Get(tablet.ReplicationPath())
-			if !zookeeper.IsError(err, zookeeper.ZNONODE) {
-				return fmt.Errorf("unexpected replication path found for scrap tablet: %v",
-					tablet.ReplicationPath())
-			}
+		if zkTabletReplicationPath != "" && zkTabletReplicationPath != tablet.ReplicationPath() {
+			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
+				tablet.ReplicationPath(), zkTabletReplicationPath)
+		}
+		// Unless we are scrapped or idle, check we are in the replication graph
+		zkPaths = append(zkPaths, tablet.ReplicationPath())
+	} else if tablet.IsAssigned() {
+		// Scrap nodes should not appear in the replication graph. However, while
+		// an action is running, there is some time where this will be inconsistent.
+		_, _, err := zconn.Get(tablet.ReplicationPath())
+		if !zookeeper.IsError(err, zookeeper.ZNONODE) {
+			return fmt.Errorf("unexpected replication path found for scrap tablet (possible pending action?): %v",
+				tablet.ReplicationPath())
 		}
 	}
 
