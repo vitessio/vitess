@@ -31,7 +31,7 @@ import (
 
 const (
 	DefaultLameDuckPeriod = 30.0
-	DefaultRebindDelay    = 0.0
+	DefaultRebindDelay    = 0.01
 )
 
 var (
@@ -118,6 +118,10 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 	// tablet.
 	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DBConfigsFile)
 	agent.Start(bindAddr, mycnf.MysqlAddr())
+	umgmt.AddCloseCallback(func() {
+		agent.Stop()
+	})
+
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba)
 
 	// The TabletManager rpc service allow other processes to query for management

@@ -44,6 +44,7 @@ type ActionAgent struct {
 
 	mutex   sync.Mutex
 	_tablet *TabletInfo // must be accessed with lock - TabletInfo objects are not synchronized.
+	done    chan bool
 }
 
 // bindAddr: the address for the query service advertised by this agent
@@ -54,7 +55,9 @@ func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile string
 		zkTabletPath:  zkTabletPath,
 		zkActionPath:  actionPath,
 		MycnfFile:     mycnfFile,
-		DBConfigsFile: dbConfigsFile}
+		DBConfigsFile: dbConfigsFile,
+		done:          make(chan bool, 1),
+	}
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -79,7 +82,8 @@ func (agent *ActionAgent) Tablet() *TabletInfo {
 // FIXME(msolomon) need a real path discovery mechanism, a config file
 // or more command line args.
 func (agent *ActionAgent) resolvePaths() error {
-	vtActionBinPaths := []string{os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/go/cmd/vtaction/vtaction"),
+	vtActionBinPaths := []string{
+		os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/go/cmd/vtaction/vtaction"),
 		"/usr/local/bin/vtaction"}
 	for _, path := range vtActionBinPaths {
 		if _, err := os.Stat(path); err == nil {
@@ -363,6 +367,10 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 	go agent.actionEventLoop()
 }
 
+func (agent *ActionAgent) Stop() {
+	agent.done <- true
+}
+
 func (agent *ActionAgent) actionEventLoop() {
 	for {
 		// Process any pending actions when we startup, before we start listening
@@ -374,14 +382,20 @@ func (agent *ActionAgent) actionEventLoop() {
 			continue
 		}
 
-		event := <-watch
-		if !event.Ok() {
-			// NOTE(msolomon) The zk meta conn will reconnect automatically, or
-			// error out. At this point, there isn't much to do.
-			relog.Warning("zookeeper not OK: %v", event)
-			time.Sleep(5 * time.Second)
-		} else if event.Type == zookeeper.EVENT_CHILD {
-			agent.handleActionQueue()
+		// FIXME(msolomon) Add a skewing timer here to guarantee we wakeup
+		// periodically even if events are missed?
+		select {
+		case event := <-watch:
+			if !event.Ok() {
+				// NOTE(msolomon) The zk meta conn will reconnect automatically, or
+				// error out. At this point, there isn't much to do.
+				relog.Warning("zookeeper not OK: %v", event)
+				time.Sleep(5 * time.Second)
+			} else if event.Type == zookeeper.EVENT_CHILD {
+				agent.handleActionQueue()
+			}
+		case <-agent.done:
+			return
 		}
 	}
 }
