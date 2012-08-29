@@ -184,7 +184,7 @@ type Response struct {
 	next          *Response // for free list in Server
 }
 
-const lastStreamResponseError = "_EndOfStream_"
+const lastStreamResponseError = "EOS"
 
 // Server represents an RPC Server.
 type Server struct {

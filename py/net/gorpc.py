@@ -12,7 +12,7 @@ import socket
 import time
 import urlparse
 
-_lastStreamResponseError = "_EndOfStream_"
+_lastStreamResponseError = "EOS"
 
 class GoRpcError(Exception):
   pass
