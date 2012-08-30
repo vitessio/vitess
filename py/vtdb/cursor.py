@@ -109,7 +109,7 @@ class Cursor(BaseCursor):
   def execute(self, sql, bind_variables=None, key=None, keys=None):
     try:
       return self._execute(sql, bind_variables, key=key, keys=keys)
-    except mc_bson_request.MCBSonException, e:
+    except mc_bson_request.MCBSonException as e:
       if str(e) == 'unavailable':
         self.connection._load_tablets()
       raise

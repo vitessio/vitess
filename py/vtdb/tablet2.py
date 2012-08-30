@@ -80,7 +80,7 @@ class TabletConnection(object):
         self.transaction_id = response.reply["TransactionId"]
       else:
         self.transaction_id = response.reply
-    except gorpc.GoRpcError, e:
+    except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
 
   def commit(self):
@@ -97,7 +97,7 @@ class TabletConnection(object):
     try:
       response = self.client.call('SqlQuery.Commit', req)
       return response.reply
-    except gorpc.GoRpcError, e:
+    except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
 
   def rollback(self):
@@ -114,7 +114,7 @@ class TabletConnection(object):
     try:
       response = self.client.call('SqlQuery.Rollback', req)
       return response.reply
-    except gorpc.GoRpcError, e:
+    except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
 
   def cursor(self, cursorclass=None, **kargs):
@@ -142,7 +142,7 @@ class TabletConnection(object):
 
       rowcount = reply['RowsAffected']
       lastrowid = reply['InsertId']
-    except gorpc.GoRpcError, e:
+    except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
     except:
       logging.exception('gorpc low-level error')
@@ -178,7 +178,7 @@ class TabletConnection(object):
         rowcount = reply['RowsAffected']
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
-    except gorpc.GoRpcError, e:
+    except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
     except:
       logging.exception('gorpc low-level error')
@@ -205,7 +205,7 @@ class TabletConnection(object):
         fields.append((field['Name'], field['Type']))
         conversions.append(field_types.conversions.get(field['Type']))
 
-    except gorpc.GoRpcError, e:
+    except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
     except:
       logging.exception('gorpc low-level error')
@@ -220,7 +220,7 @@ class TabletConnection(object):
         query_result = self.client.stream_next()
         if query_result is None:
           return None, None, None
-      except gorpc.GoRpcError, e:
+      except gorpc.GoRpcError as e:
         raise dbexceptions.OperationalError(*e.args)
       except:
         logging.exception('gorpc low-level error')
