@@ -210,19 +210,30 @@ class TabletConnection(object):
     except:
       logging.exception('gorpc low-level error')
       raise
-    return fields, conversions
+    return fields, conversions, None, 0
 
-  def _stream_next(self, conversions):
-    try:
-      response = self.client.stream_next()
-      if response is None:
-        return None
-      return tuple(_make_row(response.reply['Row'], conversions))
-    except gorpc.GoRpcError, e:
-      raise dbexceptions.OperationalError(*e.args)
-    except:
-      logging.exception('gorpc low-level error')
-      raise
+  def _stream_next(self, conversions, query_result, index):
+
+    # see if we need to read more
+    if query_result is None:
+      try:
+        query_result = self.client.stream_next()
+        if query_result is None:
+          return None, None, None
+      except gorpc.GoRpcError, e:
+        raise dbexceptions.OperationalError(*e.args)
+      except:
+        logging.exception('gorpc low-level error')
+        raise
+
+    result = tuple(_make_row(query_result.reply['Rows'][index], conversions))
+
+    index += 1
+    if index == len(query_result.reply['Rows']):
+      query_result = None
+      index = 0
+
+    return result, query_result, index
 
 def _make_row(row, conversions):
   converted_row = []

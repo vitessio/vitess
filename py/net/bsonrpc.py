@@ -62,6 +62,11 @@ class BsonRpcClient(gorpc.GoRpcClient):
       # FIXME(msolomon) remove this hack
       response.reply = response.reply.get(WRAPPED_FIELD, response.reply)
 
-      return offset, None
+      # the pure-python bson library returns the offset in the buffer
+      # the cbson library returns -1 if everything was read
+      # so we cannot use the 'offset' variable. Instead use
+      # header_len + body_len for the complete length read
+
+      return header_len + body_len, None
     except Exception, e:
       raise gorpc.GoRpcError('decode error', e)

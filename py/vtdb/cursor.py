@@ -147,6 +147,8 @@ class BatchQueryItem(object):
 class StreamCursor(object):
   arraysize = 1
   conversions = None
+  query_result = None
+  query_index = 0
   connection = None
   description = None
   index = None
@@ -175,7 +177,7 @@ class StreamCursor(object):
       self.connection.rollback()
       return
 
-    self.description, self.conversions = self.connection._stream_execute(sql, bind_variables, **kargs)
+    self.description, self.conversions, self.query_result, self.query_index = self.connection._stream_execute(sql, bind_variables, **kargs)
     self.index = 0
     return 0
 
@@ -184,7 +186,8 @@ class StreamCursor(object):
       raise dbexceptions.ProgrammingError('fetch called before execute')
 
     self.index += 1
-    return self.connection._stream_next(self.conversions)
+    result, self.query_result, self.query_index = self.connection._stream_next(self.conversions, self.query_result, self.query_index)
+    return result
 
   def fetchmany(self, size=None):
     if size is None:

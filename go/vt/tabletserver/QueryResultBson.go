@@ -13,15 +13,6 @@ import (
 
 type QueryResult mysql.QueryResult
 
-// StreamQueryResult is used to return values for streaming queries.
-// Exactly one of Fields and Row will be nil:
-// - Fields will be set on the first returned value (and Row nil)
-// - Row will be set for each database value (and Fields nil)
-type StreamQueryResult struct {
-	Fields []mysql.Field
-	Row    []interface{}
-}
-
 func MarshalFieldBson(field mysql.Field, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -67,19 +58,6 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 	bson.EncodePrefix(buf, bson.Array, "Rows")
 	encodeRowsBson(qr.Rows, buf)
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (sqr *StreamQueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodePrefix(buf, bson.Array, "Fields")
-	encodeFieldsBson(sqr.Fields, buf)
-
-	bson.EncodePrefix(buf, bson.Array, "Row")
-	encodeRowBson(sqr.Row, buf)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -141,24 +119,6 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 			qr.InsertId = bson.DecodeUint64(buf, kind)
 		case "Rows":
 			qr.Rows = decodeRowsBson(buf, kind)
-		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
-func (sqr *StreamQueryResult) UnmarshalBson(buf *bytes.Buffer) {
-	bson.Next(buf, 4)
-
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Fields":
-			sqr.Fields = decodeFieldsBson(buf, kind)
-		case "Row":
-			sqr.Row = decodeRowBson(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}

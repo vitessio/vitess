@@ -47,8 +47,11 @@ type Result struct {
 
 type StreamResult struct {
 	call    *rpcplus.Call
-	sr      chan *tabletserver.StreamQueryResult
-	columns *tabletserver.StreamQueryResult
+	sr      chan *tabletserver.QueryResult
+	columns *tabletserver.QueryResult
+	// current result and index on it
+	qr    *tabletserver.QueryResult
+	index int
 }
 
 func NewDriver(stream bool) *Driver {
@@ -116,7 +119,7 @@ func (conn *Conn) Exec(query string, args []driver.Value) (driver.Result, error)
 			ConnectionId:  conn.ConnectionId,
 			SessionId:     conn.SessionId,
 		}
-		sr := make(chan *tabletserver.StreamQueryResult, 10)
+		sr := make(chan *tabletserver.QueryResult, 10)
 		c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
 
 		// read the columns, or grab the error
@@ -124,7 +127,7 @@ func (conn *Conn) Exec(query string, args []driver.Value) (driver.Result, error)
 		if !ok {
 			return &StreamResult{}, c.Error
 		}
-		return &StreamResult{c, sr, cols}, nil
+		return &StreamResult{c, sr, cols, nil, 0}, nil
 	}
 
 	qr, err := conn.ExecBind(query, bindVars)
@@ -261,20 +264,36 @@ func (sr *StreamResult) Next(dest []driver.Value) error {
 		return errors.New("length mismatch")
 	}
 
-	cols, ok := <-sr.sr
-	if !ok {
-		// if there was an error, we return that, otherwise
-		// we return EOF
-		if sr.call.Error != nil {
-			log.Printf("Error reading the next value: %v", sr.call.Error.Error())
-			return sr.call.Error
+	if sr.qr == nil {
+		// we need to read the next record that may contain
+		// multiple rows
+		qr, ok := <-sr.sr
+		if !ok {
+			// if there was an error, we return that, otherwise
+			// we return EOF
+			if sr.call.Error != nil {
+				log.Printf("Error reading the next value: %v", sr.call.Error.Error())
+				return sr.call.Error
+			}
+			return io.EOF
 		}
-		return io.EOF
+		sr.qr = qr
+		sr.index = 0
 	}
-	for i, v := range cols.Row {
+
+	row := sr.qr.Rows[sr.index]
+	for i, v := range row {
 		if v != nil {
 			dest[i] = convert(int(sr.columns.Fields[i].Type), v.(string))
 		}
 	}
+
+	sr.index++
+	if sr.index == len(sr.qr.Rows) {
+		// we reached the end of our rows, nil it so next run
+		// will fetch the next one
+		sr.qr = nil
+	}
+
 	return nil
 }

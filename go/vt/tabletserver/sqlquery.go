@@ -344,8 +344,8 @@ func (sq *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 	return nil
 }
 
-// the first StreamQueryResult will have Fields set (and Row nil)
-// the subsequent StreamQueryResult will have Row set (and Fields nil)
+// the first QueryResult will have Fields set (and Rows nil)
+// the subsequent QueryResult will have Rows set (and Fields nil)
 func (sq *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}) error) (err error) {
 
 	defer handleExecError(query, &err)
@@ -378,7 +378,7 @@ func (sq *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}
 	defer conn.Recycle()
 
 	// then setup the callback and stream!
-	callback := func(sqr *StreamQueryResult) (err error) {
+	callback := func(sqr *QueryResult) (err error) {
 		err = sendReply(sqr)
 		if err != nil {
 			return err
@@ -827,7 +827,7 @@ func (sq *SqlQuery) fullFetch(conn PoolConnection, parsed_query *sqlparser.Parse
 	return result
 }
 
-func (sq *SqlQuery) fullStreamFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(*StreamQueryResult) error) error {
+func (sq *SqlQuery) fullStreamFetch(conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(*QueryResult) error) error {
 	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	return sq.executeStreamSql(conn, sql, callback)
 }
@@ -857,7 +857,7 @@ func (sq *SqlQuery) executeSql(conn PoolConnection, sql []byte, wantfields bool)
 	return result, nil
 }
 
-func (sq *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback func(*StreamQueryResult) error) error {
+func (sq *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback func(*QueryResult) error) error {
 	connid := conn.Id()
 	sq.activePool.Put(connid)
 	defer sq.activePool.Remove(connid)

@@ -14,13 +14,21 @@ import (
 var mysqlStats *stats.Timings
 var QueryLogger *relog.Logger
 
+// this constant was chosen after trying out a few of them. Too small
+// buffers force too many packets to be sent. Too big buffers force the
+// clients to read them in multiple chunks and make memory copies.  so
+// with the encoding overhead, this seems to work great.  (the
+// overhead makes the final packets on the wire about twice bigger
+// than this).
+const minStreamingBufferSizeBeforeSend = 32 * 1024
+
 func init() {
 	mysqlStats = stats.NewTimings("MySQL")
 }
 
 type PoolConnection interface {
 	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error)
-	ExecuteStreamFetch(query []byte, callback func(*StreamQueryResult) error) error
+	ExecuteStreamFetch(query []byte, callback func(*QueryResult) error) error
 	Id() int64
 	Close()
 	IsClosed() bool
@@ -61,7 +69,7 @@ func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool
 	return &qr, nil
 }
 
-func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*StreamQueryResult) error) error {
+func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryResult) error) error {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
@@ -76,25 +84,45 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*Stream
 	defer mresult.Close()
 
 	// first call the callback with the fields
-	err = callback(&StreamQueryResult{mfields, nil})
+	err = callback(&QueryResult{Fields: mfields})
 	if err != nil {
 		return err
 	}
 
-	// then get all the rows
+	// then get all the rows, sending them as we reach a decent packet size
 	colCount := len(mfields)
+	qr := &QueryResult{}
+	byteCount := 0
 	for {
 		row := mresult.FetchNext(colCount)
 		if row == nil {
-			// last one for sure, let's see if it was an error
-			return conn.Connection.LastErrorOrNil(query)
+			break
 		}
-		err = callback(&StreamQueryResult{nil, row})
+		qr.Rows = append(qr.Rows, row)
+		for _, s := range row {
+			if s != nil {
+				byteCount += len(s.(string))
+			}
+		}
+
+		if byteCount >= minStreamingBufferSizeBeforeSend {
+			err = callback(qr)
+			if err != nil {
+				return err
+			}
+			qr = &QueryResult{}
+			byteCount = 0
+		}
+	}
+
+	if len(qr.Rows) > 0 {
+		err = callback(qr)
 		if err != nil {
 			return err
 		}
 	}
-	panic("unreachable")
+
+	return conn.Connection.LastErrorOrNil(query)
 }
 
 // CreateConnection returns a connection for running user queries. No DDL.

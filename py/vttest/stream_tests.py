@@ -41,7 +41,9 @@ class TestStream(framework.TestCase):
     if True:
       for i in xrange(loop_count):
         cu = self.env.execute("select * from vtocc_big b1, vtocc_big b2")
-        self.assertEqual(len(cu.fetchall()), 10000)
+        rows = cu.fetchall()
+        self.assertEqual(len(rows), 10000)
+        self.check_row_10(rows[10])
 
     # select lots of data using a streaming query
     if True:
@@ -49,6 +51,20 @@ class TestStream(framework.TestCase):
         cu = self.env.execute("select * from vtocc_big b1, vtocc_big b2",
                               cursorclass=cursor.StreamCursor)
         count = 0
-        while cu.fetchone() != None:
+        while True:
+          row = cu.fetchone()
+          if row is None:
+            break
+          if count == 10:
+            self.check_row_10(row)
           count += 1
         self.assertEqual(count, 10000)
+
+  def check_row_10(self, row):
+    # null the dates so they match
+    row = list(row)
+    row[6] = None
+    row[11] = None
+    row[20] = None
+    row[25] = None
+    self.assertEqual(row, [10L, 'AAAAAAAAAAAAAAAAAA 10', 'BBBBBBBBBBBBBBBBBB 10', 'C', 'DDDDDDDDDDDDDDDDDD 10', 'EEEEEEEEEEEEEEEEEE 10', None, 'FFFFFFFFFFFFFFFF', 'GGGGGGGGGGGGGGGGGG 10', 10L, 10L, None, 10L, 10, 0L, 'AAAAAAAAAAAAAAAAAA 0', 'BBBBBBBBBBBBBBBBBB 0', 'C', 'DDDDDDDDDDDDDDDDDD 0', 'EEEEEEEEEEEEEEEEEE 0', None, 'FFFFFFFFFFFFFFFF', 'GGGGGGGGGGGGGGGGGG 0', 0L, 0L, None, 0L, 0])
