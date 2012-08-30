@@ -268,8 +268,8 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 		// an action is running, there is some time where this will be inconsistent.
 		_, _, err := zconn.Get(tablet.ReplicationPath())
 		if !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return fmt.Errorf("unexpected replication path found for scrap tablet (possible pending action?): %v",
-				tablet.ReplicationPath())
+			return fmt.Errorf("unexpected replication path found(possible pending action?): %v (%v)",
+				tablet.ReplicationPath(), tablet.Type)
 		}
 	}
 
