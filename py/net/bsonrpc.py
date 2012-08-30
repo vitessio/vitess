@@ -33,7 +33,7 @@ class BsonRpcClient(gorpc.GoRpcClient):
       else:
         body = req.body
       return bson.dumps(req.header) + bson.dumps(body)
-    except Exception, e:
+    except Exception as e:
       raise gorpc.GoRpcError('encode error', e)
 
   # fill response with decoded data, and returns a tuple
@@ -68,5 +68,5 @@ class BsonRpcClient(gorpc.GoRpcClient):
       # header_len + body_len for the complete length read
 
       return header_len + body_len, None
-    except Exception, e:
+    except Exception as e:
       raise gorpc.GoRpcError('decode error', e)
