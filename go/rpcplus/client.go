@@ -116,7 +116,6 @@ func (client *Client) input() {
 		seq := response.Seq
 		client.mutex.Lock()
 		call := client.pending[seq]
-		delete(client.pending, seq)
 		client.mutex.Unlock()
 
 		switch {
@@ -141,7 +140,7 @@ func (client *Client) input() {
 			if err != nil {
 				err = errors.New("reading error payload: " + err.Error())
 			}
-			call.done()
+			client.done(seq)
 		case call.Stream:
 			// call.Reply is a chan *T2
 			// we need to create a T2 and get a *T2 back
@@ -156,17 +155,12 @@ func (client *Client) input() {
 				// client to drain the receiving channel in that case
 				reflect.ValueOf(call.Reply).Send(reflect.ValueOf(value))
 			}
-
-			// re add to the map, we will get more
-			client.mutex.Lock()
-			client.pending[seq] = call
-			client.mutex.Unlock()
 		default:
 			err = client.codec.ReadResponseBody(call.Reply)
 			if err != nil {
 				call.Error = errors.New("reading body " + err.Error())
 			}
-			call.done()
+			client.done(seq)
 		}
 	}
 	// Terminate pending calls.
@@ -182,6 +176,17 @@ func (client *Client) input() {
 	client.sending.Unlock()
 	if err != io.EOF && !closing {
 		log.Println("rpc: client protocol error:", err)
+	}
+}
+
+func (client *Client) done(seq uint64) {
+	client.mutex.Lock()
+	call := client.pending[seq]
+	delete(client.pending, seq)
+	client.mutex.Unlock()
+
+	if call != nil {
+		call.done()
 	}
 }
 
