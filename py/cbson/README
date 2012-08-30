@@ -1,0 +1,18 @@
+This library implements a simple C bson encoder / decoder for python.
+It doesn't support the full bson spec, but supports enough for
+our use of it.
+
+The code has no particular dependencies, but at least the encoder has
+the following notable caveats:
+- It may or may not work on a 64-bit Python.
+ (It's possible that it does work, but we've never tried it.)
+- It doesn't do a good job of checking for overflows (which could happen
+in a few parts, given appropriately malicious input).
+- It won't work on a big endian platform.
+
+The python code that uses the bson decoder can work with the pure python
+bson decoder, which doesn't have these problems, but is slower.
+
+This code was originally written by Kirk Mcdonald (kgm@google.com) for the
+encoder part, and Shalabh Chaturvedi (shalabh@google.com) for the decoder
+part.

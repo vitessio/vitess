@@ -30,6 +30,16 @@ else
     python ./setup.py install --prefix=$bson_dist
 fi
 
+# install cbson
+cbson_dist=$VTROOT/dist/py-cbson
+if [ -d $cbson_dist ]; then
+  echo "skipping cbson python build"
+else
+  cd $VTTOP/py/cbson && \
+    python ./setup.py install --prefix=$cbson_dist
+fi
+
+
 #install vtdb
 vtdb_dist=$VTROOT/dist/py-vtdb
 if [ -d $vtdb_dist ]; then
