@@ -46,6 +46,7 @@ var (
 var config = ts.Config{
 	CachePoolCap:       1000,
 	PoolSize:           16,
+	StreamPoolSize:     750,
 	TransactionCap:     20,
 	TransactionTimeout: 30,
 	MaxResultSize:      10000,
@@ -53,6 +54,7 @@ var config = ts.Config{
 	SchemaReloadTime:   30 * 60,
 	QueryTimeout:       0,
 	IdleTimeout:        30 * 60,
+	StreamBufferSize:   32 * 1024,
 }
 
 var dbconfig = ts.DBConfig{

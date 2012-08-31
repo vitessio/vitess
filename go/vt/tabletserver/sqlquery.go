@@ -33,18 +33,20 @@ const (
 //-----------------------------------------------
 // RPC API
 type SqlQuery struct {
-	mu            sync.RWMutex
-	state         int32 // Use sync/atomic to acces this variable
-	sessionId     int64
-	cachePool     *CachePool
-	schemaInfo    *SchemaInfo
-	connPool      *ConnectionPool
-	reservedPool  *ReservedPool
-	txPool        *ConnectionPool
-	activeTxPool  *ActiveTxPool
-	activePool    *ActivePool
-	consolidator  *Consolidator
-	maxResultSize int32 // Use sync/atomic
+	mu               sync.RWMutex
+	state            int32 // Use sync/atomic to acces this variable
+	sessionId        int64
+	cachePool        *CachePool
+	schemaInfo       *SchemaInfo
+	connPool         *ConnectionPool
+	streamConnPool   *ConnectionPool
+	reservedPool     *ReservedPool
+	txPool           *ConnectionPool
+	activeTxPool     *ActiveTxPool
+	activePool       *ActivePool
+	consolidator     *Consolidator
+	maxResultSize    int32 // Use sync/atomic
+	streamBufferSize int32 // Use sync/atomic
 
 	// Vars for handling invalidations
 	dbName string
@@ -68,12 +70,14 @@ func NewSqlQuery(config Config) *SqlQuery {
 	sq.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	sq.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9))
 	sq.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
+	sq.streamConnPool = NewConnectionPool(config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	sq.reservedPool = NewReservedPool()
 	sq.txPool = NewConnectionPool(config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
 	sq.activeTxPool = NewActiveTxPool(time.Duration(config.TransactionTimeout * 1e9))
 	sq.activePool = NewActivePool(time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	sq.consolidator = NewConsolidator()
 	sq.maxResultSize = int32(config.MaxResultSize)
+	sq.streamBufferSize = int32(config.StreamBufferSize)
 	expvar.Publish("Voltron", stats.StrFunc(func() string { return sq.statsJSON() }))
 	queryStats = stats.NewTimings("Queries")
 	stats.NewRates("QPS", queryStats, 15, 60e9)
@@ -104,6 +108,7 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 	sq.schemaInfo.Open(connFactory, sq.cachePool)
 	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	sq.connPool.Open(connFactory)
+	sq.streamConnPool.Open(connFactory)
 	sq.reservedPool.Open(connFactory)
 	sq.txPool.Open(connFactory)
 	sq.activeTxPool.Open()
@@ -129,6 +134,7 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.activeTxPool.Close()
 	sq.txPool.Close()
 	sq.reservedPool.Close()
+	sq.streamConnPool.Close()
 	sq.connPool.Close()
 	sq.sessionId = 0
 	sq.dbName = ""
@@ -374,7 +380,7 @@ func (sq *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}
 	defer queryStats.Record("SELECT_STREAM", time.Now())
 
 	// does the real work: first get a connection
-	conn := sq.connPool.Get()
+	conn := sq.streamConnPool.Get()
 	defer conn.Recycle()
 
 	// then setup the callback and stream!
@@ -755,6 +761,9 @@ func (sq *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
 	case "vt_pool_size":
 		sq.connPool.SetCapacity(int(plan.SetValue.(float64)))
 		return &QueryResult{}
+	case "vt_stream_pool_size":
+		sq.streamConnPool.SetCapacity(int(plan.SetValue.(float64)))
+		return &QueryResult{}
 	case "vt_transaction_cap":
 		sq.txPool.SetCapacity(int(plan.SetValue.(float64)))
 		return &QueryResult{}
@@ -774,13 +783,22 @@ func (sq *SqlQuery) execSet(plan *CompiledPlan) (result *QueryResult) {
 		}
 		atomic.StoreInt32(&sq.maxResultSize, val)
 		return &QueryResult{}
+	case "vt_stream_buffer_size":
+		val := int32(plan.SetValue.(float64))
+		if val < 1024 {
+			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
+		}
+		atomic.StoreInt32(&sq.streamBufferSize, val)
+		return &QueryResult{}
 	case "vt_query_timeout":
 		sq.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
 		return &QueryResult{}
 	case "vt_idle_timeout":
-		sq.connPool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		sq.txPool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		sq.activePool.SetIdleTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
+		t := plan.SetValue.(float64) * 1e9
+		sq.connPool.SetIdleTimeout(time.Duration(t))
+		sq.streamConnPool.SetIdleTimeout(time.Duration(t))
+		sq.txPool.SetIdleTimeout(time.Duration(t))
+		sq.activePool.SetIdleTimeout(time.Duration(t))
 		return &QueryResult{}
 	}
 	return sq.qFetch(plan, plan.FullQuery, nil)
@@ -861,7 +879,7 @@ func (sq *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback f
 	connid := conn.Id()
 	sq.activePool.Put(connid)
 	defer sq.activePool.Remove(connid)
-	err := conn.ExecuteStreamFetch(sql, callback)
+	err := conn.ExecuteStreamFetch(sql, callback, int(atomic.LoadInt32(&sq.streamBufferSize)))
 	if err != nil {
 		return NewTabletErrorSql(FAIL, err)
 	}
@@ -878,10 +896,12 @@ func (sq *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.cachePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.schemaInfo.queries.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", sq.connPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"StreamConnPool\": %v,", sq.streamConnPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"TxPool\": %v,", sq.txPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", sq.activeTxPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", sq.activePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", atomic.LoadInt32(&sq.maxResultSize))
+	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v,", atomic.LoadInt32(&sq.streamBufferSize))
 	fmt.Fprintf(buf, "\n \"ReservedPool\": %v", sq.reservedPool.StatsJSON())
 	fmt.Fprintf(buf, "\n}")
 	return buf.String()

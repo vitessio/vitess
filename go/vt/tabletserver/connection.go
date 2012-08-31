@@ -14,21 +14,13 @@ import (
 var mysqlStats *stats.Timings
 var QueryLogger *relog.Logger
 
-// this constant was chosen after trying out a few of them. Too small
-// buffers force too many packets to be sent. Too big buffers force the
-// clients to read them in multiple chunks and make memory copies.  so
-// with the encoding overhead, this seems to work great.  (the
-// overhead makes the final packets on the wire about twice bigger
-// than this).
-const minStreamingBufferSizeBeforeSend = 32 * 1024
-
 func init() {
 	mysqlStats = stats.NewTimings("MySQL")
 }
 
 type PoolConnection interface {
 	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error)
-	ExecuteStreamFetch(query []byte, callback func(*QueryResult) error) error
+	ExecuteStreamFetch(query []byte, callback func(*QueryResult) error, streamBufferSize int) error
 	Id() int64
 	Close()
 	IsClosed() bool
@@ -69,7 +61,7 @@ func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool
 	return &qr, nil
 }
 
-func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryResult) error) error {
+func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryResult) error, streamBufferSize int) error {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
@@ -105,7 +97,7 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryR
 			}
 		}
 
-		if byteCount >= minStreamingBufferSizeBeforeSend {
+		if byteCount >= streamBufferSize {
 			err = callback(qr)
 			if err != nil {
 				return err

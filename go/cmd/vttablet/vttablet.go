@@ -44,16 +44,26 @@ var (
 	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 )
 
+// Default values for the config
+//
+// The value for StreamBufferSize was chosen after trying out a few of
+// them. Too small buffers force too many packets to be sent. Too big
+// buffers force the clients to read them in multiple chunks and make
+// memory copies.  so with the encoding overhead, this seems to work
+// great.  (the overhead makes the final packets on the wire about
+// twice bigger than this).
 var qsConfig ts.Config = ts.Config{
-	1000,
-	16,
-	20,
-	30,
-	10000,
-	5000,
-	30 * 60,
-	0,
-	30 * 60,
+	CachePoolCap:       1000,
+	PoolSize:           16,
+	StreamPoolSize:     750,
+	TransactionCap:     20,
+	TransactionTimeout: 30,
+	MaxResultSize:      10000,
+	QueryCacheSize:     5000,
+	SchemaReloadTime:   30 * 60,
+	QueryTimeout:       0,
+	IdleTimeout:        30 * 60,
+	StreamBufferSize:   32 * 1024,
 }
 
 func main() {

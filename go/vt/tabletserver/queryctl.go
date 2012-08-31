@@ -13,9 +13,11 @@ import (
 type Config struct {
 	CachePoolCap       int
 	PoolSize           int
+	StreamPoolSize     int
 	TransactionCap     int
 	TransactionTimeout float64
 	MaxResultSize      int
+	StreamBufferSize   int
 	QueryCacheSize     int
 	SchemaReloadTime   float64
 	QueryTimeout       float64
