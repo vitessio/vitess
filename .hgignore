@@ -11,3 +11,4 @@ _obj/
 \.sgo\.go$
 _testmain.go$
 \.swp$
+.DS_Store$
