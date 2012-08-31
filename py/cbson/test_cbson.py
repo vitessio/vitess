@@ -12,8 +12,6 @@ import sys
 sys.path.append(os.path.split(os.path.abspath(__file__))[0])
 import cbson
 
-#import cbson
-
 def test_load_empty():
   """
   >>> cbson.loads('')
@@ -49,11 +47,11 @@ def test_load_int():
   {'int': 1334}
   """
 
-# def test_bool():
-#   """
-#   >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))
-#   {'yes': True, 'no': False}
-#   """
+def test_bool():
+  """
+  >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))
+  {'yes': True, 'no': False}
+  """
 
 def test_none():
   r"""
@@ -130,7 +128,7 @@ def test_decode_next():
   >>> cbson.decode_next(s, 12)
   (28, {'b': 2.0})
   >>> cbson.decode_next(s, 28)
-  (-1, {'c': [None]})
+  (44, {'c': [None]})
   """
 
 def test_decode_next_eob():

@@ -17,7 +17,7 @@
   >>> cbson.decode_next(s, 12)
   (28, {'b': 2.0})
   >>> cbson.decode_next(s, 28)
-  (-1, {'c': [None]})
+  (44, {'c': [None]})
 */
 
 /*#include <string.h>*/
@@ -244,12 +244,7 @@ decode_next(PyObject *self, PyObject* args) {
 
  /* move slice to end of current slice for easy offset calculation */
  next(&mbuf_iter, 0, "end");
-
  offset = (mbuf_iter.slice.start - mbuf_iter.start);
- if (mbuf_iter.slice.start > mbuf_iter.end) {
-   /* we've consumed everything */
-   offset = -1;
- }
 
  PyBuffer_Release(&buffer);
  return Py_BuildValue("iN", offset, decoded_obj);
@@ -1168,7 +1163,8 @@ PyDoc_STRVAR(decode_next__doc__,
 \n\
 Decodes buffer starting at offset until exactly one BSON document is \
 decoded. Returns the decoded object and the subsequent offset. \
-If the buffer was exahusted, returned offset is -1. \n\
+If the returned offset is equal to the size of the input buffer, \
+then no more input is available.\
 \n\
 When enough bytes are not available, BSONBufferTooShort is raised. The \
 second arg of BSONBufferTooShort stores the number of additional \
