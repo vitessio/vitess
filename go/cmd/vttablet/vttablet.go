@@ -122,7 +122,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 		agent.Stop()
 	})
 
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
 	// The TabletManager rpc service allow other processes to query for management
 	// related data. It might be co-registered with the query server.

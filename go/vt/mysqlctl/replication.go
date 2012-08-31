@@ -51,14 +51,13 @@ type ReplicationState struct {
 	MasterConnectRetry  int
 }
 
-// FIXME(msolomon) wrong place for default credentials
-func NewReplicationState(masterAddr string) *ReplicationState {
+func NewReplicationState(masterAddr, user, passwd string) *ReplicationState {
 	addrPieces := strings.Split(masterAddr, ":")
 	port, err := strconv.Atoi(addrPieces[1])
 	if err != nil {
 		panic(err)
 	}
-	return &ReplicationState{MasterUser: "vt_repl", MasterPassword: "", MasterConnectRetry: 10,
+	return &ReplicationState{MasterUser: user, MasterPassword: passwd, MasterConnectRetry: 10,
 		MasterHost: addrPieces[0], MasterPort: port}
 }
 
@@ -71,12 +70,12 @@ type ReplicaSource struct {
 	*ReplicationState
 }
 
-func NewReplicaSource(addr, mysqlAddr string) *ReplicaSource {
+func NewReplicaSource(addr, mysqlAddr, user, passwd string) *ReplicaSource {
 	return &ReplicaSource{
 		Addr:             addr,
 		FileList:         make([]string, 0, 256),
 		HashList:         make([]string, 0, 256),
-		ReplicationState: NewReplicationState(mysqlAddr)}
+		ReplicationState: NewReplicationState(mysqlAddr, user, passwd)}
 }
 
 var changeMasterCmd = `CHANGE MASTER TO
@@ -110,7 +109,7 @@ func ReadReplicationState(mysqld *Mysqld) (*ReplicationState, error) {
 	masterParts := strings.Split(string(masterInfo), " ")
 	// FIXME(msolomon) does the file supply port?
 	addr := fmt.Sprintf("%v:%v", masterParts[3], 3306)
-	replState := NewReplicationState(addr)
+	replState := NewReplicationState(addr, mysqld.replParams.Uname, mysqld.replParams.Pass)
 	replState.ReplicationPosition.MasterLogFile = relayParts[2]
 	temp, _ := strconv.ParseUint(relayParts[3], 10, 0)
 	replState.ReplicationPosition.MasterLogPosition = uint(temp)
@@ -282,7 +281,7 @@ func (mysqld *Mysqld) CreateReplicaSource(dbName, replicaSourcePath, sourceAddr 
 		}
 	}
 
-	replicaSource := NewReplicaSource(sourceAddr, masterAddr)
+	replicaSource := NewReplicaSource(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass)
 	replicaSource.Addr = sourceAddr
 	replicaSource.DbName = dbName
 	replicaSource.ReplicationPosition = *replicationPosition

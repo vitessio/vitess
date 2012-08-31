@@ -37,7 +37,7 @@ func main() {
 	if err != nil {
 		relog.Fatal("%s", err)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
 	action := flag.Arg(0)
 	switch action {

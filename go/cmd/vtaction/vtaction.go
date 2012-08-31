@@ -68,7 +68,7 @@ func main() {
 	if err != nil {
 		relog.Fatal("%s", cfErr)
 	}
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba)
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
 	zconn := zk.NewMetaConn(5e9)
 	defer zconn.Close()

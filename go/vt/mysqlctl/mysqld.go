@@ -32,15 +32,17 @@ type CreateConnection func() (*mysql.Connection, error)
 
 type Mysqld struct {
 	config           *Mycnf
+	dbaParams        mysql.ConnectionParams
+	replParams       mysql.ConnectionParams
 	createConnection CreateConnection
 }
 
-func NewMysqld(config *Mycnf, dbaconfig mysql.ConnectionParams) *Mysqld {
+func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 	createSuperConnection := func() (*mysql.Connection, error) {
-		return mysql.Connect(dbaconfig)
+		return mysql.Connect(dba)
 	}
 
-	return &Mysqld{config, createSuperConnection}
+	return &Mysqld{config, dba, repl, createSuperConnection}
 }
 
 func Start(mt *Mysqld) error {

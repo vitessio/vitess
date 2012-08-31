@@ -18,6 +18,26 @@ import (
 	"code.google.com/p/vitess/go/vt/tabletserver"
 )
 
+// Offer a sample config - probably should load this when file isn't set.
+const defaultConfig = `{
+  "app": {
+    "uname": "vt_app",
+    "charset": "utf8"
+  },
+  "dba": {
+    "uname": "vt_dba",
+    "charset": "utf8"
+  },
+  "repl": {
+    "uname": "vt_repl",
+    "charset": "utf8"
+  }
+}`
+
+// FIXME(msolomon) the usage of this string seems odd. If this
+// is truly universal to all apps this variable should be private.
+// It's unclear why we need both Init and ReadJson - there should
+// only be one public entry point.
 var DBConfigsFile = flag.String("db-configs-file", "", "db connection configs file")
 
 type DBConfigs struct {
@@ -28,8 +48,16 @@ type DBConfigs struct {
 }
 
 func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
+	dbcfgs.App = tabletserver.DBConfig{
+		Uname:   "vt_app",
+		Charset: "utf8",
+	}
 	dbcfgs.Dba = mysql.ConnectionParams{
 		Uname:   "vt_dba",
+		Charset: "utf8",
+	}
+	dbcfgs.Repl = mysql.ConnectionParams{
+		Uname:   "vt_repl",
 		Charset: "utf8",
 	}
 	err = ReadJson(*DBConfigsFile, &dbcfgs)

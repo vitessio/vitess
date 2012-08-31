@@ -104,8 +104,8 @@ type SplitReplicaSource struct {
 	Schema   string
 }
 
-func NewSplitReplicaSource(addr, mysqlAddr string) *SplitReplicaSource {
-	return &SplitReplicaSource{ReplicaSource: NewReplicaSource(addr, mysqlAddr)}
+func NewSplitReplicaSource(addr, mysqlAddr, user, passwd string) *SplitReplicaSource {
+	return &SplitReplicaSource{ReplicaSource: NewReplicaSource(addr, mysqlAddr, user, passwd)}
 }
 
 // FIXME(msolomon) use query format/bind vars
@@ -191,7 +191,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	}
 	relog.Info("Save Master Status")
 
-	replicaSource := NewSplitReplicaSource(sourceAddr, mysqld.Addr())
+	replicaSource := NewSplitReplicaSource(sourceAddr, mysqld.Addr(), mysqld.replParams.Uname, mysqld.replParams.Pass)
 	replicaSource.DbName = dbName
 	replicaSource.ReplicationPosition.MasterLogFile = rows[0][0].(string)
 	temp, _ := strconv.ParseUint(rows[0][1].(string), 10, 0)

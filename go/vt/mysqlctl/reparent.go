@@ -44,7 +44,7 @@ func (mysqld *Mysqld) PromoteSlave() (replicationState *ReplicationState, waitPo
 	if err != nil {
 		return
 	}
-	replicationState = NewReplicationState(mysqld.Addr())
+	replicationState = NewReplicationState(mysqld.Addr(), mysqld.replParams.Uname, mysqld.replParams.Pass)
 	replicationState.ReplicationPosition = *replicationPosition
 	timePromoted = time.Now().UnixNano()
 	// write a row to verify that replication is functioning
