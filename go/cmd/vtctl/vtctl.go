@@ -247,6 +247,7 @@ func getTabletMap(zconn zk.Conn, tabletPaths []string) map[string]*tm.TabletInfo
 		tabletPath := path
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			tabletInfo, err := tm.ReadTablet(zconn, tabletPath)
 			if err != nil {
 				relog.Warning("%v: %v", tabletPath, err)
@@ -255,7 +256,6 @@ func getTabletMap(zconn zk.Conn, tabletPaths []string) map[string]*tm.TabletInfo
 				tabletMap[tabletPath] = tabletInfo
 				mutex.Unlock()
 			}
-			wg.Done()
 		}()
 	}
 
@@ -325,166 +325,6 @@ func listScrap(zconn zk.Conn, zkVtPath string) error {
 
 func listIdle(zconn zk.Conn, zkVtPath string) error {
 	return listTabletsByType(zconn, zkVtPath, tm.TYPE_IDLE)
-}
-
-type vdata struct {
-	zkPath string
-	err    error
-}
-
-func validateZk(zconn zk.Conn, ai *tm.ActionInitiator, zkVtPath string) error {
-	// FIXME(msolomon) validate the replication setup pulled from production
-	// against what is recorded in the replication graph.
-	zkTabletsPath := path.Join(zkVtPath, "tablets")
-	tabletUids, _, err := zconn.Children(zkTabletsPath)
-	if err != nil {
-		return err
-	}
-
-	rChan := make(chan vdata, 16)
-
-	wg := sync.WaitGroup{}
-
-	done := make(chan bool, 1)
-	go func() {
-		wg.Wait()
-		done <- true
-	}()
-
-	for _, tabletUid := range tabletUids {
-		tabletPath := path.Join(zkTabletsPath, tabletUid)
-		wg.Add(1)
-		go func() {
-			rChan <- vdata{tabletPath, tm.Validate(zconn, tabletPath, "")}
-			wg.Done()
-		}()
-	}
-
-	zkKeyspacesPath := path.Join("/zk/global/vt/keyspaces")
-	keyspaces, _, err := zconn.Children(zkKeyspacesPath)
-	if err != nil {
-		return err
-	}
-
-	for _, keyspace := range keyspaces {
-		zkShardsPath := path.Join(zkKeyspacesPath, keyspace, "shards")
-		shards, _, err := zconn.Children(zkShardsPath)
-		if err != nil {
-			rChan <- vdata{zkShardsPath, err}
-		}
-		for _, shard := range shards {
-			zkShardPath := path.Join(zkShardsPath, shard)
-			wg.Add(1)
-			go func() {
-				rChan <- vdata{zkShardPath, validateShard(zconn, ai, zkShardPath, rChan)}
-				wg.Done()
-			}()
-		}
-	}
-
-	timer := time.NewTimer(*waitTime)
-	someErrors := false
-
-	for {
-		select {
-		case <-timer.C:
-			return fmt.Errorf("timed out during validate")
-		case vd := <-rChan:
-			relog.Info("checking %v", vd.zkPath)
-			if vd.err != nil {
-				someErrors = true
-				relog.Error("%v: %v", vd.zkPath, vd.err)
-			}
-		case <-done:
-			if someErrors {
-				return fmt.Errorf("some validation errors - see log")
-			}
-			return nil
-		}
-	}
-	panic("unreachable")
-}
-
-func validateShard(zconn zk.Conn, ai *tm.ActionInitiator, zkShardPath string, rchan chan<- vdata) error {
-	shardInfo, err := tm.ReadShard(zconn, zkShardPath)
-	if err != nil {
-		return err
-	}
-	aliases, err := tm.FindAllTabletAliasesInShard(zconn, shardInfo.ShardPath())
-	if err != nil {
-		return err
-	}
-	var masterAlias tm.TabletAlias
-	shardTablets := make([]string, 0, 16)
-	for _, alias := range aliases {
-		shardTablets = append(shardTablets, tm.TabletPathForAlias(alias))
-	}
-
-	tabletMap := getTabletMap(zconn, shardTablets)
-	for _, alias := range aliases {
-		zkTabletPath := tm.TabletPathForAlias(alias)
-
-		tabletInfo, ok := tabletMap[zkTabletPath]
-		if !ok {
-			continue
-		}
-		if tabletInfo.Parent.Uid == tm.NO_TABLET {
-			if masterAlias.Cell != "" {
-				rchan <- vdata{zkTabletPath, fmt.Errorf("%v: already has a master %v", zkTabletPath, masterAlias)}
-			} else {
-				masterAlias = alias
-			}
-		}
-	}
-
-	wg := sync.WaitGroup{}
-
-	// Need the master for this loop.
-	for _, alias := range aliases {
-		zkTabletPath := tm.TabletPathForAlias(alias)
-		zkTabletReplicationPath := zkShardPath + "/" + masterAlias.String()
-		if alias != masterAlias {
-			zkTabletReplicationPath += "/" + alias.String()
-		}
-		wg.Add(1)
-		go func() {
-			rchan <- vdata{zkTabletReplicationPath, tm.Validate(zconn, zkTabletPath, zkTabletReplicationPath)}
-			wg.Done()
-		}()
-	}
-
-	if !*pingTablets {
-		return nil
-	}
-
-	for _, alias := range aliases {
-		wg.Add(1)
-		zkTabletPath := tm.TabletPathForAlias(alias)
-		go func() {
-			tabletInfo := tabletMap[zkTabletPath]
-			zkTabletPid := path.Join(zkTabletPath, "pid")
-			_, _, err := zconn.Get(zkTabletPid)
-			if err != nil {
-				rchan <- vdata{zkTabletPath, fmt.Errorf("no pid node %v: %v %v", zkTabletPid, err, tabletInfo.Hostname())}
-				return
-			}
-
-			actionPath, err := ai.Ping(zkTabletPath)
-			if err != nil {
-				rchan <- vdata{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
-				return
-			}
-
-			err = ai.WaitForCompletion(actionPath, *waitTime)
-			if err != nil {
-				rchan <- vdata{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
-			}
-			wg.Done()
-		}()
-	}
-
-	wg.Wait()
-	return nil
 }
 
 func main() {
@@ -625,7 +465,7 @@ func main() {
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}
-		err = validateZk(zconn, ai, args[1])
+		err = validateZk(zconn, args[1])
 	case "ListScrap":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])

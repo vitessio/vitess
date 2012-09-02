@@ -98,10 +98,6 @@ func (ta *TabletAlias) String() string {
 	return fmtAlias(ta.Cell, ta.Uid)
 }
 
-func fmtAlias(cell string, uid uint) string {
-	return fmt.Sprintf("%v-%v", cell, tabletUidStr(uid))
-}
-
 /*
 A pure data struct for information serialized into json and stored in zookeeper
 */
@@ -131,7 +127,7 @@ func (tablet *Tablet) IsServingType() bool {
 
 func (tablet *Tablet) IsReplicatingType() bool {
 	switch tablet.Type {
-	case TYPE_IDLE, TYPE_SCRAP:
+	case TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP:
 		return false
 	}
 	return true

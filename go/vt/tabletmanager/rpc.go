@@ -78,3 +78,13 @@ func (tm *TabletManager) StopSlave(_ *rpc.UnusedRequest, _ *rpc.UnusedResponse) 
 	err = tm.mysqld.StopSlave()
 	return tm.wrapErr(err)
 }
+
+type SlaveList struct {
+	Addrs []string
+}
+
+func (tm *TabletManager) GetSlaves(_ *rpc.UnusedRequest, reply *SlaveList) (err error) {
+	relog.Debug("GetSlaves")
+	reply.Addrs, err = tm.mysqld.FindSlaves()
+	return tm.wrapErr(err)
+}

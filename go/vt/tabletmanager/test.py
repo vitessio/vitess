@@ -182,7 +182,7 @@ def run_test_sanity():
 
   run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
   run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_nj/vt')
+  run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/global/vt/keyspaces')
   agent_62344 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
   run(vttop+'/go/cmd/vtctl/vtctl Ping /zk/test_nj/vt/tablets/0000062344')
@@ -197,7 +197,7 @@ def run_test_sanity():
   run(vttop+'/go/cmd/vtctl/vtctl DemoteMaster /zk/test_nj/vt/tablets/0000062344')
   wait_db_read_only(62344)
 
-  run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_nj/vt')
+  run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/global/vt/keyspaces')
 
   agent_62344.kill()
 
@@ -208,7 +208,7 @@ def run_test_restart_during_action():
 
   run(vttop+'/go/cmd/vtctl/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
   run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_nj/vt')
+  run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/global/vt/keyspaces')
   agent_62344 = run_bg(vttop+'/go/cmd/vttablet/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
   run(vttop+'/go/cmd/vtctl/vtctl Ping /zk/test_nj/vt/tablets/0000062344')
@@ -240,12 +240,9 @@ def _wipe_zk():
 
 def _check_zk(ping_tablets=False):
   if ping_tablets:
-    run(vttop+'/go/cmd/vtctl/vtctl -ping-tablets Validate /zk/test_nj/vt')
-    run(vttop+'/go/cmd/vtctl/vtctl -ping-tablets Validate /zk/test_ny/vt')
+    run(vttop+'/go/cmd/vtctl/vtctl -ping-tablets Validate /zk/global/vt/keyspaces')
   else:
-    run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_nj/vt')
-    run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_ny/vt')
-  #run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/test_ca/vt')
+    run(vttop+'/go/cmd/vtctl/vtctl Validate /zk/global/vt/keyspaces')
 
 def _check_db_addr(db_addr, expected_addr):
   # Run in the background to capture output.
@@ -352,12 +349,12 @@ def _run_test_reparent_graceful(shard_id):
 
   # Recompute the shard layout node - until you do that, it might not be valid.
   run(vttop+'/go/cmd/vtctl/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
-  _check_zk(ping_tablets=True)
+  _check_zk()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
   pause("force ReparentShard?")
   run(vttop+'/go/cmd/vtctl/vtctl -force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s /zk/test_nj/vt/tablets/0000062344' % shard_id)
-  _check_zk()
+  _check_zk(ping_tablets=True)
 
   expected_addr = hostname + ':6700'
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)

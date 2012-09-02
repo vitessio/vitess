@@ -823,3 +823,31 @@ func (mysqld *Mysqld) BreakSlaves() error {
 
 	return mysqld.executeSuperQueryList(cmds)
 }
+
+// Array indices for the results of SHOW PROCESSLIST.
+const (
+	colConnectionId = iota
+	colUsername
+	colClientAddr
+	colDbname
+)
+
+// Get host addresses for all currently connected slaves.
+func (mysqld *Mysqld) FindSlaves() ([]string, error) {
+	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
+	if err != nil {
+		return nil, err
+	}
+	addrs := make([]string, 0, 32)
+	for _, row := range rows {
+		if row[colUsername] == mysqld.replParams.Uname {
+			host, _, err := net.SplitHostPort(row[colClientAddr].(string))
+			if err != nil {
+				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
+			}
+			addrs = append(addrs, host)
+		}
+	}
+
+	return addrs, nil
+}

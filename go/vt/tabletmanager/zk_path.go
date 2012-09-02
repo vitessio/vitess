@@ -67,6 +67,17 @@ func VtRootFromKeyspacePath(zkKeyspacePath string) string {
 	return strings.Join(pathParts[:len(pathParts)-2], "/")
 }
 
+// In most cases the substree is just "vt" - i.e. /zk/global/vt/keyspaces.
+func VtSubtree(zkPath string) string {
+	pathParts := strings.Split(zkPath, "/")
+	for i, part := range pathParts {
+		if part == "keyspaces" || part == "tablets" {
+			return strings.Join(pathParts[3:i], "/")
+		}
+	}
+	panic(fmt.Errorf("invalid path: %v", zkPath))
+}
+
 // /zk/global/vt/keyspaces/<keyspace name>
 func MustBeKeyspacePath(zkKeyspacePath string) {
 	VtRootFromKeyspacePath(zkKeyspacePath)
@@ -160,8 +171,20 @@ func tabletUidStr(uid uint) string {
 	return fmt.Sprintf("%010d", uid)
 }
 
+func fmtAlias(cell string, uid uint) string {
+	return fmt.Sprintf("%v-%v", cell, tabletUidStr(uid))
+}
+
+// FIXME(msolomon) This method doesn't take into account the vt subtree.
 func TabletPathForAlias(alias TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, tabletUidStr(alias.Uid))
+}
+
+// Extract cell, uid and vt subtree from path and return a local tablet path.
+func TabletPathFromReplicationPath(zkReplicationPath string) string {
+	vtSubtree := VtSubtree(zkReplicationPath)
+	cell, uid := ParseTabletReplicationPath(zkReplicationPath)
+	return fmt.Sprintf("/zk/%v/%v/tablets/%v", cell, vtSubtree, tabletUidStr(uid))
 }
 
 // zkActionPath is /zk/test/vt/tablets/<uid>/action/0000000001

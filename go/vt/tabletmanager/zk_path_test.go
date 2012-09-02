@@ -120,6 +120,33 @@ func TestVtRootFromTabletPath(t *testing.T) {
 	}
 }
 
+func TestTabletPathFromReplicationPath(t *testing.T) {
+	defer func() {
+		if x := recover(); x != nil {
+			t.Error(x)
+		}
+	}()
+
+	expectedPath := "/zk/nj/vt/tablets/0000062344"
+	path := TabletPathFromReplicationPath("/zk/global/vt/keyspaces/test_keyspace/shards/0/nj-0000062344")
+	if path != expectedPath {
+		t.Errorf("%v not expected path %v", path, expectedPath)
+	}
+
+	expectedPath = "/zk/ny/vt/tablets/0000031981"
+	path = TabletPathFromReplicationPath("/zk/global/vt/keyspaces/test_keyspace/shards/0/nj-0000062344/ny-0000031981")
+	if path != expectedPath {
+		t.Errorf("%v not expected path %v", path, expectedPath)
+	}
+
+	// Test we don't assume /vt/ here.
+	expectedPath = "/zk/ny/vt-x/tablets/0000031981"
+	path = TabletPathFromReplicationPath("/zk/global/vt-x/keyspaces/test_keyspace/shards/0/nj-0000062344/ny-0000031981")
+	if path != expectedPath {
+		t.Errorf("%v not expected path %v", path, expectedPath)
+	}
+}
+
 func TestTabletPathFromActionPath(t *testing.T) {
 	defer func() {
 		if x := recover(); x != nil {
