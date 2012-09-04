@@ -59,8 +59,8 @@ func NewBsonError(format string, args ...interface{}) BsonError {
 	return BsonError{fmt.Sprintf(format, args...)}
 }
 
-func (self BsonError) Error() string {
-	return self.Message
+func (err BsonError) Error() string {
+	return err.Message
 }
 
 func handleError(err *error) {
@@ -129,234 +129,234 @@ func TopLevelBuilder(val interface{}) (sb *valueBuilder, err error) {
 }
 
 // Flush handles the final update for map & interface objects.
-func (self *valueBuilder) Flush() {
-	if self.interface_.IsValid() {
-		self.interface_.Set(self.val)
-		self.val = self.interface_
+func (builder *valueBuilder) Flush() {
+	if builder.interface_.IsValid() {
+		builder.interface_.Set(builder.val)
+		builder.val = builder.interface_
 	}
-	if self.map_.IsValid() {
-		self.map_.SetMapIndex(self.key, self.val)
+	if builder.map_.IsValid() {
+		builder.map_.SetMapIndex(builder.key, builder.val)
 	}
 }
 
-func (self *valueBuilder) Int64(i int64) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Int64(i int64) {
+	switch builder.val.Kind() {
 	case reflect.Int, reflect.Int32, reflect.Int64:
-		self.val.SetInt(i)
+		builder.val.SetInt(i)
 	case reflect.Uint, reflect.Uint32, reflect.Uint64:
-		self.val.SetUint(uint64(i))
+		builder.val.SetUint(uint64(i))
 	case reflect.Float64:
-		self.val.SetFloat(float64(i))
+		builder.val.SetFloat(float64(i))
 	case reflect.Interface:
-		self.val.Set(reflect.ValueOf(i))
+		builder.val.Set(reflect.ValueOf(i))
 	default:
-		panic(NewBsonError("unable to convert int64 %v to %s", i, self.val.Type()))
+		panic(NewBsonError("unable to convert int64 %v to %s", i, builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Uint64(u uint64) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Uint64(u uint64) {
+	switch builder.val.Kind() {
 	case reflect.Int, reflect.Int32, reflect.Int64:
-		self.val.SetInt(int64(u))
+		builder.val.SetInt(int64(u))
 	case reflect.Uint, reflect.Uint32, reflect.Uint64:
-		self.val.SetUint(u)
+		builder.val.SetUint(u)
 	case reflect.Float64:
-		self.val.SetFloat(float64(u))
+		builder.val.SetFloat(float64(u))
 	case reflect.Interface:
-		self.val.Set(reflect.ValueOf(u))
+		builder.val.Set(reflect.ValueOf(u))
 	default:
-		panic(NewBsonError("unable to convert int64 %v to %s", u, self.val.Type()))
+		panic(NewBsonError("unable to convert int64 %v to %s", u, builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Int32(i int32) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Int32(i int32) {
+	switch builder.val.Kind() {
 	case reflect.Int, reflect.Int32, reflect.Int64:
-		self.val.SetInt(int64(i))
+		builder.val.SetInt(int64(i))
 	case reflect.Uint, reflect.Uint32, reflect.Uint64:
-		self.val.SetUint(uint64(i))
+		builder.val.SetUint(uint64(i))
 	case reflect.Float64:
-		self.val.SetFloat(float64(i))
+		builder.val.SetFloat(float64(i))
 	case reflect.Interface:
-		self.val.Set(reflect.ValueOf(i))
+		builder.val.Set(reflect.ValueOf(i))
 	default:
-		panic(NewBsonError("unable to convert int32 %v to %s", i, self.val.Type()))
+		panic(NewBsonError("unable to convert int32 %v to %s", i, builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Float64(f float64) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Float64(f float64) {
+	switch builder.val.Kind() {
 	case reflect.Float64:
-		self.val.SetFloat(f)
+		builder.val.SetFloat(f)
 	case reflect.Interface:
-		self.val.Set(reflect.ValueOf(f))
+		builder.val.Set(reflect.ValueOf(f))
 	default:
-		panic(NewBsonError("unable to convert float64 %v to %s", f, self.val.Type()))
+		panic(NewBsonError("unable to convert float64 %v to %s", f, builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Null() {}
+func (builder *valueBuilder) Null() {}
 
-func (self *valueBuilder) String(b []byte) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) String(b []byte) {
+	switch builder.val.Kind() {
 	case reflect.String:
-		self.val.SetString(string(b))
+		builder.val.SetString(string(b))
 	case reflect.Interface:
-		self.val.Set(reflect.ValueOf(string(b)))
+		builder.val.Set(reflect.ValueOf(string(b)))
 	default:
-		self.Binary(b)
+		builder.Binary(b)
 	}
 }
 
-func (self *valueBuilder) Bool(tf bool) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Bool(tf bool) {
+	switch builder.val.Kind() {
 	case reflect.Bool:
-		self.val.SetBool(tf)
+		builder.val.SetBool(tf)
 	case reflect.Interface:
-		self.val.Set(reflect.ValueOf(tf))
+		builder.val.Set(reflect.ValueOf(tf))
 	default:
-		panic(NewBsonError("unable to convert bool %v to %s", tf, self.val.Type()))
+		panic(NewBsonError("unable to convert bool %v to %s", tf, builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Datetime(t time.Time) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Datetime(t time.Time) {
+	switch builder.val.Kind() {
 	case reflect.Struct, reflect.Interface:
-		self.val.Set(reflect.ValueOf(t))
+		builder.val.Set(reflect.ValueOf(t))
 	default:
-		panic(NewBsonError("unable to convert time %v to %s", t, self.val.Type()))
+		panic(NewBsonError("unable to convert time %v to %s", t, builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Array() {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Array() {
+	switch builder.val.Kind() {
 	case reflect.Array:
 		// no op
 	case reflect.Slice:
-		if self.val.IsNil() {
-			self.val.Set(reflect.MakeSlice(self.val.Type(), 0, 8))
+		if builder.val.IsNil() {
+			builder.val.Set(reflect.MakeSlice(builder.val.Type(), 0, 8))
 		}
 	case reflect.Interface:
-		self.interface_ = self.val
+		builder.interface_ = builder.val
 		// Work around reflect's lvalue-rvalue dealio
 		place_holder := make([]interface{}, 0, 8)
-		self.val = reflect.ValueOf(&place_holder).Elem()
+		builder.val = reflect.ValueOf(&place_holder).Elem()
 	default:
-		panic(NewBsonError("unable to convert array to %s", self.val.Type()))
+		panic(NewBsonError("unable to convert array to %s", builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Binary(bindata []byte) {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Binary(bindata []byte) {
+	switch builder.val.Kind() {
 	case reflect.Array:
-		if self.val.Cap() < len(bindata) {
-			panic(NewBsonError("insufficient space in array. Have: %v, Need: %v", self.val.Cap(), len(bindata)))
+		if builder.val.Cap() < len(bindata) {
+			panic(NewBsonError("insufficient space in array. Have: %v, Need: %v", builder.val.Cap(), len(bindata)))
 		}
 		for i := 0; i < len(bindata); i++ {
-			self.val.Index(i).SetUint(uint64(bindata[i]))
+			builder.val.Index(i).SetUint(uint64(bindata[i]))
 		}
 	case reflect.Slice:
 		// Just point it to the bindata object
-		self.val.Set(reflect.ValueOf(bindata))
+		builder.val.Set(reflect.ValueOf(bindata))
 	case reflect.String:
-		self.val.SetString(string(bindata))
+		builder.val.SetString(string(bindata))
 	case reflect.Interface:
-		self.val.Set(reflect.ValueOf(bindata))
+		builder.val.Set(reflect.ValueOf(bindata))
 	default:
-		panic(NewBsonError("unable to convert byte array %v to %s", bindata, self.val.Type()))
+		panic(NewBsonError("unable to convert byte array %v to %s", bindata, builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Elem(i int) *valueBuilder {
+func (builder *valueBuilder) Elem(i int) *valueBuilder {
 	if i < 0 {
 		panic(NewBsonError("negative index %v for array element", i))
 	}
-	switch self.val.Kind() {
+	switch builder.val.Kind() {
 	case reflect.Array:
-		if i < self.val.Len() {
-			return ValueBuilder(self.val.Index(i))
+		if i < builder.val.Len() {
+			return ValueBuilder(builder.val.Index(i))
 		} else {
 			panic(NewBsonError("array index %v out of bounds", i))
 		}
 	case reflect.Slice:
-		if i >= self.val.Cap() {
-			n := self.val.Cap()
+		if i >= builder.val.Cap() {
+			n := builder.val.Cap()
 			if n < 8 {
 				n = 8
 			}
 			for n <= i {
 				n *= 2
 			}
-			nv := reflect.MakeSlice(self.val.Type(), self.val.Len(), n)
-			reflect.Copy(nv, self.val)
-			self.val.Set(nv)
+			nv := reflect.MakeSlice(builder.val.Type(), builder.val.Len(), n)
+			reflect.Copy(nv, builder.val)
+			builder.val.Set(nv)
 		}
-		if self.val.Len() <= i && i < self.val.Cap() {
-			self.val.SetLen(i + 1)
+		if builder.val.Len() <= i && i < builder.val.Cap() {
+			builder.val.SetLen(i + 1)
 		}
-		if i < self.val.Len() {
-			return ValueBuilder(self.val.Index(i))
+		if i < builder.val.Len() {
+			return ValueBuilder(builder.val.Index(i))
 		} else {
 			panic(NewBsonError("internal error, realloc failed?"))
 		}
 	}
-	panic(NewBsonError("unexpected type %s, expecting slice or array", self.val.Type()))
+	panic(NewBsonError("unexpected type %s, expecting slice or array", builder.val.Type()))
 }
 
-func (self *valueBuilder) Object() {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Object() {
+	switch builder.val.Kind() {
 	case reflect.Map:
-		if self.val.IsNil() {
-			self.val.Set(reflect.MakeMap(self.val.Type()))
+		if builder.val.IsNil() {
+			builder.val.Set(reflect.MakeMap(builder.val.Type()))
 		}
 	case reflect.Struct:
 		// no op
 	case reflect.Interface:
 		map_ := reflect.ValueOf(make(map[string]interface{}))
-		self.val.Set(map_)
-		self.val = map_
+		builder.val.Set(map_)
+		builder.val = map_
 	default:
-		panic(NewBsonError("unexpected type %s, expecting composite type", self.val.Type()))
+		panic(NewBsonError("unexpected type %s, expecting composite type", builder.val.Type()))
 	}
 }
 
-func (self *valueBuilder) Key(k string) *valueBuilder {
-	switch self.val.Kind() {
+func (builder *valueBuilder) Key(k string) *valueBuilder {
+	switch builder.val.Kind() {
 	case reflect.Struct:
-		t := self.val.Type()
+		t := builder.val.Type()
 		for i := 0; i < t.NumField(); i++ {
 			if t.Field(i).Name == k {
-				return ValueBuilder(self.val.Field(i))
+				return ValueBuilder(builder.val.Field(i))
 			}
 		}
 		panic(NewBsonError("Could not find field '%s' in struct object", k))
 	case reflect.Map:
-		t := self.val.Type()
+		t := builder.val.Type()
 		if t.Key() != reflect.TypeOf(k) {
 			break
 		}
 		key := reflect.ValueOf(k)
-		return MapBuilder(t.Elem(), self.val, key)
+		return MapBuilder(t.Elem(), builder.val, key)
 	case reflect.Slice, reflect.Array:
-		if self.isSimple {
-			self.isSimple = false
-			return self
+		if builder.isSimple {
+			builder.isSimple = false
+			return builder
 		}
 		index, err := strconv.Atoi(k)
 		if err != nil {
 			panic(BsonError{err.Error()})
 		}
-		return self.Elem(index)
+		return builder.Elem(index)
 	case reflect.Float64, reflect.String, reflect.Bool,
 		reflect.Int, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint32, reflect.Uint64:
 		// Special case. We're unmarshaling into a simple type.
-		if self.isSimple {
-			self.isSimple = false
-			return self
+		if builder.isSimple {
+			builder.isSimple = false
+			return builder
 		}
 	}
-	panic(NewBsonError("%s not supported as a BSON document", self.val.Type()))
+	panic(NewBsonError("%s not supported as a BSON document", builder.val.Type()))
 }
 
 type Unmarshaler interface {

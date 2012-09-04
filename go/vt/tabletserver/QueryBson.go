@@ -19,38 +19,38 @@ type Query struct {
 	SessionId     int64
 }
 
-func (self *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Binary, "Sql")
-	bson.EncodeString(buf, self.Sql)
+	bson.EncodeString(buf, query.Sql)
 
 	bson.EncodePrefix(buf, bson.Object, "BindVariables")
-	self.encodeBindVariablesBson(buf)
+	query.encodeBindVariablesBson(buf)
 
 	bson.EncodePrefix(buf, bson.Long, "TransactionId")
-	bson.EncodeUint64(buf, uint64(self.TransactionId))
+	bson.EncodeUint64(buf, uint64(query.TransactionId))
 
 	bson.EncodePrefix(buf, bson.Long, "ConnectionId")
-	bson.EncodeUint64(buf, uint64(self.ConnectionId))
+	bson.EncodeUint64(buf, uint64(query.ConnectionId))
 
 	bson.EncodePrefix(buf, bson.Long, "SessionId")
-	bson.EncodeUint64(buf, uint64(self.SessionId))
+	bson.EncodeUint64(buf, uint64(query.SessionId))
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func (self *Query) encodeBindVariablesBson(buf *bytes2.ChunkedWriter) {
+func (query *Query) encodeBindVariablesBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
-	for k, v := range self.BindVariables {
+	for k, v := range query.BindVariables {
 		bson.EncodeField(buf, k, v)
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func (self *Query) UnmarshalBson(buf *bytes.Buffer) {
+func (query *Query) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
 	kind := bson.NextByte(buf)
@@ -58,15 +58,15 @@ func (self *Query) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Sql":
-			self.Sql = bson.DecodeString(buf, kind)
+			query.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":
-			self.decodeBindVariablesBson(buf, kind)
+			query.decodeBindVariablesBson(buf, kind)
 		case "TransactionId":
-			self.TransactionId = bson.DecodeInt64(buf, kind)
+			query.TransactionId = bson.DecodeInt64(buf, kind)
 		case "ConnectionId":
-			self.ConnectionId = bson.DecodeInt64(buf, kind)
+			query.ConnectionId = bson.DecodeInt64(buf, kind)
 		case "SessionId":
-			self.SessionId = bson.DecodeInt64(buf, kind)
+			query.SessionId = bson.DecodeInt64(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -74,10 +74,10 @@ func (self *Query) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (self *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
+func (query *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
 	switch kind {
 	case bson.Object:
-		if err := bson.UnmarshalFromBuffer(buf, &self.BindVariables); err != nil {
+		if err := bson.UnmarshalFromBuffer(buf, &query.BindVariables); err != nil {
 			panic(err)
 		}
 	case bson.Null:
@@ -89,10 +89,10 @@ func (self *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
 
 // String prints a readable version of Query, and also truncates
 // data if it's too long
-func (self *Query) String() string {
+func (query *Query) String() string {
 	buf := bytes2.NewChunkedWriter(1024)
-	fmt.Fprintf(buf, "Sql: %#v, BindVars: {", self.Sql)
-	for k, v := range self.BindVariables {
+	fmt.Fprintf(buf, "Sql: %#v, BindVars: {", query.Sql)
+	for k, v := range query.BindVariables {
 		switch val := v.(type) {
 		case []byte:
 			fmt.Fprintf(buf, "%s: %#v, ", k, slimit(string(val)))

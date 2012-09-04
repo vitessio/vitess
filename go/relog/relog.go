@@ -85,45 +85,45 @@ func New(out io.Writer, prefix string, flag, level int) *Logger {
 	return &Logger{logger: log.New(out, prefix, flag), level: level}
 }
 
-func (self *Logger) Debug(format string, args ...interface{}) {
-	self.Output(DEBUG, format, args...)
+func (logger *Logger) Debug(format string, args ...interface{}) {
+	logger.Output(DEBUG, format, args...)
 }
 
-func (self *Logger) Info(format string, args ...interface{}) {
-	self.Output(INFO, format, args...)
+func (logger *Logger) Info(format string, args ...interface{}) {
+	logger.Output(INFO, format, args...)
 }
 
-func (self *Logger) Warning(format string, args ...interface{}) {
-	self.Output(WARNING, format, args...)
+func (logger *Logger) Warning(format string, args ...interface{}) {
+	logger.Output(WARNING, format, args...)
 }
 
-func (self *Logger) Error(format string, args ...interface{}) {
-	self.Output(ERROR, format, args...)
+func (logger *Logger) Error(format string, args ...interface{}) {
+	logger.Output(ERROR, format, args...)
 }
 
-func (self *Logger) Fatal(format string, args ...interface{}) {
-	self.Output(FATAL, format, args...)
+func (logger *Logger) Fatal(format string, args ...interface{}) {
+	logger.Output(FATAL, format, args...)
 	os.Exit(1)
 }
 
-func (self *Logger) Output(level int, format string, args ...interface{}) {
-	if self.level > level {
+func (logger *Logger) Output(level int, format string, args ...interface{}) {
+	if logger.level > level {
 		return
 	}
 	// Judicious call depth setting: all callers are 3 levels deep
-	self.logger.Output(3, levelPrefixes[level]+fmt.Sprintf(format, args...))
+	logger.logger.Output(3, levelPrefixes[level]+fmt.Sprintf(format, args...))
 }
 
-func (self *Logger) SetFlags(flag int) {
-	self.logger.SetFlags(flag)
+func (logger *Logger) SetFlags(flag int) {
+	logger.logger.SetFlags(flag)
 }
 
-func (self *Logger) SetPrefix(prefix string) {
-	self.logger.SetPrefix(prefix)
+func (logger *Logger) SetPrefix(prefix string) {
+	logger.logger.SetPrefix(prefix)
 }
 
-func (self *Logger) SetLevel(level int) {
-	self.level = level
+func (logger *Logger) SetLevel(level int) {
+	logger.level = level
 }
 
 func LogNameToLogLevel(name string) int {

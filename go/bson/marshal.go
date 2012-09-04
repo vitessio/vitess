@@ -31,8 +31,8 @@ func NewLenWriter(buf *bytes2.ChunkedWriter) LenWriter {
 	return LenWriter{buf, off, b}
 }
 
-func (self LenWriter) RecordLen() {
-	Pack.PutUint32(self.b, uint32(self.buf.Len()-self.off))
+func (lw LenWriter) RecordLen() {
+	Pack.PutUint32(lw.b, uint32(lw.buf.Len()-lw.off))
 }
 
 type Marshaler interface {
@@ -43,9 +43,9 @@ type SimpleContainer struct {
 	_Val_ interface{}
 }
 
-func (self *SimpleContainer) MarshalBson(buf *bytes2.ChunkedWriter) {
+func (sc *SimpleContainer) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := NewLenWriter(buf)
-	EncodeField(buf, "_Val_", self._Val_)
+	EncodeField(buf, "_Val_", sc._Val_)
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
