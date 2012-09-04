@@ -5,11 +5,15 @@
 MAKEFLAGS = -s
 
 all:
-	cd vt/sqlparser; $(MAKE)
+	cd cmd/mysqlctl; go build
 	cd cmd/normalizer; go build
+	cd cmd/vtaction; go build
+	cd cmd/vtclient2; go build
+	cd cmd/vtctl; go build
 	cd cmd/vtocc; go build
 	cd cmd/vttablet; go build
-	cd cmd/vtclient2; go build
+	cd cmd/zk; go build
+	cd cmd/zkctl; go build
 
 # alphabetically ordered tests
 # the ones that are commented out don't pass
@@ -38,8 +42,12 @@ test:
 #	cd zk/zkctl; go test
 
 clean:
-	cd vt/sqlparser; $(MAKE) clean
+	cd cmd/mysqlctl; go clean
 	cd cmd/normalizer; go clean
+	cd cmd/vtaction; go clean
+	cd cmd/vtclient2; go clean
+	cd cmd/vtctl; go clean
 	cd cmd/vtocc; go clean
 	cd cmd/vttablet; go clean
-	cd cmd/vtclient2; go clean
+	cd cmd/zk; go clean
+	cd cmd/zkctl; go clean
