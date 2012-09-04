@@ -188,24 +188,6 @@ func initTablet(zconn zk.Conn, path, hostname, mysqlPort, vtPort, keyspace, shar
 	return err
 }
 
-func purgeActions(zconn zk.Conn, zkActionPath string) error {
-	if path.Base(zkActionPath) != "action" {
-		panic(fmt.Errorf("not action path: %v", zkActionPath))
-	}
-
-	children, _, err := zconn.Children(zkActionPath)
-	if err != nil {
-		return err
-	}
-	for _, child := range children {
-		err = zk.DeleteRecursive(zconn, path.Join(zkActionPath, child), -1)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func changeType(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkTabletPath, dbType string) error {
 	if *force {
 		return tm.ChangeType(zconn, zkTabletPath, tm.TabletType(dbType))
@@ -408,7 +390,7 @@ func main() {
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
-		err = purgeActions(zconn, args[1])
+		err = tm.PurgeActions(zconn, args[1])
 	case "RebuildShard":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])

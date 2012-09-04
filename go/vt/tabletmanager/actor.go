@@ -378,6 +378,16 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 		return err
 	}
 
+	// Remove any pending actions. Presumably forcing a scrap means you don't
+	// want the agent doing anything and the machine requires manual attention.
+	if force {
+		actionPath := TabletActionPath(zkTabletPath)
+		err = PurgeActions(zconn, actionPath)
+		if err != nil {
+			relog.Warning("purge actions failed: %v %v", actionPath, err)
+		}
+	}
+
 	if !wasIdle {
 		err = zconn.Delete(tablet.ReplicationPath(), -1)
 		if err != nil {

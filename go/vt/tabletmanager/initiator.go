@@ -2,9 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-Actions modify the state of a tablet, shard or keyspace.
-*/
+// Actions modify the state of a tablet, shard or keyspace.
+//
+// They are stored in zookeeper below "action" nodes and form a queue. Only the
+// lowest action id should be executing at any given time.
+//
+// The creation, deletion and modifaction of an action node may be used as
+// a signal to other components in the system.
 
 package tabletmanager
 
@@ -12,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -19,15 +24,13 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-/*
- The actor applies individual commands to execute an action read from a node
- in zookeeper.
-
- The actor signals completion by removing the action node from zookeeper.
-
- Errors are written to the action node and must (currently) be resolved by
- hand using zk tools.
-*/
+// The actor applies individual commands to execute an action read from a node
+// in zookeeper.
+//
+// The actor signals completion by removing the action node from zookeeper.
+//
+// Errors are written to the action node and must (currently) be resolved by
+// hand using zk tools.
 
 type InitiatorError string
 
@@ -193,4 +196,27 @@ func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration)
 		}
 	}
 	panic("unreachable")
+}
+
+// Remove all queued actions, regardless of their current state, leaving
+// the action node in place.
+//
+// This inherently breaks the locking mechanism of the action queue,
+// so this is a rare cleaup action, not a normal part of the flow.
+func PurgeActions(zconn zk.Conn, zkActionPath string) error {
+	if path.Base(zkActionPath) != "action" {
+		panic(fmt.Errorf("not action path: %v", zkActionPath))
+	}
+
+	children, _, err := zconn.Children(zkActionPath)
+	if err != nil {
+		return err
+	}
+	for _, child := range children {
+		err = zk.DeleteRecursive(zconn, path.Join(zkActionPath, child), -1)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
