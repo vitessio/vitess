@@ -1,0 +1,10 @@
+#!/bin/bash
+
+changelog_count=$(hg outgoing | grep '^changeset:' | wc -l)
+non_merge_count=$(hg outgoing -M | grep '^changeset:' | wc -l)
+
+if [ $changelog_count != $non_merge_count ]; then
+  echo "outgoing files contain merges - reapply as a fresh patch" >&2
+  echo "run ./misc/hg/reapply-outgoing to fix" >&2
+  exit 1
+fi
