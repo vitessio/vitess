@@ -34,15 +34,14 @@ else
     python ./setup.py install --prefix=$bson_dist
 fi
 
-# FIXME: cbson doesn't work with streaming. Need to debug
 # install cbson
-#cbson_dist=$VTROOT/dist/py-cbson
-#if [ -d $cbson_dist ]; then
-#  echo "skipping cbson python build"
-#else
-#  cd $VTTOP/py/cbson && \
-#    python ./setup.py install --prefix=$cbson_dist
-#fi
+cbson_dist=$VTROOT/dist/py-cbson
+if [ -d $cbson_dist ]; then
+  echo "skipping cbson python build"
+else
+  cd $VTTOP/py/cbson && \
+    python ./setup.py install --prefix=$cbson_dist
+fi
 
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data

@@ -206,6 +206,7 @@ static PyObject* element_types[16] = {
 /* ----------------------------------- decoders ----------------------------------- */
 
 static PyObject* decode_document(BufIter* buf_iter);
+static PyObject* decode_uint64(BufIter* buf_iter);
 
 static PyObject*
 decode_next(PyObject *self, PyObject* args) {
@@ -357,6 +358,10 @@ _decode_document(BufIter* buf_iter, int is_array) {
       decoder_func = decoders[(int)type_id];
       element_value = decoder_func(buf_iter);
     }
+    /* uint64 special case */
+    else if (type_id == 0x3f) {
+      element_value = decode_uint64(buf_iter);
+    }
     /* two special cases of type_id > 0x12 - for min and max */
     else if (type_id == 0x7f) {
       element_value = PyTuple_Pack(1, element_types[min]);
@@ -366,8 +371,9 @@ _decode_document(BufIter* buf_iter, int is_array) {
     }
     else {
       PyErr_Format(BSONError,
-                   "invalid element type id 0x%x at buffer[%d]",
-                   type_id, INDEX_OF(buf_iter));
+                   "invalid element type id 0x%x at buffer[%d] for %s",
+                   type_id, INDEX_OF(buf_iter),
+                   PyString_AsString(element_name));
       goto error;
     }
 
@@ -659,6 +665,14 @@ static PyObject* decode_int64(BufIter* buf_iter) {
 
   return _PyLong_FromByteArray(PTR_AT(buf_iter, unsigned char*),
                                8, 1, 1);
+}
+
+static PyObject* decode_uint64(BufIter* buf_iter) {
+  if (!next(buf_iter, 8, "uint64-val"))
+    return NULL;
+
+  return _PyLong_FromByteArray(PTR_AT(buf_iter, unsigned char*),
+                               8, 1, 0);
 }
 
 static PyObject* decode_timestamp(BufIter* buf_iter) {

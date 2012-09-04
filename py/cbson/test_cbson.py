@@ -47,6 +47,17 @@ def test_load_int():
   {'int': 1334}
   """
 
+# the library doesn't allow creation of these, so just check the unpacking
+def test_unpack_uint64():
+  r"""
+  >>> s = '\x12\x00\x00\x00\x3fint\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00'
+  >>> cbson.loads(s)
+  {'int': 1L}
+  >>> s = '\x12\x00\x00\x00\x3fint\x00\x00\x00\x00\x00\x00\x00\x00\x90\x00'
+  >>> cbson.loads(s)
+  {'int': 10376293541461622784L}
+  """
+
 def test_bool():
   """
   >>> cbson.loads(cbson.dumps({'yes': True, 'no': False}))
