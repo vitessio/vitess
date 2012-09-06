@@ -95,19 +95,6 @@ func (agent *ActionAgent) resolvePaths() error {
 	if agent.vtActionBinFile == "" {
 		return errors.New("no vtaction binary found")
 	}
-
-	/* FIXME: Delete commented out code
-	mycnfFile := []string{fmt.Sprintf("/vt/vt_%010d/my.cnf", agent.Tablet().Uid),
-		"/var/lib/mysql/my.cnf", "/etc/my.cnf"}
-	for _, path := range mycnfFile {
-		if _, err := os.Stat(path); err == nil {
-			agent.MycnfFile = path
-			break
-		}
-	}
-	if agent.MycnfFile == "" {
-		return errors.New("no my.cnf found")
-	}*/
 	return nil
 }
 

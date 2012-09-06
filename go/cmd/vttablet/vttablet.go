@@ -107,7 +107,7 @@ func main() {
 func readMycnf() *mysqlctl.Mycnf {
 	if *mycnfFile == "" {
 		_, tabletid := path.Split(*tabletPath)
-		*mycnfFile = fmt.Sprintf("/vt/vt_%s/my.cnf", tabletid)
+		*mycnfFile = fmt.Sprintf("%s/vt_%s/my.cnf", mysqlctl.VtDataRoot, tabletid)
 	}
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {

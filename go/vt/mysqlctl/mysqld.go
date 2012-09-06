@@ -16,6 +16,8 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -145,12 +147,10 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 
 func Init(mt *Mysqld) error {
 	relog.Info("mysqlctl.Init")
-	for _, path := range mt.config.DirectoryList() {
-		if err := os.MkdirAll(path, 0775); err != nil {
-			relog.Error("%s", err.Error())
-			return err
-		}
-		// FIXME(msolomon) validate permissions?
+	err := mt.createDirs()
+	if err != nil {
+		relog.Error("%s", err.Error())
+		return err
 	}
 
 	cnfTemplatePath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/config/mycnf")
@@ -194,25 +194,97 @@ func Init(mt *Mysqld) error {
 	return mt.executeSuperQueryList(sqlCmds)
 }
 
+func (mt *Mysqld) createDirs() error {
+	relog.Info("creating directory %s", mt.config.TabletDir)
+	if err := os.MkdirAll(mt.config.TabletDir, 0775); err != nil {
+		return err
+	}
+	for _, dir := range mt.config.TopLevelDirs() {
+		if err := mt.createTopDir(dir); err != nil {
+			return err
+		}
+	}
+	for _, dir := range mt.config.DirectoryList() {
+		relog.Info("creating directory %s", dir)
+		if err := os.MkdirAll(dir, 0775); err != nil {
+			return err
+		}
+		// FIXME(msolomon) validate permissions?
+	}
+	return nil
+}
+
+// createTopDir creates a top level directory under TabletDir.
+// However, if a directory of the same name already exists under VtDataRoot,
+// it creates a directory named after the tablet id under that directory, and
+// then creates a symlink under TabletDir that points to the newly created directory.
+// For example, if /vt/data is present, it will create the following structure:
+// /vt/data/vt_xxxx
+// /vt/vt_xxxx/data -> /vt/data/vt_xxxx
+func (mt *Mysqld) createTopDir(dir string) error {
+	vtname := path.Base(mt.config.TabletDir)
+	target := path.Join(VtDataRoot, dir)
+	_, err := os.Lstat(target)
+	if err != nil {
+		if err.(*os.PathError).Err == syscall.ENOENT {
+			topdir := path.Join(mt.config.TabletDir, dir)
+			relog.Info("creating directory %s", topdir)
+			return os.MkdirAll(topdir, 0775)
+		}
+		return err
+	}
+	linkto := path.Join(target, vtname)
+	source := path.Join(mt.config.TabletDir, dir)
+	relog.Info("creating directory %s", linkto)
+	err = os.MkdirAll(linkto, 0775)
+	if err != nil {
+		return err
+	}
+	relog.Info("creating symlink %s -> %s", source, linkto)
+	return os.Symlink(linkto, source)
+}
+
 func Teardown(mt *Mysqld, force bool) error {
 	relog.Info("mysqlctl.Teardown")
 	if err := Shutdown(mt, true); err != nil {
+		relog.Warning("failed mysqld shutdown: %v", err.Error())
 		if !force {
-			relog.Error("failed mysqld shutdown: %v", err.Error())
 			return err
-		} else {
-			relog.Warning("failed mysqld shutdown: %v", err.Error())
 		}
 	}
 	var removalErr error
-	for _, dir := range mt.config.DirectoryList() {
-		relog.Info("remove data dir %v", dir)
-		if err := os.RemoveAll(dir); err != nil {
-			relog.Error("failed removing %v: %v", dir, err.Error())
+	for _, dir := range mt.config.TopLevelDirs() {
+		qdir := path.Join(mt.config.TabletDir, dir)
+		if err := deleteTopDir(qdir); err != nil {
 			removalErr = err
 		}
 	}
 	return removalErr
+}
+
+func deleteTopDir(dir string) (removalErr error) {
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		relog.Error("error deleting dir %v: %v", dir, err.Error())
+		removalErr = err
+	} else if fi.Mode()&os.ModeSymlink != 0 {
+		target, err := filepath.EvalSymlinks(dir)
+		if err != nil {
+			relog.Error("could not resolve symlink %v: %v", dir, err.Error())
+			removalErr = err
+		}
+		relog.Info("remove data dir (symlinked) %v", target)
+		if err = os.RemoveAll(target); err != nil {
+			relog.Error("failed removing %v: %v", target, err.Error())
+			removalErr = err
+		}
+	}
+	relog.Info("remove data dir %v", dir)
+	if err = os.RemoveAll(dir); err != nil {
+		relog.Error("failed removing %v: %v", dir, err.Error())
+		removalErr = err
+	}
+	return
 }
 
 func Reinit(mt *Mysqld) error {

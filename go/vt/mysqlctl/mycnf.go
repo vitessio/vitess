@@ -46,8 +46,15 @@ type Mycnf struct {
 	EndKey                string
 }
 
-var innodbDataSubdir = "innodb/data"
-var innodbLogSubdir = "innodb/log"
+var (
+	VtDataRoot       = "/vt"
+	dataDir          = "data"
+	innodbDir        = "innodb"
+	relayLogDir      = "relay-logs"
+	binLogDir        = "bin-logs"
+	innodbDataSubdir = "innodb/data"
+	innodbLogSubdir  = "innodb/log"
+)
 
 /* uid is a unique id for a particular tablet - it must be unique within the
 tabletservers deployed within a keyspace, lest there be collisions on disk.
@@ -58,7 +65,7 @@ func NewMycnf(uid uint, mysqlPort int, keyspace string, vtRepl VtReplParams) *My
 	cnf := new(Mycnf)
 	cnf.ServerId = uid
 	cnf.MysqlPort = mysqlPort
-	cnf.TabletDir = fmt.Sprintf("/vt/vt_%010d", uid)
+	cnf.TabletDir = fmt.Sprintf("%s/vt_%010d", VtDataRoot, uid)
 	cnf.DataDir = path.Join(cnf.TabletDir, "data")
 	cnf.MycnfFile = path.Join(cnf.TabletDir, "my.cnf")
 	cnf.InnodbDataHomeDir = path.Join(cnf.TabletDir, innodbDataSubdir)
@@ -71,6 +78,10 @@ func NewMycnf(uid uint, mysqlPort int, keyspace string, vtRepl VtReplParams) *My
 	cnf.StartKey = vtRepl.StartKey
 	cnf.EndKey = vtRepl.EndKey
 	return cnf
+}
+
+func (cnf *Mycnf) TopLevelDirs() []string {
+	return []string{dataDir, innodbDir, relayLogDir, binLogDir}
 }
 
 func (cnf *Mycnf) DirectoryList() []string {
@@ -92,7 +103,7 @@ func (cnf *Mycnf) SlowLogPath() string {
 }
 
 func (cnf *Mycnf) relayLogDir() string {
-	return path.Join(cnf.TabletDir, "relay-logs")
+	return path.Join(cnf.TabletDir, relayLogDir)
 }
 
 func (cnf *Mycnf) RelayLogPath() string {
@@ -109,7 +120,7 @@ func (cnf *Mycnf) RelayLogInfoPath() string {
 }
 
 func (cnf *Mycnf) binLogDir() string {
-	return path.Join(cnf.TabletDir, "bin-logs")
+	return path.Join(cnf.TabletDir, binLogDir)
 }
 
 func (cnf *Mycnf) BinLogPath() string {
