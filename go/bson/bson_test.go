@@ -5,6 +5,7 @@
 package bson
 
 import (
+	"code.google.com/p/vitess/go/bytes2"
 	"testing"
 	"time"
 )
@@ -149,6 +150,55 @@ func TestInt(t *testing.T) {
 	err = Unmarshal(encoded, &out1)
 	if out1 != 20 {
 		t.Errorf("unmarshal doesn't match input: %v\n%v\n%vn", err, in, out1)
+	}
+}
+
+// test that we are calling the right encoding method
+// if we use the reflection code, this will fail as reflection
+// cannot access the non-exported field
+type PrivateStruct struct {
+	veryPrivate uint64
+}
+
+// an array can use non-pointers for custom marshaler
+type PrivateStructList struct {
+	List []PrivateStruct
+}
+
+// the map has to be using pointers, so the custom marshaler is used
+type PrivateStructMap struct {
+	Map map[string]*PrivateStruct
+}
+
+func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := NewLenWriter(buf)
+
+	EncodePrefix(buf, Long, "Type")
+	EncodeUint64(buf, ps.veryPrivate)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func TestCustomMarshaler(t *testing.T) {
+	s := &PrivateStruct{1}
+	_, err := Marshal(s)
+	if err != nil {
+		t.Errorf("Marshal error 1: %s\n", err)
+	}
+
+	sl := &PrivateStructList{make([]PrivateStruct, 1)}
+	sl.List[0] = *s
+	_, err = Marshal(sl)
+	if err != nil {
+		t.Errorf("Marshal error 2: %s\n", err)
+	}
+
+	sm := &PrivateStructMap{make(map[string]*PrivateStruct)}
+	sm.Map["first"] = s
+	_, err = Marshal(sm)
+	if err != nil {
+		t.Errorf("Marshal error 3: %s\n", err)
 	}
 }
 
