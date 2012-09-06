@@ -3,6 +3,8 @@
 # be found in the LICENSE file.
 
 import os
+import shlex
+from subprocess import check_call, Popen, CalledProcessError, PIPE
 import traceback
 
 class MultiDict(dict):
@@ -107,3 +109,19 @@ class Tailer(object):
     size = newpos-self.pos
     self.pos = newpos
     return self.f.read(size)
+
+# FIXME: Hijacked from go/vt/tabletserver/test.py
+# Reuse when things come together
+def execute(cmd, trap_output=False, verbose=False, **kargs):
+  args = shlex.split(cmd)
+  if trap_output:
+    kargs['stdout'] = PIPE
+    kargs['stderr'] = PIPE
+  if verbose:
+    print "Execute:", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
+  proc = Popen(args, **kargs)
+  proc.args = args
+  stdout, stderr = proc.communicate()
+  if proc.returncode:
+    raise TestError('cmd fail:', args, stdout, stderr)
+  return stdout, stderr

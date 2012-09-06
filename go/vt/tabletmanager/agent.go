@@ -15,7 +15,6 @@ package tabletmanager
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -79,22 +78,12 @@ func (agent *ActionAgent) Tablet() *TabletInfo {
 	return tablet
 }
 
-// FIXME(msolomon) need a real path discovery mechanism, a config file
-// or more command line args.
 func (agent *ActionAgent) resolvePaths() error {
-	vtActionBinPaths := []string{
-		os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/go/cmd/vtaction/vtaction"),
-		os.ExpandEnv("$VTROOT/bin/vtaction"),
-		"/usr/local/bin/vtaction"}
-	for _, path := range vtActionBinPaths {
-		if _, err := os.Stat(path); err == nil {
-			agent.vtActionBinFile = path
-			break
-		}
+	path := os.ExpandEnv("$VTROOT/bin/vtaction")
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("vtaction binary %s not found: %v", path, err)
 	}
-	if agent.vtActionBinFile == "" {
-		return errors.New("no vtaction binary found")
-	}
+	agent.vtActionBinFile = path
 	return nil
 }
 

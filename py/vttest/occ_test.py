@@ -37,7 +37,10 @@ class TestEnv(object):
     vttop = os.getenv("VTTOP")
     if vttop is None:
       raise Exception("VTTOP not defined")
-    occpath = vttop+"/go/cmd/vtocc/"
+    vtroot = os.getenv("VTROOT")
+    if vtroot is None:
+      raise Exception("VTROOT not defined")
+    framework.execute('go build', verbose=options.verbose, cwd=vttop+'/go/cmd/vtocc')
     with open(options.dbconfig) as f:
       self.cfg = json.load(f)
 
@@ -66,7 +69,7 @@ class TestEnv(object):
     if self.cfg.get("memcache"):
       self.memcached = subprocess.Popen(["memcached", "-s", self.cfg["memcache"]])
     occ_args = [
-      vttop+"/go/cmd/vtocc/vtocc",
+      vtroot+"/bin/vtocc",
       "-port", "9461",
       "-dbconfig", options.dbconfig,
       "-logfile", LOGFILE,

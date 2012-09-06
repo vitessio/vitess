@@ -26,7 +26,7 @@ class BareOCCConnection(db.VtOCCConnection):
 
 
 class TestAuthentication(unittest.TestCase):
-  vttop = os.getenv("VTTOP")
+  vtroot = os.getenv("VTROOT")
 
   def setUp(self):
     for i in range(30):
@@ -48,7 +48,7 @@ class TestAuthentication(unittest.TestCase):
       klass.credentials = json.load(f)
 
     klass.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
-    klass.process = subprocess.Popen([klass.vttop +"/go/cmd/vtocc/vtocc",
+    klass.process = subprocess.Popen([klass.vtroot +"/bin/vtocc",
                                      "-port", "9461",
                                      "-auth-credentials", authcredentials,
                                      "-dbconfig", dbconfig,

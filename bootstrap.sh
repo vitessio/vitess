@@ -55,5 +55,6 @@ ln -snf $VTTOP/go/cmd/vtocc/vtocc $VTROOT/bin/vtocc
 ln -snf $VTTOP/go/cmd/vttablet/vttablet $VTROOT/bin/vttablet
 ln -snf $VTTOP/go/cmd/zk/zk $VTROOT/bin/zk
 ln -snf $VTTOP/go/cmd/zkctl/zkctl $VTROOT/bin/zkctl
+ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 
 echo "source dev.env in your shell to complete the setup."
