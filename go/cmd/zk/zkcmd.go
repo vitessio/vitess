@@ -434,7 +434,9 @@ func cmdRm(args []string) {
 		}
 		if err != nil {
 			hasError = true
-			log.Printf("rm: cannot delete %v: %v", zkPath, err)
+			if !*force {
+				log.Printf("rm: cannot delete %v: %v", zkPath, err)
+			}
 		}
 	}
 	if hasError && !*force {
