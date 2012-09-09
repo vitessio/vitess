@@ -75,7 +75,7 @@ func main() {
 	mycnf := readMycnf()
 	dbcfgs, err := dbconfigs.Init(mycnf)
 	if err != nil {
-		relog.Fatal("%s", err)
+		relog.Warning("%s", err)
 	}
 
 	initAgent(dbcfgs, mycnf)
@@ -149,7 +149,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 
 func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	if err := dbconfigs.ReadJson(*qsConfigFile, &qsConfig); err != nil {
-		relog.Fatal("%s", err)
+		relog.Warning("%s", err)
 	}
 	ts.StartQueryService(qsConfig)
 	usefulLameDuckPeriod := float64(qsConfig.QueryTimeout + 1)
@@ -159,7 +159,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	}
 
 	if dbcfgs.App.Dbname == "" {
-		relog.Info("db-configs-file has no dbname. Skipping start of query service")
+		relog.Info("missing/incomplete db configs file, disabling query service")
 		return
 	}
 	if *queryLog != "" {
