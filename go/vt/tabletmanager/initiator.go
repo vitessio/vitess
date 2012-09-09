@@ -114,6 +114,10 @@ func (ai *ActionInitiator) DemoteMaster(zkTabletPath string) (actionPath string,
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_DEMOTE_MASTER})
 }
 
+func (ai *ActionInitiator) Snapshot(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT})
+}
+
 func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_BREAK_SLAVES})
 }
@@ -126,6 +130,11 @@ func (ai *ActionInitiator) PromoteSlave(zkTabletPath, zkShardActionPath string) 
 func (ai *ActionInitiator) RestartSlave(zkTabletPath, zkShardActionPath string) (actionPath string, err error) {
 	args := map[string]string{"ShardActionPath": zkShardActionPath}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, Args: args})
+}
+
+func (ai *ActionInitiator) Restore(zkDstTabletPath, zkSrcTabletPath string) (actionPath string, err error) {
+	args := map[string]string{"SrcTabletPath": zkSrcTabletPath}
+	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, Args: args})
 }
 
 func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err error) {

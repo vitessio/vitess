@@ -13,6 +13,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
@@ -33,6 +34,7 @@ var actionGuid = flag.String("action-guid", "",
 	"a label to help track processes")
 var logLevel = flag.String("log.level", "debug", "set log level")
 var logFilename = flag.String("logfile", "/dev/stderr", "log path")
+var force = flag.Bool("force", false, "force an action to rerun")
 
 // FIXME(msolomon) temporary, until we are starting mysql ourselves
 var mycnfFile = flag.String("mycnf-file", "/etc/my.cnf", "path to my.cnf")
@@ -64,6 +66,9 @@ func main() {
 	if mycnfErr != nil {
 		relog.Fatal("mycnf read failed: %v", mycnfErr)
 	}
+
+	relog.Debug("mycnf: %v", jscfg.ToJson(mycnf))
+
 	dbcfgs, cfErr := dbconfigs.Init(mycnf)
 	if err != nil {
 		relog.Fatal("%s", cfErr)
@@ -85,7 +90,7 @@ func main() {
 	}()
 
 	relog.Info("started vtaction %v", os.Args)
-	actionErr := actor.HandleAction(*actionNode, *action, *actionGuid)
+	actionErr := actor.HandleAction(*actionNode, *action, *actionGuid, *force)
 	if actionErr != nil {
 		relog.Fatal("action error: %v", actionErr)
 	}

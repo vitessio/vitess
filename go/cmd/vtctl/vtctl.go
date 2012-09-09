@@ -50,7 +50,20 @@ Tablets:
     operations.
 
   Sleep <zk tablet path> <duration>
-    block the action queue for the specified duration
+    block the action queue for the specified duration (mostly for testing)
+
+  Snapshot <zk tablet path>
+    Stop mysqld and copy compressed data aside.
+
+  Restore <zk src tablet path> <zk dst tablet path>
+    Copy the latest snaphot from the source tablet and restart replication.
+    NOTE: This does not wait for replication to catch up. The destination
+    tablet must be "idle" to begin with. It will transition to "spare" once
+    the restore is complete.
+
+  Clone <zk src tablet path> <zk dst tablet path>
+    This performs Snapshot and then Restore.  The advantage of having
+    separate actions is that one snapshot can be used for many restores.
 
 
 Shards:
@@ -79,19 +92,19 @@ Generic:
   Resolve <keyspace>.<shard>.<db type>
     read a list of addresses that can answer this query
 
-  Validate <zk vt path>
-    validate that all nodes in this cell are consistent with the global replication graph
+  Validate <zk global vt path> (/zk/global/vt)
+    validate all nodes reachable from global replication graph are consisten
 
-  ExportZkns <zk vt path>
+  ExportZkns <zk local vt path> (/zk/<cell>/vt)
     export the serving graph entries to the legacy zkns format
 
-  ListIdle <zk vt path>
+  ListIdle <zk local vt path>
     list all idle tablet paths
 
-  ListScrap <zk vt path>
+  ListScrap <zk local vt path>
     list all scrap tablet paths
 
-  DumpTablets <zk vt path>
+  DumpTablets <zk local vt path>
     list all tablets in an awk-friendly way
 `
 
@@ -206,16 +219,141 @@ func changeType(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zk
 
 	tabletInfo, err := tm.ReadTablet(zconn, zkTabletPath)
 	if err != nil {
-		relog.Warning("%v: %v", zkTabletPath, err)
+		return err
 	}
 
 	if _, err := wrangler.RebuildShard(tabletInfo.ShardPath()); err != nil {
 		return err
 	}
+
 	if _, err := wrangler.RebuildKeyspace(tabletInfo.KeyspacePath()); err != nil {
 		return err
 	}
 
+	return nil
+}
+
+func snapshot(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkTabletPath string) error {
+	ti, err := tm.ReadTablet(zconn, zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	rebuildRequired := ti.Tablet.IsServingType()
+	originalType := ti.Tablet.Type
+
+	actionPath, err := ai.ChangeType(zkTabletPath, tm.TYPE_BACKUP)
+	if err != nil {
+		return err
+	}
+
+	err = ai.WaitForCompletion(actionPath, *waitTime)
+	if err != nil {
+		if *force && ti.Tablet.Type == tm.TYPE_MASTER {
+			relog.Info("force change type master -> backup: %v", zkTabletPath)
+			// There is a legitimate reason to force in the case of a single
+			// master.
+			ti.Tablet.Type = tm.TYPE_BACKUP
+			err = tm.UpdateTablet(zconn, zkTabletPath, ti)
+			if err != nil {
+				return err
+			}
+			// Remove the failed action, nothing will proceed until this is removed.
+			if err = zconn.Delete(actionPath, -1); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	if rebuildRequired {
+		if _, err := wrangler.RebuildShard(ti.ShardPath()); err != nil {
+			return err
+		}
+
+		if _, err := wrangler.RebuildKeyspace(ti.KeyspacePath()); err != nil {
+			return err
+		}
+	}
+
+	actionPath, err = ai.Snapshot(zkTabletPath)
+	if err != nil {
+		return err
+	}
+	err = ai.WaitForCompletion(actionPath, *waitTime)
+	if err != nil {
+		return err
+	}
+
+	// Restore type
+	relog.Info("change type after snapshot: %v %v", zkTabletPath, originalType)
+	actionPath, err = ai.ChangeType(zkTabletPath, originalType)
+	if err != nil {
+		return err
+	}
+	err = ai.WaitForCompletion(actionPath, *waitTime)
+	if err != nil {
+		if *force && ti.Tablet.Parent.Uid == tm.NO_TABLET {
+			ti.Tablet.Type = tm.TYPE_MASTER
+			relog.Info("force change type backup -> master: %v", zkTabletPath)
+			err = tm.UpdateTablet(zconn, zkTabletPath, ti)
+			if err != nil {
+				return err
+			}
+			// Remove the failed action, nothing will proceed until this is removed.
+			if err = zconn.Delete(actionPath, -1); err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+
+	if rebuildRequired {
+		if _, err := wrangler.RebuildShard(ti.ShardPath()); err != nil {
+			return err
+		}
+
+		if _, err := wrangler.RebuildKeyspace(ti.KeyspacePath()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func restore(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkSrcTabletPath, zkDstTabletPath string) error {
+	actionPath, err := ai.ChangeType(zkDstTabletPath, tm.TYPE_RESTORE)
+	if err != nil {
+		return err
+	}
+	err = ai.WaitForCompletion(actionPath, *waitTime)
+	if err != nil {
+		return err
+	}
+
+	actionPath, err = ai.Restore(zkDstTabletPath, zkSrcTabletPath)
+	if err != nil {
+		return err
+	}
+	err = ai.WaitForCompletion(actionPath, *waitTime)
+	if err != nil {
+		return err
+	}
+
+	// Restore moves us into the replication graph as a spare, but
+	// no serving consequences, so no rebuild required.
+	return nil
+}
+
+func clone(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkSrcTabletPath, zkDstTabletPath string) error {
+	if err := snapshot(zconn, ai, wrangler, zkSrcTabletPath); err != nil {
+		return fmt.Errorf("snapshot err: %v", err)
+	}
+	if err := restore(zconn, ai, wrangler, zkSrcTabletPath, zkDstTabletPath); err != nil {
+		return fmt.Errorf("restore err: %v", err)
+	}
 	return nil
 }
 
@@ -386,6 +524,21 @@ func main() {
 			relog.Fatal("action %v requires <zk tablet path>", args[0])
 		}
 		actionPath, err = ai.DemoteMaster(args[1])
+	case "Clone":
+		if len(args) != 3 {
+			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
+		}
+		err = clone(zconn, ai, wrangler, args[1], args[2])
+	case "Restore":
+		if len(args) != 3 {
+			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
+		}
+		err = restore(zconn, ai, wrangler, args[1], args[2])
+	case "Snapshot":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk src tablet path>", args[0])
+		}
+		err = snapshot(zconn, ai, wrangler, args[1])
 	case "PurgeActions":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])

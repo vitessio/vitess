@@ -30,14 +30,19 @@ type VtReplParams struct {
 	EndKey     string
 }
 
+func (vtrp VtReplParams) TabletAddr() string {
+	return fmt.Sprintf("%v:%v", vtrp.TabletHost, vtrp.TabletPort)
+}
+
 type Mycnf struct {
 	ServerId              uint
 	TabletDir             string
+	SnapshotDir           string
 	DataDir               string
 	MycnfFile             string
 	InnodbDataHomeDir     string
 	InnodbLogGroupHomeDir string
-	DatabaseName          string // for replication
+	DatabaseName          string // for replication FIXME(msolomon) should not be needed
 	SocketFile            string
 	MysqlPort             int
 	VtHost                string
@@ -46,7 +51,7 @@ type Mycnf struct {
 	EndKey                string
 }
 
-var (
+const (
 	VtDataRoot       = "/vt"
 	dataDir          = "data"
 	innodbDir        = "innodb"
@@ -61,18 +66,17 @@ tabletservers deployed within a keyspace, lest there be collisions on disk.
  mysqldPort needs to be unique per instance per machine (shocking) but choosing
  this sensibly has nothing to do with the config, so I'll punt.
 */
-func NewMycnf(uid uint, mysqlPort int, keyspace string, vtRepl VtReplParams) *Mycnf {
+func NewMycnf(uid uint, mysqlPort int, vtRepl VtReplParams) *Mycnf {
 	cnf := new(Mycnf)
 	cnf.ServerId = uid
 	cnf.MysqlPort = mysqlPort
 	cnf.TabletDir = fmt.Sprintf("%s/vt_%010d", VtDataRoot, uid)
-	cnf.DataDir = path.Join(cnf.TabletDir, "data")
+	cnf.SnapshotDir = fmt.Sprintf("%s/snapshot/vt_%010d", VtDataRoot, uid)
+	cnf.DataDir = path.Join(cnf.TabletDir, dataDir)
 	cnf.MycnfFile = path.Join(cnf.TabletDir, "my.cnf")
 	cnf.InnodbDataHomeDir = path.Join(cnf.TabletDir, innodbDataSubdir)
 	cnf.InnodbLogGroupHomeDir = path.Join(cnf.TabletDir, innodbLogSubdir)
 	cnf.SocketFile = path.Join(cnf.TabletDir, "mysql.sock")
-	// this might be empty if you aren't assigned to a keyspace
-	cnf.DatabaseName = keyspace
 	cnf.VtHost = vtRepl.TabletHost
 	cnf.VtPort = vtRepl.TabletPort
 	cnf.StartKey = vtRepl.StartKey
@@ -213,13 +217,8 @@ func ReadMycnf(cnfFile string) (*Mycnf, error) {
 	defer f.Close()
 
 	buf := bufio.NewReader(f)
-	mycnf := &Mycnf{SocketFile: "/var/lib/mysql/mysql.sock",
-		MycnfFile: cnfFile,
-		// FIXME(msolomon) remove this whole method, just asking for trouble
-		VtHost:    "localhost",
-		VtPort:    6612,
-		MysqlPort: 3306,
-	}
+	mycnf := new(Mycnf)
+
 	for {
 		line, _, err := buf.ReadLine()
 		if err == io.EOF {
@@ -229,15 +228,17 @@ func ReadMycnf(cnfFile string) (*Mycnf, error) {
 		if bytes.HasPrefix(line, []byte("server-id")) {
 			serverId, err := strconv.Atoi(string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1])))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("mycnf: failed to convert server-id %v", err)
 			}
 			mycnf.ServerId = uint(serverId)
 		} else if bytes.HasPrefix(line, []byte("port")) {
 			port, err := strconv.Atoi(string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1])))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("mycnf: failed to convert port %v", err)
 			}
 			mycnf.MysqlPort = port
+		} else if bytes.HasPrefix(line, []byte("datadir")) {
+			mycnf.DataDir = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
 		} else if bytes.HasPrefix(line, []byte("innodb_log_group_home_dir")) {
 			mycnf.InnodbLogGroupHomeDir = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
 		} else if bytes.HasPrefix(line, []byte("innodb_data_home_dir")) {
@@ -247,5 +248,14 @@ func ReadMycnf(cnfFile string) (*Mycnf, error) {
 		}
 	}
 
-	return mycnf, nil
+	// Make sure we run the correct initialization.
+	vtMycnf := NewMycnf(mycnf.ServerId, mycnf.MysqlPort, VtReplParams{})
+
+	// Apply overrides.
+	vtMycnf.DataDir = mycnf.DataDir
+	vtMycnf.InnodbDataHomeDir = mycnf.InnodbDataHomeDir
+	vtMycnf.InnodbLogGroupHomeDir = mycnf.InnodbLogGroupHomeDir
+	vtMycnf.SocketFile = mycnf.SocketFile
+
+	return vtMycnf, nil
 }

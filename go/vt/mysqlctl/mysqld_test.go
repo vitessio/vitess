@@ -4,11 +4,15 @@
 
 package mysqlctl
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestStartShutdown(t *testing.T) {
-	tablet0 := NewMysqld(NewMycnf(0, ""), nil)
-	tablet1 := NewMysqld(NewMycnf(1, ""), nil)
+	mycnf0 := NewMycnf(0, 3700, "", VtReplParams{TabletHost: "localhost"})
+	mycnf1 := NewMycnf(1, 3701, "", VtReplParams{TabletHost: "localhost"})
+	tablet0 := NewMysqld(mycnf0, DefaultDbaParams, DefaultReplParams)
+	tablet1 := NewMysqld(mycnf1, DefaultDbaParams, DefaultReplParams)
 	var err error
 
 	err = Init(tablet0)
@@ -31,11 +35,11 @@ func TestStartShutdown(t *testing.T) {
 		t.Fatalf("Start() err: %v", err)
 	}
 
-	err = Teardown(tablet0)
+	err = Teardown(tablet0, false)
 	if err != nil {
 		t.Fatalf("Teardown(0) err: %v", err)
 	}
-	err = Teardown(tablet1)
+	err = Teardown(tablet1, false)
 	if err != nil {
 		t.Fatalf("Teardown(1) err: %v", err)
 	}

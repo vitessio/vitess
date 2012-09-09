@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path"
 
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/shard"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -47,6 +48,10 @@ const (
 	// replication sql thread may be stopped
 	TYPE_BACKUP = TabletType("backup")
 
+	// A tablet that has not been in the replication graph and is restoring
+	// from a snapshot.  idle -> restore -> spare
+	TYPE_RESTORE = TabletType("restore")
+
 	// a machine with data that needs to be wiped
 	TYPE_SCRAP = TabletType("scrap")
 )
@@ -60,9 +65,11 @@ func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 			return true
 		}
 	case TYPE_SCRAP:
-		if newTabletType == TYPE_IDLE {
-			return true
-		}
+		return newTabletType == TYPE_IDLE
+	case TYPE_IDLE:
+		return newTabletType == TYPE_RESTORE
+	case TYPE_RESTORE:
+		return newTabletType == TYPE_IDLE
 	}
 	return false
 }
@@ -84,11 +91,9 @@ const (
 	STATE_READ_ONLY = TabletState("ReadOnly")
 )
 
-/* Tablets are really globally unique, but crawling every cell to find out where
-it lives is time consuming and expensive. This is only needed during complex operations.
-Tablet cell assignments don't change that often.
-*/
-
+// Tablets are really globally unique, but crawling every cell to find out where
+// it lives is time consuming and expensive. This is only needed during complex operations.
+// Tablet cell assignments don't change that often, thus using a TabletAlias is efficient.
 type TabletAlias struct {
 	Cell string
 	Uid  uint
@@ -98,9 +103,11 @@ func (ta *TabletAlias) String() string {
 	return fmtAlias(ta.Cell, ta.Uid)
 }
 
-/*
-A pure data struct for information serialized into json and stored in zookeeper
-*/
+const (
+	vtDbPrefix = "vt_" // Default name for databases create"
+)
+
+// A pure data struct for information serialized into json and stored in zookeeper.
 type Tablet struct {
 	Cell      string      // the zk cell this tablet is assigned to (doesn't change)
 	Uid       uint        // the server id for this instance
@@ -114,7 +121,21 @@ type Tablet struct {
 
 	State TabletState
 
+	DbNameOverride string // Normally the database name is implied by "vt_" + keyspace
 	shard.KeyRange
+}
+
+// DbName is implied by keyspace. Having the shard information in the database name
+// complicates mysql replication.
+func (tablet *Tablet) DbName() string {
+	if tablet.Keyspace == "" {
+		return ""
+	}
+	return vtDbPrefix + tablet.Keyspace
+}
+
+func (tablet *Tablet) Alias() TabletAlias {
+	return TabletAlias{tablet.Cell, tablet.Uid}
 }
 
 func (tablet *Tablet) IsServingType() bool {
@@ -127,7 +148,7 @@ func (tablet *Tablet) IsServingType() bool {
 
 func (tablet *Tablet) IsReplicatingType() bool {
 	switch tablet.Type {
-	case TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP:
+	case TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE:
 		return false
 	}
 	return true
@@ -203,7 +224,7 @@ func NewTablet(cell string, uid uint, parent TabletAlias, vtAddr, mysqlAddr, key
 		}
 	}
 
-	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, keyspace, shardId, tabletType, state, shard.KeyRange{}}
+	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, keyspace, shardId, tabletType, state, "", shard.KeyRange{}}
 }
 
 func tabletFromJson(data string) *Tablet {
@@ -234,7 +255,10 @@ func UpdateTablet(zconn zk.Conn, zkTabletPath string, tablet *TabletInfo) error 
 		version = tablet.version
 	}
 
-	_, err := zconn.Set(zkTabletPath, tablet.Json(), version)
+	stat, err := zconn.Set(zkTabletPath, tablet.Json(), version)
+	if err == nil {
+		tablet.version = stat.Version()
+	}
 	return err
 }
 
@@ -299,11 +323,18 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 		return nil
 	}
 
+	return CreateTabletReplicationPaths(zconn, zkTabletPath, tablet)
+}
+
+func CreateTabletReplicationPaths(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
+	relog.Debug("CreateTabletReplicationPaths %v", zkTabletPath)
+	MustBeTabletPath(zkTabletPath)
+
 	zkVtRootPath := VtRootFromTabletPath(zkTabletPath)
 
 	shardPath := ShardPath(zkVtRootPath, tablet.Keyspace, tablet.Shard)
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>
-	_, err = zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err := zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}

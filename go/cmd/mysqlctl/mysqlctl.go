@@ -17,7 +17,6 @@ var port = flag.Int("port", 6612, "vtocc port")
 var force = flag.Bool("force", false, "force action")
 var mysqlPort = flag.Int("mysql-port", 3306, "mysql port")
 var tabletUid = flag.Int("tablet-uid", 41983, "tablet uid")
-var keyspace = flag.String("keyspace", "test", "keyspace name")
 var logLevel = flag.String("log.level", "WARNING", "set log level")
 
 func main() {
@@ -27,12 +26,8 @@ func main() {
 		relog.LogNameToLogLevel(*logLevel))
 	relog.SetLogger(logger)
 
-	var vtRepl mysqlctl.VtReplParams
-	vtRepl.TabletHost = "localhost"
-	vtRepl.TabletPort = *port
-	vtRepl.StartKey = "\"\""
-	vtRepl.EndKey = "\"\""
-	mycnf := mysqlctl.NewMycnf(uint(*tabletUid), *mysqlPort, *keyspace, vtRepl)
+	vtRepl := mysqlctl.VtReplParams{TabletHost: "localhost", TabletPort: *port}
+	mycnf := mysqlctl.NewMycnf(uint(*tabletUid), *mysqlPort, vtRepl)
 	dbcfgs, err := dbconfigs.Init(mycnf)
 	if err != nil {
 		relog.Fatal("%s", err)
@@ -45,9 +40,22 @@ func main() {
 		if mysqlErr := mysqlctl.Init(mysqld); mysqlErr != nil {
 			log.Fatalf("failed init mysql: %v", mysqlErr)
 		}
+	case "restore":
+		rs, err := mysqlctl.ReadReplicaSource(flag.Arg(1))
+		if err == nil {
+			err = mysqld.RestoreFromSnapshot(rs)
+		}
+		if err != nil {
+			log.Fatalf("restore failed: %v", err)
+		}
 	case "shutdown":
 		if mysqlErr := mysqlctl.Shutdown(mysqld, true); mysqlErr != nil {
 			log.Fatalf("failed shutdown mysql: %v", mysqlErr)
+		}
+	case "snapshot":
+		_, err := mysqld.CreateSnapshot(flag.Arg(1), vtRepl.TabletAddr(), false)
+		if err != nil {
+			log.Fatalf("snapshot failed: %v", err)
 		}
 	case "start":
 		if mysqlErr := mysqlctl.Start(mysqld); mysqlErr != nil {

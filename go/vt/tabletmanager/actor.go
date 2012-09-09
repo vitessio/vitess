@@ -10,6 +10,7 @@ import (
 	"path"
 	"time"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/shard"
@@ -17,21 +18,43 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-/*
-The actor applies individual commands to execute an action read
-from a node in zookeeper. Anything that modifies the state of the
-table should be applied by this code.
+// The actor applies individual commands to execute an action read
+// from a node in zookeeper. Anything that modifies the state of the
+// table should be applied by this code.
+//
+// The actor signals completion by removing the action node from zookeeper.
+//
+// Errors are written to the action node and must (currently) be resolved
+// by hand using zk tools.
 
-The actor signals completion by removing the action node from zookeeper.
-
-Errors are written to the action node and must (currently) be resolved
-by hand using zk tools.
-*/
+const (
+	restartSlaveDataFilename = "restart_slave_data.json"
+	restoreSlaveDataFilename = "restore_slave_data.json"
+)
 
 type TabletActorError string
 
 func (e TabletActorError) Error() string {
 	return string(e)
+}
+
+type RestartSlaveData struct {
+	ReplicationState *mysqlctl.ReplicationState
+	WaitPosition     *mysqlctl.ReplicationPosition
+	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
+	Parent           TabletAlias
+	Force            bool
+}
+
+// This is a superset of the fields in mysqlctl.ReplicaSource.
+// The fields are duplicated because the json encoder does not support
+// anonymous structs.
+type RestoreSlaveData struct {
+	ReplicationState *mysqlctl.ReplicationState
+	Parent           TabletAlias
+	Addr             string // this is the address of the parent vttablet
+	DbName           string
+	Files            []mysqlctl.DataFile
 }
 
 type TabletActor struct {
@@ -48,7 +71,7 @@ func NewTabletActor(mysqld *mysqlctl.Mysqld, zconn zk.Conn) *TabletActor {
 // FIXME(msolomon) protect against unforeseen panics and classify errors as "fatal" or
 // resolvable. For instance, if your zk connection fails, better to just fail. If data
 // is corrupt, you can't fix it gracefully.
-func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error {
+func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, forceRerun bool) error {
 	data, stat, zkErr := ta.zconn.Get(actionPath)
 	if zkErr != nil {
 		relog.Error("HandleAction failed: %v", zkErr)
@@ -63,8 +86,10 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error
 
 	switch actionNode.State {
 	case ACTION_STATE_RUNNING:
-		relog.Warning("HandleAction waiting for running action: %v", actionPath)
-		return WaitForCompletion(ta.zconn, actionPath, 0)
+		if !forceRerun {
+			relog.Warning("HandleAction waiting for running action: %v", actionPath)
+			return WaitForCompletion(ta.zconn, actionPath, 0)
+		}
 	case ACTION_STATE_FAILED:
 		return fmt.Errorf(actionNode.Error)
 	}
@@ -131,32 +156,40 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string) error
 func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			err = x.(error)
+			if panicErr, ok := x.(error); ok {
+				err = panicErr
+			} else {
+				err = fmt.Errorf("dispatchAction panic: %v", x)
+			}
 		}
 	}()
 
 	switch actionNode.Action {
-	case TABLET_ACTION_PING:
-		// Just an end-to-end verification that we got the message.
-		err = nil
-	case TABLET_ACTION_SLEEP:
-		err = ta.sleep(actionNode.Args)
-	case TABLET_ACTION_SET_RDONLY:
-		err = ta.setReadOnly(true)
-	case TABLET_ACTION_SET_RDWR:
-		err = ta.setReadOnly(false)
+	case TABLET_ACTION_BREAK_SLAVES:
+		err = ta.mysqld.BreakSlaves()
 	case TABLET_ACTION_CHANGE_TYPE:
 		err = ta.changeType(actionNode.Args)
 	case TABLET_ACTION_DEMOTE_MASTER:
 		err = ta.demoteMaster()
+	case TABLET_ACTION_PING:
+		// Just an end-to-end verification that we got the message.
+		err = nil
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode.Args)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode.Args)
-	case TABLET_ACTION_BREAK_SLAVES:
-		err = ta.mysqld.BreakSlaves()
+	case TABLET_ACTION_RESTORE:
+		err = ta.restore(actionNode.Args)
 	case TABLET_ACTION_SCRAP:
 		err = ta.scrap()
+	case TABLET_ACTION_SET_RDONLY:
+		err = ta.setReadOnly(true)
+	case TABLET_ACTION_SET_RDWR:
+		err = ta.setReadOnly(false)
+	case TABLET_ACTION_SLEEP:
+		err = ta.sleep(actionNode.Args)
+	case TABLET_ACTION_SNAPSHOT:
+		_, err = ta.snapshot()
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
 	}
@@ -220,14 +253,6 @@ func (ta *TabletActor) demoteMaster() error {
 	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 }
 
-type RestartSlaveData struct {
-	ReplicationState *mysqlctl.ReplicationState
-	WaitPosition     *mysqlctl.ReplicationPosition
-	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent           TabletAlias
-	Force            bool
-}
-
 func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	zkShardActionPath, ok := args["ShardActionPath"]
 	if !ok {
@@ -239,11 +264,11 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 		return err
 	}
 
-	zkRestartSlaveDataPath := path.Join(zkShardActionPath, "restart_slave_data.json")
+	zkRestartSlaveDataPath := path.Join(zkShardActionPath, restartSlaveDataFilename)
 	// The presence of this node indicates that the promote action succeeded.
 	stat, err := ta.zconn.Exists(zkRestartSlaveDataPath)
 	if stat != nil {
-		err = fmt.Errorf("restart_slave_data.json already exists - suspicious")
+		err = fmt.Errorf("slave restart data already exists - suspicious: %v", zkRestartSlaveDataPath)
 	}
 	if err != nil {
 		return err
@@ -306,7 +331,7 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 		return err
 	}
 
-	zkRestartSlaveDataPath := path.Join(zkShardActionPath, "restart_slave_data.json")
+	zkRestartSlaveDataPath := path.Join(zkShardActionPath, restartSlaveDataFilename)
 	data, _, err := ta.zconn.Get(zkRestartSlaveDataPath)
 	if err != nil {
 		return err
@@ -360,6 +385,109 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 
 func (ta *TabletActor) scrap() error {
 	return Scrap(ta.zconn, ta.zkTabletPath, false)
+}
+
+// Operate on a backup tablet. Shutdown mysqld and copy the data files aside.
+func (ta *TabletActor) snapshot() (*RestoreSlaveData, error) {
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if tablet.Type != TYPE_BACKUP {
+		return nil, fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	replicaSource, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false)
+	if err != nil {
+		return nil, err
+	}
+
+	rsd := new(RestoreSlaveData)
+	rsd.ReplicationState = replicaSource.ReplicationState
+	if tablet.Parent.Uid == NO_TABLET {
+		// If this is a master, this will be the new parent.
+		// FIXME(msolomon) this doens't work in hierarchical replication.
+		rsd.Parent = tablet.Alias()
+	} else {
+		rsd.Parent = tablet.Parent
+	}
+	rsd.Addr = replicaSource.Addr
+	rsd.DbName = replicaSource.DbName
+	rsd.Files = replicaSource.Files
+
+	rsdZkPath := path.Join(ta.zkTabletPath, restoreSlaveDataFilename)
+	_, err = ta.zconn.Create(rsdZkPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		return nil, err
+	}
+
+	return rsd, nil
+}
+
+// Operate on restore tablet.
+// Check that the ReplicaSource is valid and the master has not changed.
+// Shutdown mysqld.
+// Load the snapshot from source tablet.
+// Restart mysqld and replication.
+// Put tablet into the replication graph as a spare.
+func (ta *TabletActor) restore(args map[string]string) error {
+	zkSrcTabletPath, ok := args["SrcTabletPath"]
+	if !ok {
+		return fmt.Errorf("missing SrcTabletPath in args")
+	}
+
+	data, _, err := ta.zconn.Get(path.Join(zkSrcTabletPath, restoreSlaveDataFilename))
+	if err != nil {
+		return err
+	}
+
+	rsd := new(RestoreSlaveData)
+	if err := json.Unmarshal([]byte(data), rsd); err != nil {
+		return err
+	}
+
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+	if tablet.Type != TYPE_RESTORE {
+		return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	parentPath := TabletPathForAlias(rsd.Parent)
+	parentTablet, err := ReadTablet(ta.zconn, parentPath)
+	if err != nil {
+		return err
+	}
+
+	if parentTablet.Type != TYPE_MASTER {
+		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
+	}
+
+	rs := new(mysqlctl.ReplicaSource)
+	rs.ReplicationState = rsd.ReplicationState
+	rs.Addr = rsd.Addr
+	rs.DbName = rsd.DbName
+	rs.Files = rsd.Files
+
+	if err := ta.mysqld.RestoreFromSnapshot(rs); err != nil {
+		relog.Error("RestoreFromSnapshot failed: %v", err)
+		return err
+	}
+
+	// Once this action completes, update authoritive tablet node first.
+	tablet.Parent = rsd.Parent
+	tablet.Keyspace = parentTablet.Keyspace
+	tablet.Shard = parentTablet.Shard
+	tablet.Type = TYPE_SPARE
+	tablet.KeyRange = parentTablet.KeyRange
+
+	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
+		return err
+	}
+
+	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
 }
 
 // Make this external, since in needs to be forced from time to time.

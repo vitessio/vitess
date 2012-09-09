@@ -4,6 +4,7 @@ import json
 from optparse import OptionParser
 import os
 import shlex
+import shutil
 import signal
 import socket
 from subprocess import check_call, Popen, CalledProcessError, PIPE
@@ -76,6 +77,31 @@ def run_bg(cmd, **kargs):
   return proc
 
 
+def mysql_query(uid, dbname, query):
+  conn = MySQLdb.Connect(user='vt_dba',
+                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
+                         db=dbname)
+  cursor = conn.cursor()
+  cursor.execute(query)
+  try:
+    return cursor.fetchall()
+  finally:
+    conn.close()
+
+def mysql_write_query(uid, dbname, query):
+  conn = MySQLdb.Connect(user='vt_dba',
+                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
+                         db=dbname)
+  cursor = conn.cursor()
+  conn.begin()
+  cursor.execute(query)
+  conn.commit()
+  try:
+    return cursor.fetchall()
+  finally:
+    conn.close()
+
+
 def check_db_var(uid, name, value):
   conn = MySQLdb.Connect(user='vt_dba',
                          unix_socket='/vt/vt_%010d/mysql.sock' % uid)
@@ -100,7 +126,7 @@ def wait_db_read_only(uid):
     try:
       check_db_read_only(uid)
       return
-    except TestError, e:
+    except TestError as e:
       print >> sys.stderr, 'WARNING: ', e
       time.sleep(1.0)
   raise e
@@ -121,8 +147,8 @@ def setup():
   # compile all the tools
   run('go build', cwd=vttop+'/go/cmd/mysqlctl')
   run('go build', cwd=vttop+'/go/cmd/vtaction')
-  run('go build', cwd=vttop+'/go/cmd/vttablet')
   run('go build', cwd=vttop+'/go/cmd/vtctl')
+  run('go build', cwd=vttop+'/go/cmd/vttablet')
   run('go build', cwd=vttop+'/go/cmd/zkctl')
   run('go build', cwd=vttop+'/go/cmd/zk')
 
@@ -167,15 +193,42 @@ def teardown():
         proc = pid_map.get(pid)
         if not proc or (proc and proc.pid and proc.returncode is None):
           os.kill(pid, signal.SIGTERM)
-      except OSError, e:
+      except OSError as e:
         if options.verbose:
           print >> sys.stderr, e
   for path in ('.test-pids', '.test-zk-client-conf.json'):
     try:
       os.remove(path)
-    except OSError, e:
+    except OSError as e:
       if options.verbose:
         print >> sys.stderr, e, path
+
+  for path in ('/vt/snapshot', '/vt/vt_0000062344', '/vt/vt_0000062044', '/vt/vt_0000031981', '/vt/vt_0000041983'):
+    try:
+      shutil.rmtree(path)
+    except OSError as e:
+      if options.verbose:
+        print >> sys.stderr, e, path
+
+def _wipe_zk():
+  run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt')
+  run(vtroot+'/bin/zk rm -rf /zk/test_ny/vt')
+  #run(vtroot+'/bin/zk rm -rf /zk/test_ca/vt')
+  run(vtroot+'/bin/zk rm -rf /zk/global/vt')
+
+def _check_zk(ping_tablets=False):
+  if ping_tablets:
+    run(vtroot+'/bin/vtctl -ping-tablets Validate /zk/global/vt/keyspaces')
+  else:
+    run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+def _check_db_addr(db_addr, expected_addr):
+  # Run in the background to capture output.
+  proc = run_bg(vtroot+'/bin/vtctl -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
+  stdout = proc.communicate()[0].strip()
+  if stdout != expected_addr:
+    raise TestError('wrong zk address', db_addr, stdout, expected_addr)
+
 
 def run_test_sanity():
   # Start up a master mysql and vttablet
@@ -201,6 +254,115 @@ def run_test_sanity():
   run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
   agent_62344.kill()
+
+
+create_vt_insert_test = '''create table vt_insert_test (
+id bigint auto_increment,
+msg varchar(64),
+primary key (id)
+) Engine=InnoDB'''
+
+populate_vt_insert_test = [
+    "insert into vt_insert_test (msg) values ('test %s')"
+    for x in xrange(4)]
+
+def run_test_mysqlctl_clone():
+  _wipe_zk()
+
+  # Start up a master mysql and vttablet
+  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
+  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+
+  mysql_query(62344, '', 'create database vt_snapshot_test')
+  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  for q in populate_vt_insert_test:
+    mysql_write_query(62344, 'vt_snapshot_test', q)
+
+  run(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 snapshot vt_snapshot_test')
+
+  pause("snapshot finished")
+
+  run(vtroot+'/bin/mysqlctl -tablet-uid 62044 -port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/replica_source.json')
+
+  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  if result[0][0] != 4:
+    raise TestError("expected 4 rowsin vt_insert_test", result)
+
+  agent_62344.kill()
+
+
+def run_test_vtctl_snapshot_restore():
+  _wipe_zk()
+
+  # Start up a master mysql and vttablet
+  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master ""')
+  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+
+  mysql_query(62344, '', 'create database vt_snapshot_test')
+  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  for q in populate_vt_insert_test:
+    mysql_write_query(62344, 'vt_snapshot_test', q)
+
+  # Need to force snapshot since this is a master db.
+  run(vtroot+'/bin/vtctl -force Snapshot /zk/test_nj/vt/tablets/0000062344')
+  pause("snapshot finished")
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle ""')
+  agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
+
+  run(vtroot+'/bin/vtctl Restore /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
+  pause("restore finished")
+
+  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  if result[0][0] != 4:
+    raise TestError("expected 4 rowsin vt_insert_test", result)
+
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344.kill()
+  agent_62044.kill()
+
+
+def run_test_vtctl_clone():
+  _wipe_zk()
+
+  # Start up a master mysql and vttablet
+  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master ""')
+  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+
+  mysql_query(62344, '', 'create database vt_snapshot_test')
+  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  for q in populate_vt_insert_test:
+    mysql_write_query(62344, 'vt_snapshot_test', q)
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle ""')
+  agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
+
+  run(vtroot+'/bin/vtctl -force Clone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
+
+  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  if result[0][0] != 4:
+    raise TestError("expected 4 rowsin vt_insert_test", result)
+
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344.kill()
+  agent_62044.kill()
 
 
 def run_test_restart_during_action():
@@ -232,25 +394,6 @@ def run_test_restart_during_action():
 
 
 
-
-def _wipe_zk():
-  run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt')
-  run(vtroot+'/bin/zk rm -rf /zk/test_ny/vt')
-  #run(vtroot+'/bin/zk rm -rf /zk/test_ca/vt')
-  run(vtroot+'/bin/zk rm -rf /zk/global/vt')
-
-def _check_zk(ping_tablets=False):
-  if ping_tablets:
-    run(vtroot+'/bin/vtctl -ping-tablets Validate /zk/global/vt/keyspaces')
-  else:
-    run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
-
-def _check_db_addr(db_addr, expected_addr):
-  # Run in the background to capture output.
-  proc = run_bg(vtroot+'/bin/vtctl -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
-  stdout = proc.communicate()[0].strip()
-  if stdout != expected_addr:
-    raise TestError('wrong zk address', db_addr, stdout, expected_addr)
 
 
 def run_test_reparent_down_master():
@@ -391,11 +534,15 @@ def _run_test_reparent_graceful(shard_id):
   agent_62044.kill()
 
 
-
 def run_all():
   run_test_sanity()
   run_test_sanity() # run twice to check behavior with existing znode data
   run_test_restart_during_action()
+
+  # Subsumed by vtctl_clone test.
+  # run_test_mysqlctl_clone()
+  run_test_vtctl_clone()
+
   run_test_reparent_graceful()
   run_test_reparent_graceful_range_based()
   run_test_reparent_down_master()

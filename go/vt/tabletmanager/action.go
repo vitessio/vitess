@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-Actions modify the state of a tablet, shard or keyspace.
-*/
+// Actions modify the state of a tablet, shard or keyspace.
+//
+// They are currenty managed through a series of queues stored in zookeeper.
 
 package tabletmanager
 
@@ -26,6 +26,9 @@ const (
 	TABLET_ACTION_RESTART_SLAVE = "RestartSlave"
 	TABLET_ACTION_BREAK_SLAVES  = "BreakSlaves"
 	TABLET_ACTION_SCRAP         = "Scrap"
+
+	TABLET_ACTION_SNAPSHOT = "Snapshot"
+	TABLET_ACTION_RESTORE  = "Restore"
 
 	// Shard actions - involve all tablets in a shard
 	SHARD_ACTION_REPARENT = "ReparentShard"

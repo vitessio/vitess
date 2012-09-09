@@ -87,18 +87,19 @@ func (agent *ActionAgent) resolvePaths() error {
 	return nil
 }
 
-func (agent *ActionAgent) dispatchAction(actionPath string) {
+// A non-nil return signals that event processing should stop.
+func (agent *ActionAgent) dispatchAction(actionPath string) error {
 	relog.Info("action dispatch %v", actionPath)
 	data, _, err := agent.zconn.Get(actionPath)
 	if err != nil {
 		relog.Error("action dispatch failed: %v", err)
-		return
+		return nil
 	}
 
 	actionNode, err := ActionNodeFromJson(data, actionPath)
 	if err != nil {
 		relog.Error("action decode failed: %v %v", actionPath, err)
-		return
+		return nil
 	}
 
 	logfile := flag.Lookup("logfile").Value.String()
@@ -121,16 +122,18 @@ func (agent *ActionAgent) dispatchAction(actionPath string) {
 
 	stdOut, vtActionErr := vtActionCmd.CombinedOutput()
 	if vtActionErr != nil {
-		relog.Error("action failed: %v %v\n%s", actionPath, vtActionErr, stdOut)
-		return
+		relog.Error("agent action failed: %v %v\n%s", actionPath, vtActionErr, stdOut)
+		// If the action failed, preserve single execution path semantics.
+		return vtActionErr
 	}
 
-	relog.Info("action completed %v %s", actionPath, stdOut)
+	relog.Info("agent action completed %v %s", actionPath, stdOut)
 
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
 		relog.Warning("failed rereading tablet after action: %v %v", actionPath, err)
 	}
+	return nil
 }
 
 func (agent *ActionAgent) handleActionQueue() (<-chan zookeeper.Event, error) {
@@ -154,7 +157,10 @@ func (agent *ActionAgent) handleActionQueue() (<-chan zookeeper.Event, error) {
 				relog.Warning("remove invalid event from action queue: %v", child)
 				agent.zconn.Delete(actionPath, -1)
 			}
-			agent.dispatchAction(actionPath)
+			err = agent.dispatchAction(actionPath)
+			if err != nil {
+				break
+			}
 		}
 	}
 	return watch, nil

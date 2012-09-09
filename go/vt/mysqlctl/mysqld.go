@@ -32,6 +32,16 @@ const (
 
 type CreateConnection func() (*mysql.Connection, error)
 
+var DefaultDbaParams = mysql.ConnectionParams{
+	Uname:   "vt_dba",
+	Charset: "utf8",
+}
+
+var DefaultReplParams = mysql.ConnectionParams{
+	Uname:   "vt_repl",
+	Charset: "utf8",
+}
+
 type Mysqld struct {
 	config           *Mycnf
 	dbaParams        mysql.ConnectionParams
@@ -40,6 +50,10 @@ type Mysqld struct {
 }
 
 func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
+	if dba == DefaultDbaParams {
+		dba.UnixSocket = config.SocketFile
+	}
+
 	createSuperConnection := func() (*mysql.Connection, error) {
 		return mysql.Connect(dba)
 	}

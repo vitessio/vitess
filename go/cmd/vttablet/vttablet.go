@@ -9,9 +9,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"strings"
 	"syscall"
 
 	"code.google.com/p/vitess/go/relog"
@@ -84,6 +86,11 @@ func main() {
 	jsonrpc.ServeRPC()
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
+
+	// NOTE: trailing slash in pattern means we handle all paths with this prefix
+	http.Handle("/vt/snapshot/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleSnapshot(w, r, mycnf)
+	}))
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
@@ -166,4 +173,15 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	umgmt.AddCloseCallback(func() {
 		ts.DisallowQueries()
 	})
+}
+
+func handleSnapshot(rw http.ResponseWriter, req *http.Request, mycnf *mysqlctl.Mycnf) {
+	// FIXME(msolomon) some sort of security, no?
+	if strings.HasPrefix(req.URL.Path, mycnf.SnapshotDir) {
+		relog.Info("serve %v", req.URL.Path)
+		http.ServeFile(rw, req, req.URL.Path)
+	} else {
+		relog.Error("bad request %v", req.URL.Path)
+		http.Error(rw, "400 bad request", http.StatusBadRequest)
+	}
 }

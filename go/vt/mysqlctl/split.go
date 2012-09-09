@@ -104,8 +104,8 @@ type SplitReplicaSource struct {
 	Schema   string
 }
 
-func NewSplitReplicaSource(addr, mysqlAddr, user, passwd string) *SplitReplicaSource {
-	return &SplitReplicaSource{ReplicaSource: NewReplicaSource(addr, mysqlAddr, user, passwd)}
+func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []DataFile, pos *ReplicationPosition) *SplitReplicaSource {
+	return &SplitReplicaSource{ReplicaSource: NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos)}
 }
 
 // FIXME(msolomon) use query format/bind vars
@@ -141,14 +141,14 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		return
 	}
 	// same logic applies here
-	relog.Info("ValidateReplicaSource")
-	if err = mysqld.ValidateReplicaSource(); err != nil {
+	relog.Info("ValidateCloneSource")
+	if err = mysqld.ValidateCloneSource(); err != nil {
 		return
 	}
 
 	// FIXME(msolomon) bleh, must match patterns in mycnf - probably belongs
 	// in there as derived paths.
-	cloneSourcePath := path.Join(replicaSourcePath, "data", dbName+"-"+b64ForFilename(startKey)+","+b64ForFilename(endKey))
+	cloneSourcePath := path.Join(replicaSourcePath, dataDir, dbName+"-"+b64ForFilename(startKey)+","+b64ForFilename(endKey))
 	// clean out and start fresh	
 	for _, _path := range []string{cloneSourcePath} {
 		if err = os.RemoveAll(_path); err != nil {
@@ -190,12 +190,6 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		return nil, errors.New("unexpected result for show master status")
 	}
 	relog.Info("Save Master Status")
-
-	replicaSource := NewSplitReplicaSource(sourceAddr, mysqld.Addr(), mysqld.replParams.Uname, mysqld.replParams.Pass)
-	replicaSource.DbName = dbName
-	replicaSource.ReplicationPosition.MasterLogFile = rows[0][0].(string)
-	temp, _ := strconv.ParseUint(rows[0][1].(string), 10, 0)
-	replicaSource.ReplicationPosition.MasterLogPosition = uint(temp)
 
 	// save initial state so we can restore on Start()
 	slaveStartRequired := false
@@ -249,6 +243,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		}
 	}
 
+	dataFiles := make([]DataFile, 0, 128)
 	// FIXME(msolomon) should mysqld just restart on any failure?
 	compressFiles := func(filenames []string) error {
 		for _, srcPath := range filenames {
@@ -260,14 +255,13 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 			// later
 			os.Remove(srcPath)
 
-			hash, hashErr := md5File(dstPath)
-			if hashErr != nil {
-				return hashErr
+			hash, err := md5File(dstPath)
+			if err != nil {
+				return err
 			}
 
-			replicaSource.FileList = append(replicaSource.FileList, dstPath)
-			replicaSource.HashList = append(replicaSource.HashList, hash)
-			relog.Info("%v:%v ready", dstPath, hash)
+			dataFiles = append(dataFiles, DataFile{dstPath, hash})
+			relog.Info("clone data ready %v:%v", dstPath, hash)
 		}
 		return nil
 	}
@@ -295,8 +289,10 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		return
 	}
 
-	// ok, copy over the pointer on success
-	_replicaSource = replicaSource
+	masterLogPos, _ := strconv.ParseUint(rows[0][1].(string), 10, 0)
+	rpos := ReplicationPosition{MasterLogFile: rows[0][0].(string), MasterLogPosition: uint(masterLogPos)}
+	replicaSource := NewSplitReplicaSource(sourceAddr, mysqld.Addr(), mysqld.replParams.Uname, mysqld.replParams.Pass, dbName, dataFiles, &rpos)
+
 	relog.Info("mysqld replicaSource %#v", replicaSource)
 	return
 }
@@ -365,9 +361,8 @@ func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource
 	// FIXME(msolomon) automatically retry a file transfer at least once
 	// FIXME(msolomon) deadlines?
 	// FIXME(msolomon) work into replication.go
-	for i, srcPath := range replicaSource.FileList {
-		srcHash := replicaSource.HashList[i]
-		urlstr := "http://" + replicaSource.Addr + srcPath
+	for _, fi := range replicaSource.Files {
+		urlstr := "http://" + replicaSource.Addr + fi.Path
 		urlobj, parseErr := url.Parse(urlstr)
 		if parseErr != nil {
 			return errors.New("failed to create url " + urlstr)
@@ -387,7 +382,7 @@ func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource
 		if response.StatusCode != 200 {
 			return errors.New("failed fetching " + urlstr + ": " + response.Status)
 		}
-		relativePath := strings.SplitN(srcPath, "/", 5)[4]
+		relativePath := strings.SplitN(fi.Path, "/", 5)[4]
 		gzFilename := path.Join(tempStoragePath, relativePath)
 		// trim .gz
 		filename := gzFilename[:len(gzFilename)-3]
@@ -414,8 +409,8 @@ func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource
 		if hashErr != nil {
 			return hashErr
 		}
-		if srcHash != hash {
-			return errors.New("hash mismatch for " + gzFilename + ", " + srcHash + " != " + hash)
+		if fi.Hash != hash {
+			return errors.New("hash mismatch for " + gzFilename + ", " + fi.Hash + " != " + hash)
 		}
 
 		if err = uncompressFile(gzFilename, filename); err != nil {
