@@ -33,7 +33,7 @@ test:
 	cd timer; go test
 	cd umgmt; go test
 #	cd vt/client2; go test
-#	cd vt/mysqlctl; go test
+	cd vt/mysqlctl; go test
 	cd vt/sqlparser; go test
 	cd vt/tabletmanager; go test
 	cd vt/tabletserver; go test

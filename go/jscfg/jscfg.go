@@ -10,12 +10,13 @@ package jscfg
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 
 	"code.google.com/p/vitess/go/ioutil2"
 )
 
-func ToJson(x interface{}) string {
-	data, err := json.MarshalIndent(x, "  ", "  ")
+func ToJson(val interface{}) string {
+	data, err := json.MarshalIndent(val, "  ", "  ")
 	// This is not strictly the spirit of panic. This is meant to be used
 	// where it would be a programming error to have json encoding fail.
 	if err != nil {
@@ -25,10 +26,21 @@ func ToJson(x interface{}) string {
 }
 
 // Atomically write a marshaled structure to disk.
-func WriteJson(filename string, x interface{}) error {
-	data, err := json.MarshalIndent(x, "  ", "  ")
+func WriteJson(filename string, val interface{}) error {
+	data, err := json.MarshalIndent(val, "  ", "  ")
 	if err != nil {
-		return fmt.Errorf("WriteJson fialed: %v %v", filename, err)
+		return fmt.Errorf("WriteJson failed: %v %v", filename, err)
 	}
 	return ioutil2.WriteFileAtomic(filename, data, 0660)
+}
+
+func ReadJson(filename string, val interface{}) error {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("ReadJson failed: %T %v", val, err)
+	}
+	if err = json.Unmarshal(data, val); err != nil {
+		return fmt.Errorf("ReadJson failed: %T %v %v", val, filename, err)
+	}
+	return nil
 }

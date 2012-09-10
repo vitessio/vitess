@@ -53,6 +53,7 @@ type Mycnf struct {
 
 const (
 	VtDataRoot       = "/vt"
+	snapshotDir      = "snapshot"
 	dataDir          = "data"
 	innodbDir        = "innodb"
 	relayLogDir      = "relay-logs"
@@ -71,7 +72,7 @@ func NewMycnf(uid uint, mysqlPort int, vtRepl VtReplParams) *Mycnf {
 	cnf.ServerId = uid
 	cnf.MysqlPort = mysqlPort
 	cnf.TabletDir = fmt.Sprintf("%s/vt_%010d", VtDataRoot, uid)
-	cnf.SnapshotDir = fmt.Sprintf("%s/snapshot/vt_%010d", VtDataRoot, uid)
+	cnf.SnapshotDir = fmt.Sprintf("%s/%s/vt_%010d", VtDataRoot, snapshotDir, uid)
 	cnf.DataDir = path.Join(cnf.TabletDir, dataDir)
 	cnf.MycnfFile = path.Join(cnf.TabletDir, "my.cnf")
 	cnf.InnodbDataHomeDir = path.Join(cnf.TabletDir, innodbDataSubdir)

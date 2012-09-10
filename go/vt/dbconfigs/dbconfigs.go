@@ -7,11 +7,9 @@
 package dbconfigs
 
 import (
-	"encoding/json"
 	"flag"
-	"fmt"
-	"io/ioutil"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
@@ -60,23 +58,9 @@ func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
 		Uname:   "vt_repl",
 		Charset: "utf8",
 	}
-	err = ReadJson(*DBConfigsFile, &dbcfgs)
+	err = jscfg.ReadJson(*DBConfigsFile, &dbcfgs)
 	dbcfgs.App.UnixSocket = mycnf.SocketFile
 	dbcfgs.Dba.UnixSocket = mycnf.SocketFile
+	relog.Info("%s: %s\n", *DBConfigsFile, jscfg.ToJson(dbcfgs))
 	return
-}
-
-func ReadJson(name string, val interface{}) error {
-	if name != "" {
-		data, err := ioutil.ReadFile(name)
-		if err != nil {
-			return fmt.Errorf("could not read %v: %v", val, err)
-		}
-		if err = json.Unmarshal(data, val); err != nil {
-			return fmt.Errorf("could not read %s: %v", val, err)
-		}
-	}
-	data, _ := json.MarshalIndent(val, "", "  ")
-	relog.Info("%s: %s\n", name, data)
-	return nil
 }
