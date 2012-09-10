@@ -58,7 +58,9 @@ func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
 		Uname:   "vt_repl",
 		Charset: "utf8",
 	}
-	err = jscfg.ReadJson(*DBConfigsFile, &dbcfgs)
+	if *DBConfigsFile != "" {
+		err = jscfg.ReadJson(*DBConfigsFile, &dbcfgs)
+	}
 	dbcfgs.App.UnixSocket = mycnf.SocketFile
 	dbcfgs.Dba.UnixSocket = mycnf.SocketFile
 	relog.Info("%s: %s\n", *DBConfigsFile, jscfg.ToJson(dbcfgs))

@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
@@ -154,7 +155,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 }
 
 func initQueryService(dbcfgs dbconfigs.DBConfigs) {
-	if err := dbconfigs.ReadJson(*qsConfigFile, &qsConfig); err != nil {
+	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
 		relog.Warning("%s", err)
 	}
 	ts.StartQueryService(qsConfig)
