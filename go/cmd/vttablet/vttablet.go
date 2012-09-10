@@ -12,6 +12,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
 	"syscall"
@@ -20,7 +21,6 @@ import (
 	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
-	"code.google.com/p/vitess/go/sighandler"
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
@@ -100,7 +100,13 @@ func main() {
 		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
 	})
 	umgmt.AddStartupCallback(func() {
-		sighandler.SetSignalHandler(syscall.SIGTERM, umgmt.SigTermHandler)
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGTERM)
+		go func() {
+			for sig := range c {
+				umgmt.SigTermHandler(sig)
+			}
+		}()
 	})
 
 	relog.Info("started vttablet %v", *port)

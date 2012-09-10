@@ -13,6 +13,7 @@ import (
 	"log"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"syscall"
 
 	"code.google.com/p/vitess/go/relog"
@@ -21,7 +22,6 @@ import (
 	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
-	"code.google.com/p/vitess/go/sighandler"
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
 	"code.google.com/p/vitess/go/vt/servenv"
@@ -120,7 +120,13 @@ func main() {
 		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
 	})
 	umgmt.AddStartupCallback(func() {
-		sighandler.SetSignalHandler(syscall.SIGTERM, umgmt.SigTermHandler)
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGTERM)
+		go func() {
+			for sig := range c {
+				umgmt.SigTermHandler(sig)
+			}
+		}()
 	})
 	umgmt.AddCloseCallback(func() {
 		ts.DisallowQueries()
