@@ -876,9 +876,6 @@ func (sq *SqlQuery) executeSql(conn PoolConnection, sql []byte, wantfields bool)
 }
 
 func (sq *SqlQuery) executeStreamSql(conn PoolConnection, sql []byte, callback func(*QueryResult) error) error {
-	connid := conn.Id()
-	sq.activePool.Put(connid)
-	defer sq.activePool.Remove(connid)
 	err := conn.ExecuteStreamFetch(sql, callback, int(atomic.LoadInt32(&sq.streamBufferSize)))
 	if err != nil {
 		return NewTabletErrorSql(FAIL, err)
