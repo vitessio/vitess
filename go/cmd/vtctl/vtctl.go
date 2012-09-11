@@ -92,8 +92,8 @@ Generic:
   Resolve <keyspace>.<shard>.<db type>
     read a list of addresses that can answer this query
 
-  Validate <zk global vt path> (/zk/global/vt)
-    validate all nodes reachable from global replication graph are consisten
+  Validate <zk keyspaces path> (/zk/global/vt/keyspaces)
+    validate all nodes reachable from global replication graph are consistent
 
   ExportZkns <zk local vt path> (/zk/<cell>/vt)
     export the serving graph entries to the legacy zkns format
@@ -598,7 +598,7 @@ func main() {
 		}
 	case "Validate":
 		if len(args) != 2 {
-			relog.Fatal("action %v requires <zk vt path>", args[0])
+			relog.Fatal("action %v requires <zk keyspaces path>", args[0])
 		}
 		err = validateZk(zconn, args[1])
 	case "ListScrap":

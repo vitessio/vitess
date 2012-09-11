@@ -498,6 +498,7 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	}
 
 	wasIdle := tablet.Type == TYPE_IDLE
+	replicationPath := tablet.ReplicationPath()
 	tablet.Type = TYPE_SCRAP
 	tablet.Parent = TabletAlias{}
 	// Update the tablet first, since that is canonical.
@@ -517,11 +518,11 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	}
 
 	if !wasIdle {
-		err = zconn.Delete(tablet.ReplicationPath(), -1)
+		err = zconn.Delete(replicationPath, -1)
 		if err != nil {
 			switch err.(*zookeeper.Error).Code {
 			case zookeeper.ZNONODE:
-				relog.Debug("no replication path: %v", tablet.ReplicationPath())
+				relog.Debug("no replication path: %v", replicationPath)
 				return nil
 			case zookeeper.ZNOTEMPTY:
 				// If you are forcing the scrapping of a master, you can't update the

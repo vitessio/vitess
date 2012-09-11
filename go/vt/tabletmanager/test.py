@@ -253,7 +253,24 @@ def run_test_sanity():
 
   run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
+  run(vtroot+'/bin/vtctl ScrapTablet /zk/test_nj/vt/tablets/0000062344')
+
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
   agent_62344.kill()
+
+
+def run_test_scrap():
+  # Start up a master mysql and vttablet
+  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace 0 replica /zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-0000062344')
+  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  run(vtroot+'/bin/vtctl -force ScrapTablet /zk/test_nj/vt/tablets/0000062044')
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
 
 create_vt_insert_test = '''create table vt_insert_test (
@@ -537,6 +554,7 @@ def _run_test_reparent_graceful(shard_id):
 def run_all():
   run_test_sanity()
   run_test_sanity() # run twice to check behavior with existing znode data
+  run_test_scrap()
   run_test_restart_during_action()
 
   # Subsumed by vtctl_clone test.
