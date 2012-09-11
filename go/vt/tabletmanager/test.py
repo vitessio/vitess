@@ -253,10 +253,6 @@ def run_test_sanity():
 
   run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
-  run(vtroot+'/bin/vtctl ScrapTablet /zk/test_nj/vt/tablets/0000062344')
-
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
-
   agent_62344.kill()
 
 
