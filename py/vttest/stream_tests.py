@@ -60,6 +60,9 @@ class TestStream(framework.TestCase):
           count += 1
         self.assertEqual(count, 10000)
 
+      row = cu.fetchone()
+      self.assertEqual(row, None)
+
   def check_row_10(self, row):
     # null the dates so they match
     row = list(row)

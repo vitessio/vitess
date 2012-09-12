@@ -251,6 +251,43 @@ class VtOCCConnection(tablet2.TabletConnection):
             logging.warning('error dialing vtocc on execute %s (%s)',
                             self.addr, dial_error)
 
+  # FIXME(alainjobart) vile, copy-pasted from above
+  def _stream_execute(self, sql, bind_variables):
+    bind_vars_proxy = BindVarsProxy(bind_variables)
+    try:
+      # convert bind style from %(name)s to :name
+      sql = sql % bind_vars_proxy
+    except KeyError, e:
+      raise dbexceptions.InterfaceError(e[0], sql, bind_variables)
+
+    sane_bind_vars = bind_vars_proxy.export_bind_vars()
+
+    attempt = 0
+    while True:
+      try:
+        result = tablet2.TabletConnection._stream_execute(self, sql, sane_bind_vars)
+        self._time_failed = 0
+        return result
+      except dbexceptions.OperationalError, e:
+        error_type, e = self._convert_error(e, sql, sane_bind_vars)
+        if error_type != ERROR_RETRY:
+          raise e
+        while True:
+          attempt += 1
+          if attempt >= self.max_attempts:
+            logging.warning('Failing with 2003 on %s: %s, %s', str(e), sql, sane_bind_vars)
+            raise MySQLErrors.OperationalError(2003, str(e), self.addr, sql, sane_bind_vars)
+          try:
+            time.sleep(RECONNECT_DELAY)
+            self.dial()
+            break
+          except dbexceptions.OperationalError, dial_error:
+            logging.warning('error dialing vtocc on execute %s (%s)',
+                            self.addr, dial_error)
+
+  # Note we don't have a retry policy on this one:
+  #  def _stream_next(self, conversions, query_result, index):
+
 def connect(addr, timeout, dbname=None, user=None, password=None):
   conn = VtOCCConnection(addr, dbname, timeout, user=user, password=password)
   conn.dial()

@@ -212,7 +212,26 @@ class TabletConnection(object):
       raise
     return fields, conversions, None, 0
 
+  # the calls to _stream_next will have the following states:
+  # conversions, None, 0       (that will trigger asking for one result)
+  # conversions, result, 1     (the next call will just return the 2nd row)
+  # conversions, result, 2
+  # ...
+  # conversions, result, len(result)-1
+  # conversions, None, 0       (that will trigger asking for one more result)
+  # ...
+  # conversions, last result, len(last result)-1
+  #                            (asking for next result will return None)
+  # conversions, None, None    (this is then stable and stays that way)
+  # conversions, None, None
+  #
+  # the StreamCursor in cursor.py is a good implementation of this API.
   def _stream_next(self, conversions, query_result, index):
+
+    # if index is None, it means we're done (because _stream_next
+    # returned None, see 7 lines below here)
+    if index is None:
+      return None, None, None
 
     # see if we need to read more
     if query_result is None:

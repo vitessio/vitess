@@ -189,6 +189,9 @@ class StreamCursor(object):
     result, self.query_result, self.query_index = self.connection._stream_next(self.conversions, self.query_result, self.query_index)
     return result
 
+  # fetchmany can be called until it returns no rows. Returning less rows
+  # than what we asked for is also an indication we ran out. But the cursor
+  # may not know that.
   def fetchmany(self, size=None):
     if size is None:
       size = self.arraysize
