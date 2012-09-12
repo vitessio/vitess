@@ -123,5 +123,5 @@ def execute(cmd, trap_output=False, verbose=False, **kargs):
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode:
-    raise TestError('cmd fail:', args, stdout, stderr)
+    raise TestException('FAIL: %s %s %s' % (args, stdout, stderr))
   return stdout, stderr

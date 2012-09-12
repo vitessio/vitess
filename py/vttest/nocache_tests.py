@@ -121,6 +121,10 @@ class TestNocache(framework.TestCase):
     self.env.execute("select * from vtocc_test where intval=%(ival)s /* trailing comment */", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
+    # This should also not increase the query cache size
+    self.env.execute("select * from vtocc_test where intval=%(ival)s /* trailing comment1 */ /* comment2 */", bv)
+    vend = self.env.debug_vars()
+    self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
 
   def test_for_update(self):
     try:

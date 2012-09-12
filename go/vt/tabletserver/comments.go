@@ -13,35 +13,15 @@ type matchtracker struct {
 	index int
 }
 
-// stripTrailing strips out the trailing comment if any and puts it in a bind variable.
+// stripTrailing strips out trailing comments if any and puts them in a bind variable.
 // This code is a hack. Will need cleaning if it evolves beyond this.
 func stripTrailing(query *Query) {
-	defer func() {
-		if x := recover(); x != nil {
-			_ = x.(nomatch)
-		}
-	}()
-
-	tracker := &matchtracker{query.Sql, len(query.Sql)}
-	tracker.mustMatch('/')
-	tracker.mustMatch('*')
-
-	// find start of comment
-	for {
-		if !tracker.match('*') {
-			continue
-		}
-		if tracker.match('/') {
-			break
-		}
+	tracker := matchtracker{query.Sql, len(query.Sql)}
+	pos := tracker.matchComments()
+	if pos >= 0 {
+		query.Sql = tracker.query[:pos]
+		query.BindVariables[TRAILING_COMMENT] = tracker.query[pos:]
 	}
-
-	// find end of query
-	for tracker.match(' ') {
-	}
-	end_query := tracker.index + 1
-	query.Sql = tracker.query[:end_query]
-	query.BindVariables[TRAILING_COMMENT] = tracker.query[end_query:]
 }
 
 // restoreTrailing undoes work done by stripTrailing
@@ -52,23 +32,67 @@ func restoreTrailing(sql []byte, bindVars map[string]interface{}) []byte {
 	return sql
 }
 
-func (self *matchtracker) mustMatch(required byte) {
-	if self.index == 0 {
+// matchComments matches trailing comments. If no comment was found,
+// it returns -1. Otherwise, it returns the position where the query ends
+// before the trailing comments begin.
+func (tracker *matchtracker) matchComments() (pos int) {
+	// FIXME: use pos instead of lastpos after compiler bug fix
+	lastpos := -1
+	defer func() {
+		if x := recover(); x != nil {
+			_ = x.(nomatch)
+			pos = lastpos
+		}
+	}()
+
+	for {
+		// Verify end of comment
+		tracker.mustMatch('/')
+		tracker.mustMatch('*')
+
+		// find start of comment
+		for {
+			if !tracker.match('*') {
+				continue
+			}
+			if tracker.match('/') {
+				break
+			}
+		}
+		tracker.skipBlanks()
+		lastpos = tracker.index
+	}
+	panic("unreachable")
+}
+
+func (tracker *matchtracker) mustMatch(required byte) {
+	if tracker.index == 0 {
 		panic(nomatch{})
 	}
-	self.index--
-	if self.query[self.index] != required {
+	tracker.index--
+	if tracker.query[tracker.index] != required {
 		panic(nomatch{})
 	}
 }
 
-func (self *matchtracker) match(required byte) bool {
-	if self.index == 0 {
+func (tracker *matchtracker) match(required byte) bool {
+	if tracker.index == 0 {
 		panic(nomatch{})
 	}
-	self.index--
-	if self.query[self.index] != required {
+	tracker.index--
+	if tracker.query[tracker.index] != required {
 		return false
 	}
 	return true
+}
+
+func (tracker *matchtracker) skipBlanks() {
+	var ch byte
+	for ; tracker.index != 0; tracker.index-- {
+		ch = tracker.query[tracker.index-1]
+		if ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' {
+			continue
+		}
+		break
+	}
 }
