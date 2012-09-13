@@ -67,7 +67,7 @@ type BinlogImport struct {
 
 // return a Reader from which the decoded binlog can be read
 func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
-	dir := os.ExpandEnv("$VT_MYSQL_BIN")
+	dir := os.ExpandEnv("$VT_MYSQL_ROOT/bin")
 	name := "vt_mysqlbinlog"
 	arg := []string{"vt_mysqlbinlog", "-"}
 

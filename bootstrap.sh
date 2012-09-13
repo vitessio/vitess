@@ -17,15 +17,21 @@ if [ $? != 1 ]; then
   cat misc/hg/hooks.hgrc >> .hg/hgrc
 fi
 
-if [ ! -d $VTROOT/dist ]; then
-  mkdir $VTROOT/dist
-fi
+mkdir -p $VTROOT/dist
+mkdir -p $VTROOT/bin
+mkdir -p $VTROOT/lib
 
-if [ ! -d $VTROOT/bin ]; then
-  mkdir $VTROOT/bin
+# generate pkg-config, so go can use mysql C client
+if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
+  echo "cannot execute $VT_MYSQL_ROOT/bin/mysql_config, exiting" 1>&2
+  exit 1
 fi
+cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
+echo "Version:" "$($VT_MYSQL_ROOT/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
+echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
+echo "Libs:" "$($VT_MYSQL_ROOT/bin/mysql_config --libs_r)" >> $VTROOT/lib/gomysql.pc
 
-#install bson
+# install bson
 bson_dist=$VTROOT/dist/py-vt-bson-0.3.2
 if [ -d $bson_dist ]; then
   echo "skipping bson python build"

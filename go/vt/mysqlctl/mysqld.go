@@ -63,12 +63,12 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 
 func Start(mt *Mysqld) error {
 	relog.Info("mysqlctl.Start")
-	dir := os.ExpandEnv("$VTROOT/dist/vt-mysql")
+	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
 	name := dir + "/bin/mysqld_safe"
 	arg := []string{
 		"--defaults-file=" + mt.config.MycnfFile}
 	env := []string{
-		os.ExpandEnv("LD_LIBRARY_PATH=$VTROOT/dist/vt-mysql/lib/mysql"),
+		os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
 	}
 
 	cmd := exec.Command(name, arg...)
@@ -115,13 +115,13 @@ func Shutdown(mt *Mysqld, waitForMysqld bool) error {
 		return nil
 	}
 
-	dir := os.ExpandEnv("$VTROOT/dist/vt-mysql")
+	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
 	name := dir + "/bin/mysqladmin"
 	arg := []string{
 		"-u", "vt_dba", "-S", mt.config.SocketFile,
 		"shutdown"}
 	env := []string{
-		os.ExpandEnv("LD_LIBRARY_PATH=$VTROOT/dist/vt-mysql/lib/mysql"),
+		os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
 	}
 	_, err := execCmd(name, arg, env, dir)
 	if err != nil {

@@ -5,6 +5,7 @@
 package mysql
 
 /*
+#cgo pkg-config: gomysql
 #include <stdlib.h>
 #include <mysql.h>
 
