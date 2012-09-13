@@ -118,6 +118,6 @@ class TestCache(framework.TestCase):
       self.env.execute("rollback")
 
   def test_cache_sqls(self):
-    error_count = self.env.run_cases(cache_cases.cache_cases)
+    error_count = self.env.run_cases(cache_cases.cases)
     if error_count != 0:
       self.assertFail("test_execution errors: %d"%(error_count))

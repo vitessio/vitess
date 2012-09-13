@@ -319,6 +319,6 @@ class TestNocache(framework.TestCase):
     self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
 
   def test_sqls(self):
-    error_count = self.env.run_cases(nocache_cases.nocache_cases)
+    error_count = self.env.run_cases(nocache_cases.cases)
     if error_count != 0:
       self.assertFail("test_execution errors: %d"%(error_count))

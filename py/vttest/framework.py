@@ -97,6 +97,7 @@ class Tailer(object):
     self.reset()
 
   def reset(self):
+    """Call reset when you want to start using the tailer."""
     self.f.seek(0, os.SEEK_END)
     self.pos = self.f.tell()
 

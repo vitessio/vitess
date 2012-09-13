@@ -133,66 +133,24 @@ class TestEnv(object):
     return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/schema/tables")))
 
   def run_cases(self, cases):
-    curs = self.conn.cursor()
+    cursor = self.conn.cursor()
     error_count = 0
-    count = 0
+
     for case in cases:
-      if options.verbose:
-        print case[0]
-      count += 1
-
-      if len(case) == 5:
-        tstart = self.table_stats()[case[4][0]]
-
-      if len(case) == 1:
-        curs.execute(case[0])
+      if isinstance(case, basestring):
+        cursor.execute(case)
         continue
-      self.querylog.reset()
-      curs.execute(case[0], case[1])
+      try:
+        failures = case.run(cursor, self.querylog)
+      except Exception:
+        print "Exception in", case
+        raise
+      error_count += len(failures)
+      for fail in failures:
+        print "FAIL:", case, fail
 
-      if len(case) == 2:
-        continue
-      if case[2] is not None:
-        results = []
-        for row in curs:
-          results.append(row)
-        if results != case[2]:
-          print "Function: run_cases(%d): FAIL: %s:\n%s\n%s"%(count, case[0], case[2], results)
-          error_count += 1
-
-      if len(case) == 3:
-        continue
-      if case[3] is not None:
-        querylog = normalizelog(self.querylog.read())
-        if querylog != case[3]:
-          print "Function: run_cases(%d): FAIL: %s:\n%s\n%s"%(count, case[0], case[3], querylog)
-          error_count += 1
-
-      if len(case) == 4:
-        continue
-      tend = self.table_stats()[case[4][0]]
-      if tstart["Hits"]+case[4][1] != tend["Hits"]:
-        print "Function: run_cases(%d): FAIL: %s:\nHits: %s!=%s"%(count, case[0], tstart["Hits"]+case[4][1], tend["Hits"])
-        error_count += 1
-      if tstart["Absent"]+case[4][2] != tend["Absent"]:
-        print "Function: run_cases(%d): FAIL: %s:\nAbsent: %s!=%s"%(count, case[0], tstart["Absent"]+case[4][2], tend["Absent"])
-        error_count += 1
-      if tstart["Misses"]+case[4][3] != tend["Misses"]:
-        print "Function: run_cases(%d): FAIL: %s:\nMisses: %s!=%s"%(count, case[0], tstart["Misses"]+case[4][3], tend["Misses"])
-        error_count += 1
-      if tstart["Invalidations"]+case[4][4] != tend["Invalidations"]:
-        print "Function: run_cases(%d): FAIL: %s:\nInvalidations: %s!=%s"%(count, case[0], tstart["Invalidations"]+case[4][4], tend["Invalidations"])
-        error_count += 1
     return error_count
 
-def normalizelog(data):
-  lines = data.split("\n")
-  newlines = []
-  for line in lines:
-    pos = line.find("INFO: ")
-    if pos >= 0:
-      newlines.append(line[pos+6:])
-  return newlines
 
 env = TestEnv()
 try:
