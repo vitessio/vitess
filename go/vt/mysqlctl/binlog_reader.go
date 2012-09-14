@@ -5,9 +5,9 @@
 package mysqlctl
 
 /*
-the binlogreader is intended to "tail -f" a binlog, but be smart enough                   
-to stop tailing it when mysql is done writing to that binlog.  The stop                   
-condition is if EOF is reached *and* the next file has appeared.                          
+the binlogreader is intended to "tail -f" a binlog, but be smart enough
+to stop tailing it when mysql is done writing to that binlog.  The stop
+condition is if EOF is reached *and* the next file has appeared.
 */
 
 import (
@@ -240,7 +240,7 @@ func (blr *BinlogReader) open(name string) (*os.File, string) {
 	return file, nextLog
 }
 
-func (blr *BinlogReader) ServeData(filename string, startPosition int64, writer io.Writer) {
+func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosition int64) {
 	stats := stats{StartTime: time.Now()}
 
 	binlogFile, nextLog := blr.open(filename)
@@ -251,27 +251,14 @@ func (blr *BinlogReader) ServeData(filename string, startPosition int64, writer 
 	bufWriter := bufio.NewWriterSize(writer, 16*1024)
 
 	if startPosition > 0 {
-		// the start position can be greater than the file length
-		// in which case, we just keep rotating files until we find it
-		for {
-			size, err := binlogFile.Seek(0, 2)
-			if err != nil {
-				relog.Error("BinlogReader.serve seek err: %v", err)
-				return
-			}
-			if startPosition > size {
-				startPosition -= size
-
-				// swap to next file
-				binlogFile.Close()
-				binlogFile, nextLog = blr.open(nextLog)
-
-				// normally we chomp subsequent headers, so we have to
-				// add this back into the position
-				//startPosition += BINLOG_HEADER_SIZE
-			} else {
-				break
-			}
+		size, err := binlogFile.Seek(0, 2)
+		if err != nil {
+			relog.Error("BinlogReader.ServeData seek err: %v", err)
+			return
+		}
+		if startPosition > size {
+			relog.Error("BinlogReader.ServeData: start position %v greater than size %v", startPosition, size)
+			return
 		}
 
 		// inject the header again to fool mysqlbinlog
@@ -288,11 +275,15 @@ func (blr *BinlogReader) ServeData(filename string, startPosition int64, writer 
 			//relog.Info("Sending prefix, BinlogReader copy @ %v:%v,%v", binlogFile.Name(), position, written)
 		}
 		if err != nil {
-			relog.Error("BinlogReader.serve err: %v", err)
+			relog.Error("BinlogReader.ServeData err: %v", err)
 			return
 		}
 		position, err = binlogFile.Seek(startPosition, 0)
-		relog.Info("BinlogReader %x seek to startPosition %v @ %v:%v", stats.StartTime, startPosition, binlogFile.Name(), position)
+		if err != nil {
+			relog.Error("Failed BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
+			return
+		}
+		relog.Info("BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
 	}
 
 	for {
@@ -308,15 +299,15 @@ func (blr *BinlogReader) ServeData(filename string, startPosition int64, writer 
 		stats.Bytes += written
 
 		if written != binlogBlockSize {
+			bufWriter.Flush()
 			if _, statErr := os.Stat(nextLog); statErr == nil {
-				relog.Info("BinlogReader swap log file: %v", nextLog)
+				//relog.Info("BinlogReader swap log file: %v", nextLog)
 				// swap to next log file
 				binlogFile.Close()
 				binlogFile, nextLog = blr.open(nextLog)
 				positionWaitStart = make(map[int64]time.Time)
 				binlogFile.Seek(BINLOG_HEADER_SIZE, 0)
 			} else {
-				bufWriter.Flush()
 				position, _ := binlogFile.Seek(0, 1)
 				//relog.Info("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
 				// wait for more data
