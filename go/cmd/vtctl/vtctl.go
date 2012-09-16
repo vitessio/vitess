@@ -156,35 +156,60 @@ func createKeyspace(zconn zk.Conn, path string) error {
 	return nil
 }
 
-func initTablet(zconn zk.Conn, path, hostname, mysqlPort, vtPort, keyspace, shardId, tabletType, parentAlias string, update bool) error {
-	tm.MustBeTabletPath(path)
+func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
+	children, _, err := zconn.Children(zkShardPath)
+	if err != nil {
+		return "", err
+	}
+	if len(children) > 2 {
+		return "", fmt.Errorf("master search failed: %v", zkShardPath)
+	}
+	for _, child := range children {
+		if child == "action" {
+			continue
+		}
+		return path.Join(zkShardPath, child), nil
+	}
 
-	pathParts := strings.Split(path, "/")
-	cell := zk.ZkCellFromZkPath(path)
+	panic("unreachable")
+}
+
+func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, vtPort, keyspace, shardId, tabletType, parentAlias string, update bool) error {
+	tm.MustBeTabletPath(zkPath)
+
+	cell := zk.ZkCellFromZkPath(zkPath)
+	pathParts := strings.Split(zkPath, "/")
 	uid, err := strconv.Atoi(pathParts[len(pathParts)-1])
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	parent := tm.TabletAlias{}
+	if parentAlias == "" && tm.TabletType(tabletType) != tm.TYPE_MASTER && tm.TabletType(tabletType) != tm.TYPE_IDLE {
+		vtRoot := path.Join("/zk/global", tm.VtSubtree(zkPath))
+		parentAlias, err = getMasterAlias(zconn, tm.ShardPath(vtRoot, keyspace, shardId))
+		if err != nil {
+			return err
+		}
+	}
 	if parentAlias != "" {
 		parent.Cell, parent.Uid = tm.ParseTabletReplicationPath(parentAlias)
 	}
 
 	tablet := tm.NewTablet(cell, uint(uid), parent, fmt.Sprintf("%v:%v", hostname, vtPort), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
-	err = tm.CreateTablet(zconn, path, tablet)
+	err = tm.CreateTablet(zconn, zkPath, tablet)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			if update {
-				oldTablet, err := tm.ReadTablet(zconn, path)
+				oldTablet, err := tm.ReadTablet(zconn, zkPath)
 				if err != nil {
-					relog.Warning("failed reading tablet %v: %v", path, err)
+					relog.Warning("failed reading tablet %v: %v", zkPath, err)
 				} else {
 					if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 						*(oldTablet.Tablet) = *tablet
-						err := tm.UpdateTablet(zconn, path, oldTablet)
+						err := tm.UpdateTablet(zconn, zkPath, oldTablet)
 						if err != nil {
-							relog.Warning("failed reading tablet %v: %v", path, err)
+							relog.Warning("failed reading tablet %v: %v", zkPath, err)
 						} else {
 							return nil
 						}
@@ -192,8 +217,8 @@ func initTablet(zconn zk.Conn, path, hostname, mysqlPort, vtPort, keyspace, shar
 				}
 			}
 			if *force {
-				zk.DeleteRecursive(zconn, path, -1)
-				err = tm.CreateTablet(zconn, path, tablet)
+				zk.DeleteRecursive(zconn, zkPath, -1)
+				err = tm.CreateTablet(zconn, zkPath, tablet)
 			}
 		}
 	}
@@ -482,10 +507,14 @@ func main() {
 		}
 		err = createKeyspace(zconn, args[1])
 	case "InitTablet":
-		if len(args) != 9 {
-			relog.Fatal("action %v requires 8 args", args[0])
+		if len(args) < 8 {
+			relog.Fatal("action %v requires 7 or 8 args", args[0])
 		}
-		err = initTablet(zconn, args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], false)
+		parentAlias := ""
+		if len(args) == 9 {
+			parentAlias = args[8]
+		}
+		err = initTablet(zconn, args[1], args[2], args[3], args[4], args[5], args[6], args[7], parentAlias, false)
 	case "UpdateTablet":
 		if len(args) != 9 {
 			relog.Fatal("action %v requires 8 args", args[0])
