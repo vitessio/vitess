@@ -67,26 +67,28 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryR
 		QueryLogger.Info("%s", query)
 	}
 
-	mresult, mfields, err := conn.Connection.ExecuteStreamFetch(query)
+	err := conn.Connection.ExecuteStreamFetch(query)
 	if err != nil {
 		mysqlStats.Record("ExecStream", start)
 		conn.handleError(err)
 		return err
 	}
-	defer mresult.Close()
+	defer conn.CloseResult()
 
 	// first call the callback with the fields
-	err = callback(&QueryResult{Fields: mfields})
+	err = callback(&QueryResult{Fields: conn.Fields()})
 	if err != nil {
 		return err
 	}
 
 	// then get all the rows, sending them as we reach a decent packet size
-	colCount := len(mfields)
 	qr := &QueryResult{}
 	byteCount := 0
 	for {
-		row := mresult.FetchNext(colCount)
+		row, err := conn.FetchNext()
+		if err != nil {
+			return err
+		}
 		if row == nil {
 			break
 		}
@@ -114,7 +116,7 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryR
 		}
 	}
 
-	return conn.Connection.LastErrorOrNil(query)
+	return nil
 }
 
 // CreateConnection returns a connection for running user queries. No DDL.
