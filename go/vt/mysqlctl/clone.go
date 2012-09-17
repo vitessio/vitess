@@ -182,7 +182,9 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]DataFile, e
 
 // This function runs on the machine acting as the source for the clone.
 //
-// Check master/slave status
+// Check master/slave status and determine restore needs.
+// If this instance is a slave, stop replication, otherwise place in read-only mode.
+// Record replication position.
 // Shutdown mysql
 // Check paths for storing data
 // Compress /vt/vt_[0-9a-f]+/data/vt_.+
@@ -198,23 +200,50 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		return nil, err
 	}
 
-	// If the source is a slave use the master replication position,
+	// save initial state so we can restore on Start()
+	slaveStartRequired := false
+	sourceIsMaster := false
+	readOnly := true
+
+	slaveStatus, slaveErr := mysqld.slaveStatus()
+	if slaveErr == nil {
+		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
+	} else if slaveErr == ERR_NOT_SLAVE {
+		sourceIsMaster = true
+	} else {
+		// If we can't get any data, just fail.
+		return nil, err
+	}
+
+	readOnly, err = mysqld.IsReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	// Stop sources of writes so we can get a consistent replication position.
+	// If the source is a slave use the master replication position
 	// unless we are allowing hierachical replicas.
 	masterAddr := ""
-	replicationPosition, statusErr := mysqld.SlaveStatus()
-	if statusErr != nil {
-		if statusErr != ERR_NOT_SLAVE {
-			// this is a real error
-			return nil, statusErr
+	var replicationPosition *ReplicationPosition
+	if sourceIsMaster {
+		if err = mysqld.SetReadOnly(true); err != nil {
+			return nil, err
 		}
-		// we are really a master, so we need that position
-		replicationPosition, statusErr = mysqld.MasterStatus()
-		if statusErr != nil {
-			return nil, statusErr
+		replicationPosition, err = mysqld.MasterStatus()
+		if err != nil {
+			return nil, err
 		}
 		masterAddr = mysqld.Addr()
 	} else {
-		// we are a slave, check our replication strategy
+		if err = mysqld.StopSlave(); err != nil {
+			return nil, err
+		}
+		replicationPosition, err = mysqld.SlaveStatus()
+		if err != nil {
+			return nil, err
+		}
+		// We are a slave, check our replication strategy before choosing
+		// the master address.
 		if allowHierarchicalReplication {
 			masterAddr = mysqld.Addr()
 		} else {
@@ -225,15 +254,6 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		}
 	}
 
-	// save initial state so we can restore on Start()
-	slaveStartRequired := false
-	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
-		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
-	}
-	readOnly, err := mysqld.IsReadOnly()
-	if err != nil {
-		return nil, err
-	}
 	if err = Shutdown(mysqld, true); err != nil {
 		return nil, err
 	}
@@ -251,12 +271,12 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		}
 	}
 
-	// Try to restart mysqld regardless of snapshot success..
+	// Try to restart mysqld regardless of snapshot success.
 	if err = Start(mysqld); err != nil {
 		return nil, err
 	}
 
-	// restore original mysqld state that we saved above
+	// Restore original mysqld state that we saved above.
 	if slaveStartRequired {
 		if err = mysqld.StartSlave(); err != nil {
 			return nil, err
