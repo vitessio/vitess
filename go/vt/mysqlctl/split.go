@@ -83,38 +83,40 @@ leave the 24 lag for 1 day
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 
 	"code.google.com/p/vitess/go/relog"
 )
 
 type SplitReplicaSource struct {
-	*ReplicaSource
+	Source   ReplicaSource
 	StartKey string
 	EndKey   string
-	Schema   string
+	Schema   []string
 }
 
-func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []DataFile, pos *ReplicationPosition) *SplitReplicaSource {
-	return &SplitReplicaSource{ReplicaSource: NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos)}
+func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []DataFile, pos *ReplicationPosition, startKey, endKey string, schema []string) *SplitReplicaSource {
+	return &SplitReplicaSource{Source: *NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos), StartKey: startKey, EndKey: endKey, Schema: schema}
 }
 
-// FIXME(msolomon) use query format/bind vars
-var selectIntoOutfile = `SELECT * INTO OUTFILE :tableoutputpath
+// FIXME(alainjobart) use query format/bind vars
+var selectIntoOutfile = `SELECT * INTO OUTFILE "{{.TableOutputPath}}"
   CHARACTER SET binary
   FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\'
   LINES TERMINATED BY '\n'
-  FROM {{.TableName}} WHERE {{.KeyspaceIdColumnName}} >= :startkey AND 
-	{{.KeyspaceIdColumnName}} < :endkey`
+  FROM {{.TableName}} WHERE {{.KeyspaceIdColumnName}} >= {{.StartKey}} AND 
+	{{.KeyspaceIdColumnName}} < {{.EndKey}}`
 
 var loadDataInfile = `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}}
   CHARACTER SET binary
@@ -125,6 +127,15 @@ func b64ForFilename(s string) string {
 	return strings.Replace(base64.URLEncoding.EncodeToString([]byte(s)), "=", "", -1)
 }
 
+// this function runs on the machine acting as the source for the split
+//
+// Check master/slave status
+// Check paths for storing data
+// Create one file per table
+// Compress each file
+// Compute md5() sums
+// Place in /vt/snapshot they will be served by http server (not rpc)
+
 /*
 copied from replication.
 create a series of raw dump files the contain rows to be reinserted
@@ -132,10 +143,10 @@ create a series of raw dump files the contain rows to be reinserted
 dbName - mysql db name
 keyName - name of the mysql column that is the leading edge of all primary keys
 startKey, endKey - the row range to prepare
-replicaSourcePath - where to copy the output data
 sourceAddr - the ip addr of the machine running the export
+allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey, replicaSourcePath, sourceAddr string) (_replicaSource *SplitReplicaSource, err error) {
+func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey, sourceAddr string, allowHierarchicalReplication bool) (_replicaSource *SplitReplicaSource, err error) {
 	if dbName == "" {
 		err = errors.New("no database name provided")
 		return
@@ -146,9 +157,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		return
 	}
 
-	// FIXME(msolomon) bleh, must match patterns in mycnf - probably belongs
-	// in there as derived paths.
-	cloneSourcePath := path.Join(replicaSourcePath, dataDir, dbName+"-"+b64ForFilename(startKey)+","+b64ForFilename(endKey))
+	cloneSourcePath := path.Join(mysqld.config.SnapshotDir, dataDir, dbName+"-"+b64ForFilename(startKey)+","+b64ForFilename(endKey))
 	// clean out and start fresh	
 	for _, _path := range []string{cloneSourcePath} {
 		if err = os.RemoveAll(_path); err != nil {
@@ -160,7 +169,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	}
 
 	// get a list of tables to process
-	rows, fetchErr := mysqld.fetchSuperQuery("SHOW TABLES")
+	rows, fetchErr := mysqld.fetchSuperQuery("SHOW TABLES IN " + dbName)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
@@ -173,23 +182,18 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	}
 	relog.Info("Fetch Tables: %#v %#v", rows, tableNames)
 
-	/*
-	   mysql> show master status\G
-	   **************************** 1. row ***************************
-	   File: vt-000001c6-bin.000003
-	   Position: 106
-	   Binlog_Do_DB: 
-	   Binlog_Ignore_DB: 
-	*/
-	// FIXME(msolomon) handle both master and slave situtation
-	rows, fetchErr = mysqld.fetchSuperQuery("SHOW MASTER STATUS")
-	if fetchErr != nil {
-		return nil, fetchErr
+	// get the schema for each table
+	schema := make([]string, len(rows))
+	for i, tableName := range tableNames {
+		rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+		if len(rows) == 0 {
+			return nil, errors.New("empty create table statement")
+		}
+		schema[i] = rows[0][1].(string)
 	}
-	if len(rows) != 1 {
-		return nil, errors.New("unexpected result for show master status")
-	}
-	relog.Info("Save Master Status")
 
 	// save initial state so we can restore on Start()
 	slaveStartRequired := false
@@ -209,11 +213,79 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	if err = mysqld.StopSlave(); err != nil {
 		return
 	}
+
+	// If the source is a slave use the master replication position,
+	// unless we are allowing hierachical replicas.
+	masterAddr := ""
+	replicationPosition, statusErr := mysqld.SlaveStatus()
+	if statusErr != nil {
+		if statusErr != ERR_NOT_SLAVE {
+			// this is a real error
+			return nil, statusErr
+		}
+		// we are really a master, so we need that position
+		replicationPosition, statusErr = mysqld.MasterStatus()
+		if statusErr != nil {
+			return nil, statusErr
+		}
+		masterAddr = mysqld.Addr()
+	} else {
+		// we are a slave, check our replication strategy
+		if allowHierarchicalReplication {
+			masterAddr = mysqld.Addr()
+		} else {
+			masterAddr, err = mysqld.GetMasterAddr()
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	relog.Info("Flush tables")
 	if err = mysqld.executeSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
 		return
 	}
 
+	var rs *SplitReplicaSource
+	dataFiles, snapshotErr := mysqld.createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath, tableNames)
+	if snapshotErr != nil {
+		relog.Error("CreateSplitReplicaSource failed: %v", snapshotErr)
+	} else {
+		rs = NewSplitReplicaSource(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+			dbName, dataFiles, replicationPosition, startKey, endKey, schema)
+		rsFile := path.Join(mysqld.config.SnapshotDir, replicaSourceFile)
+		if snapshotErr = writeJson(rsFile, rs); snapshotErr != nil {
+			relog.Error("CreateSnapshot failed: %v", snapshotErr)
+		}
+	}
+
+	// Try to fix mysqld regardless of snapshot success..
+	if err = mysqld.executeSuperQuery("UNLOCK TABLES"); err != nil {
+		return
+	}
+
+	// restore original mysqld state that we saved above
+	if slaveStartRequired {
+		if err = mysqld.StartSlave(); err != nil {
+			return
+		}
+		// this should be quick, but we might as well just wait
+		if err = mysqld.WaitForSlaveStart(5); err != nil {
+			return
+		}
+	}
+	if err = mysqld.SetReadOnly(readOnly); err != nil {
+		return
+	}
+
+	if snapshotErr != nil {
+		return nil, snapshotErr
+	}
+
+	return rs, nil
+}
+
+func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath string, tableNames []string) ([]DataFile, error) {
 	// export each table to a CSV-like file, compress the results
 	tableFiles := make([]string, len(tableNames))
 	// FIXME(msolomon) parallelize
@@ -223,28 +295,21 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		tableFiles[i] = filename
 
 		queryParams := map[string]string{
-			"TableName":            tableName,
+			"TableName":            dbName + "." + tableName,
 			"KeyspaceIdColumnName": keyName,
+			// FIXME(alainjobart): move these to bind params
+			"TableOutputPath": filename,
+			"StartKey":        startKey,
+			"EndKey":          endKey,
 		}
-		// FIXME(sougou/msolomon): no bindparams for the new mysql module
-		/*bindParams := map[string]interface{}{
-		  "tableoutputpath": filename,
-		  "startkey":        startKey,
-		  "endkey":          endKey,
-		}*/
-
 		query := mustFillStringTemplate(selectIntoOutfile, queryParams)
 		relog.Info("  %v", query)
-		if err = mysqld.executeSuperQuery(query); err != nil {
-			// FIXME(msolomon) on abort, should everything go back the way it was?
-			// alternatively, we could just leave it and wait for the wrangler to
-			// notice and start cleaning up
-			return
+		if err := mysqld.executeSuperQuery(query); err != nil {
+			return nil, err
 		}
 	}
 
 	dataFiles := make([]DataFile, 0, 128)
-	// FIXME(msolomon) should mysqld just restart on any failure?
 	compressFiles := func(filenames []string) error {
 		for _, srcPath := range filenames {
 			dstPath := srcPath + ".gz"
@@ -267,34 +332,11 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	}
 
 	// FIXME(msolomon) at some point, you could pipeline requests for speed
-	if err = compressFiles(tableFiles); err != nil {
-		return
+	if err := compressFiles(tableFiles); err != nil {
+		return nil, err
 	}
 
-	if err = mysqld.executeSuperQuery("UNLOCK TABLES"); err != nil {
-		return
-	}
-
-	// restore original mysqld state that we saved above
-	if slaveStartRequired {
-		if err = mysqld.StartSlave(); err != nil {
-			return
-		}
-		// this should be quick, but we might as well just wait
-		if err = mysqld.WaitForSlaveStart(5); err != nil {
-			return
-		}
-	}
-	if err = mysqld.SetReadOnly(readOnly); err != nil {
-		return
-	}
-
-	masterLogPos, _ := strconv.ParseUint(rows[0][1].(string), 10, 0)
-	rpos := ReplicationPosition{MasterLogFile: rows[0][0].(string), MasterLogPosition: uint(masterLogPos)}
-	replicaSource := NewSplitReplicaSource(sourceAddr, mysqld.Addr(), mysqld.replParams.Uname, mysqld.replParams.Pass, dbName, dataFiles, &rpos)
-
-	relog.Info("mysqld replicaSource %#v", replicaSource)
-	return
+	return dataFiles, nil
 }
 
 /*
@@ -310,11 +352,12 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
  start_mysql()
  clean up compressed files
 */
-func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource, tempStoragePath string) (err error) {
+func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSource) (err error) {
 	if err = mysqld.ValidateSplitReplicaTarget(); err != nil {
 		return
 	}
 
+	tempStoragePath := path.Join(mysqld.config.SnapshotDir, "partialrestore")
 	cleanDirs := []string{tempStoragePath}
 
 	// clean out and start fresh
@@ -331,24 +374,18 @@ func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource
 	if err = mysqld.SetReadOnly(true); err != nil {
 		return
 	}
-	// we could conditionally create the database, but this helps us
-	// verify that other parts of the process are working
+
+	// this will check that the database was properly created
 	createDbCmds := []string{
-		// "CREATE DATABASE " + replicaSource.DbName + " IF NOT EXISTS",
-		"USE " + replicaSource.DbName}
-	for _, cmd := range strings.Split(replicaSource.Schema, ";") {
-		cmd = strings.TrimSpace(cmd)
-		if cmd == "" {
-			continue
-		}
-		createDbCmds = append(createDbCmds, cmd)
-	}
+		"USE " + replicaSource.Source.DbName}
+	createDbCmds = append(createDbCmds, replicaSource.Schema...)
+
 	// FIXME(msolomon) make sure this works with multiple tables
 	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
 		return
 	}
 
-	httpConn, connErr := net.Dial("tcp", replicaSource.Addr)
+	httpConn, connErr := net.Dial("tcp", replicaSource.Source.Addr)
 	if connErr != nil {
 		return connErr
 	}
@@ -361,14 +398,14 @@ func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource
 	// FIXME(msolomon) automatically retry a file transfer at least once
 	// FIXME(msolomon) deadlines?
 	// FIXME(msolomon) work into replication.go
-	for _, fi := range replicaSource.Files {
-		urlstr := "http://" + replicaSource.Addr + fi.Path
+	for _, fi := range replicaSource.Source.Files {
+		urlstr := "http://" + replicaSource.Source.Addr + fi.Path
 		urlobj, parseErr := url.Parse(urlstr)
 		if parseErr != nil {
 			return errors.New("failed to create url " + urlstr)
 		}
 		req := &http.Request{Method: "GET",
-			Host: replicaSource.Addr,
+			Host: replicaSource.Source.Addr,
 			URL:  urlobj}
 		err = fileClient.Write(req)
 		if err != nil {
@@ -423,7 +460,7 @@ func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource
 		tableName := strings.Replace(path.Base(filename), ".csv", "", -1)
 		queryParams := map[string]string{
 			"TableInputPath": filename,
-			"TableName":      replicaSource.DbName + "." + tableName,
+			"TableName":      replicaSource.Source.DbName + "." + tableName,
 		}
 		query := mustFillStringTemplate(loadDataInfile, queryParams)
 		if err = mysqld.executeSuperQuery(query); err != nil {
@@ -438,7 +475,7 @@ func (mysqld *Mysqld) CreateSplitReplicaTarget(replicaSource *SplitReplicaSource
 
 	// FIXME(msolomon) start *split* replication, you need the new start/end
 	// keys
-	cmdList := StartSplitReplicationCommands(replicaSource.ReplicationState, replicaSource.StartKey, replicaSource.EndKey)
+	cmdList := StartSplitReplicationCommands(replicaSource.Source.ReplicationState, replicaSource.StartKey, replicaSource.EndKey)
 	relog.Info("StartSplitReplicationCommands %#v", cmdList)
 	if err = mysqld.executeSuperQueryList(cmdList); err != nil {
 		return
@@ -464,4 +501,16 @@ func StartSplitReplicationCommands(replState *ReplicationState, startKey string,
 		"RESET SLAVE",
 		mustFillStringTemplate(changeMasterCmd, replState),
 		"START SLAVE"}
+}
+
+func ReadSplitReplicaSource(filename string) (*SplitReplicaSource, error) {
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	rs := new(SplitReplicaSource)
+	if err = json.Unmarshal(data, rs); err != nil {
+		return nil, fmt.Errorf("ReadSplitReplicaSource failed: %v %v", filename, err)
+	}
+	return rs, nil
 }

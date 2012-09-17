@@ -101,6 +101,10 @@ def mysql_write_query(uid, dbname, query):
   finally:
     conn.close()
 
+# doesn't work as vttablet query service is disabled.
+def vttablet_write_query(uid, dbname, query):
+  run(vtroot+'/bin/vtclient2 -server=localhost:%u/%s "%s"' %
+      (uid, dbname, query))
 
 def check_db_var(uid, name, value):
   conn = MySQLdb.Connect(user='vt_dba',
@@ -147,6 +151,7 @@ def setup():
   # compile all the tools
   run('go build', cwd=vttop+'/go/cmd/mysqlctl')
   run('go build', cwd=vttop+'/go/cmd/vtaction')
+#  run('go build', cwd=vttop+'/go/cmd/vtclient2')
   run('go build', cwd=vttop+'/go/cmd/vtctl')
   run('go build', cwd=vttop+'/go/cmd/vttablet')
   run('go build', cwd=vttop+'/go/cmd/zkctl')
@@ -276,7 +281,7 @@ primary key (id)
 ) Engine=InnoDB'''
 
 populate_vt_insert_test = [
-    "insert into vt_insert_test (msg) values ('test %s')"
+    "insert into vt_insert_test (msg) values ('test %s')" % x
     for x in xrange(4)]
 
 def run_test_mysqlctl_clone():
@@ -304,10 +309,9 @@ def run_test_mysqlctl_clone():
 
   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
-    raise TestError("expected 4 rowsin vt_insert_test", result)
+    raise TestError("expected 4 rows in vt_insert_test", result)
 
   agent_62344.kill()
-
 
 def run_test_vtctl_snapshot_restore():
   _wipe_zk()
@@ -338,7 +342,7 @@ def run_test_vtctl_snapshot_restore():
 
   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
-    raise TestError("expected 4 rowsin vt_insert_test", result)
+    raise TestError("expected 4 rows in vt_insert_test", result)
 
   run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
@@ -376,13 +380,108 @@ def run_test_vtctl_clone():
 
   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
-    raise TestError("expected 4 rowsin vt_insert_test", result)
+    raise TestError("expected 4 rows in vt_insert_test", result)
 
   run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
   agent_62344.kill()
   agent_62044.kill()
 
+def run_test_mysqlctl_split():
+  _wipe_zk()
+
+  # Start up a master mysql and vttablet
+  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
+  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+
+  mysql_query(62344, '', 'create database vt_snapshot_test')
+  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  for q in populate_vt_insert_test:
+    mysql_write_query(62344, 'vt_snapshot_test', q)
+
+  run(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 partialsnapshot vt_snapshot_test id 0 3')
+
+  pause("partialsnapshot finished")
+
+  mysql_query(62044, '', 'create database vt_snapshot_test')
+  run(vtroot+'/bin/mysqlctl -tablet-uid 62044 -port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/replica_source.json')
+
+  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  if result[0][0] != 2:
+    raise TestError("expected 2 rows in vt_insert_test", result)
+
+  #
+  # This next part doesn't work: I wanted to add values on the master
+  # and make sure they get replicated or not to the client.
+  # However, we can't go to mysql directly to add the values,
+  # as it won't add the comment to the query and let the slave not replicate.
+  # And we can't go to vtocc, as it's not configured properly
+  # for talking to the db for queries.
+
+  # add two values on the master, one in range, one out of range, make
+  # sure the right one propagate and not the other
+  # vttablet_write_query(6700, 'vt_snapshot_test', "insert into vt_insert_test (id, msg) values (5, 'test should not propagate')")
+  # vttablet_write_query(6700, 'vt_snapshot_test', "insert into vt_insert_test (id, msg) values (0, 'test should propagate')")
+
+  # pause("look at db now!")
+
+  # timeout = 10
+  # while timeout > 0:
+  #   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test where id=0')
+  #   if result[0][0] == 1:
+  #     break
+  #   timeout -= 1
+  #   time.sleep(1)
+  # result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test where id=0')
+  # if result[0][0] != 1:
+  #     raise TestError("expected propagation to happen", result)
+  # result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test where id=5')
+  # if result[0][0] != 0:
+  #     raise TestError("expected propagation not to happen", result)
+
+  agent_62344.kill()
+
+def run_test_vtctl_partial_clone():
+  _wipe_zk()
+
+  # Start up a master mysql and vttablet
+  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master ""')
+  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
+
+  mysql_query(62344, '', 'create database vt_snapshot_test')
+  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  for q in populate_vt_insert_test:
+    mysql_write_query(62344, 'vt_snapshot_test', q)
+
+  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle ""')
+  agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
+
+  # FIXME(alainjobart): not sure where the right place for this is,
+  # but it doesn't seem it should right here. It should be either in
+  # InitTablet (running an action on the vttablet), or in PartialClone
+  # (instead of doing a 'USE dbname' it could do a 'CREATE DATABASE
+  # dbname').
+  mysql_query(62044, '', 'create database vt_snapshot_test')
+  run(vtroot+'/bin/vtctl -force PartialClone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044 id 0 3')
+
+  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  if result[0][0] != 2:
+    raise TestError("expected 2 rows in vt_insert_test", result)
+
+  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+
+  agent_62344.kill()
+  agent_62044.kill()
 
 def run_test_restart_during_action():
   # Start up a master mysql and vttablet
@@ -573,7 +672,7 @@ def main():
   global options
   parser = OptionParser()
   parser.add_option('-v', '--verbose', action='store_true')
-  parser.add_option('--debug', action='store_true')
+  parser.add_option('-d', '--debug', action='store_true')
   parser.add_option('--skip-teardown', action='store_true')
   (options, args) = parser.parse_args()
 

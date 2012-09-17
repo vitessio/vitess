@@ -118,6 +118,15 @@ func (ai *ActionInitiator) Snapshot(zkTabletPath string) (actionPath string, err
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT})
 }
 
+func (ai *ActionInitiator) PartialSnapshot(zkTabletPath, keyName, startKey, endKey string) (actionPath string, err error) {
+	args := map[string]string{
+		"KeyName":  keyName,
+		"StartKey": startKey,
+		"EndKey":   endKey,
+	}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, Args: args})
+}
+
 func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_BREAK_SLAVES})
 }
@@ -135,6 +144,11 @@ func (ai *ActionInitiator) RestartSlave(zkTabletPath, zkShardActionPath string) 
 func (ai *ActionInitiator) Restore(zkDstTabletPath, zkSrcTabletPath string) (actionPath string, err error) {
 	args := map[string]string{"SrcTabletPath": zkSrcTabletPath}
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, Args: args})
+}
+
+func (ai *ActionInitiator) PartialRestore(zkDstTabletPath, zkSrcTabletPath string) (actionPath string, err error) {
+	args := map[string]string{"SrcTabletPath": zkSrcTabletPath}
+	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_RESTORE, Args: args})
 }
 
 func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err error) {

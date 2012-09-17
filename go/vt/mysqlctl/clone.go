@@ -78,7 +78,6 @@ func (mysqld *Mysqld) ValidateCloneTarget() error {
 }
 
 func (mysqld *Mysqld) ValidateSplitReplicaTarget() error {
-	return errors.New("unimplemented")
 	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return err
@@ -87,13 +86,8 @@ func (mysqld *Mysqld) ValidateSplitReplicaTarget() error {
 		return errors.New("too many active db processes")
 	}
 
-	rows, err = mysqld.fetchSuperQuery("SHOW DATABASES")
-	if err != nil {
-		return err
-	}
-
 	// NOTE: we expect that database was already created during tablet
-	// assignment.
+	// assignment, and we'll check that issuing a 'USE dbname' later
 	return nil
 }
 
@@ -363,6 +357,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(replicaSource *ReplicaSource) error {
 	return mysqld.WaitForSlaveStart(SlaveStartDeadline)
 }
 
+// FIXME(alainjobart) move this to replication.go, and use in split.go as well
 func (mysqld *Mysqld) fetchSnapshot(replicaSource *ReplicaSource) error {
 	replicaDbPath := path.Join(mysqld.config.DataDir, replicaSource.DbName)
 

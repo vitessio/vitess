@@ -29,8 +29,10 @@ const (
 	TABLET_ACTION_BREAK_SLAVES  = "BreakSlaves"
 	TABLET_ACTION_SCRAP         = "Scrap"
 
-	TABLET_ACTION_SNAPSHOT = "Snapshot"
-	TABLET_ACTION_RESTORE  = "Restore"
+	TABLET_ACTION_SNAPSHOT         = "Snapshot"
+	TABLET_ACTION_RESTORE          = "Restore"
+	TABLET_ACTION_PARTIAL_SNAPSHOT = "PartialSnapshot"
+	TABLET_ACTION_PARTIAL_RESTORE  = "PartialRestore"
 
 	// Shard actions - involve all tablets in a shard
 	SHARD_ACTION_REPARENT = "ReparentShard"

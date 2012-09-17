@@ -28,8 +28,9 @@ import (
 // by hand using zk tools.
 
 const (
-	restartSlaveDataFilename = "restart_slave_data.json"
-	restoreSlaveDataFilename = "restore_slave_data.json"
+	restartSlaveDataFilename        = "restart_slave_data.json"
+	restoreSlaveDataFilename        = "restore_slave_data.json"
+	partialRestoreSlaveDataFilename = "partial_restore_slave_data.json"
 )
 
 type TabletActorError string
@@ -55,6 +56,18 @@ type RestoreSlaveData struct {
 	Addr             string // this is the address of the parent vttablet
 	DbName           string
 	Files            []mysqlctl.DataFile
+}
+
+// Superset of mysqlctl.SplitReplicaSource.
+type PartialRestoreSlaveData struct {
+	ReplicationState *mysqlctl.ReplicationState
+	Parent           TabletAlias
+	Addr             string // this is the address of the parent vttablet
+	DbName           string
+	Files            []mysqlctl.DataFile
+	StartKey         string
+	EndKey           string
+	Schema           []string
 }
 
 type TabletActor struct {
@@ -171,6 +184,10 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.changeType(actionNode.Args)
 	case TABLET_ACTION_DEMOTE_MASTER:
 		err = ta.demoteMaster()
+	case TABLET_ACTION_PARTIAL_RESTORE:
+		err = ta.partialRestore(actionNode.Args)
+	case TABLET_ACTION_PARTIAL_SNAPSHOT:
+		_, err = ta.partialSnapshot(actionNode.Args)
 	case TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
@@ -473,6 +490,132 @@ func (ta *TabletActor) restore(args map[string]string) error {
 
 	if err := ta.mysqld.RestoreFromSnapshot(rs); err != nil {
 		relog.Error("RestoreFromSnapshot failed: %v", err)
+		return err
+	}
+
+	// Once this action completes, update authoritive tablet node first.
+	tablet.Parent = rsd.Parent
+	tablet.Keyspace = parentTablet.Keyspace
+	tablet.Shard = parentTablet.Shard
+	tablet.Type = TYPE_SPARE
+	tablet.KeyRange = parentTablet.KeyRange
+
+	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
+		return err
+	}
+
+	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
+}
+
+// Operate on a backup tablet. Halt mysqld (read-only, lock tables)
+// and dump the partial data files.
+func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreSlaveData, error) {
+	keyName, ok := args["KeyName"]
+	if !ok {
+		return nil, fmt.Errorf("missing KeyName in args")
+	}
+	startKey, ok := args["StartKey"]
+	if !ok {
+		return nil, fmt.Errorf("missing StartKey in args")
+	}
+	endKey, ok := args["EndKey"]
+	if !ok {
+		return nil, fmt.Errorf("missing EndKey in args")
+	}
+
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if tablet.Type != TYPE_BACKUP {
+		return nil, fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	splitReplicaSource, err := ta.mysqld.CreateSplitReplicaSource(tablet.DbName(), keyName, startKey, endKey, tablet.Addr, false)
+	if err != nil {
+		return nil, err
+	}
+
+	rsd := new(PartialRestoreSlaveData)
+	rsd.ReplicationState = splitReplicaSource.Source.ReplicationState
+	if tablet.Parent.Uid == NO_TABLET {
+		// If this is a master, this will be the new parent.
+		// FIXME(msolomon) this doens't work in hierarchical replication.
+		rsd.Parent = tablet.Alias()
+	} else {
+		rsd.Parent = tablet.Parent
+	}
+	rsd.Addr = splitReplicaSource.Source.Addr
+	rsd.DbName = splitReplicaSource.Source.DbName
+	rsd.Files = splitReplicaSource.Source.Files
+	rsd.StartKey = splitReplicaSource.StartKey
+	rsd.EndKey = splitReplicaSource.EndKey
+	rsd.Schema = splitReplicaSource.Schema
+
+	rsdZkPath := path.Join(ta.zkTabletPath, partialRestoreSlaveDataFilename)
+	_, err = ta.zconn.Create(rsdZkPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		return nil, err
+	}
+
+	return rsd, nil
+}
+
+// Operate on restore tablet.
+// Check that the ReplicaSource is valid and the master has not changed.
+// Put Mysql in read-only mode.
+// Load the snapshot from source tablet.
+// FIXME(alainjobart) which state should the tablet be in? it is a slave,
+//   but with a much smaller keyspace. For now, do the same as snapshot,
+//   but this is very dangerous, it cannot be used as a real slave
+//   or promoted to master in the same shard!
+// Put tablet into the replication graph as a spare.
+func (ta *TabletActor) partialRestore(args map[string]string) error {
+	zkSrcTabletPath, ok := args["SrcTabletPath"]
+	if !ok {
+		return fmt.Errorf("missing SrcTabletPath in args")
+	}
+
+	data, _, err := ta.zconn.Get(path.Join(zkSrcTabletPath, partialRestoreSlaveDataFilename))
+	if err != nil {
+		return err
+	}
+
+	rsd := new(PartialRestoreSlaveData)
+	if err := json.Unmarshal([]byte(data), rsd); err != nil {
+		return err
+	}
+
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+	if tablet.Type != TYPE_RESTORE {
+		return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	parentPath := TabletPathForAlias(rsd.Parent)
+	parentTablet, err := ReadTablet(ta.zconn, parentPath)
+	if err != nil {
+		return err
+	}
+
+	if parentTablet.Type != TYPE_MASTER {
+		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
+	}
+
+	rs := new(mysqlctl.SplitReplicaSource)
+	rs.Source.ReplicationState = rsd.ReplicationState
+	rs.Source.Addr = rsd.Addr
+	rs.Source.DbName = rsd.DbName
+	rs.Source.Files = rsd.Files
+	rs.StartKey = rsd.StartKey
+	rs.EndKey = rsd.EndKey
+	rs.Schema = rsd.Schema
+
+	if err := ta.mysqld.RestoreFromPartialSnapshot(rs); err != nil {
+		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
 		return err
 	}
 

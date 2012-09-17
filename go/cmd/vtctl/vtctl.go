@@ -64,6 +64,21 @@ Tablets:
     This performs Snapshot and then Restore.  The advantage of having
     separate actions is that one snapshot can be used for many restores.
 
+  PartialSnapshot <zk tablet path> <key name> <start key> <end key>
+    Halt mysqld and copy compressed data aside.
+
+  PartialRestore <zk src tablet path> <zk dst tablet path>
+    Copy the latest partial snaphot from the source tablet and starts partial
+    replication.
+    NOTE: This does not wait for replication to catch up. The destination
+    tablet must be "idle" to begin with. It will transition to "spare" once
+    the restore is complete.
+
+  PartialClone <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>
+    This performs PartialSnapshot and then PartialRestore.  The
+    advantage of having separate actions is that one partial snapshot can be
+    used for many restores.
+
 
 Shards:
   RebuildShard <zk shard path>
@@ -383,6 +398,21 @@ func main() {
 			relog.Fatal("action %v requires <zk src tablet path>", args[0])
 		}
 		err = wrangler.Snapshot(args[1], *force)
+	case "PartialClone":
+		if len(args) != 6 {
+			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>", args[0])
+		}
+		err = wrangler.PartialClone(args[1], args[2], args[3], args[4], args[5], *force)
+	case "PartialRestore":
+		if len(args) != 3 {
+			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
+		}
+		err = wrangler.PartialRestore(args[1], args[2])
+	case "PartialSnapshot":
+		if len(args) != 5 {
+			relog.Fatal("action %v requires <zk src tablet path> <key name> <start key> <end key>", args[0])
+		}
+		err = wrangler.PartialSnapshot(args[1], args[2], args[3], args[4], *force)
 	case "PurgeActions":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
