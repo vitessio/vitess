@@ -86,12 +86,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net"
-	"net/http"
-	"net/http/httputil"
-	"net/url"
 	"os"
 	"path"
 	"strings"
@@ -106,7 +101,7 @@ type SplitReplicaSource struct {
 	Schema   []string
 }
 
-func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []DataFile, pos *ReplicationPosition, startKey, endKey string, schema []string) *SplitReplicaSource {
+func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey string, schema []string) *SplitReplicaSource {
 	return &SplitReplicaSource{Source: *NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos), StartKey: startKey, EndKey: endKey, Schema: schema}
 }
 
@@ -125,6 +120,20 @@ var loadDataInfile = `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.Table
 
 func b64ForFilename(s string) string {
 	return strings.Replace(base64.URLEncoding.EncodeToString([]byte(s)), "=", "", -1)
+}
+
+func (mysqld *Mysqld) validateSplitReplicaTarget() error {
+	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
+	if err != nil {
+		return err
+	}
+	if len(rows) > 4 {
+		return errors.New("too many active db processes")
+	}
+
+	// NOTE: we expect that database was already created during tablet
+	// assignment, and we'll check that issuing a 'USE dbname' later
+	return nil
 }
 
 // this function runs on the machine acting as the source for the split
@@ -285,7 +294,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	return rs, nil
 }
 
-func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath string, tableNames []string) ([]DataFile, error) {
+func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath string, tableNames []string) ([]SnapshotFile, error) {
 	// export each table to a CSV-like file, compress the results
 	tableFiles := make([]string, len(tableNames))
 	// FIXME(msolomon) parallelize
@@ -309,7 +318,7 @@ func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey
 		}
 	}
 
-	dataFiles := make([]DataFile, 0, 128)
+	dataFiles := make([]SnapshotFile, 0, 128)
 	compressFiles := func(filenames []string) error {
 		for _, srcPath := range filenames {
 			dstPath := srcPath + ".gz"
@@ -325,7 +334,7 @@ func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey
 				return err
 			}
 
-			dataFiles = append(dataFiles, DataFile{dstPath, hash})
+			dataFiles = append(dataFiles, SnapshotFile{dstPath, hash})
 			relog.Info("clone data ready %v:%v", dstPath, hash)
 		}
 		return nil
@@ -353,7 +362,7 @@ func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey
  clean up compressed files
 */
 func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSource) (err error) {
-	if err = mysqld.ValidateSplitReplicaTarget(); err != nil {
+	if err = mysqld.validateSplitReplicaTarget(); err != nil {
 		return
 	}
 
@@ -385,78 +394,14 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 		return
 	}
 
-	httpConn, connErr := net.Dial("tcp", replicaSource.Source.Addr)
-	if connErr != nil {
-		return connErr
+	if err = fetchFiles(&replicaSource.Source, tempStoragePath); err != nil {
+		return
 	}
-	defer httpConn.Close()
 
-	fileClient := httputil.NewClientConn(httpConn, nil)
-	defer fileClient.Close()
-	// FIXME(msolomon) parallelize
-	// FIXME(msolomon) pull out simple URL fetch?
-	// FIXME(msolomon) automatically retry a file transfer at least once
-	// FIXME(msolomon) deadlines?
-	// FIXME(msolomon) work into replication.go
+	// FIXME(alainjobart) We recompute a lot of stuff that should be
+	// in fileutil.go
 	for _, fi := range replicaSource.Source.Files {
-		urlstr := "http://" + replicaSource.Source.Addr + fi.Path
-		urlobj, parseErr := url.Parse(urlstr)
-		if parseErr != nil {
-			return errors.New("failed to create url " + urlstr)
-		}
-		req := &http.Request{Method: "GET",
-			Host: replicaSource.Source.Addr,
-			URL:  urlobj}
-		err = fileClient.Write(req)
-		if err != nil {
-			return errors.New("failed requesting " + urlstr)
-		}
-		var response *http.Response
-		response, err = fileClient.Read(req)
-		if err != nil {
-			return errors.New("failed fetching " + urlstr)
-		}
-		if response.StatusCode != 200 {
-			return errors.New("failed fetching " + urlstr + ": " + response.Status)
-		}
-		relativePath := strings.SplitN(fi.Path, "/", 5)[4]
-		gzFilename := path.Join(tempStoragePath, relativePath)
-		// trim .gz
-		filename := gzFilename[:len(gzFilename)-3]
-
-		dir, _ := path.Split(gzFilename)
-		if dirErr := os.MkdirAll(dir, 0775); dirErr != nil {
-			return dirErr
-		}
-
-		// FIXME(msolomon) buffer output?
-		file, fileErr := os.OpenFile(gzFilename, os.O_CREATE|os.O_WRONLY, 0664)
-		if fileErr != nil {
-			return fileErr
-		}
-		defer file.Close()
-
-		_, err = io.Copy(file, response.Body)
-		if err != nil {
-			return
-		}
-		file.Close()
-
-		hash, hashErr := md5File(gzFilename)
-		if hashErr != nil {
-			return hashErr
-		}
-		if fi.Hash != hash {
-			return errors.New("hash mismatch for " + gzFilename + ", " + fi.Hash + " != " + hash)
-		}
-
-		if err = uncompressFile(gzFilename, filename); err != nil {
-			return
-		}
-		if err = os.Remove(gzFilename); err != nil {
-			// don't stop the process for this error
-			relog.Info("failed to remove %v", gzFilename)
-		}
+		filename := fi.getLocalFilename(tempStoragePath)
 		tableName := strings.Replace(path.Base(filename), ".csv", "", -1)
 		queryParams := map[string]string{
 			"TableInputPath": filename,

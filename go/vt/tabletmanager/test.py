@@ -296,6 +296,7 @@ def run_test_mysqlctl_clone():
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
+  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62344, '', 'create database vt_snapshot_test')
   mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
@@ -325,6 +326,7 @@ def run_test_vtctl_snapshot_restore():
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
+  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62344, '', 'create database vt_snapshot_test')
   mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
@@ -364,6 +366,7 @@ def run_test_vtctl_clone():
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
+  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62344, '', 'create database vt_snapshot_test')
   mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
@@ -399,6 +402,7 @@ def run_test_mysqlctl_split():
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
+  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62344, '', 'create database vt_snapshot_test')
   mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
@@ -408,6 +412,8 @@ def run_test_mysqlctl_split():
 
   pause("partialsnapshot finished")
 
+  mysql_query(62044, '', 'stop slave')
+  mysql_query(62044, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62044, '', 'create database vt_snapshot_test')
   run(vtroot+'/bin/mysqlctl -tablet-uid 62044 -port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/replica_source.json')
 
@@ -458,6 +464,7 @@ def run_test_vtctl_partial_clone():
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
+  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62344, '', 'create database vt_snapshot_test')
   mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
@@ -471,6 +478,8 @@ def run_test_vtctl_partial_clone():
   # InitTablet (running an action on the vttablet), or in PartialClone
   # (instead of doing a 'USE dbname' it could do a 'CREATE DATABASE
   # dbname').
+  mysql_query(62044, '', 'stop slave')
+  mysql_query(62044, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62044, '', 'create database vt_snapshot_test')
   run(vtroot+'/bin/vtctl -force PartialClone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044 id 0 3')
 
@@ -661,6 +670,7 @@ def run_all():
   # Subsumed by vtctl_clone test.
   # run_test_mysqlctl_clone()
   run_test_vtctl_clone()
+  run_test_vtctl_partial_clone()
 
   run_test_reparent_graceful()
   run_test_reparent_graceful_range_based()

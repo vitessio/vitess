@@ -55,7 +55,7 @@ type RestoreSlaveData struct {
 	Parent           TabletAlias
 	Addr             string // this is the address of the parent vttablet
 	DbName           string
-	Files            []mysqlctl.DataFile
+	Files            []mysqlctl.SnapshotFile
 }
 
 // Superset of mysqlctl.SplitReplicaSource.
@@ -64,7 +64,7 @@ type PartialRestoreSlaveData struct {
 	Parent           TabletAlias
 	Addr             string // this is the address of the parent vttablet
 	DbName           string
-	Files            []mysqlctl.DataFile
+	Files            []mysqlctl.SnapshotFile
 	StartKey         string
 	EndKey           string
 	Schema           []string

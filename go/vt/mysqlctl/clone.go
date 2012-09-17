@@ -8,9 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
@@ -77,22 +75,8 @@ func (mysqld *Mysqld) ValidateCloneTarget() error {
 	return nil
 }
 
-func (mysqld *Mysqld) ValidateSplitReplicaTarget() error {
-	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
-	if err != nil {
-		return err
-	}
-	if len(rows) > 4 {
-		return errors.New("too many active db processes")
-	}
-
-	// NOTE: we expect that database was already created during tablet
-	// assignment, and we'll check that issuing a 'USE dbname' later
-	return nil
-}
-
-func compressFiles(srcDir, dstDir string) ([]DataFile, error) {
-	dataFiles := make([]DataFile, 0, 128)
+func compressFiles(srcDir, dstDir string) ([]SnapshotFile, error) {
+	dataFiles := make([]SnapshotFile, 0, 128)
 	fiList, err := ioutil.ReadDir(srcDir)
 	if err != nil {
 		return nil, err
@@ -108,7 +92,7 @@ func compressFiles(srcDir, dstDir string) ([]DataFile, error) {
 			if err != nil {
 				return nil, err
 			}
-			dataFiles = append(dataFiles, DataFile{dstPath, hash})
+			dataFiles = append(dataFiles, SnapshotFile{dstPath, hash})
 			relog.Info("clone data ready %v:%v", dstPath, hash)
 		}
 	}
@@ -130,7 +114,7 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 	return dbNames, nil
 }
 
-func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]DataFile, error) {
+func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFile, error) {
 	// wrapErr := func(err error) error {
 	// 	return fmt.Errorf("mysqlctl: createSnapshot failed: %v", err)
 	// }
@@ -150,7 +134,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]DataFile, e
 		}
 	}
 
-	allDataFiles := make([]DataFile, 0, 128)
+	allDataFiles := make([]SnapshotFile, 0, 128)
 
 	dbDataDir := path.Join(mysqld.config.DataDir, dbName)
 	dataFiles, err := compressFiles(dbDataDir, snapshotDataSrcPath)
@@ -376,68 +360,5 @@ func (mysqld *Mysqld) fetchSnapshot(replicaSource *ReplicaSource) error {
 		}
 	}
 
-	// FIXME(msolomon) parallelize
-	// FIXME(msolomon) automatically retry a file transfer at least once
-	// FIXME(msolomon) deadlines?
-	for _, fi := range replicaSource.Files {
-		relativePath := strings.SplitN(fi.Path, "/", 5)[4]
-		gzFilename := path.Join(mysqld.config.SnapshotDir, relativePath)
-		filename := path.Join(mysqld.config.TabletDir, relativePath)
-		// trim .gz
-		filename = filename[:len(filename)-3]
-
-		// Ensure directory for final destination.
-		dir, _ := path.Split(gzFilename)
-		if err := os.MkdirAll(dir, 0775); err != nil {
-			return err
-		}
-
-		furl := "http://" + replicaSource.Addr + fi.Path
-		if err := fetchSnapshotUrl(furl, fi.Hash, gzFilename, filename); err != nil {
-			return err
-		}
-
-		relog.Info("fetched snapshot file: %v", filename)
-	}
-	return nil
-}
-
-func fetchSnapshotUrl(srcUrl, srcHash, tmpFilename, dstFilename string) error {
-	resp, err := http.Get(srcUrl)
-	if resp.StatusCode != 200 {
-		return errors.New("failed fetching " + srcUrl + ": " + resp.Status)
-	}
-	defer resp.Body.Close()
-
-	// FIXME(msolomon) buffer output?
-	file, err := os.OpenFile(tmpFilename, os.O_CREATE|os.O_WRONLY, 0660)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	if _, err = io.Copy(file, resp.Body); err != nil {
-		return err
-	}
-
-	file.Close()
-	hash, err := md5File(tmpFilename)
-	if err != nil {
-		return err
-	}
-
-	if srcHash != hash {
-		return errors.New("hash mismatch for " + tmpFilename + ", " + srcHash + " != " + hash)
-	}
-
-	if err := uncompressFile(tmpFilename, dstFilename); err != nil {
-		return err
-	}
-
-	if err := os.Remove(tmpFilename); err != nil {
-		// don't stop the process for this error
-		relog.Warning("failed to remove temp file: %v", err)
-	}
-
-	return nil
+	return fetchFiles(replicaSource, mysqld.config.TabletDir)
 }

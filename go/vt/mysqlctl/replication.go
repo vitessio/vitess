@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"path"
 	"strconv"
 	"strings"
 	"text/template"
@@ -56,23 +57,37 @@ func NewReplicationState(masterAddr, user, passwd string) *ReplicationState {
 		MasterHost: addrPieces[0], MasterPort: port}
 }
 
-// FIXME(msolomon) rename SnapshotFile?
-type DataFile struct {
+type SnapshotFile struct {
 	Path string
 	Hash string // md5 sum of the compressed file
+}
+
+// This function returns the local file used to store the SnapshotFile,
+// relative to the basePath.
+// for instance, if the source path is something like:
+// /vt/snapshot/vt_0000062344/data/vt_snapshot_test-MA,Mw/vt_insert_test.csv.gz
+// we will get everything starting with 'data/...', append it to basepath,
+// and remove the .gz extension. So with basePath=myPath, it will return:
+// myPath/data/vt_snapshot_test-MA,Mw/vt_insert_test.csv
+func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
+	relativePath := strings.SplitN(dataFile.Path, "/", 5)[4]
+	filename := path.Join(basePath, relativePath)
+	// trim compression extension
+	filename = filename[:len(filename)-len(path.Ext(filename))]
+	return filename
 }
 
 type ReplicaSource struct {
 	Addr string // this is the address of the tabletserver, not mysql
 
 	DbName string
-	Files  []DataFile
+	Files  []SnapshotFile
 
 	// ReplicationState is not anonymous because the default json encoder has begun to fail here.
 	ReplicationState *ReplicationState
 }
 
-func NewReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []DataFile, pos *ReplicationPosition) *ReplicaSource {
+func NewReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition) *ReplicaSource {
 	rs := &ReplicaSource{
 		Addr:             addr,
 		DbName:           dbName,
