@@ -165,6 +165,9 @@ func isZkFile(path string) bool {
 }
 
 func cmdWait(args []string) {
+	if len(args) != 1 {
+		log.Fatalf("wait: can only wait for one path")
+	}
 	zkPath := args[0]
 	isDir := zkPath[len(zkPath)-1] == '/'
 	zkPath = fixZkPath(zkPath)
