@@ -35,7 +35,7 @@ func TestGetMasterPosition(t *testing.T) {
 		t.Logf("skipping")
 		return
 	}
-	wr := NewWrangler(zconn, nil)
+	wr := NewWrangler(zconn)
 	tablet, err := wr.readTablet("/zk/test/vt/tablets/0000062344")
 	if err != nil {
 		t.Error(err)

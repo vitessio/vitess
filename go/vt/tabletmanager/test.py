@@ -356,6 +356,8 @@ def run_test_vtctl_clone():
   run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
   run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
+  vttablet_start_watcher = run_bg(vtroot+'/bin/zk wait /zk/test_nj/vt/tablets/0000062044/pid', stdout=devnull)
+
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
   mysql_query(62344, '', 'create database vt_snapshot_test')
@@ -365,6 +367,10 @@ def run_test_vtctl_clone():
 
   run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle')
   agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
+
+  # remove flakiness by ensuring the target tablet comes up, otherwise we get validation
+  # errors a result of forcing the clone.
+  vttablet_start_watcher.wait()
 
   run(vtroot+'/bin/vtctl -force Clone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
 

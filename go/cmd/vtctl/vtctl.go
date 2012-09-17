@@ -14,7 +14,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -157,6 +156,7 @@ func createKeyspace(zconn zk.Conn, path string) error {
 }
 
 func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
+	// FIXME(msolomon) just read the shard node data instead - that is tearing resistant.
 	children, _, err := zconn.Children(zkShardPath)
 	if err != nil {
 		return "", err
@@ -226,191 +226,6 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, vtPort, keyspace, sh
 	return err
 }
 
-func changeType(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkTabletPath, dbType string) error {
-	if *force {
-		return tm.ChangeType(zconn, zkTabletPath, tm.TabletType(dbType))
-	} else {
-		actionPath, err := ai.ChangeType(zkTabletPath, tm.TabletType(dbType))
-		if err != nil {
-			return err
-		}
-
-		// You don't have a choice - you must wait for completion before rebuilding.
-		err = ai.WaitForCompletion(actionPath, *waitTime)
-		if err != nil {
-			return err
-		}
-	}
-
-	tabletInfo, err := tm.ReadTablet(zconn, zkTabletPath)
-	if err != nil {
-		return err
-	}
-
-	if _, err := wrangler.RebuildShard(tabletInfo.ShardPath()); err != nil {
-		return err
-	}
-
-	if _, err := wrangler.RebuildKeyspace(tabletInfo.KeyspacePath()); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func snapshot(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkTabletPath string) error {
-	ti, err := tm.ReadTablet(zconn, zkTabletPath)
-	if err != nil {
-		return err
-	}
-
-	rebuildRequired := ti.Tablet.IsServingType()
-	originalType := ti.Tablet.Type
-
-	actionPath, err := ai.ChangeType(zkTabletPath, tm.TYPE_BACKUP)
-	if err != nil {
-		return err
-	}
-
-	err = ai.WaitForCompletion(actionPath, *waitTime)
-	if err != nil {
-		if *force && ti.Tablet.Type == tm.TYPE_MASTER {
-			relog.Info("force change type master -> backup: %v", zkTabletPath)
-			// There is a legitimate reason to force in the case of a single
-			// master.
-			ti.Tablet.Type = tm.TYPE_BACKUP
-			err = tm.UpdateTablet(zconn, zkTabletPath, ti)
-			if err != nil {
-				return err
-			}
-			// Remove the failed action, nothing will proceed until this is removed.
-			if err = zconn.Delete(actionPath, -1); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-
-	if rebuildRequired {
-		if _, err := wrangler.RebuildShard(ti.ShardPath()); err != nil {
-			return err
-		}
-
-		if _, err := wrangler.RebuildKeyspace(ti.KeyspacePath()); err != nil {
-			return err
-		}
-	}
-
-	actionPath, err = ai.Snapshot(zkTabletPath)
-	if err != nil {
-		return err
-	}
-	err = ai.WaitForCompletion(actionPath, *waitTime)
-	if err != nil {
-		return err
-	}
-
-	// Restore type
-	relog.Info("change type after snapshot: %v %v", zkTabletPath, originalType)
-	actionPath, err = ai.ChangeType(zkTabletPath, originalType)
-	if err != nil {
-		return err
-	}
-	err = ai.WaitForCompletion(actionPath, *waitTime)
-	if err != nil {
-		if *force && ti.Tablet.Parent.Uid == tm.NO_TABLET {
-			ti.Tablet.Type = tm.TYPE_MASTER
-			relog.Info("force change type backup -> master: %v", zkTabletPath)
-			err = tm.UpdateTablet(zconn, zkTabletPath, ti)
-			if err != nil {
-				return err
-			}
-			// Remove the failed action, nothing will proceed until this is removed.
-			if err = zconn.Delete(actionPath, -1); err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-
-	if rebuildRequired {
-		if _, err := wrangler.RebuildShard(ti.ShardPath()); err != nil {
-			return err
-		}
-
-		if _, err := wrangler.RebuildKeyspace(ti.KeyspacePath()); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func restore(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkSrcTabletPath, zkDstTabletPath string) error {
-	actionPath, err := ai.ChangeType(zkDstTabletPath, tm.TYPE_RESTORE)
-	if err != nil {
-		return err
-	}
-	err = ai.WaitForCompletion(actionPath, *waitTime)
-	if err != nil {
-		return err
-	}
-
-	actionPath, err = ai.Restore(zkDstTabletPath, zkSrcTabletPath)
-	if err != nil {
-		return err
-	}
-	err = ai.WaitForCompletion(actionPath, *waitTime)
-	if err != nil {
-		return err
-	}
-
-	// Restore moves us into the replication graph as a spare, but
-	// no serving consequences, so no rebuild required.
-	return nil
-}
-
-func clone(zconn zk.Conn, ai *tm.ActionInitiator, wrangler *wr.Wrangler, zkSrcTabletPath, zkDstTabletPath string) error {
-	if err := snapshot(zconn, ai, wrangler, zkSrcTabletPath); err != nil {
-		return fmt.Errorf("snapshot err: %v", err)
-	}
-	if err := restore(zconn, ai, wrangler, zkSrcTabletPath, zkDstTabletPath); err != nil {
-		return fmt.Errorf("restore err: %v", err)
-	}
-	return nil
-}
-
-func getTabletMap(zconn zk.Conn, tabletPaths []string) map[string]*tm.TabletInfo {
-	wg := sync.WaitGroup{}
-	mutex := sync.Mutex{}
-
-	tabletMap := make(map[string]*tm.TabletInfo)
-
-	for _, path := range tabletPaths {
-		tabletPath := path
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			tabletInfo, err := tm.ReadTablet(zconn, tabletPath)
-			if err != nil {
-				relog.Warning("%v: %v", tabletPath, err)
-			} else {
-				mutex.Lock()
-				tabletMap[tabletPath] = tabletInfo
-				mutex.Unlock()
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	mutex.Lock()
-	defer mutex.Unlock()
-	return tabletMap
-}
-
 // return a sorted list of tablets
 func getAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 	zkTabletsPath := path.Join(zkVtPath, "tablets")
@@ -425,7 +240,7 @@ func getAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 		tabletPaths[i] = path.Join(zkTabletsPath, child)
 	}
 
-	tabletMap := getTabletMap(zconn, tabletPaths)
+	tabletMap, _ := wr.GetTabletMap(zconn, tabletPaths)
 	tablets := make([]*tm.TabletInfo, 0, len(tabletPaths))
 	for _, tabletPath := range tabletPaths {
 		tabletInfo, ok := tabletMap[tabletPath]
@@ -496,7 +311,7 @@ func main() {
 	defer zconn.Close()
 
 	ai := tm.NewActionInitiator(zconn)
-	wrangler := wr.NewWrangler(zconn, ai)
+	wrangler := wr.NewWrangler(zconn, *waitTime)
 	var actionPath string
 	var err error
 
@@ -547,7 +362,7 @@ func main() {
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk tablet path> <db type>", args[0])
 		}
-		err = changeType(zconn, ai, wrangler, args[1], args[2])
+		err = wrangler.ChangeType(args[1], tm.TabletType(args[2]), *force)
 	case "DemoteMaster":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk tablet path>", args[0])
@@ -557,17 +372,17 @@ func main() {
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
 		}
-		err = clone(zconn, ai, wrangler, args[1], args[2])
+		err = wrangler.Clone(args[1], args[2], *force)
 	case "Restore":
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
 		}
-		err = restore(zconn, ai, wrangler, args[1], args[2])
+		err = wrangler.Restore(args[1], args[2])
 	case "Snapshot":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk src tablet path>", args[0])
 		}
-		err = snapshot(zconn, ai, wrangler, args[1])
+		err = wrangler.Snapshot(args[1], *force)
 	case "PurgeActions":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
@@ -629,7 +444,7 @@ func main() {
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk keyspaces path>", args[0])
 		}
-		err = validateZk(zconn, args[1])
+		err = wrangler.Validate(args[1], *pingTablets)
 	case "ListScrap":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package zkwrangler
 
 import (
 	"fmt"
@@ -33,14 +33,14 @@ type vresult struct {
 }
 
 // Validate a whole zk tree
-func validateZk(zconn zk.Conn, zkKeyspacesPath string) error {
+func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
 	// Results from various actions feed here.
 	results := make(chan vresult, 16)
 	wg := sync.WaitGroup{}
 
 	// Validate all tablets in all cells, even if they are not discoverable
 	// by the replication graph.
-	replicationPaths, err := zk.ChildrenRecursive(zconn, zkKeyspacesPath)
+	replicationPaths, err := zk.ChildrenRecursive(wr.zconn, zkKeyspacesPath)
 	if err != nil {
 		results <- vresult{zkKeyspacesPath, err}
 	} else {
@@ -55,7 +55,7 @@ func validateZk(zconn zk.Conn, zkKeyspacesPath string) error {
 
 		for cell, _ := range cellSet {
 			zkTabletsPath := path.Join("/zk", cell, tm.VtSubtree(zkKeyspacesPath), "tablets")
-			tabletUids, _, err := zconn.Children(zkTabletsPath)
+			tabletUids, _, err := wr.zconn.Children(zkTabletsPath)
 			if err != nil {
 				results <- vresult{zkTabletsPath, err}
 			} else {
@@ -63,7 +63,7 @@ func validateZk(zconn zk.Conn, zkKeyspacesPath string) error {
 					tabletPath := path.Join(zkTabletsPath, tabletUid)
 					wg.Add(1)
 					go func() {
-						results <- vresult{tabletPath, tm.Validate(zconn, tabletPath, "")}
+						results <- vresult{tabletPath, tm.Validate(wr.zconn, tabletPath, "")}
 						wg.Done()
 					}()
 				}
@@ -72,13 +72,13 @@ func validateZk(zconn zk.Conn, zkKeyspacesPath string) error {
 	}
 
 	// Validate replication graph by traversing each keyspace and then each shard.
-	keyspaces, _, err := zconn.Children(zkKeyspacesPath)
+	keyspaces, _, err := wr.zconn.Children(zkKeyspacesPath)
 	if err != nil {
 		results <- vresult{zkKeyspacesPath, err}
 	} else {
 		for _, keyspace := range keyspaces {
 			zkShardsPath := path.Join(zkKeyspacesPath, keyspace, "shards")
-			shards, _, err := zconn.Children(zkShardsPath)
+			shards, _, err := wr.zconn.Children(zkShardsPath)
 			if err != nil {
 				results <- vresult{zkShardsPath, err}
 			}
@@ -86,14 +86,14 @@ func validateZk(zconn zk.Conn, zkKeyspacesPath string) error {
 				zkShardPath := path.Join(zkShardsPath, shard)
 				wg.Add(1)
 				go func() {
-					validateShard(zconn, zkShardPath, results)
+					wr.validateShard(zkShardPath, pingTablets, results)
 					wg.Done()
 				}()
 			}
 		}
 	}
 
-	timer := time.NewTimer(*waitTime)
+	timer := time.NewTimer(wr.actionTimeout)
 	someErrors := false
 	done := make(chan bool, 1)
 	go func() {
@@ -122,14 +122,14 @@ func validateZk(zconn zk.Conn, zkKeyspacesPath string) error {
 	panic("unreachable")
 }
 
-func validateShard(zconn zk.Conn, zkShardPath string, results chan<- vresult) {
-	shardInfo, err := tm.ReadShard(zconn, zkShardPath)
+func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, results chan<- vresult) {
+	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
 		results <- vresult{zkShardPath, err}
 		return
 	}
 
-	aliases, err := tm.FindAllTabletAliasesInShard(zconn, zkShardPath)
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
 	if err != nil {
 		results <- vresult{zkShardPath, err}
 	}
@@ -139,7 +139,7 @@ func validateShard(zconn zk.Conn, zkShardPath string, results chan<- vresult) {
 		shardTablets = append(shardTablets, tm.TabletPathForAlias(alias))
 	}
 
-	tabletMap := getTabletMap(zconn, shardTablets)
+	tabletMap, _ := GetTabletMap(wr.zconn, shardTablets)
 
 	var masterAlias tm.TabletAlias
 	for _, alias := range aliases {
@@ -173,14 +173,14 @@ func validateShard(zconn zk.Conn, zkShardPath string, results chan<- vresult) {
 		}
 		wg.Add(1)
 		go func() {
-			results <- vresult{zkTabletReplicationPath, tm.Validate(zconn, zkTabletPath, zkTabletReplicationPath)}
+			results <- vresult{zkTabletReplicationPath, tm.Validate(wr.zconn, zkTabletPath, zkTabletReplicationPath)}
 			wg.Done()
 		}()
 	}
 
-	if *pingTablets {
-		validateReplication(zconn, shardInfo, tabletMap, results)
-		validatePingTablets(zconn, tabletMap, results)
+	if pingTablets {
+		wr.validateReplication(shardInfo, tabletMap, results)
+		wr.pingTablets(tabletMap, results)
 	}
 
 	wg.Wait()
@@ -196,7 +196,7 @@ func strInList(sl []string, s string) bool {
 	return false
 }
 
-func validateReplication(zconn zk.Conn, shardInfo *tm.ShardInfo, tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
+func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
 	masterTabletPath := tm.TabletPathForAlias(shardInfo.MasterAlias)
 	masterTablet, ok := tabletMap[masterTabletPath]
 	if !ok {
@@ -248,7 +248,7 @@ func validateReplication(zconn zk.Conn, shardInfo *tm.ShardInfo, tabletMap map[s
 	}
 }
 
-func validatePingTablets(zconn zk.Conn, tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
+func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
 	wg := sync.WaitGroup{}
 	for zkTabletPath, tabletInfo := range tabletMap {
 		wg.Add(1)
@@ -256,20 +256,19 @@ func validatePingTablets(zconn zk.Conn, tabletMap map[string]*tm.TabletInfo, res
 			defer wg.Done()
 
 			zkTabletPid := path.Join(tabletInfo.Path(), "pid")
-			_, _, err := zconn.Get(zkTabletPid)
+			_, _, err := wr.zconn.Get(zkTabletPid)
 			if err != nil {
 				results <- vresult{zkTabletPath, fmt.Errorf("no pid node %v: %v %v", zkTabletPid, err, tabletInfo.Hostname())}
 				return
 			}
 
-			ai := tm.NewActionInitiator(zconn)
-			actionPath, err := ai.Ping(zkTabletPath)
+			actionPath, err := wr.ai.Ping(zkTabletPath)
 			if err != nil {
 				results <- vresult{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
 				return
 			}
 
-			err = ai.WaitForCompletion(actionPath, *waitTime)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout)
 			if err != nil {
 				results <- vresult{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
 			}
