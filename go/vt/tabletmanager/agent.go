@@ -27,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
@@ -258,7 +259,7 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 	} else {
 		addrs.Entries = append(addrs.Entries, *vtnsAddrForTablet(agent.Tablet().Tablet))
 	}
-	return toJson(addrs), nil
+	return jscfg.ToJson(addrs), nil
 }
 
 func splitHostPort(addr string) (string, int) {
@@ -323,7 +324,7 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 		tablet := tabletFromJson(oldValue)
 		tablet.Addr = resolveAddr(bindAddr)
 		tablet.MysqlAddr = resolveAddr(mysqlAddr)
-		return toJson(tablet), nil
+		return jscfg.ToJson(tablet), nil
 	}
 	err = agent.zconn.RetryChange(agent.Tablet().Path(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {

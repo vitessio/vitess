@@ -10,9 +10,10 @@ import (
 	"path"
 	"strings"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
-	"code.google.com/p/vitess/go/vt/shard"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -34,7 +35,7 @@ type Shard struct {
 	RdonlyAliases  []TabletAlias
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
-	KeyRange shard.KeyRange
+	KeyRange key.KeyRange
 }
 
 func (shard *Shard) Contains(tablet *Tablet) bool {
@@ -59,7 +60,7 @@ func (shard *Shard) Contains(tablet *Tablet) bool {
 }
 
 func (shard *Shard) Json() string {
-	return toJson(shard)
+	return jscfg.ToJson(shard)
 }
 
 func newShard() *Shard {
@@ -222,6 +223,11 @@ func RebuildShard(zconn zk.Conn, zkShardPath string) error {
 		return err
 	}
 
+	return RebuildSrvShards(zconn, zkShardPath, shardInfo, tablets)
+}
+
+// Write serving graph data to /zk/local/vt/ns/...
+func RebuildSrvShards(zconn zk.Conn, zkShardPath string, shardInfo *ShardInfo, tablets []*TabletInfo) error {
 	// Get all existing db types so they can be removed if nothing had been editted.
 	// This applies to all cells, which can't be determined until you walk through all the tablets.
 	existingDbTypePaths := make(map[string]bool)
@@ -261,8 +267,8 @@ func RebuildShard(zconn zk.Conn, zkShardPath string) error {
 	}
 
 	for zkPath, addrs := range pathAddrsMap {
-		data := toJson(addrs)
-		_, err = zk.CreateRecursive(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		data := jscfg.ToJson(addrs)
+		_, err := zk.CreateRecursive(zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				// Node already exists - just stomp away. Multiple writers shouldn't be here.
@@ -289,7 +295,7 @@ func RebuildShard(zconn zk.Conn, zkShardPath string) error {
 	}
 
 	// Update per-shard information per cell-specific serving path.
-	srvShardByPath := make(map[string]*SrvShard)
+	srvShardByPath := make(map[string]*naming.SrvShard)
 	for zkPath, addrs := range pathAddrsMap {
 		// zkPath will be /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
 		srvShardPath := path.Dir(zkPath)
@@ -297,38 +303,21 @@ func RebuildShard(zconn zk.Conn, zkShardPath string) error {
 
 		srvShard, ok := srvShardByPath[srvShardPath]
 		if !ok {
-			srvShard = &SrvShard{KeyRange: shardInfo.KeyRange, AddrsByType: make(map[string]naming.VtnsAddrs)}
+			srvShard = &naming.SrvShard{KeyRange: shardInfo.KeyRange, AddrsByType: make(map[string]naming.VtnsAddrs)}
 			srvShardByPath[srvShardPath] = srvShard
 		}
 		srvShard.AddrsByType[string(tabletType)] = *addrs
 	}
 
 	for srvPath, srvShard := range srvShardByPath {
-		data := toJson(srvShard)
+		data := jscfg.ToJson(srvShard)
 		// Stomp away - presume this update will be guarded by a lock node.
-		_, err = zconn.Set(srvPath, data, -1)
+		_, err := zconn.Set(srvPath, data, -1)
 		if err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}
-
 	return nil
-}
-
-func readSrvShard(zconn zk.Conn, zkPath string) (*SrvShard, error) {
-	data, stat, err := zconn.Get(zkPath)
-	if err != nil {
-		return nil, err
-	}
-	srv := new(SrvShard)
-	if len(data) > 0 {
-		err = json.Unmarshal([]byte(data), srv)
-		if err != nil {
-			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v %v", zkPath, data, err)
-		}
-	}
-	srv.version = stat.Version()
-	return srv, nil
 }
 
 // This function should only be used with an action lock on the shard - otherwise the
@@ -346,7 +335,7 @@ func RebuildKeyspace(zconn zk.Conn, zkKeyspacePath string) error {
 		return err
 	}
 
-	srvKeyspaceByPath := make(map[string]*SrvKeyspace)
+	srvKeyspaceByPath := make(map[string]*naming.SrvKeyspace)
 
 	zkShardPath := ShardPath(vtRoot, keyspace, shardNames[0])
 	aliases, err := FindAllTabletAliasesInShard(zconn, zkShardPath)
@@ -357,23 +346,23 @@ func RebuildKeyspace(zconn zk.Conn, zkKeyspacePath string) error {
 	for _, alias := range aliases {
 		zkLocalKeyspace := naming.ZkPathForVtKeyspace(alias.Cell, keyspace)
 		if _, ok := srvKeyspaceByPath[zkLocalKeyspace]; !ok {
-			srvKeyspaceByPath[zkLocalKeyspace] = &SrvKeyspace{Shards: make([]SrvShard, 0, 16)}
+			srvKeyspaceByPath[zkLocalKeyspace] = &naming.SrvKeyspace{Shards: make([]naming.SrvShard, 0, 16)}
 		}
 	}
 
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
 		for _, shardName := range shardNames {
-			srvShard, err := readSrvShard(zconn, path.Join(srvPath, shardName))
+			srvShard, err := naming.ReadSrvShard(zconn, path.Join(srvPath, shardName))
 			if err != nil {
 				return err
 			}
 			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
 		}
-		SrvShardArray(srvKeyspace.Shards).Sort()
+		naming.SrvShardArray(srvKeyspace.Shards).Sort()
 	}
 
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
-		data := toJson(srvKeyspace)
+		data := jscfg.ToJson(srvKeyspace)
 		// Stomp away - presume this update will be guarded by a lock node.
 		_, err = zconn.Set(srvPath, data, -1)
 		if err != nil {

@@ -12,8 +12,8 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/shard"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -283,7 +283,7 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	}
 	relog.Debug("PromoteSlave %#v", *rsd)
 	// This data is valuable - commit it to zk first.
-	_, err = ta.zconn.Create(zkRestartSlaveDataPath, toJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = ta.zconn.Create(zkRestartSlaveDataPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		return err
 	}
@@ -568,7 +568,7 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType) error {
 		tablet.Parent = TabletAlias{}
 		tablet.Keyspace = ""
 		tablet.Shard = ""
-		tablet.KeyRange = shard.KeyRange{}
+		tablet.KeyRange = key.KeyRange{}
 	}
 	return UpdateTablet(zconn, zkTabletPath, tablet)
 }

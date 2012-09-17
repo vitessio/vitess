@@ -74,19 +74,6 @@ const (
 	SLAVE_STATUS_DEADLINE = 10e9
 )
 
-type Wrangler struct {
-	zconn zk.Conn
-	ai    *tm.ActionInitiator
-}
-
-func NewWrangler(zconn zk.Conn, ai *tm.ActionInitiator) *Wrangler {
-	return &Wrangler{zconn, ai}
-}
-
-func (wr *Wrangler) readTablet(zkTabletPath string) (*tm.TabletInfo, error) {
-	return tm.ReadTablet(wr.zconn, zkTabletPath)
-}
-
 /*
  Create the reparenting action and launch a goroutine to coordinate the procedure.
  The actionNode can be watched for updates.

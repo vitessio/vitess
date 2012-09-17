@@ -9,8 +9,9 @@ import (
 	"fmt"
 	"path"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/shard"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -122,7 +123,7 @@ type Tablet struct {
 	State TabletState
 
 	DbNameOverride string // Normally the database name is implied by "vt_" + keyspace
-	shard.KeyRange
+	key.KeyRange
 }
 
 // DbName is implied by keyspace. Having the shard information in the database name
@@ -163,7 +164,7 @@ func (tablet *Tablet) String() string {
 }
 
 func (tablet *Tablet) Json() string {
-	return toJson(tablet)
+	return jscfg.ToJson(tablet)
 }
 
 func (tablet *Tablet) Hostname() string {
@@ -224,7 +225,7 @@ func NewTablet(cell string, uid uint, parent TabletAlias, vtAddr, mysqlAddr, key
 		}
 	}
 
-	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, keyspace, shardId, tabletType, state, "", shard.KeyRange{}}
+	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}
 }
 
 func tabletFromJson(data string) *Tablet {

@@ -10,6 +10,8 @@ package tabletmanager
 
 import (
 	"encoding/json"
+
+	"code.google.com/p/vitess/go/jscfg"
 )
 
 const (
@@ -65,5 +67,5 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 }
 
 func ActionNodeToJson(n *ActionNode) string {
-	return toJson(n)
+	return jscfg.ToJson(n)
 }
