@@ -2,17 +2,16 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-	Package env defines and initializes command line flags that control
-	the runtime environment.
-	After the main program has called flag.Parse, it needs to call env.Init
-	to make env use the command line variables to initialize the environment.
-*/
+// Package env defines and initializes command line flags that control
+// the runtime environment.
+//
+// After the main program has called flag.Parse, it needs to call
+// env.Init to make env use the command line variables to initialize
+// the environment.
+
 package env
 
 import (
-	"code.google.com/p/vitess/go/logfile"
-	"code.google.com/p/vitess/go/relog"
 	"crypto/md5"
 	"encoding/hex"
 	"expvar"
@@ -24,6 +23,9 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"code.google.com/p/vitess/go/logfile"
+	"code.google.com/p/vitess/go/relog"
 )
 
 var (
@@ -36,8 +38,6 @@ var (
 
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024,
 		"profile every n bytes allocated")
-	maxOpenFds = flag.Uint64("max-open-fds", 32768, "max open file descriptors")
-	gomaxprocs = flag.Int("gomaxprocs", 0, "Sets GOMAXPROCS")
 )
 
 func Init(logPrefix string) {
@@ -54,16 +54,24 @@ func Init(logPrefix string) {
 	relog.SetLogger(logger)
 
 	runtime.MemProfileRate = *memProfileRate
-	if *gomaxprocs != 0 {
-		runtime.GOMAXPROCS(*gomaxprocs)
-		relog.Info("set GOMAXPROCS = %v", *gomaxprocs)
+	gomaxprocs := os.Getenv("GOMAXPROCS")
+	if gomaxprocs == "" {
+		gomaxprocs = "1"
 	}
+	// Could report this in an expvar instead.
+	relog.Info("GOMAXPROCS = %v", gomaxprocs)
 
-	fdLimit := &syscall.Rlimit{*maxOpenFds, *maxOpenFds}
-	if err := syscall.Setrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
-		relog.Fatal("can't Setrlimit %#v: err %v", *fdLimit, err)
+	// We used to set this limit directly, but you pretty much have to
+	// use a root account to allow increasing a limit reliably. Dropping
+	// privileges is also tricky. The best strategy is to make a shell
+	// script set up the limits as root and switch users before starting
+	// the server.
+	fdLimit := &syscall.Rlimit{}
+	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
+		relog.Error("max-open-fds failed: %v", err)
 	} else {
-		relog.Info("set max-open-fds = %v", *maxOpenFds)
+		// Could report this in an expvar instead.
+		relog.Info("max-open-fds: %v", fdLimit.Cur)
 	}
 
 	exportBinaryVersion()
