@@ -85,15 +85,11 @@ func compressFiles(srcDir, dstDir string) ([]SnapshotFile, error) {
 		if !fi.IsDir() {
 			srcPath := path.Join(srcDir, fi.Name())
 			dstPath := path.Join(dstDir, fi.Name()+".gz")
-			if err := compressFile(srcPath, dstPath); err != nil {
-				return nil, err
-			}
-			hash, err := md5File(dstPath)
+			sf, err := compressFile(srcPath, dstPath)
 			if err != nil {
 				return nil, err
 			}
-			dataFiles = append(dataFiles, SnapshotFile{dstPath, hash})
-			relog.Info("clone data ready %v:%v", dstPath, hash)
+			dataFiles = append(dataFiles, *sf)
 		}
 	}
 	return dataFiles, nil

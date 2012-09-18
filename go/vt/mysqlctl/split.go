@@ -321,21 +321,15 @@ func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey
 	dataFiles := make([]SnapshotFile, 0, 128)
 	compressFiles := func(filenames []string) error {
 		for _, srcPath := range filenames {
-			dstPath := srcPath + ".gz"
-			if err := compressFile(srcPath, dstPath); err != nil {
+			sf, err := compressFile(srcPath, srcPath+".gz")
+			if err != nil {
 				return err
 			}
 			// prune files to free up disk space, if it errors, we'll figure out
 			// later
 			os.Remove(srcPath)
 
-			hash, err := md5File(dstPath)
-			if err != nil {
-				return err
-			}
-
-			dataFiles = append(dataFiles, SnapshotFile{dstPath, hash})
-			relog.Info("clone data ready %v:%v", dstPath, hash)
+			dataFiles = append(dataFiles, *sf)
 		}
 		return nil
 	}

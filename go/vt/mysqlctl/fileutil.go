@@ -19,13 +19,14 @@ import (
 )
 
 /* compress a single file with gzip, leaving the src file intact.
+Also computes the md5 hash on the fly.
 FIXME(msolomon) not sure how well Go will schedule cpu intensive tasks
 might be better if this forked off workers.
 */
-func compressFile(srcPath, dstPath string) error {
+func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
 	srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer srcFile.Close()
 
@@ -35,43 +36,37 @@ func compressFile(srcPath, dstPath string) error {
 
 	dstFile, err := ioutil.TempFile(dir, filePrefix)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer dstFile.Close()
 
 	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
 
-	compressor := gzip.NewWriter(dst)
+	hasher := md5.New()
+	tee := io.MultiWriter(dst, hasher)
+
+	compressor := gzip.NewWriter(tee)
 	defer compressor.Close()
 
 	_, err = io.Copy(compressor, src)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// close dst manually to flush all buffers to disk
 	compressor.Close()
 	dst.Flush()
 	dstFile.Close()
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
 	// atomically move completed compressed file
-	return os.Rename(dstFile.Name(), dstPath)
-}
-
-func md5File(filename string) (string, error) {
-	file, err := os.OpenFile(filename, os.O_RDONLY, 0)
+	err = os.Rename(dstFile.Name(), dstPath)
 	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-
-	src := bufio.NewReaderSize(file, 2*1024*1024)
-	hasher := md5.New()
-	_, err = io.Copy(hasher, src)
-	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return hex.EncodeToString(hasher.Sum(nil)), nil
+	relog.Info("clone data ready %v:%v", dstPath, hash)
+	return &SnapshotFile{dstPath, hash}, nil
 }
 
 // This function fetches data from the web server.
