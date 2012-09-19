@@ -34,6 +34,8 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
+type TabletChangeCallback func(tablet Tablet)
+
 type ActionAgent struct {
 	zconn           zk.Conn
 	zkTabletPath    string // FIXME(msolomon) use tabletInfo
@@ -41,6 +43,8 @@ type ActionAgent struct {
 	vtActionBinFile string // path to vtaction binary
 	MycnfFile       string // my.cnf file
 	DBConfigsFile   string // File that contains db connection configs
+
+	changeCallbacks []TabletChangeCallback
 
 	mutex   sync.Mutex
 	_tablet *TabletInfo // must be accessed with lock - TabletInfo objects are not synchronized.
@@ -51,17 +55,23 @@ type ActionAgent struct {
 func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile string) *ActionAgent {
 	actionPath := TabletActionPath(zkTabletPath)
 	return &ActionAgent{
-		zconn:         zconn,
-		zkTabletPath:  zkTabletPath,
-		zkActionPath:  actionPath,
-		MycnfFile:     mycnfFile,
-		DBConfigsFile: dbConfigsFile,
-		done:          make(chan bool, 1),
+		zconn:           zconn,
+		zkTabletPath:    zkTabletPath,
+		zkActionPath:    actionPath,
+		MycnfFile:       mycnfFile,
+		DBConfigsFile:   dbConfigsFile,
+		changeCallbacks: make([]TabletChangeCallback, 0, 8),
+		done:            make(chan bool, 1),
 	}
 }
 
+func (agent *ActionAgent) AddChangeCallback(f TabletChangeCallback) {
+	agent.mutex.Lock()
+	agent.changeCallbacks = append(agent.changeCallbacks, f)
+	agent.mutex.Unlock()
+}
+
 func (agent *ActionAgent) readTablet() error {
-	// Reread in case there were changes
 	tablet, err := ReadTablet(agent.zconn, agent.zkTabletPath)
 	if err != nil {
 		return err
@@ -133,6 +143,14 @@ func (agent *ActionAgent) dispatchAction(actionPath string) error {
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
 		relog.Warning("failed rereading tablet after action: %v %v", actionPath, err)
+	} else {
+		agent.mutex.Lock()
+		for _, f := range agent.changeCallbacks {
+			relog.Info("running tablet callback: %v %v", actionPath, f)
+			// Access directly since we have the lock.
+			f(*agent._tablet.Tablet)
+		}
+		agent.mutex.Unlock()
 	}
 	return nil
 }

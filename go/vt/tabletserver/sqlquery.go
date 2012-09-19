@@ -120,6 +120,13 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 }
 
 func (sq *SqlQuery) disallowQueries() {
+	sq.mu.RLock()
+	if sq.state != OPEN {
+		sq.mu.RUnlock()
+		return
+	}
+	sq.mu.RUnlock()
+
 	// set this before obtaining lock so new incoming requests
 	// can serve "unavailable" immediately
 	atomic.StoreInt32(&sq.state, SHUTTING_DOWN)

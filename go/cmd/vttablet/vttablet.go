@@ -55,7 +55,7 @@ var (
 // memory copies.  so with the encoding overhead, this seems to work
 // great.  (the overhead makes the final packets on the wire about
 // twice bigger than this).
-var qsConfig ts.Config = ts.Config{
+var qsConfig = ts.Config{
 	CachePoolCap:       1000,
 	PoolSize:           16,
 	StreamPoolSize:     750,
@@ -89,6 +89,7 @@ func main() {
 	bsonrpc.ServeRPC()
 
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
+	// FIXME(msolomon) this path needs to be obtained from the config.
 	http.Handle("/vt/snapshot/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSnapshot(w, r, mycnf)
 	}))
@@ -141,6 +142,13 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 	// Action agent listens to changes in zookeeper and makes modifcations to this
 	// tablet.
 	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DBConfigsFile)
+	agent.AddChangeCallback(func(tablet tabletmanager.Tablet) {
+		if tablet.IsServingType() {
+			ts.AllowQueries(dbcfgs.App)
+		} else {
+			ts.DisallowQueries()
+		}
+	})
 	agent.Start(bindAddr, mycnf.MysqlAddr())
 	umgmt.AddCloseCallback(func() {
 		agent.Stop()
