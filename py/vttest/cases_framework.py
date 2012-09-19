@@ -1,8 +1,110 @@
 import json
+import re
 import urllib2
 
+def cases_iterator(cases):
+  for case in cases:
+    if isinstance(case, MultiCase):
+      for c in case:
+        yield c
+    else:
+      yield case
+
+class Log(object):
+  def __init__(self, line):
+    self.line = line
+    (self.method,
+     self.start_time,
+     self.end_time,
+     self.total_time,
+     self.plan_type,
+     self.original_sql,
+     self.bind_variables,
+     self.number_of_queries,
+     self.rewritten_sql,
+     self.query_sources,
+     self.mysql_response_time,
+     self.size_of_response,
+     self.cache_hits,
+     self.cache_misses,
+     self.cache_absent,
+     self.cache_invalidations) = line.strip().split('\t')
+
+  def check(self, case):
+
+    if isinstance(case, basestring):
+      return []
+
+    if isinstance(case, MultiCase):
+      return sum((self.check(subcase) for subcase in case.sqls_and_cases), [])
+
+    failures = []
+
+    for method in dir(self):
+      if method.startswith('check_'):
+        if not case.is_testing_cache and method.startswith('check_cache_'):
+          continue
+        fail = getattr(self, method)(case)
+        if fail:
+          failures.append(fail)
+    return failures
+
+  def fail(self, reason, should, is_):
+    return "FAIL: %s: %r != %r" % (reason, should, is_)
+
+  def check_original_sql(self, case):
+    # The following is necessary because Python and Go use different
+    # notations for bindings: %(foo)s vs :foo.
+    sql = re.sub(r'%\((\w+)\)s', r':\1', case.sql)
+    # Eval is a cheap hack - Go always uses doublequotes, Python
+    # prefers single quotes.
+    if sql != eval(self.original_sql):
+      return self.fail('wrong sql', case.sql, self.original_sql)
+
+  def check_cache_hits(self, case):
+    if case.cache_hits is not None and int(self.cache_hits) != case.cache_hits:
+      return self.fail("Bad Cache Hits", case.cache_hits, self.cache_hits)
+
+  def check_cache_absent(self, case):
+    if case.cache_absent is not None and int(self.cache_absent) != case.cache_absent:
+      return self.fail("Bad Cache Absent", case.cache_absent, self.cache_absent)
+
+  def check_cache_misses(self, case):
+    if case.cache_misses is not None and int(self.cache_misses) != case.cache_misses:
+      return self.fail("Bad Cache Misses", case.cache_misses, self.cache_misses)
+
+  def check_cache_invalidations(self, case):
+    if case.cache_invalidations is not None and int(self.cache_invalidations) != case.cache_invalidations:
+      return self.fail("Bad Cache Invalidations", case.cache_invalidations, self.cache_invalidations)
+
+  ## NOTE(szopa): I am not checking bind variables because I have
+  ## trouble parsing them - and I don't want to use a full fledged
+  ## JSON encoding on the Go side.
+  # def check_bind_variables(self, case):
+  #   if self.bind_variables:
+  #     bind_variables = json.loads(self.bind_variables)
+  #   else:
+  #     bind_variables = {}
+  #   if bind_variables != case.bindings:
+  #     self.fail("Bad bind variables", case.bindings, bind_variables)
+
+  def check_query_plan(self, case):
+    if case.query_plan is not None and case.query_plan != self.plan_type:
+      return self.fail("Bad query plan", case.query_plan, self.plan_type)
+
+  def check_rewritten_sql(self, case):
+    if case.rewritten is None:
+      return
+    rewritten = '; '.join(case.rewritten)
+    if rewritten != self.rewritten_sql:
+      self.fail("Bad rewritten SQL", rewritten, self.rewritten_sql)
+
+  def check_number_of_queries(self, case):
+    if case.rewritten is not None and int(self.number_of_queries) != len(case.rewritten):
+      return self.fail("wrong number of queries", len(case.rewritten), int(self.number_of_queries))
+
 class Case(object):
-  def __init__(self, sql, bindings=None, result=None, rewritten=[], doc='',
+  def __init__(self, sql, bindings=None, result=None, rewritten=None, doc='',
                cache_table="vtocc_cached", query_plan=None, cache_hits=None,
                cache_misses=None, cache_absent=None, cache_invalidations=None):
     # For all cache_* parameters, a number n means "check this value
@@ -25,6 +127,9 @@ class Case(object):
   def normalizelog(self, data):
     return [line.split("INFO: ")[-1]
             for line in data.split("\n") if "INFO: " in line]
+
+  def parse_streamlog(self, line):
+    line.split('\t')
 
   @property
   def is_testing_cache(self):
@@ -93,6 +198,9 @@ class MultiCase(object):
         continue
       failures += case.run(cursor, querylog)
     return failures
+
+  def __iter__(self):
+    return iter(self.sqls_and_cases)
 
   def __str__(self):
     return "MultiCase: %s" % self.doc

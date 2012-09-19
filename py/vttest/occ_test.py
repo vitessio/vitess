@@ -17,6 +17,7 @@ from vtdb import vt_occ2 as db
 from vtdb import dbexceptions
 
 import framework
+import cases_framework
 import cache_tests
 import nocache_tests
 import stream_tests
@@ -132,10 +133,22 @@ class TestEnv(object):
   def table_stats(self):
     return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/schema/tables")))
 
+  def check_streamlog(self, cases, log):
+    error_count = 0
+
+    for case, line in zip(cases_framework.cases_iterator(cases), log):
+      log = cases_framework.Log(line)
+      failures = log.check(case)
+      error_count += len(failures)
+      for fail in failures:
+        print "FAIL:", case, fail
+    return error_count
+
   def run_cases(self, cases):
     cursor = self.conn.cursor()
     error_count = 0
-
+    curl = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/vt/querylog'], stdout=open('/tmp/vtocc_streamlog.log', 'w'))
+    time.sleep(1)
     for case in cases:
       if isinstance(case, basestring):
         cursor.execute(case)
@@ -148,7 +161,8 @@ class TestEnv(object):
       error_count += len(failures)
       for fail in failures:
         print "FAIL:", case, fail
-
+    curl.terminate()
+    error_count += self.check_streamlog(cases, open('/tmp/vtocc_streamlog.log', 'r'))
     return error_count
 
 
