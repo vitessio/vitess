@@ -1,5 +1,10 @@
 #!/usr/bin/python
 
+import warnings
+# Dropping a table inexplicably produces a warning despite
+# the "IF EXISTS" clause. Squelch these warnings.
+warnings.simplefilter("ignore")
+
 import json
 from optparse import OptionParser
 import os
