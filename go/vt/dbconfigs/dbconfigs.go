@@ -38,12 +38,18 @@ const defaultConfig = `{
 // only be one public entry point.
 var DBConfigsFile = flag.String("db-configs-file", "", "db connection configs file")
 
+// Separate credential file to support split permissions.
+var dbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file")
+
 type DBConfigs struct {
 	App      tabletserver.DBConfig  `json:"app"`
 	Dba      mysql.ConnectionParams `json:"dba"`
 	Repl     mysql.ConnectionParams `json:"repl"`
 	Memcache string                 `json:"memcache"`
 }
+
+// Map user to a list of passwords. Right now we only use the first.
+type dbCredentials map[string][]string
 
 func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
 	dbcfgs.App = tabletserver.DBConfig{
@@ -59,7 +65,25 @@ func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
 		Charset: "utf8",
 	}
 	if *DBConfigsFile != "" {
-		err = jscfg.ReadJson(*DBConfigsFile, &dbcfgs)
+		if err = jscfg.ReadJson(*DBConfigsFile, &dbcfgs); err != nil {
+			return
+		}
+	}
+
+	if *dbCredentialsFile != "" {
+		dbCreds := make(dbCredentials)
+		if err = jscfg.ReadJson(*dbCredentialsFile, &dbCreds); err != nil {
+			return
+		}
+		if passwd, ok := dbCreds[dbcfgs.App.Uname]; ok {
+			dbcfgs.App.Pass = passwd[0]
+		}
+		if passwd, ok := dbCreds[dbcfgs.Dba.Uname]; ok {
+			dbcfgs.Dba.Pass = passwd[0]
+		}
+		if passwd, ok := dbCreds[dbcfgs.Repl.Uname]; ok {
+			dbcfgs.Repl.Pass = passwd[0]
+		}
 	}
 	dbcfgs.App.UnixSocket = mycnf.SocketFile
 	dbcfgs.Dba.UnixSocket = mycnf.SocketFile
