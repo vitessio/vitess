@@ -220,6 +220,9 @@ def teardown():
       if options.verbose:
         print >> sys.stderr, e, path
 
+def run_vtctl(clargs, **kwargs):
+  return run(vtroot+'/bin/vtctl -log.level=WARNING -logfile=/dev/null %s' % clargs, **kwargs)
+
 def _wipe_zk():
   run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt')
   run(vtroot+'/bin/zk rm -rf /zk/test_ny/vt')
@@ -228,55 +231,54 @@ def _wipe_zk():
 
 def _check_zk(ping_tablets=False):
   if ping_tablets:
-    run(vtroot+'/bin/vtctl -ping-tablets Validate /zk/global/vt/keyspaces')
+    run_vtctl('-ping-tablets Validate /zk/global/vt/keyspaces')
   else:
-    run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+    run_vtctl('Validate /zk/global/vt/keyspaces')
 
 def _check_db_addr(db_addr, expected_addr):
   # Run in the background to capture output.
-  proc = run_bg(vtroot+'/bin/vtctl -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
+  proc = run_bg(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
   stdout = proc.communicate()[0].strip()
   if stdout != expected_addr:
     raise TestError('wrong zk address', db_addr, stdout, expected_addr)
 
-
 def run_test_sanity():
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  run(vtroot+'/bin/vtctl Ping /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('Ping /zk/test_nj/vt/tablets/0000062344')
 
   # Quickly check basic actions.
-  run(vtroot+'/bin/vtctl SetReadOnly /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('SetReadOnly /zk/test_nj/vt/tablets/0000062344')
   wait_db_read_only(62344)
 
-  run(vtroot+'/bin/vtctl SetReadWrite /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
   check_db_read_write(62344)
 
-  run(vtroot+'/bin/vtctl DemoteMaster /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('DemoteMaster /zk/test_nj/vt/tablets/0000062344')
   wait_db_read_only(62344)
 
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344.kill()
 
 
 def run_test_scrap():
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace 0 replica')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace 0 replica')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
-  run(vtroot+'/bin/vtctl -force ScrapTablet /zk/test_nj/vt/tablets/0000062044')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force ScrapTablet /zk/test_nj/vt/tablets/0000062044')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
 
 create_vt_insert_test = '''create table vt_insert_test (
@@ -293,11 +295,11 @@ def run_test_mysqlctl_clone():
   _wipe_zk()
 
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
@@ -323,11 +325,11 @@ def run_test_vtctl_snapshot_restore():
   _wipe_zk()
 
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
@@ -338,20 +340,20 @@ def run_test_vtctl_snapshot_restore():
     mysql_write_query(62344, 'vt_snapshot_test', q)
 
   # Need to force snapshot since this is a master db.
-  run(vtroot+'/bin/vtctl -force Snapshot /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('-force Snapshot /zk/test_nj/vt/tablets/0000062344')
   pause("snapshot finished")
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle')
   agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
 
-  run(vtroot+'/bin/vtctl Restore /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
+  run_vtctl('Restore /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
   pause("restore finished")
 
   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
     raise TestError("expected 4 rows in vt_insert_test", result)
 
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344.kill()
   agent_62044.kill()
@@ -361,11 +363,11 @@ def run_test_vtctl_clone():
   _wipe_zk()
 
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   vttablet_start_watcher = run_bg(vtroot+'/bin/zk wait /zk/test_nj/vt/tablets/0000062044/pid', stdout=devnull)
 
@@ -377,20 +379,20 @@ def run_test_vtctl_clone():
   for q in populate_vt_insert_test:
     mysql_write_query(62344, 'vt_snapshot_test', q)
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle')
   agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
 
   # remove flakiness by ensuring the target tablet comes up, otherwise we get validation
   # errors a result of forcing the clone.
   vttablet_start_watcher.wait()
 
-  run(vtroot+'/bin/vtctl -force Clone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
+  run_vtctl('-force Clone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
 
   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
     raise TestError("expected 4 rows in vt_insert_test", result)
 
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344.kill()
   agent_62044.kill()
@@ -399,11 +401,11 @@ def run_test_mysqlctl_split():
   _wipe_zk()
 
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
@@ -461,11 +463,11 @@ def run_test_vtctl_partial_clone():
   _wipe_zk()
 
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/snapshot_test')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master ""')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 snapshot_test 0 master ""')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
@@ -475,7 +477,7 @@ def run_test_vtctl_partial_clone():
   for q in populate_vt_insert_test:
     mysql_write_query(62344, 'vt_snapshot_test', q)
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle ""')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle ""')
   agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
 
   # FIXME(alainjobart): not sure where the right place for this is,
@@ -486,32 +488,32 @@ def run_test_vtctl_partial_clone():
   mysql_query(62044, '', 'stop slave')
   mysql_query(62044, '', 'drop database if exists vt_snapshot_test')
   mysql_query(62044, '', 'create database vt_snapshot_test')
-  run(vtroot+'/bin/vtctl -force PartialClone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044 id 0 3')
+  run_vtctl('-force PartialClone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044 id 0 3')
 
   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 2:
     raise TestError("expected 2 rows in vt_insert_test", result)
 
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
 
   agent_62344.kill()
   agent_62044.kill()
 
 def run_test_restart_during_action():
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  run(vtroot+'/bin/vtctl Ping /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('Ping /zk/test_nj/vt/tablets/0000062344')
 
   # schedule long action
-  run(vtroot+'/bin/vtctl -no-wait Sleep /zk/test_nj/vt/tablets/0000062344 15s', stdout=devnull)
+  run_vtctl('-no-wait Sleep /zk/test_nj/vt/tablets/0000062344 15s', stdout=devnull)
   # ping blocks until the sleep finishes unless we have a schedule race
-  action_path, _ = run(vtroot+'/bin/vtctl -no-wait Ping /zk/test_nj/vt/tablets/0000062344', trap_output=True)
+  action_path, _ = run_vtctl('-no-wait Ping /zk/test_nj/vt/tablets/0000062344', trap_output=True)
 
   # kill agent leaving vtaction running
   agent_62344.kill()
@@ -531,27 +533,27 @@ def run_test_restart_during_action():
 def run_test_reparent_down_master():
   _wipe_zk()
 
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
   # Create a few slaves for testing reparenting.
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace 0 replica')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace 0 replica')
   agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000041983 localhost 3702 6702 test_keyspace 0 replica')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000041983 localhost 3702 6702 test_keyspace 0 replica')
   agent_41983 = run_bg(vtroot+'/bin/vttablet -port 6702 -tablet-path /zk/test_nj/vt/tablets/0000041983 -logfile /vt/vt_0000041983/vttablet.log')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_ny/vt/tablets/0000031981 localhost 3703 6703 test_keyspace 0 replica')
+  run_vtctl('-force InitTablet /zk/test_ny/vt/tablets/0000031981 localhost 3703 6703 test_keyspace 0 replica')
   agent_31983 = run_bg(vtroot+'/bin/vttablet -port 6703 -tablet-path /zk/test_ny/vt/tablets/0000031981 -logfile /vt/vt_0000031981/vttablet.log')
 
   # Recompute the shard layout node - until you do that, it might not be valid.
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
   _check_zk()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  run(vtroot+'/bin/vtctl -force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062344')
   _check_zk()
 
   # Make the master agent unavailable.
@@ -568,27 +570,27 @@ def run_test_reparent_down_master():
   run_fail(vtroot+'/bin/vtctl -wait-time 5s ScrapTablet /zk/test_nj/vt/tablets/0000062344')
 
   # Force the scrap action in zk even though tablet is not accessible.
-  run(vtroot+'/bin/vtctl -force ScrapTablet /zk/test_nj/vt/tablets/0000062344')
+  run_vtctl('-force ScrapTablet /zk/test_nj/vt/tablets/0000062344')
 
   run_fail(vtroot+'/bin/vtctl -force ChangeType /zk/test_nj/vt/tablets/0000062344 idle')
 
   # Remove pending locks (make this the force option to ReparentShard?)
-  run(vtroot+'/bin/vtctl -force PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
+  run_vtctl('-force PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
 
   # Scrapping a tablet shouldn't take it out of the serving graph.
   expected_addr = hostname + ':6700'
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
   # Re-run reparent operation, this shoud now proceed unimpeded.
-  run(vtroot+'/bin/vtctl ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062044')
+  run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062044')
 
   _check_zk()
   expected_addr = hostname + ':6701'
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
-  run(vtroot+'/bin/vtctl -force ChangeType /zk/test_nj/vt/tablets/0000062344 idle')
+  run_vtctl('-force ChangeType /zk/test_nj/vt/tablets/0000062344 idle')
 
-  idle_tablets, _ = run(vtroot+'/bin/vtctl ListIdle /zk/test_nj/vt', trap_output=True)
+  idle_tablets, _ = run_vtctl('ListIdle /zk/test_nj/vt', trap_output=True)
   if '0000062344' not in idle_tablets:
     raise TestError('idle tablet not found', idle_tablets)
 
@@ -608,28 +610,28 @@ def run_test_reparent_graceful():
 def _run_test_reparent_graceful(shard_id):
   _wipe_zk()
 
-  run(vtroot+'/bin/vtctl -force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
   # Start up a master mysql and vttablet
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace %(shard_id)s master' % vars())
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace %(shard_id)s master' % vars())
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
   # Create a few slaves for testing reparenting.
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace %(shard_id)s replica' % vars())
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace %(shard_id)s replica' % vars())
   agent_62044 = run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_nj/vt/tablets/0000041983 localhost 3702 6702 test_keyspace %(shard_id)s replica' % vars())
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000041983 localhost 3702 6702 test_keyspace %(shard_id)s replica' % vars())
   agent_41983 = run_bg(vtroot+'/bin/vttablet -port 6702 -tablet-path /zk/test_nj/vt/tablets/0000041983 -logfile /vt/vt_0000041983/vttablet.log')
 
-  run(vtroot+'/bin/vtctl -force InitTablet /zk/test_ny/vt/tablets/0000031981 localhost 3703 6703 test_keyspace %(shard_id)s replica' % vars())
+  run_vtctl('-force InitTablet /zk/test_ny/vt/tablets/0000031981 localhost 3703 6703 test_keyspace %(shard_id)s replica' % vars())
   agent_31983 = run_bg(vtroot+'/bin/vttablet -port 6703 -tablet-path /zk/test_ny/vt/tablets/0000031981 -logfile /vt/vt_0000031981/vttablet.log')
 
   # Recompute the shard layout node - until you do that, it might not be valid.
-  run(vtroot+'/bin/vtctl RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
   _check_zk()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
   pause("force ReparentShard?")
-  run(vtroot+'/bin/vtctl -force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s /zk/test_nj/vt/tablets/0000062344' % shard_id)
+  run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s /zk/test_nj/vt/tablets/0000062344' % shard_id)
   _check_zk(ping_tablets=True)
 
   expected_addr = hostname + ':6700'
@@ -637,14 +639,14 @@ def _run_test_reparent_graceful(shard_id):
 
   # Convert a replica to a spare. That should leave only one node serving traffic,
   # but still needs to appear in the replication graph.
-  run(vtroot+'/bin/vtctl ChangeType /zk/test_nj/vt/tablets/0000041983 spare')
+  run_vtctl('ChangeType /zk/test_nj/vt/tablets/0000041983 spare')
   _check_zk()
   expected_addr = hostname + ':6701'
   _check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
 
   # Perform a graceful reparent operation.
   pause("graceful ReparentShard?")
-  run(vtroot+'/bin/vtctl ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s /zk/test_nj/vt/tablets/0000062044' % shard_id)
+  run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s /zk/test_nj/vt/tablets/0000062044' % shard_id)
   _check_zk()
 
   expected_addr = hostname + ':6701'

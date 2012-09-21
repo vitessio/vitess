@@ -8,7 +8,9 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"log/syslog"
 	"os"
 	"path"
 	"sort"
@@ -128,7 +130,8 @@ var waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an acti
 var force = flag.Bool("force", false, "force action")
 var verbose = flag.Bool("verbose", false, "verbose logging")
 var pingTablets = flag.Bool("ping-tablets", false, "ping all tablets during validate")
-var logLevel = flag.String("log.level", "WARNING", "set log level")
+var logLevel = flag.String("log.level", "INFO", "set log level")
+var logfile = flag.String("logfile", "/vt/logs/vtctl.log", "log file")
 var stdin *bufio.Reader
 
 func init() {
@@ -317,10 +320,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	logger := relog.New(os.Stderr, "vtctl ",
-		log.Ldate|log.Lmicroseconds|log.Lshortfile,
-		relog.LogNameToLogLevel(*logLevel))
+	var logger *relog.Logger
+	logPrefix := "vtctl "
+	logFlag := log.Ldate | log.Lmicroseconds | log.Lshortfile
+	logLevel := relog.LogNameToLogLevel(*logLevel)
+
+	if log, err := os.OpenFile(*logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		logger = relog.New(io.MultiWriter(log, os.Stderr), logPrefix, logFlag, logLevel)
+	} else {
+		logger = relog.New(os.Stderr, logPrefix, logFlag, logLevel)
+		logger.Warning("cannot write to provided logfile: %v", err)
+	}
+
 	relog.SetLogger(logger)
+
+	relog.Info("USER=%v SUDOUSER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
+
+	if syslogger, err := syslog.New(syslog.LOG_INFO, logPrefix); err == nil {
+		syslogger.Info(fmt.Sprintf("USER=%v SUDOUSER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " ")))
+	} else {
+		relog.Warning("cannot connect to syslog: %v", err)
+	}
 
 	zconn := zk.NewMetaConn(5e9)
 	defer zconn.Close()
