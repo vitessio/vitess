@@ -26,7 +26,7 @@ var globalAddrs = flag.String("zk.global-addrs", "",
 // Read the cell from -zk.local-cell, or the environment ZK_CLIENT_LOCAL_CELL
 // or guess the cell by the hostname. This is either the first two characters
 // or the character before a dash '-'.
-func guessLocalCell() string {
+func GuessLocalCell() string {
 	if *localCell != "" {
 		return *localCell
 	}
@@ -95,14 +95,14 @@ func ZkPathToZkAddr(zkPath string) string {
 
 	cell := ZkCellFromZkPath(zkPath)
 	if cell == "local" {
-		cell = guessLocalCell()
+		cell = GuessLocalCell()
 	} else if cell == "global" {
 		if *globalAddrs != "" {
 			return *globalAddrs
 		} else if _, ok := cellAddrMap[cell]; !ok {
 			// if there is no "global" cell, look for a dc-specific
 			// address for the global cell
-			cell = guessLocalCell() + "-global"
+			cell = GuessLocalCell() + "-global"
 		}
 	}
 

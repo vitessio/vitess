@@ -49,7 +49,7 @@ func resolveZkPath(path string) string {
 		return path
 	}
 	parts := strings.Split(path, "/")
-	parts[2] = guessLocalCell()
+	parts[2] = GuessLocalCell()
 	return strings.Join(parts, "/")
 }
 
