@@ -2,11 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Utility functions for custom decoders
+
 package bson
 
 import (
 	"bytes"
 	"strconv"
+	"time"
 )
 
 func DecodeString(buf *bytes.Buffer, kind byte) string {
@@ -60,6 +63,58 @@ func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 		return 0
 	}
 	panic(NewBsonError("Unexpected data type %v for int", kind))
+}
+
+func DecodeTime(buf *bytes.Buffer, kind byte) time.Time {
+	switch kind {
+	case Datetime:
+		ui64 := Pack.Uint64(buf.Next(8))
+		return time.Unix(0, int64(ui64)*1e6).UTC()
+	case Null:
+		return time.Time{}
+	}
+	panic(NewBsonError("Unexpected data type %v for time", kind))
+}
+
+func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
+	switch kind {
+	case Array:
+		// valid
+	case Null:
+		return nil
+	default:
+		panic(NewBsonError("Unexpected data type %v for string array", kind))
+	}
+
+	Next(buf, 4)
+	values := make([]string, 0, 8)
+	kind = NextByte(buf)
+	for i := 0; kind != EOO; i++ {
+		if kind != Binary {
+			panic(NewBsonError("Unexpected data type %v for string array", kind))
+		}
+		ExpectIndex(buf, i)
+		values = append(values, DecodeString(buf, kind))
+		kind = NextByte(buf)
+	}
+	return values
+}
+
+func DecodeBool(buf *bytes.Buffer, kind byte) bool {
+	switch kind {
+	case Boolean:
+		// valid
+	case Null:
+		return false
+	default:
+		panic(NewBsonError("Unexpected data type %v for boolean", kind))
+	}
+
+	b, _ := buf.ReadByte()
+	if b == 1 {
+		return true
+	}
+	return false
 }
 
 func ExpectIndex(buf *bytes.Buffer, index int) {

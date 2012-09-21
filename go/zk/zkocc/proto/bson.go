@@ -1,10 +1,16 @@
+// Copyright 2012, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package proto
+
+// Contains the bson custom marshaler / unmarshaler.
+// Note this is not required, but makes the code faster.
 
 import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
-	"time"
 )
 
 func (zkPath *ZkPath) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -33,50 +39,10 @@ func (zkPath *ZkPath) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-// FIXME(alainjobart) move these two helpers to the bson library
-func marshalStringArray(buf *bytes2.ChunkedWriter, name string, values []string) {
-	if values == nil {
-		bson.EncodePrefix(buf, bson.Null, name)
-	} else {
-		bson.EncodePrefix(buf, bson.Array, name)
-		lenWriter := bson.NewLenWriter(buf)
-		for i, val := range values {
-			bson.EncodePrefix(buf, bson.Binary, bson.Itoa(i))
-			bson.EncodeString(buf, val)
-		}
-		buf.WriteByte(0)
-		lenWriter.RecordLen()
-	}
-}
-
-func unmarshalStringArray(buf *bytes.Buffer, name string, kind byte) []string {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for %v", kind, name))
-	}
-
-	bson.Next(buf, 4)
-	values := make([]string, 0, 8)
-	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		if kind != bson.Binary {
-			panic(bson.NewBsonError("Unexpected data type %v for %v", kind, name))
-		}
-		bson.ExpectIndex(buf, i)
-		values = append(values, bson.DecodeString(buf, kind))
-		kind = bson.NextByte(buf)
-	}
-	return values
-}
-
 func (zkPathV *ZkPathV) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	marshalStringArray(buf, "Paths", zkPathV.Paths)
+	bson.EncodeStringArray(buf, "Paths", zkPathV.Paths)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -90,7 +56,7 @@ func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Paths":
-			zkPathV.Paths = unmarshalStringArray(buf, "ZkPathV.Paths", kind)
+			zkPathV.Paths = bson.DecodeStringArray(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s for ZkPathV.Paths", key))
 		}
@@ -150,11 +116,9 @@ func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer) {
 		case "Mzxid":
 			zkStat.Mzxid = bson.DecodeInt64(buf, kind)
 		case "CTime":
-			ui64 := bson.Pack.Uint64(buf.Next(8))
-			zkStat.CTime = time.Unix(0, int64(ui64)*1e6).UTC()
+			zkStat.CTime = bson.DecodeTime(buf, kind)
 		case "MTime":
-			ui64 := bson.Pack.Uint64(buf.Next(8))
-			zkStat.MTime = time.Unix(0, int64(ui64)*1e6).UTC()
+			zkStat.MTime = bson.DecodeTime(buf, kind)
 		case "Version":
 			zkStat.Version = bson.DecodeInt(buf, kind)
 		case "CVersion":
@@ -188,7 +152,7 @@ func (zkNode *ZkNode) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Long, "Stat")
 	zkNode.Stat.MarshalBson(buf)
 
-	marshalStringArray(buf, "Children", zkNode.Children)
+	bson.EncodeStringArray(buf, "Children", zkNode.Children)
 
 	bson.EncodePrefix(buf, bson.Boolean, "Cached")
 	bson.EncodeBool(buf, zkNode.Cached)
@@ -214,21 +178,11 @@ func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer) {
 		case "Stat":
 			zkNode.Stat.UnmarshalBson(buf)
 		case "Children":
-			zkNode.Children = unmarshalStringArray(buf, "ZkPathV.Children", kind)
+			zkNode.Children = bson.DecodeStringArray(buf, kind)
 		case "Cached":
-			b, _ := buf.ReadByte()
-			if b == 1 {
-				zkNode.Cached = true
-			} else {
-				zkNode.Cached = false
-			}
+			zkNode.Cached = bson.DecodeBool(buf, kind)
 		case "Stale":
-			b, _ := buf.ReadByte()
-			if b == 1 {
-				zkNode.Stale = true
-			} else {
-				zkNode.Stale = false
-			}
+			zkNode.Stale = bson.DecodeBool(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s for ZkNode", key))
 		}
