@@ -41,6 +41,7 @@ func (self *ActivePool) Close() {
 }
 
 func (self *ActivePool) QueryKiller() {
+	self.ticks.Start()
 	for self.ticks.Next() {
 		for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
 			self.kill(v.(int64))

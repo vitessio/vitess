@@ -90,7 +90,7 @@ func main() {
 	unmarshalFile(*dbConfigFile, &dbconfig)
 	qm := &OccManager{config, dbconfig}
 	rpcwrap.RegisterAuthenticated(qm)
-	ts.StartQueryService(config)
+	ts.RegisterQueryService(config)
 	ts.AllowQueries(dbconfig)
 
 	rpc.HandleHTTP()

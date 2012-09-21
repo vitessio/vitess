@@ -110,6 +110,7 @@ func (si *SchemaInfo) Close() {
 }
 
 func (si *SchemaInfo) Reloader() {
+	si.ticks.Start()
 	for si.ticks.Next() {
 		si.Reload()
 	}

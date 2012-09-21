@@ -63,6 +63,7 @@ func (self *ActiveTxPool) WaitForEmpty() {
 }
 
 func (self *ActiveTxPool) TransactionKiller() {
+	self.ticks.Start()
 	for self.ticks.Next() {
 		for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
 			conn := v.(*TxConnection)

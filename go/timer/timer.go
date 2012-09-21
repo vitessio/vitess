@@ -11,6 +11,7 @@
     var t = timer.NewTimer(1e9)
 
     func KeepHouse() {
+      t.Start()
       for t.Next() {
         // do house keeping work
       }
@@ -46,6 +47,7 @@ const (
 // is to return true after waiting for the specified number of nanoseconds.
 type Timer struct {
 	interval  time.Duration
+	running   bool
 	msg, resp chan typeAction
 }
 
@@ -60,22 +62,31 @@ func NewTimer(interval time.Duration) *Timer {
 	}
 }
 
+// Start must be called before iterating on Next.
+func (tm *Timer) Start() {
+	tm.running = true
+}
+
 // Next starts the timer and waits for the next tick.
 // It will return true upon the next tick or on an explicit trigger.
 // It will return false if Close was called.
-func (self *Timer) Next() bool {
+func (tm *Timer) Next() bool {
+	if !tm.running {
+		return false
+	}
+	// loop needed to handle RESET message
 	for {
 		var ch <-chan time.Time
-		if self.interval <= 0 {
+		if tm.interval <= 0 {
 			ch = nil
 		} else {
-			ch = time.After(self.interval)
+			ch = time.After(tm.interval)
 		}
 		select {
-		case action := <-self.msg:
+		case action := <-tm.msg:
 			switch action {
 			case CLOSE:
-				self.resp <- CLOSE
+				tm.resp <- CLOSE
 				return false
 			case FORCE:
 				return true
@@ -89,29 +100,37 @@ func (self *Timer) Next() bool {
 
 // SetInterval changes the wait interval for the Next() function.
 // It will cause the function to restart the wait if it's already executing.
-func (self *Timer) SetInterval(ns time.Duration) {
-	self.interval = ns
-	self.msg <- RESET
+func (tm *Timer) SetInterval(ns time.Duration) {
+	tm.interval = ns
+	if tm.running {
+		tm.msg <- RESET
+	}
 }
 
 // Trigger will cause the currently executing, or a subsequent call to Next()
 // to immediately return true.
-func (self *Timer) Trigger() {
-	self.msg <- FORCE
+func (tm *Timer) Trigger() {
+	if tm.running {
+		tm.msg <- FORCE
+	}
 }
 
 // Trigger will wait ns nanoseconds before triggering Next().
-func (self *Timer) TriggerAfter(ns time.Duration) {
+func (tm *Timer) TriggerAfter(ns time.Duration) {
 	go func() {
 		<-time.After(ns)
-		self.Trigger()
+		tm.Trigger()
 	}()
 }
 
-// Close will cause the the currently executing, or a subsequent call to Next()
+// Close will cause the currently executing, or a subsequent call to Next
 // to immediately return false. Close will not return until the message is
-// successfully delivered.
-func (self *Timer) Close() {
-	self.msg <- CLOSE
-	<-self.resp
+// successfully delivered. To resume timer activities, you must call Start again.
+func (tm *Timer) Close() {
+	if !tm.running {
+		return
+	}
+	tm.msg <- CLOSE
+	<-tm.resp
+	tm.running = false
 }

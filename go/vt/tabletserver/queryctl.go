@@ -49,7 +49,7 @@ func (d DBConfig) MysqlParams() mysql.ConnectionParams {
 
 var SqlQueryRpcService *SqlQuery
 
-func StartQueryService(config Config) {
+func RegisterQueryService(config Config) {
 	if SqlQueryRpcService != nil {
 		relog.Warning("RPC service already up %v", SqlQueryRpcService)
 		return

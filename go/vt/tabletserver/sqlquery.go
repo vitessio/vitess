@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/vt/sqlparser"
@@ -23,33 +24,54 @@ const (
 	MAX_RESULT_NAME = "_vtMaxResultSize"
 )
 
+// exclusive transitions can be executed without a lock
+// INIT_FAILED/CLOSED -> CONNECTING
+// CONNECTING -> ABORT
+// ABORT -> CLOSED (exclusive)
+// CONNECTING -> INITIALIZING
+// INITIALIZING -> OPEN/INIT_FAILED (exclusive)
+// OPEN -> SHUTTING_DOWN
+// SHUTTING_DOWN -> CLOSED (exclusive)
 const (
-	INIT_FAILED   = -1
-	CLOSED        = 0
-	SHUTTING_DOWN = 1
-	OPEN          = 2
+	INIT_FAILED = iota
+	CLOSED
+	CONNECTING
+	ABORT
+	INITIALIZING
+	OPEN
+	SHUTTING_DOWN
 )
 
 //-----------------------------------------------
 // RPC API
 type SqlQuery struct {
-	mu               sync.RWMutex
-	state            int32 // Use sync/atomic to acces this variable
-	sessionId        int64
-	cachePool        *CachePool
-	schemaInfo       *SchemaInfo
-	connPool         *ConnectionPool
-	streamConnPool   *ConnectionPool
-	reservedPool     *ReservedPool
-	txPool           *ConnectionPool
-	activeTxPool     *ActiveTxPool
-	activePool       *ActivePool
-	consolidator     *Consolidator
-	maxResultSize    int32 // Use sync/atomic
-	streamBufferSize int32 // Use sync/atomic
+	// Obtain read lock on mu to execute queries
+	// Obtain write lock to start/stop query service
+	mu sync.RWMutex
 
-	// Vars for handling invalidations
-	dbName string
+	// Use statemu to modify state.
+	// Use atomic to access state even if you have the lock.
+	// You can atomically read state without lock if you don't intend to modify it.
+	// Exclusive transitions can be performed without a lock because there is no race.
+	statemu sync.Mutex
+	state   int32
+
+	// Query service vars
+	cachePool      *CachePool
+	schemaInfo     *SchemaInfo
+	connPool       *ConnectionPool
+	streamConnPool *ConnectionPool
+	reservedPool   *ReservedPool
+	txPool         *ConnectionPool
+	activeTxPool   *ActiveTxPool
+	activePool     *ActivePool
+	consolidator   *Consolidator
+
+	// Reference vars
+	sessionId        int64
+	maxResultSize    int32 // Use atomic
+	streamBufferSize int32 // Use atomic
+	dbName           string
 }
 
 // stats are globals to allow anybody to set them
@@ -97,11 +119,65 @@ type CompiledPlan struct {
 }
 
 func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
-	connFactory := GenericConnectionCreator(dbconfig.MysqlParams())
-	cacheFactory := CacheCreator(dbconfig)
+	sq.statemu.Lock()
+	v := atomic.LoadInt32(&sq.state)
+	switch v {
+	case CONNECTING, ABORT, INITIALIZING, OPEN, SHUTTING_DOWN:
+		sq.statemu.Unlock()
+		relog.Info("Ignoring allowQueries request, current state: %v", v)
+		return
+	}
+	// Current state is INIT_FAILED or CLOSED
+	atomic.StoreInt32(&sq.state, CONNECTING)
+	sq.statemu.Unlock()
+
+	// Try connecting. disallowQueries can change the state to ABORT during this time.
+	waitTime := time.Duration(1e9)
+	for {
+		c, err := mysql.Connect(dbconfig.MysqlParams())
+		if err == nil {
+			c.Close()
+			break
+		}
+		time.Sleep(waitTime)
+		// Cap at 32e9
+		if waitTime < time.Duration(30e9) {
+			relog.Error("%v", err)
+			waitTime = waitTime * 2
+		}
+		if atomic.LoadInt32(&sq.state) == ABORT {
+			// Exclusive transition. No need to lock statemu.
+			atomic.StoreInt32(&sq.state, CLOSED)
+			relog.Info("allowQueries aborting")
+			return
+		}
+	}
+
+	// Connection successful
+	sq.statemu.Lock()
+	if atomic.LoadInt32(&sq.state) == ABORT {
+		atomic.StoreInt32(&sq.state, CLOSED)
+		sq.statemu.Unlock()
+		relog.Info("allowQueries aborting")
+		return
+	}
+	// Need to obtain main lock before releasing statemu
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
-	atomic.StoreInt32(&sq.state, INIT_FAILED)
+	atomic.StoreInt32(&sq.state, INITIALIZING)
+	sq.statemu.Unlock()
+
+	defer func() {
+		// Exclusive transition. No need to lock statemu.
+		if x := recover(); x != nil {
+			relog.Error("%s", x.(*TabletError).Message)
+			atomic.StoreInt32(&sq.state, INIT_FAILED)
+		}
+		atomic.StoreInt32(&sq.state, OPEN)
+	}()
+
+	connFactory := GenericConnectionCreator(dbconfig.MysqlParams())
+	cacheFactory := CacheCreator(dbconfig)
 
 	start := time.Now().UnixNano()
 	sq.cachePool.Open(cacheFactory)
@@ -114,28 +190,44 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 	sq.activeTxPool.Open()
 	sq.activePool.Open(connFactory)
 	sq.sessionId = Rand()
-	relog.Info("Session id: %d", sq.sessionId)
-	atomic.StoreInt32(&sq.state, OPEN)
 	sq.dbName = dbconfig.Dbname
+	relog.Info("Session id: %d", sq.sessionId)
 }
 
 func (sq *SqlQuery) disallowQueries() {
-	sq.mu.RLock()
-	if sq.state != OPEN {
-		sq.mu.RUnlock()
-		return
+	for {
+		sq.statemu.Lock()
+		switch atomic.LoadInt32(&sq.state) {
+		case CONNECTING:
+			atomic.StoreInt32(&sq.state, ABORT)
+			sq.statemu.Unlock()
+			return
+		case INITIALIZING:
+			sq.statemu.Unlock()
+			// Wait for allowQueries to finish
+			sq.mu.Lock()
+			sq.mu.Unlock()
+			continue
+		case INIT_FAILED:
+			atomic.StoreInt32(&sq.state, CLOSED)
+			fallthrough
+		case CLOSED, ABORT, SHUTTING_DOWN:
+			sq.statemu.Unlock()
+			return
+		}
+		// OPEN
+		break
 	}
-	sq.mu.RUnlock()
-
-	// set this before obtaining lock so new incoming requests
-	// can serve "unavailable" immediately
 	atomic.StoreInt32(&sq.state, SHUTTING_DOWN)
+	sq.statemu.Unlock()
+
 	relog.Info("Stopping query service: %d", sq.sessionId)
 	sq.activeTxPool.WaitForEmpty()
 
+	// Ensure all read locks are released (no more queries being served)
 	sq.mu.Lock()
 	defer sq.mu.Unlock()
-	atomic.StoreInt32(&sq.state, CLOSED)
+
 	sq.activePool.Close()
 	sq.schemaInfo.Close()
 	sq.activeTxPool.Close()
@@ -145,6 +237,8 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.connPool.Close()
 	sq.sessionId = 0
 	sq.dbName = ""
+	// Exclusive transition. No need to lock statemu.
+	atomic.StoreInt32(&sq.state, CLOSED)
 }
 
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
@@ -153,12 +247,15 @@ func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 		panic(NewTabletError(FATAL, "init failed"))
 	case CLOSED:
 		panic(NewTabletError(RETRY, "unavailable"))
+	case CONNECTING, ABORT, INITIALIZING:
+		panic(NewTabletError(FATAL, "initalizing"))
 	case SHUTTING_DOWN:
 		if !allowShutdown {
 			panic(NewTabletError(RETRY, "unavailable"))
 		}
 	}
-	if sessionId != sq.sessionId {
+	// Current state is OPEN
+	if sessionId == 0 || sessionId != sq.sessionId {
 		panic(NewTabletError(RETRY, "Invalid session Id %v", sessionId))
 	}
 }

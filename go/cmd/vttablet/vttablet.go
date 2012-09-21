@@ -166,7 +166,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
 		relog.Warning("%s", err)
 	}
-	ts.StartQueryService(qsConfig)
+	ts.RegisterQueryService(qsConfig)
 	usefulLameDuckPeriod := float64(qsConfig.QueryTimeout + 1)
 	if usefulLameDuckPeriod > *lameDuckPeriod {
 		*lameDuckPeriod = usefulLameDuckPeriod
