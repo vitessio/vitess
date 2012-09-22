@@ -678,7 +678,7 @@ def run_all():
   # run_test_mysqlctl_clone()
   run_test_vtctl_clone()
 
-  # This test does not pass.
+  # This test does not pass as it requires an experimental mysql patch.
   #run_test_vtctl_partial_clone()
 
   run_test_reparent_graceful()
