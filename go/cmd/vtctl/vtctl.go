@@ -320,24 +320,28 @@ func main() {
 		os.Exit(1)
 	}
 
-	var logger *relog.Logger
 	logPrefix := "vtctl "
 	logFlag := log.Ldate | log.Lmicroseconds | log.Lshortfile
 	logLevel := relog.LogNameToLogLevel(*logLevel)
+	logger := relog.New(os.Stderr, logPrefix, logFlag, logLevel)
+	// Set default logger to stderr.
+	relog.SetLogger(logger)
+
+	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
 	if log, err := os.OpenFile(*logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		// Use a temp logger to keep a consistent trail of events in the log.
+		fileLogger := relog.New(log, logPrefix, logFlag, logLevel)
+		fileLogger.Info(startMsg)
+		// Redefine the default logger to keep events in both places.
 		logger = relog.New(io.MultiWriter(log, os.Stderr), logPrefix, logFlag, logLevel)
+		relog.SetLogger(logger)
 	} else {
-		logger = relog.New(os.Stderr, logPrefix, logFlag, logLevel)
 		logger.Warning("cannot write to provided logfile: %v", err)
 	}
 
-	relog.SetLogger(logger)
-
-	relog.Info("USER=%v SUDOUSER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
-
 	if syslogger, err := syslog.New(syslog.LOG_INFO, logPrefix); err == nil {
-		syslogger.Info(fmt.Sprintf("USER=%v SUDOUSER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " ")))
+		syslogger.Info(startMsg)
 	} else {
 		relog.Warning("cannot connect to syslog: %v", err)
 	}
