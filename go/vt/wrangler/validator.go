@@ -211,6 +211,11 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 		return
 	}
 
+	if len(slaveAddrs) == 0 {
+		results <- vresult{masterTabletPath, fmt.Errorf("no slaves found: %v", masterTabletPath)}
+		return
+	}
+
 	slaveAddrs, err = resolveSlaveNames(slaveAddrs)
 	if err != nil {
 		results <- vresult{masterTabletPath, err}
@@ -243,7 +248,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 		if err != nil {
 			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v", tabletPath, err)}
 		} else if !strInList(slaveAddrs, host) {
-			results <- vresult{tabletPath, fmt.Errorf("slave not replicating: %v", tabletPath)}
+			results <- vresult{tabletPath, fmt.Errorf("slave not replicating: %v %v %q", tabletPath, host, slaveAddrs)}
 		}
 	}
 }
