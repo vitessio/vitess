@@ -41,7 +41,7 @@ Tablets:
 
   DemoteMaster <zk tablet path>
 
-  ChangeType <zk tablet path> <db type>
+  ChangeSlaveType <zk tablet path> <db type>
     Change the db type for this tablet if possible. this is mostly for arranging
     replicas - it will not convert a master.
     NOTE: This will automatically update the serving graph.
@@ -84,7 +84,8 @@ Tablets:
 
 Shards:
   RebuildShard <zk shard path>
-    rebuild the shard, this may trigger an update to all connected clients
+    Rebuild the shards serving data in zk.
+    This may trigger an update to all connected clients
 
   ReparentShard <zk shard path> <zk tablet path>
     specify which shard to reparent and which tablet should be the new master
@@ -95,7 +96,8 @@ Keyspaces:
     e.g. CreateKeyspace /zk/global/vt/keyspaces/my_keyspace 4
 
   RebuildKeyspace <zk keyspace path>
-    rebuild the shard, this may trigger an update to all connected clients
+    Rebuild the serving data for all shards in this keyspace.
+    This may trigger an update to all connected clients
 
 
 Generic:
@@ -120,7 +122,7 @@ Generic:
   ListScrap <zk local vt path>
     list all scrap tablet paths
 
-  DumpTablets <zk local vt path>
+  ListTablets <zk local vt path>
     list all tablets in an awk-friendly way
 `
 
@@ -130,6 +132,7 @@ var waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an acti
 var force = flag.Bool("force", false, "force action")
 var verbose = flag.Bool("verbose", false, "verbose logging")
 var pingTablets = flag.Bool("ping-tablets", false, "ping all tablets during validate")
+var dbNameOverride = flag.String("db-name-override", "", "override the name of the db used by vttablet")
 var logLevel = flag.String("log.level", "INFO", "set log level")
 var logfile = flag.String("logfile", "/vt/logs/vtctl.log", "log file")
 var stdin *bufio.Reader
@@ -215,6 +218,7 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, vtPort, keyspace, sh
 	}
 
 	tablet := tm.NewTablet(cell, uint(uid), parent, fmt.Sprintf("%v:%v", hostname, vtPort), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
+	tablet.DbNameOverride = *dbNameOverride
 	err = tm.CreateTablet(zconn, zkPath, tablet)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
@@ -398,6 +402,8 @@ func main() {
 		}
 		actionPath, err = ai.SetReadWrite(args[1])
 	case "ChangeType":
+		fallthrough
+	case "ChangeSlaveType":
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk tablet path> <db type>", args[0])
 		}
@@ -509,7 +515,7 @@ func main() {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}
 		err = listIdle(zconn, args[1])
-	case "DumpTablets":
+	case "ListTablets":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}

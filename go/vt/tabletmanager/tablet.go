@@ -122,13 +122,19 @@ type Tablet struct {
 
 	State TabletState
 
-	DbNameOverride string // Normally the database name is implied by "vt_" + keyspace
+	// Normally the database name is implied by "vt_" + keyspace. I
+	// really want to remove this but there are some databases that are
+	// hard to rename.
+	DbNameOverride string
 	key.KeyRange
 }
 
 // DbName is implied by keyspace. Having the shard information in the database name
 // complicates mysql replication.
 func (tablet *Tablet) DbName() string {
+	if tablet.DbNameOverride != "" {
+		return tablet.DbNameOverride
+	}
 	if tablet.Keyspace == "" {
 		return ""
 	}
