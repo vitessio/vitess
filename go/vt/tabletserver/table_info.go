@@ -5,7 +5,7 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/mysql"
+	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/schema"
 	"encoding/base64"
@@ -23,7 +23,7 @@ var hashRegistry map[string]string = make(map[string]string)
 type TableInfo struct {
 	*schema.Table
 	Cache  *RowCache
-	Fields []mysql.Field
+	Fields []proto.Field
 	// stats updated by sqlquery.go
 	hits, absent, misses, invalidations int64
 }

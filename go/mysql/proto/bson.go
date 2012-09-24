@@ -2,18 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletserver
+package proto
 
 import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
-	"code.google.com/p/vitess/go/mysql"
 )
 
-type QueryResult mysql.QueryResult
-
-func MarshalFieldBson(field mysql.Field, buf *bytes2.ChunkedWriter) {
+func MarshalFieldBson(field Field, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Binary, "Name")
@@ -26,7 +23,7 @@ func MarshalFieldBson(field mysql.Field, buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func UnmarshalFieldBson(field *mysql.Field, buf *bytes.Buffer) {
+func UnmarshalFieldBson(field *Field, buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
 	kind := bson.NextByte(buf)
@@ -63,7 +60,7 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func encodeFieldsBson(fields []mysql.Field, buf *bytes2.ChunkedWriter) {
+func encodeFieldsBson(fields []Field, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range fields {
 		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
@@ -126,7 +123,7 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func decodeFieldsBson(buf *bytes.Buffer, kind byte) []mysql.Field {
+func decodeFieldsBson(buf *bytes.Buffer, kind byte) []Field {
 	switch kind {
 	case bson.Array:
 		// valid
@@ -137,14 +134,14 @@ func decodeFieldsBson(buf *bytes.Buffer, kind byte) []mysql.Field {
 	}
 
 	bson.Next(buf, 4)
-	fields := make([]mysql.Field, 0, 8)
+	fields := make([]Field, 0, 8)
 	kind = bson.NextByte(buf)
 	for i := 0; kind != bson.EOO; i++ {
 		if kind != bson.Object {
 			panic(bson.NewBsonError("Unexpected data type %v for Query.Field", kind))
 		}
 		bson.ExpectIndex(buf, i)
-		var field mysql.Field
+		var field Field
 		UnmarshalFieldBson(&field, buf)
 		fields = append(fields, field)
 		kind = bson.NextByte(buf)

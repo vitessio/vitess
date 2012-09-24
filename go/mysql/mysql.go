@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"code.google.com/p/vitess/go/hack"
+	"code.google.com/p/vitess/go/mysql/proto"
 )
 
 func init() {
@@ -65,18 +66,6 @@ type Connection struct {
 	c C.VT_CONN
 }
 
-type QueryResult struct {
-	Fields       []Field
-	RowsAffected uint64
-	InsertId     uint64
-	Rows         [][]interface{}
-}
-
-type Field struct {
-	Name string
-	Type int64
-}
-
 func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer handleError(&err)
 
@@ -110,7 +99,7 @@ func (conn *Connection) IsClosed() bool {
 	return conn.c.mysql == nil
 }
 
-func (conn *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *QueryResult, err error) {
+func (conn *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	if conn.IsClosed() {
 		return nil, NewSqlError(2006, "Connection is closed")
 	}
@@ -120,7 +109,7 @@ func (conn *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool)
 	}
 	defer conn.CloseResult()
 
-	qr = &QueryResult{}
+	qr = &proto.QueryResult{}
 	qr.RowsAffected = uint64(conn.c.affected_rows)
 	qr.InsertId = uint64(conn.c.insert_id)
 	if conn.c.num_fields == 0 {
@@ -148,7 +137,7 @@ func (conn *Connection) ExecuteStreamFetch(query []byte) (err error) {
 	return nil
 }
 
-func (conn *Connection) Fields() (fields []Field) {
+func (conn *Connection) Fields() (fields []proto.Field) {
 	nfields := int(conn.c.num_fields)
 	if nfields == 0 {
 		return nil
@@ -159,7 +148,7 @@ func (conn *Connection) Fields() (fields []Field) {
 		totalLength += uint64(cfields[i].name_length)
 	}
 	arena := hack.NewStringArena(int(totalLength))
-	fields = make([]Field, nfields)
+	fields = make([]proto.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
 		fname := (*[1 << 30]byte)(unsafe.Pointer(cfields[i].name))[:length]

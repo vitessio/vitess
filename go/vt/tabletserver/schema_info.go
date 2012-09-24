@@ -6,7 +6,7 @@ package tabletserver
 
 import (
 	"code.google.com/p/vitess/go/cache"
-	"code.google.com/p/vitess/go/mysql"
+	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/timer"
 	"code.google.com/p/vitess/go/vt/schema"
@@ -24,7 +24,7 @@ const base_show_tables = "select table_name, table_type, unix_timestamp(create_t
 type ExecPlan struct {
 	*sqlparser.ExecPlan
 	TableInfo *TableInfo
-	Fields    []mysql.Field
+	Fields    []proto.Field
 }
 
 func (*ExecPlan) Size() int {
@@ -232,7 +232,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.ParsedQuery {
 	return fullQuery
 }
 
-func (si *SchemaInfo) SetFields(sql string, plan *ExecPlan, fields []mysql.Field) {
+func (si *SchemaInfo) SetFields(sql string, plan *ExecPlan, fields []proto.Field) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	newPlan := &ExecPlan{plan.ExecPlan, plan.TableInfo, fields}
@@ -314,8 +314,8 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 }
 
 // Convenience functions
-func applyFieldFilter(columnNumbers []int, input []mysql.Field) (output []mysql.Field) {
-	output = make([]mysql.Field, len(columnNumbers))
+func applyFieldFilter(columnNumbers []int, input []proto.Field) (output []proto.Field) {
+	output = make([]proto.Field, len(columnNumbers))
 	for colIndex, colPointer := range columnNumbers {
 		if colPointer >= 0 {
 			output[colIndex] = input[colPointer]

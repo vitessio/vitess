@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"code.google.com/p/vitess/go/mysql"
+	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
 	"time"
@@ -19,8 +20,8 @@ func init() {
 }
 
 type PoolConnection interface {
-	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error)
-	ExecuteStreamFetch(query []byte, callback func(*QueryResult) error, streamBufferSize int) error
+	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*proto.QueryResult, error)
+	ExecuteStreamFetch(query []byte, callback func(interface{}) error, streamBufferSize int) error
 	Id() int64
 	Close()
 	IsClosed() bool
@@ -45,7 +46,7 @@ func (conn *DBConnection) handleError(err error) {
 	}
 }
 
-func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*QueryResult, error) {
+func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
@@ -57,11 +58,11 @@ func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool
 		return nil, err
 	}
 	mysqlStats.Record("Exec", start)
-	qr := QueryResult(*mqr)
+	qr := proto.QueryResult(*mqr)
 	return &qr, nil
 }
 
-func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryResult) error, streamBufferSize int) error {
+func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(interface{}) error, streamBufferSize int) error {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
@@ -76,13 +77,13 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryR
 	defer conn.CloseResult()
 
 	// first call the callback with the fields
-	err = callback(&QueryResult{Fields: conn.Fields()})
+	err = callback(&proto.QueryResult{Fields: conn.Fields()})
 	if err != nil {
 		return err
 	}
 
 	// then get all the rows, sending them as we reach a decent packet size
-	qr := &QueryResult{}
+	qr := &proto.QueryResult{}
 	byteCount := 0
 	for {
 		row, err := conn.FetchNext()
@@ -104,7 +105,7 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(*QueryR
 			if err != nil {
 				return err
 			}
-			qr = &QueryResult{}
+			qr = &proto.QueryResult{}
 			byteCount = 0
 		}
 	}

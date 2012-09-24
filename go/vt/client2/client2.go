@@ -16,9 +16,10 @@ import (
 	"log"
 	"strings"
 
+	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	"code.google.com/p/vitess/go/vt/tabletserver"
+	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
 type Driver struct {
@@ -27,7 +28,7 @@ type Driver struct {
 
 type Conn struct {
 	rpcClient *rpcplus.Client
-	tabletserver.Session
+	proto.Session
 	Stream bool
 }
 
@@ -41,16 +42,16 @@ type Tx struct {
 }
 
 type Result struct {
-	qr    *tabletserver.QueryResult
+	qr    *mproto.QueryResult
 	index int
 }
 
 type StreamResult struct {
 	call    *rpcplus.Call
-	sr      chan *tabletserver.QueryResult
-	columns *tabletserver.QueryResult
+	sr      chan *mproto.QueryResult
+	columns *mproto.QueryResult
 	// current result and index on it
-	qr    *tabletserver.QueryResult
+	qr    *mproto.QueryResult
 	index int
 }
 
@@ -68,8 +69,8 @@ func (driver *Driver) Open(name string) (driver.Conn, error) {
 	if conn.rpcClient, err = bsonrpc.DialHTTP("tcp", connValues[0]); err != nil {
 		return nil, err
 	}
-	sessionParams := tabletserver.SessionParams{DbName: connValues[1]}
-	var sessionInfo tabletserver.SessionInfo
+	sessionParams := proto.SessionParams{DbName: connValues[1]}
+	var sessionInfo proto.SessionInfo
 	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
 		return nil, err
 	}
@@ -83,15 +84,15 @@ func (conn *Conn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (conn *Conn) Close() error {
-	conn.Session = tabletserver.Session{0, 0, 0}
+	conn.Session = proto.Session{0, 0, 0}
 	return conn.rpcClient.Close()
 }
 
 // ExecBind can be used to execute queries with explicitly named bind vars.
 // You will need to bypass go's database api to use this function.
-func (conn *Conn) ExecBind(query string, bindVars map[string]interface{}) (*tabletserver.QueryResult, error) {
-	var result tabletserver.QueryResult
-	req := &tabletserver.Query{
+func (conn *Conn) ExecBind(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
+	var result mproto.QueryResult
+	req := &proto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
 		TransactionId: conn.TransactionId,
@@ -112,14 +113,14 @@ func (conn *Conn) Exec(query string, args []driver.Value) (driver.Result, error)
 	}
 
 	if conn.Stream {
-		req := &tabletserver.Query{
+		req := &proto.Query{
 			Sql:           query,
 			BindVariables: bindVars,
 			TransactionId: conn.TransactionId,
 			ConnectionId:  conn.ConnectionId,
 			SessionId:     conn.SessionId,
 		}
-		sr := make(chan *tabletserver.QueryResult, 10)
+		sr := make(chan *mproto.QueryResult, 10)
 		c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
 
 		// read the columns, or grab the error

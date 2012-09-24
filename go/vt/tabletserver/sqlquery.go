@@ -15,9 +15,11 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/mysql"
+	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/vt/sqlparser"
+	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
 const (
@@ -260,15 +262,7 @@ func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	}
 }
 
-type SessionParams struct {
-	DbName string
-}
-
-type SessionInfo struct {
-	SessionId int64
-}
-
-func (sq *SqlQuery) GetSessionId(sessionParams *SessionParams, sessionInfo *SessionInfo) error {
+func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
 	if sessionParams.DbName != sq.dbName {
 		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", sq.dbName, sessionParams.DbName)
 	}
@@ -276,7 +270,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *SessionParams, sessionInfo *Sess
 	return nil
 }
 
-func (sq *SqlQuery) Begin(session *Session, transactionId *int64) (err error) {
+func (sq *SqlQuery) Begin(session *proto.Session, transactionId *int64) (err error) {
 	logStats := newSqlQueryStats("Begin")
 	logStats.OriginalSql = "begin"
 	logStats.StartTime = time.Now()
@@ -302,7 +296,7 @@ func (sq *SqlQuery) Begin(session *Session, transactionId *int64) (err error) {
 	return nil
 }
 
-func (sq *SqlQuery) Commit(session *Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Commit(session *proto.Session, noOutput *string) (err error) {
 	logStats := newSqlQueryStats("Commit")
 	logStats.OriginalSql = "commit"
 	logStats.StartTime = time.Now()
@@ -337,7 +331,7 @@ func (sq *SqlQuery) invalidateRows(logStats *sqlQueryStats, dirtyTables map[stri
 	}
 }
 
-func (sq *SqlQuery) Rollback(session *Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Rollback(session *proto.Session, noOutput *string) (err error) {
 	logStats := newSqlQueryStats("Rollback")
 	logStats.StartTime = time.Now()
 	defer func() {
@@ -358,7 +352,7 @@ type ConnectionInfo struct {
 	ConnectionId int64
 }
 
-func (sq *SqlQuery) CreateReserved(session *Session, connectionInfo *ConnectionInfo) (err error) {
+func (sq *SqlQuery) CreateReserved(session *proto.Session, connectionInfo *ConnectionInfo) (err error) {
 	defer handleError(&err)
 	sq.checkState(session.SessionId, false)
 	sq.mu.RLock()
@@ -367,7 +361,7 @@ func (sq *SqlQuery) CreateReserved(session *Session, connectionInfo *ConnectionI
 	return nil
 }
 
-func (sq *SqlQuery) CloseReserved(session *Session, noOutput *string) (err error) {
+func (sq *SqlQuery) CloseReserved(session *proto.Session, noOutput *string) (err error) {
 	defer handleError(&err)
 	sq.checkState(session.SessionId, false)
 	sq.mu.RLock()
@@ -377,7 +371,7 @@ func (sq *SqlQuery) CloseReserved(session *Session, noOutput *string) (err error
 	return nil
 }
 
-func handleExecError(query *Query, err *error) {
+func handleExecError(query *proto.Query, err *error) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -393,7 +387,7 @@ func handleExecError(query *Query, err *error) {
 	}
 }
 
-func (sq *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
+func (sq *SqlQuery) Execute(query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute")
 
 	logStats.StartTime = time.Now()
@@ -504,7 +498,7 @@ func (sq *SqlQuery) Execute(query *Query, reply *QueryResult) (err error) {
 
 // the first QueryResult will have Fields set (and Rows nil)
 // the subsequent QueryResult will have Rows set (and Fields nil)
-func (sq *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}) error) (err error) {
+func (sq *SqlQuery) StreamExecute(query *proto.Query, sendReply func(reply interface{}) error) (err error) {
 	logStats := newSqlQueryStats("StreamExecute")
 	defer func() {
 		logStats.EndTime = time.Now()
@@ -548,15 +542,8 @@ func (sq *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}
 	logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 	defer conn.Recycle()
 
-	// then setup the callback and stream!
-	callback := func(sqr *QueryResult) (err error) {
-		err = sendReply(sqr)
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-	err = sq.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, callback)
+	// then let's stream!
+	err = sq.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, sendReply)
 	if err != nil {
 		return err
 	}
@@ -564,15 +551,7 @@ func (sq *SqlQuery) StreamExecute(query *Query, sendReply func(reply interface{}
 	return nil
 }
 
-type QueryList struct {
-	List []Query
-}
-
-type QueryResultList struct {
-	List []QueryResult
-}
-
-func (sq *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (err error) {
+func (sq *SqlQuery) ExecuteBatch(queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	defer handleError(&err)
 	ql := queryList.List
 	if len(ql) == 0 {
@@ -583,12 +562,12 @@ func (sq *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (
 	defer sq.mu.RUnlock()
 	begin_called := false
 	var noOutput string
-	session := Session{
+	session := proto.Session{
 		TransactionId: ql[0].TransactionId,
 		ConnectionId:  ql[0].ConnectionId,
 		SessionId:     ql[0].SessionId,
 	}
-	reply.List = make([]QueryResult, 0, len(ql))
+	reply.List = make([]mproto.QueryResult, 0, len(ql))
 	for _, query := range ql {
 		trimmed := strings.ToLower(strings.Trim(query.Sql, " \t\r\n"))
 		switch trimmed {
@@ -600,7 +579,7 @@ func (sq *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (
 				return err
 			}
 			begin_called = true
-			reply.List = append(reply.List, QueryResult{})
+			reply.List = append(reply.List, mproto.QueryResult{})
 		case "commit":
 			if !begin_called {
 				panic(NewTabletError(FAIL, "Cannot commit without begin"))
@@ -610,12 +589,12 @@ func (sq *SqlQuery) ExecuteBatch(queryList *QueryList, reply *QueryResultList) (
 			}
 			session.TransactionId = 0
 			begin_called = false
-			reply.List = append(reply.List, QueryResult{})
+			reply.List = append(reply.List, mproto.QueryResult{})
 		default:
 			query.TransactionId = session.TransactionId
 			query.ConnectionId = session.ConnectionId
 			query.SessionId = session.SessionId
-			var localReply QueryResult
+			var localReply mproto.QueryResult
 			if err = sq.Execute(&query, &localReply); err != nil {
 				if begin_called {
 					sq.Rollback(&session, &noOutput)
@@ -729,7 +708,7 @@ func (sq *SqlQuery) Ping(query *string, reply *string) error {
 //-----------------------------------------------
 // DDL
 
-func (sq *SqlQuery) execDDL(logStats *sqlQueryStats, ddl string) *QueryResult {
+func (sq *SqlQuery) execDDL(logStats *sqlQueryStats, ddl string) *mproto.QueryResult {
 	sq.mu.RLock()
 	defer sq.mu.RUnlock()
 	ddlPlan := sqlparser.DDLParse(ddl)
@@ -768,18 +747,18 @@ func (sq *SqlQuery) execDDL(logStats *sqlQueryStats, ddl string) *QueryResult {
 //-----------------------------------------------
 // Execution
 
-func (sq *SqlQuery) execPK(logStats *sqlQueryStats, plan *CompiledPlan) (result *QueryResult) {
+func (sq *SqlQuery) execPK(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
 	return sq.fetchPKRows(logStats, plan, pkRows)
 }
 
-func (sq *SqlQuery) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan) (result *QueryResult) {
+func (sq *SqlQuery) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	innerResult := sq.qFetch(logStats, plan, plan.Subquery, nil)
 	return sq.fetchPKRows(logStats, plan, copyRows(innerResult.Rows))
 }
 
-func (sq *SqlQuery) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]interface{}) (result *QueryResult) {
-	result = &QueryResult{}
+func (sq *SqlQuery) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]interface{}) (result *mproto.QueryResult) {
+	result = &mproto.QueryResult{}
 	tableInfo := plan.TableInfo
 	if plan.Fields == nil {
 		panic("unexpected")
@@ -848,7 +827,7 @@ func (sq *SqlQuery) validateRow(logStats *sqlQueryStats, plan *CompiledPlan, cac
 	return dbrow
 }
 
-func (sq *SqlQuery) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (result *QueryResult) {
+func (sq *SqlQuery) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	if plan.Fields != nil {
 		result = sq.qFetch(logStats, plan, plan.FullQuery, nil)
 		result.Fields = plan.Fields
@@ -868,17 +847,17 @@ func (sq *SqlQuery) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (res
 	return result
 }
 
-func (sq *SqlQuery) execInsertPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execInsertPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
 	normalizePKRows(plan.TableInfo, pkRows)
 	return sq.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
-func (sq *SqlQuery) execInsertSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execInsertSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := sq.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	innerRows := innerResult.Rows
 	if len(innerRows) == 0 {
-		return &QueryResult{RowsAffected: 0}
+		return &mproto.QueryResult{RowsAffected: 0}
 	}
 	if len(plan.ColumnNumbers) != len(innerRows[0]) {
 		panic(NewTabletError(FAIL, "Subquery length does not match column list"))
@@ -892,7 +871,7 @@ func (sq *SqlQuery) execInsertSubquery(logStats *sqlQueryStats, conn PoolConnect
 	return sq.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
-func (sq *SqlQuery) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	fillPKDefaults(plan.TableInfo, pkRows)
 	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
@@ -908,7 +887,7 @@ func (sq *SqlQuery) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnectio
 	return result
 }
 
-func (sq *SqlQuery) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.PKValues, plan.BindVars)
 	normalizePKRows(plan.TableInfo, pkRows)
 	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
@@ -923,14 +902,14 @@ func (sq *SqlQuery) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan
 	return result
 }
 
-func (sq *SqlQuery) execDMLSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execDMLSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := sq.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
 	return sq.execDMLPKRows(logStats, conn, plan, innerResult.Rows, invalidator)
 }
 
-func (sq *SqlQuery) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *QueryResult) {
+func (sq *SqlQuery) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	if len(pkRows) == 0 {
-		return &QueryResult{RowsAffected: 0}
+		return &mproto.QueryResult{RowsAffected: 0}
 	}
 	normalizePKRows(plan.TableInfo, pkRows)
 	rowsAffected := uint64(0)
@@ -945,58 +924,58 @@ func (sq *SqlQuery) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, 
 			invalidator.Delete(key)
 		}
 	}
-	return &QueryResult{RowsAffected: rowsAffected}
+	return &mproto.QueryResult{RowsAffected: rowsAffected}
 }
 
-func (sq *SqlQuery) execSet(logStats *sqlQueryStats, plan *CompiledPlan) (result *QueryResult) {
+func (sq *SqlQuery) execSet(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
 		sq.connPool.SetCapacity(int(plan.SetValue.(float64)))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_stream_pool_size":
 		sq.streamConnPool.SetCapacity(int(plan.SetValue.(float64)))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_transaction_cap":
 		sq.txPool.SetCapacity(int(plan.SetValue.(float64)))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_transaction_timeout":
 		sq.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_schema_reload_time":
 		sq.schemaInfo.SetReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_query_cache_size":
 		sq.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_max_result_size":
 		val := int32(plan.SetValue.(float64))
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
 		atomic.StoreInt32(&sq.maxResultSize, val)
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_stream_buffer_size":
 		val := int32(plan.SetValue.(float64))
 		if val < 1024 {
 			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
 		}
 		atomic.StoreInt32(&sq.streamBufferSize, val)
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_query_timeout":
 		sq.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	case "vt_idle_timeout":
 		t := plan.SetValue.(float64) * 1e9
 		sq.connPool.SetIdleTimeout(time.Duration(t))
 		sq.streamConnPool.SetIdleTimeout(time.Duration(t))
 		sq.txPool.SetIdleTimeout(time.Duration(t))
 		sq.activePool.SetIdleTimeout(time.Duration(t))
-		return &QueryResult{}
+		return &mproto.QueryResult{}
 	}
 	return sq.qFetch(logStats, plan, plan.FullQuery, nil)
 }
 
-func (sq *SqlQuery) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []interface{}) (result *QueryResult) {
+func (sq *SqlQuery) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []interface{}) (result *mproto.QueryResult) {
 	sql := sq.generateFinalSql(parsed_query, plan.BindVars, listVars, nil)
 	q, ok := sq.consolidator.Create(string(sql))
 	if ok {
@@ -1021,7 +1000,7 @@ func (sq *SqlQuery) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_q
 	return q.Result
 }
 
-func (sq *SqlQuery) directFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
+func (sq *SqlQuery) directFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	result, err := sq.executeSql(logStats, conn, sql, false)
 	if err != nil {
@@ -1031,7 +1010,7 @@ func (sq *SqlQuery) directFetch(logStats *sqlQueryStats, conn PoolConnection, pa
 }
 
 // fullFetch also fetches field info
-func (sq *SqlQuery) fullFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *QueryResult) {
+func (sq *SqlQuery) fullFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	result, err := sq.executeSql(logStats, conn, sql, true)
 	if err != nil {
@@ -1040,7 +1019,7 @@ func (sq *SqlQuery) fullFetch(logStats *sqlQueryStats, conn PoolConnection, pars
 	return result
 }
 
-func (sq *SqlQuery) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(*QueryResult) error) error {
+func (sq *SqlQuery) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(interface{}) error) error {
 	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	return sq.executeStreamSql(logStats, conn, sql, callback)
 }
@@ -1059,7 +1038,7 @@ func (sq *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVa
 	return sql
 }
 
-func (sq *SqlQuery) executeSql(logStats *sqlQueryStats, conn PoolConnection, sql []byte, wantfields bool) (*QueryResult, error) {
+func (sq *SqlQuery) executeSql(logStats *sqlQueryStats, conn PoolConnection, sql []byte, wantfields bool) (*mproto.QueryResult, error) {
 	connid := conn.Id()
 	sq.activePool.Put(connid)
 	defer sq.activePool.Remove(connid)
@@ -1081,7 +1060,7 @@ func (sq *SqlQuery) executeSql(logStats *sqlQueryStats, conn PoolConnection, sql
 	return result, nil
 }
 
-func (sq *SqlQuery) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql []byte, callback func(*QueryResult) error) error {
+func (sq *SqlQuery) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql []byte, callback func(interface{}) error) error {
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries += 1
 	logStats.AddRewrittenSql(sql)

@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"code.google.com/p/vitess/go/cache"
+	"code.google.com/p/vitess/go/mysql/proto"
 	"fmt"
 	"net/http"
 	"sync"
@@ -29,7 +30,7 @@ type Result struct {
 	executing    sync.RWMutex
 	consolidator *Consolidator
 	sql          string
-	Result       *QueryResult
+	Result       *proto.QueryResult
 	Err          error
 }
 
