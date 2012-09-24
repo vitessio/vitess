@@ -37,3 +37,20 @@ type Session struct {
 	ConnectionId  int64
 	SessionId     int64
 }
+
+type ConnectionInfo struct {
+	ConnectionId int64
+}
+
+type CacheInvalidate struct {
+	Database string
+	Dmls     []struct {
+		Table string
+		Keys  []interface{}
+	}
+}
+
+type DDLInvalidate struct {
+	Database string
+	DDL      string
+}

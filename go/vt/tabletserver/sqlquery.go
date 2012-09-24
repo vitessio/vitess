@@ -348,11 +348,7 @@ func (sq *SqlQuery) Rollback(session *proto.Session, noOutput *string) (err erro
 	return nil
 }
 
-type ConnectionInfo struct {
-	ConnectionId int64
-}
-
-func (sq *SqlQuery) CreateReserved(session *proto.Session, connectionInfo *ConnectionInfo) (err error) {
+func (sq *SqlQuery) CreateReserved(session *proto.Session, connectionInfo *proto.ConnectionInfo) (err error) {
 	defer handleError(&err)
 	sq.checkState(session.SessionId, false)
 	sq.mu.RLock()
@@ -611,19 +607,7 @@ func (sq *SqlQuery) ExecuteBatch(queryList *proto.QueryList, reply *proto.QueryR
 	return nil
 }
 
-type SlaveTxCommand struct {
-	Command string
-}
-
-type CacheInvalidate struct {
-	Database string
-	Dmls     []struct {
-		Table string
-		Keys  []interface{}
-	}
-}
-
-func (sq *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *string) (err error) {
+func (sq *SqlQuery) Invalidate(cacheInvalidate *proto.CacheInvalidate, noOutput *string) (err error) {
 	logStats := newSqlQueryStats("Invalidate")
 	defer func() {
 		logStats.EndTime = time.Now()
@@ -660,12 +644,7 @@ func (sq *SqlQuery) Invalidate(cacheInvalidate *CacheInvalidate, noOutput *strin
 	return nil
 }
 
-type DDLInvalidate struct {
-	Database string
-	DDL      string
-}
-
-func (sq *SqlQuery) InvalidateForDDL(ddl *DDLInvalidate, noOutput *string) (err error) {
+func (sq *SqlQuery) InvalidateForDDL(ddl *proto.DDLInvalidate, noOutput *string) (err error) {
 	logStats := newSqlQueryStats("InvalidateForDDL")
 	defer func() {
 		logStats.EndTime = time.Now()
