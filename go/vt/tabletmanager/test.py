@@ -267,6 +267,11 @@ def run_test_sanity():
 
   agent_62344.kill()
 
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 "" "" idle')
+  run_vtctl('-force ScrapTablet /zk/test_nj/vt/tablets/0000062344')
+
+
+
 
 def run_test_scrap():
   # Start up a master mysql and vttablet

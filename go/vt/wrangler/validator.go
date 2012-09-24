@@ -218,7 +218,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 
 	slaveAddrs, err = resolveSlaveNames(slaveAddrs)
 	if err != nil {
-		results <- vresult{masterTabletPath, err}
+		results <- vresult{masterTabletPath, fmt.Errorf("resolve slaves failed: %v", err)}
 		return
 	}
 

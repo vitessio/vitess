@@ -188,10 +188,10 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 		for {
 			_, _, watch, err := zconn.GetW(zkPath)
 			if err != nil {
-				log.Printf("WARNING: failed reading pid node: %v: %v", zkPath, err)
+				log.Printf("WARNING: failed reading pid node: %v", err)
 			} else {
 				event := <-watch
-				log.Printf("INFO: pid node event %v: %v", zkPath, event)
+				log.Printf("INFO: pid node event: %v", event)
 				if event.Ok() {
 					if event.Type == zookeeper.EVENT_DELETED {
 						// Another process took over (most likely), but no sense in starting
