@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"database/sql/driver"
 	"flag"
 	"fmt"
 	"io"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/client2"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	wr "code.google.com/p/vitess/go/vt/wrangler"
@@ -309,6 +311,37 @@ func listIdle(zconn zk.Conn, zkVtPath string) error {
 	return listTabletsByType(zconn, zkVtPath, tm.TYPE_IDLE)
 }
 
+func kquery(zconn zk.Conn, zkKeyspacePath, query string) error {
+	sconn, err := client2.Dial(zconn, zkKeyspacePath, "master", false, 5*time.Second)
+	if err != nil {
+		return err
+	}
+	rows, err := sconn.QueryBind(query, nil)
+	if err != nil {
+		return err
+	}
+	cols := rows.Columns()
+	fmt.Println(strings.Join(cols, "\t"))
+
+	rowIndex := 0
+	row := make([]driver.Value, len(cols))
+	rowStrs := make([]string, len(cols)+1)
+	for rows.Next(row) == nil {
+		for i, value := range row {
+			switch value.(type) {
+			case []byte:
+				rowStrs[i] = fmt.Sprintf("%q", value)
+			default:
+				rowStrs[i] = fmt.Sprintf("%v", value)
+			}
+		}
+
+		fmt.Println(strings.Join(rowStrs, "\t"))
+		rowIndex++
+	}
+	return nil
+}
+
 func main() {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
@@ -364,6 +397,11 @@ func main() {
 			relog.Fatal("action %v requires 1 arg", args[0])
 		}
 		err = createKeyspace(zconn, args[1])
+	case "Query":
+		if len(args) != 3 {
+			relog.Fatal("action %v requires 2 args", args[0])
+		}
+		err = kquery(zconn, args[1], args[2])
 	case "InitTablet":
 		if len(args) < 8 {
 			relog.Fatal("action %v requires 7 or 8 args", args[0])
