@@ -56,15 +56,24 @@ func ZkPathForVtName(cell, keyspace, shard, dbType string) string {
 	return path.Join(ZkPathForVtShard(cell, keyspace, shard), dbType)
 }
 
-func LookupVtName(zconn zk.Conn, cell, keyspace, shard, dbType, namedPort string) (srvs []*net.SRV, err error) {
+func LookupVtName(zconn zk.Conn, cell, keyspace, shard, dbType, namedPort string) ([]*net.SRV, error) {
 	zkPath := ZkPathForVtName(cell, keyspace, shard, dbType)
 
 	addrs, err := ReadAddrs(zconn, zkPath)
 	if err != nil {
 		return nil, fmt.Errorf("LookupVtName failed: %v %v", zkPath, err)
 	}
+	srvs, err := SrvEntries(addrs, namedPort)
+	if err != nil {
+		return nil, fmt.Errorf("LookupVtName failed: %v %v", zkPath, err)
+	}
+	return srvs, err
+}
+
+// FIXME(msolomon) merge with zkns
+func SrvEntries(addrs *VtnsAddrs, namedPort string) (srvs []*net.SRV, err error) {
 	srvs = make([]*net.SRV, 0, len(addrs.Entries))
-	hasError := false
+	var srvErr error
 	for _, entry := range addrs.Entries {
 		host := entry.Host
 		port := 0
@@ -74,17 +83,20 @@ func LookupVtName(zconn zk.Conn, cell, keyspace, shard, dbType, namedPort string
 			port = entry.NamedPortMap[namedPort]
 		}
 		if port == 0 {
-			hasError = true
-			relog.Warning("bad port: %v:%v %v", zkPath, namedPort, entry)
+			relog.Warning("vtns: bad port %v %v", namedPort, entry)
 			continue
 		}
 		srvs = append(srvs, &net.SRV{Target: host, Port: uint16(port)})
 	}
 	zkns.Sort(srvs)
-	if hasError && len(srvs) == 0 {
-		return nil, fmt.Errorf("LookupVtName failed: %v no valid endpoints found", zkPath)
+	if srvErr != nil && len(srvs) == 0 {
+		return nil, fmt.Errorf("SrvEntries failed: no valid endpoints found")
 	}
 	return
+}
+
+func SrvAddr(srv *net.SRV) string {
+	return fmt.Sprintf("%s:%d", srv.Target, srv.Port)
 }
 
 // zkPath: a node where children represent individual endpoints for a service.

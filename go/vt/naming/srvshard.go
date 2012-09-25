@@ -68,6 +68,22 @@ func ReadSrvShard(zconn zk.Conn, zkPath string) (*SrvShard, error) {
 	return srv, nil
 }
 
+func ReadSrvKeyspace(zconn zk.Conn, zkPath string) (*SrvKeyspace, error) {
+	data, stat, err := zconn.Get(zkPath)
+	if err != nil {
+		return nil, err
+	}
+	srv := new(SrvKeyspace)
+	if len(data) > 0 {
+		err = json.Unmarshal([]byte(data), srv)
+		if err != nil {
+			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v %v", zkPath, data, err)
+		}
+	}
+	srv.version = stat.Version()
+	return srv, nil
+}
+
 // These functions deal with keeping data in the shard graph up to date.
 //
 // The shard graph is the client-side view of the cluster and is derived
