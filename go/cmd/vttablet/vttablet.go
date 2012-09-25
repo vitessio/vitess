@@ -144,6 +144,9 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DBConfigsFile)
 	agent.AddChangeCallback(func(tablet tabletmanager.Tablet) {
 		if tablet.IsServingType() {
+			if dbcfgs.App.Dbname == "" {
+				dbcfgs.App.Dbname = tablet.DbName()
+			}
 			ts.AllowQueries(dbcfgs.App)
 		} else {
 			ts.DisallowQueries()

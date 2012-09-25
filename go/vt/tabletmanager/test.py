@@ -248,7 +248,18 @@ def run_test_sanity():
 
   run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
   run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('RebuildKeyspace /zk/global/vt/keyspaces/test_keyspace')
   run_vtctl('Validate /zk/global/vt/keyspaces')
+
+
+  # if these statements don't run before the tablet it will wedge waiting for the
+  # db to become accessible. this is more a bug than a feature.
+  mysql_query(62344, '', 'drop database if exists vt_test_keyspace')
+  mysql_query(62344, '', 'create database vt_test_keyspace')
+  mysql_query(62344, 'vt_test_keyspace', create_vt_select_test)
+  for q in populate_vt_select_test:
+    mysql_write_query(62344, 'vt_test_keyspace', q)
+
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
   run_vtctl('Ping /zk/test_nj/vt/tablets/0000062344')
@@ -259,6 +270,11 @@ def run_test_sanity():
 
   run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
   check_db_read_write(62344)
+
+  result, _ = run_vtctl('Query /zk/test_nj/vt/ns/test_keyspace "select * from vt_select_test"', trap_output=True)
+  rows = result.splitlines()
+  if len(rows) != 5:
+    raise TestError("expected 5 rows in vt_select_test", rows, result)
 
   run_vtctl('DemoteMaster /zk/test_nj/vt/tablets/0000062344')
   wait_db_read_only(62344)
@@ -295,6 +311,17 @@ primary key (id)
 populate_vt_insert_test = [
     "insert into vt_insert_test (msg) values ('test %s')" % x
     for x in xrange(4)]
+
+create_vt_select_test = '''create table vt_select_test (
+id bigint auto_increment,
+msg varchar(64),
+primary key (id)
+) Engine=InnoDB'''
+
+populate_vt_select_test = [
+    "insert into vt_select_test (msg) values ('test %s')" % x
+    for x in xrange(4)]
+
 
 def run_test_mysqlctl_clone():
   _wipe_zk()
