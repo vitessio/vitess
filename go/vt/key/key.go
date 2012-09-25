@@ -85,3 +85,17 @@ func (p KeyspaceIdArray) Swap(i, j int) {
 }
 
 func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
+
+type KeyRangeArray []KeyRange
+
+func (p KeyRangeArray) Len() int { return len(p) }
+
+func (p KeyRangeArray) Less(i, j int) bool {
+	return p[i].Start < p[j].Start
+}
+
+func (p KeyRangeArray) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+func (p KeyRangeArray) Sort() { sort.Sort(p) }

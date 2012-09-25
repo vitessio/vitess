@@ -253,8 +253,9 @@ func findShardForValue(value string, tabletKeys []string) int {
 	return index - 1
 }
 
-func FindShardForKey(key interface{}, tabletKeys []string) int {
-	return findShardForValue(encodeValue(key), tabletKeys)
+func FindShardForKey(key interface{}, tabletKeys []string) (i int, err error) {
+	defer handleError(&err)
+	return findShardForValue(encodeValue(key), tabletKeys), nil
 }
 
 func makeList(start, end int) []int {
