@@ -13,6 +13,7 @@ import time
 
 import MySQLdb
 
+from zk import zkocc
 
 devnull = open('/dev/null', 'w')
 
@@ -184,11 +185,20 @@ def run_test_zkocc():
   # preload the test_nj cell
   vtocc_14850 = run_bg(vtroot+'/bin/zkocc -port=14850 -connect-timeout=2s -cache-refresh-interval=1s test_nj')
   time.sleep(1)
+  zkocc_client = zkocc.ZkOccConnection("localhost:14850", 30)
+  zkocc_client.dial()
 
   # get test
   out, err = run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1', trap_output=True)
   if err != "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=false, Stale=false)\n":
     raise TestError('unexpected get output: ', err)
+  zkNode = zkocc_client.get("/zk/test_nj/zkocc1/data1")
+  if (zkNode['Data'] != "Test data 1" or \
+      zkNode['Stat']['NumChildren'] != 0 or \
+      zkNode['Stat']['Version'] != 0 or \
+      zkNode['Cached'] != True or \
+      zkNode['Stale'] != False):
+    raise TestError('unexpected zkocc_client.get output: ', zkNode)
 
   # getv test
   out, err = run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2', trap_output=True)
@@ -196,6 +206,18 @@ def run_test_zkocc():
 [1] /zk/test_nj/zkocc1/data2 = Test data 2 (NumChildren=0, Version=0, Cached=false, Stale=false)
 """:
     raise TestError('unexpected getV output: ', err)
+  zkNodes = zkocc_client.getv(["/zk/test_nj/zkocc1/data1", "/zk/test_nj/zkocc1/data2"])
+  if (zkNodes['Nodes'][0]['Data'] != "Test data 1" or \
+      zkNodes['Nodes'][0]['Stat']['NumChildren'] != 0 or \
+      zkNodes['Nodes'][0]['Stat']['Version'] != 0 or \
+      zkNodes['Nodes'][0]['Cached'] != True or \
+      zkNodes['Nodes'][0]['Stale'] != False or \
+      zkNodes['Nodes'][1]['Data'] != "Test data 2" or \
+      zkNodes['Nodes'][1]['Stat']['NumChildren'] != 0 or \
+      zkNodes['Nodes'][1]['Stat']['Version'] != 0 or \
+      zkNodes['Nodes'][1]['Cached'] != True or \
+      zkNodes['Nodes'][1]['Stale'] != False):
+    raise TestError('unexpected zkocc_client.getv output: ', zkNodes)
 
   # children test
   out, err = run(vtroot+'/bin/zkclient2 -server localhost:14850 -mode children /zk/test_nj', trap_output=True)

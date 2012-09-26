@@ -149,7 +149,7 @@ func (zkNode *ZkNode) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Binary, "Data")
 	bson.EncodeString(buf, zkNode.Data)
 
-	bson.EncodePrefix(buf, bson.Long, "Stat")
+	bson.EncodePrefix(buf, bson.Object, "Stat")
 	zkNode.Stat.MarshalBson(buf)
 
 	bson.EncodeStringArray(buf, "Children", zkNode.Children)
@@ -176,6 +176,9 @@ func (zkNode *ZkNode) UnmarshalBson(buf *bytes.Buffer) {
 		case "Data":
 			zkNode.Data = bson.DecodeString(buf, kind)
 		case "Stat":
+			if kind != bson.Object {
+				panic(bson.NewBsonError("Unexpected data type %v for Stat", kind))
+			}
 			zkNode.Stat.UnmarshalBson(buf)
 		case "Children":
 			zkNode.Children = bson.DecodeStringArray(buf, kind)
