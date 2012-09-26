@@ -110,12 +110,13 @@ def setup():
   run(vtroot+'/bin/zk touch -p /zk/test_ny/vt')
   run(vtroot+'/bin/zk touch -p /zk/test_ca/vt')
 
-def remove(path):
-  try:
-    os.remove(path)
-  except OSError as e:
-    if options.verbose:
-      print >> sys.stderr, e, path
+def remove(paths):
+  for path in paths:
+    try:
+      os.remove(path)
+    except OSError as e:
+      if options.verbose:
+        print >> sys.stderr, e, path
 
 def teardown():
   if options.skip_teardown:
@@ -138,8 +139,7 @@ def teardown():
       except OSError as e:
         if options.verbose:
           print >> sys.stderr, e
-  for path in ('.test-pids', '.test-zk-client-conf.json'):
-    remove(path)
+  remove(['.test-pids', '.test-zk-client-conf.json'])
 
 def _wipe_zk():
   run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt')
@@ -153,7 +153,7 @@ def _check_zk(ping_tablets=False):
   else:
     run(vtroot+'/bin/vtctl Validate /zk/global/vt/keyspaces')
 
-def run_test_zkocc():
+def _populate_zk():
   _wipe_zk()
 
   run(vtroot+'/bin/zk touch -p /zk/test_nj/zkocc1')
@@ -175,6 +175,11 @@ def run_test_zkocc():
   fd.write("Test data 3")
   fd.close()
   run(vtroot+'/bin/zk cp '+filename3+' /zk/test_nj/zkocc1/data3')
+
+  return [filename1, filename2, filename3]
+
+def run_test_zkocc():
+  files = _populate_zk()
 
   # preload the test_nj cell
   vtocc_14850 = run_bg(vtroot+'/bin/zkocc -port=14850 -connect-timeout=2s -cache-refresh-interval=1s test_nj')
@@ -251,14 +256,24 @@ Stale = false
 
   # FIXME(alainjobart): with better test infrastructure, maintain a list of
   # files to clean up.
-  remove(filename)
-  remove(filename1)
-  remove(filename2)
-  remove(filename3)
+  remove(files)
+  remove([filename])
+  vtocc_14850.kill()
+
+def run_test_zkocc_qps():
+  files = _populate_zk()
+
+  # preload the test_nj cell
+  vtocc_14850 = run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
+  qpser = run_bg(vtroot+'/bin/zkclient2 -server localhost:14850 -mode qps /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2')
+  time.sleep(10)
+  qpser.kill()
+  remove(files)
   vtocc_14850.kill()
 
 def run_all():
   run_test_zkocc()
+  run_test_zkocc_qps()
 
 options = None
 def main():

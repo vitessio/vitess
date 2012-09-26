@@ -9,7 +9,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync/atomic"
+	"time"
 
+	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/zk/zkocc/proto"
 )
@@ -18,7 +21,7 @@ var usage = `
 Queries the zkocc zookeeper cache, for test purposes. In get mode, if more
 than one value is asked for, will use getv.
 `
-var mode = flag.String("mode", "get", "which operation to run on the node (get, children)")
+var mode = flag.String("mode", "get", "which operation to run on the node (get, children, qps)")
 var server = flag.String("server", "localhost:3801", "zkocc server to dial")
 
 func init() {
@@ -29,51 +32,51 @@ func init() {
 	}
 }
 
-func main() {
-	flag.Parse()
-	args := flag.Args()
-
-	if len(args) == 0 {
-		flag.Usage()
-		os.Exit(1)
-	}
-
-	// connect to the RPC server using bson
+func connect() *rpcplus.Client {
 	rpcClient, err := bsonrpc.DialHTTP("tcp", *server)
 	if err != nil {
 		log.Fatalf("Can't connect to zkocc: %v", err)
 	}
+	return rpcClient
+}
 
-	if *mode == "get" {
-		if len(args) == 1 {
-			// it's a get
-			zkPath := &proto.ZkPath{args[0]}
-			zkNode := &proto.ZkNode{}
-			if err := rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
-				log.Fatalf("ZkReader.Get error: %v", err)
-			}
-			println(fmt.Sprintf("%v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren, zkNode.Stat.Version, zkNode.Cached, zkNode.Stale))
-		} else {
-			// it's a getv
-			zkPathV := &proto.ZkPathV{make([]string, len(args))}
-			for i, v := range args {
-				zkPathV.Paths[i] = v
-			}
-			zkNodeV := &proto.ZkNodeV{}
-			if err := rpcClient.Call("ZkReader.GetV", zkPathV, zkNodeV); err != nil {
-				log.Fatalf("ZkReader.GetV error: %v", err)
-			}
-			for i, zkNode := range zkNodeV.Nodes {
-				println(fmt.Sprintf("[%v] %v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", i, zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren, zkNode.Stat.Version, zkNode.Cached, zkNode.Stale))
-			}
+func get(rpcClient *rpcplus.Client, path string, verbose bool) {
+	// it's a get
+	zkPath := &proto.ZkPath{path}
+	zkNode := &proto.ZkNode{}
+	if err := rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
+		log.Fatalf("ZkReader.Get error: %v", err)
+	}
+	if verbose {
+		println(fmt.Sprintf("%v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren, zkNode.Stat.Version, zkNode.Cached, zkNode.Stale))
+	}
+
+}
+
+func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
+	zkPathV := &proto.ZkPathV{make([]string, len(paths))}
+	for i, v := range paths {
+		zkPathV.Paths[i] = v
+	}
+	zkNodeV := &proto.ZkNodeV{}
+	if err := rpcClient.Call("ZkReader.GetV", zkPathV, zkNodeV); err != nil {
+		log.Fatalf("ZkReader.GetV error: %v", err)
+	}
+	if verbose {
+		for i, zkNode := range zkNodeV.Nodes {
+			println(fmt.Sprintf("[%v] %v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", i, zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren, zkNode.Stat.Version, zkNode.Cached, zkNode.Stale))
 		}
-	} else if *mode == "children" {
-		for _, v := range args {
-			zkPath := &proto.ZkPath{v}
-			zkNode := &proto.ZkNode{}
-			if err := rpcClient.Call("ZkReader.Children", zkPath, zkNode); err != nil {
-				log.Fatalf("ZkReader.Children error: %v", err)
-			}
+	}
+}
+
+func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
+	for _, v := range paths {
+		zkPath := &proto.ZkPath{v}
+		zkNode := &proto.ZkNode{}
+		if err := rpcClient.Call("ZkReader.Children", zkPath, zkNode); err != nil {
+			log.Fatalf("ZkReader.Children error: %v", err)
+		}
+		if verbose {
 			println(fmt.Sprintf("Path = %v", zkNode.Path))
 			for i, child := range zkNode.Children {
 				println(fmt.Sprintf("Child[%v] = %v", i, child))
@@ -83,6 +86,54 @@ func main() {
 			println(fmt.Sprintf("Cached = %v", zkNode.Cached))
 			println(fmt.Sprintf("Stale = %v", zkNode.Stale))
 		}
+	}
+}
+
+func qps(paths []string) {
+	var count int32
+	for _, path := range paths {
+		for i := 0; i < 100; i++ {
+			go func() {
+				rpcClient := connect()
+				for true {
+					get(rpcClient, path, false)
+					atomic.AddInt32(&count, 1)
+				}
+			}()
+		}
+	}
+
+	ticker := time.NewTicker(time.Second)
+	for _ = range ticker.C {
+		c := atomic.LoadInt32(&count)
+		atomic.StoreInt32(&count, 0)
+		println(fmt.Sprintf("QPS = %v", c))
+	}
+}
+
+func main() {
+	flag.Parse()
+	args := flag.Args()
+	if len(args) == 0 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *mode == "get" {
+		rpcClient := connect()
+		if len(args) == 1 {
+			get(rpcClient, args[0], true)
+		} else {
+			getv(rpcClient, args, true)
+		}
+
+	} else if *mode == "children" {
+		rpcClient := connect()
+		children(rpcClient, args, true)
+
+	} else if *mode == "qps" {
+		qps(args)
+
 	} else {
 		flag.Usage()
 		log.Fatalf("Invalid mode: %v", mode)
