@@ -34,6 +34,9 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
+// Each TabletChangeCallback must be idempotent and "threadsafe".  The
+// agent will execute these in a new goroutine each time a change is
+// triggered.
 type TabletChangeCallback func(tablet Tablet)
 
 type ActionAgent struct {
@@ -148,7 +151,7 @@ func (agent *ActionAgent) dispatchAction(actionPath string) error {
 		for _, f := range agent.changeCallbacks {
 			relog.Info("running tablet callback: %v %v", actionPath, f)
 			// Access directly since we have the lock.
-			f(*agent._tablet.Tablet)
+			go f(*agent._tablet.Tablet)
 		}
 		agent.mutex.Unlock()
 	}
