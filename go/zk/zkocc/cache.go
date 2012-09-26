@@ -6,11 +6,16 @@
 package zkocc
 
 import (
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/zk/zkocc/proto"
 	"launchpad.net/gozk/zookeeper"
 	"sync"
 	"time"
 )
+
+// The cache is a map of entry. The mutex on the cache only protects the
+// map itself, not individual entries. Each entry has a mutex too.
+// Once an entry is added to the map, it is never removed.
 
 // cache entry state
 const (
@@ -179,9 +184,8 @@ func (zkc *ZkCache) markForRefresh() {
 
 // return a few values that need to be refreshed
 // FIXME(alainjobart) configure the refresh count
-func (zkc *ZkCache) refreshSomeValues(zconn *zookeeper.Conn) {
+func (zkc *ZkCache) refreshSomeValues(zconn *zookeeper.Conn, maxToRefresh int) {
 	// build a list of a few values we want to refresh
-	maxToRefresh := 10
 	refreshThreshold := time.Now().Add(-10 * time.Minute)
 
 	dataEntries := make([]string, 0, maxToRefresh)
@@ -212,6 +216,13 @@ func (zkc *ZkCache) refreshSomeValues(zconn *zookeeper.Conn) {
 			zkStat := &proto.ZkStat{}
 			zkStatFromZookeeperStat(stat, zkStat)
 			zkc.updateData(path, data, zkStat, watch)
+		} else if zookeeper.IsError(err, zookeeper.ZCLOSING) {
+			// connection is closing, no point in asking for more
+			relog.Warning("failed to refresh cache: %v (and stopping refresh)", err.Error())
+			return
+		} else {
+			// individual failure
+			relog.Warning("failed to refresh cache: %v", err.Error())
 		}
 	}
 
@@ -221,6 +232,13 @@ func (zkc *ZkCache) refreshSomeValues(zconn *zookeeper.Conn) {
 			zkStat := &proto.ZkStat{}
 			zkStatFromZookeeperStat(stat, zkStat)
 			zkc.updateChildren(path, children, zkStat, watch)
+		} else if zookeeper.IsError(err, zookeeper.ZCLOSING) {
+			// connection is closing, no point in asking for more
+			relog.Warning("failed to refresh cache: %v (and stopping refresh)", err.Error())
+			return
+		} else {
+			// individual failure
+			relog.Warning("failed to refresh cache: %v", err.Error())
 		}
 	}
 }

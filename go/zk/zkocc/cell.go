@@ -5,16 +5,26 @@
 package zkocc
 
 import (
+	"flag"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"code.google.com/p/vitess/go/relog"
 	"launchpad.net/gozk/zookeeper"
 )
 
 // a zkCell object represents a zookeeper cell, with a cache and a connection
 // to the real cell.
+
+var connectTimeout = flag.Duration("connect-timeout", 30*time.Second,
+	"zookeeper connection time out")
+var reconnectInterval = flag.Int("reconnect-interval", 3,
+	"how many seconds to wait between reconnect attempts")
+var refreshInterval = flag.Duration("cache-refresh-interval", 1*time.Second,
+	"how many seconds to wait between cache refreshes")
+var refreshCount = flag.Int("cache-refresh-count", 10,
+	"how many entries to refresh at every tick")
 
 // Our state. We need this to be independent as we want to decorelate the
 // connection from what clients are asking for.
@@ -46,10 +56,9 @@ const (
 
 type zkCell struct {
 	// set at creation
-	cellName       string
-	zkAddr         string
-	connectTimeout time.Duration
-	zcache         *ZkCache
+	cellName string
+	zkAddr   string
+	zcache   *ZkCache
 
 	// connection related variables
 	mutex   sync.Mutex // For connection & state only
@@ -59,8 +68,8 @@ type zkCell struct {
 	lastErr error      // last connection error
 }
 
-func newZkCell(name, zkaddr string, ctimeout time.Duration) *zkCell {
-	result := &zkCell{cellName: name, zkAddr: zkaddr, connectTimeout: ctimeout, zcache: newZkCache()}
+func newZkCell(name, zkaddr string) *zkCell {
+	result := &zkCell{cellName: name, zkAddr: zkaddr, zcache: newZkCache()}
 	result.ready = sync.NewCond(&result.mutex)
 	go result.backgroundRefresher()
 	return result
@@ -83,7 +92,7 @@ func (zcell *zkCell) connect() {
 	zcell.mutex.Unlock()
 
 	// now connect
-	zconn, session, err := zookeeper.Dial(zcell.zkAddr, zcell.connectTimeout)
+	zconn, session, err := zookeeper.Dial(zcell.zkAddr, *connectTimeout)
 	if err == nil {
 		// Wait for connection.
 		// FIXME(msolomon) the deadlines seems to be a bit fuzzy, need to double check
@@ -106,19 +115,19 @@ func (zcell *zkCell) connect() {
 		panic(fmt.Errorf("Unexpected state: %v", zcell.state))
 	}
 	if err == nil {
+		relog.Info("zk cell conn: cell %v connected", zcell.cellName)
 		zcell.state = CELL_CONNECTED
 		zcell.lastErr = nil
 
-		// FIXME(alainjobart): trigger a full reload of the
-		// map, and sets the triggers.
 	} else {
+		relog.Info("zk cell conn: cell %v connection failed: %v", zcell.cellName, err)
 		zcell.state = CELL_BACKOFF
 		zcell.lastErr = err
 
 		go func() {
 			// we're going to try to reconnect at some point
 			// FIXME(alainjobart) backoff algorithm?
-			<-time.NewTimer(3 * time.Second).C
+			<-time.NewTimer(time.Duration(*reconnectInterval) * time.Second).C
 
 			// switch back to DISCONNECTED, and trigger a connect
 			zcell.mutex.Lock()
@@ -134,10 +143,28 @@ func (zcell *zkCell) connect() {
 	zcell.mutex.Unlock()
 }
 
+// the state transitions from the library are not that obvious:
+// - If the server connection is delayed (as with using pkill -STOP
+//   on the process), the client will get a STATE_CONNECTING message,
+//   and then most likely after that a STATE_EXPIRED_SESSION event.
+//   We lost all of our watches, we need to reset them.
+// - If the server connection dies, and cannot be re-established
+//   (server was restarted), the client will get a STATE_CONNECTING message,
+//   and then a STATE_CONNECTED when the connection is re-established.
+//   The watches will still be valid.
+// - If the server connection dies, and a new server comes in (different
+//   server root), the client will never connect again (it will try though!).
+//   So we'll only get a STATE_CONNECTING and nothing else. The watches
+//   won't be valid at all any more.
+// Given all these cases, the simpler for now is to always consider a
+// STATE_CONNECTING message as a cache invalidation, close the connection
+// and start over.
+// (alainjobart: Note I've never seen a STATE_CLOSED message)
 func (zcell *zkCell) handleSessionEvents(conn *zookeeper.Conn, session <-chan zookeeper.Event) {
 	for event := range session {
+		relog.Info("zk cell conn: cell %v received: %v", zcell.cellName, event)
 		switch event.State {
-		case zookeeper.STATE_EXPIRED_SESSION:
+		case zookeeper.STATE_EXPIRED_SESSION, zookeeper.STATE_CONNECTING:
 			conn.Close()
 			fallthrough
 		case zookeeper.STATE_CLOSED:
@@ -149,10 +176,10 @@ func (zcell *zkCell) handleSessionEvents(conn *zookeeper.Conn, session <-chan zo
 			// if connect fails again, then we'll backoff
 			go zcell.connect()
 			zcell.mutex.Unlock()
-			log.Printf("zk cell conn: session for cell %v ended: %v", zcell.cellName, event)
+			relog.Warning("zk cell conn: session for cell %v ended: %v", zcell.cellName, event)
 			return
 		default:
-			log.Printf("zk conn cache: session for cell %v event: %v", zcell.cellName, event)
+			relog.Info("zk conn cache: session for cell %v event: %v", zcell.cellName, event)
 		}
 	}
 }
@@ -185,7 +212,7 @@ func (zcell *zkCell) getConnection() (*zookeeper.Conn, error) {
 // runs in the background and refreshes the cache if we're in connected state
 // FIXME(alainjobart) configure the refresh interval
 func (zcell *zkCell) backgroundRefresher() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(*refreshInterval)
 	for _ = range ticker.C {
 		// grab a valid connection
 		zcell.mutex.Lock()
@@ -198,6 +225,6 @@ func (zcell *zkCell) backgroundRefresher() {
 		zcell.mutex.Unlock()
 
 		// get a few values to refresh, and ask for them
-		zcell.zcache.refreshSomeValues(zconn)
+		zcell.zcache.refreshSomeValues(zconn, *refreshCount)
 	}
 }

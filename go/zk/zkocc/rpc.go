@@ -8,7 +8,6 @@ import (
 	"errors"
 	"strings"
 	"sync"
-	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/zk"
@@ -28,10 +27,9 @@ import (
 
 // ZkReader is the main object receiving RPC calls
 type ZkReader struct {
-	mutex          sync.Mutex
-	zcell          map[string]*zkCell
-	localCell      string
-	connectTimeout time.Duration
+	mutex     sync.Mutex
+	zcell     map[string]*zkCell
+	localCell string
 }
 
 var (
@@ -39,7 +37,7 @@ var (
 )
 
 func NewZkReader(preload []string) *ZkReader {
-	zkr := &ZkReader{zcell: make(map[string]*zkCell), localCell: zk.GuessLocalCell(), connectTimeout: 30 * time.Second}
+	zkr := &ZkReader{zcell: make(map[string]*zkCell), localCell: zk.GuessLocalCell()}
 
 	// start some cells
 	for _, cellName := range preload {
@@ -79,7 +77,7 @@ func (zkr *ZkReader) getCell(path string) (*zkCell, string) {
 	cell, ok := zkr.zcell[cellName]
 	if !ok {
 		zkaddr := zk.ZkPathToZkAddr(path)
-		cell = newZkCell(cellName, zkaddr, zkr.connectTimeout)
+		cell = newZkCell(cellName, zkaddr)
 		zkr.zcell[cellName] = cell
 	}
 	zkr.mutex.Unlock()

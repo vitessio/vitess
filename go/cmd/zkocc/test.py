@@ -110,6 +110,13 @@ def setup():
   run(vtroot+'/bin/zk touch -p /zk/test_ny/vt')
   run(vtroot+'/bin/zk touch -p /zk/test_ca/vt')
 
+def remove(path):
+  try:
+    os.remove(path)
+  except OSError as e:
+    if options.verbose:
+      print >> sys.stderr, e, path
+
 def teardown():
   if options.skip_teardown:
     return
@@ -132,11 +139,7 @@ def teardown():
         if options.verbose:
           print >> sys.stderr, e
   for path in ('.test-pids', '.test-zk-client-conf.json'):
-    try:
-      os.remove(path)
-    except OSError as e:
-      if options.verbose:
-        print >> sys.stderr, e, path
+    remove(path)
 
 def _wipe_zk():
   run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt')
@@ -156,19 +159,25 @@ def run_test_zkocc():
   run(vtroot+'/bin/zk touch -p /zk/test_nj/zkocc1')
   run(vtroot+'/bin/zk touch -p /zk/test_nj/zkocc2')
   fd = tempfile.NamedTemporaryFile(delete=False)
-  filename = fd.name
+  filename1 = fd.name
   fd.write("Test data 1")
   fd.close()
-  run(vtroot+'/bin/zk cp '+filename+' /zk/test_nj/zkocc1/data1')
+  run(vtroot+'/bin/zk cp '+filename1+' /zk/test_nj/zkocc1/data1')
 
   fd = tempfile.NamedTemporaryFile(delete=False)
-  filename = fd.name
+  filename2 = fd.name
   fd.write("Test data 2")
   fd.close()
-  run(vtroot+'/bin/zk cp '+filename+' /zk/test_nj/zkocc1/data2')
+  run(vtroot+'/bin/zk cp '+filename2+' /zk/test_nj/zkocc1/data2')
+
+  fd = tempfile.NamedTemporaryFile(delete=False)
+  filename3 = fd.name
+  fd.write("Test data 3")
+  fd.close()
+  run(vtroot+'/bin/zk cp '+filename3+' /zk/test_nj/zkocc1/data3')
 
   # preload the test_nj cell
-  vtocc_14850 = run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
+  vtocc_14850 = run_bg(vtroot+'/bin/zkocc -port=14850 -connect-timeout=2s -cache-refresh-interval=1s test_nj')
   time.sleep(1)
 
   # get test
@@ -203,24 +212,49 @@ Stale = false
   outfd.close()
   time.sleep(1)
 
-  # kill zk server, sleep a second, restart zk server, sleep a second
-  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 teardown')
-  time.sleep(1)
-  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 init')
-  time.sleep(1)
+  # kill zk server, sleep a bit, restart zk server, sleep a bit
+  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 shutdown')
+  time.sleep(3)
+  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 start')
+  time.sleep(3)
 
   querier.kill()
 
-  fd = open(filename, "r")
-  count = 0
-  for line in fd:
-    if line != "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)\n":
-      raise TestError('unexpected line: ', line)
-    count += 1
-  fd.close()
-  if count < 25 or count > 50:
-    raise TestError('unexpected count: ', count)
+  # get test
+  out, err = run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data3', trap_output=True)
+  if err != "/zk/test_nj/zkocc1/data3 = Test data 3 (NumChildren=0, Version=0, Cached=false, Stale=false)\n":
+    raise TestError('unexpected get output: ', err)
 
+
+  print "Checking", filename
+  fd = open(filename, "r")
+  state = 0
+  for line in fd:
+    if line == "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)\n":
+      stale = False
+    elif line == "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=true)\n":
+      stale = True
+    else:
+      raise TestError('unexpected line: ', line)
+    if state == 0:
+      if stale:
+        state = 1
+    elif state == 1:
+      if not stale:
+        state = 2
+    else:
+      if stale:
+        raise TestError('unexpected stale state')
+  if state != 2:
+    raise TestError('unexpected ended stale state')
+  fd.close()
+
+  # FIXME(alainjobart): with better test infrastructure, maintain a list of
+  # files to clean up.
+  remove(filename)
+  remove(filename1)
+  remove(filename2)
+  remove(filename3)
   vtocc_14850.kill()
 
 def run_all():
