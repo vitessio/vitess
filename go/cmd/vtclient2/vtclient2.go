@@ -22,6 +22,7 @@ in the form of :v0, :v1, etc.
 `
 
 var count = flag.Int("count", 1, "how many times to run the query")
+var dml = flag.Bool("dml", false, "this is a dml query, use a transaction")
 var server = flag.String("server", "localhost:6603/test", "vtocc server as hostname:port/dbname")
 var streaming = flag.Bool("streaming", false, "use the streaming API")
 var verbose = flag.Bool("verbose", false, "show results")
@@ -54,53 +55,75 @@ func main() {
 	log.Println("Sending the query...")
 	now := time.Now()
 
-	// launch the query
-	r, err := db.Query(args[0])
-	if err != nil {
-		log.Fatalf("client error: %v", err)
-	}
-
-	// get the headers
-	cols, err := r.Columns()
-	if err != nil {
-		log.Fatalf("client error: %v", err)
-	}
-
-	// print the header
-	if *verbose {
-		line := "Index"
-		for _, field := range cols {
-			line += "\t" + field
-		}
-		log.Println(line)
-	}
-
-	// get the rows
-	rowIndex := 0
-	for r.Next() {
-		row := make([]sql.NullString, len(cols))
-		rowi := make([]interface{}, len(cols))
-		for i := 0; i < len(cols); i++ {
-			rowi[i] = &row[i]
-		}
-		err := r.Scan(rowi...)
+	// handle dml
+	if *dml {
+		t, err := db.Begin()
 		if err != nil {
-			log.Fatalf("Error %s\n", err.Error())
+			log.Fatalf("begin failed: %v", err)
 		}
 
-		// print the line if needed
+		r, err := t.Exec(args[0])
+		if err != nil {
+			log.Fatalf("exec failed: %v", err)
+		}
+
+		err = t.Commit()
+		if err != nil {
+			log.Fatalf("commit failed: %v", err)
+		}
+
+		n, err := r.RowsAffected()
+		log.Println("Total time:", time.Now().Sub(now), "Rows affected:", n)
+	} else {
+
+		// launch the query
+		r, err := db.Query(args[0])
+		if err != nil {
+			log.Fatalf("client error: %v", err)
+		}
+
+		// get the headers
+		cols, err := r.Columns()
+		if err != nil {
+			log.Fatalf("client error: %v", err)
+		}
+
+		// print the header
 		if *verbose {
-			line := fmt.Sprintf("%d", rowIndex)
-			for _, value := range row {
-				if value.Valid {
-					line += value.String + "\t"
-				} else {
-					line += "\t"
-				}
+			line := "Index"
+			for _, field := range cols {
+				line += "\t" + field
 			}
 			log.Println(line)
 		}
-		rowIndex++
+
+		// get the rows
+		rowIndex := 0
+		for r.Next() {
+			row := make([]sql.NullString, len(cols))
+			rowi := make([]interface{}, len(cols))
+			for i := 0; i < len(cols); i++ {
+				rowi[i] = &row[i]
+			}
+			err := r.Scan(rowi...)
+			if err != nil {
+				log.Fatalf("Error %s\n", err.Error())
+			}
+
+			// print the line if needed
+			if *verbose {
+				line := fmt.Sprintf("%d", rowIndex)
+				for _, value := range row {
+					if value.Valid {
+						line += value.String + "\t"
+					} else {
+						line += "\t"
+					}
+				}
+				log.Println(line)
+			}
+			rowIndex++
+		}
+		log.Println("Total time:", time.Now().Sub(now), "Row count:", rowIndex)
 	}
-	log.Println("Total time:", time.Now().Sub(now), "Row count:", rowIndex)
 }

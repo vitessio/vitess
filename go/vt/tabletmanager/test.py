@@ -108,7 +108,7 @@ def mysql_write_query(uid, dbname, query):
 
 # doesn't work as vttablet query service is disabled.
 def vttablet_write_query(uid, dbname, query):
-  run(vtroot+'/bin/vtclient2 -server=localhost:%u/%s "%s"' %
+  run(vtroot+'/bin/vtclient2 -server=localhost:%u/%s -dml "%s"' %
       (uid, dbname, query))
 
 def check_db_var(uid, name, value):
@@ -156,7 +156,7 @@ def setup():
   # compile all the tools
   run('go build', cwd=vttop+'/go/cmd/mysqlctl')
   run('go build', cwd=vttop+'/go/cmd/vtaction')
-#  run('go build', cwd=vttop+'/go/cmd/vtclient2')
+  run('go build', cwd=vttop+'/go/cmd/vtclient2')
   run('go build', cwd=vttop+'/go/cmd/vtctl')
   run('go build', cwd=vttop+'/go/cmd/vttablet')
   run('go build', cwd=vttop+'/go/cmd/zkctl')
@@ -441,53 +441,51 @@ def run_test_mysqlctl_split():
 
   agent_62344 = run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
-  mysql_query(62344, '', 'create database vt_snapshot_test')
-  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  mysql_query(62344, '', 'drop database if exists vt_test_keyspace')
+  mysql_query(62344, '', 'create database vt_test_keyspace')
+  mysql_query(62344, 'vt_test_keyspace', create_vt_insert_test)
   for q in populate_vt_insert_test:
-    mysql_write_query(62344, 'vt_snapshot_test', q)
+    mysql_write_query(62344, 'vt_test_keyspace', q)
 
-  run(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 partialsnapshot vt_snapshot_test id 0 3')
+  run(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 partialsnapshot vt_test_keyspace id 0 3')
 
   pause("partialsnapshot finished")
 
   mysql_query(62044, '', 'stop slave')
-  mysql_query(62044, '', 'drop database if exists vt_snapshot_test')
-  mysql_query(62044, '', 'create database vt_snapshot_test')
+  mysql_query(62044, '', 'drop database if exists vt_test_keyspace')
+  mysql_query(62044, '', 'create database vt_test_keyspace')
   run(vtroot+'/bin/mysqlctl -tablet-uid 62044 -port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/replica_source.json')
 
-  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  result = mysql_query(62044, 'vt_test_keyspace', 'select count(*) from vt_insert_test')
   if result[0][0] != 2:
     raise TestError("expected 2 rows in vt_insert_test", result)
 
-  #
-  # This next part doesn't work: I wanted to add values on the master
-  # and make sure they get replicated or not to the client.
-  # However, we can't go to mysql directly to add the values,
-  # as it won't add the comment to the query and let the slave not replicate.
-  # And we can't go to vtocc, as it's not configured properly
-  # for talking to the db for queries.
-
-  # add two values on the master, one in range, one out of range, make
+  # change/add two values on the master, one in range, one out of range, make
   # sure the right one propagate and not the other
-  # vttablet_write_query(6700, 'vt_snapshot_test', "insert into vt_insert_test (id, msg) values (5, 'test should not propagate')")
-  # vttablet_write_query(6700, 'vt_snapshot_test', "insert into vt_insert_test (id, msg) values (0, 'test should propagate')")
+  run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
+  vttablet_write_query(6700, 'vt_test_keyspace', "insert into vt_insert_test (id, msg) values (5, 'test should not propagate')")
+  vttablet_write_query(6700, 'vt_test_keyspace', "update vt_insert_test set msg='test should propagate' where id=2")
 
-  # pause("look at db now!")
+  pause("look at db now!")
 
-  # timeout = 10
-  # while timeout > 0:
-  #   result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test where id=0')
-  #   if result[0][0] == 1:
-  #     break
-  #   timeout -= 1
-  #   time.sleep(1)
-  # result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test where id=0')
-  # if result[0][0] != 1:
-  #     raise TestError("expected propagation to happen", result)
-  # result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test where id=5')
-  # if result[0][0] != 0:
-  #     raise TestError("expected propagation not to happen", result)
+  # wait until value that should have been changed is here
+  timeout = 10
+  while timeout > 0:
+    result = mysql_query(62044, 'vt_test_keyspace', 'select msg from vt_insert_test where id=2')
+    if result[0][0] == "test should propagate":
+      break
+    timeout -= 1
+    time.sleep(1)
+  if timeout == 0:
+    raise TestError("expected propagation to happen", result)
+
+  # test value that should not propagate
+  # this part is disabled now, as the replication pruning is only enabled
+  # for row-based replication, but the mysql server is statement based.
+  # will re-enable once we get statement-based pruning patch into mysql.
+#  result = mysql_query(62044, 'vt_test_keyspace', 'select count(*) from vt_insert_test where id=5')
+#  if result[0][0] != 0:
+#    raise TestError("expected propagation not to happen", result)
 
   agent_62344.kill()
 
