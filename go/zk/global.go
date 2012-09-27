@@ -81,7 +81,7 @@ func (gzc *GlobalConn) Create(path, value string, flags int, aclv []zookeeper.AC
 	return createdPaths[0], errs[0]
 }
 
-func (gzc *GlobalConn) Get(path string) (data string, stat *zookeeper.Stat, err error) {
+func (gzc *GlobalConn) Get(path string) (data string, stat Stat, err error) {
 	datas := make([]string, len(gzc.zconns))
 	for i, zconn := range gzc.zconns {
 		data, stat, err = zconn.Get(path)
@@ -124,7 +124,7 @@ func eqSlice(a, b []string) bool {
 	return true
 }
 
-func (gzc *GlobalConn) Set(path, value string, version int) (stat *zookeeper.Stat, err error) {
+func (gzc *GlobalConn) Set(path, value string, version int) (stat Stat, err error) {
 	for _, zconn := range gzc.zconns {
 		stat, err = zconn.Set(path, value, version)
 		if err != nil {

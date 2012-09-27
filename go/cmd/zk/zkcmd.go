@@ -24,6 +24,9 @@ import (
 var zkAddrs = opts.LongSingle("--zk.addrs",
 	"list of zookeeper servers (server1:port1,server2:port2,...)",
 	"")
+var zkoccAddr = opts.LongSingle("--zk.zkocc-addr",
+	"if specified, talk to a zkocc process",
+	"")
 
 var longListing = opts.ShortFlag("-l", "long listing")
 var directoryListing = opts.ShortFlag("-d", "list directory instead of contents")
@@ -88,6 +91,8 @@ The local cell may be overridden with the ZK_CLIENT_LOCAL_CELL environment
 variable.
 
 --zk.addrs can override the value in the conf file.
+--zk.zkocc-addr can be used to connect to a zkocc process. Only a couple
+  operations are then permitted (cat and ls)
 `
 
 const (
@@ -132,6 +137,9 @@ func main() {
 	}
 
 	if *zkAddrs != "" {
+		if *zkoccAddr != "" {
+			panic(fmt.Errorf("zk.addrs and zk.zkocc-addr are mutually exclusive"))
+		}
 		zc, session, err := zookeeper.Dial(*zkAddrs, 5*time.Second)
 		if err == nil {
 			// Wait for connection.
@@ -140,6 +148,15 @@ func main() {
 				panic(fmt.Errorf("zk connect failed: %v", event.State))
 			}
 
+		}
+		zconn = zk.NewZkConn(zc)
+	}
+
+	if *zkoccAddr != "" {
+		zc := &zk.ZkoccConn{}
+		err := zc.Dial(*zkoccAddr)
+		if err != nil {
+			panic(fmt.Errorf("zkocc connect failed: %v", err))
 		}
 		zconn = zc
 	}
@@ -320,7 +337,7 @@ func cmdLs(args []string) {
 			}
 			wg := sync.WaitGroup{}
 			mutex := sync.Mutex{}
-			statMap := make(map[string]*zookeeper.Stat)
+			statMap := make(map[string]zk.Stat)
 			for _, child := range children {
 				localPath := path.Join(zkPath, child)
 				wg.Add(1)
@@ -353,7 +370,7 @@ func cmdLs(args []string) {
 	}
 }
 
-func fmtPath(stat *zookeeper.Stat, zkPath string, showFullPath bool) {
+func fmtPath(stat zk.Stat, zkPath string, showFullPath bool) {
 	var name, perms string
 
 	if !showFullPath {
@@ -375,7 +392,11 @@ func fmtPath(stat *zookeeper.Stat, zkPath string, showFullPath bool) {
 		} else {
 			perms = "-rw-rw-rw-"
 		}
-		fmt.Printf("%v %v %v % 8v % 20v %v\n", perms, "zk", "zk", stat.DataLength(), stat.MTime().Format(timeFmt), name)
+		// always print the Local version of the time. zookeeper's
+		// go / C library would return a local time, whereas
+		// gorpc to zkocc returns a UTC time. By always printing the
+		// Local version we make them the same.
+		fmt.Printf("%v %v %v % 8v % 20v %v\n", perms, "zk", "zk", stat.DataLength(), stat.MTime().Local().Format(timeFmt), name)
 	} else {
 		fmt.Printf("%v\n", name)
 	}

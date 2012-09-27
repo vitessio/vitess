@@ -7,7 +7,9 @@ package zkwrangler
 import (
 	"log"
 	"testing"
+	"time"
 
+	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -35,12 +37,12 @@ func TestGetMasterPosition(t *testing.T) {
 		t.Logf("skipping")
 		return
 	}
-	wr := NewWrangler(zconn)
+	wr := NewWrangler(zk.NewZkConn(zconn), 30*time.Second)
 	tablet, err := wr.readTablet("/zk/test/vt/tablets/0000062344")
 	if err != nil {
 		t.Error(err)
 	}
-	replicationPosition, err := getMasterPosition(tablet)
+	replicationPosition, err := getMasterPosition(tablet.Tablet)
 	if err != nil {
 		t.Error(err)
 	}

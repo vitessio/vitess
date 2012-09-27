@@ -214,7 +214,7 @@ func (zkc *ZkCache) refreshSomeValues(zconn *zookeeper.Conn, maxToRefresh int) {
 		data, stat, watch, err := zconn.GetW(path)
 		if err == nil {
 			zkStat := &proto.ZkStat{}
-			zkStatFromZookeeperStat(stat, zkStat)
+			zkStat.FromZookeeperStat(stat)
 			zkc.updateData(path, data, zkStat, watch)
 		} else if zookeeper.IsError(err, zookeeper.ZCLOSING) {
 			// connection is closing, no point in asking for more
@@ -230,7 +230,7 @@ func (zkc *ZkCache) refreshSomeValues(zconn *zookeeper.Conn, maxToRefresh int) {
 		children, stat, watch, err := zconn.ChildrenW(path)
 		if err == nil {
 			zkStat := &proto.ZkStat{}
-			zkStatFromZookeeperStat(stat, zkStat)
+			zkStat.FromZookeeperStat(stat)
 			zkc.updateChildren(path, children, zkStat, watch)
 		} else if zookeeper.IsError(err, zookeeper.ZCLOSING) {
 			// connection is closing, no point in asking for more

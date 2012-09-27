@@ -48,7 +48,7 @@ func get(rpcClient *rpcplus.Client, path string, verbose bool) {
 		log.Fatalf("ZkReader.Get error: %v", err)
 	}
 	if verbose {
-		println(fmt.Sprintf("%v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren, zkNode.Stat.Version, zkNode.Cached, zkNode.Stale))
+		println(fmt.Sprintf("%v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren(), zkNode.Stat.Version(), zkNode.Cached, zkNode.Stale))
 	}
 
 }
@@ -64,7 +64,7 @@ func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 	}
 	if verbose {
 		for i, zkNode := range zkNodeV.Nodes {
-			println(fmt.Sprintf("[%v] %v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", i, zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren, zkNode.Stat.Version, zkNode.Cached, zkNode.Stale))
+			println(fmt.Sprintf("[%v] %v = %v (NumChildren=%v, Version=%v, Cached=%v, Stale=%v)", i, zkNode.Path, zkNode.Data, zkNode.Stat.NumChildren(), zkNode.Stat.Version(), zkNode.Cached, zkNode.Stale))
 		}
 	}
 }
@@ -81,8 +81,8 @@ func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 			for i, child := range zkNode.Children {
 				println(fmt.Sprintf("Child[%v] = %v", i, child))
 			}
-			println(fmt.Sprintf("NumChildren = %v", zkNode.Stat.NumChildren))
-			println(fmt.Sprintf("CVersion = %v", zkNode.Stat.CVersion))
+			println(fmt.Sprintf("NumChildren = %v", zkNode.Stat.NumChildren()))
+			println(fmt.Sprintf("CVersion = %v", zkNode.Stat.CVersion()))
 			println(fmt.Sprintf("Cached = %v", zkNode.Cached))
 			println(fmt.Sprintf("Stale = %v", zkNode.Stale))
 		}

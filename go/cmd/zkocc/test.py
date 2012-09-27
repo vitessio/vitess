@@ -10,6 +10,7 @@ from subprocess import check_call, Popen, CalledProcessError, PIPE
 import sys
 import tempfile
 import time
+import datetime
 
 import MySQLdb
 
@@ -179,6 +180,25 @@ def _populate_zk():
 
   return [filename1, filename2, filename3]
 
+def _check_zk_output(cmd, expected):
+  # directly for sanity
+  out, err = run(vtroot+'/bin/zk ' + cmd, trap_output=True)
+  if out != expected:
+    raise TestError('unexpected direct zk output: ', cmd, "is", out, "but expected", expected)
+
+  # using zkocc
+  out, err = run(vtroot+'/bin/zk --zk.zkocc-addr=localhost:14850 ' + cmd, trap_output=True)
+  if out != expected:
+    raise TestError('unexpected zk zkocc output: ', cmd, "is", out, "but expected", expected)
+
+  if options.verbose:
+    print "Matched:", out
+
+def _format_time(timeFromBson):
+  (tz, val) = timeFromBson
+  t = datetime.datetime.fromtimestamp(val/1000)
+  return t.strftime("%Y-%m-%d %H:%M:%S")
+
 def run_test_zkocc():
   files = _populate_zk()
 
@@ -201,12 +221,13 @@ def run_test_zkocc():
     raise TestError('unexpected zkocc_client.get output: ', zkNode)
 
   # getv test
-  out, err = run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2', trap_output=True)
+  out, err = run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2 /zk/test_nj/zkocc1/data3', trap_output=True)
   if err != """[0] /zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)
 [1] /zk/test_nj/zkocc1/data2 = Test data 2 (NumChildren=0, Version=0, Cached=false, Stale=false)
+[2] /zk/test_nj/zkocc1/data3 = Test data 3 (NumChildren=0, Version=0, Cached=false, Stale=false)
 """:
     raise TestError('unexpected getV output: ', err)
-  zkNodes = zkocc_client.getv(["/zk/test_nj/zkocc1/data1", "/zk/test_nj/zkocc1/data2"])
+  zkNodes = zkocc_client.getv(["/zk/test_nj/zkocc1/data1", "/zk/test_nj/zkocc1/data2", "/zk/test_nj/zkocc1/data3"])
   if (zkNodes['Nodes'][0]['Data'] != "Test data 1" or \
       zkNodes['Nodes'][0]['Stat']['NumChildren'] != 0 or \
       zkNodes['Nodes'][0]['Stat']['Version'] != 0 or \
@@ -216,7 +237,12 @@ def run_test_zkocc():
       zkNodes['Nodes'][1]['Stat']['NumChildren'] != 0 or \
       zkNodes['Nodes'][1]['Stat']['Version'] != 0 or \
       zkNodes['Nodes'][1]['Cached'] != True or \
-      zkNodes['Nodes'][1]['Stale'] != False):
+      zkNodes['Nodes'][1]['Stale'] != False or \
+      zkNodes['Nodes'][2]['Data'] != "Test data 3" or \
+      zkNodes['Nodes'][2]['Stat']['NumChildren'] != 0 or \
+      zkNodes['Nodes'][2]['Stat']['Version'] != 0 or \
+      zkNodes['Nodes'][2]['Cached'] != True or \
+      zkNodes['Nodes'][2]['Stale'] != False):
     raise TestError('unexpected zkocc_client.getv output: ', zkNodes)
 
   # children test
@@ -230,6 +256,16 @@ Cached = false
 Stale = false
 """:
     raise TestError('unexpected children output: ', err)
+
+  # zk command tests
+  _check_zk_output("cat /zk/test_nj/zkocc1/data1", "Test data 1")
+  _check_zk_output("ls -l /zk/test_nj/zkocc1", """total: 3
+-rw-rw-rw- zk zk       11  %s data1
+-rw-rw-rw- zk zk       11  %s data2
+-rw-rw-rw- zk zk       11  %s data3
+""" % (_format_time(zkNodes['Nodes'][0]['Stat']['MTime']),
+       _format_time(zkNodes['Nodes'][1]['Stat']['MTime']),
+       _format_time(zkNodes['Nodes'][2]['Stat']['MTime'])))
 
   # start a background process to query the same value over and over again
   # while we kill the zk server and restart it
@@ -246,12 +282,6 @@ Stale = false
   time.sleep(3)
 
   querier.kill()
-
-  # get test
-  out, err = run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data3', trap_output=True)
-  if err != "/zk/test_nj/zkocc1/data3 = Test data 3 (NumChildren=0, Version=0, Cached=false, Stale=false)\n":
-    raise TestError('unexpected get output: ', err)
-
 
   print "Checking", filename
   fd = open(filename, "r")

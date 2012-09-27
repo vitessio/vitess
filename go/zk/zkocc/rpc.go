@@ -47,20 +47,6 @@ func NewZkReader(preload []string) *ZkReader {
 	return zkr
 }
 
-func zkStatFromZookeeperStat(zStat *zookeeper.Stat, zkStat *proto.ZkStat) {
-	zkStat.Czxid = zStat.Czxid()
-	zkStat.Mzxid = zStat.Mzxid()
-	zkStat.CTime = zStat.CTime()
-	zkStat.MTime = zStat.MTime()
-	zkStat.Version = zStat.Version()
-	zkStat.CVersion = zStat.CVersion()
-	zkStat.AVersion = zStat.AVersion()
-	zkStat.EphemeralOwner = zStat.EphemeralOwner()
-	zkStat.DataLength = zStat.DataLength()
-	zkStat.NumChildren = zStat.NumChildren()
-	zkStat.Pzxid = zStat.Pzxid()
-}
-
 func (zkr *ZkReader) getCell(path string) (*zkCell, string) {
 	zkr.mutex.Lock()
 	cellName := zk.ZkCellFromZkPath(path)
@@ -108,7 +94,7 @@ func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 	if err != nil {
 		return err
 	}
-	zkStatFromZookeeperStat(stat, &reply.Stat)
+	reply.Stat.FromZookeeperStat(stat)
 
 	// update cache, set channel
 	cell.zcache.updateData(path, reply.Data, &reply.Stat, watch)
@@ -172,7 +158,7 @@ func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error
 	if err != nil {
 		return err
 	}
-	zkStatFromZookeeperStat(stat, &reply.Stat)
+	reply.Stat.FromZookeeperStat(stat)
 
 	// update cache
 	cell.zcache.updateChildren(path, reply.Children, &reply.Stat, watch)

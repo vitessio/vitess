@@ -9,20 +9,22 @@ package proto
 
 import (
 	"time"
+
+	"launchpad.net/gozk/zookeeper"
 )
 
 type ZkStat struct {
-	Czxid          int64
-	Mzxid          int64
-	CTime          time.Time
-	MTime          time.Time
-	Version        int
-	CVersion       int
-	AVersion       int
-	EphemeralOwner int64
-	DataLength     int
-	NumChildren    int
-	Pzxid          int64
+	czxid          int64
+	mzxid          int64
+	cTime          time.Time
+	mTime          time.Time
+	version        int
+	cVersion       int
+	aVersion       int
+	ephemeralOwner int64
+	dataLength     int
+	numChildren    int
+	pzxid          int64
 }
 
 type ZkPath struct {
@@ -44,4 +46,63 @@ type ZkNode struct {
 
 type ZkNodeV struct {
 	Nodes []*ZkNode
+}
+
+// ZkStat methods to match zk.Stat interface
+func (zkStat *ZkStat) Czxid() int64 {
+	return zkStat.czxid
+}
+
+func (zkStat *ZkStat) Mzxid() int64 {
+	return zkStat.mzxid
+}
+
+func (zkStat *ZkStat) CTime() time.Time {
+	return zkStat.cTime
+}
+
+func (zkStat *ZkStat) MTime() time.Time {
+	return zkStat.mTime
+}
+
+func (zkStat *ZkStat) Version() int {
+	return zkStat.version
+}
+
+func (zkStat *ZkStat) CVersion() int {
+	return zkStat.cVersion
+}
+
+func (zkStat *ZkStat) AVersion() int {
+	return zkStat.aVersion
+}
+
+func (zkStat *ZkStat) EphemeralOwner() int64 {
+	return zkStat.ephemeralOwner
+}
+
+func (zkStat *ZkStat) DataLength() int {
+	return zkStat.dataLength
+}
+
+func (zkStat *ZkStat) NumChildren() int {
+	return zkStat.numChildren
+}
+
+func (zkStat *ZkStat) Pzxid() int64 {
+	return zkStat.pzxid
+}
+
+func (zkStat *ZkStat) FromZookeeperStat(zStat *zookeeper.Stat) {
+	zkStat.czxid = zStat.Czxid()
+	zkStat.mzxid = zStat.Mzxid()
+	zkStat.cTime = zStat.CTime()
+	zkStat.mTime = zStat.MTime()
+	zkStat.version = zStat.Version()
+	zkStat.cVersion = zStat.CVersion()
+	zkStat.aVersion = zStat.AVersion()
+	zkStat.ephemeralOwner = zStat.EphemeralOwner()
+	zkStat.dataLength = zStat.DataLength()
+	zkStat.numChildren = zStat.NumChildren()
+	zkStat.pzxid = zStat.Pzxid()
 }

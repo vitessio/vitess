@@ -11,19 +11,33 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
+type Stat interface {
+	Czxid() int64
+	Mzxid() int64
+	CTime() time.Time
+	MTime() time.Time
+	Version() int
+	CVersion() int
+	AVersion() int
+	EphemeralOwner() int64
+	DataLength() int
+	NumChildren() int
+	Pzxid() int64
+}
+
 type Conn interface {
-	Get(path string) (data string, stat *zookeeper.Stat, err error)
-	GetW(path string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error)
+	Get(path string) (data string, stat Stat, err error)
+	GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error)
 
-	Children(path string) (children []string, stat *zookeeper.Stat, err error)
-	ChildrenW(path string) (children []string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error)
+	Children(path string) (children []string, stat Stat, err error)
+	ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error)
 
-	Exists(path string) (stat *zookeeper.Stat, err error)
-	ExistsW(path string) (stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error)
+	Exists(path string) (stat Stat, err error)
+	ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error)
 
 	Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error)
 
-	Set(path, value string, version int) (stat *zookeeper.Stat, err error)
+	Set(path, value string, version int) (stat Stat, err error)
 
 	Delete(path string, version int) (err error)
 
@@ -31,7 +45,7 @@ type Conn interface {
 
 	RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zookeeper.ChangeFunc) error
 
-	ACL(path string) ([]zookeeper.ACL, *zookeeper.Stat, error)
+	ACL(path string) ([]zookeeper.ACL, Stat, error)
 	SetACL(path string, aclv []zookeeper.ACL, version int) error
 }
 
@@ -53,7 +67,7 @@ func resolveZkPath(path string) string {
 	return strings.Join(parts, "/")
 }
 
-func (conn *MetaConn) Get(path string) (data string, stat *zookeeper.Stat, err error) {
+func (conn *MetaConn) Get(path string) (data string, stat Stat, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -61,7 +75,7 @@ func (conn *MetaConn) Get(path string) (data string, stat *zookeeper.Stat, err e
 	return zconn.Get(resolveZkPath(path))
 }
 
-func (conn *MetaConn) GetW(path string) (data string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *MetaConn) GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -69,7 +83,7 @@ func (conn *MetaConn) GetW(path string) (data string, stat *zookeeper.Stat, watc
 	return zconn.GetW(resolveZkPath(path))
 }
 
-func (conn *MetaConn) Children(path string) (children []string, stat *zookeeper.Stat, err error) {
+func (conn *MetaConn) Children(path string) (children []string, stat Stat, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -77,7 +91,7 @@ func (conn *MetaConn) Children(path string) (children []string, stat *zookeeper.
 	return zconn.Children(resolveZkPath(path))
 }
 
-func (conn *MetaConn) ChildrenW(path string) (children []string, stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *MetaConn) ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -85,7 +99,7 @@ func (conn *MetaConn) ChildrenW(path string) (children []string, stat *zookeeper
 	return zconn.ChildrenW(resolveZkPath(path))
 }
 
-func (conn *MetaConn) Exists(path string) (stat *zookeeper.Stat, err error) {
+func (conn *MetaConn) Exists(path string) (stat Stat, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -93,7 +107,7 @@ func (conn *MetaConn) Exists(path string) (stat *zookeeper.Stat, err error) {
 	return zconn.Exists(resolveZkPath(path))
 }
 
-func (conn *MetaConn) ExistsW(path string) (stat *zookeeper.Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *MetaConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -109,7 +123,7 @@ func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL
 	return zconn.Create(resolveZkPath(path), value, flags, aclv)
 }
 
-func (conn *MetaConn) Set(path, value string, version int) (stat *zookeeper.Stat, err error) {
+func (conn *MetaConn) Set(path, value string, version int) (stat Stat, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
@@ -137,7 +151,7 @@ func (conn *MetaConn) RetryChange(path string, flags int, acl []zookeeper.ACL, c
 	return zconn.RetryChange(resolveZkPath(path), flags, acl, changeFunc)
 }
 
-func (conn *MetaConn) ACL(path string) ([]zookeeper.ACL, *zookeeper.Stat, error) {
+func (conn *MetaConn) ACL(path string) ([]zookeeper.ACL, Stat, error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return nil, nil, err

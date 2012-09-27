@@ -68,37 +68,37 @@ func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Long, "Czxid")
-	bson.EncodeUint64(buf, uint64(zkStat.Czxid))
+	bson.EncodeUint64(buf, uint64(zkStat.czxid))
 
 	bson.EncodePrefix(buf, bson.Long, "Mzxid")
-	bson.EncodeUint64(buf, uint64(zkStat.Mzxid))
+	bson.EncodeUint64(buf, uint64(zkStat.mzxid))
 
 	bson.EncodePrefix(buf, bson.Datetime, "CTime")
-	bson.EncodeTime(buf, zkStat.CTime)
+	bson.EncodeTime(buf, zkStat.cTime)
 
 	bson.EncodePrefix(buf, bson.Datetime, "MTime")
-	bson.EncodeTime(buf, zkStat.MTime)
+	bson.EncodeTime(buf, zkStat.mTime)
 
 	bson.EncodePrefix(buf, bson.Int, "Version")
-	bson.EncodeUint32(buf, uint32(zkStat.Version))
+	bson.EncodeUint32(buf, uint32(zkStat.version))
 
 	bson.EncodePrefix(buf, bson.Int, "CVersion")
-	bson.EncodeUint32(buf, uint32(zkStat.CVersion))
+	bson.EncodeUint32(buf, uint32(zkStat.cVersion))
 
 	bson.EncodePrefix(buf, bson.Int, "AVersion")
-	bson.EncodeUint32(buf, uint32(zkStat.AVersion))
+	bson.EncodeUint32(buf, uint32(zkStat.aVersion))
 
 	bson.EncodePrefix(buf, bson.Long, "EphemeralOwner")
-	bson.EncodeUint64(buf, uint64(zkStat.EphemeralOwner))
+	bson.EncodeUint64(buf, uint64(zkStat.ephemeralOwner))
 
 	bson.EncodePrefix(buf, bson.Int, "DataLength")
-	bson.EncodeUint32(buf, uint32(zkStat.DataLength))
+	bson.EncodeUint32(buf, uint32(zkStat.dataLength))
 
 	bson.EncodePrefix(buf, bson.Int, "NumChildren")
-	bson.EncodeUint32(buf, uint32(zkStat.NumChildren))
+	bson.EncodeUint32(buf, uint32(zkStat.numChildren))
 
 	bson.EncodePrefix(buf, bson.Long, "Pzxid")
-	bson.EncodeUint64(buf, uint64(zkStat.Pzxid))
+	bson.EncodeUint64(buf, uint64(zkStat.pzxid))
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -112,27 +112,27 @@ func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Czxid":
-			zkStat.Czxid = bson.DecodeInt64(buf, kind)
+			zkStat.czxid = bson.DecodeInt64(buf, kind)
 		case "Mzxid":
-			zkStat.Mzxid = bson.DecodeInt64(buf, kind)
+			zkStat.mzxid = bson.DecodeInt64(buf, kind)
 		case "CTime":
-			zkStat.CTime = bson.DecodeTime(buf, kind)
+			zkStat.cTime = bson.DecodeTime(buf, kind)
 		case "MTime":
-			zkStat.MTime = bson.DecodeTime(buf, kind)
+			zkStat.mTime = bson.DecodeTime(buf, kind)
 		case "Version":
-			zkStat.Version = bson.DecodeInt(buf, kind)
+			zkStat.version = bson.DecodeInt(buf, kind)
 		case "CVersion":
-			zkStat.CVersion = bson.DecodeInt(buf, kind)
+			zkStat.cVersion = bson.DecodeInt(buf, kind)
 		case "AVersion":
-			zkStat.AVersion = bson.DecodeInt(buf, kind)
+			zkStat.aVersion = bson.DecodeInt(buf, kind)
 		case "EphemeralOwner":
-			zkStat.EphemeralOwner = bson.DecodeInt64(buf, kind)
+			zkStat.ephemeralOwner = bson.DecodeInt64(buf, kind)
 		case "DataLength":
-			zkStat.DataLength = bson.DecodeInt(buf, kind)
+			zkStat.dataLength = bson.DecodeInt(buf, kind)
 		case "NumChildren":
-			zkStat.NumChildren = bson.DecodeInt(buf, kind)
+			zkStat.numChildren = bson.DecodeInt(buf, kind)
 		case "Pzxid":
-			zkStat.Pzxid = bson.DecodeInt64(buf, kind)
+			zkStat.pzxid = bson.DecodeInt64(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s for ZkStat", key))
 		}
