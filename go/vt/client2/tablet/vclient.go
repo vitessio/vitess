@@ -154,12 +154,12 @@ func (vtc *VtConn) Commit() (err error) {
 }
 
 func DialVtdb(dbi string, stream bool, timeout time.Duration) (*VtConn, error) {
-	user, passwd, addr, dbName, err := parseDbi(dbi)
+	user, password, addr, dbName, err := parseDbi(dbi)
 	if err != nil {
 		return nil, err
 	}
 	conn := &VtConn{
-		Conn:        Conn{dbi: dbi, stream: stream, user: user, passwd: passwd, addr: addr, dbName: dbName},
+		Conn:        Conn{dbi: dbi, stream: stream, user: user, password: password, addr: addr, dbName: dbName},
 		maxAttempts: DefaultMaxAttempts, timeout: timeout, reconnectDelay: DefaultReconnectDelay,
 	}
 

@@ -18,6 +18,7 @@ import (
 
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/rpcplus"
+	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	tproto "code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -44,10 +45,10 @@ type Conn struct {
 	rpcClient *rpcplus.Client
 	tproto.Session
 
-	user   string
-	passwd string
-	addr   string
-	dbName string
+	user     string
+	password string
+	addr     string
+	dbName   string
 }
 
 type Stmt struct {
@@ -69,28 +70,46 @@ type StreamResult struct {
 }
 
 func DialTablet(dbi string, stream bool) (*Conn, error) {
-	user, passwd, addr, dbName, err := parseDbi(dbi)
+	user, password, addr, dbName, err := parseDbi(dbi)
 	if err != nil {
 		return nil, err
 	}
-	conn := &Conn{dbi: dbi, stream: stream, user: user, passwd: passwd, addr: addr, dbName: dbName}
+	conn := &Conn{dbi: dbi, stream: stream, user: user, password: password, addr: addr, dbName: dbName}
 	if err := conn.dial(); err != nil {
 		return nil, conn.fmtErr(err)
 	}
 	return conn, nil
 }
 
-// FIXME(msolomon) Update protocol, add SASL.
-// dbi: host:port/dbname (v1)
-// dbi: vttp://user:passwd@host:port/dbname (v2)
-func parseDbi(dbi string) (user string, passwd string, addr string, dbName string, err error) {
-	dbiParts := strings.Split(dbi, "/")
-	if len(dbiParts) != 2 {
-		err = fmt.Errorf("vt: incorrectly formatted dbi %v", dbi)
+// parseDbi parses a data source string of the form
+// "user:password@host:port/database" or "host:port/database" and
+// returns the appropriate values (addr is the concatenation of host
+// and port). user and password will be empty strings if they are not
+// provided.
+func parseDbi(name string) (user, password, addr, dbName string, err error) {
+	// TODO(szopa): vttp://user:password@host:port/dbname (v2)
+	data := strings.Split(name, "@")
+	var addrAndDbName string
+	if len(data) > 1 {
+		addrAndDbName = data[1]
+
+		userAndPassword := strings.Split(data[0], ":")
+		if len(userAndPassword) != 2 {
+			err = fmt.Errorf("malformed data source name: %v", name)
+			return
+		}
+		user = userAndPassword[0]
+		password = userAndPassword[1]
+	} else {
+		addrAndDbName = data[0]
+	}
+	connValues := strings.Split(addrAndDbName, "/")
+	if len(connValues) != 2 {
+		err = fmt.Errorf("malformed data source name: %v", name)
 		return
 	}
-	addr = dbiParts[0]
-	dbName = dbiParts[1]
+	addr = connValues[0]
+	dbName = connValues[1]
 	return
 }
 
@@ -102,18 +121,55 @@ func (conn *Conn) fmtErr(err error) error {
 	return TabletError{err, conn.addr}
 }
 
+func (conn *Conn) useAuth() bool {
+	return conn.user != "" || conn.password != ""
+}
+
+func (conn *Conn) startRPCClient() (err error) {
+	if conn.useAuth() {
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.addr)
+	} else {
+		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.addr)
+	}
+	return
+}
+
 func (conn *Conn) dial() error {
-	var err error
-	if conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.addr); err != nil {
+
+	if err := conn.startRPCClient(); err != nil {
 		return err
+	}
+
+	if conn.useAuth() {
+		if err := conn.authenticate(); err != nil {
+			return err
+		}
 	}
 	sessionParams := tproto.SessionParams{DbName: conn.dbName}
 	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
+	if err := conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
 		return err
 	}
 	conn.SessionId = sessionInfo.SessionId
 	return nil
+}
+
+// authenticate performs CRAM-MD5 authentication on the connection. If
+// the authentication fails, an error will occur when the next RPC
+// call on connection is performed.
+func (conn *Conn) authenticate() (err error) {
+	reply := new(auth.GetNewChallengeReply)
+	if err = conn.rpcClient.Call("AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
+		return
+	}
+	proof := auth.CRAMMD5GetExpected(conn.user, conn.password, reply.Challenge)
+
+	if err = conn.rpcClient.Call(
+		"AuthenticatorCRAMMD5.Authenticate",
+		auth.AuthenticateRequest{Proof: proof}, new(auth.AuthenticateReply)); err != nil {
+		return
+	}
+	return
 }
 
 // driver.Conn interface

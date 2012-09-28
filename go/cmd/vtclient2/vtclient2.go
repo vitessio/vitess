@@ -12,7 +12,7 @@ import (
 	"os"
 	"time"
 
-	"code.google.com/p/vitess/go/vt/client2"
+	_ "code.google.com/p/vitess/go/vt/client2/tablet"
 )
 
 var usage = `
@@ -23,7 +23,7 @@ in the form of :v0, :v1, etc.
 
 var count = flag.Int("count", 1, "how many times to run the query")
 var dml = flag.Bool("dml", false, "this is a dml query, use a transaction")
-var server = flag.String("server", "localhost:6603/test", "vtocc server as hostname:port/dbname")
+var server = flag.String("server", "localhost:6603/test", "vtocc server as hostname:port/dbname or user:password@hostname:port/dbname")
 var streaming = flag.Bool("streaming", false, "use the streaming API")
 var verbose = flag.Bool("verbose", false, "show results")
 
@@ -45,9 +45,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	// register the driver and connects
-	sql.Register("vtocc", client2.NewDriver(*streaming))
-	db, err := sql.Open("vtocc", *server)
+	var driver string
+
+	if *streaming {
+		driver = "vttablet-streaming"
+	} else {
+		driver = "vttablet"
+	}
+
+	db, err := sql.Open(driver, *server)
 	if err != nil {
 		log.Fatalf("client error: %v", err)
 	}
