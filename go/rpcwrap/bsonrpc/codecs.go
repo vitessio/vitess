@@ -88,8 +88,8 @@ func DialHTTP(network, address string) (*rpc.Client, error) {
 	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec)
 }
 
-func DialAuthHTTP(network, address string) (*rpc.Client, error) {
-	return rpcwrap.DialAuthHTTP(network, address, codecName, NewClientCodec)
+func DialAuthHTTP(network, address, user, password string) (*rpc.Client, error) {
+	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec)
 }
 
 func ServeRPC() {

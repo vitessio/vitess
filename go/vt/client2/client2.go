@@ -18,7 +18,6 @@ import (
 
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -65,11 +64,10 @@ func NewDriver(stream bool) *Driver {
 // returns the appropriate values (url is the concatenation of host
 // and port). useAuth will be true if there was a user and password
 // pair provided.
-func parseDataSourceName(name string) (url, dbname, user, password string, useAuth bool, err error) {
+func parseDataSourceName(name string) (url, dbname, user, password string, err error) {
 	data := strings.Split(name, "@")
 	var urlAndDbname string
 	if len(data) > 1 {
-		useAuth = true
 		urlAndDbname = data[1]
 
 		userAndPassword := strings.Split(data[0], ":")
@@ -92,39 +90,19 @@ func parseDataSourceName(name string) (url, dbname, user, password string, useAu
 	return
 }
 
-// authenticate performs CRAM-MD5 authentication on the connection. If
-// the authentication fails, an error will occur when the next RPC
-// call on connection is performed.
-func authenticate(conn *Conn, username, password string) (err error) {
-	reply := new(auth.GetNewChallengeReply)
-	if err = conn.rpcClient.Call("AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
-		return
-	}
-	proof := auth.CRAMMD5GetExpected(username, password, reply.Challenge)
-
-	if err = conn.rpcClient.Call(
-		"AuthenticatorCRAMMD5.Authenticate",
-		auth.AuthenticateRequest{Proof: proof}, new(auth.AuthenticateReply)); err != nil {
-		return
-	}
-	return
-}
-
 func (driver *Driver) Open(name string) (driver.Conn, error) {
 	conn := &Conn{Stream: driver.Stream}
-	url, dbname, user, password, useAuth, err := parseDataSourceName(name)
+	url, dbname, user, password, err := parseDataSourceName(name)
 	if err != nil {
 		return nil, err
 	}
-
-	if conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", url); err != nil {
-		return nil, err
+	if user != "" || password != "" {
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", url, user, password)
+	} else {
+		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", url)
 	}
-
-	if useAuth {
-		if err = authenticate(conn, user, password); err != nil {
-			return nil, err
-		}
+	if err != nil {
+		return nil, err
 	}
 
 	sessionParams := proto.SessionParams{DbName: dbname}

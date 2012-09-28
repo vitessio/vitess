@@ -14,11 +14,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/url"
 	"strings"
 
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	tproto "code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -40,15 +40,10 @@ func (te TabletError) Error() string {
 
 // Not thread safe, as per sql package.
 type Conn struct {
-	dbi       string
+	dbi       *url.URL
 	stream    bool
 	rpcClient *rpcplus.Client
 	tproto.Session
-
-	user     string
-	password string
-	addr     string
-	dbName   string
 }
 
 type Stmt struct {
@@ -69,47 +64,28 @@ type StreamResult struct {
 	index int
 }
 
-func DialTablet(dbi string, stream bool) (*Conn, error) {
-	user, password, addr, dbName, err := parseDbi(dbi)
-	if err != nil {
-		return nil, err
-	}
-	conn := &Conn{dbi: dbi, stream: stream, user: user, password: password, addr: addr, dbName: dbName}
-	if err := conn.dial(); err != nil {
-		return nil, conn.fmtErr(err)
-	}
-	return conn, nil
+func (conn *Conn) dbName() string {
+	// get rid of the slash
+	return conn.dbi.Path[1:]
 }
 
-// parseDbi parses a data source string of the form
-// "user:password@host:port/database" or "host:port/database" and
-// returns the appropriate values (addr is the concatenation of host
-// and port). user and password will be empty strings if they are not
-// provided.
-func parseDbi(name string) (user, password, addr, dbName string, err error) {
-	// TODO(szopa): vttp://user:password@host:port/dbname (v2)
-	data := strings.Split(name, "@")
-	var addrAndDbName string
-	if len(data) > 1 {
-		addrAndDbName = data[1]
-
-		userAndPassword := strings.Split(data[0], ":")
-		if len(userAndPassword) != 2 {
-			err = fmt.Errorf("malformed data source name: %v", name)
-			return
-		}
-		user = userAndPassword[0]
-		password = userAndPassword[1]
-	} else {
-		addrAndDbName = data[0]
+// parseDbi parses the dbi and a URL. The dbi may or may not contain
+// the scheme part.
+func parseDbi(dbi string) (*url.URL, error) {
+	if !strings.HasPrefix(dbi, "vttp://") {
+		dbi = "vttp://" + dbi
 	}
-	connValues := strings.Split(addrAndDbName, "/")
-	if len(connValues) != 2 {
-		err = fmt.Errorf("malformed data source name: %v", name)
+	return url.Parse(dbi)
+}
+
+func DialTablet(dbi string, stream bool) (conn *Conn, err error) {
+	if conn.dbi, err = parseDbi(dbi); err != nil {
 		return
 	}
-	addr = connValues[0]
-	dbName = connValues[1]
+	conn.stream = stream
+	if err = conn.dial(); err != nil {
+		return nil, conn.fmtErr(err)
+	}
 	return
 }
 
@@ -118,57 +94,27 @@ func (conn *Conn) fmtErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	return TabletError{err, conn.addr}
+	return TabletError{err, conn.dbi.Host}
 }
 
-func (conn *Conn) useAuth() bool {
-	return conn.user != "" || conn.password != ""
-}
+func (conn *Conn) dial() (err error) {
 
-func (conn *Conn) startRPCClient() (err error) {
-	if conn.useAuth() {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.addr)
+	if password, useAuth := conn.dbi.User.Password(); useAuth {
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.dbi.Host, conn.dbi.User.Username(), password)
 	} else {
-		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.addr)
-	}
-	return
-}
-
-func (conn *Conn) dial() error {
-
-	if err := conn.startRPCClient(); err != nil {
-		return err
+		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.dbi.Host)
 	}
 
-	if conn.useAuth() {
-		if err := conn.authenticate(); err != nil {
-			return err
-		}
+	if err != nil {
+		return
 	}
-	sessionParams := tproto.SessionParams{DbName: conn.dbName}
+
+	sessionParams := tproto.SessionParams{DbName: conn.dbName()}
 	var sessionInfo tproto.SessionInfo
-	if err := conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
-		return err
+	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
+		return
 	}
 	conn.SessionId = sessionInfo.SessionId
-	return nil
-}
-
-// authenticate performs CRAM-MD5 authentication on the connection. If
-// the authentication fails, an error will occur when the next RPC
-// call on connection is performed.
-func (conn *Conn) authenticate() (err error) {
-	reply := new(auth.GetNewChallengeReply)
-	if err = conn.rpcClient.Call("AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
-		return
-	}
-	proof := auth.CRAMMD5GetExpected(conn.user, conn.password, reply.Challenge)
-
-	if err = conn.rpcClient.Call(
-		"AuthenticatorCRAMMD5.Authenticate",
-		auth.AuthenticateRequest{Proof: proof}, new(auth.AuthenticateReply)); err != nil {
-		return
-	}
 	return
 }
 

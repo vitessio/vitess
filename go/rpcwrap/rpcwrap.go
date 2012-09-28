@@ -37,9 +37,23 @@ func DialHTTP(network, address, codecName string, cFactory ClientCodecFactory) (
 }
 
 // DialAuthHTTP connects to an authenticated go HTTP RPC server using
-// the specified codec.
-func DialAuthHTTP(network, address, codecName string, cFactory ClientCodecFactory) (*rpc.Client, error) {
-	return dialHTTP(network, address, codecName, cFactory, true)
+// the specified codec and credentials.
+func DialAuthHTTP(network, address, user, password, codecName string, cFactory ClientCodecFactory) (conn *rpc.Client, err error) {
+	if conn, err = dialHTTP(network, address, codecName, cFactory, true); err != nil {
+		return
+	}
+	reply := new(auth.GetNewChallengeReply)
+	if err = conn.Call("AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
+		return
+	}
+	proof := auth.CRAMMD5GetExpected(user, password, reply.Challenge)
+
+	if err = conn.Call(
+		"AuthenticatorCRAMMD5.Authenticate",
+		auth.AuthenticateRequest{Proof: proof}, new(auth.AuthenticateReply)); err != nil {
+		return
+	}
+	return
 }
 
 func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, auth bool) (*rpc.Client, error) {
@@ -48,13 +62,8 @@ func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, a
 	if err != nil {
 		return nil, err
 	}
-	var rpcPath string
-	if auth {
-		rpcPath = GetAuthRpcPath(codecName)
-	} else {
-		rpcPath = GetRpcPath(codecName)
-	}
-	io.WriteString(conn, "CONNECT "+rpcPath+" HTTP/1.0\n\n")
+
+	io.WriteString(conn, "CONNECT "+GetRpcPath(codecName, auth)+" HTTP/1.0\n\n")
 
 	// Require successful HTTP response
 	// before switching to RPC protocol.
@@ -74,12 +83,12 @@ type ServerCodecFactory func(conn io.ReadWriteCloser) rpc.ServerCodec
 
 // ServeRPC handles rpc requests using the hijack scheme of rpc
 func ServeRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetRpcPath(codecName), &rpcHandler{cFactory, false})
+	http.Handle(GetRpcPath(codecName, false), &rpcHandler{cFactory, false})
 }
 
 // ServeRPC handles rpc requests using the hijack scheme of rpc
 func ServeAuthRPC(codecName string, cFactory ServerCodecFactory) {
-	http.Handle(GetAuthRpcPath(codecName), &rpcHandler{cFactory, true})
+	http.Handle(GetRpcPath(codecName, true), &rpcHandler{cFactory, true})
 }
 
 // ServeHTTP handles rpc requests in HTTP compliant POST form
@@ -139,12 +148,12 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	h.ServeCodec(codec)
 }
 
-func GetRpcPath(codecName string) string {
-	return "/_" + codecName + "_rpc_"
-}
-
-func GetAuthRpcPath(codecName string) string {
-	return GetRpcPath(codecName) + "/auth"
+func GetRpcPath(codecName string, auth bool) string {
+	path := "/_" + codecName + "_rpc_"
+	if auth {
+		path += "/auth"
+	}
+	return path
 }
 
 type httpHandler struct {

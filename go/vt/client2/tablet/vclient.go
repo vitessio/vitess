@@ -106,7 +106,7 @@ func (vtc *VtConn) ExecBind(query string, bindVars map[string]interface{}) (driv
 			if err := vtc.dial(); err == nil {
 				break
 			}
-			relog.Warning("vt: error dialing on exec %v", vtc.Conn.addr)
+			relog.Warning("vt: error dialing on exec %v", vtc.Conn.dbi.Host)
 		}
 	}
 
@@ -136,7 +136,7 @@ func (vtc *VtConn) Begin() (driver.Tx, error) {
 			if err := vtc.dial(); err == nil {
 				break
 			}
-			relog.Warning("vt: error dialing on begin %v", vtc.Conn.addr)
+			relog.Warning("vt: error dialing on begin %v", vtc.Conn.dbi.Host)
 		}
 	}
 	panic("unreachable")
@@ -154,13 +154,15 @@ func (vtc *VtConn) Commit() (err error) {
 }
 
 func DialVtdb(dbi string, stream bool, timeout time.Duration) (*VtConn, error) {
-	user, password, addr, dbName, err := parseDbi(dbi)
+	url, err := parseDbi(dbi)
 	if err != nil {
 		return nil, err
 	}
 	conn := &VtConn{
-		Conn:        Conn{dbi: dbi, stream: stream, user: user, password: password, addr: addr, dbName: dbName},
-		maxAttempts: DefaultMaxAttempts, timeout: timeout, reconnectDelay: DefaultReconnectDelay,
+		Conn:           Conn{dbi: url, stream: stream},
+		maxAttempts:    DefaultMaxAttempts,
+		timeout:        timeout,
+		reconnectDelay: DefaultReconnectDelay,
 	}
 
 	if err := conn.dial(); err != nil {
