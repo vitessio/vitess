@@ -97,10 +97,28 @@ func (conn *Conn) fmtErr(err error) error {
 	return TabletError{err, conn.dbi.Host}
 }
 
+func (conn *Conn) authCredentials() (user, password string, useAuth bool, err error) {
+	if conn.dbi.User == nil {
+		useAuth = false
+		return
+	}
+	if password, passwordProvided := conn.dbi.User.Password(); passwordProvided {
+		return conn.dbi.User.Username(), password, true, nil
+	} else {
+		err = errors.New("username provided without a password")
+	}
+	return
+}
+
 func (conn *Conn) dial() (err error) {
 
-	if password, useAuth := conn.dbi.User.Password(); useAuth {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.dbi.Host, conn.dbi.User.Username(), password)
+	user, password, useAuth, err := conn.authCredentials()
+	if err != nil {
+		return err
+	}
+
+	if useAuth {
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.dbi.Host, user, password)
 	} else {
 		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.dbi.Host)
 	}
