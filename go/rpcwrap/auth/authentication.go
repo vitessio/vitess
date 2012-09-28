@@ -94,7 +94,7 @@ func (a *AuthenticatorCRAMMD5) Authenticate(req *AuthenticateRequest, reply *Aut
 	username := strings.SplitN(req.Proof, " ", 2)[0]
 	secrets, ok := a.Credentials[username]
 	if !ok {
-		relog.Warning("failed authentication attempt: wrong user: %s", username)
+		relog.Warning("failed authentication attempt: wrong user: %#v", username)
 		return AuthenticationFailed
 	}
 	if !req.state.challengeIssued {

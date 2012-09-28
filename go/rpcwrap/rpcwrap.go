@@ -33,12 +33,28 @@ func NewBufferedConnection(conn io.ReadWriteCloser) *BufferedConnection {
 
 // DialHTTP connects to a go HTTP RPC server using the specified codec.
 func DialHTTP(network, address, codecName string, cFactory ClientCodecFactory) (*rpc.Client, error) {
+	return dialHTTP(network, address, codecName, cFactory, false)
+}
+
+// DialAuthHTTP connects to an authenticated go HTTP RPC server using
+// the specified codec.
+func DialAuthHTTP(network, address, codecName string, cFactory ClientCodecFactory) (*rpc.Client, error) {
+	return dialHTTP(network, address, codecName, cFactory, true)
+}
+
+func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, auth bool) (*rpc.Client, error) {
 	var err error
 	conn, err := net.Dial(network, address)
 	if err != nil {
 		return nil, err
 	}
-	io.WriteString(conn, "CONNECT "+GetRpcPath(codecName)+" HTTP/1.0\n\n")
+	var rpcPath string
+	if auth {
+		rpcPath = GetAuthRpcPath(codecName)
+	} else {
+		rpcPath = GetRpcPath(codecName)
+	}
+	io.WriteString(conn, "CONNECT "+rpcPath+" HTTP/1.0\n\n")
 
 	// Require successful HTTP response
 	// before switching to RPC protocol.

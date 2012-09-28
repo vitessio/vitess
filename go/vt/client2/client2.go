@@ -18,6 +18,7 @@ import (
 
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/rpcplus"
+	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -59,17 +60,74 @@ func NewDriver(stream bool) *Driver {
 	return &Driver{stream}
 }
 
+// parseDataSourceName parses a data source string of the form
+// "user:password@host:port/database" or "host:port/database" and
+// returns the appropriate values (url is the concatenation of host
+// and port). useAuth will be true if there was a user and password
+// pair provided.
+func parseDataSourceName(name string) (url, dbname, user, password string, useAuth bool, err error) {
+	data := strings.Split(name, "@")
+	var urlAndDbname string
+	if len(data) > 1 {
+		useAuth = true
+		urlAndDbname = data[1]
+
+		userAndPassword := strings.Split(data[0], ":")
+		if len(userAndPassword) != 2 {
+			err = fmt.Errorf("malformed data source name: %v", name)
+			return
+		}
+		user = userAndPassword[0]
+		password = userAndPassword[1]
+	} else {
+		urlAndDbname = data[0]
+	}
+	connValues := strings.Split(urlAndDbname, "/")
+	if len(connValues) != 2 {
+		err = fmt.Errorf("malformed data source name: %v", name)
+		return
+	}
+	url = connValues[0]
+	dbname = connValues[1]
+	return
+}
+
+// authenticate performs CRAM-MD5 authentication on the connection. If
+// the authentication fails, an error will occur when the next RPC
+// call on connection is performed.
+func authenticate(conn *Conn, username, password string) (err error) {
+	reply := new(auth.GetNewChallengeReply)
+	if err = conn.rpcClient.Call("AuthenticatorCRAMMD5.GetNewChallenge", "", reply); err != nil {
+		return
+	}
+	proof := auth.CRAMMD5GetExpected(username, password, reply.Challenge)
+
+	if err = conn.rpcClient.Call(
+		"AuthenticatorCRAMMD5.Authenticate",
+		auth.AuthenticateRequest{Proof: proof}, new(auth.AuthenticateReply)); err != nil {
+		return
+	}
+	return
+}
+
 func (driver *Driver) Open(name string) (driver.Conn, error) {
 	conn := &Conn{Stream: driver.Stream}
-	connValues := strings.Split(name, "/")
-	if len(connValues) != 2 {
-		return nil, errors.New("Incorrectly formatted name")
-	}
-	var err error
-	if conn.rpcClient, err = bsonrpc.DialHTTP("tcp", connValues[0]); err != nil {
+	url, dbname, user, password, useAuth, err := parseDataSourceName(name)
+	if err != nil {
 		return nil, err
 	}
-	sessionParams := proto.SessionParams{DbName: connValues[1]}
+
+	if conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", url); err != nil {
+		return nil, err
+	}
+
+	if useAuth {
+		if err = authenticate(conn, user, password); err != nil {
+			return nil, err
+		}
+	}
+
+	sessionParams := proto.SessionParams{DbName: dbname}
 	var sessionInfo proto.SessionInfo
 	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
 		return nil, err
