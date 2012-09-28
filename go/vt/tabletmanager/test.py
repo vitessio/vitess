@@ -107,9 +107,23 @@ def mysql_write_query(uid, dbname, query):
     conn.close()
 
 # doesn't work as vttablet query service is disabled.
-def vttablet_write_query(uid, dbname, query):
-  run(vtroot+'/bin/vtclient2 -server=localhost:%u/%s -dml "%s"' %
-      (uid, dbname, query))
+def vttablet_write_query(uid, dbname, query, user=None, password=None):
+  if (user is None) != (password is None):
+    raise TypeError("you should provide either both or none of user and password")
+
+  server = "localhost:%u/%s" % (uid, dbname)
+  if user is not None:
+    server = "%s:%s@%s" % (user, password, server)
+
+  if query.lower().startswith("insert") or query.lower().startswith("update"):
+    dml = "-dml"
+  else:
+    dml = ""
+
+
+  cmdline = [vtroot+'/bin/vtclient2', '-server', server, dml, '"%s"' % query]
+
+  return run(' '.join(cmdline), trap_output=True)
 
 def check_db_var(uid, name, value):
   conn = MySQLdb.Connect(user='vt_dba',
@@ -150,17 +164,24 @@ def wait_procs(proc_list, raise_on_error=True):
       if raise_on_error:
         raise CalledProcessError(proc.returncode, proc.args)
 
+def build_tool(name):
+    run('go build', cwd=vttop+'/go/cmd/' + name)
+
+
+TOOLS = ['mysqlctl',
+         'vtaction',
+         'vtclient2',
+         'vtctl',
+         'vttablet',
+         'zkctl',
+         'zk']
+
 def setup():
   setup_procs = []
 
   # compile all the tools
-  run('go build', cwd=vttop+'/go/cmd/mysqlctl')
-  run('go build', cwd=vttop+'/go/cmd/vtaction')
-  run('go build', cwd=vttop+'/go/cmd/vtclient2')
-  run('go build', cwd=vttop+'/go/cmd/vtctl')
-  run('go build', cwd=vttop+'/go/cmd/vttablet')
-  run('go build', cwd=vttop+'/go/cmd/zkctl')
-  run('go build', cwd=vttop+'/go/cmd/zk')
+  for tool in TOOLS:
+    build_tool(tool)
 
   # start mysql instance external to the test
   setup_procs.append(run_bg(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 init'))
@@ -697,7 +718,6 @@ def _run_test_reparent_graceful(shard_id):
 
   agent_62044.kill()
 
-
 def run_all():
   run_test_sanity()
   run_test_sanity() # run twice to check behavior with existing znode data
@@ -714,6 +734,45 @@ def run_all():
   run_test_reparent_graceful()
   run_test_reparent_graceful_range_based()
   run_test_reparent_down_master()
+  run_test_vttablet_authenticated()
+
+def run_test_vttablet_authenticated():
+  _wipe_zk()
+  run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master ""')
+  run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  run_vtctl('Validate /zk/global/vt/keyspaces')
+
+  agent = run_bg(' '.join([vtroot+'/bin/vttablet',
+                  '-port 6770',
+                  '-tablet-path /zk/test_nj/vt/tablets/0000062344',
+                  '-logfile /vt/vt_0000062344/vttablet.log',
+                  '-auth-credentials', vttop + '/py/vttest/authcredentials_test.json']))
+  time.sleep(0.1)
+  try:
+    mysql_query(62344, '', 'create database vt_test_keyspace')
+  except MySQLdb.ProgrammingError as e:
+    if e.args[0] != 1007:
+      raise
+  try:
+    mysql_query(62344, 'vt_test_keyspace', create_vt_select_test)
+  except MySQLdb.OperationalError as e:
+    if e.args[0] != 1050:
+      raise
+
+  for q in populate_vt_select_test:
+    mysql_write_query(62344, 'vt_test_keyspace', q)
+
+  run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
+  time.sleep(0.1)
+  err, out = vttablet_write_query(uid=6770, dbname='vt_test_keyspace', user="ala", password=r"ma\ kota", query="select * from vt_select_test")
+  if "Row count: " not in out:
+    raise TestError("query didn't go through: %s, %s" % (err, out))
+
+  agent.kill()
+  # TODO(szopa): Test that non-authenticated queries do not pass
+  # through (when we get to that point).
+
 
 
 options = None

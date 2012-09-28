@@ -20,6 +20,7 @@ import (
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
+	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	_ "code.google.com/p/vitess/go/snitch"
@@ -44,6 +45,7 @@ var (
 	tabletPath     = flag.String("tablet-path", "", "path to zk node representing the tablet")
 	qsConfigFile   = flag.String("queryserver-config-file", "", "config file name for the query service")
 	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
+	authConfig     = flag.String("auth-credentials", "", "name of file containing auth credentials")
 	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 )
 
@@ -83,10 +85,17 @@ func main() {
 	initQueryService(dbcfgs)
 
 	rpc.HandleHTTP()
-	jsonrpc.ServeHTTP()
-	jsonrpc.ServeRPC()
-	bsonrpc.ServeHTTP()
-	bsonrpc.ServeRPC()
+
+	// NOTE(szopa): Changing credentials requires a server
+	// restart.
+	if *authConfig != "" {
+		if err := auth.LoadCredentials(*authConfig); err != nil {
+			relog.Error("could not load authentication credentials, not starting rpc servers: %v", err)
+		}
+		serveAuthRPC()
+	}
+
+	serveRPC()
 
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
 	// FIXME(msolomon) this path needs to be obtained from the config.
@@ -117,6 +126,18 @@ func main() {
 		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
 	}
 	relog.Info("done")
+}
+
+func serveAuthRPC() {
+	bsonrpc.ServeAuthRPC()
+	jsonrpc.ServeAuthRPC()
+}
+
+func serveRPC() {
+	jsonrpc.ServeHTTP()
+	jsonrpc.ServeRPC()
+	bsonrpc.ServeHTTP()
+	bsonrpc.ServeRPC()
 }
 
 func readMycnf() *mysqlctl.Mycnf {
