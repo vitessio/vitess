@@ -3,78 +3,75 @@
 // license that can be found in the LICENSE file.
 
 /*
-  Package timer provides timer functionality that can be controlled
-  by the user. It is typically meant to be used in a for loop of a goroutine
-  that would wait on the response of the Next function:
-  Here is an example:
+	Package timer provides timer functionality that can be controlled
+	by the user. You start the timer by providing it a callback function,
+	which it will call at the specified interval.
 
-    var t = timer.NewTimer(1e9)
+		var t = timer.NewTimer(1e9)
+		t.Start(KeepHouse)
 
-    func KeepHouse() {
-      t.Start()
-      for t.Next() {
-        // do house keeping work
-      }
-    }
+		func KeepHouse() {
+			// do house keeping work
+		}
 
-  KeepHouse is expected to run as a goroutine. To cause KeepHouse to
-  terminate, you can call t.Close(), which will make the next call
-  to t.Next() return false. The Close() function will return only
-  after successfully delivering the message to t.Next()
+	You can stop the timer by calling t.Stop, which is guaranteed to
+	wait if KeepHouse is being executed.
 
-  The timer interval can be changed on the fly by calling t.SetInterval().
-  A zero value interval will cause t.Next() to wait indefinitely, and will
-  return only from an explicit trigger.
+	You can create an untimely trigger by calling t.Trigger. You can also
+	schedule an untimely trigger by calling t.TriggerAfter.
 
-  You can create an untimely trigger by calling t.Trigger(). You can also
-  schedule an untimely trigger by calling t.TriggerAfter().
+	The timer interval can be changed on the fly by calling t.SetInterval.
+	A zero value interval will cause the timer to wait indefinitely, and it
+	will react only to an explicit Trigger or Stop.
 */
 package timer
 
 import (
+	"sync"
 	"time"
 )
 
+// Out-of-band messages
 type typeAction int
 
 const (
-	CLOSE typeAction = iota
+	STOP typeAction = iota
 	RESET
-	FORCE
+	TRIGGER
 )
 
-// Timer implements the Next() function whose basic functionality
-// is to return true after waiting for the specified number of nanoseconds.
+// Timer implements the timer functionality described above.
 type Timer struct {
-	interval  time.Duration
-	running   bool
-	msg, resp chan typeAction
+	interval time.Duration
+
+	// state management
+	mu      sync.Mutex
+	running bool
+
+	// msg is used for out-of-band messages
+	msg chan typeAction
 }
 
-// Create a new Timer object. An intervalNs specifies the length of time
-// the Next() function has to wait before returning. A value of 0 will cause
-// it to wait indefinitely
+// Create a new Timer object
 func NewTimer(interval time.Duration) *Timer {
 	return &Timer{
 		interval: interval,
-		msg:      make(chan typeAction, 1),
-		resp:     make(chan typeAction, 1),
+		msg:      make(chan typeAction),
 	}
 }
 
-// Start must be called before iterating on Next.
-func (tm *Timer) Start() {
+// Start starts the timer.
+func (tm *Timer) Start(keephouse func()) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if tm.running {
+		return
+	}
 	tm.running = true
+	go tm.run(keephouse)
 }
 
-// Next starts the timer and waits for the next tick.
-// It will return true upon the next tick or on an explicit trigger.
-// It will return false if Close was called.
-func (tm *Timer) Next() bool {
-	if !tm.running {
-		return false
-	}
-	// loop needed to handle RESET message
+func (tm *Timer) run(keephouse func()) {
 	for {
 		var ch <-chan time.Time
 		if tm.interval <= 0 {
@@ -85,52 +82,54 @@ func (tm *Timer) Next() bool {
 		select {
 		case action := <-tm.msg:
 			switch action {
-			case CLOSE:
-				tm.resp <- CLOSE
-				return false
-			case FORCE:
-				return true
+			case STOP:
+				return
+			case RESET:
+				continue
 			}
 		case <-ch:
-			return true
 		}
+		keephouse()
 	}
 	panic("unreachable")
 }
 
-// SetInterval changes the wait interval for the Next() function.
-// It will cause the function to restart the wait if it's already executing.
+// SetInterval changes the wait interval.
+// It will cause the timer to restart the wait.
 func (tm *Timer) SetInterval(ns time.Duration) {
 	tm.interval = ns
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 	if tm.running {
 		tm.msg <- RESET
 	}
 }
 
-// Trigger will cause the currently executing, or a subsequent call to Next()
-// to immediately return true.
+// Trigger will cause the timer to immediately execute the keephouse function.
+// It will then cause the timer to restart the wait.
 func (tm *Timer) Trigger() {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
 	if tm.running {
-		tm.msg <- FORCE
+		tm.msg <- TRIGGER
 	}
 }
 
-// Trigger will wait ns nanoseconds before triggering Next().
-func (tm *Timer) TriggerAfter(ns time.Duration) {
+// TriggerAfter waits for the specified duration and triggers the next event.
+func (tm *Timer) TriggerAfter(duration time.Duration) {
 	go func() {
-		<-time.After(ns)
+		time.Sleep(duration)
 		tm.Trigger()
 	}()
 }
 
-// Close will cause the currently executing, or a subsequent call to Next
-// to immediately return false. Close will not return until the message is
-// successfully delivered. To resume timer activities, you must call Start again.
-func (tm *Timer) Close() {
-	if !tm.running {
-		return
+// Stop will stop the timer. It guarantees that the timer will not execute
+// any more calls to keephouse once it has returned.
+func (tm *Timer) Stop() {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if tm.running {
+		tm.msg <- STOP
+		tm.running = false
 	}
-	tm.msg <- CLOSE
-	<-tm.resp
-	tm.running = false
 }

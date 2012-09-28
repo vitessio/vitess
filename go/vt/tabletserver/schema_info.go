@@ -85,7 +85,7 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 	}
 	si.queries = cache.NewLRUCache(uint64(si.queryCacheSize))
 	si.connFactory = connFactory
-	go si.Reloader()
+	si.ticks.Start(func() { si.Reload() })
 }
 
 func (si *SchemaInfo) updateLastChange(createTime interface{}) {
@@ -103,17 +103,10 @@ func (si *SchemaInfo) updateLastChange(createTime interface{}) {
 }
 
 func (si *SchemaInfo) Close() {
-	si.ticks.Close()
+	si.ticks.Stop()
 	si.tables = nil
 	si.queries = nil
 	si.connFactory = nil
-}
-
-func (si *SchemaInfo) Reloader() {
-	si.ticks.Start()
-	for si.ticks.Next() {
-		si.Reload()
-	}
 }
 
 func (si *SchemaInfo) Reload() {

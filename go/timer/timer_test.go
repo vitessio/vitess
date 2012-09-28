@@ -5,6 +5,7 @@
 package timer
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -16,86 +17,59 @@ const (
 	tenth   = time.Duration(100e6)
 )
 
+var numcalls int32
+
+func f() {
+	atomic.AddInt32(&numcalls, 1)
+}
+
 func TestWait(t *testing.T) {
-	start := time.Now()
+	atomic.StoreInt32(&numcalls, 0)
 	timer := NewTimer(quarter)
-	timer.Start()
-	result := timer.Next()
-	if !result {
-		t.Errorf("Want true, got false")
+	timer.Start(f)
+	defer timer.Stop()
+	time.Sleep(tenth)
+	if atomic.LoadInt32(&numcalls) != 0 {
+		t.Errorf("want 0, received %v", numcalls)
 	}
-	if start.Add(quarter).After(time.Now()) {
-		t.Error("Next returned too soon")
+	time.Sleep(quarter)
+	if atomic.LoadInt32(&numcalls) != 1 {
+		t.Errorf("want 1, received %v", numcalls)
+	}
+	time.Sleep(quarter)
+	if atomic.LoadInt32(&numcalls) != 2 {
+		t.Errorf("want 1, received %v", numcalls)
 	}
 }
 
 func TestReset(t *testing.T) {
-	start := time.Now()
-	timer := NewTimer(quarter)
-	timer.Start()
-	ch := next(timer)
-	timer.SetInterval(tenth)
-	result := <-ch
-	if !result {
-		t.Errorf("Want true, got false")
+	atomic.StoreInt32(&numcalls, 0)
+	timer := NewTimer(half)
+	timer.Start(f)
+	defer timer.Stop()
+	timer.SetInterval(quarter)
+	time.Sleep(tenth)
+	if atomic.LoadInt32(&numcalls) != 0 {
+		t.Errorf("want 0, received %v", numcalls)
 	}
-	if start.Add(tenth).After(time.Now()) {
-		t.Error("Next returned too soon")
-	}
-	if start.Add(quarter).Before(time.Now()) {
-		t.Error("Next returned too late")
+	time.Sleep(quarter)
+	if atomic.LoadInt32(&numcalls) != 1 {
+		t.Errorf("want 1, received %v", numcalls)
 	}
 }
 
 func TestIndefinite(t *testing.T) {
-	start := time.Now()
+	atomic.StoreInt32(&numcalls, 0)
 	timer := NewTimer(0)
-	timer.Start()
-	ch := next(timer)
+	timer.Start(f)
+	defer timer.Stop()
 	timer.TriggerAfter(quarter)
-	result := <-ch
-	if !result {
-		t.Errorf("Want true, got false")
+	time.Sleep(tenth)
+	if atomic.LoadInt32(&numcalls) != 0 {
+		t.Errorf("want 0, received %v", numcalls)
 	}
-	if start.Add(quarter).After(time.Now()) {
-		t.Error("Next returned too soon")
+	time.Sleep(quarter)
+	if atomic.LoadInt32(&numcalls) != 1 {
+		t.Errorf("want 1, received %v", numcalls)
 	}
-}
-
-func TestClose(t *testing.T) {
-	start := time.Now()
-	timer := NewTimer(0)
-
-	// Should return false if Start was not called
-	ch := next(timer)
-	result := <-ch
-	if result {
-		t.Errorf("Want false, got true")
-	}
-
-	timer.Start()
-	ch = next(timer)
-	timer.Close()
-	result = <-ch
-	if result {
-		t.Errorf("Want false, got true")
-	}
-	if start.Add(tenth).Before(time.Now()) {
-		t.Error("Next returned too late")
-	}
-
-	// Should return false after Close
-	ch = next(timer)
-	result = <-ch
-	if result {
-		t.Errorf("Want false, got true")
-	}
-}
-
-func next(timer *Timer) chan bool {
-	ch := make(chan bool)
-	go func() {
-		ch <- timer.Next()
-	}()
-	return ch
 }

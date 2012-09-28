@@ -58,11 +58,16 @@ func RegisterQueryService(config Config) {
 	rpcwrap.RegisterAuthenticated(SqlQueryRpcService)
 }
 
+// AllowQueries can take an indefinite amount of time to return because
+// it keeps retrying until it obtains a valid connection to the database.
 func AllowQueries(dbconfig DBConfig) {
 	defer logError()
 	SqlQueryRpcService.allowQueries(dbconfig)
 }
 
+// DisallowQueries can take a long time to return (not indefinite) because
+// it has to wait for queries & transactions to be completed or killed,
+// and also for house keeping goroutines to be terminated.
 func DisallowQueries() {
 	defer logError()
 	SqlQueryRpcService.disallowQueries()

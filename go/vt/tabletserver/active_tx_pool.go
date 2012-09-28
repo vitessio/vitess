@@ -46,11 +46,11 @@ func NewActiveTxPool(timeout time.Duration) *ActiveTxPool {
 
 func (self *ActiveTxPool) Open() {
 	relog.Info("Starting transaction id: %d", self.lastId)
-	go self.TransactionKiller()
+	self.ticks.Start(func() { self.TransactionKiller() })
 }
 
 func (self *ActiveTxPool) Close() {
-	self.ticks.Close()
+	self.ticks.Stop()
 	for _, v := range self.pool.GetTimedout(time.Duration(0)) {
 		conn := v.(*TxConnection)
 		conn.Close()
@@ -63,15 +63,12 @@ func (self *ActiveTxPool) WaitForEmpty() {
 }
 
 func (self *ActiveTxPool) TransactionKiller() {
-	self.ticks.Start()
-	for self.ticks.Next() {
-		for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
-			conn := v.(*TxConnection)
-			relog.Info("killing transaction %d", conn.transactionId)
-			killStats.Add("Transactions", 1)
-			conn.Close()
-			conn.discard()
-		}
+	for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
+		conn := v.(*TxConnection)
+		relog.Info("killing transaction %d", conn.transactionId)
+		killStats.Add("Transactions", 1)
+		conn.Close()
+		conn.discard()
 	}
 }
 

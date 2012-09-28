@@ -31,21 +31,18 @@ func NewActivePool(queryTimeout, idleTimeout time.Duration) *ActivePool {
 
 func (self *ActivePool) Open(ConnFactory CreateConnectionFunc) {
 	self.connPool.Open(ConnFactory)
-	go self.QueryKiller()
+	self.ticks.Start(func() { self.QueryKiller() })
 }
 
 func (self *ActivePool) Close() {
-	self.ticks.Close()
+	self.ticks.Stop()
 	self.connPool.Close()
 	self.pool = pools.NewNumbered()
 }
 
 func (self *ActivePool) QueryKiller() {
-	self.ticks.Start()
-	for self.ticks.Next() {
-		for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
-			self.kill(v.(int64))
-		}
+	for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
+		self.kill(v.(int64))
 	}
 }
 

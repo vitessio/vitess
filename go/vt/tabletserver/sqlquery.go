@@ -51,10 +51,15 @@ type SqlQuery struct {
 	// Obtain write lock to start/stop query service
 	mu sync.RWMutex
 
-	// Use statemu to modify state.
-	// Use atomic to access state even if you have the lock.
-	// You can atomically read state without lock if you don't intend to modify it.
-	// Exclusive transitions can be performed without a lock because there is no race.
+	// We use a hybrid locking scheme to control state transitions. This is
+	// optimal for frequent reads and infrequent state changes.
+	// You can use atomic lockless reads if you don't care about any state
+	// changes after you've read the variable. This is the common use case.
+	// You can use atomic lockless writes if you don't care about, or already
+	// know, the previous value of the object. This is true for exclusive
+	// transitions as documented above.
+	// You should use the statemu lock if you want to execute a transition
+	// where you don't want the state to change from the time you've read it.
 	statemu sync.Mutex
 	state   int32
 
