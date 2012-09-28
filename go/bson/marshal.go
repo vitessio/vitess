@@ -224,6 +224,12 @@ func EncodeStruct(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	t := val.Type()
 	for i := 0; i < t.NumField(); i++ {
 		key := t.Field(i).Name
+
+		// NOTE(szopa): Ignore private fields (copied from
+		// encoding/json). Yes, it feels like a hack.
+		if t.Field(i).PkgPath != "" {
+			continue
+		}
 		encodeField(buf, key, val.Field(i))
 	}
 	buf.WriteByte(0)

@@ -210,6 +210,21 @@ func VerifyMarshal(t *testing.T, Val interface{}) []byte {
 	return encoded
 }
 
+type HasPrivate struct {
+	private string
+	Public  string
+}
+
+func TestIgnorePrivateFields(t *testing.T) {
+	v := HasPrivate{private: "private", Public: "public"}
+	marshaled := VerifyMarshal(t, v)
+	unmarshaled := new(HasPrivate)
+	Unmarshal(marshaled, unmarshaled)
+	if unmarshaled.Public != "Public" && unmarshaled.private != "" {
+		t.Errorf("private fields were not ignored: %#v", unmarshaled)
+	}
+}
+
 func compare(t *testing.T, encoded []byte, expected []byte) {
 	if len(encoded) != len(expected) {
 		t.Errorf("encoding mismatch:\n%#v\n%#v\n", string(encoded), string(expected))
@@ -256,7 +271,7 @@ func BenchmarkMarshal(b *testing.B) {
 
 func BenchmarkUnmarshal(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, err := Marshal(testBlob)
+		err := Unmarshal(testBlob, map[string]interface{}{})
 		if err != nil {
 			panic(err)
 		}
