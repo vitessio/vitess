@@ -11,143 +11,41 @@ package mysqlctl
 import (
 	"bufio"
 	"bytes"
-
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
-	"path"
 	"strconv"
 	"strings"
-	"text/template"
 )
-
-type VtReplParams struct {
-	TabletHost string
-	TabletPort int
-	StartKey   string
-	EndKey     string
-}
-
-func (vtrp VtReplParams) TabletAddr() string {
-	return fmt.Sprintf("%v:%v", vtrp.TabletHost, vtrp.TabletPort)
-}
 
 type Mycnf struct {
-	ServerId              uint
-	TabletDir             string
-	SnapshotDir           string
+	ServerId              uint32
+	MysqlPort             int
 	DataDir               string
-	MycnfFile             string
 	InnodbDataHomeDir     string
 	InnodbLogGroupHomeDir string
-	DatabaseName          string // for replication FIXME(msolomon) should not be needed
 	SocketFile            string
-	MysqlPort             int
-	VtHost                string
-	VtPort                int
 	StartKey              string
 	EndKey                string
+	ErrorLogPath          string
+	SlowLogPath           string
+	RelayLogPath          string
+	RelayLogIndexPath     string
+	RelayLogInfoPath      string
+	BinLogPath            string
+	BinLogIndexPath       string
+	MasterInfoFile        string
+	PidFile               string
+	mycnfMap              map[string]string
 }
 
-const (
-	VtDataRoot       = "/vt"
-	snapshotDir      = "snapshot"
-	dataDir          = "data"
-	innodbDir        = "innodb"
-	relayLogDir      = "relay-logs"
-	binLogDir        = "bin-logs"
-	innodbDataSubdir = "innodb/data"
-	innodbLogSubdir  = "innodb/log"
-)
-
-/* uid is a unique id for a particular tablet - it must be unique within the
-tabletservers deployed within a keyspace, lest there be collisions on disk.
- mysqldPort needs to be unique per instance per machine (shocking) but choosing
- this sensibly has nothing to do with the config, so I'll punt.
-*/
-func NewMycnf(uid uint, mysqlPort int, vtRepl VtReplParams) *Mycnf {
-	cnf := new(Mycnf)
-	cnf.ServerId = uid
-	cnf.MysqlPort = mysqlPort
-	cnf.TabletDir = fmt.Sprintf("%s/vt_%010d", VtDataRoot, uid)
-	cnf.SnapshotDir = fmt.Sprintf("%s/%s/vt_%010d", VtDataRoot, snapshotDir, uid)
-	cnf.DataDir = path.Join(cnf.TabletDir, dataDir)
-	cnf.MycnfFile = path.Join(cnf.TabletDir, "my.cnf")
-	cnf.InnodbDataHomeDir = path.Join(cnf.TabletDir, innodbDataSubdir)
-	cnf.InnodbLogGroupHomeDir = path.Join(cnf.TabletDir, innodbLogSubdir)
-	cnf.SocketFile = path.Join(cnf.TabletDir, "mysql.sock")
-	cnf.VtHost = vtRepl.TabletHost
-	cnf.VtPort = vtRepl.TabletPort
-	cnf.StartKey = vtRepl.StartKey
-	cnf.EndKey = vtRepl.EndKey
-	return cnf
-}
-
-func (cnf *Mycnf) TopLevelDirs() []string {
-	return []string{dataDir, innodbDir, relayLogDir, binLogDir}
-}
-
-func (cnf *Mycnf) DirectoryList() []string {
-	return []string{
-		cnf.DataDir,
-		cnf.InnodbDataHomeDir,
-		cnf.InnodbLogGroupHomeDir,
-		cnf.relayLogDir(),
-		cnf.binLogDir(),
+func (cnf *Mycnf) lookupAndCheck(key string) string {
+	val := cnf.mycnfMap[key]
+	if val == "" {
+		panic(fmt.Errorf("Value for key '%v' not set", key))
 	}
-}
-
-func (cnf *Mycnf) ErrorLogPath() string {
-	return path.Join(cnf.TabletDir, "error.log")
-}
-
-func (cnf *Mycnf) SlowLogPath() string {
-	return path.Join(cnf.TabletDir, "slow-query.log")
-}
-
-func (cnf *Mycnf) relayLogDir() string {
-	return path.Join(cnf.TabletDir, relayLogDir)
-}
-
-func (cnf *Mycnf) RelayLogPath() string {
-	return path.Join(cnf.relayLogDir(),
-		fmt.Sprintf("vt-%010d-relay-bin", cnf.ServerId))
-}
-
-func (cnf *Mycnf) RelayLogIndexPath() string {
-	return cnf.RelayLogPath() + ".index"
-}
-
-func (cnf *Mycnf) RelayLogInfoPath() string {
-	return path.Join(cnf.TabletDir, "relay-logs", "relay.info")
-}
-
-func (cnf *Mycnf) binLogDir() string {
-	return path.Join(cnf.TabletDir, binLogDir)
-}
-
-func (cnf *Mycnf) BinLogPath() string {
-	return path.Join(cnf.binLogDir(),
-		fmt.Sprintf("vt-%010d-bin", cnf.ServerId))
-}
-
-func (cnf *Mycnf) BinLogPathForId(fileid int) string {
-	return path.Join(cnf.binLogDir(),
-		fmt.Sprintf("vt-%010d-bin.%06d", cnf.ServerId, fileid))
-}
-
-func (cnf *Mycnf) BinLogIndexPath() string {
-	return cnf.BinLogPath() + ".index"
-}
-
-func (cnf *Mycnf) MasterInfoPath() string {
-	return path.Join(cnf.TabletDir, "master.info")
-}
-
-func (cnf *Mycnf) PidFile() string {
-	return path.Join(cnf.TabletDir, "mysql.pid")
+	return val
 }
 
 func (cnf *Mycnf) MysqlAddr() string {
@@ -167,50 +65,13 @@ func fqdn() string {
 	return strings.TrimRight(cname, ".")
 }
 
-/*
-  Join cnf files cnfPaths and subsitute in the right values.
-*/
-func MakeMycnf(cnfFiles []string, mycnf *Mycnf, header string) (string, error) {
-	myTemplateSource := new(bytes.Buffer)
-	for _, line := range strings.Split(header, "\n") {
-		fmt.Fprintf(myTemplateSource, "## %v\n", strings.TrimSpace(line))
-	}
-	myTemplateSource.WriteString("[mysqld]\n")
-	for _, path := range cnfFiles {
-		data, dataErr := ioutil.ReadFile(path)
-		if dataErr != nil {
-			return "", dataErr
+func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
+	defer func(err *error) {
+		if x := recover(); x != nil {
+			*err = x.(error)
 		}
-		myTemplateSource.WriteString("## " + path + "\n")
-		myTemplateSource.Write(data)
-	}
+	}(&err)
 
-	myTemplate, err := template.New("").Parse(myTemplateSource.String())
-	if err != nil {
-		return "", err
-	}
-	mycnfData := new(bytes.Buffer)
-	err = myTemplate.Execute(mycnfData, mycnf)
-	if err != nil {
-		return "", err
-	}
-	return mycnfData.String(), nil
-}
-
-/* Create a config for this instance. Search cnfFiles for the appropriate
-cnf template files.
-*/
-func MakeMycnfForMysqld(mysqld *Mysqld, cnfFiles, header string) (string, error) {
-	// FIXME(msolomon) determine config list from mysqld struct
-	cnfs := []string{"default", "master", "replica"}
-	paths := make([]string, len(cnfs))
-	for i, name := range cnfs {
-		paths[i] = fmt.Sprintf("%v/%v.cnf", cnfFiles, name)
-	}
-	return MakeMycnf(paths, mysqld.config, header)
-}
-
-func ReadMycnf(cnfFile string) (*Mycnf, error) {
 	f, err := os.Open(cnfFile)
 	if err != nil {
 		return nil, err
@@ -218,7 +79,10 @@ func ReadMycnf(cnfFile string) (*Mycnf, error) {
 	defer f.Close()
 
 	buf := bufio.NewReader(f)
-	mycnf := new(Mycnf)
+	mycnf = new(Mycnf)
+	mycnf.mycnfMap = make(map[string]string)
+	var lval, rval string
+	var parts [][]byte
 
 	for {
 		line, _, err := buf.ReadLine()
@@ -226,37 +90,45 @@ func ReadMycnf(cnfFile string) (*Mycnf, error) {
 			break
 		}
 		line = bytes.TrimSpace(line)
-		if bytes.HasPrefix(line, []byte("server-id")) {
-			serverId, err := strconv.Atoi(string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1])))
-			if err != nil {
-				return nil, fmt.Errorf("mycnf: failed to convert server-id %v", err)
-			}
-			mycnf.ServerId = uint(serverId)
-		} else if bytes.HasPrefix(line, []byte("port")) {
-			port, err := strconv.Atoi(string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1])))
-			if err != nil {
-				return nil, fmt.Errorf("mycnf: failed to convert port %v", err)
-			}
-			mycnf.MysqlPort = port
-		} else if bytes.HasPrefix(line, []byte("datadir")) {
-			mycnf.DataDir = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
-		} else if bytes.HasPrefix(line, []byte("innodb_log_group_home_dir")) {
-			mycnf.InnodbLogGroupHomeDir = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
-		} else if bytes.HasPrefix(line, []byte("innodb_data_home_dir")) {
-			mycnf.InnodbDataHomeDir = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
-		} else if bytes.HasPrefix(line, []byte("socket")) {
-			mycnf.SocketFile = string(bytes.TrimSpace(bytes.Split(line, []byte("="))[1]))
+
+		parts = bytes.Split(line, []byte("="))
+		if len(parts) < 2 {
+			continue
 		}
+		lval = string(bytes.TrimSpace(parts[0]))
+		rval = string(bytes.TrimSpace(parts[1]))
+		mycnf.mycnfMap[lval] = rval
 	}
 
-	// Make sure we run the correct initialization.
-	vtMycnf := NewMycnf(mycnf.ServerId, mycnf.MysqlPort, VtReplParams{})
+	serverIdStr := mycnf.lookupAndCheck("server-id")
+	serverId, err := strconv.Atoi(serverIdStr)
+	if err != nil {
+		panic(fmt.Errorf("Failed to convert server-id %v", err))
+	}
+	mycnf.ServerId = uint32(serverId)
 
-	// Apply overrides.
-	vtMycnf.DataDir = mycnf.DataDir
-	vtMycnf.InnodbDataHomeDir = mycnf.InnodbDataHomeDir
-	vtMycnf.InnodbLogGroupHomeDir = mycnf.InnodbLogGroupHomeDir
-	vtMycnf.SocketFile = mycnf.SocketFile
+	portStr := mycnf.lookupAndCheck("port")
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		panic(fmt.Errorf("Failed: failed to convert port %v", err))
+	}
+	mycnf.MysqlPort = port
+	mycnf.DataDir = mycnf.lookupAndCheck("datadir")
+	mycnf.InnodbDataHomeDir = mycnf.lookupAndCheck("innodb_data_home_dir")
+	mycnf.InnodbLogGroupHomeDir = mycnf.lookupAndCheck("innodb_log_group_home_dir")
+	mycnf.SocketFile = mycnf.lookupAndCheck("socket")
+	mycnf.ErrorLogPath = mycnf.lookupAndCheck("log-error")
+	mycnf.SlowLogPath = mycnf.lookupAndCheck("slow-query-log-file")
+	mycnf.RelayLogPath = mycnf.lookupAndCheck("relay-log")
+	mycnf.RelayLogIndexPath = mycnf.lookupAndCheck("relay-log-index")
+	mycnf.RelayLogInfoPath = mycnf.lookupAndCheck("relay-log-info-file")
+	mycnf.BinLogPath = mycnf.lookupAndCheck("log-bin")
+	mycnf.BinLogIndexPath = mycnf.lookupAndCheck("log-bin-index")
+	mycnf.MasterInfoFile = mycnf.lookupAndCheck("master-info-file")
+	mycnf.PidFile = mycnf.lookupAndCheck("pid-file")
+	//These values are currently not being set, hence not checking them.
+	mycnf.StartKey = mycnf.mycnfMap["vt_shard_key_range_start"]
+	mycnf.EndKey = mycnf.mycnfMap["vt_shard_key_range_end"]
 
-	return vtMycnf, nil
+	return mycnf, nil
 }

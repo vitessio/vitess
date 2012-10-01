@@ -5,18 +5,19 @@
 package mysqlctl
 
 import (
+	"io/ioutil"
 	"os"
 	"testing"
 )
 
+var MYCNF_PATH = "/tmp/my.cnf"
+
 func TestMycnf(t *testing.T) {
 	var vtRepl VtReplParams
-	vtRepl.TabletHost = "localhost"
-	vtRepl.TabletPort = 6702
 	vtRepl.StartKey = ""
 	vtRepl.EndKey = ""
 
-	tablet0 := NewMysqld(NewMycnf(0, 6802, "", vtRepl), DefaultDbaParams, DefaultReplParams)
+	tablet0 := NewMysqld(NewMycnf(0, 6802, vtRepl), DefaultDbaParams, DefaultReplParams)
 	cnfTemplatePath := os.ExpandEnv("$VTROOT/src/code.google.com/p/vitess/config/mycnf")
 	// FIXME(msolomon) make a path that has a chance of succeeding elsewhere
 	data, err := MakeMycnfForMysqld(tablet0, cnfTemplatePath, "test header")
@@ -24,5 +25,20 @@ func TestMycnf(t *testing.T) {
 		t.Errorf("err: %v", err)
 	} else {
 		t.Logf("data: %v", data)
+	}
+	err = ioutil.WriteFile(MYCNF_PATH, []byte(data), 0666)
+	if err != nil {
+		t.Errorf("failed creating my.cnf %v", err)
+	}
+	_, err = ioutil.ReadFile(MYCNF_PATH)
+	if err != nil {
+		t.Errorf("failed reading, err %v", err)
+		return
+	}
+	mycnf, err := ReadMycnf(MYCNF_PATH)
+	if err != nil {
+		t.Errorf("failed reading, err %v", err)
+	} else {
+		t.Logf("socket file %v", mycnf.SocketFile)
 	}
 }

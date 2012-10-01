@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -75,7 +76,14 @@ func main() {
 	flag.Parse()
 
 	env.Init("vttablet")
-	mycnf := readMycnf()
+
+	_, tabletidStr := path.Split(*tabletPath)
+	tabletId, err := strconv.ParseUint(tabletidStr, 10, 32)
+	if err != nil {
+		relog.Fatal("Error converting tabletid to uint")
+	}
+
+	mycnf := readMycnf(uint32(tabletId))
 	dbcfgs, err := dbconfigs.Init(mycnf)
 	if err != nil {
 		relog.Warning("%s", err)
@@ -100,7 +108,7 @@ func main() {
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
 	// FIXME(msolomon) this path needs to be obtained from the config.
 	http.Handle("/vt/snapshot/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSnapshot(w, r, mycnf)
+		handleSnapshot(w, r, mysqlctl.SnapshotDir(uint32(tabletId)))
 	}))
 
 	// we delegate out startup to the micromanagement server so these actions
@@ -140,10 +148,9 @@ func serveRPC() {
 	bsonrpc.ServeRPC()
 }
 
-func readMycnf() *mysqlctl.Mycnf {
+func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 	if *mycnfFile == "" {
-		_, tabletid := path.Split(*tabletPath)
-		*mycnfFile = fmt.Sprintf("%s/vt_%s/my.cnf", mysqlctl.VtDataRoot, tabletid)
+		*mycnfFile = mysqlctl.MycnfFile(tabletId)
 	}
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
@@ -214,9 +221,9 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	})
 }
 
-func handleSnapshot(rw http.ResponseWriter, req *http.Request, mycnf *mysqlctl.Mycnf) {
+func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir string) {
 	// FIXME(msolomon) some sort of security, no?
-	if strings.HasPrefix(req.URL.Path, mycnf.SnapshotDir) {
+	if strings.HasPrefix(req.URL.Path, snapshotDir) {
 		relog.Info("serve %v", req.URL.Path)
 		http.ServeFile(rw, req, req.URL.Path)
 	} else {

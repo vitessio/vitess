@@ -21,7 +21,7 @@ import (
 )
 
 type zkServerAddr struct {
-	ServerId     uint
+	ServerId     uint32
 	Hostname     string
 	LeaderPort   int
 	ElectionPort int
@@ -29,7 +29,7 @@ type zkServerAddr struct {
 }
 
 type ZkConfig struct {
-	ServerId   uint
+	ServerId   uint32
 	ClientPort int
 	Servers    []zkServerAddr
 	Global     bool
@@ -121,7 +121,7 @@ const GUESS_MYID = 0
   If server_id > 1000, then we assume this is a global quorum.
   server_id's must be 1-255, global id's are 1001-1255 mod 1000.
 */
-func MakeZkConfigFromString(cmdLine string, myId uint) *ZkConfig {
+func MakeZkConfigFromString(cmdLine string, myId uint32) *ZkConfig {
 	zkConfig := NewZkConfig()
 	for _, zki := range strings.Split(cmdLine, ",") {
 		zkiParts := strings.SplitN(zki, "@", 2)
@@ -137,7 +137,7 @@ func MakeZkConfigFromString(cmdLine string, myId uint) *ZkConfig {
 		}
 		myId = myId % 1000
 
-		zkServer := zkServerAddr{ServerId: uint(serverId), ClientPort: 2181,
+		zkServer := zkServerAddr{ServerId: uint32(serverId), ClientPort: 2181,
 			LeaderPort: 2888, ElectionPort: 3888}
 		switch len(zkAddrParts) {
 		case 4:

@@ -115,12 +115,12 @@ func StartReplicationCommands(replState *ReplicationState) []string {
 
 // Read replication state from local files.
 func ReadReplicationState(mysqld *Mysqld) (*ReplicationState, error) {
-	relayInfo, err := ioutil.ReadFile(mysqld.config.RelayLogInfoPath())
+	relayInfo, err := ioutil.ReadFile(mysqld.config.RelayLogInfoPath)
 	if err != nil {
 		return nil, err
 	}
 	// FIXME(msolomon) not sure i'll need this data
-	masterInfo, err := ioutil.ReadFile(mysqld.config.MasterInfoPath())
+	masterInfo, err := ioutil.ReadFile(mysqld.config.MasterInfoFile)
 	if err != nil {
 		return nil, err
 	}

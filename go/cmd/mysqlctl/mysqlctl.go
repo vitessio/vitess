@@ -9,6 +9,7 @@ import (
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 )
@@ -16,7 +17,7 @@ import (
 var port = flag.Int("port", 6612, "vtocc port")
 var force = flag.Bool("force", false, "force action")
 var mysqlPort = flag.Int("mysql-port", 3306, "mysql port")
-var tabletUid = flag.Int("tablet-uid", 41983, "tablet uid")
+var tabletUid = flag.Uint("tablet-uid", 41983, "tablet uid")
 var logLevel = flag.String("log.level", "WARNING", "set log level")
 
 func main() {
@@ -26,8 +27,8 @@ func main() {
 		relog.LogNameToLogLevel(*logLevel))
 	relog.SetLogger(logger)
 
-	vtRepl := mysqlctl.VtReplParams{TabletHost: "localhost", TabletPort: *port}
-	mycnf := mysqlctl.NewMycnf(uint(*tabletUid), *mysqlPort, vtRepl)
+	tabletAddr := fmt.Sprintf("%v:%v", "localhost", *port)
+	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
 	dbcfgs, err := dbconfigs.Init(mycnf)
 	if err != nil {
 		relog.Fatal("%s", err)
@@ -49,7 +50,7 @@ func main() {
 			log.Fatalf("partialrestore failed: %v", err)
 		}
 	case "partialsnapshot":
-		_, err := mysqld.CreateSplitReplicaSource(flag.Arg(1), flag.Arg(2), flag.Arg(3), flag.Arg(4), vtRepl.TabletAddr(), false)
+		_, err := mysqld.CreateSplitReplicaSource(flag.Arg(1), flag.Arg(2), flag.Arg(3), flag.Arg(4), tabletAddr, false)
 		if err != nil {
 			log.Fatalf("partialsnapshot failed: %v", err)
 		}
@@ -66,7 +67,7 @@ func main() {
 			log.Fatalf("failed shutdown mysql: %v", mysqlErr)
 		}
 	case "snapshot":
-		_, err := mysqld.CreateSnapshot(flag.Arg(1), vtRepl.TabletAddr(), false)
+		_, err := mysqld.CreateSnapshot(flag.Arg(1), tabletAddr, false)
 		if err != nil {
 			log.Fatalf("snapshot failed: %v", err)
 		}

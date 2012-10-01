@@ -47,6 +47,9 @@ type Mysqld struct {
 	dbaParams        mysql.ConnectionParams
 	replParams       mysql.ConnectionParams
 	createConnection CreateConnection
+	TabletDir        string
+	SnapshotDir      string
+	MycnfFile        string
 }
 
 func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
@@ -57,8 +60,14 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 	createSuperConnection := func() (*mysql.Connection, error) {
 		return mysql.Connect(dba)
 	}
-
-	return &Mysqld{config, dba, repl, createSuperConnection}
+	return &Mysqld{config,
+		dba,
+		repl,
+		createSuperConnection,
+		TabletDir(config.ServerId),
+		SnapshotDir(config.ServerId),
+		MycnfFile(config.ServerId),
+	}
 }
 
 func Start(mt *Mysqld) error {
@@ -66,7 +75,7 @@ func Start(mt *Mysqld) error {
 	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
 	name := dir + "/bin/mysqld_safe"
 	arg := []string{
-		"--defaults-file=" + mt.config.MycnfFile}
+		"--defaults-file=" + mt.MycnfFile}
 	env := []string{
 		os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
 	}
@@ -109,7 +118,7 @@ func Shutdown(mt *Mysqld, waitForMysqld bool) error {
 	relog.Info("mysqlctl.Shutdown")
 	// possibly mysql is already shutdown, check for a few files first
 	_, socketPathErr := os.Stat(mt.config.SocketFile)
-	_, pidPathErr := os.Stat(mt.config.PidFile())
+	_, pidPathErr := os.Stat(mt.config.PidFile)
 	if socketPathErr != nil && pidPathErr != nil {
 		relog.Warning("assuming shutdown - no socket, no pid file")
 		return nil
@@ -170,10 +179,10 @@ func Init(mt *Mysqld) error {
 	cnfTemplatePath := os.ExpandEnv("$VTROOT/config/mycnf")
 	configData, err := MakeMycnfForMysqld(mt, cnfTemplatePath, "tablet uid?")
 	if err == nil {
-		err = ioutil.WriteFile(mt.config.MycnfFile, []byte(configData), 0664)
+		err = ioutil.WriteFile(mt.MycnfFile, []byte(configData), 0664)
 	}
 	if err != nil {
-		relog.Error("failed creating %v: %v", mt.config.MycnfFile, err)
+		relog.Error("failed creating %v: %v", mt.MycnfFile, err)
 		return err
 	}
 
@@ -186,7 +195,7 @@ func Init(mt *Mysqld) error {
 		return tarErr
 	}
 	if err = Start(mt); err != nil {
-		relog.Error("failed starting, check %v", mt.config.ErrorLogPath())
+		relog.Error("failed starting, check %v", mt.config.ErrorLogPath)
 		return err
 	}
 	schemaPath := os.ExpandEnv("$VTROOT/data/bootstrap/_vt_schema.sql")
@@ -209,16 +218,16 @@ func Init(mt *Mysqld) error {
 }
 
 func (mt *Mysqld) createDirs() error {
-	relog.Info("creating directory %s", mt.config.TabletDir)
-	if err := os.MkdirAll(mt.config.TabletDir, 0775); err != nil {
+	relog.Info("creating directory %s", mt.TabletDir)
+	if err := os.MkdirAll(mt.TabletDir, 0775); err != nil {
 		return err
 	}
-	for _, dir := range mt.config.TopLevelDirs() {
+	for _, dir := range TopLevelDirs() {
 		if err := mt.createTopDir(dir); err != nil {
 			return err
 		}
 	}
-	for _, dir := range mt.config.DirectoryList() {
+	for _, dir := range DirectoryList(mt.config) {
 		relog.Info("creating directory %s", dir)
 		if err := os.MkdirAll(dir, 0775); err != nil {
 			return err
@@ -236,19 +245,19 @@ func (mt *Mysqld) createDirs() error {
 // /vt/data/vt_xxxx
 // /vt/vt_xxxx/data -> /vt/data/vt_xxxx
 func (mt *Mysqld) createTopDir(dir string) error {
-	vtname := path.Base(mt.config.TabletDir)
+	vtname := path.Base(mt.TabletDir)
 	target := path.Join(VtDataRoot, dir)
 	_, err := os.Lstat(target)
 	if err != nil {
 		if err.(*os.PathError).Err == syscall.ENOENT {
-			topdir := path.Join(mt.config.TabletDir, dir)
+			topdir := path.Join(mt.TabletDir, dir)
 			relog.Info("creating directory %s", topdir)
 			return os.MkdirAll(topdir, 0775)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
-	source := path.Join(mt.config.TabletDir, dir)
+	source := path.Join(mt.TabletDir, dir)
 	relog.Info("creating directory %s", linkto)
 	err = os.MkdirAll(linkto, 0775)
 	if err != nil {
@@ -267,8 +276,8 @@ func Teardown(mt *Mysqld, force bool) error {
 		}
 	}
 	var removalErr error
-	for _, dir := range mt.config.TopLevelDirs() {
-		qdir := path.Join(mt.config.TabletDir, dir)
+	for _, dir := range TopLevelDirs() {
+		qdir := path.Join(mt.TabletDir, dir)
 		if err := deleteTopDir(qdir); err != nil {
 			removalErr = err
 		}

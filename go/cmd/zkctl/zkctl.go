@@ -63,7 +63,7 @@ func main() {
 		relog.LogNameToLogLevel(*logLevel))
 	relog.SetLogger(logger)
 
-	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, *myId)
+	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myId))
 	zkd := zkctl.NewZkd(zkConfig)
 
 	action := flag.Arg(0)

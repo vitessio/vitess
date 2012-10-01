@@ -233,13 +233,13 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	}
 
 	var rs *ReplicaSource
-	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.config.SnapshotDir)
+	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir)
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
 		rs = NewReplicaSource(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition)
-		rsFile := path.Join(mysqld.config.SnapshotDir, replicaSourceFile)
+		rsFile := path.Join(mysqld.SnapshotDir, replicaSourceFile)
 		if snapshotErr = writeJson(rsFile, rs); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		}
@@ -341,7 +341,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(replicaSource *ReplicaSource) error {
 func (mysqld *Mysqld) fetchSnapshot(replicaSource *ReplicaSource) error {
 	replicaDbPath := path.Join(mysqld.config.DataDir, replicaSource.DbName)
 
-	cleanDirs := []string{mysqld.config.SnapshotDir, replicaDbPath,
+	cleanDirs := []string{mysqld.SnapshotDir, replicaDbPath,
 		mysqld.config.InnodbDataHomeDir, mysqld.config.InnodbLogGroupHomeDir}
 
 	// clean out and start fresh
@@ -356,5 +356,5 @@ func (mysqld *Mysqld) fetchSnapshot(replicaSource *ReplicaSource) error {
 		}
 	}
 
-	return fetchFiles(replicaSource, mysqld.config.TabletDir)
+	return fetchFiles(replicaSource, mysqld.TabletDir)
 }

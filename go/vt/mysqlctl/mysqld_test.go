@@ -9,8 +9,8 @@ import (
 )
 
 func TestStartShutdown(t *testing.T) {
-	mycnf0 := NewMycnf(0, 3700, "", VtReplParams{TabletHost: "localhost"})
-	mycnf1 := NewMycnf(1, 3701, "", VtReplParams{TabletHost: "localhost"})
+	mycnf0 := NewMycnf(0, 3700, VtReplParams{})
+	mycnf1 := NewMycnf(1, 3701, VtReplParams{})
 	tablet0 := NewMysqld(mycnf0, DefaultDbaParams, DefaultReplParams)
 	tablet1 := NewMysqld(mycnf1, DefaultDbaParams, DefaultReplParams)
 	var err error

@@ -1,9 +1,6 @@
 # master.cnf parameters
 
-#master-info-file=file_name
 log-bin = {{.BinLogPath}}
 log-bin-index = {{.BinLogIndexPath}}
 log-slave-updates
 sync_binlog = 1
-# empty binlog-do-db seems to block replication
-#binlog-do-db = {{.DatabaseName}}

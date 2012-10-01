@@ -166,7 +166,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		return
 	}
 
-	cloneSourcePath := path.Join(mysqld.config.SnapshotDir, dataDir, dbName+"-"+b64ForFilename(startKey)+","+b64ForFilename(endKey))
+	cloneSourcePath := path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+b64ForFilename(startKey)+","+b64ForFilename(endKey))
 	// clean out and start fresh	
 	for _, _path := range []string{cloneSourcePath} {
 		if err = os.RemoveAll(_path); err != nil {
@@ -262,7 +262,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	} else {
 		rs = NewSplitReplicaSource(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition, startKey, endKey, schema)
-		rsFile := path.Join(mysqld.config.SnapshotDir, replicaSourceFile)
+		rsFile := path.Join(mysqld.SnapshotDir, replicaSourceFile)
 		if snapshotErr = writeJson(rsFile, rs); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		}
@@ -360,7 +360,7 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 		return
 	}
 
-	tempStoragePath := path.Join(mysqld.config.SnapshotDir, "partialrestore")
+	tempStoragePath := path.Join(mysqld.SnapshotDir, "partialrestore")
 	cleanDirs := []string{tempStoragePath}
 
 	// clean out and start fresh
