@@ -199,7 +199,7 @@ func cmdWait(args []string) {
 	}
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			_, wait, err = zconn.ExistsW(zkPath)
+			_, _, wait, err = zconn.ExistsW(zkPath)
 		} else {
 			log.Fatalf("wait: error %v: %v", zkPath, err)
 		}
@@ -348,7 +348,7 @@ func cmdLs(args []string) {
 				localPath := path.Join(zkPath, child)
 				wg.Add(1)
 				go func() {
-					stat, err := zconn.Exists(localPath)
+					_, stat, err := zconn.Exists(localPath)
 					if err != nil {
 						log.Printf("ls: cannot access: %v: %v", localPath, err)
 					} else {

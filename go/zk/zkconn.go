@@ -33,12 +33,14 @@ func (conn *ZkConn) ChildrenW(path string) (children []string, stat Stat, watch 
 	return conn.conn.ChildrenW(path)
 }
 
-func (conn *ZkConn) Exists(path string) (stat Stat, err error) {
-	return conn.conn.Exists(path)
+func (conn *ZkConn) Exists(path string) (exists bool, stat Stat, err error) {
+	s, err := conn.conn.Exists(path)
+	return s != nil, s, err
 }
 
-func (conn *ZkConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
-	return conn.conn.ExistsW(path)
+func (conn *ZkConn) ExistsW(path string) (exists bool, stat Stat, watch <-chan zookeeper.Event, err error) {
+	s, w, err := conn.conn.ExistsW(path)
+	return s != nil, s, w, err
 }
 
 func (conn *ZkConn) Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {

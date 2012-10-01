@@ -178,7 +178,7 @@ def run_test_sanity():
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
-  agent_62344.kill()
+  utils.kill_sub_process(agent_62344)
 
   utils.run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 "" "" idle')
   utils.run_vtctl('-force ScrapTablet /zk/test_nj/vt/tablets/0000062344')
@@ -248,7 +248,7 @@ def run_test_mysqlctl_clone():
   if result[0][0] != 4:
     raise utils.TestError("expected 4 rows in vt_insert_test", result)
 
-  agent_62344.kill()
+  utils.kill_sub_process(agent_62344)
 
 def run_test_vtctl_snapshot_restore():
   utils.zk_wipe()
@@ -284,8 +284,8 @@ def run_test_vtctl_snapshot_restore():
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
-  agent_62344.kill()
-  agent_62044.kill()
+  utils.kill_sub_process(agent_62344)
+  utils.kill_sub_process(agent_62044)
 
 
 def run_test_vtctl_clone():
@@ -323,8 +323,8 @@ def run_test_vtctl_clone():
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
-  agent_62344.kill()
-  agent_62044.kill()
+  utils.kill_sub_process(agent_62344)
+  utils.kill_sub_process(agent_62044)
 
 def run_test_mysqlctl_split():
   utils.zk_wipe()
@@ -384,7 +384,7 @@ def run_test_mysqlctl_split():
 #  if result[0][0] != 0:
 #    raise utils.TestError("expected propagation not to happen", result)
 
-  agent_62344.kill()
+  utils.kill_sub_process(agent_62344)
 
 def run_test_vtctl_partial_clone():
   utils.zk_wipe()
@@ -423,8 +423,8 @@ def run_test_vtctl_partial_clone():
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
-  agent_62344.kill()
-  agent_62044.kill()
+  utils.kill_sub_process(agent_62344)
+  utils.kill_sub_process(agent_62044)
 
 def run_test_restart_during_action():
   # Start up a master mysql and vttablet
@@ -443,7 +443,7 @@ def run_test_restart_during_action():
   action_path, _ = utils.run_vtctl('-no-wait Ping /zk/test_nj/vt/tablets/0000062344', trap_output=True)
 
   # kill agent leaving vtaction running
-  agent_62344.kill()
+  utils.kill_sub_process(agent_62344)
 
   # restart agent
   agent_62344 = utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
@@ -451,7 +451,7 @@ def run_test_restart_during_action():
   # we expect this action with a short wait time to fail. this isn't the best
   # and has some potential for flakiness.
   utils.run_fail(vtroot+'/bin/vtctl -wait-time 2s WaitForAction ' + action_path)
-  agent_62344.kill()
+  utils.kill_sub_process(agent_62344)
 
 
 
@@ -484,7 +484,7 @@ def run_test_reparent_down_master():
   utils.zk_check()
 
   # Make the master agent unavailable.
-  agent_62344.kill()
+  utils.kill_sub_process(agent_62344)
 
 
   expected_addr = hostname + ':6700'
@@ -521,9 +521,9 @@ def run_test_reparent_down_master():
   if '0000062344' not in idle_tablets:
     raise utils.TestError('idle tablet not found', idle_tablets)
 
-  agent_62044.kill()
-  agent_41983.kill()
-  agent_31983.kill()
+  utils.kill_sub_process(agent_62044)
+  utils.kill_sub_process(agent_41983)
+  utils.kill_sub_process(agent_31983)
 
 
 def run_test_reparent_graceful_range_based():
@@ -579,10 +579,10 @@ def _run_test_reparent_graceful(shard_id):
   expected_addr = hostname + ':6701'
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
 
-  agent_62344.kill()
-  agent_62044.kill()
-  agent_41983.kill()
-  agent_31983.kill()
+  utils.kill_sub_process(agent_62344)
+  utils.kill_sub_process(agent_62044)
+  utils.kill_sub_process(agent_41983)
+  utils.kill_sub_process(agent_31983)
 
   # Test address correction.
   agent_62044 = utils.run_bg(vtroot+'/bin/vttablet -port 6773 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
@@ -592,7 +592,7 @@ def _run_test_reparent_graceful(shard_id):
   expected_addr = hostname + ':6773'
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
 
-  agent_62044.kill()
+  utils.kill_sub_process(agent_62044)
 
 def run_all():
   run_test_sanity()
@@ -645,7 +645,7 @@ def run_test_vttablet_authenticated():
   if "Row count: " not in out:
     raise utils.TestError("query didn't go through: %s, %s" % (err, out))
 
-  agent.kill()
+  utils.kill_sub_process(agent)
   # TODO(szopa): Test that non-authenticated queries do not pass
   # through (when we get to that point).
 
