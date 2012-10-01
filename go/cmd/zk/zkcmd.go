@@ -35,6 +35,7 @@ var recursiveDelete = opts.ShortFlag("-r", "recursive delete")
 var recursiveListing = opts.ShortFlag("-R", "recursive listing")
 var createParents = opts.ShortFlag("-p", "create parents")
 var touchOnly = opts.ShortFlag("-c", "touch only - don't create")
+var exitIfExists = opts.ShortFlag("-e", "exit if the path already exists")
 
 var doc = `zk - a tool for wrangling the zookeeper
 
@@ -201,6 +202,11 @@ func cmdWait(args []string) {
 			_, wait, err = zconn.ExistsW(zkPath)
 		} else {
 			log.Fatalf("wait: error %v: %v", zkPath, err)
+		}
+	} else {
+		if *exitIfExists {
+			fmt.Printf("already exists: %v\n", zkPath)
+			return
 		}
 	}
 	event := <-wait
