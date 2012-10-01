@@ -183,3 +183,19 @@ def zk_check(ping_tablets=False):
 def run_vtctl(clargs, **kwargs):
   prog_compile(['vtctl'])
   return run(vtroot+'/bin/vtctl -log.level=WARNING -logfile=/dev/null %s' % clargs, **kwargs)
+
+# vtclient2 helpers
+def vttablet_query(uid, dbname, query, user=None, password=None, driver=None):
+  prog_compile(['vtclient2'])
+  if (user is None) != (password is None):
+    raise TypeError("you should provide either both or none of user and password")
+
+  server = "localhost:%u/%s" % (uid, dbname)
+  if user is not None:
+    server = "%s:%s@%s" % (user, password, server)
+
+  cmdline = [vtroot+'/bin/vtclient2', '-server', server, '"%s"' % query]
+  if driver:
+    cmdLine.append("-driver " + driver)
+
+  return run(' '.join(cmdline), trap_output=True)

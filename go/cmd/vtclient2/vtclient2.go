@@ -10,8 +10,10 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
+	_ "code.google.com/p/vitess/go/vt/client2"
 	_ "code.google.com/p/vitess/go/vt/client2/tablet"
 )
 
@@ -22,9 +24,8 @@ in the form of :v0, :v1, etc.
 `
 
 var count = flag.Int("count", 1, "how many times to run the query")
-var dml = flag.Bool("dml", false, "this is a dml query, use a transaction")
 var server = flag.String("server", "localhost:6603/test", "vtocc server as hostname:port/dbname or user:password@hostname:port/dbname")
-var streaming = flag.Bool("streaming", false, "use the streaming API")
+var driver = flag.String("driver", "vttablet", "which driver to use (one of vttablet, vttablet-streaming, vtdb, vtdb-streaming)")
 var verbose = flag.Bool("verbose", false, "show results")
 
 func init() {
@@ -36,6 +37,13 @@ func init() {
 	}
 }
 
+// FIXME(alainjobart) this is a cheap trick. Should probably use the
+// query parser if we needed this to be 100% reliable.
+func isDml(sql string) bool {
+	lower := strings.TrimSpace(strings.ToLower(sql))
+	return strings.HasPrefix(lower, "insert") || strings.HasPrefix(lower, "update")
+}
+
 func main() {
 	flag.Parse()
 	args := flag.Args()
@@ -45,15 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var driver string
-
-	if *streaming {
-		driver = "vttablet-streaming"
-	} else {
-		driver = "vttablet"
-	}
-
-	db, err := sql.Open(driver, *server)
+	db, err := sql.Open(*driver, *server)
 	if err != nil {
 		log.Fatalf("client error: %v", err)
 	}
@@ -62,7 +62,7 @@ func main() {
 	now := time.Now()
 
 	// handle dml
-	if *dml {
+	if isDml(args[0]) {
 		t, err := db.Begin()
 		if err != nil {
 			log.Fatalf("begin failed: %v", err)

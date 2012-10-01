@@ -49,24 +49,6 @@ def mysql_write_query(uid, dbname, query):
   finally:
     conn.close()
 
-def vttablet_write_query(uid, dbname, query, user=None, password=None):
-  if (user is None) != (password is None):
-    raise TypeError("you should provide either both or none of user and password")
-
-  server = "localhost:%u/%s" % (uid, dbname)
-  if user is not None:
-    server = "%s:%s@%s" % (user, password, server)
-
-  if query.lower().startswith("insert") or query.lower().startswith("update"):
-    dml = "-dml"
-  else:
-    dml = ""
-
-
-  cmdline = [vtroot+'/bin/vtclient2', '-server', server, dml, '"%s"' % query]
-
-  return utils.run(' '.join(cmdline), trap_output=True)
-
 def check_db_var(uid, name, value):
   conn = MySQLdb.Connect(user='vt_dba',
                          unix_socket='/vt/vt_%010d/mysql.sock' % uid)
@@ -99,7 +81,6 @@ def wait_db_read_only(uid):
 def setup():
   utils.prog_compile(['mysqlctl',
                       'vtaction',
-                      'vtclient2',
                       'vtctl',
                       'vttablet',
                       ])
@@ -360,8 +341,8 @@ def run_test_mysqlctl_split():
   # change/add two values on the master, one in range, one out of range, make
   # sure the right one propagate and not the other
   utils.run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
-  vttablet_write_query(6700, 'vt_test_keyspace', "insert into vt_insert_test (id, msg) values (5, 'test should not propagate')")
-  vttablet_write_query(6700, 'vt_test_keyspace', "update vt_insert_test set msg='test should propagate' where id=2")
+  utils.vttablet_query(6700, 'vt_test_keyspace', "insert into vt_insert_test (id, msg) values (5, 'test should not propagate')")
+  utils.vttablet_query(6700, 'vt_test_keyspace', "update vt_insert_test set msg='test should propagate' where id=2")
 
   utils.pause("look at db now!")
 
@@ -594,24 +575,6 @@ def _run_test_reparent_graceful(shard_id):
 
   utils.kill_sub_process(agent_62044)
 
-def run_all():
-  run_test_sanity()
-  run_test_sanity() # run twice to check behavior with existing znode data
-  run_test_scrap()
-  run_test_restart_during_action()
-
-  # Subsumed by vtctl_clone test.
-  # run_test_mysqlctl_clone()
-  run_test_vtctl_clone()
-
-  # This test does not pass as it requires an experimental mysql patch.
-  #run_test_vtctl_partial_clone()
-
-  run_test_reparent_graceful()
-  run_test_reparent_graceful_range_based()
-  run_test_reparent_down_master()
-  run_test_vttablet_authenticated()
-
 def run_test_vttablet_authenticated():
   utils.zk_wipe()
   utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
@@ -641,7 +604,7 @@ def run_test_vttablet_authenticated():
 
   utils.run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
   time.sleep(0.1)
-  err, out = vttablet_write_query(uid=6770, dbname='vt_test_keyspace', user="ala", password=r"ma\ kota", query="select * from vt_select_test")
+  err, out = utils.vttablet_query(uid=6770, dbname='vt_test_keyspace', user="ala", password=r"ma\ kota", query="select * from vt_select_test")
   if "Row count: " not in out:
     raise utils.TestError("query didn't go through: %s, %s" % (err, out))
 
@@ -650,6 +613,23 @@ def run_test_vttablet_authenticated():
   # through (when we get to that point).
 
 
+def run_all():
+  run_test_sanity()
+  run_test_sanity() # run twice to check behavior with existing znode data
+  run_test_scrap()
+  run_test_restart_during_action()
+
+  # Subsumed by vtctl_clone test.
+  # run_test_mysqlctl_clone()
+  run_test_vtctl_clone()
+
+  # This test does not pass as it requires an experimental mysql patch.
+  #run_test_vtctl_partial_clone()
+
+  run_test_reparent_graceful()
+  run_test_reparent_graceful_range_based()
+  run_test_reparent_down_master()
+  run_test_vttablet_authenticated()
 
 def main():
   parser = OptionParser()
