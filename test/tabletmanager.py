@@ -25,59 +25,6 @@ vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
 hostname = socket.gethostname()
 
-def mysql_query(uid, dbname, query):
-  conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
-                         db=dbname)
-  cursor = conn.cursor()
-  cursor.execute(query)
-  try:
-    return cursor.fetchall()
-  finally:
-    conn.close()
-
-def mysql_write_query(uid, dbname, query):
-  conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
-                         db=dbname)
-  cursor = conn.cursor()
-  conn.begin()
-  cursor.execute(query)
-  conn.commit()
-  try:
-    return cursor.fetchall()
-  finally:
-    conn.close()
-
-def check_db_var(uid, name, value):
-  conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='/vt/vt_%010d/mysql.sock' % uid)
-  cursor = conn.cursor()
-  cursor.execute("show variables like '%s'" % name)
-  row = cursor.fetchone()
-  if row != (name, value):
-    raise utils.TestError('variable not set correctly', name, row)
-  conn.close()
-
-
-def check_db_read_only(uid):
-  return check_db_var(uid, 'read_only', 'ON')
-
-
-def check_db_read_write(uid):
-  return check_db_var(uid, 'read_only', 'OFF')
-
-
-def wait_db_read_only(uid):
-  for x in xrange(3):
-    try:
-      check_db_read_only(uid)
-      return
-    except utils.TestError as e:
-      print >> sys.stderr, 'WARNING: ', e
-      time.sleep(1.0)
-  raise e
-
 def setup():
   utils.prog_compile(['mysqlctl',
                       'vtaction',
@@ -132,11 +79,11 @@ def run_test_sanity():
 
   # if these statements don't run before the tablet it will wedge waiting for the
   # db to become accessible. this is more a bug than a feature.
-  mysql_query(62344, '', 'drop database if exists vt_test_keyspace')
-  mysql_query(62344, '', 'create database vt_test_keyspace')
-  mysql_query(62344, 'vt_test_keyspace', create_vt_select_test)
+  utils.mysql_query(62344, '', 'drop database if exists vt_test_keyspace')
+  utils.mysql_query(62344, '', 'create database vt_test_keyspace')
+  utils.mysql_query(62344, 'vt_test_keyspace', create_vt_select_test)
   for q in populate_vt_select_test:
-    mysql_write_query(62344, 'vt_test_keyspace', q)
+    utils.mysql_write_query(62344, 'vt_test_keyspace', q)
 
   agent_62344 = utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
@@ -144,10 +91,10 @@ def run_test_sanity():
 
   # Quickly check basic actions.
   utils.run_vtctl('SetReadOnly /zk/test_nj/vt/tablets/0000062344')
-  wait_db_read_only(62344)
+  utils.wait_db_read_only(62344)
 
   utils.run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
-  check_db_read_write(62344)
+  utils.check_db_read_write(62344)
 
   result, _ = utils.run_vtctl('Query /zk/test_nj/vt/ns/test_keyspace "select * from vt_select_test"', trap_output=True)
   rows = result.splitlines()
@@ -155,7 +102,7 @@ def run_test_sanity():
     raise utils.TestError("expected 5 rows in vt_select_test", rows, result)
 
   utils.run_vtctl('DemoteMaster /zk/test_nj/vt/tablets/0000062344')
-  wait_db_read_only(62344)
+  utils.wait_db_read_only(62344)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
@@ -213,11 +160,11 @@ def run_test_mysqlctl_clone():
 
   agent_62344 = utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
-  mysql_query(62344, '', 'create database vt_snapshot_test')
-  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  utils.mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
+  utils.mysql_query(62344, '', 'create database vt_snapshot_test')
+  utils.mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
-    mysql_write_query(62344, 'vt_snapshot_test', q)
+    utils.mysql_write_query(62344, 'vt_snapshot_test', q)
 
   utils.run(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 snapshot vt_snapshot_test')
 
@@ -225,7 +172,7 @@ def run_test_mysqlctl_clone():
 
   utils.run(vtroot+'/bin/mysqlctl -tablet-uid 62044 -port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/replica_source.json')
 
-  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  result = utils.mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
     raise utils.TestError("expected 4 rows in vt_insert_test", result)
 
@@ -243,11 +190,11 @@ def run_test_vtctl_snapshot_restore():
 
   agent_62344 = utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
-  mysql_query(62344, '', 'create database vt_snapshot_test')
-  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  utils.mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
+  utils.mysql_query(62344, '', 'create database vt_snapshot_test')
+  utils.mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
-    mysql_write_query(62344, 'vt_snapshot_test', q)
+    utils.mysql_write_query(62344, 'vt_snapshot_test', q)
 
   # Need to force snapshot since this is a master db.
   utils.run_vtctl('-force Snapshot /zk/test_nj/vt/tablets/0000062344')
@@ -259,7 +206,7 @@ def run_test_vtctl_snapshot_restore():
   utils.run_vtctl('Restore /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
   utils.pause("restore finished")
 
-  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  result = utils.mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
     raise utils.TestError("expected 4 rows in vt_insert_test", result)
 
@@ -283,11 +230,11 @@ def run_test_vtctl_clone():
 
   agent_62344 = utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
-  mysql_query(62344, '', 'create database vt_snapshot_test')
-  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  utils.mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
+  utils.mysql_query(62344, '', 'create database vt_snapshot_test')
+  utils.mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
-    mysql_write_query(62344, 'vt_snapshot_test', q)
+    utils.mysql_write_query(62344, 'vt_snapshot_test', q)
 
   utils.run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle')
   agent_62044 = utils.run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
@@ -298,7 +245,7 @@ def run_test_vtctl_clone():
 
   utils.run_vtctl('-force Clone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044')
 
-  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  result = utils.mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 4:
     raise utils.TestError("expected 4 rows in vt_insert_test", result)
 
@@ -319,22 +266,22 @@ def run_test_mysqlctl_split():
 
   agent_62344 = utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  mysql_query(62344, '', 'drop database if exists vt_test_keyspace')
-  mysql_query(62344, '', 'create database vt_test_keyspace')
-  mysql_query(62344, 'vt_test_keyspace', create_vt_insert_test)
+  utils.mysql_query(62344, '', 'drop database if exists vt_test_keyspace')
+  utils.mysql_query(62344, '', 'create database vt_test_keyspace')
+  utils.mysql_query(62344, 'vt_test_keyspace', create_vt_insert_test)
   for q in populate_vt_insert_test:
-    mysql_write_query(62344, 'vt_test_keyspace', q)
+    utils.mysql_write_query(62344, 'vt_test_keyspace', q)
 
   utils.run(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 partialsnapshot vt_test_keyspace id 0 3')
 
   utils.pause("partialsnapshot finished")
 
-  mysql_query(62044, '', 'stop slave')
-  mysql_query(62044, '', 'drop database if exists vt_test_keyspace')
-  mysql_query(62044, '', 'create database vt_test_keyspace')
+  utils.mysql_query(62044, '', 'stop slave')
+  utils.mysql_query(62044, '', 'drop database if exists vt_test_keyspace')
+  utils.mysql_query(62044, '', 'create database vt_test_keyspace')
   utils.run(vtroot+'/bin/mysqlctl -tablet-uid 62044 -port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/replica_source.json')
 
-  result = mysql_query(62044, 'vt_test_keyspace', 'select count(*) from vt_insert_test')
+  result = utils.mysql_query(62044, 'vt_test_keyspace', 'select count(*) from vt_insert_test')
   if result[0][0] != 2:
     raise utils.TestError("expected 2 rows in vt_insert_test", result)
 
@@ -349,7 +296,7 @@ def run_test_mysqlctl_split():
   # wait until value that should have been changed is here
   timeout = 10
   while timeout > 0:
-    result = mysql_query(62044, 'vt_test_keyspace', 'select msg from vt_insert_test where id=2')
+    result = utils.mysql_query(62044, 'vt_test_keyspace', 'select msg from vt_insert_test where id=2')
     if result[0][0] == "test should propagate":
       break
     timeout -= 1
@@ -361,7 +308,7 @@ def run_test_mysqlctl_split():
   # this part is disabled now, as the replication pruning is only enabled
   # for row-based replication, but the mysql server is statement based.
   # will re-enable once we get statement-based pruning patch into mysql.
-#  result = mysql_query(62044, 'vt_test_keyspace', 'select count(*) from vt_insert_test where id=5')
+#  result = utils.mysql_query(62044, 'vt_test_keyspace', 'select count(*) from vt_insert_test where id=5')
 #  if result[0][0] != 0:
 #    raise utils.TestError("expected propagation not to happen", result)
 
@@ -379,11 +326,11 @@ def run_test_vtctl_partial_clone():
 
   agent_62344 = utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log')
 
-  mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
-  mysql_query(62344, '', 'create database vt_snapshot_test')
-  mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
+  utils.mysql_query(62344, '', 'drop database if exists vt_snapshot_test')
+  utils.mysql_query(62344, '', 'create database vt_snapshot_test')
+  utils.mysql_query(62344, 'vt_snapshot_test', create_vt_insert_test)
   for q in populate_vt_insert_test:
-    mysql_write_query(62344, 'vt_snapshot_test', q)
+    utils.mysql_write_query(62344, 'vt_snapshot_test', q)
 
   utils.run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3700 6700 "" "" idle ""')
   agent_62044 = utils.run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log')
@@ -393,12 +340,12 @@ def run_test_vtctl_partial_clone():
   # InitTablet (running an action on the vttablet), or in PartialClone
   # (instead of doing a 'USE dbname' it could do a 'CREATE DATABASE
   # dbname').
-  mysql_query(62044, '', 'stop slave')
-  mysql_query(62044, '', 'drop database if exists vt_snapshot_test')
-  mysql_query(62044, '', 'create database vt_snapshot_test')
+  utils.mysql_query(62044, '', 'stop slave')
+  utils.mysql_query(62044, '', 'drop database if exists vt_snapshot_test')
+  utils.mysql_query(62044, '', 'create database vt_snapshot_test')
   utils.run_vtctl('-force PartialClone /zk/test_nj/vt/tablets/0000062344 /zk/test_nj/vt/tablets/0000062044 id 0 3')
 
-  result = mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
+  result = utils.mysql_query(62044, 'vt_snapshot_test', 'select count(*) from vt_insert_test')
   if result[0][0] != 2:
     raise utils.TestError("expected 2 rows in vt_insert_test", result)
 
@@ -589,18 +536,18 @@ def run_test_vttablet_authenticated():
                   '-auth-credentials', vttop + '/py/vttest/authcredentials_test.json']))
   time.sleep(0.1)
   try:
-    mysql_query(62344, '', 'create database vt_test_keyspace')
+    utils.mysql_query(62344, '', 'create database vt_test_keyspace')
   except MySQLdb.ProgrammingError as e:
     if e.args[0] != 1007:
       raise
   try:
-    mysql_query(62344, 'vt_test_keyspace', create_vt_select_test)
+    utils.mysql_query(62344, 'vt_test_keyspace', create_vt_select_test)
   except MySQLdb.OperationalError as e:
     if e.args[0] != 1050:
       raise
 
   for q in populate_vt_select_test:
-    mysql_write_query(62344, 'vt_test_keyspace', q)
+    utils.mysql_write_query(62344, 'vt_test_keyspace', q)
 
   utils.run_vtctl('SetReadWrite /zk/test_nj/vt/tablets/0000062344')
   time.sleep(0.1)

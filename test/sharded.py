@@ -1,10 +1,12 @@
 #!/usr/bin/python
 
+import json
 from optparse import OptionParser
 import os
 import shutil
 import socket
 from subprocess import check_call, Popen, CalledProcessError, PIPE
+import sys
 import tempfile
 import time
 import datetime
@@ -45,15 +47,21 @@ def teardown():
     try:
       shutil.rmtree(path)
     except OSError as e:
-      if options.verbose:
+      if utils.options.verbose:
         print >> sys.stderr, e, path
+
+create_vt_select_test = '''create table vt_select_test (
+id bigint not null,
+msg varchar(64),
+primary key (id)
+) Engine=InnoDB'''
 
 def run_test_sharding():
 
   # set up the following databases:
-  # 0000062344: shard 0 master
+  # 0000062344: shard 0 master 0000000000000000 - 8000000000000000
   # 0000062044: shard 0 slave
-  # 0000031981: shard 1 master
+  # 0000031981: shard 1 master 8000000000000000 - FFFFFFFFFFFFFFFF
   # 0000041983: shard 1 slave
 
   utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
@@ -70,6 +78,12 @@ def run_test_sharding():
 
   # run checks now before we start the tablets
   utils.zk_check()
+
+  # create databases and schema so tablets are good to go
+  for port in [62344, 62044, 31981, 41983]:
+    utils.mysql_query(port, '', 'drop database if exists vt_test_keyspace')
+    utils.mysql_query(port, '', 'create database vt_test_keyspace')
+    utils.mysql_query(port, 'vt_test_keyspace', create_vt_select_test)
 
   # start the tablets
   agents = [
@@ -88,7 +102,115 @@ def run_test_sharding():
   utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062344')
   utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/1 /zk/test_nj/vt/tablets/0000031981')
 
+  # FIXME(alainjobart) fix the test_nj serving graph and use it:
+  # - it needs to have KeyRange(Start, End) setup
+  #   (I may be missing this setting earlier in the setup)
+  #   (I am saving the original file into /vt/tmp/old_test_nj_test_keyspace)
+  # - we should use the 'local' cell, not a given cell, but the logic
+  #   to create it is not there yet I think.
+  fd = tempfile.NamedTemporaryFile(dir=utils.tmp_root, delete=False)
+  filename = fd.name
+  zk_srv_keyspace = {
+      "Shards": [
+          {
+              "KeyRange": {
+                  "Start": "8000000000000000",
+                  "End": "FFFFFFFFFFFFFFFF"
+                  },
+              "AddrsByType": {
+                  "master": {
+                      "entries": [
+                          {
+                              "uid": 31981,
+                              "host": "localhost",
+                              "port": 0,
+                              "named_port_map": {
+                                  "_mysql": 3702,
+                                  "_vtocc": 6702
+                                  }
+                              }
+                          ]
+                      },
+                  "replica": {
+                      "entries": [
+                          {
+                              "uid": 41983,
+                              "host": "localhost",
+                              "port": 0,
+                              "named_port_map": {
+                                  "_mysql": 3703,
+                                  "_vtocc": 6703
+                                  }
+                              }
+                          ]
+                      }
+                  },
+              "ReadOnly": False
+              },
+          {
+              "KeyRange": {
+                  "Start": "",
+                  "End": "8000000000000000"
+                  },
+              "AddrsByType": {
+                  "master": {
+                      "entries": [
+                          {
+                              "uid": 62344,
+                              "host": "localhost",
+                              "port": 0,
+                              "named_port_map": {
+                                  "_mysql": 3700,
+                                  "_vtocc": 6700
+                                  }
+                              }
+                          ]
+                      },
+                  "replica": {
+                      "entries": [
+                          {
+                              "uid": 62044,
+                              "host": "localhost",
+                              "port": 0,
+                              "named_port_map": {
+                                  "_mysql": 3701,
+                                  "_vtocc": 6701
+                                  }
+                              }
+                          ]
+                      }
+                  },
+              "ReadOnly": False
+              }
+          ],
+      "TabletTypes": None
+      }
+  json.dump(zk_srv_keyspace, fd)
+  fd.close()
+  utils.run(vtroot+'/bin/zk cp /zk/test_nj/vt/ns/test_keyspace /vt/tmp/old_test_nj_test_keyspace')
+  utils.run(vtroot+'/bin/zk cp '+filename+' /zk/test_nj/vt/ns/test_keyspace')
+
+  # insert some values directly
+  # FIXME(alainjobart) these values don't match the shard map
+  utils.mysql_write_query(62344, 'vt_test_keyspace', "insert into vt_select_test (id, msg) values (1, 'test 1')")
+  utils.mysql_write_query(31981, 'vt_test_keyspace', "insert into vt_select_test (id, msg) values (10, 'test 10')")
+
   utils.zk_check(ping_tablets=True)
+
+  utils.pause("Before the sql scatter query")
+
+  # note the order of the rows is not guaranteed, as the go routines
+  # doing the work can go out of order
+  out, err = utils.vttablet_query(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver="vtdb", verbose=True)
+  if (err.find("Index\tid\tmsg") == -1 or \
+        err.find("1\ttest 1") == -1 or \
+        err.find("10\ttest 10") == -1):
+    print "vttablet_query returned:"
+    print out
+    print err
+    raise utils.TestError('wrong vtclient2 output')
+  if utils.options.verbose:
+    print err
 
   #
   # more to come here

@@ -9,6 +9,8 @@ import socket
 from subprocess import check_call, Popen, CalledProcessError, PIPE
 import sys
 
+import MySQLdb
+
 options = None
 devnull = open('/dev/null', 'w')
 vttop = os.environ['VTTOP']
@@ -185,17 +187,76 @@ def run_vtctl(clargs, **kwargs):
   return run(vtroot+'/bin/vtctl -log.level=WARNING -logfile=/dev/null %s' % clargs, **kwargs)
 
 # vtclient2 helpers
-def vttablet_query(uid, dbname, query, user=None, password=None, driver=None):
+# driver is one of vttablet (default), vttablet-streaming, vtdb, vtdb-streaming
+def vttablet_query(uid, dbname, query, user=None, password=None, driver=None,
+                   verbose=False):
   prog_compile(['vtclient2'])
   if (user is None) != (password is None):
     raise TypeError("you should provide either both or none of user and password")
 
+  # for ZK paths to not have // in the path, that confuses things
+  if dbname.startswith('/'):
+    dbname = dbname[1:]
   server = "localhost:%u/%s" % (uid, dbname)
   if user is not None:
     server = "%s:%s@%s" % (user, password, server)
 
-  cmdline = [vtroot+'/bin/vtclient2', '-server', server, '"%s"' % query]
+  cmdline = [vtroot+'/bin/vtclient2', '-server', server]
   if driver:
-    cmdLine.append("-driver " + driver)
+    cmdline.extend(["-driver", driver])
+  if verbose:
+    cmdline.append("-verbose")
+  cmdline.append('"%s"' % query)
 
   return run(' '.join(cmdline), trap_output=True)
+
+# mysql helpers
+def mysql_query(uid, dbname, query):
+  conn = MySQLdb.Connect(user='vt_dba',
+                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
+                         db=dbname)
+  cursor = conn.cursor()
+  cursor.execute(query)
+  try:
+    return cursor.fetchall()
+  finally:
+    conn.close()
+
+def mysql_write_query(uid, dbname, query):
+  conn = MySQLdb.Connect(user='vt_dba',
+                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
+                         db=dbname)
+  cursor = conn.cursor()
+  conn.begin()
+  cursor.execute(query)
+  conn.commit()
+  try:
+    return cursor.fetchall()
+  finally:
+    conn.close()
+
+def check_db_var(uid, name, value):
+  conn = MySQLdb.Connect(user='vt_dba',
+                         unix_socket='/vt/vt_%010d/mysql.sock' % uid)
+  cursor = conn.cursor()
+  cursor.execute("show variables like '%s'" % name)
+  row = cursor.fetchone()
+  if row != (name, value):
+    raise TestError('variable not set correctly', name, row)
+  conn.close()
+
+def check_db_read_only(uid):
+  return check_db_var(uid, 'read_only', 'ON')
+
+def check_db_read_write(uid):
+  return check_db_var(uid, 'read_only', 'OFF')
+
+def wait_db_read_only(uid):
+  for x in xrange(3):
+    try:
+      check_db_read_only(uid)
+      return
+    except TestError as e:
+      print >> sys.stderr, 'WARNING: ', e
+      time.sleep(1.0)
+  raise e

@@ -121,7 +121,7 @@ func main() {
 				line := fmt.Sprintf("%d", rowIndex)
 				for _, value := range row {
 					if value.Valid {
-						line += value.String + "\t"
+						line += "\t" + value.String
 					} else {
 						line += "\t"
 					}
