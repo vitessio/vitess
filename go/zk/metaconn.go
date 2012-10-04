@@ -32,8 +32,8 @@ type Conn interface {
 	Children(path string) (children []string, stat Stat, err error)
 	ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error)
 
-	Exists(path string) (exists bool, stat Stat, err error)
-	ExistsW(path string) (exists bool, stat Stat, watch <-chan zookeeper.Event, err error)
+	Exists(path string) (stat Stat, err error)
+	ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error)
 
 	Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error)
 
@@ -99,22 +99,30 @@ func (conn *MetaConn) ChildrenW(path string) (children []string, stat Stat, watc
 	return zconn.ChildrenW(resolveZkPath(path))
 }
 
-func (conn *MetaConn) Exists(path string) (exists bool, stat Stat, err error) {
+func (conn *MetaConn) Exists(path string) (stat Stat, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
 	}
 	s, err := zconn.Exists(resolveZkPath(path))
-	return s != nil, s, err
+	if s == nil {
+		// this is to avoid returning a typed nil interface,
+		// which isn't equal to nil
+		return nil, err
+	}
+	return s, err
 }
 
-func (conn *MetaConn) ExistsW(path string) (exists bool, stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *MetaConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return
 	}
 	s, w, err := zconn.ExistsW(resolveZkPath(path))
-	return s != nil, s, w, err
+	if s == nil {
+		return nil, w, err
+	}
+	return s, w, err
 }
 
 func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {

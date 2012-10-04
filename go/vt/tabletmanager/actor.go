@@ -283,8 +283,8 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 
 	zkRestartSlaveDataPath := path.Join(zkShardActionPath, restartSlaveDataFilename)
 	// The presence of this node indicates that the promote action succeeded.
-	exists, _, err := ta.zconn.Exists(zkRestartSlaveDataPath)
-	if exists {
+	stat, err := ta.zconn.Exists(zkRestartSlaveDataPath)
+	if stat != nil {
 		err = fmt.Errorf("slave restart data already exists - suspicious: %v", zkRestartSlaveDataPath)
 	}
 	if err != nil {
@@ -705,11 +705,11 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType) error {
 			// With a master the node cannot be set to idle unless we have already removed all of
 			// the derived paths. The global replication path is a good indication that this has
 			// been resolved.
-			exists, stat, err := zconn.Exists(tablet.ReplicationPath())
+			stat, err := zconn.Exists(tablet.ReplicationPath())
 			if err != nil {
 				return err
 			}
-			if exists && stat.NumChildren() != 0 {
+			if stat != nil && stat.NumChildren() != 0 {
 				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, zkTabletPath)
 			}
 		}

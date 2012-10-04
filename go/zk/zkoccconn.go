@@ -56,16 +56,16 @@ func (conn *ZkoccConn) ChildrenW(path string) (children []string, stat Stat, wat
 
 // implement Exists using Get
 // FIXME(alainjobart) Maybe we should add Exists in rpc API?
-func (conn *ZkoccConn) Exists(path string) (exists bool, stat Stat, err error) {
+func (conn *ZkoccConn) Exists(path string) (stat Stat, err error) {
 	zkPath := &proto.ZkPath{path}
 	zkNode := &proto.ZkNode{}
 	if err := conn.rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
-		return false, nil, err
+		return nil, err
 	}
-	return true, &zkNode.Stat, nil
+	return &zkNode.Stat, nil
 }
 
-func (conn *ZkoccConn) ExistsW(path string) (exists bool, stat Stat, watch <-chan zookeeper.Event, err error) {
+func (conn *ZkoccConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
 	panic(ZkoccUnimplementedError("ExistsW"))
 }
 
