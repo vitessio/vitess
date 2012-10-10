@@ -151,6 +151,7 @@ def prog_compile(names):
     run('go build', cwd=vttop+'/go/cmd/'+name)
 
 # background zk process
+# (note the zkocc addresses will only work with an extra zkocc process)
 def zk_setup():
   prog_compile(['zkctl', 'zk'])
   run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 init')
@@ -159,7 +160,11 @@ def zk_setup():
     zk_cell_mapping = {'test_nj': 'localhost:3803',
                        'test_ny': 'localhost:3803',
                        'test_ca': 'localhost:3803',
-                       'global': 'localhost:3803',}
+                       'global': 'localhost:3803',
+                       'test_nj:_zkocc': 'localhost:14850',
+                       'test_ny:_zkocc': 'localhost:14850',
+                       'test_ca:_zkocc': 'localhost:14850',
+                       'global:_zkocc': 'localhost:14850',}
     json.dump(zk_cell_mapping, f)
   os.putenv('ZK_CLIENT_CONFIG', config)
   run(vtroot+'/bin/zk touch -p /zk/test_nj/vt')
@@ -208,7 +213,7 @@ def vttablet_query(uid, dbname, query, user=None, password=None, driver=None,
     cmdline.append("-verbose")
   cmdline.append('"%s"' % query)
 
-  return run(' '.join(cmdline), trap_output=True)
+  return run(' '.join(cmdline), raise_on_error=True, trap_output=True)
 
 # mysql helpers
 def mysql_query(uid, dbname, query):

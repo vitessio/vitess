@@ -184,6 +184,6 @@ func (conn *MetaConn) GetSession(path string) <-chan zookeeper.Event {
 }
 */
 
-func NewMetaConn(connectTimeout time.Duration) *MetaConn {
-	return &MetaConn{NewConnCache(connectTimeout)}
+func NewMetaConn(connectTimeout time.Duration, useZkocc bool) *MetaConn {
+	return &MetaConn{NewConnCache(connectTimeout, useZkocc)}
 }

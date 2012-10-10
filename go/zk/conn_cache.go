@@ -21,16 +21,17 @@ ConnCache guarantees that you have at most one zookeeper connection per cell.
 
 type cachedConn struct {
 	mutex sync.Mutex // used to notify if multiple goroutine simultaneously want a connection
-	zconn *zookeeper.Conn
+	zconn Conn
 }
 
 type ConnCache struct {
 	mutex          sync.Mutex
 	zconnCellMap   map[string]*cachedConn // map cell name to connection
 	connectTimeout time.Duration
+	useZkocc       bool
 }
 
-func (cc *ConnCache) ConnForPath(zkPath string) (*zookeeper.Conn, error) {
+func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	zcell := ZkCellFromZkPath(zkPath)
 
 	cc.mutex.Lock()
@@ -55,7 +56,16 @@ func (cc *ConnCache) ConnForPath(zkPath string) (*zookeeper.Conn, error) {
 		return conn.zconn, nil
 	}
 
-	zconn, session, err := zookeeper.Dial(ZkPathToZkAddr(zkPath), cc.connectTimeout)
+	if cc.useZkocc {
+		conn.zconn, err = cc.newZkoccConn(zkPath, zcell)
+	} else {
+		conn.zconn, err = cc.newZookeeperConn(zkPath, zcell)
+	}
+	return conn.zconn, err
+}
+
+func (cc *ConnCache) newZookeeperConn(zkPath, zcell string) (Conn, error) {
+	zconn, session, err := zookeeper.Dial(ZkPathToZkAddr(zkPath, false), cc.connectTimeout)
 	if err == nil {
 		// Wait for connection.
 		// FIXME(msolomon) the deadlines seems to be a bit fuzzy, need to double check
@@ -65,13 +75,13 @@ func (cc *ConnCache) ConnForPath(zkPath string) (*zookeeper.Conn, error) {
 			err = fmt.Errorf("zk connect failed: %v", event.State)
 		}
 		if err == nil {
-			conn.zconn = zconn
 			go cc.handleSessionEvents(zcell, zconn, session)
+			return NewZkConn(zconn), nil
 		} else {
 			zconn.Close()
 		}
 	}
-	return conn.zconn, err
+	return nil, err
 }
 
 func (cc *ConnCache) handleSessionEvents(cell string, conn *zookeeper.Conn, session <-chan zookeeper.Event) {
@@ -94,6 +104,12 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn *zookeeper.Conn, sess
 	}
 }
 
+func (cc *ConnCache) newZkoccConn(zkPath, zcell string) (Conn, error) {
+	zconn := &ZkoccConn{}
+	err := zconn.Dial(ZkPathToZkAddr(zkPath, true))
+	return zconn, err
+}
+
 func (cc *ConnCache) Close() error {
 	cc.mutex.Lock()
 	defer cc.mutex.Unlock()
@@ -109,8 +125,9 @@ func (cc *ConnCache) Close() error {
 	return nil
 }
 
-func NewConnCache(connectTimeout time.Duration) *ConnCache {
+func NewConnCache(connectTimeout time.Duration, useZkocc bool) *ConnCache {
 	return &ConnCache{
 		zconnCellMap:   make(map[string]*cachedConn),
-		connectTimeout: connectTimeout}
+		connectTimeout: connectTimeout,
+		useZkocc:       useZkocc}
 }

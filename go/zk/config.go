@@ -71,7 +71,7 @@ func getConfigPaths() []string {
 	return zkConfigPaths
 }
 
-func ZkPathToZkAddr(zkPath string) string {
+func ZkPathToZkAddr(zkPath string, useCache bool) string {
 	if !strings.HasPrefix(zkPath, "/zk") {
 		panic(fmt.Errorf("invalid zk path: %v", zkPath))
 	}
@@ -104,6 +104,9 @@ func ZkPathToZkAddr(zkPath string) string {
 			// address for the global cell
 			cell = GuessLocalCell() + "-global"
 		}
+	}
+	if useCache {
+		cell += ":_zkocc"
 	}
 
 	addr := cellAddrMap[cell]

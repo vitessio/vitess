@@ -8,7 +8,9 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	// FIXME(msolomon) needed for the field mapping. Probably should be part of
@@ -69,7 +71,9 @@ type ShardedConn struct {
 	zkKeyspacePath string
 	dbType         string
 	dbName         string
-	stream         bool // Use streaming RPC
+	stream         bool   // Use streaming RPC
+	user           string // "" if not using auth
+	password       string // "" iff userName is ""
 
 	srvKeyspace *naming.SrvKeyspace
 	// Keep a map per shard mapping tabletType to a real connection.
@@ -81,8 +85,8 @@ type ShardedConn struct {
 
 	timeout time.Duration // How long should we wait for a given operation?
 
-	// Has a transaction been requested on any shard?
-	inTransaction bool
+	// Currently running transaction (or nil if not inside a transaction)
+	currentTransaction *MetaTx
 }
 
 // FIXME(msolomon) Normally a connect method would actually connect up
@@ -91,13 +95,16 @@ type ShardedConn struct {
 // anyway, so the whole system degenerates to managing connections on
 // demand.
 // zkKeyspaceSrvPath: /zk/local/vt/ns/<keyspace>
-func Dial(zconn zk.Conn, zkKeyspaceSrvPath, dbType string, stream bool, timeout time.Duration) (*ShardedConn, error) {
+func Dial(zconn zk.Conn, zkKeyspaceSrvPath, dbType string, stream bool, timeout time.Duration, user, password string) (*ShardedConn, error) {
 	sc := &ShardedConn{
 		zconn:          zconn,
 		zkKeyspacePath: zkKeyspaceSrvPath,
 		dbType:         dbType,
 		dbName:         "vt_" + path.Base(zkKeyspaceSrvPath),
-		stream:         stream}
+		stream:         stream,
+		user:           user,
+		password:       password,
+	}
 	err := sc.readKeyspace()
 	if err != nil {
 		return nil, err
@@ -109,7 +116,7 @@ func (sc *ShardedConn) Close() error {
 	if sc.conns == nil {
 		return nil
 	}
-	if sc.inTransaction {
+	if sc.currentTransaction != nil {
 		sc.rollback()
 	}
 
@@ -157,8 +164,27 @@ type MetaTx struct {
 	conns       []*tablet.VtConn
 }
 
+// makes sure the given transaction was issued a Begin() call
+func (tx *MetaTx) begin(conn *tablet.VtConn) (err error) {
+	for _, v := range tx.conns {
+		if v == conn {
+			return
+		}
+	}
+
+	_, err = conn.Begin()
+	if err != nil {
+		// the caller will need to take care of the rollback,
+		// and therefore issue a rollback on all pre-existing
+		// transactions
+		return err
+	}
+	tx.conns = append(tx.conns, conn)
+	return nil
+}
+
 func (tx *MetaTx) Commit() (err error) {
-	if !tx.shardedConn.inTransaction {
+	if tx.shardedConn.currentTransaction == nil {
 		return tablet.ErrBadRollback
 	}
 
@@ -173,12 +199,12 @@ func (tx *MetaTx) Commit() (err error) {
 			conn.Rollback()
 		}
 	}
-	tx.shardedConn.inTransaction = false
+	tx.shardedConn.currentTransaction = nil
 	return err
 }
 
 func (tx *MetaTx) Rollback() error {
-	if !tx.shardedConn.inTransaction {
+	if tx.shardedConn.currentTransaction == nil {
 		return tablet.ErrBadRollback
 	}
 	var someErr error
@@ -187,7 +213,7 @@ func (tx *MetaTx) Rollback() error {
 			someErr = err
 		}
 	}
-	tx.shardedConn.inTransaction = false
+	tx.shardedConn.currentTransaction = nil
 	return someErr
 }
 
@@ -195,15 +221,16 @@ func (sc *ShardedConn) Begin() (driver.Tx, error) {
 	if sc.srvKeyspace == nil {
 		return nil, ErrNotConnected
 	}
-	if sc.inTransaction {
+	if sc.currentTransaction != nil {
 		return nil, tablet.ErrNoNestedTxn
 	}
-	sc.inTransaction = true
-	return &MetaTx{sc, make([]*tablet.VtConn, 0, 32)}, nil
+	tx := &MetaTx{sc, make([]*tablet.VtConn, 0, 32)}
+	sc.currentTransaction = tx
+	return tx, nil
 }
 
 func (sc *ShardedConn) rollback() error {
-	if !sc.inTransaction {
+	if sc.currentTransaction == nil {
 		return tablet.ErrBadRollback
 	}
 	var someErr error
@@ -214,7 +241,7 @@ func (sc *ShardedConn) rollback() error {
 			}
 		}
 	}
-	sc.inTransaction = false
+	sc.currentTransaction = nil
 	return someErr
 }
 
@@ -264,14 +291,14 @@ type tabletResult struct {
 func (sc *ShardedConn) execBindOnShards(query string, bindVars map[string]interface{}, shards []int) (metaResult *tablet.Result, err error) {
 	rchan := make(chan tabletResult, len(shards))
 	for _, shardIdx := range shards {
-		go func() {
+		go func(shardIdx int) {
 			qr, err := sc.execBindOnShard(query, bindVars, shardIdx)
 			if err != nil {
 				rchan <- tabletResult{error: err}
 			} else {
 				rchan <- tabletResult{Result: qr.(*tablet.Result)}
 			}
-		}()
+		}(shardIdx)
 	}
 
 	results := make([]tabletResult, len(shards))
@@ -340,11 +367,21 @@ func (sc *ShardedConn) execBindOnShard(query string, bindVars map[string]interfa
 		}
 		sc.conns[shardIdx] = conn
 	}
+	conn := sc.conns[shardIdx]
+
+	// if we haven't started the transaction on that shard and need to, now is the time
+	if sc.currentTransaction != nil {
+		err := sc.currentTransaction.begin(conn)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// Retries should have already taken place inside the tablet connection.
 	// At this point, all that's left are more sinister failures.
 	// FIXME(msolomon) reload just this shard unless the failure pertains to
-	// needing to relaod the entire keyspace.
-	return sc.conns[shardIdx].ExecBind(query, bindVars)
+	// needing to reload the entire keyspace.
+	return conn.ExecBind(query, bindVars)
 }
 
 /*
@@ -356,7 +393,7 @@ type ClientQuery struct {
 // FIXME(msolomon) There are multiple options for an efficient ExecMulti.
 // * Use a special stmt object, buffer all statements, connections, etc and send when it's ready.
 // * Take a list of (sql, bind) pairs and just send that - have to parse and route that anyway.
-// * Problably need sepearate support for the a MultiTx too.
+// * Problably need separate support for the a MultiTx too.
 func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, key interface{}) (*tabletserver.QueryResult, error) {
 	shardIdx, err := sqlparser.FindShardForKey(key, sc.shardMaxKeys)
 	shards := []int{shardIdx}
@@ -394,7 +431,11 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 
 	// Try to connect to any address.
 	for _, srv := range srvs {
-		conn, err = tablet.DialVtdb(naming.SrvAddr(srv)+"/"+sc.dbName, sc.stream, tablet.DefaultTimeout)
+		name := naming.SrvAddr(srv) + "/" + sc.dbName
+		if sc.user != "" {
+			name = sc.user + ":" + sc.password + "@" + name
+		}
+		conn, err = tablet.DialVtdb(name, sc.stream, tablet.DefaultTimeout)
 		if err == nil {
 			return conn, nil
 		}
@@ -421,11 +462,8 @@ func (*MetaStmt) NumInput() int {
 }
 
 func (stmt *MetaStmt) Exec(args []driver.Value) (driver.Result, error) {
-	// FIXME(msolomon) how to handle multiple exec? MultiResult?
-	for _, conn := range stmt.conns {
-		return conn.Exec(stmt.query, args)
-	}
-	panic("unreachable")
+	// let the connection handle this
+	return stmt.shardedConn.Exec(stmt.query, args)
 }
 
 func (stmt *MetaStmt) Query(args []driver.Value) (driver.Rows, error) {
@@ -433,14 +471,11 @@ func (stmt *MetaStmt) Query(args []driver.Value) (driver.Rows, error) {
 	// we use driver.Execer interface, we know it's a Result return,
 	// and our Result implements driver.Rows
 	// (or a StreamResult that does too)
-	for _, conn := range stmt.conns {
-		res, err := conn.Exec(stmt.query, args)
-		if err != nil {
-			return nil, err
-		}
-		return res.(driver.Rows), nil
+	res, err := stmt.shardedConn.Exec(stmt.query, args)
+	if err != nil {
+		return nil, err
 	}
-	panic("unreachable")
+	return res.(driver.Rows), nil
 }
 
 func (sc *ShardedConn) Prepare(query string) (driver.Stmt, error) {
@@ -454,14 +489,44 @@ type sDriver struct {
 	stream bool
 }
 
-// name: dbi/dbType
-func (driver *sDriver) Open(name string) (driver.Conn, error) {
-	dbi, dbType := path.Split(name)
-	return Dial(driver.zconn, dbi, dbType, driver.stream, tablet.DefaultTimeout)
+// for direct zk connection: vtzk://host:port/zkpath/dbType
+// we always use a MetaConn, host and port are ignored.
+// the driver name dictates if we use zk or zkocc, and streaming or not
+//
+// if user and password are specified in the URL, they will be used
+// for each DB connection to the tablet's vttablet processes
+func (driver *sDriver) Open(name string) (sc driver.Conn, err error) {
+	if !strings.HasPrefix(name, "vtzk://") {
+		// add a default protocol talking to zk
+		name = "vtzk://" + name
+	}
+	u, err := url.Parse(name)
+	if err != nil {
+		return nil, err
+	}
+
+	dbi, dbType := path.Split(u.Path)
+	dbi = strings.TrimRight(dbi, "/")
+	var user, password string
+	if u.User != nil {
+		user = u.User.Username()
+		var ok bool
+		password, ok = u.User.Password()
+		if !ok {
+			return nil, errors.New("need a password if a user is specified")
+		}
+	}
+	return Dial(driver.zconn, dbi, dbType, driver.stream, tablet.DefaultTimeout, user, password)
 }
 
 func init() {
-	// FIXME(msolomon) This doesn't *actually* work - need a zconn in there somehow.
-	sql.Register("vtdb", &sDriver{})
-	sql.Register("vtdb-streaming", &sDriver{nil, true})
+	zconn := zk.NewMetaConn(5*time.Second, false)
+	zkoccconn := zk.NewMetaConn(5*time.Second, true)
+	sql.Register("vtdb", &sDriver{zconn, false})
+	sql.Register("vtdb-zkocc", &sDriver{zkoccconn, false})
+	// FIXME(alainjobart) the streaming drivers are not working,
+	// will fix in a different check-in
+	//	sql.Register("vtdb-streaming", &sDriver{zconn, true})
+	//	sql.Register("vtdb-zkocc-streaming", &sDriver{zkoccconn, true})
+	//	sql.Register("vtdb-streaming-zkocc", &sDriver{zkoccconn, true})
 }

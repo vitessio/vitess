@@ -52,6 +52,8 @@ Tablets:
     check that the agent is awake and responding - can be blocked by other in-flight
     operations.
 
+  Query <zk tablet path> [<user> <password>] <query>
+
   Sleep <zk tablet path> <duration>
     block the action queue for the specified duration (mostly for testing)
 
@@ -311,8 +313,8 @@ func listIdle(zconn zk.Conn, zkVtPath string) error {
 	return listTabletsByType(zconn, zkVtPath, tm.TYPE_IDLE)
 }
 
-func kquery(zconn zk.Conn, zkKeyspacePath, query string) error {
-	sconn, err := client2.Dial(zconn, zkKeyspacePath, "master", false, 5*time.Second)
+func kquery(zconn zk.Conn, zkKeyspacePath, user, password, query string) error {
+	sconn, err := client2.Dial(zconn, zkKeyspacePath, "master", false, 5*time.Second, user, password)
 	if err != nil {
 		return err
 	}
@@ -383,7 +385,7 @@ func main() {
 		relog.Warning("cannot connect to syslog: %v", err)
 	}
 
-	zconn := zk.NewMetaConn(5e9)
+	zconn := zk.NewMetaConn(5e9, false)
 	defer zconn.Close()
 
 	ai := tm.NewActionInitiator(zconn)
@@ -398,10 +400,14 @@ func main() {
 		}
 		err = createKeyspace(zconn, args[1])
 	case "Query":
-		if len(args) != 3 {
-			relog.Fatal("action %v requires 2 args", args[0])
+		if len(args) != 3 && len(args) != 5 {
+			relog.Fatal("action %v requires 2 or 4 args", args[0])
 		}
-		err = kquery(zconn, args[1], args[2])
+		if len(args) == 3 {
+			err = kquery(zconn, args[1], "", "", args[2])
+		} else {
+			err = kquery(zconn, args[1], args[2], args[3], args[4])
+		}
 	case "InitTablet":
 		if len(args) < 8 {
 			relog.Fatal("action %v requires 7 or 8 args", args[0])

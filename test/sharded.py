@@ -21,6 +21,7 @@ hostname = socket.gethostname()
 
 def setup():
   utils.prog_compile(['mysqlctl',
+                      'zkocc',
                       ])
   utils.zk_setup()
 
@@ -55,6 +56,17 @@ id bigint not null,
 msg varchar(64),
 primary key (id)
 ) Engine=InnoDB'''
+
+def check_rows(to_look_for, driver="vtdb"):
+  out, err = utils.vttablet_query(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
+  for pattern in to_look_for:
+    if err.find(pattern) == -1:
+      print "vttablet_query returned:"
+      print out
+      print err
+      raise utils.TestError('wrong vtclient2 output, missing: ' + pattern)
+  if utils.options.verbose:
+    print err
 
 def run_test_sharding():
 
@@ -97,7 +109,9 @@ def run_test_sharding():
   utils.run(vtroot+'/bin/zk wait -e /zk/test_nj/vt/tablets/0000062044/pid', stdout=utils.devnull)
   utils.run(vtroot+'/bin/zk wait -e /zk/test_nj/vt/tablets/0000031981/pid', stdout=utils.devnull)
   utils.run(vtroot+'/bin/zk wait -e /zk/test_nj/vt/tablets/0000041983/pid', stdout=utils.devnull)
-  time.sleep(1)
+
+  # start zkocc, we'll use it later
+  zkocc = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
 
   utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062344')
   utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/1 /zk/test_nj/vt/tablets/0000031981')
@@ -112,6 +126,41 @@ def run_test_sharding():
   filename = fd.name
   zk_srv_keyspace = {
       "Shards": [
+          {
+              "KeyRange": {
+                  "Start": "",
+                  "End": "8000000000000000"
+                  },
+              "AddrsByType": {
+                  "master": {
+                      "entries": [
+                          {
+                              "uid": 62344,
+                              "host": "localhost",
+                              "port": 0,
+                              "named_port_map": {
+                                  "_mysql": 3700,
+                                  "_vtocc": 6700
+                                  }
+                              }
+                          ]
+                      },
+                  "replica": {
+                      "entries": [
+                          {
+                              "uid": 62044,
+                              "host": "localhost",
+                              "port": 0,
+                              "named_port_map": {
+                                  "_mysql": 3701,
+                                  "_vtocc": 6701
+                                  }
+                              }
+                          ]
+                      }
+                  },
+              "ReadOnly": False
+              },
           {
               "KeyRange": {
                   "Start": "8000000000000000",
@@ -147,41 +196,6 @@ def run_test_sharding():
                   },
               "ReadOnly": False
               },
-          {
-              "KeyRange": {
-                  "Start": "",
-                  "End": "8000000000000000"
-                  },
-              "AddrsByType": {
-                  "master": {
-                      "entries": [
-                          {
-                              "uid": 62344,
-                              "host": "localhost",
-                              "port": 0,
-                              "named_port_map": {
-                                  "_mysql": 3700,
-                                  "_vtocc": 6700
-                                  }
-                              }
-                          ]
-                      },
-                  "replica": {
-                      "entries": [
-                          {
-                              "uid": 62044,
-                              "host": "localhost",
-                              "port": 0,
-                              "named_port_map": {
-                                  "_mysql": 3701,
-                                  "_vtocc": 6701
-                                  }
-                              }
-                          ]
-                      }
-                  },
-              "ReadOnly": False
-              }
           ],
       "TabletTypes": None
       }
@@ -201,21 +215,50 @@ def run_test_sharding():
 
   # note the order of the rows is not guaranteed, as the go routines
   # doing the work can go out of order
-  out, err = utils.vttablet_query(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver="vtdb", verbose=True)
-  if (err.find("Index\tid\tmsg") == -1 or \
-        err.find("1\ttest 1") == -1 or \
-        err.find("10\ttest 10") == -1):
-    print "vttablet_query returned:"
-    print out
-    print err
-    raise utils.TestError('wrong vtclient2 output')
-  if utils.options.verbose:
-    print err
+  check_rows(["Index\tid\tmsg",
+              "1\ttest 1",
+              "10\ttest 10"])
 
-  #
-  # more to come here
-  #
+  # write a value, re-read them all
+  out, err = utils.vttablet_query(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (2, 'test 2')", driver="vtdb", verbose=True)
+  print out
+  print err
 
+  check_rows(["Index\tid\tmsg",
+              "1\ttest 1",
+              "2\ttest 2",
+              "10\ttest 10"])
+
+  # make sure the '2' value was written on first shard
+  rows = utils.mysql_query(62344, 'vt_test_keyspace', "select id, msg from vt_select_test order by id")
+  if (len(rows) != 2 or \
+        rows[0][0] != 1 or \
+        rows[1][0] != 2):
+    print "mysql_query returned:", rows
+    raise utils.TestError('wrong mysql_query output')
+
+  utils.pause("After db writes")
+
+  # now use zkocc or streaming or both for the same query
+  check_rows(["Index\tid\tmsg",
+              "1\ttest 1",
+              "2\ttest 2",
+              "10\ttest 10"],
+             driver="vtdb-zkocc")
+# FIXME(alainjobart) the streaming drivers are not working,
+# will fix in a different check-in
+#  check_rows(["Index\tid\tmsg",
+#              "1\ttest 1",
+#              "2\ttest 2",
+#              "10\ttest 10"],
+#             driver="vtdb-streaming")
+#  check_rows(["Index\tid\tmsg",
+#              "1\ttest 1",
+#              "2\ttest 2",
+#              "10\ttest 10"],
+#             driver="vtdb-zkocc-streaming")
+
+  utils.kill_sub_process(zkocc)
   for agent in agents:
     utils.kill_sub_process(agent)
 

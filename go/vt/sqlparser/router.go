@@ -247,12 +247,14 @@ func findShardForValue(value string, tabletKeys []string) int {
 	for index < len(tabletKeys) && value >= tabletKeys[index] {
 		index++
 	}
-	if index == 0 {
-		panic(NewParserError("value lower than lowest shard"))
+	if index == len(tabletKeys) {
+		panic(NewParserError("value higher than highest shard"))
 	}
-	return index - 1
+	return index
 }
 
+// Given a list of upper bounds for shards, returns the shard index
+// for the given value (between 0 and len(tabletKeys)-1)
 func FindShardForKey(key interface{}, tabletKeys []string) (i int, err error) {
 	defer handleError(&err)
 	return findShardForValue(encodeValue(key), tabletKeys), nil

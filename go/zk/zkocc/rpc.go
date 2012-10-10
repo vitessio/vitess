@@ -62,7 +62,7 @@ func (zkr *ZkReader) getCell(path string) (*zkCell, string) {
 
 	cell, ok := zkr.zcell[cellName]
 	if !ok {
-		zkaddr := zk.ZkPathToZkAddr(path)
+		zkaddr := zk.ZkPathToZkAddr(path, false)
 		cell = newZkCell(cellName, zkaddr)
 		zkr.zcell[cellName] = cell
 	}
