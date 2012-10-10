@@ -7,11 +7,17 @@ package zk
 import (
 	"fmt"
 	"log"
+	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
 	"launchpad.net/gozk/zookeeper"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 /* When you need to talk to multiple zk cells, you need a simple
 abstraction so you aren't caching clients all over the place.
@@ -104,10 +110,21 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn *zookeeper.Conn, sess
 	}
 }
 
+// from the zkPath (of the form server1:port1,server2:port2,server3:port3:...)
+// splits it on commas, randomizes the list, and tries to connect
+// to the servers, stopping at the first successful connection
 func (cc *ConnCache) newZkoccConn(zkPath, zcell string) (Conn, error) {
-	zconn := &ZkoccConn{}
-	err := zconn.Dial(ZkPathToZkAddr(zkPath, true))
-	return zconn, err
+	servers := strings.Split(ZkPathToZkAddr(zkPath, true), ",")
+	perm := rand.Perm(len(servers))
+	for _, index := range perm {
+		server := servers[index]
+		zconn, err := DialZkocc(server)
+		if err == nil {
+			return zconn, nil
+		}
+		log.Printf("zk conn cache: zkocc connection to %v failed: %v", server, err)
+	}
+	return nil, fmt.Errorf("zkocc connect failed: %v", zkPath)
 }
 
 func (cc *ConnCache) Close() error {

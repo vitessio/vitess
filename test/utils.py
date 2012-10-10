@@ -161,7 +161,7 @@ def zk_setup():
                        'test_ny': 'localhost:3803',
                        'test_ca': 'localhost:3803',
                        'global': 'localhost:3803',
-                       'test_nj:_zkocc': 'localhost:14850',
+                       'test_nj:_zkocc': 'localhost:14850,localhost:14851,localhost:14852',
                        'test_ny:_zkocc': 'localhost:14850',
                        'test_ca:_zkocc': 'localhost:14850',
                        'global:_zkocc': 'localhost:14850',}

@@ -393,7 +393,7 @@ type ClientQuery struct {
 // FIXME(msolomon) There are multiple options for an efficient ExecMulti.
 // * Use a special stmt object, buffer all statements, connections, etc and send when it's ready.
 // * Take a list of (sql, bind) pairs and just send that - have to parse and route that anyway.
-// * Problably need separate support for the a MultiTx too.
+// * Probably need separate support for the a MultiTx too.
 func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, key interface{}) (*tabletserver.QueryResult, error) {
 	shardIdx, err := sqlparser.FindShardForKey(key, sc.shardMaxKeys)
 	shards := []int{shardIdx}

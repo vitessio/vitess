@@ -23,9 +23,14 @@ type ZkoccConn struct {
 	rpcClient *rpcplus.Client
 }
 
-func (conn *ZkoccConn) Dial(addr string) (err error) {
-	conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr)
-	return err
+// Dial tries to connect to a RPC zkocc server, and returns the ZkoccConn
+// if it succeeds.
+func DialZkocc(addr string) (zkocc *ZkoccConn, err error) {
+	rpcClient, err := bsonrpc.DialHTTP("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	return &ZkoccConn{rpcClient: rpcClient}, nil
 }
 
 func (conn *ZkoccConn) Get(path string) (data string, stat Stat, err error) {

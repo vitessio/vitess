@@ -66,7 +66,7 @@ def check_rows(to_look_for, driver="vtdb"):
       print err
       raise utils.TestError('wrong vtclient2 output, missing: ' + pattern)
   if utils.options.verbose:
-    print err
+    print out, err
 
 def run_test_sharding():
 

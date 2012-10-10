@@ -154,12 +154,11 @@ func main() {
 	}
 
 	if *zkoccAddr != "" {
-		zc := &zk.ZkoccConn{}
-		err := zc.Dial(*zkoccAddr)
+		var err error
+		zconn, err = zk.DialZkocc(*zkoccAddr)
 		if err != nil {
 			panic(fmt.Errorf("zkocc connect failed: %v", err))
 		}
-		zconn = zc
 	}
 
 	cmdName := args[0]
