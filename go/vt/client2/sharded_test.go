@@ -15,7 +15,7 @@ package client2
 
 // // This is more of an example code than a real test
 // func TestShardExec(t *testing.T) {
-// 	zconn := zk.NewMetaConn(5 * time.Second)
+// 	zconn := zk.NewMetaConn(5 * time.Second, false)
 // 	sconn, err := Dial(zconn, "/zk/local/vt/keyspaces/test_keyspace", "master", false, 5*time.Second)
 // 	if err != nil {
 // 		t.Fatalf("dial error: %v", err)
