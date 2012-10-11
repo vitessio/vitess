@@ -19,6 +19,12 @@ import (
 	"code.google.com/p/vitess/go/mysql/proto"
 )
 
+const (
+	// NOTE(szopa): maxSize used to be 1 << 30, but that causes
+	// compiler errors in some situations.
+	maxSize = 1 << 20
+)
+
 func init() {
 	// This needs to be called before threads begin to spawn.
 	C.vt_library_init()
@@ -142,7 +148,7 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 	if nfields == 0 {
 		return nil
 	}
-	cfields := (*[1 << 30]C.MYSQL_FIELD)(unsafe.Pointer(conn.c.fields))
+	cfields := (*[maxSize]C.MYSQL_FIELD)(unsafe.Pointer(conn.c.fields))
 	totalLength := uint64(0)
 	for i := 0; i < nfields; i++ {
 		totalLength += uint64(cfields[i].name_length)
@@ -151,7 +157,7 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 	fields = make([]proto.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
-		fname := (*[1 << 30]byte)(unsafe.Pointer(cfields[i].name))[:length]
+		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
 		fields[i].Name = arena.NewString(fname)
 		fields[i].Type = int64(cfields[i]._type)
 	}
@@ -178,13 +184,13 @@ func (conn *Connection) FetchNext() (row []interface{}, err error) {
 	if vtrow.has_error != 0 {
 		return nil, conn.lastError(nil)
 	}
-	rowPtr := (*[1 << 30]*[1 << 30]byte)(unsafe.Pointer(vtrow.mysql_row))
+	rowPtr := (*[maxSize]*[maxSize]byte)(unsafe.Pointer(vtrow.mysql_row))
 	if rowPtr == nil {
 		return nil, nil
 	}
 	colCount := int(conn.c.num_fields)
 	row = make([]interface{}, colCount)
-	lengths := (*[1 << 30]uint64)(unsafe.Pointer(vtrow.lengths))
+	lengths := (*[maxSize]uint64)(unsafe.Pointer(vtrow.lengths))
 	totalLength := uint64(0)
 	for i := 0; i < colCount; i++ {
 		totalLength += (*lengths)[i]
