@@ -51,9 +51,18 @@ def teardown():
       if utils.options.verbose:
         print >> sys.stderr, e, path
 
+# both shards will have similar tables, but with different column order,
+# so we can test column mismatches by doing a 'select *',
+# and also check the good case by doing a 'select id, msg'
 create_vt_select_test = '''create table vt_select_test (
 id bigint not null,
 msg varchar(64),
+primary key (id)
+) Engine=InnoDB'''
+
+create_vt_select_test_reverse = '''create table vt_select_test (
+msg varchar(64),
+id bigint not null,
 primary key (id)
 ) Engine=InnoDB'''
 
@@ -67,6 +76,18 @@ def check_rows(to_look_for, driver="vtdb"):
       raise utils.TestError('wrong vtclient2 output, missing: ' + pattern)
   if utils.options.verbose:
     print out, err
+
+def check_rows_schema_diff(driver):
+  out, err = utils.vttablet_query(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
+  if (err.find("column[0] name mismatch: id != msg") == -1 and
+      err.find("column[0] name mismatch: msg != id") == -1):
+    print "vttablet_query returned:"
+    print out
+    print err
+    raise utils.TestError('wrong vtclient2 output, missing "name mismatch" of some kind')
+  if utils.options.verbose:
+    print out, err
+
 
 def run_test_sharding():
 
@@ -95,7 +116,10 @@ def run_test_sharding():
   for port in [62344, 62044, 31981, 41983]:
     utils.mysql_query(port, '', 'drop database if exists vt_test_keyspace')
     utils.mysql_query(port, '', 'create database vt_test_keyspace')
-    utils.mysql_query(port, 'vt_test_keyspace', create_vt_select_test)
+    if port in [62344, 62044]:
+      utils.mysql_query(port, 'vt_test_keyspace', create_vt_select_test)
+    else:
+      utils.mysql_query(port, 'vt_test_keyspace', create_vt_select_test_reverse)
 
   # start the tablets
   agents = [
@@ -245,18 +269,20 @@ def run_test_sharding():
               "2\ttest 2",
               "10\ttest 10"],
              driver="vtdb-zkocc")
-# FIXME(alainjobart) the streaming drivers are not working,
-# will fix in a different check-in
-#  check_rows(["Index\tid\tmsg",
-#              "1\ttest 1",
-#              "2\ttest 2",
-#              "10\ttest 10"],
-#             driver="vtdb-streaming")
-#  check_rows(["Index\tid\tmsg",
-#              "1\ttest 1",
-#              "2\ttest 2",
-#              "10\ttest 10"],
-#             driver="vtdb-zkocc-streaming")
+  check_rows(["Index\tid\tmsg",
+              "1\ttest 1",
+              "2\ttest 2",
+              "10\ttest 10"],
+             driver="vtdb-streaming")
+  check_rows(["Index\tid\tmsg",
+              "1\ttest 1",
+              "2\ttest 2",
+              "10\ttest 10"],
+             driver="vtdb-zkocc-streaming")
+
+  # make sure the schema checking works
+  check_rows_schema_diff("vtdb-zkocc")
+  check_rows_schema_diff("vtdb")
 
   utils.kill_sub_process(zkocc)
   for agent in agents:

@@ -6,8 +6,8 @@ package client2
 import (
 	"database/sql"
 	"database/sql/driver"
-	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"path"
 	"strings"
@@ -21,7 +21,6 @@ import (
 	"code.google.com/p/vitess/go/vt/naming"
 	// FIXME(msolomon) seems like a subpackage
 	"code.google.com/p/vitess/go/vt/sqlparser"
-	// FIXME(msolomon) Substitute zkocc
 	"code.google.com/p/vitess/go/zk"
 )
 
@@ -45,7 +44,7 @@ import (
 // higher level.
 
 var (
-	ErrNotConnected = errors.New("vt: not connected")
+	ErrNotConnected = fmt.Errorf("vt: not connected")
 )
 
 const (
@@ -262,6 +261,9 @@ func (sc *ShardedConn) ExecBind(query string, bindVars map[string]interface{}) (
 	if err != nil {
 		return nil, err
 	}
+	if sc.stream {
+		return sc.execBindOnShardsStream(query, bindVars, shards)
+	}
 	return sc.execBindOnShards(query, bindVars, shards)
 }
 
@@ -279,6 +281,9 @@ func (sc *ShardedConn) ExecBindWithKey(query string, bindVars map[string]interfa
 	shardIdx, err := sqlparser.FindShardForKey(key, sc.shardMaxKeys)
 	if err != nil {
 		return nil, err
+	}
+	if sc.stream {
+		return sc.execBindOnShardsStream(query, bindVars, []int{shardIdx})
 	}
 	return sc.execBindOnShards(query, bindVars, []int{shardIdx})
 }
@@ -345,6 +350,22 @@ func (sc *ShardedConn) execBindOnShards(query string, bindVars map[string]interf
 		fields = results[0].Fields()
 	}
 
+	// check the schemas all match (both names and types)
+	if len(results) > 1 {
+		firstFields := results[0].Fields()
+		for _, r := range results[1:] {
+			fields := r.Fields()
+			if len(fields) != len(firstFields) {
+				return nil, fmt.Errorf("vt: column count mismatch: %v != %v", len(firstFields), len(fields))
+			}
+			for i, name := range fields {
+				if name.Name != firstFields[i].Name {
+					return nil, fmt.Errorf("vt: column[%v] name mismatch: %v != %v", i, name.Name, firstFields[i].Name)
+				}
+			}
+		}
+	}
+
 	// Combine results.
 	metaResult = tablet.NewResult(rowCount, rowsAffected, lastInsertId, fields)
 	curIndex := 0
@@ -382,6 +403,138 @@ func (sc *ShardedConn) execBindOnShard(query string, bindVars map[string]interfa
 	// FIXME(msolomon) reload just this shard unless the failure pertains to
 	// needing to reload the entire keyspace.
 	return conn.ExecBind(query, bindVars)
+}
+
+// when doing a streaming query, we send this structure back
+type streamTabletResult struct {
+	error
+	row []driver.Value
+}
+
+// our streaming result, just aggregates from all streaming results
+// it implements both driver.Result and driver.Rows
+type multiStreamResult struct {
+	cols []string
+
+	// we keep track of how many shards are done
+	count int
+	done  int
+
+	// results flow through this, maybe with errors
+	rows chan streamTabletResult
+
+	// set to the error we need to report to the last Next()
+	err error
+}
+
+// driver.Result interface
+func (*multiStreamResult) LastInsertId() (int64, error) {
+	return 0, tablet.ErrNoLastInsertId
+}
+
+func (*multiStreamResult) RowsAffected() (int64, error) {
+	return 0, tablet.ErrNoRowsAffected
+}
+
+// driver.Rows interface
+func (sr *multiStreamResult) Columns() []string {
+	return sr.cols
+}
+
+func (sr *multiStreamResult) Close() error {
+	close(sr.rows)
+	return nil
+}
+
+// read from the stream and gets the next value
+// if one of the go routines returns an error, we want to save it and return it
+// eventually. (except if it's EOF, then we just know that routine is done)
+func (sr *multiStreamResult) Next(dest []driver.Value) error {
+	if len(dest) != len(sr.cols) {
+		return tablet.ErrFieldLengthMismatch
+	}
+
+	// we may need to read more than one value if we get a EOF
+	var str streamTabletResult
+	for {
+		str = <-sr.rows
+		if str.error == nil {
+			break
+		}
+
+		// one of the streams finished or errored out
+		sr.done += 1
+		if str.error != io.EOF {
+			// save this error
+			sr.err = str.error
+		}
+		if sr.done == sr.count {
+			if sr.err != nil {
+				return sr.err
+			} else {
+				return io.EOF
+			}
+		}
+	}
+	for i, v := range str.row {
+		dest[i] = v
+	}
+	return nil
+}
+
+func (sc *ShardedConn) execBindOnShardsStream(query string, bindVars map[string]interface{}, shards []int) (msr *multiStreamResult, err error) {
+	// we synchronously do the execBind on each shard
+	// so we can get the Columns from the first one
+	// and check the others match them
+	var cols []string
+	qrs := make([]driver.Rows, len(shards))
+	for i, shardIdx := range shards {
+		qr, err := sc.execBindOnShard(query, bindVars, shardIdx)
+		if err != nil {
+			// FIXME(alainjobart) if the first queries went through
+			// we need to cancel them
+			return nil, err
+		}
+
+		// we know the result is a tablet.StreamResult,
+		// and we use it as a driver.Rows
+		qrs[i] = qr.(driver.Rows)
+
+		// save the columns or check they match
+		if i == 0 {
+			cols = qrs[i].Columns()
+		} else {
+			ncols := qrs[i].Columns()
+			if len(ncols) != len(cols) {
+				return nil, fmt.Errorf("vt: column count mismatch: %v != %v", len(ncols), len(cols))
+			}
+			for i, name := range cols {
+				if name != ncols[i] {
+					return nil, fmt.Errorf("vt: column[%v] name mismatch: %v != %v", i, name, ncols[i])
+				}
+			}
+		}
+	}
+
+	// now we create the result, its channel, and run background
+	// routines to stream results
+	msr = &multiStreamResult{cols: cols, count: len(shards), rows: make(chan streamTabletResult, 10*len(shards))}
+	for i, shardIdx := range shards {
+		go func(i, shardIdx int) {
+			for {
+				row := make([]driver.Value, len(cols))
+				err := qrs[i].Next(row)
+				if err != nil {
+					// that will catch io.EOF as well
+					msr.rows <- streamTabletResult{error: err}
+					return
+				}
+				msr.rows <- streamTabletResult{row: row}
+			}
+		}(i, shardIdx)
+	}
+
+	return msr, nil
 }
 
 /*
@@ -513,7 +666,7 @@ func (driver *sDriver) Open(name string) (sc driver.Conn, err error) {
 		var ok bool
 		password, ok = u.User.Password()
 		if !ok {
-			return nil, errors.New("need a password if a user is specified")
+			return nil, fmt.Errorf("vt: need a password if a user is specified")
 		}
 	}
 	return Dial(driver.zconn, dbi, dbType, driver.stream, tablet.DefaultTimeout, user, password)
@@ -524,9 +677,7 @@ func init() {
 	zkoccconn := zk.NewMetaConn(5*time.Second, true)
 	sql.Register("vtdb", &sDriver{zconn, false})
 	sql.Register("vtdb-zkocc", &sDriver{zkoccconn, false})
-	// FIXME(alainjobart) the streaming drivers are not working,
-	// will fix in a different check-in
-	//	sql.Register("vtdb-streaming", &sDriver{zconn, true})
-	//	sql.Register("vtdb-zkocc-streaming", &sDriver{zkoccconn, true})
-	//	sql.Register("vtdb-streaming-zkocc", &sDriver{zkoccconn, true})
+	sql.Register("vtdb-streaming", &sDriver{zconn, true})
+	sql.Register("vtdb-zkocc-streaming", &sDriver{zkoccconn, true})
+	sql.Register("vtdb-streaming-zkocc", &sDriver{zkoccconn, true})
 }

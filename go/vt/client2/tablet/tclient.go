@@ -24,9 +24,12 @@ import (
 )
 
 var (
-	ErrNoNestedTxn = errors.New("vt: no nested transactions")
-	ErrBadCommit   = errors.New("vt: commit without corresponding begin")
-	ErrBadRollback = errors.New("vt: rollback without corresponding begin")
+	ErrNoNestedTxn         = errors.New("vt: no nested transactions")
+	ErrBadCommit           = errors.New("vt: commit without corresponding begin")
+	ErrBadRollback         = errors.New("vt: rollback without corresponding begin")
+	ErrNoLastInsertId      = errors.New("vt: no LastInsertId available after streaming statement")
+	ErrNoRowsAffected      = errors.New("vt: no RowsAffected available after streaming statement")
+	ErrFieldLengthMismatch = errors.New("vt: no RowsAffected available after streaming statement")
 )
 
 type TabletError struct {
@@ -309,7 +312,7 @@ func (result *Result) Close() error {
 
 func (result *Result) Next(dest []driver.Value) error {
 	if len(dest) != len(result.qr.Fields) {
-		return errors.New("vt: field length mismatch")
+		return ErrFieldLengthMismatch
 	}
 	if result.index >= len(result.qr.Rows) {
 		return io.EOF
@@ -325,11 +328,11 @@ func (result *Result) Next(dest []driver.Value) error {
 
 // driver.Result interface
 func (*StreamResult) LastInsertId() (int64, error) {
-	return 0, errors.New("vt: no LastInsertId available after streaming statement")
+	return 0, ErrNoLastInsertId
 }
 
 func (*StreamResult) RowsAffected() (int64, error) {
-	return 0, errors.New("vt: no RowsAffected available after streaming statement")
+	return 0, ErrNoRowsAffected
 }
 
 // driver.Rows interface

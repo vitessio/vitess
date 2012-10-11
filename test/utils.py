@@ -194,7 +194,7 @@ def run_vtctl(clargs, **kwargs):
 # vtclient2 helpers
 # driver is one of vttablet (default), vttablet-streaming, vtdb, vtdb-streaming
 def vttablet_query(uid, dbname, query, user=None, password=None, driver=None,
-                   verbose=False):
+                   verbose=False, raise_on_error=True):
   prog_compile(['vtclient2'])
   if (user is None) != (password is None):
     raise TypeError("you should provide either both or none of user and password")
@@ -213,7 +213,7 @@ def vttablet_query(uid, dbname, query, user=None, password=None, driver=None,
     cmdline.append("-verbose")
   cmdline.append('"%s"' % query)
 
-  return run(' '.join(cmdline), raise_on_error=True, trap_output=True)
+  return run(' '.join(cmdline), raise_on_error=raise_on_error, trap_output=True)
 
 # mysql helpers
 def mysql_query(uid, dbname, query):
