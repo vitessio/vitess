@@ -5,7 +5,9 @@
 package zk
 
 import (
+	"fmt"
 	"launchpad.net/gozk/zookeeper"
+	"time"
 )
 
 // ZkConn is a client class that implements zk.Conn using a zookeeper.Conn
@@ -13,8 +15,26 @@ type ZkConn struct {
 	conn *zookeeper.Conn
 }
 
-func NewZkConn(conn *zookeeper.Conn) *ZkConn {
-	return &ZkConn{conn}
+// Dial a ZK server and waits for connection event. Returns a ZkConn
+// encapsulating the zookeeper.Conn, and the zookeeper session event
+// channel to monitor the connection
+func DialZk(zkAddr string, connectTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
+	zconn, session, err := zookeeper.Dial(zkAddr, connectTimeout)
+	if err == nil {
+		// Wait for connection.
+		// FIXME(msolomon) the deadlines seems to be a bit fuzzy, need to double check
+		// and potentially do a high-level select here.
+		event := <-session
+		if event.State != zookeeper.STATE_CONNECTED {
+			err = fmt.Errorf("zk connect failed: %v", event.State)
+		}
+		if err == nil {
+			return &ZkConn{zconn}, session, nil
+		} else {
+			zconn.Close()
+		}
+	}
+	return nil, nil, err
 }
 
 func (conn *ZkConn) Get(path string) (data string, stat Stat, err error) {

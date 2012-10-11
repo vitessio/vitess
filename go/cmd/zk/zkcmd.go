@@ -141,23 +141,18 @@ func main() {
 		if *zkoccAddr != "" {
 			panic(fmt.Errorf("zk.addrs and zk.zkocc-addr are mutually exclusive"))
 		}
-		zc, session, err := zookeeper.Dial(*zkAddrs, 5*time.Second)
-		if err == nil {
-			// Wait for connection.
-			event := <-session
-			if event.State != zookeeper.STATE_CONNECTED {
-				panic(fmt.Errorf("zk connect failed: %v", event.State))
-			}
-
+		var err error
+		zconn, _, err = zk.DialZk(*zkAddrs, 5*time.Second)
+		if err != nil {
+			panic(fmt.Errorf("zk connect failed: %v", err.Error()))
 		}
-		zconn = zk.NewZkConn(zc)
 	}
 
 	if *zkoccAddr != "" {
 		var err error
 		zconn, err = zk.DialZkocc(*zkoccAddr)
 		if err != nil {
-			panic(fmt.Errorf("zkocc connect failed: %v", err))
+			panic(fmt.Errorf("zkocc connect failed: %v", err.Error()))
 		}
 	}
 

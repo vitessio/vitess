@@ -8,8 +8,17 @@ import (
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/zk/zkocc/proto"
+	"fmt"
 	"launchpad.net/gozk/zookeeper"
+	"log"
+	"math/rand"
+	"strings"
+	"time"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 type ZkoccUnimplementedError string
 
@@ -23,14 +32,22 @@ type ZkoccConn struct {
 	rpcClient *rpcplus.Client
 }
 
-// Dial tries to connect to a RPC zkocc server, and returns the ZkoccConn
-// if it succeeds.
+// From the addr (of the form server1:port1,server2:port2,server3:port3:...)
+// splits it on commas, randomizes the list, and tries to connect
+// to the servers, stopping at the first successful connection
 func DialZkocc(addr string) (zkocc *ZkoccConn, err error) {
-	rpcClient, err := bsonrpc.DialHTTP("tcp", addr)
-	if err != nil {
-		return nil, err
+	servers := strings.Split(addr, ",")
+	perm := rand.Perm(len(servers))
+	for _, index := range perm {
+		server := servers[index]
+
+		rpcClient, err := bsonrpc.DialHTTP("tcp", server)
+		if err == nil {
+			return &ZkoccConn{rpcClient: rpcClient}, nil
+		}
+		log.Printf("zk conn cache: zkocc connection to %v failed: %v", server, err)
 	}
-	return &ZkoccConn{rpcClient: rpcClient}, nil
+	return nil, fmt.Errorf("zkocc connect failed: %v", addr)
 }
 
 func (conn *ZkoccConn) Get(path string) (data string, stat Stat, err error) {

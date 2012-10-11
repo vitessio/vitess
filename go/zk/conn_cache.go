@@ -5,10 +5,8 @@
 package zk
 
 import (
-	"fmt"
 	"log"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
@@ -63,7 +61,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	}
 
 	if cc.useZkocc {
-		conn.zconn, err = cc.newZkoccConn(zkPath, zcell)
+		conn.zconn, err = DialZkocc(ZkPathToZkAddr(zkPath, true))
 	} else {
 		conn.zconn, err = cc.newZookeeperConn(zkPath, zcell)
 	}
@@ -71,26 +69,15 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 }
 
 func (cc *ConnCache) newZookeeperConn(zkPath, zcell string) (Conn, error) {
-	zconn, session, err := zookeeper.Dial(ZkPathToZkAddr(zkPath, false), cc.connectTimeout)
-	if err == nil {
-		// Wait for connection.
-		// FIXME(msolomon) the deadlines seems to be a bit fuzzy, need to double check
-		// and potentially do a high-level select here.
-		event := <-session
-		if event.State != zookeeper.STATE_CONNECTED {
-			err = fmt.Errorf("zk connect failed: %v", event.State)
-		}
-		if err == nil {
-			go cc.handleSessionEvents(zcell, zconn, session)
-			return NewZkConn(zconn), nil
-		} else {
-			zconn.Close()
-		}
+	conn, session, err := DialZk(ZkPathToZkAddr(zkPath, false), cc.connectTimeout)
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	go cc.handleSessionEvents(zcell, conn, session)
+	return conn, nil
 }
 
-func (cc *ConnCache) handleSessionEvents(cell string, conn *zookeeper.Conn, session <-chan zookeeper.Event) {
+func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan zookeeper.Event) {
 	for event := range session {
 		switch event.State {
 		case zookeeper.STATE_EXPIRED_SESSION:
@@ -108,23 +95,6 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn *zookeeper.Conn, sess
 			log.Printf("zk conn cache: session for cell %v event: %v", cell, event)
 		}
 	}
-}
-
-// from the zkPath (of the form server1:port1,server2:port2,server3:port3:...)
-// splits it on commas, randomizes the list, and tries to connect
-// to the servers, stopping at the first successful connection
-func (cc *ConnCache) newZkoccConn(zkPath, zcell string) (Conn, error) {
-	servers := strings.Split(ZkPathToZkAddr(zkPath, true), ",")
-	perm := rand.Perm(len(servers))
-	for _, index := range perm {
-		server := servers[index]
-		zconn, err := DialZkocc(server)
-		if err == nil {
-			return zconn, nil
-		}
-		log.Printf("zk conn cache: zkocc connection to %v failed: %v", server, err)
-	}
-	return nil, fmt.Errorf("zkocc connect failed: %v", zkPath)
 }
 
 func (cc *ConnCache) Close() error {
