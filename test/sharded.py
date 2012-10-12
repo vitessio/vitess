@@ -100,13 +100,13 @@ def run_test_sharding():
 
   utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  shard_0_master.init_tablet( 'test_keyspace', '0', 'master')
-  shard_0_replica.init_tablet('test_keyspace', '0', 'replica')
-  shard_1_master.init_tablet( 'test_keyspace', '1', 'master')
-  shard_1_replica.init_tablet('test_keyspace', '1', 'replica')
+  shard_0_master.init_tablet( 'test_keyspace', '0000000000000000-8000000000000000', 'master')
+  shard_0_replica.init_tablet('test_keyspace', '0000000000000000-8000000000000000', 'replica')
+  shard_1_master.init_tablet( 'test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', 'master')
+  shard_1_replica.init_tablet('test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', 'replica')
 
-  utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/1')
+  utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
+  utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF')
 
   utils.run_vtctl('RebuildKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
@@ -132,8 +132,8 @@ def run_test_sharding():
   # start zkocc, we'll use it later
   zkocc = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
 
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path)
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path)
+  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path)
+  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF ' + shard_1_master.zk_tablet_path)
 
   # FIXME(alainjobart) fix the test_nj serving graph and use it:
   # - it needs to have KeyRange(Start, End) setup
