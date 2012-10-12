@@ -114,14 +114,10 @@ def run_test_sharding():
   utils.zk_check()
 
   # create databases and schema so tablets are good to go
-  shard_0_master.create_db('vt_test_keyspace')
-  shard_0_replica.create_db('vt_test_keyspace')
-  shard_1_master.create_db('vt_test_keyspace')
-  shard_1_replica.create_db('vt_test_keyspace')
-  shard_0_master.mquery('vt_test_keyspace', create_vt_select_test)
-  shard_0_replica.mquery('vt_test_keyspace', create_vt_select_test)
-  shard_1_master.mquery('vt_test_keyspace', create_vt_select_test_reverse)
-  shard_1_replica.mquery('vt_test_keyspace', create_vt_select_test_reverse)
+  shard_0_master.populate('vt_test_keyspace', create_vt_select_test)
+  shard_0_replica.populate('vt_test_keyspace', create_vt_select_test)
+  shard_1_master.populate('vt_test_keyspace', create_vt_select_test_reverse)
+  shard_1_replica.populate('vt_test_keyspace', create_vt_select_test_reverse)
 
   # start the tablets
   shard_0_master.start_vttablet()

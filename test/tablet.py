@@ -115,7 +115,7 @@ class Tablet(object):
     if result[0][0] != n:
       raise utils.TestError("expected %u rows in %s" % (n, table), result)
 
-  def populate(self, dbname, create_sql, insert_sqls):
+  def populate(self, dbname, create_sql, insert_sqls=[]):
       self.create_db(dbname)
       self.mquery(dbname, create_sql)
       for q in insert_sqls:

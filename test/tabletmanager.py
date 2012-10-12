@@ -352,7 +352,7 @@ def run_test_restart_during_action():
 
   # we expect this action with a short wait time to fail. this isn't the best
   # and has some potential for flakiness.
-  utils.run_fail(vtroot+'/bin/vtctl -wait-time 2s WaitForAction ' + action_path)
+  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 2s WaitForAction ' + action_path)
   tablet_62344.kill_vttablet()
 
 
@@ -388,15 +388,15 @@ def run_test_reparent_down_master():
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
   # Perform a reparent operation - this will hang for some amount of time.
-  utils.run_fail(vtroot+'/bin/vtctl -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062044')
+  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_alias)
 
   # Should timeout and fail
-  utils.run_fail(vtroot+'/bin/vtctl -wait-time 5s ScrapTablet /zk/test_nj/vt/tablets/0000062344')
+  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_alias)
 
   # Force the scrap action in zk even though tablet is not accessible.
   utils.run_vtctl('-force ScrapTablet ' + tablet_62344.zk_tablet_path)
 
-  utils.run_fail(vtroot+'/bin/vtctl -force ChangeType %s idle' %
+  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -force ChangeType %s idle' %
                  tablet_62344.zk_tablet_path)
 
   # Remove pending locks (make this the force option to ReparentShard?)
