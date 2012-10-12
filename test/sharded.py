@@ -100,10 +100,10 @@ def run_test_sharding():
 
   utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  shard_0_master.init_tablet(shard='0', db_type='master')
-  shard_0_replica.init_tablet(shard='0', db_type='replica')
-  shard_1_master.init_tablet(shard='1', db_type='master')
-  shard_1_replica.init_tablet(shard='1', db_type='replica')
+  shard_0_master.init_tablet( 'test_keyspace', '0', 'master')
+  shard_0_replica.init_tablet('test_keyspace', '0', 'replica')
+  shard_1_master.init_tablet( 'test_keyspace', '1', 'master')
+  shard_1_replica.init_tablet('test_keyspace', '1', 'replica')
 
   utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
   utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/1')
@@ -114,14 +114,14 @@ def run_test_sharding():
   utils.zk_check()
 
   # create databases and schema so tablets are good to go
-  shard_0_master.create_db()
-  shard_0_replica.create_db()
-  shard_1_master.create_db()
-  shard_1_replica.create_db()
-  shard_0_master.mquery(create_vt_select_test, dbname='vt_test_keyspace')
-  shard_0_replica.mquery(create_vt_select_test, dbname='vt_test_keyspace')
-  shard_1_master.mquery(create_vt_select_test_reverse, dbname='vt_test_keyspace')
-  shard_1_replica.mquery(create_vt_select_test_reverse, dbname='vt_test_keyspace')
+  shard_0_master.create_db('vt_test_keyspace')
+  shard_0_replica.create_db('vt_test_keyspace')
+  shard_1_master.create_db('vt_test_keyspace')
+  shard_1_replica.create_db('vt_test_keyspace')
+  shard_0_master.mquery('vt_test_keyspace', create_vt_select_test)
+  shard_0_replica.mquery('vt_test_keyspace', create_vt_select_test)
+  shard_1_master.mquery('vt_test_keyspace', create_vt_select_test_reverse)
+  shard_1_replica.mquery('vt_test_keyspace', create_vt_select_test_reverse)
 
   # start the tablets
   shard_0_master.start_vttablet()
@@ -193,8 +193,8 @@ def run_test_sharding():
 
   # insert some values directly
   # FIXME(alainjobart) these values don't match the shard map
-  shard_0_master.mquery("insert into vt_select_test (id, msg) values (1, 'test 1')", 'vt_test_keyspace', write=True)
-  shard_1_master.mquery("insert into vt_select_test (id, msg) values (10, 'test 10')", 'vt_test_keyspace', write=True)
+  shard_0_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (1, 'test 1')", write=True)
+  shard_1_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (10, 'test 10')", write=True)
 
   utils.zk_check(ping_tablets=True)
 
@@ -217,7 +217,7 @@ def run_test_sharding():
               "10\ttest 10"])
 
   # make sure the '2' value was written on first shard
-  rows = shard_0_master.mquery("select id, msg from vt_select_test order by id", 'vt_test_keyspace')
+  rows = shard_0_master.mquery('vt_test_keyspace', "select id, msg from vt_select_test order by id")
   if (len(rows) != 2 or \
         rows[0][0] != 1 or \
         rows[1][0] != 2):

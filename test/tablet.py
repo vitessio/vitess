@@ -72,7 +72,7 @@ class Tablet(object):
     return conn, conn.cursor()
 
   # Query the MySQL instance directly
-  def mquery(self, query, dbname='', write=False):
+  def mquery(self, dbname, query, write=False):
     conn, cursor = self.connect(dbname)
     if write:
       conn.begin()
@@ -110,20 +110,20 @@ class Tablet(object):
     return utils.run(' '.join(cmdline), trap_output=True)
 
 
-  def assertResultCount(self, query, n, dbname=''):
-    result = self.mquery(query, dbname=dbname, write=False)
+  def assert_table_count(self, dbname, table, n, where=''):
+    result = self.mquery(dbname, 'select count(*) from ' + table + ' ' + where)
     if result[0][0] != n:
-      raise utils.TestError("expected %s rows in vt_insert_test" % n, result)
+      raise utils.TestError("expected %u rows in %s" % (n, table), result)
 
   def populate(self, dbname, create_sql, insert_sqls):
       self.create_db(dbname)
-      self.mquery(create_sql, dbname=dbname)
+      self.mquery(dbname, create_sql)
       for q in insert_sqls:
-        self.mquery(q, write=True, dbname=dbname)
+        self.mquery(dbname, q, write=True)
 
-  def create_db(self, name='vt_test_keyspace'):
-    self.mquery('drop database if exists %s' % name)
-    self.mquery('create database %s' % name)
+  def create_db(self, name):
+    self.mquery('', 'drop database if exists %s' % name)
+    self.mquery('', 'create database %s' % name)
 
   def wait_check_db_var(self, name, value):
     for _ in range(3):
@@ -147,7 +147,7 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def init_tablet(self, keyspace='test_keyspace', shard='0', db_type='master', force=True, parent_path=None, start=False):
+  def init_tablet(self, keyspace, shard, db_type, force=True, parent_path=None, start=False):
     self.keyspace = keyspace
     self.shard = shard
     self.zk_tablet_alias = "/zk/global/vt/keyspaces/%s/shards/%s/test_%s-%010d" % (self.keyspace, self.shard, self.datacenter, self.tablet_uid)
@@ -176,7 +176,7 @@ class Tablet(object):
             '-tablet-path %s' % self.zk_tablet_path,
             '-logfile /vt/vt_%010d/vttablet.log' % self.tablet_uid]
     if auth:
-      args.extend(['-auth-credentials', os.path.join(vttop, 'test', 'authcredentials_test.json')])
+      args.extend(['-auth-credentials', os.path.join(vttop, 'py', 'vttest', 'authcredentials_test.json')])
 
     self.proc = utils.run_bg(' '.join(args))
     utils.run(vtroot+'/bin/zk wait -e ' + self.zk_pid, stdout=utils.devnull)
