@@ -33,7 +33,7 @@ func init() {
 }
 
 func connect() *rpcplus.Client {
-	rpcClient, err := bsonrpc.DialHTTP("tcp", *server)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", *server, 0)
 	if err != nil {
 		log.Fatalf("Can't connect to zkocc: %v", err)
 	}

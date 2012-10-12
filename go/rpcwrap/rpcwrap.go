@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
@@ -32,14 +33,16 @@ func NewBufferedConnection(conn io.ReadWriteCloser) *BufferedConnection {
 }
 
 // DialHTTP connects to a go HTTP RPC server using the specified codec.
-func DialHTTP(network, address, codecName string, cFactory ClientCodecFactory) (*rpc.Client, error) {
-	return dialHTTP(network, address, codecName, cFactory, false)
+// use 0 as connectTimeout for no timeout
+func DialHTTP(network, address, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration) (*rpc.Client, error) {
+	return dialHTTP(network, address, codecName, cFactory, false, connectTimeout)
 }
 
 // DialAuthHTTP connects to an authenticated go HTTP RPC server using
 // the specified codec and credentials.
-func DialAuthHTTP(network, address, user, password, codecName string, cFactory ClientCodecFactory) (conn *rpc.Client, err error) {
-	if conn, err = dialHTTP(network, address, codecName, cFactory, true); err != nil {
+// use 0 as connectTimeout for no timeout
+func DialAuthHTTP(network, address, user, password, codecName string, cFactory ClientCodecFactory, connectTimeout time.Duration) (conn *rpc.Client, err error) {
+	if conn, err = dialHTTP(network, address, codecName, cFactory, true, connectTimeout); err != nil {
 		return
 	}
 	reply := new(auth.GetNewChallengeReply)
@@ -56,9 +59,14 @@ func DialAuthHTTP(network, address, user, password, codecName string, cFactory C
 	return
 }
 
-func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, auth bool) (*rpc.Client, error) {
+func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, auth bool, connectTimeout time.Duration) (*rpc.Client, error) {
 	var err error
-	conn, err := net.Dial(network, address)
+	var conn net.Conn
+	if connectTimeout != 0 {
+		conn, err = net.DialTimeout(network, address, connectTimeout)
+	} else {
+		conn, err = net.Dial(network, address)
+	}
 	if err != nil {
 		return nil, err
 	}

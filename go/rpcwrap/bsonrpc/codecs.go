@@ -6,6 +6,7 @@ package bsonrpc
 
 import (
 	"io"
+	"time"
 
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
@@ -84,12 +85,12 @@ func (sc *ServerCodec) Close() error {
 	return sc.rwc.Close()
 }
 
-func DialHTTP(network, address string) (*rpc.Client, error) {
-	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec)
+func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Client, error) {
+	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec, connectTimeout)
 }
 
-func DialAuthHTTP(network, address, user, password string) (*rpc.Client, error) {
-	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec)
+func DialAuthHTTP(network, address, user, password string, connectTimeout time.Duration) (*rpc.Client, error) {
+	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec, connectTimeout)
 }
 
 func ServeRPC() {

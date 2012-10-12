@@ -35,13 +35,13 @@ type ZkoccConn struct {
 // From the addr (of the form server1:port1,server2:port2,server3:port3:...)
 // splits it on commas, randomizes the list, and tries to connect
 // to the servers, stopping at the first successful connection
-func DialZkocc(addr string) (zkocc *ZkoccConn, err error) {
+func DialZkocc(addr string, connectTimeout time.Duration) (zkocc *ZkoccConn, err error) {
 	servers := strings.Split(addr, ",")
 	perm := rand.Perm(len(servers))
 	for _, index := range perm {
 		server := servers[index]
 
-		rpcClient, err := bsonrpc.DialHTTP("tcp", server)
+		rpcClient, err := bsonrpc.DialHTTP("tcp", server, connectTimeout)
 		if err == nil {
 			return &ZkoccConn{rpcClient: rpcClient}, nil
 		}

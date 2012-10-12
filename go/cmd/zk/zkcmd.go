@@ -150,7 +150,7 @@ func main() {
 
 	if *zkoccAddr != "" {
 		var err error
-		zconn, err = zk.DialZkocc(*zkoccAddr)
+		zconn, err = zk.DialZkocc(*zkoccAddr, 5*time.Second)
 		if err != nil {
 			panic(fmt.Errorf("zkocc connect failed: %v", err.Error()))
 		}

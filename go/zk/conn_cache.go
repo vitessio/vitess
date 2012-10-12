@@ -61,7 +61,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	}
 
 	if cc.useZkocc {
-		conn.zconn, err = DialZkocc(ZkPathToZkAddr(zkPath, true))
+		conn.zconn, err = DialZkocc(ZkPathToZkAddr(zkPath, true), cc.connectTimeout)
 	} else {
 		conn.zconn, err = cc.newZookeeperConn(zkPath, zcell)
 	}
