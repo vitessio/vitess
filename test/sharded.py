@@ -3,21 +3,25 @@
 import json
 from optparse import OptionParser
 import os
-import shutil
 import socket
 from subprocess import check_call, Popen, CalledProcessError, PIPE
-import sys
 import tempfile
-import time
-import datetime
 
 from zk import zkocc
 
 import utils
+import tablet
 
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
 hostname = socket.gethostname()
+
+# range 0000000000000000 - 8000000000000000
+shard_0_master = tablet.Tablet()
+shard_0_replica  = tablet.Tablet()
+# range 8000000000000000 - FFFFFFFFFFFFFFFF
+shard_1_master = tablet.Tablet()
+shard_1_replica  = tablet.Tablet()
 
 def setup():
   utils.prog_compile(['mysqlctl',
@@ -26,10 +30,10 @@ def setup():
   utils.zk_setup()
 
   setup_procs = [
-      utils.run_bg(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 init'),
-      utils.run_bg(vtroot+'/bin/mysqlctl -tablet-uid 62044 -port 6701 -mysql-port 3701 init'),
-      utils.run_bg(vtroot+'/bin/mysqlctl -tablet-uid 41983 -port 6702 -mysql-port 3702 init'),
-      utils.run_bg(vtroot+'/bin/mysqlctl -tablet-uid 31981 -port 6703 -mysql-port 3703 init'),
+      shard_0_master.start_mysql(),
+      shard_0_replica.start_mysql(),
+      shard_1_master.start_mysql(),
+      shard_1_replica.start_mysql(),
       ]
   utils.wait_procs(setup_procs)
 
@@ -37,19 +41,22 @@ def teardown():
   if utils.options.skip_teardown:
     return
 
-  teardown_procs = [utils.run_bg(vtroot+'/bin/mysqlctl -tablet-uid %u -force teardown' % x) for x in (62344, 62044, 41983, 31981)]
+  teardown_procs = [
+      shard_0_master.teardown_mysql(),
+      shard_0_replica.teardown_mysql(),
+      shard_1_master.teardown_mysql(),
+      shard_1_replica.teardown_mysql(),
+      ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   utils.zk_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
-  for path in ('/vt/vt_0000062344', '/vt/vt_0000062044', '/vt/vt_0000031981', '/vt/vt_0000041983'):
-    try:
-      shutil.rmtree(path)
-    except OSError as e:
-      if utils.options.verbose:
-        print >> sys.stderr, e, path
+  shard_0_master.remove_tree()
+  shard_0_replica.remove_tree()
+  shard_1_master.remove_tree()
+  shard_1_replica.remove_tree()
 
 # both shards will have similar tables, but with different column order,
 # so we can test column mismatches by doing a 'select *',
@@ -91,18 +98,12 @@ def check_rows_schema_diff(driver):
 
 def run_test_sharding():
 
-  # set up the following databases:
-  # 0000062344: shard 0 master 0000000000000000 - 8000000000000000
-  # 0000062044: shard 0 slave
-  # 0000031981: shard 1 master 8000000000000000 - FFFFFFFFFFFFFFFF
-  # 0000041983: shard 1 slave
-
   utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  utils.run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062344 localhost 3700 6700 test_keyspace 0 master')
-  utils.run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000062044 localhost 3701 6701 test_keyspace 0 replica /zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-0000062344')
-  utils.run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000031981 localhost 3702 6702 test_keyspace 1 master')
-  utils.run_vtctl('-force InitTablet /zk/test_nj/vt/tablets/0000041983 localhost 3703 6703 test_keyspace 1 replica /zk/global/vt/keyspaces/test_keyspace/shards/1/test_nj-0000031981')
+  shard_0_master.init_tablet(shard='0', db_type='master')
+  shard_0_replica.init_tablet(shard='0', db_type='replica')
+  shard_1_master.init_tablet(shard='1', db_type='master')
+  shard_1_replica.init_tablet(shard='1', db_type='replica')
 
   utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
   utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/1')
@@ -113,32 +114,26 @@ def run_test_sharding():
   utils.zk_check()
 
   # create databases and schema so tablets are good to go
-  for port in [62344, 62044, 31981, 41983]:
-    utils.mysql_query(port, '', 'drop database if exists vt_test_keyspace')
-    utils.mysql_query(port, '', 'create database vt_test_keyspace')
-    if port in [62344, 62044]:
-      utils.mysql_query(port, 'vt_test_keyspace', create_vt_select_test)
-    else:
-      utils.mysql_query(port, 'vt_test_keyspace', create_vt_select_test_reverse)
+  shard_0_master.create_db()
+  shard_0_replica.create_db()
+  shard_1_master.create_db()
+  shard_1_replica.create_db()
+  shard_0_master.mquery(create_vt_select_test, dbname='vt_test_keyspace')
+  shard_0_replica.mquery(create_vt_select_test, dbname='vt_test_keyspace')
+  shard_1_master.mquery(create_vt_select_test_reverse, dbname='vt_test_keyspace')
+  shard_1_replica.mquery(create_vt_select_test_reverse, dbname='vt_test_keyspace')
 
   # start the tablets
-  agents = [
-      utils.run_bg(vtroot+'/bin/vttablet -port 6700 -tablet-path /zk/test_nj/vt/tablets/0000062344 -logfile /vt/vt_0000062344/vttablet.log'),
-      utils.run_bg(vtroot+'/bin/vttablet -port 6701 -tablet-path /zk/test_nj/vt/tablets/0000062044 -logfile /vt/vt_0000062044/vttablet.log'),
-      utils.run_bg(vtroot+'/bin/vttablet -port 6702 -tablet-path /zk/test_nj/vt/tablets/0000031981 -logfile /vt/vt_0000031981/vttablet.log'),
-      utils.run_bg(vtroot+'/bin/vttablet -port 6703 -tablet-path /zk/test_nj/vt/tablets/0000041983 -logfile /vt/vt_0000041983/vttablet.log'),
-      ]
-
-  utils.run(vtroot+'/bin/zk wait -e /zk/test_nj/vt/tablets/0000062344/pid', stdout=utils.devnull)
-  utils.run(vtroot+'/bin/zk wait -e /zk/test_nj/vt/tablets/0000062044/pid', stdout=utils.devnull)
-  utils.run(vtroot+'/bin/zk wait -e /zk/test_nj/vt/tablets/0000031981/pid', stdout=utils.devnull)
-  utils.run(vtroot+'/bin/zk wait -e /zk/test_nj/vt/tablets/0000041983/pid', stdout=utils.devnull)
+  shard_0_master.start_vttablet()
+  shard_0_replica.start_vttablet()
+  shard_1_master.start_vttablet()
+  shard_1_replica.start_vttablet()
 
   # start zkocc, we'll use it later
   zkocc = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
 
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 /zk/test_nj/vt/tablets/0000062344')
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/1 /zk/test_nj/vt/tablets/0000031981')
+  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path)
+  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path)
 
   # FIXME(alainjobart) fix the test_nj serving graph and use it:
   # - it needs to have KeyRange(Start, End) setup
@@ -158,28 +153,12 @@ def run_test_sharding():
               "AddrsByType": {
                   "master": {
                       "entries": [
-                          {
-                              "uid": 62344,
-                              "host": "localhost",
-                              "port": 0,
-                              "named_port_map": {
-                                  "_mysql": 3700,
-                                  "_vtocc": 6700
-                                  }
-                              }
+                          shard_0_master.json_vtns_addr(),
                           ]
                       },
                   "replica": {
                       "entries": [
-                          {
-                              "uid": 62044,
-                              "host": "localhost",
-                              "port": 0,
-                              "named_port_map": {
-                                  "_mysql": 3701,
-                                  "_vtocc": 6701
-                                  }
-                              }
+                          shard_0_replica.json_vtns_addr(),
                           ]
                       }
                   },
@@ -193,28 +172,12 @@ def run_test_sharding():
               "AddrsByType": {
                   "master": {
                       "entries": [
-                          {
-                              "uid": 31981,
-                              "host": "localhost",
-                              "port": 0,
-                              "named_port_map": {
-                                  "_mysql": 3702,
-                                  "_vtocc": 6702
-                                  }
-                              }
+                          shard_1_master.json_vtns_addr(),
                           ]
                       },
                   "replica": {
                       "entries": [
-                          {
-                              "uid": 41983,
-                              "host": "localhost",
-                              "port": 0,
-                              "named_port_map": {
-                                  "_mysql": 3703,
-                                  "_vtocc": 6703
-                                  }
-                              }
+                          shard_1_replica.json_vtns_addr(),
                           ]
                       }
                   },
@@ -230,8 +193,8 @@ def run_test_sharding():
 
   # insert some values directly
   # FIXME(alainjobart) these values don't match the shard map
-  utils.mysql_write_query(62344, 'vt_test_keyspace', "insert into vt_select_test (id, msg) values (1, 'test 1')")
-  utils.mysql_write_query(31981, 'vt_test_keyspace', "insert into vt_select_test (id, msg) values (10, 'test 10')")
+  shard_0_master.mquery("insert into vt_select_test (id, msg) values (1, 'test 1')", 'vt_test_keyspace', write=True)
+  shard_1_master.mquery("insert into vt_select_test (id, msg) values (10, 'test 10')", 'vt_test_keyspace', write=True)
 
   utils.zk_check(ping_tablets=True)
 
@@ -254,7 +217,7 @@ def run_test_sharding():
               "10\ttest 10"])
 
   # make sure the '2' value was written on first shard
-  rows = utils.mysql_query(62344, 'vt_test_keyspace', "select id, msg from vt_select_test order by id")
+  rows = shard_0_master.mquery("select id, msg from vt_select_test order by id", 'vt_test_keyspace')
   if (len(rows) != 2 or \
         rows[0][0] != 1 or \
         rows[1][0] != 2):
@@ -285,8 +248,10 @@ def run_test_sharding():
   check_rows_schema_diff("vtdb")
 
   utils.kill_sub_process(zkocc)
-  for agent in agents:
-    utils.kill_sub_process(agent)
+  shard_0_master.kill_vttablet()
+  shard_0_replica.kill_vttablet()
+  shard_1_master.kill_vttablet()
+  shard_1_replica.kill_vttablet()
 
 def run_all():
   run_test_sharding()
