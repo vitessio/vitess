@@ -13,7 +13,7 @@ import (
 )
 
 var MinKey = KeyspaceId("")
-var MaxKey = KeyspaceId(strings.Repeat("\xff", 64))
+var MaxKey = KeyspaceId("")
 
 // NOTE(msolomon) not sure about all these types - feels like it will create
 // hoops later.
@@ -64,7 +64,7 @@ func (kr KeyRange) MapKey() string {
 }
 
 func (kr KeyRange) Contains(i KeyspaceId) bool {
-	return kr.Start < i && i <= kr.End
+	return kr.Start <= i && kr.End != MaxKey && i < kr.End
 }
 
 type KeyspaceRange struct {
