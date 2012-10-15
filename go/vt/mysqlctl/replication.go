@@ -507,7 +507,7 @@ const (
 	binlogDumpCommand = "Binlog Dump"
 )
 
-// Get host addresses for all currently connected slaves.
+// Get IP addresses for all currently connected slaves.
 // FIXME(msolomon) use command instead of user to find "rogue" slaves?
 func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")

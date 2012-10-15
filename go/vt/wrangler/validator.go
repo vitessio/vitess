@@ -216,25 +216,25 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 		return
 	}
 
-	slaveAddrs, err = resolveSlaveNames(slaveAddrs)
+	// Some addresses don't resolve in all locations, just use IP address
 	if err != nil {
 		results <- vresult{masterTabletPath, fmt.Errorf("resolve slaves failed: %v", err)}
 		return
 	}
 
-	tabletHostMap := make(map[string]*tm.Tablet)
+	tabletIpMap := make(map[string]*tm.Tablet)
 	for tabletPath, tablet := range tabletMap {
-		host, _, err := net.SplitHostPort(tablet.MysqlAddr)
+		ipAddr, err := tabletIp(tablet.MysqlAddr)
 		if err != nil {
-			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v", tabletPath, err)}
+			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v %v", tablet.MysqlAddr, tabletPath, err)}
 			continue
 		}
-		tabletHostMap[host] = tablet.Tablet
+		tabletIpMap[ipAddr] = tablet.Tablet
 	}
 
 	// See if every slave is in the replication graph.
 	for _, slaveAddr := range slaveAddrs {
-		if tabletHostMap[slaveAddr] == nil {
+		if tabletIpMap[slaveAddr] == nil {
 			results <- vresult{shardInfo.ShardPath(), fmt.Errorf("slave not in replication graph: %v", slaveAddr)}
 		}
 	}
@@ -244,13 +244,25 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 		if !tablet.IsReplicatingType() {
 			continue
 		}
-		host, _, err := net.SplitHostPort(tablet.MysqlAddr)
+		ipAddr, err := tabletIp(tablet.MysqlAddr)
 		if err != nil {
 			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v", tabletPath, err)}
-		} else if !strInList(slaveAddrs, host) {
-			results <- vresult{tabletPath, fmt.Errorf("slave not replicating: %v %v %q", tabletPath, host, slaveAddrs)}
+		} else if !strInList(slaveAddrs, ipAddr) {
+			results <- vresult{tabletPath, fmt.Errorf("slave not replicating: %v %v %q", tabletPath, ipAddr, slaveAddrs)}
 		}
 	}
+}
+
+func tabletIp(addr string) (string, error) {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", err
+	}
+	ipAddrs, err := net.LookupHost(host)
+	if err != nil {
+		return "", err
+	}
+	return ipAddrs[0], nil
 }
 
 func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
