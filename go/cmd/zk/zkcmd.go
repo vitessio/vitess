@@ -280,7 +280,7 @@ func cmdWatch(args []string) {
 			if event.Type == zookeeper.EVENT_CHANGED {
 				data, stat, watch, err := zconn.GetW(event.Path)
 				if err != nil {
-					log.Printf("ERROR: failed to watch %v", err)
+					log.Fatalf("ERROR: failed to watch %v", err)
 				}
 				log.Printf("watch: %v %v\n", event.Path, stat)
 				println(data)
@@ -289,6 +289,17 @@ func cmdWatch(args []string) {
 				}()
 			} else if event.State == zookeeper.STATE_CLOSED {
 				return
+			} else if event.Type == zookeeper.EVENT_DELETED {
+				log.Printf("watch: %v deleted\n", event.Path)
+			} else {
+				// Most likely a session event - try t
+				_, _, watch, err := zconn.GetW(event.Path)
+				if err != nil {
+					log.Fatalf("ERROR: failed to watch %v", err)
+				}
+				go func() {
+					eventChan <- <-watch
+				}()
 			}
 		}
 	}
