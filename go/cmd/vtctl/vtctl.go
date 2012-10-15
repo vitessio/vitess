@@ -21,6 +21,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/client2"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	wr "code.google.com/p/vitess/go/vt/wrangler"
@@ -32,7 +33,8 @@ var usage = `
 Commands:
 
 Tablets:
-  InitTablet <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>
+  InitTablet <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]
+  InitTablet zk_tablet_path=<zk tablet path> hostname=<hostname> mysql_port=<mysql port> port=<vt port> tablet_type=<tablet type> [keyspace=<keyspace>] [shard_id=<shard id>] [zk_parent_alias=<zk parent alias>] [key_start=<start>] [key_end=<end>]
 
   ScrapTablet <zk tablet path>
     -force writes the scrap state in to zk, no questions asked, if a tablet is offline.
@@ -199,7 +201,13 @@ func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
 	panic("unreachable")
 }
 
-func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, vtPort, keyspace, shardId, tabletType, parentAlias string, update bool) error {
+func initTablet(zconn zk.Conn, params map[string]string, update bool) error {
+	zkPath := params["zk_tablet_path"]
+	keyspace := params["keyspace"]
+	shardId := params["shard_id"]
+	tabletType := params["tablet_type"]
+	parentAlias := params["zk_parent_alias"]
+
 	tm.MustBeTabletPath(zkPath)
 
 	cell := zk.ZkCellFromZkPath(zkPath)
@@ -221,8 +229,19 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, vtPort, keyspace, sh
 		parent.Cell, parent.Uid = tm.ParseTabletReplicationPath(parentAlias)
 	}
 
-	tablet := tm.NewTablet(cell, uint(uid), parent, fmt.Sprintf("%v:%v", hostname, vtPort), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
+	hostname := params["hostname"]
+	tablet := tm.NewTablet(cell, uint(uid), parent, fmt.Sprintf("%v:%v", hostname, params["port"]), fmt.Sprintf("%v:%v", hostname, params["mysql_port"]), keyspace, shardId, tm.TabletType(tabletType))
 	tablet.DbNameOverride = *dbNameOverride
+
+	keyStart, ok := params["key_start"]
+	if ok {
+		tablet.KeyRange.Start = key.HexKeyspaceId(keyStart).Unhex()
+	}
+	keyEnd, ok := params["key_end"]
+	if ok {
+		tablet.KeyRange.End = key.HexKeyspaceId(keyEnd).Unhex()
+	}
+
 	err = tm.CreateTablet(zconn, zkPath, tablet)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
@@ -344,6 +363,32 @@ func kquery(zconn zk.Conn, zkKeyspacePath, user, password, query string) error {
 	return nil
 }
 
+// returns true if they are the right number of parameters,
+// and none of them contains an '=' sign.
+func oldStyleParameters(args []string, minNumber, maxNumber int) bool {
+	if len(args) < minNumber || len(args) > maxNumber {
+		return false
+	}
+	for _, arg := range args {
+		if strings.Contains(arg, "=") {
+			return false
+		}
+	}
+	return true
+}
+
+func parseParams(args []string) map[string]string {
+	params := make(map[string]string)
+	for _, arg := range args[1:] {
+		parts := strings.SplitN(arg, "=", 2)
+		if len(parts) != 2 {
+			relog.Fatal("Named parameters require an equal sign")
+		}
+		params[parts[0]] = parts[1]
+	}
+	return params
+}
+
 func main() {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
@@ -409,19 +454,39 @@ func main() {
 			err = kquery(zconn, args[1], args[2], args[3], args[4])
 		}
 	case "InitTablet":
-		if len(args) < 8 {
-			relog.Fatal("action %v requires 7 or 8 args", args[0])
+		var params map[string]string
+		if oldStyleParameters(args, 8, 9) {
+			params = make(map[string]string)
+			params["zk_tablet_path"] = args[1]
+			params["hostname"] = args[2]
+			params["mysql_port"] = args[3]
+			params["port"] = args[4]
+			params["keyspace"] = args[5]
+			params["shard_id"] = args[6]
+			params["tablet_type"] = args[7]
+			if len(args) == 9 {
+				params["zk_parent_alias"] = args[8]
+			}
+		} else {
+			params = parseParams(args)
 		}
-		parentAlias := ""
-		if len(args) == 9 {
-			parentAlias = args[8]
-		}
-		err = initTablet(zconn, args[1], args[2], args[3], args[4], args[5], args[6], args[7], parentAlias, false)
+		err = initTablet(zconn, params, false)
 	case "UpdateTablet":
-		if len(args) != 9 {
-			relog.Fatal("action %v requires 8 args", args[0])
+		var params map[string]string
+		if oldStyleParameters(args, 9, 9) {
+			params = make(map[string]string)
+			params["zk_tablet_path"] = args[1]
+			params["hostname"] = args[2]
+			params["mysql_port"] = args[3]
+			params["port"] = args[4]
+			params["keyspace"] = args[5]
+			params["shard_id"] = args[6]
+			params["tablet_type"] = args[7]
+			params["zk_parent_alias"] = args[8]
+		} else {
+			params = parseParams(args)
 		}
-		err = initTablet(zconn, args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8], true)
+		err = initTablet(zconn, params, true)
 	case "Ping":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires args", args[0])

@@ -242,13 +242,12 @@ func (self *Node) findBindValue(bindVariables map[string]interface{}) interface{
 	return value
 }
 
+// this function will not check the value is under the last shard's max
+// (as we assume it will be empty, as checked by RebuildKeyspace)
 func findShardForValue(value string, tabletKeys []string) int {
 	var index int
-	for index < len(tabletKeys) && value >= tabletKeys[index] {
+	for index < len(tabletKeys)-1 && value >= tabletKeys[index] {
 		index++
-	}
-	if index == len(tabletKeys) {
-		panic(NewParserError("value higher than highest shard"))
 	}
 	return index
 }

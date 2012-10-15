@@ -126,7 +126,7 @@ type Tablet struct {
 	// really want to remove this but there are some databases that are
 	// hard to rename.
 	DbNameOverride string
-	key.KeyRange
+	KeyRange       key.KeyRange
 }
 
 // DbName is implied by keyspace. Having the shard information in the database name

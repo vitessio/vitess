@@ -35,17 +35,6 @@ class Tablet(object):
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.datacenter, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
-  def json_vtns_addr(self):
-    return {
-        "uid": self.tablet_uid,
-        "host": "localhost",
-        "port": 0,
-        "named_port_map": {
-            "_mysql": self.mysql_port,
-            "_vtocc": self.port,
-            }
-        }
-
   def mysqlctl(self, cmd):
     return utils.run_bg(os.path.join(vtroot, 'bin', 'mysqlctl') +
                         ' -tablet-uid %u ' % self.tablet_uid + cmd)
@@ -147,20 +136,35 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def init_tablet(self, keyspace, shard, db_type, force=True, parent_path=None, start=False):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, key_start=None, key_end=None, start=False):
     self.keyspace = keyspace
     self.shard = shard
-    self.zk_tablet_alias = "/zk/global/vt/keyspaces/%s/shards/%s/test_%s-%010d" % (self.keyspace, self.shard, self.datacenter, self.tablet_uid)
+    if keyspace:
+      self.zk_tablet_alias = "/zk/global/vt/keyspaces/%s/shards/%s/test_%s-%010d" % (self.keyspace, self.shard, self.datacenter, self.tablet_uid)
+    else:
+      self.zk_tablet_alias = ""
 
     if force:
       args = ['-force']
     else:
       args = []
 
-    args.extend(['InitTablet', self.zk_tablet_path, 'localhost', str(self.mysql_port), str(self.port), keyspace, shard, db_type])
-
-    if parent_path != None:
-      args.append(parent_path)
+    args.extend(['InitTablet',
+                 'zk_tablet_path='+self.zk_tablet_path,
+                 'hostname=localhost',
+                 'mysql_port=%u' % self.mysql_port,
+                 'port=%u' % self.port,
+                 'tablet_type='+tablet_type])
+    if keyspace:
+      args.append('keyspace='+keyspace)
+    if shard:
+      args.append('shard_id='+shard)
+    if zk_parent_alias:
+      args.append('zk_parent_alias='+zk_parent_alias)
+    if key_start:
+      args.append('key_start='+key_start)
+    if key_end:
+      args.append('key_end='+key_end)
 
     utils.run_vtctl(' '.join(args))
     if start:

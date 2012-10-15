@@ -109,9 +109,9 @@ func (si *ShardInfo) MasterTabletPath() (string, error) {
 	return si.TabletPath(si.Shard.MasterAlias), nil
 }
 
-func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) {
+func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 	tmp := newShard()
-	for _, ti := range shardTablets {
+	for i, ti := range shardTablets {
 		tablet := ti.Tablet
 		cell := tablet.Cell
 		alias := TabletAlias{cell, tablet.Uid}
@@ -123,8 +123,19 @@ func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) {
 		case TYPE_RDONLY:
 			tmp.RdonlyAliases = append(tmp.RdonlyAliases, alias)
 		}
+
+		if i == 0 {
+			// copy the first KeyRange
+			tmp.KeyRange = tablet.KeyRange
+		} else {
+			// verify the subsequent ones
+			if tmp.KeyRange != tablet.KeyRange {
+				return fmt.Errorf("inconsistent KeyRange: %v != %v", tmp.KeyRange, tablet.KeyRange)
+			}
+		}
 	}
 	si.Shard = tmp
+	return nil
 }
 
 // shardData: JSON blob
@@ -218,7 +229,9 @@ func RebuildShard(zconn zk.Conn, zkShardPath string) error {
 		}
 		tablets = append(tablets, tablet)
 	}
-	shardInfo.Rebuild(tablets)
+	if err = shardInfo.Rebuild(tablets); err != nil {
+		return err
+	}
 	if err = UpdateShard(zconn, shardInfo); err != nil {
 		return err
 	}
@@ -359,6 +372,20 @@ func RebuildKeyspace(zconn zk.Conn, zkKeyspacePath string) error {
 			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
 		}
 		naming.SrvShardArray(srvKeyspace.Shards).Sort()
+
+		// check the first Start is MinKey, the last End is MaxKey,
+		// and the values in between match: End[i] == Start[i+1]
+		if srvKeyspace.Shards[0].KeyRange.Start != key.MinKey {
+			return fmt.Errorf("Keyspace does not start with %v", key.MinKey)
+		}
+		if srvKeyspace.Shards[len(srvKeyspace.Shards)-1].KeyRange.End != key.MaxKey {
+			return fmt.Errorf("Keyspace does not end with %v", key.MaxKey)
+		}
+		for i, _ := range srvKeyspace.Shards[0 : len(srvKeyspace.Shards)-1] {
+			if srvKeyspace.Shards[i].KeyRange.End != srvKeyspace.Shards[i+1].KeyRange.Start {
+				return fmt.Errorf("Non-contiguous KeyRange values at shard %v to %v: %v != %v", i, i+1, srvKeyspace.Shards[i].KeyRange.End, srvKeyspace.Shards[i+1].KeyRange.Start)
+			}
+		}
 	}
 
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {

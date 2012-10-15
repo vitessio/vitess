@@ -100,10 +100,10 @@ def run_test_sharding():
 
   utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
 
-  shard_0_master.init_tablet( 'test_keyspace', '0000000000000000-8000000000000000', 'master')
-  shard_0_replica.init_tablet('test_keyspace', '0000000000000000-8000000000000000', 'replica')
-  shard_1_master.init_tablet( 'test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', 'master')
-  shard_1_replica.init_tablet('test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', 'replica')
+  shard_0_master.init_tablet( 'master',  'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
+  shard_0_replica.init_tablet('replica', 'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
+  shard_1_master.init_tablet( 'master',  'test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', key_start='8000000000000000')
+  shard_1_replica.init_tablet('replica', 'test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', key_start='8000000000000000')
 
   utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
   utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF')
@@ -130,62 +130,6 @@ def run_test_sharding():
 
   utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path)
   utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF ' + shard_1_master.zk_tablet_path)
-
-  # FIXME(alainjobart) fix the test_nj serving graph and use it:
-  # - it needs to have KeyRange(Start, End) setup
-  #   (I may be missing this setting earlier in the setup)
-  #   (I am saving the original file into /vt/tmp/old_test_nj_test_keyspace)
-  # - we should use the 'local' cell, not a given cell, but the logic
-  #   to create it is not there yet I think.
-  fd = tempfile.NamedTemporaryFile(dir=utils.tmp_root, delete=False)
-  filename = fd.name
-  zk_srv_keyspace = {
-      "Shards": [
-          {
-              "KeyRange": {
-                  "Start": "",
-                  "End": "8000000000000000"
-                  },
-              "AddrsByType": {
-                  "master": {
-                      "entries": [
-                          shard_0_master.json_vtns_addr(),
-                          ]
-                      },
-                  "replica": {
-                      "entries": [
-                          shard_0_replica.json_vtns_addr(),
-                          ]
-                      }
-                  },
-              "ReadOnly": False
-              },
-          {
-              "KeyRange": {
-                  "Start": "8000000000000000",
-                  "End": "FFFFFFFFFFFFFFFF"
-                  },
-              "AddrsByType": {
-                  "master": {
-                      "entries": [
-                          shard_1_master.json_vtns_addr(),
-                          ]
-                      },
-                  "replica": {
-                      "entries": [
-                          shard_1_replica.json_vtns_addr(),
-                          ]
-                      }
-                  },
-              "ReadOnly": False
-              },
-          ],
-      "TabletTypes": None
-      }
-  json.dump(zk_srv_keyspace, fd)
-  fd.close()
-  utils.run(vtroot+'/bin/zk cp /zk/test_nj/vt/ns/test_keyspace /vt/tmp/old_test_nj_test_keyspace')
-  utils.run(vtroot+'/bin/zk cp '+filename+' /zk/test_nj/vt/ns/test_keyspace')
 
   # insert some values directly
   # FIXME(alainjobart) these values don't match the shard map
