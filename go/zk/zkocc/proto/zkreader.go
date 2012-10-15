@@ -9,6 +9,7 @@ import (
 )
 
 // defines the RPC services
+// the service name to use is 'ZkReader'
 type ZkReader interface {
 	Get(req *ZkPath, reply *ZkNode) error
 	GetV(req *ZkPathV, reply *ZkNodeV) error

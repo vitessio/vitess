@@ -7,7 +7,7 @@ package tabletserver
 import (
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/rpcwrap"
+	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
 type Config struct {
@@ -55,7 +55,7 @@ func RegisterQueryService(config Config) {
 		return
 	}
 	SqlQueryRpcService = NewSqlQuery(config)
-	rpcwrap.RegisterAuthenticated(SqlQueryRpcService)
+	proto.RegisterAuthenticated(SqlQueryRpcService)
 }
 
 // AllowQueries can take an indefinite amount of time to return because
