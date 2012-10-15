@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"sort"
-	"strings"
 )
 
 var MinKey = KeyspaceId("")
