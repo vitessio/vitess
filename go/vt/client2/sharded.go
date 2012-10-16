@@ -17,6 +17,7 @@ import (
 	// tablet, or moved.
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/vt/client2/tablet"
+	"code.google.com/p/vitess/go/vt/key"
 	// FIXME(msolomon) zk indirect dependency
 	"code.google.com/p/vitess/go/vt/naming"
 	// FIXME(msolomon) seems like a subpackage
@@ -276,9 +277,8 @@ func (sc *ShardedConn) QueryBind(query string, bindVars map[string]interface{}) 
 }
 
 // FIXME(msolomon) define key interface "Keyer" or force a concrete type?
-func (sc *ShardedConn) ExecBindWithKey(query string, bindVars map[string]interface{}, key interface{}) (driver.Result, error) {
-	// FIXME(msolomon) this doesn't belong in the parser.
-	shardIdx, err := sqlparser.FindShardForKey(key, sc.shardMaxKeys)
+func (sc *ShardedConn) ExecBindWithKey(query string, bindVars map[string]interface{}, keyVal interface{}) (driver.Result, error) {
+	shardIdx, err := key.FindShardForKey(keyVal, sc.shardMaxKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -547,8 +547,8 @@ type ClientQuery struct {
 // * Use a special stmt object, buffer all statements, connections, etc and send when it's ready.
 // * Take a list of (sql, bind) pairs and just send that - have to parse and route that anyway.
 // * Probably need separate support for the a MultiTx too.
-func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, key interface{}) (*tabletserver.QueryResult, error) {
-	shardIdx, err := sqlparser.FindShardForKey(key, sc.shardMaxKeys)
+func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{}) (*tabletserver.QueryResult, error) {
+	shardIdx, err := key.FindShardForKey(keyVal, sc.shardMaxKeys)
 	shards := []int{shardIdx}
 
 	if err = sc.tabletPrepare(shardIdx); err != nil {

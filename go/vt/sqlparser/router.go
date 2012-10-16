@@ -5,8 +5,9 @@
 package sqlparser
 
 import (
-	"encoding/binary"
 	"strconv"
+
+	"code.google.com/p/vitess/go/vt/key"
 )
 
 const (
@@ -209,7 +210,7 @@ func (self *Node) findInsertShard(bindVariables map[string]interface{}, tabletKe
 
 func (self *Node) findShard(bindVariables map[string]interface{}, tabletKeys []string) int {
 	value := self.getBoundValue(bindVariables)
-	return findShardForValue(value, tabletKeys)
+	return key.FindShardForValue(value, tabletKeys)
 }
 
 func (self *Node) getBoundValue(bindVariables map[string]interface{}) string {
@@ -223,10 +224,10 @@ func (self *Node) getBoundValue(bindVariables map[string]interface{}) string {
 		if err != nil {
 			panic(NewParserError("%s", err.Error()))
 		}
-		return binaryEncode(uint64(val))
+		return key.Uint64Key(val).String()
 	case VALUE_ARG:
 		value := self.findBindValue(bindVariables)
-		return encodeValue(value)
+		return key.EncodeValue(value)
 	}
 	panic("Unexpected token")
 }
@@ -242,49 +243,10 @@ func (self *Node) findBindValue(bindVariables map[string]interface{}) interface{
 	return value
 }
 
-// this function will not check the value is under the last shard's max
-// (as we assume it will be empty, as checked by RebuildKeyspace)
-func findShardForValue(value string, tabletKeys []string) int {
-	var index int
-	for index < len(tabletKeys)-1 && value >= tabletKeys[index] {
-		index++
-	}
-	return index
-}
-
-// Given a list of upper bounds for shards, returns the shard index
-// for the given value (between 0 and len(tabletKeys)-1)
-func FindShardForKey(key interface{}, tabletKeys []string) (i int, err error) {
-	defer handleError(&err)
-	return findShardForValue(encodeValue(key), tabletKeys), nil
-}
-
 func makeList(start, end int) []int {
 	list := make([]int, end-start)
 	for i := start; i < end; i++ {
 		list[i-start] = i
 	}
 	return list
-}
-
-func encodeValue(value interface{}) string {
-	switch bindVal := value.(type) {
-	case int:
-		return binaryEncode(uint64(bindVal))
-	case uint64:
-		return binaryEncode(bindVal)
-	case int64:
-		return binaryEncode(uint64(bindVal))
-	case string:
-		return bindVal
-	case []byte:
-		return string(bindVal)
-	}
-	panic(NewParserError("Unexpected bind variable type"))
-}
-
-func binaryEncode(val uint64) string {
-	bytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(bytes, uint64(val))
-	return string(bytes)
 }
