@@ -184,6 +184,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.changeType(actionNode.Args)
 	case TABLET_ACTION_DEMOTE_MASTER:
 		err = ta.demoteMaster()
+	case TABLET_ACTION_MASTER_POSITION:
+		err = ta.masterPosition(actionNode.Args)
 	case TABLET_ACTION_PARTIAL_RESTORE:
 		err = ta.partialRestore(actionNode.Args)
 	case TABLET_ACTION_PARTIAL_SNAPSHOT:
@@ -205,8 +207,14 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.setReadOnly(false)
 	case TABLET_ACTION_SLEEP:
 		err = ta.sleep(actionNode.Args)
+	case TABLET_ACTION_SLAVE_POSITION:
+		err = ta.slavePosition(actionNode.Args)
 	case TABLET_ACTION_SNAPSHOT:
 		_, err = ta.snapshot()
+	case TABLET_ACTION_STOP_SLAVE:
+		err = ta.mysqld.StopSlave()
+	case TABLET_ACTION_WAIT_SLAVE_POSITION:
+		err = ta.waitSlavePosition(actionNode.Args)
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
 	}
@@ -335,6 +343,55 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	}
 
 	return nil
+}
+
+func (ta *TabletActor) masterPosition(args map[string]string) error {
+	zkReplyPath, ok := args["ReplyPath"]
+	if !ok {
+		return fmt.Errorf("missing ReplyPath in args")
+	}
+
+	position, err := ta.mysqld.MasterStatus()
+	relog.Debug("MasterPosition %#v %v", *position, zkReplyPath)
+	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(position), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return err
+}
+
+func (ta *TabletActor) slavePosition(args map[string]string) error {
+	zkReplyPath, ok := args["ReplyPath"]
+	if !ok {
+		return fmt.Errorf("missing ReplyPath in args")
+	}
+
+	position, err := ta.mysqld.SlaveStatus()
+	relog.Debug("SlavePosition %#v %v", *position, zkReplyPath)
+	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(position), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return err
+}
+
+func (ta *TabletActor) waitSlavePosition(args map[string]string) error {
+	zkArgsPath, ok := args["ArgsPath"]
+	if !ok {
+		return fmt.Errorf("missing ArgsPath in args")
+	}
+
+	data, _, err := ta.zconn.Get(zkArgsPath)
+	if err != nil {
+		return err
+	}
+
+	slavePos := new(SlavePositionReq)
+	if err = json.Unmarshal([]byte(data), slavePos); err != nil {
+		return err
+	}
+
+	relog.Debug("WaitSlavePosition %#v %v", *slavePos, zkArgsPath)
+	err = ta.mysqld.WaitMasterPos(&slavePos.ReplicationPosition, slavePos.WaitTimeout)
+	if err != nil {
+		return err
+	}
+
+	return ta.slavePosition(args)
 }
 
 func (ta *TabletActor) restartSlave(args map[string]string) error {

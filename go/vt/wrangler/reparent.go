@@ -221,7 +221,8 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 			return err
 		}
 
-		masterPosition, err = getMasterPosition(masterTablet.Tablet)
+		//masterPosition, err = getMasterPosition(masterTablet.Tablet)
+		masterPosition, err = wr.getMasterPositionWithAction(masterTablet, zkShardActionPath)
 		if err != nil {
 			// FIXME(msolomon) handle the case where the master is failed, not demoted.
 			// Suggest retry, or scrap master and force reparenting.
@@ -231,14 +232,16 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 	if masterTablet.Uid != masterElectTablet.Uid {
 		relog.Debug("check slaves %v", zkMasterTabletPath)
-		err = checkSlaveConsistency(slaveTabletMap, masterPosition)
+		//err = checkSlaveConsistency(slaveTabletMap, masterPosition, zkShardActionPath)
+		err = wr.checkSlaveConsistencyWithActions(slaveTabletMap, masterPosition, zkShardActionPath)
 		if err != nil {
 			return err
 		}
 	} else {
 		// We are forcing a reparenting. Make sure that all slaves stop so
 		// no data is accidentally replicated through before we call RestartSlave.
-		err = stopSlaves(slaveTabletMap)
+		//err = stopSlaves(slaveTabletMap)
+		err = wr.stopSlavesWithAction(slaveTabletMap, zkShardActionPath)
 		if err != nil {
 			return err
 		}
@@ -394,9 +397,9 @@ func mapStrKeys(m interface{}) []string {
 	return keys
 }
 
-/* Check all the tablets to see if we can proceed with reparenting.
-   masterPosition is supplied from the demoted master if we are doing this gracefully.
-*/
+// Check all the tablets to see if we can proceed with reparenting.
+// masterPosition is supplied from the demoted master if we are doing
+// this gracefully.
 func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
 	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
@@ -488,7 +491,7 @@ func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *my
 	return nil
 }
 
-/* Shut off all replication. */
+// Shut off all replication.
 func stopSlaves(tabletMap map[uint]*tm.TabletInfo) error {
 	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
 

@@ -141,6 +141,28 @@ func (ai *ActionInitiator) RestartSlave(zkTabletPath, zkShardActionPath string) 
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, Args: args})
 }
 
+// NOTE(msolomon) Also available as RPC.
+func (ai *ActionInitiator) MasterPosition(zkTabletPath, zkReplyPath string) (actionPath string, err error) {
+	args := map[string]string{"ReplyPath": zkReplyPath}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MASTER_POSITION, Args: args})
+}
+
+// NOTE(msolomon) Also available as RPC.
+func (ai *ActionInitiator) SlavePosition(zkTabletPath, zkReplyPath string) (actionPath string, err error) {
+	args := map[string]string{"ReplyPath": zkReplyPath}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_POSITION, Args: args})
+}
+
+// NOTE(msolomon) Also available as RPC.
+func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath, zkArgsPath, zkReplyPath string) (actionPath string, err error) {
+	args := map[string]string{"ArgsPath": zkArgsPath, "ReplyPath": zkReplyPath}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, Args: args})
+}
+
+func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
+}
+
 func (ai *ActionInitiator) Restore(zkDstTabletPath, zkSrcTabletPath string) (actionPath string, err error) {
 	args := map[string]string{"SrcTabletPath": zkSrcTabletPath}
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, Args: args})
