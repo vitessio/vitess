@@ -36,6 +36,7 @@ class Tablet(object):
     self.zk_pid = self.zk_tablet_path + '/pid'
 
   def mysqlctl(self, cmd):
+    utils.prog_compile(['mysqlctl'])
     return utils.run_bg(os.path.join(vtroot, 'bin', 'mysqlctl') +
                         ' -tablet-uid %u ' % self.tablet_uid + cmd)
 
@@ -175,6 +176,9 @@ class Tablet(object):
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
     """
+    utils.prog_compile(['vtaction',
+                        'vttablet',
+                        ])
     args = [os.path.join(vtroot, 'bin', 'vttablet'),
             '-port %s' % (port or self.port),
             '-tablet-path %s' % self.zk_tablet_path,

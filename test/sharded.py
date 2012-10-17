@@ -24,9 +24,7 @@ shard_1_master = tablet.Tablet()
 shard_1_replica  = tablet.Tablet()
 
 def setup():
-  utils.prog_compile(['mysqlctl',
-                      'zkocc',
-                      ])
+  utils.prog_compile(['zkocc'])
   utils.zk_setup()
 
   setup_procs = [

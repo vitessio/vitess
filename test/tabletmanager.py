@@ -30,11 +30,6 @@ tablet_41983 = tablet.Tablet(41983, 6702, 3702)
 tablet_31981 = tablet.Tablet(31981, 6703, 3703)
 
 def setup():
-  utils.prog_compile(['mysqlctl',
-                      'vtaction',
-                      'vtctl',
-                      'vttablet',
-                      ])
   utils.zk_setup()
 
   # start mysql instance external to the test
