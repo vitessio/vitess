@@ -29,7 +29,7 @@ type panicError struct {
 }
 
 func (e panicError) Error() string {
-	return e.err.Error()
+	return e.String()
 }
 
 func (e panicError) StackTrace() string {
@@ -42,7 +42,7 @@ func (e panicError) String() string {
 
 func NewPanicError(err error) PanicError {
 	// magic 5 trims off just enough stack data to be clear
-	return panicError{err.(error), string(Stack(5))}
+	return panicError{err, string(Stack(5))}
 }
 
 // Taken from runtime/debug.go
