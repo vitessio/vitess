@@ -82,7 +82,6 @@ leave the 24 lag for 1 day
 */
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -92,35 +91,35 @@ import (
 	"strings"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 )
 
 type SplitReplicaSource struct {
 	Source   ReplicaSource
-	StartKey string
-	EndKey   string
+	KeyRange key.KeyRange
 	Schema   []string
 }
 
-func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey string, schema []string) *SplitReplicaSource {
-	return &SplitReplicaSource{Source: *NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos), StartKey: startKey, EndKey: endKey, Schema: schema}
+func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, schema []string) *SplitReplicaSource {
+	return &SplitReplicaSource{Source: *NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, Schema: schema}
 }
 
+// In MySQL for both bigint and varbinary, 0x1234 is a valid value. For
+// varbinary, it is left justified and for bigint it is correctly
+// interpreted. So in all cases, we can use '0x' plus the hex version
+// of the values.
 // FIXME(alainjobart) use query format/bind vars
 var selectIntoOutfile = `SELECT * INTO OUTFILE "{{.TableOutputPath}}"
   CHARACTER SET binary
   FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\'
   LINES TERMINATED BY '\n'
-  FROM {{.TableName}} WHERE {{.KeyspaceIdColumnName}} >= {{.StartKey}} AND 
-	{{.KeyspaceIdColumnName}} < {{.EndKey}}`
+  FROM {{.TableName}} WHERE {{.KeyspaceIdColumnName}} >= 0x{{.StartKey}} AND 
+	{{.KeyspaceIdColumnName}} < 0x{{.EndKey}}`
 
 var loadDataInfile = `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}}
   CHARACTER SET binary
   FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\'
   LINES TERMINATED BY '\n'`
-
-func b64ForFilename(s string) string {
-	return strings.Replace(base64.URLEncoding.EncodeToString([]byte(s)), "=", "", -1)
-}
 
 func (mysqld *Mysqld) validateSplitReplicaTarget() error {
 	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
@@ -155,7 +154,7 @@ startKey, endKey - the row range to prepare
 sourceAddr - the ip addr of the machine running the export
 allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey, sourceAddr string, allowHierarchicalReplication bool) (_replicaSource *SplitReplicaSource, err error) {
+func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool) (_replicaSource *SplitReplicaSource, err error) {
 	if dbName == "" {
 		err = errors.New("no database name provided")
 		return
@@ -166,7 +165,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 		return
 	}
 
-	cloneSourcePath := path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+b64ForFilename(startKey)+","+b64ForFilename(endKey))
+	cloneSourcePath := path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+string(startKey)+","+string(endKey))
 	// clean out and start fresh	
 	for _, _path := range []string{cloneSourcePath} {
 		if err = os.RemoveAll(_path); err != nil {
@@ -294,7 +293,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName, startKey, endKey
 	return rs, nil
 }
 
-func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath string, tableNames []string) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, tableNames []string) ([]SnapshotFile, error) {
 	// export each table to a CSV-like file, compress the results
 	tableFiles := make([]string, len(tableNames))
 	// FIXME(msolomon) parallelize
@@ -308,8 +307,8 @@ func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName, startKey, endKey
 			"KeyspaceIdColumnName": keyName,
 			// FIXME(alainjobart): move these to bind params
 			"TableOutputPath": filename,
-			"StartKey":        startKey,
-			"EndKey":          endKey,
+			"StartKey":        string(startKey),
+			"EndKey":          string(endKey),
 		}
 		query := mustFillStringTemplate(selectIntoOutfile, queryParams)
 		relog.Info("  %v", query)
@@ -414,7 +413,7 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 
 	// FIXME(msolomon) start *split* replication, you need the new start/end
 	// keys
-	cmdList := StartSplitReplicationCommands(replicaSource.Source.ReplicationState, replicaSource.StartKey, replicaSource.EndKey)
+	cmdList := StartSplitReplicationCommands(replicaSource.Source.ReplicationState, replicaSource.KeyRange)
 	relog.Info("StartSplitReplicationCommands %#v", cmdList)
 	if err = mysqld.executeSuperQueryList(cmdList); err != nil {
 		return
@@ -432,7 +431,9 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 	return
 }
 
-func StartSplitReplicationCommands(replState *ReplicationState, startKey string, endKey string) []string {
+func StartSplitReplicationCommands(replState *ReplicationState, keyRange key.KeyRange) []string {
+	startKey := string(keyRange.Start.Hex())
+	endKey := string(keyRange.End.Hex())
 	return []string{
 		"SET GLOBAL vt_enable_binlog_splitter_rbr = 1",
 		"SET GLOBAL vt_shard_key_range_start = \"" + startKey + "\"",

@@ -7,6 +7,7 @@ package main
 import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"flag"
 	"fmt"
@@ -50,7 +51,7 @@ func main() {
 			log.Fatalf("partialrestore failed: %v", err)
 		}
 	case "partialsnapshot":
-		_, err := mysqld.CreateSplitReplicaSource(flag.Arg(1), flag.Arg(2), flag.Arg(3), flag.Arg(4), tabletAddr, false)
+		_, err := mysqld.CreateSplitReplicaSource(flag.Arg(1), flag.Arg(2), key.HexKeyspaceId(flag.Arg(3)), key.HexKeyspaceId(flag.Arg(4)), tabletAddr, false)
 		if err != nil {
 			log.Fatalf("partialsnapshot failed: %v", err)
 		}

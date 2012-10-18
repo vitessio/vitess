@@ -6,13 +6,14 @@ package zkwrangler
 
 import (
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName, startKey, endKey string, forceMasterSnapshot bool) error {
+func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool) error {
 	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {
 		return err
@@ -79,7 +80,7 @@ func (wr *Wrangler) PartialRestore(zkSrcTabletPath, zkDstTabletPath string) erro
 	return nil
 }
 
-func (wr *Wrangler) PartialClone(zkSrcTabletPath, zkDstTabletPath, keyName, startKey, endKey string, forceMasterSnapshot bool) error {
+func (wr *Wrangler) PartialClone(zkSrcTabletPath, zkDstTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool) error {
 	if err := wr.PartialSnapshot(zkSrcTabletPath, keyName, startKey, endKey, forceMasterSnapshot); err != nil {
 		return err
 	}

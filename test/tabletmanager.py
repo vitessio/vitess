@@ -167,11 +167,11 @@ def run_test_mysqlctl_clone():
   tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
                         populate_vt_insert_test)
 
-  tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshot vt_snapshot_test')
+  tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshot vt_snapshot_test').wait()
 
   utils.pause("snapshot finished")
 
-  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/replica_source.json')
+  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/replica_source.json').wait()
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
@@ -252,13 +252,13 @@ def run_test_mysqlctl_split():
   tablet_62344.populate('vt_test_keyspace', create_vt_insert_test,
                         populate_vt_insert_test)
 
-  utils.run(vtroot+'/bin/mysqlctl -tablet-uid 62344 -port 6700 -mysql-port 3700 partialsnapshot vt_test_keyspace id 0 3')
+  tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 partialsnapshot vt_test_keyspace id 0000000000000000 0000000000000003').wait()
 
   utils.pause("partialsnapshot finished")
 
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_test_keyspace')
-  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/replica_source.json')
+  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/replica_source.json').wait()
 
   tablet_62044.assert_table_count('vt_test_keyspace', 'vt_insert_test', 2)
 
@@ -313,8 +313,18 @@ def run_test_vtctl_partial_clone():
   # dbname').
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_snapshot_test')
-  utils.run_vtctl('-force PartialClone %s %s id 0 3' %
+  utils.run_vtctl('-force PartialClone %s %s id 0000000000000000 0000000000000003' %
                   (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
+
+  # grab the new tablet definition from zk, make sure the start and
+  # end keys are set properly
+  out, err = utils.run(vtroot+'/bin/zk cat ' + tablet_62044.zk_tablet_path,
+                       trap_output=True)
+  if (out.find('"Start": "0000000000000000"') == -1 or \
+        out.find('"End": "0000000000000003"') == -1):
+    print "Tablet output:"
+    print "out"
+    raise utils.TestError('wrong Start or End')
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 2)
 

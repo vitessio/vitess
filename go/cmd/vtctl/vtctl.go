@@ -541,7 +541,7 @@ func main() {
 		if len(args) != 6 {
 			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>", args[0])
 		}
-		err = wrangler.PartialClone(args[1], args[2], args[3], args[4], args[5], *force)
+		err = wrangler.PartialClone(args[1], args[2], args[3], key.HexKeyspaceId(args[4]), key.HexKeyspaceId(args[5]), *force)
 	case "PartialRestore":
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
@@ -551,7 +551,7 @@ func main() {
 		if len(args) != 5 {
 			relog.Fatal("action %v requires <zk src tablet path> <key name> <start key> <end key>", args[0])
 		}
-		err = wrangler.PartialSnapshot(args[1], args[2], args[3], args[4], *force)
+		err = wrangler.PartialSnapshot(args[1], args[2], key.HexKeyspaceId(args[3]), key.HexKeyspaceId(args[4]), *force)
 	case "PurgeActions":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])

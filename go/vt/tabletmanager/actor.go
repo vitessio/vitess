@@ -65,8 +65,7 @@ type PartialRestoreSlaveData struct {
 	Addr             string // this is the address of the parent vttablet
 	DbName           string
 	Files            []mysqlctl.SnapshotFile
-	StartKey         string
-	EndKey           string
+	KeyRange         key.KeyRange
 	Schema           []string
 }
 
@@ -589,7 +588,7 @@ func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreS
 		return nil, fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	splitReplicaSource, err := ta.mysqld.CreateSplitReplicaSource(tablet.DbName(), keyName, startKey, endKey, tablet.Addr, false)
+	splitReplicaSource, err := ta.mysqld.CreateSplitReplicaSource(tablet.DbName(), keyName, key.HexKeyspaceId(startKey), key.HexKeyspaceId(endKey), tablet.Addr, false)
 	if err != nil {
 		return nil, err
 	}
@@ -606,8 +605,7 @@ func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreS
 	rsd.Addr = splitReplicaSource.Source.Addr
 	rsd.DbName = splitReplicaSource.Source.DbName
 	rsd.Files = splitReplicaSource.Source.Files
-	rsd.StartKey = splitReplicaSource.StartKey
-	rsd.EndKey = splitReplicaSource.EndKey
+	rsd.KeyRange = splitReplicaSource.KeyRange
 	rsd.Schema = splitReplicaSource.Schema
 
 	rsdZkPath := path.Join(ta.zkTabletPath, partialRestoreSlaveDataFilename)
@@ -667,8 +665,7 @@ func (ta *TabletActor) partialRestore(args map[string]string) error {
 	rs.Source.Addr = rsd.Addr
 	rs.Source.DbName = rsd.DbName
 	rs.Source.Files = rsd.Files
-	rs.StartKey = rsd.StartKey
-	rs.EndKey = rsd.EndKey
+	rs.KeyRange = rsd.KeyRange
 	rs.Schema = rsd.Schema
 
 	if err := ta.mysqld.RestoreFromPartialSnapshot(rs); err != nil {
@@ -681,7 +678,7 @@ func (ta *TabletActor) partialRestore(args map[string]string) error {
 	tablet.Keyspace = parentTablet.Keyspace
 	tablet.Shard = parentTablet.Shard
 	tablet.Type = TYPE_SPARE
-	tablet.KeyRange = parentTablet.KeyRange
+	tablet.KeyRange = rs.KeyRange
 
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -118,11 +119,11 @@ func (ai *ActionInitiator) Snapshot(zkTabletPath string) (actionPath string, err
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT})
 }
 
-func (ai *ActionInitiator) PartialSnapshot(zkTabletPath, keyName, startKey, endKey string) (actionPath string, err error) {
+func (ai *ActionInitiator) PartialSnapshot(zkTabletPath, keyName string, startKey, endKey key.HexKeyspaceId) (actionPath string, err error) {
 	args := map[string]string{
 		"KeyName":  keyName,
-		"StartKey": startKey,
-		"EndKey":   endKey,
+		"StartKey": string(startKey),
+		"EndKey":   string(endKey),
 	}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, Args: args})
 }

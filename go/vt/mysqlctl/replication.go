@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 )
 
 const (
@@ -444,11 +445,11 @@ func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
 	return nil
 }
 
-func (mysqld *Mysqld) ConfigureKeyRange(startKey string, endKey string) error {
+func (mysqld *Mysqld) ConfigureKeyRange(startKey, endKey key.HexKeyspaceId) error {
 	replicationCmds := []string{
 		"SET GLOBAL vt_enable_binlog_splitter_rbr = 1",
-		"SET GLOBAL vt_shard_key_range_start = \"0x" + startKey + "\"",
-		"SET GLOBAL vt_shard_key_range_end = \"0x" + endKey + "\""}
+		"SET GLOBAL vt_shard_key_range_start = \"0x" + string(startKey) + "\"",
+		"SET GLOBAL vt_shard_key_range_end = \"0x" + string(endKey) + "\""}
 	if err := mysqld.executeSuperQueryList(replicationCmds); err != nil {
 		return err
 	}
