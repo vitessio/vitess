@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sync"
 	"time"
@@ -48,7 +49,7 @@ func (self *Logfile) Rotate() error {
 	self.curName = newName
 	self.switchHandle(handle)
 	os.Remove(self.baseName)
-	os.Symlink(newName, self.baseName)
+	os.Symlink(path.Base(newName), self.baseName)
 	go self.LogPurge()
 	return nil
 }
