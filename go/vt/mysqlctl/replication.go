@@ -228,6 +228,9 @@ func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 
 	rowMap := make(map[string]string)
 	for i, column := range rows[0] {
+		if i >= len(showSlaveStatusColumnNames) {
+			break
+		}
 		if column == nil {
 			rowMap[showSlaveStatusColumnNames[i]] = ""
 		} else {
