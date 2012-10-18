@@ -173,6 +173,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 			} else {
 				err = fmt.Errorf("dispatchAction panic: %v", x)
 			}
+			err = relog.NewPanicError(err)
 		}
 	}()
 
@@ -351,6 +352,9 @@ func (ta *TabletActor) masterPosition(args map[string]string) error {
 	}
 
 	position, err := ta.mysqld.MasterStatus()
+	if err != nil {
+		return err
+	}
 	relog.Debug("MasterPosition %#v %v", *position, zkReplyPath)
 	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(position), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	return err
@@ -363,6 +367,9 @@ func (ta *TabletActor) slavePosition(args map[string]string) error {
 	}
 
 	position, err := ta.mysqld.SlaveStatus()
+	if err != nil {
+		return err
+	}
 	relog.Debug("SlavePosition %#v %v", *position, zkReplyPath)
 	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(position), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	return err

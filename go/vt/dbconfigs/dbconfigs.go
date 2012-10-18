@@ -36,10 +36,10 @@ const defaultConfig = `{
 // is truly universal to all apps this variable should be private.
 // It's unclear why we need both Init and ReadJson - there should
 // only be one public entry point.
-var DBConfigsFile = flag.String("db-configs-file", "", "db connection configs file")
+var DbConfigsFile = flag.String("db-configs-file", "", "db connection configs file")
 
 // Separate credential file to support split permissions.
-var dbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file")
+var DbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file")
 
 type DBConfigs struct {
 	App      tabletserver.DBConfig  `json:"app"`
@@ -64,15 +64,15 @@ func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
 		Uname:   "vt_repl",
 		Charset: "utf8",
 	}
-	if *DBConfigsFile != "" {
-		if err = jscfg.ReadJson(*DBConfigsFile, &dbcfgs); err != nil {
+	if *DbConfigsFile != "" {
+		if err = jscfg.ReadJson(*DbConfigsFile, &dbcfgs); err != nil {
 			return
 		}
 	}
 
-	if *dbCredentialsFile != "" {
+	if *DbCredentialsFile != "" {
 		dbCreds := make(dbCredentials)
-		if err = jscfg.ReadJson(*dbCredentialsFile, &dbCreds); err != nil {
+		if err = jscfg.ReadJson(*DbCredentialsFile, &dbCreds); err != nil {
 			return
 		}
 		if passwd, ok := dbCreds[dbcfgs.App.Uname]; ok {
@@ -87,6 +87,6 @@ func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
 	}
 	dbcfgs.App.UnixSocket = mycnf.SocketFile
 	dbcfgs.Dba.UnixSocket = mycnf.SocketFile
-	relog.Info("%s: %s\n", *DBConfigsFile, jscfg.ToJson(dbcfgs))
+	relog.Info("%s: %s\n", *DbConfigsFile, jscfg.ToJson(dbcfgs))
 	return
 }
