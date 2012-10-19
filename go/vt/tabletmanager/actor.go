@@ -47,26 +47,16 @@ type RestartSlaveData struct {
 	Force            bool
 }
 
-// This is a superset of the fields in mysqlctl.ReplicaSource.
-// The fields are duplicated because the json encoder does not support
-// anonymous structs.
+// Enough data to restore a slave from a mysqlctl.ReplicaSource
 type RestoreSlaveData struct {
-	ReplicationState *mysqlctl.ReplicationState
-	Parent           TabletAlias
-	Addr             string // this is the address of the parent vttablet
-	DbName           string
-	Files            []mysqlctl.SnapshotFile
+	ReplicaSource *mysqlctl.ReplicaSource
+	Parent        TabletAlias
 }
 
-// Superset of mysqlctl.SplitReplicaSource.
+// Enough data to restore a slave from a mysqlctl.SplitReplicaSource
 type PartialRestoreSlaveData struct {
-	ReplicationState *mysqlctl.ReplicationState
-	Parent           TabletAlias
-	Addr             string // this is the address of the parent vttablet
-	DbName           string
-	Files            []mysqlctl.SnapshotFile
-	KeyRange         key.KeyRange
-	Schema           []string
+	SplitReplicaSource *mysqlctl.SplitReplicaSource
+	Parent             TabletAlias
 }
 
 type TabletActor struct {
@@ -483,8 +473,7 @@ func (ta *TabletActor) snapshot() (*RestoreSlaveData, error) {
 		return nil, err
 	}
 
-	rsd := new(RestoreSlaveData)
-	rsd.ReplicationState = replicaSource.ReplicationState
+	rsd := &RestoreSlaveData{ReplicaSource: replicaSource}
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
@@ -492,9 +481,6 @@ func (ta *TabletActor) snapshot() (*RestoreSlaveData, error) {
 	} else {
 		rsd.Parent = tablet.Parent
 	}
-	rsd.Addr = replicaSource.Addr
-	rsd.DbName = replicaSource.DbName
-	rsd.Files = replicaSource.Files
 
 	rsdZkPath := path.Join(ta.zkTabletPath, restoreSlaveDataFilename)
 	_, err = ta.zconn.Create(rsdZkPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -545,13 +531,7 @@ func (ta *TabletActor) restore(args map[string]string) error {
 		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
 	}
 
-	rs := new(mysqlctl.ReplicaSource)
-	rs.ReplicationState = rsd.ReplicationState
-	rs.Addr = rsd.Addr
-	rs.DbName = rsd.DbName
-	rs.Files = rsd.Files
-
-	if err := ta.mysqld.RestoreFromSnapshot(rs); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(rsd.ReplicaSource); err != nil {
 		relog.Error("RestoreFromSnapshot failed: %v", err)
 		return err
 	}
@@ -600,8 +580,7 @@ func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreS
 		return nil, err
 	}
 
-	rsd := new(PartialRestoreSlaveData)
-	rsd.ReplicationState = splitReplicaSource.Source.ReplicationState
+	rsd := &PartialRestoreSlaveData{SplitReplicaSource: splitReplicaSource}
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
@@ -609,11 +588,6 @@ func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreS
 	} else {
 		rsd.Parent = tablet.Parent
 	}
-	rsd.Addr = splitReplicaSource.Source.Addr
-	rsd.DbName = splitReplicaSource.Source.DbName
-	rsd.Files = splitReplicaSource.Source.Files
-	rsd.KeyRange = splitReplicaSource.KeyRange
-	rsd.Schema = splitReplicaSource.Schema
 
 	rsdZkPath := path.Join(ta.zkTabletPath, partialRestoreSlaveDataFilename)
 	_, err = ta.zconn.Create(rsdZkPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -667,15 +641,7 @@ func (ta *TabletActor) partialRestore(args map[string]string) error {
 		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
 	}
 
-	rs := new(mysqlctl.SplitReplicaSource)
-	rs.Source.ReplicationState = rsd.ReplicationState
-	rs.Source.Addr = rsd.Addr
-	rs.Source.DbName = rsd.DbName
-	rs.Source.Files = rsd.Files
-	rs.KeyRange = rsd.KeyRange
-	rs.Schema = rsd.Schema
-
-	if err := ta.mysqld.RestoreFromPartialSnapshot(rs); err != nil {
+	if err := ta.mysqld.RestoreFromPartialSnapshot(rsd.SplitReplicaSource); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
 		return err
 	}
@@ -685,7 +651,7 @@ func (ta *TabletActor) partialRestore(args map[string]string) error {
 	tablet.Keyspace = parentTablet.Keyspace
 	tablet.Shard = parentTablet.Shard
 	tablet.Type = TYPE_SPARE
-	tablet.KeyRange = rs.KeyRange
+	tablet.KeyRange = rsd.SplitReplicaSource.KeyRange
 
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err
