@@ -141,6 +141,18 @@ populate_vt_insert_test = [
     "insert into vt_insert_test (msg) values ('test %s')" % x
     for x in xrange(4)]
 
+# the varbinary test uses 10 bytes long ids, stored in a 64 bytes column
+# (using 10 bytes so it's longer than a uint64 8 bytes)
+create_vt_insert_test_varbinary = '''create table vt_insert_test (
+id varbinary(64),
+msg varchar(64),
+primary key (id)
+) Engine=InnoDB'''
+
+populate_vt_insert_test_varbinary = [
+    "insert into vt_insert_test (id, msg) values (0x%02x000000000000000000, 'test %s')" % (x+1, x+1)
+    for x in xrange(4)]
+
 create_vt_select_test = '''create table vt_select_test (
 id bigint auto_increment,
 msg varchar(64),
@@ -289,7 +301,8 @@ def run_test_mysqlctl_split():
 
   tablet_62344.kill_vttablet()
 
-def run_test_vtctl_partial_clone():
+def _run_test_vtctl_partial_clone(create, populate,
+                                  start, end):
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
@@ -301,8 +314,7 @@ def run_test_vtctl_partial_clone():
 
   tablet_62344.start_vttablet()
 
-  tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
-                        populate_vt_insert_test)
+  tablet_62344.populate('vt_snapshot_test', create, populate)
 
   tablet_62044.init_tablet('idle', start=True)
 
@@ -313,15 +325,18 @@ def run_test_vtctl_partial_clone():
   # dbname').
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_snapshot_test')
-  utils.run_vtctl('-force PartialClone %s %s id 0000000000000000 0000000000000003' %
-                  (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('-force PartialClone %s %s id %s %s' %
+                  (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path,
+                   start, end))
+
+  utils.pause("after PartialClone")
 
   # grab the new tablet definition from zk, make sure the start and
   # end keys are set properly
   out, err = utils.run(vtroot+'/bin/zk cat ' + tablet_62044.zk_tablet_path,
                        trap_output=True)
-  if (out.find('"Start": "0000000000000000"') == -1 or \
-        out.find('"End": "0000000000000003"') == -1):
+  if (out.find('"Start": "%s"' % start) == -1 or \
+        out.find('"End": "%s"' % end) == -1):
     print "Tablet output:"
     print "out"
     raise utils.TestError('wrong Start or End')
@@ -332,6 +347,18 @@ def run_test_vtctl_partial_clone():
 
   tablet_62344.kill_vttablet()
   tablet_62044.kill_vttablet()
+
+def run_test_vtctl_partial_clone():
+  _run_test_vtctl_partial_clone(create_vt_insert_test,
+                                populate_vt_insert_test,
+                                '0000000000000000',
+                                '0000000000000003')
+
+def run_test_vtctl_partial_clone_varbinary():
+  _run_test_vtctl_partial_clone(create_vt_insert_test_varbinary,
+                                populate_vt_insert_test_varbinary,
+                                '00000000000000000000',
+                                '03000000000000000000')
 
 def run_test_restart_during_action():
   # Start up a master mysql and vttablet
@@ -539,6 +566,7 @@ def run_all():
 
   # This test does not pass as it requires an experimental mysql patch.
   #run_test_vtctl_partial_clone()
+  #run_test_vtctl_partial_clone_varbinary()
 
   run_test_reparent_graceful()
   run_test_reparent_graceful_range_based()
