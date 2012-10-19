@@ -142,7 +142,7 @@ func main() {
 			panic(fmt.Errorf("zk.addrs and zk.zkocc-addr are mutually exclusive"))
 		}
 		var err error
-		zconn, _, err = zk.DialZk(*zkAddrs, 5*time.Second)
+		zconn, _, err = zk.DialZkTimeout(*zkAddrs, 5*time.Second, 10*time.Second)
 		if err != nil {
 			panic(fmt.Errorf("zk connect failed: %v", err.Error()))
 		}
