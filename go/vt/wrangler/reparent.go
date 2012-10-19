@@ -440,10 +440,11 @@ func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *my
 
 	replies := make([]*rpcContext, 0, len(tabletMap))
 	// wait for responses
+wait:
 	for i := 0; i < len(tabletMap); i++ {
 		select {
 		case <-timer.C:
-			break
+			break wait
 		case call := <-calls:
 			replies = append(replies, call)
 		}
@@ -516,10 +517,11 @@ func stopSlaves(tabletMap map[uint]*tm.TabletInfo) error {
 
 	// wait for responses
 	var err error
+wait:
 	for i := 0; i < len(tabletMap); i++ {
 		select {
 		case <-timer.C:
-			break
+			break wait
 		case lastErr := <-errs:
 			if err == nil && lastErr != nil {
 				err = lastErr

@@ -42,11 +42,12 @@ func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardAction
 	return position, nil
 }
 
+const (
+	SLAVE_STATUS_TIMEOUT = 1 * time.Minute
+)
+
 func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
 	relog.Debug("checkSlaveConsistencyWithActions %v %#v", mapKeys(tabletMap), masterPosition)
-
-	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
-	defer timer.Stop()
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
 	calls := make(chan *rpcContext, len(tabletMap))
@@ -68,7 +69,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				ctx.err = err
 				return
 			}
-			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
 			if err != nil {
 				ctx.err = err
 				return
@@ -92,7 +93,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				ctx.err = err
 				return
 			}
-			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
 			if err != nil {
 				ctx.err = err
 				return
@@ -122,7 +123,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				ctx.err = err
 				return
 			}
-			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
 			if err != nil {
 				ctx.err = err
 				return
@@ -146,12 +147,15 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		go f(tablet)
 	}
 
+	timer := time.NewTimer(SLAVE_STATUS_TIMEOUT)
+	defer timer.Stop()
 	replies := make([]*rpcContext, 0, len(tabletMap))
 	// wait for responses
+wait:
 	for i := 0; i < len(tabletMap); i++ {
 		select {
 		case <-timer.C:
-			break
+			break wait
 		case call := <-calls:
 			replies = append(replies, call)
 		}
@@ -205,7 +209,7 @@ func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint]*tm.TabletInfo, zkSh
 	f := func(ti *tm.TabletInfo) {
 		actionPath, err := wr.ai.StopSlave(ti.Path())
 		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
 		}
 		if err != nil {
 			relog.Debug("StopSlave failed: %v", err)
