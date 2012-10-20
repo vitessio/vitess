@@ -128,6 +128,9 @@ Generic:
   ListScrap <zk local vt path>
     list all scrap tablet paths
 
+  ListShardTablets <zk shard path>
+    list all tablets paths in a given shard
+
   ListTablets <zk local vt path>
     list all tablets in an awk-friendly way
 `
@@ -308,7 +311,17 @@ func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) err
 			fmt.Println(tablet.Path())
 		}
 	}
+	return nil
+}
 
+func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
+	tabletAliases, err := tm.FindAllTabletAliasesInShard(zconn, zkShardPath)
+	if err != nil {
+		return err
+	}
+	for _, alias := range tabletAliases {
+		fmt.Println(tm.TabletPathForAlias(alias))
+	}
 	return nil
 }
 
@@ -320,7 +333,6 @@ func dumpTablets(zconn zk.Conn, zkVtPath string) error {
 	for _, tablet := range tablets {
 		fmt.Printf("%v %v %v %v %v\n", tablet.Path(), tablet.Keyspace, tablet.Shard, tablet.Type, tablet.Addr)
 	}
-
 	return nil
 }
 
@@ -614,16 +626,21 @@ func main() {
 			relog.Fatal("action %v requires <zk keyspaces path>", args[0])
 		}
 		err = wrangler.Validate(args[1], *pingTablets)
-	case "ListScrap":
-		if len(args) != 2 {
-			relog.Fatal("action %v requires <zk vt path>", args[0])
-		}
-		err = listScrap(zconn, args[1])
 	case "ListIdle":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}
 		err = listIdle(zconn, args[1])
+	case "ListScrap":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk vt path>", args[0])
+		}
+		err = listScrap(zconn, args[1])
+	case "ListShardTablets":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk vt path>", args[0])
+		}
+		err = listTabletsByShard(zconn, args[1])
 	case "ListTablets":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
