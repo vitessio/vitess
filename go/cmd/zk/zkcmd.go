@@ -16,6 +16,7 @@ import (
 	"time"
 
 	opts "code.google.com/p/opts-go"
+	"code.google.com/p/vitess/go/terminal"
 	"code.google.com/p/vitess/go/zk"
 
 	"launchpad.net/gozk/zookeeper"
@@ -492,6 +493,9 @@ func cmdCat(args []string) {
 			log.Printf("cat: cannot access %v: %v", zkPath, err)
 		} else {
 			fmt.Print(data)
+			if len(data) > 0 && data[len(data)-1] != '\n' && terminal.IsTerminal(os.Stdout.Fd()) {
+				fmt.Print("\n")
+			}
 		}
 	}
 	if hasError {
