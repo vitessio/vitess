@@ -83,7 +83,6 @@ leave the 24 lag for 1 day
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -95,13 +94,13 @@ import (
 )
 
 type SplitReplicaSource struct {
-	Source   ReplicaSource
-	KeyRange key.KeyRange
-	Schema   []string
+	Source           *ReplicaSource
+	KeyRange         key.KeyRange
+	SchemaDefinition *SchemaDefinition
 }
 
-func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, schema []string) *SplitReplicaSource {
-	return &SplitReplicaSource{Source: *NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, Schema: schema}
+func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) *SplitReplicaSource {
+	return &SplitReplicaSource{Source: NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
 }
 
 // In MySQL for both bigint and varbinary, 0x1234 is a valid value. For
@@ -127,7 +126,7 @@ func (mysqld *Mysqld) validateSplitReplicaTarget() error {
 		return err
 	}
 	if len(rows) > 4 {
-		return errors.New("too many active db processes")
+		return fmt.Errorf("too many active db processes (%v > 4)", len(rows))
 	}
 
 	// NOTE: we expect that database was already created during tablet
@@ -156,7 +155,7 @@ allowHierarchicalReplication - allow replication from a slave
 */
 func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool) (_replicaSource *SplitReplicaSource, err error) {
 	if dbName == "" {
-		err = errors.New("no database name provided")
+		err = fmt.Errorf("no database name provided")
 		return
 	}
 	// same logic applies here
@@ -176,31 +175,13 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey,
 		}
 	}
 
-	// get a list of tables to process
-	rows, fetchErr := mysqld.fetchSuperQuery("SHOW TABLES IN " + dbName)
+	// get the schema for each table
+	sd, fetchErr := mysqld.GetSchema(dbName)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
-	if len(rows) == 0 {
-		return nil, errors.New("empty table list")
-	}
-	tableNames := make([]string, len(rows))
-	for i, row := range rows {
-		tableNames[i] = row[0].(string)
-	}
-	relog.Info("Fetch Tables: %#v %#v", rows, tableNames)
-
-	// get the schema for each table
-	schema := make([]string, len(rows))
-	for i, tableName := range tableNames {
-		rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
-		if fetchErr != nil {
-			return nil, fetchErr
-		}
-		if len(rows) == 0 {
-			return nil, errors.New("empty create table statement")
-		}
-		schema[i] = rows[0][1].(string)
+	if len(sd.TableDefinitions) == 0 {
+		return nil, fmt.Errorf("empty table list for %v", dbName)
 	}
 
 	// save initial state so we can restore on Start()
@@ -255,12 +236,12 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey,
 	}
 
 	var rs *SplitReplicaSource
-	dataFiles, snapshotErr := mysqld.createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath, tableNames)
+	dataFiles, snapshotErr := mysqld.createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath, sd)
 	if snapshotErr != nil {
 		relog.Error("CreateSplitReplicaSource failed: %v", snapshotErr)
 	} else {
 		rs = NewSplitReplicaSource(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
-			dbName, dataFiles, replicationPosition, startKey, endKey, schema)
+			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
 		rsFile := path.Join(mysqld.SnapshotDir, replicaSourceFile)
 		if snapshotErr = writeJson(rsFile, rs); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
@@ -293,17 +274,17 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey,
 	return rs, nil
 }
 
-func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, tableNames []string) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition) ([]SnapshotFile, error) {
 	// export each table to a CSV-like file, compress the results
-	tableFiles := make([]string, len(tableNames))
+	tableFiles := make([]string, len(sd.TableDefinitions))
 	// FIXME(msolomon) parallelize
-	for i, tableName := range tableNames {
-		relog.Info("Dump table %v...", tableName)
-		filename := path.Join(cloneSourcePath, tableName+".csv")
+	for i, td := range sd.TableDefinitions {
+		relog.Info("Dump table %v...", td.Name)
+		filename := path.Join(cloneSourcePath, td.Name+".csv")
 		tableFiles[i] = filename
 
 		queryParams := map[string]string{
-			"TableName":            dbName + "." + tableName,
+			"TableName":            dbName + "." + td.Name,
 			"KeyspaceIdColumnName": keyName,
 			// FIXME(alainjobart): move these to bind params
 			"TableOutputPath": filename,
@@ -380,14 +361,16 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 	// this will check that the database was properly created
 	createDbCmds := []string{
 		"USE " + replicaSource.Source.DbName}
-	createDbCmds = append(createDbCmds, replicaSource.Schema...)
+	for _, td := range replicaSource.SchemaDefinition.TableDefinitions {
+		createDbCmds = append(createDbCmds, td.Schema)
+	}
 
 	// FIXME(msolomon) make sure this works with multiple tables
 	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
 		return
 	}
 
-	if err = fetchFiles(&replicaSource.Source, tempStoragePath); err != nil {
+	if err = fetchFiles(replicaSource.Source, tempStoragePath); err != nil {
 		return
 	}
 
