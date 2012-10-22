@@ -32,14 +32,51 @@ type vresult struct {
 	err    error
 }
 
-// Validate a whole zk tree
-func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
-	// Results from various actions feed here.
-	results := make(chan vresult, 16)
-	wg := sync.WaitGroup{}
+func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan vresult) error {
+	timer := time.NewTimer(wr.actionTimeout)
+	done := make(chan bool, 1)
+	go func() {
+		wg.Wait()
+		done <- true
+	}()
 
-	// Validate all tablets in all cells, even if they are not discoverable
-	// by the replication graph.
+	var err error
+wait:
+	for {
+		select {
+		case vd := <-results:
+			relog.Info("checking %v", vd.zkPath)
+			if vd.err != nil {
+				err = fmt.Errorf("some validation errors - see log")
+				relog.Error("%v: %v", vd.zkPath, vd.err)
+			}
+		case <-timer.C:
+			err = fmt.Errorf("timed out during validate")
+			break wait
+		case <-done:
+			// To prevent a false positive, once we are 'done',
+			// drain the result channel completely.
+			for {
+				select {
+				case vd := <-results:
+					relog.Info("checking %v", vd.zkPath)
+					if vd.err != nil {
+						err = fmt.Errorf("some validation errors - see log")
+						relog.Error("%v: %v", vd.zkPath, vd.err)
+					}
+				default:
+					break wait
+				}
+			}
+		}
+	}
+
+	return err
+}
+
+// Validate all tablets in all discoverable cells, even if they are
+// not in the replication graph.
+func (wr *Wrangler) validateAllTablets(zkKeyspacesPath string, wg *sync.WaitGroup, results chan<- vresult) {
 	replicationPaths, err := zk.ChildrenRecursive(wr.zconn, zkKeyspacesPath)
 	if err != nil {
 		results <- vresult{zkKeyspacesPath, err}
@@ -70,56 +107,23 @@ func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
 			}
 		}
 	}
+}
 
-	// Validate replication graph by traversing each keyspace and then each shard.
-	keyspaces, _, err := wr.zconn.Children(zkKeyspacesPath)
+func (wr *Wrangler) validateKeyspace(zkKeyspacePath string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
+	// Validate replication graph by traversing each shard.
+	zkShardsPath := path.Join(zkKeyspacePath, "shards")
+	shards, _, err := wr.zconn.Children(zkShardsPath)
 	if err != nil {
-		results <- vresult{zkKeyspacesPath, err}
-	} else {
-		for _, keyspace := range keyspaces {
-			zkShardsPath := path.Join(zkKeyspacesPath, keyspace, "shards")
-			shards, _, err := wr.zconn.Children(zkShardsPath)
-			if err != nil {
-				results <- vresult{zkShardsPath, err}
-			}
-			for _, shard := range shards {
-				zkShardPath := path.Join(zkShardsPath, shard)
-				wg.Add(1)
-				go func() {
-					wr.validateShard(zkShardPath, pingTablets, results)
-					wg.Done()
-				}()
-			}
-		}
+		results <- vresult{zkShardsPath, err}
 	}
-
-	timer := time.NewTimer(wr.actionTimeout)
-	someErrors := false
-	done := make(chan bool, 1)
-	go func() {
-		wg.Wait()
-		done <- true
-	}()
-
-	for {
-		select {
-		case <-timer.C:
-			return fmt.Errorf("timed out during validate")
-		case vd := <-results:
-			relog.Info("checking %v", vd.zkPath)
-			if vd.err != nil {
-				someErrors = true
-				relog.Error("%v: %v", vd.zkPath, vd.err)
-			}
-		case <-done:
-			if someErrors {
-				return fmt.Errorf("some validation errors - see log")
-			}
-			return nil
-		}
+	for _, shard := range shards {
+		zkShardPath := path.Join(zkShardsPath, shard)
+		wg.Add(1)
+		go func() {
+			wr.validateShard(zkShardPath, pingTablets, results)
+			wg.Done()
+		}()
 	}
-
-	panic("unreachable")
 }
 
 func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, results chan<- vresult) {
@@ -293,6 +297,49 @@ func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results cha
 	}
 
 	wg.Wait()
+}
+
+// Validate a whole zk tree
+func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
+	// Results from various actions feed here.
+	results := make(chan vresult, 16)
+	wg := &sync.WaitGroup{}
+
+	// Validate all tablets in all cells, even if they are not discoverable
+	// by the replication graph.
+	wr.validateAllTablets(zkKeyspacesPath, wg, results)
+
+	// Validate replication graph by traversing each keyspace and then each shard.
+	keyspaces, _, err := wr.zconn.Children(zkKeyspacesPath)
+	if err != nil {
+		results <- vresult{zkKeyspacesPath, err}
+	} else {
+		for _, keyspace := range keyspaces {
+			zkKeyspace := path.Join(zkKeyspacesPath, keyspace)
+			wg.Add(1)
+			go func() {
+				wr.validateKeyspace(zkKeyspace, pingTablets, wg, results)
+				wg.Done()
+			}()
+		}
+	}
+	return wr.waitForResults(wg, results)
+}
+
+func (wr *Wrangler) ValidateKeyspace(zkKeyspacePath string, pingTablets bool) error {
+	wg := &sync.WaitGroup{}
+	results := make(chan vresult, 16)
+	wr.validateKeyspace(zkKeyspacePath, pingTablets, wg, results)
+	return wr.waitForResults(wg, results)
+}
+
+func (wr *Wrangler) ValidateShard(zkShardPath string, pingTablets bool) error {
+	// create an empty waitgroup - validateShard blocks, so when it
+	// returns, we are done.
+	wg := &sync.WaitGroup{}
+	results := make(chan vresult, 16)
+	wr.validateShard(zkShardPath, pingTablets, results)
+	return wr.waitForResults(wg, results)
 }
 
 // Slaves come back as IP addrs, resolve to host names.

@@ -109,6 +109,8 @@ def run_test_sanity():
   utils.wait_db_read_only(62344)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
+  utils.run_vtctl('ValidateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('ValidateShard /zk/global/vt/keyspaces/test_keyspace/shards/0')
 
   tablet_62344.kill_vttablet()
 

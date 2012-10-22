@@ -117,7 +117,14 @@ Generic:
     read a list of addresses that can answer this query
 
   Validate <zk keyspaces path> (/zk/global/vt/keyspaces)
-    validate all nodes reachable from global replication graph are consistent
+    validate all nodes reachable from global replication graph and all
+    tablets in all discoverable cells are consistent
+
+  ValidateKeyspace <zk keyspace path> (/zk/global/vt/keyspaces/<keyspace>)
+    validate all nodes reachable from this keyspace are consistent
+
+  ValidateShard <zk keyspaces path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
+    validate all nodes reachable from this shard are consistent
 
   ExportZkns <zk local vt path> (/zk/<cell>/vt)
     export the serving graph entries to the legacy zkns format
@@ -626,6 +633,16 @@ func main() {
 			relog.Fatal("action %v requires <zk keyspaces path>", args[0])
 		}
 		err = wrangler.Validate(args[1], *pingTablets)
+	case "ValidateKeyspace":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk keyspace path>", args[0])
+		}
+		err = wrangler.ValidateKeyspace(args[1], *pingTablets)
+	case "ValidateShard":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk shard path>", args[0])
+		}
+		err = wrangler.ValidateShard(args[1], *pingTablets)
 	case "ListIdle":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
