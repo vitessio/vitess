@@ -32,6 +32,7 @@ const (
 	TABLET_ACTION_SLAVE_POSITION      = "SlavePosition"
 	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
 	TABLET_ACTION_SCRAP               = "Scrap"
+	TABLET_ACTION_GET_SCHEMA          = "GetSchema"
 
 	TABLET_ACTION_SNAPSHOT         = "Snapshot"
 	TABLET_ACTION_RESTORE          = "Restore"

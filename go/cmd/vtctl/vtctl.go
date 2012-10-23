@@ -22,6 +22,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/client2"
 	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	wr "code.google.com/p/vitess/go/vt/wrangler"
@@ -140,6 +141,17 @@ Generic:
 
   ListTablets <zk local vt path>
     list all tablets in an awk-friendly way
+
+
+Schema:
+  GetSchema <zk tablet path>
+    displays the full schema for a tablet
+
+  ValidateSchemaShard <zk shard path>
+    validate the master schema matches all the slaves.
+
+  ValidateSchemaKeyspace <zk keyspace path>
+    validate the master schema from shard 0 matches all the other tablets in the keyspace.
 `
 
 var noWaitForAction = flag.Bool("no-wait", false,
@@ -663,6 +675,25 @@ func main() {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}
 		err = dumpTablets(zconn, args[1])
+	case "GetSchema":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk tablet path>", args[0])
+		}
+		var sd *mysqlctl.SchemaDefinition
+		sd, err = wrangler.GetSchema(args[1])
+		if err == nil {
+			relog.Info(sd.String())
+		}
+	case "ValidateSchemaShard":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk shard path>", args[0])
+		}
+		err = wrangler.ValidateSchemaShard(args[1])
+	case "ValidateSchemaKeyspace":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk keyspace path>", args[0])
+		}
+		err = wrangler.ValidateSchemaKeyspace(args[1])
 	case "WaitForAction":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk action path>", args[0])

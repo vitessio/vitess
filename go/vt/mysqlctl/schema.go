@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 )
 
@@ -25,6 +26,10 @@ type SchemaDefinition struct {
 	Version string
 }
 
+func (sd *SchemaDefinition) String() string {
+	return jscfg.ToJson(sd)
+}
+
 func (sd *SchemaDefinition) generateSchemaVersion() {
 	hasher := md5.New()
 	for _, td := range sd.TableDefinitions {
@@ -37,38 +42,38 @@ func (sd *SchemaDefinition) generateSchemaVersion() {
 }
 
 // generates a report on what's different between two SchemaDefinition
-func (left *SchemaDefinition) diffSchema(leftName, rightName string, right *SchemaDefinition) (result []string) {
+func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *SchemaDefinition, result chan string) {
 	leftIndex := 0
 	rightIndex := 0
 	for leftIndex < len(left.TableDefinitions) && rightIndex < len(right.TableDefinitions) {
 		// extra table on the left side
 		if left.TableDefinitions[leftIndex].Name < right.TableDefinitions[rightIndex].Name {
-			result = append(result, leftName+" has an extra table named "+left.TableDefinitions[leftIndex].Name)
+			result <- leftName + " has an extra table named " + left.TableDefinitions[leftIndex].Name
 			leftIndex++
 			continue
 		}
 
 		// extra table on the right side
 		if left.TableDefinitions[leftIndex].Name > right.TableDefinitions[rightIndex].Name {
-			result = append(result, rightName+" has an extra table named "+right.TableDefinitions[rightIndex].Name)
+			result <- rightName + " has an extra table named " + right.TableDefinitions[rightIndex].Name
 			rightIndex++
 			continue
 		}
 
 		// same name, let's see content
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
-			result = append(result, leftName+" and "+rightName+" disagree on schema for table "+left.TableDefinitions[leftIndex].Name)
+			result <- leftName + " and " + rightName + " disagree on schema for table " + left.TableDefinitions[leftIndex].Name
 		}
 		leftIndex++
 		rightIndex++
 	}
 
 	for leftIndex < len(left.TableDefinitions) {
-		result = append(result, leftName+" has an extra table named "+left.TableDefinitions[leftIndex].Name)
+		result <- leftName + " has an extra table named " + left.TableDefinitions[leftIndex].Name
 		leftIndex++
 	}
 	for rightIndex < len(right.TableDefinitions) {
-		result = append(result, rightName+" has an extra table named "+right.TableDefinitions[rightIndex].Name)
+		result <- rightName + " has an extra table named " + right.TableDefinitions[rightIndex].Name
 		rightIndex++
 	}
 	return

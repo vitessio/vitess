@@ -191,6 +191,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.restore(actionNode.Args)
 	case TABLET_ACTION_SCRAP:
 		err = ta.scrap()
+	case TABLET_ACTION_GET_SCHEMA:
+		err = ta.getSchema(actionNode.Args)
 	case TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
 	case TABLET_ACTION_SET_RDWR:
@@ -455,6 +457,29 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 
 func (ta *TabletActor) scrap() error {
 	return Scrap(ta.zconn, ta.zkTabletPath, false)
+}
+
+func (ta *TabletActor) getSchema(args map[string]string) error {
+	// get where we put the response
+	zkReplyPath, ok := args["ReplyPath"]
+	if !ok {
+		return fmt.Errorf("missing ReplyPath in args")
+	}
+
+	// read the tablet to get the dbname
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	// and get the schema
+	sd, err := ta.mysqld.GetSchema(tablet.DbName())
+	if err != nil {
+		return err
+	}
+
+	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(sd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return err
 }
 
 // Operate on a backup tablet. Shutdown mysqld and copy the data files aside.

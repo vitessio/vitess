@@ -178,6 +178,11 @@ func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err er
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SCRAP})
 }
 
+func (ai *ActionInitiator) GetSchema(zkTabletPath, zkReplyPath string) (actionPath string, err error) {
+	args := map[string]string{"ReplyPath": zkReplyPath}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, Args: args})
+}
+
 func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (actionPath string, err error) {
 	MustBeTabletPath(zkTabletPath)
 	node := &ActionNode{Action: SHARD_ACTION_REPARENT}

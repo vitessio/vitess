@@ -185,6 +185,15 @@ def run_test_sharding():
   check_rows_schema_diff("vtdb-zkocc")
   check_rows_schema_diff("vtdb")
 
+  # throw in some schema validation step
+  # we created the schema differently, so it should show
+  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
+  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF')
+  out, err = utils.run_vtctl('ValidateSchemaKeyspace /zk/global/vt/keyspaces/test_keyspace', trap_output=True, raise_on_error=False)
+  if (err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test") == -1 or \
+      err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test") == -1):
+        raise utils.TestError('wrong ValidateSchemaKeyspace output: ' + err)
+
   utils.kill_sub_process(zkocc)
   shard_0_master.kill_vttablet()
   shard_0_replica.kill_vttablet()
