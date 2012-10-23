@@ -390,9 +390,6 @@ def run_test_restart_during_action():
   tablet_62344.kill_vttablet()
 
 
-
-
-
 def run_test_reparent_down_master():
   utils.zk_wipe()
 
@@ -521,6 +518,44 @@ def _run_test_reparent_graceful(shard_id):
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
 
   tablet_62044.kill_vttablet()
+
+
+# This is a manual test to check error formatting.
+def run_test_reparent_slave_offline(shard_id='0'):
+  utils.zk_wipe()
+
+  utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
+  # Start up a master mysql and vttablet
+  tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
+
+  # Create a few slaves for testing reparenting.
+  tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+  tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+  tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+
+  # Recompute the shard layout node - until you do that, it might not be valid.
+  utils.run_vtctl('RebuildShard /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+  utils.zk_check()
+
+  # Force the slaves to reparent assuming that all the datasets are identical.
+  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.zk_check(ping_tablets=True)
+
+  expected_addr = hostname + ':6700'
+  _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+
+  # Kill one tablet so we seem offline
+  tablet_31981.kill_vttablet()
+
+  # Perform a graceful reparent operation.
+  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
+
+  tablet_62344.kill_vttablet()
+  tablet_62044.kill_vttablet()
+  tablet_41983.kill_vttablet()
+
+
 
 def run_test_vttablet_authenticated():
   utils.zk_wipe()

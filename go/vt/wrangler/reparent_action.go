@@ -51,9 +51,11 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
 	calls := make(chan *rpcContext, len(tabletMap))
-
 	f := func(ti *tm.TabletInfo) {
 		ctx := &rpcContext{tablet: ti}
+		defer func() {
+			calls <- ctx
+		}()
 		if masterPosition != nil {
 			zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
 			zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_reply.json")
@@ -139,7 +141,6 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				return
 			}
 		}
-		calls <- ctx
 	}
 
 	for _, tablet := range tabletMap {
@@ -147,36 +148,21 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		go f(tablet)
 	}
 
-	timer := time.NewTimer(SLAVE_STATUS_TIMEOUT)
-	defer timer.Stop()
-	replies := make([]*rpcContext, 0, len(tabletMap))
-	// wait for responses
-wait:
-	for i := 0; i < len(tabletMap); i++ {
-		select {
-		case <-timer.C:
-			break wait
-		case call := <-calls:
-			replies = append(replies, call)
-		}
-	}
-
-	replyErrorCount := len(tabletMap) - len(replies)
 	// map positions to tablets
 	positionMap := make(map[string][]uint)
-	for _, ctx := range replies {
-		if ctx.err != nil {
-			replyErrorCount++
-		} else {
-			mapKey := ctx.position.MapKey()
-			if _, ok := positionMap[mapKey]; !ok {
-				positionMap[mapKey] = make([]uint, 0, 32)
-			}
-			positionMap[mapKey] = append(positionMap[mapKey], ctx.tablet.Uid)
+	for i := 0; i < len(tabletMap); i++ {
+		ctx := <-calls
+		mapKey := "unavailable-tablet-error"
+		if ctx.err == nil {
+			mapKey = ctx.position.MapKey()
 		}
+		if _, ok := positionMap[mapKey]; !ok {
+			positionMap[mapKey] = make([]uint, 0, 32)
+		}
+		positionMap[mapKey] = append(positionMap[mapKey], ctx.tablet.Uid)
 	}
 
-	if len(positionMap) == 1 && replyErrorCount == 0 {
+	if len(positionMap) == 1 {
 		// great, everyone agrees
 		// demotedMasterReplicationState is nil if demotion failed
 		if masterPosition != nil {
@@ -194,11 +180,14 @@ wait:
 		// sounds like you pick the latest group and reclone.
 		items := make([]string, 0, 32)
 		for slaveMapKey, uids := range positionMap {
-			items = append(items, fmt.Sprintf("%v %v", slaveMapKey, uids))
+			tabletPaths := make([]string, len(uids))
+			for i, uid := range uids {
+				tabletPaths[i] = tabletMap[uid].Path()
+			}
+			items = append(items, fmt.Sprintf("%v %v", slaveMapKey, tabletPaths))
 		}
 		sort.Strings(items)
-		// FIXME(msolomon) add instructions how to do so.
-		return fmt.Errorf("inconsistent slaves, mark some offline (rpc error count: %v) %v", replyErrorCount, strings.Join(items, ", "))
+		return fmt.Errorf("inconsistent slaves, mark some offline with vtctl ScrapTablet {%v}", strings.Join(items, ", "))
 	}
 	return nil
 }

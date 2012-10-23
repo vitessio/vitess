@@ -400,6 +400,9 @@ func mapStrKeys(m interface{}) []string {
 // Check all the tablets to see if we can proceed with reparenting.
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
+// FIXME(msolomon) This has been superceded by the action based version.
+// This should be removed, but the RPC based version is much simpler to
+// understand even though they are starting to diverge.
 func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
 	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
