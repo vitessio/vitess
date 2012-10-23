@@ -45,6 +45,7 @@ This mimics unix file system commands wherever possible.
 zk -h - provide help on overriding cell selection
 
 zk cat /zk/path
+zk cat -l /zk/path1 /zk/path2 (list filename before file data)
 
 zk chmod n-mode /zk/path
 zk chmod n+mode /zk/path
@@ -53,7 +54,7 @@ zk cp /zk/path .
 zk cp ./config /zk/path/config
 zk cp ./config /zk/path/ (trailing slash indicates directory)
 
-zk edit /zk/path (create a local copy, edit and save to quorum)
+zk edit /zk/path (create a local copy, edit and write changes back to cell)
 
 zk elock /zk/path (create an ephemeral node that lives as long as the process)
 
@@ -311,6 +312,7 @@ func cmdLs(args []string) {
 		log.Fatal("ls: no path specified")
 	}
 	hasError := false
+	needsHeader := len(args) > 1
 	for _, arg := range args {
 		zkPath := fixZkPath(arg)
 		var children []string
@@ -341,8 +343,9 @@ func cmdLs(args []string) {
 		} else if *longListing && (*directoryListing || !isDir) {
 			showFullPath = true
 		}
-
-		sort.Strings(children)
+		if needsHeader {
+			fmt.Printf("%v:\n", zkPath)
+		}
 		if len(children) > 0 {
 			if *longListing && isDir {
 				fmt.Printf("total: %v\n", len(children))
@@ -350,6 +353,7 @@ func cmdLs(args []string) {
 			wg := sync.WaitGroup{}
 			mutex := sync.Mutex{}
 			statMap := make(map[string]zk.Stat)
+			sort.Strings(children)
 			for _, child := range children {
 				localPath := path.Join(zkPath, child)
 				wg.Add(1)
@@ -375,6 +379,9 @@ func cmdLs(args []string) {
 				localPath := path.Join(zkPath, child)
 				fmtPath(statMap[localPath], localPath, showFullPath)
 			}
+		}
+		if needsHeader {
+			fmt.Println()
 		}
 	}
 	if hasError {
@@ -492,8 +499,11 @@ func cmdCat(args []string) {
 			hasError = true
 			log.Printf("cat: cannot access %v: %v", zkPath, err)
 		} else {
+			if *longListing {
+				fmt.Printf("%v:\n", zkPath)
+			}
 			fmt.Print(data)
-			if len(data) > 0 && data[len(data)-1] != '\n' && terminal.IsTerminal(os.Stdout.Fd()) {
+			if len(data) > 0 && data[len(data)-1] != '\n' && (terminal.IsTerminal(os.Stdout.Fd()) || *longListing) {
 				fmt.Print("\n")
 			}
 		}
