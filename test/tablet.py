@@ -11,19 +11,29 @@ import utils
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
 
+tablet_cell_map = {
+    62344: 'nj',
+    62044: 'nj',
+    41983: 'nj',
+    31981: 'ny',
+}
+
 class Tablet(object):
   default_uid = 62344
   default_port = 6700
   default_mysql_port = 3700
   seq = 0
 
-  def __init__(self, tablet_uid=None, port=None, mysql_port=None, datacenter='nj'):
+  def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
     self.port = port or (Tablet.default_port + Tablet.seq)
     self.mysql_port = mysql_port or (Tablet.default_mysql_port + Tablet.seq)
     Tablet.seq += 1
 
-    self.datacenter = datacenter
+    if cell:
+      self.cell = cell
+    else:
+      self.cell = tablet_cell_map.get(tablet_uid, 'nj')
     self.proc = None
 
     # filled in during init_tablet
@@ -32,7 +42,7 @@ class Tablet(object):
     self.zk_tablet_alias = None
 
     # utility variables
-    self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.datacenter, self.tablet_uid)
+    self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
   def mysqlctl(self, cmd):
@@ -141,7 +151,7 @@ class Tablet(object):
     self.keyspace = keyspace
     self.shard = shard
     if keyspace:
-      self.zk_tablet_alias = "/zk/global/vt/keyspaces/%s/shards/%s/test_%s-%010d" % (self.keyspace, self.shard, self.datacenter, self.tablet_uid)
+      self.zk_tablet_alias = "/zk/global/vt/keyspaces/%s/shards/%s/test_%s-%010d" % (self.keyspace, self.shard, self.cell, self.tablet_uid)
     else:
       self.zk_tablet_alias = ""
 
