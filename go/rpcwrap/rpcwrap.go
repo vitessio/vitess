@@ -15,6 +15,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/auth"
+	"code.google.com/p/vitess/go/rpcwrap/proto"
 )
 
 const (
@@ -121,11 +122,11 @@ func RegisterAuthenticated(rcvr interface{}) error {
 
 // ServeCodec calls ServeCodec for the appropriate server
 // (authenticated or default).
-func (h *rpcHandler) ServeCodec(c rpc.ServerCodec) {
+func (h *rpcHandler) ServeCodecWithContext(c rpc.ServerCodec, context *proto.Context) {
 	if h.useAuth {
-		AuthenticatedServer.ServeCodec(c)
+		AuthenticatedServer.ServeCodecWithContext(c, context)
 	} else {
-		rpc.ServeCodec(c)
+		rpc.ServeCodecWithContext(c, context)
 	}
 }
 
@@ -142,9 +143,9 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	}
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
 	codec := h.cFactory(NewBufferedConnection(conn))
-
+	context := &proto.Context{RemoteAddr: req.RemoteAddr}
 	if h.useAuth {
-		if authenticated, err := auth.Authenticate(codec); !authenticated {
+		if authenticated, err := auth.Authenticate(codec, context); !authenticated {
 			if err != nil {
 				relog.Error("authentication erred at %s: %v", req.RemoteAddr, err)
 			}
@@ -152,8 +153,7 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-
-	h.ServeCodec(codec)
+	h.ServeCodecWithContext(codec, context)
 }
 
 func GetRpcPath(codecName string, auth bool) string {
@@ -171,7 +171,7 @@ type httpHandler struct {
 func (hh *httpHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	conn := &httpConnectionBroker{c, req.Body}
 	codec := hh.cFactory(conn)
-	if err := rpc.ServeRequest(codec); err != nil {
+	if err := rpc.ServeRequestWithContext(codec, &proto.Context{RemoteAddr: req.RemoteAddr}); err != nil {
 		relog.Error("rpcwrap: %v", err)
 	}
 }

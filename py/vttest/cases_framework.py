@@ -14,6 +14,8 @@ class Log(object):
   def __init__(self, line):
     self.line = line
     (self.method,
+     self.remote_address,
+     self.username,
      self.start_time,
      self.end_time,
      self.total_time,
@@ -99,6 +101,10 @@ class Log(object):
     if rewritten != self.rewritten_sql:
       self.fail("Bad rewritten SQL", rewritten, self.rewritten_sql)
 
+  def check_remote_address(self, case):
+    if not self.remote_address.startswith(case.remote_address):
+      return self.fail("Bad RemoteAddr", case.remote_address, self.remote_address)
+
   def check_number_of_queries(self, case):
     if case.rewritten is not None and int(self.number_of_queries) != len(case.rewritten):
       return self.fail("wrong number of queries", len(case.rewritten), int(self.number_of_queries))
@@ -106,7 +112,8 @@ class Log(object):
 class Case(object):
   def __init__(self, sql, bindings=None, result=None, rewritten=None, doc='',
                cache_table="vtocc_cached", query_plan=None, cache_hits=None,
-               cache_misses=None, cache_absent=None, cache_invalidations=None):
+               cache_misses=None, cache_absent=None, cache_invalidations=None,
+               remote_address="[::1]"):
     # For all cache_* parameters, a number n means "check this value
     # is exactly n," while None means "I am not interested in this
     # value, leave it alone."
@@ -123,6 +130,7 @@ class Case(object):
     self.cache_misses = cache_misses
     self.cache_absent = cache_absent
     self.cache_invalidations = cache_invalidations
+    self.remote_address = remote_address
 
   def normalizelog(self, data):
     return [line.split("INFO: ")[-1]

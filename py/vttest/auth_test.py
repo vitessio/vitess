@@ -59,8 +59,11 @@ class TestAuthentication(unittest.TestCase):
 
   @classmethod
   def tearDownVTOCC(klass):
-    klass.process.kill()
-    klass.process.wait()
+    try:
+      klass.process.kill()
+      klass.process.wait()
+    except AttributeError:
+      pass
 
   def call(self, *args, **kwargs):
     return self.conn.client.call(*args, **kwargs)
@@ -112,7 +115,7 @@ if __name__=="__main__":
 
   try:
     TestAuthentication.setUpVTOCC(options.dbconfig, options.auth_credentials)
-    unittest.main()
+    unittest.main(argv=["auth_test.py"])
   finally:
     print "Waiting for vtocc to terminate...",
     TestAuthentication.tearDownVTOCC()

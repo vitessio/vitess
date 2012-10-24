@@ -150,12 +150,17 @@ const (
 var typeOfError = reflect.TypeOf((*error)(nil)).Elem()
 
 type methodType struct {
-	sync.Mutex // protects counters
-	method     reflect.Method
-	ArgType    reflect.Type
-	ReplyType  reflect.Type
-	stream     bool
-	numCalls   uint
+	sync.Mutex  // protects counters
+	method      reflect.Method
+	ArgType     reflect.Type
+	ReplyType   reflect.Type
+	ContextType reflect.Type
+	stream      bool
+	numCalls    uint
+}
+
+func (m methodType) TakesContext() bool {
+	return m.ContextType != nil
 }
 
 type service struct {
@@ -239,6 +244,86 @@ func (server *Server) RegisterName(name string, rcvr interface{}) error {
 	return server.register(rcvr, name, true)
 }
 
+// prepareMethod returns a methodType for the provided method or nil
+// in case if the method was unsuitable.
+func prepareMethod(method reflect.Method) *methodType {
+	mtype := method.Type
+	mname := method.Name
+	var replyType, argType, contextType reflect.Type
+
+	stream := false
+	// Method must be exported.
+	if method.PkgPath != "" {
+		return nil
+	}
+
+	switch mtype.NumIn() {
+	case 3:
+		// normal method
+		argType = mtype.In(1)
+		replyType = mtype.In(2)
+		contextType = nil
+	case 4:
+		// method that takes a context
+		argType = mtype.In(2)
+		replyType = mtype.In(3)
+		contextType = mtype.In(1)
+	default:
+		log.Println("method", mname, "has wrong number of ins:", mtype.NumIn())
+		return nil
+	}
+
+	// First arg need not be a pointer.
+	if !isExportedOrBuiltinType(argType) {
+		log.Println(mname, "argument type not exported:", argType)
+		return nil
+	}
+
+	// the second argument will tell us if it's a streaming call
+	// or a regular call
+	if replyType.Kind() == reflect.Func {
+		// this is a streaming call
+		stream = true
+		if replyType.NumIn() != 1 {
+			log.Println("method", mname, "sendReply has wrong number of ins:", replyType.NumIn())
+			return nil
+		}
+		if replyType.In(0).Kind() != reflect.Interface {
+			log.Println("method", mname, "sendReply parameter type not an interface:", replyType.In(0))
+			return nil
+		}
+		if replyType.NumOut() != 1 {
+			log.Println("method", mname, "sendReply has wrong number of outs:", replyType.NumOut())
+			return nil
+		}
+		if returnType := replyType.Out(0); returnType != typeOfError {
+			log.Println("method", mname, "sendReply returns", returnType.String(), "not error")
+			return nil
+		}
+
+	} else if replyType.Kind() != reflect.Ptr {
+		log.Println("method", mname, "reply type not a pointer:", replyType)
+		return nil
+	}
+
+	// Reply type must be exported.
+	if !isExportedOrBuiltinType(replyType) {
+		log.Println("method", mname, "reply type not exported:", replyType)
+		return nil
+	}
+	// Method needs one out.
+	if mtype.NumOut() != 1 {
+		log.Println("method", mname, "has wrong number of outs:", mtype.NumOut())
+		return nil
+	}
+	// The return type of the method must be error.
+	if returnType := mtype.Out(0); returnType != typeOfError {
+		log.Println("method", mname, "returns", returnType.String(), "not error")
+		return nil
+	}
+	return &methodType{method: method, ArgType: argType, ReplyType: replyType, ContextType: contextType, stream: stream}
+}
+
 func (server *Server) register(rcvr interface{}, name string, useName bool) error {
 	server.mu.Lock()
 	defer server.mu.Unlock()
@@ -269,72 +354,9 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 	// Install the methods
 	for m := 0; m < s.typ.NumMethod(); m++ {
 		method := s.typ.Method(m)
-		mtype := method.Type
-		mname := method.Name
-		var replyType reflect.Type
-		stream := false
-		// Method must be exported.
-		if method.PkgPath != "" {
-			continue
+		if mt := prepareMethod(method); mt != nil {
+			s.method[method.Name] = mt
 		}
-		// Method needs three ins: receiver, *args, *reply.
-		// Or: receiver, *args, sendReply func.
-		if mtype.NumIn() != 3 {
-			log.Println("method", mname, "has wrong number of ins:", mtype.NumIn())
-			continue
-		}
-
-		// First arg need not be a pointer.
-		argType := mtype.In(1)
-		if !isExportedOrBuiltinType(argType) {
-			log.Println(mname, "argument type not exported:", argType)
-			continue
-		}
-
-		// the second argument will tell us if it's a streaming call
-		// or a regular call
-		replyType = mtype.In(2)
-		if replyType.Kind() == reflect.Func {
-			// this is a streaming call
-			stream = true
-			if replyType.NumIn() != 1 {
-				log.Println("method", mname, "sendReply has wrong number of ins:", replyType.NumIn())
-				continue
-			}
-			if replyType.In(0).Kind() != reflect.Interface {
-				log.Println("method", mname, "sendReply parameter type not an interface:", replyType.In(0))
-				continue
-			}
-			if replyType.NumOut() != 1 {
-				log.Println("method", mname, "sendReply has wrong number of outs:", replyType.NumOut())
-				continue
-			}
-			if returnType := replyType.Out(0); returnType != typeOfError {
-				log.Println("method", mname, "sendReply returns", returnType.String(), "not error")
-				continue
-			}
-
-		} else if replyType.Kind() != reflect.Ptr {
-			log.Println("method", mname, "reply type not a pointer:", replyType)
-			continue
-		}
-
-		// Reply type must be exported.
-		if !isExportedOrBuiltinType(replyType) {
-			log.Println("method", mname, "reply type not exported:", replyType)
-			continue
-		}
-		// Method needs one out.
-		if mtype.NumOut() != 1 {
-			log.Println("method", mname, "has wrong number of outs:", mtype.NumOut())
-			continue
-		}
-		// The return type of the method must be error.
-		if returnType := mtype.Out(0); returnType != typeOfError {
-			log.Println("method", mname, "returns", returnType.String(), "not error")
-			continue
-		}
-		s.method[mname] = &methodType{method: method, ArgType: argType, ReplyType: replyType, stream: stream}
 	}
 
 	if len(s.method) == 0 {
@@ -377,14 +399,22 @@ func (m *methodType) NumCalls() (n uint) {
 	return n
 }
 
-func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec) {
+func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, req *Request, argv, replyv reflect.Value, codec ServerCodec, context interface{}) {
 	mtype.Lock()
 	mtype.numCalls++
 	mtype.Unlock()
 	function := mtype.method.Func
+	var returnValues []reflect.Value
+
 	if !mtype.stream {
+
 		// Invoke the method, providing a new value for the reply.
-		returnValues := function.Call([]reflect.Value{s.rcvr, argv, replyv})
+		if mtype.TakesContext() {
+			returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, replyv})
+		} else {
+			returnValues = function.Call([]reflect.Value{s.rcvr, argv, replyv})
+		}
+
 		// The return value for the method is an error.
 		errInter := returnValues[0].Interface()
 		errmsg := ""
@@ -393,63 +423,68 @@ func (s *service) call(server *Server, sending *sync.Mutex, mtype *methodType, r
 		}
 		server.sendResponse(sending, req, replyv.Interface(), codec, errmsg, true)
 		server.freeRequest(req)
-	} else {
-		// declare a local error to see if we errored out already
-		// keep track of the type, to make sure we return
-		// the same one consistently
-		var lastError error
-		var firstType reflect.Type
-
-		sendReply := func(oneReply interface{}) error {
-
-			// we already triggered an error, we're done
-			if lastError != nil {
-				return lastError
-			}
-
-			// check the oneReply has the right type using reflection
-			typ := reflect.TypeOf(oneReply)
-			if firstType == nil {
-				firstType = typ
-			} else {
-				if firstType != typ {
-					log.Println("passing wrong type to sendReply",
-						firstType, "!=", typ)
-					lastError = errors.New("rpc: passing wrong type to sendReply")
-					return lastError
-				}
-			}
-
-			lastError = server.sendResponse(sending, req, oneReply, codec, "", false)
-			if lastError != nil {
-				return lastError
-			}
-
-			// we manage to send, we're good
-			return nil
-		}
-
-		// Invoke the method, providing a new value for the reply.
-		returnValues := function.Call([]reflect.Value{s.rcvr, argv, reflect.ValueOf(sendReply)})
-		errInter := returnValues[0].Interface()
-		errmsg := ""
-		if errInter != nil {
-			// the function returned an error, we use that
-			errmsg = errInter.(error).Error()
-		} else if lastError != nil {
-			// we had an error inside sendReply, we use that
-			errmsg = lastError.Error()
-		} else {
-			// no error, we send the special EOS error
-			errmsg = lastStreamResponseError
-		}
-
-		// this is the last packet, we don't do anything with
-		// the error here (well sendStreamResponse will log it
-		// already)
-		server.sendResponse(sending, req, nil, codec, errmsg, true)
-		server.freeRequest(req)
+		return
 	}
+
+	// declare a local error to see if we errored out already
+	// keep track of the type, to make sure we return
+	// the same one consistently
+	var lastError error
+	var firstType reflect.Type
+
+	sendReply := func(oneReply interface{}) error {
+
+		// we already triggered an error, we're done
+		if lastError != nil {
+			return lastError
+		}
+
+		// check the oneReply has the right type using reflection
+		typ := reflect.TypeOf(oneReply)
+		if firstType == nil {
+			firstType = typ
+		} else {
+			if firstType != typ {
+				log.Println("passing wrong type to sendReply",
+					firstType, "!=", typ)
+				lastError = errors.New("rpc: passing wrong type to sendReply")
+				return lastError
+			}
+		}
+
+		lastError = server.sendResponse(sending, req, oneReply, codec, "", false)
+		if lastError != nil {
+			return lastError
+		}
+
+		// we manage to send, we're good
+		return nil
+	}
+
+	// Invoke the method, providing a new value for the reply.
+	if mtype.TakesContext() {
+		returnValues = function.Call([]reflect.Value{s.rcvr, mtype.prepareContext(context), argv, reflect.ValueOf(sendReply)})
+	} else {
+		returnValues = function.Call([]reflect.Value{s.rcvr, argv, reflect.ValueOf(sendReply)})
+	}
+	errInter := returnValues[0].Interface()
+	errmsg := ""
+	if errInter != nil {
+		// the function returned an error, we use that
+		errmsg = errInter.(error).Error()
+	} else if lastError != nil {
+		// we had an error inside sendReply, we use that
+		errmsg = lastError.Error()
+	} else {
+		// no error, we send the special EOS error
+		errmsg = lastStreamResponseError
+	}
+
+	// this is the last packet, we don't do anything with
+	// the error here (well sendStreamResponse will log it
+	// already)
+	server.sendResponse(sending, req, nil, codec, errmsg, true)
+	server.freeRequest(req)
 }
 
 type gobServerCodec struct {
@@ -487,14 +522,26 @@ func (c *gobServerCodec) Close() error {
 // ServeConn uses the gob wire format (see package gob) on the
 // connection.  To use an alternate codec, use ServeCodec.
 func (server *Server) ServeConn(conn io.ReadWriteCloser) {
+	server.ServeConnWithContext(conn, nil)
+}
+
+// ServeConnWithContext is like ServeConn but makes it possible to
+// pass a connection context to the RPC methods.
+func (server *Server) ServeConnWithContext(conn io.ReadWriteCloser, context interface{}) {
 	buf := bufio.NewWriter(conn)
 	srv := &gobServerCodec{conn, gob.NewDecoder(conn), gob.NewEncoder(buf), buf}
-	server.ServeCodec(srv)
+	server.ServeCodecWithContext(srv, context)
 }
 
 // ServeCodec is like ServeConn but uses the specified codec to
 // decode requests and encode responses.
 func (server *Server) ServeCodec(codec ServerCodec) {
+	server.ServeCodecWithContext(codec, nil)
+}
+
+// ServeCodecWithContext is like ServeCodec but it makes it possible
+// to pass a connection context to the RPC methods.
+func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface{}) {
 	sending := new(sync.Mutex)
 	for {
 		service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
@@ -512,14 +559,27 @@ func (server *Server) ServeCodec(codec ServerCodec) {
 			}
 			continue
 		}
-		go service.call(server, sending, mtype, req, argv, replyv, codec)
+		go service.call(server, sending, mtype, req, argv, replyv, codec, context)
 	}
 	codec.Close()
+}
+
+func (mtype methodType) prepareContext(context interface{}) reflect.Value {
+	if contextv := reflect.ValueOf(context); contextv.IsValid() {
+		return contextv
+	}
+	return reflect.Zero(mtype.ContextType)
 }
 
 // ServeRequest is like ServeCodec but synchronously serves a single request.
 // It does not close the codec upon completion.
 func (server *Server) ServeRequest(codec ServerCodec) error {
+	return server.ServeRequestWithContext(codec, nil)
+}
+
+// ServeRequestWithContext is like ServeRequest but makes it possible
+// to pass a connection context to the RPC methods.
+func (server *Server) ServeRequestWithContext(codec ServerCodec, context interface{}) error {
 	sending := new(sync.Mutex)
 	service, mtype, req, argv, replyv, keepReading, err := server.readRequest(codec)
 	if err != nil {
@@ -533,7 +593,7 @@ func (server *Server) ServeRequest(codec ServerCodec) error {
 		}
 		return err
 	}
-	service.call(server, sending, mtype, req, argv, replyv, codec)
+	service.call(server, sending, mtype, req, argv, replyv, codec, context)
 	return nil
 }
 
@@ -690,19 +750,38 @@ type ServerCodec interface {
 // ServeConn uses the gob wire format (see package gob) on the
 // connection.  To use an alternate codec, use ServeCodec.
 func ServeConn(conn io.ReadWriteCloser) {
-	DefaultServer.ServeConn(conn)
+	ServeConnWithContext(conn, nil)
+}
+
+// ServeConnWithContext is like ServeConn but it allows to pass a
+// connection context to the RPC methods.
+func ServeConnWithContext(conn io.ReadWriteCloser, context interface{}) {
+	DefaultServer.ServeConnWithContext(conn, context)
 }
 
 // ServeCodec is like ServeConn but uses the specified codec to
 // decode requests and encode responses.
 func ServeCodec(codec ServerCodec) {
-	DefaultServer.ServeCodec(codec)
+	ServeCodecWithContext(codec, nil)
+}
+
+// ServeCodecWithContext is like ServeCodec but it allows to pass a
+// connection context to the RPC methods.
+func ServeCodecWithContext(codec ServerCodec, context interface{}) {
+	DefaultServer.ServeCodecWithContext(codec, context)
 }
 
 // ServeRequest is like ServeCodec but synchronously serves a single request.
 // It does not close the codec upon completion.
 func ServeRequest(codec ServerCodec) error {
-	return DefaultServer.ServeRequest(codec)
+	return ServeRequestWithContext(codec, nil)
+
+}
+
+// ServeRequestWithContext is like ServeRequest but it allows to pass
+// a connection context to the RPC methods.
+func ServeRequestWithContext(codec ServerCodec, context interface{}) error {
+	return DefaultServer.ServeRequestWithContext(codec, context)
 }
 
 // Accept accepts connections on the listener and serves requests

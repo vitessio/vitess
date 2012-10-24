@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/rpcwrap/proto"
 	"code.google.com/p/vitess/go/streamlog"
 )
 
@@ -37,6 +38,7 @@ type sqlQueryStats struct {
 	CacheInvalidations   int64
 	QuerySources         byte
 	Rows                 [][]interface{}
+	context              *proto.Context
 }
 
 func newSqlQueryStats(methodName string) *sqlQueryStats {
@@ -94,9 +96,9 @@ func (stats *sqlQueryStats) FmtBindVariables() string {
 	for k, v := range stats.BindVariables {
 		switch val := v.(type) {
 		case string:
-			scrubbed[k] = "string " + string(len(val))
+			scrubbed[k] = fmt.Sprintf("string %v", len(val))
 		case []byte:
-			scrubbed[k] = "bytes " + string(len(val))
+			scrubbed[k] = fmt.Sprintf("bytes %v", len(val))
 		default:
 			scrubbed[k] = v
 		}
@@ -133,11 +135,21 @@ func (stats *sqlQueryStats) FmtQuerySources() string {
 	return strings.Join(sources[:n], ",")
 }
 
+func (log sqlQueryStats) RemoteAddr() string {
+	return log.context.RemoteAddr
+}
+
+func (log sqlQueryStats) Username() string {
+	return log.context.Username
+}
+
 //String returns a tab separated list of logged fields.
 func (log sqlQueryStats) String() string {
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%v\t%v\t%q\t%v\t%v\t%q\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t",
+		"%v\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t%v\t%v\t%q\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t",
 		log.Method,
+		log.RemoteAddr(),
+		log.Username(),
 		log.StartTime,
 		log.EndTime,
 		log.TotalTime(),

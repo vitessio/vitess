@@ -74,6 +74,10 @@ func (t *Arith) Error(args *Args, reply *Reply) error {
 	panic("ERROR")
 }
 
+func (t *Arith) TakesContext(context interface{}, args string, reply *string) error {
+	return nil
+}
+
 func listenTCP() (net.Listener, string) {
 	l, e := net.Listen("tcp", "127.0.0.1:0") // any available address
 	if e != nil {
@@ -232,6 +236,13 @@ func testRPC(t *testing.T, addr string) {
 	}
 	if reply.C != args.A*args.B {
 		t.Errorf("Mul: expected %d got %d", reply.C, args.A*args.B)
+	}
+
+	// Takes context
+	emptyString := ""
+	err = client.Call("Arith.TakesContext", "", &emptyString)
+	if err != nil {
+		t.Errorf("TakesContext: expected no error but got string %q", err.Error())
 	}
 }
 

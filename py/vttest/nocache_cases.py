@@ -95,6 +95,9 @@ cases = [
          sql='select /* order */ * from vtocc_a order by id desc',
          result=[(1L, 2L, 'bcde', 'fghi'), (1L, 1L, 'abcd', 'efgh')],
          rewritten='select /* order */ * from vtocc_a order by id desc limit 10001'),
+    Case(doc='string in bindings are not shown in logs',
+         sql='select /* limit */ %(somestring)s, eid, id from vtocc_a limit %(a)s',
+         bindings={"somestring": "Ala ma kota.", "a": 1}),
 
     MultiCase(
         'simple insert',

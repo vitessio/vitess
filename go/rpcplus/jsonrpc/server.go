@@ -135,5 +135,11 @@ func (c *serverCodec) Close() error {
 // ServeConn blocks, serving the connection until the client hangs up.
 // The caller typically invokes ServeConn in a go statement.
 func ServeConn(conn io.ReadWriteCloser) {
-	rpc.ServeCodec(NewServerCodec(conn))
+	ServeConnWithContext(conn, nil)
+}
+
+// ServeConnWithContext is like ServeConn but it allows to pass a
+// connection context to the RPC methods.
+func ServeConnWithContext(conn io.ReadWriteCloser, context interface{}) {
+	rpc.ServeCodecWithContext(NewServerCodec(conn), context)
 }

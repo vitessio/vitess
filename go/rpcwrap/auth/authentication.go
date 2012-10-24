@@ -9,6 +9,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
+	"code.google.com/p/vitess/go/rpcwrap/proto"
 )
 
 // UnusedArgument is a type used to indicate an argument that is
@@ -64,10 +65,10 @@ func LoadCredentials(filename string) error {
 
 // Authenticate returns true if it the client manages to authenticate
 // the codec in at most maxRequest number of requests.
-func Authenticate(c rpc.ServerCodec) (bool, error) {
+func Authenticate(c rpc.ServerCodec, context *proto.Context) (bool, error) {
 	auth := newAuthenticatedCodec(c)
 	for i := 0; i < CRAMMD5MaxRequests; i++ {
-		err := AuthenticationServer.ServeRequest(auth)
+		err := AuthenticationServer.ServeRequestWithContext(auth, context)
 		if err != nil {
 			return false, err
 		}
@@ -90,7 +91,7 @@ func (a *AuthenticatorCRAMMD5) GetNewChallenge(_ UnusedArgument, reply *GetNewCh
 }
 
 // Authenticate checks if the client proof is correct.
-func (a *AuthenticatorCRAMMD5) Authenticate(req *AuthenticateRequest, reply *AuthenticateReply) error {
+func (a *AuthenticatorCRAMMD5) Authenticate(context proto.Context, req *AuthenticateRequest, reply *AuthenticateReply) error {
 	username := strings.SplitN(req.Proof, " ", 2)[0]
 	secrets, ok := a.Credentials[username]
 	if !ok {
@@ -103,6 +104,7 @@ func (a *AuthenticatorCRAMMD5) Authenticate(req *AuthenticateRequest, reply *Aut
 	}
 	for _, secret := range secrets {
 		if expected := CRAMMD5GetExpected(username, secret, req.state.challenge); expected == req.Proof {
+			context.Username = username
 			return nil
 		}
 	}
