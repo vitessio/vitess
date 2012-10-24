@@ -8,6 +8,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
@@ -79,6 +81,8 @@ func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *Sche
 	return
 }
 
+var autoIncr = regexp.MustCompile("auto_increment=\\d+")
+
 // Return the schema for a database
 func (mysqld *Mysqld) GetSchema(dbName string) (*SchemaDefinition, error) {
 	rows, err := mysqld.fetchSuperQuery("SHOW TABLES IN " + dbName)
@@ -101,8 +105,14 @@ func (mysqld *Mysqld) GetSchema(dbName string) (*SchemaDefinition, error) {
 			return nil, fmt.Errorf("empty create table statement for %v", tableName)
 		}
 
+		// Normalize & remove auto_increment because it changes on every insert
+		// FIXME(alainjobart) find a way to share this with
+		// vt/tabletserver/table_info.go:162
+		norm1 := strings.ToLower(rows[0][1].(string))
+		norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
+
 		sd.TableDefinitions[i].Name = tableName
-		sd.TableDefinitions[i].Schema = rows[0][1].(string)
+		sd.TableDefinitions[i].Schema = norm2
 	}
 
 	sd.generateSchemaVersion()
