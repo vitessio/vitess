@@ -14,7 +14,6 @@ import (
 	"log/syslog"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -293,35 +292,8 @@ func initTablet(zconn zk.Conn, params map[string]string, update bool) error {
 	return err
 }
 
-// return a sorted list of tablets
-func getAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
-	zkTabletsPath := path.Join(zkVtPath, "tablets")
-	children, _, err := zconn.Children(zkTabletsPath)
-	if err != nil {
-		return nil, err
-	}
-
-	sort.Strings(children)
-	tabletPaths := make([]string, len(children))
-	for i, child := range children {
-		tabletPaths[i] = path.Join(zkTabletsPath, child)
-	}
-
-	tabletMap, _ := wr.GetTabletMap(zconn, tabletPaths)
-	tablets := make([]*tm.TabletInfo, 0, len(tabletPaths))
-	for _, tabletPath := range tabletPaths {
-		tabletInfo, ok := tabletMap[tabletPath]
-		if !ok {
-			relog.Warning("failed to load tablet %v", tabletPath)
-		}
-		tablets = append(tablets, tabletInfo)
-	}
-
-	return tablets, nil
-}
-
 func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) error {
-	tablets, err := getAllTablets(zconn, zkVtPath)
+	tablets, err := wr.GetAllTablets(zconn, zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -345,7 +317,7 @@ func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
 }
 
 func dumpTablets(zconn zk.Conn, zkVtPath string) error {
-	tablets, err := getAllTablets(zconn, zkVtPath)
+	tablets, err := wr.GetAllTablets(zconn, zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -667,7 +639,7 @@ func main() {
 		err = listScrap(zconn, args[1])
 	case "ListShardTablets":
 		if len(args) != 2 {
-			relog.Fatal("action %v requires <zk vt path>", args[0])
+			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
 		err = listTabletsByShard(zconn, args[1])
 	case "ListTablets":
@@ -675,6 +647,21 @@ func main() {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}
 		err = dumpTablets(zconn, args[1])
+	case "RebuildReplicationGraph":
+		if len(args) < 2 {
+			relog.Fatal("action %v requires zk-vt-paths=<zk vt path>,... keyspaces=<keyspace>,...", args[0])
+		}
+
+		params := parseParams(args)
+		var keyspaces, zkVtPaths []string
+		if _, ok := params["zk-vt-paths"]; ok {
+			zkVtPaths = strings.Split(params["zk-vt-paths"], ",")
+		}
+		if _, ok := params["keyspaces"]; ok {
+			keyspaces = strings.Split(params["keyspaces"], ",")
+		}
+		// RebuildReplicationGraph zk-vt-paths=/zk/test_nj/vt,/zk/test_ny/vt keyspaces=test_keyspace
+		err = wrangler.RebuildReplicationGraph(zkVtPaths, keyspaces, *waitTime)
 	case "GetSchema":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk tablet path>", args[0])

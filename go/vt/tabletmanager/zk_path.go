@@ -13,7 +13,7 @@ import (
 	"code.google.com/p/vitess/go/zk"
 )
 
-/* Functions for extracting and deriving zk paths. */
+// Functions for extracting and deriving zk paths.
 
 func VtRootFromTabletPath(zkTabletPath string) string {
 	defer func() {
@@ -129,6 +129,12 @@ func KeyspacePath(zkVtRoot, keyspace string) string {
 func KeyspaceActionPath(zkKeyspacePath string) string {
 	MustBeKeyspacePath(zkKeyspacePath)
 	return path.Join(zkKeyspacePath, "action")
+}
+
+// zkKeyspacePath: /zk/global/vt/keyspaces/XX
+func KeyspaceShardsPath(zkKeyspacePath string) string {
+	MustBeKeyspacePath(zkKeyspacePath)
+	return path.Join(zkKeyspacePath, "shards")
 }
 
 // Tablet aliases are the nodes that point into /vt/tablets/<uid> from the keyspace
