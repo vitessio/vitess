@@ -91,7 +91,7 @@ func (a *AuthenticatorCRAMMD5) GetNewChallenge(_ UnusedArgument, reply *GetNewCh
 }
 
 // Authenticate checks if the client proof is correct.
-func (a *AuthenticatorCRAMMD5) Authenticate(context proto.Context, req *AuthenticateRequest, reply *AuthenticateReply) error {
+func (a *AuthenticatorCRAMMD5) Authenticate(context *proto.Context, req *AuthenticateRequest, reply *AuthenticateReply) error {
 	username := strings.SplitN(req.Proof, " ", 2)[0]
 	secrets, ok := a.Credentials[username]
 	if !ok {
