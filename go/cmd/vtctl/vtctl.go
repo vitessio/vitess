@@ -138,8 +138,11 @@ Generic:
   ListShardTablets <zk shard path>
     list all tablets paths in a given shard
 
-  ListTablets <zk local vt path>
+  ListAllTablets <zk local vt path>
     list all tablets in an awk-friendly way
+
+  ListTablets <zk tablet path> ...
+    list specified tablets in an awk-friendly way
 
 
 Schema:
@@ -264,32 +267,42 @@ func initTablet(zconn zk.Conn, params map[string]string, update bool) error {
 	}
 
 	err = tm.CreateTablet(zconn, zkPath, tablet)
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			if update {
-				oldTablet, err := tm.ReadTablet(zconn, zkPath)
-				if err != nil {
-					relog.Warning("failed reading tablet %v: %v", zkPath, err)
-				} else {
-					if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
-						*(oldTablet.Tablet) = *tablet
-						err := tm.UpdateTablet(zconn, zkPath, oldTablet)
-						if err != nil {
-							relog.Warning("failed reading tablet %v: %v", zkPath, err)
-						} else {
-							return nil
-						}
+	if err != nil && zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		// Try to update nicely, but if it fails fall back to force behavior.
+		if update {
+			oldTablet, err := tm.ReadTablet(zconn, zkPath)
+			if err != nil {
+				relog.Warning("failed reading tablet %v: %v", zkPath, err)
+			} else {
+				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
+					*(oldTablet.Tablet) = *tablet
+					err := tm.UpdateTablet(zconn, zkPath, oldTablet)
+					if err != nil {
+						relog.Warning("failed updating tablet %v: %v", zkPath, err)
+					} else {
+						return nil
 					}
 				}
 			}
-			if *force {
-				zk.DeleteRecursive(zconn, zkPath, -1)
-				err = tm.CreateTablet(zconn, zkPath, tablet)
-			}
+		}
+		if *force {
+			zk.DeleteRecursive(zconn, zkPath, -1)
+			err = tm.CreateTablet(zconn, zkPath, tablet)
 		}
 	}
-
 	return err
+}
+
+func fmtTabletAwkable(ti *tm.TabletInfo) string {
+	keyspace := ti.Keyspace
+	shard := ti.Shard
+	if keyspace == "" {
+		keyspace = "<null>"
+	}
+	if shard == "" {
+		shard = "<null>"
+	}
+	return fmt.Sprintf("%v %v %v %v %v %v", ti.Path(), keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr)
 }
 
 func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) error {
@@ -299,7 +312,7 @@ func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) err
 	}
 	for _, tablet := range tablets {
 		if tablet.Type == dbType {
-			fmt.Println(tablet.Path())
+			fmt.Println(fmtTabletAwkable(tablet))
 		}
 	}
 	return nil
@@ -310,19 +323,35 @@ func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
 	if err != nil {
 		return err
 	}
-	for _, alias := range tabletAliases {
-		fmt.Println(tm.TabletPathForAlias(alias))
+	tabletPaths := make([]string, len(tabletAliases))
+	for i, alias := range tabletAliases {
+		tabletPaths[i] = tm.TabletPathForAlias(alias)
 	}
-	return nil
+	return dumpTablets(zconn, tabletPaths)
 }
 
-func dumpTablets(zconn zk.Conn, zkVtPath string) error {
+func dumpAllTablets(zconn zk.Conn, zkVtPath string) error {
 	tablets, err := wr.GetAllTablets(zconn, zkVtPath)
 	if err != nil {
 		return err
 	}
-	for _, tablet := range tablets {
-		fmt.Printf("%v %v %v %v %v\n", tablet.Path(), tablet.Keyspace, tablet.Shard, tablet.Type, tablet.Addr)
+	for _, ti := range tablets {
+		fmt.Println(fmtTabletAwkable(ti))
+	}
+	return nil
+}
+
+func dumpTablets(zconn zk.Conn, zkTabletPaths []string) error {
+	tabletMap, err := wr.GetTabletMap(zconn, zkTabletPaths)
+	if err != nil {
+		return err
+	}
+	for _, tabletPath := range zkTabletPaths {
+		ti, ok := tabletMap[tabletPath]
+		if !ok {
+			relog.Warning("failed to load tablet %v", tabletPath)
+		}
+		fmt.Println(fmtTabletAwkable(ti))
 	}
 	return nil
 }
@@ -642,11 +671,16 @@ func main() {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
 		err = listTabletsByShard(zconn, args[1])
-	case "ListTablets":
+	case "ListAllTablets":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])
 		}
-		err = dumpTablets(zconn, args[1])
+		err = dumpAllTablets(zconn, args[1])
+	case "ListTablets":
+		if len(args) < 2 {
+			relog.Fatal("action %v requires <zk tablet path> ...", args[0])
+		}
+		err = dumpTablets(zconn, args[1:])
 	case "RebuildReplicationGraph":
 		if len(args) < 2 {
 			relog.Fatal("action %v requires zk-vt-paths=<zk vt path>,... keyspaces=<keyspace>,...", args[0])
