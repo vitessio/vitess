@@ -28,15 +28,15 @@ const (
 )
 
 // exclusive transitions can be executed without a lock
-// INIT_FAILED/CLOSED -> CONNECTING
+// NOT_SERVING/CLOSED -> CONNECTING
 // CONNECTING -> ABORT
 // ABORT -> CLOSED (exclusive)
 // CONNECTING -> INITIALIZING
-// INITIALIZING -> OPEN/INIT_FAILED (exclusive)
+// INITIALIZING -> OPEN/NOT_SERVING (exclusive)
 // OPEN -> SHUTTING_DOWN
 // SHUTTING_DOWN -> CLOSED (exclusive)
 const (
-	INIT_FAILED = iota
+	NOT_SERVING = iota
 	CLOSED
 	CONNECTING
 	ABORT
@@ -135,7 +135,7 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 		relog.Info("Ignoring allowQueries request, current state: %v", v)
 		return
 	}
-	// Current state is INIT_FAILED or CLOSED
+	// Current state is NOT_SERVING or CLOSED
 	atomic.StoreInt32(&sq.state, CONNECTING)
 	sq.statemu.Unlock()
 
@@ -179,7 +179,7 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 		// Exclusive transition. No need to lock statemu.
 		if x := recover(); x != nil {
 			relog.Error("%s", x.(*TabletError).Message)
-			atomic.StoreInt32(&sq.state, INIT_FAILED)
+			atomic.StoreInt32(&sq.state, NOT_SERVING)
 		}
 		atomic.StoreInt32(&sq.state, OPEN)
 	}()
@@ -202,7 +202,7 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 	relog.Info("Session id: %d", sq.sessionId)
 }
 
-func (sq *SqlQuery) disallowQueries() {
+func (sq *SqlQuery) disallowQueries(forRestart bool) {
 	for {
 		sq.statemu.Lock()
 		switch atomic.LoadInt32(&sq.state) {
@@ -216,10 +216,15 @@ func (sq *SqlQuery) disallowQueries() {
 			sq.mu.Lock()
 			sq.mu.Unlock()
 			continue
-		case INIT_FAILED:
-			atomic.StoreInt32(&sq.state, CLOSED)
-			fallthrough
-		case CLOSED, ABORT, SHUTTING_DOWN:
+		case NOT_SERVING, CLOSED:
+			if forRestart {
+				atomic.StoreInt32(&sq.state, CLOSED)
+			} else {
+				atomic.StoreInt32(&sq.state, NOT_SERVING)
+			}
+			sq.statemu.Unlock()
+			return
+		case ABORT, SHUTTING_DOWN:
 			sq.statemu.Unlock()
 			return
 		}
@@ -246,13 +251,17 @@ func (sq *SqlQuery) disallowQueries() {
 	sq.sessionId = 0
 	sq.dbName = ""
 	// Exclusive transition. No need to lock statemu.
-	atomic.StoreInt32(&sq.state, CLOSED)
+	if forRestart {
+		atomic.StoreInt32(&sq.state, CLOSED)
+	} else {
+		atomic.StoreInt32(&sq.state, NOT_SERVING)
+	}
 }
 
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	switch atomic.LoadInt32(&sq.state) {
-	case INIT_FAILED:
-		panic(NewTabletError(FATAL, "init failed"))
+	case NOT_SERVING:
+		panic(NewTabletError(FATAL, "not serving"))
 	case CLOSED:
 		panic(NewTabletError(RETRY, "unavailable"))
 	case CONNECTING, ABORT, INITIALIZING:
@@ -293,8 +302,8 @@ func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, tra
 	var conn PoolConnection
 	if session.ConnectionId != 0 {
 		conn = sq.reservedPool.Get(session.ConnectionId)
-	} else if conn = sq.txPool.TryGet(); conn == nil {
-		panic(NewTabletError(FAIL, "Transaction pool connection limit exceeded"))
+	} else {
+		conn = sq.txPool.Get()
 	}
 	if *transactionId, err = sq.activeTxPool.SafeBegin(conn); err != nil {
 		conn.Recycle()

@@ -167,7 +167,7 @@ class TestNocache(framework.TestCase):
       cu2 = co2.cursor()
       cu2.execute("begin", {})
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Transaction")
+      self.assertContains(e[1], "timeout")
     else:
       self.assertFail("Did not receive exception")
     finally:

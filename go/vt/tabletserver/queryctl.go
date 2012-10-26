@@ -68,9 +68,9 @@ func AllowQueries(dbconfig DBConfig) {
 // DisallowQueries can take a long time to return (not indefinite) because
 // it has to wait for queries & transactions to be completed or killed,
 // and also for house keeping goroutines to be terminated.
-func DisallowQueries() {
+func DisallowQueries(forRestart bool) {
 	defer logError()
-	SqlQueryRpcService.disallowQueries()
+	SqlQueryRpcService.disallowQueries(forRestart)
 }
 
 func GetSessionId() int64 {

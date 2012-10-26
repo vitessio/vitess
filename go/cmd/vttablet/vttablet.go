@@ -177,7 +177,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 			}
 			ts.AllowQueries(dbcfgs.App)
 		} else {
-			ts.DisallowQueries()
+			ts.DisallowQueries(false)
 		}
 	})
 	agent.Start(bindAddr, mycnf.MysqlAddr())
@@ -217,7 +217,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	}
 	ts.AllowQueries(dbcfgs.App)
 	umgmt.AddCloseCallback(func() {
-		ts.DisallowQueries()
+		ts.DisallowQueries(true)
 	})
 }
 

@@ -129,7 +129,7 @@ func main() {
 		}()
 	})
 	umgmt.AddCloseCallback(func() {
-		ts.DisallowQueries()
+		ts.DisallowQueries(true)
 	})
 
 	umgmtSocket := fmt.Sprintf("/tmp/vtocc-%08x-umgmt.sock", *port)
