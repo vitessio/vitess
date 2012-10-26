@@ -141,12 +141,12 @@ func main() {
 
 	if *zkAddrs != "" {
 		if *zkoccAddr != "" {
-			panic(fmt.Errorf("zk.addrs and zk.zkocc-addr are mutually exclusive"))
+			log.Fatalf("zk.addrs and zk.zkocc-addr are mutually exclusive")
 		}
 		var err error
 		zconn, _, err = zk.DialZkTimeout(*zkAddrs, 5*time.Second, 10*time.Second)
 		if err != nil {
-			panic(fmt.Errorf("zk connect failed: %v", err.Error()))
+			log.Fatalf("zk connect failed: %v", err.Error())
 		}
 	}
 
@@ -154,7 +154,7 @@ func main() {
 		var err error
 		zconn, err = zk.DialZkocc(*zkoccAddr, 5*time.Second)
 		if err != nil {
-			panic(fmt.Errorf("zkocc connect failed: %v", err.Error()))
+			log.Fatalf("zkocc connect failed: %v", err.Error())
 		}
 	}
 
