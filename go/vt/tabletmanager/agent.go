@@ -320,6 +320,18 @@ func resolveAddr(addr string) string {
 	return fmt.Sprintf("%v:%v", host, port)
 }
 
+func resolveIpAddr(addr string) (string, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", err
+	}
+	ipAddrs, err := net.LookupHost(host)
+	if err != nil {
+		return "", err
+	}
+	return net.JoinHostPort(ipAddrs[0], port), nil
+}
+
 func vtnsAddrForTablet(tablet *Tablet) *naming.VtnsAddr {
 	host, port := splitHostPort(tablet.Addr)
 	entry := naming.NewAddr(tablet.Uid, host, 0)
@@ -339,6 +351,13 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 		panic(err)
 	}
 
+	bindAddr = resolveAddr(bindAddr)
+	mysqlAddr = resolveAddr(mysqlAddr)
+	mysqlIpAddr, err := resolveIpAddr(mysqlAddr)
+	if err != nil {
+		panic(err)
+	}
+
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(oldValue string, oldStat *zookeeper.Stat) (string, error) {
 		if oldValue == "" {
@@ -346,8 +365,9 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 		}
 
 		tablet := tabletFromJson(oldValue)
-		tablet.Addr = resolveAddr(bindAddr)
-		tablet.MysqlAddr = resolveAddr(mysqlAddr)
+		tablet.Addr = bindAddr
+		tablet.MysqlAddr = mysqlAddr
+		tablet.MysqlIpAddr = mysqlIpAddr
 		return jscfg.ToJson(tablet), nil
 	}
 	err = agent.zconn.RetryChange(agent.Tablet().Path(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)

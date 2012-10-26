@@ -228,9 +228,9 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 
 	tabletIpMap := make(map[string]*tm.Tablet)
 	for tabletPath, tablet := range tabletMap {
-		ipAddr, err := tabletIp(tablet.MysqlAddr)
+		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
-			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v %v", tablet.MysqlAddr, tabletPath, err)}
+			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v %v", tablet.MysqlIpAddr, tabletPath, err)}
 			continue
 		}
 		tabletIpMap[ipAddr] = tablet.Tablet
@@ -248,25 +248,13 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 		if !tablet.IsReplicatingType() {
 			continue
 		}
-		ipAddr, err := tabletIp(tablet.MysqlAddr)
+		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
 			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v", tabletPath, err)}
 		} else if !strInList(slaveAddrs, ipAddr) {
 			results <- vresult{tabletPath, fmt.Errorf("slave not replicating: %v %v %q", tabletPath, ipAddr, slaveAddrs)}
 		}
 	}
-}
-
-func tabletIp(addr string) (string, error) {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-	ipAddrs, err := net.LookupHost(host)
-	if err != nil {
-		return "", err
-	}
-	return ipAddrs[0], nil
 }
 
 func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {

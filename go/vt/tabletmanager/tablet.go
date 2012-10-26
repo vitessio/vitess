@@ -110,11 +110,12 @@ const (
 
 // A pure data struct for information serialized into json and stored in zookeeper.
 type Tablet struct {
-	Cell      string      // the zk cell this tablet is assigned to (doesn't change)
-	Uid       uint        // the server id for this instance
-	Parent    TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
-	Addr      string      // host:port for queryserver
-	MysqlAddr string      // host:port for the mysql instance
+	Cell        string      // the zk cell this tablet is assigned to (doesn't change)
+	Uid         uint        // the server id for this instance
+	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
+	Addr        string      // host:port for queryserver
+	MysqlAddr   string      // host:port for the mysql instance
+	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns
 
 	Keyspace string
 	Shard    string
@@ -231,7 +232,9 @@ func NewTablet(cell string, uid uint, parent TabletAlias, vtAddr, mysqlAddr, key
 		}
 	}
 
-	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}
+	// This value will get resolved on tablet server startup.
+	mysqlIpAddr := ""
+	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, mysqlIpAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}
 }
 
 func tabletFromJson(data string) *Tablet {
