@@ -590,6 +590,55 @@ def run_test_vttablet_authenticated():
   # TODO(szopa): Test that non-authenticated queries do not pass
   # through (when we get to that point).
 
+def _run_hook(params, expectedStrings):
+  out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO ExecuteHook %s %s' % (tablet_62344.zk_tablet_path, params), trap_output=True, raise_on_error=False)
+  for expected in expectedStrings:
+    if err.find(expected) == -1:
+      print "ExecuteHook output:"
+      print err
+      raise utils.TestError('ExecuteHook returned unexpected result, no string: ' + expected)
+
+
+def run_test_hook():
+  utils.zk_wipe()
+  utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
+
+  # test a regular program works
+  _run_hook("test.sh flag1 param1=hello", [
+      '"ExitStatus": 0',
+      '"Stdout": "PARAM: --flag1\\nPARAM: --param1=hello\\n"',
+      '"Stderr": ""',
+      ])
+
+  # test stderr output
+  _run_hook("test.sh to-stderr", [
+      '"ExitStatus": 0',
+      '"Stdout": "PARAM: --to-stderr\\n"',
+      '"Stderr": "ERR: --to-stderr\\n"',
+      ])
+
+  # test commands that fail
+  _run_hook("test.sh exit-error", [
+      '"ExitStatus": 1',
+      '"Stdout": "PARAM: --exit-error\\n"',
+      '"Stderr": "ERROR: exit status 1\\n"',
+      ])
+
+  # test hook that is not present
+  _run_hook("not_here.sh", [
+      '"ExitStatus": -1',
+      '"Stdout": "Skipping missing hook: /', # cannot go further, local path
+      '"Stderr": ""',
+      ])
+
+  # test hook with invalid name
+  _run_hook("/bin/ls", [
+      "FATAL: action failed: ExecuteHook hook name cannot have a '/' in it",
+      ])
+
+  tablet_62344.kill_vttablet()
+
 
 def run_all():
   run_test_sanity()

@@ -20,6 +20,7 @@ fi
 mkdir -p $VTROOT/dist
 mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
+mkdir -p $VTROOT/vthook
 
 # generate pkg-config, so go can use mysql C client
 if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
@@ -64,5 +65,6 @@ ln -snf $VTTOP/go/cmd/zkctl/zkctl $VTROOT/bin/zkctl
 ln -snf $VTTOP/go/cmd/zkocc/zkocc $VTROOT/bin/zkocc
 ln -snf $VTTOP/go/cmd/zkclient2/zkclient2 $VTROOT/bin/zkclient2
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
+ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
 echo "source dev.env in your shell to complete the setup."

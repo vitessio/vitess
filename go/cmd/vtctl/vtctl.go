@@ -87,6 +87,8 @@ Tablets:
     advantage of having separate actions is that one partial snapshot can be
     used for many restores.
 
+  ExecuteHook <zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]
+    This runs the specified hook on the given tablet.
 
 Shards:
   RebuildShard <zk shard path>
@@ -413,10 +415,11 @@ func parseParams(args []string) map[string]string {
 	params := make(map[string]string)
 	for _, arg := range args[1:] {
 		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) != 2 {
-			relog.Fatal("Named parameters require an equal sign")
+		if len(parts) == 1 {
+			params[parts[0]] = ""
+		} else {
+			params[parts[0]] = parts[1]
 		}
-		params[parts[0]] = parts[1]
 	}
 	return params
 }
@@ -715,6 +718,17 @@ func main() {
 			relog.Fatal("action %v requires <zk keyspace path>", args[0])
 		}
 		err = wrangler.ValidateSchemaKeyspace(args[1])
+	case "ExecuteHook":
+		if len(args) < 3 {
+			relog.Fatal("action %v requires <zk tablet path> <hook name>", args[0])
+		}
+
+		hook := &tm.Hook{Name: args[2], Parameters: parseParams(args[2:])}
+		var hr *tm.HookResult
+		hr, err = wrangler.ExecuteHook(args[1], hook)
+		if err == nil {
+			relog.Info(hr.String())
+		}
 	case "WaitForAction":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk action path>", args[0])

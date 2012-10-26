@@ -183,6 +183,13 @@ func (ai *ActionInitiator) GetSchema(zkTabletPath, zkReplyPath string) (actionPa
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, Args: args})
 }
 
+func (ai *ActionInitiator) ExecuteHook(zkTabletPath, zkReplyPath string, hook *Hook) (actionPath string, err error) {
+	args := hook.Parameters
+	args["HookName"] = hook.Name
+	args["HookReplyPath"] = zkReplyPath
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, Args: args})
+}
+
 func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (actionPath string, err error) {
 	MustBeTabletPath(zkTabletPath)
 	node := &ActionNode{Action: SHARD_ACTION_REPARENT}

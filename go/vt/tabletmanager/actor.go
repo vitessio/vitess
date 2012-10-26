@@ -193,6 +193,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.scrap()
 	case TABLET_ACTION_GET_SCHEMA:
 		err = ta.getSchema(actionNode.Args)
+	case TABLET_ACTION_EXECUTE_HOOK:
+		err = ta.executeHook(actionNode.Args)
 	case TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
 	case TABLET_ACTION_SET_RDWR:
@@ -479,6 +481,24 @@ func (ta *TabletActor) getSchema(args map[string]string) error {
 	}
 
 	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(sd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return err
+}
+
+func (ta *TabletActor) executeHook(args map[string]string) error {
+	// get where we put the response
+	zkReplyPath, ok := args["HookReplyPath"]
+	if !ok {
+		return fmt.Errorf("missing ReplyPath in args")
+	}
+	delete(args, "HookReplyPath")
+
+	// reconstruct the Hook, execute it
+	name := args["HookName"]
+	delete(args, "HookName")
+	hook := &Hook{Name: name, Parameters: args}
+	hr := hook.Execute()
+
+	_, err := ta.zconn.Create(zkReplyPath, jscfg.ToJson(hr), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	return err
 }
 
