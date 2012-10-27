@@ -60,7 +60,7 @@ func (client *Client) GracefulShutdown() error {
 	request := new(Request)
 	reply := new(Reply)
 	err := client.Call("UmgmtService.GracefulShutdown", request, reply)
-	if err != nil {
+	if err != nil && err != io.ErrUnexpectedEOF {
 		relog.Error("GracefulShutdown err: %v", err)
 	}
 	return err
