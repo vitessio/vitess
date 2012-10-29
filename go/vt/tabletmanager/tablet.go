@@ -57,7 +57,7 @@ const (
 	TYPE_SCRAP = TabletType("scrap")
 )
 
-// Can this db type be trivially reassigned without changes to the replication grpah?
+// Can this db type be trivially reassigned without changes to the replication graph?
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
 	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_BACKUP, TYPE_EXPERIMENTAL:
@@ -325,6 +325,12 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 
 	// Create /vt/tablets/<uid>/action
 	_, err = zconn.Create(TabletActionPath(zkTabletPath), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		return err
+	}
+
+	// Create /vt/tablets/<uid>/reply
+	_, err = zconn.Create(TabletReplyPath(zkTabletPath), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		return err
 	}

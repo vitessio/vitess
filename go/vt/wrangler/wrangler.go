@@ -31,7 +31,8 @@ func (wr *Wrangler) readTablet(zkTabletPath string) (*tm.TabletInfo, error) {
 
 // Change the type of tablet and recompute all necessary derived paths in the
 // serving graph.
-// force: Bypass the vtaction system and make the data change directly
+// force: Bypass the vtaction system and make the data change directly, and
+// do not run the idle_server_check nor live_server_check hooks
 func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force bool) error {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
@@ -43,8 +44,25 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	if force {
+		// with --force, we do not run the hooks
 		err = tm.ChangeType(wr.zconn, zkTabletPath, dbType)
 	} else {
+		// if the tablet was idle, run the idle_server_check hook
+		if ti.Tablet.Type == tm.TYPE_IDLE {
+			err = wr.ExecuteOptionalTabletInfoHook(ti, tm.NewSimpleHook("idle_server_check"))
+			if err != nil {
+				return err
+			}
+		}
+
+		// run the live_server_check hook unless we're going to scrap
+		if dbType != tm.TYPE_SCRAP {
+			err = wr.ExecuteOptionalTabletInfoHook(ti, tm.NewSimpleHook("live_server_check"))
+			if err != nil {
+				return err
+			}
+		}
+
 		actionPath, err := wr.ai.ChangeType(zkTabletPath, dbType)
 		// You don't have a choice - you must wait for completion before rebuilding.
 		if err == nil {

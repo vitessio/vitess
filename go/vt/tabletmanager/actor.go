@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"strings"
 	"time"
 
 	"code.google.com/p/vitess/go/jscfg"
@@ -194,7 +195,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_GET_SCHEMA:
 		err = ta.getSchema(actionNode.Args)
 	case TABLET_ACTION_EXECUTE_HOOK:
-		err = ta.executeHook(actionNode.Args)
+		err = ta.executeHook(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
 	case TABLET_ACTION_SET_RDWR:
@@ -214,6 +215,35 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	}
 
 	return
+}
+
+// create the path for the reply if not absolute, and returns the full
+// reply path
+func (ta *TabletActor) createReplyPath(actionPath, replyPath string) (string, error) {
+	// we're given an absolute path, trust the sender knows it's good
+	if strings.HasPrefix(replyPath, "/") {
+		return replyPath, nil
+	}
+
+	// create the path
+	actionReplyPath := TabletActionToReplyPath(actionPath, "")
+
+	// backward compatibility code: create the 'reply' path for the tablet
+	// if it doesn't exist
+	tabletReplyPath := path.Dir(actionReplyPath)
+	if stat, err := ta.zconn.Exists(tabletReplyPath); stat == nil {
+		_, err = ta.zconn.Create(tabletReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	_, err := ta.zconn.Create(actionReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		return "", err
+	}
+
+	return path.Join(actionReplyPath, replyPath), nil
 }
 
 func (ta *TabletActor) sleep(args map[string]string) error {
@@ -484,13 +514,17 @@ func (ta *TabletActor) getSchema(args map[string]string) error {
 	return err
 }
 
-func (ta *TabletActor) executeHook(args map[string]string) error {
+func (ta *TabletActor) executeHook(actionPath string, args map[string]string) (err error) {
 	// get where we put the response
 	zkReplyPath, ok := args["HookReplyPath"]
 	if !ok {
 		return fmt.Errorf("missing ReplyPath in args")
 	}
 	delete(args, "HookReplyPath")
+	zkReplyPath, err = ta.createReplyPath(actionPath, zkReplyPath)
+	if err != nil {
+		return err
+	}
 
 	// reconstruct the Hook, execute it
 	name := args["HookName"]
@@ -498,7 +532,7 @@ func (ta *TabletActor) executeHook(args map[string]string) error {
 	hook := &Hook{Name: name, Parameters: args}
 	hr := hook.Execute()
 
-	_, err := ta.zconn.Create(zkReplyPath, jscfg.ToJson(hr), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(hr), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	return err
 }
 

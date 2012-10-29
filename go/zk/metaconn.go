@@ -25,6 +25,12 @@ type Stat interface {
 	Pzxid() int64
 }
 
+// This interface is really close to the zookeeper connection
+// interface.  It uses the Stat interface defined here instead of the
+// zookeeper.Stat structure for stats. Everything else is the same as
+// in zookeeper.  SO refer to the zookeeper docs for the conventions
+// used here (for instance, using -1 as version to specify any
+// version)
 type Conn interface {
 	Get(path string) (data string, stat Stat, err error)
 	GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error)

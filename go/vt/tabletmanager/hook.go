@@ -33,10 +33,26 @@ var (
 	HOOK_DOES_NOT_EXIST         = -1
 	HOOK_STAT_FAILED            = -2
 	HOOK_CANNOT_GET_EXIT_STATUS = -3
+	HOOK_INVALID_NAME           = -4
 )
+
+func NewHook(name string, params map[string]string) *Hook {
+	return &Hook{Name: name, Parameters: params}
+}
+
+func NewSimpleHook(name string) *Hook {
+	return &Hook{Name: name, Parameters: make(map[string]string)}
+}
 
 func (hook *Hook) Execute() (result *HookResult) {
 	result = &HookResult{}
+
+	// also check for bad string here on the server side, to be sure
+	if strings.Contains(hook.Name, "/") {
+		result.ExitStatus = HOOK_INVALID_NAME
+		result.Stderr = "Hooks cannot contains '/'\n"
+		return result
+	}
 
 	// see if the hook exists
 	vthook := os.ExpandEnv("$VTROOT/vthook/" + hook.Name)
