@@ -193,7 +193,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_SCRAP:
 		err = ta.scrap()
 	case TABLET_ACTION_GET_SCHEMA:
-		err = ta.getSchema(actionNode.Args)
+		err = ta.getSchema(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_EXECUTE_HOOK:
 		err = ta.executeHook(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_SET_RDONLY:
@@ -217,33 +217,48 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	return
 }
 
-// create the path for the reply if not absolute, and returns the full
-// reply path
-func (ta *TabletActor) createReplyPath(actionPath, replyPath string) (string, error) {
+// Store the result of a tablet action inside zookeeper.
+//
+// - if replyPath is relative, we will create the result in the
+// 'reply' area for the tablet.
+// - if replyPath is absolute, we will just use it and assume its path
+// exists.
+//
+// See wrangler/Wrangler.WaitForTabletActionResponse
+func (ta *TabletActor) storeTabletActionResponse(actionPath, replyPath string, result interface{}) error {
 	// we're given an absolute path, trust the sender knows it's good
-	if strings.HasPrefix(replyPath, "/") {
-		return replyPath, nil
-	}
-
-	// create the path
-	actionReplyPath := TabletActionToReplyPath(actionPath, "")
-
-	// backward compatibility code: create the 'reply' path for the tablet
-	// if it doesn't exist
-	tabletReplyPath := path.Dir(actionReplyPath)
-	if stat, err := ta.zconn.Exists(tabletReplyPath); stat == nil {
-		_, err = ta.zconn.Create(tabletReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if !strings.HasPrefix(replyPath, "/") {
+		// otherwise, create the reply path
+		actionReplyPath := TabletActionToReplyPath(actionPath, "")
+		_, err := ta.zconn.Create(actionReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
-			return "", err
+			// this code is to address the case where the tablet
+			// was created without the 'reply' path.
+			// it can be removed once we've check all tablets in
+			// zk have it.
+			if zookeeper.IsError(err, zookeeper.ZNONODE) {
+				// the parent doesn't exists, try to create it
+				tabletReplyPath := path.Dir(actionReplyPath)
+				_, err = ta.zconn.Create(tabletReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+				if err != nil {
+					return err
+				}
+
+				// and try again
+				_, err := ta.zconn.Create(actionReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
 		}
+
+		replyPath = path.Join(actionReplyPath, replyPath)
 	}
 
-	_, err := ta.zconn.Create(actionReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		return "", err
-	}
-
-	return path.Join(actionReplyPath, replyPath), nil
+	_, err := ta.zconn.Create(replyPath, jscfg.ToJson(result), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return err
 }
 
 func (ta *TabletActor) sleep(args map[string]string) error {
@@ -491,7 +506,7 @@ func (ta *TabletActor) scrap() error {
 	return Scrap(ta.zconn, ta.zkTabletPath, false)
 }
 
-func (ta *TabletActor) getSchema(args map[string]string) error {
+func (ta *TabletActor) getSchema(actionPath string, args map[string]string) error {
 	// get where we put the response
 	zkReplyPath, ok := args["ReplyPath"]
 	if !ok {
@@ -510,8 +525,7 @@ func (ta *TabletActor) getSchema(args map[string]string) error {
 		return err
 	}
 
-	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(sd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	return err
+	return ta.storeTabletActionResponse(actionPath, zkReplyPath, sd)
 }
 
 func (ta *TabletActor) executeHook(actionPath string, args map[string]string) (err error) {
@@ -521,10 +535,6 @@ func (ta *TabletActor) executeHook(actionPath string, args map[string]string) (e
 		return fmt.Errorf("missing ReplyPath in args")
 	}
 	delete(args, "HookReplyPath")
-	zkReplyPath, err = ta.createReplyPath(actionPath, zkReplyPath)
-	if err != nil {
-		return err
-	}
 
 	// reconstruct the Hook, execute it
 	name := args["HookName"]
@@ -532,8 +542,8 @@ func (ta *TabletActor) executeHook(actionPath string, args map[string]string) (e
 	hook := &Hook{Name: name, Parameters: args}
 	hr := hook.Execute()
 
-	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(hr), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	return err
+	// and store the result
+	return ta.storeTabletActionResponse(actionPath, zkReplyPath, hr)
 }
 
 // Operate on a backup tablet. Shutdown mysqld and copy the data files aside.

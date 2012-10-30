@@ -5,15 +5,12 @@
 package zkwrangler
 
 import (
-	"encoding/json"
 	"fmt"
-	"path"
 	"strings"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
 )
 
 func (wr *Wrangler) ExecuteHook(zkTabletPath string, hook *tm.Hook) (hookResult *tm.HookResult, err error) {
@@ -34,21 +31,10 @@ func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *tm.Hook) (hoo
 	if err != nil {
 		return nil, err
 	}
-	err = wr.ai.WaitForCompletion(actionPath, 10*time.Minute)
-	if err != nil {
-		return nil, err
-	}
-	zkReplyPath = tm.TabletActionToReplyPath(actionPath, zkReplyPath)
-	data, _, err := wr.zconn.Get(zkReplyPath)
-	if err != nil {
-		return nil, err
-	}
+
 	hr := new(tm.HookResult)
-	if err = json.Unmarshal([]byte(data), hr); err != nil {
+	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, hr, 10*time.Minute); err != nil {
 		return nil, err
-	}
-	if err = zk.DeleteRecursive(wr.zconn, path.Dir(zkReplyPath), -1); err != nil {
-		relog.Error("Cannot delete action reply %v", zkReplyPath)
 	}
 	return hr, nil
 }

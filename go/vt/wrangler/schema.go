@@ -5,7 +5,6 @@
 package zkwrangler
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"sync"
@@ -20,21 +19,11 @@ func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, 
 	if err != nil {
 		return nil, err
 	}
-	zkReplyPath := path.Join(tm.TabletActionPath(zkTabletPath), path.Base(ti.Path())+"_get_schema_reply.json")
+	zkReplyPath := "get_schema_result.json"
 	actionPath, err := wr.ai.GetSchema(ti.Path(), zkReplyPath)
-	if err != nil {
-		return nil, err
-	}
-	err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
-	if err != nil {
-		return nil, err
-	}
-	data, _, err := wr.zconn.Get(zkReplyPath)
-	if err != nil {
-		return nil, err
-	}
+
 	sd := new(mysqlctl.SchemaDefinition)
-	if err = json.Unmarshal([]byte(data), sd); err != nil {
+	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, sd, 1*time.Minute); err != nil {
 		return nil, err
 	}
 	return sd, nil
