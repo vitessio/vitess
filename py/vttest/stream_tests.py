@@ -14,6 +14,20 @@ class TestStream(framework.TestCase):
 
 # more fields!
 
+  # UNION queries like this used to crash vtocc, only straight SELECT
+  # would go through. This is a unit test to show it is fixed.
+  # The fix went in revision bad7511746ca.
+  def test_union(self):
+    cu = self.env.execute("select 1 from dual union select 1 from dual",
+                          cursorclass=cursor.StreamCursor)
+    count = 0
+    while True:
+      row = cu.fetchone()
+      if row is None:
+        break
+      count += 1
+    self.assertEqual(count, 1)
+
   def test_basic_stream(self):
     # insert 100 rows in a table
     self.env.execute("begin")
