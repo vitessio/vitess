@@ -391,6 +391,7 @@ func handleExecError(query *proto.Query, err *error) {
 		if !ok {
 			relog.Error("%v: Uncaught panic for %v", x, query)
 			*err = NewTabletError(FAIL, "%v: uncaught panic for %v", x, query)
+			errorStats.Add("Panic", 1)
 			return
 		}
 		*err = terr
