@@ -31,7 +31,7 @@ the largest group.
 Select X from N - X is the new root node. Might not be a "master" in terms of
 voltron, but it will be the data source for the rest of the nodes.
 
- On X: (Promote Slave)
+On X: (Promote Slave)
   STOP SLAVE;
   RESET MASTER;
   RESET SLAVE;
@@ -41,6 +41,11 @@ voltron, but it will be the data source for the rest of the nodes.
   SHOW MASTER STATUS;
     wait file,position
   SET GLOBAL READ_ONLY=0;
+
+Disabling READ_ONLY mode here is a matter of opinion.
+Realistically it is probably safer to do this later on and minimize
+the potential of replaying rows. It expands the write unavailable window
+slightly - probably by about 1 second.
 
 For all slaves in majority N:
  if slave != X (Restart Slave)
@@ -53,6 +58,8 @@ For all slaves in majority N:
 
 if no connection to N is available, ???
 
+On X: (promoted slave)
+  SET GLOBAL READ_ONLY=0;
 */
 
 import (
@@ -341,6 +348,11 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	// If the majority of slaves restarted, move ahead.
 	majorityRestart := len(restartSlaveErrors) < (len(slaveTabletMap) / 2)
 	if majorityRestart {
+		relog.Info("marking master read-write %v", zkMasterTabletPath)
+		actionPath, err := wr.ai.SetReadWrite(zkMasterElectPath)
+		if err == nil {
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		}
 		relog.Info("rebuilding shard data in zk")
 		if err = tm.RebuildShard(wr.zconn, shardInfo.ShardPath()); err != nil {
 			return err

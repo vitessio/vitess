@@ -39,7 +39,7 @@ const (
 
 	// a slaved copy of the data ready, but not serving query traffic
 	// implies something abnormal about the setup - don't consider it
-	// a potential master.
+	// a potential master and don't worry about lag when reparenting.
 	TYPE_EXPERIMENTAL = TabletType("experimental")
 
 	// a slaved copy of the data intentionally lagged for pseudo backup

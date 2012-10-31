@@ -341,7 +341,7 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	// No slave data, perform the action.
 	alias := TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
 	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == NO_TABLET)}
-	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave()
+	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false)
 	if err != nil {
 		return err
 	}

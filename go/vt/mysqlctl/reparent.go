@@ -26,12 +26,12 @@ func (mysqld *Mysqld) DemoteMaster() (*ReplicationPosition, error) {
 	return mysqld.MasterStatus()
 }
 
-/*
-replicationState: info slaves need to reparent themselves
-waitPosition: slaves can wait for this position when restarting replication
-timePromoted: this timestamp (unix nanoseconds) is inserted into _vt.replication_test to verify the replication config
-*/
-func (mysqld *Mysqld) PromoteSlave() (replicationState *ReplicationState, waitPosition *ReplicationPosition, timePromoted int64, err error) {
+// setReadWrite: set the new master in read-write mode.
+//
+// replicationState: info slaves need to reparent themselves
+// waitPosition: slaves can wait for this position when restarting replication
+// timePromoted: this timestamp (unix nanoseconds) is inserted into _vt.replication_test to verify the replication config
+func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *ReplicationState, waitPosition *ReplicationPosition, timePromoted int64, err error) {
 	cmds := []string{
 		"STOP SLAVE",
 		"RESET MASTER",
@@ -58,7 +58,9 @@ func (mysqld *Mysqld) PromoteSlave() (replicationState *ReplicationState, waitPo
 		return
 	}
 
-	err = mysqld.SetReadOnly(false)
+	if setReadWrite {
+		err = mysqld.SetReadOnly(false)
+	}
 	return
 }
 
