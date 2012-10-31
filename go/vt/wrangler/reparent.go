@@ -460,8 +460,8 @@ func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *my
 				if ctx.err == nil {
 					// In the case where a master is down, look for the last bit of data copied and wait
 					// for that to apply. That gives us a chance to wait for all data.
-					lastDataPos := *ctx.position
-					lastDataPos.MasterLogPosition = lastDataPos.ReadMasterLogPosition
+					lastDataPos := mysqlctl.ReplicationPosition{MasterLogFile: ctx.position.MasterLogFileIo,
+						MasterLogPositionIo: ctx.position.MasterLogPositionIo}
 					args := &tm.SlavePositionReq{lastDataPos, int(SLAVE_STATUS_DEADLINE / 1e9)}
 					ctx.err = ctx.client.Call("TabletManager.WaitSlavePosition", args, ctx.position)
 				}

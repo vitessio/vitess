@@ -107,8 +107,8 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 			}
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
-			lastDataPos := *replPos
-			lastDataPos.MasterLogPosition = lastDataPos.ReadMasterLogPosition
+			lastDataPos := mysqlctl.ReplicationPosition{MasterLogFile: replPos.MasterLogFileIo,
+				MasterLogPositionIo: replPos.MasterLogPositionIo}
 			args := &tm.SlavePositionReq{lastDataPos, int(wr.actionTimeout().Seconds())}
 			_, err = wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 			if err != nil {

@@ -29,9 +29,10 @@ const (
 )
 
 type ReplicationPosition struct {
-	MasterLogFile         string
-	MasterLogPosition     uint
-	ReadMasterLogPosition uint // how much has been read, but not applied
+	MasterLogFile       string
+	MasterLogPosition   uint
+	MasterLogFileIo     string // how much has been read, but not applied
+	MasterLogPositionIo uint
 }
 
 func (rp ReplicationPosition) MapKey() string {
@@ -264,11 +265,14 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 		return nil, err
 	}
 	pos := new(ReplicationPosition)
+	// Use Relay_Master_Log_File because we care where the SQL thread
+	// is, not the IO thread.
 	pos.MasterLogFile = fields["Relay_Master_Log_File"]
+	pos.MasterLogFileIo = fields["Master_Log_File"]
 	temp, _ := strconv.ParseUint(fields["Exec_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
-	pos.ReadMasterLogPosition = uint(temp)
+	pos.MasterLogPositionIo = uint(temp)
 	return pos, nil
 }
 
