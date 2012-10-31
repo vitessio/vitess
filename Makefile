@@ -36,7 +36,7 @@ unit_test:
 	cd go/umgmt; go test
 	cd go/vt/client2; go test
 	cd go/vt/mysqlctl; go test
-#	cd go/vt/sqlparser; go test
+	cd go/vt/sqlparser; go test
 	cd go/vt/tabletmanager; go test
 #	cd go/vt/tabletserver; go test
 #	cd go/vt/wrangler; go test
