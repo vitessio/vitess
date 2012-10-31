@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"path"
 	"sync"
-	"time"
 
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
@@ -23,7 +22,7 @@ func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, 
 	actionPath, err := wr.ai.GetSchema(ti.Path(), zkReplyPath)
 
 	sd := new(mysqlctl.SchemaDefinition)
-	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, sd, 1*time.Minute); err != nil {
+	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, sd, wr.actionTimeout()); err != nil {
 		return nil, err
 	}
 	return sd, nil
