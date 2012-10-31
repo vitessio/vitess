@@ -20,13 +20,17 @@ const (
 )
 
 type Wrangler struct {
-	zconn         zk.Conn
-	ai            *tm.ActionInitiator
-	actionTimeout time.Duration
+	zconn    zk.Conn
+	ai       *tm.ActionInitiator
+	deadline time.Time
 }
 
 func NewWrangler(zconn zk.Conn, actionTimeout time.Duration) *Wrangler {
-	return &Wrangler{zconn, tm.NewActionInitiator(zconn), actionTimeout}
+	return &Wrangler{zconn, tm.NewActionInitiator(zconn), time.Now().Add(actionTimeout)}
+}
+
+func (wr *Wrangler) actionTimeout() time.Duration {
+	return wr.deadline.Sub(time.Now())
 }
 
 func (wr *Wrangler) readTablet(zkTabletPath string) (*tm.TabletInfo, error) {

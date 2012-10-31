@@ -6,7 +6,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
@@ -27,7 +26,7 @@ func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardAction
 	if err != nil {
 		return nil, err
 	}
-	err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	if err != nil {
 		return nil, err
 	}
@@ -42,10 +41,6 @@ func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardAction
 	return position, nil
 }
 
-const (
-	SLAVE_STATUS_TIMEOUT = 1 * time.Minute
-)
-
 func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
 	relog.Debug("checkSlaveConsistencyWithActions %v %#v", mapKeys(tabletMap), masterPosition)
 
@@ -59,7 +54,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		if masterPosition != nil {
 			zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
 			zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_reply.json")
-			args := &tm.SlavePositionReq{*masterPosition, int(SLAVE_STATUS_DEADLINE / 1e9)}
+			args := &tm.SlavePositionReq{*masterPosition, int(wr.actionTimeout().Seconds())}
 			// If the master position is known, do our best to wait for replication to catch up.
 			_, err := wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 			if err != nil {
@@ -71,7 +66,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				ctx.err = err
 				return
 			}
-			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
@@ -95,7 +90,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				ctx.err = err
 				return
 			}
-			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
@@ -114,7 +109,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 			// for that to apply. That gives us a chance to wait for all data.
 			lastDataPos := *replPos
 			lastDataPos.MasterLogPosition = lastDataPos.ReadMasterLogPosition
-			args := &tm.SlavePositionReq{lastDataPos, int(SLAVE_STATUS_DEADLINE / 1e9)}
+			args := &tm.SlavePositionReq{lastDataPos, int(wr.actionTimeout().Seconds())}
 			_, err = wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 			if err != nil {
 				ctx.err = err
@@ -125,7 +120,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				ctx.err = err
 				return
 			}
-			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
@@ -198,7 +193,7 @@ func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint]*tm.TabletInfo, zkSh
 	f := func(ti *tm.TabletInfo) {
 		actionPath, err := wr.ai.StopSlave(ti.Path())
 		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, SLAVE_STATUS_TIMEOUT)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 		}
 		if err != nil {
 			relog.Debug("StopSlave failed: %v", err)

@@ -33,7 +33,7 @@ type vresult struct {
 }
 
 func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan vresult) error {
-	timer := time.NewTimer(wr.actionTimeout)
+	timer := time.NewTimer(wr.actionTimeout())
 	done := make(chan bool, 1)
 	go func() {
 		wg.Wait()
@@ -277,7 +277,7 @@ func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results cha
 				return
 			}
 
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
 				results <- vresult{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
 			}

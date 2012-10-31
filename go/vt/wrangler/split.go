@@ -42,7 +42,7 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 		return err
 	}
 
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout)
+	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func (wr *Wrangler) PartialRestore(zkSrcTabletPath, zkDstTabletPath string) erro
 		return err
 	}
 
-	if err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout); err != nil {
+	if err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
 		return err
 	}
 

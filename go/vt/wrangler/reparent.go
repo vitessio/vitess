@@ -61,6 +61,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -74,68 +75,65 @@ const (
 	SLAVE_STATUS_DEADLINE = 10e9
 )
 
-/*
- Create the reparenting action and launch a goroutine to coordinate the procedure.
- The actionNode can be watched for updates.
- TODO(msolomon): We could supply a channel of updates to cut out zk round trips.
-
-force: true if we are trying to skip sanity checks - mostly for test setups
-*/
-func (wr *Wrangler) ReparentShard(zkShardPath, zkTabletPath string, force bool) (actionPath string, err error) {
+// Create the reparenting action and launch a goroutine to coordinate
+// the procedure.
+//
+// force: true if we are trying to skip sanity checks - mostly for test setups
+func (wr *Wrangler) ReparentShard(zkShardPath, zkTabletPath string, force bool) error {
 	tm.MustBeShardPath(zkShardPath)
 	tm.MustBeTabletPath(zkTabletPath)
 
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
-		return
+		return err
 	}
 
 	currentMasterTabletPath, err := shardInfo.MasterTabletPath()
 	if err != nil {
-		return
+		return err
 	}
 	if currentMasterTabletPath == zkTabletPath && !force {
-		return "", fmt.Errorf("master-elect tablet %v is already master - specify -force to override", zkTabletPath)
+		return fmt.Errorf("master-elect tablet %v is already master - specify -force to override", zkTabletPath)
 	}
 
 	tablet, err := wr.readTablet(zkTabletPath)
 	if err != nil {
-		return
+		return err
 	}
 
-	actionPath, err = wr.ai.ReparentShard(zkShardPath, zkTabletPath)
+	actionPath, err := wr.ai.ReparentShard(zkShardPath, zkTabletPath)
 	if err != nil {
-		return
+		return err
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
 	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, false)
 	if err != nil {
-		return
+		return err
 	}
 
 	if !ok {
 		// just clean up for now, in the future we may want to try harder, or wait
 		wr.zconn.Delete(actionPath, -1)
-		panic(fmt.Errorf("failed to obtain action lock: %v", actionPath))
+		return fmt.Errorf("ReparentShard failed to obtain shard action lock")
 	}
 
-	// This method communicates via the action error in zk so that vtctl can initiate the
-	// action and then choose how to wait.
-	// FIXME(msolomon) if you don't wait, then this will fail
+	// This method communicates via the action error in zk so that vtctl
+	// can initiate the action and then choose how to wait. Use action
+	// wait to keep logic consistent.
 	go wr.reparentShardHandler(shardInfo, tablet, actionPath)
-	return
+	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
-/*
-shardInfo for the shard we want to reparent.
-masterElectTablet is the shart we want to promote when the time comes.
-zkShardActionPath - zk path to the node representing this action.
-*/
+// Handle action node error communication and cleanup
+//
+// shardInfo: the shard we want to reparent.
+// masterElectTablet: the tablet we want to promote when the time comes.
+// zkShardActionPath: zk path to the node representing this action.
 func (wr *Wrangler) reparentShardHandler(shardInfo *tm.ShardInfo, masterElectTablet *tm.TabletInfo, zkShardActionPath string) {
-	relog.Debug("reparentShard starting %#v %v", masterElectTablet, zkShardActionPath)
+	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, zkShardActionPath)
 	reparentErr := wr.reparentShard(shardInfo, masterElectTablet, zkShardActionPath)
-	relog.Debug("reparentShard finished %v", reparentErr)
+	relog.Info("reparentShard finished %v", reparentErr)
 
 	var err error
 	if reparentErr == nil {
@@ -155,6 +153,7 @@ func (wr *Wrangler) reparentShardHandler(shardInfo *tm.ShardInfo, masterElectTab
 	if err != nil {
 		relog.Error("action node update failed: %v", err)
 		if reparentErr != nil {
+			// This seems extreme, but failing fast is preferable here.
 			relog.Fatal("reparent failed: %v", reparentErr)
 		}
 	}
@@ -178,17 +177,23 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
 	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
-	relog.Debug("shardUids: %v", tabletAliases)
 	if err != nil {
 		return err
 	}
 
+	// FIXME(msolomon) Run validate shard first? What about the case when the
+	// master is dead?
+
+	// FIXME(msolomon) Ping all tablets before demote to minimize unavailaility.
+
+	// FIXME(msolomon) Use GetTabletMap to parallelize.
+
+	// FIXME(msolomon) this assumes that the replica nodes must all be
+	// in a good state when the reparent happens. The better thing to
+	// guarantee is that *enough* replica nodes are in a good state. In
+	// fact, "enough" is probably a function of each datacenter. It's
+	// complicated.
 	slaveTabletMap := make(map[uint]*tm.TabletInfo)
-	// FIXME(msolomon) this assumes that the replica nodes must all be in a good
-	// state when the reparent happens. the better thing to guarantee is that
-	// *enough* replica nodes are in a good state. In fact, "enough" is probably a function
-	// of each datacenter. It's complicated.
-	// FIXME(msolomon) handle multiple datacenters
 	for _, alias := range tabletAliases {
 		if alias.Uid == masterTablet.Uid {
 			// skip master
@@ -204,43 +209,43 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		slaveTabletMap[alias.Uid] = tablet
 	}
 
-	relog.Debug("read all slave tablets")
-
 	var masterPosition *mysqlctl.ReplicationPosition
 	// If the masterTablet type doesn't match, we can assume that it's been
 	// removed by other operations. For instance, a DBA or health-check process
 	// setting it's type to SCRAP.
-	if masterTablet.Type == tm.TYPE_MASTER && masterTablet.Uid != masterElectTablet.Uid {
-		relog.Debug("demote master %v", zkMasterTabletPath)
+	shouldDemoteMaster := masterTablet.Type == tm.TYPE_MASTER && masterTablet.Uid != masterElectTablet.Uid
+	if shouldDemoteMaster {
+		relog.Info("demote master %v", zkMasterTabletPath)
 		actionPath, err := wr.ai.DemoteMaster(zkMasterTabletPath)
 		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		}
+		if err == nil {
+			// masterPosition, err = getMasterPosition(masterTablet.Tablet)
+			masterPosition, err = wr.getMasterPositionWithAction(masterTablet, zkShardActionPath)
 		}
 		if err != nil {
-			// FIXME(msolomon) This suggests that the master is dead and we need to take steps.
-			return err
-		}
-
-		//masterPosition, err = getMasterPosition(masterTablet.Tablet)
-		masterPosition, err = wr.getMasterPositionWithAction(masterTablet, zkShardActionPath)
-		if err != nil {
-			// FIXME(msolomon) handle the case where the master is failed, not demoted.
-			// Suggest retry, or scrap master and force reparenting.
+			// FIXME(msolomon) This suggests that the master is dead and we
+			// need to take steps. We could either pop a prompt, or make
+			// retrying the action painless.
+			relog.Warning("demote master failed: vtctl -force ScrapTablet %v ?", zkMasterTabletPath)
 			return err
 		}
 	}
 
 	if masterTablet.Uid != masterElectTablet.Uid {
-		relog.Debug("check slaves %v", zkMasterTabletPath)
-		//err = checkSlaveConsistency(slaveTabletMap, masterPosition, zkShardActionPath)
+		relog.Info("check slaves %v", zkMasterTabletPath)
+		// err = checkSlaveConsistency(slaveTabletMap, masterPosition, zkShardActionPath)
 		err = wr.checkSlaveConsistencyWithActions(slaveTabletMap, masterPosition, zkShardActionPath)
 		if err != nil {
 			return err
 		}
 	} else {
+		relog.Info("forcing reparent to same master %v", zkMasterTabletPath)
 		// We are forcing a reparenting. Make sure that all slaves stop so
 		// no data is accidentally replicated through before we call RestartSlave.
-		//err = stopSlaves(slaveTabletMap)
+		// err = stopSlaves(slaveTabletMap)
+		relog.Info("stop slaves %v", zkMasterTabletPath)
 		err = wr.stopSlavesWithAction(slaveTabletMap, zkShardActionPath)
 		if err != nil {
 			return err
@@ -248,10 +253,10 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 		// Force slaves to break, just in case they were not advertised in
 		// the replication graph.
-		relog.Debug("break slaves %v", zkMasterTabletPath)
+		relog.Info("break slaves %v", zkMasterTabletPath)
 		actionPath, err := wr.ai.BreakSlaves(zkMasterTabletPath)
 		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 		}
 		if err != nil {
 			return err
@@ -259,14 +264,17 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	}
 
 	zkMasterElectPath := masterElectTablet.Path()
-	relog.Debug("promote slave %v", zkMasterElectPath)
+	relog.Info("promote slave %v", zkMasterElectPath)
 	actionPath, err := wr.ai.PromoteSlave(zkMasterElectPath, zkShardActionPath)
 	if err == nil {
-		err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	}
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master-elect is dead.
 		// We need to classify certain errors as temporary and retry.
+		if shouldDemoteMaster {
+			relog.Warning("promote slave failed, demoted master is still read only: vtctl SetReadWrite %v ?", zkMasterTabletPath)
+		}
 		return err
 	}
 
@@ -275,55 +283,70 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		delete(slaveTabletMap, masterElectTablet.Uid)
 	}
 
-	// FIXME(msolomon) actions could block forever - set a reasonable deadline
 	restartSlaveErrors := make([]error, 0, len(slaveTabletMap))
-	// FIXME(msolomon) could be done in parallel
+	wg := new(sync.WaitGroup)
+	mu := new(sync.Mutex)
 	for _, slaveTablet := range slaveTabletMap {
-		relog.Debug("restart slave %v", slaveTablet.Path())
-		actionPath, err := wr.ai.RestartSlave(slaveTablet.Path(), zkShardActionPath)
-		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, 1*time.Minute)
+		relog.Info("restart slave %v", slaveTablet.Path())
+		wg.Add(1)
+		f := func(zkSlavePath string) {
+			actionPath, err := wr.ai.RestartSlave(zkSlavePath, zkShardActionPath)
+			if err == nil {
+				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+			}
+			if err != nil {
+				// FIXME(msolomon) Don't bail early, just mark this phase as
+				// failed. We might decide to proceed if enough of these
+				// succeed.
+				//
+				// FIXME(msolomon) This is a somewhat delicate retry -
+				// have to figure out why it failed on the tablet end. This
+				// could lead to a nasty case of having to recompute where to
+				// start replication. Practically speaking, that chance is
+				// pretty low.
+				relog.Warning("restart slave failed: %v %v", zkSlavePath, err)
+				mu.Lock()
+				restartSlaveErrors = append(restartSlaveErrors, err)
+				mu.Unlock()
+			}
+			wg.Done()
 		}
-		if err != nil {
-			// FIXME(msolomon) Don't bail early, just mark this phase as failed. We might
-			// decide to proceed if enough of these succeed.
-			// FIXME(msolomon) This is a somewhat delicate retry - have to figure out
-			// why it failed on the tablet end. This could lead to a nasty case of having
-			// to recompute where to start replication. Practically speaking, that chance
-			// is pretty low.
-			relog.Warning("restart slave failed: %v", err)
-			restartSlaveErrors = append(restartSlaveErrors, err)
-		}
+		go f(slaveTablet.Path())
 	}
+	wg.Wait()
 
 	if masterTablet.Uid != masterElectTablet.Uid {
-		relog.Debug("scrap demoted master %v", zkMasterTabletPath)
+		relog.Info("scrap demoted master %v", zkMasterTabletPath)
 		// If there is a master, scrap it for now.
 		// We could reintroduce it and reparent it and use it as new replica.
-		if masterPosition != nil {
+		if shouldDemoteMaster {
 			scrapActionPath, scrapErr := wr.ai.Scrap(zkMasterTabletPath)
+			if scrapErr == nil {
+				scrapErr = wr.ai.WaitForCompletion(scrapActionPath, wr.actionTimeout())
+			}
 			if scrapErr != nil {
-				relog.Warning("initiating scrap failed: %v", scrapErr)
-			} else {
-				err = wr.ai.WaitForCompletion(scrapActionPath, 1*time.Minute)
-				if err != nil {
-					relog.Warning("waiting for scrap failed: %v", err)
-				}
+				// The sub action is non-critical, so just warn.
+				relog.Warning("waiting for scrap failed: %v", scrapErr)
 			}
 		} else {
-			relog.Debug("forcing scrap: %v", zkMasterTabletPath)
-			// The master is dead, so we have to take action ourselves since we presume
-			// the actor will not get the initiation for some time.
+			relog.Info("force scrap errant master %v", zkMasterTabletPath)
+			// The master is dead so execute the action locally instead of
+			// enqueing the scrap action for an arbitrary amount of time.
 			if scrapErr := tm.Scrap(wr.zconn, zkMasterTabletPath, false); scrapErr != nil {
 				relog.Warning("forcing scrap failed: %v", scrapErr)
 			}
 		}
 	}
 
-	relog.Debug("update shard")
-	err = tm.RebuildShard(wr.zconn, shardInfo.ShardPath())
-	if err != nil {
-		return err
+	// If the majority of slaves restarted, move ahead.
+	majorityRestart := len(restartSlaveErrors) < (len(slaveTabletMap) / 2)
+	if majorityRestart {
+		relog.Info("rebuilding shard data in zk")
+		if err = tm.RebuildShard(wr.zconn, shardInfo.ShardPath()); err != nil {
+			return err
+		}
+	} else {
+		relog.Warning("minority reparent, force serving graph rebuild: vtctl RebuildShard %v ?", shardInfo.ShardPath())
 	}
 
 	if len(restartSlaveErrors) > 0 {

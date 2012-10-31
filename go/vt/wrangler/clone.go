@@ -41,7 +41,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) erro
 		return err
 	}
 
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout)
+	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	if err != nil {
 		return err
 	}
@@ -70,7 +70,7 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, zkDstTabletPath string) error {
 		return err
 	}
 
-	if err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout); err != nil {
+	if err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
 		return err
 	}
 
