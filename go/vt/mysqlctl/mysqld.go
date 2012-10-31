@@ -24,6 +24,7 @@ import (
 
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
+	vtenv "code.google.com/p/vitess/go/vt/env"
 )
 
 const (
@@ -72,13 +73,12 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 
 func Start(mt *Mysqld) error {
 	relog.Info("mysqlctl.Start")
+	// FIXME(szopa): add VtMysqlRoot to env.
 	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
 	name := dir + "/bin/mysqld_safe"
 	arg := []string{
 		"--defaults-file=" + mt.MycnfFile}
-	env := []string{
-		os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
-	}
+	env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
 	cmd := exec.Command(name, arg...)
 	cmd.Dir = dir
@@ -175,8 +175,12 @@ func Init(mt *Mysqld) error {
 		relog.Error("%s", err.Error())
 		return err
 	}
-
-	cnfTemplatePath := os.ExpandEnv("$VTROOT/config/mycnf")
+	root, err := vtenv.VtRoot()
+	if err != nil {
+		relog.Error("%s", err.Error())
+		return err
+	}
+	cnfTemplatePath := path.Join(root, "config/mycnf")
 	configData, err := MakeMycnfForMysqld(mt, cnfTemplatePath, "tablet uid?")
 	if err == nil {
 		err = ioutil.WriteFile(mt.MycnfFile, []byte(configData), 0664)
@@ -186,7 +190,7 @@ func Init(mt *Mysqld) error {
 		return err
 	}
 
-	dbTbzPath := os.ExpandEnv("$VTROOT/data/bootstrap/mysql-db-dir.tbz")
+	dbTbzPath := path.Join(root, "data/bootstrap/mysql-db-dir.tbz")
 	relog.Info("decompress bootstrap db %v", dbTbzPath)
 	args := []string{"-xj", "-C", mt.config.DataDir, "-f", dbTbzPath}
 	_, tarErr := execCmd("tar", args, []string{}, "")
@@ -198,7 +202,7 @@ func Init(mt *Mysqld) error {
 		relog.Error("failed starting, check %v", mt.config.ErrorLogPath)
 		return err
 	}
-	schemaPath := os.ExpandEnv("$VTROOT/data/bootstrap/_vt_schema.sql")
+	schemaPath := path.Join(root, "data/bootstrap/_vt_schema.sql")
 	schema, err := ioutil.ReadFile(schemaPath)
 	if err != nil {
 		return err

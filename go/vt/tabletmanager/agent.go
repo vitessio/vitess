@@ -29,6 +29,7 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -95,7 +96,11 @@ func (agent *ActionAgent) Tablet() *TabletInfo {
 }
 
 func (agent *ActionAgent) resolvePaths() error {
-	path := os.ExpandEnv("$VTROOT/bin/vtaction")
+	vtroot, err := env.VtRoot()
+	if err != nil {
+		return err
+	}
+	path := path.Join(vtroot, "bin/vtaction")
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("vtaction binary %s not found: %v", path, err)
 	}
