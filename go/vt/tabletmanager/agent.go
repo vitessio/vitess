@@ -37,7 +37,7 @@ import (
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The
 // agent will execute these in a new goroutine each time a change is
 // triggered.
-type TabletChangeCallback func(tablet Tablet)
+type TabletChangeCallback func(oldTablet, newTablet Tablet)
 
 type ActionAgent struct {
 	zconn             zk.Conn
@@ -148,15 +148,20 @@ func (agent *ActionAgent) dispatchAction(actionPath string) error {
 
 	relog.Info("agent action completed %v %s", actionPath, stdOut)
 
+	// Save the old tablet so callbacks can have a better idea of the precise
+	// nature of the transition.
+	oldTablet := agent.Tablet().Tablet
+
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
-		relog.Warning("failed rereading tablet after action: %v %v", actionPath, err)
+		relog.Warning("failed rereading tablet after action - services may be inconsistent: %v %v", actionPath, err)
 	} else {
 		agent.mutex.Lock()
+		// Access directly since we have the lock.
+		newTablet := agent._tablet.Tablet
 		for _, f := range agent.changeCallbacks {
 			relog.Info("running tablet callback: %v %v", actionPath, f)
-			// Access directly since we have the lock.
-			go f(*agent._tablet.Tablet)
+			go f(*oldTablet, *newTablet)
 		}
 		agent.mutex.Unlock()
 	}

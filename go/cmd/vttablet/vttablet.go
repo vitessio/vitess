@@ -167,13 +167,19 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 
 	bindAddr := fmt.Sprintf(":%v", *port)
 
-	// Action agent listens to changes in zookeeper and makes modifcations to this
-	// tablet.
+	// Action agent listens to changes in zookeeper and makes
+	// modifcations to this tablet.
 	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DbConfigsFile, *dbconfigs.DbCredentialsFile)
-	agent.AddChangeCallback(func(tablet tabletmanager.Tablet) {
-		if tablet.IsServingType() {
+	agent.AddChangeCallback(func(oldTablet, newTablet tabletmanager.Tablet) {
+		if newTablet.IsServingType() {
 			if dbcfgs.App.Dbname == "" {
-				dbcfgs.App.Dbname = tablet.DbName()
+				dbcfgs.App.Dbname = newTablet.DbName()
+			}
+			// Transitioning from replica to master, first disconnect
+			// existing connections. "false" indicateds that clients must
+			// re-resolve their endpoint before reconnecting.
+			if newTablet.Type == tabletmanager.TYPE_MASTER && oldTablet.Type != tabletmanager.TYPE_MASTER {
+				ts.DisallowQueries(false)
 			}
 			ts.AllowQueries(dbcfgs.App)
 		} else {
@@ -187,8 +193,8 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
-	// The TabletManager rpc service allow other processes to query for management
-	// related data. It might be co-registered with the query server.
+	// The TabletManager service exports read-only management related
+	// data.
 	tm := tabletmanager.NewTabletManager(bindAddr, nil, mysqld)
 	rpc.Register(tm)
 }
