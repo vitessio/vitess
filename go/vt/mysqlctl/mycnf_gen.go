@@ -2,9 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-  Generate my.cnf files from templates.
-*/
+//  Generate my.cnf files from templates.
 
 package mysqlctl
 
@@ -34,13 +32,11 @@ const (
 	snapshotDir      = "snapshot"
 )
 
-/*
-NewMycnf fills the Mycnf structure with vt root paths and derived values.
-This is used to fill out the cnfTemplate values and generate my.cnf.
-uid is a unique id for a particular tablet - it must be unique within the
-tabletservers deployed within a keyspace, lest there be collisions on disk.
-mysqldPort needs to be unique per instance per machine.
-*/
+// NewMycnf fills the Mycnf structure with vt root paths and derived values.
+// This is used to fill out the cnfTemplate values and generate my.cnf.
+// uid is a unique id for a particular tablet - it must be unique within the
+// tabletservers deployed within a keyspace, lest there be collisions on disk.
+// mysqldPort needs to be unique per instance per machine.
 func NewMycnf(uid uint32, mysqlPort int, vtRepl VtReplParams) *Mycnf {
 	cnf := new(Mycnf)
 	tabletDir := TabletDir(uid)
@@ -63,6 +59,8 @@ func NewMycnf(uid uint32, mysqlPort int, vtRepl VtReplParams) *Mycnf {
 	cnf.BinLogIndexPath = cnf.BinLogPath + ".index"
 	cnf.MasterInfoFile = path.Join(tabletDir, "master.info")
 	cnf.PidFile = path.Join(tabletDir, "mysql.pid")
+	cnf.TmpDir = path.Join(tabletDir, "tmp")
+	cnf.SlaveLoadTmpDir = cnf.TmpDir
 	return cnf
 }
 
@@ -87,14 +85,13 @@ func DirectoryList(cnf *Mycnf) []string {
 		cnf.DataDir,
 		cnf.InnodbDataHomeDir,
 		cnf.InnodbLogGroupHomeDir,
+		cnf.TmpDir,
 		path.Join(TabletDir(cnf.ServerId), relayLogDir),
 		path.Join(TabletDir(cnf.ServerId), binLogDir),
 	}
 }
 
-/*
-  Join cnf files cnfPaths and subsitute in the right values.
-*/
+// Join cnf files cnfPaths and subsitute in the right values.
 func MakeMycnf(cnfFiles []string, mycnf *Mycnf, header string) (string, error) {
 	myTemplateSource := new(bytes.Buffer)
 	for _, line := range strings.Split(header, "\n") {
@@ -122,9 +119,8 @@ func MakeMycnf(cnfFiles []string, mycnf *Mycnf, header string) (string, error) {
 	return mycnfData.String(), nil
 }
 
-/* Create a config for this instance. Search cnfFiles for the appropriate
-cnf template files.
-*/
+// Create a config for this instance. Search cnfFiles for the
+// appropriate cnf template files.
 func MakeMycnfForMysqld(mysqld *Mysqld, cnfFiles, header string) (string, error) {
 	// FIXME(msolomon) determine config list from mysqld struct
 	cnfs := []string{"default", "master", "replica"}

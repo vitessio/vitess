@@ -37,6 +37,8 @@ type Mycnf struct {
 	BinLogIndexPath       string
 	MasterInfoFile        string
 	PidFile               string
+	TmpDir                string
+	SlaveLoadTmpDir       string
 	mycnfMap              map[string]string
 }
 
