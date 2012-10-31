@@ -8,11 +8,13 @@ import (
 	"bytes"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"syscall"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
+	vtenv "code.google.com/p/vitess/go/vt/env"
 )
 
 type Hook struct {
@@ -34,6 +36,7 @@ var (
 	HOOK_STAT_FAILED            = -2
 	HOOK_CANNOT_GET_EXIT_STATUS = -3
 	HOOK_INVALID_NAME           = -4
+	HOOK_VTROOT_ERROR           = -5
 )
 
 func NewHook(name string, params map[string]string) *Hook {
@@ -54,9 +57,17 @@ func (hook *Hook) Execute() (result *HookResult) {
 		return result
 	}
 
+	// find our root
+	root, err := vtenv.VtRoot()
+	if err != nil {
+		result.ExitStatus = HOOK_VTROOT_ERROR
+		result.Stdout = "Cannot get VTROOT: " + err.Error() + "\n"
+		return result
+	}
+
 	// see if the hook exists
-	vthook := os.ExpandEnv("$VTROOT/vthook/" + hook.Name)
-	_, err := os.Stat(vthook)
+	vthook := path.Join(root, "vthook", hook.Name)
+	_, err = os.Stat(vthook)
 	if err != nil {
 		if os.IsNotExist(err) {
 			result.ExitStatus = HOOK_DOES_NOT_EXIST
