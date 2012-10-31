@@ -30,10 +30,24 @@ func (mysqld *Mysqld) DemoteMaster() (*ReplicationPosition, error) {
 //
 // replicationState: info slaves need to reparent themselves
 // waitPosition: slaves can wait for this position when restarting replication
-// timePromoted: this timestamp (unix nanoseconds) is inserted into _vt.replication_test to verify the replication config
+// timePromoted: this timestamp (unix nanoseconds) is inserted into _vt.replication_log to verify the replication config
 func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *ReplicationState, waitPosition *ReplicationPosition, timePromoted int64, err error) {
+	if err = mysqld.StopSlave(); err != nil {
+		return
+	}
+
+	// If we are forced, we have to get our status as a master, not a slave.
+	masterAddr, _ := mysqld.GetMasterAddr()
+	lastRepPos, err := mysqld.SlaveStatus()
+	if err == ErrNotSlave {
+		lastRepPos, err = mysqld.MasterStatus()
+		masterAddr = mysqld.Addr()
+	}
+	if err != nil {
+		return
+	}
+
 	cmds := []string{
-		"STOP SLAVE",
 		"RESET MASTER",
 		"RESET SLAVE",
 	}
@@ -46,10 +60,15 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 	}
 	replicationState = NewReplicationState(mysqld.Addr(), mysqld.replParams.Uname, mysqld.replParams.Pass)
 	replicationState.ReplicationPosition = *replicationPosition
+	lastPos := masterAddr + "@" + lastRepPos.MapKey()
+	newPos := replicationState.MasterAddr() + "@" + replicationState.ReplicationPosition.MapKey()
 	timePromoted = time.Now().UnixNano()
 	// write a row to verify that replication is functioning
-	cmd := fmt.Sprintf("INSERT INTO _vt.replication_test (time_created_ns) VALUES (%v)", timePromoted)
-	if err = mysqld.executeSuperQuery(cmd); err != nil {
+	cmds = []string{
+		fmt.Sprintf("INSERT INTO _vt.replication_log (time_created_ns, note) VALUES (%v, 'reparent check')", timePromoted),
+		fmt.Sprintf("INSERT INTO _vt.reparent_log (time_created_ns, last_position, new_position) VALUES (%v, '%v', '%v')", timePromoted, lastPos, newPos),
+	}
+	if err = mysqld.executeSuperQueryList(cmds); err != nil {
 		return
 	}
 	// this is the wait-point for checking replication
@@ -88,8 +107,8 @@ func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosit
 
 // Check for the magic row inserted under controlled reparenting.
 func (mysqld *Mysqld) CheckReplication(timeCheck int64) error {
-	relog.Info("Check Slave")
-	checkQuery := fmt.Sprintf("SELECT * FROM _vt.replication_test WHERE time_created_ns = %v",
+	relog.Info("Check replication restarted")
+	checkQuery := fmt.Sprintf("SELECT * FROM _vt.replication_log WHERE time_created_ns = %v",
 		timeCheck)
 	rows, err := mysqld.fetchSuperQuery(checkQuery)
 	if err != nil {

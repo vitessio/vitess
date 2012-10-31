@@ -208,7 +208,7 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey,
 	masterAddr := ""
 	replicationPosition, statusErr := mysqld.SlaveStatus()
 	if statusErr != nil {
-		if statusErr != ERR_NOT_SLAVE {
+		if statusErr != ErrNotSlave {
 			// this is a real error
 			return nil, statusErr
 		}

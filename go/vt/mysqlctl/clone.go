@@ -35,7 +35,7 @@ const (
 func (mysqld *Mysqld) ValidateCloneSource() error {
 	slaveStatus, err := mysqld.slaveStatus()
 	if err != nil {
-		if err != ERR_NOT_SLAVE {
+		if err != ErrNotSlave {
 			return fmt.Errorf("mysqlctl: ValidateCloneSource failed, %v", err)
 		}
 	} else {
@@ -182,7 +182,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	slaveStatus, slaveErr := mysqld.slaveStatus()
 	if slaveErr == nil {
 		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
-	} else if slaveErr == ERR_NOT_SLAVE {
+	} else if slaveErr == ErrNotSlave {
 		sourceIsMaster = true
 	} else {
 		// If we can't get any data, just fail.

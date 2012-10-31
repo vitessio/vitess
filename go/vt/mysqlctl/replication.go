@@ -49,6 +49,10 @@ type ReplicationState struct {
 	MasterConnectRetry  int
 }
 
+func (rs ReplicationState) MasterAddr() string {
+	return fmt.Sprintf("%v:%v", rs.MasterHost, rs.MasterPort)
+}
+
 func NewReplicationState(masterAddr, user, passwd string) *ReplicationState {
 	addrPieces := strings.Split(masterAddr, ":")
 	port, err := strconv.Atoi(addrPieces[1])
@@ -216,7 +220,7 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.executeSuperQuery(query)
 }
 
-var ERR_NOT_SLAVE = errors.New("no slave status")
+var ErrNotSlave = errors.New("no slave status")
 
 func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 	rows, err := mysqld.fetchSuperQuery("SHOW SLAVE STATUS")
@@ -224,7 +228,7 @@ func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 		return nil, err
 	}
 	if len(rows) != 1 {
-		return nil, ERR_NOT_SLAVE
+		return nil, ErrNotSlave
 	}
 
 	rowMap := make(map[string]string)

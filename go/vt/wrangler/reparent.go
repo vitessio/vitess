@@ -37,7 +37,7 @@ On X: (Promote Slave)
   RESET SLAVE;
   SHOW MASTER STATUS;
     replication file,position
-  INSERT INTO _vt.replication_test (time_created_ns) VALUES (<time>);
+  INSERT INTO _vt.replication_log (time_created_ns, 'reparent check') VALUES (<time>);
   SHOW MASTER STATUS;
     wait file,position
   SET GLOBAL READ_ONLY=0;
@@ -54,7 +54,7 @@ For all slaves in majority N:
     CHANGE MASTER TO X;
     START SLAVE;
     SELECT MASTER_POS_WAIT(file, pos, deadline)
-    SELECT time_created FROM _vt.replication_test WHERE time_created_ns = <time>;
+    SELECT time_created FROM _vt.replication_log WHERE time_created_ns = <time>;
 
 if no connection to N is available, ???
 
