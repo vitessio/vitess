@@ -51,40 +51,16 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		defer func() {
 			calls <- ctx
 		}()
+		zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
+		zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_reply.json")
+		var args *tm.SlavePositionReq
 		if masterPosition != nil {
-			zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
-			zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_reply.json")
-			args := &tm.SlavePositionReq{*masterPosition, int(wr.actionTimeout().Seconds())}
 			// If the master position is known, do our best to wait for replication to catch up.
-			_, err := wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			actionPath, err := wr.ai.WaitSlavePosition(ti.Path(), zkArgsPath, zkReplyPath)
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			data, _, err := wr.zconn.Get(zkReplyPath)
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			ctx.position = new(mysqlctl.ReplicationPosition)
-			if err = json.Unmarshal([]byte(data), ctx.position); err != nil {
-				ctx.err = err
-				return
-			}
+			args = &tm.SlavePositionReq{*masterPosition, int(wr.actionTimeout().Seconds())}
 		} else {
+			// In the case where a master is down, look for the last bit of data copied and wait
+			// for that to apply. That gives us a chance to wait for all data.
 			zkSlaveReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_initial_slave_position_reply.json")
-			zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
-			zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_reply.json")
 			actionPath, err := wr.ai.SlavePosition(ti.Path(), zkSlaveReplyPath)
 			if err != nil {
 				ctx.err = err
@@ -105,47 +81,55 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 				ctx.err = err
 				return
 			}
-			// In the case where a master is down, look for the last bit of data copied and wait
-			// for that to apply. That gives us a chance to wait for all data.
 			lastDataPos := mysqlctl.ReplicationPosition{MasterLogFile: replPos.MasterLogFileIo,
 				MasterLogPositionIo: replPos.MasterLogPositionIo}
-			args := &tm.SlavePositionReq{lastDataPos, int(wr.actionTimeout().Seconds())}
-			_, err = wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			actionPath, err = wr.ai.WaitSlavePosition(ti.Path(), zkArgsPath, zkReplyPath)
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			data, _, err = wr.zconn.Get(zkReplyPath)
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			ctx.position = new(mysqlctl.ReplicationPosition)
-			if err = json.Unmarshal([]byte(data), ctx.position); err != nil {
-				ctx.err = err
-				return
-			}
+			args = &tm.SlavePositionReq{lastDataPos, int(wr.actionTimeout().Seconds())}
+		}
+
+		_, err := wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		if err != nil {
+			ctx.err = err
+			return
+		}
+		actionPath, err := wr.ai.WaitSlavePosition(ti.Path(), zkArgsPath, zkReplyPath)
+		if err != nil {
+			ctx.err = err
+			return
+		}
+		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		if err != nil {
+			ctx.err = err
+			return
+		}
+		data, _, err := wr.zconn.Get(zkReplyPath)
+		if err != nil {
+			ctx.err = err
+			return
+		}
+		ctx.position = new(mysqlctl.ReplicationPosition)
+		if err = json.Unmarshal([]byte(data), ctx.position); err != nil {
+			ctx.err = err
+			return
 		}
 	}
 
+	reparentableSlaveCount := 0
 	for _, tablet := range tabletMap {
+		// These types are explicitly excluded from reparenting since you
+		// will just wait forever for them to catch up.  A possible
+		// improvement is waiting for the io thread to reach the same
+		// position as the sql thread on a normal slave.
+		if tablet.Type == tm.TYPE_LAG || tablet.Type == tm.TYPE_EXPERIMENTAL {
+			continue
+		}
 		// Pass loop variable explicitly so we don't have a concurrency issue.
 		go f(tablet)
+		reparentableSlaveCount++
 	}
 
 	// map positions to tablets
 	positionMap := make(map[string][]uint)
-	for i := 0; i < len(tabletMap); i++ {
+	for i := 0; i < reparentableSlaveCount; i++ {
 		ctx := <-calls
 		mapKey := "unavailable-tablet-error"
 		if ctx.err == nil {
