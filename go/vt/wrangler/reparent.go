@@ -85,10 +85,13 @@ const (
 // Create the reparenting action and launch a goroutine to coordinate
 // the procedure.
 //
-// force: true if we are trying to skip sanity checks - mostly for test setups
-func (wr *Wrangler) ReparentShard(zkShardPath, zkTabletPath string, force bool) error {
+// leaveMasterReadOnly: leave the master in read-only mode, even
+//   though all the other necessary updates have been made.
+// forceReparentToCurrentMaster: mostly for test setups, this can
+//   cause data loss.
+func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
 	tm.MustBeShardPath(zkShardPath)
-	tm.MustBeTabletPath(zkTabletPath)
+	tm.MustBeTabletPath(zkMasterElectTabletPath)
 
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
@@ -99,16 +102,16 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkTabletPath string, force bool) 
 	if err != nil {
 		return err
 	}
-	if currentMasterTabletPath == zkTabletPath && !force {
-		return fmt.Errorf("master-elect tablet %v is already master - specify -force to override", zkTabletPath)
+	if currentMasterTabletPath == zkMasterElectTabletPath && !forceReparentToCurrentMaster {
+		return fmt.Errorf("master-elect tablet %v is already master - specify -force to override", zkMasterElectTabletPath)
 	}
 
-	tablet, err := wr.readTablet(zkTabletPath)
+	masterElectTablet, err := wr.readTablet(zkMasterElectTabletPath)
 	if err != nil {
 		return err
 	}
 
-	actionPath, err := wr.ai.ReparentShard(zkShardPath, zkTabletPath)
+	actionPath, err := wr.ai.ReparentShard(zkShardPath, zkMasterElectTabletPath)
 	if err != nil {
 		return err
 	}
@@ -125,48 +128,21 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkTabletPath string, force bool) 
 		return fmt.Errorf("ReparentShard failed to obtain shard action lock")
 	}
 
-	// This method communicates via the action error in zk so that vtctl
-	// can initiate the action and then choose how to wait. Use action
-	// wait to keep logic consistent.
-	go wr.reparentShardHandler(shardInfo, tablet, actionPath)
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-}
-
-// Handle action node error communication and cleanup
-//
-// shardInfo: the shard we want to reparent.
-// masterElectTablet: the tablet we want to promote when the time comes.
-// zkShardActionPath: zk path to the node representing this action.
-func (wr *Wrangler) reparentShardHandler(shardInfo *tm.ShardInfo, masterElectTablet *tm.TabletInfo, zkShardActionPath string) {
-	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, zkShardActionPath)
-	reparentErr := wr.reparentShard(shardInfo, masterElectTablet, zkShardActionPath)
+	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, actionPath)
+	reparentErr := wr.reparentShard(shardInfo, masterElectTablet, actionPath, leaveMasterReadOnly)
 	relog.Info("reparentShard finished %v", reparentErr)
 
-	var err error
-	if reparentErr == nil {
-		err = zk.DeleteRecursive(wr.zconn, zkShardActionPath, -1)
-	} else {
-		data, stat, err := wr.zconn.Get(zkShardActionPath)
-		if err == nil {
-			var actionNode *tm.ActionNode
-			actionNode, err = tm.ActionNodeFromJson(data, zkShardActionPath)
-			if err == nil {
-				actionNode.Error = reparentErr.Error()
-				data = tm.ActionNodeToJson(actionNode)
-				_, err = wr.zconn.Set(zkShardActionPath, data, stat.Version())
-			}
+	err = wr.handleActionError(actionPath, reparentErr)
+	if reparentErr != nil {
+		if err != nil {
+			relog.Warning("handleActionError failed: %v", err)
 		}
+		return reparentErr
 	}
-	if err != nil {
-		relog.Error("action node update failed: %v", err)
-		if reparentErr != nil {
-			// This seems extreme, but failing fast is preferable here.
-			relog.Fatal("reparent failed: %v", reparentErr)
-		}
-	}
+	return err
 }
 
-func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm.TabletInfo, zkShardActionPath string) error {
+func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm.TabletInfo, zkShardActionPath string, leaveMasterReadOnly bool) error {
 	// Get shard's master tablet.
 	zkMasterTabletPath, err := shardInfo.MasterTabletPath()
 	if err != nil {
@@ -348,17 +324,21 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	// If the majority of slaves restarted, move ahead.
 	majorityRestart := len(restartSlaveErrors) < (len(slaveTabletMap) / 2)
 	if majorityRestart {
-		relog.Info("marking master read-write %v", zkMasterTabletPath)
-		actionPath, err := wr.ai.SetReadWrite(zkMasterElectPath)
-		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		if leaveMasterReadOnly {
+			relog.Warning("leaving master read-only, vtctl SetReadWrite %v ?", zkMasterTabletPath)
+		} else {
+			relog.Info("marking master read-write %v", zkMasterTabletPath)
+			actionPath, err := wr.ai.SetReadWrite(zkMasterElectPath)
+			if err == nil {
+				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+			}
 		}
 		relog.Info("rebuilding shard data in zk")
 		if err = wr.rebuildShard(shardInfo.ShardPath()); err != nil {
 			return err
 		}
 	} else {
-		relog.Warning("minority reparent, force serving graph rebuild: vtctl RebuildShard %v ?", shardInfo.ShardPath())
+		relog.Warning("minority reparent, force serving graph rebuild: vtctl RebuildShardGraph %v ?", shardInfo.ShardPath())
 	}
 
 	if len(restartSlaveErrors) > 0 {

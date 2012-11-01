@@ -97,6 +97,7 @@ Shards:
 
   ReparentShard <zk shard path> <zk tablet path>
     specify which shard to reparent and which tablet should be the new master
+    -leave-master-read-only: skip the flip to read-write mode
 
 
 Keyspaces:
@@ -162,6 +163,7 @@ var noWaitForAction = flag.Bool("no-wait", false,
 	"don't wait for action completion, detach")
 var waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
 var force = flag.Bool("force", false, "force action")
+var leaveMasterReadOnly = flag.Bool("leave-master-read-only", false, "only applies to ReparentShard")
 var pingTablets = flag.Bool("ping-tablets", false, "ping all tablets during validate")
 var dbNameOverride = flag.String("db-name-override", "", "override the name of the db used by vttablet")
 var logLevel = flag.String("log.level", "INFO", "set log level")
@@ -621,7 +623,7 @@ func main() {
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk shard path> <zk tablet path>", args[0])
 		}
-		err = wrangler.ReparentShard(args[1], args[2], *force)
+		err = wrangler.ReparentShard(args[1], args[2], *leaveMasterReadOnly, *force)
 	case "ExportZkns":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt root path>", args[0])
