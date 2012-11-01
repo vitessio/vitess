@@ -76,7 +76,7 @@ func TestShardInfo(t *testing.T) {
 	}()
 	zkPath := "/zk/global/vt/keyspaces/test_keyspace/shards/shard0"
 	// intentionally degenerate data to bypass empty data check
-	si, err := newShardInfo(zkPath, "{}")
+	si, err := NewShardInfo(zkPath, "{}")
 	if err != nil {
 		t.Error("newShardErr: %v", err)
 	}
@@ -157,5 +157,22 @@ func TestTabletPathFromActionPath(t *testing.T) {
 	expectedPath := "/zk/test/vt/tablets/0000062344"
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)
+	}
+}
+
+func TestReplicationPath2(t *testing.T) {
+	badReplPath := "/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF"
+	if IsTabletReplicationPath(badReplPath) {
+		t.Errorf("expected IsTabletReplicationPath to be false: %v", badReplPath)
+	}
+
+	badReplPath = "/zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000"
+	if IsTabletReplicationPath(badReplPath) {
+		t.Errorf("expected IsTabletReplicationPath to be false: %v", badReplPath)
+	}
+
+	goodReplPath := "/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF/xxx-01"
+	if !IsTabletReplicationPath(goodReplPath) {
+		t.Errorf("expected IsTabletReplicationPath to be true")
 	}
 }

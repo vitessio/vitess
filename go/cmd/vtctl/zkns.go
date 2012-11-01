@@ -11,10 +11,7 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-/*
- Export addresses from the VT serving graph to a legacy zkns server.
-*/
-
+// Export addresses from the VT serving graph to a legacy zkns server.
 func exportZkns(zconn zk.Conn, zkVtRoot string) error {
 	vtNsPath := path.Join(zkVtRoot, "ns")
 	zkCell := zk.ZkCellFromZkPath(zkVtRoot)

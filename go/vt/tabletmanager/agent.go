@@ -288,10 +288,10 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 		}
 
 		if !foundTablet {
-			addrs.Entries = append(addrs.Entries, *vtnsAddrForTablet(agent.Tablet().Tablet))
+			addrs.Entries = append(addrs.Entries, *VtnsAddrForTablet(agent.Tablet().Tablet))
 		}
 	} else {
-		addrs.Entries = append(addrs.Entries, *vtnsAddrForTablet(agent.Tablet().Tablet))
+		addrs.Entries = append(addrs.Entries, *VtnsAddrForTablet(agent.Tablet().Tablet))
 	}
 	return jscfg.ToJson(addrs), nil
 }
@@ -342,7 +342,7 @@ func resolveIpAddr(addr string) (string, error) {
 	return net.JoinHostPort(ipAddrs[0], port), nil
 }
 
-func vtnsAddrForTablet(tablet *Tablet) *naming.VtnsAddr {
+func VtnsAddrForTablet(tablet *Tablet) *naming.VtnsAddr {
 	host, port := splitHostPort(tablet.Addr)
 	entry := naming.NewAddr(tablet.Uid, host, 0)
 	entry.NamedPortMap["_vtocc"] = port

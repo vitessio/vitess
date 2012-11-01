@@ -83,11 +83,11 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 	}
 
 	if rebuildRequired {
-		if _, err := wr.RebuildShard(ti.ShardPath()); err != nil {
+		if _, err := wr.RebuildShardGraph(ti.ShardPath()); err != nil {
 			return err
 		}
 
-		if _, err := wr.RebuildKeyspace(ti.KeyspacePath()); err != nil {
+		if _, err := wr.RebuildKeyspaceGraph(ti.KeyspacePath()); err != nil {
 			return err
 		}
 	}

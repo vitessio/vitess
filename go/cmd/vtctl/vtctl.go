@@ -91,8 +91,8 @@ Tablets:
     This runs the specified hook on the given tablet.
 
 Shards:
-  RebuildShard <zk shard path>
-    Rebuild the shards serving data in zk.
+  RebuildShardGraph <zk shard path>
+    Rebuild the replication graph and shard serving data in zk.
     This may trigger an update to all connected clients
 
   ReparentShard <zk shard path> <zk tablet path>
@@ -103,7 +103,7 @@ Keyspaces:
   CreateKeyspace <zk keyspaces path>/<name> <shard count>
     e.g. CreateKeyspace /zk/global/vt/keyspaces/my_keyspace 4
 
-  RebuildKeyspace <zk keyspace path>
+  RebuildKeyspaceGraph <zk keyspace path>
     Rebuild the serving data for all shards in this keyspace.
     This may trigger an update to all connected clients
 
@@ -591,16 +591,32 @@ func main() {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
 		err = tm.PurgeActions(zconn, args[1])
-	case "RebuildShard":
+	case "RebuildShardGraph":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
-		actionPath, err = wrangler.RebuildShard(args[1])
-	case "RebuildKeyspace":
+		actionPath, err = wrangler.RebuildShardGraph(args[1])
+	case "RebuildKeyspaceGraph":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk keyspace path>", args[0])
 		}
-		actionPath, err = wrangler.RebuildKeyspace(args[1])
+		actionPath, err = wrangler.RebuildKeyspaceGraph(args[1])
+	case "RebuildReplicationGraph":
+		// This is sort of a nuclear option.
+		if len(args) < 2 {
+			relog.Fatal("action %v requires zk-vt-paths=<zk vt path>,... keyspaces=<keyspace>,...", args[0])
+		}
+
+		params := parseParams(args)
+		var keyspaces, zkVtPaths []string
+		if _, ok := params["zk-vt-paths"]; ok {
+			zkVtPaths = strings.Split(params["zk-vt-paths"], ",")
+		}
+		if _, ok := params["keyspaces"]; ok {
+			keyspaces = strings.Split(params["keyspaces"], ",")
+		}
+		// RebuildReplicationGraph zk-vt-paths=/zk/test_nj/vt,/zk/test_ny/vt keyspaces=test_keyspace
+		err = wrangler.RebuildReplicationGraph(zkVtPaths, keyspaces)
 	case "ReparentShard":
 		if len(args) != 3 {
 			relog.Fatal("action %v requires <zk shard path> <zk tablet path>", args[0])
@@ -683,21 +699,6 @@ func main() {
 			relog.Fatal("action %v requires <zk tablet path> ...", args[0])
 		}
 		err = dumpTablets(zconn, args[1:])
-	case "RebuildReplicationGraph":
-		if len(args) < 2 {
-			relog.Fatal("action %v requires zk-vt-paths=<zk vt path>,... keyspaces=<keyspace>,...", args[0])
-		}
-
-		params := parseParams(args)
-		var keyspaces, zkVtPaths []string
-		if _, ok := params["zk-vt-paths"]; ok {
-			zkVtPaths = strings.Split(params["zk-vt-paths"], ",")
-		}
-		if _, ok := params["keyspaces"]; ok {
-			keyspaces = strings.Split(params["keyspaces"], ",")
-		}
-		// RebuildReplicationGraph zk-vt-paths=/zk/test_nj/vt,/zk/test_ny/vt keyspaces=test_keyspace
-		err = wrangler.RebuildReplicationGraph(zkVtPaths, keyspaces, *waitTime)
 	case "GetSchema":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk tablet path>", args[0])

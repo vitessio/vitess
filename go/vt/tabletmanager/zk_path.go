@@ -164,19 +164,30 @@ func IsTabletReplicationPath(zkReplicationPath string) bool {
 func parseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint, err error) {
 	cell = zk.ZkCellFromZkPath(zkReplicationPath)
 	if cell != "global" {
-		cell = ""
-		err = fmt.Errorf("invalid cell, expected global: %v", zkReplicationPath)
-		return
+		return "", 0, fmt.Errorf("invalid replication path cell, expected global: %v", zkReplicationPath)
 	}
+
+	// /zk/cell/vt/keyspaces/<k>/shards/<s>/alias/...
+	pathParts := strings.Split(zkReplicationPath, "/")
+	shardIdx := -1
+	for i, part := range pathParts {
+		if part == "shards" {
+			shardIdx = i
+			break
+		}
+	}
+	if shardIdx == -1 || shardIdx+2 >= len(pathParts) {
+		return "", 0, fmt.Errorf("invalid replication path %v", zkReplicationPath)
+	}
+
 	nameParts := strings.Split(path.Base(zkReplicationPath), "-")
 	if len(nameParts) != 2 {
-		err = fmt.Errorf("invalid path %v", zkReplicationPath)
-		return
+		return "", 0, fmt.Errorf("invalid replication path %v", zkReplicationPath)
 	}
 	cell = nameParts[0]
 	_uid, err := strconv.ParseUint(nameParts[1], 10, 0)
 	if err != nil {
-		err = fmt.Errorf("invalid uid %v: %v", zkReplicationPath, err)
+		return "", 0, fmt.Errorf("invalid replication path uid %v: %v", zkReplicationPath, err)
 	}
 	uid = uint(_uid)
 	return

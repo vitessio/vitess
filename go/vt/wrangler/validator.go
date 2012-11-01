@@ -80,30 +80,31 @@ func (wr *Wrangler) validateAllTablets(zkKeyspacesPath string, wg *sync.WaitGrou
 	replicationPaths, err := zk.ChildrenRecursive(wr.zconn, zkKeyspacesPath)
 	if err != nil {
 		results <- vresult{zkKeyspacesPath, err}
-	} else {
-		cellSet := make(map[string]bool, 16)
-		for _, p := range replicationPaths {
-			p := path.Join(zkKeyspacesPath, p)
-			if tm.IsTabletReplicationPath(p) {
-				cell, _ := tm.ParseTabletReplicationPath(p)
-				cellSet[cell] = true
-			}
-		}
+		return
+	}
 
-		for cell, _ := range cellSet {
-			zkTabletsPath := path.Join("/zk", cell, tm.VtSubtree(zkKeyspacesPath), "tablets")
-			tabletUids, _, err := wr.zconn.Children(zkTabletsPath)
-			if err != nil {
-				results <- vresult{zkTabletsPath, err}
-			} else {
-				for _, tabletUid := range tabletUids {
-					tabletPath := path.Join(zkTabletsPath, tabletUid)
-					wg.Add(1)
-					go func() {
-						results <- vresult{tabletPath, tm.Validate(wr.zconn, tabletPath, "")}
-						wg.Done()
-					}()
-				}
+	cellSet := make(map[string]bool, 16)
+	for _, p := range replicationPaths {
+		p := path.Join(zkKeyspacesPath, p)
+		if tm.IsTabletReplicationPath(p) {
+			cell, _ := tm.ParseTabletReplicationPath(p)
+			cellSet[cell] = true
+		}
+	}
+
+	for cell, _ := range cellSet {
+		zkTabletsPath := path.Join("/zk", cell, tm.VtSubtree(zkKeyspacesPath), "tablets")
+		tabletUids, _, err := wr.zconn.Children(zkTabletsPath)
+		if err != nil {
+			results <- vresult{zkTabletsPath, err}
+		} else {
+			for _, tabletUid := range tabletUids {
+				tabletPath := path.Join(zkTabletsPath, tabletUid)
+				wg.Add(1)
+				go func() {
+					results <- vresult{tabletPath, tm.Validate(wr.zconn, tabletPath, "")}
+					wg.Done()
+				}()
 			}
 		}
 	}

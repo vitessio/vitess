@@ -354,7 +354,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 		}
 		relog.Info("rebuilding shard data in zk")
-		if err = tm.RebuildShard(wr.zconn, shardInfo.ShardPath()); err != nil {
+		if err = wr.rebuildShard(shardInfo.ShardPath()); err != nil {
 			return err
 		}
 	} else {
