@@ -3,6 +3,10 @@ import shutil
 from subprocess import check_call, Popen, CalledProcessError, PIPE
 import sys
 import time
+import warnings
+# Dropping a table inexplicably produces a warning despite
+# the "IF EXISTS" clause. Squelch these warnings.
+warnings.simplefilter("ignore")
 
 import MySQLdb
 
