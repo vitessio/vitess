@@ -105,23 +105,23 @@ func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) error {
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 
-	reply.Nodes = make([]*proto.ZkNode, 0, len(req.Paths))
+	reply.Nodes = make([]*proto.ZkNode, len(req.Paths))
 	errors := make([]error, 0, len(req.Paths))
-	for _, zkPath := range req.Paths {
-		zp := &proto.ZkPath{zkPath}
-		zn := &proto.ZkNode{}
+	for i, zkPath := range req.Paths {
 		wg.Add(1)
-		go func() {
+		go func(i int, zkPath string) {
+			zp := &proto.ZkPath{zkPath}
+			zn := &proto.ZkNode{}
 			err := zkr.Get(zp, zn)
-			mu.Lock()
 			if err != nil {
+				mu.Lock()
 				errors = append(errors, err)
+				mu.Unlock()
 			} else {
-				reply.Nodes = append(reply.Nodes, zn)
+				reply.Nodes[i] = zn
 			}
-			mu.Unlock()
 			wg.Done()
-		}()
+		}(i, zkPath)
 	}
 	wg.Wait()
 	mu.Lock()
