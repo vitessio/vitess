@@ -628,7 +628,7 @@ func main() {
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt root path>", args[0])
 		}
-		err = exportZkns(zconn, args[1])
+		err = wrangler.ExportZkns(args[1])
 	case "Resolve":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <keyspace>.<shard>.<db type>:<port name>", args[0])

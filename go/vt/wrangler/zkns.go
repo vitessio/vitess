@@ -1,4 +1,4 @@
-package main
+package zkwrangler
 
 import (
 	"fmt"
@@ -12,19 +12,19 @@ import (
 )
 
 // Export addresses from the VT serving graph to a legacy zkns server.
-func exportZkns(zconn zk.Conn, zkVtRoot string) error {
+func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
 	vtNsPath := path.Join(zkVtRoot, "ns")
 	zkCell := zk.ZkCellFromZkPath(zkVtRoot)
 	zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt", zkCell)
 
-	children, err := zk.ChildrenRecursive(zconn, vtNsPath)
+	children, err := zk.ChildrenRecursive(wr.zconn, vtNsPath)
 	if err != nil {
 		return err
 	}
 
 	for _, child := range children {
 		addrPath := path.Join(vtNsPath, child)
-		_, stat, err := zconn.Get(addrPath)
+		_, stat, err := wr.zconn.Get(addrPath)
 		if err != nil {
 			return err
 		}
@@ -33,15 +33,15 @@ func exportZkns(zconn zk.Conn, zkVtRoot string) error {
 			continue
 		}
 
-		if err = exportVtnsToZkns(zconn, addrPath, zknsRootPath); err != nil {
+		if err = wr.exportVtnsToZkns(addrPath, zknsRootPath); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func exportVtnsToZkns(zconn zk.Conn, zkVtnsAddrPath, zknsAddrPath string) error {
-	addrs, err := naming.ReadAddrs(zconn, zkVtnsAddrPath)
+func (wr *Wrangler) exportVtnsToZkns(zkVtnsAddrPath, zknsAddrPath string) error {
+	addrs, err := naming.ReadAddrs(wr.zconn, zkVtnsAddrPath)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func exportVtnsToZkns(zconn zk.Conn, zkVtnsAddrPath, zknsAddrPath string) error 
 	for i, entry := range addrs.Entries {
 		zknsAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, i)
 		zknsAddr := zkns.ZknsAddr{Host: entry.Host, Port: entry.NamedPortMap["_mysql"], NamedPortMap: entry.NamedPortMap}
-		err := WriteAddr(zconn, zknsAddrPath, &zknsAddr)
+		err := WriteAddr(wr.zconn, zknsAddrPath, &zknsAddr)
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func exportVtnsToZkns(zconn zk.Conn, zkVtnsAddrPath, zknsAddrPath string) error 
 	deleteIdx := len(addrs.Entries)
 	for {
 		zknsAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, deleteIdx)
-		err := zconn.Delete(zknsAddrPath, -1)
+		err := wr.zconn.Delete(zknsAddrPath, -1)
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			break
 		}
@@ -77,12 +77,12 @@ func exportVtnsToZkns(zconn zk.Conn, zkVtnsAddrPath, zknsAddrPath string) error 
 
 	// Write the VDNS entries for both vtocc and mysql
 	vtoccVdnsPath := fmt.Sprintf("%v/_vtocc.vdns", zknsAddrPath)
-	if err = WriteAddrs(zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
+	if err = WriteAddrs(wr.zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
 		return err
 	}
 
 	defaultVdnsPath := fmt.Sprintf("%v.vdns", zknsAddrPath)
-	if err = WriteAddrs(zconn, defaultVdnsPath, &defaultAddrs); err != nil {
+	if err = WriteAddrs(wr.zconn, defaultVdnsPath, &defaultAddrs); err != nil {
 		return err
 	}
 	return nil
