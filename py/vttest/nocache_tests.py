@@ -253,7 +253,7 @@ class TestNocache(framework.TestCase):
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
-    conn = db.connect("localhost:9461", 5, dbname=self.env.cfg['dbname'])
+    conn = db.connect("localhost:9461", 5, dbname="vt_test")
     cu = conn.cursor()
     self.env.execute("set vt_query_timeout=1")
     try:

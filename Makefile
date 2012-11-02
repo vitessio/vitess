@@ -43,10 +43,9 @@ unit_test:
 #	cd go/zk; go test
 #	cd go/zk/zkctl; go test
 
-# put a custom dbtest.json in your HOME directory if required
 occ_test:
-	if [ -e $$HOME/dbtest.json ]; then \
-		cd py/vttest ; ./occ_test.py -c $$HOME/dbtest.json ; \
+	if [ -e "/usr/bin/memcached" ]; then \
+		cd py/vttest ; ./occ_test.py -m ; \
 	else \
 		cd py/vttest ; ./occ_test.py ; \
 	fi

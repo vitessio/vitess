@@ -7,6 +7,7 @@
 import json
 import optparse
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -23,29 +24,65 @@ import nocache_tests
 import stream_tests
 
 parser = optparse.OptionParser(usage="usage: %prog [options]")
-parser.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False)
-parser.add_option("-t", "--testcase", action="store", dest="testcase", default=None,
-    help="Run a single named test")
-parser.add_option("-c", "--dbconfig", action="store", dest="dbconfig", default="dbtest.json",
-    help="json db config file")
+parser.add_option("-m", "--memcache", action="store_true", default=False,
+                  help="starts a memcached, and tests rowcache")
+parser.add_option("-v", "--verbose", action="store_true", default=False)
+parser.add_option("-t", "--testcase", action="store", default=None,
+                  help="Run a single named test")
 (options, args) = parser.parse_args()
 
 LOGFILE = "/tmp/vtocc.log"
 QUERYLOGFILE = "/tmp/vtocc_queries.log"
+
+TABLETUID = "9460"
+MYSQLPORT = 9460
+VTOCCPORT = 9461
 
 class TestEnv(object):
   def setUp(self):
     vttop = os.getenv("VTTOP")
     if vttop is None:
       raise Exception("VTTOP not defined")
-    vtroot = os.getenv("VTROOT")
-    if vtroot is None:
+    self.vtroot = os.getenv("VTROOT")
+    if self.vtroot is None:
       raise Exception("VTROOT not defined")
     framework.execute('go build', verbose=options.verbose, cwd=vttop+'/go/cmd/vtocc')
-    with open(options.dbconfig) as f:
-      self.cfg = json.load(f)
+    framework.execute('go build', verbose=options.verbose, cwd=vttop+'/go/cmd/mysqlctl')
 
-    self.mysql_conn = self.mysql_connect(self.cfg)
+    # start mysql
+    res = subprocess.call([
+        self.vtroot+"/bin/mysqlctl",
+        "-tablet-uid",  TABLETUID,
+        "-port", str(VTOCCPORT),
+        "-mysql-port", str(MYSQLPORT),
+        "init"
+        ])
+    if res != 0:
+      raise Exception("Cannot start mysql")
+    self.mysqldir = "/vt/vt_0000009460"
+    res = subprocess.call([
+        "mysql",
+        "-S",  self.mysqldir+"/mysql.sock",
+        "-u", "vt_dba",
+        "-e", "create database vt_test ; set global read_only = off"])
+    if res != 0:
+      raise Exception("Cannot create vt_test database")
+    dbconfig = self.mysqldir+"/dbconf.json"
+    if options.memcache:
+      memcache = self.mysqldir+"/memcache.sock"
+    with open(dbconfig, 'w') as f:
+      conf = {
+          'charset': 'utf8',
+          'dbname': 'vt_test',
+          'host': 'localhost',
+          'unix_socket': self.mysqldir+"/mysql.sock",
+          'uname': 'vt_dba',   # use vt_dba as some tests depend on 'drop'
+          }
+      if options.memcache:
+        conf['memcache'] = memcache
+      json.dump(conf, f)
+
+    self.mysql_conn = self.mysql_connect()
     mcu = self.mysql_conn.cursor()
     self.clean_sqls = []
     self.init_sqls = []
@@ -67,12 +104,12 @@ class TestEnv(object):
     finally:
       mcu.close()
 
-    if self.cfg.get("memcache"):
-      self.memcached = subprocess.Popen(["memcached", "-s", self.cfg["memcache"]])
+    if options.memcache:
+      self.memcached = subprocess.Popen(["memcached", "-s", memcache])
     occ_args = [
-      vtroot+"/bin/vtocc",
+      self.vtroot+"/bin/vtocc",
       "-port", "9461",
-      "-dbconfig", options.dbconfig,
+      "-dbconfig", dbconfig,
       "-logfile", LOGFILE,
       "-querylog", QUERYLOGFILE,
     ]
@@ -107,18 +144,25 @@ class TestEnv(object):
     if getattr(self, "memcached", None):
       self.memcached.terminate()
 
-  def mysql_connect(self, cfg):
+    # stop mysql, delete directory
+    subprocess.call([
+        self.vtroot+"/bin/mysqlctl",
+        "-tablet-uid",  TABLETUID,
+        "-force", "teardown"
+        ])
+    shutil.rmtree(self.mysqldir)
+
+  def mysql_connect(self):
     return mysql.connect(
-      host=cfg.get('host', ''),
-      user=cfg.get('uname', ''),
-      passwd=cfg.get('pass', ''),
-      port=cfg.get('port', 0),
-      db=cfg.get('dbname'),
-      unix_socket=cfg.get('unix_socket', ''),
-      charset=cfg.get('charset', ''))
+      host='localhost',
+      user='vt_dba',
+      port=MYSQLPORT,
+      db='vt_test',
+      unix_socket=self.mysqldir+"/mysql.sock",
+      charset='utf8')
 
   def connect(self):
-    return db.connect("localhost:9461", 2, dbname=self.cfg.get('dbname', None))
+    return db.connect("localhost:9461", 2, dbname='vt_test')
 
   def execute(self, query, binds=None, cursorclass=None):
     if binds is None:
