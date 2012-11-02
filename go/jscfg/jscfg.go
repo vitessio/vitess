@@ -16,7 +16,7 @@ import (
 )
 
 func ToJson(val interface{}) string {
-	data, err := json.MarshalIndent(val, "  ", "  ")
+	data, err := json.MarshalIndent(val, "", "  ")
 	// This is not strictly the spirit of panic. This is meant to be used
 	// where it would be a programming error to have json encoding fail.
 	if err != nil {
