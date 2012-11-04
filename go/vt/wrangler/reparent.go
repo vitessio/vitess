@@ -38,8 +38,10 @@ On X: (Promote Slave)
   SHOW MASTER STATUS;
     replication file,position
   INSERT INTO _vt.replication_log (time_created_ns, 'reparent check') VALUES (<time>);
+  INSERT INTO _vt.reparent_log (time_created_ns, 'last post', 'new pos') VALUES ... ;
   SHOW MASTER STATUS;
     wait file,position
+
   SET GLOBAL READ_ONLY=0;
 
 Disabling READ_ONLY mode here is a matter of opinion.

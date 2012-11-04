@@ -1,13 +1,17 @@
 package naming
 
-/* Handle logical name resolution  - sort of like DNS but tailored to vt and using zookeeper.
+/*
+Handle logical name resolution - sort of like DNS but tailored to
+vt and using zookeeper.
 
-Naming is disconnected from the backend discovery and is used for front end clients.
+Naming is disconnected from the backend discovery and is used for
+front end clients.
 
- The common query is "resolve keyspace.shard.db_type" and return a list of host:port tuples that export our default server (vtocc).  You can get all shards with "keyspace.*.db_type".
+The common query is "resolve keyspace.shard.db_type" and return a list
+of host:port tuples that export our default server (vtocc).  You can
+get all shards with "keyspace.*.db_type".
 
 /zk/local/vt/ns/<keyspace>/<shard>/<db type>
-
 */
 
 import (

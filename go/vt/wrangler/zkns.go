@@ -6,6 +6,7 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/vt/naming"
+	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkns"
 	"launchpad.net/gozk/zookeeper"
@@ -24,6 +25,7 @@ func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
 
 	for _, child := range children {
 		addrPath := path.Join(vtNsPath, child)
+		zknsAddrPath := path.Join(zknsRootPath, child)
 		_, stat, err := wr.zconn.Get(addrPath)
 		if err != nil {
 			return err
@@ -33,15 +35,65 @@ func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
 			continue
 		}
 
-		if err = wr.exportVtnsToZkns(addrPath, zknsRootPath); err != nil {
+		if err = wr.exportVtnsToZkns(addrPath, zknsAddrPath); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (wr *Wrangler) exportVtnsToZkns(zkVtnsAddrPath, zknsAddrPath string) error {
-	addrs, err := naming.ReadAddrs(wr.zconn, zkVtnsAddrPath)
+// Export addresses from the VT serving graph to a legacy zkns server.
+func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
+	vtRoot := tm.VtRootFromKeyspacePath(zkKeyspacePath)
+	keyspace := path.Base(zkKeyspacePath)
+	shardNames, _, err := wr.zconn.Children(path.Join(zkKeyspacePath, "shards"))
+	if err != nil {
+		return err
+	}
+
+	// Scan the first shard to discover which cells need local serving data.
+	zkShardPath := tm.ShardPath(vtRoot, keyspace, shardNames[0])
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
+	if err != nil {
+		return err
+	}
+
+	cellMap := make(map[string]bool)
+	for _, alias := range aliases {
+		cellMap[alias.Cell] = true
+	}
+
+	for cell, _ := range cellMap {
+		vtnsRootPath := path.Join("/zk/%v/vt/ns/%v", cell, keyspace)
+		zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt/%v", cell, keyspace)
+
+		children, err := zk.ChildrenRecursive(wr.zconn, vtnsRootPath)
+		if err != nil {
+			return err
+		}
+
+		for _, child := range children {
+			vtnsAddrPath := path.Join(vtnsRootPath, child)
+			zknsAddrPath := path.Join(zknsRootPath, child)
+
+			_, stat, err := wr.zconn.Get(vtnsAddrPath)
+			if err != nil {
+				return err
+			}
+			// Leaf nodes correspond to zkns vdns files in the old setup.
+			if stat.NumChildren() > 0 {
+				continue
+			}
+			if err = wr.exportVtnsToZkns(vtnsAddrPath, zknsAddrPath); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (wr *Wrangler) exportVtnsToZkns(vtnsAddrPath, zknsAddrPath string) error {
+	addrs, err := naming.ReadAddrs(wr.zconn, vtnsAddrPath)
 	if err != nil {
 		return err
 	}

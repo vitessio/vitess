@@ -129,7 +129,10 @@ Generic:
   ValidateShard <zk keyspaces path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
     validate all nodes reachable from this shard are consistent
 
-  ExportZkns <zk local vt path> (/zk/<cell>/vt)
+  ExportZkns <zk local vt path>  (/zk/<cell>/vt)
+    export the serving graph entries to the legacy zkns format
+
+  ExportZknsForKeyspace <zk global keyspace path> (/zk/global/vt/keyspaces/<keyspace>)
     export the serving graph entries to the legacy zkns format
 
   ListIdle <zk local vt path>
@@ -629,6 +632,11 @@ func main() {
 			relog.Fatal("action %v requires <zk vt root path>", args[0])
 		}
 		err = wrangler.ExportZkns(args[1])
+	case "ExportZknsForKeyspace":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk vt root path>", args[0])
+		}
+		err = wrangler.ExportZknsForKeyspace(args[1])
 	case "Resolve":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <keyspace>.<shard>.<db type>:<port name>", args[0])
