@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
+	"code.google.com/p/vitess/go/sqltypes"
 )
 
 func MarshalFieldBson(field Field, buf *bytes2.ChunkedWriter) {
@@ -70,7 +71,7 @@ func encodeFieldsBson(fields []Field, buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func encodeRowsBson(rows [][]interface{}, buf *bytes2.ChunkedWriter) {
+func encodeRowsBson(rows [][]sqltypes.Value, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range rows {
 		bson.EncodePrefix(buf, bson.Array, bson.Itoa(i))
@@ -80,21 +81,14 @@ func encodeRowsBson(rows [][]interface{}, buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func encodeRowBson(row []interface{}, buf *bytes2.ChunkedWriter) {
+func encodeRowBson(row []sqltypes.Value, buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range row {
-		if v == nil {
+		if v.IsNull() {
 			bson.EncodePrefix(buf, bson.Null, bson.Itoa(i))
 		} else {
 			bson.EncodePrefix(buf, bson.Binary, bson.Itoa(i))
-			switch vv := v.(type) {
-			case string:
-				bson.EncodeString(buf, vv)
-			case []byte:
-				bson.EncodeBinary(buf, vv)
-			default:
-				panic(bson.NewBsonError("Unrecognized type %T", v))
-			}
+			bson.EncodeBinary(buf, v.Raw())
 		}
 	}
 	buf.WriteByte(0)
@@ -149,7 +143,7 @@ func decodeFieldsBson(buf *bytes.Buffer, kind byte) []Field {
 	return fields
 }
 
-func decodeRowsBson(buf *bytes.Buffer, kind byte) [][]interface{} {
+func decodeRowsBson(buf *bytes.Buffer, kind byte) [][]sqltypes.Value {
 	switch kind {
 	case bson.Array:
 		// valid
@@ -160,7 +154,7 @@ func decodeRowsBson(buf *bytes.Buffer, kind byte) [][]interface{} {
 	}
 
 	bson.Next(buf, 4)
-	rows := make([][]interface{}, 0, 8)
+	rows := make([][]sqltypes.Value, 0, 8)
 	kind = bson.NextByte(buf)
 	for i := 0; kind != bson.EOO; i++ {
 		bson.ExpectIndex(buf, i)
@@ -170,7 +164,7 @@ func decodeRowsBson(buf *bytes.Buffer, kind byte) [][]interface{} {
 	return rows
 }
 
-func decodeRowBson(buf *bytes.Buffer, kind byte) []interface{} {
+func decodeRowBson(buf *bytes.Buffer, kind byte) []sqltypes.Value {
 	switch kind {
 	case bson.Array:
 		// valid
@@ -181,14 +175,14 @@ func decodeRowBson(buf *bytes.Buffer, kind byte) []interface{} {
 	}
 
 	bson.Next(buf, 4)
-	row := make([]interface{}, 0, 8)
+	row := make([]sqltypes.Value, 0, 8)
 	kind = bson.NextByte(buf)
 	for i := 0; kind != bson.EOO; i++ {
 		bson.ExpectIndex(buf, i)
 		if kind != bson.Null {
-			row = append(row, bson.DecodeString(buf, kind))
+			row = append(row, sqltypes.MakeString(bson.DecodeBytes(buf, kind)))
 		} else {
-			row = append(row, nil)
+			row = append(row, sqltypes.Value{})
 		}
 		kind = bson.NextByte(buf)
 	}

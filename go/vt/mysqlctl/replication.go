@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/vt/key"
 )
 
@@ -204,7 +205,7 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	if len(rows) != 1 {
 		return true, errors.New("no read_only variable in mysql")
 	}
-	if rows[0][1].(string) == "ON" {
+	if rows[0][1].String() == "ON" {
 		return true, nil
 	}
 	return false, nil
@@ -236,11 +237,7 @@ func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 		if i >= len(showSlaveStatusColumnNames) {
 			break
 		}
-		if column == nil {
-			rowMap[showSlaveStatusColumnNames[i]] = ""
-		} else {
-			rowMap[showSlaveStatusColumnNames[i]] = column.(string)
-		}
+		rowMap[showSlaveStatusColumnNames[i]] = column.String()
 	}
 	return rowMap, nil
 }
@@ -255,9 +252,9 @@ func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout int) er
 	if len(rows) != 1 {
 		return fmt.Errorf("WaitMasterPos returned unexpected row count: %v", len(rows))
 	}
-	if rows[0][0] == nil {
+	if rows[0][0].IsNull() {
 		return fmt.Errorf("WaitMasterPos failed: replication stopped")
-	} else if rows[0][0].(string) == "-1" {
+	} else if rows[0][0].String() == "-1" {
 		return fmt.Errorf("WaitMasterPos failed: timed out")
 	}
 	return nil
@@ -298,8 +295,8 @@ func (mysqld *Mysqld) MasterStatus() (position *ReplicationPosition, err error) 
 		return
 	}
 	position = &ReplicationPosition{}
-	position.MasterLogFile = rows[0][0].(string)
-	temp, err := strconv.ParseUint(rows[0][1].(string), 10, 0)
+	position.MasterLogFile = rows[0][0].String()
+	temp, err := strconv.ParseUint(rows[0][1].String(), 10, 0)
 	position.MasterLogPosition = uint(temp)
 	return
 }
@@ -427,7 +424,7 @@ func (mysqld *Mysqld) executeSuperQuery(query string) error {
 
 // FIXME(msolomon) should there be a query lock so we only
 // run one admin action at a time?
-func (mysqld *Mysqld) fetchSuperQuery(query string) ([][]interface{}, error) {
+func (mysqld *Mysqld) fetchSuperQuery(query string) ([][]sqltypes.Value, error) {
 	conn, connErr := mysqld.createConnection()
 	if connErr != nil {
 		return nil, connErr
@@ -528,8 +525,8 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	}
 	addrs := make([]string, 0, 32)
 	for _, row := range rows {
-		if row[colUsername] == mysqld.replParams.Uname {
-			host, _, err := net.SplitHostPort(row[colClientAddr].(string))
+		if row[colUsername].String() == mysqld.replParams.Uname {
+			host, _, err := net.SplitHostPort(row[colClientAddr].String())
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)
 			}

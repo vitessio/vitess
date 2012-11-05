@@ -7,6 +7,8 @@ package sqlparser
 import (
 	"bytes"
 	"fmt"
+
+	"code.google.com/p/vitess/go/sqltypes"
 )
 
 type ParserError struct {
@@ -198,16 +200,8 @@ func (self *Node) Format(buf *TrackedBuffer) {
 		buf.bind_locations = append(buf.bind_locations, BindLocation{buf.Len(), len(self.Value)})
 		Fprintf(buf, "%s", self.Value)
 	case STRING:
-		buf.WriteByte('\'')
-		for _, ch := range self.Value {
-			if encodedChar, ok := escapeEncodeMap[ch]; ok {
-				buf.WriteByte('\\')
-				buf.WriteByte(encodedChar)
-			} else {
-				buf.WriteByte(ch)
-			}
-		}
-		buf.WriteByte('\'')
+		s := sqltypes.MakeString(self.Value)
+		s.EncodeSql(buf)
 	case '+', '-', '*', '/', '%', '&', '|', '^', '.':
 		Fprintf(buf, "%v%s%v", self.At(0), self.Value, self.At(1))
 	case '=', '>', '<', GE, LE, NE, NULL_SAFE_EQUAL, AS, AND, OR, UNION, UNION_ALL, MINUS, EXCEPT, INTERSECT, LIKE, NOT_LIKE, IN, NOT_IN:

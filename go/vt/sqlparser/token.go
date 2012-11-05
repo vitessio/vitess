@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"unicode"
+
+	"code.google.com/p/vitess/go/sqltypes"
 )
 
 const EOFCHAR = 0x100
@@ -91,30 +93,6 @@ var keywords = map[string]int{
 	"if":     IF,
 	"unique": UNIQUE,
 	"using":  USING,
-}
-
-// escapEncodeMap specifies how to escape certain binary data with '\'
-// complies to http://dev.mysql.com/doc/refman/5.1/en/string-syntax.html
-var escapeEncodeMap = map[byte]byte{
-	'\x00': '0',
-	'\'':   '\'',
-	'"':    '"',
-	'\b':   'b',
-	'\n':   'n',
-	'\r':   'r',
-	'\t':   't',
-	26:     'Z', // ctl-Z
-	'\\':   '\\',
-}
-
-// escapeDecodeMap is the reverse of excapeEncodeMap
-var escapeDecodeMap map[byte]byte
-
-func init() {
-	escapeDecodeMap = make(map[byte]byte)
-	for k, v := range escapeEncodeMap {
-		escapeDecodeMap[v] = k
-	}
 }
 
 func (self *Tokenizer) Lex(lval *yySymType) int {
@@ -346,10 +324,10 @@ func (self *Tokenizer) scanString(delim uint16) *Node {
 			if self.lastChar == EOFCHAR {
 				return NewParseNode(LEX_ERROR, buffer.Bytes())
 			}
-			if decodedChar, ok := escapeDecodeMap[byte(self.lastChar)]; ok {
-				ch = uint16(decodedChar)
-			} else {
+			if decodedChar := sqltypes.SqlDecodeMap[byte(self.lastChar)]; decodedChar == sqltypes.DONTESCAPE {
 				ch = self.lastChar
+			} else {
+				ch = uint16(decodedChar)
 			}
 			self.Next()
 		}

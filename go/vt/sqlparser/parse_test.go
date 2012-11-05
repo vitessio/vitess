@@ -7,7 +7,6 @@ package sqlparser
 import (
 	"bufio"
 	"bytes"
-	"code.google.com/p/vitess/go/vt/schema"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +14,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+
+	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/vt/schema"
 )
 
 func TestGen(t *testing.T) {
@@ -24,16 +26,20 @@ func TestGen(t *testing.T) {
 	}
 }
 
+var (
+	SQLZERO = sqltypes.MakeString([]byte("0"))
+)
+
 var schem map[string]*schema.Table
 
 func initTables() {
 	schem = make(map[string]*schema.Table)
 
 	a := schema.NewTable("a")
-	a.AddColumn("eid", "int", "0", "")
-	a.AddColumn("id", "int", "0", "")
-	a.AddColumn("name", "varchar(10)", "0", "")
-	a.AddColumn("foo", "varchar(10)", "0", "")
+	a.AddColumn("eid", "int", SQLZERO, "")
+	a.AddColumn("id", "int", SQLZERO, "")
+	a.AddColumn("name", "varchar(10)", SQLZERO, "")
+	a.AddColumn("foo", "varchar(10)", SQLZERO, "")
 	acolumns := []string{"eid", "id", "name", "foo"}
 	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, acolumns})
 	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}, []uint64{1, 1}, a.Indexes[0].Columns})
@@ -44,8 +50,8 @@ func initTables() {
 	schem["a"] = a
 
 	b := schema.NewTable("b")
-	b.AddColumn("eid", "int", "0", "")
-	b.AddColumn("id", "int", "0", "")
+	b.AddColumn("eid", "int", SQLZERO, "")
+	b.AddColumn("id", "int", SQLZERO, "")
 	bcolumns := []string{"eid", "id"}
 	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, bcolumns})
 	b.PKColumns = append(a.PKColumns, 0, 1)
@@ -53,10 +59,18 @@ func initTables() {
 	schem["b"] = b
 
 	c := schema.NewTable("c")
-	b.AddColumn("eid", "int", "0", "")
-	b.AddColumn("id", "int", "0", "")
+	c.AddColumn("eid", "int", SQLZERO, "")
+	c.AddColumn("id", "int", SQLZERO, "")
 	c.CacheType = 0
 	schem["c"] = c
+
+	d := schema.NewTable("d")
+	d.AddColumn("name", "varbinary(10)", SQLZERO, "")
+	dcolumns := []string{"name"}
+	d.Indexes = append(d.Indexes, &schema.Index{"PRIMARY", []string{"name"}, []uint64{1}, dcolumns})
+	d.PKColumns = append(d.PKColumns, 0)
+	d.CacheType = 1
+	schem["d"] = d
 }
 
 func tableGetter(name string) (*schema.Table, bool) {

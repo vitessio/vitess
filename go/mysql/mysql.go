@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"unsafe"
 
-	"code.google.com/p/vitess/go/hack"
 	"code.google.com/p/vitess/go/mysql/proto"
+	"code.google.com/p/vitess/go/sqltypes"
 )
 
 const (
@@ -153,23 +153,22 @@ func (conn *Connection) Fields() (fields []proto.Field) {
 	for i := 0; i < nfields; i++ {
 		totalLength += uint64(cfields[i].name_length)
 	}
-	arena := hack.NewStringArena(int(totalLength))
 	fields = make([]proto.Field, nfields)
 	for i := 0; i < nfields; i++ {
 		length := cfields[i].name_length
 		fname := (*[maxSize]byte)(unsafe.Pointer(cfields[i].name))[:length]
-		fields[i].Name = arena.NewString(fname)
+		fields[i].Name = string(fname)
 		fields[i].Type = int64(cfields[i]._type)
 	}
 	return fields
 }
 
-func (conn *Connection) fetchAll() (rows [][]interface{}, err error) {
+func (conn *Connection) fetchAll() (rows [][]sqltypes.Value, err error) {
 	rowCount := int(conn.c.affected_rows)
 	if rowCount == 0 {
 		return nil, nil
 	}
-	rows = make([][]interface{}, rowCount)
+	rows = make([][]sqltypes.Value, rowCount)
 	for i := 0; i < rowCount; i++ {
 		rows[i], err = conn.FetchNext()
 		if err != nil {
@@ -179,7 +178,7 @@ func (conn *Connection) fetchAll() (rows [][]interface{}, err error) {
 	return rows, nil
 }
 
-func (conn *Connection) FetchNext() (row []interface{}, err error) {
+func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 	vtrow := C.vt_fetch_next(&conn.c)
 	if vtrow.has_error != 0 {
 		return nil, conn.lastError(nil)
@@ -189,20 +188,23 @@ func (conn *Connection) FetchNext() (row []interface{}, err error) {
 		return nil, nil
 	}
 	colCount := int(conn.c.num_fields)
-	row = make([]interface{}, colCount)
+	cfields := (*[maxSize]C.MYSQL_FIELD)(unsafe.Pointer(conn.c.fields))
+	row = make([]sqltypes.Value, colCount)
 	lengths := (*[maxSize]uint64)(unsafe.Pointer(vtrow.lengths))
 	totalLength := uint64(0)
 	for i := 0; i < colCount; i++ {
-		totalLength += (*lengths)[i]
+		totalLength += lengths[i]
 	}
-	arena := hack.NewStringArena(int(totalLength))
+	arena := make([]byte, 0, int(totalLength))
 	for i := 0; i < colCount; i++ {
-		colLength := (*lengths)[i]
-		colPtr := (*rowPtr)[i]
+		colLength := lengths[i]
+		colPtr := rowPtr[i]
 		if colPtr == nil {
 			continue
 		}
-		row[i] = arena.NewString((*colPtr)[:colLength])
+		start := len(arena)
+		arena = append(arena, colPtr[:colLength]...)
+		row[i] = BuildValue(arena[start:start+int(colLength)], cfields[i]._type)
 	}
 	return row, nil
 }
@@ -223,6 +225,21 @@ func (conn *Connection) lastError(query []byte) error {
 		return &SqlError{Num: int(C.vt_errno(&conn.c)), Message: C.GoString(err), Query: string(query)}
 	}
 	return &SqlError{0, "Dummy", string(query)}
+}
+
+func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
+	switch fieldType {
+	case C.MYSQL_TYPE_DECIMAL, C.MYSQL_TYPE_FLOAT, C.MYSQL_TYPE_DOUBLE, C.MYSQL_TYPE_NEWDECIMAL:
+		return sqltypes.MakeFractional(bytes)
+	case C.MYSQL_TYPE_TIMESTAMP:
+		return sqltypes.MakeString(bytes)
+	}
+	// The below condition represents the following list of values:
+	// C.MYSQL_TYPE_TINY, C.MYSQL_TYPE_SHORT, C.MYSQL_TYPE_LONG, C.MYSQL_TYPE_LONGLONG, C.MYSQL_TYPE_INT24, C.MYSQL_TYPE_YEAR:
+	if fieldType <= C.MYSQL_TYPE_INT24 || fieldType == C.MYSQL_TYPE_YEAR {
+		return sqltypes.MakeNumeric(bytes)
+	}
+	return sqltypes.MakeString(bytes)
 }
 
 func cfree(str *C.char) {

@@ -4,6 +4,10 @@
 
 package proto
 
+import (
+	"code.google.com/p/vitess/go/sqltypes"
+)
+
 type Field struct {
 	Name string
 	Type int64
@@ -13,5 +17,5 @@ type QueryResult struct {
 	Fields       []Field
 	RowsAffected uint64
 	InsertId     uint64
-	Rows         [][]interface{}
+	Rows         [][]sqltypes.Value
 }

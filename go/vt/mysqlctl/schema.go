@@ -94,7 +94,7 @@ func (mysqld *Mysqld) GetSchema(dbName string) (*SchemaDefinition, error) {
 	}
 	sd := &SchemaDefinition{TableDefinitions: make([]TableDefinition, len(rows))}
 	for i, row := range rows {
-		tableName := row[0].(string)
+		tableName := row[0].String()
 		relog.Info("GetSchema(table: %v)", tableName)
 
 		rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
@@ -108,7 +108,7 @@ func (mysqld *Mysqld) GetSchema(dbName string) (*SchemaDefinition, error) {
 		// Normalize & remove auto_increment because it changes on every insert
 		// FIXME(alainjobart) find a way to share this with
 		// vt/tabletserver/table_info.go:162
-		norm1 := strings.ToLower(rows[0][1].(string))
+		norm1 := strings.ToLower(rows[0][1].String())
 		norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
 
 		sd.TableDefinitions[i].Name = tableName

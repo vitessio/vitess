@@ -5,18 +5,20 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/cache"
-	"code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/timer"
-	"code.google.com/p/vitess/go/vt/schema"
-	"code.google.com/p/vitess/go/vt/sqlparser"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
 	"time"
+
+	"code.google.com/p/vitess/go/cache"
+	mproto "code.google.com/p/vitess/go/mysql/proto"
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/timer"
+	"code.google.com/p/vitess/go/vt/schema"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 )
 
 const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
@@ -24,7 +26,7 @@ const base_show_tables = "select table_name, table_type, unix_timestamp(create_t
 type ExecPlan struct {
 	*sqlparser.ExecPlan
 	TableInfo *TableInfo
-	Fields    []proto.Field
+	Fields    []mproto.Field
 }
 
 func (*ExecPlan) Size() int {
@@ -66,16 +68,16 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
-	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", nil, "", si.cachePool)
+	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", sqltypes.NULL, "", si.cachePool)
 	for _, row := range tables.Rows {
-		tableName := row[0].(string)
+		tableName := row[0].String()
 		si.updateLastChange(row[2])
 		tableInfo := NewTableInfo(
 			conn,
 			tableName,
-			row[1].(string), // table_type
+			row[1].String(), // table_type
 			row[2],          // create_time
-			row[3].(string), // table_comment
+			row[3].String(), // table_comment
 			si.cachePool,
 		)
 		if tableInfo == nil {
@@ -88,13 +90,13 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 	si.ticks.Start(func() { si.Reload() })
 }
 
-func (si *SchemaInfo) updateLastChange(createTime interface{}) {
-	if createTime == nil {
+func (si *SchemaInfo) updateLastChange(createTime sqltypes.Value) {
+	if createTime.IsNull() {
 		return
 	}
-	t, err := strconv.ParseInt(createTime.(string), 10, 64)
+	t, err := strconv.ParseInt(createTime.String(), 10, 64)
 	if err != nil {
-		relog.Warning("Could not parse time %s: %v", createTime.(string), err)
+		relog.Warning("Could not parse time %s: %v", createTime.String(), err)
 		return
 	}
 	if si.lastChange.Unix() < t {
@@ -121,7 +123,7 @@ func (si *SchemaInfo) Reload() {
 		relog.Warning("Could not get table list for reload: %v", err)
 	}
 	for _, row := range tables.Rows {
-		tableName := row[0].(string)
+		tableName := row[0].String()
 		si.updateLastChange(row[2])
 		relog.Info("Reloading: %s", tableName)
 		si.mu.Lock()
@@ -154,9 +156,9 @@ func (si *SchemaInfo) createTable(conn *DBConnection, tableName string) {
 	tableInfo := NewTableInfo(
 		conn,
 		tableName,
-		tables.Rows[0][1].(string), // table_type
+		tables.Rows[0][1].String(), // table_type
 		tables.Rows[0][2],          // create_time
-		tables.Rows[0][3].(string), // table_comment
+		tables.Rows[0][3].String(), // table_comment
 		si.cachePool,
 	)
 	if tableInfo == nil {
@@ -225,7 +227,7 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.ParsedQuery {
 	return fullQuery
 }
 
-func (si *SchemaInfo) SetFields(sql string, plan *ExecPlan, fields []proto.Field) {
+func (si *SchemaInfo) SetFields(sql string, plan *ExecPlan, fields []mproto.Field) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	newPlan := &ExecPlan{plan.ExecPlan, plan.TableInfo, fields}
@@ -306,20 +308,8 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	}
 }
 
-// Convenience functions
-func applyFieldFilter(columnNumbers []int, input []proto.Field) (output []proto.Field) {
-	output = make([]proto.Field, len(columnNumbers))
-	for colIndex, colPointer := range columnNumbers {
-		if colPointer >= 0 {
-			output[colIndex] = input[colPointer]
-		}
-		output[colIndex] = input[colPointer]
-	}
-	return output
-}
-
-func applyFilter(columnNumbers []int, input []interface{}) (output []interface{}) {
-	output = make([]interface{}, len(columnNumbers))
+func applyFieldFilter(columnNumbers []int, input []mproto.Field) (output []mproto.Field) {
+	output = make([]mproto.Field, len(columnNumbers))
 	for colIndex, colPointer := range columnNumbers {
 		if colPointer >= 0 {
 			output[colIndex] = input[colPointer]

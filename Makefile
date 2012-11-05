@@ -16,6 +16,7 @@ build:
 	cd go/cmd/vttablet; go build
 	cd go/cmd/zk; go build
 	cd go/cmd/zkctl; go build
+	cd go/cmd/zkocc; go build
 
 # alphabetically ordered unit tests
 # the ones that are commented out don't pass
@@ -66,3 +67,4 @@ clean:
 	cd go/cmd/vttablet; go clean
 	cd go/cmd/zk; go clean
 	cd go/cmd/zkctl; go clean
+	cd go/cmd/zkocc; go clean

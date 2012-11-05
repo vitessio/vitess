@@ -5,10 +5,12 @@
 package sqlparser
 
 import (
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/schema"
 	"fmt"
 	"strconv"
+
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/vt/schema"
 )
 
 type PlanType int
@@ -87,6 +89,11 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 	return ([]byte)(fmt.Sprintf("\"%s\"", reasonName[rt])), nil
 }
 
+// ExecPlan is built for selects and DMLs.
+// PK Values values within ExecPlan can be:
+// sqltypes.Value: sourced form the query, or
+// string: bind variable name starting with ':', or
+// nil if no value was specified
 type ExecPlan struct {
 	PlanId    PlanType
 	Reason    ReasonType
@@ -333,7 +340,7 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	rowList := rowValues.At(0) // VALUES->NODE_LIST
-	if pkValues := getInsertPKValues(columnNumbers, rowList); pkValues != nil {
+	if pkValues := getInsertPKValues(columnNumbers, rowList, tableInfo); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
 		plan.PKValues = pkValues
@@ -742,10 +749,11 @@ func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (columnNumbers []i
 	return columnNumbers
 }
 
-func getInsertPKValues(columnNumbers []int, rowList *Node) (pkValues []interface{}) {
+func getInsertPKValues(columnNumbers []int, rowList *Node, tableInfo *schema.Table) (pkValues []interface{}) {
 	pkValues = make([]interface{}, len(columnNumbers))
 	for index, columnNumber := range columnNumbers {
 		if columnNumber == -1 {
+			pkValues[index] = tableInfo.GetPKColumn(index).Default
 			continue
 		}
 		values := make([]interface{}, rowList.Len())
@@ -1057,24 +1065,16 @@ func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {
 
 func asInterface(node *Node) interface{} {
 	switch node.Type {
-	case STRING, VALUE_ARG:
+	case VALUE_ARG:
 		return string(node.Value)
+	case STRING:
+		return sqltypes.MakeString(node.Value)
 	case NUMBER:
-		return tonumber(node.Value)
+		n, err := sqltypes.BuildNumeric(string(node.Value))
+		if err != nil {
+			panic(NewParserError("Expecting whole number: %s", err))
+		}
+		return n
 	}
 	panic(NewParserError("Unexpected node %v", node))
-}
-
-// duplicated in multipe packages
-func tonumber(val []byte) (number interface{}) {
-	var err error
-	if val[0] == '-' {
-		number, err = strconv.ParseInt(string(val), 0, 64)
-	} else {
-		number, err = strconv.ParseUint(string(val), 0, 64)
-	}
-	if err != nil {
-		panic(NewParserError("%s", err))
-	}
-	return number
 }

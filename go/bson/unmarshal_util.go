@@ -12,6 +12,10 @@ import (
 	"time"
 )
 
+var (
+	emptybytes = []byte{}
+)
+
 func DecodeString(buf *bytes.Buffer, kind byte) string {
 	switch kind {
 	case String:
@@ -25,6 +29,23 @@ func DecodeString(buf *bytes.Buffer, kind byte) string {
 		return string(buf.Next(l))
 	case Null:
 		return ""
+	}
+	panic(NewBsonError("Unexpected data type %v for string", kind))
+}
+
+func DecodeBytes(buf *bytes.Buffer, kind byte) []byte {
+	switch kind {
+	case String:
+		l := int(Pack.Uint32(buf.Next(4)))
+		b := buf.Next(l - 1)
+		NextByte(buf)
+		return b
+	case Binary:
+		l := int(Pack.Uint32(buf.Next(4)))
+		NextByte(buf)
+		return buf.Next(l)
+	case Null:
+		return emptybytes
 	}
 	panic(NewBsonError("Unexpected data type %v for string", kind))
 }

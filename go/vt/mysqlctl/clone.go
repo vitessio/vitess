@@ -59,8 +59,8 @@ func (mysqld *Mysqld) ValidateCloneTarget() error {
 	}
 
 	for _, row := range rows {
-		if strings.HasPrefix(row[0].(string), "vt_") {
-			dbName := row[0].(string)
+		if strings.HasPrefix(row[0].String(), "vt_") {
+			dbName := row[0].String()
 			tableRows, err := mysqld.fetchSuperQuery("SHOW TABLES FROM " + dbName)
 			if err != nil {
 				return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, %v", err)

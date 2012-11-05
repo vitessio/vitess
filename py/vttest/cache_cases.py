@@ -26,11 +26,11 @@ cases = [
        cache_absent=1),
   # (2.foo)
 
-  Case(doc="SELECT_PK, number as string",
-       sql="select bid, eid, name, foo from vtocc_cached where eid = '0x2' and bid = 'foo'",
-       result=[('foo', 2, 'abcd2', 'efgh')],
-       rewritten=[],
-       cache_hits=1),
+  #Case(doc="SELECT_PK, number as string",
+  #     sql="select bid, eid, name, foo from vtocc_cached where eid = '0x2' and bid = 'foo'",
+  #     result=[('foo', 2, 'abcd2', 'efgh')],
+  #     rewritten=[],
+  #     cache_hits=1),
   # (2.foo)
 
   Case(doc="SELECT_SUBQUERY (2.foo)",

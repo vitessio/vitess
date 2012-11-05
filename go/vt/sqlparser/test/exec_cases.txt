@@ -407,6 +407,28 @@ select * from a where eid=1 and id=1
   "SetValue": null
 }
 
+# string pk match
+select * from d where name='foo'
+{
+  "PlanId": "SELECT_PK",
+  "Reason": "DEFAULT",
+  "TableName": "d",
+  "FullQuery": "select * from d where name = 'foo' limit :_vtMaxResultSize",
+  "OuterQuery": "select name from d where name = :0",
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0
+  ],
+  "PKValues": [
+    "Zm9v"
+  ],
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # pk IN
 select * from a where eid=1 and id in (1, 2)
 {
@@ -953,7 +975,7 @@ insert into a (id) values (1)
   "IndexUsed": "",
   "ColumnNumbers": null,
   "PKValues": [
-    null,
+    0,
     1
   ],
   "SecondaryPKValues": null,

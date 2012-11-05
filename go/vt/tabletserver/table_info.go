@@ -5,9 +5,6 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/schema"
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
@@ -16,6 +13,11 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+
+	"code.google.com/p/vitess/go/mysql/proto"
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/vt/schema"
 )
 
 var hashRegistry map[string]string = make(map[string]string)
@@ -28,7 +30,7 @@ type TableInfo struct {
 	hits, absent, misses, invalidations int64
 }
 
-func NewTableInfo(conn *DBConnection, tableName string, tableType string, createTime interface{}, comment string, cachePool *CachePool) (self *TableInfo) {
+func NewTableInfo(conn *DBConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (self *TableInfo) {
 	if tableName == "dual" {
 		return &TableInfo{Table: schema.NewTable(tableName)}
 	}
@@ -55,7 +57,7 @@ func (self *TableInfo) fetchColumns(conn *DBConnection) bool {
 		return false
 	}
 	for _, row := range columns.Rows {
-		self.AddColumn(row[0].(string), row[1].(string), row[4], row[5].(string))
+		self.AddColumn(row[0].String(), row[1].String(), row[4], row[5].String())
 	}
 	return true
 }
@@ -69,19 +71,19 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 	var currentIndex *schema.Index
 	currentName := ""
 	for _, row := range indexes.Rows {
-		indexName := row[2].(string)
+		indexName := row[2].String()
 		if currentName != indexName {
 			currentIndex = self.AddIndex(indexName)
 			currentName = indexName
 		}
 		var cardinality uint64
-		if row[6] != nil {
-			cardinality, err = strconv.ParseUint(row[6].(string), 0, 64)
+		if !row[6].IsNull() {
+			cardinality, err = strconv.ParseUint(row[6].String(), 0, 64)
 			if err != nil {
 				relog.Warning("%s", err)
 			}
 		}
-		currentIndex.AddColumn(row[4].(string), cardinality)
+		currentIndex.AddColumn(row[4].String(), cardinality)
 	}
 	if len(self.Indexes) == 0 {
 		return true
@@ -105,7 +107,7 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 	return true
 }
 
-func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, createTime interface{}, comment string, cachePool *CachePool) {
+func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}
@@ -143,13 +145,13 @@ func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, create
 
 	self.Fields = rowInfo.Fields
 	self.CacheType = 1
-	self.Cache = NewRowCache(self.Name, thash, cachePool)
+	self.Cache = NewRowCache(self, thash, cachePool)
 }
 
 var autoIncr = regexp.MustCompile("auto_increment=\\d+")
 
-func (self *TableInfo) computePrefix(conn *DBConnection, createTime interface{}) string {
-	if createTime == nil {
+func (self *TableInfo) computePrefix(conn *DBConnection, createTime sqltypes.Value) string {
+	if createTime.IsNull() {
 		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
 		return ""
 	}
@@ -159,9 +161,9 @@ func (self *TableInfo) computePrefix(conn *DBConnection, createTime interface{})
 		return ""
 	}
 	// Normalize & remove auto_increment because it changes on every insert
-	norm1 := strings.ToLower(createTable.Rows[0][1].(string))
+	norm1 := strings.ToLower(createTable.Rows[0][1].String())
 	norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
-	thash := base64fnv(norm2 + createTime.(string))
+	thash := base64fnv(norm2 + createTime.String())
 	if _, ok := hashRegistry[thash]; ok {
 		relog.Warning("Hash collision for %s (schema revert?). Will not be cached", self.Name)
 		return ""

@@ -18,6 +18,7 @@ import (
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
+	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
@@ -687,8 +688,8 @@ func (sq *SqlQuery) InvalidateForDDL(context *rpcproto.Context, ddl *proto.DDLIn
 		return nil
 	}
 
-	ddlDecoded := base64Decode([]byte(ddl.DDL))
-	ddlPlan := sqlparser.DDLParse(ddlDecoded)
+	//ddlDecoded := base64Decode([]byte(ddl.DDL))
+	ddlPlan := sqlparser.DDLParse(ddl.DDL)
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
@@ -755,29 +756,29 @@ func (sq *SqlQuery) execDDL(logStats *sqlQueryStats, ddl string) *mproto.QueryRe
 // Execution
 
 func (sq *SqlQuery) execPK(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
-	pkRows := buildValueList(plan.PKValues, plan.BindVars)
+	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	return sq.fetchPKRows(logStats, plan, pkRows)
 }
 
 func (sq *SqlQuery) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	innerResult := sq.qFetch(logStats, plan, plan.Subquery, nil)
-	return sq.fetchPKRows(logStats, plan, copyRows(innerResult.Rows))
+	// no need to validate innerResult
+	return sq.fetchPKRows(logStats, plan, innerResult.Rows)
 }
 
-func (sq *SqlQuery) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]interface{}) (result *mproto.QueryResult) {
+func (sq *SqlQuery) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	result = &mproto.QueryResult{}
 	tableInfo := plan.TableInfo
 	if plan.Fields == nil {
 		panic("unexpected")
 	}
 	result.Fields = plan.Fields
-	normalizePKRows(plan.TableInfo, pkRows)
-	rows := make([][]interface{}, 0, len(pkRows))
+	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
 	for _, pk := range pkRows {
 		key := buildKey(tableInfo, pk)
 		if cacheRow, cas := tableInfo.Cache.Get(key); cacheRow != nil {
-			/*if dbrow := sq.validateRow(plan, cacheRow, pk); dbrow != nil {
+			/*if dbrow := sq.compareRow(plan, cacheRow, pk); dbrow != nil {
 				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
 			}*/
 			rows = append(rows, applyFilter(plan.ColumnNumbers, cacheRow))
@@ -814,7 +815,7 @@ func (sq *SqlQuery) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkR
 	return result
 }
 
-func (sq *SqlQuery) validateRow(logStats *sqlQueryStats, plan *CompiledPlan, cacheRow []interface{}, pk []interface{}) (dbrow []interface{}) {
+func (sq *SqlQuery) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, cacheRow []sqltypes.Value, pk []sqltypes.Value) (dbrow []sqltypes.Value) {
 	resultFromdb := sq.qFetch(logStats, plan, plan.OuterQuery, pk)
 	if len(resultFromdb.Rows) != 1 {
 		relog.Warning("unexpected number of rows for %v: %d", pk, len(resultFromdb.Rows))
@@ -822,10 +823,10 @@ func (sq *SqlQuery) validateRow(logStats *sqlQueryStats, plan *CompiledPlan, cac
 	}
 	dbrow = resultFromdb.Rows[0]
 	for i := 0; i < len(cacheRow); i++ {
-		if cacheRow[i] == nil && dbrow[i] == nil {
+		if cacheRow[i].IsNull() && dbrow[i].IsNull() {
 			continue
 		}
-		if (cacheRow[i] == nil && dbrow[i] != nil) || (cacheRow[i] != nil && dbrow[i] == nil) || string(cacheRow[i].([]byte)) != dbrow[i] {
+		if (cacheRow[i].IsNull() && !dbrow[i].IsNull()) || (!cacheRow[i].IsNull() && dbrow[i].IsNull()) || cacheRow[i].String() != dbrow[i].String() {
 			relog.Warning("query: %v", plan.FullQuery)
 			relog.Warning("mismatch for: %v, column: %v cache: %s, db: %s", pk, i, cacheRow[i], dbrow[i])
 			return dbrow
@@ -855,8 +856,7 @@ func (sq *SqlQuery) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (res
 }
 
 func (sq *SqlQuery) execInsertPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	pkRows := buildValueList(plan.PKValues, plan.BindVars)
-	normalizePKRows(plan.TableInfo, pkRows)
+	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
 	return sq.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
@@ -869,18 +869,18 @@ func (sq *SqlQuery) execInsertSubquery(logStats *sqlQueryStats, conn PoolConnect
 	if len(plan.ColumnNumbers) != len(innerRows[0]) {
 		panic(NewTabletError(FAIL, "Subquery length does not match column list"))
 	}
-	normalizeRows(plan.TableInfo, plan.ColumnNumbers, innerRows)
-	pkRows := make([][]interface{}, len(innerRows))
+	pkRows := make([][]sqltypes.Value, len(innerRows))
 	for i, innerRow := range innerRows {
-		pkRows[i] = applyFilter(plan.SubqueryPKColumns, innerRow)
+		pkRows[i] = applyFilterWithPKDefaults(plan.TableInfo, plan.SubqueryPKColumns, innerRow)
 	}
+	// Validating first row is sufficient
+	validateRow(plan.TableInfo, plan.TableInfo.PKColumns, pkRows[0])
 	plan.BindVars["_rowValues"] = innerRows
 	return sq.execInsertPKRows(logStats, conn, plan, pkRows, invalidator)
 }
 
-func (sq *SqlQuery) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	fillPKDefaults(plan.TableInfo, pkRows)
-	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
+func (sq *SqlQuery) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = sq.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	// TODO: We need to do this only if insert has on duplicate key clause
@@ -895,9 +895,8 @@ func (sq *SqlQuery) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnectio
 }
 
 func (sq *SqlQuery) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
-	pkRows := buildValueList(plan.PKValues, plan.BindVars)
-	normalizePKRows(plan.TableInfo, pkRows)
-	secondaryList := buildSecondaryList(pkRows, plan.SecondaryPKValues, plan.BindVars)
+	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	secondaryList := buildSecondaryList(plan.TableInfo, pkRows, plan.SecondaryPKValues, plan.BindVars)
 	bsc := buildStreamComment(plan.TableInfo, pkRows, secondaryList)
 	result = sq.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	if invalidator != nil {
@@ -911,19 +910,19 @@ func (sq *SqlQuery) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, plan
 
 func (sq *SqlQuery) execDMLSubquery(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	innerResult := sq.directFetch(logStats, conn, plan.Subquery, plan.BindVars, nil, nil)
+	// no need to validate innerResult
 	return sq.execDMLPKRows(logStats, conn, plan, innerResult.Rows, invalidator)
 }
 
-func (sq *SqlQuery) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]interface{}, invalidator CacheInvalidator) (result *mproto.QueryResult) {
+func (sq *SqlQuery) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, pkRows [][]sqltypes.Value, invalidator CacheInvalidator) (result *mproto.QueryResult) {
 	if len(pkRows) == 0 {
 		return &mproto.QueryResult{RowsAffected: 0}
 	}
-	normalizePKRows(plan.TableInfo, pkRows)
 	rowsAffected := uint64(0)
-	singleRow := make([][]interface{}, 1)
+	singleRow := make([][]sqltypes.Value, 1)
 	for _, pkRow := range pkRows {
 		singleRow[0] = pkRow
-		secondaryList := buildSecondaryList(singleRow, plan.SecondaryPKValues, plan.BindVars)
+		secondaryList := buildSecondaryList(plan.TableInfo, singleRow, plan.SecondaryPKValues, plan.BindVars)
 		bsc := buildStreamComment(plan.TableInfo, singleRow, secondaryList)
 		rowsAffected += sq.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, pkRow, bsc).RowsAffected
 		if invalidator != nil {
@@ -982,7 +981,7 @@ func (sq *SqlQuery) execSet(logStats *sqlQueryStats, plan *CompiledPlan) (result
 	return sq.qFetch(logStats, plan, plan.FullQuery, nil)
 }
 
-func (sq *SqlQuery) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []interface{}) (result *mproto.QueryResult) {
+func (sq *SqlQuery) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := sq.generateFinalSql(parsed_query, plan.BindVars, listVars, nil)
 	q, ok := sq.consolidator.Create(string(sql))
 	if ok {
@@ -1007,7 +1006,7 @@ func (sq *SqlQuery) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_q
 	return q.Result
 }
 
-func (sq *SqlQuery) directFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+func (sq *SqlQuery) directFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	result, err := sq.executeSql(logStats, conn, sql, false)
 	if err != nil {
@@ -1017,7 +1016,7 @@ func (sq *SqlQuery) directFetch(logStats *sqlQueryStats, conn PoolConnection, pa
 }
 
 // fullFetch also fetches field info
-func (sq *SqlQuery) fullFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) (result *mproto.QueryResult) {
+func (sq *SqlQuery) fullFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) (result *mproto.QueryResult) {
 	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	result, err := sq.executeSql(logStats, conn, sql, true)
 	if err != nil {
@@ -1026,12 +1025,12 @@ func (sq *SqlQuery) fullFetch(logStats *sqlQueryStats, conn PoolConnection, pars
 	return result
 }
 
-func (sq *SqlQuery) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte, callback func(interface{}) error) error {
+func (sq *SqlQuery) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(interface{}) error) error {
 	sql := sq.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	return sq.executeStreamSql(logStats, conn, sql, callback)
 }
 
-func (sq *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []interface{}, buildStreamComment []byte) []byte {
+func (sq *SqlQuery) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) []byte {
 	bindVars[MAX_RESULT_NAME] = atomic.LoadInt32(&sq.maxResultSize) + 1
 	sql, err := parsed_query.GenerateQuery(bindVars, listVars)
 	if err != nil {

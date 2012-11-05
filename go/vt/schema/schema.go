@@ -8,8 +8,9 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
-	"strconv"
 	"strings"
+
+	"code.google.com/p/vitess/go/sqltypes"
 )
 
 // Column categories
@@ -23,7 +24,7 @@ type TableColumn struct {
 	Name     string
 	Category int
 	IsAuto   bool
-	Default  interface{}
+	Default  sqltypes.Value
 }
 
 type Table struct {
@@ -42,7 +43,7 @@ func NewTable(name string) *Table {
 	}
 }
 
-func (self *Table) AddColumn(name string, columnType string, defval interface{}, extra string) {
+func (self *Table) AddColumn(name string, columnType string, defval sqltypes.Value, extra string) {
 	index := len(self.Columns)
 	self.Columns = append(self.Columns, TableColumn{Name: name})
 	if strings.Contains(columnType, "int") {
@@ -52,15 +53,18 @@ func (self *Table) AddColumn(name string, columnType string, defval interface{},
 	} else {
 		self.Columns[index].Category = CAT_OTHER
 	}
-	if defval != nil {
-		if self.Columns[index].Category == CAT_NUMBER {
-			self.Columns[index].Default = tonumber(defval.(string))
-		} else {
-			self.Columns[index].Default = defval
-		}
-	}
 	if extra == "auto_increment" {
 		self.Columns[index].IsAuto = true
+		// Ignore default value, if any
+		return
+	}
+	if defval.IsNull() {
+		return
+	}
+	if self.Columns[index].Category == CAT_NUMBER {
+		self.Columns[index].Default = sqltypes.MakeNumeric(defval.Raw())
+	} else {
+		self.Columns[index].Default = sqltypes.MakeString(defval.Raw())
 	}
 }
 
@@ -71,6 +75,10 @@ func (self *Table) FindColumn(name string) int {
 		}
 	}
 	return -1
+}
+
+func (self *Table) GetPKColumn(index int) *TableColumn {
+	return &self.Columns[self.PKColumns[index]]
 }
 
 func (self *Table) AddIndex(name string) (index *Index) {
@@ -114,14 +122,4 @@ func (self *Index) FindDataColumn(name string) int {
 		}
 	}
 	return -1
-}
-
-// duplicated in multipe packages
-func tonumber(val string) (number interface{}) {
-	if val[0] == '-' {
-		number, _ = strconv.ParseInt(val, 0, 64)
-	} else {
-		number, _ = strconv.ParseUint(val, 0, 64)
-	}
-	return number
 }

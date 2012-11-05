@@ -5,9 +5,12 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/stats"
 	"encoding/binary"
 	"time"
+
+	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/vt/schema"
 )
 
 var cacheStats = stats.NewTimings("Cache")
@@ -19,19 +22,23 @@ const (
 )
 
 type RowCache struct {
+	tableInfo *TableInfo
 	prefix    string
 	cachePool *CachePool
 }
 
-func NewRowCache(tableName string, hash string, cachePool *CachePool) *RowCache {
+func NewRowCache(tableInfo *TableInfo, hash string, cachePool *CachePool) *RowCache {
 	prefix := hash + "."
-	return &RowCache{prefix, cachePool}
+	return &RowCache{tableInfo, prefix, cachePool}
 }
 
-func (self *RowCache) Get(key string) (row []interface{}, cas uint64) {
-	conn := self.cachePool.Get()
+func (rc *RowCache) Get(key string) (row []sqltypes.Value, cas uint64) {
+	if key == "" {
+		return nil, 0
+	}
+	mkey := rc.prefix + key
+	conn := rc.cachePool.Get()
 	defer conn.Recycle()
-	mkey := self.prefix + key
 
 	defer cacheStats.Record("Exec", time.Now())
 	b, f, cas, err := conn.Gets(mkey)
@@ -48,23 +55,23 @@ func (self *RowCache) Get(key string) (row []interface{}, cas uint64) {
 		// back as long as it's not updated again.
 		return nil, cas
 	}
-	if row = decodeRow(b); row == nil {
+	if row = rc.decodeRow(b); row == nil {
 		panic(NewTabletError(FAIL, "Corrupt data for %s", key))
 	}
 	// No cas. If you've read the row, we don't expect you to update it back.
 	return row, 0
 }
 
-func (self *RowCache) Set(key string, row []interface{}, cas uint64) {
+func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
 	// This value is hardcoded for now.
 	// We're assuming it's not worth caching rows that are too large.
-	b := encodeRow(row, 8000)
+	b := rc.encodeRow(row, 8000)
 	if b == nil {
 		return
 	}
-	conn := self.cachePool.Get()
+	conn := rc.cachePool.Get()
 	defer conn.Recycle()
-	mkey := self.prefix + key
+	mkey := rc.prefix + key
 
 	var err error
 	if cas == 0 {
@@ -81,46 +88,22 @@ func (self *RowCache) Set(key string, row []interface{}, cas uint64) {
 	}
 }
 
-func (self *RowCache) Delete(key string) {
-	conn := self.cachePool.Get()
+func (rc *RowCache) Delete(key string) {
+	conn := rc.cachePool.Get()
 	defer conn.Recycle()
-	mkey := self.prefix + key
+	mkey := rc.prefix + key
 
-	_, err := conn.Set(mkey, RC_DELETED, self.cachePool.DeleteExpiry, nil)
+	_, err := conn.Set(mkey, RC_DELETED, rc.cachePool.DeleteExpiry, nil)
 	if err != nil {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
 	}
 }
 
-func rowLen(row []interface{}) int {
+func (rc *RowCache) encodeRow(row []sqltypes.Value, max int) (b []byte) {
 	length := 0
 	for _, v := range row {
-		if v == nil {
-			continue
-		}
-		switch col := v.(type) {
-		case string:
-			length += len(col)
-		case []byte:
-			length += len(col)
-		}
-	}
-	return length
-}
-
-func encodeRow(row []interface{}, max int) (b []byte) {
-	length := 0
-	for _, v := range row {
-		if v == nil {
-			continue
-		}
-		switch col := v.(type) {
-		case string:
-			length += len(col)
-		case []byte:
-			length += len(col)
-		}
+		length += len(v.Raw())
 		if length > max {
 			return nil
 		}
@@ -130,28 +113,20 @@ func encodeRow(row []interface{}, max int) (b []byte) {
 	data := b[datastart:datastart]
 	pack.PutUint32(b, uint32(len(row)))
 	for i, v := range row {
-		if v == nil {
+		if v.IsNull() {
 			pack.PutUint32(b[4+i*4:], 0xFFFFFFFF)
 			continue
 		}
-		var clen int
-		switch col := v.(type) {
-		case string:
-			clen = len(col)
-			data = append(data, col...)
-		case []byte:
-			clen = len(col)
-			data = append(data, col...)
-		}
-		pack.PutUint32(b[4+i*4:], uint32(clen))
+		data = append(data, v.Raw()...)
+		pack.PutUint32(b[4+i*4:], uint32(len(v.Raw())))
 	}
 	return b
 }
 
-func decodeRow(b []byte) (row []interface{}) {
+func (rc *RowCache) decodeRow(b []byte) (row []sqltypes.Value) {
 	rowlen := pack.Uint32(b)
 	data := b[4+rowlen*4:]
-	row = make([]interface{}, rowlen)
+	row = make([]sqltypes.Value, rowlen)
 	for i, _ := range row {
 		length := pack.Uint32(b[4+i*4:])
 		if length == 0xFFFFFFFF {
@@ -161,8 +136,20 @@ func decodeRow(b []byte) (row []interface{}) {
 			// Corrupt data
 			return nil
 		}
-		row[i] = data[:length]
+		if rc.tableInfo.Columns[i].Category == schema.CAT_NUMBER {
+			row[i] = sqltypes.MakeNumeric(data[:length])
+		} else {
+			row[i] = sqltypes.MakeString(data[:length])
+		}
 		data = data[length:]
 	}
 	return row
+}
+
+func rowLen(row []sqltypes.Value) int {
+	length := 0
+	for _, v := range row {
+		length += len(v.Raw())
+	}
+	return length
 }

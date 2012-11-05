@@ -6,16 +6,19 @@ package tabletserver
 
 import (
 	"bytes"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/schema"
-	"code.google.com/p/vitess/go/vt/sqlparser"
 	"encoding/base64"
 	"fmt"
-	"strconv"
 	"strings"
+
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/vt/schema"
 )
 
-func buildValueList(pkValues []interface{}, bindVars map[string]interface{}) [][]interface{} {
+// buildValueList builds the set of PK reference rows used to drive the next query.
+// It is uses the PK values supplied in the original query and bind variables.
+// The generated reference rows are validated for type match against the PK of the table.
+func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) [][]sqltypes.Value {
 	length := -1
 	for _, pkValue := range pkValues {
 		if list, ok := pkValue.([]interface{}); ok {
@@ -31,102 +34,94 @@ func buildValueList(pkValues []interface{}, bindVars map[string]interface{}) [][
 	if length == -1 {
 		length = 1
 	}
-	valueList := make([][]interface{}, length)
+	valueList := make([][]sqltypes.Value, length)
 	for i := 0; i < length; i++ {
-		valueList[i] = make([]interface{}, len(pkValues))
+		valueList[i] = make([]sqltypes.Value, len(pkValues))
 		for j, pkValue := range pkValues {
 			if list, ok := pkValue.([]interface{}); ok {
-				valueList[i][j] = resolveValue(list[i], bindVars)
+				valueList[i][j] = resolveValue(tableInfo.GetPKColumn(j), list[i], bindVars)
 			} else {
-				valueList[i][j] = resolveValue(pkValue, bindVars)
+				valueList[i][j] = resolveValue(tableInfo.GetPKColumn(j), pkValue, bindVars)
 			}
 		}
 	}
 	return valueList
 }
 
-func buildSecondaryList(pkList [][]interface{}, secondaryList []interface{}, bindVars map[string]interface{}) [][]interface{} {
+// buildSecondaryList is used for handling ON DUPLICATE DMLs, or those that change the PK.
+func buildSecondaryList(tableInfo *TableInfo, pkList [][]sqltypes.Value, secondaryList []interface{}, bindVars map[string]interface{}) [][]sqltypes.Value {
 	if secondaryList == nil {
 		return nil
 	}
-	valueList := make([][]interface{}, len(pkList))
+	valueList := make([][]sqltypes.Value, len(pkList))
 	for i, row := range pkList {
-		valueList[i] = make([]interface{}, len(row))
+		valueList[i] = make([]sqltypes.Value, len(row))
 		for j, cell := range row {
 			if secondaryList[j] == nil {
 				valueList[i][j] = cell
 			} else {
-				valueList[i][j] = resolveValue(secondaryList[j], bindVars)
+				valueList[i][j] = resolveValue(tableInfo.GetPKColumn(j), secondaryList[j], bindVars)
 			}
 		}
 	}
 	return valueList
 }
 
-func resolveValue(value interface{}, bindVars map[string]interface{}) interface{} {
-	if v, ok := value.(string); ok {
-		if v[0] == ':' {
-			lookup, ok := bindVars[v[1:]]
-			if !ok {
-				panic(NewTabletError(FAIL, "No bind var found for %s", v))
-			}
-			return lookup
+func resolveValue(col *schema.TableColumn, value interface{}, bindVars map[string]interface{}) (result sqltypes.Value) {
+	switch v := value.(type) {
+	case string:
+		lookup, ok := bindVars[v[1:]]
+		if !ok {
+			panic(NewTabletError(FAIL, "Missing bind var %s", v))
 		}
+		sqlval, err := sqltypes.BuildValue(lookup)
+		if err != nil {
+			panic(NewTabletError(FAIL, "%v", err))
+		}
+		result = sqlval
+	case sqltypes.Value:
+		result = v
+	case nil:
+		// no op
+	default:
+		panic("unreachable")
 	}
-	return value
-}
-
-func copyRows(rows [][]interface{}) (result [][]interface{}) {
-	result = make([][]interface{}, len(rows))
-	for i, row := range rows {
-		result[i] = make([]interface{}, len(row))
-		copy(result[i], row)
-	}
+	validateValue(col, result)
 	return result
 }
 
-func normalizePKRows(tableInfo *TableInfo, pkRows [][]interface{}) {
-	normalizeRows(tableInfo, tableInfo.PKColumns, pkRows)
+func validateRow(tableInfo *TableInfo, columnNumbers []int, row []sqltypes.Value) {
+	if len(row) != len(columnNumbers) {
+		panic(NewTabletError(FAIL, "data inconsistency %d vs %d", len(row), len(columnNumbers)))
+	}
+	for j, value := range row {
+		validateValue(&tableInfo.Columns[columnNumbers[j]], value)
+	}
 }
 
-func normalizeRows(tableInfo *TableInfo, columnNumbers []int, rows [][]interface{}) {
-	for _, row := range rows {
-		if len(row) != len(columnNumbers) {
-			panic(NewTabletError(FAIL, "data inconsistency %d vs %d", len(row), len(columnNumbers)))
+func validateValue(col *schema.TableColumn, value sqltypes.Value) {
+	if value.IsNull() {
+		return
+	}
+	switch col.Category {
+	case schema.CAT_NUMBER:
+		if !value.IsNumeric() {
+			panic(NewTabletError(FAIL, "Type mismatch, expecting numeric type for %v", value))
 		}
-		for j, cell := range row {
-			if tableInfo.Columns[columnNumbers[j]].Category == schema.CAT_NUMBER {
-				switch val := cell.(type) {
-				case string:
-					row[j] = tonumber(val)
-				case []byte:
-					row[j] = tonumber(string(val))
-				}
-			}
+	case schema.CAT_VARBINARY:
+		if !value.IsString() {
+			panic(NewTabletError(FAIL, "Type mismatch, expecting string type for %v", value))
 		}
 	}
 }
 
-func fillPKDefaults(tableInfo *TableInfo, pkRows [][]interface{}) {
-	for _, row := range pkRows {
-		for j, cell := range row {
-			if tableInfo.Columns[tableInfo.PKColumns[j]].IsAuto {
-				continue
-			}
-			if cell == nil {
-				row[j] = tableInfo.Columns[tableInfo.PKColumns[j]].Default
-			}
-		}
-	}
-}
-
-func buildKey(tableInfo *TableInfo, row []interface{}) (key string) {
+func buildKey(tableInfo *TableInfo, row []sqltypes.Value) (key string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	for i, pkValue := range row {
-		if pkValue == nil { // Can happen for inserts with auto_increment columns
+		if pkValue.IsNull() {
 			return ""
 		}
-		encodePKValue(buf, pkValue, tableInfo.Columns[tableInfo.PKColumns[i]].Category)
+		pkValue.EncodeAscii(buf)
 		if i != len(row)-1 {
 			buf.WriteByte('.')
 		}
@@ -134,7 +129,7 @@ func buildKey(tableInfo *TableInfo, row []interface{}) (key string) {
 	return buf.String()
 }
 
-func buildStreamComment(tableInfo *TableInfo, pkValueList [][]interface{}, secondaryList [][]interface{}) []byte {
+func buildStreamComment(tableInfo *TableInfo, pkValueList [][]sqltypes.Value, secondaryList [][]sqltypes.Value) []byte {
 	buf := bytes.NewBuffer(make([]byte, 0, 256))
 	fmt.Fprintf(buf, " /* _stream %s (", tableInfo.Name)
 	// We assume the first index exists, and is the pk
@@ -149,48 +144,37 @@ func buildStreamComment(tableInfo *TableInfo, pkValueList [][]interface{}, secon
 	return buf.Bytes()
 }
 
-func buildPKValueList(buf *bytes.Buffer, tableInfo *TableInfo, pkValueList [][]interface{}) {
+func buildPKValueList(buf *bytes.Buffer, tableInfo *TableInfo, pkValueList [][]sqltypes.Value) {
 	for _, pkValues := range pkValueList {
 		buf.WriteString(" (")
-		for j, pkValue := range pkValues {
-			if pkValue == nil {
-				buf.WriteString("null ")
-				continue
-			}
-			encodePKValue(buf, pkValue, tableInfo.Columns[tableInfo.PKColumns[j]].Category)
+		for _, pkValue := range pkValues {
+			pkValue.EncodeAscii(buf)
 			buf.WriteString(" ")
 		}
 		buf.WriteString(")")
 	}
 }
 
-func encodePKValue(buf *bytes.Buffer, pkValue interface{}, category int) {
-	switch category {
-	case schema.CAT_NUMBER:
-		switch val := pkValue.(type) {
-		case int, int32, int64, uint, uint32, uint64:
-			sqlparser.EncodeValue(buf, val)
-		case string:
-			sqlparser.EncodeValue(buf, tonumber(val))
-		case []byte:
-			sqlparser.EncodeValue(buf, tonumber(string(val)))
-		default:
-			panic(NewTabletError(FAIL, "Type %T disallowed for pk columns", val))
+func applyFilter(columnNumbers []int, input []sqltypes.Value) (output []sqltypes.Value) {
+	output = make([]sqltypes.Value, len(columnNumbers))
+	for colIndex, colPointer := range columnNumbers {
+		if colPointer >= 0 {
+			output[colIndex] = input[colPointer]
 		}
-	default:
-		buf.WriteByte('\'')
-		encoder := base64.NewEncoder(base64.StdEncoding, buf)
-		switch val := pkValue.(type) {
-		case string:
-			encoder.Write([]byte(val))
-		case []byte:
-			encoder.Write(val)
-		default:
-			panic(NewTabletError(FAIL, "Type %T disallowed for non-number pk columns", val))
-		}
-		encoder.Close()
-		buf.WriteByte('\'')
 	}
+	return output
+}
+
+func applyFilterWithPKDefaults(tableInfo *TableInfo, columnNumbers []int, input []sqltypes.Value) (output []sqltypes.Value) {
+	output = make([]sqltypes.Value, len(columnNumbers))
+	for colIndex, colPointer := range columnNumbers {
+		if colPointer >= 0 {
+			output[colIndex] = input[colPointer]
+		} else {
+			output[colIndex] = tableInfo.GetPKColumn(colIndex).Default
+		}
+	}
+	return output
 }
 
 func validateKey(tableInfo *TableInfo, key string) (newKey string) {
@@ -203,48 +187,29 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 		// TODO: Verify auto-increment table
 		return ""
 	}
-	pkValues := make([]interface{}, len(tableInfo.PKColumns))
+	pkValues := make([]sqltypes.Value, len(tableInfo.PKColumns))
 	for i, piece := range pieces {
 		if piece[0] == '\'' {
-			var err error
-			pkValues[i], err = base64.StdEncoding.DecodeString(piece[1 : len(piece)-1])
+			s, err := base64.StdEncoding.DecodeString(piece[1 : len(piece)-1])
 			if err != nil {
 				relog.Warning("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
 				return
 			}
-			//pkValues[i] = piece[1 : len(piece)-1]
+			pkValues[i] = sqltypes.MakeString(s)
 		} else if piece == "null" {
 			// TODO: Verify auto-increment table
 			return ""
 		} else {
-			pkValues[i] = piece
+			n, err := sqltypes.BuildNumeric(piece)
+			if err != nil {
+				relog.Warning("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
+				return
+			}
+			pkValues[i] = n
 		}
 	}
 	if newKey = buildKey(tableInfo, pkValues); newKey != key {
 		relog.Warning("Error: Key mismatch, received: %s, computed: %s", key, newKey)
 	}
 	return buildKey(tableInfo, pkValues)
-}
-
-// duplicated in multipe packages
-func tonumber(val string) (number interface{}) {
-	var err error
-	if val[0] == '-' {
-		number, err = strconv.ParseInt(val, 0, 64)
-	} else {
-		number, err = strconv.ParseUint(val, 0, 64)
-	}
-	if err != nil {
-		panic(NewTabletError(FAIL, "%s", err))
-	}
-	return number
-}
-
-func base64Decode(b []byte) string {
-	decodedKey := make([]byte, base64.StdEncoding.DecodedLen(len(b)))
-	n, err := base64.StdEncoding.Decode(decodedKey, b)
-	if err != nil {
-		panic(NewTabletError(FAIL, "%s", err))
-	}
-	return string(decodedKey[:n])
 }

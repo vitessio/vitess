@@ -95,9 +95,7 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(interfa
 		}
 		qr.Rows = append(qr.Rows, row)
 		for _, s := range row {
-			if s != nil {
-				byteCount += len(s.(string))
-			}
+			byteCount += len(s.Raw())
 		}
 
 		if byteCount >= streamBufferSize {

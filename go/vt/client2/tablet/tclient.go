@@ -20,6 +20,7 @@ import (
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
+	"code.google.com/p/vitess/go/sqltypes"
 	tproto "code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
@@ -266,7 +267,7 @@ type Result struct {
 func NewResult(rowCount, rowsAffected, insertId int64, fields []mproto.Field) *Result {
 	return &Result{
 		qr: &mproto.QueryResult{
-			Rows:         make([][]interface{}, int(rowCount)),
+			Rows:         make([][]sqltypes.Value, int(rowCount)),
 			Fields:       fields,
 			RowsAffected: uint64(rowsAffected),
 			InsertId:     uint64(insertId),
@@ -296,7 +297,7 @@ func (result *Result) Columns() []string {
 	return cols
 }
 
-func (result *Result) Rows() [][]interface{} {
+func (result *Result) Rows() [][]sqltypes.Value {
 	return result.qr.Rows
 }
 
@@ -319,8 +320,8 @@ func (result *Result) Next(dest []driver.Value) error {
 	}
 	defer func() { result.index++ }()
 	for i, v := range result.qr.Rows[result.index] {
-		if v != nil {
-			dest[i] = convert(int(result.qr.Fields[i].Type), v.(string))
+		if !v.IsNull() {
+			dest[i] = convert(int(result.qr.Fields[i].Type), v.String())
 		}
 	}
 	return nil
@@ -372,8 +373,8 @@ func (sr *StreamResult) Next(dest []driver.Value) error {
 
 	row := sr.qr.Rows[sr.index]
 	for i, v := range row {
-		if v != nil {
-			dest[i] = convert(int(sr.columns.Fields[i].Type), v.(string))
+		if !v.IsNull() {
+			dest[i] = convert(int(sr.columns.Fields[i].Type), v.String())
 		}
 	}
 

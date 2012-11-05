@@ -9,6 +9,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap/proto"
+	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/streamlog"
 )
 
@@ -37,7 +38,7 @@ type sqlQueryStats struct {
 	CacheMisses          int64
 	CacheInvalidations   int64
 	QuerySources         byte
-	Rows                 [][]interface{}
+	Rows                 [][]sqltypes.Value
 	context              *proto.Context
 }
 
@@ -70,17 +71,7 @@ func (stats *sqlQueryStats) SizeOfResponse() int {
 	size := 0
 	for _, row := range stats.Rows {
 		for _, field := range row {
-			if field == nil {
-				continue
-			}
-			switch f := field.(type) {
-			case string:
-				size += len(f)
-			case []byte:
-				size += len(f)
-			default:
-				relog.Warning("cannot convert %#v to string or []byte", field)
-			}
+			size += len(field.Raw())
 		}
 	}
 	return size
