@@ -100,6 +100,9 @@ Shards:
     specify which shard to reparent and which tablet should be the new master
     -leave-master-read-only: skip the flip to read-write mode
 
+  ValidateShard <zk keyspaces path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
+    validate all nodes reachable from this shard are consistent
+
 
 Keyspaces:
   CreateKeyspace <zk keyspaces path>/<name> <shard count>
@@ -108,6 +111,9 @@ Keyspaces:
   RebuildKeyspaceGraph <zk keyspace path>
     Rebuild the serving data for all shards in this keyspace.
     This may trigger an update to all connected clients
+
+  ValidateKeyspace <zk keyspace path> (/zk/global/vt/keyspaces/<keyspace>)
+    validate all nodes reachable from this keyspace are consistent
 
 
 Generic:
@@ -124,17 +130,18 @@ Generic:
     validate all nodes reachable from global replication graph and all
     tablets in all discoverable cells are consistent
 
-  ValidateKeyspace <zk keyspace path> (/zk/global/vt/keyspaces/<keyspace>)
-    validate all nodes reachable from this keyspace are consistent
-
-  ValidateShard <zk keyspaces path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
-    validate all nodes reachable from this shard are consistent
-
   ExportZkns <zk local vt path>  (/zk/<cell>/vt)
     export the serving graph entries to the legacy zkns format
 
   ExportZknsForKeyspace <zk global keyspace path> (/zk/global/vt/keyspaces/<keyspace>)
     export the serving graph entries to the legacy zkns format
+
+  RebuildReplicationGraph zk-vt-paths=<zk local vt path>,... keyspaces=<keyspace>,...
+    This takes the Thor's hammer approach of recovery and should only
+    be used in emergencies.  /zk/cell/vt/tablets/* are the canonical
+    source of data for the system. This function use that canonical
+    data to recover the replication graph, at which point further
+    auditing with Validate can reveal any remaining issues.
 
   ListIdle <zk local vt path>
     list all idle tablet paths
