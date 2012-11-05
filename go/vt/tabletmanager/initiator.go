@@ -19,8 +19,10 @@ import (
 	"path"
 	"time"
 
+	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -181,6 +183,14 @@ func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err er
 func (ai *ActionInitiator) GetSchema(zkTabletPath, zkReplyPath string) (actionPath string, err error) {
 	args := map[string]string{"ReplyPath": zkReplyPath}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, Args: args})
+}
+
+func (ai *ActionInitiator) ApplySchema(zkTabletPath, zkReplyPath string, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
+	args := map[string]string{
+		"ReplyPath":    zkReplyPath,
+		"SchemaChange": jscfg.ToJson(sc),
+	}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, Args: args})
 }
 
 func (ai *ActionInitiator) ExecuteHook(zkTabletPath, zkReplyPath string, hook *Hook) (actionPath string, err error) {

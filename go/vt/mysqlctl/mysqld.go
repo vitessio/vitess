@@ -324,3 +324,20 @@ func Reinit(mt *Mysqld) error {
 func (mysqld *Mysqld) Addr() string {
 	return mysqld.config.MysqlAddr()
 }
+
+// executes some SQL commands using a mysql command line interface process 
+func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
+	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
+	name := dir + "/bin/mysql"
+	arg := []string{
+		"-u", "vt_dba", "-S", mysqld.config.SocketFile,
+		"-e", sql}
+	env := []string{
+		os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
+	}
+	_, err := execCmd(name, arg, env, dir)
+	if err != nil {
+		return err
+	}
+	return nil
+}

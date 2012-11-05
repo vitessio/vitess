@@ -118,3 +118,105 @@ func (mysqld *Mysqld) GetSchema(dbName string) (*SchemaDefinition, error) {
 	sd.generateSchemaVersion()
 	return sd, nil
 }
+
+type SchemaChange struct {
+	Sql              string
+	UseDb            string
+	Force            bool
+	AllowReplication bool
+	BeforeSchema     *SchemaDefinition
+	AfterSchema      *SchemaDefinition
+}
+
+type SchemaChangeResult struct {
+	Error        string
+	BeforeSchema *SchemaDefinition
+	AfterSchema  *SchemaDefinition
+}
+
+func (scr *SchemaChangeResult) String() string {
+	return jscfg.ToJson(scr)
+}
+
+func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (result *SchemaChangeResult) {
+	result = &SchemaChangeResult{}
+
+	// check current schema matches
+	var err error
+	result.BeforeSchema, err = mysqld.GetSchema(dbName)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+	if change.BeforeSchema != nil {
+		schemaDiffs := make(chan string, 10)
+		go func() {
+			result.BeforeSchema.DiffSchema("actual", "expected", change.BeforeSchema, schemaDiffs)
+			close(schemaDiffs)
+		}()
+		differs := false
+		for msg := range schemaDiffs {
+			differs = true
+			relog.Warning("BeforeSchema differs: %v", msg)
+		}
+		if differs {
+			if change.Force {
+				relog.Warning("BeforeSchema differs, applying anyway")
+			} else {
+				result.Error = "BeforeSchema differs"
+				return result
+			}
+		}
+	}
+
+	sql := change.Sql
+	if !change.AllowReplication {
+		sql = "SET sql_log_bin = 0;\n" + sql
+	}
+
+	// add a 'use XXX' in front of the SQL
+	if change.UseDb != "" {
+		sql = "USE " + change.UseDb + ";\n" + sql
+	} else {
+		sql = "USE " + dbName + ";\n" + sql
+	}
+
+	// execute the schema change using an external mysql process
+	// (to benefit from the extra commands in mysql cli)
+	err = mysqld.ExecuteMysqlCommand(sql)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+
+	// populate AfterSchema
+	result.AfterSchema, err = mysqld.GetSchema(dbName)
+	if err != nil {
+		result.Error = err.Error()
+		return result
+	}
+
+	// compare to the provided AfterSchema
+	if change.AfterSchema != nil {
+		schemaDiffs := make(chan string, 10)
+		go func() {
+			result.AfterSchema.DiffSchema("actual", "expected", change.AfterSchema, schemaDiffs)
+			close(schemaDiffs)
+		}()
+		differs := false
+		for msg := range schemaDiffs {
+			differs = true
+			relog.Warning("AfterSchema differs: %v", msg)
+		}
+		if differs {
+			if change.Force {
+				relog.Warning("AfterSchema differs, not reporting error")
+			} else {
+				result.Error = "AfterSchema differs"
+				return result
+			}
+		}
+	}
+
+	return result
+}

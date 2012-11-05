@@ -194,6 +194,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.scrap()
 	case TABLET_ACTION_GET_SCHEMA:
 		err = ta.getSchema(actionNode.path, actionNode.Args)
+	case TABLET_ACTION_APPLY_SCHEMA:
+		err = ta.applySchema(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_EXECUTE_HOOK:
 		err = ta.executeHook(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_SET_RDONLY:
@@ -526,6 +528,30 @@ func (ta *TabletActor) getSchema(actionPath string, args map[string]string) erro
 	}
 
 	return ta.storeTabletActionResponse(actionPath, zkReplyPath, sd)
+}
+
+func (ta *TabletActor) applySchema(actionPath string, args map[string]string) error {
+	// get where we put the response
+	zkReplyPath, ok := args["ReplyPath"]
+	if !ok {
+		return fmt.Errorf("missing ReplyPath in args")
+	}
+
+	// get the parameters
+	sc := &mysqlctl.SchemaChange{}
+	if err := json.Unmarshal([]byte(args["SchemaChange"]), sc); err != nil {
+		return fmt.Errorf("SchemaChange json.Unmarshal failed: %v %v", args["SchemaChange"], err)
+	}
+
+	// read the tablet to get the dbname
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	// and apply the change
+	scr := ta.mysqld.ApplySchemaChange(tablet.DbName(), sc)
+	return ta.storeTabletActionResponse(actionPath, zkReplyPath, scr)
 }
 
 func (ta *TabletActor) executeHook(actionPath string, args map[string]string) (err error) {

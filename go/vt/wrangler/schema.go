@@ -166,3 +166,20 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	close(result)
 	return channelToError(result)
 }
+
+func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
+	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	if err != nil {
+		return nil, err
+	}
+	zkReplyPath := "schema_change_result.json"
+	actionPath, err := wr.ai.ApplySchema(ti.Path(), zkReplyPath, sc)
+
+	// FIXME(alainjobart) the timeout value is wrong here, we need
+	// a longer one
+	scr := new(mysqlctl.SchemaChangeResult)
+	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, scr, wr.actionTimeout()); err != nil {
+		return nil, err
+	}
+	return scr, nil
+}

@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"log/syslog"
 	"os"
@@ -153,13 +154,16 @@ Generic:
 
 Schema:
   GetSchema <zk tablet path>
-    displays the full schema for a tablet
+    display the full schema for a tablet
 
   ValidateSchemaShard <zk shard path>
     validate the master schema matches all the slaves.
 
   ValidateSchemaKeyspace <zk keyspace path>
     validate the master schema from shard 0 matches all the other tablets in the keyspace.
+
+  ApplySchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>} [use_db=<db name>] [allow_replication=false]
+    apply the schema change to the specific tablet (not using _vt, and allowing replication by default). The sql can be inlined or read from a file.
 `
 
 var noWaitForAction = flag.Bool("no-wait", false,
@@ -717,6 +721,39 @@ func main() {
 		sd, err = wrangler.GetSchema(args[1])
 		if err == nil {
 			relog.Info(sd.String())
+		}
+	case "ApplySchema":
+		params := parseParams(args)
+		sc := &mysqlctl.SchemaChange{}
+		zkTabletPath, ok := params["zk_tablet_path"]
+		if !ok {
+			relog.Fatal("action %v requires zk_tablet_path=<zk tablet path>", args[0])
+		}
+		sc.Sql, ok = params["sql"]
+		if ok {
+			if _, ok = params["sql_file"]; ok {
+				relog.Fatal("action %v requires only one of sql or sql_file")
+			}
+		} else {
+			sqlFile, ok := params["sql_file"]
+			if !ok {
+				relog.Fatal("action %v requires one of sql or sql_file")
+			}
+			data, err := ioutil.ReadFile(sqlFile)
+			if err != nil {
+				relog.Fatal("Cannot read file %v: %v", sqlFile, err)
+			}
+			sc.Sql = string(data)
+
+		}
+		sc.UseDb = params["use_db"]
+		sc.AllowReplication = params["allow_replication"] != "false"
+		scr, err := wrangler.ApplySchema(zkTabletPath, sc)
+		if err == nil {
+			relog.Info(scr.String())
+			if scr.Error != "" {
+				relog.Fatal(scr.Error)
+			}
 		}
 	case "ValidateSchemaShard":
 		if len(args) != 2 {
