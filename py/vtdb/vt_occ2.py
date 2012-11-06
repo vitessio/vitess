@@ -6,6 +6,7 @@ import errno
 import logging
 import re
 import time
+import socket
 
 from net import gorpc
 from vtdb import tablet2
@@ -42,6 +43,7 @@ _mysql_error_map = {
 ERROR_APP_LEVEL = 'app_level'
 ERROR_RETRY = 'retry'
 ERROR_FATAL = 'fatal'
+ERROR_TIMEOUT = 'timeout'
 
 RECONNECT_DELAY = 0.002
 
@@ -125,6 +127,8 @@ class VtOCCConnection(tablet2.TabletConnection):
       error_type = ERROR_RETRY
     elif err in (errno.ECONNREFUSED, errno.EPIPE):
       error_type = ERROR_RETRY
+    elif isinstance(exception[0], socket.timeout):
+      error_type = ERROR_TIMEOUT
     else:
       # Everything else is app level - just process the failure and continue
       # to use the existing connection.
@@ -158,7 +162,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         return result
       except dbexceptions.OperationalError, e:
         error_type, e = self._convert_error(e, 'begin')
-        if error_type != ERROR_RETRY:
+        if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
         while True:
           attempt += 1
@@ -168,6 +172,8 @@ class VtOCCConnection(tablet2.TabletConnection):
           try:
             time.sleep(RECONNECT_DELAY)
             self.dial()
+            if error_type == ERROR_TIMEOUT:
+              raise e
             break
           except dbexceptions.OperationalError, dial_error:
             logging.warning('error dialing vtocc on begin %s (%s)',
@@ -200,7 +206,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         return result
       except dbexceptions.OperationalError, e:
         error_type, e = self._convert_error(e, sql, sane_bind_vars)
-        if error_type != ERROR_RETRY:
+        if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
         while True:
           attempt += 1
@@ -210,6 +216,10 @@ class VtOCCConnection(tablet2.TabletConnection):
           try:
             time.sleep(RECONNECT_DELAY)
             self.dial()
+            if error_type == ERROR_TIMEOUT:
+              # If there was a timeout, we want to redial, but do not
+              # want to retry - exit early.
+              raise e
             break
           except dbexceptions.OperationalError, dial_error:
             logging.warning('error dialing vtocc on execute %s (%s)',
@@ -236,7 +246,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         return result
       except dbexceptions.OperationalError, e:
         error_type, e = self._convert_error(e, sql_list, sane_bind_vars_list)
-        if error_type != ERROR_RETRY:
+        if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
         while True:
           attempt += 1
@@ -246,6 +256,8 @@ class VtOCCConnection(tablet2.TabletConnection):
           try:
             time.sleep(RECONNECT_DELAY)
             self.dial()
+            if error_type == ERROR_TIMEOUT:
+              raise e
             break
           except dbexceptions.OperationalError, dial_error:
             logging.warning('error dialing vtocc on execute %s (%s)',
@@ -270,7 +282,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         return result
       except dbexceptions.OperationalError, e:
         error_type, e = self._convert_error(e, sql, sane_bind_vars)
-        if error_type != ERROR_RETRY:
+        if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
         while True:
           attempt += 1
@@ -280,6 +292,8 @@ class VtOCCConnection(tablet2.TabletConnection):
           try:
             time.sleep(RECONNECT_DELAY)
             self.dial()
+            if error_type == ERROR_TIMEOUT:
+              raise e
             break
           except dbexceptions.OperationalError, dial_error:
             logging.warning('error dialing vtocc on execute %s (%s)',
