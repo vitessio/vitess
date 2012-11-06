@@ -8,6 +8,7 @@ package bson
 
 import (
 	"bytes"
+	"math"
 	"strconv"
 	"time"
 )
@@ -50,6 +51,16 @@ func DecodeBytes(buf *bytes.Buffer, kind byte) []byte {
 	panic(NewBsonError("Unexpected data type %v for string", kind))
 }
 
+func DecodeInt32(buf *bytes.Buffer, kind byte) int32 {
+	switch kind {
+	case Int:
+		return int32(Pack.Uint32(buf.Next(4)))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("Unexpected data type %v for int", kind))
+}
+
 func DecodeInt(buf *bytes.Buffer, kind byte) int {
 	switch kind {
 	case Int:
@@ -80,6 +91,16 @@ func DecodeUint64(buf *bytes.Buffer, kind byte) uint64 {
 		return uint64(Pack.Uint32(buf.Next(4)))
 	case Long, Ulong:
 		return Pack.Uint64(buf.Next(8))
+	case Null:
+		return 0
+	}
+	panic(NewBsonError("Unexpected data type %v for int", kind))
+}
+
+func DecodeFloat64(buf *bytes.Buffer, kind byte) float64 {
+	switch kind {
+	case Number:
+		return float64(math.Float64frombits(Pack.Uint64(buf.Next(8))))
 	case Null:
 		return 0
 	}

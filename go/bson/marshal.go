@@ -5,12 +5,13 @@
 package bson
 
 import (
-	"code.google.com/p/vitess/go/bytes2"
 	"io"
 	"math"
 	"reflect"
 	"strconv"
 	"time"
+
+	"code.google.com/p/vitess/go/bytes2"
 )
 
 // LenWriter records the current write position on the buffer
@@ -102,8 +103,12 @@ func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 	switch v := val.Interface().(type) {
 	case []byte:
-		EncodePrefix(buf, Binary, key)
-		EncodeBinary(buf, v)
+		if v == nil {
+			EncodePrefix(buf, Null, key)
+		} else {
+			EncodePrefix(buf, Binary, key)
+			EncodeBinary(buf, v)
+		}
 	case time.Time:
 		EncodePrefix(buf, Datetime, key)
 		EncodeTime(buf, v)
@@ -294,17 +299,3 @@ func Itoa(i int) string {
 	}
 	return strconv.Itoa(i)
 }
-
-/*
-func strInterned(buf []byte) string {
-	hasher := fnv.New64()
-	hasher.Write(buf)
-	hashcode := hasher.Sum64()
-	if str, ok := strIntern[hashcode]; ok {
-		return str
-	}
-	str := string(buf)
-	strIntern[hashcode] = str
-	return str
-}
-*/

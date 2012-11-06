@@ -5,9 +5,11 @@
 package bson
 
 import (
-	"code.google.com/p/vitess/go/bytes2"
+	"bytes"
 	"testing"
 	"time"
+
+	"code.google.com/p/vitess/go/bytes2"
 )
 
 func TestVariety(t *testing.T) {
@@ -41,6 +43,136 @@ func TestVariety(t *testing.T) {
 	err = Unmarshal(encoded, &out3)
 	if out3.Val != "test" {
 		t.Errorf("unmarshal doesn't match input: %v\n%v\n%v\n", err, in, out3)
+	}
+}
+
+type alltypes struct {
+	Bytes   []byte
+	Float64 float64
+	String  string
+	Bool    bool
+	Time    time.Time
+	Int32   int32
+	Int     int
+	Int64   int64
+	Uint64  uint64
+	Strings []string
+	Nil     interface{}
+}
+
+func (a *alltypes) UnmarshalBson(buf *bytes.Buffer) {
+	Next(buf, 4)
+
+	kind := NextByte(buf)
+	for kind != EOO {
+		key := ReadCString(buf)
+		switch key {
+		case "Bytes":
+			verifyKind("Bytes", Binary, kind)
+			a.Bytes = DecodeBytes(buf, kind)
+		case "Float64":
+			verifyKind("Float64", Number, kind)
+			a.Float64 = DecodeFloat64(buf, kind)
+		case "String":
+			verifyKind("String", Binary, kind)
+			a.String = DecodeString(buf, kind)
+		case "Bool":
+			verifyKind("Bool", Boolean, kind)
+			a.Bool = DecodeBool(buf, kind)
+		case "Time":
+			verifyKind("Time", Datetime, kind)
+			a.Time = DecodeTime(buf, kind)
+		case "Int32":
+			verifyKind("Int32", Int, kind)
+			a.Int32 = DecodeInt32(buf, kind)
+		case "Int":
+			verifyKind("Int", Long, kind)
+			a.Int = DecodeInt(buf, kind)
+		case "Int64":
+			verifyKind("Int64", Long, kind)
+			a.Int64 = DecodeInt64(buf, kind)
+		case "Uint64":
+			verifyKind("Uint64", Ulong, kind)
+			a.Uint64 = DecodeUint64(buf, kind)
+		case "Strings":
+			verifyKind("Strings", Array, kind)
+			a.Strings = DecodeStringArray(buf, kind)
+		case "Nil":
+			verifyKind("Nil", Null, kind)
+		default:
+			panic(NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = NextByte(buf)
+	}
+}
+
+func verifyKind(tag string, expecting, actual byte) {
+	if expecting != actual {
+		panic(NewBsonError("Decode %s: expecting %v, actual %v", tag, expecting, actual))
+	}
+}
+
+// TestCustom tests custom unmarshalling
+func TestCustom(t *testing.T) {
+	a := alltypes{
+		Bytes:   []byte("bytes"),
+		Float64: float64(64),
+		String:  "string",
+		Bool:    true,
+		Time:    time.Unix(1136243045, 0),
+		Int32:   int32(-0x80000000),
+		Int:     int(-0x80000000),
+		Int64:   int64(-0x8000000000000000),
+		Uint64:  uint64(0xFFFFFFFFFFFFFFFF),
+		Strings: []string{"a", "b"},
+		Nil:     nil,
+	}
+	encoded := VerifyMarshal(t, a)
+	var out alltypes
+	err := Unmarshal(encoded, &out)
+	if err != nil {
+		t.Fatalf("unmarshal fail: %v\n", err)
+	}
+	if string(out.Bytes) != "bytes" {
+		t.Errorf("bytes fail: %s", out.Bytes)
+	}
+	if out.Float64 != 64 {
+		t.Error("float fail: %v", out.Float64)
+	}
+	if out.String != "string" {
+		t.Errorf("string fail: %v", out.String)
+	}
+	if !out.Bool {
+		t.Errorf("bool fail: %v", out.Bool)
+	}
+	if out.Time.Unix() != 1136243045 {
+		t.Errorf("time fail: %v", out.Time)
+	}
+	if out.Int32 != -0x80000000 {
+		t.Errorf("int32 fail: %v", out.Int32)
+	}
+	if out.Int != -0x80000000 {
+		t.Errorf("int fail: %v", out.Int)
+	}
+	if out.Int64 != -0x8000000000000000 {
+		t.Errorf("int64 fail: %v", out.Int64)
+	}
+	if out.Uint64 != 0xFFFFFFFFFFFFFFFF {
+		t.Errorf("uint64 fail: %v", out.Uint64)
+	}
+	if out.Strings[0] != "a" || out.Strings[1] != "b" {
+		t.Errorf("strings fail: %v", out.Strings)
+	}
+
+	b := alltypes{Bytes: []byte(""), Strings: []string{"a"}}
+	encoded = VerifyMarshal(t, b)
+	var outb alltypes
+	err = Unmarshal(encoded, &outb)
+	if err != nil {
+		t.Fatalf("unmarshal fail: %v\n", err)
+	}
+	if outb.Bytes == nil || len(outb.Bytes) != 0 {
+		t.Errorf("nil bytes fail: %s", outb.Bytes)
 	}
 }
 
@@ -86,29 +218,29 @@ func TestTypes(t *testing.T) {
 	if tm.Unix() != 1136243045 {
 		t.Error("time failed")
 	}
-	if out["int32"].(int32) != int32(-0x80000000) {
-		t.Errorf("int32 fail")
+	if v := out["int32"].(int32); v != int32(-0x80000000) {
+		t.Errorf("int32 fail: %v", v)
 	}
-	if out["int"].(int64) != int64(-0x80000000) {
-		t.Errorf("int fail")
+	if v := out["int"].(int64); v != int64(-0x80000000) {
+		t.Errorf("int fail: %v", v)
 	}
-	if out["int64"].(int64) != int64(-0x8000000000000000) {
-		t.Errorf("int64 fail")
+	if v := out["int64"].(int64); v != int64(-0x8000000000000000) {
+		t.Errorf("int64 fail: %v", v)
 	}
-	if out["uint"].(uint64) != uint64(0xFFFFFFFF) {
-		t.Errorf("uint fail")
+	if v := out["uint"].(uint64); v != uint64(0xFFFFFFFF) {
+		t.Errorf("uint fail: %v", v)
 	}
-	if out["uint32"].(uint64) != uint64(0xFFFFFFFF) {
-		t.Errorf("uint32 fail")
+	if v := out["uint32"].(uint64); v != uint64(0xFFFFFFFF) {
+		t.Errorf("uint32 fail: %v", v)
 	}
-	if out["uint64"].(uint64) != uint64(0xFFFFFFFFFFFFFFFF) {
-		t.Errorf("uint64 fail")
+	if v := out["uint64"].(uint64); v != uint64(0xFFFFFFFFFFFFFFFF) {
+		t.Errorf("uint64 fail: %v", v)
 	}
-	if out["slice"].([]interface{})[0].(int64) != 1 {
-		t.Errorf("slice fail")
+	if v := out["slice"].([]interface{})[0].(int64); v != 1 {
+		t.Errorf("slice fail: %v", v)
 	}
-	if out["slice"].([]interface{})[1] != nil {
-		t.Errorf("slice fail")
+	if v := out["slice"].([]interface{})[1]; v != nil {
+		t.Errorf("slice fail: %v", v)
 	}
 	if nilval, ok := out["nil"]; !ok || nilval != nil {
 		t.Errorf("nil fail")
