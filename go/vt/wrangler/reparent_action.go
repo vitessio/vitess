@@ -41,6 +41,9 @@ func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardAction
 	return position, nil
 }
 
+// Check all the tablets to see if we can proceed with reparenting.
+// masterPosition is supplied from the demoted master if we are doing
+// this gracefully.
 func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
 	relog.Debug("checkSlaveConsistencyWithActions %v %#v", mapKeys(tabletMap), masterPosition)
 
@@ -51,6 +54,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		defer func() {
 			calls <- ctx
 		}()
+
 		zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
 		zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_reply.json")
 		var args *tm.SlavePositionReq
@@ -86,6 +90,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 			args = &tm.SlavePositionReq{lastDataPos, int(wr.actionTimeout().Seconds())}
 		}
 
+		// This option waits for the SQL thread to apply all changes to this instance.
 		_, err := wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
 			ctx.err = err
@@ -120,6 +125,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		// improvement is waiting for the io thread to reach the same
 		// position as the sql thread on a normal slave.
 		if tablet.Type == tm.TYPE_LAG || tablet.Type == tm.TYPE_EXPERIMENTAL {
+			relog.Info("skipping reparent action for tablet %v %v", tablet.Type, tablet.Path())
 			continue
 		}
 		// Pass loop variable explicitly so we don't have a concurrency issue.
@@ -198,4 +204,61 @@ func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint]*tm.TabletInfo, zkSh
 	}
 
 	return nil
+}
+
+// Return a map of all tablets to the current replication position.
+// Handles masters and slaves, but it's up to the caller to guarantee
+// all tablets are in the same shard.
+func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint]*tm.TabletInfo, zkShardActionPath string) (map[uint]*mysqlctl.ReplicationPosition, error) {
+	relog.Debug("tabletReplicationPositions %v", mapKeys(tabletMap))
+
+	calls := make(chan *rpcContext, len(tabletMap))
+	f := func(ti *tm.TabletInfo) {
+		ctx := &rpcContext{tablet: ti}
+		defer func() {
+			calls <- ctx
+		}()
+
+		zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_tablet_position_reply.json")
+		var actionPath, data string
+		if ti.Type == tm.TYPE_MASTER {
+			actionPath, ctx.err = wr.ai.MasterPosition(ti.Path(), zkReplyPath)
+		} else if ti.IsReplicatingType() {
+			actionPath, ctx.err = wr.ai.SlavePosition(ti.Path(), zkReplyPath)
+		}
+		if ctx.err != nil {
+			return
+		}
+		if ctx.err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); ctx.err != nil {
+			return
+		}
+		if data, _, ctx.err = wr.zconn.Get(zkReplyPath); ctx.err != nil {
+			return
+		}
+		ctx.position = new(mysqlctl.ReplicationPosition)
+		if ctx.err = json.Unmarshal([]byte(data), ctx.position); ctx.err != nil {
+			return
+		}
+	}
+
+	for _, tablet := range tabletMap {
+		go f(tablet)
+	}
+
+	someErrors := false
+	positionMap := make(map[uint]*mysqlctl.ReplicationPosition)
+	for i := 0; i < len(tabletMap); i++ {
+		ctx := <-calls
+		if ctx.err == nil {
+			positionMap[ctx.tablet.Uid] = ctx.position
+		} else {
+			positionMap[ctx.tablet.Uid] = nil
+			relog.Warning("could not get replication position for tablet %v %v", ctx.tablet.Path(), ctx.err)
+			someErrors = true
+		}
+	}
+	if someErrors {
+		return positionMap, fmt.Errorf("partial position map, some errors")
+	}
+	return positionMap, nil
 }

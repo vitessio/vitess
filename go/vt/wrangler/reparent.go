@@ -87,6 +87,7 @@ const (
 // Create the reparenting action and launch a goroutine to coordinate
 // the procedure.
 //
+//
 // leaveMasterReadOnly: leave the master in read-only mode, even
 //   though all the other necessary updates have been made.
 // forceReparentToCurrentMaster: mostly for test setups, this can
@@ -219,6 +220,9 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	}
 
 	if masterTablet.Uid != masterElectTablet.Uid {
+		if _, ok := slaveTabletMap[masterElectTablet.Uid]; !ok {
+			return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Path(), shardInfo.ShardPath(), mapKeys(slaveTabletMap))
+		}
 		relog.Info("check slaves %v", zkMasterTabletPath)
 		// err = checkSlaveConsistency(slaveTabletMap, masterPosition, zkShardActionPath)
 		err = wr.checkSlaveConsistencyWithActions(slaveTabletMap, masterPosition, zkShardActionPath)
@@ -550,4 +554,61 @@ wait:
 	}
 
 	return err
+}
+
+func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint]*tm.TabletInfo, map[uint]*mysqlctl.ReplicationPosition, error) {
+	tm.MustBeShardPath(zkShardPath)
+
+	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	actionPath, err := wr.ai.CheckShard(zkShardPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Make sure two of these don't get scheduled at the same time.
+	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, false)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !ok {
+		// just clean up for now, in the future we may want to try harder, or wait
+		wr.zconn.Delete(actionPath, -1)
+		return nil, nil, fmt.Errorf("ShardSlaveStatus failed to obtain shard action lock")
+	}
+
+	tabletMap, posMap, slaveErr := wr.shardReplicationPositions(shardInfo, actionPath)
+
+	// regardless of error, just clean up
+	err = wr.handleActionError(actionPath, nil)
+	if slaveErr != nil {
+		if err != nil {
+			relog.Warning("handleActionError failed: %v", err)
+		}
+		return tabletMap, posMap, slaveErr
+	}
+	return tabletMap, posMap, err
+}
+
+func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardActionPath string) (map[uint]*tm.TabletInfo, map[uint]*mysqlctl.ReplicationPosition, error) {
+	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
+	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tabletMap := make(map[uint]*tm.TabletInfo)
+	for _, alias := range tabletAliases {
+		tablet, err := wr.readTablet(shardInfo.TabletPath(alias))
+		if err != nil {
+			return nil, nil, fmt.Errorf("tablet unavailable: %v", err)
+		}
+		tabletMap[alias.Uid] = tablet
+	}
+	posMap, err := wr.tabletReplicationPositions(tabletMap, zkShardActionPath)
+	return tabletMap, posMap, err
 }

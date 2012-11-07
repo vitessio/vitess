@@ -213,6 +213,11 @@ func (ai *ActionInitiator) RebuildShard(zkShardPath string) (actionPath string, 
 	return ai.writeShardAction(zkShardPath, node)
 }
 
+func (ai *ActionInitiator) CheckShard(zkShardPath string) (actionPath string, err error) {
+	node := &ActionNode{Action: SHARD_ACTION_CHECK}
+	return ai.writeShardAction(zkShardPath, node)
+}
+
 func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath string, err error) {
 	MustBeKeyspacePath(zkKeyspacePath)
 	node := &ActionNode{Action: KEYSPACE_ACTION_REBUILD}

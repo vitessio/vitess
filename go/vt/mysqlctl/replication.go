@@ -111,7 +111,11 @@ var changeMasterCmd = `CHANGE MASTER TO
   MASTER_PASSWORD = '{{.MasterPassword}}',
   MASTER_LOG_FILE = '{{.ReplicationPosition.MasterLogFile}}',
   MASTER_LOG_POS = {{.ReplicationPosition.MasterLogPosition}},
-  MASTER_CONNECT_RETRY = {{.MasterConnectRetry}}`
+  MASTER_CONNECT_RETRY = {{.MasterConnectRetry}}
+`
+
+//  RELAY_LOG_FILE = '{{.ReplicationPosition.RelayLogFile}}',
+//  RELAY_LOG_POS = {{.ReplicationPosition.RelayLogPosition}},
 
 func StartReplicationCommands(replState *ReplicationState) []string {
 	return []string{
@@ -285,7 +289,7 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
  Binlog_Do_DB: 
  Binlog_Ignore_DB: 
 */
-func (mysqld *Mysqld) MasterStatus() (position *ReplicationPosition, err error) {
+func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	rows, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
 	if err != nil {
 		return
@@ -294,10 +298,14 @@ func (mysqld *Mysqld) MasterStatus() (position *ReplicationPosition, err error) 
 		err = errors.New("unexpected result for show master status")
 		return
 	}
-	position = &ReplicationPosition{}
-	position.MasterLogFile = rows[0][0].String()
+	rp = &ReplicationPosition{}
+	rp.MasterLogFile = rows[0][0].String()
 	temp, err := strconv.ParseUint(rows[0][1].String(), 10, 0)
-	position.MasterLogPosition = uint(temp)
+	rp.MasterLogPosition = uint(temp)
+	// On the master, the SQL position and IO position are at
+	// necessarily the same point.
+	rp.MasterLogFileIo = rp.MasterLogFile
+	rp.MasterLogPositionIo = rp.MasterLogPosition
 	return
 }
 

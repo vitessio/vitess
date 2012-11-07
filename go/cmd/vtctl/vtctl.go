@@ -15,6 +15,7 @@ import (
 	"log/syslog"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -100,8 +101,11 @@ Shards:
     specify which shard to reparent and which tablet should be the new master
     -leave-master-read-only: skip the flip to read-write mode
 
-  ValidateShard <zk keyspaces path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
+  ValidateShard <zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
     validate all nodes reachable from this shard are consistent
+
+  ShardReplicationPositions <zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
+    Show slave status on all machines in the shard graph.
 
 
 Keyspaces:
@@ -695,6 +699,28 @@ func main() {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
 		err = wrangler.ValidateShard(args[1], *pingTablets)
+	case "ShardReplicationPositions":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk shard path>", args[0])
+		}
+		tabletMap, posMap, wrErr := wrangler.ShardReplicationPositions(args[1])
+		err = wrErr
+		if tabletMap == nil {
+			break
+		}
+		lines := make([]string, 0, 24)
+		for uid, ti := range tabletMap {
+			pos := posMap[uid]
+			if pos == nil {
+				lines = append(lines, fmtTabletAwkable(ti)+"  <err> <err>")
+			} else {
+				lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v:%010d %v:%010d", pos.MasterLogFile, pos.MasterLogPosition, pos.MasterLogFileIo, pos.MasterLogPositionIo))
+			}
+		}
+		sort.Strings(lines)
+		for _, l := range lines {
+			fmt.Println(l)
+		}
 	case "ListIdle":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])

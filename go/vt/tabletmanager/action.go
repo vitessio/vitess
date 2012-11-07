@@ -45,6 +45,8 @@ const (
 	SHARD_ACTION_REPARENT = "ReparentShard"
 	// Recompute derived shard-wise data
 	SHARD_ACTION_REBUILD = "RebuildShard"
+	// Generic read lock for inexpensive shard-wide actions.
+	SHARD_ACTION_CHECK = "CheckShard"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD = "RebuildKeyspace"
