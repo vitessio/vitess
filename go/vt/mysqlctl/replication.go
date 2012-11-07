@@ -225,7 +225,9 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.executeSuperQuery(query)
 }
 
-var ErrNotSlave = errors.New("no slave status")
+var (
+	ErrNotSlave = errors.New("no slave status")
+)
 
 func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 	rows, err := mysqld.fetchSuperQuery("SHOW SLAVE STATUS")
@@ -244,6 +246,56 @@ func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 		rowMap[showSlaveStatusColumnNames[i]] = column.String()
 	}
 	return rowMap, nil
+}
+
+// Return a replication state that will reparent a slave to the
+// correct master for a specified position.
+func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *ReplicationState, waitPosition *ReplicationPosition, reparentTime int64, err error) {
+	rows, err := mysqld.fetchSuperQuery(fmt.Sprintf("SELECT time_created_ns, new_addr, new_position, wait_position FROM _vt.reparent_log WHERE last_position = '%v'", slavePosition.MapKey()))
+	if err != nil {
+		return
+	}
+	if len(rows) != 1 {
+		err = fmt.Errorf("no reparent for position: %v", slavePosition.MapKey())
+		return
+	}
+
+	reparentTime, err = strconv.ParseInt(rows[0][0].String(), 10, 64)
+	if err != nil {
+		err = fmt.Errorf("bad reparent time: %v %v %v", slavePosition.MapKey(), rows[0][0], err)
+		return
+	}
+
+	file, pos, err := parseReplicationPosition(rows[0][2].String())
+	if err != nil {
+		return
+	}
+	rs = NewReplicationState(rows[0][1].String(), mysqld.replParams.Uname, mysqld.replParams.Pass)
+	rs.ReplicationPosition.MasterLogFile = file
+	rs.ReplicationPosition.MasterLogPosition = uint(pos)
+
+	file, pos, err = parseReplicationPosition(rows[0][3].String())
+	if err != nil {
+		return
+	}
+	waitPosition = new(ReplicationPosition)
+	waitPosition.MasterLogFile = file
+	waitPosition.MasterLogPosition = pos
+	return
+}
+
+func parseReplicationPosition(rpos string) (filename string, pos uint, err error) {
+	parts := strings.Split(rpos, ":")
+	if len(parts) != 2 {
+		return "", 0, fmt.Errorf("bad replication file position: %v", rpos)
+	}
+	_pos, err := strconv.ParseUint(parts[1], 10, 32)
+	if err != nil {
+		return "", 0, fmt.Errorf("bad replication file position: %v %v", rpos, err)
+	}
+	filename = parts[0]
+	pos = uint(_pos)
+	return
 }
 
 func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout int) error {

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -205,7 +206,9 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_SLEEP:
 		err = ta.sleep(actionNode.Args)
 	case TABLET_ACTION_SLAVE_POSITION:
-		err = ta.slavePosition(actionNode.Args)
+		err = ta.slavePosition(actionNode.path, actionNode.Args)
+	case TABLET_ACTION_REPARENT_POSITION:
+		err = ta.reparentPosition(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_SNAPSHOT:
 		_, err = ta.snapshot()
 	case TABLET_ACTION_STOP_SLAVE:
@@ -231,6 +234,9 @@ func (ta *TabletActor) storeTabletActionResponse(actionPath, replyPath string, r
 	// we're given an absolute path, trust the sender knows it's good
 	if !strings.HasPrefix(replyPath, "/") {
 		// otherwise, create the reply path
+		if actionPath == "" {
+			return fmt.Errorf("must specify actionPath for a relative replyPath: %v", replyPath)
+		}
 		actionReplyPath := TabletActionToReplyPath(actionPath, "")
 		_, err := ta.zconn.Create(actionReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -401,7 +407,7 @@ func (ta *TabletActor) masterPosition(args map[string]string) error {
 	return err
 }
 
-func (ta *TabletActor) slavePosition(args map[string]string) error {
+func (ta *TabletActor) slavePosition(actionPath string, args map[string]string) error {
 	zkReplyPath, ok := args["ReplyPath"]
 	if !ok {
 		return fmt.Errorf("missing ReplyPath in args")
@@ -412,8 +418,40 @@ func (ta *TabletActor) slavePosition(args map[string]string) error {
 		return err
 	}
 	relog.Debug("SlavePosition %#v %v", *position, zkReplyPath)
-	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(position), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	return err
+	return ta.storeTabletActionResponse(actionPath, zkReplyPath, position)
+}
+
+func (ta *TabletActor) reparentPosition(actionPath string, args map[string]string) error {
+	slavePosition, ok := args["SlavePosition"]
+	if !ok {
+		return fmt.Errorf("missing SlavePosition in args")
+	}
+	slavePos := new(mysqlctl.ReplicationPosition)
+	if err := json.Unmarshal([]byte(slavePosition), slavePos); err != nil {
+		return err
+	}
+
+	zkReplyPath, ok := args["ReplyPath"]
+	if !ok {
+		return fmt.Errorf("missing ReplyPath in args")
+	}
+
+	replicationState, waitPosition, timePromoted, err := ta.mysqld.ReparentPosition(slavePos)
+	if err != nil {
+		return err
+	}
+	rsd := new(RestartSlaveData)
+	rsd.ReplicationState = replicationState
+	rsd.TimePromoted = timePromoted
+	rsd.WaitPosition = waitPosition
+	parts := strings.Split(ta.zkTabletPath, "/")
+	uid, err := strconv.ParseUint(parts[len(parts)-1], 10, 32)
+	if err != nil {
+		return fmt.Errorf("bad tablet uid %v", err)
+	}
+	rsd.Parent = TabletAlias{parts[2], uint(uid)}
+	relog.Debug("reparentPosition %#v %v", *rsd, zkReplyPath)
+	return ta.storeTabletActionResponse(actionPath, zkReplyPath, rsd)
 }
 
 func (ta *TabletActor) waitSlavePosition(args map[string]string) error {
@@ -438,7 +476,7 @@ func (ta *TabletActor) waitSlavePosition(args map[string]string) error {
 		return err
 	}
 
-	return ta.slavePosition(args)
+	return ta.slavePosition("", args)
 }
 
 func (ta *TabletActor) restartSlave(args map[string]string) error {
@@ -452,12 +490,14 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 		return err
 	}
 
-	zkRestartSlaveDataPath := path.Join(zkShardActionPath, restartSlaveDataFilename)
-	data, _, err := ta.zconn.Get(zkRestartSlaveDataPath)
-	if err != nil {
-		return err
+	data, ok := args["RestartSlaveData"]
+	if !ok {
+		zkRestartSlaveDataPath := path.Join(zkShardActionPath, restartSlaveDataFilename)
+		data, _, err = ta.zconn.Get(zkRestartSlaveDataPath)
+		if err != nil {
+			return err
+		}
 	}
-
 	rsd := new(RestartSlaveData)
 	err = json.Unmarshal([]byte(data), rsd)
 	if err != nil {

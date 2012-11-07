@@ -74,6 +74,10 @@ Tablets:
     This performs Snapshot and then Restore.  The advantage of having
     separate actions is that one snapshot can be used for many restores.
 
+  ReparentTablet <zk tablet path>
+    Reparent a tablet to the current master in the shard. This only works
+    if the current slave position matches the last known reparent action.
+
   PartialSnapshot <zk tablet path> <key name> <start key> <end key>
     Halt mysqld and copy compressed data aside.
 
@@ -642,6 +646,11 @@ func main() {
 			relog.Fatal("action %v requires <zk shard path> <zk tablet path>", args[0])
 		}
 		err = wrangler.ReparentShard(args[1], args[2], *leaveMasterReadOnly, *force)
+	case "ReparentTablet":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk tablet path>", args[0])
+		}
+		err = wrangler.ReparentTablet(args[1])
 	case "ExportZkns":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt root path>", args[0])
@@ -712,7 +721,7 @@ func main() {
 		for uid, ti := range tabletMap {
 			pos := posMap[uid]
 			if pos == nil {
-				lines = append(lines, fmtTabletAwkable(ti)+"  <err> <err>")
+				lines = append(lines, fmtTabletAwkable(ti)+" <err> <err>")
 			} else {
 				lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v:%010d %v:%010d", pos.MasterLogFile, pos.MasterLogPosition, pos.MasterLogFileIo, pos.MasterLogPositionIo))
 			}

@@ -589,6 +589,9 @@ def run_test_reparent_lag_slave(shard_id='0'):
 
   tablet_41983.mquery('', 'start slave')
   time.sleep(1)
+
+  utils.run_vtctl('ReparentTablet %s' % tablet_41983.zk_tablet_path)
+
   result = tablet_41983.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
   if len(result) != 1:
     raise utils.TestError('expected 1 row from vt_insert_test', result)

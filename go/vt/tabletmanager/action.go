@@ -29,6 +29,7 @@ const (
 	TABLET_ACTION_STOP_SLAVE          = "StopSlave"
 	TABLET_ACTION_BREAK_SLAVES        = "BreakSlaves"
 	TABLET_ACTION_MASTER_POSITION     = "MasterPosition"
+	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
 	TABLET_ACTION_SLAVE_POSITION      = "SlavePosition"
 	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
 	TABLET_ACTION_SCRAP               = "Scrap"

@@ -59,7 +59,7 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) (actionPath string, er
 		return "", fmt.Errorf("failed to obtain action lock: %v", actionPath)
 	}
 
-	rebuildErr := wr.rebuildShard(zkShardPath)
+	rebuildErr := wr.rebuildShard(zkShardPath, false)
 	err = wr.handleActionError(actionPath, rebuildErr)
 	if rebuildErr != nil {
 		if err != nil {
@@ -72,12 +72,12 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) (actionPath string, er
 
 // Update shard file with new master, replicas, etc.
 //   /zk/global/vt/keyspaces/<keyspace>/shards/<shard uid>
-// Write to zkns files?
+//
 // Re-read from zk to make sure we are using the side effects of all actions.
 //
 // This function should only be used with an action lock on the shard - otherwise the
 // consistency of the serving graph data can't be guaranteed.
-func (wr *Wrangler) rebuildShard(zkShardPath string) error {
+func (wr *Wrangler) rebuildShard(zkShardPath string, replicationGraphOnly bool) error {
 	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
 	shardInfo, err := tm.NewShardInfo(zkShardPath, "{}")
 	if err != nil {
@@ -101,10 +101,13 @@ func (wr *Wrangler) rebuildShard(zkShardPath string) error {
 	if err = tm.UpdateShard(wr.zconn, shardInfo); err != nil {
 		return err
 	}
-
-	return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets)
+	if !replicationGraphOnly {
+		return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets)
+	}
+	return nil
 }
 
+// Write to zkns files?
 // Write serving graph data to /zk/local/vt/ns/...
 func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo) error {
 	// Get all existing db types so they can be removed if nothing had been editted.

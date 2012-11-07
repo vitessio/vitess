@@ -13,18 +13,17 @@
 package tabletmanager
 
 import (
-	"fmt"
-	"os"
-	"os/user"
-	"path"
-	"time"
-
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/zk"
+	"fmt"
 	"launchpad.net/gozk/zookeeper"
+	"os"
+	"os/user"
+	"path"
+	"time"
 )
 
 // The actor applies individual commands to execute an action read from a node
@@ -139,9 +138,17 @@ func (ai *ActionInitiator) PromoteSlave(zkTabletPath, zkShardActionPath string) 
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE, Args: args})
 }
 
-func (ai *ActionInitiator) RestartSlave(zkTabletPath, zkShardActionPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) RestartSlave(zkTabletPath, zkShardActionPath string, rsd *RestartSlaveData) (actionPath string, err error) {
 	args := map[string]string{"ShardActionPath": zkShardActionPath}
+	if rsd != nil {
+		args["RestartSlaveData"] = jscfg.ToJson(rsd)
+	}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, Args: args})
+}
+
+func (ai *ActionInitiator) ReparentPosition(zkTabletPath string, slavePos *mysqlctl.ReplicationPosition, zkReplyPath string) (actionPath string, err error) {
+	args := map[string]string{"SlavePosition": jscfg.ToJson(slavePos), "ReplyPath": zkReplyPath}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, Args: args})
 }
 
 // NOTE(msolomon) Also available as RPC.

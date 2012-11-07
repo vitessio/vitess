@@ -219,13 +219,24 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		}
 	}
 
+	restartableSlaveTabletMap := slaveTabletMap
 	if masterTablet.Uid != masterElectTablet.Uid {
-		if _, ok := slaveTabletMap[masterElectTablet.Uid]; !ok {
-			return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Path(), shardInfo.ShardPath(), mapKeys(slaveTabletMap))
+		// Under normal circumstances, prune out lag and experimental as not restartable.
+		restartableSlaveTabletMap = make(map[uint]*tm.TabletInfo)
+		for uid, ti := range slaveTabletMap {
+			if ti.Type == tm.TYPE_LAG || ti.Type == tm.TYPE_EXPERIMENTAL {
+				relog.Info("skipping reparent action for tablet %v %v", ti.Type, ti.Path())
+				continue
+			}
+			restartableSlaveTabletMap[uid] = ti
+		}
+
+		if _, ok := restartableSlaveTabletMap[masterElectTablet.Uid]; !ok {
+			return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Path(), shardInfo.ShardPath(), mapKeys(restartableSlaveTabletMap))
 		}
 		relog.Info("check slaves %v", zkMasterTabletPath)
 		// err = checkSlaveConsistency(slaveTabletMap, masterPosition, zkShardActionPath)
-		err = wr.checkSlaveConsistencyWithActions(slaveTabletMap, masterPosition, zkShardActionPath)
+		err = wr.checkSlaveConsistencyWithActions(restartableSlaveTabletMap, masterPosition, zkShardActionPath)
 		if err != nil {
 			return err
 		}
@@ -233,9 +244,8 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		relog.Info("forcing reparent to same master %v", zkMasterTabletPath)
 		// We are forcing a reparenting. Make sure that all slaves stop so
 		// no data is accidentally replicated through before we call RestartSlave.
-		// err = stopSlaves(slaveTabletMap)
 		relog.Info("stop slaves %v", zkMasterTabletPath)
-		err = wr.stopSlavesWithAction(slaveTabletMap, zkShardActionPath)
+		err = wr.stopSlavesWithAction(restartableSlaveTabletMap, zkShardActionPath)
 		if err != nil {
 			return err
 		}
@@ -269,17 +279,17 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 	// Once the slave is promoted, remove it from our map
 	if masterTablet.Uid != masterElectTablet.Uid {
-		delete(slaveTabletMap, masterElectTablet.Uid)
+		delete(restartableSlaveTabletMap, masterElectTablet.Uid)
 	}
 
-	restartSlaveErrors := make([]error, 0, len(slaveTabletMap))
+	restartSlaveErrors := make([]error, 0, len(restartableSlaveTabletMap))
 	wg := new(sync.WaitGroup)
 	mu := new(sync.Mutex)
-	for _, slaveTablet := range slaveTabletMap {
+	for _, slaveTablet := range restartableSlaveTabletMap {
 		relog.Info("restart slave %v", slaveTablet.Path())
 		wg.Add(1)
 		f := func(zkSlavePath string) {
-			actionPath, err := wr.ai.RestartSlave(zkSlavePath, zkShardActionPath)
+			actionPath, err := wr.ai.RestartSlave(zkSlavePath, zkShardActionPath, nil)
 			if err == nil {
 				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			}
@@ -328,7 +338,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	}
 
 	// If the majority of slaves restarted, move ahead.
-	majorityRestart := len(restartSlaveErrors) < (len(slaveTabletMap) / 2)
+	majorityRestart := len(restartSlaveErrors) < (len(restartableSlaveTabletMap) / 2)
 	if majorityRestart {
 		if leaveMasterReadOnly {
 			relog.Warning("leaving master read-only, vtctl SetReadWrite %v ?", zkMasterTabletPath)
@@ -339,11 +349,16 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			}
 		}
-		relog.Info("rebuilding shard data in zk")
-		if err = wr.rebuildShard(shardInfo.ShardPath()); err != nil {
+		relog.Info("rebuilding shard serving graph data in zk")
+		if err = wr.rebuildShard(shardInfo.ShardPath(), false); err != nil {
 			return err
 		}
 	} else {
+		relog.Info("rebuilding shard *replication* graph data in zk")
+		// Only rebuild the replication graph
+		if err = wr.rebuildShard(shardInfo.ShardPath(), true); err != nil {
+			return err
+		}
 		relog.Warning("minority reparent, force serving graph rebuild: vtctl RebuildShardGraph %v ?", shardInfo.ShardPath())
 	}
 
@@ -607,8 +622,81 @@ func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardAc
 		if err != nil {
 			return nil, nil, fmt.Errorf("tablet unavailable: %v", err)
 		}
-		tabletMap[alias.Uid] = tablet
+		if tablet.IsReplicatingType() {
+			tabletMap[alias.Uid] = tablet
+		}
 	}
 	posMap, err := wr.tabletReplicationPositions(tabletMap, zkShardActionPath)
 	return tabletMap, posMap, err
+}
+
+// Attempt to reparent this tablet to the current master, based on the current
+// replication position. If there is no match, it will fail.
+func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
+	// Get specified tablet.
+	// Get current shard master tablet.
+	// Sanity check they are in the same keyspace/shard.
+	// Get slave position for specified tablet.
+	// Get reparent position from master for the given slave position.
+	// Issue a restart slave on the specified tablet.
+
+	tm.MustBeTabletPath(zkTabletPath)
+	ti, err := wr.readTablet(zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	shardInfo, err := tm.ReadShard(wr.zconn, ti.ShardPath())
+	if err != nil {
+		return err
+	}
+
+	masterPath, err := shardInfo.MasterTabletPath()
+	if err != nil {
+		return err
+	}
+	masterTi, err := wr.readTablet(masterPath)
+	if err != nil {
+		return err
+	}
+
+	// Basic sanity checking.
+	if masterTi.Type != tm.TYPE_MASTER {
+		return fmt.Errorf("zk has inconsistent state for shard master %v", masterPath)
+	}
+	if masterTi.Keyspace != ti.Keyspace || masterTi.Shard != ti.Shard {
+		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", masterPath)
+	}
+
+	replyPath := "slave_position.json"
+	actionPath, err := wr.ai.SlavePosition(zkTabletPath, replyPath)
+	if err != nil {
+		return err
+	}
+
+	pos := new(mysqlctl.ReplicationPosition)
+	err = wr.WaitForTabletActionResponse(actionPath, replyPath, pos, wr.actionTimeout())
+	if err != nil {
+		return err
+	}
+
+	relog.Info("slave tablet position: %v %v %v", zkTabletPath, ti.MysqlAddr, pos.MapKey())
+
+	replyPath = "restart_slave_data.json"
+	actionPath, err = wr.ai.ReparentPosition(masterPath, pos, replyPath)
+	if err != nil {
+		return err
+	}
+	rsd := new(tm.RestartSlaveData)
+	err = wr.WaitForTabletActionResponse(actionPath, replyPath, rsd, wr.actionTimeout())
+	if err != nil {
+		return err
+	}
+
+	relog.Info("master tablet position: %v %v #%v", masterPath, masterTi.MysqlAddr, rsd)
+	actionPath, err = wr.ai.RestartSlave(zkTabletPath, "", rsd)
+	if err != nil {
+		return err
+	}
+	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }

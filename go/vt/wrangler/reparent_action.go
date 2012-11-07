@@ -223,7 +223,7 @@ func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint]*tm.TabletInfo
 		var actionPath, data string
 		if ti.Type == tm.TYPE_MASTER {
 			actionPath, ctx.err = wr.ai.MasterPosition(ti.Path(), zkReplyPath)
-		} else if ti.IsReplicatingType() {
+		} else {
 			actionPath, ctx.err = wr.ai.SlavePosition(ti.Path(), zkReplyPath)
 		}
 		if ctx.err != nil {

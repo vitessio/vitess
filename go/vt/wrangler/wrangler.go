@@ -106,7 +106,7 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 func (wr *Wrangler) WaitForTabletActionResponse(actionPath, replyPath string, result interface{}, waitTime time.Duration) (err error) {
 	err = wr.ai.WaitForCompletion(actionPath, waitTime)
 	if err != nil {
-		return nil
+		return err
 	}
 	isRelativeResponse := false
 	if !strings.HasPrefix(replyPath, "/") {
