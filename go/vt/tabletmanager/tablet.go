@@ -44,6 +44,9 @@ const (
 
 	// a slaved copy of the data intentionally lagged for pseudo backup
 	TYPE_LAG = TabletType("lag")
+	// when a reparent occurs, the tablet goes into lag_orphan state until
+	// it can be reparented properly
+	TYPE_LAG_ORPHAN = TabletType("lag_orphan")
 
 	// a slaved copy of the data, but offline to queries other than backup
 	// replication sql thread may be stopped
@@ -60,9 +63,9 @@ const (
 // Can this db type be trivially reassigned without changes to the replication graph?
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_BACKUP, TYPE_EXPERIMENTAL:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_BACKUP, TYPE_EXPERIMENTAL:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL:
 			return true
 		}
 	case TYPE_SCRAP:
@@ -156,7 +159,7 @@ func (tablet *Tablet) IsServingType() bool {
 
 func (tablet *Tablet) IsReplicatingType() bool {
 	switch tablet.Type {
-	case TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE:
+	case TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN:
 		return false
 	}
 	return true

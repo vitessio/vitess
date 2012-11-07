@@ -590,11 +590,15 @@ def run_test_reparent_lag_slave(shard_id='0'):
   tablet_41983.mquery('', 'start slave')
   time.sleep(1)
 
+  utils.pause("check orphan")
+
   utils.run_vtctl('ReparentTablet %s' % tablet_41983.zk_tablet_path)
 
   result = tablet_41983.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
   if len(result) != 1:
     raise utils.TestError('expected 1 row from vt_insert_test', result)
+
+  utils.pause("check lag reparent")
 
   tablet_62344.kill_vttablet()
   tablet_62044.kill_vttablet()
@@ -704,6 +708,7 @@ def run_all():
   run_test_reparent_graceful_range_based()
   run_test_reparent_down_master()
   run_test_vttablet_authenticated()
+  run_test_reparent_lag_slave()
 
 def main():
   parser = OptionParser()

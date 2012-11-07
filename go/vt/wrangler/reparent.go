@@ -219,12 +219,15 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		}
 	}
 
-	restartableSlaveTabletMap := slaveTabletMap
 	if masterTablet.Uid != masterElectTablet.Uid {
-		// Under normal circumstances, prune out lag and experimental as not restartable.
-		restartableSlaveTabletMap = make(map[uint]*tm.TabletInfo)
+		// Under normal circumstances, prune out lag and experimental as
+		// not restartable.  These types are explicitly excluded from
+		// reparenting since you will just wait forever for them to catch
+		// up.  A possible improvement is waiting for the io thread to
+		// reach the same position as the sql thread on a normal slave.
+		restartableSlaveTabletMap := make(map[uint]*tm.TabletInfo)
 		for uid, ti := range slaveTabletMap {
-			if ti.Type == tm.TYPE_LAG || ti.Type == tm.TYPE_EXPERIMENTAL {
+			if ti.Type == tm.TYPE_LAG {
 				relog.Info("skipping reparent action for tablet %v %v", ti.Type, ti.Path())
 				continue
 			}
@@ -245,7 +248,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		// We are forcing a reparenting. Make sure that all slaves stop so
 		// no data is accidentally replicated through before we call RestartSlave.
 		relog.Info("stop slaves %v", zkMasterTabletPath)
-		err = wr.stopSlavesWithAction(restartableSlaveTabletMap, zkShardActionPath)
+		err = wr.stopSlavesWithAction(slaveTabletMap, zkShardActionPath)
 		if err != nil {
 			return err
 		}
@@ -279,13 +282,13 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 	// Once the slave is promoted, remove it from our map
 	if masterTablet.Uid != masterElectTablet.Uid {
-		delete(restartableSlaveTabletMap, masterElectTablet.Uid)
+		delete(slaveTabletMap, masterElectTablet.Uid)
 	}
 
-	restartSlaveErrors := make([]error, 0, len(restartableSlaveTabletMap))
+	restartSlaveErrors := make([]error, 0, len(slaveTabletMap))
 	wg := new(sync.WaitGroup)
 	mu := new(sync.Mutex)
-	for _, slaveTablet := range restartableSlaveTabletMap {
+	for _, slaveTablet := range slaveTabletMap {
 		relog.Info("restart slave %v", slaveTablet.Path())
 		wg.Add(1)
 		f := func(zkSlavePath string) {
@@ -338,7 +341,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	}
 
 	// If the majority of slaves restarted, move ahead.
-	majorityRestart := len(restartSlaveErrors) < (len(restartableSlaveTabletMap) / 2)
+	majorityRestart := len(restartSlaveErrors) < (len(slaveTabletMap) / 2)
 	if majorityRestart {
 		if leaveMasterReadOnly {
 			relog.Warning("leaving master read-only, vtctl SetReadWrite %v ?", zkMasterTabletPath)
@@ -622,9 +625,10 @@ func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardAc
 		if err != nil {
 			return nil, nil, fmt.Errorf("tablet unavailable: %v", err)
 		}
-		if tablet.IsReplicatingType() {
-			tabletMap[alias.Uid] = tablet
-		}
+		tabletMap[alias.Uid] = tablet
+		//if tablet.IsReplicatingType() {
+		//	tabletMap[alias.Uid] = tablet
+		//}
 	}
 	posMap, err := wr.tabletReplicationPositions(tabletMap, zkShardActionPath)
 	return tabletMap, posMap, err
@@ -694,6 +698,9 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 	}
 
 	relog.Info("master tablet position: %v %v #%v", masterPath, masterTi.MysqlAddr, rsd)
+	// An orphan is already in the replication graph but it is
+	// disconnected, hence we have to force this action.
+	rsd.Force = ti.Type == tm.TYPE_LAG_ORPHAN
 	actionPath, err = wr.ai.RestartSlave(zkTabletPath, "", rsd)
 	if err != nil {
 		return err

@@ -516,9 +516,15 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 			return err
 		}
 
-		err = ta.mysqld.RestartSlave(rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted)
-		if err != nil {
-			return err
+		// Move a lag slave into the orphan lag type so we can safely ignore
+		// this reparenting until replication catches up.
+		if tablet.Type == TYPE_LAG {
+			tablet.Type = TYPE_LAG_ORPHAN
+		} else {
+			err = ta.mysqld.RestartSlave(rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted)
+			if err != nil {
+				return err
+			}
 		}
 		// Once this action completes, update authoritive tablet node first.
 		tablet.Parent = rsd.Parent
@@ -530,6 +536,14 @@ func (ta *TabletActor) restartSlave(args map[string]string) error {
 		err = ta.mysqld.RestartSlave(rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted)
 		if err != nil {
 			return err
+		}
+		// Complete the special orphan accounting.
+		if tablet.Type == TYPE_LAG_ORPHAN {
+			tablet.Type = TYPE_LAG
+			err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

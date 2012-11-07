@@ -118,24 +118,14 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		}
 	}
 
-	reparentableSlaveCount := 0
 	for _, tablet := range tabletMap {
-		// These types are explicitly excluded from reparenting since you
-		// will just wait forever for them to catch up.  A possible
-		// improvement is waiting for the io thread to reach the same
-		// position as the sql thread on a normal slave.
-		if tablet.Type == tm.TYPE_LAG || tablet.Type == tm.TYPE_EXPERIMENTAL {
-			relog.Info("skipping reparent action for tablet %v %v", tablet.Type, tablet.Path())
-			continue
-		}
 		// Pass loop variable explicitly so we don't have a concurrency issue.
 		go f(tablet)
-		reparentableSlaveCount++
 	}
 
 	// map positions to tablets
 	positionMap := make(map[string][]uint)
-	for i := 0; i < reparentableSlaveCount; i++ {
+	for i := 0; i < len(tabletMap); i++ {
 		ctx := <-calls
 		mapKey := "unavailable-tablet-error"
 		if ctx.err == nil {
