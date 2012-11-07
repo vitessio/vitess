@@ -14,6 +14,11 @@ import (
 	"code.google.com/p/vitess/go/bytes2"
 )
 
+var (
+	TimeType  = reflect.TypeOf(time.Time{})
+	BytesType = reflect.TypeOf([]byte(nil))
+)
+
 // LenWriter records the current write position on the buffer
 // and can later be used to record the number of bytes written
 // in conformance to BSON spec
@@ -101,23 +106,6 @@ func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 }
 
 func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
-	switch v := val.Interface().(type) {
-	case []byte:
-		if v == nil {
-			EncodePrefix(buf, Null, key)
-		} else {
-			EncodePrefix(buf, Binary, key)
-			EncodeBinary(buf, v)
-		}
-	case time.Time:
-		EncodePrefix(buf, Datetime, key)
-		EncodeTime(buf, v)
-	default:
-		goto CompositeType
-	}
-	return
-
-CompositeType:
 	switch val.Kind() {
 	case reflect.Float64:
 		EncodePrefix(buf, Number, key)
@@ -139,8 +127,13 @@ CompositeType:
 		EncodePrefix(buf, Ulong, key)
 		EncodeUint64(buf, val.Uint())
 	case reflect.Struct:
-		EncodePrefix(buf, Object, key)
-		EncodeStruct(buf, val)
+		if val.Type() == TimeType {
+			EncodePrefix(buf, Datetime, key)
+			EncodeTime(buf, val.Interface().(time.Time))
+		} else {
+			EncodePrefix(buf, Object, key)
+			EncodeStruct(buf, val)
+		}
 	case reflect.Map:
 		if val.IsNil() {
 			EncodePrefix(buf, Null, key)
@@ -151,6 +144,9 @@ CompositeType:
 	case reflect.Slice:
 		if val.IsNil() {
 			EncodePrefix(buf, Null, key)
+		} else if val.Type() == BytesType {
+			EncodePrefix(buf, Binary, key)
+			EncodeBinary(buf, val.Interface().([]byte))
 		} else {
 			EncodePrefix(buf, Array, key)
 			EncodeSlice(buf, val)
