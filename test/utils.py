@@ -187,9 +187,10 @@ def zk_check(ping_tablets=False):
     run_vtctl('Validate /zk/global/vt/keyspaces')
 
 # vtctl helpers
-def run_vtctl(clargs, **kwargs):
+def run_vtctl(clargs, log_level='WARNING', **kwargs):
   prog_compile(['vtctl'])
-  return run(vtroot+'/bin/vtctl -log.level=WARNING -logfile=/dev/null %s' % clargs, **kwargs)
+  cmd = vtroot+'/bin/vtctl -log.level=%s -logfile=/dev/null %s' % (log_level, clargs)
+  return run(cmd, **kwargs)
 
 # vtclient2 helpers
 # driver is one of vttablet (default), vttablet-streaming, vtdb, vtdb-streaming

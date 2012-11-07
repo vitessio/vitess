@@ -76,6 +76,7 @@ def _check_db_addr(db_addr, expected_addr):
   if stdout != expected_addr:
     raise utils.TestError('wrong zk address', db_addr, stdout, expected_addr)
 
+
 def run_test_sanity():
   # Start up a master mysql and vttablet
   utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
@@ -116,8 +117,6 @@ def run_test_sanity():
 
   tablet_62344.init_tablet('idle')
   utils.run_vtctl('-force ScrapTablet ' + tablet_62344.zk_tablet_path)
-
-
 
 
 def run_test_scrap():
@@ -554,6 +553,50 @@ def run_test_reparent_slave_offline(shard_id='0'):
   tablet_62344.kill_vttablet()
   tablet_62044.kill_vttablet()
   tablet_41983.kill_vttablet()
+
+
+# See if a lag slave can be safely reparent.
+def run_test_reparent_lag_slave(shard_id='0'):
+  utils.zk_wipe()
+
+  utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
+  # Start up a master mysql and vttablet
+  tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
+
+  # Create a few slaves for testing reparenting.
+  tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+  tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+  tablet_41983.init_tablet('lag', 'test_keyspace', shard_id, start=True)
+
+  # Recompute the shard layout node - until you do that, it might not be valid.
+  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+  utils.zk_check()
+
+  # Force the slaves to reparent assuming that all the datasets are identical.
+  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.zk_check(ping_tablets=True)
+
+  tablet_62344.create_db('vt_test_keyspace')
+  tablet_62344.mquery('vt_test_keyspace', create_vt_insert_test)
+
+  tablet_41983.mquery('', 'stop slave')
+  for q in populate_vt_insert_test:
+    tablet_62344.mquery('vt_test_keyspace', q, write=True)
+
+  # Perform a graceful reparent operation.
+  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path), log_level='info')
+
+  tablet_41983.mquery('', 'start slave')
+  time.sleep(1)
+  result = tablet_41983.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+  if len(result) != 1:
+    raise utils.TestError('expected 1 row from vt_insert_test', result)
+
+  tablet_62344.kill_vttablet()
+  tablet_62044.kill_vttablet()
+  tablet_41983.kill_vttablet()
+  tablet_31981.kill_vttablet()
 
 
 
