@@ -12,7 +12,6 @@ import (
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/tabletserver"
 )
 
@@ -51,7 +50,7 @@ type DBConfigs struct {
 // Map user to a list of passwords. Right now we only use the first.
 type dbCredentials map[string][]string
 
-func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
+func Init(socketFile string) (dbcfgs DBConfigs, err error) {
 	dbcfgs.App = tabletserver.DBConfig{
 		Uname:   "vt_app",
 		Charset: "utf8",
@@ -85,8 +84,9 @@ func Init(mycnf *mysqlctl.Mycnf) (dbcfgs DBConfigs, err error) {
 			dbcfgs.Repl.Pass = passwd[0]
 		}
 	}
-	dbcfgs.App.UnixSocket = mycnf.SocketFile
-	dbcfgs.Dba.UnixSocket = mycnf.SocketFile
+	dbcfgs.App.UnixSocket = socketFile
+	dbcfgs.Dba.UnixSocket = socketFile
+	dbcfgs.Repl.UnixSocket = socketFile
 	relog.Info("%s: %s\n", *DbConfigsFile, jscfg.ToJson(dbcfgs))
 	return
 }

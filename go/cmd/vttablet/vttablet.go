@@ -84,13 +84,14 @@ func main() {
 	}
 
 	mycnf := readMycnf(uint32(tabletId))
-	dbcfgs, err := dbconfigs.Init(mycnf)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
 		relog.Warning("%s", err)
 	}
 
 	initAgent(dbcfgs, mycnf)
 	initQueryService(dbcfgs)
+	initUpdateStreamService(mycnf)
 
 	rpc.HandleHTTP()
 
@@ -182,8 +183,10 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 				ts.DisallowQueries(false)
 			}
 			ts.AllowQueries(dbcfgs.App)
+			mysqlctl.EnableUpdateStreamService(string(newTablet.Type), dbcfgs)
 		} else {
 			ts.DisallowQueries(false)
+			mysqlctl.DisableUpdateStreamService()
 		}
 	})
 	agent.Start(bindAddr, mycnf.MysqlAddr())
@@ -236,4 +239,12 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 		relog.Error("bad request %v", req.URL.Path)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)
 	}
+}
+
+func initUpdateStreamService(mycnf *mysqlctl.Mycnf) {
+	mysqlctl.RegisterUpdateStreamService(mycnf)
+
+	umgmt.AddCloseCallback(func() {
+		mysqlctl.DisableUpdateStreamService()
+	})
 }

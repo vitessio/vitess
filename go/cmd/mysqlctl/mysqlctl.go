@@ -30,7 +30,7 @@ func main() {
 
 	tabletAddr := fmt.Sprintf("%v:%v", "localhost", *port)
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
-	dbcfgs, err := dbconfigs.Init(mycnf)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
 		relog.Fatal("%s", err)
 	}

@@ -20,8 +20,6 @@ The code in this file helps to track the position metadata
 for binlogs.
 */
 
-var RELAY_INFO_FILE = "relay-log.info"
-
 type ReplicationCoordinates struct {
 	RelayFilename  string
 	RelayPosition  uint64
@@ -40,9 +38,8 @@ type SlaveMetadata struct {
 	SlavePositionList []*ReplicationCoordinates
 }
 
-func NewSlaveMetadata(logsDir string) *SlaveMetadata {
-	metadata := &SlaveMetadata{logsDir: logsDir}
-	metadata.relayInfoFile = path.Join(logsDir, RELAY_INFO_FILE)
+func NewSlaveMetadata(logsDir string, relayInfo string) *SlaveMetadata {
+	metadata := &SlaveMetadata{logsDir: logsDir, relayInfoFile: relayInfo}
 	metadata.SlavePositionList = make([]*ReplicationCoordinates, 0, 20)
 	return metadata
 }
@@ -178,7 +175,14 @@ func (metadata *SlaveMetadata) getCurrentReplicationPosition() (repl *Replicatio
 	if len(lines) < 4 {
 		return nil, fmt.Errorf("Invalid relay.info format")
 	}
-	relayFile := path.Join(metadata.logsDir, string(lines[0]))
+	var relayFile string
+	relayPath := string(lines[0])
+	d, f := path.Split(relayPath)
+	if d == "" {
+		relayFile = path.Join(metadata.logsDir, f)
+	} else {
+		relayFile = relayPath
+	}
 	relayPos, err := strconv.ParseUint(string(lines[1]), 10, 64)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid relay position, %v", err)
@@ -189,19 +193,19 @@ func (metadata *SlaveMetadata) getCurrentReplicationPosition() (repl *Replicatio
 		return nil, fmt.Errorf("Invalid master position, %v", err)
 	}
 
+	//relog.Info("repl Coord %v %v %v %v", relayFile, relayPos, string(masterFilename), masterPos)
 	replCoordinates := NewReplicationCoordinates(relayFile, relayPos, string(masterFilename), masterPos)
 	return replCoordinates, nil
 }
 
 //debug function, can be removed later
-//this is an external function since it needs to be called from outside the package.
-func (metadata *SlaveMetadata) Display() {
+func (metadata *SlaveMetadata) display() {
 	var err error
-	//relog.Info("len of slave position list %v", metadata.SlavePositionList.Len())
 	masterFileMap, err := metadata.constructMasterMap()
 	if err != nil {
 		relog.Error("Error in constructing master map,  ", err)
 	}
+	relog.Info("len of slave position list %v", len(metadata.SlavePositionList))
 	for masterFile, positionList := range masterFileMap {
 		for _, replCoord := range positionList {
 			relog.Info("Master %v:%v => Slave %v:%v\n", masterFile, replCoord.MasterPosition, replCoord.RelayFilename, replCoord.RelayPosition)

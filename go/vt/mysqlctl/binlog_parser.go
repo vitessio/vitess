@@ -10,14 +10,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/relog"
 	parser "code.google.com/p/vitess/go/vt/sqlparser"
 )
@@ -135,22 +133,22 @@ type Blp struct {
 	txnLineBuffer    []*eventBuffer
 	responseStream   []*UpdateResponse
 	initialSeek      bool
-	UsingRelayLogs   bool
 	startPosition    *BinlogPosition
-	CurrentPosition  *BinlogPosition
-	*ReplicationCoordinates
-	*SlaveMetadata
+	currentPosition  *BinlogPosition
+	repl             *ReplicationCoordinates
+	globalState      *UpdateStream
 	blpStats
 }
 
-func NewBlp(filename string, position uint64, usingRelayLogs bool) *Blp {
+func NewBlp(filename string, position uint64, updateStream *UpdateStream) *Blp {
 	StartPosition := NewBinlogPosition(filename, position)
-	blp := &Blp{startPosition: StartPosition, UsingRelayLogs: usingRelayLogs}
-	blp.CurrentPosition = NewBinlogPosition(filename, position)
+	blp := &Blp{startPosition: StartPosition}
+	blp.currentPosition = NewBinlogPosition(filename, position)
 	blp.inTxn = false
 	blp.initialSeek = true
 	blp.txnLineBuffer = make([]*eventBuffer, 0, MAX_TXN_BATCH)
 	blp.responseStream = make([]*UpdateResponse, 0, MAX_TXN_BATCH)
+	blp.globalState = updateStream
 	return blp
 }
 
@@ -166,11 +164,13 @@ func (err BinlogParseError) Error() string {
 	return err.Msg
 }
 
+type SendUpdateStreamResponse func(response interface{}) error
+
 //Main entry function for reading and parsing the binlog.
-func (blp *Blp) StreamBinlog(rw http.ResponseWriter, binlogPrefix string) {
+func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) {
 	var binlogReader io.Reader
 	defer func() {
-		reqIdentifier := fmt.Sprintf("%s:%u", blp.CurrentPosition.MasterFilename, blp.CurrentPosition.MasterPosition)
+		reqIdentifier := fmt.Sprintf("%v:%v", blp.currentPosition.MasterFilename, blp.currentPosition.MasterPosition)
 		if x := recover(); x != nil {
 			serr, ok := x.(*BinlogParseError)
 			if !ok {
@@ -179,7 +179,7 @@ func (blp *Blp) StreamBinlog(rw http.ResponseWriter, binlogPrefix string) {
 			}
 			err := *serr
 			relog.Error("StreamBinlog error @ %v, error: %v", reqIdentifier, err)
-			SendError(rw, reqIdentifier, err, blp.CurrentPosition)
+			SendError(sendReply, reqIdentifier, err, blp.currentPosition)
 		}
 	}()
 
@@ -199,34 +199,37 @@ func (blp *Blp) StreamBinlog(rw http.ResponseWriter, binlogPrefix string) {
 	if err != nil {
 		panic(NewBinlogParseError(err.Error()))
 	}
-	blp.parseBinlogEvents(rw, binlogReader)
+	blp.parseBinlogEvents(sendReply, binlogReader)
 }
 
 //Main parse loop
-func (blp *Blp) parseBinlogEvents(writer http.ResponseWriter, binlogReader io.Reader) {
-	writer.Header().Set("Transfer-Encoding", "chunked")
-	//_ = bufio.NewWriterSize(writer, 1024)
-
+func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogReader io.Reader) {
 	// read over the stream and buffer up the transactions
 	var err error
-	var line []byte
+	var tmpLine, line []byte
 	bigLine := make([]byte, 0, BLP_LINE_SIZE)
 	// make the line as big as the max packet size - currently 16MB
 	lineReader := bufio.NewReaderSize(binlogReader, BLP_LINE_SIZE)
+	readAhead := false
 
 	for {
+		if !blp.globalState.isServiceEnabled() {
+			panic(NewBinlogParseError("Disconnecting because the Update Stream service has been disabled"))
+		}
 		bigLine = bigLine[:0]
-		line, err = blp.readBlpLine(lineReader, bigLine)
+		tmpLine, err = blp.readBlpLine(lineReader, bigLine)
 		if err != nil {
 			if err == io.EOF {
 				//end of stream
-				if _, err = writer.Write([]byte("0\r\n")); err != nil {
-					panic(NewBinlogParseError(fmt.Sprintf("Error in sending EOS to client, %v", err)))
-				}
 				relog.Info("encountered EOF, quitting")
-				break
+				return
 			}
 			panic(NewBinlogParseError(fmt.Sprintf("ReadLine err: , %v", err)))
+		}
+		if readAhead {
+			line = append(line, tmpLine...)
+		} else {
+			line = tmpLine
 		}
 		blp.LineCount++
 		if len(line) == 0 {
@@ -240,13 +243,19 @@ func (blp *Blp) parseBinlogEvents(writer http.ResponseWriter, binlogReader io.Re
 			//parse event data
 
 			//This is to accont for replicas where we seek to a point before the desired startPosition
-			if blp.initialSeek && blp.UsingRelayLogs && blp.nextStmtPosition < blp.startPosition.MasterPosition {
+			if blp.initialSeek && blp.globalState.usingRelayLogs && blp.nextStmtPosition < blp.startPosition.MasterPosition {
 				continue
 			}
+
+			readAhead = true
 			if bytes.HasSuffix(line, BINLOG_DELIMITER) {
+				readAhead = false
 				line = line[:len(line)-len(BINLOG_DELIMITER)]
 			}
-			blp.parseEventData(writer, line)
+			if !readAhead {
+				blp.parseEventData(sendReply, line)
+				line = line[:0]
+			}
 		}
 	}
 	//TODO: revisit printing/exporting of stats
@@ -256,10 +265,10 @@ func (blp *Blp) parseBinlogEvents(writer http.ResponseWriter, binlogReader io.Re
 func (blp *Blp) parsePositionData(line []byte) {
 	if bytes.HasPrefix(line, BINLOG_POSITION_PREFIX) {
 		//Master Position
-		if blp.initialSeek && blp.nextStmtPosition < blp.startPosition.MasterPosition {
+		if blp.nextStmtPosition == 0 {
 			return
 		}
-		blp.CurrentPosition.MasterPosition = blp.nextStmtPosition
+		blp.currentPosition.MasterPosition = blp.nextStmtPosition
 	} else if bytes.Index(line, BINLOG_ROTATE_TO) != -1 {
 		blp.parseRotateEvent(line)
 	} else if bytes.Index(line, BINLOG_END_LOG_POS) != -1 {
@@ -274,7 +283,7 @@ func (blp *Blp) parsePositionData(line []byte) {
 	}
 }
 
-func (blp *Blp) parseEventData(writer http.ResponseWriter, line []byte) {
+func (blp *Blp) parseEventData(sendReply SendUpdateStreamResponse, line []byte) {
 	if bytes.HasPrefix(line, BINLOG_SET_TIMESTAMP) {
 		blp.extractEventTimestamp(line)
 		blp.initialSeek = false
@@ -286,9 +295,9 @@ func (blp *Blp) parseEventData(writer http.ResponseWriter, line []byte) {
 	} else if len(line) > 0 {
 		sqlType := getSqlType(line)
 		if blp.inTxn {
-			blp.handleTxnEvent(writer, line, sqlType)
+			blp.handleTxnEvent(sendReply, line, sqlType)
 		} else if sqlType == DDL {
-			blp.handleDdlEvent(writer, line)
+			blp.handleDdlEvent(sendReply, line)
 		}
 	}
 }
@@ -313,7 +322,7 @@ func (blp *Blp) parseXid(line []byte) {
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting Xid position %v", err)))
 	}
-	blp.CurrentPosition.Xid = xid
+	blp.currentPosition.Xid = xid
 }
 
 func (blp *Blp) extractEventTimestamp(line []byte) {
@@ -321,7 +330,7 @@ func (blp *Blp) extractEventTimestamp(line []byte) {
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting timestamp %v", err)))
 	}
-	blp.CurrentPosition.Timestamp = currentTimestamp
+	blp.currentPosition.Timestamp = currentTimestamp
 }
 
 func (blp *Blp) parseRotateEvent(line []byte) {
@@ -333,25 +342,25 @@ func (blp *Blp) parseRotateEvent(line []byte) {
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting rotate pos %v from line %s", err, string(line))))
 	}
-	if !blp.UsingRelayLogs {
+	if !blp.globalState.usingRelayLogs {
 		//If the file being parsed is a binlog,
 		//then the rotate events only correspond to itself.
-		blp.CurrentPosition.MasterFilename = rotateFilename
-		blp.CurrentPosition.MasterPosition = rotatePos
+		blp.currentPosition.MasterFilename = rotateFilename
+		blp.currentPosition.MasterPosition = rotatePos
 	} else {
 		//For relay logs, the rotate events could be that of relay log or the binlog,
 		//the prefix of rotateFilename is used to test which case is it.
-		logsDir, relayFile := path.Split(blp.ReplicationCoordinates.RelayFilename)
+		logsDir, relayFile := path.Split(blp.repl.RelayFilename)
 		currentPrefix := strings.Split(relayFile, ".")[0]
 		rotatePrefix := strings.Split(rotateFilename, ".")[0]
 		if currentPrefix == rotatePrefix {
 			//relay log rotated
-			blp.ReplicationCoordinates.RelayFilename = path.Join(logsDir, rotateFilename)
-			blp.ReplicationCoordinates.RelayPosition = rotatePos
+			blp.repl.RelayFilename = path.Join(logsDir, rotateFilename)
+			blp.repl.RelayPosition = rotatePos
 		} else {
 			//master file rotated
-			blp.CurrentPosition.MasterFilename = rotateFilename
-			blp.CurrentPosition.MasterPosition = rotatePos
+			blp.currentPosition.MasterFilename = rotateFilename
+			blp.currentPosition.MasterPosition = rotatePos
 		}
 	}
 }
@@ -365,51 +374,51 @@ func (blp *Blp) handleBeginEvent(line []byte) {
 		panic(NewBinlogParseError(fmt.Sprintf("BEGIN encountered with non-empty trxn buffer, len: %d", len(blp.txnLineBuffer))))
 	}
 	blp.inTxn = true
-	event := NewEventBuffer(blp.CurrentPosition, line)
+	event := NewEventBuffer(blp.currentPosition, line)
 	blp.txnLineBuffer = append(blp.txnLineBuffer, event)
 }
 
-func (blp *Blp) handleDdlEvent(writer http.ResponseWriter, line []byte) {
-	event := NewEventBuffer(blp.CurrentPosition, line)
+func (blp *Blp) handleDdlEvent(sendReply SendUpdateStreamResponse, line []byte) {
+	event := NewEventBuffer(blp.currentPosition, line)
 	ddlStream := createDdlStream(event)
-	buf := make([]*UpdateResponse, 1)
-	buf[0] = ddlStream
-	if err := sendStream(writer, buf); err != nil {
+	buf := []*UpdateResponse{ddlStream}
+	if err := sendStream(sendReply, buf); err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in sending event to client %v", err)))
 	}
 	blp.DdlCount++
 }
 
-func (blp *Blp) handleTxnEvent(writer http.ResponseWriter, line []byte, sqlType string) {
+func (blp *Blp) handleTxnEvent(sendReply SendUpdateStreamResponse, line []byte, sqlType string) {
 	//AutoIncrement parsing
 	if bytes.HasPrefix(line, BINLOG_SET_INSERT) {
 		blp.extractAutoIncrementId(line)
 	} else if bytes.HasPrefix(line, BINLOG_COMMIT) {
-		blp.handleCommitEvent(writer, line)
+		blp.handleCommitEvent(sendReply, line)
 	} else if sqlType == DML {
 		blp.handleDmlEvent(line)
 	}
 }
 
 func (blp *Blp) extractAutoIncrementId(line []byte) {
-	event := NewEventBuffer(blp.CurrentPosition, line)
+	event := NewEventBuffer(blp.currentPosition, line)
 	blp.txnLineBuffer = append(blp.txnLineBuffer, event)
 }
 
-func (blp *Blp) handleCommitEvent(writer http.ResponseWriter, line []byte) {
-	if blp.UsingRelayLogs {
+func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, line []byte) {
+	if blp.globalState.usingRelayLogs {
 		for !blp.slavePosBehindReplication() {
-			//TODO: replace this with a new function from Mike
-			//in replication.go that uses MASTER_POS_WAIT.
-			//use WaitMasterPos in replication.go.
-			time.Sleep(10 * time.Second)
+			rp := &ReplicationPosition{MasterLogFile: blp.currentPosition.MasterFilename,
+				MasterLogPosition: uint(blp.currentPosition.MasterPosition)}
+			if err := blp.globalState.mysqld.WaitMasterPos(rp, 30); err != nil {
+				panic(NewBinlogParseError(fmt.Sprintf("Error in waiting for replication to catch up, %v", err)))
+			}
 		}
 	}
-	commitEvent := NewEventBuffer(blp.CurrentPosition, line)
+	commitEvent := NewEventBuffer(blp.currentPosition, line)
 	//txn block for DMLs, parse it and send events for a txn
 	blp.responseStream = buildTxnResponse(blp.txnLineBuffer, commitEvent)
 
-	if err := sendStream(writer, blp.responseStream); err != nil {
+	if err := sendStream(sendReply, blp.responseStream); err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in sending event to client %v", err)))
 	}
 
@@ -422,7 +431,7 @@ func (blp *Blp) handleDmlEvent(line []byte) {
 	if getDmlType(line) == "" {
 		panic(NewBinlogParseError(fmt.Sprintf("Invalid dml or out of txn context %v", string(line))))
 	}
-	event := NewEventBuffer(blp.CurrentPosition, line)
+	event := NewEventBuffer(blp.currentPosition, line)
 	blp.txnLineBuffer = append(blp.txnLineBuffer, event)
 	blp.DmlCount++
 }
@@ -459,8 +468,8 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader) {
 			relog.Error("getBinlogStream failed: %v", err)
 		}
 	}()
-	if blp.UsingRelayLogs {
-		blr.ServeData(writer, path.Base(blp.ReplicationCoordinates.RelayFilename), int64(blp.ReplicationCoordinates.RelayPosition))
+	if blp.globalState.usingRelayLogs {
+		blr.ServeData(writer, path.Base(blp.repl.RelayFilename), int64(blp.repl.RelayPosition))
 	} else {
 		blr.ServeData(writer, blp.startPosition.MasterFilename, int64(blp.startPosition.MasterPosition))
 	}
@@ -469,27 +478,27 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader) {
 //FIXME: this needs to be replaced by MASTER_POS_WAIT call.
 //This function whether streaming is behind replication as it should be.
 func (blp *Blp) slavePosBehindReplication() bool {
-	repl, err := blp.SlaveMetadata.GetCurrentReplicationPosition()
+	repl, err := blp.globalState.logMetadata.GetCurrentReplicationPosition()
 	if err != nil {
 		relog.Error(err.Error())
 		panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
 	}
-	if repl.MasterFilename == blp.CurrentPosition.MasterFilename {
-		if blp.CurrentPosition.MasterPosition <= repl.MasterPosition {
+	if repl.MasterFilename == blp.currentPosition.MasterFilename {
+		if blp.currentPosition.MasterPosition <= repl.MasterPosition {
 			return true
 		}
 	} else {
-		currentExt, err := strconv.ParseUint(strings.Split(repl.MasterFilename, ".")[1], 10, 64)
+		replExt, err := strconv.ParseUint(strings.Split(repl.MasterFilename, ".")[1], 10, 64)
 		if err != nil {
 			relog.Error(err.Error())
 			panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
 		}
-		logExt, err := strconv.ParseUint(strings.Split(blp.CurrentPosition.MasterFilename, ".")[1], 10, 64)
+		parseExt, err := strconv.ParseUint(strings.Split(blp.currentPosition.MasterFilename, ".")[1], 10, 64)
 		if err != nil {
 			relog.Error(err.Error())
 			panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
 		}
-		if currentExt >= logExt {
+		if replExt >= parseExt {
 			return true
 		}
 	}
@@ -609,12 +618,10 @@ func parseStreamComment(dmlComment string, autoincId uint64) (EventNode *parser.
 	var node *parser.Node
 	var pkTuple *parser.Node
 
-	relog.Info("comment: %s", dmlComment)
 	node = tokenizer.Scan()
 	if node.Type == parser.ID {
 		//Table Name
 		EventNode.Push(node)
-		relog.Info("table name: %s", string(node.Value))
 	}
 
 	for node = tokenizer.Scan(); node.Type != ';'; node = tokenizer.Scan() {
@@ -697,40 +704,25 @@ func createPkMap(pkColNames []string, pkValues []*parser.Node) (pkMap map[string
 }
 
 //This sends the stream to the client.
-func sendStream(writer http.ResponseWriter, responseBuf []*UpdateResponse) (err error) {
-	output := make([]byte, 1024)
+func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateResponse) (err error) {
 	for _, event := range responseBuf {
-		output, err = bson.Marshal(event)
+		err = sendReply(event)
 		if err != nil {
-			return NewBinlogParseError(fmt.Sprintf("Error in encoding bson %v", err))
-		}
-		streamLen := len(output)
-		if streamLen != 0 {
-			var bytes_out int
-			if bytes_out, err = writer.Write(output); err != nil {
-				return NewBinlogParseError(fmt.Sprintf("Error in writing the stream on wire %v", err))
-			}
-			//relog.Info("wrote %d bytes for this event %v", streamLen, sendBuf)
-			if bytes_out != streamLen {
-				err = io.ErrShortWrite
-				return NewBinlogParseError(fmt.Sprintf("Error in writing the stream on wire %v", err))
-			}
+			return NewBinlogParseError(fmt.Sprintf("Error in sending reply to client, %v", err))
 		}
 	}
 	return nil
 }
 
 //This sends the error to the client.
-func SendError(rw http.ResponseWriter, reqIdentifier string, inputErr error, blPos *BinlogPosition) {
-	//_ = bufio.NewWriterSize(rw, 1024)
+func SendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputErr error, blPos *BinlogPosition) {
 	streamBuf := new(UpdateResponse)
 	streamBuf.Error = inputErr.Error()
 	if blPos != nil {
 		streamBuf.BinlogPosition = *blPos
 	}
-	buf := make([]*UpdateResponse, 1)
-	buf[0] = streamBuf
-	err := sendStream(rw, buf)
+	buf := []*UpdateResponse{streamBuf}
+	err := sendStream(sendReply, buf)
 	if err != nil {
 		relog.Error("Error in communicating message %v with the client: %v", inputErr, err)
 	}

@@ -69,7 +69,7 @@ func main() {
 
 	relog.Debug("mycnf: %v", jscfg.ToJson(mycnf))
 
-	dbcfgs, cfErr := dbconfigs.Init(mycnf)
+	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
 		relog.Fatal("%s", cfErr)
 	}
