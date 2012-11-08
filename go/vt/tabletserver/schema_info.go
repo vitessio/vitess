@@ -136,6 +136,12 @@ func (si *SchemaInfo) Reload() {
 	}
 }
 
+// safe to call this if Close has been called, as si.ticks will be stopped
+// and won't fire
+func (si *SchemaInfo) triggerReload() {
+	si.ticks.Trigger()
+}
+
 func (si *SchemaInfo) CreateTable(tableName string) {
 	conn, err := si.connFactory()
 	if err != nil {

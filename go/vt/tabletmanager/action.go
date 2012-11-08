@@ -34,6 +34,7 @@ const (
 	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
 	TABLET_ACTION_SCRAP               = "Scrap"
 	TABLET_ACTION_GET_SCHEMA          = "GetSchema"
+	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
 	TABLET_ACTION_APPLY_SCHEMA        = "ApplySchema"
 	TABLET_ACTION_EXECUTE_HOOK        = "ExecuteHook"
 

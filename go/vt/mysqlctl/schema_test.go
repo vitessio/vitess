@@ -8,20 +8,9 @@ import (
 	"testing"
 )
 
-func channelToArray(stream chan string) (result []string) {
-	close(stream)
-	result = make([]string, 0, 10)
-	for text := range stream {
-		result = append(result, text)
-	}
-	return result
-}
-
 func testDiff(t *testing.T, left, right *SchemaDefinition, leftName, rightName string, expected []string) {
 
-	result := make(chan string, 10)
-	left.DiffSchema(leftName, rightName, right, result)
-	actual := channelToArray(result)
+	actual := left.DiffSchemaToArray(leftName, rightName, right)
 
 	equal := false
 	if len(actual) == len(expected) {

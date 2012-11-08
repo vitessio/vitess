@@ -195,6 +195,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.scrap()
 	case TABLET_ACTION_GET_SCHEMA:
 		err = ta.getSchema(actionNode.path, actionNode.Args)
+	case TABLET_ACTION_PREFLIGHT_SCHEMA:
+		err = ta.preflightSchema(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_APPLY_SCHEMA:
 		err = ta.applySchema(actionNode.path, actionNode.Args)
 	case TABLET_ACTION_EXECUTE_HOOK:
@@ -582,6 +584,30 @@ func (ta *TabletActor) getSchema(actionPath string, args map[string]string) erro
 	}
 
 	return ta.storeTabletActionResponse(actionPath, zkReplyPath, sd)
+}
+
+func (ta *TabletActor) preflightSchema(actionPath string, args map[string]string) error {
+	// get where we put the response
+	zkReplyPath, ok := args["ReplyPath"]
+	if !ok {
+		return fmt.Errorf("missing ReplyPath in args")
+	}
+
+	// get the parameters
+	change, ok := args["Change"]
+	if !ok {
+		return fmt.Errorf("missing Change in args")
+	}
+
+	// read the tablet to get the dbname
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	// and preflight the change
+	scr := ta.mysqld.PreflightSchemaChange(tablet.DbName(), change)
+	return ta.storeTabletActionResponse(actionPath, zkReplyPath, scr)
 }
 
 func (ta *TabletActor) applySchema(actionPath string, args map[string]string) error {

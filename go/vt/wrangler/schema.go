@@ -167,6 +167,21 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	return channelToError(result)
 }
 
+func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
+	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	if err != nil {
+		return nil, err
+	}
+	zkReplyPath := "schema_preflight_result.json"
+	actionPath, err := wr.ai.PreflightSchema(ti.Path(), zkReplyPath, change)
+
+	scr := new(mysqlctl.SchemaChangeResult)
+	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, scr, wr.actionTimeout()); err != nil {
+		return nil, err
+	}
+	return scr, nil
+}
+
 func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
 	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {

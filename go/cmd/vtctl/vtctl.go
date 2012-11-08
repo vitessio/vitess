@@ -177,8 +177,11 @@ Schema:
   ValidateSchemaKeyspace <zk keyspace path>
     validate the master schema from shard 0 matches all the other tablets in the keyspace.
 
-  ApplySchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>} [use_db=<db name>] [allow_replication=false]
-    apply the schema change to the specific tablet (not using _vt, and allowing replication by default). The sql can be inlined or read from a file.
+  PreflightSchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>}
+    apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
+
+  ApplySchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>} [allow_replication=false] [skip_preflight=false]
+    apply the schema change to the specific tablet (allowing replication by default). The sql can be inlined or read from a file.
 `
 
 var noWaitForAction = flag.Bool("no-wait", false,
@@ -445,6 +448,26 @@ func parseParams(args []string) map[string]string {
 		}
 	}
 	return params
+}
+
+func getFileParam(params map[string]string, name string) string {
+	result, ok := params[name]
+	if ok {
+		if _, ok = params[name+"_file"]; ok {
+			relog.Fatal("action requires only one of " + name + " or " + name + "_file")
+		}
+	} else {
+		filename, ok := params[name+"_file"]
+		if !ok {
+			relog.Fatal("action requires one of " + name + " or " + name + "_file")
+		}
+		data, err := ioutil.ReadFile(filename)
+		if err != nil {
+			relog.Fatal("Cannot read file %v: %v", filename, err)
+		}
+		result = string(data)
+	}
+	return result
 }
 
 func main() {
@@ -764,6 +787,20 @@ func main() {
 		if err == nil {
 			relog.Info(sd.String())
 		}
+	case "PreflightSchema":
+		params := parseParams(args)
+		zkTabletPath, ok := params["zk_tablet_path"]
+		if !ok {
+			relog.Fatal("action %v requires zk_tablet_path=<zk tablet path>", args[0])
+		}
+		change := getFileParam(params, "sql")
+		scr, err := wrangler.PreflightSchema(zkTabletPath, change)
+		if err == nil {
+			relog.Info(scr.String())
+			if scr.Error != "" {
+				relog.Fatal(scr.Error)
+			}
+		}
 	case "ApplySchema":
 		params := parseParams(args)
 		sc := &mysqlctl.SchemaChange{}
@@ -771,25 +808,25 @@ func main() {
 		if !ok {
 			relog.Fatal("action %v requires zk_tablet_path=<zk tablet path>", args[0])
 		}
-		sc.Sql, ok = params["sql"]
-		if ok {
-			if _, ok = params["sql_file"]; ok {
-				relog.Fatal("action %v requires only one of sql or sql_file")
-			}
-		} else {
-			sqlFile, ok := params["sql_file"]
-			if !ok {
-				relog.Fatal("action %v requires one of sql or sql_file")
-			}
-			data, err := ioutil.ReadFile(sqlFile)
-			if err != nil {
-				relog.Fatal("Cannot read file %v: %v", sqlFile, err)
-			}
-			sc.Sql = string(data)
-
-		}
-		sc.UseDb = params["use_db"]
+		sc.Sql = getFileParam(params, "sql")
 		sc.AllowReplication = params["allow_replication"] != "false"
+
+		// do the preflight to get before and after schema
+		if params["skip_preflight"] != "true" {
+			scr, err := wrangler.PreflightSchema(zkTabletPath, sc.Sql)
+			if err != nil {
+				relog.Fatal("preflight failed: %v %v", args[0], err)
+			}
+			relog.Info("Preflight: " + scr.String())
+			if scr.Error != "" {
+				relog.Fatal("preflight failed: %v", scr.Error)
+			}
+
+			sc.BeforeSchema = scr.BeforeSchema
+			sc.AfterSchema = scr.AfterSchema
+			sc.Force = *force
+		}
+
 		scr, err := wrangler.ApplySchema(zkTabletPath, sc)
 		if err == nil {
 			relog.Info(scr.String())

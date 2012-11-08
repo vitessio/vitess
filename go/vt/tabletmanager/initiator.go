@@ -192,6 +192,14 @@ func (ai *ActionInitiator) GetSchema(zkTabletPath, zkReplyPath string) (actionPa
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, Args: args})
 }
 
+func (ai *ActionInitiator) PreflightSchema(zkTabletPath, zkReplyPath, change string) (actionPath string, err error) {
+	args := map[string]string{
+		"ReplyPath": zkReplyPath,
+		"Change":    change,
+	}
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PREFLIGHT_SCHEMA, Args: args})
+}
+
 func (ai *ActionInitiator) ApplySchema(zkTabletPath, zkReplyPath string, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
 	args := map[string]string{
 		"ReplyPath":    zkReplyPath,

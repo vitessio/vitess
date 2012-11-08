@@ -31,6 +31,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/tabletserver"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -170,6 +171,15 @@ func (agent *ActionAgent) dispatchAction(actionPath string) error {
 		}
 		agent.mutex.Unlock()
 	}
+
+	// Maybe invalidate the schema.
+	// This adds a dependency between tabletmanager and tabletserver,
+	// so it's not ideal. But I (alainjobart) think it's better
+	// to have up to date schema in vtocc.
+	if actionNode.Action == TABLET_ACTION_APPLY_SCHEMA {
+		tabletserver.ReloadSchema()
+	}
+
 	return nil
 }
 

@@ -259,6 +259,10 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 	}
 }
 
+func (sq *SqlQuery) reloadSchema() {
+	sq.schemaInfo.triggerReload()
+}
+
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	switch atomic.LoadInt32(&sq.state) {
 	case NOT_SERVING:
