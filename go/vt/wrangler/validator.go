@@ -262,7 +262,7 @@ func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results cha
 	wg := sync.WaitGroup{}
 	for zkTabletPath, tabletInfo := range tabletMap {
 		wg.Add(1)
-		go func() {
+		go func(zkTabletPath string, tabletInfo *tm.TabletInfo) {
 			defer wg.Done()
 
 			zkTabletPid := path.Join(tabletInfo.Path(), "pid")
@@ -282,7 +282,7 @@ func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results cha
 			if err != nil {
 				results <- vresult{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
 			}
-		}()
+		}(zkTabletPath, tabletInfo)
 	}
 
 	wg.Wait()
