@@ -49,6 +49,8 @@ const (
 	SHARD_ACTION_REBUILD = "RebuildShard"
 	// Generic read lock for inexpensive shard-wide actions.
 	SHARD_ACTION_CHECK = "CheckShard"
+	// Apply a schema change on an entire shard
+	SHARD_ACTION_APPLY_SCHEMA = "ApplySchemaShard"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD = "RebuildKeyspace"
