@@ -1,5 +1,6 @@
 # basic config parameters for all db instances in the grid
 
+sql_mode = STRICT_TRANS_TABLES
 back_log = 50
 binlog_format = statement
 character_set_server = utf8

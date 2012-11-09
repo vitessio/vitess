@@ -5,11 +5,13 @@
 package tabletserver
 
 import (
+	"strings"
+	"time"
+
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
-	"time"
 )
 
 var mysqlStats *stats.Timings
@@ -116,6 +118,19 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(interfa
 	}
 
 	return nil
+}
+
+var getModeSql = []byte("select @@global.sql_mode")
+
+func (conn *DBConnection) VerifyStrict() bool {
+	qr, err := conn.ExecuteFetch(getModeSql, 2, false)
+	if err != nil {
+		return false
+	}
+	if len(qr.Rows) == 0 {
+		return false
+	}
+	return strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES")
 }
 
 // CreateConnection returns a connection for running user queries. No DDL.

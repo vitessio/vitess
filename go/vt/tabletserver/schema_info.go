@@ -62,6 +62,10 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 	}
 	defer conn.Close()
 
+	if !conn.VerifyStrict() {
+		panic(NewTabletError(FATAL, "Could not verify strict mode"))
+	}
+
 	si.cachePool = cachePool
 	tables, err := conn.ExecuteFetch([]byte(base_show_tables), 10000, false)
 	if err != nil {

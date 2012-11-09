@@ -46,10 +46,8 @@ func UnmarshalFieldBson(field *Field, buf *bytes.Buffer) {
 func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	if qr.Fields != nil {
-		bson.EncodePrefix(buf, bson.Array, "Fields")
-		encodeFieldsBson(qr.Fields, buf)
-	}
+	bson.EncodePrefix(buf, bson.Array, "Fields")
+	encodeFieldsBson(qr.Fields, buf)
 
 	bson.EncodePrefix(buf, bson.Long, "RowsAffected")
 	bson.EncodeUint64(buf, uint64(qr.RowsAffected))
@@ -57,10 +55,8 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Long, "InsertId")
 	bson.EncodeUint64(buf, uint64(qr.InsertId))
 
-	if qr.Rows != nil {
-		bson.EncodePrefix(buf, bson.Array, "Rows")
-		encodeRowsBson(qr.Rows, buf)
-	}
+	bson.EncodePrefix(buf, bson.Array, "Rows")
+	encodeRowsBson(qr.Rows, buf)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()

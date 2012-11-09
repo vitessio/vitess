@@ -40,7 +40,7 @@ class TestStream(framework.TestCase):
                        "'DDDDDDDDDDDDDDDDDD " + str(i) + "', " +
                        "'EEEEEEEEEEEEEEEEEE " + str(i) + "', " +
                        "now()," +
-                       "'FFFFFFFFFFFFFFFFFF " + str(i) + "', " +
+                       "'FF " + str(i) + "', " +
                        "'GGGGGGGGGGGGGGGGGG " + str(i) + "', " +
                        str(i) + ", " +
                        str(i) + ", " +
@@ -84,4 +84,4 @@ class TestStream(framework.TestCase):
     row[11] = None
     row[20] = None
     row[25] = None
-    self.assertEqual(row, [10L, 'AAAAAAAAAAAAAAAAAA 10', 'BBBBBBBBBBBBBBBBBB 10', 'C', 'DDDDDDDDDDDDDDDDDD 10', 'EEEEEEEEEEEEEEEEEE 10', None, 'FFFFFFFFFFFFFFFF', 'GGGGGGGGGGGGGGGGGG 10', 10L, 10L, None, 10L, 10, 0L, 'AAAAAAAAAAAAAAAAAA 0', 'BBBBBBBBBBBBBBBBBB 0', 'C', 'DDDDDDDDDDDDDDDDDD 0', 'EEEEEEEEEEEEEEEEEE 0', None, 'FFFFFFFFFFFFFFFF', 'GGGGGGGGGGGGGGGGGG 0', 0L, 0L, None, 0L, 0])
+    self.assertEqual(row, [10L, 'AAAAAAAAAAAAAAAAAA 10', 'BBBBBBBBBBBBBBBBBB 10', 'C', 'DDDDDDDDDDDDDDDDDD 10', 'EEEEEEEEEEEEEEEEEE 10', None, 'FF 10', 'GGGGGGGGGGGGGGGGGG 10', 10L, 10L, None, 10L, 10, 0L, 'AAAAAAAAAAAAAAAAAA 0', 'BBBBBBBBBBBBBBBBBB 0', 'C', 'DDDDDDDDDDDDDDDDDD 0', 'EEEEEEEEEEEEEEEEEE 0', None, 'FF 0', 'GGGGGGGGGGGGGGGGGG 0', 0L, 0L, None, 0L, 0])
