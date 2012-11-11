@@ -157,12 +157,18 @@ func (tablet *Tablet) IsServingType() bool {
 	return false
 }
 
+// Should this tablet appear in the replication graph?
 func (tablet *Tablet) IsReplicatingType() bool {
 	switch tablet.Type {
 	case TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN:
 		return false
 	}
 	return true
+}
+
+// Should this type be connected to a master db?
+func (tablet *Tablet) IsSlaveType() bool {
+	return tablet.Type != TYPE_MASTER && tablet.IsReplicatingType()
 }
 
 func (tablet *Tablet) IsAssigned() bool {

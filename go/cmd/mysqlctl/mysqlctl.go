@@ -32,7 +32,7 @@ func main() {
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
-		relog.Fatal("%s", err)
+		relog.Fatal("%v", err)
 	}
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 

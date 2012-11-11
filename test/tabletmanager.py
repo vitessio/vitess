@@ -585,7 +585,7 @@ def run_test_reparent_lag_slave(shard_id='0'):
     tablet_62344.mquery('vt_test_keyspace', q, write=True)
 
   # Perform a graceful reparent operation.
-  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path), log_level='info')
+  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
 
   tablet_41983.mquery('', 'start slave')
   time.sleep(1)

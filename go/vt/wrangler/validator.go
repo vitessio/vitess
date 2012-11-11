@@ -246,9 +246,10 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 
 	// See if every entry in the replication graph is connected to the master.
 	for tabletPath, tablet := range tabletMap {
-		if !tablet.IsReplicatingType() {
+		if !tablet.IsSlaveType() {
 			continue
 		}
+
 		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
 			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v", tabletPath, err)}
