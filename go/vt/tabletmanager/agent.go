@@ -218,7 +218,8 @@ func (agent *ActionAgent) verifyZkPaths() error {
 	}
 
 	if err := Validate(agent.zconn, agent.zkTabletPath, ""); err != nil {
-		return err
+		// Don't stop, it's not serious enough, this is likely transient.
+		relog.Warning("tablet validate failed: %v", agent.zkTabletPath)
 	}
 
 	// Ensure that the action node is there. There is no conflict creating
