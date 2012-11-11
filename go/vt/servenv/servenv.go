@@ -41,13 +41,18 @@ var (
 )
 
 func Init(logPrefix string) {
+	// Once you run as root, you pretty much destroy the chances of a
+	// non-privileged user starting the program correctly.
+	if uid := os.Getuid(); uid == 0 {
+		panic(fmt.Errorf("running this as root makes no sense"))
+	}
 	if logPrefix != "" {
 		logPrefix += " "
 	}
 	logPrefix += fmt.Sprintf("[%v]", os.Getpid())
 	f, err := logfile.Open(*logfileName, *logFrequency, *logMaxSize, *logMaxFiles)
 	if err != nil {
-		panic(fmt.Sprintf("unable to open logfile %s: %v", *logfileName, err))
+		panic(fmt.Errorf("unable to open logfile %s: %v", *logfileName, err))
 	}
 	logger := relog.New(f, logPrefix+" ",
 		log.Ldate|log.Lmicroseconds|log.Lshortfile, relog.DEBUG)
