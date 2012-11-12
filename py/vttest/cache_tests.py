@@ -117,6 +117,22 @@ class TestCache(framework.TestCase):
     finally:
       self.env.execute("rollback")
 
+  def test_types(self):
+    self._verify_mismatch("select * from vtocc_cached where eid = 'str' and bid = 'str'")
+    self._verify_mismatch("select * from vtocc_cached where eid = %(str)s and bid = %(str)s", {"str": "str"})
+    self._verify_mismatch("select * from vtocc_cached where eid = 1 and bid = 1")
+    self._verify_mismatch("select * from vtocc_cached where eid = %(id)s and bid = %(id)s", {"id": 1})
+    self._verify_mismatch("select * from vtocc_cached where eid = 1.2 and bid = 1.2")
+    self._verify_mismatch("select * from vtocc_cached where eid = %(fl)s and bid = %(fl)s", {"fl": 1.2})
+
+  def _verify_mismatch(self, query, bindvars=None):
+    try:
+      self.env.execute(query, bindvars)
+    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+      self.assertContains(e[1], "error: Type mismatch")
+    else:
+      self.assertFail("Did not receive exception")
+
   def test_cache_sqls(self):
     error_count = self.env.run_cases(cache_cases.cases)
     if error_count != 0:

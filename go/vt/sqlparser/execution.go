@@ -1072,7 +1072,7 @@ func asInterface(node *Node) interface{} {
 	case NUMBER:
 		n, err := sqltypes.BuildNumeric(string(node.Value))
 		if err != nil {
-			panic(NewParserError("Expecting whole number: %s", err))
+			panic(NewParserError("Type mismatch: %s", err))
 		}
 		return n
 	}

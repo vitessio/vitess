@@ -213,18 +213,14 @@ class TestEnv(object):
 env = TestEnv()
 try:
   env.setUp()
-  try:
-    t = nocache_tests.TestNocache(options.testcase, options.verbose)
-    t.set_env(env)
-    t.run()
-  except KeyError:
-    pass
-  try:
-    t = stream_tests.TestStream(options.testcase, options.verbose)
-    t.set_env(env)
-    t.run()
-  except KeyError:
-    pass
+  print "Testing general functionality"
+  t = nocache_tests.TestNocache(options.testcase, options.verbose)
+  t.set_env(env)
+  t.run()
+  print "Testing streaming functionality"
+  t = stream_tests.TestStream(options.testcase, options.verbose)
+  t.set_env(env)
+  t.run()
   if getattr(env, "memcached", None):
     print "Testing row cache"
     t = cache_tests.TestCache(options.testcase, options.verbose)

@@ -78,7 +78,7 @@ func (self *ParsedQuery) MarshalJSON() ([]byte, error) {
 func EncodeValue(buf *bytes.Buffer, value interface{}) error {
 	switch bindVal := value.(type) {
 	case nil:
-		buf.WriteString("NULL")
+		buf.WriteString("null")
 	case []sqltypes.Value:
 		for i := 0; i < len(bindVal); i++ {
 			if i != 0 {

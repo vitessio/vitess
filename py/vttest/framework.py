@@ -45,9 +45,11 @@ class TestCase(object):
       for testfunc in testlist:
         try:
           testfunc(self)
-        except TestException, e:
+        except (TestException, KeyError), e:
           print e
           error_count += 1
+    except KeyError:
+      print self.testcase, "not found"
     finally:
       self.tearDown()
       if error_count == 0:

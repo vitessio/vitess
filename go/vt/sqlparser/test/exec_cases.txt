@@ -414,11 +414,12 @@ select * from d where name='foo'
   "Reason": "DEFAULT",
   "TableName": "d",
   "FullQuery": "select * from d where name = 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select name from d where name = :0",
+  "OuterQuery": "select name, id from d where name = :0",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
-    0
+    0,
+    1
   ],
   "PKValues": [
     "Zm9v"
@@ -943,6 +944,7 @@ select * from a use index(a_name) where eid = 1
   "SetValue": null
 }
 
+# insert with bind value
 insert into a (eid, id) values (1, :a)
 {
   "PlanId": "INSERT_PK",
@@ -963,7 +965,7 @@ insert into a (eid, id) values (1, :a)
   "SetValue": null
 }
 
-# partial pk
+# default number
 insert into a (id) values (1)
 {
   "PlanId": "INSERT_PK",
@@ -984,10 +986,31 @@ insert into a (id) values (1)
   "SetValue": null
 }
 
+# default string
+insert into d(id) values(1)
+{
+  "PlanId": "INSERT_PK",
+  "Reason": "DEFAULT",
+  "TableName": "d",
+  "FullQuery": "insert into d(id) values (1)",
+  "OuterQuery": "insert into d(id) values (1)",
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": [
+    "MA=="
+  ],
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # mismatch
 insert into a (eid, id) values (1)
 "Column count doesn't match value count"
 
+# negative number
 insert into a (eid, id) values (-1, 2)
 {
   "PlanId": "INSERT_PK",

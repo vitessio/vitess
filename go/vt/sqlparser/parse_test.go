@@ -66,6 +66,7 @@ func initTables() {
 
 	d := schema.NewTable("d")
 	d.AddColumn("name", "varbinary(10)", SQLZERO, "")
+	d.AddColumn("id", "int", SQLZERO, "")
 	dcolumns := []string{"name"}
 	d.Indexes = append(d.Indexes, &schema.Index{"PRIMARY", []string{"name"}, []uint64{1}, dcolumns})
 	d.PKColumns = append(d.PKColumns, 0)

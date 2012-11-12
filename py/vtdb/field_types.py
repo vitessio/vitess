@@ -72,7 +72,6 @@ conversions = {
   VT_DATETIME   : times.DateTimeOrNone,
   VT_YEAR       : int,
   VT_NEWDATE    : times.DateOrNone,
-  VT_BIT        : int,
   VT_NEWDECIMAL : Decimal,
 }
 

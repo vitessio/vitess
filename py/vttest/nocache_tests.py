@@ -67,7 +67,7 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+2, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Completed.Count", 0)+2, vend.Transactions.Histograms.Completed.Count)
     self.assertEqual(vstart.mget("Queries.TotalCount", 0)+4, vend.Queries.TotalCount)
-    self.assertEqual(vstart.mget("Queries.Histograms.PLAN_INSERT_PK.Count", 0)+1, vend.Queries.Histograms.PLAN_INSERT_PK.Count)
+    self.assertEqual(vstart.mget("Queries.Histograms.INSERT_PK.Count", 0)+1, vend.Queries.Histograms.INSERT_PK.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.DML_PK.Count", 0)+1, vend.Queries.Histograms.DML_PK.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.PASS_SELECT.Count", 0)+2, vend.Queries.Histograms.PASS_SELECT.Count)
 
@@ -181,8 +181,10 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.TxPool.Capacity, 20)
 
   def test_transaction_timeout(self):
-    vstart = self.env.debug_vars()
     self.env.execute("set vt_transaction_timeout=1")
+    # wait for any pending transactions to timeout
+    time.sleep(0.5)
+    vstart = self.env.debug_vars()
     self.env.execute("begin")
     time.sleep(2)
     try:
@@ -317,6 +319,47 @@ class TestNocache(framework.TestCase):
     bvars = [{"a":2}, {"b":2}]
     results = self.env.conn._execute_batch(queries, bvars)
     self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
+
+  def test_types(self):
+    self._verify_mismatch("insert into vtocc_ints(tiny) values('str')")
+    self._verify_mismatch("insert into vtocc_ints(tiny) values(%(str)s)", {"str": "str"})
+    self._verify_mismatch("insert into vtocc_ints(tiny) values(1.2)")
+    self._verify_mismatch("insert into vtocc_ints(tiny) values(%(fl)s)", {"fl": 1.2})
+    self._verify_mismatch("insert into vtocc_strings(vb) values(1)")
+    self._verify_mismatch("insert into vtocc_strings(vb) values(%(id)s)", {"id": 1})
+    self._verify_error("insert into vtocc_strings(vb) values('12345678901234567')", None, "error: Data too long")
+    self._verify_error("insert into vtocc_ints(tiny) values(-129)", None, "error: Out of range")
+
+    try:
+      self.env.execute("begin")
+      self.env.execute("insert into vtocc_ints(tiny, medium) values(1, -129)")
+      self.env.execute("insert into vtocc_fracts(id, num) values(1, 1)")
+      self.env.execute("insert into vtocc_strings(vb) values('a')")
+      self.env.execute("commit")
+      self._verify_mismatch("insert into vtocc_strings(vb) select tiny from vtocc_ints")
+      self._verify_mismatch("insert into vtocc_ints(tiny) select num from vtocc_fracts")
+      self._verify_mismatch("insert into vtocc_ints(tiny) select vb from vtocc_strings")
+      self._verify_error("insert into vtocc_ints(tiny) select medium from vtocc_ints", None, "error: Out of range")
+    finally:
+      self.env.execute("begin")
+      self.env.execute("delete from vtocc_ints")
+      self.env.execute("delete from vtocc_fracts")
+      self.env.execute("delete from vtocc_strings")
+      self.env.execute("commit")
+
+  def _verify_mismatch(self, query, bindvars=None):
+    self._verify_error(query, bindvars, "error: Type mismatch")
+
+  def _verify_error(self, query, bindvars, err):
+    self.env.execute("begin")
+    try:
+      self.env.execute(query, bindvars)
+    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+      self.assertContains(e[1], err)
+    else:
+      self.assertFail("Did not receive exception: " + query)
+    finally:
+      self.env.execute("rollback")
 
   def test_sqls(self):
     error_count = self.env.run_cases(nocache_cases.cases)

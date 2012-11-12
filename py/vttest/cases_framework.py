@@ -148,20 +148,20 @@ class Case(object):
 
   def run(self, cursor, querylog=None):
     failures = []
-    check_rewritten = self.rewritten and querylog
+    check_rewritten = self.rewritten is not None and querylog
     if check_rewritten:
       querylog.reset()
     if self.is_testing_cache:
       tstart = self.table_stats()
     cursor.execute(self.sql, self.bindings)
-    if self.result:
+    if self.result is not None:
       result = list(cursor)
       if self.result != result:
-        failures.append("%r: %s != %s" % (self.sql, self.result, result))
+        failures.append("%r:\n%s !=\n%s" % (self.sql, self.result, result))
     if check_rewritten:
       rewritten = self.normalizelog(querylog.read())
       if self.rewritten != rewritten:
-        failures.append("%r: %s != %s" % (self.sql, self.rewritten, rewritten))
+        failures.append("%r:\n%s !=\n%s" % (self.sql, self.rewritten, rewritten))
 
     if self.is_testing_cache:
       tdelta = self.table_stats_delta(tstart)
