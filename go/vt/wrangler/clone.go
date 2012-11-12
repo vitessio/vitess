@@ -41,9 +41,10 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) erro
 		return err
 	}
 
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-	if err != nil {
-		return err
+	// wait for completion, and save the error
+	actionErr := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	if actionErr != nil {
+		relog.Error("snapshot failed, still restoring tablet type: %v", actionErr)
 	}
 
 	// Restore type
@@ -55,8 +56,12 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) erro
 	} else {
 		err = wr.ChangeType(zkTabletPath, originalType, false)
 	}
-
-	return err
+	if err != nil {
+		// failure in changing the zk type is probably worse,
+		// so returning that (we logged actionErr anyway)
+		return err
+	}
+	return actionErr
 }
 
 func (wr *Wrangler) Restore(zkSrcTabletPath, zkDstTabletPath string) error {

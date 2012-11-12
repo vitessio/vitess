@@ -43,7 +43,7 @@ func main() {
 			log.Fatalf("failed init mysql: %v", mysqlErr)
 		}
 	case "partialrestore":
-		rs, err := mysqlctl.ReadSplitReplicaSource(flag.Arg(1))
+		rs, err := mysqlctl.ReadSplitSnapshotManifest(flag.Arg(1))
 		if err == nil {
 			err = mysqld.RestoreFromPartialSnapshot(rs)
 		}
@@ -51,12 +51,12 @@ func main() {
 			log.Fatalf("partialrestore failed: %v", err)
 		}
 	case "partialsnapshot":
-		_, err := mysqld.CreateSplitReplicaSource(flag.Arg(1), flag.Arg(2), key.HexKeyspaceId(flag.Arg(3)), key.HexKeyspaceId(flag.Arg(4)), tabletAddr, false)
+		_, err := mysqld.CreateSplitSnapshotManifest(flag.Arg(1), flag.Arg(2), key.HexKeyspaceId(flag.Arg(3)), key.HexKeyspaceId(flag.Arg(4)), tabletAddr, false)
 		if err != nil {
 			log.Fatalf("partialsnapshot failed: %v", err)
 		}
 	case "restore":
-		rs, err := mysqlctl.ReadReplicaSource(flag.Arg(1))
+		rs, err := mysqlctl.ReadSnapshotManifest(flag.Arg(1))
 		if err == nil {
 			err = mysqld.RestoreFromSnapshot(rs)
 		}

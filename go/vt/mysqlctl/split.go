@@ -93,14 +93,18 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 )
 
-type SplitReplicaSource struct {
-	Source           *ReplicaSource
+const (
+	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
+)
+
+type SplitSnapshotManifest struct {
+	Source           *SnapshotManifest
 	KeyRange         key.KeyRange
 	SchemaDefinition *SchemaDefinition
 }
 
-func NewSplitReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) *SplitReplicaSource {
-	return &SplitReplicaSource{Source: NewReplicaSource(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
+func NewSplitSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) *SplitSnapshotManifest {
+	return &SplitSnapshotManifest{Source: NewSnapshotManifest(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
 }
 
 // In MySQL for both bigint and varbinary, 0x1234 is a valid value. For
@@ -121,12 +125,18 @@ var loadDataInfile = `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.Table
   LINES TERMINATED BY '\n'`
 
 func (mysqld *Mysqld) validateSplitReplicaTarget() error {
+	// check activity
 	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return err
 	}
 	if len(rows) > 4 {
 		return fmt.Errorf("too many active db processes (%v > 4)", len(rows))
+	}
+
+	// make sure we can write locally
+	if err := mysqld.ValidateSnapshotPath(); err != nil {
+		return err
 	}
 
 	// NOTE: we expect that database was already created during tablet
@@ -153,7 +163,7 @@ startKey, endKey - the row range to prepare
 sourceAddr - the ip addr of the machine running the export
 allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool) (_replicaSource *SplitReplicaSource, err error) {
+func (mysqld *Mysqld) CreateSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool) (_snapshotManifest *SplitSnapshotManifest, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -235,15 +245,15 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey,
 		return
 	}
 
-	var rs *SplitReplicaSource
-	dataFiles, snapshotErr := mysqld.createSplitReplicaSource(dbName, keyName, startKey, endKey, cloneSourcePath, sd)
+	var ssm *SplitSnapshotManifest
+	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd)
 	if snapshotErr != nil {
-		relog.Error("CreateSplitReplicaSource failed: %v", snapshotErr)
+		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 	} else {
-		rs = NewSplitReplicaSource(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+		ssm = NewSplitSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
-		rsFile := path.Join(mysqld.SnapshotDir, replicaSourceFile)
-		if snapshotErr = writeJson(rsFile, rs); snapshotErr != nil {
+		ssmFile := path.Join(mysqld.SnapshotDir, partialSnapshotManifestFile)
+		if snapshotErr = writeJson(ssmFile, ssm); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		}
 	}
@@ -271,10 +281,10 @@ func (mysqld *Mysqld) CreateSplitReplicaSource(dbName, keyName string, startKey,
 		return nil, snapshotErr
 	}
 
-	return rs, nil
+	return ssm, nil
 }
 
-func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition) ([]SnapshotFile, error) {
 	// export each table to a CSV-like file, compress the results
 	tableFiles := make([]string, len(sd.TableDefinitions))
 	// FIXME(msolomon) parallelize
@@ -335,7 +345,7 @@ func (mysqld *Mysqld) createSplitReplicaSource(dbName, keyName string, startKey,
  start_mysql()
  clean up compressed files
 */
-func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSource) (err error) {
+func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshotManifest) (err error) {
 	if err = mysqld.validateSplitReplicaTarget(); err != nil {
 		return
 	}
@@ -360,8 +370,8 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 
 	// this will check that the database was properly created
 	createDbCmds := []string{
-		"USE " + replicaSource.Source.DbName}
-	for _, td := range replicaSource.SchemaDefinition.TableDefinitions {
+		"USE " + snapshotManifest.Source.DbName}
+	for _, td := range snapshotManifest.SchemaDefinition.TableDefinitions {
 		createDbCmds = append(createDbCmds, td.Schema)
 	}
 
@@ -370,18 +380,18 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 		return
 	}
 
-	if err = fetchFiles(replicaSource.Source, tempStoragePath); err != nil {
+	if err = fetchFiles(snapshotManifest.Source, tempStoragePath); err != nil {
 		return
 	}
 
 	// FIXME(alainjobart) We recompute a lot of stuff that should be
 	// in fileutil.go
-	for _, fi := range replicaSource.Source.Files {
+	for _, fi := range snapshotManifest.Source.Files {
 		filename := fi.getLocalFilename(tempStoragePath)
 		tableName := strings.Replace(path.Base(filename), ".csv", "", -1)
 		queryParams := map[string]string{
 			"TableInputPath": filename,
-			"TableName":      replicaSource.Source.DbName + "." + tableName,
+			"TableName":      snapshotManifest.Source.DbName + "." + tableName,
 		}
 		query := mustFillStringTemplate(loadDataInfile, queryParams)
 		if err = mysqld.executeSuperQuery(query); err != nil {
@@ -396,7 +406,7 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(replicaSource *SplitReplicaSour
 
 	// FIXME(msolomon) start *split* replication, you need the new start/end
 	// keys
-	cmdList := StartSplitReplicationCommands(replicaSource.Source.ReplicationState, replicaSource.KeyRange)
+	cmdList := StartSplitReplicationCommands(snapshotManifest.Source.ReplicationState, snapshotManifest.KeyRange)
 	relog.Info("StartSplitReplicationCommands %#v", cmdList)
 	if err = mysqld.executeSuperQueryList(cmdList); err != nil {
 		return
@@ -426,14 +436,14 @@ func StartSplitReplicationCommands(replState *ReplicationState, keyRange key.Key
 		"START SLAVE"}
 }
 
-func ReadSplitReplicaSource(filename string) (*SplitReplicaSource, error) {
+func ReadSplitSnapshotManifest(filename string) (*SplitSnapshotManifest, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	rs := new(SplitReplicaSource)
-	if err = json.Unmarshal(data, rs); err != nil {
-		return nil, fmt.Errorf("ReadSplitReplicaSource failed: %v %v", filename, err)
+	ssm := new(SplitSnapshotManifest)
+	if err = json.Unmarshal(data, ssm); err != nil {
+		return nil, fmt.Errorf("ReadSplitSnapshotManifest failed: %v %v", filename, err)
 	}
-	return rs, nil
+	return ssm, nil
 }

@@ -138,10 +138,10 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 // FIXME(msolomon) parallelize
 // FIXME(msolomon) automatically retry a file transfer at least once
 // FIXME(msolomon) deadlines?
-func fetchFiles(replicaSource *ReplicaSource, destinationPath string) error {
-	for _, fi := range replicaSource.Files {
+func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string) error {
+	for _, fi := range snapshotManifest.Files {
 		filename := fi.getLocalFilename(destinationPath)
-		furl := "http://" + replicaSource.Addr + fi.Path
+		furl := "http://" + snapshotManifest.Addr + fi.Path
 		if err := fetchFile(furl, fi.Hash, filename); err != nil {
 			return err
 		}

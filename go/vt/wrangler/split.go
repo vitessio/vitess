@@ -42,9 +42,9 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 		return err
 	}
 
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-	if err != nil {
-		return err
+	actionErr := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	if actionErr != nil {
+		relog.Error("PartialSnapshot failed, still restoring tablet type: %v", actionErr)
 	}
 
 	// Restore type
@@ -56,8 +56,12 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 	} else {
 		err = wr.ChangeType(zkTabletPath, originalType, false)
 	}
-
-	return err
+	if err != nil {
+		// failure in changing the zk type is probably worse,
+		// so returning that (we logged actionErr anyway)
+		return err
+	}
+	return actionErr
 }
 
 func (wr *Wrangler) PartialRestore(zkSrcTabletPath, zkDstTabletPath string) error {

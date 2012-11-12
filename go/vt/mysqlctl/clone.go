@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	replicaSourceFile = "replica_source.json"
+	snapshotManifestFile = "snapshot_manifest.json"
 )
 
 // Validate that this instance is a reasonable source of data.
@@ -33,6 +33,7 @@ const (
 // Is this an option to vtaction? Or look for $VTROOT/bin/vthook_validate_clone_source?
 // What environment variables do we have to provide? dbname, host, socket?
 func (mysqld *Mysqld) ValidateCloneSource() error {
+	// needs to be master, or slave that's not too far behind
 	slaveStatus, err := mysqld.slaveStatus()
 	if err != nil {
 		if err != ErrNotSlave {
@@ -44,6 +45,12 @@ func (mysqld *Mysqld) ValidateCloneSource() error {
 			return fmt.Errorf("mysqlctl: ValidateCloneSource failed, lag_seconds exceed maximum tolerance (%v)", lagSeconds)
 		}
 	}
+
+	// make sure we can write locally
+	if err := mysqld.ValidateSnapshotPath(); err != nil {
+		return err
+	}
+
 	// FIXME(msolomon) check free space based on an estimate of the current
 	// size of the db files.
 	// Also, check that we aren't already cloning/compressing or acting as a
@@ -111,10 +118,6 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 }
 
 func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFile, error) {
-	// wrapErr := func(err error) error {
-	// 	return fmt.Errorf("mysqlctl: createSnapshot failed: %v", err)
-	// }
-
 	// FIXME(msolomon) Must match patterns in mycnf - probably belongs
 	// in there as derived paths.
 	snapshotDataSrcPath := path.Join(snapshotPath, dataDir, dbName)
@@ -165,7 +168,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFil
 // Compute md5() sums
 // Place in /vt/clone_src where they will be served by http server (not rpc)
 // Restart mysql
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool) (replicaSource *ReplicaSource, err error) {
+func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool) (snapshotManifest *SnapshotManifest, err error) {
 	if dbName == "" {
 		return nil, errors.New("CreateSnapshot failed: no database name provided")
 	}
@@ -232,15 +235,15 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		return nil, err
 	}
 
-	var rs *ReplicaSource
+	var sm *SnapshotManifest
 	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir)
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
-		rs = NewReplicaSource(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+		sm = NewSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition)
-		rsFile := path.Join(mysqld.SnapshotDir, replicaSourceFile)
-		if snapshotErr = writeJson(rsFile, rs); snapshotErr != nil {
+		smFile := path.Join(mysqld.SnapshotDir, snapshotManifestFile)
+		if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		}
 	}
@@ -269,7 +272,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		return nil, snapshotErr
 	}
 
-	return rs, nil
+	return sm, nil
 }
 
 func writeJson(filename string, x interface{}) error {
@@ -280,16 +283,16 @@ func writeJson(filename string, x interface{}) error {
 	return ioutil2.WriteFileAtomic(filename, data, 0660)
 }
 
-func ReadReplicaSource(filename string) (*ReplicaSource, error) {
+func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	rs := new(ReplicaSource)
-	if err = json.Unmarshal(data, rs); err != nil {
-		return nil, fmt.Errorf("ReadReplicaSource failed: %v %v", filename, err)
+	sm := new(SnapshotManifest)
+	if err = json.Unmarshal(data, sm); err != nil {
+		return nil, fmt.Errorf("ReadSnapshotManifest failed: %v %v", filename, err)
 	}
-	return rs, nil
+	return sm, nil
 }
 
 // This piece runs on the presumably empty machine acting as the target in the
@@ -303,9 +306,9 @@ func ReadReplicaSource(filename string) (*ReplicaSource, error) {
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
-func (mysqld *Mysqld) RestoreFromSnapshot(replicaSource *ReplicaSource) error {
-	if replicaSource == nil {
-		return errors.New("RestoreFromSnapshot: nil replicaSource")
+func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest) error {
+	if snapshotManifest == nil {
+		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
 
 	relog.Debug("ValidateCloneTarget")
@@ -319,7 +322,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(replicaSource *ReplicaSource) error {
 	}
 
 	relog.Debug("Fetch snapshot")
-	if err := mysqld.fetchSnapshot(replicaSource); err != nil {
+	if err := mysqld.fetchSnapshot(snapshotManifest); err != nil {
 		return err
 	}
 
@@ -328,7 +331,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(replicaSource *ReplicaSource) error {
 		return err
 	}
 
-	cmdList := StartReplicationCommands(replicaSource.ReplicationState)
+	cmdList := StartReplicationCommands(snapshotManifest.ReplicationState)
 	relog.Info("StartReplicationCommands %#v", cmdList)
 	if err := mysqld.executeSuperQueryList(cmdList); err != nil {
 		return err
@@ -338,8 +341,8 @@ func (mysqld *Mysqld) RestoreFromSnapshot(replicaSource *ReplicaSource) error {
 }
 
 // FIXME(alainjobart) move this to replication.go, and use in split.go as well
-func (mysqld *Mysqld) fetchSnapshot(replicaSource *ReplicaSource) error {
-	replicaDbPath := path.Join(mysqld.config.DataDir, replicaSource.DbName)
+func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest) error {
+	replicaDbPath := path.Join(mysqld.config.DataDir, snapshotManifest.DbName)
 
 	cleanDirs := []string{mysqld.SnapshotDir, replicaDbPath,
 		mysqld.config.InnodbDataHomeDir, mysqld.config.InnodbLogGroupHomeDir}
@@ -356,5 +359,5 @@ func (mysqld *Mysqld) fetchSnapshot(replicaSource *ReplicaSource) error {
 		}
 	}
 
-	return fetchFiles(replicaSource, mysqld.TabletDir)
+	return fetchFiles(snapshotManifest, mysqld.TabletDir)
 }

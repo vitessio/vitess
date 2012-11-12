@@ -49,16 +49,16 @@ type RestartSlaveData struct {
 	Force            bool
 }
 
-// Enough data to restore a slave from a mysqlctl.ReplicaSource
+// Enough data to restore a slave from a mysqlctl.SnapshotManifest
 type RestoreSlaveData struct {
-	ReplicaSource *mysqlctl.ReplicaSource
-	Parent        TabletAlias
+	SnapshotManifest *mysqlctl.SnapshotManifest
+	Parent           TabletAlias
 }
 
-// Enough data to restore a slave from a mysqlctl.SplitReplicaSource
+// Enough data to restore a slave from a mysqlctl.SplitSnapshotManifest
 type PartialRestoreSlaveData struct {
-	SplitReplicaSource *mysqlctl.SplitReplicaSource
-	Parent             TabletAlias
+	SplitSnapshotManifest *mysqlctl.SplitSnapshotManifest
+	Parent                TabletAlias
 }
 
 type TabletActor struct {
@@ -663,15 +663,15 @@ func (ta *TabletActor) snapshot() (*RestoreSlaveData, error) {
 		return nil, fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	replicaSource, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false)
+	snapshotManifest, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false)
 	if err != nil {
 		return nil, err
 	}
 
-	rsd := &RestoreSlaveData{ReplicaSource: replicaSource}
+	rsd := &RestoreSlaveData{SnapshotManifest: snapshotManifest}
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doens't work in hierarchical replication.
+		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		rsd.Parent = tablet.Alias()
 	} else {
 		rsd.Parent = tablet.Parent
@@ -687,7 +687,7 @@ func (ta *TabletActor) snapshot() (*RestoreSlaveData, error) {
 }
 
 // Operate on restore tablet.
-// Check that the ReplicaSource is valid and the master has not changed.
+// Check that the SnapshotManifest is valid and the master has not changed.
 // Shutdown mysqld.
 // Load the snapshot from source tablet.
 // Restart mysqld and replication.
@@ -726,7 +726,7 @@ func (ta *TabletActor) restore(args map[string]string) error {
 		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
 	}
 
-	if err := ta.mysqld.RestoreFromSnapshot(rsd.ReplicaSource); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(rsd.SnapshotManifest); err != nil {
 		relog.Error("RestoreFromSnapshot failed: %v", err)
 		return err
 	}
@@ -770,12 +770,12 @@ func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreS
 		return nil, fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	splitReplicaSource, err := ta.mysqld.CreateSplitReplicaSource(tablet.DbName(), keyName, key.HexKeyspaceId(startKey), key.HexKeyspaceId(endKey), tablet.Addr, false)
+	splitSnapshotManifest, err := ta.mysqld.CreateSplitSnapshotManifest(tablet.DbName(), keyName, key.HexKeyspaceId(startKey), key.HexKeyspaceId(endKey), tablet.Addr, false)
 	if err != nil {
 		return nil, err
 	}
 
-	rsd := &PartialRestoreSlaveData{SplitReplicaSource: splitReplicaSource}
+	rsd := &PartialRestoreSlaveData{SplitSnapshotManifest: splitSnapshotManifest}
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
@@ -794,7 +794,7 @@ func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreS
 }
 
 // Operate on restore tablet.
-// Check that the ReplicaSource is valid and the master has not changed.
+// Check that the SnapshotManifest is valid and the master has not changed.
 // Put Mysql in read-only mode.
 // Load the snapshot from source tablet.
 // FIXME(alainjobart) which state should the tablet be in? it is a slave,
@@ -836,7 +836,7 @@ func (ta *TabletActor) partialRestore(args map[string]string) error {
 		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
 	}
 
-	if err := ta.mysqld.RestoreFromPartialSnapshot(rsd.SplitReplicaSource); err != nil {
+	if err := ta.mysqld.RestoreFromPartialSnapshot(rsd.SplitSnapshotManifest); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
 		return err
 	}
@@ -846,7 +846,7 @@ func (ta *TabletActor) partialRestore(args map[string]string) error {
 	tablet.Keyspace = parentTablet.Keyspace
 	tablet.Shard = parentTablet.Shard
 	tablet.Type = TYPE_SPARE
-	tablet.KeyRange = rsd.SplitReplicaSource.KeyRange
+	tablet.KeyRange = rsd.SplitSnapshotManifest.KeyRange
 
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err

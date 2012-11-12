@@ -184,7 +184,7 @@ def run_test_mysqlctl_clone():
 
   utils.pause("snapshot finished")
 
-  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/replica_source.json').wait()
+  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/snapshot_manifest.json').wait()
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
@@ -240,6 +240,16 @@ def run_test_vtctl_clone():
 
   tablet_62044.init_tablet('idle', start=True)
 
+  # small test to make sure the directory validation works
+  utils.run("mkdir -p /vt/snapshot")
+  utils.run("chmod -w /vt/snapshot")
+  out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null -force Clone %s %s' %
+                       (tablet_62344.zk_tablet_path,
+                        tablet_62044.zk_tablet_path),
+                       trap_output=True, raise_on_error=False)
+  if err.find("Cannot validate snapshot directory") == -1:
+    raise utils.TestError("expected validation error", err)
+
   utils.run_vtctl('-force Clone %s %s' %
                   (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
 
@@ -271,7 +281,7 @@ def run_test_mysqlctl_split():
 
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_test_keyspace')
-  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/replica_source.json').wait()
+  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/partial_snapshot_manifest.json').wait()
 
   tablet_62044.assert_table_count('vt_test_keyspace', 'vt_insert_test', 2)
 

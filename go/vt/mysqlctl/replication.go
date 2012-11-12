@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -89,18 +90,17 @@ func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
 	return filename
 }
 
-type ReplicaSource struct {
+type SnapshotManifest struct {
 	Addr string // this is the address of the tabletserver, not mysql
 
 	DbName string
 	Files  []SnapshotFile
 
-	// ReplicationState is not anonymous because the default json encoder has begun to fail here.
 	ReplicationState *ReplicationState
 }
 
-func NewReplicaSource(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition) *ReplicaSource {
-	rs := &ReplicaSource{
+func NewSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition) *SnapshotManifest {
+	rs := &SnapshotManifest{
 		Addr:             addr,
 		DbName:           dbName,
 		Files:            files,
@@ -601,4 +601,21 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	}
 
 	return addrs, nil
+}
+
+// Helper function to make sure we can write to the local snapshot area,
+// before we actually do any action
+// (can be used for both partial and full snapshots)
+func (mysqld *Mysqld) ValidateSnapshotPath() error {
+	_path := path.Join(mysqld.SnapshotDir, "validate_test")
+	if err := os.RemoveAll(_path); err != nil {
+		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
+	}
+	if err := os.MkdirAll(_path, 0775); err != nil {
+		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
+	}
+	if err := os.RemoveAll(_path); err != nil {
+		return fmt.Errorf("ValidateSnapshotPath: Cannot validate snapshot directory: %v", err)
+	}
+	return nil
 }
