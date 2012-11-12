@@ -61,7 +61,7 @@ class BaseTest(unittest.TestCase):
       json.dump(klass.dbconfig, f)
 
   @classmethod
-  def setUpClass(klass):
+  def _setUpClass(klass):
     os.mkdir(klass.mysqldir)
     klass.dump_config_files()
     klass.start_mysql()
@@ -95,7 +95,7 @@ class BaseTest(unittest.TestCase):
     connection.commit()
 
   @classmethod
-  def tearDownClass(klass):
+  def _tearDownClass(klass):
     try:
       klass.process.kill()
       klass.process.wait()
@@ -208,9 +208,9 @@ class TestConnection(BaseTest):
 
 if __name__=="__main__":
   try:
-    BaseTest.setUpClass()
+    BaseTest._setUpClass()
     unittest.main(argv=["auth_test.py"])
   finally:
     print "Waiting for processes to terminate...",
-    BaseTest.tearDownClass()
+    BaseTest._tearDownClass()
     print "OK"
