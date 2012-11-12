@@ -34,10 +34,15 @@ type ReplicationPosition struct {
 	MasterLogPosition   uint
 	MasterLogFileIo     string // how much has been read, but not applied
 	MasterLogPositionIo uint
+	SecondsBehindMaster uint
 }
 
 func (rp ReplicationPosition) MapKey() string {
 	return fmt.Sprintf("%v:%d", rp.MasterLogFile, rp.MasterLogPosition)
+}
+
+func (rp ReplicationPosition) MapKeyIo() string {
+	return fmt.Sprintf("%v:%d", rp.MasterLogFileIo, rp.MasterLogPositionIo)
 }
 
 type ReplicationState struct {
@@ -322,14 +327,15 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 		return nil, err
 	}
 	pos := new(ReplicationPosition)
-	// Use Relay_Master_Log_File because we care where the SQL thread
-	// is, not the IO thread.
+	// Use Relay_Master_Log_File for the SQL thread postion.
 	pos.MasterLogFile = fields["Relay_Master_Log_File"]
 	pos.MasterLogFileIo = fields["Master_Log_File"]
 	temp, _ := strconv.ParseUint(fields["Exec_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPositionIo = uint(temp)
+	temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	pos.SecondsBehindMaster = uint(temp)
 	return pos, nil
 }
 

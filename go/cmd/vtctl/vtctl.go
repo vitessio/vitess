@@ -743,16 +743,18 @@ func main() {
 		if tabletMap == nil {
 			break
 		}
+
 		lines := make([]string, 0, 24)
-		for uid, ti := range tabletMap {
-			pos := posMap[uid]
+		for _, rt := range sortReplicatingTablets(tabletMap, posMap) {
+			pos := rt.ReplicationPosition
+			ti := rt.TabletInfo
 			if pos == nil {
-				lines = append(lines, fmtTabletAwkable(ti)+" <err> <err>")
+				lines = append(lines, fmtTabletAwkable(ti)+" <err> <err> <err>")
 			} else {
-				lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v:%010d %v:%010d", pos.MasterLogFile, pos.MasterLogPosition, pos.MasterLogFileIo, pos.MasterLogPositionIo))
+				lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v:%010d %v:%010d %v", pos.MasterLogFile, pos.MasterLogPosition, pos.MasterLogFileIo, pos.MasterLogPositionIo, pos.SecondsBehindMaster))
 			}
 		}
-		sort.Strings(lines)
+		// sort.Strings(lines)
 		for _, l := range lines {
 			fmt.Println(l)
 		}
@@ -904,4 +906,52 @@ func main() {
 			}
 		}
 	}
+}
+
+type rTablet struct {
+	*tm.TabletInfo
+	*mysqlctl.ReplicationPosition
+}
+
+type rTablets []*rTablet
+
+func (rts rTablets) Len() int { return len(rts) }
+
+func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
+
+// Sort for tablet replication.
+// master first, then i/o position, then sql position
+func (rts rTablets) Less(i, j int) bool {
+	// NOTE: Swap order of unpack to reverse sort
+	l, r := rts[j], rts[i]
+	var lTypeMaster, rTypeMaster int
+	if l.Type == tm.TYPE_MASTER {
+		lTypeMaster = 1
+	}
+	if r.Type == tm.TYPE_MASTER {
+		rTypeMaster = 1
+	}
+	if lTypeMaster < rTypeMaster {
+		return true
+	}
+	if lTypeMaster == rTypeMaster {
+		if l.MapKeyIo() < r.MapKeyIo() {
+			return true
+		}
+		if l.MapKeyIo() == r.MapKeyIo() {
+			if l.MapKey() < r.MapKey() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func sortReplicatingTablets(tabletMap map[uint]*tm.TabletInfo, posMap map[uint]*mysqlctl.ReplicationPosition) []*rTablet {
+	rtablets := make([]*rTablet, 0, len(tabletMap))
+	for uid, pos := range posMap {
+		rtablets = append(rtablets, &rTablet{tabletMap[uid], pos})
+	}
+	sort.Sort(rTablets(rtablets))
+	return rtablets
 }
