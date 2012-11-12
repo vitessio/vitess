@@ -18,10 +18,10 @@ hostname = socket.gethostname()
 
 # range 0000000000000000 - 8000000000000000
 shard_0_master = tablet.Tablet()
-shard_0_replica  = tablet.Tablet()
+shard_0_replica = tablet.Tablet()
 # range 8000000000000000 - FFFFFFFFFFFFFFFF
 shard_1_master = tablet.Tablet()
-shard_1_replica  = tablet.Tablet()
+shard_1_replica = tablet.Tablet()
 
 def setup():
   utils.prog_compile(['zkocc'])

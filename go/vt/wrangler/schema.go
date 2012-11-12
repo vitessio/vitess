@@ -17,12 +17,9 @@ import (
 )
 
 func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, error) {
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
-	if err != nil {
-		return nil, err
-	}
+	tm.MustBeTabletPath(zkTabletPath)
 	zkReplyPath := "get_schema_result.json"
-	actionPath, err := wr.ai.GetSchema(ti.Path(), zkReplyPath)
+	actionPath, err := wr.ai.GetSchema(zkTabletPath, zkReplyPath)
 
 	sd := new(mysqlctl.SchemaDefinition)
 	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, sd, wr.actionTimeout()); err != nil {
@@ -171,12 +168,9 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 }
 
 func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
-	if err != nil {
-		return nil, err
-	}
+	tm.MustBeTabletPath(zkTabletPath)
 	zkReplyPath := "schema_preflight_result.json"
-	actionPath, err := wr.ai.PreflightSchema(ti.Path(), zkReplyPath, change)
+	actionPath, err := wr.ai.PreflightSchema(zkTabletPath, zkReplyPath, change)
 
 	scr := new(mysqlctl.SchemaChangeResult)
 	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, scr, wr.actionTimeout()); err != nil {
@@ -186,12 +180,9 @@ func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlc
 }
 
 func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
-	if err != nil {
-		return nil, err
-	}
+	tm.MustBeTabletPath(zkTabletPath)
 	zkReplyPath := "schema_change_result.json"
-	actionPath, err := wr.ai.ApplySchema(ti.Path(), zkReplyPath, sc)
+	actionPath, err := wr.ai.ApplySchema(zkTabletPath, zkReplyPath, sc)
 
 	// FIXME(alainjobart) the timeout value is wrong here, we need
 	// a longer one
@@ -252,7 +243,7 @@ func (wr *Wrangler) ApplySchemaShard(zkShardPath string, change, zkNewParentTabl
 	}
 
 	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, zkMasterTabletPath, actionPath, change, zkNewParentTabletPath, simple, force)
-	relog.Info("applySchemaShard finished %v", schemaErr)
+	relog.Info("applySchemaShard finished error=%v", schemaErr)
 
 	err = wr.handleActionError(actionPath, schemaErr)
 	if schemaErr != nil {
@@ -360,8 +351,19 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			}
 		}
 
-		// FIXME(alainjobart): take this guy out of the rotation /
-		// serving graph
+		// take this guy out of the serving graph if necessary
+		ti, err := tm.ReadTablet(wr.zconn, status.zkTabletPath)
+		if err != nil {
+			return nil, err
+		}
+		typeChangeRequired := ti.Tablet.IsServingType()
+		if typeChangeRequired {
+			// note we want to update the serving graph there
+			err = wr.changeTypeInternal(ti.Path(), tm.TYPE_SCHEMA_UPGRADE)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		// apply the schema change
 		relog.Info("Applying schema change to slave %v in complex mode", status.zkTabletPath)
@@ -371,8 +373,13 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return scr, err
 		}
 
-		// FIXME(alainjobart): put this guy back into the rotation /
-		// serving graph
+		// put this guy back into the serving graph
+		if typeChangeRequired {
+			err = wr.changeTypeInternal(ti.Path(), ti.Tablet.Type)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// if zkNewParentTabletPath is passed in, use that as the new master

@@ -94,6 +94,48 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 	return nil
 }
 
+// same as ChangeType, but assume we already have the shard lock,
+// and do not have the option to force anything
+// FIXME(alainjobart): doesn't rebuild the Keyspace, as that part has locks,
+// so the local serving graphs will be wrong. To do that, I need to refactor
+// some code, might be a bigger change.
+// Mike says: Updating the shard should be good enough. I'm debating dropping the entire
+// keyspace rollup, since I think that is adding complexity and feels like it might
+// be a premature optimization.
+func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType tm.TabletType) error {
+	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	if err != nil {
+		return err
+	}
+	rebuildRequired := ti.Tablet.IsServingType()
+
+	// change the type
+	actionPath, err := wr.ai.ChangeType(ti.Path(), dbType)
+	if err != nil {
+		return err
+	}
+	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	if err != nil {
+		return err
+	}
+
+	// rebuild if necessary
+	if rebuildRequired {
+		err = wr.rebuildShard(ti.ShardPath(), false)
+		if err != nil {
+			return err
+		}
+		// FIXME(alainjobart) We already have the lock on one shard, so this is not
+		// possible. But maybe it's not necessary anyway.
+		// We could pass in a shard path we already have the lock on, and skip it?
+		//		err = wr.rebuildKeyspace(ti.KeyspacePath())
+		//		if err != nil {
+		//			return err
+		//		}
+	}
+	return nil
+}
+
 // Waits for the completion of a tablet action, and pulls the single
 // result back into the given interface.
 //

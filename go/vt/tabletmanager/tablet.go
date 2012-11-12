@@ -48,6 +48,11 @@ const (
 	// it can be reparented properly
 	TYPE_LAG_ORPHAN = TabletType("lag_orphan")
 
+	// a slaved copy of the data that was serving but is now applying
+	// a schema change. Will go bak to its serving type after the
+	// upgrade
+	TYPE_SCHEMA_UPGRADE = TabletType("schema_apply")
+
 	// a slaved copy of the data, but offline to queries other than backup
 	// replication sql thread may be stopped
 	TYPE_BACKUP = TabletType("backup")
@@ -63,9 +68,9 @@ const (
 // Can this db type be trivially reassigned without changes to the replication graph?
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
 			return true
 		}
 	case TYPE_SCRAP:

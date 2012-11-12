@@ -185,8 +185,8 @@ Schema: (beta)
   PreflightSchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>}
     apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
 
-  ApplySchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>} [allow_replication=false] [skip_preflight=false]
-    apply the schema change to the specific tablet (allowing replication by default). The sql can be inlined or read from a file.
+  ApplySchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>} [allow_replication=false] [skip_preflight=true]
+    apply the schema change to the specific tablet (allowing replication by default). The sql can be inlined or read from a file. Note this doesn't change any tablet state (doesn't go into 'schema' type).
 
   ApplySchemaShard zk_shard_path=<zk shard path> {sql=<sql> || sql_file=<filename>} [simple=false] [new_parent=<zk tablet path>]
     apply the schema change to the specific shard. If simple is true, we just apply on the live master. If simple is false, we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
@@ -940,7 +940,7 @@ func main() {
 			relog.Fatal("action %v requires zk_shard_path=<zk shard path>", args[0])
 		}
 		sql := getFileParam(params, "sql")
-		simple := params["simple"] != "false"
+		simple := params["simple"] == "true"
 		newParent := params["new_parent"]
 		if simple && newParent != "" {
 			relog.Fatal("new_parent for action %v can only be specified for complex schema upgrades", args[0])
