@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -96,8 +97,9 @@ Tablets:
   ExecuteHook <zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]
     This runs the specified hook on the given tablet.
 
+
 Shards:
-  RebuildShardGraph <zk shard path>
+  RebuildShardGraph <zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
     Rebuild the replication graph and shard serving data in zk.
     This may trigger an update to all connected clients
 
@@ -111,12 +113,18 @@ Shards:
   ShardReplicationPositions <zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
     Show slave status on all machines in the shard graph.
 
+  ListShardTablets <zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
+    list all tablets in a given shard
+
+  ListShardActions <zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)
+    list all active actions in a given shard
+
 
 Keyspaces:
   CreateKeyspace <zk keyspaces path>/<name> <shard count>
     e.g. CreateKeyspace /zk/global/vt/keyspaces/my_keyspace 4
 
-  RebuildKeyspaceGraph <zk keyspace path>
+  RebuildKeyspaceGraph <zk keyspace path> (/zk/global/vt/keyspaces/<keyspace>)
     Rebuild the serving data for all shards in this keyspace.
     This may trigger an update to all connected clients
 
@@ -125,10 +133,10 @@ Keyspaces:
 
 
 Generic:
-  PurgeActions <zk action path>
+  PurgeActions <zk action path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)
     remove all actions - be careful, this is powerful cleanup magic
 
-  WaitForAction <zk action path>
+  WaitForAction <zk action path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action/<action id>)
     watch an action node, printing updates, until the action is complete
 
   Resolve <keyspace>.<shard>.<db type>
@@ -138,7 +146,7 @@ Generic:
     validate all nodes reachable from global replication graph and all
     tablets in all discoverable cells are consistent
 
-  ExportZkns <zk local vt path>  (/zk/<cell>/vt)
+  ExportZkns <zk local vt path>  (/zk/<cell>/vt) DEPRECATED
     export the serving graph entries to the legacy zkns format
 
   ExportZknsForKeyspace <zk global keyspace path> (/zk/global/vt/keyspaces/<keyspace>)
@@ -151,23 +159,20 @@ Generic:
     data to recover the replication graph, at which point further
     auditing with Validate can reveal any remaining issues.
 
-  ListIdle <zk local vt path>
+  ListIdle <zk local vt path> (/zk/<cell>/vt) DEPRECATED - ListAllTablets + awk
     list all idle tablet paths
 
-  ListScrap <zk local vt path>
+  ListScrap <zk local vt path>  (/zk/<cell>/vt) DEPRECATED - ListAllTablets + awk
     list all scrap tablet paths
 
-  ListShardTablets <zk shard path>
-    list all tablets paths in a given shard
-
-  ListAllTablets <zk local vt path>
+  ListAllTablets <zk local vt path>  (/zk/<cell>/vt)
     list all tablets in an awk-friendly way
 
-  ListTablets <zk tablet path> ...
+  ListTablets <zk tablet path> ...  (/zk/<cell>/vt/tablets/<tablet uid> ...)
     list specified tablets in an awk-friendly way
 
 
-Schema:
+Schema: (beta)
   GetSchema <zk tablet path>
     display the full schema for a tablet
 
@@ -349,16 +354,101 @@ func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) err
 	return nil
 }
 
-func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
-	tabletAliases, err := tm.FindAllTabletAliasesInShard(zconn, zkShardPath)
+func getFirstAction(zconn zk.Conn, actionPath string) (*tm.ActionNode, error) {
+	actions, _, err := zconn.Children(actionPath)
+	if err != nil {
+		return nil, fmt.Errorf("getFirstAction: %v %v", actionPath, err)
+	}
+	if len(actions) == 0 {
+		return nil, nil
+	}
+	actionNodePath := path.Join(actionPath, actions[0])
+	data, _, err := zconn.Get(actionNodePath)
+	if err != nil {
+		return nil, fmt.Errorf("getFirstAction: %v %v", actionNodePath, err)
+	}
+	actionNode, err := tm.ActionNodeFromJson(data, actionNodePath)
+	if err != nil {
+		return nil, fmt.Errorf("getFirstAction: %v %v", actionNodePath, err)
+	}
+	return actionNode, nil
+}
+
+func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
+	tabletPaths, err := tabletPathsForShard(zconn, zkShardPath)
 	if err != nil {
 		return err
+	}
+
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	actionMap := make(map[string]*tm.ActionNode)
+	f := func(actionPath string) {
+		defer wg.Done()
+		actionNode, err := getFirstAction(zconn, actionPath)
+		if err != nil {
+			relog.Warning("listActionsByShard %v", err)
+			return
+		}
+		if actionNode != nil {
+			mu.Lock()
+			actionMap[actionNode.Path()] = actionNode
+			mu.Unlock()
+		}
+	}
+	shardActionNode, err := getFirstAction(zconn, tm.ShardActionPath(zkShardPath))
+	if err != nil {
+		relog.Warning("listActionsByShard %v", err)
+	}
+	for _, tabletPath := range tabletPaths {
+		actionPath := tm.TabletActionPath(tabletPath)
+		wg.Add(1)
+		go f(actionPath)
+	}
+
+	wg.Wait()
+	mu.Lock()
+	defer mu.Unlock()
+
+	keys := wr.CopyMapKeys(actionMap, []string{}).([]string)
+	sort.Strings(keys)
+	if shardActionNode != nil {
+		fmt.Println(fmtAction(shardActionNode))
+	}
+	for _, key := range keys {
+		action := actionMap[key]
+		if action == nil {
+			fmt.Fprintf(os.Stderr, "ERROR: %v\n", key)
+		} else {
+			fmt.Println(fmtAction(action))
+		}
+	}
+	return nil
+}
+
+func fmtAction(action *tm.ActionNode) string {
+	return fmt.Sprintf("%v %v %v %v %v", action.Path(), action.Action, action.State, action.ActionGuid, action.Error)
+
+}
+
+func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
+	tabletPaths, err := tabletPathsForShard(zconn, zkShardPath)
+	if err != nil {
+		return err
+	}
+	return dumpTablets(zconn, tabletPaths)
+}
+
+func tabletPathsForShard(zconn zk.Conn, zkShardPath string) ([]string, error) {
+	tabletAliases, err := tm.FindAllTabletAliasesInShard(zconn, zkShardPath)
+	if err != nil {
+		return nil, err
 	}
 	tabletPaths := make([]string, len(tabletAliases))
 	for i, alias := range tabletAliases {
 		tabletPaths[i] = tm.TabletPathForAlias(alias)
 	}
-	return dumpTablets(zconn, tabletPaths)
+	return tabletPaths, nil
 }
 
 func dumpAllTablets(zconn zk.Conn, zkVtPath string) error {
@@ -754,7 +844,6 @@ func main() {
 				lines = append(lines, fmtTabletAwkable(ti)+fmt.Sprintf(" %v:%010d %v:%010d %v", pos.MasterLogFile, pos.MasterLogPosition, pos.MasterLogFileIo, pos.MasterLogPositionIo, pos.SecondsBehindMaster))
 			}
 		}
-		// sort.Strings(lines)
 		for _, l := range lines {
 			fmt.Println(l)
 		}
@@ -773,6 +862,11 @@ func main() {
 			relog.Fatal("action %v requires <zk shard path>", args[0])
 		}
 		err = listTabletsByShard(zconn, args[1])
+	case "ListShardActions":
+		if len(args) != 2 {
+			relog.Fatal("action %v requires <zk shard path>", args[0])
+		}
+		err = listActionsByShard(zconn, args[1])
 	case "ListAllTablets":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk vt path>", args[0])

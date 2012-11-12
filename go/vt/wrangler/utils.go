@@ -89,20 +89,23 @@ func GetAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 	return tablets, nil
 }
 
-// copy keys from from map m into slice s - types must match.
-func CopyMapKeys(s, m interface{}) {
-	keys := reflect.ValueOf(s)
+// Copy keys from from map m into a new slice with the type specified
+// by typeHint.  Reflection can't make a new slice type just based on
+// the key type AFAICT.
+func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 	mapVal := reflect.ValueOf(m)
-	for _, kv := range mapVal.MapKeys() {
-		keys = reflect.AppendSlice(keys, kv)
+	keys := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())
+	for _, k := range mapVal.MapKeys() {
+		keys = reflect.Append(keys, k)
 	}
+	return keys.Interface()
 }
 
-// copy values from from map m into slice s - types must match.
-func CopyMapValues(s, m interface{}) {
-	keys := reflect.ValueOf(s)
+func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
 	mapVal := reflect.ValueOf(m)
-	for _, kv := range mapVal.MapKeys() {
-		keys = reflect.AppendSlice(keys, mapVal.MapIndex(kv))
+	vals := reflect.MakeSlice(reflect.TypeOf(typeHint), 0, mapVal.Len())
+	for _, k := range mapVal.MapKeys() {
+		vals = reflect.Append(vals, mapVal.MapIndex(k))
 	}
+	return vals.Interface()
 }

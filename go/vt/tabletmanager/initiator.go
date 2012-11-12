@@ -49,7 +49,7 @@ func NewActionInitiator(zconn zk.Conn) *ActionInitiator {
 }
 
 func actionGuid() string {
-	now := time.Now().Unix()
+	now := time.Now().Format(time.RFC3339)
 	username := "unknown"
 	if u, err := user.Current(); err == nil {
 		username = u.Username

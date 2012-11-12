@@ -68,7 +68,7 @@ type ActionNode struct {
 	Error      string
 	State      ActionState
 	Args       map[string]string
-	path       string // path in zookeeper representing this action
+	path       string // path in zookeeper representing this action, don't serialize
 }
 
 func ActionNodeFromJson(data, path string) (*ActionNode, error) {
@@ -79,6 +79,10 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	}
 	node.path = path
 	return node, nil
+}
+
+func (n *ActionNode) Path() string {
+	return n.path
 }
 
 func ActionNodeToJson(n *ActionNode) string {
