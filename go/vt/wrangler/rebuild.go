@@ -18,26 +18,6 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-// Cleanup an action node or write back error data to zk.
-// Only returns an error if something went wrong with zk.
-func (wr *Wrangler) handleActionError(actionPath string, actionErr error) error {
-	if actionErr == nil {
-		return zk.DeleteRecursive(wr.zconn, actionPath, -1)
-	}
-
-	data, stat, err := wr.zconn.Get(actionPath)
-	if err == nil {
-		var actionNode *tm.ActionNode
-		actionNode, err = tm.ActionNodeFromJson(data, actionPath)
-		if err == nil {
-			actionNode.Error = actionErr.Error()
-			data = tm.ActionNodeToJson(actionNode)
-			_, err = wr.zconn.Set(actionPath, data, stat.Version())
-		}
-	}
-	return err
-}
-
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(zkShardPath string) (actionPath string, err error) {

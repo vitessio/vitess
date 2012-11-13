@@ -239,6 +239,18 @@ func createKeyspace(zconn zk.Conn, path string) error {
 		}
 	}
 
+	actionLogPath := tm.KeyspaceActionLogPath(path)
+	_, err = zk.CreateRecursive(zconn, actionLogPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			if !*force {
+				relog.Fatal("keyspace already exists: %v", path)
+			}
+		} else {
+			relog.Fatal("error creating keyspace: %v %v", path, err)
+		}
+	}
+
 	return nil
 }
 
@@ -248,17 +260,18 @@ func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(children) > 2 {
-		return "", fmt.Errorf("master search failed: %v", zkShardPath)
-	}
+	result := ""
 	for _, child := range children {
-		if child == "action" {
+		if child == "action" || child == "actionlog" {
 			continue
 		}
-		return path.Join(zkShardPath, child), nil
+		if result != "" {
+			return "", fmt.Errorf("master search failed: %v", zkShardPath)
+		}
+		result = path.Join(zkShardPath, child)
 	}
 
-	panic("unreachable")
+	return result, nil
 }
 
 func initTablet(zconn zk.Conn, params map[string]string, update bool) error {

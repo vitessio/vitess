@@ -101,6 +101,12 @@ func TabletActionPath(zkTabletPath string) string {
 	return path.Join(zkTabletPath, "action")
 }
 
+// /zk/<cell>/vt/tablets/<tablet uid>/actionlog
+func TabletActionLogPath(zkTabletPath string) string {
+	MustBeTabletPath(zkTabletPath)
+	return path.Join(zkTabletPath, "actionlog")
+}
+
 // /zk/<cell>/vt/tablets/<tablet uid>/reply
 func TabletReplyPath(zkTabletPath string) string {
 	MustBeTabletPath(zkTabletPath)
@@ -115,6 +121,13 @@ func TabletActionToReplyPath(zkTabletActionPath, filename string) string {
 	parts[len(parts)-2] = "reply"
 	replyPath := path.Join(parts...)
 	return path.Join("/", replyPath, filename)
+}
+
+// From an action path and a filename, returns the actionlog path, e.g from
+// /zk/<cell>/vt/tablets/<tablet uid>/action/0000001 it will return:
+// /zk/<cell>/vt/tablets/<tablet uid>/actionlog/0000001
+func ActionToActionLogPath(zkTabletActionPath string) string {
+	return strings.Replace(zkTabletActionPath, "/action/", "/actionlog/", 1)
 }
 
 // /vt/keyspaces/<keyspace>/shards/<shard uid>
@@ -135,6 +148,12 @@ func ShardActionPath(zkShardPath string) string {
 	return path.Join(zkShardPath, "action")
 }
 
+// zkShardPath: /zk/global/vt/keyspaces/XX/shards/YY
+func ShardActionLogPath(zkShardPath string) string {
+	MustBeShardPath(zkShardPath)
+	return path.Join(zkShardPath, "actionlog")
+}
+
 // zkVtRoot: /zk/XX/vt
 func KeyspacePath(zkVtRoot, keyspace string) string {
 	keyspacePath := path.Join("/zk/global/vt", "keyspaces", keyspace)
@@ -146,6 +165,12 @@ func KeyspacePath(zkVtRoot, keyspace string) string {
 func KeyspaceActionPath(zkKeyspacePath string) string {
 	MustBeKeyspacePath(zkKeyspacePath)
 	return path.Join(zkKeyspacePath, "action")
+}
+
+// zkKeyspacePath: /zk/global/vt/keyspaces/XX
+func KeyspaceActionLogPath(zkKeyspacePath string) string {
+	MustBeKeyspacePath(zkKeyspacePath)
+	return path.Join(zkKeyspacePath, "actionlog")
 }
 
 // zkKeyspacePath: /zk/global/vt/keyspaces/XX

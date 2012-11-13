@@ -343,8 +343,8 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 		return err
 	}
 
-	// Create /vt/tablets/<uid>/reply
-	_, err = zconn.Create(TabletReplyPath(zkTabletPath), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	// Create /vt/tablets/<uid>/actionlog
+	_, err = zconn.Create(TabletActionLogPath(zkTabletPath), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		return err
 	}
@@ -372,6 +372,13 @@ func CreateTabletReplicationPaths(zconn zk.Conn, zkTabletPath string, tablet *Ta
 	shardActionPath := ShardActionPath(shardPath)
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>/action
 	_, err = zk.CreateRecursive(zconn, shardActionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		return err
+	}
+
+	shardActionLogPath := ShardActionLogPath(shardPath)
+	// Create /vt/keyspaces/<keyspace>/shards/<shard id>/actionlog
+	_, err = zk.CreateRecursive(zconn, shardActionLogPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}

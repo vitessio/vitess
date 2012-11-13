@@ -95,7 +95,11 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			return WaitForCompletion(ta.zconn, actionPath, 0)
 		}
 	case ACTION_STATE_FAILED:
+		// this should not be happening any more, but keep it for now
 		return fmt.Errorf(actionNode.Error)
+	case ACTION_STATE_DONE:
+		// this is bad
+		return fmt.Errorf("Unexpected finished ActionNode in action queue: %v", actionPath)
 	}
 
 	// Claim the action by this process.
@@ -126,35 +130,18 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	}
 
 	actionErr := ta.dispatchAction(actionNode)
-	if actionErr != nil {
-		// on failure, set an error field on the node - let other tools deal
-		// with it.
-		actionNode.Error = actionErr.Error()
-		actionNode.State = ACTION_STATE_FAILED
-	} else {
-		actionNode.Error = ""
+	err = StoreActionResponse(ta.zconn, actionNode, actionPath, actionErr)
+	if err != nil {
+		return err
 	}
 
-	newData = ActionNodeToJson(actionNode)
-	if newData != data {
-		_, zkErr = ta.zconn.Set(actionPath, newData, -1)
-		if zkErr != nil {
-			relog.Error("HandleAction failed writing: %v", zkErr)
-			return zkErr
-		}
+	// remove from zk on completion
+	zkErr = ta.zconn.Delete(actionPath, -1)
+	if zkErr != nil {
+		relog.Error("HandleAction failed deleting: %v", zkErr)
+		return zkErr
 	}
-
-	if actionErr != nil {
-		return actionErr
-	} else {
-		// remove from zk on success
-		zkErr = ta.zconn.Delete(actionPath, -1)
-		if zkErr != nil {
-			relog.Error("HandleAction failed deleting: %v", zkErr)
-			return zkErr
-		}
-	}
-	return nil
+	return actionErr
 }
 
 func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
@@ -222,6 +209,46 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	}
 
 	return
+}
+
+// Write the result of an action into zookeeper
+func StoreActionResponse(zconn zk.Conn, actionNode *ActionNode, actionPath string, actionErr error) error {
+	// change our state
+	if actionErr != nil {
+		// on failure, set an error field on the node
+		actionNode.Error = actionErr.Error()
+		actionNode.State = ACTION_STATE_FAILED
+	} else {
+		actionNode.Error = ""
+		actionNode.State = ACTION_STATE_DONE
+	}
+
+	// and write the data
+	data := ActionNodeToJson(actionNode)
+	actionLogPath := ActionToActionLogPath(actionPath)
+	_, err := zconn.Create(actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		// this code is to address the case where the
+		// tablet/shard/keyspace was created without the
+		// 'actionlog' path. Let's correct it.
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			// the parent doesn't exists, try to create it
+			actionLogDir := path.Dir(actionLogPath)
+			_, err = zconn.Create(actionLogDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+			if err != nil {
+				return err
+			}
+
+			// and try to store again
+			_, err := zconn.Create(actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	return nil
 }
 
 // Store the result of a tablet action inside zookeeper.

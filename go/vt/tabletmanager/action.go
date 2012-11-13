@@ -57,7 +57,8 @@ const (
 
 	ACTION_STATE_QUEUED  = ActionState("")        // All actions are queued initially
 	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process
-	ACTION_STATE_FAILED  = ActionState("Failed")
+	ACTION_STATE_FAILED  = ActionState("Failed")  // Ended with a failure
+	ACTION_STATE_DONE    = ActionState("Done")    // Ended with no failure
 )
 
 type ActionState string

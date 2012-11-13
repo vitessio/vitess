@@ -255,40 +255,54 @@ func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration)
 	}
 	timer := time.NewTimer(waitTime)
 	defer timer.Stop()
+
+	// see if the file exists or sets a watch
+	// the loop is to resist zk disconnects while we're waiting
+	actionLogPath := ActionToActionLogPath(actionPath)
+wait:
 	for {
-		data, _, watch, err := zconn.GetW(actionPath)
+		stat, watch, err := zconn.ExistsW(actionLogPath)
 		if err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNONODE) {
-				return nil
-			}
-			return fmt.Errorf("action err: %v %v", actionPath, err)
-		} else {
-			actionNode, dataErr := ActionNodeFromJson(data, actionPath)
-			if dataErr != nil {
-				return fmt.Errorf("action data error: %v %v %#v", actionPath, dataErr, data)
-			} else if actionNode.Error != "" {
-				return fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
-			}
+			return fmt.Errorf("action err: %v %v", actionLogPath, err)
 		}
 
+		// file exists, go on
+		if stat != nil {
+			break wait
+		}
+
+		// if the file doesn't exist yet, wait for creation event.
+		// On any other event we'll retry the ExistsW
 		select {
 		case actionEvent := <-watch:
-			switch actionEvent.Type {
-			case zookeeper.EVENT_CHANGED:
-				// reload the node and try again
-				continue
-			case zookeeper.EVENT_DELETED:
-				return nil
-			default:
-				// Log unexpected events. Reconnects are handled by zk.Conn, so
-				// calling GetW again will handle a disconnect.
+			if actionEvent.Type == zookeeper.EVENT_CREATED {
+				break wait
+			} else {
+				// Log unexpected events. Reconnects are
+				// handled by zk.Conn, so calling ExistsW again
+				// will handle a disconnect.
 				relog.Warning("unexpected zk event: %v", actionEvent)
 			}
 		case <-timer.C:
-			return fmt.Errorf("action err: %v deadline exceeded %v", actionPath, waitTime)
+			return fmt.Errorf("action err: %v deadline exceeded %v", actionLogPath, waitTime)
 		}
 	}
-	panic("unreachable")
+
+	// the node exists, read it
+	data, _, err := zconn.Get(actionLogPath)
+	if err != nil {
+		return fmt.Errorf("action err: %v %v", actionLogPath, err)
+	}
+
+	// parse it
+	actionNode, dataErr := ActionNodeFromJson(data, actionLogPath)
+	if dataErr != nil {
+		return fmt.Errorf("action data error: %v %v %#v", actionLogPath, dataErr, data)
+	} else if actionNode.Error != "" {
+		return fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
+	}
+
+	return nil
 }
 
 // Remove all queued actions, regardless of their current state, leaving

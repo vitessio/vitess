@@ -136,6 +136,33 @@ func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType tm.TabletType
 	return nil
 }
 
+// Cleanup an action node and write back status/error to zk.
+// Only returns an error if something went wrong with zk.
+func (wr *Wrangler) handleActionError(actionPath string, actionErr error) error {
+	// re-read the action node
+	data, _, err := wr.zconn.Get(actionPath)
+	if err != nil {
+		return err
+	}
+	var actionNode *tm.ActionNode
+	actionNode, err = tm.ActionNodeFromJson(data, actionPath)
+	if err != nil {
+		return err
+	}
+
+	// write what happened to the action log
+	err = tm.StoreActionResponse(wr.zconn, actionNode, actionPath, actionErr)
+	if err != nil {
+		return err
+	}
+
+	// no error, we can unblock the action queue
+	if actionErr == nil {
+		return zk.DeleteRecursive(wr.zconn, actionPath, -1)
+	}
+	return nil
+}
+
 // Waits for the completion of a tablet action, and pulls the single
 // result back into the given interface.
 //
