@@ -26,14 +26,13 @@ func (wr *Wrangler) ExecuteHook(zkTabletPath string, hook *tm.Hook) (hookResult 
 
 func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *tm.Hook) (hookResult *tm.HookResult, err error) {
 
-	zkReplyPath := "hook_result.json"
-	actionPath, err := wr.ai.ExecuteHook(ti.Path(), zkReplyPath, hook)
+	actionPath, err := wr.ai.ExecuteHook(ti.Path(), hook)
 	if err != nil {
 		return nil, err
 	}
 
 	hr := new(tm.HookResult)
-	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, hr, 10*time.Minute); err != nil {
+	if err = wr.WaitForActionResult(actionPath, hr, 10*time.Minute); err != nil {
 		return nil, err
 	}
 	return hr, nil

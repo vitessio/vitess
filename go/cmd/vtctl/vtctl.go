@@ -65,8 +65,10 @@ Tablets:
   Snapshot <zk tablet path>
     Stop mysqld and copy compressed data aside.
 
-  Restore <zk src tablet path> <zk dst tablet path>
-    Copy the latest snaphot from the source tablet and restart replication.
+  Restore <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]
+    Copy the given snaphot from the source tablet and restart replication
+    to the new master path (or uses the <src tablet path> if not specified).
+    If <src manifest file> is 'default', uses the default value.
     NOTE: This does not wait for replication to catch up. The destination
     tablet must be "idle" to begin with. It will transition to "spare" once
     the restore is complete.
@@ -82,9 +84,10 @@ Tablets:
   PartialSnapshot <zk tablet path> <key name> <start key> <end key>
     Halt mysqld and copy compressed data aside.
 
-  PartialRestore <zk src tablet path> <zk dst tablet path>
-    Copy the latest partial snaphot from the source tablet and starts partial
-    replication.
+  PartialRestore <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]
+    Copy the given partial snaphot from the source tablet and starts partial
+    replication to the new master path (or uses the src tablet path if not
+    specified).
     NOTE: This does not wait for replication to catch up. The destination
     tablet must be "idle" to begin with. It will transition to "spare" once
     the restore is complete.
@@ -715,30 +718,48 @@ func main() {
 		}
 		err = wrangler.Clone(args[1], args[2], *force)
 	case "Restore":
-		if len(args) != 3 {
-			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
+		if len(args) != 4 && len(args) != 5 {
+			relog.Fatal("action %v requires <zk src tablet path> <src manifest path> <zk dst tablet path> [<zk new master path>]", args[0])
 		}
-		err = wrangler.Restore(args[1], args[2])
+		zkParentPath := args[1]
+		if len(args) == 5 {
+			zkParentPath = args[4]
+		}
+		err = wrangler.Restore(args[1], args[2], args[3], zkParentPath)
 	case "Snapshot":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk src tablet path>", args[0])
 		}
-		err = wrangler.Snapshot(args[1], *force)
+		var filename, zkParentPath string
+		filename, zkParentPath, err = wrangler.Snapshot(args[1], *force)
+		if err == nil {
+			relog.Info("Manifest: %v", filename)
+			relog.Info("ParentPath: %v", zkParentPath)
+		}
 	case "PartialClone":
 		if len(args) != 6 {
 			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>", args[0])
 		}
 		err = wrangler.PartialClone(args[1], args[2], args[3], key.HexKeyspaceId(args[4]), key.HexKeyspaceId(args[5]), *force)
 	case "PartialRestore":
-		if len(args) != 3 {
-			relog.Fatal("action %v requires <zk src tablet path> <zk dst tablet path>", args[0])
+		if len(args) != 4 && len(args) != 5 {
+			relog.Fatal("action %v requires <zk src tablet path> <src manifest path> <zk dst tablet path> [<zk new master path>]", args[0])
 		}
-		err = wrangler.PartialRestore(args[1], args[2])
+		zkParentPath := args[1]
+		if len(args) == 5 {
+			zkParentPath = args[4]
+		}
+		err = wrangler.PartialRestore(args[1], args[2], args[3], zkParentPath)
 	case "PartialSnapshot":
 		if len(args) != 5 {
 			relog.Fatal("action %v requires <zk src tablet path> <key name> <start key> <end key>", args[0])
 		}
-		err = wrangler.PartialSnapshot(args[1], args[2], key.HexKeyspaceId(args[3]), key.HexKeyspaceId(args[4]), *force)
+		var filename, zkParentPath string
+		filename, zkParentPath, err = wrangler.PartialSnapshot(args[1], args[2], key.HexKeyspaceId(args[3]), key.HexKeyspaceId(args[4]), *force)
+		if err == nil {
+			relog.Info("Manifest: %v", filename)
+			relog.Info("ParentPath: %v", zkParentPath)
+		}
 	case "PurgeActions":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])

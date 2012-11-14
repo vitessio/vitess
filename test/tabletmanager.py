@@ -211,14 +211,24 @@ def run_test_vtctl_snapshot_restore():
                         populate_vt_insert_test)
 
   # Need to force snapshot since this is a master db.
-  utils.run_vtctl('-force Snapshot ' + tablet_62344.zk_tablet_path)
-  utils.pause("snapshot finished")
+  out, err = utils.run_vtctl('-force Snapshot ' + tablet_62344.zk_tablet_path, log_level='INFO', trap_output=True)
+  errPos = err.find("Manifest: ")
+  if errPos == -1:
+    raise utils.TestError("Snapshot didn't echo Manifest file", err)
+  manifest = err[errPos+10:].splitlines()[0]
+  errPos = err.find("ParentPath: ")
+  if errPos == -1:
+    raise utils.TestError("Snapshot didn't echo ParentPath", err)
+  parentPath = err[errPos+12:].splitlines()[0]
+  utils.pause("snapshot finished: " + manifest + " " + parentPath)
 
   tablet_62044.init_tablet('idle', start=True)
 
+  # do not specify a MANIFEST, see if default works
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  utils.run_vtctl('Restore %s %s' %
-                  (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('Restore %s default %s %s' %
+                  (tablet_62344.zk_tablet_path,
+                   tablet_62044.zk_tablet_path, parentPath), log_level='INFO')
   utils.pause("restore finished")
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
@@ -260,6 +270,8 @@ def run_test_vtctl_clone():
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('-force Clone %s %s' %
                   (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
+
+  utils.pause("look at logs!")
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 

@@ -1,7 +1,6 @@
 package zkwrangler
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -21,21 +20,13 @@ import (
 // centralize debug information in zk when a failure occurs.
 
 func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardActionPath string) (*mysqlctl.ReplicationPosition, error) {
-	zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_master_position_reply.json")
-	actionPath, err := wr.ai.MasterPosition(ti.Path(), zkReplyPath)
-	if err != nil {
-		return nil, err
-	}
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-	if err != nil {
-		return nil, err
-	}
-	data, _, err := wr.zconn.Get(zkReplyPath)
+	actionPath, err := wr.ai.MasterPosition(ti.Path())
 	if err != nil {
 		return nil, err
 	}
 	position := new(mysqlctl.ReplicationPosition)
-	if err = json.Unmarshal([]byte(data), position); err != nil {
+	err = wr.WaitForActionResult(actionPath, position, wr.actionTimeout())
+	if err != nil {
 		return nil, err
 	}
 	return position, nil
@@ -56,7 +47,6 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		}()
 
 		zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
-		zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_reply.json")
 		var args *tm.SlavePositionReq
 		if masterPosition != nil {
 			// If the master position is known, do our best to wait for replication to catch up.
@@ -64,24 +54,14 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 		} else {
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
-			zkSlaveReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_initial_slave_position_reply.json")
-			actionPath, err := wr.ai.SlavePosition(ti.Path(), zkSlaveReplyPath)
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			data, _, err := wr.zconn.Get(zkSlaveReplyPath)
+			actionPath, err := wr.ai.SlavePosition(ti.Path())
 			if err != nil {
 				ctx.err = err
 				return
 			}
 			replPos := new(mysqlctl.ReplicationPosition)
-			if err = json.Unmarshal([]byte(data), replPos); err != nil {
+			err = wr.WaitForActionResult(actionPath, replPos, wr.actionTimeout())
+			if err != nil {
 				ctx.err = err
 				return
 			}
@@ -96,23 +76,14 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 			ctx.err = err
 			return
 		}
-		actionPath, err := wr.ai.WaitSlavePosition(ti.Path(), zkArgsPath, zkReplyPath)
-		if err != nil {
-			ctx.err = err
-			return
-		}
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-		if err != nil {
-			ctx.err = err
-			return
-		}
-		data, _, err := wr.zconn.Get(zkReplyPath)
+		actionPath, err := wr.ai.WaitSlavePosition(ti.Path(), zkArgsPath)
 		if err != nil {
 			ctx.err = err
 			return
 		}
 		ctx.position = new(mysqlctl.ReplicationPosition)
-		if err = json.Unmarshal([]byte(data), ctx.position); err != nil {
+		err = wr.WaitForActionResult(actionPath, ctx.position, wr.actionTimeout())
+		if err != nil {
 			ctx.err = err
 			return
 		}
@@ -209,24 +180,17 @@ func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint]*tm.TabletInfo
 			calls <- ctx
 		}()
 
-		zkReplyPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_tablet_position_reply.json")
-		var actionPath, data string
+		var actionPath string
 		if ti.Type == tm.TYPE_MASTER {
-			actionPath, ctx.err = wr.ai.MasterPosition(ti.Path(), zkReplyPath)
+			actionPath, ctx.err = wr.ai.MasterPosition(ti.Path())
 		} else {
-			actionPath, ctx.err = wr.ai.SlavePosition(ti.Path(), zkReplyPath)
+			actionPath, ctx.err = wr.ai.SlavePosition(ti.Path())
 		}
 		if ctx.err != nil {
 			return
 		}
-		if ctx.err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); ctx.err != nil {
-			return
-		}
-		if data, _, ctx.err = wr.zconn.Get(zkReplyPath); ctx.err != nil {
-			return
-		}
 		ctx.position = new(mysqlctl.ReplicationPosition)
-		if ctx.err = json.Unmarshal([]byte(data), ctx.position); ctx.err != nil {
+		if ctx.err = wr.WaitForActionResult(actionPath, ctx.position, wr.actionTimeout()); ctx.err != nil {
 			return
 		}
 	}

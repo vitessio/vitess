@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	snapshotManifestFile = "snapshot_manifest.json"
+	SnapshotManifestFile = "snapshot_manifest.json"
 )
 
 // Validate that this instance is a reasonable source of data.
@@ -170,13 +170,13 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFil
 // Compute md5() sums
 // Place in /vt/clone_src where they will be served by http server (not rpc)
 // Restart mysql
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool) (snapshotManifest *SnapshotManifest, err error) {
+func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool) (snapshotManifestFilename string, err error) {
 	if dbName == "" {
-		return nil, errors.New("CreateSnapshot failed: no database name provided")
+		return "", errors.New("CreateSnapshot failed: no database name provided")
 	}
 
 	if err = mysqld.ValidateCloneSource(); err != nil {
-		return nil, err
+		return
 	}
 
 	// save initial state so we can restore on Start()
@@ -191,12 +191,12 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		sourceIsMaster = true
 	} else {
 		// If we can't get any data, just fail.
-		return nil, err
+		return
 	}
 
 	readOnly, err = mysqld.IsReadOnly()
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// Stop sources of writes so we can get a consistent replication position.
@@ -206,20 +206,20 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	var replicationPosition *ReplicationPosition
 	if sourceIsMaster {
 		if err = mysqld.SetReadOnly(true); err != nil {
-			return nil, err
+			return
 		}
 		replicationPosition, err = mysqld.MasterStatus()
 		if err != nil {
-			return nil, err
+			return
 		}
 		masterAddr = mysqld.Addr()
 	} else {
 		if err = mysqld.StopSlave(); err != nil {
-			return nil, err
+			return
 		}
 		replicationPosition, err = mysqld.SlaveStatus()
 		if err != nil {
-			return nil, err
+			return
 		}
 		// We are a slave, check our replication strategy before choosing
 		// the master address.
@@ -228,23 +228,23 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {
-				return nil, err
+				return
 			}
 		}
 	}
 
 	if err = Shutdown(mysqld, true); err != nil {
-		return nil, err
+		return
 	}
 
-	var sm *SnapshotManifest
+	var smFile string
 	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir)
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
-		sm = NewSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+		sm := NewSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition)
-		smFile := path.Join(mysqld.SnapshotDir, snapshotManifestFile)
+		smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
 		if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		}
@@ -252,29 +252,29 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 
 	// Try to restart mysqld regardless of snapshot success.
 	if err = Start(mysqld); err != nil {
-		return nil, err
+		return
 	}
 
 	// Restore original mysqld state that we saved above.
 	if slaveStartRequired {
 		if err = mysqld.StartSlave(); err != nil {
-			return nil, err
+			return
 		}
 		// this should be quick, but we might as well just wait
 		if err = mysqld.WaitForSlaveStart(SlaveStartDeadline); err != nil {
-			return nil, err
+			return
 		}
 	}
 
 	if err = mysqld.SetReadOnly(readOnly); err != nil {
-		return nil, err
+		return
 	}
 
 	if snapshotErr != nil {
-		return nil, snapshotErr
+		return "", snapshotErr
 	}
 
-	return sm, nil
+	return smFile, nil
 }
 
 func writeJson(filename string, x interface{}) error {

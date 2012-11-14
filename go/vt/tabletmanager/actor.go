@@ -7,6 +7,8 @@ package tabletmanager
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"path"
 	"strconv"
 	"strings"
@@ -30,9 +32,7 @@ import (
 // by hand using zk tools.
 
 const (
-	restartSlaveDataFilename        = "restart_slave_data.json"
-	restoreSlaveDataFilename        = "restore_slave_data.json"
-	partialRestoreSlaveDataFilename = "partial_restore_slave_data.json"
+	restartSlaveDataFilename = "restart_slave_data.json"
 )
 
 type TabletActorError string
@@ -47,18 +47,6 @@ type RestartSlaveData struct {
 	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
 	Parent           TabletAlias
 	Force            bool
-}
-
-// Enough data to restore a slave from a mysqlctl.SnapshotManifest
-type RestoreSlaveData struct {
-	SnapshotManifest *mysqlctl.SnapshotManifest
-	Parent           TabletAlias
-}
-
-// Enough data to restore a slave from a mysqlctl.SplitSnapshotManifest
-type PartialRestoreSlaveData struct {
-	SplitSnapshotManifest *mysqlctl.SplitSnapshotManifest
-	Parent                TabletAlias
 }
 
 type TabletActor struct {
@@ -92,7 +80,8 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	case ACTION_STATE_RUNNING:
 		if !forceRerun {
 			relog.Warning("HandleAction waiting for running action: %v", actionPath)
-			return WaitForCompletion(ta.zconn, actionPath, 0)
+			_, err := WaitForCompletion(ta.zconn, actionPath, 0)
+			return err
 		}
 	case ACTION_STATE_FAILED:
 		// this should not be happening any more, but keep it for now
@@ -111,7 +100,8 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			// The action is schedule by another actor. Most likely
 			// the tablet restarted during an action. Just wait for completion.
 			relog.Warning("HandleAction waiting for scheduled action: %v", actionPath)
-			return WaitForCompletion(ta.zconn, actionPath, 0)
+			_, err := WaitForCompletion(ta.zconn, actionPath, 0)
+			return err
 		} else {
 			return zkErr
 		}
@@ -164,11 +154,11 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_DEMOTE_MASTER:
 		err = ta.demoteMaster()
 	case TABLET_ACTION_MASTER_POSITION:
-		err = ta.masterPosition(actionNode.Args)
+		err = ta.masterPosition(actionNode)
 	case TABLET_ACTION_PARTIAL_RESTORE:
 		err = ta.partialRestore(actionNode.Args)
 	case TABLET_ACTION_PARTIAL_SNAPSHOT:
-		_, err = ta.partialSnapshot(actionNode.Args)
+		err = ta.partialSnapshot(actionNode, actionNode.Args)
 	case TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
@@ -181,13 +171,13 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_SCRAP:
 		err = ta.scrap()
 	case TABLET_ACTION_GET_SCHEMA:
-		err = ta.getSchema(actionNode.path, actionNode.Args)
+		err = ta.getSchema(actionNode)
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
-		err = ta.preflightSchema(actionNode.path, actionNode.Args)
+		err = ta.preflightSchema(actionNode, actionNode.Args)
 	case TABLET_ACTION_APPLY_SCHEMA:
-		err = ta.applySchema(actionNode.path, actionNode.Args)
+		err = ta.applySchema(actionNode, actionNode.Args)
 	case TABLET_ACTION_EXECUTE_HOOK:
-		err = ta.executeHook(actionNode.path, actionNode.Args)
+		err = ta.executeHook(actionNode, actionNode.Args)
 	case TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
 	case TABLET_ACTION_SET_RDWR:
@@ -195,15 +185,15 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_SLEEP:
 		err = ta.sleep(actionNode.Args)
 	case TABLET_ACTION_SLAVE_POSITION:
-		err = ta.slavePosition(actionNode.path, actionNode.Args)
+		err = ta.slavePosition(actionNode)
 	case TABLET_ACTION_REPARENT_POSITION:
-		err = ta.reparentPosition(actionNode.path, actionNode.Args)
+		err = ta.reparentPosition(actionNode, actionNode.Args)
 	case TABLET_ACTION_SNAPSHOT:
-		_, err = ta.snapshot()
+		err = ta.snapshot(actionNode)
 	case TABLET_ACTION_STOP_SLAVE:
 		err = ta.mysqld.StopSlave()
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
-		err = ta.waitSlavePosition(actionNode.Args)
+		err = ta.waitSlavePosition(actionNode, actionNode.Args)
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
 	}
@@ -251,51 +241,18 @@ func StoreActionResponse(zconn zk.Conn, actionNode *ActionNode, actionPath strin
 	return nil
 }
 
-// Store the result of a tablet action inside zookeeper.
+// Store a structure inside an ActionNode Results map as the 'Result'
+// field.
 //
-// - if replyPath is relative, we will create the result in the
-// 'reply' area for the tablet.
-// - if replyPath is absolute, we will just use it and assume its path
-// exists.
-//
-// See wrangler/Wrangler.WaitForTabletActionResponse
-func (ta *TabletActor) storeTabletActionResponse(actionPath, replyPath string, result interface{}) error {
-	// we're given an absolute path, trust the sender knows it's good
-	if !strings.HasPrefix(replyPath, "/") {
-		// otherwise, create the reply path
-		if actionPath == "" {
-			return fmt.Errorf("must specify actionPath for a relative replyPath: %v", replyPath)
-		}
-		actionReplyPath := TabletActionToReplyPath(actionPath, "")
-		_, err := ta.zconn.Create(actionReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil {
-			// this code is to address the case where the tablet
-			// was created without the 'reply' path.
-			// it can be removed once we've check all tablets in
-			// zk have it.
-			if zookeeper.IsError(err, zookeeper.ZNONODE) {
-				// the parent doesn't exists, try to create it
-				tabletReplyPath := path.Dir(actionReplyPath)
-				_, err = ta.zconn.Create(tabletReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-				if err != nil {
-					return err
-				}
-
-				// and try again
-				_, err := ta.zconn.Create(actionReplyPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-				if err != nil {
-					return err
-				}
-			} else {
-				return err
-			}
-		}
-
-		replyPath = path.Join(actionReplyPath, replyPath)
+// See wrangler/Wrangler.WaitForActionResponse
+func (ta *TabletActor) storeActionResult(actionNode *ActionNode, val interface{}) error {
+	data, err := json.MarshalIndent(val, "", "  ")
+	if err != nil {
+		return err
 	}
-
-	_, err := ta.zconn.Create(replyPath, jscfg.ToJson(result), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	return err
+	actionNode.Results = make(map[string]string)
+	actionNode.Results["Result"] = string(data)
+	return nil
 }
 
 func (ta *TabletActor) sleep(args map[string]string) error {
@@ -421,36 +378,25 @@ func (ta *TabletActor) promoteSlave(args map[string]string) error {
 	return nil
 }
 
-func (ta *TabletActor) masterPosition(args map[string]string) error {
-	zkReplyPath, ok := args["ReplyPath"]
-	if !ok {
-		return fmt.Errorf("missing ReplyPath in args")
-	}
-
+func (ta *TabletActor) masterPosition(actionNode *ActionNode) error {
 	position, err := ta.mysqld.MasterStatus()
 	if err != nil {
 		return err
 	}
-	relog.Debug("MasterPosition %#v %v", *position, zkReplyPath)
-	_, err = ta.zconn.Create(zkReplyPath, jscfg.ToJson(position), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	return err
+	relog.Debug("MasterPosition %#v", *position)
+	return ta.storeActionResult(actionNode, position)
 }
 
-func (ta *TabletActor) slavePosition(actionPath string, args map[string]string) error {
-	zkReplyPath, ok := args["ReplyPath"]
-	if !ok {
-		return fmt.Errorf("missing ReplyPath in args")
-	}
-
+func (ta *TabletActor) slavePosition(actionNode *ActionNode) error {
 	position, err := ta.mysqld.SlaveStatus()
 	if err != nil {
 		return err
 	}
-	relog.Debug("SlavePosition %#v %v", *position, zkReplyPath)
-	return ta.storeTabletActionResponse(actionPath, zkReplyPath, position)
+	relog.Debug("SlavePosition %#v", *position)
+	return ta.storeActionResult(actionNode, position)
 }
 
-func (ta *TabletActor) reparentPosition(actionPath string, args map[string]string) error {
+func (ta *TabletActor) reparentPosition(actionNode *ActionNode, args map[string]string) error {
 	slavePosition, ok := args["SlavePosition"]
 	if !ok {
 		return fmt.Errorf("missing SlavePosition in args")
@@ -458,11 +404,6 @@ func (ta *TabletActor) reparentPosition(actionPath string, args map[string]strin
 	slavePos := new(mysqlctl.ReplicationPosition)
 	if err := json.Unmarshal([]byte(slavePosition), slavePos); err != nil {
 		return err
-	}
-
-	zkReplyPath, ok := args["ReplyPath"]
-	if !ok {
-		return fmt.Errorf("missing ReplyPath in args")
 	}
 
 	replicationState, waitPosition, timePromoted, err := ta.mysqld.ReparentPosition(slavePos)
@@ -479,11 +420,11 @@ func (ta *TabletActor) reparentPosition(actionPath string, args map[string]strin
 		return fmt.Errorf("bad tablet uid %v", err)
 	}
 	rsd.Parent = TabletAlias{parts[2], uint(uid)}
-	relog.Debug("reparentPosition %#v %v", *rsd, zkReplyPath)
-	return ta.storeTabletActionResponse(actionPath, zkReplyPath, rsd)
+	relog.Debug("reparentPosition %#v", *rsd)
+	return ta.storeActionResult(actionNode, rsd)
 }
 
-func (ta *TabletActor) waitSlavePosition(args map[string]string) error {
+func (ta *TabletActor) waitSlavePosition(actionNode *ActionNode, args map[string]string) error {
 	zkArgsPath, ok := args["ArgsPath"]
 	if !ok {
 		return fmt.Errorf("missing ArgsPath in args")
@@ -505,7 +446,7 @@ func (ta *TabletActor) waitSlavePosition(args map[string]string) error {
 		return err
 	}
 
-	return ta.slavePosition("", args)
+	return ta.slavePosition(actionNode)
 }
 
 func (ta *TabletActor) restartSlave(args map[string]string) error {
@@ -591,13 +532,7 @@ func (ta *TabletActor) scrap() error {
 	return Scrap(ta.zconn, ta.zkTabletPath, false)
 }
 
-func (ta *TabletActor) getSchema(actionPath string, args map[string]string) error {
-	// get where we put the response
-	zkReplyPath, ok := args["ReplyPath"]
-	if !ok {
-		return fmt.Errorf("missing ReplyPath in args")
-	}
-
+func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
 	// read the tablet to get the dbname
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
@@ -610,16 +545,10 @@ func (ta *TabletActor) getSchema(actionPath string, args map[string]string) erro
 		return err
 	}
 
-	return ta.storeTabletActionResponse(actionPath, zkReplyPath, sd)
+	return ta.storeActionResult(actionNode, sd)
 }
 
-func (ta *TabletActor) preflightSchema(actionPath string, args map[string]string) error {
-	// get where we put the response
-	zkReplyPath, ok := args["ReplyPath"]
-	if !ok {
-		return fmt.Errorf("missing ReplyPath in args")
-	}
-
+func (ta *TabletActor) preflightSchema(actionNode *ActionNode, args map[string]string) error {
 	// get the parameters
 	change, ok := args["Change"]
 	if !ok {
@@ -634,16 +563,10 @@ func (ta *TabletActor) preflightSchema(actionPath string, args map[string]string
 
 	// and preflight the change
 	scr := ta.mysqld.PreflightSchemaChange(tablet.DbName(), change)
-	return ta.storeTabletActionResponse(actionPath, zkReplyPath, scr)
+	return ta.storeActionResult(actionNode, scr)
 }
 
-func (ta *TabletActor) applySchema(actionPath string, args map[string]string) error {
-	// get where we put the response
-	zkReplyPath, ok := args["ReplyPath"]
-	if !ok {
-		return fmt.Errorf("missing ReplyPath in args")
-	}
-
+func (ta *TabletActor) applySchema(actionNode *ActionNode, args map[string]string) error {
 	// get the parameters
 	sc := &mysqlctl.SchemaChange{}
 	if err := json.Unmarshal([]byte(args["SchemaChange"]), sc); err != nil {
@@ -658,17 +581,10 @@ func (ta *TabletActor) applySchema(actionPath string, args map[string]string) er
 
 	// and apply the change
 	scr := ta.mysqld.ApplySchemaChange(tablet.DbName(), sc)
-	return ta.storeTabletActionResponse(actionPath, zkReplyPath, scr)
+	return ta.storeActionResult(actionNode, scr)
 }
 
-func (ta *TabletActor) executeHook(actionPath string, args map[string]string) (err error) {
-	// get where we put the response
-	zkReplyPath, ok := args["HookReplyPath"]
-	if !ok {
-		return fmt.Errorf("missing ReplyPath in args")
-	}
-	delete(args, "HookReplyPath")
-
+func (ta *TabletActor) executeHook(actionNode *ActionNode, args map[string]string) (err error) {
 	// reconstruct the Hook, execute it
 	name := args["HookName"]
 	delete(args, "HookName")
@@ -676,41 +592,56 @@ func (ta *TabletActor) executeHook(actionPath string, args map[string]string) (e
 	hr := hook.Execute()
 
 	// and store the result
-	return ta.storeTabletActionResponse(actionPath, zkReplyPath, hr)
+	return ta.storeActionResult(actionNode, hr)
 }
 
 // Operate on a backup tablet. Shutdown mysqld and copy the data files aside.
-func (ta *TabletActor) snapshot() (*RestoreSlaveData, error) {
+func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if tablet.Type != TYPE_BACKUP {
-		return nil, fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	snapshotManifest, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false)
+	filename, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	rsd := &RestoreSlaveData{SnapshotManifest: snapshotManifest}
+	actionNode.Results = make(map[string]string)
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		rsd.Parent = tablet.Alias()
+		actionNode.Results["Parent"] = tablet.Path()
 	} else {
-		rsd.Parent = tablet.Parent
+		actionNode.Results["Parent"] = TabletPathForAlias(tablet.Parent)
 	}
+	actionNode.Results["Manifest"] = filename
+	return nil
+}
 
-	rsdZkPath := path.Join(ta.zkTabletPath, restoreSlaveDataFilename)
-	_, err = ta.zconn.Create(rsdZkPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+// fetch a json file and parses it
+func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
+	// read the manifest
+	murl := "http://" + addr + filename
+	resp, err := http.Get(murl)
 	if err != nil {
-		return nil, err
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Error fetching url %v: %v", murl, resp.Status)
+	}
+	data, err := ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		return err
 	}
 
-	return rsd, nil
+	// unpack it
+	return json.Unmarshal(data, result)
 }
 
 // Operate on restore tablet.
@@ -720,21 +651,21 @@ func (ta *TabletActor) snapshot() (*RestoreSlaveData, error) {
 // Restart mysqld and replication.
 // Put tablet into the replication graph as a spare.
 func (ta *TabletActor) restore(args map[string]string) error {
+	// get arguments
 	zkSrcTabletPath, ok := args["SrcTabletPath"]
 	if !ok {
 		return fmt.Errorf("missing SrcTabletPath in args")
 	}
-
-	data, _, err := ta.zconn.Get(path.Join(zkSrcTabletPath, restoreSlaveDataFilename))
-	if err != nil {
-		return err
+	zkSrcFilePath, ok := args["SrcFilePath"]
+	if !ok {
+		return fmt.Errorf("missing SrcFilePath in args")
+	}
+	zkParentPath, ok := args["zkParentPath"]
+	if !ok {
+		return fmt.Errorf("missing zkParentPath in args")
 	}
 
-	rsd := new(RestoreSlaveData)
-	if err := json.Unmarshal([]byte(data), rsd); err != nil {
-		return err
-	}
-
+	// read our current tablet, verify its state
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
 		return err
@@ -743,27 +674,42 @@ func (ta *TabletActor) restore(args map[string]string) error {
 		return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	parentPath := TabletPathForAlias(rsd.Parent)
-	parentTablet, err := ReadTablet(ta.zconn, parentPath)
+	// read the source tablet, compute zkSrcFilePath if default
+	sourceTablet, err := ReadTablet(ta.zconn, zkSrcTabletPath)
 	if err != nil {
 		return err
 	}
-
-	if parentTablet.Type != TYPE_MASTER {
-		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
+	if strings.ToLower(zkSrcFilePath) == "default" {
+		zkSrcFilePath = path.Join(mysqlctl.SnapshotDir(uint32(sourceTablet.Uid)), mysqlctl.SnapshotManifestFile)
 	}
 
-	if err := ta.mysqld.RestoreFromSnapshot(rsd.SnapshotManifest); err != nil {
+	// read the parent tablet, verify its state
+	parentTablet, err := ReadTablet(ta.zconn, zkParentPath)
+	if err != nil {
+		return err
+	}
+	if parentTablet.Type != TYPE_MASTER {
+		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, zkParentPath)
+	}
+
+	// read & unpack the manifest
+	sm := new(mysqlctl.SnapshotManifest)
+	if err := fetchAndParseJsonFile(sourceTablet.Addr, zkSrcFilePath, sm); err != nil {
+		return err
+	}
+
+	// and do the action
+	if err := ta.mysqld.RestoreFromSnapshot(sm); err != nil {
 		relog.Error("RestoreFromSnapshot failed: %v", err)
 		return err
 	}
 
 	// Once this action completes, update authoritive tablet node first.
-	tablet.Parent = rsd.Parent
-	tablet.Keyspace = parentTablet.Keyspace
-	tablet.Shard = parentTablet.Shard
+	tablet.Parent = parentTablet.Alias()
+	tablet.Keyspace = sourceTablet.Keyspace
+	tablet.Shard = sourceTablet.Shard
 	tablet.Type = TYPE_SPARE
-	tablet.KeyRange = parentTablet.KeyRange
+	tablet.KeyRange = sourceTablet.KeyRange
 
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err
@@ -774,50 +720,44 @@ func (ta *TabletActor) restore(args map[string]string) error {
 
 // Operate on a backup tablet. Halt mysqld (read-only, lock tables)
 // and dump the partial data files.
-func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreSlaveData, error) {
+func (ta *TabletActor) partialSnapshot(actionNode *ActionNode, args map[string]string) error {
 	keyName, ok := args["KeyName"]
 	if !ok {
-		return nil, fmt.Errorf("missing KeyName in args")
+		return fmt.Errorf("missing KeyName in args")
 	}
 	startKey, ok := args["StartKey"]
 	if !ok {
-		return nil, fmt.Errorf("missing StartKey in args")
+		return fmt.Errorf("missing StartKey in args")
 	}
 	endKey, ok := args["EndKey"]
 	if !ok {
-		return nil, fmt.Errorf("missing EndKey in args")
+		return fmt.Errorf("missing EndKey in args")
 	}
 
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	if tablet.Type != TYPE_BACKUP {
-		return nil, fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	splitSnapshotManifest, err := ta.mysqld.CreateSplitSnapshotManifest(tablet.DbName(), keyName, key.HexKeyspaceId(startKey), key.HexKeyspaceId(endKey), tablet.Addr, false)
+	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), keyName, key.HexKeyspaceId(startKey), key.HexKeyspaceId(endKey), tablet.Addr, false)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	rsd := &PartialRestoreSlaveData{SplitSnapshotManifest: splitSnapshotManifest}
+	actionNode.Results = make(map[string]string)
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
-		rsd.Parent = tablet.Alias()
+		actionNode.Results["Parent"] = tablet.Path()
 	} else {
-		rsd.Parent = tablet.Parent
+		actionNode.Results["Parent"] = TabletPathForAlias(tablet.Parent)
 	}
-
-	rsdZkPath := path.Join(ta.zkTabletPath, partialRestoreSlaveDataFilename)
-	_, err = ta.zconn.Create(rsdZkPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		return nil, err
-	}
-
-	return rsd, nil
+	actionNode.Results["Manifest"] = filename
+	return nil
 }
 
 // Operate on restore tablet.
@@ -830,21 +770,21 @@ func (ta *TabletActor) partialSnapshot(args map[string]string) (*PartialRestoreS
 //   or promoted to master in the same shard!
 // Put tablet into the replication graph as a spare.
 func (ta *TabletActor) partialRestore(args map[string]string) error {
+	// get arguments
 	zkSrcTabletPath, ok := args["SrcTabletPath"]
 	if !ok {
 		return fmt.Errorf("missing SrcTabletPath in args")
 	}
-
-	data, _, err := ta.zconn.Get(path.Join(zkSrcTabletPath, partialRestoreSlaveDataFilename))
-	if err != nil {
-		return err
+	zkSrcFilePath, ok := args["SrcFilePath"]
+	if !ok {
+		return fmt.Errorf("missing SrcFilePath in args")
+	}
+	zkParentPath, ok := args["zkParentPath"]
+	if !ok {
+		return fmt.Errorf("missing zkParentPath in args")
 	}
 
-	rsd := new(PartialRestoreSlaveData)
-	if err := json.Unmarshal([]byte(data), rsd); err != nil {
-		return err
-	}
-
+	// read our current tablet, verify its state
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
 		return err
@@ -853,27 +793,39 @@ func (ta *TabletActor) partialRestore(args map[string]string) error {
 		return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	parentPath := TabletPathForAlias(rsd.Parent)
-	parentTablet, err := ReadTablet(ta.zconn, parentPath)
+	// read the source tablet
+	sourceTablet, err := ReadTablet(ta.zconn, zkSrcTabletPath)
 	if err != nil {
 		return err
 	}
 
+	// read the parent tablet, verify its state
+	parentTablet, err := ReadTablet(ta.zconn, zkParentPath)
+	if err != nil {
+		return err
+	}
 	if parentTablet.Type != TYPE_MASTER {
-		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, parentPath)
+		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, zkParentPath)
 	}
 
-	if err := ta.mysqld.RestoreFromPartialSnapshot(rsd.SplitSnapshotManifest); err != nil {
+	// read & unpack the manifest
+	ssm := new(mysqlctl.SplitSnapshotManifest)
+	if err := fetchAndParseJsonFile(sourceTablet.Addr, zkSrcFilePath, ssm); err != nil {
+		return err
+	}
+
+	// and do the action
+	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
 		return err
 	}
 
 	// Once this action completes, update authoritive tablet node first.
-	tablet.Parent = rsd.Parent
-	tablet.Keyspace = parentTablet.Keyspace
-	tablet.Shard = parentTablet.Shard
+	tablet.Parent = parentTablet.Alias()
+	tablet.Keyspace = sourceTablet.Keyspace
+	tablet.Shard = sourceTablet.Shard
 	tablet.Type = TYPE_SPARE
-	tablet.KeyRange = rsd.SplitSnapshotManifest.KeyRange
+	tablet.KeyRange = ssm.KeyRange
 
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err

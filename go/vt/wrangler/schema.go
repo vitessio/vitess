@@ -18,11 +18,10 @@ import (
 
 func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, error) {
 	tm.MustBeTabletPath(zkTabletPath)
-	zkReplyPath := "get_schema_result.json"
-	actionPath, err := wr.ai.GetSchema(zkTabletPath, zkReplyPath)
+	actionPath, err := wr.ai.GetSchema(zkTabletPath)
 
 	sd := new(mysqlctl.SchemaDefinition)
-	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, sd, wr.actionTimeout()); err != nil {
+	if err = wr.WaitForActionResult(actionPath, sd, wr.actionTimeout()); err != nil {
 		return nil, err
 	}
 	return sd, nil
@@ -169,11 +168,10 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 
 func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
 	tm.MustBeTabletPath(zkTabletPath)
-	zkReplyPath := "schema_preflight_result.json"
-	actionPath, err := wr.ai.PreflightSchema(zkTabletPath, zkReplyPath, change)
+	actionPath, err := wr.ai.PreflightSchema(zkTabletPath, change)
 
 	scr := new(mysqlctl.SchemaChangeResult)
-	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, scr, wr.actionTimeout()); err != nil {
+	if err = wr.WaitForActionResult(actionPath, scr, wr.actionTimeout()); err != nil {
 		return nil, err
 	}
 	return scr, nil
@@ -181,13 +179,12 @@ func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlc
 
 func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
 	tm.MustBeTabletPath(zkTabletPath)
-	zkReplyPath := "schema_change_result.json"
-	actionPath, err := wr.ai.ApplySchema(zkTabletPath, zkReplyPath, sc)
+	actionPath, err := wr.ai.ApplySchema(zkTabletPath, sc)
 
 	// FIXME(alainjobart) the timeout value is wrong here, we need
 	// a longer one
 	scr := new(mysqlctl.SchemaChangeResult)
-	if err = wr.WaitForTabletActionResponse(actionPath, zkReplyPath, scr, wr.actionTimeout()); err != nil {
+	if err = wr.WaitForActionResult(actionPath, scr, wr.actionTimeout()); err != nil {
 		return nil, err
 	}
 	return scr, nil

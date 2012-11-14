@@ -12,10 +12,11 @@ import (
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) error {
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) (manifest, parent string, err error) {
+	var ti *tm.TabletInfo
+	ti, err = tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {
-		return err
+		return
 	}
 
 	originalType := ti.Tablet.Type
@@ -33,16 +34,17 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) erro
 	}
 
 	if err != nil {
-		return err
+		return
 	}
 
-	actionPath, err := wr.ai.Snapshot(zkTabletPath)
+	var actionPath string
+	actionPath, err = wr.ai.Snapshot(zkTabletPath)
 	if err != nil {
-		return err
+		return
 	}
 
 	// wait for completion, and save the error
-	actionErr := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	results, actionErr := wr.ai.WaitForCompletionResult(actionPath, wr.actionTimeout())
 	if actionErr != nil {
 		relog.Error("snapshot failed, still restoring tablet type: %v", actionErr)
 	}
@@ -59,18 +61,18 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) erro
 	if err != nil {
 		// failure in changing the zk type is probably worse,
 		// so returning that (we logged actionErr anyway)
-		return err
+		return
 	}
-	return actionErr
+	return results["Manifest"], results["Parent"], actionErr
 }
 
-func (wr *Wrangler) Restore(zkSrcTabletPath, zkDstTabletPath string) error {
+func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string) error {
 	err := wr.ChangeType(zkDstTabletPath, tm.TYPE_RESTORE, false)
 	if err != nil {
 		return err
 	}
 
-	actionPath, err := wr.ai.Restore(zkDstTabletPath, zkSrcTabletPath)
+	actionPath, err := wr.ai.Restore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath)
 	if err != nil {
 		return err
 	}
@@ -85,10 +87,11 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, zkDstTabletPath string) error {
 }
 
 func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool) error {
-	if err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot); err != nil {
+	srcFilePath, zkParentPath, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot)
+	if err != nil {
 		return err
 	}
-	if err := wr.Restore(zkSrcTabletPath, zkDstTabletPath); err != nil {
+	if err = wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath); err != nil {
 		return err
 	}
 	return nil

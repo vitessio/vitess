@@ -146,26 +146,24 @@ func (ai *ActionInitiator) RestartSlave(zkTabletPath, zkShardActionPath string, 
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, Args: args})
 }
 
-func (ai *ActionInitiator) ReparentPosition(zkTabletPath string, slavePos *mysqlctl.ReplicationPosition, zkReplyPath string) (actionPath string, err error) {
-	args := map[string]string{"SlavePosition": jscfg.ToJson(slavePos), "ReplyPath": zkReplyPath}
+func (ai *ActionInitiator) ReparentPosition(zkTabletPath string, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
+	args := map[string]string{"SlavePosition": jscfg.ToJson(slavePos)}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, Args: args})
 }
 
 // NOTE(msolomon) Also available as RPC.
-func (ai *ActionInitiator) MasterPosition(zkTabletPath, zkReplyPath string) (actionPath string, err error) {
-	args := map[string]string{"ReplyPath": zkReplyPath}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MASTER_POSITION, Args: args})
+func (ai *ActionInitiator) MasterPosition(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MASTER_POSITION})
 }
 
 // NOTE(msolomon) Also available as RPC.
-func (ai *ActionInitiator) SlavePosition(zkTabletPath, zkReplyPath string) (actionPath string, err error) {
-	args := map[string]string{"ReplyPath": zkReplyPath}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_POSITION, Args: args})
+func (ai *ActionInitiator) SlavePosition(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_POSITION})
 }
 
 // NOTE(msolomon) Also available as RPC.
-func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath, zkArgsPath, zkReplyPath string) (actionPath string, err error) {
-	args := map[string]string{"ArgsPath": zkArgsPath, "ReplyPath": zkReplyPath}
+func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath, zkArgsPath string) (actionPath string, err error) {
+	args := map[string]string{"ArgsPath": zkArgsPath}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, Args: args})
 }
 
@@ -173,13 +171,21 @@ func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, er
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
 }
 
-func (ai *ActionInitiator) Restore(zkDstTabletPath, zkSrcTabletPath string) (actionPath string, err error) {
-	args := map[string]string{"SrcTabletPath": zkSrcTabletPath}
+func (ai *ActionInitiator) Restore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath string) (actionPath string, err error) {
+	args := map[string]string{
+		"SrcTabletPath": zkSrcTabletPath,
+		"SrcFilePath":   srcFilePath,
+		"zkParentPath":  zkParentPath,
+	}
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, Args: args})
 }
 
-func (ai *ActionInitiator) PartialRestore(zkDstTabletPath, zkSrcTabletPath string) (actionPath string, err error) {
-	args := map[string]string{"SrcTabletPath": zkSrcTabletPath}
+func (ai *ActionInitiator) PartialRestore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath string) (actionPath string, err error) {
+	args := map[string]string{
+		"SrcTabletPath": zkSrcTabletPath,
+		"SrcFilePath":   srcFilePath,
+		"zkParentPath":  zkParentPath,
+	}
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_RESTORE, Args: args})
 }
 
@@ -187,31 +193,25 @@ func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err er
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SCRAP})
 }
 
-func (ai *ActionInitiator) GetSchema(zkTabletPath, zkReplyPath string) (actionPath string, err error) {
-	args := map[string]string{"ReplyPath": zkReplyPath}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, Args: args})
+func (ai *ActionInitiator) GetSchema(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA})
 }
 
-func (ai *ActionInitiator) PreflightSchema(zkTabletPath, zkReplyPath, change string) (actionPath string, err error) {
-	args := map[string]string{
-		"ReplyPath": zkReplyPath,
-		"Change":    change,
-	}
+func (ai *ActionInitiator) PreflightSchema(zkTabletPath, change string) (actionPath string, err error) {
+	args := map[string]string{"Change": change}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PREFLIGHT_SCHEMA, Args: args})
 }
 
-func (ai *ActionInitiator) ApplySchema(zkTabletPath, zkReplyPath string, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
+func (ai *ActionInitiator) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
 	args := map[string]string{
-		"ReplyPath":    zkReplyPath,
 		"SchemaChange": jscfg.ToJson(sc),
 	}
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, Args: args})
 }
 
-func (ai *ActionInitiator) ExecuteHook(zkTabletPath, zkReplyPath string, hook *Hook) (actionPath string, err error) {
+func (ai *ActionInitiator) ExecuteHook(zkTabletPath string, hook *Hook) (actionPath string, err error) {
 	args := hook.Parameters
 	args["HookName"] = hook.Name
-	args["HookReplyPath"] = zkReplyPath
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, Args: args})
 }
 
@@ -245,10 +245,15 @@ func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath st
 }
 
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
+	_, err := WaitForCompletion(ai.zconn, actionPath, waitTime)
+	return err
+}
+
+func (ai *ActionInitiator) WaitForCompletionResult(actionPath string, waitTime time.Duration) (map[string]string, error) {
 	return WaitForCompletion(ai.zconn, actionPath, waitTime)
 }
 
-func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration) error {
+func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration) (map[string]string, error) {
 	// If there is no duration specified, block for a sufficiently long time.
 	if waitTime <= 0 {
 		waitTime = 24 * time.Hour
@@ -263,7 +268,7 @@ wait:
 	for {
 		stat, watch, err := zconn.ExistsW(actionLogPath)
 		if err != nil {
-			return fmt.Errorf("action err: %v %v", actionLogPath, err)
+			return nil, fmt.Errorf("action err: %v %v", actionLogPath, err)
 		}
 
 		// file exists, go on
@@ -284,25 +289,25 @@ wait:
 				relog.Warning("unexpected zk event: %v", actionEvent)
 			}
 		case <-timer.C:
-			return fmt.Errorf("action err: %v deadline exceeded %v", actionLogPath, waitTime)
+			return nil, fmt.Errorf("action err: %v deadline exceeded %v", actionLogPath, waitTime)
 		}
 	}
 
 	// the node exists, read it
 	data, _, err := zconn.Get(actionLogPath)
 	if err != nil {
-		return fmt.Errorf("action err: %v %v", actionLogPath, err)
+		return nil, fmt.Errorf("action err: %v %v", actionLogPath, err)
 	}
 
 	// parse it
 	actionNode, dataErr := ActionNodeFromJson(data, actionLogPath)
 	if dataErr != nil {
-		return fmt.Errorf("action data error: %v %v %#v", actionLogPath, dataErr, data)
+		return nil, fmt.Errorf("action data error: %v %v %#v", actionLogPath, dataErr, data)
 	} else if actionNode.Error != "" {
-		return fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
+		return nil, fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
 	}
 
-	return nil
+	return actionNode.Results, nil
 }
 
 // Remove all queued actions, regardless of their current state, leaving

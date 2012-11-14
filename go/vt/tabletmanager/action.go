@@ -69,6 +69,7 @@ type ActionNode struct {
 	Error      string
 	State      ActionState
 	Args       map[string]string
+	Results    map[string]string
 	path       string // path in zookeeper representing this action, don't serialize
 }
 

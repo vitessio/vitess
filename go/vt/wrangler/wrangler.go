@@ -6,11 +6,9 @@ package zkwrangler
 
 import (
 	"encoding/json"
-	"path"
-	"strings"
+	"fmt"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -166,33 +164,18 @@ func (wr *Wrangler) handleActionError(actionPath string, actionErr error) error 
 // Waits for the completion of a tablet action, and pulls the single
 // result back into the given interface.
 //
-// - if replyPath is relative, we read it from the 'reply' area for
-// the tablet, and then delete the directory for the reply.
-// - if replyPath is absolute, we just read it, and don't delete
-// anything (most likely it's a shard action and will be deleted with it)
-//
-// See tabletmanager/TabletActor.storeTabletActionResponse
-func (wr *Wrangler) WaitForTabletActionResponse(actionPath, replyPath string, result interface{}, waitTime time.Duration) (err error) {
-	err = wr.ai.WaitForCompletion(actionPath, waitTime)
+// See tabletmanager/TabletActor.storeActionResult
+func (wr *Wrangler) WaitForActionResult(actionPath string, result interface{}, waitTime time.Duration) error {
+	results, err := wr.ai.WaitForCompletionResult(actionPath, waitTime)
 	if err != nil {
 		return err
 	}
-	isRelativeResponse := false
-	if !strings.HasPrefix(replyPath, "/") {
-		replyPath = tm.TabletActionToReplyPath(actionPath, replyPath)
-		isRelativeResponse = true
-	}
-	data, _, err := wr.zconn.Get(replyPath)
-	if err != nil {
-		return err
+	data, ok := results["Result"]
+	if !ok {
+		return fmt.Errorf("No response")
 	}
 	if err = json.Unmarshal([]byte(data), result); err != nil {
 		return err
-	}
-	if isRelativeResponse {
-		if err = zk.DeleteRecursive(wr.zconn, path.Dir(replyPath), -1); err != nil {
-			relog.Error("Cannot delete action reply %v", replyPath)
-		}
 	}
 	return nil
 }

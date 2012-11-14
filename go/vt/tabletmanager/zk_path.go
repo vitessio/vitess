@@ -107,22 +107,6 @@ func TabletActionLogPath(zkTabletPath string) string {
 	return path.Join(zkTabletPath, "actionlog")
 }
 
-// /zk/<cell>/vt/tablets/<tablet uid>/reply
-func TabletReplyPath(zkTabletPath string) string {
-	MustBeTabletPath(zkTabletPath)
-	return path.Join(zkTabletPath, "reply")
-}
-
-// From an action path and a filename, returns the reply path, e.g from
-// /zk/<cell>/vt/tablets/<tablet uid>/action/0000001 aaa.json it will return:
-// /zk/<cell>/vt/tablets/<tablet uid>/reply/0000001/aaa.json
-func TabletActionToReplyPath(zkTabletActionPath, filename string) string {
-	parts := strings.Split(zkTabletActionPath, "/")
-	parts[len(parts)-2] = "reply"
-	replyPath := path.Join(parts...)
-	return path.Join("/", replyPath, filename)
-}
-
 // From an action path and a filename, returns the actionlog path, e.g from
 // /zk/<cell>/vt/tablets/<tablet uid>/action/0000001 it will return:
 // /zk/<cell>/vt/tablets/<tablet uid>/actionlog/0000001

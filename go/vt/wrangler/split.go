@@ -13,10 +13,11 @@ import (
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool) error {
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool) (manifest, parent string, err error) {
+	var ti *tm.TabletInfo
+	ti, err = tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {
-		return err
+		return
 	}
 
 	originalType := ti.Tablet.Type
@@ -34,15 +35,15 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 	}
 
 	if err != nil {
-		return err
+		return
 	}
 
 	actionPath, err := wr.ai.PartialSnapshot(zkTabletPath, keyName, startKey, endKey)
 	if err != nil {
-		return err
+		return
 	}
 
-	actionErr := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	results, actionErr := wr.ai.WaitForCompletionResult(actionPath, wr.actionTimeout())
 	if actionErr != nil {
 		relog.Error("PartialSnapshot failed, still restoring tablet type: %v", actionErr)
 	}
@@ -59,18 +60,18 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 	if err != nil {
 		// failure in changing the zk type is probably worse,
 		// so returning that (we logged actionErr anyway)
-		return err
+		return
 	}
-	return actionErr
+	return results["Manifest"], results["Parent"], actionErr
 }
 
-func (wr *Wrangler) PartialRestore(zkSrcTabletPath, zkDstTabletPath string) error {
+func (wr *Wrangler) PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string) error {
 	err := wr.ChangeType(zkDstTabletPath, tm.TYPE_RESTORE, false)
 	if err != nil {
 		return err
 	}
 
-	actionPath, err := wr.ai.PartialRestore(zkDstTabletPath, zkSrcTabletPath)
+	actionPath, err := wr.ai.PartialRestore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath)
 	if err != nil {
 		return err
 	}
@@ -85,10 +86,11 @@ func (wr *Wrangler) PartialRestore(zkSrcTabletPath, zkDstTabletPath string) erro
 }
 
 func (wr *Wrangler) PartialClone(zkSrcTabletPath, zkDstTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool) error {
-	if err := wr.PartialSnapshot(zkSrcTabletPath, keyName, startKey, endKey, forceMasterSnapshot); err != nil {
+	srcFilePath, zkParentPath, err := wr.PartialSnapshot(zkSrcTabletPath, keyName, startKey, endKey, forceMasterSnapshot)
+	if err != nil {
 		return err
 	}
-	if err := wr.PartialRestore(zkSrcTabletPath, zkDstTabletPath); err != nil {
+	if err := wr.PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath); err != nil {
 		return err
 	}
 	return nil

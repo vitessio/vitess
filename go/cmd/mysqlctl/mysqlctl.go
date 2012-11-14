@@ -40,7 +40,7 @@ func main() {
 	switch action {
 	case "init":
 		if mysqlErr := mysqlctl.Init(mysqld); mysqlErr != nil {
-			log.Fatalf("failed init mysql: %v", mysqlErr)
+			relog.Fatal("failed init mysql: %v", mysqlErr)
 		}
 	case "partialrestore":
 		rs, err := mysqlctl.ReadSplitSnapshotManifest(flag.Arg(1))
@@ -48,12 +48,14 @@ func main() {
 			err = mysqld.RestoreFromPartialSnapshot(rs)
 		}
 		if err != nil {
-			log.Fatalf("partialrestore failed: %v", err)
+			relog.Fatal("partialrestore failed: %v", err)
 		}
 	case "partialsnapshot":
-		_, err := mysqld.CreateSplitSnapshotManifest(flag.Arg(1), flag.Arg(2), key.HexKeyspaceId(flag.Arg(3)), key.HexKeyspaceId(flag.Arg(4)), tabletAddr, false)
+		filename, err := mysqld.CreateSplitSnapshot(flag.Arg(1), flag.Arg(2), key.HexKeyspaceId(flag.Arg(3)), key.HexKeyspaceId(flag.Arg(4)), tabletAddr, false)
 		if err != nil {
-			log.Fatalf("partialsnapshot failed: %v", err)
+			relog.Fatal("partialsnapshot failed: %v", err)
+		} else {
+			relog.Info("manifest location: %v", filename)
 		}
 	case "restore":
 		rs, err := mysqlctl.ReadSnapshotManifest(flag.Arg(1))
@@ -61,26 +63,28 @@ func main() {
 			err = mysqld.RestoreFromSnapshot(rs)
 		}
 		if err != nil {
-			log.Fatalf("restore failed: %v", err)
+			relog.Fatal("restore failed: %v", err)
 		}
 	case "shutdown":
 		if mysqlErr := mysqlctl.Shutdown(mysqld, true); mysqlErr != nil {
-			log.Fatalf("failed shutdown mysql: %v", mysqlErr)
+			relog.Fatal("failed shutdown mysql: %v", mysqlErr)
 		}
 	case "snapshot":
-		_, err := mysqld.CreateSnapshot(flag.Arg(1), tabletAddr, false)
+		filename, err := mysqld.CreateSnapshot(flag.Arg(1), tabletAddr, false)
 		if err != nil {
-			log.Fatalf("snapshot failed: %v", err)
+			relog.Fatal("snapshot failed: %v", err)
+		} else {
+			relog.Info("manifest location: %v", filename)
 		}
 	case "start":
 		if mysqlErr := mysqlctl.Start(mysqld); mysqlErr != nil {
-			log.Fatalf("failed start mysql: %v", mysqlErr)
+			relog.Fatal("failed start mysql: %v", mysqlErr)
 		}
 	case "teardown":
 		if mysqlErr := mysqlctl.Teardown(mysqld, *force); mysqlErr != nil {
-			log.Fatalf("failed teardown mysql (forced? %v): %v", *force, mysqlErr)
+			relog.Fatal("failed teardown mysql (forced? %v): %v", *force, mysqlErr)
 		}
 	default:
-		log.Fatalf("invalid action: %v", action)
+		relog.Fatal("invalid action: %v", action)
 	}
 }

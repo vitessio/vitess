@@ -163,7 +163,7 @@ startKey, endKey - the row range to prepare
 sourceAddr - the ip addr of the machine running the export
 allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool) (_snapshotManifest *SplitSnapshotManifest, err error) {
+func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool) (snapshotManifestFilename string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -188,10 +188,10 @@ func (mysqld *Mysqld) CreateSplitSnapshotManifest(dbName, keyName string, startK
 	// get the schema for each table
 	sd, fetchErr := mysqld.GetSchema(dbName)
 	if fetchErr != nil {
-		return nil, fetchErr
+		return "", fetchErr
 	}
 	if len(sd.TableDefinitions) == 0 {
-		return nil, fmt.Errorf("empty table list for %v", dbName)
+		return "", fmt.Errorf("empty table list for %v", dbName)
 	}
 
 	// save initial state so we can restore on Start()
@@ -220,12 +220,12 @@ func (mysqld *Mysqld) CreateSplitSnapshotManifest(dbName, keyName string, startK
 	if statusErr != nil {
 		if statusErr != ErrNotSlave {
 			// this is a real error
-			return nil, statusErr
+			return "", statusErr
 		}
 		// we are really a master, so we need that position
 		replicationPosition, statusErr = mysqld.MasterStatus()
 		if statusErr != nil {
-			return nil, statusErr
+			return "", statusErr
 		}
 		masterAddr = mysqld.Addr()
 	} else {
@@ -235,7 +235,7 @@ func (mysqld *Mysqld) CreateSplitSnapshotManifest(dbName, keyName string, startK
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {
-				return nil, err
+				return "", err
 			}
 		}
 	}
@@ -245,14 +245,14 @@ func (mysqld *Mysqld) CreateSplitSnapshotManifest(dbName, keyName string, startK
 		return
 	}
 
-	var ssm *SplitSnapshotManifest
+	var ssmFile string
 	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd)
 	if snapshotErr != nil {
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 	} else {
-		ssm = NewSplitSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
-		ssmFile := path.Join(mysqld.SnapshotDir, partialSnapshotManifestFile)
+		ssmFile = path.Join(mysqld.SnapshotDir, partialSnapshotManifestFile)
 		if snapshotErr = writeJson(ssmFile, ssm); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		}
@@ -278,10 +278,10 @@ func (mysqld *Mysqld) CreateSplitSnapshotManifest(dbName, keyName string, startK
 	}
 
 	if snapshotErr != nil {
-		return nil, snapshotErr
+		return "", snapshotErr
 	}
 
-	return ssm, nil
+	return ssmFile, nil
 }
 
 func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition) ([]SnapshotFile, error) {
