@@ -13,17 +13,19 @@
 package tabletmanager
 
 import (
+	"fmt"
+	"os"
+	"os/user"
+	"path"
+	"sort"
+	"time"
+
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/zk"
-	"fmt"
 	"launchpad.net/gozk/zookeeper"
-	"os"
-	"os/user"
-	"path"
-	"time"
 )
 
 // The actor applies individual commands to execute an action read from a node
@@ -324,10 +326,26 @@ func PurgeActions(zconn zk.Conn, zkActionPath string) error {
 	if err != nil {
 		return err
 	}
-	for _, child := range children {
-		err = zk.DeleteRecursive(zconn, path.Join(zkActionPath, child), -1)
+
+	sort.Strings(children)
+	// Purge newer items first so the action queues don't try to process something.
+	for i := len(children) - 1; i >= 0; i-- {
+		actionPath := path.Join(zkActionPath, children[i])
+		data, _, err := zconn.Get(actionPath)
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+			return fmt.Errorf("purge action err: %v", err)
+		}
+		actionNode, err := ActionNodeFromJson(data, actionPath)
 		if err != nil {
-			return err
+			relog.Warning("bad action data: %v %v %#v", actionPath, err, data)
+		} else if actionNode.State == ACTION_STATE_RUNNING {
+			relog.Warning("cannot remove running action: %v %v %v", actionPath, actionNode.Action, actionNode.ActionGuid)
+			continue
+		}
+
+		err = zk.DeleteRecursive(zconn, actionPath, -1)
+		if err != nil {
+			return fmt.Errorf("purge action err: %v", err)
 		}
 	}
 	return nil
