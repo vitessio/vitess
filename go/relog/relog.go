@@ -110,9 +110,9 @@ func (logger *Logger) Fatal(format string, args ...interface{}) {
 // information (like passwords), which shouldn't be printed to the
 // log.
 type Redactor interface {
-	// Redact returns a copy of the instance with sensitive
+	// Redacted returns a copy of the instance with sensitive
 	// information removed.
-	Redact() interface{}
+	Redacted() interface{}
 }
 
 // Redact returns a string of * having the same length as s.
@@ -127,7 +127,7 @@ func (logger *Logger) Output(level int, format string, args ...interface{}) {
 	redactedArgs := make([]interface{}, len(args))
 	for i, arg := range args {
 		if redactor, ok := arg.(Redactor); ok {
-			redactedArgs[i] = redactor.Redact()
+			redactedArgs[i] = redactor.Redacted()
 		} else {
 			redactedArgs[i] = arg
 		}
