@@ -17,25 +17,23 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-/*
-Create a path and any pieces required, think mkdir -p.
-*/
+// Create a path and any pieces required, think mkdir -p.
+// Intermediate znodes are always created empty.
 func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	parts := strings.Split(zkPath, "/")
 	if parts[1] != "zk" {
 		return "", fmt.Errorf("non zk path: %v", zkPath)
 	}
-	if len(parts) > 2 {
-		tmpPath := "/zk"
-		for _, p := range parts[2 : len(parts)-1] {
-			tmpPath = path.Join(tmpPath, p)
-			_, err = zconn.Create(tmpPath, "", flags, aclv)
-			if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-				return "", err
-			}
+
+	pathCreated, err = zconn.Create(zkPath, value, flags, aclv)
+	if zookeeper.IsError(err, zookeeper.ZNONODE) {
+		_, err = CreateRecursive(zconn, path.Dir(zkPath), "", flags, aclv)
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			return "", err
 		}
+		pathCreated, err = zconn.Create(zkPath, value, flags, aclv)
 	}
-	return zconn.Create(zkPath, value, flags, aclv)
+	return
 }
 
 func CreateOrUpdate(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL, recursive bool) (pathCreated string, err error) {
@@ -135,12 +133,10 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	return err
 }
 
-/*
-The lexically lowest node is the lock holder - verify that this
-path holds the lock.  Call this queue-lock because the semantics are
-a hybrid.  Normal zookeeper locks make assumptions about sequential
-numbering that don't hold when the data in a lock is modified.
-*/
+// The lexically lowest node is the lock holder - verify that this
+// path holds the lock.  Call this queue-lock because the semantics are
+// a hybrid.  Normal zookeeper locks make assumptions about sequential
+// numbering that don't hold when the data in a lock is modified.
 func ObtainQueueLock(zconn Conn, zkPath string, wait bool) (bool, error) {
 	if wait {
 		panic("unimplemented")
