@@ -10,7 +10,7 @@ from optparse import OptionParser
 import os
 import shutil
 import socket
-from subprocess import PIPE
+from subprocess import PIPE, call
 import sys
 import time
 
@@ -180,11 +180,16 @@ def run_test_mysqlctl_clone():
   tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
                         populate_vt_insert_test)
 
-  tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshot vt_snapshot_test').wait()
+  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshot vt_snapshot_test').wait()
+  if err != 0:
+    raise utils.TestError('mysqlctl snapshot failed')
 
   utils.pause("snapshot finished")
 
-  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/snapshot_manifest.json').wait()
+  call(["touch", "/tmp/vtSimulateFetchFailures"])
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/snapshot_manifest.json').wait()
+  if err != 0:
+    raise utils.TestError('mysqlctl restore failed')
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
@@ -211,6 +216,7 @@ def run_test_vtctl_snapshot_restore():
 
   tablet_62044.init_tablet('idle', start=True)
 
+  call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Restore %s %s' %
                   (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
   utils.pause("restore finished")
@@ -251,6 +257,7 @@ def run_test_vtctl_clone():
     raise utils.TestError("expected validation error", err)
   utils.run("chmod +w /vt/snapshot")
 
+  call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('-force Clone %s %s' %
                   (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
 
@@ -276,13 +283,19 @@ def run_test_mysqlctl_split():
   tablet_62344.populate('vt_test_keyspace', create_vt_insert_test,
                         populate_vt_insert_test)
 
-  tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 partialsnapshot vt_test_keyspace id 0000000000000000 0000000000000003').wait()
+  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 partialsnapshot vt_test_keyspace id 0000000000000000 0000000000000003').wait()
+  if err != 0:
+    raise utils.TestError('mysqlctl partialsnapshot failed')
+
 
   utils.pause("partialsnapshot finished")
 
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_test_keyspace')
-  tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/partial_snapshot_manifest.json').wait()
+  call(["touch", "/tmp/vtSimulateFetchFailures"])
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/partial_snapshot_manifest.json').wait()
+  if err != 0:
+    raise utils.TestError('mysqlctl partialrestore failed')
 
   tablet_62044.assert_table_count('vt_test_keyspace', 'vt_insert_test', 2)
 
@@ -337,6 +350,7 @@ def _run_test_vtctl_partial_clone(create, populate,
   # dbname').
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_snapshot_test')
+  call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('-force PartialClone %s %s id %s %s' %
                   (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path,
                    start, end))

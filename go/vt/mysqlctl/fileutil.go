@@ -18,12 +18,33 @@ import (
 	"path"
 )
 
+// FIXME(alainjobart) would be nice to configure these somehow.
+// Cannot use flags, as vtaction doesn't take any.
+const (
+	compressConcurrency = 3
+	fetchConcurrency    = 3
+	fetchRetryCount     = 3
+)
+
+// FIXME(alainjobart) would be nice to configure these too.
+// use this to simulate failures in tests
+var (
+	simulateFailures = false
+	failureCounter   = 0
+)
+
+func init() {
+	_, statErr := os.Stat("/tmp/vtSimulateFetchFailures")
+	simulateFailures = statErr == nil
+}
+
 /* compress a single file with gzip, leaving the src file intact.
 Also computes the md5 hash on the fly.
 FIXME(msolomon) not sure how well Go will schedule cpu intensive tasks
 might be better if this forked off workers.
 */
 func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
+	relog.Info("compressFile: starting to compress %v into %v", srcPath, dstPath)
 	srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
@@ -38,7 +59,13 @@ func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer dstFile.Close()
+	defer func() {
+		// try to close and delete the file.
+		// in the success case, the file will already be closed
+		// and renamed, so all of this would fail anyway, no biggie
+		dstFile.Close()
+		os.Remove(dstFile.Name())
+	}()
 
 	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
 
@@ -69,11 +96,67 @@ func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
 	return &SnapshotFile{dstPath, hash}, nil
 }
 
+// compress multiple files in parallel
+func compressFiles(sources, destinations []string) ([]SnapshotFile, error) {
+	if len(sources) != len(destinations) || len(sources) == 0 {
+		panic(fmt.Errorf("bad array lengths: %v %v", len(sources), len(destinations)))
+	}
+
+	workQueue := make(chan int, len(sources))
+	for i := 0; i < len(sources); i++ {
+		workQueue <- i
+	}
+	close(workQueue)
+
+	snapshotFiles := make([]SnapshotFile, len(sources))
+	resultQueue := make(chan error, len(sources))
+	for i := 0; i < compressConcurrency; i++ {
+		go func() {
+			for {
+				i, ok := <-workQueue
+				if !ok {
+					return
+				}
+
+				sf, err := compressFile(sources[i], destinations[i])
+				if err == nil {
+					snapshotFiles[i] = *sf
+				}
+				resultQueue <- err
+			}
+		}()
+	}
+
+	var err error
+	for i := 0; i < len(sources); i++ {
+		if compressErr := <-resultQueue; compressErr != nil {
+			err = compressErr
+		}
+	}
+
+	// clean up files if we had an error
+	// FIXME(alainjobart) it seems extreme to delete all files if
+	// the last one failed. Since we only move the file into
+	// its destination when it worked, we could assume if the file
+	// already exists it's good, and re-compute its md5.
+	if err != nil {
+		relog.Info("Error happened, deleting all the files we already compressed")
+		for _, dest := range destinations {
+			os.Remove(dest)
+		}
+		return nil, err
+	}
+
+	return snapshotFiles, nil
+}
+
 // This function fetches data from the web server.
 // It then sends it to a tee, which on one side has an md5 checksum
 // reader, and on the other a gunzip reader writing to a file.
 // It will compare the md5 checksum after the copy is done.
 func fetchFile(srcUrl, srcHash, dstFilename string) error {
+	relog.Info("fetchFile: starting to fetch %v", dstFilename)
+
 	// create destination directory
 	dir, _ := path.Split(dstFilename)
 	if dirErr := os.MkdirAll(dir, 0775); dirErr != nil {
@@ -93,7 +176,13 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	if err != nil {
 		return err
 	}
-	defer dstFile.Close()
+	defer func() {
+		// try to close and delete the file.
+		// in the success case, the file will already be closed
+		// and renamed, so all of this would fail anyway, no biggie
+		dstFile.Close()
+		os.Remove(dstFile.Name())
+	}()
 
 	// create a buffering output
 	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
@@ -111,6 +200,14 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 		return err
 	}
 	defer decompressor.Close()
+
+	// see if we need to introduce failures
+	if simulateFailures {
+		failureCounter++
+		if failureCounter%3 == 0 {
+			return fmt.Errorf("Simulated error")
+		}
+	}
 
 	// copy the data. Will also write to the hasher
 	if _, err = io.Copy(dst, decompressor); err != nil {
@@ -135,16 +232,64 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	return os.Rename(dstFile.Name(), dstFilename)
 }
 
-// FIXME(msolomon) parallelize
-// FIXME(msolomon) automatically retry a file transfer at least once
-// FIXME(msolomon) deadlines?
-func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string) error {
+// This function fetches data from the web server,
+// retrying a few times.
+func fetchFileWithRetry(srcUrl, srcHash, dstFilename string) (err error) {
+	for i := 0; i < fetchRetryCount; i++ {
+		err = fetchFile(srcUrl, srcHash, dstFilename)
+		if err == nil {
+			return nil
+		}
+		relog.Warning("fetching snapshot file %v failed (try=%v): %v", dstFilename, i, err)
+	}
+
+	relog.Error("fetching snapshot file %v failed too many times", dstFilename)
+	return err
+}
+
+// FIXME(msolomon) Should we add deadlines? What really matters more
+// than a deadline is probably a sense of progress, more like a
+// "progress timeout" - how long will we wait if there is no change in
+// received bytes.
+func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string) (err error) {
+	workQueue := make(chan SnapshotFile, len(snapshotManifest.Files))
 	for _, fi := range snapshotManifest.Files {
-		filename := fi.getLocalFilename(destinationPath)
-		furl := "http://" + snapshotManifest.Addr + fi.Path
-		if err := fetchFile(furl, fi.Hash, filename); err != nil {
-			return err
+		workQueue <- fi
+	}
+	close(workQueue)
+
+	resultQueue := make(chan error, len(snapshotManifest.Files))
+	for i := 0; i < fetchConcurrency; i++ {
+		go func() {
+			for {
+				fi, ok := <-workQueue
+				if !ok {
+					return
+				}
+				filename := fi.getLocalFilename(destinationPath)
+				furl := "http://" + snapshotManifest.Addr + fi.Path
+				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename)
+			}
+		}()
+	}
+
+	for i := 0; i < len(snapshotManifest.Files); i++ {
+		if fetchErr := <-resultQueue; fetchErr != nil {
+			err = fetchErr
 		}
 	}
-	return nil
+
+	// clean up files if we had an error
+	// FIXME(alainjobart) it seems extreme to delete all files if
+	// the last one failed. Maybe we shouldn't, and if a file already
+	// exists, we md5 it before retransmitting.
+	if err != nil {
+		relog.Info("Error happened, deleting all the files we already got")
+		for _, fi := range snapshotManifest.Files {
+			filename := fi.getLocalFilename(destinationPath)
+			os.Remove(filename)
+		}
+	}
+
+	return err
 }

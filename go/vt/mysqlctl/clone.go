@@ -82,24 +82,22 @@ func (mysqld *Mysqld) ValidateCloneTarget() error {
 	return nil
 }
 
-func compressFiles(srcDir, dstDir string) ([]SnapshotFile, error) {
-	dataFiles := make([]SnapshotFile, 0, 128)
+func findFilesToCompress(srcDir, dstDir string) ([]string, []string, error) {
 	fiList, err := ioutil.ReadDir(srcDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	sources := make([]string, 0, len(fiList))
+	destinations := make([]string, 0, len(fiList))
 	for _, fi := range fiList {
 		if !fi.IsDir() {
 			srcPath := path.Join(srcDir, fi.Name())
 			dstPath := path.Join(dstDir, fi.Name()+".gz")
-			sf, err := compressFile(srcPath, dstPath)
-			if err != nil {
-				return nil, err
-			}
-			dataFiles = append(dataFiles, *sf)
+			sources = append(sources, srcPath)
+			destinations = append(destinations, dstPath)
 		}
 	}
-	return dataFiles, nil
+	return sources, destinations, nil
 }
 
 func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
@@ -133,28 +131,32 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFil
 		}
 	}
 
-	allDataFiles := make([]SnapshotFile, 0, 128)
+	sources := make([]string, 0, 128)
+	destinations := make([]string, 0, 128)
 
 	dbDataDir := path.Join(mysqld.config.DataDir, dbName)
-	dataFiles, err := compressFiles(dbDataDir, snapshotDataSrcPath)
-	if err != nil {
+	if s, d, err := findFilesToCompress(dbDataDir, snapshotDataSrcPath); err != nil {
 		return nil, err
+	} else {
+		sources = append(sources, s...)
+		destinations = append(destinations, d...)
 	}
-	allDataFiles = append(allDataFiles, dataFiles...)
 
-	dataFiles, err = compressFiles(mysqld.config.InnodbDataHomeDir, snapshotInnodbDataSrcPath)
-	if err != nil {
+	if s, d, err := findFilesToCompress(mysqld.config.InnodbDataHomeDir, snapshotInnodbDataSrcPath); err != nil {
 		return nil, err
+	} else {
+		sources = append(sources, s...)
+		destinations = append(destinations, d...)
 	}
-	allDataFiles = append(allDataFiles, dataFiles...)
 
-	dataFiles, err = compressFiles(mysqld.config.InnodbLogGroupHomeDir, snapshotInnodbLogSrcPath)
-	if err != nil {
+	if s, d, err := findFilesToCompress(mysqld.config.InnodbLogGroupHomeDir, snapshotInnodbLogSrcPath); err != nil {
 		return nil, err
+	} else {
+		sources = append(sources, s...)
+		destinations = append(destinations, d...)
 	}
-	allDataFiles = append(allDataFiles, dataFiles...)
 
-	return allDataFiles, nil
+	return compressFiles(sources, destinations)
 }
 
 // This function runs on the machine acting as the source for the clone.

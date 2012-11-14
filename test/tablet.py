@@ -49,16 +49,21 @@ class Tablet(object):
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
-  def mysqlctl(self, cmd):
+  def mysqlctl(self, cmd, quiet=False):
     utils.prog_compile(['mysqlctl'])
+
+    logLevel = ''
+    if utils.options.verbose and not quiet:
+      logLevel = ' -log.level=INFO'
+
     return utils.run_bg(os.path.join(vtroot, 'bin', 'mysqlctl') +
-                        ' -tablet-uid %u ' % self.tablet_uid + cmd)
+                        logLevel + ' -tablet-uid %u ' % self.tablet_uid + cmd)
 
   def start_mysql(self):
-    return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port))
+    return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port), quiet=True)
 
   def teardown_mysql(self):
-    return self.mysqlctl('-force teardown')
+    return self.mysqlctl('-force teardown', quiet=True)
 
   def remove_tree(self):
     path = '/vt/vt_%010d' % self.tablet_uid

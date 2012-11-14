@@ -308,28 +308,22 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 		}
 	}
 
-	dataFiles := make([]SnapshotFile, 0, 128)
-	compressFiles := func(filenames []string) error {
-		for _, srcPath := range filenames {
-			sf, err := compressFile(srcPath, srcPath+".gz")
-			if err != nil {
-				return err
-			}
-			// prune files to free up disk space, if it errors, we'll figure out
-			// later
+	sources := make([]string, 0, 128)
+	destinations := make([]string, 0, 128)
+	for _, srcPath := range tableFiles {
+		sources = append(sources, srcPath)
+		destinations = append(destinations, srcPath+".gz")
+	}
+
+	dataFiles, err := compressFiles(sources, destinations)
+	if err != nil {
+		// prune files to free up disk space, if it errors,
+		// we'll figure out later
+		for _, srcPath := range tableFiles {
 			os.Remove(srcPath)
-
-			dataFiles = append(dataFiles, *sf)
 		}
-		return nil
 	}
-
-	// FIXME(msolomon) at some point, you could pipeline requests for speed
-	if err := compressFiles(tableFiles); err != nil {
-		return nil, err
-	}
-
-	return dataFiles, nil
+	return dataFiles, err
 }
 
 /*
