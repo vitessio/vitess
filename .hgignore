@@ -12,3 +12,14 @@ _obj/
 _testmain.go$
 \.swp$
 .DS_Store$
+^go/cmd/mysqlctl/mysqlctl$
+^go/cmd/normalizer/normalizer$
+^go/cmd/vtaction/vtaction$
+^go/cmd/vtclient2/vtclient2$
+^go/cmd/vtctl/vtctl$
+^go/cmd/vtocc/vtocc$
+^go/cmd/vttablet/vttablet$
+^go/cmd/zk/zk$
+^go/cmd/zkclient2/zkclient2$
+^go/cmd/zkctl/zkctl$
+^go/cmd/zkocc/zkocc$
