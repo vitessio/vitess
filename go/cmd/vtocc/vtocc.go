@@ -91,8 +91,7 @@ func main() {
 	relog.Info("config: %s\n", data)
 
 	unmarshalFile(*dbConfigFile, &dbconfig)
-	data, _ = json.MarshalIndent(dbconfig.Redacted(), "", "  ")
-	relog.Info("dbconfig: %s\n", data)
+	relog.Info("dbconfig: %s\n", dbconfig)
 
 	qm := &OccManager{config, dbconfig}
 	rpcwrap.RegisterAuthenticated(qm)

@@ -7,6 +7,7 @@
 package dbconfigs
 
 import (
+	"encoding/json"
 	"flag"
 
 	"code.google.com/p/vitess/go/jscfg"
@@ -45,6 +46,14 @@ type DBConfigs struct {
 	Dba      mysql.ConnectionParams `json:"dba"`
 	Repl     mysql.ConnectionParams `json:"repl"`
 	Memcache string                 `json:"memcache"`
+}
+
+func (dbcfgs DBConfigs) String() string {
+	data, err := json.MarshalIndent(dbcfgs, "", "  ")
+	if err != nil {
+		return err.Error()
+	}
+	return string(data)
 }
 
 func (dbcfgs DBConfigs) Redacted() interface{} {
@@ -94,6 +103,6 @@ func Init(socketFile string) (dbcfgs DBConfigs, err error) {
 	dbcfgs.App.UnixSocket = socketFile
 	dbcfgs.Dba.UnixSocket = socketFile
 	dbcfgs.Repl.UnixSocket = socketFile
-	relog.Info("%s: %s\n", *DbConfigsFile, jscfg.ToJson(dbcfgs.Redacted()))
+	relog.Info("%s: %s\n", *DbConfigsFile, dbcfgs)
 	return
 }

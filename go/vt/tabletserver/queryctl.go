@@ -5,6 +5,8 @@
 package tabletserver
 
 import (
+	"encoding/json"
+
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
@@ -33,6 +35,14 @@ type DBConfig struct {
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
 	Memcache   string `json:"memcache"`
+}
+
+func (d DBConfig) String() string {
+	data, err := json.MarshalIndent(d, "", " ")
+	if err != nil {
+		return err.Error()
+	}
+	return string(data)
 }
 
 func (d DBConfig) Redacted() interface{} {
