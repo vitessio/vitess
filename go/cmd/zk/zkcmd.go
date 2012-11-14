@@ -377,7 +377,9 @@ func cmdLs(args []string) {
 
 			for _, child := range children {
 				localPath := path.Join(zkPath, child)
-				fmtPath(statMap[localPath], localPath, showFullPath)
+				if stat := statMap[localPath]; stat != nil {
+					fmtPath(stat, localPath, showFullPath)
+				}
 			}
 		}
 		if needsHeader {
