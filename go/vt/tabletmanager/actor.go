@@ -215,29 +215,8 @@ func StoreActionResponse(zconn zk.Conn, actionNode *ActionNode, actionPath strin
 	// and write the data
 	data := ActionNodeToJson(actionNode)
 	actionLogPath := ActionToActionLogPath(actionPath)
-	_, err := zconn.Create(actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		// this code is to address the case where the
-		// tablet/shard/keyspace was created without the
-		// 'actionlog' path. Let's correct it.
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			// the parent doesn't exists, try to create it
-			actionLogDir := path.Dir(actionLogPath)
-			_, err = zconn.Create(actionLogDir, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-			if err != nil {
-				return err
-			}
-
-			// and try to store again
-			_, err := zconn.Create(actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-			if err != nil {
-				return err
-			}
-		} else {
-			return err
-		}
-	}
-	return nil
+	_, err := zk.CreateRecursive(zconn, actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return err
 }
 
 // Store a structure inside an ActionNode Results map as the 'Result'
