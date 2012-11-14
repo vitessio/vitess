@@ -106,11 +106,16 @@ func (logger *Logger) Fatal(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
-// Redactor is an interface for types that may contain sensitive information, which shouldn't 
+// Redactor is an interface for types that may contain sensitive
+// information (like passwords), which shouldn't be printed to the
+// log.
 type Redactor interface {
+	// Redact returns a copy of the instance with sensitive
+	// information removed.
 	Redact() interface{}
 }
 
+// Redact returns a string of * having the same length as s.
 func Redact(s string) string {
 	return strings.Repeat("*", len(s))
 }
