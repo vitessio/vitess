@@ -16,6 +16,7 @@ import (
 	"unsafe"
 
 	"code.google.com/p/vitess/go/mysql/proto"
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
 )
 
@@ -66,6 +67,11 @@ type ConnectionParams struct {
 	Dbname     string `json:"dbname"`
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
+}
+
+func (c ConnectionParams) Redacted() interface{} {
+	c.Pass = relog.Redact(c.Pass)
+	return c
 }
 
 type Connection struct {

@@ -106,12 +106,29 @@ func (logger *Logger) Fatal(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
+// Redactor is an interface for types that may contain sensitive information, which shouldn't 
+type Redactor interface {
+	Redact() interface{}
+}
+
+func Redact(s string) string {
+	return strings.Repeat("*", len(s))
+}
+
 func (logger *Logger) Output(level int, format string, args ...interface{}) {
 	if logger.level > level {
 		return
 	}
+	redactedArgs := make([]interface{}, len(args))
+	for i, arg := range args {
+		if redactor, ok := arg.(Redactor); ok {
+			redactedArgs[i] = redactor.Redact()
+		} else {
+			redactedArgs[i] = arg
+		}
+	}
 	// Judicious call depth setting: all callers are 3 levels deep
-	logger.logger.Output(3, levelPrefixes[level]+fmt.Sprintf(format, args...))
+	logger.logger.Output(3, levelPrefixes[level]+fmt.Sprintf(format, redactedArgs...))
 }
 
 func (logger *Logger) SetFlags(flag int) {

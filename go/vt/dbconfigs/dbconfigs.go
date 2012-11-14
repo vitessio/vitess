@@ -47,6 +47,13 @@ type DBConfigs struct {
 	Memcache string                 `json:"memcache"`
 }
 
+func (dbcfgs DBConfigs) Redacted() interface{} {
+	dbcfgs.App = dbcfgs.App.Redacted().(tabletserver.DBConfig)
+	dbcfgs.Dba = dbcfgs.Dba.Redacted().(mysql.ConnectionParams)
+	dbcfgs.Repl = dbcfgs.Repl.Redacted().(mysql.ConnectionParams)
+	return dbcfgs
+}
+
 // Map user to a list of passwords. Right now we only use the first.
 type dbCredentials map[string][]string
 
@@ -87,6 +94,6 @@ func Init(socketFile string) (dbcfgs DBConfigs, err error) {
 	dbcfgs.App.UnixSocket = socketFile
 	dbcfgs.Dba.UnixSocket = socketFile
 	dbcfgs.Repl.UnixSocket = socketFile
-	relog.Info("%s: %s\n", *DbConfigsFile, jscfg.ToJson(dbcfgs))
+	relog.Info("%s: %s\n", *DbConfigsFile, jscfg.ToJson(dbcfgs.Redacted()))
 	return
 }

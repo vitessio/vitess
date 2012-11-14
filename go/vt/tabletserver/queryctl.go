@@ -35,6 +35,11 @@ type DBConfig struct {
 	Memcache   string `json:"memcache"`
 }
 
+func (d DBConfig) Redacted() interface{} {
+	d.Pass = relog.Redact(d.Pass)
+	return d
+}
+
 func (d DBConfig) MysqlParams() mysql.ConnectionParams {
 	return mysql.ConnectionParams{
 		Host:       d.Host,

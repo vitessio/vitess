@@ -87,7 +87,13 @@ func main() {
 		}
 	}
 	unmarshalFile(*configFile, &config)
+	data, _ := json.MarshalIndent(config, "", "  ")
+	relog.Info("config: %s\n", data)
+
 	unmarshalFile(*dbConfigFile, &dbconfig)
+	data, _ = json.MarshalIndent(dbconfig.Redacted(), "", "  ")
+	relog.Info("dbconfig: %s\n", data)
+
 	qm := &OccManager{config, dbconfig}
 	rpcwrap.RegisterAuthenticated(qm)
 	ts.RegisterQueryService(config)
@@ -149,8 +155,6 @@ func unmarshalFile(name string, val interface{}) {
 			relog.Fatal("could not read %s: %v", val, err)
 		}
 	}
-	data, _ := json.MarshalIndent(val, "", "  ")
-	relog.Info("config: %s\n", data)
 }
 
 // OccManager is deprecated. Use SqlQuery.GetSessionId instead.
