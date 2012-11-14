@@ -16,7 +16,6 @@ import (
 	"os"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -288,7 +287,7 @@ func initTablet(zconn zk.Conn, params map[string]string, update bool) error {
 
 	cell := zk.ZkCellFromZkPath(zkPath)
 	pathParts := strings.Split(zkPath, "/")
-	uid, err := strconv.Atoi(pathParts[len(pathParts)-1])
+	uid, err := tm.ParseUid(pathParts[len(pathParts)-1])
 	if err != nil {
 		return err
 	}
@@ -306,7 +305,7 @@ func initTablet(zconn zk.Conn, params map[string]string, update bool) error {
 	}
 
 	hostname := params["hostname"]
-	tablet := tm.NewTablet(cell, uint(uid), parent, fmt.Sprintf("%v:%v", hostname, params["port"]), fmt.Sprintf("%v:%v", hostname, params["mysql_port"]), keyspace, shardId, tm.TabletType(tabletType))
+	tablet := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, params["port"]), fmt.Sprintf("%v:%v", hostname, params["mysql_port"]), keyspace, shardId, tm.TabletType(tabletType))
 	tablet.DbNameOverride = *dbNameOverride
 
 	keyStart, ok := params["key_start"]
@@ -1075,7 +1074,7 @@ func (rts rTablets) Less(i, j int) bool {
 	return false
 }
 
-func sortReplicatingTablets(tabletMap map[uint]*tm.TabletInfo, posMap map[uint]*mysqlctl.ReplicationPosition) []*rTablet {
+func sortReplicatingTablets(tabletMap map[uint32]*tm.TabletInfo, posMap map[uint32]*mysqlctl.ReplicationPosition) []*rTablet {
 	rtablets := make([]*rTablet, 0, len(tabletMap))
 	for uid, pos := range posMap {
 		rtablets = append(rtablets, &rTablet{tabletMap[uid], pos})

@@ -35,7 +35,7 @@ func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardAction
 // Check all the tablets to see if we can proceed with reparenting.
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
-func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
+func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint32]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
 	relog.Debug("checkSlaveConsistencyWithActions %v %#v", mapKeys(tabletMap), masterPosition)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
@@ -95,7 +95,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 	}
 
 	// map positions to tablets
-	positionMap := make(map[string][]uint)
+	positionMap := make(map[string][]uint32)
 	for i := 0; i < len(tabletMap); i++ {
 		ctx := <-calls
 		mapKey := "unavailable-tablet-error"
@@ -103,7 +103,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 			mapKey = ctx.position.MapKey()
 		}
 		if _, ok := positionMap[mapKey]; !ok {
-			positionMap[mapKey] = make([]uint, 0, 32)
+			positionMap[mapKey] = make([]uint32, 0, 32)
 		}
 		positionMap[mapKey] = append(positionMap[mapKey], ctx.tablet.Uid)
 	}
@@ -139,7 +139,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint]*tm.Tabl
 }
 
 // Shut off all replication.
-func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint]*tm.TabletInfo, zkShardActionPath string) error {
+func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint32]*tm.TabletInfo, zkShardActionPath string) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *tm.TabletInfo) {
 		actionPath, err := wr.ai.StopSlave(ti.Path())
@@ -170,7 +170,7 @@ func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint]*tm.TabletInfo, zkSh
 // Return a map of all tablets to the current replication position.
 // Handles masters and slaves, but it's up to the caller to guarantee
 // all tablets are in the same shard.
-func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint]*tm.TabletInfo, zkShardActionPath string) (map[uint]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint32]*tm.TabletInfo, zkShardActionPath string) (map[uint32]*mysqlctl.ReplicationPosition, error) {
 	relog.Debug("tabletReplicationPositions %v", mapKeys(tabletMap))
 
 	calls := make(chan *rpcContext, len(tabletMap))
@@ -200,7 +200,7 @@ func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint]*tm.TabletInfo
 	}
 
 	someErrors := false
-	positionMap := make(map[uint]*mysqlctl.ReplicationPosition)
+	positionMap := make(map[uint32]*mysqlctl.ReplicationPosition)
 	for i := 0; i < len(tabletMap); i++ {
 		ctx := <-calls
 		if ctx.err == nil {

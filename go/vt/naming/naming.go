@@ -26,7 +26,7 @@ import (
 )
 
 type VtnsAddr struct {
-	Uid          uint           `json:"uid"` // Keep track of which tablet this corresponds to.
+	Uid          uint32         `json:"uid"` // Keep track of which tablet this corresponds to.
 	Host         string         `json:"host"`
 	Port         int            `json:"port"`
 	NamedPortMap map[string]int `json:"named_port_map"`
@@ -37,7 +37,7 @@ type VtnsAddrs struct {
 	version int        // zk version to allow non-stomping writes
 }
 
-func NewAddr(uid uint, host string, port int) *VtnsAddr {
+func NewAddr(uid uint32, host string, port int) *VtnsAddr {
 	return &VtnsAddr{Uid: uid, Host: host, Port: port, NamedPortMap: make(map[string]int)}
 }
 

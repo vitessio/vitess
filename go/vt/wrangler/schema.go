@@ -62,7 +62,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 	}
 
 	// get schema from the master, or error
-	if si.MasterAlias.Uid == 0 {
+	if si.MasterAlias.Uid == tm.NO_TABLET {
 		return fmt.Errorf("No master in shard " + zkShardPath)
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
@@ -110,7 +110,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == 0 {
+	if si.MasterAlias.Uid == tm.NO_TABLET {
 		return fmt.Errorf("No master in shard " + referenceShardPath)
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
@@ -144,7 +144,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 			continue
 		}
 
-		if si.MasterAlias.Uid == 0 {
+		if si.MasterAlias.Uid == tm.NO_TABLET {
 			result <- "No master in shard " + shardPath
 			continue
 		}

@@ -89,7 +89,7 @@ func MustBeTabletPath(zkTabletPath string) {
 }
 
 // This is the path that indicates the authoritive table node.
-func TabletPath(zkVtRoot string, tabletUid uint) string {
+func TabletPath(zkVtRoot string, tabletUid uint32) string {
 	tabletPath := path.Join(zkVtRoot, "tablets", tabletUidStr(tabletUid))
 	MustBeTabletPath(tabletPath)
 	return tabletPath
@@ -170,7 +170,7 @@ func IsTabletReplicationPath(zkReplicationPath string) bool {
 	return err == nil
 }
 
-func parseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint, err error) {
+func parseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint32, err error) {
 	cell = zk.ZkCellFromZkPath(zkReplicationPath)
 	if cell != "global" {
 		return "", 0, fmt.Errorf("invalid replication path cell, expected global: %v", zkReplicationPath)
@@ -194,15 +194,14 @@ func parseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint
 		return "", 0, fmt.Errorf("invalid replication path %v", zkReplicationPath)
 	}
 	cell = nameParts[0]
-	_uid, err := strconv.ParseUint(nameParts[1], 10, 0)
+	uid, err = ParseUid(nameParts[1])
 	if err != nil {
 		return "", 0, fmt.Errorf("invalid replication path uid %v: %v", zkReplicationPath, err)
 	}
-	uid = uint(_uid)
 	return
 }
 
-func ParseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint) {
+func ParseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint32) {
 	cell, uid, err := parseTabletReplicationPath(zkReplicationPath)
 	if err != nil {
 		panic(err)
@@ -210,11 +209,19 @@ func ParseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint
 	return
 }
 
-func tabletUidStr(uid uint) string {
+func tabletUidStr(uid uint32) string {
 	return fmt.Sprintf("%010d", uid)
 }
 
-func fmtAlias(cell string, uid uint) string {
+func ParseUid(value string) (uint32, error) {
+	uid, err := strconv.ParseUint(value, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("bad tablet uid %v", err)
+	}
+	return uint32(uid), nil
+}
+
+func fmtAlias(cell string, uid uint32) string {
 	return fmt.Sprintf("%v-%v", cell, tabletUidStr(uid))
 }
 

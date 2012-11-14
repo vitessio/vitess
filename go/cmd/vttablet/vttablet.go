@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -29,7 +28,7 @@ import (
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
-	"code.google.com/p/vitess/go/vt/tabletmanager"
+	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -78,12 +77,12 @@ func main() {
 	env.Init("vttablet")
 
 	_, tabletidStr := path.Split(*tabletPath)
-	tabletId, err := strconv.ParseUint(tabletidStr, 10, 32)
+	tabletId, err := tm.ParseUid(tabletidStr)
 	if err != nil {
-		relog.Fatal("Error converting tabletid to uint")
+		relog.Fatal("%s", err)
 	}
 
-	mycnf := readMycnf(uint32(tabletId))
+	mycnf := readMycnf(tabletId)
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
 		relog.Warning("%s", err)
@@ -170,8 +169,8 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifcations to this tablet.
-	agent := tabletmanager.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DbConfigsFile, *dbconfigs.DbCredentialsFile)
-	agent.AddChangeCallback(func(oldTablet, newTablet tabletmanager.Tablet) {
+	agent := tm.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DbConfigsFile, *dbconfigs.DbCredentialsFile)
+	agent.AddChangeCallback(func(oldTablet, newTablet tm.Tablet) {
 		if newTablet.IsServingType() {
 			if dbcfgs.App.Dbname == "" {
 				dbcfgs.App.Dbname = newTablet.DbName()
@@ -179,7 +178,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 			// Transitioning from replica to master, first disconnect
 			// existing connections. "false" indicateds that clients must
 			// re-resolve their endpoint before reconnecting.
-			if newTablet.Type == tabletmanager.TYPE_MASTER && oldTablet.Type != tabletmanager.TYPE_MASTER {
+			if newTablet.Type == tm.TYPE_MASTER && oldTablet.Type != tm.TYPE_MASTER {
 				ts.DisallowQueries(false)
 			}
 			ts.AllowQueries(dbcfgs.App)
@@ -198,7 +197,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 
 	// The TabletManager service exports read-only management related
 	// data.
-	tm := tabletmanager.NewTabletManager(bindAddr, nil, mysqld)
+	tm := tm.NewTabletManager(bindAddr, nil, mysqld)
 	rpc.Register(tm)
 }
 

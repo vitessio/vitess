@@ -179,7 +179,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	// guarantee is that *enough* replica nodes are in a good state. In
 	// fact, "enough" is probably a function of each datacenter. It's
 	// complicated.
-	slaveTabletMap := make(map[uint]*tm.TabletInfo)
+	slaveTabletMap := make(map[uint32]*tm.TabletInfo)
 	for _, alias := range tabletAliases {
 		if alias.Uid == masterTablet.Uid {
 			// skip master
@@ -225,7 +225,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		// reparenting since you will just wait forever for them to catch
 		// up.  A possible improvement is waiting for the io thread to
 		// reach the same position as the sql thread on a normal slave.
-		restartableSlaveTabletMap := make(map[uint]*tm.TabletInfo)
+		restartableSlaveTabletMap := make(map[uint32]*tm.TabletInfo)
 		for uid, ti := range slaveTabletMap {
 			if ti.Type == tm.TYPE_LAG {
 				relog.Info("skipping reparent action for tablet %v %v", ti.Type, ti.Path())
@@ -442,7 +442,7 @@ func mapStrKeys(m interface{}) []string {
 // FIXME(msolomon) This has been superceded by the action based version.
 // This should be removed, but the RPC based version is much simpler to
 // understand even though they are starting to diverge.
-func checkSlaveConsistency(tabletMap map[uint]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
+func checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
 	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
 	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
@@ -494,14 +494,14 @@ wait:
 
 	replyErrorCount := len(tabletMap) - len(replies)
 	// map positions to tablets
-	positionMap := make(map[string][]uint)
+	positionMap := make(map[string][]uint32)
 	for _, ctx := range replies {
 		if ctx.err != nil {
 			replyErrorCount++
 		} else {
 			mapKey := ctx.position.MapKey()
 			if _, ok := positionMap[mapKey]; !ok {
-				positionMap[mapKey] = make([]uint, 0, 32)
+				positionMap[mapKey] = make([]uint32, 0, 32)
 			}
 			positionMap[mapKey] = append(positionMap[mapKey], ctx.tablet.Uid)
 		}
@@ -535,7 +535,7 @@ wait:
 }
 
 // Shut off all replication.
-func stopSlaves(tabletMap map[uint]*tm.TabletInfo) error {
+func stopSlaves(tabletMap map[uint32]*tm.TabletInfo) error {
 	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
@@ -574,7 +574,7 @@ wait:
 	return err
 }
 
-func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint]*tm.TabletInfo, map[uint]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*tm.TabletInfo, map[uint32]*mysqlctl.ReplicationPosition, error) {
 	tm.MustBeShardPath(zkShardPath)
 
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
@@ -612,14 +612,14 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint]*tm.
 	return tabletMap, posMap, err
 }
 
-func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardActionPath string) (map[uint]*tm.TabletInfo, map[uint]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardActionPath string) (map[uint32]*tm.TabletInfo, map[uint32]*mysqlctl.ReplicationPosition, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
 	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
 	if err != nil {
 		return nil, nil, err
 	}
 
-	tabletMap := make(map[uint]*tm.TabletInfo)
+	tabletMap := make(map[uint32]*tm.TabletInfo)
 	for _, alias := range tabletAliases {
 		tablet, err := wr.readTablet(shardInfo.TabletPath(alias))
 		if err != nil {

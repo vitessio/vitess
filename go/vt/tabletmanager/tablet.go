@@ -105,7 +105,7 @@ const (
 // Tablet cell assignments don't change that often, thus using a TabletAlias is efficient.
 type TabletAlias struct {
 	Cell string
-	Uid  uint
+	Uid  uint32
 }
 
 func (ta *TabletAlias) String() string {
@@ -119,7 +119,7 @@ const (
 // A pure data struct for information serialized into json and stored in zookeeper.
 type Tablet struct {
 	Cell        string      // the zk cell this tablet is assigned to (doesn't change)
-	Uid         uint        // the server id for this instance
+	Uid         uint32      // the server id for this instance
 	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
 	Addr        string      // host:port for queryserver
 	MysqlAddr   string      // host:port for the mysql instance
@@ -237,7 +237,7 @@ func TabletReplicationPath(zkVtRoot string, tablet *Tablet) string {
 	return zkPath
 }
 
-func NewTablet(cell string, uid uint, parent TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType TabletType) *Tablet {
+func NewTablet(cell string, uid uint32, parent TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType TabletType) *Tablet {
 	state := STATE_READ_ONLY
 	if tabletType == TYPE_MASTER {
 		state = STATE_READ_WRITE

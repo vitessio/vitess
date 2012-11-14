@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -415,11 +414,11 @@ func (ta *TabletActor) reparentPosition(actionNode *ActionNode, args map[string]
 	rsd.TimePromoted = timePromoted
 	rsd.WaitPosition = waitPosition
 	parts := strings.Split(ta.zkTabletPath, "/")
-	uid, err := strconv.ParseUint(parts[len(parts)-1], 10, 32)
+	uid, err := ParseUid(parts[len(parts)-1])
 	if err != nil {
-		return fmt.Errorf("bad tablet uid %v", err)
+		return err
 	}
-	rsd.Parent = TabletAlias{parts[2], uint(uid)}
+	rsd.Parent = TabletAlias{parts[2], uid}
 	relog.Debug("reparentPosition %#v", *rsd)
 	return ta.storeActionResult(actionNode, rsd)
 }
@@ -680,7 +679,7 @@ func (ta *TabletActor) restore(args map[string]string) error {
 		return err
 	}
 	if strings.ToLower(zkSrcFilePath) == "default" {
-		zkSrcFilePath = path.Join(mysqlctl.SnapshotDir(uint32(sourceTablet.Uid)), mysqlctl.SnapshotManifestFile)
+		zkSrcFilePath = path.Join(mysqlctl.SnapshotDir(sourceTablet.Uid), mysqlctl.SnapshotManifestFile)
 	}
 
 	// read the parent tablet, verify its state
