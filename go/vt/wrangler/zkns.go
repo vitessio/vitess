@@ -64,7 +64,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
 	}
 
 	for cell, _ := range cellMap {
-		vtnsRootPath := path.Join("/zk/%v/vt/ns/%v", cell, keyspace)
+		vtnsRootPath := fmt.Sprintf("/zk/%v/vt/ns/%v", cell, keyspace)
 		zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt/%v", cell, keyspace)
 
 		children, err := zk.ChildrenRecursive(wr.zconn, vtnsRootPath)
