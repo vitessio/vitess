@@ -91,7 +91,7 @@ func DisallowQueries(forRestart bool) {
 // Reload the schema. If the query service is not running, nothing will happen
 func ReloadSchema() {
 	defer logError()
-	SqlQueryRpcService.reloadSchema()
+	SqlQueryRpcService.qe.schemaInfo.triggerReload()
 }
 
 func GetSessionId() int64 {

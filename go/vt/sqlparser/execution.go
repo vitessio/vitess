@@ -311,7 +311,7 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	columnNumbers := node.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
+	pkColumnNumbers := node.At(INSERT_COLUMN_LIST_OFFSET).getInsertPKColumns(tableInfo)
 
 	if node.At(INSERT_ON_DUP_OFFSET).Len() != 0 {
 		var ok bool
@@ -335,12 +335,12 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 			n.Push(NewSimpleParseNode(SELECT_STAR, "*"))
 			plan.ColumnNumbers = n.execAnalyzeSelectExpressions(tableInfo)
 		}
-		plan.SubqueryPKColumns = columnNumbers
+		plan.SubqueryPKColumns = pkColumnNumbers
 		return plan
 	}
 
 	rowList := rowValues.At(0) // VALUES->NODE_LIST
-	if pkValues := getInsertPKValues(columnNumbers, rowList, tableInfo); pkValues != nil {
+	if pkValues := getInsertPKValues(pkColumnNumbers, rowList, tableInfo); pkValues != nil {
 		plan.PlanId = PLAN_INSERT_PK
 		plan.OuterQuery = plan.FullQuery
 		plan.PKValues = pkValues
@@ -730,28 +730,28 @@ func (node *Node) execAnalyzeOrderExpression() (order *Node) {
 //-----------------------------------------------
 // Insert
 
-func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (columnNumbers []int) {
+func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (pkColumnNumbers []int) {
 	if node.Len() == 0 {
 		return tableInfo.PKColumns
 	}
 	pkIndex := tableInfo.Indexes[0]
-	columnNumbers = make([]int, len(pkIndex.Columns))
-	for i, _ := range columnNumbers {
-		columnNumbers[i] = -1
+	pkColumnNumbers = make([]int, len(pkIndex.Columns))
+	for i, _ := range pkColumnNumbers {
+		pkColumnNumbers[i] = -1
 	}
 	for i, column := range node.Sub {
 		index := pkIndex.FindColumn(string(column.Value))
 		if index == -1 {
 			continue
 		}
-		columnNumbers[index] = i
+		pkColumnNumbers[index] = i
 	}
-	return columnNumbers
+	return pkColumnNumbers
 }
 
-func getInsertPKValues(columnNumbers []int, rowList *Node, tableInfo *schema.Table) (pkValues []interface{}) {
-	pkValues = make([]interface{}, len(columnNumbers))
-	for index, columnNumber := range columnNumbers {
+func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.Table) (pkValues []interface{}) {
+	pkValues = make([]interface{}, len(pkColumnNumbers))
+	for index, columnNumber := range pkColumnNumbers {
 		if columnNumber == -1 {
 			pkValues[index] = tableInfo.GetPKColumn(index).Default
 			continue

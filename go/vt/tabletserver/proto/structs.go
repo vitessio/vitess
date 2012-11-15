@@ -43,14 +43,12 @@ type ConnectionInfo struct {
 }
 
 type CacheInvalidate struct {
-	Database string
-	Dmls     []struct {
+	Dmls []struct {
 		Table string
 		Keys  []interface{}
 	}
 }
 
 type DDLInvalidate struct {
-	Database string
-	DDL      string
+	DDL string
 }
