@@ -350,15 +350,6 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 		}
 	}
 
-	for shardPath, _ := range shardPaths {
-		actionPath, err := wr.RebuildShardGraph(shardPath)
-		if err != nil {
-			relog.Warning("RebuildShard failed: %v %v", shardPath, err)
-			continue
-		}
-		wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-	}
-
 	for keyspacePath, _ := range keyspacePaths {
 		actionPath, err := wr.RebuildKeyspaceGraph(keyspacePath)
 		if err != nil {
