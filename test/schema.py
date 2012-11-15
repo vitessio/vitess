@@ -141,6 +141,28 @@ def run_test_complex_schema():
   check_tables(shard_0_rdonly, 2)
   check_tables(shard_0_backup, 1)
 
+  out, err = utils.run(vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
+  oldLines = out.splitlines()
+  oldCount = len(oldLines)
+  if utils.options.verbose:
+    print "I have %u actionlog before" % oldCount
+  if oldCount <= 5:
+    raise utils.TestError('Not enough actionlog before: %u' % oldCount)
+
+  utils.run_vtctl('PruneActionLogs '+shard_0_replica1.zk_tablet_path+'/actionlog 5', log_level='INFO')
+
+  out, err = utils.run(vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
+  newLines = out.splitlines()
+  newCount = len(newLines)
+  if utils.options.verbose:
+    print "I have %u actionlog after" % newCount
+
+  if newCount != 5:
+    raise utils.TestError('Unexpected actionlog count after: %u' % newCount)
+  if oldLines[-5:] != newLines:
+    raise utils.TestError('Unexpected actionlog values:\n%s\n%s' %
+                          (' '.join(oldLines[-5:]), ' '.join(newLines)))
+
   utils.pause("Look at schema now!")
 
   shard_0_master.kill_vttablet()

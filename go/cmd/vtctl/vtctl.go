@@ -16,6 +16,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -137,6 +138,11 @@ Keyspaces:
 Generic:
   PurgeActions <zk action path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)
     remove all actions - be careful, this is powerful cleanup magic
+
+  PruneActionLogs <zk actionlog path> [<count to keep>]
+    e.g. PruneActionLogs /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog 10
+    Removes older actionlog entries until at most <count to keep> are left.
+    If <count to keep> is not specified, uses 10 as a default.
 
   WaitForAction <zk action path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action/<action id>)
     watch an action node, printing updates, until the action is complete
@@ -761,9 +767,20 @@ func main() {
 		}
 	case "PurgeActions":
 		if len(args) != 2 {
-			relog.Fatal("action %v requires <zk shard path>", args[0])
+			relog.Fatal("action %v requires <zk action path>", args[0])
 		}
 		err = tm.PurgeActions(zconn, args[1])
+	case "PruneActionLogs":
+		if len(args) != 2 && len(args) != 3 {
+			relog.Fatal("action %v requires <zk action log path> [<count to keep>]", args[0])
+		}
+		keepCount := 10
+		if len(args) == 3 {
+			keepCount, err = strconv.Atoi(args[2])
+		}
+		var purgedCount int
+		purgedCount, err = tm.PruneActionLogs(zconn, args[1], keepCount)
+		relog.Info("Pruned %v actionlog", purgedCount)
 	case "RebuildShardGraph":
 		if len(args) != 2 {
 			relog.Fatal("action %v requires <zk shard path>", args[0])

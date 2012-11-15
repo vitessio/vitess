@@ -350,3 +350,36 @@ func PurgeActions(zconn zk.Conn, zkActionPath string) error {
 	}
 	return nil
 }
+
+// Prune old actionlog entries. Returns how many entries were purged
+// (even if there was an error)
+//
+// There is a chance some processes might still be waiting for action
+// results, but it is very very small.
+func PruneActionLogs(zconn zk.Conn, zkActionLogPath string, keepCount int) (prunedCount int, err error) {
+	if path.Base(zkActionLogPath) != "actionlog" {
+		panic(fmt.Errorf("not actionlog path: %v", zkActionLogPath))
+	}
+
+	// get sorted list of children
+	children, _, err := zconn.Children(zkActionLogPath)
+	if err != nil {
+		return 0, err
+	}
+	sort.Strings(children)
+
+	// see if nothing to do
+	if len(children) <= keepCount {
+		return 0, nil
+	}
+
+	for i := 0; i < len(children)-keepCount; i++ {
+		actionPath := path.Join(zkActionLogPath, children[i])
+		err = zk.DeleteRecursive(zconn, actionPath, -1)
+		if err != nil {
+			return prunedCount, fmt.Errorf("purge action err: %v", err)
+		}
+		prunedCount++
+	}
+	return prunedCount, nil
+}
