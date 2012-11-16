@@ -53,7 +53,8 @@ const (
 	SHARD_ACTION_APPLY_SCHEMA = "ApplySchemaShard"
 
 	// Keyspace actions - require very high level locking for consistency
-	KEYSPACE_ACTION_REBUILD = "RebuildKeyspace"
+	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
+	KEYSPACE_ACTION_APPLY_SCHEMA = "ApplySchemaKeyspace"
 
 	ACTION_STATE_QUEUED  = ActionState("")        // All actions are queued initially
 	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process

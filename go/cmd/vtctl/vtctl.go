@@ -194,10 +194,13 @@ Schema: (beta)
     apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
 
   ApplySchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>} [allow_replication=false] [skip_preflight=true]
-    apply the schema change to the specific tablet (allowing replication by default). The sql can be inlined or read from a file. Note this doesn't change any tablet state (doesn't go into 'schema' type).
+    apply the schema change to the specified tablet (allowing replication by default). The sql can be inlined or read from a file. Note this doesn't change any tablet state (doesn't go into 'schema' type).
 
   ApplySchemaShard zk_shard_path=<zk shard path> {sql=<sql> || sql_file=<filename>} [simple=false] [new_parent=<zk tablet path>]
-    apply the schema change to the specific shard. If simple is true, we just apply on the live master. If simple is false, we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
+    apply the schema change to the specified shard. If simple is true, we just apply on the live master. If simple is false, we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
+
+  ApplySchemaKeyspace zk_keyspace_path=<zk keyspace path> {sql=<sql> || sql_file=<filename>} [simple=false]
+    apply the schema change to the specified keyspace. If simple is true, we just apply on the live masters. If simple is false, we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). we will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care.
 `
 
 var noWaitForAction = flag.Bool("no-wait", false,
@@ -943,7 +946,8 @@ func main() {
 			relog.Fatal("action %v requires zk_tablet_path=<zk tablet path>", args[0])
 		}
 		change := getFileParam(params, "sql")
-		scr, err := wrangler.PreflightSchema(zkTabletPath, change)
+		var scr *mysqlctl.SchemaChangeResult
+		scr, err = wrangler.PreflightSchema(zkTabletPath, change)
 		if err == nil {
 			relog.Info(scr.String())
 			if scr.Error != "" {
@@ -976,7 +980,8 @@ func main() {
 			sc.Force = *force
 		}
 
-		scr, err := wrangler.ApplySchema(zkTabletPath, sc)
+		var scr *mysqlctl.SchemaChangeResult
+		scr, err = wrangler.ApplySchema(zkTabletPath, sc)
 		if err == nil {
 			relog.Info(scr.String())
 			if scr.Error != "" {
@@ -996,7 +1001,25 @@ func main() {
 			relog.Fatal("new_parent for action %v can only be specified for complex schema upgrades", args[0])
 		}
 
-		scr, err := wrangler.ApplySchemaShard(zkShardPath, sql, newParent, simple, *force)
+		var scr *mysqlctl.SchemaChangeResult
+		scr, err = wrangler.ApplySchemaShard(zkShardPath, sql, newParent, simple, *force)
+		if err == nil {
+			relog.Info(scr.String())
+			if scr.Error != "" {
+				relog.Fatal(scr.Error)
+			}
+		}
+	case "ApplySchemaKeyspace":
+		params := parseParams(args)
+		zkKeyspacePath, ok := params["zk_keyspace_path"]
+		if !ok {
+			relog.Fatal("action %v requires zk_keyspace_path=<zk keyspace path>", args[0])
+		}
+		sql := getFileParam(params, "sql")
+		simple := params["simple"] == "true"
+
+		var scr *mysqlctl.SchemaChangeResult
+		scr, err = wrangler.ApplySchemaKeyspace(zkKeyspacePath, sql, simple, *force)
 		if err == nil {
 			relog.Info(scr.String())
 			if scr.Error != "" {

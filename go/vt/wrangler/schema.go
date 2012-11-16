@@ -222,8 +222,12 @@ func (wr *Wrangler) ApplySchemaShard(zkShardPath string, change, zkNewParentTabl
 		return nil, err
 	}
 
-	// We think we can do this, let's get a shard lock
-	actionPath, err := wr.ai.ApplySchemaShard(zkShardPath)
+	return wr.lockAndApplySchemaShard(shardInfo, preflight, zkShardPath, zkMasterTabletPath, change, zkNewParentTabletPath, simple, force)
+}
+
+func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, shardPath, zkMasterTabletPath, change, zkNewParentTabletPath string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+	// get a shard lock
+	actionPath, err := wr.ai.ApplySchemaShard(shardPath, zkNewParentTabletPath, change, simple)
 	if err != nil {
 		return nil, err
 	}
@@ -234,22 +238,30 @@ func (wr *Wrangler) ApplySchemaShard(zkShardPath string, change, zkNewParentTabl
 		return nil, err
 	}
 	if !ok {
-		// just clean up for now, in the future we may want to try harder, or wait
+		// just clean up for now, in the future we
+		// may want to try harder, or wait
 		wr.zconn.Delete(actionPath, -1)
-		return nil, fmt.Errorf("ApplySchemaShard failed to obtain shard action lock")
+		return nil, fmt.Errorf("ApplySchemaShard failed to obtain shard action lock on shard %v", shardPath)
 	}
 
 	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, zkMasterTabletPath, actionPath, change, zkNewParentTabletPath, simple, force)
-	relog.Info("applySchemaShard finished error=%v", schemaErr)
+	relog.Info("applySchemaShard finished on %v error=%v", shardPath, schemaErr)
 
 	err = wr.handleActionError(actionPath, schemaErr)
+	if err != nil {
+		relog.Warning("handleActionError failed: %v", err)
+	}
+	// schemaErr has higher priority
 	if schemaErr != nil {
-		if err != nil {
-			relog.Warning("handleActionError failed: %v", err)
-		}
 		return nil, schemaErr
 	}
-	return scr, err
+	if scr.Error != "" {
+		return nil, fmt.Errorf("applySchemaShard failed on shard %v: %v", shardInfo.ShardPath(), scr.Error)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return scr, nil
 }
 
 // local structure used to keep track of what we're doing
@@ -281,7 +293,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 	// In particular, if we had interrupted a schema change
 	// before, and some tablets are still applying it, this would
 	// wait until they're done.
-	relog.Info("Getting schema on all tablets")
+	relog.Info("Getting schema on all tablets for shard %v", shardInfo.ShardPath())
 	wg := &sync.WaitGroup{}
 	for _, status := range statusArray {
 		wg.Add(1)
@@ -399,5 +411,149 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		// too.
 		relog.Info("Skipping schema change on old master %v in complex mode, it's been Scrapped", zkMasterTabletPath)
 	}
+	return &mysqlctl.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
+}
+
+// apply a schema change to an entire keyspace.
+// take a keyspace lock to do this.
+// first we will validate the Preflight works the same on all shard masters
+// and fail if not (unless force is specified)
+// if simple, we just do it on all masters.
+// if complex, we do the shell game in parallel on all shards
+func (wr *Wrangler) ApplySchemaKeyspace(zkKeyspacePath string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+	relog.Info("Reading keyspace and getting lock")
+	tm.MustBeKeyspacePath(zkKeyspacePath)
+	actionPath, err := wr.ai.ApplySchemaKeyspace(zkKeyspacePath, change, simple)
+	if err != nil {
+		return nil, err
+	}
+
+	// Make sure two of these don't get scheduled at the same time.
+	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, false)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		// just clean up for now, in the future we may want to try harder, or wait
+		wr.zconn.Delete(actionPath, -1)
+		return nil, fmt.Errorf("failed to obtain action lock: %v", actionPath)
+	}
+
+	scr, schemaErr := wr.applySchemaKeyspace(zkKeyspacePath, change, simple, force)
+	err = wr.handleActionError(actionPath, schemaErr)
+	if schemaErr != nil {
+		if err != nil {
+			relog.Warning("handleActionError failed: %v", err)
+		}
+		return nil, schemaErr
+	}
+	return scr, err
+}
+
+func (wr *Wrangler) applySchemaKeyspace(zkKeyspacePath string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+	zkShardsPath := path.Join(zkKeyspacePath, "shards")
+	shards, _, err := wr.zconn.Children(zkShardsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// corner cases
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("No shards in keyspace " + zkKeyspacePath)
+	}
+	if len(shards) == 1 {
+		relog.Info("Only one shard in keyspace %v, using ApplySchemaShard", zkKeyspacePath)
+		return wr.ApplySchemaShard(path.Join(zkShardsPath, shards[0]), change, "", simple, force)
+	}
+
+	// Get schema on all shard masters in parallel
+	relog.Info("Getting schema on all shards")
+	beforeSchemas := make([]*mysqlctl.SchemaDefinition, len(shards))
+	zkMasterTabletPaths := make([]string, len(shards))
+	shardInfos := make([]*tm.ShardInfo, len(shards))
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{}
+	getErrs := make([]string, 0, 5)
+	for i, shard := range shards {
+		shardPath := path.Join(zkShardsPath, shard)
+		wg.Add(1)
+		go func(i int) {
+			var err error
+			defer func() {
+				if err != nil {
+					mu.Lock()
+					getErrs = append(getErrs, err.Error())
+					mu.Unlock()
+				}
+				wg.Done()
+			}()
+
+			shardInfos[i], err = tm.ReadShard(wr.zconn, shardPath)
+			if err != nil {
+				return
+			}
+
+			zkMasterTabletPaths[i], err = shardInfos[i].MasterTabletPath()
+			if err != nil {
+				return
+			}
+
+			beforeSchemas[i], err = wr.GetSchema(zkMasterTabletPaths[i])
+		}(i)
+	}
+	wg.Wait()
+	if len(getErrs) > 0 {
+		return nil, fmt.Errorf("Error(s) getting schema: %v", strings.Join(getErrs, ", "))
+	}
+
+	// check they all match, or use the force flag
+	relog.Info("Checking starting schemas match on all shards")
+	for i, beforeSchema := range beforeSchemas {
+		if i == 0 {
+			continue
+		}
+		diffs := beforeSchemas[0].DiffSchemaToArray("shard 0", fmt.Sprintf("shard %v", i), beforeSchema)
+		if len(diffs) > 0 {
+			if force {
+				relog.Warning("Shard %v has inconsistent schema, ignoring: %v", i, strings.Join(diffs, "\n"))
+			} else {
+				return nil, fmt.Errorf("Shard %v has inconsistent schema: %v", i, strings.Join(diffs, "\n"))
+			}
+		}
+	}
+
+	// preflight on shard 0 master, to get baseline
+	// this assumes shard 0 master doesn't have the schema upgrade applied
+	// if it does, we'll have to fix the slaves and other shards manually.
+	relog.Info("Running Preflight on Shard 0 Master")
+	preflight, err := wr.PreflightSchema(zkMasterTabletPaths[0], change)
+	if err != nil {
+		return nil, err
+	}
+
+	// for each shard, apply the change
+	relog.Info("Applying change on all shards")
+	var applyErr error
+	for i, shard := range shards {
+		shardPath := path.Join(zkShardsPath, shard)
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+
+			_, err := wr.lockAndApplySchemaShard(shardInfos[i], preflight, shardPath, zkMasterTabletPaths[i], change, "", simple, force)
+			if err != nil {
+				mu.Lock()
+				applyErr = err
+				mu.Unlock()
+				return
+			}
+		}(i)
+	}
+	wg.Wait()
+	if applyErr != nil {
+		return nil, applyErr
+	}
+
 	return &mysqlctl.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }

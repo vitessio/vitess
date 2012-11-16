@@ -235,14 +235,24 @@ func (ai *ActionInitiator) CheckShard(zkShardPath string) (actionPath string, er
 	return ai.writeShardAction(zkShardPath, node)
 }
 
-func (ai *ActionInitiator) ApplySchemaShard(zkShardPath string) (actionPath string, err error) {
+// parameters are stored for debug purposes
+func (ai *ActionInitiator) ApplySchemaShard(zkShardPath, zkMasterTabletPath, change string, simple bool) (actionPath string, err error) {
 	node := &ActionNode{Action: SHARD_ACTION_APPLY_SCHEMA}
+	node.Args = map[string]string{"zkMasterTabletPath": zkMasterTabletPath, "change": change, "simple": fmt.Sprintf("%v", simple)}
 	return ai.writeShardAction(zkShardPath, node)
 }
 
 func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath string, err error) {
 	MustBeKeyspacePath(zkKeyspacePath)
 	node := &ActionNode{Action: KEYSPACE_ACTION_REBUILD}
+	return ai.writeKeyspaceAction(zkKeyspacePath, node)
+}
+
+// parameters are stored for debug purposes
+func (ai *ActionInitiator) ApplySchemaKeyspace(zkKeyspacePath, change string, simple bool) (actionPath string, err error) {
+	MustBeKeyspacePath(zkKeyspacePath)
+	node := &ActionNode{Action: KEYSPACE_ACTION_APPLY_SCHEMA}
+	node.Args = map[string]string{"change": change, "simple": fmt.Sprintf("%v", simple)}
 	return ai.writeKeyspaceAction(zkKeyspacePath, node)
 }
 
