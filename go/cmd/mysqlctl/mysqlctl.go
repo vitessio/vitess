@@ -51,7 +51,20 @@ func main() {
 			relog.Fatal("partialrestore failed: %v", err)
 		}
 	case "partialsnapshot":
-		filename, err := mysqld.CreateSplitSnapshot(flag.Arg(1), flag.Arg(2), key.HexKeyspaceId(flag.Arg(3)), key.HexKeyspaceId(flag.Arg(4)), tabletAddr, false)
+		subFlags := flag.NewFlagSet("partialsnapshot", flag.ExitOnError)
+		start := subFlags.String("start", "", "start of the key range")
+		end := subFlags.String("end", "", "end of the key range")
+
+		if err := subFlags.Parse(flag.Args()[1:]); err != nil {
+			flag.Usage()
+			os.Exit(1)
+		}
+
+		if len(subFlags.Args()) != 2 {
+			relog.Fatal("action %v requires <db name> <key name>", flag.Arg(0))
+		}
+
+		filename, err := mysqld.CreateSplitSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(*start), key.HexKeyspaceId(*end), tabletAddr, false)
 		if err != nil {
 			relog.Fatal("partialsnapshot failed: %v", err)
 		} else {
