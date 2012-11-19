@@ -292,7 +292,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		relog.Info("restart slave %v", slaveTablet.Path())
 		wg.Add(1)
 		f := func(zkSlavePath string) {
-			actionPath, err := wr.ai.RestartSlave(zkSlavePath, zkShardActionPath, nil)
+			actionPath, err := wr.ai.RestartSlave(zkSlavePath, &tm.RestartSlaveArgs{zkShardActionPath, nil})
 			if err == nil {
 				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			}
@@ -677,11 +677,11 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 		return err
 	}
 
-	pos := new(mysqlctl.ReplicationPosition)
-	err = wr.WaitForActionResult(actionPath, pos, wr.actionTimeout())
+	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	if err != nil {
 		return err
 	}
+	pos := result.(*mysqlctl.ReplicationPosition)
 
 	relog.Info("slave tablet position: %v %v %v", zkTabletPath, ti.MysqlAddr, pos.MapKey())
 
@@ -689,17 +689,17 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 	if err != nil {
 		return err
 	}
-	rsd := new(tm.RestartSlaveData)
-	err = wr.WaitForActionResult(actionPath, rsd, wr.actionTimeout())
+	result, err = wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	if err != nil {
 		return err
 	}
+	rsd := result.(*tm.RestartSlaveData)
 
 	relog.Info("master tablet position: %v %v #%v", masterPath, masterTi.MysqlAddr, rsd)
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == tm.TYPE_LAG_ORPHAN
-	actionPath, err = wr.ai.RestartSlave(zkTabletPath, "", rsd)
+	actionPath, err = wr.ai.RestartSlave(zkTabletPath, &tm.RestartSlaveArgs{"", rsd})
 	if err != nil {
 		return err
 	}

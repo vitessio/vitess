@@ -44,9 +44,13 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) (man
 	}
 
 	// wait for completion, and save the error
-	results, actionErr := wr.ai.WaitForCompletionResult(actionPath, wr.actionTimeout())
+	results, actionErr := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	var reply *tm.SnapshotReply
 	if actionErr != nil {
 		relog.Error("snapshot failed, still restoring tablet type: %v", actionErr)
+		reply = &tm.SnapshotReply{}
+	} else {
+		reply = results.(*tm.SnapshotReply)
 	}
 
 	// Restore type
@@ -63,7 +67,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) (man
 		// so returning that (we logged actionErr anyway)
 		return
 	}
-	return results["Manifest"], results["Parent"], actionErr
+	return reply.ManifestPath, reply.ZkParentPath, actionErr
 }
 
 func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string) error {
@@ -72,7 +76,7 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkPar
 		return err
 	}
 
-	actionPath, err := wr.ai.Restore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath)
+	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath})
 	if err != nil {
 		return err
 	}

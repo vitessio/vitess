@@ -24,12 +24,11 @@ func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardAction
 	if err != nil {
 		return nil, err
 	}
-	position := new(mysqlctl.ReplicationPosition)
-	err = wr.WaitForActionResult(actionPath, position, wr.actionTimeout())
+	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	if err != nil {
 		return nil, err
 	}
-	return position, nil
+	return result.(*mysqlctl.ReplicationPosition), nil
 }
 
 // Check all the tablets to see if we can proceed with reparenting.
@@ -59,12 +58,12 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint32]*tm.Ta
 				ctx.err = err
 				return
 			}
-			replPos := new(mysqlctl.ReplicationPosition)
-			err = wr.WaitForActionResult(actionPath, replPos, wr.actionTimeout())
+			result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
 			}
+			replPos := result.(*mysqlctl.ReplicationPosition)
 			lastDataPos := mysqlctl.ReplicationPosition{MasterLogFile: replPos.MasterLogFileIo,
 				MasterLogPositionIo: replPos.MasterLogPositionIo}
 			args = &tm.SlavePositionReq{lastDataPos, int(wr.actionTimeout().Seconds())}
@@ -81,12 +80,12 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint32]*tm.Ta
 			ctx.err = err
 			return
 		}
-		ctx.position = new(mysqlctl.ReplicationPosition)
-		err = wr.WaitForActionResult(actionPath, ctx.position, wr.actionTimeout())
+		result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 		if err != nil {
 			ctx.err = err
 			return
 		}
+		ctx.position = result.(*mysqlctl.ReplicationPosition)
 	}
 
 	for _, tablet := range tabletMap {
@@ -189,10 +188,11 @@ func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint32]*tm.TabletIn
 		if ctx.err != nil {
 			return
 		}
-		ctx.position = new(mysqlctl.ReplicationPosition)
-		if ctx.err = wr.WaitForActionResult(actionPath, ctx.position, wr.actionTimeout()); ctx.err != nil {
+		var result interface{}
+		if result, ctx.err = wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout()); ctx.err != nil {
 			return
 		}
+		ctx.position = result.(*mysqlctl.ReplicationPosition)
 	}
 
 	for _, tablet := range tabletMap {

@@ -5,8 +5,6 @@
 package zkwrangler
 
 import (
-	"encoding/json"
-	"fmt"
 	"time"
 
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
@@ -157,25 +155,6 @@ func (wr *Wrangler) handleActionError(actionPath string, actionErr error) error 
 	// no error, we can unblock the action queue
 	if actionErr == nil {
 		return zk.DeleteRecursive(wr.zconn, actionPath, -1)
-	}
-	return nil
-}
-
-// Waits for the completion of a tablet action, and pulls the single
-// result back into the given interface.
-//
-// See tabletmanager/TabletActor.storeActionResult
-func (wr *Wrangler) WaitForActionResult(actionPath string, result interface{}, waitTime time.Duration) error {
-	results, err := wr.ai.WaitForCompletionResult(actionPath, waitTime)
-	if err != nil {
-		return err
-	}
-	data, ok := results["Result"]
-	if !ok {
-		return fmt.Errorf("No response")
-	}
-	if err = json.Unmarshal([]byte(data), result); err != nil {
-		return err
 	}
 	return nil
 }

@@ -38,14 +38,18 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 		return
 	}
 
-	actionPath, err := wr.ai.PartialSnapshot(zkTabletPath, keyName, startKey, endKey)
+	actionPath, err := wr.ai.PartialSnapshot(zkTabletPath, &tm.PartialSnapshotArgs{keyName, startKey, endKey})
 	if err != nil {
 		return
 	}
 
-	results, actionErr := wr.ai.WaitForCompletionResult(actionPath, wr.actionTimeout())
+	results, actionErr := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	var reply *tm.SnapshotReply
 	if actionErr != nil {
 		relog.Error("PartialSnapshot failed, still restoring tablet type: %v", actionErr)
+		reply = &tm.SnapshotReply{}
+	} else {
+		reply = results.(*tm.SnapshotReply)
 	}
 
 	// Restore type
@@ -62,7 +66,7 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 		// so returning that (we logged actionErr anyway)
 		return
 	}
-	return results["Manifest"], results["Parent"], actionErr
+	return reply.ManifestPath, reply.ZkParentPath, actionErr
 }
 
 func (wr *Wrangler) PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string) error {
@@ -71,7 +75,7 @@ func (wr *Wrangler) PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath
 		return err
 	}
 
-	actionPath, err := wr.ai.PartialRestore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath)
+	actionPath, err := wr.ai.PartialRestore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath})
 	if err != nil {
 		return err
 	}

@@ -19,12 +19,15 @@ import (
 func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, error) {
 	tm.MustBeTabletPath(zkTabletPath)
 	actionPath, err := wr.ai.GetSchema(zkTabletPath)
-
-	sd := new(mysqlctl.SchemaDefinition)
-	if err = wr.WaitForActionResult(actionPath, sd, wr.actionTimeout()); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	return sd, nil
+
+	sd, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	if err != nil {
+		return nil, err
+	}
+	return sd.(*mysqlctl.SchemaDefinition), nil
 }
 
 // helper method to asynchronously diff a schema
@@ -169,12 +172,15 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
 	tm.MustBeTabletPath(zkTabletPath)
 	actionPath, err := wr.ai.PreflightSchema(zkTabletPath, change)
-
-	scr := new(mysqlctl.SchemaChangeResult)
-	if err = wr.WaitForActionResult(actionPath, scr, wr.actionTimeout()); err != nil {
+	if err != nil {
 		return nil, err
 	}
-	return scr, nil
+
+	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	if err != nil {
+		return nil, err
+	}
+	return result.(*mysqlctl.SchemaChangeResult), nil
 }
 
 func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
@@ -183,11 +189,11 @@ func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) 
 
 	// FIXME(alainjobart) the timeout value is wrong here, we need
 	// a longer one
-	scr := new(mysqlctl.SchemaChangeResult)
-	if err = wr.WaitForActionResult(actionPath, scr, wr.actionTimeout()); err != nil {
+	results, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	if err != nil {
 		return nil, err
 	}
-	return scr, nil
+	return results.(*mysqlctl.SchemaChangeResult), nil
 }
 
 // Note for 'complex' mode (the 'simple' mode is easy enough that we

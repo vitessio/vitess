@@ -31,11 +31,11 @@ func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *tm.Hook) (hoo
 		return nil, err
 	}
 
-	hr := new(tm.HookResult)
-	if err = wr.WaitForActionResult(actionPath, hr, 10*time.Minute); err != nil {
+	var hr interface{}
+	if hr, err = wr.ai.WaitForCompletionReply(actionPath, 10*time.Minute); err != nil {
 		return nil, err
 	}
-	return hr, nil
+	return hr.(*tm.HookResult), nil
 }
 
 // Execute a hook and returns an error only if the hook failed, not if

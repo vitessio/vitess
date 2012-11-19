@@ -20,7 +20,6 @@ import (
 	"sort"
 	"time"
 
-	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
@@ -97,13 +96,11 @@ func (ai *ActionInitiator) Ping(zkTabletPath string) (actionPath string, err err
 }
 
 func (ai *ActionInitiator) Sleep(zkTabletPath string, duration time.Duration) (actionPath string, err error) {
-	args := map[string]string{"Duration": duration.String()}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLEEP, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLEEP, args: &duration})
 }
 
 func (ai *ActionInitiator) ChangeType(zkTabletPath string, dbType TabletType) (actionPath string, err error) {
-	args := map[string]string{"DbType": string(dbType)}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, args: &dbType})
 }
 
 func (ai *ActionInitiator) SetReadOnly(zkTabletPath string) (actionPath string, err error) {
@@ -118,17 +115,24 @@ func (ai *ActionInitiator) DemoteMaster(zkTabletPath string) (actionPath string,
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_DEMOTE_MASTER})
 }
 
+// used by both Snapshot and PartialSnapshot
+type SnapshotReply struct {
+	ZkParentPath string
+	ManifestPath string
+}
+
 func (ai *ActionInitiator) Snapshot(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT})
 }
 
-func (ai *ActionInitiator) PartialSnapshot(zkTabletPath, keyName string, startKey, endKey key.HexKeyspaceId) (actionPath string, err error) {
-	args := map[string]string{
-		"KeyName":  keyName,
-		"StartKey": string(startKey),
-		"EndKey":   string(endKey),
-	}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, Args: args})
+type PartialSnapshotArgs struct {
+	KeyName  string
+	StartKey key.HexKeyspaceId
+	EndKey   key.HexKeyspaceId
+}
+
+func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, args: args})
 }
 
 func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, err error) {
@@ -136,21 +140,21 @@ func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, 
 }
 
 func (ai *ActionInitiator) PromoteSlave(zkTabletPath, zkShardActionPath string) (actionPath string, err error) {
-	args := map[string]string{"ShardActionPath": zkShardActionPath}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE, args: &zkShardActionPath})
 }
 
-func (ai *ActionInitiator) RestartSlave(zkTabletPath, zkShardActionPath string, rsd *RestartSlaveData) (actionPath string, err error) {
-	args := map[string]string{"ShardActionPath": zkShardActionPath}
-	if rsd != nil {
-		args["RestartSlaveData"] = jscfg.ToJson(rsd)
-	}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, Args: args})
+type RestartSlaveArgs struct {
+	// only one of these should be set
+	ShardActionPath  string
+	RestartSlaveData *RestartSlaveData
+}
+
+func (ai *ActionInitiator) RestartSlave(zkTabletPath string, args *RestartSlaveArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, args: args})
 }
 
 func (ai *ActionInitiator) ReparentPosition(zkTabletPath string, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
-	args := map[string]string{"SlavePosition": jscfg.ToJson(slavePos)}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, args: slavePos})
 }
 
 // NOTE(msolomon) Also available as RPC.
@@ -165,30 +169,26 @@ func (ai *ActionInitiator) SlavePosition(zkTabletPath string) (actionPath string
 
 // NOTE(msolomon) Also available as RPC.
 func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath, zkArgsPath string) (actionPath string, err error) {
-	args := map[string]string{"ArgsPath": zkArgsPath}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, args: &zkArgsPath})
 }
 
 func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
 }
 
-func (ai *ActionInitiator) Restore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath string) (actionPath string, err error) {
-	args := map[string]string{
-		"SrcTabletPath": zkSrcTabletPath,
-		"SrcFilePath":   srcFilePath,
-		"zkParentPath":  zkParentPath,
-	}
-	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, Args: args})
+// used for both Restore and PartialRestore
+type RestoreArgs struct {
+	ZkSrcTabletPath string
+	SrcFilePath     string
+	ZkParentPath    string
 }
 
-func (ai *ActionInitiator) PartialRestore(zkDstTabletPath, zkSrcTabletPath, srcFilePath, zkParentPath string) (actionPath string, err error) {
-	args := map[string]string{
-		"SrcTabletPath": zkSrcTabletPath,
-		"SrcFilePath":   srcFilePath,
-		"zkParentPath":  zkParentPath,
-	}
-	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_RESTORE, Args: args})
+func (ai *ActionInitiator) Restore(zkDstTabletPath string, args *RestoreArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, args: args})
+}
+
+func (ai *ActionInitiator) PartialRestore(zkDstTabletPath string, args *RestoreArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_RESTORE, args: args})
 }
 
 func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err error) {
@@ -200,46 +200,40 @@ func (ai *ActionInitiator) GetSchema(zkTabletPath string) (actionPath string, er
 }
 
 func (ai *ActionInitiator) PreflightSchema(zkTabletPath, change string) (actionPath string, err error) {
-	args := map[string]string{"Change": change}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PREFLIGHT_SCHEMA, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PREFLIGHT_SCHEMA, args: &change})
 }
 
 func (ai *ActionInitiator) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
-	args := map[string]string{
-		"SchemaChange": jscfg.ToJson(sc),
-	}
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, args: sc})
 }
 
 func (ai *ActionInitiator) ExecuteHook(zkTabletPath string, hook *Hook) (actionPath string, err error) {
-	args := hook.Parameters
-	args["HookName"] = hook.Name
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, Args: args})
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, args: hook})
 }
 
 func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (actionPath string, err error) {
 	MustBeTabletPath(zkTabletPath)
-	node := &ActionNode{Action: SHARD_ACTION_REPARENT}
-	node.Args = map[string]string{"tabletPath": zkTabletPath}
-	return ai.writeShardAction(zkShardPath, node)
+	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REPARENT, args: &zkTabletPath})
 }
 
 func (ai *ActionInitiator) RebuildShard(zkShardPath string) (actionPath string, err error) {
 	MustBeShardPath(zkShardPath)
-	node := &ActionNode{Action: SHARD_ACTION_REBUILD}
-	return ai.writeShardAction(zkShardPath, node)
+	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REBUILD})
 }
 
 func (ai *ActionInitiator) CheckShard(zkShardPath string) (actionPath string, err error) {
-	node := &ActionNode{Action: SHARD_ACTION_CHECK}
-	return ai.writeShardAction(zkShardPath, node)
+	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_CHECK})
 }
 
 // parameters are stored for debug purposes
+type ApplySchemaShardArgs struct {
+	ZkMasterTabletPath string
+	Change             string
+	Simple             bool
+}
+
 func (ai *ActionInitiator) ApplySchemaShard(zkShardPath, zkMasterTabletPath, change string, simple bool) (actionPath string, err error) {
-	node := &ActionNode{Action: SHARD_ACTION_APPLY_SCHEMA}
-	node.Args = map[string]string{"zkMasterTabletPath": zkMasterTabletPath, "change": change, "simple": fmt.Sprintf("%v", simple)}
-	return ai.writeShardAction(zkShardPath, node)
+	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_APPLY_SCHEMA, args: &ApplySchemaShardArgs{ZkMasterTabletPath: zkMasterTabletPath, Change: change, Simple: simple}})
 }
 
 func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath string, err error) {
@@ -249,11 +243,14 @@ func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath st
 }
 
 // parameters are stored for debug purposes
+type ApplySchemaKeyspaceArgs struct {
+	Change string
+	Simple bool
+}
+
 func (ai *ActionInitiator) ApplySchemaKeyspace(zkKeyspacePath, change string, simple bool) (actionPath string, err error) {
 	MustBeKeyspacePath(zkKeyspacePath)
-	node := &ActionNode{Action: KEYSPACE_ACTION_APPLY_SCHEMA}
-	node.Args = map[string]string{"change": change, "simple": fmt.Sprintf("%v", simple)}
-	return ai.writeKeyspaceAction(zkKeyspacePath, node)
+	return ai.writeKeyspaceAction(zkKeyspacePath, &ActionNode{Action: KEYSPACE_ACTION_APPLY_SCHEMA, args: &ApplySchemaKeyspaceArgs{Change: change, Simple: simple}})
 }
 
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
@@ -261,11 +258,11 @@ func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Du
 	return err
 }
 
-func (ai *ActionInitiator) WaitForCompletionResult(actionPath string, waitTime time.Duration) (map[string]string, error) {
+func (ai *ActionInitiator) WaitForCompletionReply(actionPath string, waitTime time.Duration) (interface{}, error) {
 	return WaitForCompletion(ai.zconn, actionPath, waitTime)
 }
 
-func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration) (map[string]string, error) {
+func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration) (interface{}, error) {
 	// If there is no duration specified, block for a sufficiently long time.
 	if waitTime <= 0 {
 		waitTime = 24 * time.Hour
@@ -319,7 +316,7 @@ wait:
 		return nil, fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
 	}
 
-	return actionNode.Results, nil
+	return actionNode.reply, nil
 }
 
 // Remove all queued actions, regardless of their current state, leaving
