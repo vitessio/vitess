@@ -295,7 +295,7 @@ def run_test_mysqlctl_split():
   tablet_62344.populate('vt_test_keyspace', create_vt_insert_test,
                         populate_vt_insert_test)
 
-  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 partialsnapshot --start=0000000000000000 --end=0000000000000003 vt_test_keyspace id').wait()
+  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 partialsnapshot --end=0000000000000003 vt_test_keyspace id').wait()
   if err != 0:
     raise utils.TestError('mysqlctl partialsnapshot failed')
 

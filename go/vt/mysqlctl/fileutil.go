@@ -38,12 +38,11 @@ func init() {
 	simulateFailures = statErr == nil
 }
 
-/* compress a single file with gzip, leaving the src file intact.
-Also computes the md5 hash on the fly.
-FIXME(msolomon) not sure how well Go will schedule cpu intensive tasks
-might be better if this forked off workers.
-*/
+// compressFile compresses a single file with gzip, leaving the src
+// file intact.  Also computes the md5 hash on the fly.
 func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
+	// FIXME(msolomon) not sure how well Go will schedule cpu intensive tasks
+	// might be better if this forked off workers.
 	relog.Info("compressFile: starting to compress %v into %v", srcPath, dstPath)
 	srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
 	if err != nil {
@@ -96,7 +95,7 @@ func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
 	return &SnapshotFile{dstPath, hash}, nil
 }
 
-// compress multiple files in parallel
+// compressFile compresses multiple files in parallel.
 func compressFiles(sources, destinations []string) ([]SnapshotFile, error) {
 	if len(sources) != len(destinations) || len(sources) == 0 {
 		panic(fmt.Errorf("bad array lengths: %v %v", len(sources), len(destinations)))
@@ -112,12 +111,7 @@ func compressFiles(sources, destinations []string) ([]SnapshotFile, error) {
 	resultQueue := make(chan error, len(sources))
 	for i := 0; i < compressConcurrency; i++ {
 		go func() {
-			for {
-				i, ok := <-workQueue
-				if !ok {
-					return
-				}
-
+			for i := range workQueue {
 				sf, err := compressFile(sources[i], destinations[i])
 				if err == nil {
 					snapshotFiles[i] = *sf
@@ -150,10 +144,10 @@ func compressFiles(sources, destinations []string) ([]SnapshotFile, error) {
 	return snapshotFiles, nil
 }
 
-// This function fetches data from the web server.
-// It then sends it to a tee, which on one side has an md5 checksum
-// reader, and on the other a gunzip reader writing to a file.
-// It will compare the md5 checksum after the copy is done.
+// fetchFile fetches data from the web server.  It then sends it to a
+// tee, which on one side has an md5 checksum reader, and on the other
+// a gunzip reader writing to a file.  It will compare the md5
+// checksum after the copy is done.
 func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	relog.Info("fetchFile: starting to fetch %v", dstFilename)
 
@@ -232,8 +226,8 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	return os.Rename(dstFile.Name(), dstFilename)
 }
 
-// This function fetches data from the web server,
-// retrying a few times.
+// fetchFileWithRetry fetches data from the web server, retrying a few
+// times.
 func fetchFileWithRetry(srcUrl, srcHash, dstFilename string) (err error) {
 	for i := 0; i < fetchRetryCount; i++ {
 		err = fetchFile(srcUrl, srcHash, dstFilename)
@@ -261,11 +255,7 @@ func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string) (err
 	resultQueue := make(chan error, len(snapshotManifest.Files))
 	for i := 0; i < fetchConcurrency; i++ {
 		go func() {
-			for {
-				fi, ok := <-workQueue
-				if !ok {
-					return
-				}
+			for fi := range workQueue {
 				filename := fi.getLocalFilename(destinationPath)
 				furl := "http://" + snapshotManifest.Addr + fi.Path
 				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename)

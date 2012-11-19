@@ -116,8 +116,10 @@ var selectIntoOutfile = `SELECT * INTO OUTFILE "{{.TableOutputPath}}"
   CHARACTER SET binary
   FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\'
   LINES TERMINATED BY '\n'
-  FROM {{.TableName}} WHERE {{.KeyspaceIdColumnName}} >= 0x{{.StartKey}} AND 
-	{{.KeyspaceIdColumnName}} < 0x{{.EndKey}}`
+  FROM {{.TableName}} WHERE
+   {{if .StartKey}}{{ .KeyspaceIdColumnName }} >= 0x{{.StartKey}} {{end}}
+   {{if and .StartKey .EndKey}} AND {{end}}
+   {{if .EndKey}} {{.KeyspaceIdColumnName}} < 0x{{.EndKey}} {{end}}`
 
 var loadDataInfile = `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}}
   CHARACTER SET binary
@@ -284,41 +286,64 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	return ssmFile, nil
 }
 
+const dumpConcurrency = 4
+
+// createSplitSnapshotManifest exports each table to a CSV-like file
+// and compresses the results.
 func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition) ([]SnapshotFile, error) {
-	// export each table to a CSV-like file, compress the results
-	tableFiles := make([]string, len(sd.TableDefinitions))
-	// FIXME(msolomon) parallelize
-	for i, td := range sd.TableDefinitions {
-		relog.Info("Dump table %v...", td.Name)
-		filename := path.Join(cloneSourcePath, td.Name+".csv")
-		tableFiles[i] = filename
+	n := len(sd.TableDefinitions)
+	errors := make(chan error)
+	work := make(chan int, n)
 
-		queryParams := map[string]string{
-			"TableName":            dbName + "." + td.Name,
-			"KeyspaceIdColumnName": keyName,
-			// FIXME(alainjobart): move these to bind params
-			"TableOutputPath": filename,
-			"StartKey":        string(startKey),
-			"EndKey":          string(endKey),
-		}
-		query := mustFillStringTemplate(selectIntoOutfile, queryParams)
-		relog.Info("  %v", query)
-		if err := mysqld.executeSuperQuery(query); err != nil {
-			return nil, err
+	for i := 0; i < n; i++ {
+		work <- i
+	}
+	close(work)
+
+	tableFiles := make([]string, n)
+	compressedFiles := make([]string, n)
+
+	for i := 0; i < dumpConcurrency; i++ {
+		go func() {
+			for i := range work {
+				td := sd.TableDefinitions[i]
+				relog.Info("Dump table %v...", td.Name)
+				filename := path.Join(cloneSourcePath, td.Name+".csv")
+
+				queryParams := map[string]string{
+					"TableName":            dbName + "." + td.Name,
+					"KeyspaceIdColumnName": keyName,
+					// FIXME(alainjobart): move these to bind params
+					"TableOutputPath": filename,
+					"StartKey":        string(startKey),
+					"EndKey":          string(endKey),
+				}
+				err := mysqld.executeSuperQuery(mustFillStringTemplate(selectIntoOutfile, queryParams))
+				if err == nil {
+					tableFiles[i] = filename
+					compressedFiles[i] = filename + ".gz"
+				}
+				errors <- err
+			}
+		}()
+	}
+	var err error
+	for i := 0; i < n; i++ {
+		if dumpErr := <-errors; dumpErr != nil {
+			err = dumpErr
 		}
 	}
-
-	sources := make([]string, 0, 128)
-	destinations := make([]string, 0, 128)
-	for _, srcPath := range tableFiles {
-		sources = append(sources, srcPath)
-		destinations = append(destinations, srcPath+".gz")
-	}
-
-	dataFiles, err := compressFiles(sources, destinations)
 	if err != nil {
-		// prune files to free up disk space, if it errors,
-		// we'll figure out later
+		for _, srcPath := range tableFiles {
+			if srcPath != "" {
+				os.Remove(srcPath)
+			}
+		}
+		return nil, err
+	}
+
+	dataFiles, err := compressFiles(tableFiles, compressedFiles)
+	if err != nil {
 		for _, srcPath := range tableFiles {
 			os.Remove(srcPath)
 		}
