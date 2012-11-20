@@ -36,8 +36,7 @@ var usage = `
 Commands:
 
 Tablets:
-  InitTablet <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]
-  InitTablet zk_tablet_path=<zk tablet path> hostname=<hostname> mysql_port=<mysql port> port=<vt port> tablet_type=<tablet type> [keyspace=<keyspace>] [shard_id=<shard id>] [zk_parent_alias=<zk parent alias>] [key_start=<start>] [key_end=<end>]
+  InitTablet [--key-start=<start>] [--key-end=<end>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]
 
   ScrapTablet <zk tablet path>
     -force writes the scrap state in to zk, no questions asked, if a tablet is offline.
@@ -190,17 +189,17 @@ Schema: (beta)
   ValidateSchemaKeyspace <zk keyspace path>
     validate the master schema from shard 0 matches all the other tablets in the keyspace.
 
-  PreflightSchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>}
+  PreflightSchema {--sql=<sql> || --sql-file=<filename>} <zk tablet path>
     apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
 
-  ApplySchema zk_tablet_path=<zk tablet path> {sql=<sql> || sql_file=<filename>} [allow_replication=false] [skip_preflight=true]
+  ApplySchema {--sql=<sql> || --sql-file=<filename>} [--skip-preflight] [--stop-replication] <zk tablet path>
     apply the schema change to the specified tablet (allowing replication by default). The sql can be inlined or read from a file. Note this doesn't change any tablet state (doesn't go into 'schema' type).
 
-  ApplySchemaShard zk_shard_path=<zk shard path> {sql=<sql> || sql_file=<filename>} [simple=false] [new_parent=<zk tablet path>]
-    apply the schema change to the specified shard. If simple is true, we just apply on the live master. If simple is false, we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
+  ApplySchemaShard {--sql=<sql> || --sql-file=<filename>} [--simple] [--new-parent=<zk tablet path>] <zk shard path>
+    apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care.
 
-  ApplySchemaKeyspace zk_keyspace_path=<zk keyspace path> {sql=<sql> || sql_file=<filename>} [simple=false]
-    apply the schema change to the specified keyspace. If simple is true, we just apply on the live masters. If simple is false, we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). we will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care.
+  ApplySchemaKeyspace {sql=<sql> || sql_file=<filename>} [--simple] <zk keyspace path>
+    apply the schema change to the specified keyspace. If simple is specified, we just apply on the live masters. Otherwise we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). We will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care.
 `
 
 var noWaitForAction = flag.Bool("no-wait", false,
@@ -540,20 +539,8 @@ func kquery(zconn zk.Conn, zkKeyspacePath, user, password, query string) error {
 	return nil
 }
 
-// returns true if they are the right number of parameters,
-// and none of them contains an '=' sign.
-func oldStyleParameters(args []string, minNumber, maxNumber int) bool {
-	if len(args) < minNumber || len(args) > maxNumber {
-		return false
-	}
-	for _, arg := range args {
-		if strings.Contains(arg, "=") {
-			return false
-		}
-	}
-	return true
-}
-
+// parseParams parses an array of strings in the form of a=b
+// into a map.
 func parseParams(args []string) map[string]string {
 	params := make(map[string]string)
 	for _, arg := range args[1:] {
@@ -567,24 +554,24 @@ func parseParams(args []string) map[string]string {
 	return params
 }
 
-func getFileParam(params map[string]string, name string) string {
-	result, ok := params[name]
-	if ok {
-		if _, ok = params[name+"_file"]; ok {
-			relog.Fatal("action requires only one of " + name + " or " + name + "_file")
+// getFileParam returns a string containing either flag is not "",
+// or the content of the file named flagFile
+func getFileParam(flag, flagFile, name string) string {
+	if flag != "" {
+		if flagFile != "" {
+			relog.Fatal("action requires only one of " + name + " or " + name + "-file")
 		}
-	} else {
-		filename, ok := params[name+"_file"]
-		if !ok {
-			relog.Fatal("action requires one of " + name + " or " + name + "_file")
-		}
-		data, err := ioutil.ReadFile(filename)
-		if err != nil {
-			relog.Fatal("Cannot read file %v: %v", filename, err)
-		}
-		result = string(data)
+		return flag
 	}
-	return result
+
+	if flagFile == "" {
+		relog.Fatal("action requires one of " + name + " or " + name + "_file")
+	}
+	data, err := ioutil.ReadFile(flagFile)
+	if err != nil {
+		relog.Fatal("Cannot read file %v: %v", flagFile, err)
+	}
+	return string(data)
 }
 
 func main() {
@@ -652,38 +639,47 @@ func main() {
 			err = kquery(zconn, args[1], args[2], args[3], args[4])
 		}
 	case "InitTablet":
-		var params map[string]string
-		if oldStyleParameters(args, 8, 9) {
-			params = make(map[string]string)
-			params["zk_tablet_path"] = args[1]
-			params["hostname"] = args[2]
-			params["mysql_port"] = args[3]
-			params["port"] = args[4]
-			params["keyspace"] = args[5]
-			params["shard_id"] = args[6]
-			params["tablet_type"] = args[7]
-			if len(args) == 9 {
-				params["zk_parent_alias"] = args[8]
-			}
-		} else {
-			params = parseParams(args)
+		subFlags := flag.NewFlagSet("InitTablet", flag.ExitOnError)
+		keyStart := subFlags.String("key-start", "", "start of the key range")
+		keyEnd := subFlags.String("key-end", "", "end of the key range")
+		subFlags.Parse(flag.Args()[1:])
+
+		if len(subFlags.Args()) != 7 && len(subFlags.Args()) != 8 {
+			relog.Fatal("action InitTablet requires <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]")
+		}
+
+		params := make(map[string]string)
+		params["zk_tablet_path"] = subFlags.Args()[0]
+		params["hostname"] = subFlags.Args()[1]
+		params["mysql_port"] = subFlags.Args()[2]
+		params["port"] = subFlags.Args()[3]
+		params["keyspace"] = subFlags.Args()[4]
+		params["shard_id"] = subFlags.Args()[5]
+		params["tablet_type"] = subFlags.Args()[6]
+		params["key_start"] = *keyStart
+		params["key_end"] = *keyEnd
+		if len(subFlags.Args()) == 8 {
+			params["zk_parent_alias"] = subFlags.Args()[7]
 		}
 		err = initTablet(zconn, params, false)
 	case "UpdateTablet":
+		subFlags := flag.NewFlagSet("UpdateTablet", flag.ExitOnError)
+		keyStart := subFlags.String("key-start", "", "start of the key range")
+		keyEnd := subFlags.String("key-end", "", "end of the key range")
+		subFlags.Parse(flag.Args()[1:])
+
 		var params map[string]string
-		if oldStyleParameters(args, 9, 9) {
-			params = make(map[string]string)
-			params["zk_tablet_path"] = args[1]
-			params["hostname"] = args[2]
-			params["mysql_port"] = args[3]
-			params["port"] = args[4]
-			params["keyspace"] = args[5]
-			params["shard_id"] = args[6]
-			params["tablet_type"] = args[7]
-			params["zk_parent_alias"] = args[8]
-		} else {
-			params = parseParams(args)
-		}
+		params = make(map[string]string)
+		params["zk_tablet_path"] = subFlags.Args()[0]
+		params["hostname"] = subFlags.Args()[1]
+		params["mysql_port"] = subFlags.Args()[2]
+		params["port"] = subFlags.Args()[3]
+		params["keyspace"] = subFlags.Args()[4]
+		params["shard_id"] = subFlags.Args()[5]
+		params["tablet_type"] = subFlags.Args()[6]
+		params["zk_parent_alias"] = subFlags.Args()[7]
+		params["key_start"] = *keyStart
+		params["key_end"] = *keyEnd
 		err = initTablet(zconn, params, true)
 	case "Ping":
 		if len(args) != 2 {
@@ -940,14 +936,17 @@ func main() {
 			relog.Info(sd.String())
 		}
 	case "PreflightSchema":
-		params := parseParams(args)
-		zkTabletPath, ok := params["zk_tablet_path"]
-		if !ok {
-			relog.Fatal("action %v requires zk_tablet_path=<zk tablet path>", args[0])
+		subFlags := flag.NewFlagSet("PreflightSchema", flag.ExitOnError)
+		sql := subFlags.String("sql", "", "sql command")
+		sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
+		subFlags.Parse(flag.Args()[1:])
+
+		if len(subFlags.Args()) != 1 {
+			relog.Fatal("action PreflightSchema requires <zk tablet path>")
 		}
-		change := getFileParam(params, "sql")
+		change := getFileParam(*sql, *sqlFile, "sql")
 		var scr *mysqlctl.SchemaChangeResult
-		scr, err = wrangler.PreflightSchema(zkTabletPath, change)
+		scr, err = wrangler.PreflightSchema(subFlags.Args()[0], change)
 		if err == nil {
 			relog.Info(scr.String())
 			if scr.Error != "" {
@@ -955,20 +954,27 @@ func main() {
 			}
 		}
 	case "ApplySchema":
-		params := parseParams(args)
-		sc := &mysqlctl.SchemaChange{}
-		zkTabletPath, ok := params["zk_tablet_path"]
-		if !ok {
-			relog.Fatal("action %v requires zk_tablet_path=<zk tablet path>", args[0])
+		subFlags := flag.NewFlagSet("ApplySchema", flag.ExitOnError)
+		sql := subFlags.String("sql", "", "sql command")
+		sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
+		skipPreflight := subFlags.Bool("skip-preflight", false, "do not preflight the schema (use with care)")
+		stopReplication := subFlags.Bool("stop-replication", false, "stop replication before applying schema")
+		subFlags.Parse(flag.Args()[1:])
+
+		if len(subFlags.Args()) != 1 {
+			relog.Fatal("action ApplySchema requires <zk tablet path>")
 		}
-		sc.Sql = getFileParam(params, "sql")
-		sc.AllowReplication = params["allow_replication"] != "false"
+		change := getFileParam(*sql, *sqlFile, "sql")
+
+		sc := &mysqlctl.SchemaChange{}
+		sc.Sql = change
+		sc.AllowReplication = !(*stopReplication)
 
 		// do the preflight to get before and after schema
-		if params["skip_preflight"] != "true" {
-			scr, err := wrangler.PreflightSchema(zkTabletPath, sc.Sql)
+		if !(*skipPreflight) {
+			scr, err := wrangler.PreflightSchema(subFlags.Args()[0], sc.Sql)
 			if err != nil {
-				relog.Fatal("preflight failed: %v %v", args[0], err)
+				relog.Fatal("preflight failed: %v", err)
 			}
 			relog.Info("Preflight: " + scr.String())
 			if scr.Error != "" {
@@ -981,7 +987,7 @@ func main() {
 		}
 
 		var scr *mysqlctl.SchemaChangeResult
-		scr, err = wrangler.ApplySchema(zkTabletPath, sc)
+		scr, err = wrangler.ApplySchema(subFlags.Args()[0], sc)
 		if err == nil {
 			relog.Info(scr.String())
 			if scr.Error != "" {
@@ -989,20 +995,24 @@ func main() {
 			}
 		}
 	case "ApplySchemaShard":
-		params := parseParams(args)
-		zkShardPath, ok := params["zk_shard_path"]
-		if !ok {
-			relog.Fatal("action %v requires zk_shard_path=<zk shard path>", args[0])
+		subFlags := flag.NewFlagSet("ApplySchemaShard", flag.ExitOnError)
+		sql := subFlags.String("sql", "", "sql command")
+		sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
+		simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
+		newParent := subFlags.String("new-parent", "", "will reparent to this tablet after the change")
+		subFlags.Parse(flag.Args()[1:])
+
+		if len(subFlags.Args()) != 1 {
+			relog.Fatal("action ApplySchemaShard requires <zk shard path>")
 		}
-		sql := getFileParam(params, "sql")
-		simple := params["simple"] == "true"
-		newParent := params["new_parent"]
-		if simple && newParent != "" {
-			relog.Fatal("new_parent for action %v can only be specified for complex schema upgrades", args[0])
+		change := getFileParam(*sql, *sqlFile, "sql")
+
+		if (*simple) && (*newParent != "") {
+			relog.Fatal("new_parent for action ApplySchemaShard can only be specified for complex schema upgrades")
 		}
 
 		var scr *mysqlctl.SchemaChangeResult
-		scr, err = wrangler.ApplySchemaShard(zkShardPath, sql, newParent, simple, *force)
+		scr, err = wrangler.ApplySchemaShard(subFlags.Args()[0], change, *newParent, *simple, *force)
 		if err == nil {
 			relog.Info(scr.String())
 			if scr.Error != "" {
@@ -1010,16 +1020,19 @@ func main() {
 			}
 		}
 	case "ApplySchemaKeyspace":
-		params := parseParams(args)
-		zkKeyspacePath, ok := params["zk_keyspace_path"]
-		if !ok {
-			relog.Fatal("action %v requires zk_keyspace_path=<zk keyspace path>", args[0])
+		subFlags := flag.NewFlagSet("ApplySchemaKeyspace", flag.ExitOnError)
+		sql := subFlags.String("sql", "", "sql command")
+		sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
+		simple := subFlags.Bool("simple", false, "just apply change on master and let replication do the rest")
+		subFlags.Parse(flag.Args()[1:])
+
+		if len(subFlags.Args()) != 1 {
+			relog.Fatal("action ApplySchemaKeyspace requires <zk keyspace path>")
 		}
-		sql := getFileParam(params, "sql")
-		simple := params["simple"] == "true"
+		change := getFileParam(*sql, *sqlFile, "sql")
 
 		var scr *mysqlctl.SchemaChangeResult
-		scr, err = wrangler.ApplySchemaKeyspace(zkKeyspacePath, sql, simple, *force)
+		scr, err = wrangler.ApplySchemaKeyspace(subFlags.Args()[0], change, *simple, *force)
 		if err == nil {
 			relog.Info(scr.String())
 			if scr.Error != "" {

@@ -126,8 +126,14 @@ def run_test_sharding():
   # apply the schema on the first shard through vtctl, so all tablets
   # are the same (replication is not enabled yet, so allow_replication=false
   # is just there to be tested)
-  utils.run_vtctl('ApplySchema zk_tablet_path=' + shard_0_master.zk_tablet_path + ' sql="' + create_vt_select_test.replace("\n", "") + '" allow_replication=false')
-  utils.run_vtctl('ApplySchema zk_tablet_path=' + shard_0_replica.zk_tablet_path + ' sql="' + create_vt_select_test.replace("\n", "") + '" allow_replication=false')
+  utils.run_vtctl(['ApplySchema',
+                   '--stop-replication',
+                   '--sql=' + create_vt_select_test.replace("\n", ""),
+                   shard_0_master.zk_tablet_path])
+  utils.run_vtctl(['ApplySchema',
+                   '--stop-replication',
+                   '--sql=' + create_vt_select_test.replace("\n", ""),
+                   shard_0_replica.zk_tablet_path])
 
   # start zkocc, we'll use it later
   zkocc = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
@@ -136,7 +142,10 @@ def run_test_sharding():
   utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF ' + shard_1_master.zk_tablet_path)
 
   # apply the schema on the second shard using a simple schema upgrade
-  utils.run_vtctl('ApplySchemaShard zk_shard_path=/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF sql="' + create_vt_select_test_reverse.replace("\n", "") + '" simple=true')
+  utils.run_vtctl(['ApplySchemaShard',
+                   '--simple',
+                   '--sql=' + create_vt_select_test_reverse.replace("\n", ""),
+                   '/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF'])
 
   # insert some values directly (db is RO after minority reparent)
   # FIXME(alainjobart) these values don't match the shard map

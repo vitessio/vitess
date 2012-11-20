@@ -8,6 +8,7 @@ import signal
 import socket
 from subprocess import check_call, Popen, CalledProcessError, PIPE
 import sys
+import types
 
 import MySQLdb
 
@@ -79,7 +80,10 @@ def kill_sub_process(proc):
 
 # run in foreground, possibly capturing output
 def run(cmd, trap_output=False, raise_on_error=True, **kargs):
-  args = shlex.split(cmd)
+  if isinstance(cmd, types.StringTypes):
+    args = shlex.split(cmd)
+  else:
+    args = cmd
   if trap_output:
     kargs['stdout'] = PIPE
     kargs['stderr'] = PIPE
@@ -189,7 +193,13 @@ def zk_check(ping_tablets=False):
 # vtctl helpers
 def run_vtctl(clargs, log_level='WARNING', **kwargs):
   prog_compile(['vtctl'])
-  cmd = vtroot+'/bin/vtctl -log.level=%s -logfile=/dev/null %s' % (log_level, clargs)
+  args = [vtroot+'/bin/vtctl',
+          '-log.level='+log_level,
+          '-logfile=/dev/null']
+  if isinstance(clargs, types.StringTypes):
+    cmd = " ".join(args) + ' ' + clargs
+  else:
+    cmd = args + clargs
   return run(cmd, **kwargs)
 
 # vtclient2 helpers

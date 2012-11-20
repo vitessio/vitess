@@ -169,24 +169,28 @@ class Tablet(object):
     else:
       args = []
 
-    args.extend(['InitTablet',
-                 'zk_tablet_path='+self.zk_tablet_path,
-                 'hostname=localhost',
-                 'mysql_port=%u' % self.mysql_port,
-                 'port=%u' % self.port,
-                 'tablet_type='+tablet_type])
-    if keyspace:
-      args.append('keyspace='+keyspace)
-    if shard:
-      args.append('shard_id='+shard)
-    if zk_parent_alias:
-      args.append('zk_parent_alias='+zk_parent_alias)
+    args.append('InitTablet')
     if key_start:
-      args.append('key_start='+key_start)
+      args.append('--key-start='+key_start)
     if key_end:
-      args.append('key_end='+key_end)
+      args.append('--key-end='+key_end)
+    args.extend([self.zk_tablet_path,
+                 'localhost',
+                 str(self.mysql_port),
+                 str(self.port)])
+    if keyspace:
+      args.append(keyspace)
+    else:
+      args.append('')
+    if shard:
+      args.append(shard)
+    else:
+      args.append('')
+    args.append(tablet_type)
+    if zk_parent_alias:
+      args.append(zk_parent_alias)
 
-    utils.run_vtctl(' '.join(args))
+    utils.run_vtctl(args)
     if start:
       self.start_vttablet()
 
