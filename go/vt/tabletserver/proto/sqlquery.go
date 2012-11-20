@@ -31,8 +31,6 @@ type SqlQuery interface {
 
 	Invalidate(context *rpcproto.Context, cacheInvalidate *CacheInvalidate, noOutput *string) error
 	InvalidateForDDL(context *rpcproto.Context, ddl *DDLInvalidate, noOutput *string) error
-
-	Ping(context *rpcproto.Context, query *string, reply *string) error
 }
 
 // helper method to register the server (does interface checking)

@@ -73,7 +73,7 @@ func (self *ActiveTxPool) TransactionKiller() {
 }
 
 func (self *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
-	defer handleError(&err)
+	defer handleError(&err, nil)
 	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
@@ -83,7 +83,7 @@ func (self *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, e
 }
 
 func (self *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
-	defer handleError(&err)
+	defer handleError(&err, nil)
 	conn := self.Get(transactionId)
 	defer conn.discard()
 	self.txStats.Add("Completed", time.Now().Sub(conn.startTime))

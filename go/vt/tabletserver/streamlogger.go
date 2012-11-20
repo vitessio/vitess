@@ -42,9 +42,14 @@ type sqlQueryStats struct {
 	context              *proto.Context
 }
 
-func newSqlQueryStats(methodName string) *sqlQueryStats {
-	s := &sqlQueryStats{Method: methodName}
+func newSqlQueryStats(methodName string, context *proto.Context) *sqlQueryStats {
+	s := &sqlQueryStats{Method: methodName, StartTime: time.Now(), context: context}
 	return s
+}
+
+func (stats *sqlQueryStats) Send() {
+	stats.EndTime = time.Now()
+	sqlQueryLogger.Send(stats)
 }
 
 func (stats *sqlQueryStats) AddRewrittenSql(sql []byte) {

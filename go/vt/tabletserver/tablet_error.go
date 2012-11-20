@@ -68,7 +68,10 @@ func (self *TabletError) RecordStats() {
 	}
 }
 
-func handleError(err *error) {
+func handleError(err *error, logStats *sqlQueryStats) {
+	if logStats != nil {
+		logStats.Send()
+	}
 	if x := recover(); x != nil {
 		terr := x.(*TabletError)
 		*err = terr

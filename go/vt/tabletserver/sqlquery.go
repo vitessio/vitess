@@ -189,15 +189,9 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 }
 
 func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, transactionId *int64) (err error) {
-	logStats := newSqlQueryStats("Begin")
+	logStats := newSqlQueryStats("Begin", context)
 	logStats.OriginalSql = "begin"
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-	defer handleError(&err)
+	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, false)
 
 	*transactionId = sq.qe.Begin(logStats, session.ConnectionId)
@@ -205,15 +199,9 @@ func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, tra
 }
 
 func (sq *SqlQuery) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) (err error) {
-	logStats := newSqlQueryStats("Commit")
+	logStats := newSqlQueryStats("Commit", context)
 	logStats.OriginalSql = "commit"
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-	defer handleError(&err)
+	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, true)
 
 	sq.qe.Commit(logStats, session.TransactionId)
@@ -221,14 +209,9 @@ func (sq *SqlQuery) Commit(context *rpcproto.Context, session *proto.Session, no
 }
 
 func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) (err error) {
-	logStats := newSqlQueryStats("Rollback")
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-	defer handleError(&err)
+	logStats := newSqlQueryStats("Rollback", context)
+	logStats.OriginalSql = "rollback"
+	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, true)
 
 	sq.qe.Rollback(logStats, session.TransactionId)
@@ -236,20 +219,23 @@ func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, 
 }
 
 func (sq *SqlQuery) CreateReserved(session *proto.Session, connectionInfo *proto.ConnectionInfo) (err error) {
-	defer handleError(&err)
+	defer handleError(&err, nil)
 	sq.checkState(session.SessionId, false)
 	connectionInfo.ConnectionId = sq.qe.CreateReserved()
 	return nil
 }
 
 func (sq *SqlQuery) CloseReserved(session *proto.Session, noOutput *string) (err error) {
-	defer handleError(&err)
+	defer handleError(&err, nil)
 	sq.checkState(session.SessionId, false)
 	sq.qe.CloseReserved(session.ConnectionId)
 	return nil
 }
 
-func handleExecError(query *proto.Query, err *error) {
+func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
+	if logStats != nil {
+		logStats.Send()
+	}
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
@@ -268,14 +254,8 @@ func handleExecError(query *proto.Query, err *error) {
 }
 
 func (sq *SqlQuery) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
-	logStats := newSqlQueryStats("Execute")
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-	defer handleExecError(query, &err)
+	logStats := newSqlQueryStats("Execute", context)
+	defer handleExecError(query, &err, logStats)
 
 	// allow shutdown state if we're in a transaction
 	allowShutdown := (query.TransactionId != 0)
@@ -288,14 +268,8 @@ func (sq *SqlQuery) Execute(context *rpcproto.Context, query *proto.Query, reply
 // the first QueryResult will have Fields set (and Rows nil)
 // the subsequent QueryResult will have Rows set (and Fields nil)
 func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) (err error) {
-	logStats := newSqlQueryStats("StreamExecute")
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-	defer handleExecError(query, &err)
+	logStats := newSqlQueryStats("StreamExecute", context)
+	defer handleExecError(query, &err, logStats)
 
 	// check cases we don't handle yet
 	if query.TransactionId != 0 {
@@ -314,7 +288,7 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 }
 
 func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
-	defer handleError(&err)
+	defer handleError(&err, nil)
 	ql := queryList.List
 	if len(ql) == 0 {
 		panic(NewTabletError(FAIL, "Empty query list"))
@@ -372,15 +346,8 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 }
 
 func (sq *SqlQuery) Invalidate(context *rpcproto.Context, cacheInvalidate *proto.CacheInvalidate, noOutput *string) (err error) {
-	logStats := newSqlQueryStats("Invalidate")
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-
-	defer handleError(&err)
+	logStats := newSqlQueryStats("Invalidate", context)
+	defer handleError(&err, logStats)
 	sq.checkState(sq.sessionId, false)
 
 	sq.qe.Invalidate(cacheInvalidate)
@@ -388,31 +355,11 @@ func (sq *SqlQuery) Invalidate(context *rpcproto.Context, cacheInvalidate *proto
 }
 
 func (sq *SqlQuery) InvalidateForDDL(context *rpcproto.Context, ddl *proto.DDLInvalidate, noOutput *string) (err error) {
-	logStats := newSqlQueryStats("InvalidateForDDL")
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-
-	defer handleError(&err)
+	logStats := newSqlQueryStats("InvalidateForDDL", context)
+	defer handleError(&err, logStats)
 	sq.checkState(sq.sessionId, true) // Accept DDLs in shut down mode
 
 	sq.qe.InvalidateForDDL(ddl.DDL)
-	return nil
-}
-
-func (sq *SqlQuery) Ping(context *rpcproto.Context, query *string, reply *string) error {
-	logStats := newSqlQueryStats("Ping")
-	logStats.context = context
-	logStats.StartTime = time.Now()
-	defer func() {
-		logStats.EndTime = time.Now()
-		sqlQueryLogger.Send(logStats)
-	}()
-
-	*reply = "pong: " + *query
 	return nil
 }
 
