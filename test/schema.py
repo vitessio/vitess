@@ -238,7 +238,7 @@ def run_test_complex_schema():
   if oldCount <= 5:
     raise utils.TestError('Not enough actionlog before: %u' % oldCount)
 
-  utils.run_vtctl('PruneActionLogs '+shard_0_replica1.zk_tablet_path+'/actionlog 5', log_level='INFO')
+  utils.run_vtctl('PruneActionLogs --keep-count=5 '+shard_0_replica1.zk_tablet_path+'/actionlog', log_level='INFO')
 
   out, err = utils.run(vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
   newLines = out.splitlines()

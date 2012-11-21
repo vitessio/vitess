@@ -186,7 +186,7 @@ def zk_wipe():
 
 def zk_check(ping_tablets=False):
   if ping_tablets:
-    run_vtctl('-ping-tablets Validate /zk/global/vt/keyspaces')
+    run_vtctl('Validate -ping-tablets /zk/global/vt/keyspaces')
   else:
     run_vtctl('Validate /zk/global/vt/keyspaces')
 
