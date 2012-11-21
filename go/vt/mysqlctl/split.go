@@ -254,7 +254,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	} else {
 		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
-		ssmFile = path.Join(mysqld.SnapshotDir, partialSnapshotManifestFile)
+		ssmFile = path.Join(cloneSourcePath, partialSnapshotManifestFile)
 		if snapshotErr = writeJson(ssmFile, ssm); snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		}

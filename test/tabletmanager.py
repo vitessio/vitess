@@ -305,7 +305,7 @@ def run_test_mysqlctl_split():
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_test_keyspace')
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/partial_snapshot_manifest.json').wait()
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json').wait()
   if err != 0:
     raise utils.TestError('mysqlctl partialrestore failed')
 

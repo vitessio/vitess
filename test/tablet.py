@@ -85,8 +85,11 @@ class Tablet(object):
     conn, cursor = self.connect(dbname)
     if write:
       conn.begin()
+    if isinstance(query, basestring):
+      query = [query]
 
-    cursor.execute(query)
+    for q in query:
+      cursor.execute(q)
 
     if write:
       conn.commit()
