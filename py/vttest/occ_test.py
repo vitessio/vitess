@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import time
+import unittest
 import urllib2
 import MySQLdb as mysql
 
@@ -23,12 +24,11 @@ import cache_tests
 import nocache_tests
 import stream_tests
 
-parser = optparse.OptionParser(usage="usage: %prog [options]")
+parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
 parser.add_option("-m", "--memcache", action="store_true", default=False,
                   help="starts a memcached, and tests rowcache")
-parser.add_option("-v", "--verbose", action="store_true", default=False)
-parser.add_option("-t", "--testcase", action="store", default=None,
-                  help="Run a single named test")
+parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
+parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
 (options, args) = parser.parse_args()
 
 LOGFILE = "/tmp/vtocc.log"
@@ -210,21 +210,29 @@ class TestEnv(object):
     return error_count
 
 
-env = TestEnv()
-try:
-  env.setUp()
-  print "Testing general functionality"
-  t = nocache_tests.TestNocache(options.testcase, options.verbose)
-  t.set_env(env)
-  t.run()
-  print "Testing streaming functionality"
-  t = stream_tests.TestStream(options.testcase, options.verbose)
-  t.set_env(env)
-  t.run()
-  if getattr(env, "memcached", None):
-    print "Testing row cache"
-    t = cache_tests.TestCache(options.testcase, options.verbose)
-    t.set_env(env)
-    t.run()
-finally:
-  env.tearDown()
+if __name__ == "__main__":
+  suite = unittest.TestSuite()
+  if args:
+    for arg in args:
+      if hasattr(nocache_tests.TestNocache, arg):
+        suite.addTest(nocache_tests.TestNocache(arg))
+      elif hasattr(stream_tests.TestStream, arg):
+        suite.addTest(stream_tests.TestStream(arg))
+      elif hasattr(cache_tests.TestCache, arg) and options.memcache:
+        suite.addTest(cache_tests.TestCache(arg))
+      else:
+        raise Exception(arg, "not found in tests")
+  else:
+    suite.addTests(unittest.TestLoader().loadTestsFromTestCase(nocache_tests.TestNocache))
+    suite.addTests(unittest.TestLoader().loadTestsFromTestCase(stream_tests.TestStream))
+    if options.memcache:
+      suite.addTests(unittest.TestLoader().loadTestsFromTestCase(cache_tests.TestCache))
+
+  try:
+    env = TestEnv()
+    env.setUp()
+    print "Starting occ_test.py"
+    framework.TestCase.setenv(env)
+    unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+  finally:
+    env.tearDown()

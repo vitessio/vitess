@@ -3,17 +3,6 @@ from vtdb import cursor
 import framework
 
 class TestStream(framework.TestCase):
-  def setUp(self):
-    pass
-
-  def tearDown(self):
-    pass
-
-  def set_env(self, env):
-    self.env = env
-
-# more fields!
-
   # UNION queries like this used to crash vtocc, only straight SELECT
   # would go through. This is a unit test to show it is fixed.
   # The fix went in revision bad7511746ca.

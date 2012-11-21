@@ -6,15 +6,6 @@ import framework
 import nocache_cases
 
 class TestNocache(framework.TestCase):
-  def setUp(self):
-    pass
-
-  def tearDown(self):
-    pass
-
-  def set_env(self, env):
-    self.env = env
-
   def test_data(self):
     cu = self.env.execute("select * from vtocc_test where intval=1")
     self.assertEqual(cu.description, [('intval', 3), ('floatval', 4), ('charval', 253), ('binval', 253)])
@@ -144,12 +135,7 @@ class TestNocache(framework.TestCase):
   def test_pool_size(self):
     vstart = self.env.debug_vars()
     self.env.execute("set vt_pool_size=1")
-    try:
-      self.env.execute("select sleep(3) from dual")
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError):
-      pass
-    else:
-      self.assertFail("Did not receive exception")
+    self.assertRaises(db.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
     self.env.execute("select 1 from dual")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 1)
@@ -181,12 +167,12 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.TxPool.Capacity, 20)
 
   def test_transaction_timeout(self):
-    self.env.execute("set vt_transaction_timeout=1")
+    self.env.execute("set vt_transaction_timeout=0.25")
     # wait for any pending transactions to timeout
-    time.sleep(0.5)
+    time.sleep(0.3)
     vstart = self.env.debug_vars()
     self.env.execute("begin")
-    time.sleep(2)
+    time.sleep(0.3)
     try:
       self.env.execute("commit")
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
@@ -194,7 +180,7 @@ class TestNocache(framework.TestCase):
     else:
       self.assertFail("Did not receive exception")
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 1000000000)
+    self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)
     self.env.execute("set vt_transaction_timeout=30")
     vend = self.env.debug_vars()
@@ -257,10 +243,10 @@ class TestNocache(framework.TestCase):
     vstart = self.env.debug_vars()
     conn = db.connect("localhost:9461", 5, dbname="vt_test")
     cu = conn.cursor()
-    self.env.execute("set vt_query_timeout=1")
+    self.env.execute("set vt_query_timeout=0.25")
     try:
       cu.execute("begin", {})
-      cu.execute("select sleep(2) from vtocc_test", {})
+      cu.execute("select sleep(0.5) from vtocc_test", {})
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       if "error: Query" not in e[1] and "error: Lost connection" not in e[1]:
         print e[1]
@@ -284,7 +270,7 @@ class TestNocache(framework.TestCase):
       self.assertFail("Did not receive exception")
 
     vend = self.env.debug_vars()
-    self.assertEqual(vend.Voltron.ActivePool.Timeout, 1000000000)
+    self.assertEqual(vend.Voltron.ActivePool.Timeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Queries", 0)+1, vend.Kills.Queries)
     self.env.execute("set vt_query_timeout=30")
     vend = self.env.debug_vars()
@@ -305,6 +291,9 @@ class TestNocache(framework.TestCase):
 
   def test_consolidation(self):
     vstart = self.env.debug_vars()
+    # The first call always does a full fetch for field info
+    self.assertRaises(db.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
+    time.sleep(2)
     for i in range(2):
       try:
         self.env.execute("select sleep(3) from dual")

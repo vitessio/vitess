@@ -4,15 +4,6 @@ import framework
 import cache_cases
 
 class TestCache(framework.TestCase):
-  def setUp(self):
-    pass
-
-  def tearDown(self):
-    pass
-
-  def set_env(self, env):
-    self.env = env
-
   def test_num_str(self):
     try:
       self.env.execute("select bid, eid from vtocc_cached where eid = 1 and bid = 1")
