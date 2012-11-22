@@ -344,8 +344,8 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
  **************************** 1. row ***************************
  File: vt-000001c6-bin.000003
  Position: 106
- Binlog_Do_DB: 
- Binlog_Ignore_DB: 
+ Binlog_Do_DB:
+ Binlog_Ignore_DB:
 */
 func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	rows, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
@@ -416,32 +416,32 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
  Relay_Master_Log_File: vt-00000001-bin.000002
  Slave_IO_Running: Yes
  Slave_SQL_Running: Yes
- Replicate_Do_DB: 
- Replicate_Ignore_DB: 
- Replicate_Do_Table: 
- Replicate_Ignore_Table: 
- Replicate_Wild_Do_Table: 
- Replicate_Wild_Ignore_Table: 
+ Replicate_Do_DB:
+ Replicate_Ignore_DB:
+ Replicate_Do_Table:
+ Replicate_Ignore_Table:
+ Replicate_Wild_Do_Table:
+ Replicate_Wild_Ignore_Table:
  Last_Errno: 0
- Last_Error: 
+ Last_Error:
  Skip_Counter: 0
  Exec_Master_Log_Pos: 106
  Relay_Log_Space: 569
  Until_Condition: None
- Until_Log_File: 
+ Until_Log_File:
  Until_Log_Pos: 0
  Master_SSL_Allowed: No
- Master_SSL_CA_File: 
- Master_SSL_CA_Path: 
- Master_SSL_Cert: 
- Master_SSL_Cipher: 
- Master_SSL_Key: 
+ Master_SSL_CA_File:
+ Master_SSL_CA_Path:
+ Master_SSL_Cert:
+ Master_SSL_Cipher:
+ Master_SSL_Key:
  Seconds_Behind_Master: 0
  Master_SSL_Verify_Server_Cert: No
  Last_IO_Errno: 0
- Last_IO_Error: 
+ Last_IO_Error:
  Last_SQL_Errno: 0
- Last_SQL_Error: 
+ Last_SQL_Error:
 */
 var showSlaveStatusColumnNames = []string{
 	"Slave_IO_State",
@@ -542,7 +542,7 @@ func (mysqld *Mysqld) ResetKeyRange() error {
 
 // Force all slaves to error and stop. This is extreme, but helpful for emergencies
 // and tests.
-// Insert a row, block the propagation of its subsequent delete and reinsert it. This 
+// Insert a row, block the propagation of its subsequent delete and reinsert it. This
 // forces a failure on slaves only.
 func (mysqld *Mysqld) BreakSlaves() error {
 	now := time.Now().UnixNano()

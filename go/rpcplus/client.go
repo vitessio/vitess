@@ -263,7 +263,7 @@ func DialHTTP(network, address string) (*Client, error) {
 	return DialHTTPPath(network, address, DefaultRPCPath)
 }
 
-// DialHTTPPath connects to an HTTP RPC server 
+// DialHTTPPath connects to an HTTP RPC server
 // at the specified network address and path.
 func DialHTTPPath(network, address, path string) (*Client, error) {
 	var err error
@@ -337,7 +337,7 @@ func (client *Client) Go(serviceMethod string, args interface{}, reply interface
 }
 
 // Go invokes the streaming function asynchronously.  It returns the Call structure representing
-// the invocation. 
+// the invocation.
 func (client *Client) StreamGo(serviceMethod string, args interface{}, replyStream interface{}) *Call {
 	// first check the replyStream object is a stream of pointers to a data structure
 	typ := reflect.TypeOf(replyStream)

@@ -36,7 +36,7 @@ import (
 //  * transaction tracking across shards
 //  * preflight checking all transactions before attempting to commit
 //    (reduce partial commit probability)
-// 
+//
 // NOTE: Queries with aggregate results will not produce expected
 // results right now.  For instance, running a count(*) on a table
 // across all tablets will return one row per tablet.  In the future,

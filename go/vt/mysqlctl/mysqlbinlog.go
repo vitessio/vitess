@@ -13,7 +13,7 @@ import (
 
 /*
  -d, --database=name List entries for just this database (local log only).
-  -D, --disable-log-bin 
+  -D, --disable-log-bin
                       Disable binary log. This is useful, if you enabled
                       --to-last-log and are sending the output to the same
                       MySQL server. This way you could avoid an endless loop.
@@ -24,26 +24,26 @@ import (
   -F, --force-if-open Force if binlog was not closed properly.
   -f, --force-read    Force reading unknown binlog events.
  -h, --host=name     Get the binlog from server.
- -l, --local-load=name 
+ -l, --local-load=name
                       Prepare local temporary files for LOAD DATA INFILE in the
                       specified directory.
  -o, --offset=#      Skip the first N entries.
- -p, --password[=name] 
+ -p, --password[=name]
                       Password to connect to remote server.
  -P, --port=#        Port number to use for connection or 0 for default to, in
                       order of preference, my.cnf, $MYSQL_TCP_PORT,
  /etc/services, built-in default (3306).
  --protocol=name     The protocol to use for connection (tcp, socket, pipe,
  memory).
-  -R, --read-from-remote-server 
+  -R, --read-from-remote-server
                       Read binary logs from a MySQL server.
- -r, --result-file=name 
+ -r, --result-file=name
                       Direct output to a given file.
  --server-id=#       Extract only binlog entries created by the server having
                       the given id.
  --set-charset=name  Add 'SET NAMES character_set' to the output.
  -S, --socket=name   The socket file to use for connection.
- -j, --start-position=# 
+ -j, --start-position=#
                       Start reading the binlog at position N. Applies to the
                       first binlog passed on the command line.
  --stop-position=#   Stop reading the binlog at position N. Applies to the

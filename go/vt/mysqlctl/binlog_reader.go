@@ -163,7 +163,7 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 		writer.Header().Set("Vt-Binlog-Offset", "0")
 	}
 
-	// FIXME(msolomon) register stats on http handler	
+	// FIXME(msolomon) register stats on http handler
 	for {
 		//position, _ := binlogFile.Seek(0, 1)
 		written, err := io.CopyN(writer, binlogFile, binlogBlockSize)

@@ -684,7 +684,7 @@ func createPkMap(pkColNames []string, pkValues []*parser.Node) (pkMap map[string
 		if pkVal.Type == parser.STRING {
 			pkMap[pkCol] = string(pkVal.Value)
 		} else if pkVal.Type == parser.NUMBER {
-			//pkVal.Value is a byte array, convert this to string and use strconv to find 
+			//pkVal.Value is a byte array, convert this to string and use strconv to find
 			//the right numberic type.
 			valstr := string(pkVal.Value)
 			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {

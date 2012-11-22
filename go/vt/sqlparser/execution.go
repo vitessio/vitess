@@ -901,7 +901,7 @@ func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) 
 }
 
 //-----------------------------------------------
-// Query Generation 
+// Query Generation
 func (node *Node) GenerateFullQuery() *ParsedQuery {
 	buf := NewTrackedBuffer()
 	node.Format(buf)

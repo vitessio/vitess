@@ -747,7 +747,7 @@ func fileCp(srcPath, dstPath string) {
 			dstPath = path.Join(dstPath, path.Base(srcPath))
 		}
 	} else if dstIsDir {
-		// If we are copying into zk, interpret trailing slash as treating the 
+		// If we are copying into zk, interpret trailing slash as treating the
 		// dstPath as a directory.
 		dstPath = path.Join(dstPath, path.Base(srcPath))
 	}
@@ -768,7 +768,7 @@ func multiFileCp(args []string) {
 	}
 }
 
-// Store a zk tree in a zip archive. This won't be immediately useful to 
+// Store a zk tree in a zip archive. This won't be immediately useful to
 // zip tools since even "directories" can contain data.
 func cmdZip(args []string) {
 	if len(args) < 2 {

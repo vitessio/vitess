@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Commands for controlling an external zookeeper process. 
+Commands for controlling an external zookeeper process.
 */
 
 package zkctl

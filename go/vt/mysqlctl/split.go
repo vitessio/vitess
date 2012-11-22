@@ -177,7 +177,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	}
 
 	cloneSourcePath := path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+string(startKey)+","+string(endKey))
-	// clean out and start fresh	
+	// clean out and start fresh
 	for _, _path := range []string{cloneSourcePath} {
 		if err = os.RemoveAll(_path); err != nil {
 			return

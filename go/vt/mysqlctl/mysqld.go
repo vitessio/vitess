@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Commands for controlling an external mysql process. 
+Commands for controlling an external mysql process.
 
 Some commands are issued as exec'd tools, some are handled by connecting via
 the mysql protocol.
@@ -325,7 +325,7 @@ func (mysqld *Mysqld) Addr() string {
 	return mysqld.config.MysqlAddr()
 }
 
-// executes some SQL commands using a mysql command line interface process 
+// executes some SQL commands using a mysql command line interface process
 func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
 	name := dir + "/bin/mysql"
