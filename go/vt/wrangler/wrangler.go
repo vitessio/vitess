@@ -33,6 +33,14 @@ func (wr *Wrangler) readTablet(zkTabletPath string) (*tm.TabletInfo, error) {
 	return tm.ReadTablet(wr.zconn, zkTabletPath)
 }
 
+func (wr *Wrangler) ZkConn() zk.Conn {
+	return wr.zconn
+}
+
+func (wr *Wrangler) ActionInitiator() *tm.ActionInitiator {
+	return wr.ai
+}
+
 // Change the type of tablet and recompute all necessary derived paths in the
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and

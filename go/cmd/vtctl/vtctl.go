@@ -39,7 +39,7 @@ var logfile = flag.String("logfile", "/vt/logs/vtctl.log", "log file")
 
 type command struct {
 	name   string
-	method func(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error)
+	method func(wrangler *wr.Wrangler, args []string) (string, error)
 	params string
 	help   string // if help is empty, won't list the command
 }
@@ -563,7 +563,7 @@ func getFileParam(flag, flagFile, name string) string {
 	return string(data)
 }
 
-func commandInitTablet(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandInitTablet(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("InitTablet", flag.ExitOnError)
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	keyStart := subFlags.String("key-start", "", "start of the key range")
@@ -579,76 +579,76 @@ func commandInitTablet(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitia
 	if subFlags.NArg() == 8 {
 		parentAlias = subFlags.Arg(7)
 	}
-	return "", initTablet(zconn, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *keyStart, *keyEnd, false)
+	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *keyStart, *keyEnd, false)
 }
 
-func commandUpdateTablet(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandUpdateTablet(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("UpdateTablet", flag.ExitOnError)
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	keyStart := subFlags.String("key-start", "", "start of the key range")
 	keyEnd := subFlags.String("key-end", "", "end of the key range")
 	subFlags.Parse(flag.Args()[1:])
 
-	return "", initTablet(zconn, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *keyStart, *keyEnd, true)
+	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *keyStart, *keyEnd, true)
 }
 
-func commandScrapTablet(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandScrapTablet(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ScrapTablet requires <zk tablet path>")
 	}
 	if *force {
-		return "", tm.Scrap(zconn, args[0], *force)
+		return "", tm.Scrap(wrangler.ZkConn(), args[0], *force)
 	}
-	return ai.Scrap(args[0])
+	return wrangler.ActionInitiator().Scrap(args[0])
 }
 
-func commandSetReadOnly(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandSetReadOnly(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action SetReadOnly requires args")
 	}
-	return ai.SetReadOnly(args[0])
+	return wrangler.ActionInitiator().SetReadOnly(args[0])
 }
 
-func commandSetReadWrite(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandSetReadWrite(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action SetReadWrite requires args")
 	}
-	return ai.SetReadWrite(args[0])
+	return wrangler.ActionInitiator().SetReadWrite(args[0])
 }
 
-func commandDemoteMaster(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandDemoteMaster(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action DemoteMaster requires <zk tablet path>")
 	}
-	return ai.DemoteMaster(args[0])
+	return wrangler.ActionInitiator().DemoteMaster(args[0])
 }
 
-func commandChangeSlaveType(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandChangeSlaveType(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 2 {
 		relog.Fatal("action ChangeSlaveType requires <zk tablet path> <db type>")
 	}
 	return "", wrangler.ChangeType(args[0], tm.TabletType(args[1]), *force)
 }
 
-func commandPing(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandPing(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action Ping requires <zk tablet path>")
 	}
-	return ai.Ping(args[0])
+	return wrangler.ActionInitiator().Ping(args[0])
 }
 
-func commandQuery(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandQuery(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 2 && len(args) != 4 {
 		relog.Fatal("action Query requires 2 or 4 args")
 	}
 	if len(args) == 2 {
-		return "", kquery(zconn, args[0], "", "", args[1])
+		return "", kquery(wrangler.ZkConn(), args[0], "", "", args[1])
 	}
 
-	return "", kquery(zconn, args[0], args[1], args[2], args[3])
+	return "", kquery(wrangler.ZkConn(), args[0], args[1], args[2], args[3])
 }
 
-func commandSleep(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandSleep(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 2 {
 		relog.Fatal("action Sleep requires 2 args")
 	}
@@ -656,10 +656,10 @@ func commandSleep(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, 
 	if err != nil {
 		return "", err
 	}
-	return ai.Sleep(args[0], duration)
+	return wrangler.ActionInitiator().Sleep(args[0], duration)
 }
 
-func commandSnapshot(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandSnapshot(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action Snapshot requires <zk src tablet path>")
 	}
@@ -671,7 +671,7 @@ func commandSnapshot(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiato
 	return "", err
 }
 
-func commandRestore(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandRestore(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 3 && len(args) != 4 {
 		relog.Fatal("action Restore requires <zk src tablet path> <src manifest path> <zk dst tablet path> [<zk new master path>]")
 	}
@@ -682,21 +682,21 @@ func commandRestore(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator
 	return "", wrangler.Restore(args[0], args[1], args[2], zkParentPath)
 }
 
-func commandClone(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandClone(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 2 {
 		relog.Fatal("action Clone requires <zk src tablet path> <zk dst tablet path>")
 	}
 	return "", wrangler.Clone(args[0], args[1], *force)
 }
 
-func commandReparentTablet(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandReparentTablet(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ReparentTablet requires <zk tablet path>")
 	}
 	return "", wrangler.ReparentTablet(args[0])
 }
 
-func commandPartialSnapshot(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandPartialSnapshot(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 4 {
 		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name> <start key> <end key>")
 	}
@@ -708,7 +708,7 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionI
 	return "", err
 }
 
-func commandPartialRestore(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandPartialRestore(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 3 && len(args) != 4 {
 		relog.Fatal("action PartialRestore requires <zk src tablet path> <src manifest path> <zk dst tablet path> [<zk new master path>]")
 	}
@@ -719,14 +719,14 @@ func commandPartialRestore(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionIn
 	return "", wrangler.PartialRestore(args[0], args[1], args[2], zkParentPath)
 }
 
-func commandPartialClone(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandPartialClone(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 5 {
 		relog.Fatal("action PartialClone requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>")
 	}
 	return "", wrangler.PartialClone(args[0], args[1], args[2], key.HexKeyspaceId(args[3]), key.HexKeyspaceId(args[4]), *force)
 }
 
-func commandExecuteHook(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandExecuteHook(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) < 2 {
 		relog.Fatal("action ExecuteHook requires <zk tablet path> <hook name>")
 	}
@@ -739,14 +739,14 @@ func commandExecuteHook(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionIniti
 	return "", err
 }
 
-func commandRebuildShardGraph(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandRebuildShardGraph(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action RebuildShardGraph requires <zk shard path>")
 	}
 	return wrangler.RebuildShardGraph(args[0])
 }
 
-func commandReparentShard(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandReparentShard(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("ReparentShard", flag.ExitOnError)
 	leaveMasterReadOnly := subFlags.Bool("leave-master-read-only", false, "leaves the master read-only after reparenting")
 	subFlags.Parse(args)
@@ -757,7 +757,7 @@ func commandReparentShard(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionIni
 	return "", wrangler.ReparentShard(subFlags.Arg(0), subFlags.Arg(1), *leaveMasterReadOnly, *force)
 }
 
-func commandValidateShard(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandValidateShard(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("ValidateShard", flag.ExitOnError)
 	pingTablets := subFlags.Bool("ping-tablets", false, "ping all tablets during validate")
 	subFlags.Parse(args)
@@ -768,7 +768,7 @@ func commandValidateShard(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionIni
 	return "", wrangler.ValidateShard(subFlags.Arg(0), *pingTablets)
 }
 
-func commandShardReplicationPositions(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandShardReplicationPositions(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ShardReplicationPositions requires <zk shard path>")
 	}
@@ -793,35 +793,35 @@ func commandShardReplicationPositions(wrangler *wr.Wrangler, zconn zk.Conn, ai *
 	return "", nil
 }
 
-func commandListShardTablets(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandListShardTablets(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ListShardTablets requires <zk shard path>")
 	}
-	return "", listTabletsByShard(zconn, args[0])
+	return "", listTabletsByShard(wrangler.ZkConn(), args[0])
 }
 
-func commandListShardActions(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandListShardActions(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ListShardActions requires <zk shard path>")
 	}
-	return "", listActionsByShard(zconn, args[0])
+	return "", listActionsByShard(wrangler.ZkConn(), args[0])
 }
 
-func commandCreateKeyspace(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandCreateKeyspace(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action CreateKeyspace requires 1 arg")
 	}
-	return "", createKeyspace(zconn, args[0])
+	return "", createKeyspace(wrangler.ZkConn(), args[0])
 }
 
-func commandRebuildKeyspaceGraph(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandRebuildKeyspaceGraph(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action RebuildKeyspaceGraph requires <zk keyspace path>")
 	}
 	return wrangler.RebuildKeyspaceGraph(args[0])
 }
 
-func commandValidateKeyspace(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandValidateKeyspace(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("ValidateKeyspace", flag.ExitOnError)
 	pingTablets := subFlags.Bool("ping-tablets", false, "ping all tablets during validate")
 	subFlags.Parse(args)
@@ -832,14 +832,14 @@ func commandValidateKeyspace(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.Action
 	return "", wrangler.ValidateKeyspace(subFlags.Arg(0), *pingTablets)
 }
 
-func commandPurgeActions(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandPurgeActions(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action PurgeActions requires <zk action path>")
 	}
-	return "", tm.PurgeActions(zconn, args[0])
+	return "", tm.PurgeActions(wrangler.ZkConn(), args[0])
 }
 
-func commandPruneActionLogs(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandPruneActionLogs(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("PruneActionLogs", flag.ExitOnError)
 	keepCount := subFlags.Int("keep-count", 10, "count to keep")
 	subFlags.Parse(args)
@@ -848,19 +848,19 @@ func commandPruneActionLogs(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionI
 		relog.Fatal("action PruneActionLogs requires <zk action log path>")
 	}
 
-	purgedCount, err := tm.PruneActionLogs(zconn, subFlags.Arg(0), *keepCount)
+	purgedCount, err := tm.PruneActionLogs(wrangler.ZkConn(), subFlags.Arg(0), *keepCount)
 	relog.Info("Pruned %v actionlog", purgedCount)
 	return "", err
 }
 
-func commandWaitForAction(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandWaitForAction(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action WaitForAction requires <zk action path>")
 	}
 	return args[0], nil
 }
 
-func commandResolve(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandResolve(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
 	}
@@ -875,7 +875,7 @@ func commandResolve(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator
 		relog.Fatal("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
 	}
 
-	addrs, err := naming.LookupVtName(zconn, "", parts[0], parts[1], parts[2], namedPort)
+	addrs, err := naming.LookupVtName(wrangler.ZkConn(), "", parts[0], parts[1], parts[2], namedPort)
 	if err != nil {
 		return "", err
 	}
@@ -885,7 +885,7 @@ func commandResolve(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator
 	return "", nil
 }
 
-func commandValidate(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandValidate(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("Validate", flag.ExitOnError)
 	pingTablets := subFlags.Bool("ping-tablets", false, "ping all tablets during validate")
 	subFlags.Parse(args)
@@ -896,21 +896,21 @@ func commandValidate(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiato
 	return "", wrangler.Validate(subFlags.Arg(0), *pingTablets)
 }
 
-func commandExportZkns(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandExportZkns(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ExportZkns requires <zk vt root path>")
 	}
 	return "", wrangler.ExportZkns(args[0])
 }
 
-func commandExportZknsForKeyspace(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandExportZknsForKeyspace(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ExportZknsForKeyspace requires <zk vt root path>")
 	}
 	return "", wrangler.ExportZknsForKeyspace(args[0])
 }
 
-func commandRebuildReplicationGraph(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandRebuildReplicationGraph(wrangler *wr.Wrangler, args []string) (string, error) {
 	// This is sort of a nuclear option.
 	if len(args) < 2 {
 		relog.Fatal("action RebuildReplicationGraph requires zk-vt-paths=<zk vt path>,... keyspaces=<keyspace>,...")
@@ -928,35 +928,35 @@ func commandRebuildReplicationGraph(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm
 	return "", wrangler.RebuildReplicationGraph(zkVtPaths, keyspaces)
 }
 
-func commandListIdle(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandListIdle(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ListIdle requires <zk vt path>")
 	}
-	return "", listTabletsByType(zconn, args[0], tm.TYPE_IDLE)
+	return "", listTabletsByType(wrangler.ZkConn(), args[0], tm.TYPE_IDLE)
 }
 
-func commandListScrap(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandListScrap(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ListScrap requires <zk vt path>")
 	}
-	return "", listTabletsByType(zconn, args[0], tm.TYPE_SCRAP)
+	return "", listTabletsByType(wrangler.ZkConn(), args[0], tm.TYPE_SCRAP)
 }
 
-func commandListAllTablets(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandListAllTablets(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ListAllTablets requires <zk vt path>")
 	}
-	return "", dumpAllTablets(zconn, args[0])
+	return "", dumpAllTablets(wrangler.ZkConn(), args[0])
 }
 
-func commandListTablets(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandListTablets(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) == 0 {
 		relog.Fatal("action ListTablets requires <zk tablet path> ...")
 	}
-	return "", dumpTablets(zconn, args)
+	return "", dumpTablets(wrangler.ZkConn(), args)
 }
 
-func commandGetSchema(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandGetSchema(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action GetSchema requires <zk tablet path>")
 	}
@@ -967,21 +967,21 @@ func commandGetSchema(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiat
 	return "", err
 }
 
-func commandValidateSchemaShard(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandValidateSchemaShard(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ValidateSchemaShard requires <zk shard path>")
 	}
 	return "", wrangler.ValidateSchemaShard(args[0])
 }
 
-func commandValidateSchemaKeyspace(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandValidateSchemaKeyspace(wrangler *wr.Wrangler, args []string) (string, error) {
 	if len(args) != 1 {
 		relog.Fatal("action ValidateSchemaKeyspace requires <zk keyspace path>")
 	}
 	return "", wrangler.ValidateSchemaKeyspace(args[0])
 }
 
-func commandPreflightSchema(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandPreflightSchema(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("PreflightSchema", flag.ExitOnError)
 	sql := subFlags.String("sql", "", "sql command")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
@@ -1001,7 +1001,7 @@ func commandPreflightSchema(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionI
 	return "", err
 }
 
-func commandApplySchema(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandApplySchema(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("ApplySchema", flag.ExitOnError)
 	sql := subFlags.String("sql", "", "sql command")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
@@ -1044,7 +1044,7 @@ func commandApplySchema(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionIniti
 	return "", err
 }
 
-func commandApplySchemaShard(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandApplySchemaShard(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("ApplySchemaShard", flag.ExitOnError)
 	sql := subFlags.String("sql", "", "sql command")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
@@ -1071,7 +1071,7 @@ func commandApplySchemaShard(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.Action
 	return "", err
 }
 
-func commandApplySchemaKeyspace(wrangler *wr.Wrangler, zconn zk.Conn, ai *tm.ActionInitiator, args []string) (string, error) {
+func commandApplySchemaKeyspace(wrangler *wr.Wrangler, args []string) (string, error) {
 	subFlags := flag.NewFlagSet("ApplySchemaKeyspace", flag.ExitOnError)
 	sql := subFlags.String("sql", "", "sql command")
 	sqlFile := subFlags.String("sql-file", "", "file containing the sql commands")
@@ -1137,7 +1137,6 @@ func main() {
 	zconn := zk.NewMetaConn(5e9, false)
 	defer zconn.Close()
 
-	ai := tm.NewActionInitiator(zconn)
 	wrangler := wr.NewWrangler(zconn, *waitTime)
 	var actionPath string
 	var err error
@@ -1146,7 +1145,7 @@ func main() {
 	for _, group := range commands {
 		for _, cmd := range group.commands {
 			if cmd.name == action {
-				actionPath, err = cmd.method(wrangler, zconn, ai, args[1:])
+				actionPath, err = cmd.method(wrangler, args[1:])
 				found = true
 			}
 		}
@@ -1164,7 +1163,7 @@ func main() {
 		if *noWaitForAction {
 			fmt.Println(actionPath)
 		} else {
-			err := ai.WaitForCompletion(actionPath, *waitTime)
+			err := wrangler.ActionInitiator().WaitForCompletion(actionPath, *waitTime)
 			if err != nil {
 				relog.Fatal(err.Error())
 			} else {
