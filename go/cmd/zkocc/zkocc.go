@@ -16,6 +16,7 @@ import (
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
+	"code.google.com/p/vitess/go/vt/servenv"
 	"code.google.com/p/vitess/go/zk/zkocc"
 	"code.google.com/p/vitess/go/zk/zkocc/proto"
 )
@@ -49,6 +50,7 @@ func init() {
 // zkocc: a proxy for zk
 func main() {
 	flag.Parse()
+	env.Init("zkocc")
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()
