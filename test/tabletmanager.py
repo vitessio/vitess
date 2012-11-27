@@ -92,6 +92,13 @@ def run_test_sanity():
 
   tablet_62344.start_vttablet()
 
+  # make sure the query service is started right away
+  result, _ = utils.run_vtctl('Query /zk/test_nj/vt/ns/test_keyspace "select * from vt_select_test"', trap_output=True)
+  rows = result.splitlines()
+  if len(rows) != 5:
+    raise utils.TestError("expected 5 rows in vt_select_test", rows, result)
+
+  # check Ping
   utils.run_vtctl('Ping ' + tablet_62344.zk_tablet_path)
 
   # Quickly check basic actions.
@@ -100,11 +107,6 @@ def run_test_sanity():
 
   utils.run_vtctl('SetReadWrite ' + tablet_62344.zk_tablet_path)
   utils.check_db_read_write(62344)
-
-  result, _ = utils.run_vtctl('Query /zk/test_nj/vt/ns/test_keyspace "select * from vt_select_test"', trap_output=True)
-  rows = result.splitlines()
-  if len(rows) != 5:
-    raise utils.TestError("expected 5 rows in vt_select_test", rows, result)
 
   utils.run_vtctl('DemoteMaster ' + tablet_62344.zk_tablet_path)
   utils.wait_db_read_only(62344)

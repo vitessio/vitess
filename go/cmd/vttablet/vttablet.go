@@ -88,9 +88,9 @@ func main() {
 		relog.Warning("%s", err)
 	}
 
-	initAgent(dbcfgs, mycnf)
 	initQueryService(dbcfgs)
 	initUpdateStreamService(mycnf)
+	initAgent(dbcfgs, mycnf) // depends on both query and updateStream
 
 	rpc.HandleHTTP()
 
@@ -211,11 +211,6 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 		*lameDuckPeriod = usefulLameDuckPeriod
 		relog.Info("readjusted -lame-duck-period to %f", *lameDuckPeriod)
 	}
-
-	if dbcfgs.App.Dbname == "" {
-		relog.Info("missing/incomplete db configs file, disabling query service")
-		return
-	}
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
 			ts.QueryLogger = relog.New(f, "", log.Ldate|log.Lmicroseconds, relog.DEBUG)
@@ -223,7 +218,6 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 			relog.Fatal("Error opening file %v: %v", *queryLog, err)
 		}
 	}
-	ts.AllowQueries(dbcfgs.App)
 	umgmt.AddCloseCallback(func() {
 		ts.DisallowQueries(true)
 	})

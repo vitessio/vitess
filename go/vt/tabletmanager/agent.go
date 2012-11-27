@@ -78,6 +78,17 @@ func (agent *ActionAgent) AddChangeCallback(f TabletChangeCallback) {
 	agent.mutex.Unlock()
 }
 
+func (agent *ActionAgent) runChangeCallbacks(oldTablet *Tablet, context string) {
+	agent.mutex.Lock()
+	// Access directly since we have the lock.
+	newTablet := agent._tablet.Tablet
+	for _, f := range agent.changeCallbacks {
+		relog.Info("running tablet callback: %v %v", context, f)
+		go f(*oldTablet, *newTablet)
+	}
+	agent.mutex.Unlock()
+}
+
 func (agent *ActionAgent) readTablet() error {
 	tablet, err := ReadTablet(agent.zconn, agent.zkTabletPath)
 	if err != nil {
@@ -162,14 +173,7 @@ func (agent *ActionAgent) dispatchAction(actionPath string) error {
 	if err := agent.readTablet(); err != nil {
 		relog.Warning("failed rereading tablet after action - services may be inconsistent: %v %v", actionPath, err)
 	} else {
-		agent.mutex.Lock()
-		// Access directly since we have the lock.
-		newTablet := agent._tablet.Tablet
-		for _, f := range agent.changeCallbacks {
-			relog.Info("running tablet callback: %v %v", actionPath, f)
-			go f(*oldTablet, *newTablet)
-		}
-		agent.mutex.Unlock()
+		agent.runChangeCallbacks(oldTablet, actionPath)
 	}
 
 	// Maybe invalidate the schema.
@@ -412,6 +416,9 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 	if err = agent.verifyZkServingAddrs(); err != nil {
 		panic(err)
 	}
+
+	oldTablet := &Tablet{}
+	agent.runChangeCallbacks(oldTablet, "Start")
 
 	go agent.actionEventLoop()
 }
