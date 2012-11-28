@@ -84,7 +84,7 @@ class VtOCCConnection(tablet2.TabletConnection):
     try:
       response = self.client.call('SqlQuery.GetSessionId', {"DbName": self.dbname})
       self.set_session_id(response.reply["SessionId"])
-    except gorpc.GoRpcError, e:
+    except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
 
   def _convert_error(self, exception, *error_hints):
@@ -144,7 +144,7 @@ class VtOCCConnection(tablet2.TabletConnection):
       try:
         time.sleep(RECONNECT_DELAY)
         self.dial()
-      except Exception, e:
+      except Exception as e:
         # If this fails now, the code will retry later as the session_id
         # won't be valid until the handshake finishes.
         logging.warning('error dialing vtocc %s (%s)', self.addr, e)
@@ -160,7 +160,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         result = tablet2.TabletConnection.begin(self)
         self._time_failed = 0
         return result
-      except dbexceptions.OperationalError, e:
+      except dbexceptions.OperationalError as e:
         error_type, e = self._convert_error(e, 'begin')
         if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
@@ -175,7 +175,7 @@ class VtOCCConnection(tablet2.TabletConnection):
             if error_type == ERROR_TIMEOUT:
               raise e
             break
-          except dbexceptions.OperationalError, dial_error:
+          except dbexceptions.OperationalError as dial_error:
             logging.warning('error dialing vtocc on begin %s (%s)',
                             self.addr, dial_error)
 
@@ -184,7 +184,7 @@ class VtOCCConnection(tablet2.TabletConnection):
       result = tablet2.TabletConnection.commit(self)
       self._time_failed = 0
       return result
-    except dbexceptions.OperationalError, e:
+    except dbexceptions.OperationalError as e:
       error_type, e = self._convert_error(e, 'commit')
       raise e
 
@@ -193,7 +193,7 @@ class VtOCCConnection(tablet2.TabletConnection):
     try:
       # convert bind style from %(name)s to :name
       sql = sql % bind_vars_proxy
-    except KeyError, e:
+    except KeyError as e:
       raise dbexceptions.InterfaceError(e[0], sql, bind_variables)
 
     sane_bind_vars = bind_vars_proxy.export_bind_vars()
@@ -204,7 +204,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         result = tablet2.TabletConnection._execute(self, sql, sane_bind_vars)
         self._time_failed = 0
         return result
-      except dbexceptions.OperationalError, e:
+      except dbexceptions.OperationalError as e:
         error_type, e = self._convert_error(e, sql, sane_bind_vars)
         if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
@@ -221,7 +221,7 @@ class VtOCCConnection(tablet2.TabletConnection):
               # want to retry - exit early.
               raise e
             break
-          except dbexceptions.OperationalError, dial_error:
+          except dbexceptions.OperationalError as dial_error:
             logging.warning('error dialing vtocc on execute %s (%s)',
                             self.addr, dial_error)
 
@@ -234,7 +234,7 @@ class VtOCCConnection(tablet2.TabletConnection):
       try:
         # convert bind style from %(name)s to :name
         sane_sql_list.append(sql % bind_vars_proxy)
-      except KeyError, e:
+      except KeyError as e:
         raise dbexceptions.InterfaceError(e[0], sql, bind_variables)
       sane_bind_vars_list.append(bind_vars_proxy.export_bind_vars())
 
@@ -244,7 +244,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         result = tablet2.TabletConnection._execute_batch(self, sane_sql_list, sane_bind_vars_list)
         self._time_failed = 0
         return result
-      except dbexceptions.OperationalError, e:
+      except dbexceptions.OperationalError as e:
         error_type, e = self._convert_error(e, sql_list, sane_bind_vars_list)
         if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
@@ -259,7 +259,7 @@ class VtOCCConnection(tablet2.TabletConnection):
             if error_type == ERROR_TIMEOUT:
               raise e
             break
-          except dbexceptions.OperationalError, dial_error:
+          except dbexceptions.OperationalError as dial_error:
             logging.warning('error dialing vtocc on execute %s (%s)',
                             self.addr, dial_error)
 
@@ -269,7 +269,7 @@ class VtOCCConnection(tablet2.TabletConnection):
     try:
       # convert bind style from %(name)s to :name
       sql = sql % bind_vars_proxy
-    except KeyError, e:
+    except KeyError as e:
       raise dbexceptions.InterfaceError(e[0], sql, bind_variables)
 
     sane_bind_vars = bind_vars_proxy.export_bind_vars()
@@ -280,7 +280,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         result = tablet2.TabletConnection._stream_execute(self, sql, sane_bind_vars)
         self._time_failed = 0
         return result
-      except dbexceptions.OperationalError, e:
+      except dbexceptions.OperationalError as e:
         error_type, e = self._convert_error(e, sql, sane_bind_vars)
         if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
@@ -295,7 +295,7 @@ class VtOCCConnection(tablet2.TabletConnection):
             if error_type == ERROR_TIMEOUT:
               raise e
             break
-          except dbexceptions.OperationalError, dial_error:
+          except dbexceptions.OperationalError as dial_error:
             logging.warning('error dialing vtocc on execute %s (%s)',
                             self.addr, dial_error)
 

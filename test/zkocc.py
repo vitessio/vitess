@@ -75,10 +75,22 @@ def run_test_zkocc():
   _populate_zk()
 
   # preload the test_nj cell
-  vtocc_14850 = utils.run_bg(vtroot+'/bin/zkocc -port=14850 -connect-timeout=2s -cache-refresh-interval=1s test_nj')
+  zkocc_14850 = utils.run_bg(vtroot+'/bin/zkocc -port=14850 -connect-timeout=2s -cache-refresh-interval=1s test_nj')
   time.sleep(1)
-  zkocc_client = zkocc.ZkOccConnection("localhost:14850", 30)
+
+  # create a python client. The first address is bad, will test the retry logic
+  zkocc_client = zkocc.ZkOccConnection("localhost:14849,localhost:14850,localhost:14851", 30)
   zkocc_client.dial()
+
+  # test failure for a python client that cannot connect
+  bad_zkocc_client = zkocc.ZkOccConnection("localhost:14848,localhost:14849", 30)
+  bad_zkocc_client.dial()
+  try:
+    bad_zkocc_client.get("/zk/test_nj/zkocc1/data1")
+    raise utils.TestError('exception expected')
+  except zkocc.ZkOccError as e:
+    if str(e) != "zkocc get command failed 2 times: ('get failed', GoRpcError(error(111, 'Connection refused'), 'ZkReader.Get'))":
+      raise utils.TestError('Unexpected exception: ', str(e))
 
   # get test
   out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1', trap_output=True)
@@ -178,17 +190,26 @@ Stale = false
     raise utils.TestError('unexpected ended stale state')
   fd.close()
 
-  utils.kill_sub_process(vtocc_14850)
+  utils.kill_sub_process(zkocc_14850)
+  zkocc_14850.wait()
+
+  # check that after the server is gone, the python client fails correctly
+  try:
+    zkocc_client.get("/zk/test_nj/zkocc1/data1")
+    raise utils.TestError('exception expected')
+  except zkocc.ZkOccError as e:
+    if str(e) != "zkocc get command failed 2 times: ('get failed', GoRpcError(error(111, 'Connection refused'), 'ZkReader.Get'))":
+      raise utils.TestError('Unexpected exception: ', str(e))
 
 def run_test_zkocc_qps():
   _populate_zk()
 
   # preload the test_nj cell
-  vtocc_14850 = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
+  zkocc_14850 = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
   qpser = utils.run_bg(vtroot+'/bin/zkclient2 -server localhost:14850 -mode qps /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2')
   time.sleep(10)
   utils.kill_sub_process(qpser)
-  utils.kill_sub_process(vtocc_14850)
+  utils.kill_sub_process(zkocc_14850)
 
 def run_all():
   run_test_zkocc()

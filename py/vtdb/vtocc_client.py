@@ -35,7 +35,7 @@ if __name__ == '__main__':
           print 'description:', curs.description
           for i, v in enumerate(curs):
             print i, v
-      except Exception, e:
+      except Exception as e:
         print str(e)
         sys.exit(1)
     sys.exit(0)
