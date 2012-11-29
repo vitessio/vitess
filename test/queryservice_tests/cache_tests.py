@@ -3,6 +3,27 @@ from vtdb import vt_occ2 as db
 import framework
 import cache_cases
 
+class TestWillNotBeCached(framework.TestCase):
+
+  def setUp(self):
+    self.env.log.reset()
+
+  def tearDown(self):
+    self.env.execute("drop table vtocc_nocache")
+
+  def test_nocache(self):
+    self.env.execute("create table vtocc_nocache(eid int, primary key (eid)) comment 'vtocc_nocache'")
+    self.assertContains(self.env.log.read(), "Will not be cached")
+
+  def test_nopk(self):
+    self.env.execute("create table vtocc_nocache(eid int)")
+    self.assertContains(self.env.log.read(), "Will not be cached")
+    
+  def test_charcol(self):
+    self.env.execute("create table vtocc_nocache(eid varchar(10), primary key (eid))")
+    self.assertContains(self.env.log.read(), "Will not be cached")
+  
+
 class TestCache(framework.TestCase):
   def test_num_str(self):
     try:
@@ -10,31 +31,7 @@ class TestCache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Type")
     else:
-      self.assertFail("Did not receive exception")
-
-  def test_nocache(self):
-    try:
-      self.env.log.reset()
-      self.env.execute("create table vtocc_nocache(eid int, primary key (eid)) comment 'vtocc_nocache'")
-      self.assertContains(self.env.log.read(), "Will not be cached")
-    finally:
-      self.env.execute("drop table vtocc_nocache")
-
-  def test_nopk(self):
-    try:
-      self.env.log.reset()
-      self.env.execute("create table vtocc_nocache(eid int)")
-      self.assertContains(self.env.log.read(), "Will not be cached")
-    finally:
-      self.env.execute("drop table vtocc_nocache")
-
-  def test_charcol(self):
-    try:
-      self.env.log.reset()
-      self.env.execute("create table vtocc_nocache(eid varchar(10), primary key (eid))")
-      self.assertContains(self.env.log.read(), "Will not be cached")
-    finally:
-      self.env.execute("drop table vtocc_nocache")
+      self.fail("Did not receive exception")
 
   def test_uncache(self):
     try:
@@ -52,7 +49,7 @@ class TestCache(framework.TestCase):
       except KeyError:
         pass
       else:
-        self.assertFail("Did not receive exception")
+        self.fail("Did not receive exception")
     finally:
       self.env.execute("alter table vtocc_cached comment ''")
 
@@ -78,7 +75,7 @@ class TestCache(framework.TestCase):
       except KeyError:
         pass
       else:
-        self.assertFail("Did not receive exception")
+        self.fail("Did not receive exception")
       # Verify row cache is working
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       tstart = self.env.table_stats()["vtocc_cached2"]
@@ -104,7 +101,7 @@ class TestCache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: DML too complex")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
     finally:
       self.env.execute("rollback")
 
@@ -122,9 +119,9 @@ class TestCache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Type mismatch")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
 
   def test_cache_sqls(self):
     error_count = self.env.run_cases(cache_cases.cases)
     if error_count != 0:
-      self.assertFail("test_execution errors: %d"%(error_count))
+      self.fail("test_execution errors: %d" % error_count)

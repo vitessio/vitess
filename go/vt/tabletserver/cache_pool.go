@@ -89,6 +89,7 @@ func (self *Cache) Recycle() {
 
 func CacheCreator(dbconfig DBConfig) CreateCacheFunc {
 	if dbconfig.Memcache == "" {
+		relog.Info("Row cache not enabled")
 		return nil
 	}
 	relog.Info("Row cache is enabled")

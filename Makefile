@@ -4,7 +4,7 @@
 
 MAKEFLAGS = -s
 
-all: build unit_test occ_test integration_test
+all: build unit_test queryservice_test integration_test
 
 build:
 	cd go/cmd/mysqlctl; go build
@@ -43,11 +43,13 @@ unit_test:
 #	cd go/zk; go test
 #	cd go/zk/zkctl; go test
 
-occ_test:
+queryservice_test:
 	if [ -e "/usr/bin/memcached" ]; then \
-		cd py/vttest ; ./occ_test.py -m ; \
+		cd test; ./queryservice_test.py -m -e vttablet; \
+		cd test; ./queryservice_test.py -m -e vtocc; \
 	else \
-		cd py/vttest ; ./occ_test.py ; \
+		cd test; ./queryservice_test.py -e vttablet; \
+		cd test; ./queryservice_test.py -e vttablet; \
 	fi
 
 # export VT_TEST_FLAGS=-v for instance

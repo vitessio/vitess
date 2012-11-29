@@ -101,9 +101,9 @@ class Log(object):
     if rewritten != self.rewritten_sql:
       self.fail("Bad rewritten SQL", rewritten, self.rewritten_sql)
 
-  def check_remote_address(self, case):
-    if not self.remote_address.startswith(case.remote_address):
-      return self.fail("Bad RemoteAddr", case.remote_address, self.remote_address)
+  # def check_remote_address(self, case):
+  #   if not self.remote_address.startswith(case.remote_address):
+  #     return self.fail("Bad RemoteAddr", case.remote_address, self.remote_address)
 
   def check_number_of_queries(self, case):
     if case.rewritten is not None and int(self.number_of_queries) != len(case.rewritten):

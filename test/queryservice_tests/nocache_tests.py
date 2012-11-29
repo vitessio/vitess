@@ -241,7 +241,7 @@ class TestNocache(framework.TestCase):
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
-    conn = db.connect("localhost:9461", 5, dbname="vt_test")
+    conn = db.connect("localhost:9461", 5, dbname="vt_test_keyspace")
     cu = conn.cursor()
     self.env.execute("set vt_query_timeout=0.25")
     try:
@@ -353,4 +353,4 @@ class TestNocache(framework.TestCase):
   def test_sqls(self):
     error_count = self.env.run_cases(nocache_cases.cases)
     if error_count != 0:
-      self.assertFail("test_execution errors: %d"%(error_count))
+      self.fail("test_execution errors: %d"%(error_count))

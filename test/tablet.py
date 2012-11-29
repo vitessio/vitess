@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 from subprocess import check_call, Popen, CalledProcessError, PIPE
 import sys
@@ -27,6 +28,22 @@ class Tablet(object):
   default_port = 6700
   default_mysql_port = 3700
   seq = 0
+  default_db_config = {
+    "app": {
+      "dbname": "vt_test_keyspace",
+      "uname": "vt_dba", # it's vt_dba so that the tests can create
+                         # and drop tables.
+      "charset": "utf8"
+      },
+    "dba": {
+      "uname": "vt_dba",
+      "charset": "utf8"
+      },
+    "repl": {
+      "uname": "vt_repl",
+      "charset": "utf8"
+      }
+    }
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
@@ -39,6 +56,8 @@ class Tablet(object):
     else:
       self.cell = tablet_cell_map.get(tablet_uid, 'nj')
     self.proc = None
+    self.memcached = None
+    self.memcache_path = None
 
     # filled in during init_tablet
     self.keyspace = None
@@ -197,7 +216,19 @@ class Tablet(object):
     if start:
       self.start_vttablet()
 
-  def start_vttablet(self, port=None, auth=False):
+  @property
+  def tablet_dir(self):
+    return "/vt/vt_%010d" % self.tablet_uid
+
+  @property
+  def querylog_file(self):
+    return os.path.join(self.tablet_dir, "vttablet.querylog")
+
+  @property
+  def logfile(self):
+    return os.path.join(self.tablet_dir, "vttablet.log")
+
+  def start_vttablet(self, port=None, auth=False, memcache=False):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -205,16 +236,46 @@ class Tablet(object):
     utils.prog_compile(['vtaction',
                         'vttablet',
                         ])
+    if memcache:
+      self.start_memcache()
+
     args = [os.path.join(vtroot, 'bin', 'vttablet'),
             '-port %s' % (port or self.port),
             '-tablet-path %s' % self.zk_tablet_path,
-            '-logfile /vt/vt_%010d/vttablet.log' % self.tablet_uid]
+            '-logfile', self.logfile,
+            '-log.level INFO',
+            '-db-configs-file', self._write_db_configs_file(),
+            '-debug-querylog-file', self.querylog_file]
     if auth:
-      args.extend(['-auth-credentials', os.path.join(vttop, 'py', 'vttest', 'authcredentials_test.json')])
+      args.extend(['-auth-credentials', os.path.join(vttop, 'test', 'test_data', 'authcredentials_test.json')])
 
-    self.proc = utils.run_bg(' '.join(args))
+    self.proc = utils.run_bg(' '.join(args), stderr=utils.devnull)
     utils.run(vtroot+'/bin/zk wait -e ' + self.zk_pid, stdout=utils.devnull)
     return self.proc
 
+  def _write_db_configs_file(self):
+    config = dict(self.default_db_config)
+    path = os.path.join(self.tablet_dir, 'db-configs.json')
+
+    if self.memcached:
+      for d in config.values():
+        d['memcache'] = self.memcache_path
+
+      config['memcache'] = self.memcache_path
+
+    with open(path, 'w') as fi:
+      json.dump(config, fi)
+
+    return path
+
   def kill_vttablet(self):
     utils.kill_sub_process(self.proc)
+    if self.memcached:
+      self.kill_memcache()
+
+  def start_memcache(self):
+      self.memcache_path = os.path.join(self.tablet_dir, "memcache.sock")
+      self.memcached = utils.run_bg(' '.join(["memcached", "-s", self.memcache_path]), stdout=utils.devnull)
+
+  def kill_memcache(self):
+    utils.kill_sub_process(self.memcached)
