@@ -49,7 +49,7 @@ queryservice_test:
 		cd test; ./queryservice_test.py -m -e vtocc; \
 	else \
 		cd test; ./queryservice_test.py -e vttablet; \
-		cd test; ./queryservice_test.py -e vttablet; \
+		cd test; ./queryservice_test.py -e vtocc; \
 	fi
 
 # export VT_TEST_FLAGS=-v for instance
