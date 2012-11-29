@@ -1,7 +1,3 @@
-# Copyright 2012, Google Inc. All rights reserved.
-# Use of this source code is governed by a BSD-style license that can
-# be found in the LICENSE file.
-
 # times module
 #
 # This module provides some Date and Time interface for vtdb
@@ -70,7 +66,7 @@ def DateOrNone(s):
   except: return None
 
 def DateToString(d):
-  return d.strftime("%Y-%m-%d")
+  return d.isoformat()
 
 def DateTimeToString(dt):
-  return dt.strftime("%Y-%m-%d %H:%M:%S")
+  return dt.isoformat(' ')
