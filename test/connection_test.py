@@ -3,10 +3,8 @@
 
 import hmac
 import json
-import optparse
 import os
 import subprocess
-import sys
 import shutil
 import time
 import unittest
@@ -177,7 +175,7 @@ class TestAuthentication(BaseTest):
     for i in range(4):
       try:
         self.call('AuthenticatorCRAMMD5.GetNewChallenge', "")
-      except gorpc.GoRpcError as e:
+      except gorpc.GoRpcError:
         break
     else:
       self.fail("Too many requests were allowed (%s)." % (i + 1))

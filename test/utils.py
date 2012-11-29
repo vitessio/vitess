@@ -6,8 +6,9 @@ import shlex
 import shutil
 import signal
 import socket
-from subprocess import check_call, Popen, CalledProcessError, PIPE
+from subprocess import Popen, CalledProcessError, PIPE
 import sys
+import time
 import types
 
 import MySQLdb
@@ -37,7 +38,7 @@ def remove_tmp_files():
     shutil.rmtree(tmp_root)
   except OSError as e:
       if options.verbose:
-        print >> sys.stderr, e, path
+        print >> sys.stderr, e, tmp_root
 
 def pause(prompt):
   if options.debug:
@@ -62,7 +63,6 @@ def kill_sub_processes():
       try:
         parts = line.strip().split()
         pid = int(parts[0])
-        proc_name = parts[1]
         proc = pid_map.get(pid)
         if not proc or (proc and proc.pid and proc.returncode is None):
           if not pid in already_killed:
@@ -125,7 +125,6 @@ def run_bg(cmd, **kargs):
   return proc
 
 def wait_procs(proc_list, raise_on_error=True):
-  pids = []
   for proc in proc_list:
     pid = proc.pid
     if pid:

@@ -4,7 +4,7 @@
 
 import os
 import shlex
-from subprocess import check_call, Popen, CalledProcessError, PIPE
+from subprocess import Popen, PIPE
 import unittest
 
 class TestCase(unittest.TestCase):
@@ -67,5 +67,5 @@ def execute(cmd, trap_output=False, verbose=False, **kargs):
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode:
-    raise TestException('FAIL: %s %s %s' % (args, stdout, stderr))
+    raise Exception('FAIL: %s %s %s' % (args, stdout, stderr))
   return stdout, stderr

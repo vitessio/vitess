@@ -5,7 +5,6 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
-import json
 from optparse import OptionParser
 import os
 import shutil

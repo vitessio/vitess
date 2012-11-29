@@ -145,7 +145,6 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 16)
 
   def test_transaction_cap(self):
-    vstart = self.env.debug_vars()
     self.env.execute("set vt_transaction_cap=1")
     co2 = self.env.connect()
     self.env.execute("begin")
@@ -187,7 +186,6 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 30000000000)
 
   def test_query_cache(self):
-    vstart = self.env.debug_vars()
     self.env.execute("set vt_query_cache_size=1")
     bv={}
     bv["ival1"] = 1
@@ -277,7 +275,6 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.ActivePool.Timeout, 30000000000)
 
   def test_idle_timeout(self):
-    vstart = self.env.debug_vars()
     self.env.execute("set vt_idle_timeout=1")
     time.sleep(2)
     self.env.execute("select 1 from dual")

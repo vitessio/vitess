@@ -1,13 +1,8 @@
 #!/usr/bin/python
 
-import json
 from optparse import OptionParser
 import os
 import socket
-from subprocess import check_call, Popen, CalledProcessError, PIPE
-import tempfile
-
-from zk import zkocc
 
 import utils
 import tablet
