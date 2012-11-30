@@ -15,7 +15,6 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"encoding/binary"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -29,22 +28,7 @@ import (
 const (
 	BINLOG_HEADER_SIZE = 4  // copied from mysqlbinlog.cc for mysql 5.0.33
 	EVENT_HEADER_SIZE  = 19 // 4.0 and above, can be larger in 5.x
-
-	DEFAULT_BLOCK_SIZE = 16 * 1024
 )
-
-var binlogBlockSize int64
-var maxWaitTimeout float64
-var logWaitTimeout float64
-
-func init() {
-	flag.Int64Var(&binlogBlockSize, "binlog-block-size", DEFAULT_BLOCK_SIZE,
-		"block size for binlog chunks")
-	flag.Float64Var(&maxWaitTimeout, "binlog-max-wait", 3600.0,
-		"maximum time to wait for more data before closing (seconds)")
-	flag.Float64Var(&logWaitTimeout, "binlog-wait", 5.0,
-		"time to wait for more data (seconds)")
-}
 
 type stats struct {
 	Reads     int64
@@ -63,6 +47,11 @@ type request struct {
 
 type BinlogReader struct {
 	binLogPrefix string
+
+	// these parameters will have reasonable default values but can be tuned
+	BinlogBlockSize int64
+	MaxWaitTimeout  float64
+	LogWaitTimeout  float64
 }
 
 func (blr *BinlogReader) binLogPathForId(fileId int) string {
@@ -70,7 +59,7 @@ func (blr *BinlogReader) binLogPathForId(fileId int) string {
 }
 
 func NewBinlogReader(binLogPrefix string) *BinlogReader {
-	return &BinlogReader{binLogPrefix: binLogPrefix}
+	return &BinlogReader{binLogPrefix: binLogPrefix, BinlogBlockSize: 16 * 1024, MaxWaitTimeout: 3600.0, LogWaitTimeout: 5.0}
 }
 
 /*
@@ -166,7 +155,7 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 	// FIXME(msolomon) register stats on http handler
 	for {
 		//position, _ := binlogFile.Seek(0, 1)
-		written, err := io.CopyN(writer, binlogFile, binlogBlockSize)
+		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
 		//relog.Info("BinlogReader %x copy @ %v:%v,%v", stats.StartTime, binlogFile.Name(), position, written)
 		if err != nil && err != io.EOF {
 			relog.Error("BinlogReader.serve err: %v", err)
@@ -176,7 +165,7 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 		stats.Reads++
 		stats.Bytes += written
 
-		if written != binlogBlockSize {
+		if written != blr.BinlogBlockSize {
 			if _, statErr := os.Stat(nextLog); statErr == nil {
 				relog.Info("BinlogReader swap log file: %v", nextLog)
 				// swap to next log file
@@ -189,11 +178,11 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 				position, _ := binlogFile.Seek(0, 1)
 				relog.Info("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
 				// wait for more data
-				time.Sleep(time.Duration(logWaitTimeout * 1e9))
+				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
 				stats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
-					if (now.Sub(lastSlept)) > time.Duration(maxWaitTimeout*1e9) {
+					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
 						relog.Error("MAX_WAIT_TIMEOUT exceeded, closing connection")
 						return
 					}
@@ -288,7 +277,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 
 	for {
 		//position, _ := binlogFile.Seek(0, 1)
-		written, err := io.CopyN(writer, binlogFile, binlogBlockSize)
+		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
 		if err != nil && err != io.EOF {
 			relog.Error("BinlogReader.serve err: %v", err)
 			return
@@ -298,7 +287,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 		stats.Reads++
 		stats.Bytes += written
 
-		if written != binlogBlockSize {
+		if written != blr.BinlogBlockSize {
 			bufWriter.Flush()
 			if _, statErr := os.Stat(nextLog); statErr == nil {
 				//relog.Info("BinlogReader swap log file: %v", nextLog)
@@ -311,11 +300,11 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				position, _ := binlogFile.Seek(0, 1)
 				//relog.Info("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
 				// wait for more data
-				time.Sleep(time.Duration(logWaitTimeout * 1e9))
+				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
 				stats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
-					if (now.Sub(lastSlept)) > time.Duration(maxWaitTimeout*1e9) {
+					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
 						relog.Error("MAX_WAIT_TIMEOUT exceeded, closing connection")
 						return
 					}
