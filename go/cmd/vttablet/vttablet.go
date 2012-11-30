@@ -72,6 +72,7 @@ var qsConfig = ts.Config{
 }
 
 func main() {
+	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
 	env.Init("vttablet")
@@ -83,14 +84,14 @@ func main() {
 	}
 
 	mycnf := readMycnf(tabletId)
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
 		relog.Warning("%s", err)
 	}
 
 	initQueryService(dbcfgs)
 	initUpdateStreamService(mycnf)
-	initAgent(dbcfgs, mycnf) // depends on both query and updateStream
+	initAgent(dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
 
 	rpc.HandleHTTP()
 
@@ -159,7 +160,7 @@ func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 	return mycnf
 }
 
-func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
+func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) {
 	zconn := zk.NewMetaConn(5e9, false)
 	umgmt.AddCloseCallback(func() {
 		zconn.Close()
@@ -168,8 +169,8 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf) {
 	bindAddr := fmt.Sprintf(":%v", *port)
 
 	// Action agent listens to changes in zookeeper and makes
-	// modifcations to this tablet.
-	agent := tm.NewActionAgent(zconn, *tabletPath, *mycnfFile, *dbconfigs.DbConfigsFile, *dbconfigs.DbCredentialsFile)
+	// modifications to this tablet.
+	agent := tm.NewActionAgent(zconn, *tabletPath, *mycnfFile, dbConfigsFile, dbCredentialsFile)
 	agent.AddChangeCallback(func(oldTablet, newTablet tm.Tablet) {
 		if newTablet.IsServingType() {
 			if dbcfgs.App.Dbname == "" {

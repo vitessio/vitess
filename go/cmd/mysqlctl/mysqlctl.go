@@ -5,14 +5,15 @@
 package main
 
 import (
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
+	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/mysqlctl"
 )
 
 var port = flag.Int("port", 6612, "vtocc port")
@@ -152,7 +153,9 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "\n")
 	}
+	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
+
 	logger := relog.New(os.Stderr, "",
 		log.Ldate|log.Lmicroseconds|log.Lshortfile,
 		relog.LogNameToLogLevel(*logLevel))
@@ -160,7 +163,7 @@ func main() {
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
 		relog.Fatal("%v", err)
 	}

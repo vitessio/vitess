@@ -44,6 +44,7 @@ func init() {
 }
 
 func main() {
+	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
 	rpc.HandleHTTP()
@@ -69,7 +70,7 @@ func main() {
 
 	relog.Debug("mycnf: %v", jscfg.ToJson(mycnf))
 
-	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile)
+	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
 		relog.Fatal("%s", cfErr)
 	}

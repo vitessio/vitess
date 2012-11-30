@@ -32,14 +32,11 @@ const defaultConfig = `{
   }
 }`
 
-// FIXME(msolomon) the usage of this string seems odd. If this
-// is truly universal to all apps this variable should be private.
-// It's unclear why we need both Init and ReadJson - there should
-// only be one public entry point.
-var DbConfigsFile = flag.String("db-configs-file", "", "db connection configs file")
-
-// Separate credential file to support split permissions.
-var DbCredentialsFile = flag.String("db-credentials-file", "", "db credentials file")
+func RegisterCommonFlags() (*string, *string) {
+	dbConfigsFile := flag.String("db-configs-file", "", "db connection configs file")
+	dbCredentialsFile := flag.String("db-credentials-file", "", "db credentials file")
+	return dbConfigsFile, dbCredentialsFile
+}
 
 type DBConfigs struct {
 	App      tabletserver.DBConfig  `json:"app"`
@@ -66,7 +63,7 @@ func (dbcfgs DBConfigs) Redacted() interface{} {
 // Map user to a list of passwords. Right now we only use the first.
 type dbCredentials map[string][]string
 
-func Init(socketFile string) (dbcfgs DBConfigs, err error) {
+func Init(socketFile, dbConfigsFile, dbCredentialsFile string) (dbcfgs DBConfigs, err error) {
 	dbcfgs.App = tabletserver.DBConfig{
 		Uname:   "vt_app",
 		Charset: "utf8",
@@ -79,15 +76,15 @@ func Init(socketFile string) (dbcfgs DBConfigs, err error) {
 		Uname:   "vt_repl",
 		Charset: "utf8",
 	}
-	if *DbConfigsFile != "" {
-		if err = jscfg.ReadJson(*DbConfigsFile, &dbcfgs); err != nil {
+	if dbConfigsFile != "" {
+		if err = jscfg.ReadJson(dbConfigsFile, &dbcfgs); err != nil {
 			return
 		}
 	}
 
-	if *DbCredentialsFile != "" {
+	if dbCredentialsFile != "" {
 		dbCreds := make(dbCredentials)
-		if err = jscfg.ReadJson(*DbCredentialsFile, &dbCreds); err != nil {
+		if err = jscfg.ReadJson(dbCredentialsFile, &dbCreds); err != nil {
 			return
 		}
 		if passwd, ok := dbCreds[dbcfgs.App.Uname]; ok {
@@ -103,6 +100,6 @@ func Init(socketFile string) (dbcfgs DBConfigs, err error) {
 	dbcfgs.App.UnixSocket = socketFile
 	dbcfgs.Dba.UnixSocket = socketFile
 	dbcfgs.Repl.UnixSocket = socketFile
-	relog.Info("%s: %s\n", *DbConfigsFile, dbcfgs)
+	relog.Info("%s: %s\n", dbConfigsFile, dbcfgs)
 	return
 }
