@@ -185,16 +185,13 @@ class Tablet(object):
     else:
       self.zk_tablet_alias = ""
 
+    args = ['InitTablet']
     if force:
-      args = ['-force']
-    else:
-      args = []
-
-    args.append('InitTablet')
+      args.append('-force')
     if key_start:
-      args.append('--key-start='+key_start)
+      args.append('-key-start='+key_start)
     if key_end:
-      args.append('--key-end='+key_end)
+      args.append('-key-end='+key_end)
     args.extend([self.zk_tablet_path,
                  'localhost',
                  str(self.mysql_port),

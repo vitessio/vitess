@@ -78,7 +78,7 @@ def check_tables(tablet, expectedCount):
 
 def run_test_complex_schema():
 
-  utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
 
   shard_0_master.init_tablet(  'master',  'test_keyspace', '0')
   shard_0_replica1.init_tablet('replica', 'test_keyspace', '0')
@@ -114,13 +114,13 @@ def run_test_complex_schema():
   shard_1_replica1.start_vttablet()
 
   # make sure all replication is good
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path)
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path)
 
   # shard 0: apply the schema using a complex schema upgrade, no
   # reparenting yet
   utils.run_vtctl(['ApplySchemaShard',
-                   '--sql='+create_vt_select_test[0],
+                   '-sql='+create_vt_select_test[0],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/0'],
                   log_level='INFO')
 
@@ -138,8 +138,8 @@ def run_test_complex_schema():
   # shard 0: apply schema change to just master directly
   # (to test its state is not changed)
   utils.run_vtctl(['ApplySchema',
-                   '--stop-replication',
-                   '--sql='+create_vt_select_test[0],
+                   '-stop-replication',
+                   '-sql='+create_vt_select_test[0],
                    shard_0_master.zk_tablet_path],
                   log_level='INFO')
   check_tables(shard_0_master, 1)
@@ -147,16 +147,16 @@ def run_test_complex_schema():
   # shard 0: apply schema change to just backup directly
   # (to test its state is not changed)
   utils.run_vtctl(['ApplySchema',
-                   '--stop-replication',
-                   '--sql='+create_vt_select_test[0],
+                   '-stop-replication',
+                   '-sql='+create_vt_select_test[0],
                    shard_0_backup.zk_tablet_path],
                   log_level='INFO')
   check_tables(shard_0_backup, 1)
 
   # shard 0: apply new schema change, with reparenting
   utils.run_vtctl(['ApplySchemaShard',
-                   '--new-parent='+shard_0_replica1.zk_tablet_path,
-                   '--sql='+create_vt_select_test[1],
+                   '-new-parent='+shard_0_replica1.zk_tablet_path,
+                   '-sql='+create_vt_select_test[1],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/0'],
                   log_level='INFO')
   check_tables(shard_0_master, 1)
@@ -168,7 +168,7 @@ def run_test_complex_schema():
   # keyspace: try to apply a keyspace-wide schema change, should fail
   # as the preflight would be different in both shards
   out, err = utils.run_vtctl(['ApplySchemaKeyspace',
-                              '--sql='+create_vt_select_test[2],
+                              '-sql='+create_vt_select_test[2],
                               '/zk/global/vt/keyspaces/test_keyspace'],
                              log_level='INFO', trap_output=True,
                              raise_on_error=False)
@@ -179,13 +179,13 @@ def run_test_complex_schema():
 
   # shard 1: catch it up with simple updates
   utils.run_vtctl(['ApplySchemaShard',
-                   '--simple',
-                   '--sql='+create_vt_select_test[0],
+                   '-simple',
+                   '-sql='+create_vt_select_test[0],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/1'],
                   log_level='INFO')
   utils.run_vtctl(['ApplySchemaShard',
-                   '--simple',
-                   '--sql='+create_vt_select_test[1],
+                   '-simple',
+                   '-sql='+create_vt_select_test[1],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/1'],
                   log_level='INFO')
   check_tables(shard_1_master, 2)
@@ -193,8 +193,8 @@ def run_test_complex_schema():
 
   # keyspace: apply a keyspace-wide simple schema change, should work now
   utils.run_vtctl(['ApplySchemaKeyspace',
-                   '--simple',
-                   '--sql='+create_vt_select_test[2],
+                   '-simple',
+                   '-sql='+create_vt_select_test[2],
                    '/zk/global/vt/keyspaces/test_keyspace'],
                   log_level='INFO')
 
@@ -209,7 +209,7 @@ def run_test_complex_schema():
 
   # keyspace: apply a keyspace-wide complex schema change, should work too
   utils.run_vtctl(['ApplySchemaKeyspace',
-                   '--sql='+create_vt_select_test[3],
+                   '-sql='+create_vt_select_test[3],
                    '/zk/global/vt/keyspaces/test_keyspace'],
                   log_level='INFO')
 
@@ -233,7 +233,7 @@ def run_test_complex_schema():
   if oldCount <= 5:
     raise utils.TestError('Not enough actionlog before: %u' % oldCount)
 
-  utils.run_vtctl('PruneActionLogs --keep-count=5 '+shard_0_replica1.zk_tablet_path+'/actionlog', log_level='INFO')
+  utils.run_vtctl('PruneActionLogs -keep-count=5 '+shard_0_replica1.zk_tablet_path+'/actionlog', log_level='INFO')
 
   out, err = utils.run(vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
   newLines = out.splitlines()

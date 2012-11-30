@@ -91,7 +91,7 @@ def check_rows_schema_diff(driver):
 
 def run_test_sharding():
 
-  utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
 
   shard_0_master.init_tablet( 'master',  'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
   shard_0_replica.init_tablet('replica', 'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
@@ -122,24 +122,24 @@ def run_test_sharding():
   # are the same (replication is not enabled yet, so allow_replication=false
   # is just there to be tested)
   utils.run_vtctl(['ApplySchema',
-                   '--stop-replication',
-                   '--sql=' + create_vt_select_test.replace("\n", ""),
+                   '-stop-replication',
+                   '-sql=' + create_vt_select_test.replace("\n", ""),
                    shard_0_master.zk_tablet_path])
   utils.run_vtctl(['ApplySchema',
-                   '--stop-replication',
-                   '--sql=' + create_vt_select_test.replace("\n", ""),
+                   '-stop-replication',
+                   '-sql=' + create_vt_select_test.replace("\n", ""),
                    shard_0_replica.zk_tablet_path])
 
   # start zkocc, we'll use it later
   zkocc = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
 
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path)
-  utils.run_vtctl('-force ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF ' + shard_1_master.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF ' + shard_1_master.zk_tablet_path)
 
   # apply the schema on the second shard using a simple schema upgrade
   utils.run_vtctl(['ApplySchemaShard',
-                   '--simple',
-                   '--sql=' + create_vt_select_test_reverse.replace("\n", ""),
+                   '-simple',
+                   '-sql=' + create_vt_select_test_reverse.replace("\n", ""),
                    '/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF'])
 
   # insert some values directly (db is RO after minority reparent)
