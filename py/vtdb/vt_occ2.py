@@ -76,12 +76,12 @@ class VtOCCConnection(tablet2.TabletConnection):
   _time_failed = 0
 
   def dial(self):
-    tablet2.TabletConnection.dial(self)
     try:
+      tablet2.TabletConnection.dial(self)
       response = self.client.call('SqlQuery.GetSessionId', {"DbName": self.dbname})
       self.set_session_id(response.reply["SessionId"])
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise self._convert_error(e, "dial")[1]
 
   def _convert_error(self, exception, *error_hints):
     now = time.time()

@@ -54,7 +54,7 @@ class BaseTest(unittest.TestCase):
   def dump_config_files(klass):
     with open(klass.credentials_file, 'w') as f:
       json.dump(klass.credentials, f)
-    
+
     with open(klass.dbconfig_file, 'w') as f:
       json.dump(klass.dbconfig, f)
 
@@ -82,7 +82,6 @@ class BaseTest(unittest.TestCase):
                                      "-querylog", QUERYLOGFILE],
                                     stderr=klass.vtstderr)
     time.sleep(1)
-
     connection = db.VtOCCConnection("localhost:%s" % klass.vtocc_port, klass.dbconfig['dbname'], timeout=10, user=klass.user, password=klass.password)
     connection.dial()
     cursor = connection.cursor()
@@ -95,8 +94,7 @@ class BaseTest(unittest.TestCase):
   @classmethod
   def _tearDownClass(klass):
     try:
-      klass.process.kill()
-      klass.process.wait()
+      klass.kill_vtocc()
     except AttributeError:
       pass
 
@@ -110,6 +108,11 @@ class BaseTest(unittest.TestCase):
       shutil.rmtree(klass.mysqldir)
     except OSError:
       pass
+
+  @classmethod
+  def kill_vtocc(klass):
+    klass.process.kill()
+    klass.process.wait()
 
   @classmethod
   def start_mysql(klass):
@@ -191,6 +194,14 @@ class TestConnection(BaseTest):
     self.connection = db.VtOCCConnection(self.vtocc_uri, self.dbconfig['dbname'], timeout=1, user=self.user, password=self.password)
     self.connection.dial()
 
+  def assertEscalates(self, func, *args, **kwargs):
+    call = lambda: func(*args, **kwargs)
+    for i in range(2):
+      self.assertRaises(MySQLdb.DatabaseError, call)
+      time.sleep(1)
+    self.assertRaises(MySQLdb.OperationalError, call)
+
+
   def test_reconnect(self):
     cursor = self.connection.cursor()
     cursor.execute("create table if not exists connection_test (c int)")
@@ -203,6 +214,18 @@ class TestConnection(BaseTest):
     else:
       self.fail("Expected timeout error not raised")
     cursor.execute("select 2 from connection_test")
+
+  def test_vtocc_not_there(self):
+    connection = db.VtOCCConnection("localhost:7777", self.dbconfig['dbname'], timeout=1, user=self.user, password=self.password)
+    self.assertEscalates(connection.dial)
+
+  def test_vtocc_has_gone_away(self):
+    cursor = self.connection.cursor()
+    BaseTest.kill_vtocc()
+    try:
+      self.assertEscalates(cursor.execute, "select 1 from dual")
+    finally:
+      BaseTest.start_vtocc()
 
 if __name__=="__main__":
   try:
