@@ -70,6 +70,7 @@ def _format_time(timeFromBson):
   t = datetime.datetime.fromtimestamp(val/1000)
   return t.strftime("%Y-%m-%d %H:%M:%S")
 
+@utils.test_case
 def run_test_zkocc():
   _populate_zk()
 
@@ -200,6 +201,7 @@ Stale = false
     if str(e) != "zkocc get command failed 2 times: ('get failed', GoRpcError(error(111, 'Connection refused'), 'ZkReader.Get'))":
       raise utils.TestError('Unexpected exception: ', str(e))
 
+@utils.test_case
 def run_test_zkocc_qps():
   _populate_zk()
 

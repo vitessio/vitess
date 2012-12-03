@@ -88,10 +88,10 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 			c.Close()
 			break
 		}
+		relog.Error("%v", err)
 		time.Sleep(waitTime)
 		// Cap at 32e9
 		if waitTime < time.Duration(30e9) {
-			relog.Error("%v", err)
 			waitTime = waitTime * 2
 		}
 		if atomic.LoadInt32(&sq.state) == ABORT {

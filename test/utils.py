@@ -33,6 +33,16 @@ except OSError:
   # directory already exists
   pass
 
+def debug(msg):
+  if options.verbose:
+    print msg
+
+def test_case(fn):
+  def body():
+    debug("========== " + fn.__name__ + " ==========")
+    fn()
+  return body
+
 def remove_tmp_files():
   try:
     shutil.rmtree(tmp_root)

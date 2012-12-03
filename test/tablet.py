@@ -3,6 +3,7 @@ import json
 import shutil
 import sys
 import time
+import urllib
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
@@ -29,7 +30,6 @@ class Tablet(object):
   seq = 0
   default_db_config = {
     "app": {
-      "dbname": "vt_test_keyspace",
       "uname": "vt_dba", # it's vt_dba so that the tests can create
                          # and drop tables.
       "charset": "utf8"
@@ -43,6 +43,15 @@ class Tablet(object):
       "charset": "utf8"
       }
     }
+
+  # tablet states, from sqlquery.go
+  TABLET_NOT_SERVING = 0
+  TABLET_CLOSED = 1
+  TABLET_CONNECTING = 2
+  TABLET_ABORT = 3
+  TABLET_INITIALIZING = 4
+  TABLET_OPEN = 5
+  TABLET_SHUTTING_DOWN = 6
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
@@ -210,7 +219,11 @@ class Tablet(object):
 
     utils.run_vtctl(args)
     if start:
-      self.start_vttablet()
+      if tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
+        expected_state = self.TABLET_OPEN
+      else:
+        expected_state = self.TABLET_NOT_SERVING
+      self.start_vttablet(wait_for_state=expected_state)
 
   @property
   def tablet_dir(self):
@@ -224,7 +237,7 @@ class Tablet(object):
   def logfile(self):
     return os.path.join(self.tablet_dir, "vttablet.log")
 
-  def start_vttablet(self, port=None, auth=False, memcache=False):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state=TABLET_OPEN):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -246,11 +259,53 @@ class Tablet(object):
       args.extend(['-auth-credentials', os.path.join(vttop, 'test', 'test_data', 'authcredentials_test.json')])
 
     self.proc = utils.run_bg(' '.join(args), stderr=utils.devnull)
+
+    # wait for zookeeper PID just to be sure we have it
     utils.run(vtroot+'/bin/zk wait -e ' + self.zk_pid, stdout=utils.devnull)
+
+    # wait for query service to be in the right state
+    self.wait_for_vttablet_state(wait_for_state, port=port)
+
     return self.proc
+
+  def get_vttablet_vars(self, port=None):
+    """
+    Returns the dict for vars, from the vttablet process, or None
+    if we can't get them.
+    """
+    try:
+      f = urllib.urlopen('http://localhost:%u/debug/vars' % (port or self.port))
+      data = f.read()
+      f.close()
+    except:
+      return None
+    return json.loads(data)
+
+  def wait_for_vttablet_state(self, expected, timeout=5.0, port=None):
+    while True:
+      v = self.get_vttablet_vars(port)
+      if v == None:
+        utils.debug("  vttablet not answering at /debug/vars, waiting...")
+      else:
+        if not 'Voltron' in v:
+          utils.debug("  vttablet not exporting Voltron, waiting...")
+        else:
+          s = v['Voltron']['IsOpen']
+          if s != expected:
+            utils.debug("  vttablet in state %u != %u" % (s, expected))
+          else:
+            break
+
+      utils.debug("sleeping a bit while we wait")
+      time.sleep(0.1)
+      timeout -= 0.1
+      if timeout <= 0:
+        raise utils.TestError("timeout waiting for state %u" % expected)
 
   def _write_db_configs_file(self):
     config = dict(self.default_db_config)
+    if self.keyspace:
+      config['app']['dbname'] = "vt_" + self.keyspace
     path = os.path.join(self.tablet_dir, 'db-configs.json')
 
     if self.memcached:
@@ -265,6 +320,7 @@ class Tablet(object):
     return path
 
   def kill_vttablet(self):
+    utils.debug("killing vttablet: " + self.zk_tablet_path)
     utils.kill_sub_process(self.proc)
     if self.memcached:
       self.kill_memcache()

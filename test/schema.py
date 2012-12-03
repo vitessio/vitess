@@ -76,6 +76,7 @@ def check_tables(tablet, expectedCount):
     raise utils.TestError('Unexpected table count on %s (not %u): %s' %
                           (tablet.zk_tablet_alias, expectedCount, str(tables)))
 
+@utils.test_case
 def run_test_complex_schema():
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
@@ -109,7 +110,7 @@ def run_test_complex_schema():
   shard_0_replica1.start_vttablet()
   shard_0_replica2.start_vttablet()
   shard_0_rdonly.start_vttablet()
-  shard_0_backup.start_vttablet()
+  shard_0_backup.start_vttablet(wait_for_state=tablet.Tablet.TABLET_NOT_SERVING)
   shard_1_master.start_vttablet()
   shard_1_replica1.start_vttablet()
 
