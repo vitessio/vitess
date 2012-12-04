@@ -8,6 +8,31 @@ from net import gorpc
 class ZkOccError(Exception):
   pass
 
+#
+# the ZkNode dict returned by these structures has the following members:
+#
+# Path     string
+# Data     string
+# Stat     ZkStat
+# Children []string
+# Cached   bool // the response comes from the zkocc cache
+# Stale    bool // the response is stale because we're not connected
+#
+# ZkStat is a dict:
+#
+# czxid          long
+# mzxid          long
+# cTime          time.DateTime
+# mTime          time.DateTime
+# version        int
+# cVersion       int
+# aVersion       int
+# ephemeralOwner long
+# dataLength     int
+# numChildren    int
+# pzxid          long
+#
+
 # A simple, direct connection to a single zkocc server. Doesn't retry.
 # You probably want to use ZkOccConnection instead.
 class SimpleZkOccConnection(object):
@@ -47,6 +72,7 @@ class SimpleZkOccConnection(object):
 
   __del__ = close
 
+  # returns a ZkNode, see header
   def get(self, path):
     req = {'Path':path}
     try:
@@ -54,6 +80,7 @@ class SimpleZkOccConnection(object):
     except gorpc.GoRpcError as e:
       raise ZkOccError('get failed', e)
 
+  # returns an array of ZkNode, see header
   def getv(self, paths):
     req = {'Paths':paths}
     try:
@@ -61,6 +88,7 @@ class SimpleZkOccConnection(object):
     except gorpc.GoRpcError as e:
       raise ZkOccError('getv failed', e)
 
+  # returns a ZkNode, see header
   def children(self, path):
     req = {'Path':path}
     try:
@@ -110,6 +138,7 @@ class ZkOccConnection(object):
       self.simpleConn.close()
       self.simpleConn = None
 
+  # returns a ZkNode, see header
   def get(self, path):
     if not self.simpleConn:
       self.dial()
@@ -128,6 +157,7 @@ class ZkOccConnection(object):
         if self.addr_count > 1:
           self.dial()
 
+  # returns an array of ZkNode, see header
   def getv(self, paths):
     if not self.simpleConn:
       self.dial()
@@ -146,6 +176,7 @@ class ZkOccConnection(object):
         if self.addr_count > 1:
           self.dial()
 
+  # returns a ZkNode, see header
   def children(self, path):
     if not self.simpleConn:
       self.dial()
