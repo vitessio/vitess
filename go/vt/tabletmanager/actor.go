@@ -524,6 +524,8 @@ func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
 
 // Operate on a backup tablet. Shutdown mysqld and copy the data files aside.
 func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
+	args := actionNode.args.(*SnapshotArgs)
+
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
 		return err
@@ -533,7 +535,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false)
+	filename, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.CompressConcurrency)
 	if err != nil {
 		return err
 	}
@@ -614,7 +616,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// and do the action
-	if err := ta.mysqld.RestoreFromSnapshot(sm); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
 		relog.Error("RestoreFromSnapshot failed: %v", err)
 		return err
 	}
@@ -647,7 +649,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false)
+	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.CompressConcurrency)
 	if err != nil {
 		return err
 	}
@@ -707,7 +709,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// and do the action
-	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm); err != nil {
+	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
 		return err
 	}

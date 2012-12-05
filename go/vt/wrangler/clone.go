@@ -12,7 +12,7 @@ import (
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) (manifest, parent string, err error) {
+func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, compressConcurrency int) (manifest, parent string, err error) {
 	var ti *tm.TabletInfo
 	ti, err = tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {
@@ -38,7 +38,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) (man
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.Snapshot(zkTabletPath)
+	actionPath, err = wr.ai.Snapshot(zkTabletPath, &tm.SnapshotArgs{compressConcurrency})
 	if err != nil {
 		return
 	}
@@ -70,13 +70,13 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool) (man
 	return reply.ManifestPath, reply.ZkParentPath, actionErr
 }
 
-func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string) error {
+func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int) error {
 	err := wr.ChangeType(zkDstTabletPath, tm.TYPE_RESTORE, false)
 	if err != nil {
 		return err
 	}
 
-	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath})
+	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount})
 	if err != nil {
 		return err
 	}
@@ -90,12 +90,12 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkPar
 	return nil
 }
 
-func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool) error {
-	srcFilePath, zkParentPath, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot)
+func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool, compressConcurrency, fetchConcurrency, fetchRetryCount int) error {
+	srcFilePath, zkParentPath, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, compressConcurrency)
 	if err != nil {
 		return err
 	}
-	if err = wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath); err != nil {
+	if err = wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount); err != nil {
 		return err
 	}
 	return nil

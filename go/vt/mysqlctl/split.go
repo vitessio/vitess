@@ -165,7 +165,7 @@ startKey, endKey - the row range to prepare
 sourceAddr - the ip addr of the machine running the export
 allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool) (snapshotManifestFilename string, err error) {
+func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, compressConcurrency int) (snapshotManifestFilename string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -248,7 +248,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	}
 
 	var ssmFile string
-	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd)
+	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd, compressConcurrency)
 	if snapshotErr != nil {
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 	} else {
@@ -290,7 +290,7 @@ const dumpConcurrency = 4
 
 // createSplitSnapshotManifest exports each table to a CSV-like file
 // and compresses the results.
-func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition, compressConcurrency int) ([]SnapshotFile, error) {
 	n := len(sd.TableDefinitions)
 	errors := make(chan error)
 	work := make(chan int, n)
@@ -342,7 +342,7 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 		return nil, err
 	}
 
-	dataFiles, err := compressFiles(tableFiles, compressedFiles)
+	dataFiles, err := compressFiles(tableFiles, compressedFiles, compressConcurrency)
 	if err != nil {
 		for _, srcPath := range tableFiles {
 			os.Remove(srcPath)
@@ -364,7 +364,7 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
  start_mysql()
  clean up compressed files
 */
-func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshotManifest) (err error) {
+func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshotManifest, fetchConcurrency, fetchRetryCount int) (err error) {
 	if err = mysqld.validateSplitReplicaTarget(); err != nil {
 		return
 	}
@@ -399,7 +399,7 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 		return
 	}
 
-	if err = fetchFiles(snapshotManifest.Source, tempStoragePath); err != nil {
+	if err = fetchFiles(snapshotManifest.Source, tempStoragePath, fetchConcurrency, fetchRetryCount); err != nil {
 		return
 	}
 

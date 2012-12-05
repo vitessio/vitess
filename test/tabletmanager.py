@@ -184,14 +184,14 @@ def run_test_mysqlctl_clone():
 
   tablet_62344.start_vttablet()
 
-  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshot vt_snapshot_test').wait()
+  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshot -compress-concurrency=5 vt_snapshot_test').wait()
   if err != 0:
     raise utils.TestError('mysqlctl snapshot failed')
 
   utils.pause("snapshot finished")
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore /vt/snapshot/vt_0000062344/snapshot_manifest.json').wait()
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 /vt/snapshot/vt_0000062344/snapshot_manifest.json').wait()
   if err != 0:
     raise utils.TestError('mysqlctl restore failed')
 
@@ -216,7 +216,7 @@ def run_test_vtctl_snapshot_restore():
   tablet_62344.start_vttablet()
 
   # Need to force snapshot since this is a master db.
-  out, err = utils.run_vtctl('Snapshot -force ' + tablet_62344.zk_tablet_path, log_level='INFO', trap_output=True)
+  out, err = utils.run_vtctl('Snapshot -force -compress-concurrency=4 ' + tablet_62344.zk_tablet_path, log_level='INFO', trap_output=True)
   errPos = err.find("Manifest: ")
   if errPos == -1:
     raise utils.TestError("Snapshot didn't echo Manifest file", err)
@@ -231,7 +231,7 @@ def run_test_vtctl_snapshot_restore():
 
   # do not specify a MANIFEST, see if default works
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  utils.run_vtctl('Restore %s default %s %s' %
+  utils.run_vtctl('Restore -fetch-concurrency=2 -fetch-retry-count=4 %s default %s %s' %
                   (tablet_62344.zk_tablet_path,
                    tablet_62044.zk_tablet_path, parentPath), log_level='INFO')
   utils.pause("restore finished")

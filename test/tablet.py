@@ -90,7 +90,7 @@ class Tablet(object):
     return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port), quiet=True)
 
   def teardown_mysql(self):
-    return self.mysqlctl('-force teardown', quiet=True)
+    return self.mysqlctl('teardown -force', quiet=True)
 
   def remove_tree(self):
     path = '/vt/vt_%010d' % self.tablet_uid

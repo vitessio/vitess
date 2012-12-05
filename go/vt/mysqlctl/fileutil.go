@@ -18,16 +18,7 @@ import (
 	"path"
 )
 
-// FIXME(alainjobart) would be nice to configure these somehow.
-// Cannot use flags, as vtaction doesn't take any.
-const (
-	compressConcurrency = 3
-	fetchConcurrency    = 3
-	fetchRetryCount     = 3
-)
-
-// FIXME(alainjobart) would be nice to configure these too.
-// use this to simulate failures in tests
+// Use this to simulate failures in tests
 var (
 	simulateFailures = false
 	failureCounter   = 0
@@ -96,7 +87,7 @@ func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
 }
 
 // compressFile compresses multiple files in parallel.
-func compressFiles(sources, destinations []string) ([]SnapshotFile, error) {
+func compressFiles(sources, destinations []string, compressConcurrency int) ([]SnapshotFile, error) {
 	if len(sources) != len(destinations) || len(sources) == 0 {
 		panic(fmt.Errorf("bad array lengths: %v %v", len(sources), len(destinations)))
 	}
@@ -228,7 +219,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 
 // fetchFileWithRetry fetches data from the web server, retrying a few
 // times.
-func fetchFileWithRetry(srcUrl, srcHash, dstFilename string) (err error) {
+func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int) (err error) {
 	for i := 0; i < fetchRetryCount; i++ {
 		err = fetchFile(srcUrl, srcHash, dstFilename)
 		if err == nil {
@@ -245,7 +236,7 @@ func fetchFileWithRetry(srcUrl, srcHash, dstFilename string) (err error) {
 // than a deadline is probably a sense of progress, more like a
 // "progress timeout" - how long will we wait if there is no change in
 // received bytes.
-func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string) (err error) {
+func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetchConcurrency, fetchRetryCount int) (err error) {
 	workQueue := make(chan SnapshotFile, len(snapshotManifest.Files))
 	for _, fi := range snapshotManifest.Files {
 		workQueue <- fi
@@ -258,7 +249,7 @@ func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string) (err
 			for fi := range workQueue {
 				filename := fi.getLocalFilename(destinationPath)
 				furl := "http://" + snapshotManifest.Addr + fi.Path
-				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename)
+				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename, fetchRetryCount)
 			}
 		}()
 	}

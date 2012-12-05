@@ -132,6 +132,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.reply = &HookResult{}
 
 	case TABLET_ACTION_SNAPSHOT:
+		node.args = &SnapshotArgs{}
 		node.reply = &SnapshotReply{}
 	case TABLET_ACTION_RESTORE:
 		node.args = &RestoreArgs{}

@@ -115,20 +115,25 @@ func (ai *ActionInitiator) DemoteMaster(zkTabletPath string) (actionPath string,
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_DEMOTE_MASTER})
 }
 
+type SnapshotArgs struct {
+	CompressConcurrency int
+}
+
 // used by both Snapshot and PartialSnapshot
 type SnapshotReply struct {
 	ZkParentPath string
 	ManifestPath string
 }
 
-func (ai *ActionInitiator) Snapshot(zkTabletPath string) (actionPath string, err error) {
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT})
+func (ai *ActionInitiator) Snapshot(zkTabletPath string, args *SnapshotArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT, args: args})
 }
 
 type PartialSnapshotArgs struct {
-	KeyName  string
-	StartKey key.HexKeyspaceId
-	EndKey   key.HexKeyspaceId
+	KeyName             string
+	StartKey            key.HexKeyspaceId
+	EndKey              key.HexKeyspaceId
+	CompressConcurrency int
 }
 
 func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
@@ -178,9 +183,11 @@ func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, er
 
 // used for both Restore and PartialRestore
 type RestoreArgs struct {
-	ZkSrcTabletPath string
-	SrcFilePath     string
-	ZkParentPath    string
+	ZkSrcTabletPath  string
+	SrcFilePath      string
+	ZkParentPath     string
+	FetchConcurrency int
+	FetchRetryCount  int
 }
 
 func (ai *ActionInitiator) Restore(zkDstTabletPath string, args *RestoreArgs) (actionPath string, err error) {

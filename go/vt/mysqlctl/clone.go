@@ -115,7 +115,7 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 	return dbNames, nil
 }
 
-func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcurrency int) ([]SnapshotFile, error) {
 	// FIXME(msolomon) Must match patterns in mycnf - probably belongs
 	// in there as derived paths.
 	snapshotDataSrcPath := path.Join(snapshotPath, dataDir, dbName)
@@ -156,7 +156,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFil
 		destinations = append(destinations, d...)
 	}
 
-	return compressFiles(sources, destinations)
+	return compressFiles(sources, destinations, compressConcurrency)
 }
 
 // This function runs on the machine acting as the source for the clone.
@@ -170,7 +170,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string) ([]SnapshotFil
 // Compute md5() sums
 // Place in /vt/clone_src where they will be served by http server (not rpc)
 // Restart mysql
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool) (snapshotManifestFilename string, err error) {
+func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, compressConcurrency int) (snapshotManifestFilename string, err error) {
 	if dbName == "" {
 		return "", errors.New("CreateSnapshot failed: no database name provided")
 	}
@@ -238,7 +238,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	}
 
 	var smFile string
-	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir)
+	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir, compressConcurrency)
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
@@ -308,7 +308,7 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
-func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest) error {
+func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int) error {
 	if snapshotManifest == nil {
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
@@ -324,7 +324,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest) er
 	}
 
 	relog.Debug("Fetch snapshot")
-	if err := mysqld.fetchSnapshot(snapshotManifest); err != nil {
+	if err := mysqld.fetchSnapshot(snapshotManifest, fetchConcurrency, fetchRetryCount); err != nil {
 		return err
 	}
 
@@ -343,7 +343,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest) er
 }
 
 // FIXME(alainjobart) move this to replication.go, and use in split.go as well
-func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest) error {
+func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int) error {
 	replicaDbPath := path.Join(mysqld.config.DataDir, snapshotManifest.DbName)
 
 	cleanDirs := []string{mysqld.SnapshotDir, replicaDbPath,
@@ -361,5 +361,5 @@ func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest) error {
 		}
 	}
 
-	return fetchFiles(snapshotManifest, mysqld.TabletDir)
+	return fetchFiles(snapshotManifest, mysqld.TabletDir, fetchConcurrency, fetchRetryCount)
 }
