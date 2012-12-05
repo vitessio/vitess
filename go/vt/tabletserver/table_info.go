@@ -14,7 +14,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/vt/schema"
@@ -24,13 +23,12 @@ var hashRegistry map[string]string = make(map[string]string)
 
 type TableInfo struct {
 	*schema.Table
-	Cache  *RowCache
-	Fields []proto.Field
+	Cache *RowCache
 	// stats updated by sqlquery.go
 	hits, absent, misses, invalidations int64
 }
 
-func NewTableInfo(conn *DBConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (self *TableInfo) {
+func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (self *TableInfo) {
 	if tableName == "dual" {
 		return &TableInfo{Table: schema.NewTable(tableName)}
 	}
@@ -39,7 +37,7 @@ func NewTableInfo(conn *DBConnection, tableName string, tableType string, create
 	return self
 }
 
-func loadTableInfo(conn *DBConnection, tableName string) (self *TableInfo) {
+func loadTableInfo(conn PoolConnection, tableName string) (self *TableInfo) {
 	self = &TableInfo{Table: schema.NewTable(tableName)}
 	if !self.fetchColumns(conn) {
 		return nil
@@ -50,7 +48,7 @@ func loadTableInfo(conn *DBConnection, tableName string) (self *TableInfo) {
 	return self
 }
 
-func (self *TableInfo) fetchColumns(conn *DBConnection) bool {
+func (self *TableInfo) fetchColumns(conn PoolConnection) bool {
 	columns, err := conn.ExecuteFetch([]byte(fmt.Sprintf("describe %s", self.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
@@ -62,7 +60,7 @@ func (self *TableInfo) fetchColumns(conn *DBConnection) bool {
 	return true
 }
 
-func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
+func (self *TableInfo) fetchIndexes(conn PoolConnection) bool {
 	indexes, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show index from %s", self.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
@@ -107,7 +105,7 @@ func (self *TableInfo) fetchIndexes(conn *DBConnection) bool {
 	return true
 }
 
-func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
+func (self *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}
@@ -133,24 +131,18 @@ func (self *TableInfo) initRowCache(conn *DBConnection, tableType string, create
 		}
 	}
 
-	rowInfo, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %s where 1!=1", self.Name)), 10000, true)
-	if err != nil {
-		relog.Warning("Failed to fetch column info for %s, table will not be cached: %s", self.Name, err.Error())
-		return
-	}
 	thash := self.computePrefix(conn, createTime)
 	if thash == "" {
 		return
 	}
 
-	self.Fields = rowInfo.Fields
 	self.CacheType = 1
 	self.Cache = NewRowCache(self, thash, cachePool)
 }
 
 var autoIncr = regexp.MustCompile("auto_increment=\\d+")
 
-func (self *TableInfo) computePrefix(conn *DBConnection, createTime sqltypes.Value) string {
+func (self *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Value) string {
 	if createTime.IsNull() {
 		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
 		return ""

@@ -4,100 +4,142 @@ cases = [
     Case(doc='union',
          sql='select /* union */ eid, id from vtocc_a union select eid, id from vtocc_b',
          result=[(1L, 1L), (1L, 2L)],
-         rewritten='select /* union */ eid, id from vtocc_a union select eid, id from vtocc_b'),
+         rewritten=[
+           'select eid, id from vtocc_a where 1 != 1 union select eid, id from vtocc_b where 1 != 1',
+           'select /* union */ eid, id from vtocc_a union select eid, id from vtocc_b']),
+
+    Case(doc='double union',
+         sql='select /* double union */ eid, id from vtocc_a union select eid, id from vtocc_b union select eid, id from vtocc_d',
+         result=[(1L, 1L), (1L, 2L)],
+         rewritten=[
+           'select eid, id from vtocc_a where 1 != 1 union select eid, id from vtocc_b where 1 != 1 union select eid, id from vtocc_d where 1 != 1',
+           'select /* double union */ eid, id from vtocc_a union select eid, id from vtocc_b union select eid, id from vtocc_d']),
 
     Case(doc="distinct",
          sql='select /* distinct */ distinct * from vtocc_a',
          result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
-         rewritten='select /* distinct */ distinct * from vtocc_a limit 10001'),
+         rewritten=[
+           'select * from vtocc_a where 1 != 1',
+           'select /* distinct */ distinct * from vtocc_a limit 10001']),
 
     Case(doc='group by',
          sql='select /* group by */ eid, sum(id) from vtocc_a group by eid',
          result=[(1L, 3L)],
-         rewritten='select /* group by */ eid, sum(id) from vtocc_a group by eid limit 10001'),
+         rewritten=[
+           'select eid, sum(id) from vtocc_a where 1 != 1',
+           'select /* group by */ eid, sum(id) from vtocc_a group by eid limit 10001']),
     Case(doc='having',
          sql='select /* having */ sum(id) from vtocc_a having sum(id) = 3',
          result=[(3L,)],
-         rewritten='select /* having */ sum(id) from vtocc_a having sum(id) = 3 limit 10001',),
+         rewritten=[
+           'select sum(id) from vtocc_a where 1 != 1',
+           'select /* having */ sum(id) from vtocc_a having sum(id) = 3 limit 10001']),
 
     Case(doc='limit',
          sql='select /* limit */ eid, id from vtocc_a limit %(a)s',
          bindings={"a": 1},
          result=[(1L, 1L)],
-         rewritten='select /* limit */ eid, id from vtocc_a limit 1'),
+         rewritten=[
+           'select eid, id from vtocc_a where 1 != 1',
+           'select /* limit */ eid, id from vtocc_a limit 1']),
     Case(doc='multi-table',
          sql='select /* multi-table */ a.eid, a.id, b.eid, b.id  from vtocc_a as a, vtocc_b as b',
          result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 1L), (1L, 1L, 1L, 2L), (1L, 2L, 1L, 2L)],
-         rewritten='select /* multi-table */ a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b limit 10001'),
+         rewritten=[
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b where 1 != 1',
+           'select /* multi-table */ a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b limit 10001']),
 
     Case(doc='multi-table join',
          sql='select /* multi-table join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id',
          result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
-         rewritten='select /* multi-table join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001'),
+         rewritten=[
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id where 1 != 1',
+           'select /* multi-table join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
 
 
     Case(doc='complex select list',
          sql='select /* complex select list */ eid+1, id from vtocc_a',
          result=[(2L, 1L), (2L, 2L)],
-         rewritten='select /* complex select list */ eid+1, id from vtocc_a limit 10001'),
+         rewritten=[
+           'select eid+1, id from vtocc_a where 1 != 1',
+           'select /* complex select list */ eid+1, id from vtocc_a limit 10001']),
     Case(doc="*",
          sql='select /* * */ * from vtocc_a',
          result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
-         rewritten='select /* * */ * from vtocc_a limit 10001'),
+         rewritten=[
+           'select * from vtocc_a where 1 != 1',
+           'select /* * */ * from vtocc_a limit 10001']),
 
     Case(doc='table alias',
          sql='select /* table alias */ a.eid from vtocc_a as a where a.eid=1',
          result=[(1L,), (1L,)],
-         rewritten='select /* table alias */ a.eid from vtocc_a as a where a.eid = 1 limit 10001'),
+         rewritten=[
+           'select a.eid from vtocc_a as a where 1 != 1',
+           'select /* table alias */ a.eid from vtocc_a as a where a.eid = 1 limit 10001']),
 
     Case(doc='parenthesised col',
          sql='select /* parenthesised col */ (eid) from vtocc_a where eid = 1 and id = 1',
          result=[(1L,)],
-         rewritten='select /* parenthesised col */ eid from vtocc_a where eid = 1 and id = 1 limit 10001'),
+         rewritten=[
+           'select eid from vtocc_a where 1 != 1',
+           'select /* parenthesised col */ eid from vtocc_a where eid = 1 and id = 1 limit 10001']),
 
     MultiCase('for update',
               ['begin',
                Case(sql='select /* for update */ eid from vtocc_a where eid = 1 and id = 1 for update',
                     result=[(1L,)],
-                    rewritten='select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 for update'),
+                    rewritten=[
+                      'select eid from vtocc_a where 1 != 1',
+                      'select /* for update */ eid from vtocc_a where eid = 1 and id = 1 limit 10001 for update']),
                'commit']),
 
     Case(doc='complex where',
          sql='select /* complex where */ id from vtocc_a where id+1 = 2',
          result=[(1L,)],
-         rewritten='select /* complex where */ id from vtocc_a where id+1 = 2 limit 10001'),
+         rewritten=[
+           'select id from vtocc_a where 1 != 1',
+           'select /* complex where */ id from vtocc_a where id+1 = 2 limit 10001']),
 
     Case(doc='complex where (non-value operand)',
          sql='select /* complex where (non-value operand) */ eid, id from vtocc_a where eid = id',
          result=[(1L, 1L)],
-         rewritten='select /* complex where (non-value operand) */ eid, id from vtocc_a where eid = id limit 10001'),
+         rewritten=[
+           'select eid, id from vtocc_a where 1 != 1',
+           'select /* complex where (non-value operand) */ eid, id from vtocc_a where eid = id limit 10001']),
 
     Case(doc='(condition)',
          sql='select /* (condition) */ * from vtocc_a where (eid = 1)',
          result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
-         rewritten='select /* (condition) */ * from vtocc_a where (eid = 1) limit 10001'),
+         rewritten=[
+           'select * from vtocc_a where 1 != 1',
+           'select /* (condition) */ * from vtocc_a where (eid = 1) limit 10001']),
 
     Case(doc='inequality',
          sql='select /* inequality */ * from vtocc_a where id > 1',
          result=[(1L, 2L, 'bcde', 'fghi')],
-         rewritten='select /* inequality */ * from vtocc_a where id > 1 limit 10001'),
+         rewritten=[
+           'select * from vtocc_a where 1 != 1',
+           'select /* inequality */ * from vtocc_a where id > 1 limit 10001']),
     Case(doc='in',
          sql='select /* in */ * from vtocc_a where id in (1, 2)',
          result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
-         rewritten='select /* in */ * from vtocc_a where id in (1, 2) limit 10001'),
+         rewritten=[
+           'select * from vtocc_a where 1 != 1',
+           'select /* in */ * from vtocc_a where id in (1, 2) limit 10001']),
 
     Case(doc='between',
          sql='select /* between */ * from vtocc_a where id between 1 and 2',
          result=[(1L, 1L, 'abcd', 'efgh'), (1L, 2L, 'bcde', 'fghi')],
-         rewritten='select /* between */ * from vtocc_a where id between 1 and 2 limit 10001'),
+         rewritten=[
+           'select * from vtocc_a where 1 != 1',
+           'select /* between */ * from vtocc_a where id between 1 and 2 limit 10001']),
 
     Case(doc='order',
          sql='select /* order */ * from vtocc_a order by id desc',
          result=[(1L, 2L, 'bcde', 'fghi'), (1L, 1L, 'abcd', 'efgh')],
-         rewritten='select /* order */ * from vtocc_a order by id desc limit 10001'),
-    Case(doc='string in bindings are not shown in logs',
-         sql='select /* limit */ %(somestring)s, eid, id from vtocc_a limit %(a)s',
-         bindings={"somestring": "Ala ma kota.", "a": 1}),
+         rewritten=[
+           'select * from vtocc_a where 1 != 1',
+           'select /* order */ * from vtocc_a order by id desc limit 10001']),
 
     MultiCase(
         'simple insert',

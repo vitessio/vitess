@@ -10,14 +10,18 @@ cases = [
        sql="select * from vtocc_cached where eid = 2 and bid = %(bid)s",
        bindings={"bid": None},
        result=[],
-       rewritten="select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = null",
+       rewritten=[
+         "select * from vtocc_cached where 1 != 1",
+         "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = null"],
        cache_absent=1),
 
   Case(doc="SELECT_PK (empty cache)",
        query_plan="SELECT_PK",
        sql="select * from vtocc_cached where eid = 2 and bid = 'foo'",
        result=[(2, 'foo', 'abcd2', 'efgh')],
-       rewritten="select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'foo'",
+       rewritten=[
+         "select * from vtocc_cached where 1 != 1",
+         "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'foo'"],
        cache_misses=1),
   # (2.foo) is in cache
 
@@ -25,7 +29,7 @@ cases = [
        query_plan="SELECT_PK",
        sql="select bid, eid, name, foo from vtocc_cached where eid = 2 and bid = 'foo'",
        result=[('foo', 2, 'abcd2', 'efgh')],
-       rewritten=[],
+       rewritten=["select bid, eid, name, foo from vtocc_cached where 1 != 1"],
        cache_hits=1),
   # (2.foo) is in cache
 
@@ -33,7 +37,9 @@ cases = [
        query_plan="SELECT_PK",
        sql="select bid, eid, name, foo from vtocc_cached where eid = 3 and bid = 'foo'",
        result=[],
-       rewritten="select eid, bid, name, foo from vtocc_cached where eid = 3 and bid = 'foo'",
+       rewritten=[
+         "select bid, eid, name, foo from vtocc_cached where 1 != 1",
+         "select eid, bid, name, foo from vtocc_cached where eid = 3 and bid = 'foo'"],
        cache_absent=1),
   # (2.foo)
 
@@ -41,8 +47,9 @@ cases = [
        sql="select * from vtocc_cached where eid = 2 and name = 'abcd2'",
        result=[(2L, 'bar', 'abcd2', 'efgh'), (2L, 'foo', 'abcd2', 'efgh')],
        rewritten=[
-           "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
-           "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"],
+         "select * from vtocc_cached where 1 != 1",
+         "select eid, bid from vtocc_cached use index (aname) where eid = 2 and name = 'abcd2' limit 10001",
+         "select eid, bid, name, foo from vtocc_cached where eid = 2 and bid = 'bar'"],
        cache_hits=1,
        cache_misses=1),
   # (2.bar, 2.foo)
@@ -57,7 +64,9 @@ cases = [
   Case(doc="out of order columns list",
        sql="select bid, eid from vtocc_cached where eid = 1 and bid = 'foo'",
        result=[('foo', 1)],
-       rewritten="select eid, bid, name, foo from vtocc_cached where eid = 1 and bid = 'foo'",
+       rewritten=[
+         "select bid, eid from vtocc_cached where 1 != 1",
+         "select eid, bid, name, foo from vtocc_cached where eid = 1 and bid = 'foo'"],
        cache_misses=1),
   # (1.foo, 2.bar, 2.foo)
 
@@ -73,7 +82,9 @@ cases = [
       ['select * from vtocc_cached',
        Case(query_plan="SELECT_CACHE_RESULT",
             sql="select eid, bid, name, foo from vtocc_cached",
-            rewritten="select eid, bid, name, foo from vtocc_cached limit 10001",
+            rewritten=[
+              "select eid, bid, name, foo from vtocc_cached where 1 != 1",
+              "select eid, bid, name, foo from vtocc_cached limit 10001"],
             cache_hits=0,
             cache_misses=0,
             cache_absent=0,
@@ -84,7 +95,9 @@ cases = [
   Case(doc="verify 1.bar is not cached",
        sql="select bid, eid from vtocc_cached where eid = 1 and bid = 'bar'",
        result=[('bar', 1)],
-       rewritten="select eid, bid, name, foo from vtocc_cached where eid = 1 and bid = 'bar'",
+       rewritten=[
+         "select bid, eid from vtocc_cached where 1 != 1",
+         "select eid, bid, name, foo from vtocc_cached where eid = 1 and bid = 'bar'"],
        cache_misses=1),
   # (1.foo, 1.bar, 2.foo, 2.bar)
 
@@ -163,7 +176,7 @@ cases = [
   Case(doc="Verify 1.foo is in cache",
        sql="select * from vtocc_cached where eid = 1 and bid = 'foo'",
        result=[(1, 'foo', 'abcd1', 'efgh')],
-       rewritten=[],
+       rewritten=["select * from vtocc_cached where 1 != 1"],
        cache_hits=1),
   # (1.foo) is in cache
 
@@ -173,7 +186,9 @@ cases = [
   Case(doc="Verify cache is empty after DDL",
        sql="select * from vtocc_cached where eid = 1 and bid = 'foo'",
        result=[(1, 'foo', 'abcd1', 'efgh')],
-       rewritten="select eid, bid, name, foo from vtocc_cached where eid = 1 and bid = 'foo'",
+       rewritten=[
+         "select * from vtocc_cached where 1 != 1",
+         "select eid, bid, name, foo from vtocc_cached where eid = 1 and bid = 'foo'"],
        cache_misses=1),
 
   # (1.foo)
@@ -194,7 +209,9 @@ cases = [
        'commit',
        Case(sql="select * from vtocc_ints where tiny = -128",
          result=[(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648L, 4294967295L, -9223372036854775808L, 18446744073709551615L, 2012)],
-         rewritten="select tiny, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vtocc_ints where tiny = -128"),
+         rewritten=[
+           "select * from vtocc_ints where 1 != 1",
+           "select tiny, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vtocc_ints where tiny = -128"]),
        Case(sql="select * from vtocc_ints where tiny = -128",
          result=[(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648L, 4294967295L, -9223372036854775808L, 18446744073709551615L, 2012)],
          rewritten=[]),
@@ -217,7 +234,9 @@ cases = [
        'commit',
        Case(sql="select * from vtocc_fracts where id = 1",
          result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002, 4.9900000000000002)],
-         rewritten="select id, deci, num, f, d from vtocc_fracts where id = 1"),
+         rewritten=[
+           "select * from vtocc_fracts where 1 != 1",
+           "select id, deci, num, f, d from vtocc_fracts where id = 1"]),
        Case(sql="select * from vtocc_fracts where id = 1",
          result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002, 4.9900000000000002)],
          rewritten=[]),
@@ -240,7 +259,9 @@ cases = [
        'commit',
        Case(sql="select * from vtocc_strings where vb = 'a'",
          result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h', 'a', 'a,b')],
-         rewritten="select vb, c, vc, b, tb, bl, ttx, tx, en, s from vtocc_strings where vb = 'a'"),
+         rewritten=[
+           "select * from vtocc_strings where 1 != 1",
+           "select vb, c, vc, b, tb, bl, ttx, tx, en, s from vtocc_strings where vb = 'a'"]),
        Case(sql="select * from vtocc_strings where vb = 'a'",
          result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h', 'a', 'a,b')],
          rewritten=[]),
@@ -263,7 +284,9 @@ cases = [
        'commit',
        Case(sql="select * from vtocc_misc where id = 1",
          result=[(1L, '\x01', datetime.date(2012, 1, 1), datetime.datetime(2012, 1, 1, 15, 45, 45), datetime.timedelta(0, 56745))],
-         rewritten="select id, b, d, dt, t from vtocc_misc where id = 1"),
+         rewritten=[
+           "select * from vtocc_misc where 1 != 1",
+           "select id, b, d, dt, t from vtocc_misc where id = 1"]),
        Case(sql="select * from vtocc_misc where id = 1",
          result=[(1L, '\x01', datetime.date(2012, 1, 1), datetime.datetime(2012, 1, 1, 15, 45, 45), datetime.timedelta(0, 56745))],
          rewritten=[]),

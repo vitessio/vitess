@@ -37,7 +37,7 @@ func NewParsedQuery(buf *TrackedBuffer) *ParsedQuery {
 type EncoderFunc func(value interface{}) ([]byte, error)
 
 func (self *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listVariables []sqltypes.Value) ([]byte, error) {
-	if bindVariables == nil || len(self.BindLocations) == 0 {
+	if len(self.BindLocations) == 0 {
 		return []byte(self.Query), nil
 	}
 	buf := bytes.NewBuffer(make([]byte, 0, len(self.Query)))

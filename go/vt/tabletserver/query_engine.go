@@ -65,7 +65,7 @@ type CacheInvalidator interface {
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
 	qe.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
-	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9))
+	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool(config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.reservedPool = NewReservedPool()
@@ -196,7 +196,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 	logStats.OriginalSql = query.Sql
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
-	basePlan := qe.schemaInfo.GetPlan(query.Sql, len(query.BindVariables) != 0)
+	basePlan := qe.schemaInfo.GetPlan(logStats, query.Sql)
 	if basePlan.PlanId == sqlparser.PLAN_DDL {
 		defer queryStats.Record("DDL", time.Now())
 		return qe.execDDL(logStats, query.Sql)
@@ -240,6 +240,20 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 			defer queryStats.Record("PASS_SELECT", time.Now())
 			reply = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		}
+	} else if plan.ConnectionId != 0 {
+		conn := qe.reservedPool.Get(plan.ConnectionId)
+		defer conn.Recycle()
+		if plan.PlanId.IsSelect() {
+			logStats.PlanType = "PASS_SELECT"
+			defer queryStats.Record("PASS_SELECT", time.Now())
+			reply = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+		} else if plan.PlanId == sqlparser.PLAN_SET {
+			logStats.PlanType = "SET"
+			defer queryStats.Record("SET", time.Now())
+			reply = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+		} else {
+			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))
+		}
 	} else {
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_SELECT:
@@ -263,9 +277,13 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 			// It may not be worth caching the results. So, just pass through.
 			reply = qe.execSelect(logStats, plan)
 		case sqlparser.PLAN_SET:
+			waitingForConnectionStart := time.Now()
+			conn := qe.connPool.Get()
+			logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+			defer conn.Recycle()
 			logStats.PlanType = "SET"
 			defer queryStats.Record("SET", time.Now())
-			reply = qe.execSet(logStats, plan)
+			reply = qe.execSet(logStats, conn, plan)
 		default:
 			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))
 		}
@@ -399,9 +417,6 @@ func (qe *QueryEngine) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan)
 func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	result = &mproto.QueryResult{}
 	tableInfo := plan.TableInfo
-	if plan.Fields == nil {
-		panic("unexpected")
-	}
 	result.Fields = plan.Fields
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
@@ -466,23 +481,9 @@ func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, c
 }
 
 func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
-	if plan.Fields != nil {
-		result = qe.qFetch(logStats, plan, plan.FullQuery, nil)
-		result.Fields = plan.Fields
-		return
-	}
-	var conn PoolConnection
-	waitingForConnectionStart := time.Now()
-	if plan.ConnectionId != 0 {
-		conn = qe.reservedPool.Get(plan.ConnectionId)
-	} else {
-		conn = qe.connPool.Get()
-	}
-	logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-	defer conn.Recycle()
-	result = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-	qe.schemaInfo.SetFields(plan.Query, plan.ExecPlan, result.Fields)
-	return result
+	result = qe.qFetch(logStats, plan, plan.FullQuery, nil)
+	result.Fields = plan.Fields
+	return
 }
 
 func (qe *QueryEngine) execInsertPK(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan, invalidator CacheInvalidator) (result *mproto.QueryResult) {
@@ -563,7 +564,7 @@ func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnectio
 	return &mproto.QueryResult{RowsAffected: rowsAffected}
 }
 
-func (qe *QueryEngine) execSet(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, plan *CompiledPlan) (result *mproto.QueryResult) {
 	switch plan.SetKey {
 	case "vt_pool_size":
 		qe.connPool.SetCapacity(int(plan.SetValue.(float64)))
@@ -608,20 +609,15 @@ func (qe *QueryEngine) execSet(logStats *sqlQueryStats, plan *CompiledPlan) (res
 		qe.activePool.SetIdleTimeout(time.Duration(t))
 		return &mproto.QueryResult{}
 	}
-	return qe.qFetch(logStats, plan, plan.FullQuery, nil)
+	return qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 }
 
 func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []sqltypes.Value) (result *mproto.QueryResult) {
 	sql := qe.generateFinalSql(parsed_query, plan.BindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
 	if ok {
-		var conn PoolConnection
 		waitingForConnectionStart := time.Now()
-		if plan.ConnectionId != 0 {
-			conn = qe.reservedPool.Get(plan.ConnectionId)
-		} else {
-			conn = qe.connPool.Get()
-		}
+		conn := qe.connPool.Get()
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		defer conn.Recycle()
 		q.Result, q.Err = qe.executeSql(logStats, conn, sql, false)

@@ -24,6 +24,7 @@ func init() {
 type PoolConnection interface {
 	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*proto.QueryResult, error)
 	ExecuteStreamFetch(query []byte, callback func(interface{}) error, streamBufferSize int) error
+	VerifyStrict() bool
 	Id() int64
 	Close()
 	IsClosed() bool

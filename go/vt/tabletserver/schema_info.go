@@ -38,16 +38,17 @@ type SchemaInfo struct {
 	tables         map[string]*TableInfo
 	queryCacheSize int
 	queries        *cache.LRUCache
-	connFactory    CreateConnectionFunc
+	connPool       *ConnectionPool
 	cachePool      *CachePool
 	reloadTime     time.Duration
 	lastChange     time.Time
 	ticks          *timer.Timer
 }
 
-func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration) *SchemaInfo {
+func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
 		queryCacheSize: queryCacheSize,
+		connPool:       NewConnectionPool(2, idleTimeout),
 		reloadTime:     reloadTime,
 		ticks:          timer.NewTimer(reloadTime),
 	}
@@ -56,11 +57,9 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration) *SchemaInfo {
 }
 
 func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePool) {
-	conn, err := connFactory()
-	if err != nil {
-		panic(NewTabletError(FATAL, "Could not get connection: %v", err))
-	}
-	defer conn.Close()
+	si.connPool.Open(connFactory)
+	conn := si.connPool.Get()
+	defer conn.Recycle()
 
 	if !conn.VerifyStrict() {
 		panic(NewTabletError(FATAL, "Could not verify strict mode"))
@@ -90,7 +89,6 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 		si.tables[tableName] = tableInfo
 	}
 	si.queries = cache.NewLRUCache(uint64(si.queryCacheSize))
-	si.connFactory = connFactory
 	si.ticks.Start(func() { si.Reload() })
 }
 
@@ -110,18 +108,14 @@ func (si *SchemaInfo) updateLastChange(createTime sqltypes.Value) {
 
 func (si *SchemaInfo) Close() {
 	si.ticks.Stop()
+	si.connPool.Close()
 	si.tables = nil
 	si.queries = nil
-	si.connFactory = nil
 }
 
 func (si *SchemaInfo) Reload() {
-	conn, err := si.connFactory()
-	if err != nil {
-		relog.Error("Could not get connection for reload: %v", err)
-		return
-	}
-	defer conn.Close()
+	conn := si.connPool.Get()
+	defer conn.Recycle()
 	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix())), 1000, false)
 	if err != nil {
 		relog.Warning("Could not get table list for reload: %v", err)
@@ -147,15 +141,12 @@ func (si *SchemaInfo) triggerReload() {
 }
 
 func (si *SchemaInfo) CreateTable(tableName string) {
-	conn, err := si.connFactory()
-	if err != nil {
-		panic(NewTabletError(FATAL, "Could not get connection for create table %s: %v", tableName, err))
-	}
-	defer conn.Close()
+	conn := si.connPool.Get()
+	defer conn.Recycle()
 	si.createTable(conn, tableName)
 }
 
-func (si *SchemaInfo) createTable(conn *DBConnection, tableName string) {
+func (si *SchemaInfo) createTable(conn PoolConnection, tableName string) {
 	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName)), 1, false)
 	if err != nil {
 		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
@@ -195,7 +186,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	relog.Info("Table %s forgotten", tableName)
 }
 
-func (si *SchemaInfo) GetPlan(sql string, mustCache bool) (plan *ExecPlan) {
+func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPlan) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	if plan := si.getQuery(sql); plan != nil {
@@ -215,15 +206,22 @@ func (si *SchemaInfo) GetPlan(sql string, mustCache bool) (plan *ExecPlan) {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	plan = &ExecPlan{splan, tableInfo, nil}
-	if plan.PlanId.IsSelect() && plan.ColumnNumbers != nil {
-		plan.Fields = applyFieldFilter(plan.ColumnNumbers, tableInfo.Fields)
-	}
-	if plan.PlanId == sqlparser.PLAN_DDL {
+	if plan.PlanId.IsSelect() {
+		conn := si.connPool.Get()
+		defer conn.Recycle()
+		sql := []byte(plan.FieldQuery.Query)
+		r, err := conn.ExecuteFetch(sql, 1, true)
+		logStats.QuerySources |= QUERY_SOURCE_MYSQL
+		logStats.NumberOfQueries += 1
+		logStats.AddRewrittenSql(sql)
+		if err != nil {
+			panic(NewTabletError(FAIL, "Error fetching fields: %v", err))
+		}
+		plan.Fields = r.Fields
+	} else if plan.PlanId == sqlparser.PLAN_DDL || plan.PlanId == sqlparser.PLAN_SET {
 		return plan
 	}
-	if mustCache {
-		si.queries.Set(sql, plan)
-	}
+	si.queries.Set(sql, plan)
 	return plan
 }
 
@@ -235,13 +233,6 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.ParsedQuery {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	return fullQuery
-}
-
-func (si *SchemaInfo) SetFields(sql string, plan *ExecPlan, fields []mproto.Field) {
-	si.mu.Lock()
-	defer si.mu.Unlock()
-	newPlan := &ExecPlan{plan.ExecPlan, plan.TableInfo, fields}
-	si.queries.Set(sql, newPlan)
 }
 
 func (si *SchemaInfo) GetTable(tableName string) *TableInfo {

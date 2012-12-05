@@ -202,6 +202,11 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.QueryCache.Length, 2)
     self.assertEqual(vend.Voltron.QueryCache.Size, 2)
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 5000)
+    self.env.execute("select * from vtocc_test where intval=1")
+    vend = self.env.debug_vars()
+    self.assertEqual(vend.Voltron.QueryCache.Length, 3)
+    self.assertEqual(vend.Voltron.QueryCache.Size, 3)
+    self.assertEqual(vend.Voltron.QueryCache.Capacity, 5000)
 
   def test_schema_reload_time(self):
     mcu = self.env.mysql_conn.cursor()
@@ -305,6 +310,14 @@ class TestNocache(framework.TestCase):
     bvars = [{"a":2}, {"b":2}]
     results = self.env.conn._execute_batch(queries, bvars)
     self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
+
+  def test_bind_in_select(self):
+    try:
+      bv = {}
+      bv['bv'] = 1
+      self.env.execute('select %(bv)s from vtocc_test', bv)
+    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+      self.assertContains(e[1], "error: Syntax error")
 
   def test_types(self):
     self._verify_mismatch("insert into vtocc_ints(tiny) values('str')")

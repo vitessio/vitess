@@ -99,6 +99,9 @@ type ExecPlan struct {
 	Reason    ReasonType
 	TableName string
 
+	// Query to fetch field info
+	FieldQuery *ParsedQuery
+
 	// PLAN_PASS_*
 	FullQuery *ParsedQuery
 
@@ -217,7 +220,7 @@ func (node *Node) execAnalyzeSql(getTable TableGetter) (plan *ExecPlan) {
 
 func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
-	plan = &ExecPlan{PlanId: PLAN_PASS_SELECT, FullQuery: node.GenerateSelectLimitQuery()}
+	plan = &ExecPlan{PlanId: PLAN_PASS_SELECT, FieldQuery: node.GenerateFieldQuery(), FullQuery: node.GenerateSelectLimitQuery()}
 
 	if !node.execAnalyzeSelectStructure() {
 		plan.Reason = REASON_SELECT
@@ -906,6 +909,29 @@ func (node *Node) GenerateFullQuery() *ParsedQuery {
 	buf := NewTrackedBuffer()
 	node.Format(buf)
 	return NewParsedQuery(buf)
+}
+
+func (node *Node) GenerateFieldQuery() *ParsedQuery {
+	buf := NewTrackedBuffer()
+	node.generateImpossibleQuery(buf)
+	if len(buf.bind_locations) != 0 {
+		panic(NewParserError("Syntax error: Bind variables not allowed in select expressions"))
+	}
+	return NewParsedQuery(buf)
+}
+
+func (node *Node) generateImpossibleQuery(buf *TrackedBuffer) {
+	switch node.Type {
+	case UNION, UNION_ALL, MINUS, EXCEPT:
+		node.At(0).generateImpossibleQuery(buf)
+		fmt.Fprintf(buf, " %s ", node.Value)
+		node.At(1).generateImpossibleQuery(buf)
+	case SELECT:
+		Fprintf(buf, "select %v from %v where 1 != 1",
+			node.At(SELECT_EXPR_OFFSET),
+			node.At(SELECT_FROM_OFFSET),
+		)
+	}
 }
 
 func (node *Node) GenerateSelectLimitQuery() *ParsedQuery {
