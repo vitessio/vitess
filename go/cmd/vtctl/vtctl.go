@@ -59,7 +59,7 @@ var commands = []commandGroup{
 				"DEPRECATED (use ChangeSlaveType or other operations instead).\n" +
 					"Updates a tablet in zookeeper."},
 			command{"ScrapTablet", commandScrapTablet,
-				"[-force] <zk tablet path>",
+				"[-force] [-skip-rebuild] <zk tablet path>",
 				"Scraps a tablet."},
 			command{"SetReadOnly", commandSetReadOnly,
 				"[<zk tablet path> | <zk shard/tablet path>]",
@@ -598,15 +598,13 @@ func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 
 func commandScrapTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "writes the scrap state in to zk, no questions asked, if a tablet is offline")
+	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after scrapping")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action ScrapTablet requires <zk tablet path>")
 	}
 
-	if *globalForce || *force {
-		return "", tm.Scrap(wrangler.ZkConn(), subFlags.Arg(0), *globalForce || *force)
-	}
-	return wrangler.ActionInitiator().Scrap(subFlags.Arg(0))
+	return wrangler.Scrap(subFlags.Arg(0), *globalForce || *force, *skipRebuild)
 }
 
 func commandSetReadOnly(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

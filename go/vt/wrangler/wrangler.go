@@ -7,6 +7,7 @@ package zkwrangler
 import (
 	"time"
 
+	"code.google.com/p/vitess/go/relog"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -165,4 +166,45 @@ func (wr *Wrangler) handleActionError(actionPath string, actionErr error) error 
 		return zk.DeleteRecursive(wr.zconn, actionPath, -1)
 	}
 	return nil
+}
+
+// Scrap a tablet. If force is used, we write to ZK directly and don't
+// remote-execute the command.
+func (wr *Wrangler) Scrap(zkTabletPath string, force, skipRebuild bool) (actionPath string, err error) {
+	// load the tablet, see if we'll need to rebuild
+	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	if err != nil {
+		return "", err
+	}
+	rebuildRequired := ti.Tablet.IsServingType()
+
+	if force {
+		err = tm.Scrap(wr.zconn, zkTabletPath, force)
+	} else {
+		actionPath, err = wr.ai.Scrap(zkTabletPath)
+	}
+
+	if !rebuildRequired {
+		relog.Info("Rebuild not required")
+		return
+	}
+	if skipRebuild {
+		relog.Warning("Rebuild required, but skipping it")
+		return
+	}
+
+	// wait for the remote Scrap if necessary
+	if actionPath != "" {
+		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		if err != nil {
+			return "", nil
+		}
+	}
+
+	// and rebuild the original shard / keyspace
+	if _, err := wr.RebuildShardGraph(ti.ShardPath()); err != nil {
+		return "", err
+	}
+
+	return wr.RebuildKeyspaceGraph(ti.KeyspacePath())
 }

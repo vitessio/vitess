@@ -479,7 +479,7 @@ def run_test_reparent_down_master():
   utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_alias)
 
   # Force the scrap action in zk even though tablet is not accessible.
-  utils.run_vtctl('ScrapTablet -force ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('ScrapTablet -force -skip-rebuild ' + tablet_62344.zk_tablet_path)
 
   utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING ChangeSlaveType -force %s idle' %
                  tablet_62344.zk_tablet_path)
@@ -487,7 +487,8 @@ def run_test_reparent_down_master():
   # Remove pending locks (make this the force option to ReparentShard?)
   utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
 
-  # Scrapping a tablet shouldn't take it out of the serving graph.
+  # Scrapping a tablet with -skip-rebuild shouldn't take it out of the
+  # serving graph.
   expected_addr = hostname + ':6700'
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
