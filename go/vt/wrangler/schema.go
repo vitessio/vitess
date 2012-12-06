@@ -239,7 +239,7 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, false)
+	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -435,7 +435,7 @@ func (wr *Wrangler) ApplySchemaKeyspace(zkKeyspacePath string, change string, si
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, false)
+	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
 		return nil, err
 	}

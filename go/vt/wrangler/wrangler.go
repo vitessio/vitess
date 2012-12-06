@@ -14,16 +14,23 @@ import (
 
 const (
 	DefaultActionTimeout = 30 * time.Second
+	DefaultLockTimeout   = 30 * time.Second
 )
 
 type Wrangler struct {
-	zconn    zk.Conn
-	ai       *tm.ActionInitiator
-	deadline time.Time
+	zconn       zk.Conn
+	ai          *tm.ActionInitiator
+	deadline    time.Time
+	lockTimeout time.Duration
 }
 
-func NewWrangler(zconn zk.Conn, actionTimeout time.Duration) *Wrangler {
-	return &Wrangler{zconn, tm.NewActionInitiator(zconn), time.Now().Add(actionTimeout)}
+// actionTimeout: how long should we wait for an action to complete?
+// lockTimeout: how long should we wait for the initial lock to start a complex action?
+//   This is distinct from actionTimeout because most of the time, we want to immediately
+//   know that out action will fail. However, automated action will need some time to
+//   arbitrate the locks.
+func NewWrangler(zconn zk.Conn, actionTimeout, lockTimeout time.Duration) *Wrangler {
+	return &Wrangler{zconn, tm.NewActionInitiator(zconn), time.Now().Add(actionTimeout), lockTimeout}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {

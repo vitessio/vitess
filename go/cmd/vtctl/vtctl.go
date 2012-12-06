@@ -32,6 +32,7 @@ import (
 
 var noWaitForAction = flag.Bool("no-wait", false, "don't wait for action completion, detach")
 var waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+var lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
 var globalForce = flag.Bool("force", false, "force action (DEPRECATED, use the per command -force flag)")
 var logLevel = flag.String("log.level", "INFO", "set log level")
 var logfile = flag.String("logfile", "/vt/logs/vtctl.log", "log file")
@@ -1200,7 +1201,7 @@ func main() {
 	zconn := zk.NewMetaConn(false)
 	defer zconn.Close()
 
-	wrangler := wr.NewWrangler(zconn, *waitTime)
+	wrangler := wr.NewWrangler(zconn, *waitTime, *lockWaitTimeout)
 	var actionPath string
 	var err error
 

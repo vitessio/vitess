@@ -28,6 +28,9 @@ var zkAddrs = opts.LongSingle("--zk.addrs",
 var zkoccAddr = opts.LongSingle("--zk.zkocc-addr",
 	"if specified, talk to a zkocc process",
 	"")
+var lockWaitTimeout = opts.LongSingle("--lock-wait-timeout",
+	"wait for a lock for the specified duration",
+	"0")
 
 var longListing = opts.ShortFlag("-l", "long listing")
 var directoryListing = opts.ShortFlag("-d", "list directory instead of contents")
@@ -57,6 +60,8 @@ zk cp ./config /zk/path/ (trailing slash indicates directory)
 zk edit /zk/path (create a local copy, edit and write changes back to cell)
 
 zk elock /zk/path (create an ephemeral node that lives as long as the process)
+zk qlock /zk/path/0000000001
+zk qlock --lock-wait-timeout=<duration> /zk/path/0000000001
 
 zk ls /zk
 zk ls -l /zk
@@ -211,8 +216,11 @@ func cmdWait(args []string) {
 
 func cmdQlock(args []string) {
 	zkPath := fixZkPath(args[0])
-
-	locked, err := zk.ObtainQueueLock(zconn, zkPath, false)
+	timeout, err := time.ParseDuration(*lockWaitTimeout)
+	if err != nil {
+		log.Fatalf("qlock: invalid timeout %v: %v", *lockWaitTimeout, err)
+	}
+	locked, err := zk.ObtainQueueLock(zconn, zkPath, timeout)
 	if err != nil {
 		log.Fatalf("qlock: error %v: %v", zkPath, err)
 	}

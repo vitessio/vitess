@@ -120,7 +120,7 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, false)
+	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
 		return err
 	}
@@ -588,7 +588,7 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*t
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, false)
+	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
 		return nil, nil, err
 	}

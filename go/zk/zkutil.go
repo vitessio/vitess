@@ -22,7 +22,7 @@ import (
 func CreateRecursive(zconn Conn, zkPath, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
 	parts := strings.Split(zkPath, "/")
 	if parts[1] != "zk" {
-		return "", fmt.Errorf("non zk path: %v", zkPath)
+		return "", fmt.Errorf("zkutil: non zk path: %v", zkPath)
 	}
 
 	pathCreated, err = zconn.Create(zkPath, value, flags, aclv)
@@ -122,13 +122,13 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	for _, child := range children {
 		err := DeleteRecursive(zconn, path.Join(zkPath, child), -1)
 		if err != nil {
-			return fmt.Errorf("recursive delete failed: %v", err)
+			return fmt.Errorf("zkutil: recursive delete failed: %v", err)
 		}
 	}
 
 	err = zconn.Delete(zkPath, version)
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
-		err = fmt.Errorf("nodes getting recreated underneath delete (app race condition): %v", zkPath)
+		err = fmt.Errorf("zkutil: nodes getting recreated underneath delete (app race condition): %v", zkPath)
 	}
 	return err
 }
@@ -137,30 +137,59 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 // path holds the lock.  Call this queue-lock because the semantics are
 // a hybrid.  Normal zookeeper locks make assumptions about sequential
 // numbering that don't hold when the data in a lock is modified.
-func ObtainQueueLock(zconn Conn, zkPath string, wait bool) (bool, error) {
-	if wait {
-		panic("unimplemented")
-	}
-
+func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration) (bool, error) {
 	queueNode := path.Dir(zkPath)
 	lockNode := path.Base(zkPath)
 
+	timer := time.NewTimer(wait)
+trylock:
 	children, _, err := zconn.Children(queueNode)
 	if err != nil {
 		return false, err
 	}
 	sort.Strings(children)
 	if len(children) > 0 {
-		return children[0] == lockNode, nil
+		if children[0] == lockNode {
+			return true, nil
+		}
+		if wait > 0 {
+			prevLock := ""
+			for i := 1; i < len(children); i++ {
+				if children[i] == lockNode {
+					prevLock = children[i-1]
+					break
+				}
+			}
+			if prevLock == "" {
+				return false, fmt.Errorf("zkutil: no previous queue node found: %v", zkPath)
+			}
+
+			zkPrevLock := path.Join(queueNode, prevLock)
+			stat, watch, err := zconn.ExistsW(zkPrevLock)
+			if err != nil {
+				return false, fmt.Errorf("zkutil: unable to watch queued node %v %v", zkPrevLock, err)
+			}
+			if stat == nil {
+				goto trylock
+			}
+			select {
+			case <-timer.C:
+				break
+			case <-watch:
+				// The precise event doesn't matter - try to read again regardless.
+				goto trylock
+			}
+		}
+		return false, fmt.Errorf("zkutil: obtaining lock timed out %v", zkPath)
 	}
 
-	return false, fmt.Errorf("empty queue node: %v", queueNode)
+	return false, fmt.Errorf("zkutil: empty queue node: %v", queueNode)
 }
 
 func CreatePidNode(zconn Conn, zkPath string) error {
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("failed creating pid node %v: %v", zkPath, err)
+		return fmt.Errorf("zkutil: failed creating pid node %v: %v", zkPath, err)
 	}
 	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
 
@@ -172,11 +201,11 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 			err = zconn.Delete(zkPath, -1)
 		}
 		if err != nil {
-			return fmt.Errorf("failed deleting pid node: %v: %v", zkPath, err)
+			return fmt.Errorf("zkutil: failed deleting pid node: %v: %v", zkPath, err)
 		}
 		_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
-			return fmt.Errorf("failed creating pid node: %v: %v", zkPath, err)
+			return fmt.Errorf("zkutil: failed creating pid node: %v: %v", zkPath, err)
 		}
 	}
 
