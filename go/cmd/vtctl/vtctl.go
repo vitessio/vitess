@@ -74,7 +74,9 @@ var commands = []commandGroup{
 			command{"ChangeSlaveType", commandChangeSlaveType,
 				"[-force] <zk tablet path> <db type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
-					"NOTE: This will automatically update the serving graph."},
+					"NOTE: This will automatically update the serving graph.\n" +
+					"Valid <db type>:\n" +
+					"  " + strings.Join(tm.SlaveTabletTypeStrings, " ") + "\n"},
 			command{"ChangeType", commandChangeSlaveType,
 				"[-force] <zk tablet path> <db type>",
 				"DEPRECATED (use ChangeSlaveType instead).\n" +

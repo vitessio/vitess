@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"sort"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
@@ -64,6 +65,51 @@ const (
 	// a machine with data that needs to be wiped
 	TYPE_SCRAP = TabletType("scrap")
 )
+
+var allTabletTypes = []TabletType{TYPE_IDLE,
+	TYPE_MASTER,
+	TYPE_REPLICA,
+	TYPE_RDONLY,
+	TYPE_BATCH,
+	TYPE_SPARE,
+	TYPE_EXPERIMENTAL,
+	TYPE_LAG,
+	TYPE_LAG_ORPHAN,
+	TYPE_SCHEMA_UPGRADE,
+	TYPE_BACKUP,
+	TYPE_RESTORE,
+	TYPE_SCRAP,
+}
+
+var slaveTabletTypes = []TabletType{
+	TYPE_REPLICA,
+	TYPE_RDONLY,
+	TYPE_BATCH,
+	TYPE_SPARE,
+	TYPE_EXPERIMENTAL,
+	TYPE_LAG,
+	TYPE_LAG_ORPHAN,
+	TYPE_SCHEMA_UPGRADE,
+	TYPE_BACKUP,
+	TYPE_RESTORE,
+}
+
+var AllTabletTypeStrings []string
+var SlaveTabletTypeStrings []string
+
+func makeTypeList(types []TabletType) []string {
+	strs := make([]string, len(types))
+	for i, t := range types {
+		strs[i] = string(t)
+	}
+	sort.Strings(strs)
+	return strs
+}
+
+func init() {
+	AllTabletTypeStrings = makeTypeList(allTabletTypes)
+	SlaveTabletTypeStrings = makeTypeList(slaveTabletTypes)
+}
 
 // Can this db type be trivially reassigned without changes to the replication graph?
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
