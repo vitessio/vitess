@@ -38,6 +38,16 @@ const (
 	SHUTTING_DOWN
 )
 
+var stateName = map[int32]string{
+	NOT_SERVING:   "NOT_SERVING",
+	CLOSED:        "CLOSED",
+	CONNECTING:    "CONNECTING",
+	ABORT:         "ABORT",
+	INITIALIZING:  "INITIALIZING",
+	OPEN:          "OPEN",
+	SHUTTING_DOWN: "SHUTTING_DOWN",
+}
+
 //-----------------------------------------------
 // RPC API
 type SqlQuery struct {
@@ -116,6 +126,7 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 		if x := recover(); x != nil {
 			relog.Error("%s", x.(*TabletError).Message)
 			atomic.StoreInt32(&sq.state, NOT_SERVING)
+			return
 		}
 		atomic.StoreInt32(&sq.state, OPEN)
 	}()
@@ -239,7 +250,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
-			relog.Error("%v: Uncaught panic for %v", x, query)
+			relog.Error("Uncaught panic for %v:\n%v\n%s", query, x, relog.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic for %v", x, query)
 			errorStats.Add("Panic", 1)
 			return
@@ -366,7 +377,7 @@ func (sq *SqlQuery) InvalidateForDDL(context *rpcproto.Context, ddl *proto.DDLIn
 func (sq *SqlQuery) statsJSON() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	fmt.Fprintf(buf, "{")
-	fmt.Fprintf(buf, "\n \"IsOpen\": %v,", atomic.LoadInt32(&sq.state))
+	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[atomic.LoadInt32(&sq.state)])
 	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.qe.cachePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.qe.schemaInfo.queries.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", sq.qe.connPool.StatsJSON())

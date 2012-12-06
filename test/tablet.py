@@ -44,15 +44,6 @@ class Tablet(object):
       }
     }
 
-  # tablet states, from sqlquery.go
-  TABLET_NOT_SERVING = 0
-  TABLET_CLOSED = 1
-  TABLET_CONNECTING = 2
-  TABLET_ABORT = 3
-  TABLET_INITIALIZING = 4
-  TABLET_OPEN = 5
-  TABLET_SHUTTING_DOWN = 6
-
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
     self.port = port or (Tablet.default_port + Tablet.seq)
@@ -220,9 +211,9 @@ class Tablet(object):
     utils.run_vtctl(args)
     if start:
       if tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
-        expected_state = self.TABLET_OPEN
+        expected_state = "OPEN"
       else:
-        expected_state = self.TABLET_NOT_SERVING
+        expected_state = "NOT_SERVING"
       self.start_vttablet(wait_for_state=expected_state)
 
   @property
@@ -237,7 +228,7 @@ class Tablet(object):
   def logfile(self):
     return os.path.join(self.tablet_dir, "vttablet.log")
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state=TABLET_OPEN):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN"):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -290,7 +281,7 @@ class Tablet(object):
         if not 'Voltron' in v:
           utils.debug("  vttablet not exporting Voltron, waiting...")
         else:
-          s = v['Voltron']['IsOpen']
+          s = v['Voltron']['State']
           if s != expected:
             utils.debug("  vttablet in state %u != %u" % (s, expected))
           else:

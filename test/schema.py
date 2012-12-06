@@ -110,7 +110,7 @@ def run_test_complex_schema():
   shard_0_replica1.start_vttablet()
   shard_0_replica2.start_vttablet()
   shard_0_rdonly.start_vttablet()
-  shard_0_backup.start_vttablet(wait_for_state=tablet.Tablet.TABLET_NOT_SERVING)
+  shard_0_backup.start_vttablet(wait_for_state="NOT_SERVING")
   shard_1_master.start_vttablet()
   shard_1_replica1.start_vttablet()
 
