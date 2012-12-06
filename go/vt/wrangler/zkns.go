@@ -73,7 +73,11 @@ func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
 		// delete them as stale entries.
 		zknsChildren, err := zk.ChildrenRecursive(wr.zconn, zknsRootPath)
 		if err != nil {
-			return err
+			if zookeeper.IsError(err, zookeeper.ZNONODE) {
+				zknsChildren = make([]string, 0)
+			} else {
+				return err
+			}
 		}
 		staleZknsPaths := make(map[string]bool)
 		for _, child := range zknsChildren {
@@ -82,7 +86,11 @@ func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
 
 		vtnsChildren, err := zk.ChildrenRecursive(wr.zconn, vtnsRootPath)
 		if err != nil {
-			return err
+			if zookeeper.IsError(err, zookeeper.ZNONODE) {
+				vtnsChildren = make([]string, 0)
+			} else {
+				return err
+			}
 		}
 		for _, child := range vtnsChildren {
 			vtnsAddrPath := path.Join(vtnsRootPath, child)

@@ -210,6 +210,18 @@ def run_test_sharding():
       err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test") == -1):
         raise utils.TestError('wrong ValidateSchemaKeyspace output: ' + err)
 
+  # and create zkns on this complex keyspace, make sure a few files are created
+  utils.run_vtctl('ExportZknsForKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  out, err = utils.run(vtroot+'/bin/zk ls -R /zk/test_nj/zkns/vt/test_keyspace', trap_output=True)
+  lines = out.splitlines()
+  for base in ['0000000000000000-8000000000000000',
+                '8000000000000000-FFFFFFFFFFFFFFFF']:
+    for db_type in ['master', 'replica']:
+      for sub_path in ['', '.vdns', '/0', '/_vtocc.vdns']:
+        expected = '/zk/test_nj/zkns/vt/test_keyspace/' + base + '/' + db_type + sub_path
+        if not expected in lines:
+          raise utils.TestError('missing zkns part:\n%s\nin:%s' %(expected, out))
+
   utils.kill_sub_process(zkocc)
   shard_0_master.kill_vttablet()
   shard_0_replica.kill_vttablet()
