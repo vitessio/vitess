@@ -94,12 +94,30 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 		return err
 	}
 
+	// we rebuild if the tablet was serving, or if it is now
+	var shardToRebuild, keyspaceToRebuild string
 	if rebuildRequired {
-		if _, err := wr.RebuildShardGraph(ti.ShardPath()); err != nil {
+		shardToRebuild = ti.ShardPath()
+		keyspaceToRebuild = ti.KeyspacePath()
+	} else {
+		// re-read the tablet, see if we become serving
+		ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+		if err != nil {
+			return err
+		}
+		if ti.Tablet.IsServingType() {
+			rebuildRequired = true
+			shardToRebuild = ti.ShardPath()
+			keyspaceToRebuild = ti.KeyspacePath()
+		}
+	}
+
+	if rebuildRequired {
+		if _, err := wr.RebuildShardGraph(shardToRebuild); err != nil {
 			return err
 		}
 
-		if _, err := wr.RebuildKeyspaceGraph(ti.KeyspacePath()); err != nil {
+		if _, err := wr.RebuildKeyspaceGraph(keyspaceToRebuild); err != nil {
 			return err
 		}
 	}
