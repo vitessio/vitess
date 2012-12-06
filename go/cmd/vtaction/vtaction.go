@@ -76,7 +76,7 @@ func main() {
 	}
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
-	zconn := zk.NewMetaConn(5e9, false)
+	zconn := zk.NewMetaConn(false)
 	defer zconn.Close()
 	actor := tabletmanager.NewTabletActor(mysqld, zconn)
 

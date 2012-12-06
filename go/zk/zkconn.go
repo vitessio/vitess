@@ -19,7 +19,7 @@ type ZkConn struct {
 // encapsulating the zookeeper.Conn, and the zookeeper session event
 // channel to monitor the connection
 //
-// The value for recvTimeout is used as a session timeout as well, and
+// The value for baseTimeout is used as a session timeout as well, and
 // will be used to negotiate a 'good' value with the server. From
 // reading the zookeeper source code, it has to be between 6 and 60
 // seconds (2x and 20x the tickTime by default, with default tick time
@@ -27,19 +27,19 @@ type ZkConn struct {
 // can all be overwritten on the zookeeper server side, so these
 // numbers may vary.
 //
-// Then this recvTimeout is used to compute other related timeouts:
-// - connect timeout is 1/3 of recvTimeout
-// - recv timeout is 2/3 of recvTimeout minus a ping time
-// - send timeout is 1/3 of recvTimeout
-// - we try to send a ping a least every recvTimeout / 3
+// Then this baseTimeout is used to compute other related timeouts:
+// - connect timeout is 1/3 of baseTimeout
+// - recv timeout is 2/3 of baseTimeout minus a ping time
+// - send timeout is 1/3 of baseTimeout
+// - we try to send a ping a least every baseTimeout / 3
 //
-// Note the recvTimeout has *nothing* to do with the time between we
+// Note the baseTimeout has *nothing* to do with the time between we
 // call Dial and the maximum time before we receive the event on the
 // session. The library will actually try to re-connect in the background
 // (after each timeout), and may *never* send an event if the TCP connections
 // always fail. Use DialZkTimeout to enforce a timeout for the initial connect.
-func DialZk(zkAddr string, recvTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
-	zconn, session, err := zookeeper.Dial(zkAddr, recvTimeout)
+func DialZk(zkAddr string, baseTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
+	zconn, session, err := zookeeper.Dial(zkAddr, baseTimeout)
 	if err == nil {
 		// Wait for connection, possibly forever
 		event := <-session
@@ -55,8 +55,8 @@ func DialZk(zkAddr string, recvTimeout time.Duration) (*ZkConn, <-chan zookeeper
 	return nil, nil, err
 }
 
-func DialZkTimeout(zkAddr string, recvTimeout time.Duration, connectTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
-	zconn, session, err := zookeeper.Dial(zkAddr, recvTimeout)
+func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
+	zconn, session, err := zookeeper.Dial(zkAddr, baseTimeout)
 	if err == nil {
 		// Wait for connection, with a timeout
 		timer := time.NewTimer(connectTimeout)

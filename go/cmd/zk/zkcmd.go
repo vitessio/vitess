@@ -128,7 +128,7 @@ func init() {
 	}
 	log.SetFlags(0)
 
-	zconn = zk.NewMetaConn(5*time.Second, false)
+	zconn = zk.NewMetaConn(false)
 }
 
 func main() {

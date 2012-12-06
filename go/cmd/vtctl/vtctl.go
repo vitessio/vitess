@@ -1197,7 +1197,7 @@ func main() {
 		relog.Warning("cannot connect to syslog: %v", err)
 	}
 
-	zconn := zk.NewMetaConn(5e9, false)
+	zconn := zk.NewMetaConn(false)
 	defer zconn.Close()
 
 	wrangler := wr.NewWrangler(zconn, *waitTime)

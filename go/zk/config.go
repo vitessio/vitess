@@ -11,8 +11,13 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 //	"launchpad.net/gozk/zookeeper"
+)
+
+const (
+	DEFAULT_BASE_TIMEOUT = 5 * time.Second
 )
 
 var zkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
@@ -22,6 +27,8 @@ var localAddrs = flag.String("zk.local-addrs", "",
 	"list of zookeeper servers (host:port, ...)")
 var globalAddrs = flag.String("zk.global-addrs", "",
 	"list of global zookeeper servers (host:port, ...)")
+var baseTimeout = flag.Duration("zk.base-timeout", DEFAULT_BASE_TIMEOUT,
+	"zk or zkocc base timeout (see zkconn.go and zkoccconn.go)")
 
 // Read the cell from -zk.local-cell, or the environment ZK_CLIENT_LOCAL_CELL
 // or guess the cell by the hostname. This is either the first two characters
@@ -115,4 +122,24 @@ func ZkPathToZkAddr(zkPath string, useCache bool) string {
 	}
 
 	panic(fmt.Errorf("no addr found for zk cell: %#v", cell))
+}
+
+// GetZkSubprocessFlags returns the flags necessary to run a sub-process
+// that would connect to the same zk servers as this process
+// (assuming the environment of the sub-process is the same as ours)
+func GetZkSubprocessFlags() []string {
+	result := make([]string, 0, 0)
+	if *localCell != "" {
+		result = append(result, "-zk.local-cell", *localCell)
+	}
+	if *localAddrs != "" {
+		result = append(result, "-zk.local-addrs", *localAddrs)
+	}
+	if *globalAddrs != "" {
+		result = append(result, "-zk.global-addrs", *globalAddrs)
+	}
+	if *baseTimeout != DEFAULT_BASE_TIMEOUT {
+		result = append(result, "-zk.base-timeout", baseTimeout.String())
+	}
+	return result
 }

@@ -161,7 +161,7 @@ func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 }
 
 func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) {
-	zconn := zk.NewMetaConn(5e9, false)
+	zconn := zk.NewMetaConn(false)
 	umgmt.AddCloseCallback(func() {
 		zconn.Close()
 	})

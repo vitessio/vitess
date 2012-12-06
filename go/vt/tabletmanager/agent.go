@@ -147,6 +147,7 @@ func (agent *ActionAgent) dispatchAction(actionPath string) error {
 		"-mycnf-file", agent.MycnfFile,
 		"-logfile", logfile,
 	}
+	cmd = append(cmd, zk.GetZkSubprocessFlags()...)
 	if agent.DbConfigsFile != "" {
 		cmd = append(cmd, "-db-configs-file", agent.DbConfigsFile)
 	}

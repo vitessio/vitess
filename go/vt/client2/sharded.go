@@ -673,8 +673,8 @@ func (driver *sDriver) Open(name string) (sc driver.Conn, err error) {
 }
 
 func init() {
-	zconn := zk.NewMetaConn(5*time.Second, false)
-	zkoccconn := zk.NewMetaConn(5*time.Second, true)
+	zconn := zk.NewMetaConn(false)
+	zkoccconn := zk.NewMetaConn(true)
 	sql.Register("vtdb", &sDriver{zconn, false})
 	sql.Register("vtdb-zkocc", &sDriver{zkoccconn, false})
 	sql.Register("vtdb-streaming", &sDriver{zconn, true})
