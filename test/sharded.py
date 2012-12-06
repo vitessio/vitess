@@ -14,7 +14,7 @@ hostname = socket.gethostname()
 # range 0000000000000000 - 8000000000000000
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
-# range 8000000000000000 - FFFFFFFFFFFFFFFF
+# range 8000000000000000 - 0000000000000000
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 
@@ -96,11 +96,11 @@ def run_test_sharding():
 
   shard_0_master.init_tablet( 'master',  'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
   shard_0_replica.init_tablet('replica', 'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
-  shard_1_master.init_tablet( 'master',  'test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', key_start='8000000000000000')
-  shard_1_replica.init_tablet('replica', 'test_keyspace', '8000000000000000-FFFFFFFFFFFFFFFF', key_start='8000000000000000')
+  shard_1_master.init_tablet( 'master',  'test_keyspace', '8000000000000000-0000000000000000', key_start='8000000000000000')
+  shard_1_replica.init_tablet('replica', 'test_keyspace', '8000000000000000-0000000000000000', key_start='8000000000000000')
 
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF')
+  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000')
 
   utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace')
 
@@ -135,13 +135,13 @@ def run_test_sharding():
   zkocc = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
 
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path)
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF ' + shard_1_master.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000 ' + shard_1_master.zk_tablet_path)
 
   # apply the schema on the second shard using a simple schema upgrade
   utils.run_vtctl(['ApplySchemaShard',
                    '-simple',
                    '-sql=' + create_vt_select_test_reverse.replace("\n", ""),
-                   '/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF'])
+                   '/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000'])
 
   # insert some values directly (db is RO after minority reparent)
   # FIXME(alainjobart) these values don't match the shard map
@@ -204,7 +204,7 @@ def run_test_sharding():
   # throw in some schema validation step
   # we created the schema differently, so it should show
   utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
-  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-FFFFFFFFFFFFFFFF')
+  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000')
   out, err = utils.run_vtctl('ValidateSchemaKeyspace /zk/global/vt/keyspaces/test_keyspace', trap_output=True, raise_on_error=False)
   if (err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test") == -1 or \
       err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test") == -1):
@@ -215,7 +215,7 @@ def run_test_sharding():
   out, err = utils.run(vtroot+'/bin/zk ls -R /zk/test_nj/zkns/vt/test_keyspace', trap_output=True)
   lines = out.splitlines()
   for base in ['0000000000000000-8000000000000000',
-                '8000000000000000-FFFFFFFFFFFFFFFF']:
+                '8000000000000000-0000000000000000']:
     for db_type in ['master', 'replica']:
       for sub_path in ['', '.vdns', '/0', '/_vtocc.vdns']:
         expected = '/zk/test_nj/zkns/vt/test_keyspace/' + base + '/' + db_type + sub_path
@@ -252,6 +252,9 @@ def main():
     pass
   except utils.Break:
     utils.options.skip_teardown = True
+  except utils.TestError as e:
+    for arg in e.args:
+      print arg
   finally:
     teardown()
 

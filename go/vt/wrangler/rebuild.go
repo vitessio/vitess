@@ -270,13 +270,26 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 	}
 
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
+		keyspaceDbTypes := make(map[string]bool)
 		for _, shardName := range shardNames {
 			srvShard, err := naming.ReadSrvShard(wr.zconn, path.Join(srvPath, shardName))
 			if err != nil {
 				return err
 			}
+			for dbType, _ := range srvShard.AddrsByType {
+				keyspaceDbTypes[dbType] = true
+			}
+			// Prune addrs, this is unnecessarily expensive right now. It is easier to
+			// load on-demand since we have to do that anyway on a reconnect.
+			srvShard.AddrsByType = nil
 			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
 		}
+		tabletTypes := make([]string, 0, len(keyspaceDbTypes))
+		for dbType, _ := range keyspaceDbTypes {
+			tabletTypes = append(tabletTypes, dbType)
+		}
+		srvKeyspace.TabletTypes = tabletTypes
+		// FIXME(msolomon) currently this only works when the shards are range-based
 		naming.SrvShardArray(srvKeyspace.Shards).Sort()
 
 		// check the first Start is MinKey, the last End is MaxKey,

@@ -145,6 +145,21 @@ func (sc *ShardedConn) readKeyspace() error {
 	for i, srvShard := range sc.srvKeyspace.Shards {
 		// FIXME(msolomon) do this as string, or make everyting in terms of KeyspaceId?
 		sc.shardMaxKeys[i] = string(srvShard.KeyRange.End)
+		// FIXME(msolomon) this needs to be revisited for non-int keys. The problem is that
+		// KeyspaceId is lossy - you don't know if it was originally a Uint64KeyspaceId. For
+		// now I'm making that assumption and padding the data accordingly. Otherwise, zero
+		// gets hex encoded to "".  Depends if shard names need to be guaranteed to match the
+		// sort order.
+		zkShardPath := fmt.Sprintf("%v/%016v-%016v", sc.zkKeyspacePath, srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
+		// Hack to handle non-range based shards.
+		if srvShard.KeyRange.Start == key.MinKey && srvShard.KeyRange.End == key.MaxKey {
+			zkShardPath = fmt.Sprintf("%v/%v", sc.zkKeyspacePath, i)
+		}
+		realSrvShard, err := naming.ReadSrvShard(sc.zconn, zkShardPath)
+		if err != nil {
+			return fmt.Errorf("vt: readKeyspace failed %v", err)
+		}
+		sc.srvKeyspace.Shards[i] = *realSrvShard
 	}
 
 	// Disabled for now.
