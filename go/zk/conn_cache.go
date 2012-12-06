@@ -60,7 +60,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	}
 
 	if cc.useZkocc {
-		conn.zconn, err = DialZkocc(ZkPathToZkAddr(zkPath, true), *recvTimeout)
+		conn.zconn, err = DialZkocc(ZkPathToZkAddr(zkPath, true), *baseTimeout)
 	} else {
 		conn.zconn, err = cc.newZookeeperConn(zkPath, zcell)
 	}
@@ -68,7 +68,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 }
 
 func (cc *ConnCache) newZookeeperConn(zkPath, zcell string) (Conn, error) {
-	conn, session, err := DialZk(ZkPathToZkAddr(zkPath, false), *recvTimeout)
+	conn, session, err := DialZk(ZkPathToZkAddr(zkPath, false), *baseTimeout)
 	if err != nil {
 		return nil, err
 	}
