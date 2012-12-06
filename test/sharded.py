@@ -19,7 +19,6 @@ shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 
 def setup():
-  utils.prog_compile(['zkocc'])
   utils.zk_setup()
 
   setup_procs = [
@@ -132,10 +131,10 @@ def run_test_sharding():
                    shard_0_replica.zk_tablet_path])
 
   # start zkocc, we'll use it later
-  zkocc = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
+  zkocc = utils.zkocc_start()
 
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path)
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000 ' + shard_1_master.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000 ' + shard_1_master.zk_tablet_path, auto_log=True)
 
   # apply the schema on the second shard using a simple schema upgrade
   utils.run_vtctl(['ApplySchemaShard',
@@ -161,10 +160,7 @@ def run_test_sharding():
               "10\ttest 10"])
 
   # write a value, re-read them all
-  out, err = utils.vttablet_query(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (2, 'test 2')", driver="vtdb", verbose=True)
-  print out
-  print err
-
+  utils.vttablet_query(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (2, 'test 2')", driver="vtdb", verbose=True)
   check_rows(["Index\tid\tmsg",
               "1\ttest 1",
               "2\ttest 2",

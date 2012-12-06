@@ -9,7 +9,7 @@ import socket
 from subprocess import Popen, CalledProcessError, PIPE
 import sys
 import time
-import types
+import urllib
 
 import MySQLdb
 
@@ -90,7 +90,7 @@ def kill_sub_process(proc):
 
 # run in foreground, possibly capturing output
 def run(cmd, trap_output=False, raise_on_error=True, **kargs):
-  if isinstance(cmd, types.StringTypes):
+  if isinstance(cmd, str):
     args = shlex.split(cmd)
   else:
     args = cmd
@@ -112,7 +112,10 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
 
 # run sub-process, expects failure
 def run_fail(cmd, **kargs):
-  args = shlex.split(cmd)
+  if isinstance(cmd, str):
+    args = shlex.split(cmd)
+  else:
+    args = cmd
   kargs['stdout'] = PIPE
   kargs['stderr'] = PIPE
   if options.verbose:
@@ -128,7 +131,10 @@ def run_fail(cmd, **kargs):
 def run_bg(cmd, **kargs):
   if options.verbose:
     print "run:", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
-  args = shlex.split(cmd)
+  if isinstance(cmd, str):
+    args = shlex.split(cmd)
+  else:
+    args = cmd
   proc = Popen(args=args, **kargs)
   proc.args = args
   _add_proc(proc)
@@ -199,13 +205,64 @@ def zk_check(ping_tablets=False):
   else:
     run_vtctl('Validate /zk/global/vt/keyspaces')
 
+# vars helpers
+def get_vars(port):
+  """
+  Returns the dict for vars, from a vtxxx process, or None
+  if we can't get them.
+  """
+  try:
+    f = urllib.urlopen('http://localhost:%u/debug/vars' % port)
+    data = f.read()
+    f.close()
+  except:
+    return None
+  return json.loads(data)
+
+# zkocc helpers
+def zkocc_start(port=14850, cells=['test_nj'], extra_params=[]):
+  prog_compile(['zkocc'])
+  logfile = tmp_root + '/zkocc_%u.log' % port
+  args = [vtroot+'/bin/zkocc',
+          '-port', str(port),
+          '-logfile', logfile,
+          '-log.level', 'INFO',
+          ] + extra_params + cells
+  sp = run_bg(args)
+
+  # wait for vars
+  timeout = 5.0
+  while True:
+    v = get_vars(port)
+    if v == None:
+      debug("  zkocc not answering at /debug/vars, waiting...")
+    else:
+      break
+
+    debug("sleeping a bit while we wait")
+    time.sleep(0.1)
+    timeout -= 0.1
+    if timeout <= 0:
+      raise TestError("timeout waiting for zkocc")
+
+  return sp
+
+def zkocc_kill(sp):
+  kill_sub_process(sp)
+  sp.wait()
+
 # vtctl helpers
-def run_vtctl(clargs, log_level='WARNING', **kwargs):
+def run_vtctl(clargs, log_level='WARNING', auto_log=False, **kwargs):
+  if auto_log:
+    if options.verbose:
+      log_level='INFO'
+    else:
+      log_level='ERROR'
   prog_compile(['vtctl'])
   args = [vtroot+'/bin/vtctl',
           '-log.level='+log_level,
           '-logfile=/dev/null']
-  if isinstance(clargs, types.StringTypes):
+  if isinstance(clargs, str):
     cmd = " ".join(args) + ' ' + clargs
   else:
     cmd = args + clargs

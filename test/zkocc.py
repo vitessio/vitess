@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 from optparse import OptionParser
+import logging
 import os
 import socket
 import tempfile
@@ -16,8 +17,7 @@ vtroot = os.environ['VTROOT']
 hostname = socket.gethostname()
 
 def setup():
-  utils.prog_compile(['zkocc',
-                      'zkclient2',
+  utils.prog_compile(['zkclient2',
                       ])
   utils.zk_setup()
 
@@ -62,8 +62,7 @@ def _check_zk_output(cmd, expected):
   if out != expected:
     raise utils.TestError('unexpected zk zkocc output: ', cmd, "is", out, "but expected", expected)
 
-  if utils.options.verbose:
-    print "Matched:", out
+  utils.debug("Matched: " + out)
 
 def _format_time(timeFromBson):
   (tz, val) = timeFromBson
@@ -75,7 +74,7 @@ def run_test_zkocc():
   _populate_zk()
 
   # preload the test_nj cell
-  zkocc_14850 = utils.run_bg(vtroot+'/bin/zkocc -port=14850 -connect-timeout=2s -cache-refresh-interval=1s test_nj')
+  zkocc_14850 = utils.zkocc_start(extra_params=['-connect-timeout=2s', '-cache-refresh-interval=1s'])
   time.sleep(1)
 
   # create a python client. The first address is bad, will test the retry logic
@@ -85,12 +84,14 @@ def run_test_zkocc():
   # test failure for a python client that cannot connect
   bad_zkocc_client = zkocc.ZkOccConnection("localhost:14848,localhost:14849", 30)
   bad_zkocc_client.dial()
+  logging.getLogger().setLevel(logging.ERROR)
   try:
     bad_zkocc_client.get("/zk/test_nj/zkocc1/data1")
     raise utils.TestError('exception expected')
   except zkocc.ZkOccError as e:
     if str(e) != "zkocc get command failed 2 times: ('get failed', GoRpcError(error(111, 'Connection refused'), 'ZkReader.Get'))":
       raise utils.TestError('Unexpected exception: ', str(e))
+  logging.getLogger().setLevel(logging.WARNING)
 
   # get test
   out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1', trap_output=True)
@@ -167,7 +168,7 @@ Stale = false
 
   utils.kill_sub_process(querier)
 
-  print "Checking", filename
+  utils.debug("Checking " + filename)
   fd = open(filename, "r")
   state = 0
   for line in fd:
@@ -190,27 +191,29 @@ Stale = false
     raise utils.TestError('unexpected ended stale state')
   fd.close()
 
-  utils.kill_sub_process(zkocc_14850)
-  zkocc_14850.wait()
+  utils.zkocc_kill(zkocc_14850)
 
   # check that after the server is gone, the python client fails correctly
+  logging.getLogger().setLevel(logging.ERROR)
   try:
     zkocc_client.get("/zk/test_nj/zkocc1/data1")
     raise utils.TestError('exception expected')
   except zkocc.ZkOccError as e:
     if str(e) != "zkocc get command failed 2 times: ('get failed', GoRpcError(error(111, 'Connection refused'), 'ZkReader.Get'))":
       raise utils.TestError('Unexpected exception: ', str(e))
+  logging.getLogger().setLevel(logging.WARNING)
 
 @utils.test_case
 def run_test_zkocc_qps():
   _populate_zk()
 
   # preload the test_nj cell
-  zkocc_14850 = utils.run_bg(vtroot+'/bin/zkocc -port=14850 test_nj')
+  zkocc_14850 = utils.zkocc_start()
+
   qpser = utils.run_bg(vtroot+'/bin/zkclient2 -server localhost:14850 -mode qps /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2')
   time.sleep(10)
   utils.kill_sub_process(qpser)
-  utils.kill_sub_process(zkocc_14850)
+  utils.zkocc_kill(zkocc_14850)
 
 def run_all():
   run_test_zkocc()

@@ -1,9 +1,8 @@
-import os
 import json
+import os
 import shutil
 import sys
 import time
-import urllib
 import warnings
 # Dropping a table inexplicably produces a warning despite
 # the "IF EXISTS" clause. Squelch these warnings.
@@ -259,22 +258,9 @@ class Tablet(object):
 
     return self.proc
 
-  def get_vttablet_vars(self, port=None):
-    """
-    Returns the dict for vars, from the vttablet process, or None
-    if we can't get them.
-    """
-    try:
-      f = urllib.urlopen('http://localhost:%u/debug/vars' % (port or self.port))
-      data = f.read()
-      f.close()
-    except:
-      return None
-    return json.loads(data)
-
   def wait_for_vttablet_state(self, expected, timeout=5.0, port=None):
     while True:
-      v = self.get_vttablet_vars(port)
+      v = utils.get_vars(port or self.port)
       if v == None:
         utils.debug("  vttablet not answering at /debug/vars, waiting...")
       else:
@@ -283,7 +269,7 @@ class Tablet(object):
         else:
           s = v['Voltron']['State']
           if s != expected:
-            utils.debug("  vttablet in state %u != %u" % (s, expected))
+            utils.debug("  vttablet in state %s != %s" % (s, expected))
           else:
             break
 
@@ -291,7 +277,7 @@ class Tablet(object):
       time.sleep(0.1)
       timeout -= 0.1
       if timeout <= 0:
-        raise utils.TestError("timeout waiting for state %u" % expected)
+        raise utils.TestError("timeout waiting for state %s" % expected)
 
   def _write_db_configs_file(self):
     config = dict(self.default_db_config)

@@ -479,7 +479,7 @@ def run_test_reparent_down_master():
   utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_alias)
 
   # Force the scrap action in zk even though tablet is not accessible.
-  utils.run_vtctl('ScrapTablet -force -skip-rebuild ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('ScrapTablet -force -skip-rebuild ' + tablet_62344.zk_tablet_path, auto_log=True)
 
   utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING ChangeSlaveType -force %s idle' %
                  tablet_62344.zk_tablet_path)

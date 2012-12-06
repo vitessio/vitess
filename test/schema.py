@@ -115,15 +115,15 @@ def run_test_complex_schema():
   shard_1_replica1.start_vttablet()
 
   # make sure all replication is good
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path)
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path, auto_log=True)
 
   # shard 0: apply the schema using a complex schema upgrade, no
   # reparenting yet
   utils.run_vtctl(['ApplySchemaShard',
                    '-sql='+create_vt_select_test[0],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/0'],
-                  log_level='INFO')
+                  auto_log=True)
 
   # check all expected hosts have the change:
   # - master won't have it as it's a complex change
@@ -142,7 +142,7 @@ def run_test_complex_schema():
                    '-stop-replication',
                    '-sql='+create_vt_select_test[0],
                    shard_0_master.zk_tablet_path],
-                  log_level='INFO')
+                  auto_log=True)
   check_tables(shard_0_master, 1)
 
   # shard 0: apply schema change to just backup directly
@@ -151,7 +151,7 @@ def run_test_complex_schema():
                    '-stop-replication',
                    '-sql='+create_vt_select_test[0],
                    shard_0_backup.zk_tablet_path],
-                  log_level='INFO')
+                  auto_log=True)
   check_tables(shard_0_backup, 1)
 
   # shard 0: apply new schema change, with reparenting
@@ -159,7 +159,7 @@ def run_test_complex_schema():
                    '-new-parent='+shard_0_replica1.zk_tablet_path,
                    '-sql='+create_vt_select_test[1],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/0'],
-                  log_level='INFO')
+                  auto_log=True)
   check_tables(shard_0_master, 1)
   check_tables(shard_0_replica1, 2)
   check_tables(shard_0_replica2, 2)
@@ -183,12 +183,12 @@ def run_test_complex_schema():
                    '-simple',
                    '-sql='+create_vt_select_test[0],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/1'],
-                  log_level='INFO')
+                  auto_log=True)
   utils.run_vtctl(['ApplySchemaShard',
                    '-simple',
                    '-sql='+create_vt_select_test[1],
                    '/zk/global/vt/keyspaces/test_keyspace/shards/1'],
-                  log_level='INFO')
+                  auto_log=True)
   check_tables(shard_1_master, 2)
   check_tables(shard_1_replica1, 2)
 
@@ -197,7 +197,7 @@ def run_test_complex_schema():
                    '-simple',
                    '-sql='+create_vt_select_test[2],
                    '/zk/global/vt/keyspaces/test_keyspace'],
-                  log_level='INFO')
+                  auto_log=True)
 
   # check all expected hosts have the change
   check_tables(shard_0_master, 1) # was stuck a long time ago as scrap
@@ -212,7 +212,7 @@ def run_test_complex_schema():
   utils.run_vtctl(['ApplySchemaKeyspace',
                    '-sql='+create_vt_select_test[3],
                    '/zk/global/vt/keyspaces/test_keyspace'],
-                  log_level='INFO')
+                  auto_log=True)
 
   # check all expected hosts have the change:
   # - master won't have it as it's a complex change
@@ -234,7 +234,7 @@ def run_test_complex_schema():
   if oldCount <= 5:
     raise utils.TestError('Not enough actionlog before: %u' % oldCount)
 
-  utils.run_vtctl('PruneActionLogs -keep-count=5 '+shard_0_replica1.zk_tablet_path+'/actionlog', log_level='INFO')
+  utils.run_vtctl('PruneActionLogs -keep-count=5 '+shard_0_replica1.zk_tablet_path+'/actionlog', auto_log=True)
 
   out, err = utils.run(vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
   newLines = out.splitlines()
