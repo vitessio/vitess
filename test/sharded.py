@@ -66,10 +66,10 @@ primary key (id)
 ) Engine=InnoDB'''
 
 def check_rows(to_look_for, driver="vtdb"):
-  out, err = utils.vttablet_query(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
+  out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
   for pattern in to_look_for:
     if err.find(pattern) == -1:
-      print "vttablet_query returned:"
+      print "vtclient2 returned:"
       print out
       print err
       raise utils.TestError('wrong vtclient2 output, missing: ' + pattern)
@@ -77,10 +77,10 @@ def check_rows(to_look_for, driver="vtdb"):
     print out, err
 
 def check_rows_schema_diff(driver):
-  out, err = utils.vttablet_query(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
+  out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
   if (err.find("column[0] name mismatch: id != msg") == -1 and
       err.find("column[0] name mismatch: msg != id") == -1):
-    print "vttablet_query returned:"
+    print "vtclient2 returned:"
     print out
     print err
     raise utils.TestError('wrong vtclient2 output, missing "name mismatch" of some kind')
@@ -160,7 +160,7 @@ def run_test_sharding():
               "10\ttest 10"])
 
   # write a value, re-read them all
-  utils.vttablet_query(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (2, 'test 2')", driver="vtdb", verbose=True)
+  utils.vtclient2(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (2, 'test 2')", driver="vtdb", verbose=True)
   check_rows(["Index\tid\tmsg",
               "1\ttest 1",
               "2\ttest 2",

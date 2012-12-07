@@ -695,11 +695,11 @@ def run_test_vttablet_authenticated():
 
   tablet_62344.populate('vt_test_keyspace', create_vt_select_test,
                         populate_vt_select_test)
-  agent = tablet_62344.start_vttablet(port=6770, auth=True)
+  agent = tablet_62344.start_vttablet(auth=True)
   utils.run_vtctl('SetReadWrite ' + tablet_62344.zk_tablet_path)
 
-  err, out = utils.vttablet_query(uid=6770, dbname='vt_test_keyspace', user="ala", password=r"ma\ kota", query="select * from vt_select_test")
-  if "Row count: " not in out:
+  err, out = tablet_62344.vquery('select * from vt_select_test', dbname='vt_test_keyspace', user='ala', password=r'ma kota')
+  if 'Row count: ' not in out:
     raise utils.TestError("query didn't go through: %s, %s" % (err, out))
 
   utils.kill_sub_process(agent)

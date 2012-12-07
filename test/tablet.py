@@ -117,27 +117,10 @@ class Tablet(object):
       conn.close()
 
   def vquery(self, query, dbname='', user=None, password=None, driver=None,
-                     verbose=False):
-    utils.prog_compile(['vtclient2'])
-    if (user is None) != (password is None):
-      raise TypeError("you should provide either both or none of user and password")
-
-    # for ZK paths to not have // in the path, that confuses things
-    if dbname.startswith('/'):
-      dbname = dbname[1:]
-    server = "localhost:%u/%s" % (self.port, dbname)
-    if user is not None:
-      server = "%s:%s@%s" % (user, password, server)
-
-    cmdline = [vtroot+'/bin/vtclient2', '-server', server]
-    if driver:
-      cmdline.extend(["-driver", driver])
-    if verbose:
-      cmdline.append("-verbose")
-    cmdline.append('"%s"' % query)
-
-    return utils.run(' '.join(cmdline), trap_output=True)
-
+             verbose=False, raise_on_error=True):
+    return utils.vtclient2(self.port, dbname, query, user=user,
+                           password=password, driver=driver,
+                           verbose=verbose, raise_on_error=raise_on_error)
 
   def assert_table_count(self, dbname, table, n, where=''):
     result = self.mquery(dbname, 'select count(*) from ' + table + ' ' + where)
@@ -239,16 +222,18 @@ class Tablet(object):
       self.start_memcache()
 
     args = [os.path.join(vtroot, 'bin', 'vttablet'),
-            '-port %s' % (port or self.port),
-            '-tablet-path %s' % self.zk_tablet_path,
+            '-port', '%s' % (port or self.port),
+            '-tablet-path', self.zk_tablet_path,
             '-logfile', self.logfile,
-            '-log.level INFO',
+            '-log.level', 'INFO',
             '-db-configs-file', self._write_db_configs_file(),
             '-debug-querylog-file', self.querylog_file]
     if auth:
       args.extend(['-auth-credentials', os.path.join(vttop, 'test', 'test_data', 'authcredentials_test.json')])
 
-    self.proc = utils.run_bg(' '.join(args), stderr=utils.devnull)
+    stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
+    self.proc = utils.run_bg(args, stderr=stderr_fd)
+    stderr_fd.close()
 
     # wait for zookeeper PID just to be sure we have it
     utils.run(vtroot+'/bin/zk wait -e ' + self.zk_pid, stdout=utils.devnull)
