@@ -53,7 +53,7 @@ cases = [
          sql='select /* multi-table join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id',
          result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
          rewritten=[
-           'select a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id where 1 != 1',
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b where 1 != 1',
            'select /* multi-table join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
 
 
@@ -140,6 +140,18 @@ cases = [
          rewritten=[
            'select * from vtocc_a where 1 != 1',
            'select /* order */ * from vtocc_a order by id desc limit 10001']),
+    Case(doc='select in select list',
+         sql='select (select eid from vtocc_a where id = 1), eid from vtocc_a where id = 2',
+         result=[(1L, 1L)],
+         rewritten=[
+           'select (select eid from vtocc_a where 1 != 1), eid from vtocc_a where 1 != 1',
+           'select (select eid from vtocc_a where id = 1), eid from vtocc_a where id = 2 limit 10001']),
+    Case(doc='select in from clause',
+         sql='select eid from (select eid from vtocc_a where id=2) as a',
+         result=[(1L,)],
+         rewritten=[
+           'select eid from (select eid from vtocc_a where 1 != 1) as a where 1 != 1',
+           'select eid from (select eid from vtocc_a where id = 2) as a limit 10001']),
 
     MultiCase(
         'simple insert',

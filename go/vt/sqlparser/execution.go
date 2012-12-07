@@ -906,36 +906,41 @@ func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) 
 //-----------------------------------------------
 // Query Generation
 func (node *Node) GenerateFullQuery() *ParsedQuery {
-	buf := NewTrackedBuffer()
-	node.Format(buf)
-	return NewParsedQuery(buf)
+	buf := NewTrackedBuffer(nil)
+	FormatNode(buf, node)
+	return buf.ParsedQuery()
 }
 
 func (node *Node) GenerateFieldQuery() *ParsedQuery {
-	buf := NewTrackedBuffer()
-	node.generateImpossibleQuery(buf)
-	if len(buf.bind_locations) != 0 {
+	buf := NewTrackedBuffer(FormatImpossible)
+	FormatImpossible(buf, node)
+	if len(buf.bindLocations) != 0 {
 		panic(NewParserError("Syntax error: Bind variables not allowed in select expressions"))
 	}
-	return NewParsedQuery(buf)
+	return buf.ParsedQuery()
 }
 
-func (node *Node) generateImpossibleQuery(buf *TrackedBuffer) {
+// FormatImpossible is a callback function used by TrackedBuffer
+// to generate a modified version of the query where all selects
+// have impossible where clauses. It overrides a few node types
+// and passes the rest down to the default FormatNode.
+func FormatImpossible(buf *TrackedBuffer, node *Node) {
 	switch node.Type {
-	case UNION, UNION_ALL, MINUS, EXCEPT:
-		node.At(0).generateImpossibleQuery(buf)
-		fmt.Fprintf(buf, " %s ", node.Value)
-		node.At(1).generateImpossibleQuery(buf)
 	case SELECT:
-		Fprintf(buf, "select %v from %v where 1 != 1",
+		buf.Fprintf("select %v from %v where 1 != 1",
 			node.At(SELECT_EXPR_OFFSET),
 			node.At(SELECT_FROM_OFFSET),
 		)
+	case JOIN, STRAIGHT_JOIN, LEFT, RIGHT, CROSS, NATURAL:
+		// We skip ON clauses (if any)
+		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
+	default:
+		FormatNode(buf, node)
 	}
 }
 
 func (node *Node) GenerateSelectLimitQuery() *ParsedQuery {
-	buf := NewTrackedBuffer()
+	buf := NewTrackedBuffer(nil)
 	if node.Type == SELECT {
 		limit := node.At(SELECT_LIMIT_OFFSET)
 		if limit.Len() == 0 {
@@ -943,12 +948,12 @@ func (node *Node) GenerateSelectLimitQuery() *ParsedQuery {
 			defer limit.Pop()
 		}
 	}
-	node.Format(buf)
-	return NewParsedQuery(buf)
+	FormatNode(buf, node)
+	return buf.ParsedQuery()
 }
 
 func (node *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
-	buf := NewTrackedBuffer()
+	buf := NewTrackedBuffer(nil)
 	limit := node.At(SELECT_LIMIT_OFFSET)
 	if limit.Len() == 0 {
 		limit.PushLimit()
@@ -956,45 +961,45 @@ func (node *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
 	}
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
-	Fprintf(buf, " from %v%v%v%v",
+	buf.Fprintf(" from %v%v%v%v",
 		node.At(SELECT_FROM_OFFSET),
 		node.At(SELECT_WHERE_OFFSET),
 		node.At(SELECT_ORDER_OFFSET),
 		limit)
-	return NewParsedQuery(buf)
+	return buf.ParsedQuery()
 }
 
 func (node *Node) GenerateSelectOuterQuery(tableInfo *schema.Table) *ParsedQuery {
-	buf := NewTrackedBuffer()
+	buf := NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
-	Fprintf(buf, " from %v where ", node.At(SELECT_FROM_OFFSET))
+	buf.Fprintf(" from %v where ", node.At(SELECT_FROM_OFFSET))
 	generatePKWhere(buf, tableInfo.Indexes[0])
-	return NewParsedQuery(buf)
+	return buf.ParsedQuery()
 }
 
 func (node *Node) GenerateInsertOuterQuery() *ParsedQuery {
-	buf := NewTrackedBuffer()
-	Fprintf(buf, "insert %vinto %v%v values ",
+	buf := NewTrackedBuffer(nil)
+	buf.Fprintf("insert %vinto %v%v values ",
 		node.At(INSERT_COMMENT_OFFSET), node.At(INSERT_TABLE_OFFSET), node.At(INSERT_COLUMN_LIST_OFFSET))
 	writeArg(buf, "_rowValues")
-	Fprintf(buf, "%v", node.At(INSERT_ON_DUP_OFFSET))
-	return NewParsedQuery(buf)
+	buf.Fprintf("%v", node.At(INSERT_ON_DUP_OFFSET))
+	return buf.ParsedQuery()
 }
 
 func (node *Node) GenerateUpdateOuterQuery(pkIndex *schema.Index) *ParsedQuery {
-	buf := NewTrackedBuffer()
-	Fprintf(buf, "update %v%v set %v where ",
+	buf := NewTrackedBuffer(nil)
+	buf.Fprintf("update %v%v set %v where ",
 		node.At(UPDATE_COMMENT_OFFSET), node.At(UPDATE_TABLE_OFFSET), node.At(UPDATE_LIST_OFFSET))
 	generatePKWhere(buf, pkIndex)
-	return NewParsedQuery(buf)
+	return buf.ParsedQuery()
 }
 
 func (node *Node) GenerateDeleteOuterQuery(pkIndex *schema.Index) *ParsedQuery {
-	buf := NewTrackedBuffer()
-	Fprintf(buf, "delete %vfrom %v where ", node.At(DELETE_COMMENT_OFFSET), node.At(DELETE_TABLE_OFFSET))
+	buf := NewTrackedBuffer(nil)
+	buf.Fprintf("delete %vfrom %v where ", node.At(DELETE_COMMENT_OFFSET), node.At(DELETE_TABLE_OFFSET))
 	generatePKWhere(buf, pkIndex)
-	return NewParsedQuery(buf)
+	return buf.ParsedQuery()
 }
 
 func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
@@ -1013,7 +1018,7 @@ func writeArg(buf *TrackedBuffer, arg string) {
 	buf.WriteString(":")
 	buf.WriteString(arg)
 	end := buf.Len()
-	buf.bind_locations = append(buf.bind_locations, BindLocation{start, end - start})
+	buf.bindLocations = append(buf.bindLocations, BindLocation{start, end - start})
 }
 
 func (node *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) *ParsedQuery {
@@ -1063,7 +1068,7 @@ func (node *Node) PushLimit() {
 }
 
 func GenerateSubquery(columns []string, table *Node, where *Node, order *Node, limit *Node, for_update bool) *ParsedQuery {
-	buf := NewTrackedBuffer()
+	buf := NewTrackedBuffer(nil)
 	if limit.Len() == 0 {
 		limit.PushLimit()
 		defer limit.Pop()
@@ -1074,11 +1079,11 @@ func GenerateSubquery(columns []string, table *Node, where *Node, order *Node, l
 		fmt.Fprintf(buf, "%s, ", columns[i])
 	}
 	fmt.Fprintf(buf, "%s", columns[i])
-	Fprintf(buf, " from %v%v%v%v", table, where, order, limit)
+	buf.Fprintf(" from %v%v%v%v", table, where, order, limit)
 	if for_update {
-		Fprintf(buf, " for update")
+		buf.Fprintf(" for update")
 	}
-	return NewParsedQuery(buf)
+	return buf.ParsedQuery()
 }
 
 func writeColumnList(buf *TrackedBuffer, columns []schema.TableColumn) {

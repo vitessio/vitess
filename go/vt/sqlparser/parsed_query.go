@@ -12,26 +12,13 @@ import (
 	"code.google.com/p/vitess/go/sqltypes"
 )
 
-type TrackedBuffer struct {
-	*bytes.Buffer
-	bind_locations []BindLocation
-}
-
 type BindLocation struct {
 	Offset, Length int
-}
-
-func NewTrackedBuffer() *TrackedBuffer {
-	return &TrackedBuffer{bytes.NewBuffer(make([]byte, 0, 128)), make([]BindLocation, 0, 4)}
 }
 
 type ParsedQuery struct {
 	Query         string
 	BindLocations []BindLocation
-}
-
-func NewParsedQuery(buf *TrackedBuffer) *ParsedQuery {
-	return &ParsedQuery{buf.String(), buf.bind_locations}
 }
 
 type EncoderFunc func(value interface{}) ([]byte, error)
