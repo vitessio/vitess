@@ -49,12 +49,47 @@ cases = [
            'select a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b where 1 != 1',
            'select /* multi-table */ a.eid, a.id, b.eid, b.id from vtocc_a as a, vtocc_b as b limit 10001']),
 
-    Case(doc='multi-table join',
-         sql='select /* multi-table join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id',
+    Case(doc='join',
+         sql='select /* join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id',
          result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
          rewritten=[
            'select a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b where 1 != 1',
-           'select /* multi-table join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
+           'select /* join */ a.eid, a.id, b.eid, b.id from vtocc_a as a join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
+
+    Case(doc='straight_join',
+         sql='select /* straight_join */ a.eid, a.id, b.eid, b.id from vtocc_a as a straight_join vtocc_b as b on a.eid = b.eid and a.id = b.id',
+         result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
+         rewritten=[
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a straight_join vtocc_b as b where 1 != 1',
+           'select /* straight_join */ a.eid, a.id, b.eid, b.id from vtocc_a as a straight_join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
+
+    Case(doc='cross join',
+         sql='select /* cross join */ a.eid, a.id, b.eid, b.id from vtocc_a as a cross join vtocc_b as b on a.eid = b.eid and a.id = b.id',
+         result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
+         rewritten=[
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a cross join vtocc_b as b where 1 != 1',
+           'select /* cross join */ a.eid, a.id, b.eid, b.id from vtocc_a as a cross join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
+
+    Case(doc='natural join',
+         sql='select /* natural join */ a.eid, a.id, b.eid, b.id from vtocc_a as a natural join vtocc_b as b',
+         result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
+         rewritten=[
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a natural join vtocc_b as b where 1 != 1',
+           'select /* natural join */ a.eid, a.id, b.eid, b.id from vtocc_a as a natural join vtocc_b as b limit 10001']),
+
+    Case(doc='left join',
+         sql='select /* left join */ a.eid, a.id, b.eid, b.id from vtocc_a as a left join vtocc_b as b on a.eid = b.eid and a.id = b.id',
+         result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
+         rewritten=[
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a left join vtocc_b as b on 1 != 1 where 1 != 1',
+           'select /* left join */ a.eid, a.id, b.eid, b.id from vtocc_a as a left join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
+
+    Case(doc='right join',
+         sql='select /* right join */ a.eid, a.id, b.eid, b.id from vtocc_a as a right join vtocc_b as b on a.eid = b.eid and a.id = b.id',
+         result=[(1L, 1L, 1L, 1L), (1L, 2L, 1L, 2L)],
+         rewritten=[
+           'select a.eid, a.id, b.eid, b.id from vtocc_a as a right join vtocc_b as b on 1 != 1 where 1 != 1',
+           'select /* right join */ a.eid, a.id, b.eid, b.id from vtocc_a as a right join vtocc_b as b on a.eid = b.eid and a.id = b.id limit 10001']),
 
 
     Case(doc='complex select list',

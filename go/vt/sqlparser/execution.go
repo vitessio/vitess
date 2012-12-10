@@ -931,9 +931,12 @@ func FormatImpossible(buf *TrackedBuffer, node *Node) {
 			node.At(SELECT_EXPR_OFFSET),
 			node.At(SELECT_FROM_OFFSET),
 		)
-	case JOIN, STRAIGHT_JOIN, LEFT, RIGHT, CROSS, NATURAL:
+	case JOIN, STRAIGHT_JOIN, CROSS, NATURAL:
 		// We skip ON clauses (if any)
 		buf.Fprintf("%v %s %v", node.At(0), node.Value, node.At(1))
+	case LEFT, RIGHT:
+		// ON clause is requried
+		buf.Fprintf("%v %s %v on 1 != 1", node.At(0), node.Value, node.At(1))
 	default:
 		FormatNode(buf, node)
 	}
