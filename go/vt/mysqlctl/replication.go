@@ -173,7 +173,7 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) (err error) {
 		if rowMap["Slave_IO_Running"] == "Yes" && rowMap["Slave_SQL_Running"] == "Yes" {
 			return nil
 		}
-		time.Sleep(1e9)
+		time.Sleep(time.Second)
 	}
 
 	errorKeys := []string{"Last_Error", "Last_IO_Error", "Last_SQL_Error"}
@@ -387,7 +387,7 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 				return nil
 			}
 		}
-		time.Sleep(1e9)
+		time.Sleep(time.Second)
 	}
 
 	errorKeys := []string{"Last_Error", "Last_IO_Error", "Last_SQL_Error"}

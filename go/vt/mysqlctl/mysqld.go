@@ -99,7 +99,7 @@ func Start(mt *Mysqld) error {
 	// give it some time to succeed - usually by the time the socket emerges
 	// we are in good shape
 	for i := 0; i < MysqlWaitTime; i++ {
-		time.Sleep(1e9)
+		time.Sleep(time.Second)
 		_, statErr := os.Stat(mt.config.SocketFile)
 		if statErr == nil {
 			return nil
@@ -146,7 +146,7 @@ func Shutdown(mt *Mysqld, waitForMysqld bool) error {
 			if statErr != nil && statErr.(*os.PathError).Err == syscall.ENOENT {
 				return nil
 			}
-			time.Sleep(1e9)
+			time.Sleep(time.Second)
 		}
 		return errors.New("gave up waiting for mysqld to stop")
 	}

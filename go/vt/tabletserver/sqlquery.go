@@ -91,7 +91,7 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 	sq.statemu.Unlock()
 
 	// Try connecting. disallowQueries can change the state to ABORT during this time.
-	waitTime := time.Duration(1e9)
+	waitTime := time.Second
 	for {
 		c, err := mysql.Connect(dbconfig.MysqlParams())
 		if err == nil {
@@ -100,8 +100,8 @@ func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
 		}
 		relog.Error("%v", err)
 		time.Sleep(waitTime)
-		// Cap at 32e9
-		if waitTime < time.Duration(30e9) {
+		// Cap at 32 seconds
+		if waitTime < 30*time.Second {
 			waitTime = waitTime * 2
 		}
 		if atomic.LoadInt32(&sq.state) == ABORT {

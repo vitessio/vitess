@@ -83,7 +83,7 @@ func (zkd *Zkd) Start() error {
 		conn, connErr := net.Dial("tcp", zkAddr)
 		if connErr != nil {
 			err = connErr
-			time.Sleep(1e9)
+			time.Sleep(time.Second)
 			continue
 		} else {
 			err = nil

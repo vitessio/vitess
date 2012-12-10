@@ -19,7 +19,7 @@ func init() {
 	if testing.Short() {
 		return
 	}
-	_zconn, _, err := zk.DialZk("localhost:2181", 1e9)
+	_zconn, _, err := zk.DialZk("localhost:2181", time.Second)
 	if err != nil {
 		log.Fatal("zk connect failed: %v", err.Error())
 	}
