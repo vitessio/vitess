@@ -83,9 +83,10 @@ func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) 
 }
 
 func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for shutdown")
 	subFlags.Parse(args)
 
-	if mysqlErr := mysqlctl.Shutdown(mysqld, true); mysqlErr != nil {
+	if mysqlErr := mysqlctl.Shutdown(mysqld, true, *waitTime); mysqlErr != nil {
 		relog.Fatal("failed shutdown mysql: %v", mysqlErr)
 	}
 }
@@ -106,9 +107,10 @@ func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 }
 
 func startCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Start(mysqld); err != nil {
+	if err := mysqlctl.Start(mysqld, *waitTime); err != nil {
 		relog.Fatal("failed start mysql: %v", err)
 	}
 }
@@ -135,9 +137,9 @@ var commands = []command{
 	command{"teardown", teardownCmd, "[-force]",
 		"Shuts mysqld down, and removes the directory"},
 
-	command{"start", startCmd, "",
+	command{"start", startCmd, "[-wait-time=20s]",
 		"Starts mysqld on an already 'init'-ed directory"},
-	command{"shutdown", shutdownCmd, "",
+	command{"shutdown", shutdownCmd, "[-wait-time=20s]",
 		"Shuts down mysqld, does not remove any file"},
 
 	command{"snapshot", snapshotCmd,
@@ -148,7 +150,7 @@ var commands = []command{
 		"Restores a full snapshot"},
 
 	command{"partialsnapshot", partialSnapshotCmd,
-		"[--start=<start key>] [--stop=<stop key>] [-compress-concurrency=3] <db name> <key name>",
+		"[-start=<start key>] [-stop=<stop key>] [-compress-concurrency=3] <db name> <key name>",
 		"Takes a partial snapshot using 'select * into' commands"},
 	command{"partialrestore", partialRestoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",

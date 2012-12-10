@@ -19,7 +19,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"code.google.com/p/vitess/go/mysql"
@@ -28,7 +27,7 @@ import (
 )
 
 const (
-	MysqlWaitTime = 20 // number of seconds to wait
+	MysqlWaitTime = 20 * time.Second // default number of seconds to wait
 )
 
 type CreateConnection func() (*mysql.Connection, error)
@@ -71,7 +70,7 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 	}
 }
 
-func Start(mt *Mysqld) error {
+func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	relog.Info("mysqlctl.Start")
 	// FIXME(szopa): add VtMysqlRoot to env.
 	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
@@ -98,14 +97,14 @@ func Start(mt *Mysqld) error {
 
 	// give it some time to succeed - usually by the time the socket emerges
 	// we are in good shape
-	for i := 0; i < MysqlWaitTime; i++ {
-		time.Sleep(time.Second)
+	for i := mysqlWaitTime; i >= 0; i -= time.Second {
 		_, statErr := os.Stat(mt.config.SocketFile)
 		if statErr == nil {
 			return nil
-		} else if statErr.(*os.PathError).Err != syscall.ENOENT {
+		} else if !os.IsNotExist(statErr) {
 			return statErr
 		}
+		time.Sleep(time.Second)
 	}
 	return errors.New(name + ": deadline exceeded waiting for " + mt.config.SocketFile)
 }
@@ -114,7 +113,7 @@ func Start(mt *Mysqld) error {
 This can actually take a *long* time if the buffer cache needs to be fully
 flushed - on the order of 20-30 minutes.
 */
-func Shutdown(mt *Mysqld, waitForMysqld bool) error {
+func Shutdown(mt *Mysqld, waitForMysqld bool, mysqlWaitTime time.Duration) error {
 	relog.Info("mysqlctl.Shutdown")
 	// possibly mysql is already shutdown, check for a few files first
 	_, socketPathErr := os.Stat(mt.config.SocketFile)
@@ -140,10 +139,9 @@ func Shutdown(mt *Mysqld, waitForMysqld bool) error {
 	// wait for mysqld to really stop. use the sock file as a proxy for that since
 	// we can't call wait() in a process we didn't start.
 	if waitForMysqld {
-		for i := 0; i < MysqlWaitTime; i++ {
+		for i := mysqlWaitTime; i >= 0; i -= time.Second {
 			_, statErr := os.Stat(mt.config.SocketFile)
-			// NOTE: dreaded PathError :(
-			if statErr != nil && statErr.(*os.PathError).Err == syscall.ENOENT {
+			if statErr != nil && os.IsNotExist(statErr) {
 				return nil
 			}
 			time.Sleep(time.Second)
@@ -198,7 +196,7 @@ func Init(mt *Mysqld) error {
 		relog.Error("failed unpacking %v: %v", dbTbzPath, tarErr)
 		return tarErr
 	}
-	if err = Start(mt); err != nil {
+	if err = Start(mt, MysqlWaitTime); err != nil {
 		relog.Error("failed starting, check %v", mt.config.ErrorLogPath)
 		return err
 	}
@@ -253,7 +251,7 @@ func (mt *Mysqld) createTopDir(dir string) error {
 	target := path.Join(VtDataRoot, dir)
 	_, err := os.Lstat(target)
 	if err != nil {
-		if err.(*os.PathError).Err == syscall.ENOENT {
+		if os.IsNotExist(err) {
 			topdir := path.Join(mt.TabletDir, dir)
 			relog.Info("creating directory %s", topdir)
 			return os.MkdirAll(topdir, 0775)
@@ -273,7 +271,7 @@ func (mt *Mysqld) createTopDir(dir string) error {
 
 func Teardown(mt *Mysqld, force bool) error {
 	relog.Info("mysqlctl.Teardown")
-	if err := Shutdown(mt, true); err != nil {
+	if err := Shutdown(mt, true, MysqlWaitTime); err != nil {
 		relog.Warning("failed mysqld shutdown: %v", err.Error())
 		if !force {
 			return err
