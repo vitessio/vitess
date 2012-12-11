@@ -189,6 +189,27 @@ cases = [
            'select eid from (select eid from vtocc_a where id = 2) as a limit 10001']),
 
     MultiCase(
+        'select in transaction',
+        ['begin',
+         Case(sql='select * from vtocc_a where eid = 2 and id = 1',
+              result=[],
+              rewritten=[
+                "select * from vtocc_a where 1 != 1",
+                "select * from vtocc_a where eid = 2 and id = 1 limit 10001"]),
+         Case(sql='select * from vtocc_a where eid = 2 and id = 1',
+              result=[],
+              rewritten=["select * from vtocc_a where eid = 2 and id = 1 limit 10001"]),
+         Case(sql="select %(bv)s from vtocc_a where eid = 2 and id = 1",
+              bindings={'bv': 1},
+              result=[],
+              rewritten=["select 1 from vtocc_a where eid = 2 and id = 1 limit 10001"]),
+         Case(sql="select %(bv)s from vtocc_a where eid = 2 and id = 1",
+              bindings={'bv': 'abcd'},
+              result=[],
+              rewritten=["select 'abcd' from vtocc_a where eid = 2 and id = 1 limit 10001"]),
+         'commit']),
+
+    MultiCase(
         'simple insert',
         ['begin',
          Case(sql="insert /* simple */ into vtocc_a values (2, 1, 'aaaa', 'bbbb')",

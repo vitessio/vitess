@@ -207,17 +207,21 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 	}
 	plan = &ExecPlan{splan, tableInfo, nil}
 	if plan.PlanId.IsSelect() {
-		conn := si.connPool.Get()
-		defer conn.Recycle()
-		sql := []byte(plan.FieldQuery.Query)
-		r, err := conn.ExecuteFetch(sql, 1, true)
-		logStats.QuerySources |= QUERY_SOURCE_MYSQL
-		logStats.NumberOfQueries += 1
-		logStats.AddRewrittenSql(sql)
-		if err != nil {
-			panic(NewTabletError(FAIL, "Error fetching fields: %v", err))
+		if plan.FieldQuery == nil {
+			relog.Warning("Cannot cache field info: %s", sql)
+		} else {
+			conn := si.connPool.Get()
+			defer conn.Recycle()
+			sql := []byte(plan.FieldQuery.Query)
+			r, err := conn.ExecuteFetch(sql, 1, true)
+			logStats.QuerySources |= QUERY_SOURCE_MYSQL
+			logStats.NumberOfQueries += 1
+			logStats.AddRewrittenSql(sql)
+			if err != nil {
+				panic(NewTabletError(FAIL, "Error fetching fields: %v", err))
+			}
+			plan.Fields = r.Fields
 		}
-		plan.Fields = r.Fields
 	} else if plan.PlanId == sqlparser.PLAN_DDL || plan.PlanId == sqlparser.PLAN_SET {
 		return plan
 	}

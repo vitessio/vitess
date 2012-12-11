@@ -155,6 +155,25 @@ select * from b
   "SetValue": null
 }
 
+# bind in select list
+select :bv from a
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "SELECT_LIST",
+  "TableName": "",
+  "FieldQuery": null,
+  "FullQuery": "select :bv from a limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # complex select list
 select eid+1 from a
 {

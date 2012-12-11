@@ -238,7 +238,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		default: // select or set in a transaction, just count as select
 			logStats.PlanType = "PASS_SELECT"
 			defer queryStats.Record("PASS_SELECT", time.Now())
-			reply = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+			reply = qe.execDirect(logStats, plan, conn)
 		}
 	} else if plan.ConnectionId != 0 {
 		conn := qe.reservedPool.Get(plan.ConnectionId)
@@ -246,11 +246,11 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		if plan.PlanId.IsSelect() {
 			logStats.PlanType = "PASS_SELECT"
 			defer queryStats.Record("PASS_SELECT", time.Now())
-			reply = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+			reply = qe.execDirect(logStats, plan, conn)
 		} else if plan.PlanId == sqlparser.PLAN_SET {
 			logStats.PlanType = "SET"
 			defer queryStats.Record("SET", time.Now())
-			reply = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		} else {
 			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))
 		}
@@ -417,6 +417,9 @@ func (qe *QueryEngine) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan)
 func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	result = &mproto.QueryResult{}
 	tableInfo := plan.TableInfo
+	if plan.Fields == nil {
+		panic("unexpected")
+	}
 	result.Fields = plan.Fields
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
@@ -480,9 +483,30 @@ func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, c
 	return dbrow
 }
 
+// execDirect always sends the query to mysql
+func (qe *QueryEngine) execDirect(logStats *sqlQueryStats, plan *CompiledPlan, conn PoolConnection) (result *mproto.QueryResult) {
+	if plan.Fields != nil {
+		result = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+		result.Fields = plan.Fields
+		return
+	}
+	result = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+	return
+}
+
+// execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
+// reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
 func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
-	result = qe.qFetch(logStats, plan, plan.FullQuery, nil)
-	result.Fields = plan.Fields
+	if plan.Fields != nil {
+		result = qe.qFetch(logStats, plan, plan.FullQuery, nil)
+		result.Fields = plan.Fields
+		return
+	}
+	waitingForConnectionStart := time.Now()
+	conn := qe.connPool.Get()
+	logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
+	defer conn.Recycle()
+	result = qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 	return
 }
 
@@ -609,7 +633,7 @@ func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, pla
 		qe.activePool.SetIdleTimeout(time.Duration(t))
 		return &mproto.QueryResult{}
 	}
-	return qe.fullFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+	return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 }
 
 func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []sqltypes.Value) (result *mproto.QueryResult) {

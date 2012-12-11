@@ -312,12 +312,13 @@ class TestNocache(framework.TestCase):
     self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
 
   def test_bind_in_select(self):
-    try:
-      bv = {}
-      bv['bv'] = 1
-      self.env.execute('select %(bv)s from vtocc_test', bv)
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Syntax error")
+    bv = {}
+    bv['bv'] = 1
+    cu = self.env.execute('select %(bv)s from vtocc_test', bv)
+    self.assertEqual(cu.description, [('1', 8)])
+    bv['bv'] = 'abcd'
+    cu = self.env.execute('select %(bv)s from vtocc_test', bv)
+    self.assertEqual(cu.description, [('abcd', 253)])
 
   def test_types(self):
     self._verify_mismatch("insert into vtocc_ints(tiny) values('str')")

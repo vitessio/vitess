@@ -222,6 +222,12 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{PlanId: PLAN_PASS_SELECT, FieldQuery: node.GenerateFieldQuery(), FullQuery: node.GenerateSelectLimitQuery()}
 
+	// There are bind variables in the SELECT list
+	if plan.FieldQuery == nil {
+		plan.Reason = REASON_SELECT_LIST
+		return plan
+	}
+
 	if !node.execAnalyzeSelectStructure() {
 		plan.Reason = REASON_SELECT
 		return plan
@@ -915,7 +921,7 @@ func (node *Node) GenerateFieldQuery() *ParsedQuery {
 	buf := NewTrackedBuffer(FormatImpossible)
 	FormatImpossible(buf, node)
 	if len(buf.bindLocations) != 0 {
-		panic(NewParserError("Syntax error: Bind variables not allowed in select expressions"))
+		return nil
 	}
 	return buf.ParsedQuery()
 }
