@@ -23,6 +23,8 @@ import (
 
 const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"
 
+const maxTableCount = 10000
+
 type ExecPlan struct {
 	*sqlparser.ExecPlan
 	TableInfo *TableInfo
@@ -66,7 +68,7 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 	}
 
 	si.cachePool = cachePool
-	tables, err := conn.ExecuteFetch([]byte(base_show_tables), 10000, false)
+	tables, err := conn.ExecuteFetch([]byte(base_show_tables), maxTableCount, false)
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
@@ -116,7 +118,7 @@ func (si *SchemaInfo) Close() {
 func (si *SchemaInfo) Reload() {
 	conn := si.connPool.Get()
 	defer conn.Recycle()
-	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix())), 1000, false)
+	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix())), maxTableCount, false)
 	if err != nil {
 		relog.Warning("Could not get table list for reload: %v", err)
 	}
