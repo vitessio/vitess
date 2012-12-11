@@ -182,7 +182,7 @@ func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]TabletAli
 	aliases := make([]TabletAlias, 0, len(children))
 	for _, child := range children {
 		alias := path.Base(child)
-		if strings.Contains(alias, "action") {
+		if strings.HasPrefix(alias, "action") {
 			continue
 		}
 		zkTabletReplicationPath := path.Join(zkShardPath, child)

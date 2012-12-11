@@ -212,10 +212,15 @@ func StoreActionResponse(zconn zk.Conn, actionNode *ActionNode, actionPath strin
 		actionNode.State = ACTION_STATE_DONE
 	}
 
-	// and write the data
+	// Write the data first to our action node, then to the log.
+	// In the error case, this node will be left behind to debug.
 	data := ActionNodeToJson(actionNode)
+	_, err := zconn.Set(actionPath, data, -1)
+	if err != nil {
+		return err
+	}
 	actionLogPath := ActionToActionLogPath(actionPath)
-	_, err := zk.CreateRecursive(zconn, actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = zk.CreateRecursive(zconn, actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	return err
 }
 
