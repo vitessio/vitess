@@ -239,15 +239,11 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		// just clean up for now, in the future we
-		// may want to try harder, or wait
+		// Regardless of the reason, try to cleanup.
 		wr.zconn.Delete(actionPath, -1)
-		return nil, fmt.Errorf("ApplySchemaShard failed to obtain shard action lock on shard %v", shardPath)
+		return nil, fmt.Errorf("ApplySchemaShard failed to obtain action lock: %v", actionPath)
 	}
 
 	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, zkMasterTabletPath, actionPath, change, zkNewParentTabletPath, simple, force)
@@ -435,13 +431,9 @@ func (wr *Wrangler) ApplySchemaKeyspace(zkKeyspacePath string, change string, si
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
-		return nil, err
-	}
-
-	if !ok {
-		// just clean up for now, in the future we may want to try harder, or wait
+		// Regardless of the reason, try to cleanup.
 		wr.zconn.Delete(actionPath, -1)
 		return nil, fmt.Errorf("failed to obtain action lock: %v", actionPath)
 	}

@@ -120,15 +120,11 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
-		return err
-	}
-
-	if !ok {
-		// just clean up for now, in the future we may want to try harder, or wait
+		// Regardless of the reason, try to cleanup.
 		wr.zconn.Delete(actionPath, -1)
-		return fmt.Errorf("ReparentShard failed to obtain shard action lock")
+		return fmt.Errorf("ReparentShard failed to obtain action lock: %v", actionPath)
 	}
 
 	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, actionPath)
@@ -588,15 +584,11 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*t
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
-		return nil, nil, err
-	}
-
-	if !ok {
-		// just clean up for now, in the future we may want to try harder, or wait
+		// Regardless of the reason, try to cleanup.
 		wr.zconn.Delete(actionPath, -1)
-		return nil, nil, fmt.Errorf("ShardSlaveStatus failed to obtain shard action lock")
+		return nil, nil, fmt.Errorf("failed to obtain action lock: %v", actionPath)
 	}
 
 	tabletMap, posMap, slaveErr := wr.shardReplicationPositions(shardInfo, actionPath)

@@ -220,11 +220,11 @@ func cmdQlock(args []string) {
 	if err != nil {
 		log.Fatalf("qlock: invalid timeout %v: %v", *lockWaitTimeout, err)
 	}
-	locked, err := zk.ObtainQueueLock(zconn, zkPath, timeout)
+	err = zk.ObtainQueueLock(zconn, zkPath, timeout)
 	if err != nil {
 		log.Fatalf("qlock: error %v: %v", zkPath, err)
 	}
-	fmt.Printf("qlock: %v %v\n", zkPath, locked)
+	fmt.Printf("qlock: locked %v\n", zkPath)
 }
 
 // Create an ephemeral node an just wait.

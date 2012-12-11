@@ -137,7 +137,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 // path holds the lock.  Call this queue-lock because the semantics are
 // a hybrid.  Normal zookeeper locks make assumptions about sequential
 // numbering that don't hold when the data in a lock is modified.
-func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration) (bool, error) {
+func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration) error {
 	queueNode := path.Dir(zkPath)
 	lockNode := path.Base(zkPath)
 
@@ -145,12 +145,12 @@ func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration) (bool, error
 trylock:
 	children, _, err := zconn.Children(queueNode)
 	if err != nil {
-		return false, err
+		return fmt.Errorf("zkutil: trylock failed %v", err)
 	}
 	sort.Strings(children)
 	if len(children) > 0 {
 		if children[0] == lockNode {
-			return true, nil
+			return nil
 		}
 		if wait > 0 {
 			prevLock := ""
@@ -161,13 +161,13 @@ trylock:
 				}
 			}
 			if prevLock == "" {
-				return false, fmt.Errorf("zkutil: no previous queue node found: %v", zkPath)
+				return fmt.Errorf("zkutil: no previous queue node found: %v", zkPath)
 			}
 
 			zkPrevLock := path.Join(queueNode, prevLock)
 			stat, watch, err := zconn.ExistsW(zkPrevLock)
 			if err != nil {
-				return false, fmt.Errorf("zkutil: unable to watch queued node %v %v", zkPrevLock, err)
+				return fmt.Errorf("zkutil: unable to watch queued node %v %v", zkPrevLock, err)
 			}
 			if stat == nil {
 				goto trylock
@@ -180,10 +180,9 @@ trylock:
 				goto trylock
 			}
 		}
-		return false, fmt.Errorf("zkutil: obtaining lock timed out %v", zkPath)
+		return fmt.Errorf("zkutil: obtaining lock timed out %v", zkPath)
 	}
-
-	return false, fmt.Errorf("zkutil: empty queue node: %v", queueNode)
+	return fmt.Errorf("zkutil: empty queue node: %v", queueNode)
 }
 
 func CreatePidNode(zconn Conn, zkPath string) error {

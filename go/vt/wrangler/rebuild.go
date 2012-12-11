@@ -28,13 +28,9 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) (actionPath string, er
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
-		return
-	}
-
-	if !ok {
-		// just clean up for now, in the future we may want to try harder, or wait
+		// Regardless of the reason, try to cleanup.
 		wr.zconn.Delete(actionPath, -1)
 		return "", fmt.Errorf("failed to obtain action lock: %v", actionPath)
 	}
@@ -192,13 +188,9 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) (actionPath stri
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	ok, err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
 	if err != nil {
-		return
-	}
-
-	if !ok {
-		// just clean up for now, in the future we may want to try harder, or wait
+		// Regardless of the reason, try to cleanup.
 		wr.zconn.Delete(actionPath, -1)
 		return "", fmt.Errorf("failed to obtain action lock: %v", actionPath)
 	}
