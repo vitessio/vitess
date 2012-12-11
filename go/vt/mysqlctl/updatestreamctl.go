@@ -113,7 +113,10 @@ func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 
 	if updateStream.usingRelayLogs {
 		updateStream.logMetadata = NewSlaveMetadata(updateStream.logsDir, updateStream.mycnf.RelayLogInfoPath)
-		go updateStream.buildSlaveMetadata()
+		// FIXME(msolomon) commenting out for now per shrutip as we
+		// have log spam from misconfiguration. To be removed properly
+		// in a subsequent fix.
+		// go updateStream.buildSlaveMetadata()
 	}
 }
 
