@@ -65,29 +65,28 @@ func ChildrenRecursive(zconn Conn, zkPath string) ([]string, error) {
 	}
 
 	for _, child := range children {
-		mutex.Lock()
-		pathList = append(pathList, child)
-		mutex.Unlock()
-
-		childPath := path.Join(zkPath, child)
-		childCopy := child
-
 		wg.Add(1)
-		go func() {
+		go func(child string) {
+			childPath := path.Join(zkPath, child)
 			rChildren, zkErr := ChildrenRecursive(zconn, childPath)
 			if zkErr != nil {
-				mutex.Lock()
-				err = zkErr
-				mutex.Unlock()
+				// If other processes are deleting nodes, we need to ignore
+				// the missing nodes.
+				if !zookeeper.IsError(zkErr, zookeeper.ZNONODE) {
+					mutex.Lock()
+					err = zkErr
+					mutex.Unlock()
+				}
 			} else {
 				mutex.Lock()
+				pathList = append(pathList, child)
 				for _, rChild := range rChildren {
-					pathList = append(pathList, path.Join(childCopy, rChild))
+					pathList = append(pathList, path.Join(child, rChild))
 				}
 				mutex.Unlock()
 			}
 			wg.Done()
-		}()
+		}(child)
 	}
 
 	wg.Wait()
