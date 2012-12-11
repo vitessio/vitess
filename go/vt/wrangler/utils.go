@@ -13,6 +13,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
+	"launchpad.net/gozk/zookeeper"
 )
 
 // If error is not nil, the results in the dictionary are incomplete.
@@ -32,7 +33,10 @@ func GetTabletMap(zconn zk.Conn, tabletPaths []string) (map[string]*tm.TabletInf
 			mutex.Lock()
 			if err != nil {
 				relog.Warning("%v: %v", tabletPath, err)
-				someError = err
+				// There can be data races removing nodes - ignore them for now.
+				if !zookeeper.IsError(err, zookeeper.ZNONODE) {
+					someError = err
+				}
 			} else {
 				tabletMap[tabletPath] = tabletInfo
 			}
