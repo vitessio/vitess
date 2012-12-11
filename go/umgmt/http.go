@@ -9,8 +9,8 @@ import (
 	"expvar"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
-	"syscall"
 )
 
 var connectionCount = expvar.NewInt("connection-count")
@@ -83,27 +83,18 @@ func (l *connCountListener) Accept() (c net.Conn, err error) {
 //   umgmt.AddStartupCallback(func () { umgmt.StartHttpServer(addr) })
 func StartHttpServer(addr string) {
 	httpListener, httpErr := net.Listen("tcp", addr)
-
+	if httpErr != nil {
+		relog.Fatal("StartHttpServer failed: %v", httpErr)
+	}
 	go func() {
-		if httpErr == nil {
-			httpListener = newHttpListener(httpListener)
-			AddListener(httpListener)
-			httpErr = http.Serve(httpListener, nil)
-			httpListener.Close()
-		}
+		httpListener = newHttpListener(httpListener)
+		AddListener(httpListener)
+		httpErr = http.Serve(httpListener, nil)
+		httpListener.Close()
 		if httpErr != nil {
-			var err error
-			if opErr, ok := httpErr.(*net.OpError); ok {
-				err = opErr.Err
-			} else {
-				err = httpErr
-			}
-			switch err {
-			case syscall.EADDRINUSE:
-				relog.Fatal("StartHttpServer failed: %v", httpErr)
-			case syscall.EINVAL:
-				relog.Info("StartHttpServer finished: %v", httpErr)
-			default:
+			// This is net.errClosing, which is conveniently non-public.
+			// Squelch this expected case.
+			if !strings.Contains(httpErr.Error(), "use of closed network connection") {
 				relog.Error("StartHttpServer error: %v", httpErr)
 			}
 		}
