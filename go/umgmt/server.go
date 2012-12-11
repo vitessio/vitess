@@ -163,24 +163,36 @@ type UmgmtServer struct {
 	connMap  map[net.Conn]bool
 }
 
+// NOTE(msolomon) This function handles requests serially. Multiple clients
+// to umgmt doesn't make sense.
 func (server *UmgmtServer) Serve() error {
+	defer server.listener.Close()
+	var tempDelay time.Duration // how long to sleep on accept failure
 	relog.Info("started umgmt server: %v", server.listener.Addr())
 	for {
 		conn, err := server.listener.Accept()
 		if err != nil {
-			// Accept() on a closed socket is EINVAL.
-			if err == syscall.EINVAL {
-				server.Lock()
-				if server.quit {
-					// If we are quitting, the EINVAL is expected.
-					err = nil
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
 				}
-				server.Unlock()
-				return err
+				if max := 1 * time.Second; tempDelay > max {
+					tempDelay = max
+				}
+				relog.Warning("umgmt: Accept error: %v; retrying in %v", err, tempDelay)
+				time.Sleep(tempDelay)
+				continue
 			}
-			// syscall.EMFILE, syscall.ENFILE could happen here if you run out of file descriptors
-			relog.Error("accept error %v", err)
-			continue
+
+			server.Lock()
+			if server.quit {
+				// If we are quitting, an EINVAL is expected.
+				err = nil
+			}
+			server.Unlock()
+			return err
 		}
 
 		server.Lock()

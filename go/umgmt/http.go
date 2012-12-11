@@ -92,27 +92,19 @@ func StartHttpServer(addr string) {
 			httpListener.Close()
 		}
 		if httpErr != nil {
-			switch e := httpErr.(type) {
-			case *net.OpError:
-				switch e.Err {
-				case syscall.EADDRINUSE:
-					relog.Fatal("StartHttpServer failed: %v", e)
-				}
-			case error:
-				// NOTE(msolomon) even though these are Errno objects, the constants
-				// are typed as os.Error.
-				switch e {
-				// FIXME(msolomon) this needs to be migrated into the system library
-				// because this needs to be properly handled in the accept loop.
-				case syscall.EMFILE, syscall.ENFILE:
-					relog.Error("non-fatal error serving HTTP: %s", e.Error())
-				case syscall.EINVAL:
-					// nothing - listener was probably closed
-				default:
-					relog.Error("http.ListenAndServe: " + httpErr.Error())
-				}
+			var err error
+			if opErr, ok := httpErr.(*net.OpError); ok {
+				err = opErr.Err
+			} else {
+				err = httpErr
+			}
+			switch err {
+			case syscall.EADDRINUSE:
+				relog.Fatal("StartHttpServer failed: %v", httpErr)
+			case syscall.EINVAL:
+				relog.Info("StartHttpServer finished: %v", httpErr)
 			default:
-				relog.Error("http.ListenAndServe: " + httpErr.Error())
+				relog.Error("StartHttpServer error: %v", httpErr)
 			}
 		}
 	}()
