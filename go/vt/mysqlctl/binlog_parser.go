@@ -144,7 +144,6 @@ type Blp struct {
 	dbmatch bool
 }
 
-//func NewBlp(filename string, position uint64, updateStream *UpdateStream) *Blp {
 func NewBlp(startCoordinates *ReplicationCoordinates, updateStream *UpdateStream) *Blp {
 	blp := &Blp{}
 	blp.startPosition = startCoordinates
