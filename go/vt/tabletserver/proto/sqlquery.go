@@ -28,9 +28,6 @@ type SqlQuery interface {
 	Execute(context *rpcproto.Context, query *Query, reply *mproto.QueryResult) error
 	StreamExecute(context *rpcproto.Context, query *Query, sendReply func(reply interface{}) error) error
 	ExecuteBatch(context *rpcproto.Context, queryList *QueryList, reply *QueryResultList) error
-
-	Invalidate(context *rpcproto.Context, cacheInvalidate *CacheInvalidate, noOutput *string) error
-	InvalidateForDDL(context *rpcproto.Context, ddl *DDLInvalidate, noOutput *string) error
 }
 
 // helper method to register the server (does interface checking)

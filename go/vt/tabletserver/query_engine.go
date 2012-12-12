@@ -13,6 +13,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -84,7 +85,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	return qe
 }
 
-func (qe *QueryEngine) Open(dbconfig DBConfig) {
+func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig) {
 	// Wait for Close, in case it's running
 	qe.mu.Lock()
 	defer qe.mu.Unlock()

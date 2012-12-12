@@ -5,11 +5,13 @@
 package tabletserver
 
 import (
+	"net/http"
+	"time"
+
 	"code.google.com/p/vitess/go/memcache"
 	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
-	"net/http"
-	"time"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
 )
 
 const statsURL = "/debug/memcache/"
@@ -87,7 +89,7 @@ func (self *Cache) Recycle() {
 	self.pool.Put(self)
 }
 
-func CacheCreator(dbconfig DBConfig) CreateCacheFunc {
+func CacheCreator(dbconfig dbconfigs.DBConfig) CreateCacheFunc {
 	if dbconfig.Memcache == "" {
 		relog.Info("Row cache not enabled")
 		return nil

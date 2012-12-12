@@ -19,6 +19,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
@@ -75,7 +76,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 	return sq
 }
 
-func (sq *SqlQuery) allowQueries(dbconfig DBConfig) {
+func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 	sq.statemu.Lock()
 	v := atomic.LoadInt32(&sq.state)
 	switch v {
@@ -353,24 +354,6 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 		sq.Rollback(context, &session, &noOutput)
 		panic(NewTabletError(FAIL, "begin called with no commit"))
 	}
-	return nil
-}
-
-func (sq *SqlQuery) Invalidate(context *rpcproto.Context, cacheInvalidate *proto.CacheInvalidate, noOutput *string) (err error) {
-	logStats := newSqlQueryStats("Invalidate", context)
-	defer handleError(&err, logStats)
-	sq.checkState(sq.sessionId, false)
-
-	sq.qe.Invalidate(cacheInvalidate)
-	return nil
-}
-
-func (sq *SqlQuery) InvalidateForDDL(context *rpcproto.Context, ddl *proto.DDLInvalidate, noOutput *string) (err error) {
-	logStats := newSqlQueryStats("InvalidateForDDL", context)
-	defer handleError(&err, logStats)
-	sq.checkState(sq.sessionId, true) // Accept DDLs in shut down mode
-
-	sq.qe.InvalidateForDDL(ddl.DDL)
 	return nil
 }
 

@@ -24,6 +24,7 @@ import (
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
+	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/servenv"
 	ts "code.google.com/p/vitess/go/vt/tabletserver"
 )
@@ -57,7 +58,7 @@ var config = ts.Config{
 	StreamBufferSize:   32 * 1024,
 }
 
-var dbconfig = ts.DBConfig{
+var dbconfig = dbconfigs.DBConfig{
 	Host:    "localhost",
 	Uname:   "vt_app",
 	Charset: "utf8",
@@ -159,7 +160,7 @@ func unmarshalFile(name string, val interface{}) {
 // OccManager is deprecated. Use SqlQuery.GetSessionId instead.
 type OccManager struct {
 	config   ts.Config
-	dbconfig ts.DBConfig
+	dbconfig dbconfigs.DBConfig
 }
 
 func (m *OccManager) GetSessionId(dbname *string, sessionId *int64) error {
