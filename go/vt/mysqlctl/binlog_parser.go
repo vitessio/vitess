@@ -31,6 +31,7 @@ const (
 	DDL           = "DDL"
 	BEGIN         = "BEGIN"
 	COMMIT        = "COMMIT"
+	USE           = "Use "
 )
 
 var sqlKwMap = map[string]string{
@@ -59,20 +60,17 @@ var (
 	BINLOG_END_LOG_POS     = []byte("end_log_pos ")
 	BINLOG_XID             = []byte("Xid = ")
 	BINLOG_START           = []byte("Start: binlog")
+	BINLOG_DB_CHANGE       = []byte("Use ")
 	POS                    = []byte(" pos: ")
 	SPACE                  = []byte(" ")
 )
 
 type BinlogPosition struct {
-	MasterFilename string
-	MasterPosition uint64
-	Timestamp      int64
-	Xid            uint64
-	GroupId        uint64
-}
-
-func NewBinlogPosition(masterFilename string, masterPos uint64) *BinlogPosition {
-	return &BinlogPosition{MasterFilename: masterFilename, MasterPosition: masterPos}
+	coordinates *ReplicationCoordinates
+	Position    string
+	Timestamp   int64
+	Xid         uint64
+	GroupId     uint64
 }
 
 //Api Interface
@@ -83,10 +81,11 @@ type UpdateResponse struct {
 }
 
 type EventData struct {
-	SqlType   string
-	TableName string
-	PkValues  map[string]interface{}
-	Sql       string
+	SqlType    string
+	TableName  string
+	Sql        string
+	PkColNames []string
+	PkValues   [][]interface{}
 }
 
 //Raw event buffer used to gather data during parsing.
@@ -99,7 +98,12 @@ func NewEventBuffer(pos *BinlogPosition, line []byte) *eventBuffer {
 	buf := &eventBuffer{}
 	buf.LogLine = make([]byte, len(line))
 	_ = copy(buf.LogLine, line)
-	buf.BinlogPosition = *pos
+	//The RelayPosition is never used, so using the default value
+	buf.BinlogPosition.coordinates = &ReplicationCoordinates{RelayFilename: pos.coordinates.RelayFilename,
+		MasterFilename: pos.coordinates.MasterFilename,
+		MasterPosition: pos.coordinates.MasterPosition,
+	}
+	buf.BinlogPosition.Timestamp = pos.Timestamp
 	return buf
 }
 
@@ -133,22 +137,30 @@ type Blp struct {
 	txnLineBuffer    []*eventBuffer
 	responseStream   []*UpdateResponse
 	initialSeek      bool
-	startPosition    *BinlogPosition
+	startPosition    *ReplicationCoordinates
 	currentPosition  *BinlogPosition
-	repl             *ReplicationCoordinates
 	globalState      *UpdateStream
 	blpStats
+	dbmatch bool
 }
 
-func NewBlp(filename string, position uint64, updateStream *UpdateStream) *Blp {
-	StartPosition := NewBinlogPosition(filename, position)
-	blp := &Blp{startPosition: StartPosition}
-	blp.currentPosition = NewBinlogPosition(filename, position)
+//func NewBlp(filename string, position uint64, updateStream *UpdateStream) *Blp {
+func NewBlp(startCoordinates *ReplicationCoordinates, updateStream *UpdateStream) *Blp {
+	blp := &Blp{}
+	blp.startPosition = startCoordinates
+	//The RelayPosition is never used, so using the default value
+	currentCoord := NewReplicationCoordinates(startCoordinates.RelayFilename,
+		0,
+		startCoordinates.MasterFilename,
+		startCoordinates.MasterPosition)
+	blp.currentPosition = &BinlogPosition{coordinates: currentCoord}
 	blp.inTxn = false
 	blp.initialSeek = true
 	blp.txnLineBuffer = make([]*eventBuffer, 0, MAX_TXN_BATCH)
 	blp.responseStream = make([]*UpdateResponse, 0, MAX_TXN_BATCH)
 	blp.globalState = updateStream
+	//by default assume that the db matches.
+	blp.dbmatch = true
 	return blp
 }
 
@@ -170,7 +182,7 @@ type SendUpdateStreamResponse func(response interface{}) error
 func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) {
 	var binlogReader io.Reader
 	defer func() {
-		reqIdentifier := fmt.Sprintf("%v:%v", blp.currentPosition.MasterFilename, blp.currentPosition.MasterPosition)
+		reqIdentifier := fmt.Sprintf("%v:%v", blp.currentPosition.coordinates.MasterFilename, blp.currentPosition.coordinates.MasterPosition)
 		if x := recover(); x != nil {
 			serr, ok := x.(*BinlogParseError)
 			if !ok {
@@ -247,6 +259,12 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 				continue
 			}
 
+			//Update Stream processes statements only for the dbname that it is subscribed to.
+			blp.parseDbChange(line)
+			if !blp.dbmatch {
+				continue
+			}
+
 			readAhead = true
 			if bytes.HasSuffix(line, BINLOG_DELIMITER) {
 				readAhead = false
@@ -262,13 +280,29 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 	//relog.Info(blp.DebugJsonString())
 }
 
+//Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
+func (blp *Blp) parseDbChange(line []byte) {
+	if !bytes.HasPrefix(line, BINLOG_DB_CHANGE) {
+		return
+	}
+	if blp.globalState.dbname == "" {
+		relog.Warning("Dbname is not set, will match all database names")
+		return
+	}
+
+	new_db := string(bytes.TrimLeft(line, USE))
+	if new_db != blp.globalState.dbname {
+		blp.dbmatch = false
+	}
+}
+
 func (blp *Blp) parsePositionData(line []byte) {
 	if bytes.HasPrefix(line, BINLOG_POSITION_PREFIX) {
 		//Master Position
 		if blp.nextStmtPosition == 0 {
 			return
 		}
-		blp.currentPosition.MasterPosition = blp.nextStmtPosition
+		blp.currentPosition.coordinates.MasterPosition = blp.nextStmtPosition
 	} else if bytes.Index(line, BINLOG_ROTATE_TO) != -1 {
 		blp.parseRotateEvent(line)
 	} else if bytes.Index(line, BINLOG_END_LOG_POS) != -1 {
@@ -345,22 +379,21 @@ func (blp *Blp) parseRotateEvent(line []byte) {
 	if !blp.globalState.usingRelayLogs {
 		//If the file being parsed is a binlog,
 		//then the rotate events only correspond to itself.
-		blp.currentPosition.MasterFilename = rotateFilename
-		blp.currentPosition.MasterPosition = rotatePos
+		blp.currentPosition.coordinates.MasterFilename = rotateFilename
+		blp.currentPosition.coordinates.MasterPosition = rotatePos
 	} else {
 		//For relay logs, the rotate events could be that of relay log or the binlog,
 		//the prefix of rotateFilename is used to test which case is it.
-		logsDir, relayFile := path.Split(blp.repl.RelayFilename)
+		logsDir, relayFile := path.Split(blp.currentPosition.coordinates.RelayFilename)
 		currentPrefix := strings.Split(relayFile, ".")[0]
 		rotatePrefix := strings.Split(rotateFilename, ".")[0]
 		if currentPrefix == rotatePrefix {
 			//relay log rotated
-			blp.repl.RelayFilename = path.Join(logsDir, rotateFilename)
-			blp.repl.RelayPosition = rotatePos
+			blp.currentPosition.coordinates.RelayFilename = path.Join(logsDir, rotateFilename)
 		} else {
 			//master file rotated
-			blp.currentPosition.MasterFilename = rotateFilename
-			blp.currentPosition.MasterPosition = rotatePos
+			blp.currentPosition.coordinates.MasterFilename = rotateFilename
+			blp.currentPosition.coordinates.MasterPosition = rotatePos
 		}
 	}
 }
@@ -407,16 +440,25 @@ func (blp *Blp) extractAutoIncrementId(line []byte) {
 func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, line []byte) {
 	if blp.globalState.usingRelayLogs {
 		for !blp.slavePosBehindReplication() {
-			rp := &ReplicationPosition{MasterLogFile: blp.currentPosition.MasterFilename,
-				MasterLogPosition: uint(blp.currentPosition.MasterPosition)}
+			rp := &ReplicationPosition{MasterLogFile: blp.currentPosition.coordinates.MasterFilename,
+				MasterLogPosition: uint(blp.currentPosition.coordinates.MasterPosition)}
 			if err := blp.globalState.mysqld.WaitMasterPos(rp, 30); err != nil {
 				panic(NewBinlogParseError(fmt.Sprintf("Error in waiting for replication to catch up, %v", err)))
 			}
 		}
 	}
 	commitEvent := NewEventBuffer(blp.currentPosition, line)
+	commitEvent.BinlogPosition.Xid = blp.currentPosition.Xid
+	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	//txn block for DMLs, parse it and send events for a txn
-	blp.responseStream = buildTxnResponse(blp.txnLineBuffer, commitEvent)
+	blp.responseStream = buildTxnResponse(blp.txnLineBuffer)
+
+	//Only Begin and Commit events - no point in sending this.
+	if len(blp.responseStream) <= 2 {
+		blp.inTxn = false
+		blp.txnLineBuffer = blp.txnLineBuffer[0:0]
+		return
+	}
 
 	if err := sendStream(sendReply, blp.responseStream); err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in sending event to client %v", err)))
@@ -469,22 +511,24 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader) {
 		}
 	}()
 	if blp.globalState.usingRelayLogs {
-		blr.ServeData(writer, path.Base(blp.repl.RelayFilename), int64(blp.repl.RelayPosition))
+		//we use RelayPosition for initial seek in case the caller has precise coordinates. But the code
+		//is designed to primarily use RelayFilename, MasterFilename and MasterPosition to correctly start
+		//streaming the logs if relay logs are being used.
+		blr.ServeData(writer, path.Base(blp.startPosition.RelayFilename), int64(blp.startPosition.RelayPosition))
 	} else {
 		blr.ServeData(writer, blp.startPosition.MasterFilename, int64(blp.startPosition.MasterPosition))
 	}
 }
 
-//FIXME: this needs to be replaced by MASTER_POS_WAIT call.
-//This function whether streaming is behind replication as it should be.
+//This function determines whether streaming is behind replication as it should be.
 func (blp *Blp) slavePosBehindReplication() bool {
 	repl, err := blp.globalState.logMetadata.GetCurrentReplicationPosition()
 	if err != nil {
 		relog.Error(err.Error())
 		panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
 	}
-	if repl.MasterFilename == blp.currentPosition.MasterFilename {
-		if blp.currentPosition.MasterPosition <= repl.MasterPosition {
+	if repl.MasterFilename == blp.currentPosition.coordinates.MasterFilename {
+		if blp.currentPosition.coordinates.MasterPosition <= repl.MasterPosition {
 			return true
 		}
 	} else {
@@ -493,7 +537,7 @@ func (blp *Blp) slavePosBehindReplication() bool {
 			relog.Error(err.Error())
 			panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
 		}
-		parseExt, err := strconv.ParseUint(strings.Split(blp.currentPosition.MasterFilename, ".")[1], 10, 64)
+		parseExt, err := strconv.ParseUint(strings.Split(blp.currentPosition.coordinates.MasterFilename, ".")[1], 10, 64)
 		if err != nil {
 			relog.Error(err.Error())
 			panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
@@ -506,7 +550,7 @@ func (blp *Blp) slavePosBehindReplication() bool {
 }
 
 //This builds UpdateResponse for each transaction.
-func buildTxnResponse(trxnLineBuffer []*eventBuffer, commitEvent *eventBuffer) (txnResponseList []*UpdateResponse) {
+func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateResponse) {
 	var err error
 	var line []byte
 	var dmlType string
@@ -515,17 +559,22 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer, commitEvent *eventBuffer) (
 
 	for _, event := range trxnLineBuffer {
 		line = event.LogLine
-		//Xid of all events in the transaction should be the Xid of the commit for that txn.
-		event.Xid = commitEvent.Xid
-
 		if bytes.HasPrefix(line, BINLOG_BEGIN) {
 			streamBuf := new(UpdateResponse)
 			streamBuf.BinlogPosition = event.BinlogPosition
+			streamBuf.BinlogPosition.Position, err = EncodeCoordinatesToPosition(event.BinlogPosition.coordinates)
+			if err != nil {
+				panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v", err)))
+			}
 			streamBuf.SqlType = BEGIN
 			txnResponseList = append(txnResponseList, streamBuf)
 			continue
 		}
-
+		if bytes.HasPrefix(line, BINLOG_COMMIT) {
+			commitEvent := createCommitEvent(event)
+			txnResponseList = append(txnResponseList, commitEvent)
+			continue
+		}
 		if bytes.HasPrefix(line, BINLOG_SET_INSERT) {
 			autoincId, err = strconv.ParseUint(string(line[len(BINLOG_SET_INSERT):]), 10, 64)
 			if err != nil {
@@ -552,13 +601,10 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer, commitEvent *eventBuffer) (
 		//fmt.Println(lineTxn)
 		streamComment := string(line[commentIndex+len(STREAM_COMMENT_START):])
 		eventNodeTree = parseStreamComment(streamComment, autoincId)
-		responseList := createUpdateResponse(eventNodeTree, autoincId, dmlType, event.BinlogPosition)
-		txnResponseList = append(txnResponseList, responseList...)
+		response := createUpdateResponse(eventNodeTree, dmlType, event.BinlogPosition)
+		txnResponseList = append(txnResponseList, response)
 		autoincId = 0
 	}
-
-	eventBuf := createCommitEvent(commitEvent)
-	txnResponseList = append(txnResponseList, eventBuf)
 
 	return txnResponseList
 }
@@ -638,13 +684,13 @@ func parseStreamComment(dmlComment string, autoincId uint64) (EventNode *parser.
 	return EventNode
 }
 
-//This builds a slice of UpdateResponse from the parsed tree. It could be a multi-row update, hence returns a slice.
-func createUpdateResponse(eventTree *parser.Node, autoincId uint64, dmlType string, blPos BinlogPosition) (responseList []*UpdateResponse) {
+//This builds UpdateResponse from the parsed tree, also handles a multi-row update.
+func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos BinlogPosition) (response *UpdateResponse) {
+	var err error
 	if eventTree.Len() < 3 {
 		panic(NewBinlogParseError(fmt.Sprintf("Invalid comment structure, len of tree %v", eventTree.Len())))
 	}
 
-	responseList = make([]*UpdateResponse, 0, eventTree.Len())
 	tableName := string(eventTree.At(0).Value)
 	pkColNamesNode := eventTree.At(1)
 	pkColNames := make([]string, 0, pkColNamesNode.Len())
@@ -656,43 +702,44 @@ func createUpdateResponse(eventTree *parser.Node, autoincId uint64, dmlType stri
 	}
 	pkColLen := pkColNamesNode.Len()
 
-	var response *UpdateResponse
+	response = new(UpdateResponse)
+	response.BinlogPosition = blpPos
+	response.BinlogPosition.Position, err = EncodeCoordinatesToPosition(blpPos.coordinates)
+	if err != nil {
+		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v", err)))
+	}
+	response.SqlType = dmlType
+	response.TableName = tableName
+	response.PkColNames = pkColNames
+	response.PkValues = make([][]interface{}, len(eventTree.Sub[2:]))
+
+	rowPk := make([]interface{}, pkColLen)
 	for _, node := range eventTree.Sub[2:] {
+		rowPk = rowPk[:0]
 		if node.Len() != pkColLen {
 			panic(NewBinlogParseError("Error in the stream comment, length of pk values doesn't match column names."))
 		}
-		response = new(UpdateResponse)
-		response.BinlogPosition = blPos
-		response.SqlType = dmlType
-
-		response.TableName = tableName
-		response.PkValues = createPkMap(pkColNames, node.Sub)
-
-		responseList = append(responseList, response)
+		rowPk = encodePkValues(node.Sub)
+		response.PkValues = append(response.PkValues, rowPk)
 	}
-	return responseList
+	return response
 }
 
-//Creates the map of pkCol:pkValues
-func createPkMap(pkColNames []string, pkValues []*parser.Node) (pkMap map[string]interface{}) {
-	pkMap = make(map[string]interface{})
-
-	var pkCol string
-	for i, pkVal := range pkValues {
-		pkCol = pkColNames[i]
-		//if pkVal.Type == parser.STRING || pkVal.Type == parser.ID {
+//Interprets the parsed node and correctly encodes the primary key values.
+func encodePkValues(pkValues []*parser.Node) (rowPk []interface{}) {
+	for _, pkVal := range pkValues {
 		if pkVal.Type == parser.STRING {
-			pkMap[pkCol] = string(pkVal.Value)
+			rowPk = append(rowPk, string(pkVal.Value))
 		} else if pkVal.Type == parser.NUMBER {
 			//pkVal.Value is a byte array, convert this to string and use strconv to find
 			//the right numberic type.
 			valstr := string(pkVal.Value)
 			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
-				pkMap[pkCol] = ival
+				rowPk = append(rowPk, ival)
 			} else if uval, err := strconv.ParseUint(valstr, 0, 64); err == nil {
-				pkMap[pkCol] = uval
+				rowPk = append(rowPk, uval)
 			} else if fval, err := strconv.ParseFloat(valstr, 64); err == nil {
-				pkMap[pkCol] = fval
+				rowPk = append(rowPk, fval)
 			} else {
 				panic(NewBinlogParseError(fmt.Sprintf("Error in encoding pkValues %v", err)))
 			}
@@ -700,7 +747,7 @@ func createPkMap(pkColNames []string, pkValues []*parser.Node) (pkMap map[string
 			panic(NewBinlogParseError("Error in encoding pkValues - Unsupported type"))
 		}
 	}
-	return pkMap
+	return rowPk
 }
 
 //This sends the stream to the client.
@@ -715,14 +762,19 @@ func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateRespons
 }
 
 //This sends the error to the client.
-func SendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputErr error, blPos *BinlogPosition) {
+func SendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputErr error, blpPos *BinlogPosition) {
+	var err error
 	streamBuf := new(UpdateResponse)
 	streamBuf.Error = inputErr.Error()
-	if blPos != nil {
-		streamBuf.BinlogPosition = *blPos
+	if blpPos != nil {
+		streamBuf.BinlogPosition = *blpPos
+		streamBuf.BinlogPosition.Position, err = EncodeCoordinatesToPosition(blpPos.coordinates)
+		if err != nil {
+			panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v", err)))
+		}
 	}
 	buf := []*UpdateResponse{streamBuf}
-	err := sendStream(sendReply, buf)
+	err = sendStream(sendReply, buf)
 	if err != nil {
 		relog.Error("Error in communicating message %v with the client: %v", inputErr, err)
 	}
@@ -730,16 +782,26 @@ func SendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputEr
 
 //This creates the response for COMMIT event.
 func createCommitEvent(eventBuf *eventBuffer) (streamBuf *UpdateResponse) {
+	var err error
 	streamBuf = new(UpdateResponse)
 	streamBuf.BinlogPosition = eventBuf.BinlogPosition
+	streamBuf.BinlogPosition.Position, err = EncodeCoordinatesToPosition(eventBuf.BinlogPosition.coordinates)
+	if err != nil {
+		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v", err)))
+	}
 	streamBuf.SqlType = COMMIT
 	return
 }
 
 //This creates the response for DDL event.
 func createDdlStream(lineBuffer *eventBuffer) (ddlStream *UpdateResponse) {
+	var err error
 	ddlStream = new(UpdateResponse)
 	ddlStream.BinlogPosition = lineBuffer.BinlogPosition
+	ddlStream.BinlogPosition.Position, err = EncodeCoordinatesToPosition(lineBuffer.BinlogPosition.coordinates)
+	if err != nil {
+		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v", err)))
+	}
 	ddlStream.SqlType = DDL
 	ddlStream.Sql = string(lineBuffer.LogLine)
 	return ddlStream

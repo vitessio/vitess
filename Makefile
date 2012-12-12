@@ -59,6 +59,7 @@ integration_test:
 	cd test ; ./tabletmanager.py $$VT_TEST_FLAGS
 	cd test ; ./zkocc.py $$VT_TEST_FLAGS
 	cd test ; ./connection_test.py
+	cd test ; ./update_stream.py
 
 clean:
 	cd go/cmd/mysqlctl; go clean

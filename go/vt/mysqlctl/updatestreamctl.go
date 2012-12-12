@@ -4,13 +4,12 @@
 package mysqlctl
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"path"
-	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap"
@@ -36,6 +35,7 @@ type UpdateStream struct {
 	mysqld         *Mysqld
 	clients        []*Blp
 	stateWaitGroup sync.WaitGroup
+	dbname         string
 }
 
 type UpdateStreamRequest struct {
@@ -85,80 +85,68 @@ func dbcfgsCorrect(tabletType string, dbcfgs dbconfigs.DBConfigs) bool {
 
 func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 	defer logError()
-	updateStream := UpdateStreamRpcService
-	updateStream.actionLock.Lock()
-	defer updateStream.actionLock.Unlock()
+	UpdateStreamRpcService.actionLock.Lock()
+	defer UpdateStreamRpcService.actionLock.Unlock()
 
 	if !dbcfgsCorrect(tabletType, dbcfgs) {
 		relog.Warning("missing/incomplete db configs file, cannot enable update stream service")
 		return
 	}
 
-	if updateStream.isServiceEnabled() {
+	if UpdateStreamRpcService.isServiceEnabled() {
 		disableUpdateStreamService()
 	}
 
-	atomic.StoreInt32(&updateStream.state, ENABLED)
+	atomic.StoreInt32(&UpdateStreamRpcService.state, ENABLED)
 
-	updateStream.mysqld = NewMysqld(updateStream.mycnf, dbcfgs.Dba, dbcfgs.Repl)
-	updateStream.tabletType = tabletType
-	updateStream.usingRelayLogs = false
+	UpdateStreamRpcService.mysqld = NewMysqld(UpdateStreamRpcService.mycnf, dbcfgs.Dba, dbcfgs.Repl)
+	UpdateStreamRpcService.dbname = dbcfgs.Repl.Dbname
+	UpdateStreamRpcService.tabletType = tabletType
+	UpdateStreamRpcService.usingRelayLogs = false
 	if tabletType == "master" {
-		updateStream.binlogPrefix = updateStream.mycnf.BinLogPath
+		UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.BinLogPath
 	} else if isReplicaType(tabletType) {
-		updateStream.binlogPrefix = updateStream.mycnf.RelayLogPath
-		updateStream.usingRelayLogs = true
+		UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.RelayLogPath
+		UpdateStreamRpcService.usingRelayLogs = true
 	}
-	updateStream.logsDir = path.Dir(updateStream.binlogPrefix)
+	UpdateStreamRpcService.logsDir = path.Dir(UpdateStreamRpcService.binlogPrefix)
 
-	if updateStream.usingRelayLogs {
-		updateStream.logMetadata = NewSlaveMetadata(updateStream.logsDir, updateStream.mycnf.RelayLogInfoPath)
-		// FIXME(msolomon) commenting out for now per shrutip as we
-		// have log spam from misconfiguration. To be removed properly
-		// in a subsequent fix.
-		// go updateStream.buildSlaveMetadata()
+	if UpdateStreamRpcService.usingRelayLogs {
+		UpdateStreamRpcService.logMetadata = NewSlaveMetadata(UpdateStreamRpcService.logsDir, UpdateStreamRpcService.mycnf.RelayLogInfoPath)
 	}
 }
 
 func DisableUpdateStreamService() {
+	//If the service is already disabled, just return
+	if !UpdateStreamRpcService.isServiceEnabled() {
+		return
+	}
 	UpdateStreamRpcService.actionLock.Lock()
 	defer UpdateStreamRpcService.actionLock.Unlock()
 	disableUpdateStreamService()
 }
 
+func IsUpdateStreamEnabled() bool {
+	return UpdateStreamRpcService.isServiceEnabled()
+}
+
+func IsUpdateStreamUsingRelayLogs() bool {
+	return UpdateStreamRpcService.usingRelayLogs
+}
+
 func disableUpdateStreamService() {
 	defer logError()
-	updateStream := UpdateStreamRpcService
 
-	atomic.StoreInt32(&updateStream.state, DISABLED)
-	updateStream.stateWaitGroup.Wait()
+	atomic.StoreInt32(&UpdateStreamRpcService.state, DISABLED)
+	UpdateStreamRpcService.stateWaitGroup.Wait()
 }
 
 func (updateStream *UpdateStream) isServiceEnabled() bool {
-	state := atomic.LoadInt32(&updateStream.state)
-	if state == ENABLED {
-		return true
-	}
-	return false
+	return atomic.LoadInt32(&updateStream.state) == ENABLED
 }
 
-func (updateStream *UpdateStream) buildSlaveMetadata() {
-	var err error
-
-	//perform one lookup immediately
-	if err = updateStream.logMetadata.BuildMetadata(); err != nil {
-		relog.Error("Error in building slave metadata %v", err)
-	}
-	timerChannel := time.Tick(30 * time.Second)
-	for _ = range timerChannel {
-		if !updateStream.isServiceEnabled() {
-			return
-		}
-
-		if err = updateStream.logMetadata.BuildMetadata(); err != nil {
-			relog.Error("Error in building slave metadata %v", err)
-		}
-	}
+func ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) error {
+	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
 func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) error {
@@ -170,38 +158,91 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 	}()
 
 	if !updateStream.isServiceEnabled() {
-		relog.Warning("Update stream service is not enabled yet")
+		relog.Warning("Unable to serve client request: Update stream service is not enabled yet")
 		return fmt.Errorf("Update stream service is not enabled yet")
 	}
 
-	//relog.Info("ServeUpdateStream starting @ %v", req.StartPosition)
-	// path is something like /vt/vt-xxxxxx-bin-log:position
-	pieces := strings.SplitN(req.StartPosition, ":", 2)
-	filename := pieces[0]
-	if filename == "" {
-		return fmt.Errorf("Invalid start position, %v", req.StartPosition)
+	relog.Info("ServeUpdateStream starting @ %v", req.StartPosition)
+	if req.StartPosition == "" {
+		return fmt.Errorf("Invalid start position, cannot serve the stream")
 	}
-	pos, err := strconv.ParseUint(pieces[1], 10, 64)
+	startCoordinates, err := DecodePositionToCoordinates(req.StartPosition)
 	if err != nil {
-		return fmt.Errorf("Could not locate the start position %v, err: %v", req.StartPosition, err)
+		return fmt.Errorf("Invalid start position %v, cannot serve the stream, err %v", req.StartPosition, err)
 	}
 
-	blp := NewBlp(filename, pos, updateStream)
+	blp := NewBlp(startCoordinates, updateStream)
 	updateStream.clients = append(updateStream.clients, blp)
+	updateStream.actionLock.Lock()
 	updateStream.stateWaitGroup.Add(1)
+	updateStream.actionLock.Unlock()
 
 	//locate the relay filename and position based on the masterPosition map
-	if updateStream.usingRelayLogs {
-		//updateStream.logMetadata.display()
-		replCoordinates, err := updateStream.logMetadata.LocateReplicationCoordinates(filename, pos)
-		if err != nil {
-			return fmt.Errorf("Could not locate the start position %v, err: %v", req.StartPosition, err)
+	if !updateStream.usingRelayLogs {
+		if !isMasterPositionValid(startCoordinates) {
+			return fmt.Errorf("Invalid start position %v", req.StartPosition)
 		}
-		//relog.Info("Located correct pos, %v %v", replCoordinates.RelayFilename, replCoordinates.RelayPosition)
-		blp.repl = &replCoordinates
+	} else {
+		if !isRelayPositionValid(startCoordinates) {
+			return fmt.Errorf("Could not locate the start position %v", req.StartPosition)
+		}
 	}
 
 	blp.StreamBinlog(sendReply, updateStream.binlogPrefix)
 	updateStream.stateWaitGroup.Done()
 	return nil
+}
+
+func isMasterPositionValid(startCoordinates *ReplicationCoordinates) bool {
+	if startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
+		return false
+	}
+	return true
+}
+
+//This verifies the correctness of the start position.
+//The seek for relay logs depends on the RelayFilename and correct MasterFilename and Position.
+func isRelayPositionValid(startCoordinates *ReplicationCoordinates) bool {
+	if startCoordinates.RelayFilename == "" || startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
+		return false
+	}
+	var relayFile string
+	d, f := path.Split(startCoordinates.RelayFilename)
+	if d == "" {
+		relayFile = path.Join(UpdateStreamRpcService.logsDir, f)
+	} else {
+		relayFile = startCoordinates.RelayFilename
+	}
+	_, err := os.Open(relayFile)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+func GetCurrentReplicationPosition() (repl *ReplicationCoordinates, err error) {
+	if !UpdateStreamRpcService.isServiceEnabled() {
+		return nil, fmt.Errorf("UpdateStream Service is not enabled, cannot determine current replication position")
+	}
+	if !UpdateStreamRpcService.usingRelayLogs {
+		return nil, fmt.Errorf("Server is a non-replicating type")
+	}
+	return UpdateStreamRpcService.logMetadata.GetCurrentReplicationPosition()
+}
+
+func EncodeCoordinatesToPosition(coordinates *ReplicationCoordinates) (string, error) {
+	pos, err := json.Marshal(coordinates)
+	if err != nil {
+		return "", err
+	}
+	return string(pos), err
+}
+
+func DecodePositionToCoordinates(pos string) (repl *ReplicationCoordinates, err error) {
+	repl = new(ReplicationCoordinates)
+	err = json.Unmarshal([]byte(pos), repl)
+	if err != nil {
+		return nil, err
+	}
+	return repl, err
 }

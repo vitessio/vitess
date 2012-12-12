@@ -255,7 +255,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 		// 5.1.50 is 106, 5.0.24 is 98
 		firstEventSize := readFirstEventSize(binlogFile)
 		prefixSize := int64(BINLOG_HEADER_SIZE + firstEventSize)
-		relog.Info("BinlogReader.serve inject header + first event: %v", prefixSize)
+		//relog.Info("BinlogReader.serve inject header + first event: %v", prefixSize)
 		//offsetString = fmt.Sprintf("Vt-Binlog-Offset: %v\n", strconv.FormatInt(prefixSize, 10))
 
 		position, err := binlogFile.Seek(0, 0)
@@ -272,7 +272,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 			relog.Error("Failed BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
 			return
 		}
-		relog.Info("BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
+		//relog.Info("BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
 	}
 
 	for {

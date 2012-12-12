@@ -94,7 +94,9 @@ func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
 	go func() {
 		// just make sure we don't spawn zombies
 		waitMsg, err := process.Wait()
-		relog.Error("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
+		if err != nil {
+			relog.Error("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
+		}
 	}()
 
 	return dataRdFile, nil

@@ -268,6 +268,8 @@ class Tablet(object):
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = "vt_" + self.keyspace
+      config['dba']['dbname'] = "vt_" + self.keyspace
+      config['repl']['dbname'] = "vt_" + self.keyspace
     path = os.path.join(self.tablet_dir, 'db-configs.json')
 
     if self.memcached:
