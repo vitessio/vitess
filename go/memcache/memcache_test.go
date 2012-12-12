@@ -175,6 +175,30 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Stats: %v", err)
 		return
 	}
+
+	//FlushAll
+	// Set
+	stored, err = c.Set("Flush", 0, 0, []byte("Test"))
+	if err != nil {
+		t.Errorf("Set: %v", err)
+	}
+	expect(t, c, "Flush", "Test")
+
+	err = c.FlushAll()
+	if err != nil {
+		t.Errorf("FlushAll: err %v", err)
+		return
+	}
+
+	b, f, err = c.Get("Flush")
+	if err != nil {
+		t.Errorf("Get: %v", err)
+		return
+	}
+	if string(b) != "" {
+		t.Errorf("FlushAll failed")
+		return
+	}
 }
 
 func expect(t *testing.T, c *Connection, key, value string) {
