@@ -257,9 +257,9 @@ def run_test_vtctl_clone():
 
   tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
                         populate_vt_insert_test)
-
   tablet_62344.start_vttablet()
 
+  tablet_62044.create_db('vt_snapshot_test')
   tablet_62044.init_tablet('idle', start=True)
 
   # small test to make sure the directory validation works
