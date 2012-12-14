@@ -8,6 +8,9 @@ import (
 	"testing"
 )
 
+// FIXME: This test is rather klunky - if something goes wrong it may
+// leave mysqld processes behind.
+
 func TestStartShutdown(t *testing.T) {
 	mycnf0 := NewMycnf(0, 3700, VtReplParams{})
 	mycnf1 := NewMycnf(1, 3701, VtReplParams{})
@@ -17,30 +20,31 @@ func TestStartShutdown(t *testing.T) {
 
 	err = Init(tablet0)
 	if err != nil {
-		t.Fatalf("Init(0) err: %v", err)
+		t.Errorf("Init(0) err: %v", err)
 	}
 
 	err = Init(tablet1)
+
 	if err != nil {
-		t.Fatalf("Init(1) err: %v", err)
+		t.Errorf("Init(1) err: %v", err)
 	}
 
 	err = Shutdown(tablet0, true, MysqlWaitTime)
 	if err != nil {
-		t.Fatalf("Shutdown() err: %v", err)
+		t.Errorf("Shutdown() err: %v", err)
 	}
 
 	err = Start(tablet0, MysqlWaitTime)
 	if err != nil {
-		t.Fatalf("Start() err: %v", err)
+		t.Errorf("Start() err: %v", err)
 	}
 
 	err = Teardown(tablet0, false)
 	if err != nil {
-		t.Fatalf("Teardown(0) err: %v", err)
+		t.Errorf("Teardown(0) err: %v", err)
 	}
 	err = Teardown(tablet1, false)
 	if err != nil {
-		t.Fatalf("Teardown(1) err: %v", err)
+		t.Errorf("Teardown(1) err: %v", err)
 	}
 }
