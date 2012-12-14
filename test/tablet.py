@@ -106,6 +106,8 @@ class Tablet(object):
       query = [query]
 
     for q in query:
+      if utils.options.verbose:
+        print "mysql(%s,%s): %s" % (self.tablet_uid, dbname, q)
       cursor.execute(q)
 
     if write:
@@ -135,6 +137,11 @@ class Tablet(object):
 
   def create_db(self, name):
     self.mquery('', 'drop database if exists %s' % name)
+    rows = self.mquery('', 'show databases')
+    for row in rows:
+      dbname = row[0]
+      if dbname == name:
+        raise utils.TestError("drop database didn't work???")
     self.mquery('', 'create database %s' % name)
 
   def wait_check_db_var(self, name, value):
