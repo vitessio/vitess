@@ -25,12 +25,12 @@ func TestStartShutdown(t *testing.T) {
 		t.Fatalf("Init(1) err: %v", err)
 	}
 
-	err = Shutdown(tablet0, true)
+	err = Shutdown(tablet0, true, MysqlWaitTime)
 	if err != nil {
 		t.Fatalf("Shutdown() err: %v", err)
 	}
 
-	err = Start(tablet0)
+	err = Start(tablet0, MysqlWaitTime)
 	if err != nil {
 		t.Fatalf("Start() err: %v", err)
 	}
