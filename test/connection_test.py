@@ -194,14 +194,6 @@ class TestConnection(BaseTest):
     self.connection = db.VtOCCConnection(self.vtocc_uri, self.dbconfig['dbname'], timeout=1, user=self.user, password=self.password)
     self.connection.dial()
 
-  def assertEscalates(self, func, *args, **kwargs):
-    call = lambda: func(*args, **kwargs)
-    for i in range(2):
-      self.assertRaises(MySQLdb.DatabaseError, call)
-      time.sleep(1)
-    self.assertRaises(MySQLdb.OperationalError, call)
-
-
   def test_reconnect(self):
     cursor = self.connection.cursor()
     cursor.execute("create table if not exists connection_test (c int)")
@@ -217,13 +209,13 @@ class TestConnection(BaseTest):
 
   def test_vtocc_not_there(self):
     connection = db.VtOCCConnection("localhost:7777", self.dbconfig['dbname'], timeout=1, user=self.user, password=self.password)
-    self.assertEscalates(connection.dial)
+    self.assertRaises(dbexceptions.OperationalError, connection.dial)
 
   def test_vtocc_has_gone_away(self):
     cursor = self.connection.cursor()
     BaseTest.kill_vtocc()
     try:
-      self.assertEscalates(cursor.execute, "select 1 from dual")
+      self.assertRaises(MySQLdb.OperationalError, cursor.execute, "select 1 from dual")
     finally:
       BaseTest.start_vtocc()
 
