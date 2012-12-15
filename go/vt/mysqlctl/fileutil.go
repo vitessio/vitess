@@ -189,7 +189,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	// see if we need to introduce failures
 	if simulateFailures {
 		failureCounter++
-		if failureCounter%3 == 0 {
+		if failureCounter%5 == 0 {
 			return fmt.Errorf("Simulated error")
 		}
 	}
