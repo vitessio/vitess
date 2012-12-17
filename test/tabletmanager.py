@@ -263,6 +263,7 @@ def run_test_vtctl_clone():
   tablet_62044.init_tablet('idle', start=True)
 
   # small test to make sure the directory validation works
+  utils.run("rm -rf /vt/snapshot")
   utils.run("mkdir -p /vt/snapshot")
   utils.run("chmod -w /vt/snapshot")
   out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s' %
