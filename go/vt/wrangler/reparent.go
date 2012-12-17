@@ -618,9 +618,6 @@ func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardAc
 			return nil, nil, fmt.Errorf("tablet unavailable: %v", err)
 		}
 		tabletMap[alias.Uid] = tablet
-		//if tablet.IsReplicatingType() {
-		//	tabletMap[alias.Uid] = tablet
-		//}
 	}
 	posMap, err := wr.tabletReplicationPositions(tabletMap, zkShardActionPath)
 	return tabletMap, posMap, err

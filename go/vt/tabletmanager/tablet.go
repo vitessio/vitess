@@ -209,17 +209,28 @@ func (tablet *Tablet) IsServingType() bool {
 }
 
 // Should this tablet appear in the replication graph?
-func (tablet *Tablet) IsReplicatingType() bool {
+// Only IDLE and SCRAP are not in the replication graph.
+// The other non-obvious types are BACKUP, RESTORE and LAG_ORPHAN:
+// these have had a master at some point (or were the master),
+// so they are in the graph.
+func (tablet *Tablet) IsInReplicationGraph() bool {
 	switch tablet.Type {
-	case TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN:
+	case TYPE_IDLE, TYPE_SCRAP:
 		return false
 	}
 	return true
 }
 
-// Should this type be connected to a master db?
+// Should this type be connected to a master db and actively replicating?
+// MASTER is not obviously (only support one level replication graph)
+// IDLE and SCRAP are not either
+// BACKUP, RESTORE, LAG_ORPHAN may or may not be, but we don't know for sure
 func (tablet *Tablet) IsSlaveType() bool {
-	return tablet.Type != TYPE_MASTER && tablet.IsReplicatingType()
+	switch tablet.Type {
+	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN:
+		return false
+	}
+	return true
 }
 
 func (tablet *Tablet) IsAssigned() bool {
@@ -345,7 +356,14 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 	}
 
 	// Some tablets have no information to generate valid replication paths.
-	if tablet.IsReplicatingType() {
+	// We have two cases to handle:
+	// - we are in the replication graph, and should have a ZK path
+	//   (first case below)
+	// - we are in scrap mode, but used to be assigned in the graph
+	//   somewhere (second case below)
+	// Idle tablets are just not in any graph at all, we don't even know
+	// their keyspace / shard to know where to check.
+	if tablet.IsInReplicationGraph() {
 		zkPaths = append(zkPaths, ShardActionPath(tablet.ShardPath()))
 		if zkTabletReplicationPath != "" && zkTabletReplicationPath != tablet.ReplicationPath() {
 			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
@@ -353,9 +371,12 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 		}
 		// Unless we are scrapped or idle, check we are in the replication graph
 		zkPaths = append(zkPaths, tablet.ReplicationPath())
+
 	} else if tablet.IsAssigned() {
-		// Scrap nodes should not appear in the replication graph. However, while
-		// an action is running, there is some time where this will be inconsistent.
+		// this case is to make sure a scrap node that used to be in
+		// a replication graph doesn't leave a node behind.
+		// However, while an action is running, there is some
+		// time where this might be inconsistent.
 		_, _, err := zconn.Get(tablet.ReplicationPath())
 		if !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return fmt.Errorf("unexpected replication path found(possible pending action?): %v (%v)",
@@ -395,7 +416,7 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 		return err
 	}
 
-	if !tablet.IsReplicatingType() {
+	if !tablet.IsInReplicationGraph() {
 		return nil
 	}
 

@@ -350,7 +350,7 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 		wg.Add(1)
 		go func(ti *tm.TabletInfo) {
 			defer wg.Done()
-			if ti.Type == tm.TYPE_SCRAP || ti.Type == tm.TYPE_IDLE {
+			if !ti.IsInReplicationGraph() {
 				return
 			}
 			if !strInList(keyspaces, ti.Keyspace) {
