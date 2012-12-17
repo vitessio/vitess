@@ -33,7 +33,6 @@ import (
 var noWaitForAction = flag.Bool("no-wait", false, "don't wait for action completion, detach")
 var waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
 var lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
-var globalForce = flag.Bool("force", false, "force action (DEPRECATED, use the per command -force flag)")
 var logLevel = flag.String("log.level", "INFO", "set log level")
 var logfile = flag.String("logfile", "/vt/logs/vtctl.log", "log file")
 
@@ -583,7 +582,7 @@ func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []str
 	if subFlags.NArg() == 8 {
 		parentAlias = subFlags.Arg(7)
 	}
-	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *keyStart, *keyEnd, *globalForce || *force, false)
+	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *keyStart, *keyEnd, *force, false)
 }
 
 func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -596,7 +595,7 @@ func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("action UpdateTablet requires <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>")
 	}
 
-	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *keyStart, *keyEnd, *globalForce || *force, true)
+	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *keyStart, *keyEnd, *force, true)
 }
 
 func commandScrapTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -607,7 +606,7 @@ func commandScrapTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 		relog.Fatal("action ScrapTablet requires <zk tablet path>")
 	}
 
-	return wrangler.Scrap(subFlags.Arg(0), *globalForce || *force, *skipRebuild)
+	return wrangler.Scrap(subFlags.Arg(0), *force, *skipRebuild)
 }
 
 func commandSetReadOnly(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -641,7 +640,7 @@ func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		relog.Fatal("action ChangeSlaveType requires <zk tablet path> <db type>")
 	}
 
-	return "", wrangler.ChangeType(subFlags.Arg(0), tm.TabletType(subFlags.Arg(1)), *globalForce || *force)
+	return "", wrangler.ChangeType(subFlags.Arg(0), tm.TabletType(subFlags.Arg(1)), *force)
 }
 
 func commandPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -684,7 +683,7 @@ func commandSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 		relog.Fatal("action Snapshot requires <zk src tablet path>")
 	}
 
-	filename, zkParentPath, err := wrangler.Snapshot(subFlags.Arg(0), *globalForce || *force, *compressConcurrency)
+	filename, zkParentPath, err := wrangler.Snapshot(subFlags.Arg(0), *force, *compressConcurrency)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
 		relog.Info("ParentPath: %v", zkParentPath)
@@ -716,7 +715,7 @@ func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) 
 		relog.Fatal("action Clone requires <zk src tablet path> <zk dst tablet path>")
 	}
 
-	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Arg(1), *globalForce || *force, *compressConcurrency, *fetchConcurrency, *fetchRetryCount)
+	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Arg(1), *force, *compressConcurrency, *fetchConcurrency, *fetchRetryCount)
 }
 
 func commandReparentTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -735,7 +734,7 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name> <start key> <end key>")
 	}
 
-	filename, zkParentPath, err := wrangler.PartialSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *globalForce || *force, *compressConcurrency)
+	filename, zkParentPath, err := wrangler.PartialSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *compressConcurrency)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
 		relog.Info("ParentPath: %v", zkParentPath)
@@ -767,7 +766,7 @@ func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("action PartialClone requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>")
 	}
 
-	return "", wrangler.PartialClone(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *globalForce || *force, *compressConcurrency, *fetchConcurrency, *fetchRetryCount)
+	return "", wrangler.PartialClone(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *compressConcurrency, *fetchConcurrency, *fetchRetryCount)
 }
 
 func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -800,7 +799,7 @@ func commandReparentShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action ReparentShard requires <zk shard path> <zk tablet path>")
 	}
-	return "", wrangler.ReparentShard(subFlags.Arg(0), subFlags.Arg(1), *leaveMasterReadOnly, *globalForce || *force)
+	return "", wrangler.ReparentShard(subFlags.Arg(0), subFlags.Arg(1), *leaveMasterReadOnly, *force)
 }
 
 func commandValidateShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -862,7 +861,7 @@ func commandCreateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action CreateKeyspace requires 1 arg")
 	}
-	return "", createKeyspace(wrangler.ZkConn(), subFlags.Arg(0), *globalForce || *force)
+	return "", createKeyspace(wrangler.ZkConn(), subFlags.Arg(0), *force)
 }
 
 func commandRebuildKeyspaceGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1097,7 +1096,7 @@ func commandApplySchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 
 		sc.BeforeSchema = scr.BeforeSchema
 		sc.AfterSchema = scr.AfterSchema
-		sc.Force = *globalForce || *force
+		sc.Force = *force
 	}
 
 	scr, err := wrangler.ApplySchema(subFlags.Arg(0), sc)
@@ -1127,7 +1126,7 @@ func commandApplySchemaShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args
 		relog.Fatal("new_parent for action ApplySchemaShard can only be specified for complex schema upgrades")
 	}
 
-	scr, err := wrangler.ApplySchemaShard(subFlags.Arg(0), change, *newParent, *simple, *globalForce || *force)
+	scr, err := wrangler.ApplySchemaShard(subFlags.Arg(0), change, *newParent, *simple, *force)
 	if err == nil {
 		relog.Info(scr.String())
 		if scr.Error != "" {
@@ -1149,7 +1148,7 @@ func commandApplySchemaKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, a
 	}
 	change := getFileParam(*sql, *sqlFile, "sql")
 
-	scr, err := wrangler.ApplySchemaKeyspace(subFlags.Arg(0), change, *simple, *globalForce || *force)
+	scr, err := wrangler.ApplySchemaKeyspace(subFlags.Arg(0), change, *simple, *force)
 	if err == nil {
 		relog.Info(scr.String())
 		if scr.Error != "" {

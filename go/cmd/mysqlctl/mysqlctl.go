@@ -17,7 +17,6 @@ import (
 )
 
 var port = flag.Int("port", 6612, "vtocc port")
-var globalForce = flag.Bool("force", false, "force action (DEPRECATED, use the per command -force flag)")
 var mysqlPort = flag.Int("mysql-port", 3306, "mysql port")
 var tabletUid = flag.Uint("tablet-uid", 41983, "tablet uid")
 var logLevel = flag.String("log.level", "WARNING", "set log level")
@@ -119,8 +118,8 @@ func teardownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Teardown(mysqld, *globalForce || *force); err != nil {
-		relog.Fatal("failed teardown mysql (forced? %v): %v", *globalForce || *force, err)
+	if err := mysqlctl.Teardown(mysqld, *force); err != nil {
+		relog.Fatal("failed teardown mysql (forced? %v): %v", *force, err)
 	}
 }
 
