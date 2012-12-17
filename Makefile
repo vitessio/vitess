@@ -3,8 +3,6 @@
 # be found in the LICENSE file.
 
 MAKEFLAGS = -s
-VTDATAROOT := /tmp/vt
-export VTDATAROOT
 
 all: build unit_test queryservice_test integration_test
 
