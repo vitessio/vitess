@@ -382,13 +382,16 @@ func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) err
 func getActions(zconn zk.Conn, actionPath string) ([]*tm.ActionNode, error) {
 	actions, _, err := zconn.Children(actionPath)
 	if err != nil {
-		return nil, fmt.Errorf("getActions: %v %v", actionPath, err)
+		return nil, fmt.Errorf("getActions failed: %v %v", actionPath, err)
 	}
 	sort.Strings(actions)
+	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	nodes := make([]*tm.ActionNode, len(actions))
+	nodes := make([]*tm.ActionNode, 0, len(actions))
 	for _, action := range actions {
+		wg.Add(1)
 		go func(action string) {
+			defer wg.Done()
 			actionNodePath := path.Join(actionPath, action)
 			data, _, err := zconn.Get(actionNodePath)
 			if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
@@ -405,6 +408,7 @@ func getActions(zconn zk.Conn, actionPath string) ([]*tm.ActionNode, error) {
 			mu.Unlock()
 		}(action)
 	}
+	wg.Wait()
 
 	return nodes, nil
 }
@@ -418,6 +422,7 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	actionMap := make(map[string]*tm.ActionNode)
+
 	f := func(actionPath string) {
 		defer wg.Done()
 		actionNodes, err := getActions(zconn, actionPath)
@@ -431,6 +436,7 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 		}
 		mu.Unlock()
 	}
+
 	shardActionNodes, err := getActions(zconn, tm.ShardActionPath(zkShardPath))
 	if err != nil {
 		relog.Warning("listActionsByShard %v", err)
@@ -454,7 +460,7 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 	for _, key := range keys {
 		action := actionMap[key]
 		if action == nil {
-			fmt.Fprintf(os.Stderr, "ERROR: %v\n", key)
+			relog.Warning("nil action: %v", key)
 		} else {
 			fmt.Println(fmtAction(action))
 		}
@@ -463,8 +469,12 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 }
 
 func fmtAction(action *tm.ActionNode) string {
-	return fmt.Sprintf("%v %v %v %v %v", action.Path(), action.Action, action.State, action.ActionGuid, action.Error)
-
+	state := string(action.State)
+	// FIXME(msolomon) The default state should really just have the value "queued".
+	if action.State == tm.ACTION_STATE_QUEUED {
+		state = "queued"
+	}
+	return fmt.Sprintf("%v %v %v %v %v", action.Path(), action.Action, state, action.ActionGuid, action.Error)
 }
 
 func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
