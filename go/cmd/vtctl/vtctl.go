@@ -517,8 +517,9 @@ func dumpTablets(zconn zk.Conn, zkTabletPaths []string) error {
 		ti, ok := tabletMap[tabletPath]
 		if !ok {
 			relog.Warning("failed to load tablet %v", tabletPath)
+		} else {
+			fmt.Println(fmtTabletAwkable(ti))
 		}
-		fmt.Println(fmtTabletAwkable(ti))
 	}
 	return nil
 }
