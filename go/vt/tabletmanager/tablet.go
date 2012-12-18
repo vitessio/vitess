@@ -233,6 +233,8 @@ func (tablet *Tablet) IsSlaveType() bool {
 	return true
 }
 
+// Was this tablet ever assigned data? A "scrap" node will show up as assigned
+// even though its data cannot be used for serving.
 func (tablet *Tablet) IsAssigned() bool {
 	return tablet.Keyspace != "" && tablet.Shard != ""
 }

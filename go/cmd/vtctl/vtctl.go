@@ -379,24 +379,34 @@ func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) err
 	return nil
 }
 
-func getFirstAction(zconn zk.Conn, actionPath string) (*tm.ActionNode, error) {
+func getActions(zconn zk.Conn, actionPath string) ([]*tm.ActionNode, error) {
 	actions, _, err := zconn.Children(actionPath)
 	if err != nil {
-		return nil, fmt.Errorf("getFirstAction: %v %v", actionPath, err)
+		return nil, fmt.Errorf("getActions: %v %v", actionPath, err)
 	}
-	if len(actions) == 0 {
-		return nil, nil
+	sort.Strings(actions)
+	mu := sync.Mutex{}
+	nodes := make([]*tm.ActionNode, len(actions))
+	for _, action := range actions {
+		go func(action string) {
+			actionNodePath := path.Join(actionPath, action)
+			data, _, err := zconn.Get(actionNodePath)
+			if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+				relog.Warning("getActions: %v %v", actionNodePath, err)
+				return
+			}
+			actionNode, err := tm.ActionNodeFromJson(data, actionNodePath)
+			if err != nil {
+				relog.Warning("getActions: %v %v", actionNodePath, err)
+				return
+			}
+			mu.Lock()
+			nodes = append(nodes, actionNode)
+			mu.Unlock()
+		}(action)
 	}
-	actionNodePath := path.Join(actionPath, actions[0])
-	data, _, err := zconn.Get(actionNodePath)
-	if err != nil {
-		return nil, fmt.Errorf("getFirstAction: %v %v", actionNodePath, err)
-	}
-	actionNode, err := tm.ActionNodeFromJson(data, actionNodePath)
-	if err != nil {
-		return nil, fmt.Errorf("getFirstAction: %v %v", actionNodePath, err)
-	}
-	return actionNode, nil
+
+	return nodes, nil
 }
 
 func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
@@ -410,18 +420,18 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 	actionMap := make(map[string]*tm.ActionNode)
 	f := func(actionPath string) {
 		defer wg.Done()
-		actionNode, err := getFirstAction(zconn, actionPath)
+		actionNodes, err := getActions(zconn, actionPath)
 		if err != nil {
 			relog.Warning("listActionsByShard %v", err)
 			return
 		}
-		if actionNode != nil {
-			mu.Lock()
-			actionMap[actionNode.Path()] = actionNode
-			mu.Unlock()
+		mu.Lock()
+		for _, node := range actionNodes {
+			actionMap[node.Path()] = node
 		}
+		mu.Unlock()
 	}
-	shardActionNode, err := getFirstAction(zconn, tm.ShardActionPath(zkShardPath))
+	shardActionNodes, err := getActions(zconn, tm.ShardActionPath(zkShardPath))
 	if err != nil {
 		relog.Warning("listActionsByShard %v", err)
 	}
@@ -435,11 +445,12 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 	mu.Lock()
 	defer mu.Unlock()
 
+	for _, shardAction := range shardActionNodes {
+		fmt.Println(fmtAction(shardAction))
+	}
+
 	keys := wr.CopyMapKeys(actionMap, []string{}).([]string)
 	sort.Strings(keys)
-	if shardActionNode != nil {
-		fmt.Println(fmtAction(shardActionNode))
-	}
 	for _, key := range keys {
 		action := actionMap[key]
 		if action == nil {
