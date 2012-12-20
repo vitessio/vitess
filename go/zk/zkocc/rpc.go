@@ -27,37 +27,51 @@ import (
 
 // ZkReader is the main object receiving RPC calls
 type ZkReader struct {
-	mutex     sync.Mutex
-	zcell     map[string]*zkCell
-	localCell string
+	mutex        sync.Mutex
+	zcell        map[string]*zkCell
+	resolveLocal bool
+	localCell    string
 }
 
 var (
 	ErrPartialRead = errors.New("zkocc: partial read")
+	ErrLocalCell   = errors.New("zkocc: cannot resolve local cell")
 )
 
-func NewZkReader(preload []string) *ZkReader {
-	zkr := &ZkReader{zcell: make(map[string]*zkCell), localCell: zk.GuessLocalCell()}
+func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
+	zkr := &ZkReader{zcell: make(map[string]*zkCell), resolveLocal: resolveLocal}
+	if resolveLocal {
+		zkr.localCell = zk.GuessLocalCell()
+	}
 
 	// start some cells
 	for _, cellName := range preload {
-		_, path := zkr.getCell("/zk/" + cellName)
-		relog.Info("Cell " + cellName + " preloaded for: " + path)
+		_, path, err := zkr.getCell("/zk/" + cellName)
+		if err != nil {
+			relog.Error("Cell " + cellName + " could not be preloaded: " + err.Error())
+		} else {
+			relog.Info("Cell " + cellName + " preloaded for: " + path)
+		}
 	}
 	return zkr
 }
 
-func (zkr *ZkReader) getCell(path string) (*zkCell, string) {
+func (zkr *ZkReader) getCell(path string) (*zkCell, string, error) {
 	zkr.mutex.Lock()
+	defer zkr.mutex.Unlock()
 	cellName := zk.ZkCellFromZkPath(path)
 
 	// the 'local' cell has to be resolved, and the path fixed
 	resolvedPath := path
 	if cellName == "local" {
-		cellName = zkr.localCell
-		parts := strings.Split(path, "/")
-		parts[2] = cellName
-		resolvedPath = strings.Join(parts, "/")
+		if zkr.resolveLocal {
+			cellName = zkr.localCell
+			parts := strings.Split(path, "/")
+			parts[2] = cellName
+			resolvedPath = strings.Join(parts, "/")
+		} else {
+			return nil, "", ErrLocalCell
+		}
 	}
 
 	cell, ok := zkr.zcell[cellName]
@@ -66,18 +80,20 @@ func (zkr *ZkReader) getCell(path string) (*zkCell, string) {
 		cell = newZkCell(cellName, zkaddr)
 		zkr.zcell[cellName] = cell
 	}
-	zkr.mutex.Unlock()
-	return cell, resolvedPath
+	return cell, resolvedPath, nil
 }
 
-func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
-	cell, path := zkr.getCell(req.Path)
+func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) error {
+	cell, path, err := zkr.getCell(req.Path)
+	if err != nil {
+		return err
+	}
 
 	// check the cell cache
 	if cached, stale := cell.zcache.get(path, reply); cached {
 		reply.Cached = true
 		reply.Stale = stale
-		return
+		return nil
 	}
 
 	// not in cache, have to query zk
@@ -98,7 +114,7 @@ func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 
 	// update cache, set channel
 	cell.zcache.updateData(path, reply.Data, &reply.Stat, watch)
-	return
+	return nil
 }
 
 func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) error {
@@ -134,14 +150,17 @@ func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) error {
 	return nil
 }
 
-func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
-	cell, path := zkr.getCell(req.Path)
+func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) error {
+	cell, path, err := zkr.getCell(req.Path)
+	if err != nil {
+		return err
+	}
 
 	// check the cell cache
 	if cached, stale := cell.zcache.children(path, reply); cached {
 		reply.Cached = true
 		reply.Stale = stale
-		return
+		return nil
 	}
 
 	// not in cache, have to query zk
@@ -162,5 +181,5 @@ func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error
 
 	// update cache
 	cell.zcache.updateChildren(path, reply.Children, &reply.Stat, watch)
-	return
+	return nil
 }

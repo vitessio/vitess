@@ -34,6 +34,7 @@ instance).
 `
 
 var (
+	resolveLocal   = flag.Bool("resolve-local", false, "if specified, will try to resolve /zk/local/ paths. If not set, they will fail.")
 	port           = flag.Int("port", 14850, "port for the server")
 	lameDuckPeriod = flag.Float64("lame-duck-period", DefaultLameDuckPeriod, "how long to give in-flight transactions to finish")
 	rebindDelay    = flag.Float64("rebind-delay", DefaultRebindDelay, "artificial delay before rebinding a hijacked listener")
@@ -58,7 +59,7 @@ func main() {
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
 
-	proto.Register(zkocc.NewZkReader(flag.Args()))
+	proto.Register(zkocc.NewZkReader(*resolveLocal, flag.Args()))
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
