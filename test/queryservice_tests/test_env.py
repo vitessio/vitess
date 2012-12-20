@@ -276,7 +276,7 @@ class VtoccTestEnv(TestEnv):
     subprocess.call([
         self.vtroot+"/bin/mysqlctl",
         "-tablet-uid",  self.tabletuid,
-        "-force", "teardown"
+        "teardown", "-force"
         ])
     shutil.rmtree(self.mysqldir)
 

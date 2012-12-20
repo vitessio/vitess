@@ -116,6 +116,8 @@ func (si *SchemaInfo) Close() {
 }
 
 func (si *SchemaInfo) Reload() {
+	var err error
+	defer handleError(&err, nil)
 	conn := si.connPool.Get()
 	defer conn.Recycle()
 	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix())), maxTableCount, false)

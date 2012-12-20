@@ -73,7 +73,13 @@ func handleError(err *error, logStats *sqlQueryStats) {
 		logStats.Send()
 	}
 	if x := recover(); x != nil {
-		terr := x.(*TabletError)
+		terr, ok := x.(*TabletError)
+		if !ok {
+			relog.Error("Uncaught panic:\n%v\n%s", x, relog.Stack(4))
+			*err = NewTabletError(FAIL, "%v: uncaught panic", x)
+			errorStats.Add("Panic", 1)
+			return
+		}
 		*err = terr
 		terr.RecordStats()
 		if terr.ErrorType == RETRY { // Retry errors are too spammy
