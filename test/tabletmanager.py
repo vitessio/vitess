@@ -435,8 +435,13 @@ def run_test_restart_during_action():
   # we expect this action with a short wait time to fail. this isn't the best
   # and has some potential for flakiness.
   utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 2s WaitForAction ' + action_path)
-  tablet_62344.kill_vttablet()
 
+  # wait until the background sleep action is done, otherwise there will be
+  # a leftover vtaction whose result may overwrite running actions
+  # NOTE(alainjobart): Yes, I've seen it happen, it's a pain to debug:
+  # the zombie Sleep clobbers the Clone command in the following tests
+  utils.run(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 20s WaitForAction ' + action_path)
+  tablet_62344.kill_vttablet()
 
 @utils.test_case
 def run_test_reparent_down_master():
