@@ -15,6 +15,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -156,8 +157,11 @@ var commands = []commandGroup{
 	commandGroup{
 		"Generic", []command{
 			command{"PurgeActions", commandPurgeActions,
-				"<zk action path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
+				"<zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
 				"Remove all actions - be careful, this is powerful cleanup magic."},
+			command{"StaleActions", commandStaleActions,
+				"[-max-staleness=<duration>] <zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
+				"List any queued actions that are considered stale."},
 			command{"PruneActionLogs", commandPruneActionLogs,
 				"[-keep-count=<count to keep>] <zk actionlog path> [<count to keep>]",
 				"e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog\n" +
@@ -481,6 +485,17 @@ func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
 	tabletPaths, err := tabletPathsForShard(zconn, zkShardPath)
 	if err != nil {
 		return err
+	}
+	return dumpTablets(zconn, tabletPaths)
+}
+
+func listTabletsByAliases(zconn zk.Conn, tabletAliases []string) error {
+	tabletPaths := make([]string, len(tabletAliases))
+	for i, tabletAlias := range tabletAliases {
+		aliasParts := strings.Split(tabletAlias, "-")
+		uid, _ := strconv.ParseUint(aliasParts[1], 10, 32)
+		alias := tm.TabletAlias{aliasParts[0], uint32(uid)}
+		tabletPaths[i] = tm.TabletPathForAlias(alias)
 	}
 	return dumpTablets(zconn, tabletPaths)
 }
@@ -906,23 +921,82 @@ func commandValidateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args
 
 func commandPurgeActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
+	if subFlags.NArg() == 0 {
 		relog.Fatal("action PurgeActions requires <zk action path>")
 	}
-	return "", tm.PurgeActions(wrangler.ZkConn(), subFlags.Arg(0))
+	for _, zkActionPath := range subFlags.Args() {
+		err := tm.PurgeActions(wrangler.ZkConn(), zkActionPath)
+		if err != nil {
+			return "", err
+		}
+	}
+	return "", nil
+}
+
+func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	maxStaleness := subFlags.Duration("max-staleness", 5*time.Minute, "how long since the last modification before an action considered stale")
+	subFlags.Parse(args)
+	if subFlags.NArg() == 0 {
+		relog.Fatal("action StaleActions requires <zk action path>")
+	}
+
+	zkPaths := subFlags.Args()
+	workq := make(chan string, len(zkPaths))
+	wg := sync.WaitGroup{}
+	results := make(chan string, len(zkPaths))
+	for _, zkPath := range zkPaths {
+		workq <- zkPath
+	}
+	close(workq)
+
+	for i := 16; i >= 0; i-- {
+		wg.Add(1)
+		go func() {
+			for zkActionPath := range workq {
+				staleActions, err := tm.StaleActions(wrangler.ZkConn(), zkActionPath, *maxStaleness)
+				if err != nil {
+					relog.Warning("can't check stale actions: %v %v", zkActionPath, err)
+					continue
+				}
+				for _, path := range staleActions {
+					results <- path
+				}
+			}
+			wg.Done()
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+	for path := range results {
+		fmt.Println(path)
+	}
+	return "", nil
 }
 
 func commandPruneActionLogs(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	keepCount := subFlags.Int("keep-count", 10, "count to keep")
 	subFlags.Parse(args)
 
-	if subFlags.NArg() != 1 {
+	if subFlags.NArg() == 0 {
 		relog.Fatal("action PruneActionLogs requires <zk action log path>")
 	}
 
-	purgedCount, err := tm.PruneActionLogs(wrangler.ZkConn(), subFlags.Arg(0), *keepCount)
-	relog.Info("Pruned %v actionlog", purgedCount)
-	return "", err
+	errCount := 0
+	for _, zkActionLogPath := range subFlags.Args() {
+		purgedCount, err := tm.PruneActionLogs(wrangler.ZkConn(), zkActionLogPath, *keepCount)
+		if err == nil {
+			relog.Debug("%v pruned %v", zkActionLogPath, purgedCount)
+		} else {
+			relog.Error("%v pruning failed: %v", zkActionLogPath, err)
+			errCount++
+		}
+	}
+	if errCount > 0 {
+		return "", fmt.Errorf("some error occurred, check the log")
+	}
+	return "", nil
 }
 
 func commandWaitForAction(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1035,7 +1109,11 @@ func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 		relog.Fatal("action ListTablets requires <zk tablet path> ...")
 	}
 
-	return "", dumpTablets(wrangler.ZkConn(), subFlags.Args())
+	// If these are not zk paths, assume they are tablet aliases.
+	if strings.HasPrefix(subFlags.Arg(0), "/zk") {
+		return "", dumpTablets(wrangler.ZkConn(), subFlags.Args())
+	}
+	return "", listTabletsByAliases(wrangler.ZkConn(), subFlags.Args())
 }
 
 func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

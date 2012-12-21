@@ -326,8 +326,7 @@ wait:
 	return actionNode.reply, nil
 }
 
-// Remove all queued actions, regardless of their current state, leaving
-// the action node in place.
+// Remove all queued actions, leaving the action node itself in place.
 //
 // This inherently breaks the locking mechanism of the action queue,
 // so this is a rare cleaup action, not a normal part of the flow.
@@ -363,6 +362,35 @@ func PurgeActions(zconn zk.Conn, zkActionPath string) error {
 		}
 	}
 	return nil
+}
+
+// Return a list of queued actions that have been sitting for more
+// than some amount of time.
+func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration) ([]string, error) {
+	if path.Base(zkActionPath) != "action" {
+		return nil, fmt.Errorf("not action path: %v", zkActionPath)
+	}
+
+	children, _, err := zconn.Children(zkActionPath)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Strings(children)
+
+	// Purge newer items first so the action queues don't try to process something.
+	staleActions := make([]string, 0, 16)
+	for i := 0; i < len(children); i++ {
+		actionPath := path.Join(zkActionPath, children[i])
+		stat, err := zconn.Exists(actionPath)
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+			return nil, fmt.Errorf("stale action err: %v", err)
+		}
+		if stat != nil && time.Since(stat.MTime()) > maxStaleness {
+			staleActions = append(staleActions, actionPath)
+		}
+	}
+	return staleActions, nil
 }
 
 // Prune old actionlog entries. Returns how many entries were purged
