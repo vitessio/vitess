@@ -163,7 +163,7 @@ var commands = []commandGroup{
 				"[-max-staleness=<duration>] <zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
 				"List any queued actions that are considered stale."},
 			command{"PruneActionLogs", commandPruneActionLogs,
-				"[-keep-count=<count to keep>] <zk actionlog path> [<count to keep>]",
+				"[-keep-count=<count to keep>] <zk actionlog path>",
 				"e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog\n" +
 					"Removes older actionlog entries until at most <count to keep> are left."},
 			command{"WaitForAction", commandWaitForAction,
