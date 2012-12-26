@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/stats"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -66,13 +67,20 @@ type zkCell struct {
 	state   int
 	ready   *sync.Cond // will be signaled at connection time
 	lastErr error      // last connection error
+	states  *stats.States
 }
 
 func newZkCell(name, zkaddr string) *zkCell {
 	result := &zkCell{cellName: name, zkAddr: zkaddr, zcache: newZkCache()}
 	result.ready = sync.NewCond(&result.mutex)
+	result.states = stats.NewStates("", []string{"Disconnected", "Connecting", "Connected", "BackOff"}, time.Now(), CELL_DISCONNECTED)
 	go result.backgroundRefresher()
 	return result
+}
+
+func (zcell *zkCell) setState(state int) {
+	zcell.state = state
+	zcell.states.SetState(state)
 }
 
 // background routine to initiate a connection sequence
@@ -88,7 +96,7 @@ func (zcell *zkCell) connect() {
 		zcell.mutex.Unlock()
 		return
 	}
-	zcell.state = CELL_CONNECTING
+	zcell.setState(CELL_CONNECTING)
 	zcell.mutex.Unlock()
 
 	// now connect
@@ -116,12 +124,12 @@ func (zcell *zkCell) connect() {
 	}
 	if err == nil {
 		relog.Info("zk cell conn: cell %v connected", zcell.cellName)
-		zcell.state = CELL_CONNECTED
+		zcell.setState(CELL_CONNECTED)
 		zcell.lastErr = nil
 
 	} else {
 		relog.Info("zk cell conn: cell %v connection failed: %v", zcell.cellName, err)
-		zcell.state = CELL_BACKOFF
+		zcell.setState(CELL_BACKOFF)
 		zcell.lastErr = err
 
 		go func() {
@@ -131,7 +139,7 @@ func (zcell *zkCell) connect() {
 
 			// switch back to DISCONNECTED, and trigger a connect
 			zcell.mutex.Lock()
-			zcell.state = CELL_DISCONNECTED
+			zcell.setState(CELL_DISCONNECTED)
 			zcell.mutex.Unlock()
 			zcell.connect()
 		}()
@@ -169,7 +177,7 @@ func (zcell *zkCell) handleSessionEvents(conn *zookeeper.Conn, session <-chan zo
 			fallthrough
 		case zookeeper.STATE_CLOSED:
 			zcell.mutex.Lock()
-			zcell.state = CELL_DISCONNECTED
+			zcell.setState(CELL_DISCONNECTED)
 			zcell.zconn = nil
 			zcell.zcache.markForRefresh()
 			// for a closed connection, no backoff at first retry
@@ -227,4 +235,9 @@ func (zcell *zkCell) backgroundRefresher() {
 		// get a few values to refresh, and ask for them
 		zcell.zcache.refreshSomeValues(zconn, *refreshCount)
 	}
+}
+
+// Implements expvar.Var()
+func (zcell *zkCell) String() string {
+	return zcell.states.String()
 }

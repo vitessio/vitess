@@ -190,6 +190,11 @@ func (conn *MetaConn) GetSession(path string) <-chan zookeeper.Event {
 }
 */
 
+// Implements expvar.Var()
+func (conn *MetaConn) String() string {
+	return conn.connCache.String()
+}
+
 func NewMetaConn(useZkocc bool) *MetaConn {
 	return &MetaConn{NewConnCache(useZkocc)}
 }

@@ -441,6 +441,21 @@ def run_test_restart_during_action():
   # NOTE(alainjobart): Yes, I've seen it happen, it's a pain to debug:
   # the zombie Sleep clobbers the Clone command in the following tests
   utils.run(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 20s WaitForAction ' + action_path)
+
+  # extra small test: we ran for a while, get the states we were in,
+  # make sure they're accounted for properly
+  # first the query engine States
+  v = utils.get_vars(tablet_62344.port)
+  if v['Voltron']['States']['DurationOPEN'] < 10e9:
+    raise utils.TestError('not enough time in Open state', v['Voltron']['States']['DurationOPEN'])
+  # then the Zookeeper connections
+  if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
+    raise utils.TestError('invalid zk test_nj state: ', v['ZkMetaConn']['test_nj']['Current'])
+  if v['ZkMetaConn']['global']['Current'] != 'Connected':
+    raise utils.TestError('invalid zk global state: ', v['ZkMetaConn']['global']['Current'])
+  if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
+    raise utils.TestError('not enough time in Connected state', v['ZkMetaConn']['test_nj']['DurationConnected'])
+
   tablet_62344.kill_vttablet()
 
 @utils.test_case

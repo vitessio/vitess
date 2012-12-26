@@ -5,11 +5,14 @@
 package zk
 
 import (
+	"bytes"
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
 
+	"code.google.com/p/vitess/go/stats"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -23,9 +26,16 @@ abstraction so you aren't caching clients all over the place.
 ConnCache guarantees that you have at most one zookeeper connection per cell.
 */
 
+const (
+	DISCONNECTED = 0
+	CONNECTING   = 1
+	CONNECTED    = 2
+)
+
 type cachedConn struct {
-	mutex sync.Mutex // used to notify if multiple goroutine simultaneously want a connection
-	zconn Conn
+	mutex  sync.Mutex // used to notify if multiple goroutine simultaneously want a connection
+	zconn  Conn
+	states *stats.States
 }
 
 type ConnCache struct {
@@ -46,6 +56,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	conn, ok := cc.zconnCellMap[zcell]
 	if !ok {
 		conn = &cachedConn{}
+		conn.states = stats.NewStates("", []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
 		cc.zconnCellMap[zcell] = conn
 	}
 	cc.mutex.Unlock()
@@ -59,10 +70,16 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 		return conn.zconn, nil
 	}
 
+	conn.states.SetState(CONNECTING)
 	if cc.useZkocc {
 		conn.zconn, err = DialZkocc(ZkPathToZkAddr(zkPath, true), *baseTimeout)
 	} else {
 		conn.zconn, err = cc.newZookeeperConn(zkPath, zcell)
+	}
+	if conn.zconn != nil {
+		conn.states.SetState(CONNECTED)
+	} else {
+		conn.states.SetState(DISCONNECTED)
 	}
 	return conn.zconn, err
 }
@@ -83,11 +100,21 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 			conn.Close()
 			fallthrough
 		case zookeeper.STATE_CLOSED:
+			var cached *cachedConn
 			cc.mutex.Lock()
 			if cc.zconnCellMap != nil {
-				delete(cc.zconnCellMap, cell)
+				cached = cc.zconnCellMap[cell]
 			}
 			cc.mutex.Unlock()
+
+			// keek the entry in the map, but nil the Conn
+			// (that will trigger a re-dial next time
+			// we ask for a variable)
+			if cached != nil {
+				cached.zconn = nil
+				cached.states.SetState(DISCONNECTED)
+			}
+
 			log.Printf("zk conn cache: session for cell %v ended: %v", cell, event)
 			return
 		default:
@@ -109,6 +136,28 @@ func (cc *ConnCache) Close() error {
 	}
 	cc.zconnCellMap = nil
 	return nil
+}
+
+// Implements expvar.Var()
+func (cc *ConnCache) String() string {
+	cc.mutex.Lock()
+	defer cc.mutex.Unlock()
+
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	fmt.Fprintf(b, "{")
+
+	firstCell := true
+	for cell, conn := range cc.zconnCellMap {
+		if firstCell {
+			firstCell = false
+		} else {
+			fmt.Fprintf(b, ", ")
+		}
+		fmt.Fprintf(b, "\"%v\": %v", cell, conn.states.String())
+	}
+
+	fmt.Fprintf(b, "}")
+	return b.String()
 }
 
 func NewConnCache(useZkocc bool) *ConnCache {

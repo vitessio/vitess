@@ -63,6 +63,7 @@ type SqlQuery struct {
 	// where you don't want the state to change from the time you've read it.
 	statemu sync.Mutex
 	state   int32
+	states  *stats.States
 
 	qe        *QueryEngine
 	sessionId int64
@@ -72,8 +73,22 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
+	sq.states = stats.NewStates("", []string{
+		stateName[NOT_SERVING],
+		stateName[CLOSED],
+		stateName[CONNECTING],
+		stateName[ABORT],
+		stateName[INITIALIZING],
+		stateName[OPEN],
+		stateName[SHUTTING_DOWN],
+	}, time.Now(), NOT_SERVING)
 	expvar.Publish("Voltron", stats.StrFunc(func() string { return sq.statsJSON() }))
 	return sq
+}
+
+func (sq *SqlQuery) setState(state int32) {
+	atomic.StoreInt32(&sq.state, state)
+	sq.states.SetState(int(state))
 }
 
 func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
@@ -88,7 +103,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 		panic("unreachable")
 	}
 	// state is NOT_SERVING or CLOSED
-	atomic.StoreInt32(&sq.state, CONNECTING)
+	sq.setState(CONNECTING)
 	sq.statemu.Unlock()
 
 	// Try connecting. disallowQueries can change the state to ABORT during this time.
@@ -107,7 +122,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 		}
 		if atomic.LoadInt32(&sq.state) == ABORT {
 			// Exclusive transition. No need to lock statemu.
-			atomic.StoreInt32(&sq.state, CLOSED)
+			sq.setState(CLOSED)
 			relog.Info("allowQueries aborting")
 			return
 		}
@@ -117,19 +132,19 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
 	if atomic.LoadInt32(&sq.state) == ABORT {
-		atomic.StoreInt32(&sq.state, CLOSED)
+		sq.setState(CLOSED)
 		relog.Info("allowQueries aborting")
 		return
 	}
-	atomic.StoreInt32(&sq.state, INITIALIZING)
+	sq.setState(INITIALIZING)
 
 	defer func() {
 		if x := recover(); x != nil {
 			relog.Error("%s", x.(*TabletError).Message)
-			atomic.StoreInt32(&sq.state, NOT_SERVING)
+			sq.setState(NOT_SERVING)
 			return
 		}
-		atomic.StoreInt32(&sq.state, OPEN)
+		sq.setState(OPEN)
 	}()
 
 	sq.qe.Open(dbconfig)
@@ -143,13 +158,13 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 	defer sq.statemu.Unlock()
 	switch atomic.LoadInt32(&sq.state) {
 	case CONNECTING:
-		atomic.StoreInt32(&sq.state, ABORT)
+		sq.setState(ABORT)
 		return
 	case NOT_SERVING, CLOSED:
 		if forRestart {
-			atomic.StoreInt32(&sq.state, CLOSED)
+			sq.setState(CLOSED)
 		} else {
-			atomic.StoreInt32(&sq.state, NOT_SERVING)
+			sq.setState(NOT_SERVING)
 		}
 		return
 	case ABORT:
@@ -158,12 +173,12 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 		panic("unreachable")
 	}
 	// state is OPEN
-	atomic.StoreInt32(&sq.state, SHUTTING_DOWN)
+	sq.setState(SHUTTING_DOWN)
 	defer func() {
 		if forRestart {
-			atomic.StoreInt32(&sq.state, CLOSED)
+			sq.setState(CLOSED)
 		} else {
-			atomic.StoreInt32(&sq.state, NOT_SERVING)
+			sq.setState(NOT_SERVING)
 		}
 	}()
 
@@ -360,7 +375,10 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 func (sq *SqlQuery) statsJSON() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	fmt.Fprintf(buf, "{")
+	// TODO(alainjobart) when no monitoring depends on 'State',
+	// remove it (use 'States.Current' instead)
 	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[atomic.LoadInt32(&sq.state)])
+	fmt.Fprintf(buf, "\n \"States\": %v,", sq.states.String())
 	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.qe.cachePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.qe.schemaInfo.queries.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ConnPool\": %v,", sq.qe.connPool.StatsJSON())

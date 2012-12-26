@@ -259,7 +259,7 @@ class Tablet(object):
         if not 'Voltron' in v:
           utils.debug("  vttablet not exporting Voltron, waiting...")
         else:
-          s = v['Voltron']['State']
+          s = v['Voltron']['States']['Current']
           if s != expected:
             utils.debug("  vttablet in state %s != %s" % (s, expected))
           else:

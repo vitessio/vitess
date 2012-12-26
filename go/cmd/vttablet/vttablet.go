@@ -6,6 +6,7 @@
 package main
 
 import (
+	"expvar"
 	"flag"
 	"fmt"
 	"log"
@@ -162,6 +163,7 @@ func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 
 func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) {
 	zconn := zk.NewMetaConn(false)
+	expvar.Publish("ZkMetaConn", zconn)
 	umgmt.AddCloseCallback(func() {
 		zconn.Close()
 	})

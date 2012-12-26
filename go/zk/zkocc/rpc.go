@@ -5,11 +5,15 @@
 package zkocc
 
 import (
+	"bytes"
 	"errors"
+	"expvar"
+	"fmt"
 	"strings"
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkocc/proto"
 	"launchpad.net/gozk/zookeeper"
@@ -43,6 +47,9 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 	if resolveLocal {
 		zkr.localCell = zk.GuessLocalCell()
 	}
+
+	// register to expvar
+	expvar.Publish("ZkReader", stats.StrFunc(func() string { return zkr.statsJSON() }))
 
 	// start some cells
 	for _, cellName := range preload {
@@ -182,4 +189,25 @@ func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) error {
 	// update cache
 	cell.zcache.updateChildren(path, reply.Children, &reply.Stat, watch)
 	return nil
+}
+
+func (zkr *ZkReader) statsJSON() string {
+	zkr.mutex.Lock()
+	defer zkr.mutex.Unlock()
+
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	fmt.Fprintf(b, "{")
+
+	firstCell := true
+	for name, zcell := range zkr.zcell {
+		if firstCell {
+			firstCell = false
+		} else {
+			fmt.Fprintf(b, ", ")
+		}
+		fmt.Fprintf(b, "\"%v\": %v", name, zcell.String())
+	}
+
+	fmt.Fprintf(b, "}")
+	return b.String()
 }

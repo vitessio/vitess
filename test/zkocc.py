@@ -218,6 +218,14 @@ def run_test_zkocc_qps():
   qpser = utils.run_bg(vtroot+'/bin/zkclient2 -server localhost:14850 -mode qps /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2')
   time.sleep(10)
   utils.kill_sub_process(qpser)
+
+  # get the zkocc vars, make sure we have what we need
+  v = utils.get_vars(14850)
+  if v['ZkReader']['test_nj']['Current'] != 'Connected':
+    raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['Current'])
+  if v['ZkReader']['test_nj']['DurationConnected'] < 9e9:
+    raise utils.TestError('not enough time in Connected state', v['ZkReader']['test_nj']['DurationConnected'])
+
   utils.zkocc_kill(zkocc_14850)
 
 def run_all():

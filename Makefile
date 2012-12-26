@@ -33,6 +33,7 @@ unit_test:
 	cd go/rpcplus; go test
 	cd go/rpcplus/jsonrpc; go test
 	cd go/rpcwrap/auth; go test
+	cd go/stats; go test
 	cd go/timer; go test
 	cd go/umgmt; go test
 	cd go/vt/client2; go test
