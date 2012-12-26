@@ -114,7 +114,7 @@ class VttabletTestEnv(TestEnv):
     finally:
       mcu.close()
 
-    utils.run_vtctl('-force CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+    utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
     self.tablet.init_tablet('master', 'test_keyspace', '0')
 
     if utils.options.memcache:
@@ -291,4 +291,3 @@ class VtoccTestEnv(TestEnv):
       db='vt_test_keyspace',
       unix_socket=self.mysqldir+"/mysql.sock",
       charset='utf8')
-

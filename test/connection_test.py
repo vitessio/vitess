@@ -99,11 +99,13 @@ class BaseTest(unittest.TestCase):
       pass
 
     # stop mysql, delete directory
-    subprocess.call([
+    result = subprocess.call([
         klass.vtroot+"/bin/mysqlctl",
         "-tablet-uid",  klass.tabletuid,
-        "-force", "teardown"
+        "teardown", "-force"
         ])
+    if result != 0:
+      raise Exception("cannot stop mysql")
     try:
       shutil.rmtree(klass.mysqldir)
     except OSError:

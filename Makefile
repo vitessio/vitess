@@ -45,11 +45,13 @@ unit_test:
 
 queryservice_test:
 	if [ -e "/usr/bin/memcached" ]; then \
-		cd test; ./queryservice_test.py -m -e vttablet; \
-		cd test; ./queryservice_test.py -m -e vtocc; \
+		cd test && \
+		./queryservice_test.py -m -e vttablet && \
+		./queryservice_test.py -m -e vtocc; \
 	else \
-		cd test; ./queryservice_test.py -e vttablet; \
-		cd test; ./queryservice_test.py -e vtocc; \
+		cd test && \
+		./queryservice_test.py -e vttablet && \
+		./queryservice_test.py -e vtocc; \
 	fi
 
 # export VT_TEST_FLAGS=-v for instance
