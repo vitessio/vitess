@@ -127,12 +127,11 @@ def run_test_complex_schema():
 
   # check all expected hosts have the change:
   # - master won't have it as it's a complex change
-  # - backup won't have it as IsReplicatingType is false
   check_tables(shard_0_master, 0)
   check_tables(shard_0_replica1, 1)
   check_tables(shard_0_replica2, 1)
   check_tables(shard_0_rdonly, 1)
-  check_tables(shard_0_backup, 0)
+  check_tables(shard_0_backup, 1)
   check_tables(shard_1_master, 0)
   check_tables(shard_1_replica1, 0)
 
@@ -145,15 +144,6 @@ def run_test_complex_schema():
                   auto_log=True)
   check_tables(shard_0_master, 1)
 
-  # shard 0: apply schema change to just backup directly
-  # (to test its state is not changed)
-  utils.run_vtctl(['ApplySchema',
-                   '-stop-replication',
-                   '-sql='+create_vt_select_test[0],
-                   shard_0_backup.zk_tablet_path],
-                  auto_log=True)
-  check_tables(shard_0_backup, 1)
-
   # shard 0: apply new schema change, with reparenting
   utils.run_vtctl(['ApplySchemaShard',
                    '-new-parent='+shard_0_replica1.zk_tablet_path,
@@ -164,7 +154,7 @@ def run_test_complex_schema():
   check_tables(shard_0_replica1, 2)
   check_tables(shard_0_replica2, 2)
   check_tables(shard_0_rdonly, 2)
-  check_tables(shard_0_backup, 1)
+  check_tables(shard_0_backup, 2)
 
   # keyspace: try to apply a keyspace-wide schema change, should fail
   # as the preflight would be different in both shards
@@ -204,7 +194,7 @@ def run_test_complex_schema():
   check_tables(shard_0_replica1, 3) # current master
   check_tables(shard_0_replica2, 3)
   check_tables(shard_0_rdonly, 3)
-  check_tables(shard_0_backup, 1) # stuck behind
+  check_tables(shard_0_backup, 3)
   check_tables(shard_1_master, 3) # current master
   check_tables(shard_1_replica1, 3)
 
@@ -221,7 +211,7 @@ def run_test_complex_schema():
   check_tables(shard_0_replica1, 3) # current master
   check_tables(shard_0_replica2, 4)
   check_tables(shard_0_rdonly, 4)
-  check_tables(shard_0_backup, 1) # stuck behind
+  check_tables(shard_0_backup, 4)
   check_tables(shard_1_master, 3) # current master
   check_tables(shard_1_replica1, 4)
 
