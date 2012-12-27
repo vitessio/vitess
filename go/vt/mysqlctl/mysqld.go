@@ -240,15 +240,15 @@ func (mt *Mysqld) createDirs() error {
 }
 
 // createTopDir creates a top level directory under TabletDir.
-// However, if a directory of the same name already exists under VtDataRoot,
-// it creates a directory named after the tablet id under that directory, and
-// then creates a symlink under TabletDir that points to the newly created directory.
-// For example, if /vt/data is present, it will create the following structure:
-// /vt/data/vt_xxxx
-// /vt/vt_xxxx/data -> /vt/data/vt_xxxx
+// However, if a directory of the same name already exists under
+// vtenv.VtDataRoot(), it creates a directory named after the tablet
+// id under that directory, and then creates a symlink under TabletDir
+// that points to the newly created directory.  For example, if
+// /vt/data is present, it will create the following structure:
+// /vt/data/vt_xxxx /vt/vt_xxxx/data -> /vt/data/vt_xxxx
 func (mt *Mysqld) createTopDir(dir string) error {
 	vtname := path.Base(mt.TabletDir)
-	target := path.Join(VtDataRoot, dir)
+	target := path.Join(vtenv.VtDataRoot(), dir)
 	_, err := os.Lstat(target)
 	if err != nil {
 		if os.IsNotExist(err) {

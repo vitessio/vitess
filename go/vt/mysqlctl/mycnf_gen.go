@@ -8,12 +8,13 @@ package mysqlctl
 
 import (
 	"bytes"
-
 	"fmt"
 	"io/ioutil"
 	"path"
 	"strings"
 	"text/template"
+
+	"code.google.com/p/vitess/go/vt/env"
 )
 
 type VtReplParams struct {
@@ -22,7 +23,6 @@ type VtReplParams struct {
 }
 
 const (
-	VtDataRoot       = "/vt"
 	dataDir          = "data"
 	innodbDir        = "innodb"
 	relayLogDir      = "relay-logs"
@@ -65,11 +65,11 @@ func NewMycnf(uid uint32, mysqlPort int, vtRepl VtReplParams) *Mycnf {
 }
 
 func TabletDir(uid uint32) string {
-	return fmt.Sprintf("%s/vt_%010d", VtDataRoot, uid)
+	return fmt.Sprintf("%s/vt_%010d", env.VtDataRoot(), uid)
 }
 
 func SnapshotDir(uid uint32) string {
-	return fmt.Sprintf("%s/%s/vt_%010d", VtDataRoot, snapshotDir, uid)
+	return fmt.Sprintf("%s/%s/vt_%010d", env.VtDataRoot(), snapshotDir, uid)
 }
 
 func MycnfFile(uid uint32) string {
