@@ -281,7 +281,6 @@ def run_test_vtctl_clone():
                   (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
 
   utils.pause("look at logs!")
-
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')

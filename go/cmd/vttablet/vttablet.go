@@ -27,8 +27,9 @@ import (
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
+	"code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/servenv"
+	servenv "code.google.com/p/vitess/go/vt/servenv"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"code.google.com/p/vitess/go/zk"
@@ -76,7 +77,7 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
-	env.Init("vttablet")
+	servenv.Init("vttablet")
 
 	_, tabletidStr := path.Split(*tabletPath)
 	tabletId, err := tm.ParseUid(tabletidStr)
@@ -109,7 +110,7 @@ func main() {
 
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
 	// FIXME(msolomon) this path needs to be obtained from the config.
-	http.Handle("/vt/snapshot/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(path.Join(env.VtDataRoot(), "snapshot")+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSnapshot(w, r, mysqlctl.SnapshotDir(uint32(tabletId)))
 	}))
 
