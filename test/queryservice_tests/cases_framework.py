@@ -13,24 +13,28 @@ def cases_iterator(cases):
 class Log(object):
   def __init__(self, line):
     self.line = line
-    (self.method,
-     self.remote_address,
-     self.username,
-     self.start_time,
-     self.end_time,
-     self.total_time,
-     self.plan_type,
-     self.original_sql,
-     self.bind_variables,
-     self.number_of_queries,
-     self.rewritten_sql,
-     self.query_sources,
-     self.mysql_response_time,
-     self.size_of_response,
-     self.cache_hits,
-     self.cache_misses,
-     self.cache_absent,
-     self.cache_invalidations) = line.strip().split('\t')
+    try:
+      (self.method,
+       self.remote_address,
+       self.username,
+       self.start_time,
+       self.end_time,
+       self.total_time,
+       self.plan_type,
+       self.original_sql,
+       self.bind_variables,
+       self.number_of_queries,
+       self.rewritten_sql,
+       self.query_sources,
+       self.mysql_response_time,
+       self.size_of_response,
+       self.cache_hits,
+       self.cache_misses,
+       self.cache_absent,
+       self.cache_invalidations) = line.strip().split('\t')
+    except ValueError:
+      print "Wrong looking line: %r"
+      raise
 
   def check(self, case):
 

@@ -78,7 +78,7 @@ func serveRPC() {
 
 func main() {
 	flag.Parse()
-	env.Init("vtocc")
+	servenv.Init("vtocc")
 
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {

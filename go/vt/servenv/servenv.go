@@ -9,7 +9,7 @@
 // env.Init to make env use the command line variables to initialize
 // the environment.
 
-package env
+package servenv
 
 import (
 	"crypto/md5"

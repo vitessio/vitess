@@ -56,6 +56,7 @@ queryservice_test:
 	fi
 
 # export VT_TEST_FLAGS=-v for instance
+
 integration_test:
 	cd test ; ./schema.py $$VT_TEST_FLAGS
 	cd test ; ./sharded.py $$VT_TEST_FLAGS

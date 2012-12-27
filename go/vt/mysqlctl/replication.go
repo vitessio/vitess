@@ -83,12 +83,7 @@ type SnapshotFile struct {
 // and remove the .gz extension. So with basePath=myPath, it will return:
 // myPath/data/vt_snapshot_test-MA,Mw/vt_insert_test.csv
 func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
-	relativeStart := strings.Index(dataFile.Path, "snapshot") + len("snapshot") + 1
-	if relativeStart == -1 {
-		panic("cannot determine relative path for snapshot file " + dataFile.Path)
-	}
-	relativePath := strings.SplitN(dataFile.Path[relativeStart:], "/", 2)[1]
-	filename := path.Join(basePath, relativePath)
+	filename := path.Join(basePath, dataFile.Path)
 	// trim compression extension
 	filename = filename[:len(filename)-len(path.Ext(filename))]
 	return filename

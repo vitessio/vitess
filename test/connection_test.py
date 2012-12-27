@@ -30,10 +30,11 @@ class BareOCCConnection(db.VtOCCConnection):
 
 class BaseTest(unittest.TestCase):
   vtroot = os.getenv("VTROOT")
+  vtdataroot = os.getenv("VTDATAROOT") or "/vt"
   tabletuid = "9460"
   mysql_port = 9460
   vtocc_port = 9461
-  mysqldir = "/vt/vt_0000009460"
+  mysqldir = os.path.join(vtdataroot, "vt_0000009460")
   mysql_socket = os.path.join(mysqldir, "mysql.sock")
   credentials = {"ala": ["ma kota", "miala kota"]}
   credentials_file = os.path.join(mysqldir, 'authcredentials.json')

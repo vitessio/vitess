@@ -87,6 +87,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"code.google.com/p/vitess/go/relog"
@@ -95,6 +96,7 @@ import (
 
 const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
+	SnapshotURLPath             = "/snapshot"
 )
 
 type SplitSnapshotManifest struct {
@@ -282,8 +284,11 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	if snapshotErr != nil {
 		return "", snapshotErr
 	}
-
-	return ssmFile, nil
+	relative, err := filepath.Rel(mysqld.SnapshotDir, ssmFile)
+	if err != nil {
+		return "", err
+	}
+	return path.Join(SnapshotURLPath, relative), nil
 }
 
 const dumpConcurrency = 4
@@ -341,14 +346,14 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 		}
 		return nil, err
 	}
-
-	dataFiles, err := compressFiles(tableFiles, compressedFiles, compressConcurrency)
+	dataFiles, err := compressFiles(tableFiles, compressedFiles, mysqld.SnapshotDir, compressConcurrency)
 	if err != nil {
 		for _, srcPath := range tableFiles {
 			os.Remove(srcPath)
 		}
+		return nil, err
 	}
-	return dataFiles, err
+	return dataFiles, nil
 }
 
 /*

@@ -166,7 +166,8 @@ class VtoccTestEnv(TestEnv):
   mysqlport = 9460
   vttop = os.getenv("VTTOP")
   vtroot = os.getenv("VTROOT")
-  mysqldir = "/vt/vt_0000009460"
+  vtdataroot = os.getenv("VTDATAROOT") or "/vt"
+  mysqldir = os.path.join(vtdataroot, "vt_0000009460")
 
   def setUp(self):
     if self.vttop is None:
@@ -187,7 +188,6 @@ class VtoccTestEnv(TestEnv):
         ])
     if res != 0:
       raise EnvironmentError("Cannot start mysql")
-
     res = subprocess.call([
         "mysql",
         "-S",  self.mysqldir+"/mysql.sock",

@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -156,7 +157,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcur
 		destinations = append(destinations, d...)
 	}
 
-	return compressFiles(sources, destinations, compressConcurrency)
+	return compressFiles(sources, destinations, mysqld.SnapshotDir, compressConcurrency)
 }
 
 // This function runs on the machine acting as the source for the clone.
@@ -170,7 +171,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcur
 // Compute md5() sums
 // Place in /vt/clone_src where they will be served by http server (not rpc)
 // Restart mysql
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, compressConcurrency int) (snapshotManifestFilename string, err error) {
+func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, compressConcurrency int) (snapshotManifestUrlPath string, err error) {
 	if dbName == "" {
 		return "", errors.New("CreateSnapshot failed: no database name provided")
 	}
@@ -242,6 +243,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
+
 		sm := NewSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition)
 		smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
@@ -273,8 +275,11 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	if snapshotErr != nil {
 		return "", snapshotErr
 	}
-
-	return smFile, nil
+	relative, err := filepath.Rel(mysqld.SnapshotDir, smFile)
+	if err != nil {
+		return "", nil
+	}
+	return path.Join(SnapshotURLPath, relative), nil
 }
 
 func writeJson(filename string, x interface{}) error {

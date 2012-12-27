@@ -51,7 +51,7 @@ func init() {
 // zkocc: a proxy for zk
 func main() {
 	flag.Parse()
-	env.Init("zkocc")
+	servenv.Init("zkocc")
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()

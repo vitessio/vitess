@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -27,9 +28,8 @@ import (
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	servenv "code.google.com/p/vitess/go/vt/servenv"
+	"code.google.com/p/vitess/go/vt/servenv"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"code.google.com/p/vitess/go/zk"
@@ -110,7 +110,7 @@ func main() {
 
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
 	// FIXME(msolomon) this path needs to be obtained from the config.
-	http.Handle(path.Join(env.VtDataRoot(), "snapshot")+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	http.Handle(mysqlctl.SnapshotURLPath+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleSnapshot(w, r, mysqlctl.SnapshotDir(uint32(tabletId)))
 	}))
 
@@ -237,9 +237,35 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 
 func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir string) {
 	// FIXME(msolomon) some sort of security, no?
-	if strings.HasPrefix(req.URL.Path, snapshotDir) {
-		relog.Info("serve %v", req.URL.Path)
-		http.ServeFile(rw, req, req.URL.Path)
+	// /snapshot must be rewritten to the actual location of the snapshot.
+	relative, err := filepath.Rel(mysqlctl.SnapshotURLPath, req.URL.Path)
+	if err != nil {
+		relog.Error("bad request %v %v", req.URL.Path, err)
+		http.Error(rw, "400 bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Make sure that realPath is absolute and isn't escaping from
+	// snapshotDir through a symlink.
+	realPath, err := filepath.Abs(path.Join(snapshotDir, relative))
+	if err != nil {
+		relog.Error("bad request %v", req.URL.Path)
+		http.Error(rw, "400 bad request", http.StatusBadRequest)
+		return
+	}
+
+	realPath, err = filepath.EvalSymlinks(realPath)
+	if err != nil {
+		relog.Error("bad request %v", req.URL.Path)
+		http.Error(rw, "400 bad request", http.StatusBadRequest)
+		return
+	}
+
+	// Make sure that we are not serving something like
+	// /snapshot/../../../etc/passwd.
+	if strings.HasPrefix(realPath, snapshotDir) {
+		relog.Info("serve %v %v", req.URL.Path, realPath)
+		http.ServeFile(rw, req, realPath)
 	} else {
 		relog.Error("bad request %v", req.URL.Path)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 )
 
 // Use this to simulate failures in tests
@@ -30,8 +31,9 @@ func init() {
 }
 
 // compressFile compresses a single file with gzip, leaving the src
-// file intact.  Also computes the md5 hash on the fly.
-func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
+// file intact. The path of the returned SnapshotFile will be relative
+// to root. Also computes the md5 hash on the fly.
+func compressFile(srcPath, dstPath, root string) (*SnapshotFile, error) {
 	// FIXME(msolomon) not sure how well Go will schedule cpu intensive tasks
 	// might be better if this forked off workers.
 	relog.Info("compressFile: starting to compress %v into %v", srcPath, dstPath)
@@ -83,11 +85,16 @@ func compressFile(srcPath, dstPath string) (*SnapshotFile, error) {
 	}
 
 	relog.Info("clone data ready %v:%v", dstPath, hash)
-	return &SnapshotFile{dstPath, hash}, nil
+	relativeDst, err := filepath.Rel(root, dstPath)
+	if err != nil {
+		return nil, err
+	}
+	return &SnapshotFile{relativeDst, hash}, nil
 }
 
-// compressFile compresses multiple files in parallel.
-func compressFiles(sources, destinations []string, compressConcurrency int) ([]SnapshotFile, error) {
+// compressFile compresses multiple files in parallel. The Paths of
+// the returned SnapshotFiles will be relative to root.
+func compressFiles(sources, destinations []string, root string, compressConcurrency int) ([]SnapshotFile, error) {
 	if len(sources) != len(destinations) || len(sources) == 0 {
 		panic(fmt.Errorf("bad array lengths: %v %v", len(sources), len(destinations)))
 	}
@@ -103,7 +110,7 @@ func compressFiles(sources, destinations []string, compressConcurrency int) ([]S
 	for i := 0; i < compressConcurrency; i++ {
 		go func() {
 			for i := range workQueue {
-				sf, err := compressFile(sources[i], destinations[i])
+				sf, err := compressFile(sources[i], destinations[i], root)
 				if err == nil {
 					snapshotFiles[i] = *sf
 				}
@@ -248,7 +255,7 @@ func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetc
 		go func() {
 			for fi := range workQueue {
 				filename := fi.getLocalFilename(destinationPath)
-				furl := "http://" + snapshotManifest.Addr + fi.Path
+				furl := "http://" + snapshotManifest.Addr + path.Join(SnapshotURLPath, fi.Path)
 				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename, fetchRetryCount)
 			}
 		}()
