@@ -2,18 +2,18 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-The micromanagment module provides a tiny server running on a unix domain socket.
-
-It is meant as an alternative to signals for handling graceful server management.
-The decision to use unix domain sockets was motivated by future intend to implement
-file descriptor passing.
-
-The underlying unix socket acts as a guard for starting up a server.
-Once that socket has be acquired it is assumed that previously bound sockets will be
-released and startup can continue. You must delegate execution of your server
-initialization to this module via AddStartupCallback().
-*/
+// The micromanagment module provides a tiny server running on a unix
+// domain socket.
+//
+// It is meant as an alternative to signals for handling graceful
+// server management.  The decision to use unix domain sockets was
+// motivated by future intend to implement file descriptor passing.
+//
+// The underlying unix socket acts as a guard for starting up a
+// server.  Once that socket has be acquired it is assumed that
+// previously bound sockets will be released and startup can
+// continue. You must delegate execution of your server initialization
+// to this module via AddStartupCallback().
 
 package umgmt
 
@@ -62,12 +62,6 @@ func newService() *UmgmtService {
 		closeCallbacks:    make([]UmgmtCallback, 0, 8),
 		done:              make(chan bool, 1)}
 }
-
-// FIXME(msolomon) seems like RPC should really be registering an interface and something
-// that happens to implement it. This might help client-side type safety too.
-// type UmgmtService2 interface {
-// 	Ping(request *Request, reply *Reply) os.Error
-// }
 
 func (service *UmgmtService) lameDuckPeriod() time.Duration {
 	service.mutex.Lock()
