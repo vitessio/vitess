@@ -13,8 +13,10 @@ import (
 )
 
 // The States structure keeps historical data about a state machine
-// state, and exports them using expvar (namely, our current state,
-// and how long we have been in each state.)
+// state, and exports them using expvar:
+// - our current state
+// - how long we have been in each state
+// - how many times we transitioned into a state (not counting initial state)
 type States struct {
 	// set at construction time
 	StateCount int
@@ -26,11 +28,12 @@ type States struct {
 	CurrentStateStartTime time.Time // when we switched to our state
 
 	// historical data about the states
-	Durations []time.Duration
+	Durations   []time.Duration // how much time in each state
+	Transitions []int           // how many times we got into a state
 }
 
 func NewStates(name string, labels []string, startTime time.Time, initialState int) *States {
-	s := &States{StateCount: len(labels), Labels: labels, CurrentState: initialState, CurrentStateStartTime: startTime, Durations: make([]time.Duration, len(labels))}
+	s := &States{StateCount: len(labels), Labels: labels, CurrentState: initialState, CurrentStateStartTime: startTime, Durations: make([]time.Duration, len(labels)), Transitions: make([]int, len(labels))}
 	if initialState < 0 || initialState >= s.StateCount {
 		panic(fmt.Errorf("initialState out of range 0-%v: %v", s.StateCount, initialState))
 	}
@@ -63,6 +66,7 @@ func (s *States) SetStateAt(state int, now time.Time) {
 
 	// record the previous state duration, reset our state
 	s.Durations[s.CurrentState] += dur
+	s.Transitions[state] += 1
 	s.CurrentState = state
 	s.CurrentStateStartTime = now
 }
@@ -87,6 +91,7 @@ func (s *States) StringAt(now time.Time) string {
 	for i := 0; i < s.StateCount; i++ {
 
 		d := s.Durations[i]
+		t := s.Transitions[i]
 		if i == s.CurrentState {
 			dur := now.Sub(s.CurrentStateStartTime)
 			if dur > 0 {
@@ -99,7 +104,8 @@ func (s *States) StringAt(now time.Time) string {
 		}
 
 		fmt.Fprintf(b, ", ")
-		fmt.Fprintf(b, "\"Duration%v\": %v", s.Labels[i], int64(d))
+		fmt.Fprintf(b, "\"Duration%v\": %v, ", s.Labels[i], int64(d))
+		fmt.Fprintf(b, "\"TransitionInto%v\": %v", s.Labels[i], t)
 	}
 
 	fmt.Fprintf(b, "}")
