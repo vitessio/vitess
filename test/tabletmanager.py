@@ -21,6 +21,7 @@ import tablet
 devnull = open('/dev/null', 'w')
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
+vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 hostname = socket.gethostname()
 
 tablet_62344 = tablet.Tablet(62344, 6700, 3700)
@@ -61,12 +62,12 @@ def teardown():
   tablet_41983.remove_tree()
   tablet_31981.remove_tree()
 
-  for path in ['/vt/snapshot']:
-    try:
-      shutil.rmtree(path)
-    except OSError as e:
-      if utils.options.verbose:
-        print >> sys.stderr, e, path
+  path = os.path.join(vtdataroot, 'snapshot')
+  try:
+    shutil.rmtree(path)
+  except OSError as e:
+    if utils.options.verbose:
+      print >> sys.stderr, e, path
 
 def _check_db_addr(db_addr, expected_addr):
   # Run in the background to capture output.
@@ -191,7 +192,7 @@ def run_test_mysqlctl_clone():
   utils.pause("snapshot finished")
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 /vt/snapshot/vt_0000062344/snapshot_manifest.json').wait()
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 %s/snapshot/vt_0000062344/snapshot_manifest.json' % vtdataroot).wait()
   if err != 0:
     raise utils.TestError('mysqlctl restore failed')
 
@@ -263,16 +264,17 @@ def run_test_vtctl_clone():
   tablet_62044.init_tablet('idle', start=True)
 
   # small test to make sure the directory validation works
-  utils.run("rm -rf /vt/snapshot")
-  utils.run("mkdir -p /vt/snapshot")
-  utils.run("chmod -w /vt/snapshot")
+  snapshot_dir = os.path.join(vtdataroot, 'snapshot')
+  utils.run("rm -rf %s" % snapshot_dir)
+  utils.run("mkdir -p %s" % snapshot_dir)
+  utils.run("chmod -w %s" % snapshot_dir)
   out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s' %
                        (tablet_62344.zk_tablet_path,
                         tablet_62044.zk_tablet_path),
                        trap_output=True, raise_on_error=False)
   if err.find("Cannot validate snapshot directory") == -1:
     raise utils.TestError("expected validation error", err)
-  utils.run("chmod +w /vt/snapshot")
+  utils.run("chmod +w %s" % snapshot_dir)
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Clone -force %s %s' %
@@ -313,7 +315,7 @@ def run_test_mysqlctl_split():
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_test_keyspace')
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore /vt/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json').wait()
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore %s/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json' % vtdataroot).wait()
   if err != 0:
     raise utils.TestError('mysqlctl partialrestore failed')
 

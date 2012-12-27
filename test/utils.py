@@ -17,6 +17,7 @@ options = None
 devnull = open('/dev/null', 'w')
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
+vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 hostname = socket.gethostname()
 
 class TestError(Exception):
@@ -26,7 +27,7 @@ class Break(Exception):
   pass
 
 # tmp files management: all under /vt/tmp
-tmp_root = '/vt/tmp'
+tmp_root = os.path.join(vtdataroot, 'tmp')
 try:
   os.makedirs(tmp_root)
 except OSError:
@@ -295,7 +296,7 @@ def vtclient2(uid, dbname, query, user=None, password=None, driver=None,
 # mysql helpers
 def mysql_query(uid, dbname, query):
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
+                         unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, uid),
                          db=dbname)
   cursor = conn.cursor()
   cursor.execute(query)
@@ -306,7 +307,7 @@ def mysql_query(uid, dbname, query):
 
 def mysql_write_query(uid, dbname, query):
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='/vt/vt_%010d/mysql.sock' % uid,
+                         unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, uid),
                          db=dbname)
   cursor = conn.cursor()
   conn.begin()
@@ -319,7 +320,7 @@ def mysql_write_query(uid, dbname, query):
 
 def check_db_var(uid, name, value):
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='/vt/vt_%010d/mysql.sock' % uid)
+                         unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, uid))
   cursor = conn.cursor()
   cursor.execute("show variables like '%s'" % name)
   row = cursor.fetchone()
