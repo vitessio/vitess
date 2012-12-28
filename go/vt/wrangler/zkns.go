@@ -156,8 +156,11 @@ func (wr *Wrangler) exportVtnsToZkns(vtnsAddrPath, zknsAddrPath string) ([]strin
 	// shard graph.
 	deleteIdx := len(addrs.Entries)
 	for {
-		zknsAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, deleteIdx)
-		err := wr.zconn.Delete(zknsAddrPath, -1)
+		zknsStaleAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, deleteIdx)
+		// A "delete" is a write of sorts - just communicate up that nothing
+		// needs to be done to this node.
+		zknsPaths = append(zknsPaths, zknsStaleAddrPath)
+		err := wr.zconn.Delete(zknsStaleAddrPath, -1)
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			break
 		}
