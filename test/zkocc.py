@@ -236,6 +236,7 @@ def main():
   parser = OptionParser()
   parser.add_option('-v', '--verbose', action='store_true')
   parser.add_option('-d', '--debug', action='store_true')
+  parser.add_option('--no-build', action='store_true')
   parser.add_option('--skip-teardown', action='store_true')
   (utils.options, args) = parser.parse_args()
 

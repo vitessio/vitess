@@ -37,6 +37,7 @@ except OSError:
 def debug(msg):
   if options.verbose:
     print msg
+    sys.stdout.flush()
 
 def test_case(fn):
   def body():
@@ -168,7 +169,10 @@ def prog_compile(names):
     if name in compiled_progs:
       continue
     compiled_progs.append(name)
-    run('go build', cwd=vttop+'/go/cmd/'+name)
+    if options.no_build:
+      debug('Skipping build of '+name)
+    else:
+      run('go build', cwd=vttop+'/go/cmd/'+name)
 
 # background zk process
 # (note the zkocc addresses will only work with an extra zkocc process)

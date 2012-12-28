@@ -2,6 +2,7 @@
 
 import optparse
 import unittest
+import sys
 
 import utils
 import framework
@@ -20,6 +21,7 @@ if __name__ == "__main__":
                     help="Environment that will be used. Valid options: vttablet, vtocc")
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
+  parser.add_option("--no-build", action="store_true")
   (options, args) = parser.parse_args()
   utils.options = options
 
@@ -50,6 +52,7 @@ if __name__ == "__main__":
 
     env.setUp()
     print "Starting queryservice_test.py: %s" % options.env
+    sys.stdout.flush()
     framework.TestCase.setenv(env)
     unittest.TextTestRunner(verbosity=options.verbose).run(suite)
   finally:
