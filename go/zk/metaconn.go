@@ -64,7 +64,12 @@ type MetaConn struct {
 }
 
 func resolveZkPath(path string) string {
-	cell := ZkCellFromZkPath(path)
+	cell, err := ZkCellFromZkPath(path)
+	if err != nil {
+		// ConnForPath was already called on path, so this should
+		// never happen
+		panic(err)
+	}
 	if cell != "local" {
 		return path
 	}

@@ -171,7 +171,10 @@ func IsTabletReplicationPath(zkReplicationPath string) bool {
 }
 
 func parseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint32, err error) {
-	cell = zk.ZkCellFromZkPath(zkReplicationPath)
+	cell, err = zk.ZkCellFromZkPath(zkReplicationPath)
+	if err != nil {
+		return
+	}
 	if cell != "global" {
 		return "", 0, fmt.Errorf("invalid replication path cell, expected global: %v", zkReplicationPath)
 	}

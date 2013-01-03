@@ -17,7 +17,10 @@ import (
 // Export addresses from the VT serving graph to a legacy zkns server.
 func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
 	vtNsPath := path.Join(zkVtRoot, "ns")
-	zkCell := zk.ZkCellFromZkPath(zkVtRoot)
+	zkCell, err := zk.ZkCellFromZkPath(zkVtRoot)
+	if err != nil {
+		return err
+	}
 	zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt", zkCell)
 
 	children, err := zk.ChildrenRecursive(wr.zconn, vtNsPath)

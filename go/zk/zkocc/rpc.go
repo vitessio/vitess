@@ -66,7 +66,10 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 func (zkr *ZkReader) getCell(path string) (*zkCell, string, error) {
 	zkr.mutex.Lock()
 	defer zkr.mutex.Unlock()
-	cellName := zk.ZkCellFromZkPath(path)
+	cellName, err := zk.ZkCellFromZkPath(path)
+	if err != nil {
+		return nil, "", err
+	}
 
 	// the 'local' cell has to be resolved, and the path fixed
 	resolvedPath := path
@@ -83,7 +86,10 @@ func (zkr *ZkReader) getCell(path string) (*zkCell, string, error) {
 
 	cell, ok := zkr.zcell[cellName]
 	if !ok {
-		zkaddr := zk.ZkPathToZkAddr(path, false)
+		zkaddr, err := zk.ZkPathToZkAddr(path, false)
+		if err != nil {
+			return nil, "", err
+		}
 		cell = newZkCell(cellName, zkaddr)
 		zkr.zcell[cellName] = cell
 	}

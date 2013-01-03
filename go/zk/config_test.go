@@ -42,7 +42,10 @@ func TestZkPathToZkAddr(t *testing.T) {
 	file.Close()
 
 	for _, path := range []string{"/zk/" + fakeCell, "/zk/" + fakeCell + "/", "/zk/local", "/zk/local/"} {
-		zkAddr := ZkPathToZkAddr(path, false)
+		zkAddr, err := ZkPathToZkAddr(path, false)
+		if err != nil {
+			t.Errorf("got error: %v", err.Error())
+		}
 		if zkAddr != fakeAddr {
 			t.Errorf("addr mismatch for path %v %v != %v", path, zkAddr, fakeAddr)
 		}

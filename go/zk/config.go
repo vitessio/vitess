@@ -56,18 +56,19 @@ func GuessLocalCell() string {
 	return shortHostname[:2]
 }
 
-func ZkCellFromZkPath(zkPath string) string {
-	defer func() {
-		if x := recover(); x != nil {
-			panic(fmt.Errorf("no cell name in path: %v", zkPath))
-		}
-	}()
+func ZkCellFromZkPath(zkPath string) (string, error) {
 	pathParts := strings.Split(zkPath, "/")
+	if len(pathParts) < 3 {
+		return "", fmt.Errorf("no cell name in path: %v", zkPath)
+	}
+	if pathParts[0] != "" || pathParts[1] != "zk" {
+		return "", fmt.Errorf("path should start with /zk/: %v", zkPath)
+	}
 	cell := pathParts[2]
 	if strings.Contains(cell, "-") {
-		panic(fmt.Errorf("invalid cell name %v", cell))
+		return "", fmt.Errorf("invalid cell name %v", cell)
 	}
-	return cell
+	return cell, nil
 }
 
 func getConfigPaths() []string {
@@ -78,9 +79,10 @@ func getConfigPaths() []string {
 	return zkConfigPaths
 }
 
-func ZkPathToZkAddr(zkPath string, useCache bool) string {
-	if !strings.HasPrefix(zkPath, "/zk") {
-		panic(fmt.Errorf("invalid zk path: %v", zkPath))
+func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
+	cell, err := ZkCellFromZkPath(zkPath)
+	if err != nil {
+		return "", err
 	}
 
 	var cellAddrMap map[string]string
@@ -100,12 +102,11 @@ func ZkPathToZkAddr(zkPath string, useCache bool) string {
 		break
 	}
 
-	cell := ZkCellFromZkPath(zkPath)
 	if cell == "local" {
 		cell = GuessLocalCell()
 	} else if cell == "global" {
 		if *globalAddrs != "" {
-			return *globalAddrs
+			return *globalAddrs, nil
 		} else if _, ok := cellAddrMap[cell]; !ok {
 			// if there is no "global" cell, look for a dc-specific
 			// address for the global cell
@@ -118,10 +119,10 @@ func ZkPathToZkAddr(zkPath string, useCache bool) string {
 
 	addr := cellAddrMap[cell]
 	if addr != "" {
-		return addr
+		return addr, nil
 	}
 
-	panic(fmt.Errorf("no addr found for zk cell: %#v", cell))
+	return "", fmt.Errorf("no addr found for zk cell: %#v", cell)
 }
 
 // GetZkSubprocessFlags returns the flags necessary to run a sub-process

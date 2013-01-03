@@ -302,7 +302,10 @@ func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
 func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride, keyStart, keyEnd string, force, update bool) error {
 	tm.MustBeTabletPath(zkPath)
 
-	cell := zk.ZkCellFromZkPath(zkPath)
+	cell, err := zk.ZkCellFromZkPath(zkPath)
+	if err != nil {
+		return err
+	}
 	pathParts := strings.Split(zkPath, "/")
 	uid, err := tm.ParseUid(pathParts[len(pathParts)-1])
 	if err != nil {

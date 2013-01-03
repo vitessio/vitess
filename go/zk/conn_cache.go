@@ -45,7 +45,10 @@ type ConnCache struct {
 }
 
 func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
-	zcell := ZkCellFromZkPath(zkPath)
+	zcell, err := ZkCellFromZkPath(zkPath)
+	if err != nil {
+		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZBADARGUMENTS}
+	}
 
 	cc.mutex.Lock()
 	if cc.zconnCellMap == nil {
@@ -70,11 +73,16 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 		return conn.zconn, nil
 	}
 
+	zkAddr, err := ZkPathToZkAddr(zkPath, cc.useZkocc)
+	if err != nil {
+		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZBADARGUMENTS}
+	}
+
 	conn.states.SetState(CONNECTING)
 	if cc.useZkocc {
-		conn.zconn, err = DialZkocc(ZkPathToZkAddr(zkPath, true), *baseTimeout)
+		conn.zconn, err = DialZkocc(zkAddr, *baseTimeout)
 	} else {
-		conn.zconn, err = cc.newZookeeperConn(zkPath, zcell)
+		conn.zconn, err = cc.newZookeeperConn(zkAddr, zcell)
 	}
 	if conn.zconn != nil {
 		conn.states.SetState(CONNECTED)
@@ -84,8 +92,8 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	return conn.zconn, err
 }
 
-func (cc *ConnCache) newZookeeperConn(zkPath, zcell string) (Conn, error) {
-	conn, session, err := DialZk(ZkPathToZkAddr(zkPath, false), *baseTimeout)
+func (cc *ConnCache) newZookeeperConn(zkAddr, zcell string) (Conn, error) {
+	conn, session, err := DialZk(zkAddr, *baseTimeout)
 	if err != nil {
 		return nil, err
 	}

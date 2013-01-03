@@ -280,9 +280,13 @@ func (ti *TabletInfo) ReplicationPath() string {
 	return TabletReplicationPath(ti.zkVtRoot, ti.Tablet)
 }
 
+// FIXME(alainjobart) this may panic, return an error instead
 func TabletReplicationPath(zkVtRoot string, tablet *Tablet) string {
 	zkPath := ShardPath(zkVtRoot, tablet.Keyspace, tablet.Shard)
-	cell := zk.ZkCellFromZkPath(zkVtRoot)
+	cell, err := zk.ZkCellFromZkPath(zkVtRoot)
+	if err != nil {
+		panic(err)
+	}
 	if cell == "local" || cell == "global" {
 		panic(fmt.Errorf("invalid cell name for replication path: %v", cell))
 	}
