@@ -96,7 +96,21 @@ func (zkr *ZkReader) getCell(path string) (*zkCell, string, error) {
 	return cell, resolvedPath, nil
 }
 
-func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) error {
+func handleError(err *error) {
+	if x := recover(); x != nil {
+		relog.Error("rpc panic: %v", x)
+		terr, ok := x.(error)
+		if !ok {
+			*err = fmt.Errorf("rpc panic: %v", x)
+			return
+		}
+		*err = terr
+	}
+}
+
+func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
+	defer handleError(&err)
+
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
 		return err
@@ -130,7 +144,9 @@ func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) error {
 	return nil
 }
 
-func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) error {
+func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) (err error) {
+	defer handleError(&err)
+
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 
@@ -163,7 +179,9 @@ func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) error {
 	return nil
 }
 
-func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) error {
+func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
+	defer handleError(&err)
+
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
 		return err
