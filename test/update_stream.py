@@ -96,8 +96,7 @@ def setup():
 def teardown():
   if utils.options.skip_teardown:
     return
-  if utils.options.verbose:
-    print "Tearing down the servers and setup"
+  utils.debug("Tearing down the servers and setup")
   teardown_procs = [master_tablet.teardown_mysql(),
                     replica_tablet.teardown_mysql()]
   utils.wait_procs(teardown_procs, raise_on_error=False)
@@ -110,8 +109,7 @@ def teardown():
 
 def setup_tablets():
   # Start up a master mysql and vttablet
-  if utils.options.verbose:
-    print "Setting up tablets"
+  utils.debug("Setting up tablets")
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
@@ -166,8 +164,7 @@ def _get_replica_stream_conn():
 @utils.test_case
 def run_test_service_disabled():
   start_position = _get_repl_current_position()
-  if utils.options.verbose:
-    print "run_test_service_disabled starting @ %s" % start_position
+  utils.debug("run_test_service_disabled starting @ %s" % start_position)
   _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_insert_test)
   _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_insert_test',])
   utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
@@ -178,10 +175,13 @@ def run_test_service_disabled():
     binlog_pos, data, err = replica_conn.stream_start(start_position)
   except Exception, e:
     if str(e) == "Update stream service is not enabled yet":
-      if utils.options.verbose:
-        print "Test Service Disabled: Pass"
+      utils.debug("Test Service Disabled: Pass")
     else:
       raise "Test Service Disabled: Fail - did not throw the correct exception"
+
+  v = utils.get_vars(replica_tablet.port)
+  if v['UpdateStreamRpcService']['States']['Current'] != 'Disabled':
+    raise utils.TestError("Update stream service should be 'Disabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
 
 def perform_writes(count):
   for i in xrange(count):
@@ -192,11 +192,9 @@ def perform_writes(count):
 @utils.test_case
 def run_test_service_enabled():
   start_position = _get_repl_current_position()
-  if utils.options.verbose:
-    print "run_test_service_enabled starting @ %s" % start_position
+  utils.debug("run_test_service_enabled starting @ %s" % start_position)
   utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
-  if utils.options.verbose:
-    print "sleeping a bit for the replica action to complete"
+  utils.debug("sleeping a bit for the replica action to complete")
   time.sleep(30)
   thd = threading.Thread(target=perform_writes, name='write_thd', args=(400,))
   thd.daemon = True
@@ -222,8 +220,11 @@ def run_test_service_enabled():
     print traceback.print_exc()
   thd.join(timeout=30)
 
-  if utils.options.verbose:
-    print "Testing enable -> disable switch starting @ %s" % start_position
+  v = utils.get_vars(replica_tablet.port)
+  if v['UpdateStreamRpcService']['States']['Current'] != 'Enabled':
+    raise utils.TestError("Update stream service should be 'Enabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
+
+  utils.debug("Testing enable -> disable switch starting @ %s" % start_position)
   replica_conn = _get_replica_stream_conn()
   replica_conn.dial()
   disabled_err = False
@@ -231,8 +232,7 @@ def run_test_service_enabled():
   try:
     binlog_pos, data, err = replica_conn.stream_start(start_position)
     utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
-    if utils.options.verbose:
-      print "Sleeping a bit for the spare action to complete"
+    utils.debug("Sleeping a bit for the spare action to complete")
     time.sleep(20)
     while(1):
       binlog_pos, data, err = replica_conn.stream_next()
@@ -248,8 +248,7 @@ def run_test_service_enabled():
   except Exception, e:
     print "Exception: %s" % str(e)
     print traceback.print_exc()
-  if utils.options.verbose:
-    print "Streamed %d transactions before exiting" % txn_count
+  utils.debug("Streamed %d transactions before exiting" % txn_count)
 
 def _vtdb_conn(host, dbname):
   return vt_occ2.connect(host, 2, dbname=dbname)
@@ -271,8 +270,7 @@ def _exec_vt_txn(host, dbname, query_list=None):
 def run_test_stream_parity():
   master_start_position = _get_master_current_position()
   replica_start_position = _get_repl_current_position()
-  if utils.options.verbose:
-    print "run_test_stream_parity starting @ %s" % master_start_position
+  utils.debug("run_test_stream_parity starting @ %s" % master_start_position)
   master_txn_count = 0
   replica_txn_count = 0
   _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_a(15))
@@ -324,16 +322,14 @@ def run_test_stream_parity():
       print "Test Failed, master data: %s replica data: %s" % (val[1], replica_tuples[i][1])
     if val[1] != replica_tuples[i][1]:
       print "Test Failed, master data: %s replica data: %s" % (val[1], replica_tuples[i][1])
-  if utils.options.verbose:
-    print "Test Writes: PASS"
+  utils.debug("Test Writes: PASS")
 
 
 @utils.test_case
 def run_test_ddl():
   global GLOBAL_MASTER_START_POSITION
   start_position = GLOBAL_MASTER_START_POSITION
-  if utils.options.verbose:
-    print "run_test_ddl: starting @ %s" % start_position
+  utils.debug("run_test_ddl: starting @ %s" % start_position)
   master_conn = _get_master_stream_conn()
   master_conn.dial()
   binlog_pos, data, err = master_conn.stream_start(start_position)
@@ -349,8 +345,7 @@ def run_test_ddl():
   if data['Sql'] != create_vt_insert_test.replace('\n', ''):
     print "Test Failed: DDL %s didn't match the original %s" % (data['Sql'], create_vt_insert_test)
     return
-  if utils.options.verbose:
-    print "Test DDL: PASS"
+  utils.debug("Test DDL: PASS")
 
 #This tests the service switch from disable -> enable -> disable
 def run_test_service_switch():
@@ -378,8 +373,7 @@ def run_test_log_rotation():
       return
     decoded_pos = Position().decode_json(binlog_pos['Position'])
     if decoded_start_position.MasterFilename < decoded_pos.MasterFilename:
-      if utils.options.verbose:
-        print "Log rotation correctly interpreted"
+      utils.debug("Log rotation correctly interpreted")
       break
     if data['SqlType'] == 'COMMIT':
       master_txn_count +=1
@@ -389,8 +383,7 @@ def run_all():
   run_test_service_switch()
   #The above test leaves the service in disabled state, hence enabling it.
   utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
-  if utils.options.verbose:
-    print "Sleeping a bit for the action to complete"
+  utils.debug("Sleeping a bit for the action to complete")
   time.sleep(20)
   run_test_ddl()
   run_test_stream_parity()

@@ -5,14 +5,17 @@ package mysqlctl
 
 import (
 	"encoding/json"
+	"expvar"
 	"fmt"
 	"os"
 	"path"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap"
+	estats "code.google.com/p/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 )
 
@@ -27,6 +30,7 @@ type UpdateStream struct {
 	mycnf          *Mycnf
 	tabletType     string
 	state          int32
+	states         *estats.States
 	actionLock     sync.Mutex
 	binlogPrefix   string
 	logsDir        string
@@ -52,7 +56,12 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
 	UpdateStreamRpcService.clients = make([]*Blp, 10)
+	UpdateStreamRpcService.states = estats.NewStates("", []string{
+		"Disabled",
+		"Enabled",
+	}, time.Now(), DISABLED)
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
+	expvar.Publish("UpdateStreamRpcService", UpdateStreamRpcService)
 }
 
 func logError() {
@@ -97,7 +106,7 @@ func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 		disableUpdateStreamService()
 	}
 
-	atomic.StoreInt32(&UpdateStreamRpcService.state, ENABLED)
+	UpdateStreamRpcService.setState(ENABLED)
 
 	UpdateStreamRpcService.mysqld = NewMysqld(UpdateStreamRpcService.mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	UpdateStreamRpcService.dbname = dbcfgs.Repl.Dbname
@@ -137,12 +146,24 @@ func IsUpdateStreamUsingRelayLogs() bool {
 func disableUpdateStreamService() {
 	defer logError()
 
-	atomic.StoreInt32(&UpdateStreamRpcService.state, DISABLED)
+	UpdateStreamRpcService.setState(DISABLED)
 	UpdateStreamRpcService.stateWaitGroup.Wait()
 }
 
 func (updateStream *UpdateStream) isServiceEnabled() bool {
 	return atomic.LoadInt32(&updateStream.state) == ENABLED
+}
+
+func (updateStream *UpdateStream) setState(state int32) {
+	atomic.StoreInt32(&UpdateStreamRpcService.state, state)
+	updateStream.states.SetState(int(state))
+}
+
+// expvar.Var interface
+func (updateStream *UpdateStream) String() string {
+	return fmt.Sprintf("{"+
+		"\"States\": %v"+
+		"}", updateStream.states.String())
 }
 
 func ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) error {
