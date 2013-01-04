@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-from optparse import OptionParser
 import os
 import socket
 
@@ -252,15 +251,7 @@ def run_all():
   run_test_complex_schema()
 
 def main():
-  parser = OptionParser()
-  parser.add_option('-v', '--verbose', action='store_true')
-  parser.add_option('-d', '--debug', action='store_true')
-  parser.add_option('--no-build', action='store_true')
-  parser.add_option('--skip-teardown', action='store_true')
-  (utils.options, args) = parser.parse_args()
-
-  if not args:
-    args = ['run_all']
+  args = utils.get_args()
 
   try:
     if args[0] != 'teardown':

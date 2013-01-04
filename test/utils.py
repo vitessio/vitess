@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import json
+from optparse import OptionParser
 import os
 import shlex
 import shutil
@@ -38,6 +39,18 @@ def debug(msg):
   if options.verbose:
     print msg
     sys.stdout.flush()
+
+def get_args():
+  global options
+  parser = OptionParser(usage="usage: %prog [options] [test_names]")
+  parser.add_option('-v', '--verbose', action='store_true', help='show a lot of logs')
+  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
+  parser.add_option('--no-build', action='store_true', help='skip the build commands')
+  parser.add_option('--skip-teardown', action='store_true', help='do not kill processes after the tests are done')
+  (options, args) = parser.parse_args()
+  if not args:
+    args = ['run_all']
+  return args
 
 def test_case(fn):
   def body():
