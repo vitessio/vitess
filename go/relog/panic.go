@@ -17,32 +17,51 @@ var (
 	dot       = []byte(".")
 )
 
-type PanicError interface {
+type StackError interface {
 	Error() string
 	String() string
 	StackTrace() string
 }
 
-type panicError struct {
+type stackError struct {
 	err        error
 	stackTrace string
 }
 
-func (e panicError) Error() string {
+func (e stackError) Error() string {
 	return e.String()
 }
 
-func (e panicError) StackTrace() string {
+func (e stackError) StackTrace() string {
 	return e.stackTrace
 }
 
-func (e panicError) String() string {
+func (e stackError) String() string {
 	return fmt.Sprintf("%v\n%v", e.err, e.stackTrace)
 }
 
-func NewPanicError(err error) PanicError {
+func Errorf(msg string, args ...interface{}) error {
+	stack := ""
+	// See if any arg is already embedding a stack - no need to
+	// recompute something expensive and make the message unreadable.
+	for _, arg := range args {
+		if stackErr, ok := arg.(stackError); ok {
+			stack = stackErr.stackTrace
+			break
+		}
+	}
+
+	if stack == "" {
+		// magic 5 trims off just enough stack data to be clear
+		stack = string(Stack(5))
+	}
+
+	return stackError{fmt.Errorf(msg, args...), stack}
+}
+
+func NewPanicError(err error) error {
 	// magic 5 trims off just enough stack data to be clear
-	return panicError{err, string(Stack(5))}
+	return stackError{err, string(Stack(5))}
 }
 
 // Taken from runtime/debug.go

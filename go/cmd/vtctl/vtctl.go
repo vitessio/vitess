@@ -1264,7 +1264,7 @@ func commandApplySchemaKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, a
 func main() {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
-			relog.Fatal("%v", relog.NewPanicError(panicErr.(error)).String())
+			relog.Fatal("panic: %v", relog.Errorf("%v", panicErr))
 		}
 	}()
 
