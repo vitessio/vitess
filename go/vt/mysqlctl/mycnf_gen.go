@@ -28,7 +28,7 @@ const (
 	relayLogDir      = "relay-logs"
 	binLogDir        = "bin-logs"
 	innodbDataSubdir = "innodb/data"
-	innodbLogSubdir  = "innodb/log"
+	innodbLogSubdir  = "innodb/logs"
 	snapshotDir      = "snapshot"
 )
 

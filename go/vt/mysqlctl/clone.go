@@ -83,6 +83,7 @@ func (mysqld *Mysqld) ValidateCloneTarget() error {
 	return nil
 }
 
+// FIXME(msolomon) add compress flag
 func findFilesToCompress(srcDir, dstDir string) ([]string, []string, error) {
 	fiList, err := ioutil.ReadDir(srcDir)
 	if err != nil {
@@ -117,44 +118,35 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 }
 
 func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcurrency int) ([]SnapshotFile, error) {
-	// FIXME(msolomon) Must match patterns in mycnf - probably belongs
-	// in there as derived paths.
-	snapshotDataSrcPath := path.Join(snapshotPath, dataDir, dbName)
-	snapshotInnodbDataSrcPath := path.Join(snapshotPath, innodbDataSubdir)
-	snapshotInnodbLogSrcPath := path.Join(snapshotPath, innodbLogSubdir)
-	// clean out and start fresh
-	for _, _path := range []string{snapshotDataSrcPath, snapshotInnodbDataSrcPath, snapshotInnodbLogSrcPath} {
-		if err := os.RemoveAll(_path); err != nil {
-			return nil, err
-		}
-		if err := os.MkdirAll(_path, 0775); err != nil {
-			return nil, err
-		}
-	}
-
 	sources := make([]string, 0, 128)
 	destinations := make([]string, 0, 128)
 
-	dbDataDir := path.Join(mysqld.config.DataDir, dbName)
-	if s, d, err := findFilesToCompress(dbDataDir, snapshotDataSrcPath); err != nil {
+	// clean out and start fresh
+	relog.Info("removing previous snapshots: %v", snapshotPath)
+	if err := os.RemoveAll(snapshotPath); err != nil {
 		return nil, err
-	} else {
-		sources = append(sources, s...)
-		destinations = append(destinations, d...)
 	}
 
-	if s, d, err := findFilesToCompress(mysqld.config.InnodbDataHomeDir, snapshotInnodbDataSrcPath); err != nil {
-		return nil, err
-	} else {
-		sources = append(sources, s...)
-		destinations = append(destinations, d...)
+	// FIXME(msolomon) innodb paths must match patterns in mycnf - probably belongs
+	// as a derived path.
+	dps := []struct{ srcDir, dstDir string }{
+		{path.Join(mysqld.config.DataDir, dbName), path.Join(snapshotPath, dataDir, dbName)},
+		{path.Join(mysqld.config.DataDir, "_vt"), path.Join(snapshotPath, dataDir, "_vt")},
+		{path.Join(mysqld.config.DataDir, "mysql"), path.Join(snapshotPath, dataDir, "mysql")},
+		{mysqld.config.InnodbDataHomeDir, path.Join(snapshotPath, innodbDataSubdir)},
+		{mysqld.config.InnodbLogGroupHomeDir, path.Join(snapshotPath, innodbLogSubdir)},
 	}
 
-	if s, d, err := findFilesToCompress(mysqld.config.InnodbLogGroupHomeDir, snapshotInnodbLogSrcPath); err != nil {
-		return nil, err
-	} else {
-		sources = append(sources, s...)
-		destinations = append(destinations, d...)
+	for _, dp := range dps {
+		if err := os.MkdirAll(dp.dstDir, 0775); err != nil {
+			return nil, err
+		}
+		if s, d, err := findFilesToCompress(dp.srcDir, dp.dstDir); err != nil {
+			return nil, err
+		} else {
+			sources = append(sources, s...)
+			destinations = append(destinations, d...)
+		}
 	}
 
 	return compressFiles(sources, destinations, mysqld.SnapshotDir, compressConcurrency)

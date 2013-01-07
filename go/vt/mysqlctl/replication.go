@@ -85,6 +85,7 @@ type SnapshotFile struct {
 func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
 	filename := path.Join(basePath, dataFile.Path)
 	// trim compression extension
+	// FIXME(msolomon) validate compression extension or ignore
 	filename = filename[:len(filename)-len(path.Ext(filename))]
 	return filename
 }

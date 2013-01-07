@@ -186,6 +186,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	// and into the gunziper
 	tee := io.TeeReader(resp.Body, hasher)
 
+	// FIXME(msolomon) only uncompress if url ends with .gz
 	// create the uncompresser
 	decompressor, err := gzip.NewReader(tee)
 	if err != nil {
