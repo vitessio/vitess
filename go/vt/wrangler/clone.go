@@ -46,25 +46,26 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, conc
 	// wait for completion, and save the error
 	results, actionErr := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	var reply *tm.SnapshotReply
+	newType := originalType
 	if actionErr != nil {
 		relog.Error("snapshot failed, still restoring tablet type: %v", actionErr)
 		reply = &tm.SnapshotReply{}
 	} else {
 		reply = results.(*tm.SnapshotReply)
 		if serverMode {
-			relog.Info("server mode specified, leaving tablet in snapshot source mode")
-			return reply.ManifestPath, reply.ZkParentPath, reply.SlaveStartRequired, reply.ReadOnly, originalType, nil
+			relog.Info("server mode specified, switching tablet to snapshot_source mode")
+			newType = tm.TYPE_SNAPSHOT_SOURCE
 		}
 	}
 
-	// Restore type
-	relog.Info("change type after snapshot: %v %v", zkTabletPath, originalType)
-	if ti.Tablet.Parent.Uid == tm.NO_TABLET && forceMasterSnapshot {
+	// Go back to original type, or go to SNAPSHOT_SOURCE
+	relog.Info("change type after snapshot: %v %v", zkTabletPath, newType)
+	if ti.Tablet.Parent.Uid == tm.NO_TABLET && forceMasterSnapshot && newType != tm.TYPE_SNAPSHOT_SOURCE {
 		relog.Info("force change type backup -> master: %v", zkTabletPath)
 		ti.Tablet.Type = tm.TYPE_MASTER
 		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 	} else {
-		err = wr.ChangeType(zkTabletPath, originalType, false)
+		err = wr.ChangeType(zkTabletPath, newType, false)
 	}
 	if err != nil {
 		// failure in changing the zk type is probably worse,

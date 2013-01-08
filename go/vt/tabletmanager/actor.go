@@ -567,8 +567,8 @@ func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != TYPE_BACKUP {
-		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	if tablet.Type != TYPE_SNAPSHOT_SOURCE {
+		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
 	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly)
@@ -627,8 +627,8 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if parentTablet.Type != TYPE_MASTER && parentTablet.Type != TYPE_BACKUP {
-		return fmt.Errorf("restore expected master or backup parent: %v %v", parentTablet.Type, args.ZkParentPath)
+	if parentTablet.Type != TYPE_MASTER && parentTablet.Type != TYPE_SNAPSHOT_SOURCE {
+		return fmt.Errorf("restore expected master or snapshot_source parent: %v %v", parentTablet.Type, args.ZkParentPath)
 	}
 
 	// read & unpack the manifest

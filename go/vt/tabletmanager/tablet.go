@@ -58,6 +58,12 @@ const (
 	// replication sql thread may be stopped
 	TYPE_BACKUP = TabletType("backup")
 
+	// a slaved copy of the data, where mysqld is *not* running,
+	// and we are serving our data files to clone slaves
+	// use 'vtctl Snapshot -server-mode ...' to get in this mode
+	// use 'vtctl SnapshotSourceEnd ...' to get out of this mode
+	TYPE_SNAPSHOT_SOURCE = TabletType("snapshot_source")
+
 	// A tablet that has not been in the replication graph and is restoring
 	// from a snapshot.  idle -> restore -> spare
 	TYPE_RESTORE = TabletType("restore")
@@ -77,6 +83,7 @@ var allTabletTypes = []TabletType{TYPE_IDLE,
 	TYPE_LAG_ORPHAN,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
+	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
 	TYPE_SCRAP,
 }
@@ -91,6 +98,7 @@ var slaveTabletTypes = []TabletType{
 	TYPE_LAG_ORPHAN,
 	TYPE_SCHEMA_UPGRADE,
 	TYPE_BACKUP,
+	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
 }
 
@@ -114,9 +122,9 @@ func init() {
 // Can this db type be trivially reassigned without changes to the replication graph?
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
 			return true
 		}
 	case TYPE_SCRAP:
@@ -210,9 +218,9 @@ func (tablet *Tablet) IsServingType() bool {
 
 // Should this tablet appear in the replication graph?
 // Only IDLE and SCRAP are not in the replication graph.
-// The other non-obvious types are BACKUP, RESTORE and LAG_ORPHAN:
-// these have had a master at some point (or were the master),
-// so they are in the graph.
+// The other non-obvious types are BACKUP, SNAPSHOT_SOURCE, RESTORE
+// and LAG_ORPHAN: these have had a master at some point (or were the
+// master), so they are in the graph.
 func (tablet *Tablet) IsInReplicationGraph() bool {
 	switch tablet.Type {
 	case TYPE_IDLE, TYPE_SCRAP:

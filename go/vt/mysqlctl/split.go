@@ -173,8 +173,8 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		return
 	}
 	// same logic applies here
-	relog.Info("ValidateCloneSource")
-	if err = mysqld.ValidateCloneSource(); err != nil {
+	relog.Info("validateCloneSource")
+	if err = mysqld.validateCloneSource(false); err != nil {
 		return
 	}
 

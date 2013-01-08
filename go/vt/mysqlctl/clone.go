@@ -17,6 +17,7 @@ import (
 
 	"code.google.com/p/vitess/go/ioutil2"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/hook"
 )
 
 // These methods deal with cloning a running instance of mysql.
@@ -30,26 +31,37 @@ const (
 )
 
 // Validate that this instance is a reasonable source of data.
-// FIXME(msolomon) Provide a hook to call out to a program to decide.
-// Is this an option to vtaction? Or look for $VTROOT/bin/vthook_validate_clone_source?
-// What environment variables do we have to provide? dbname, host, socket?
-func (mysqld *Mysqld) ValidateCloneSource() error {
+func (mysqld *Mysqld) validateCloneSource(serverMode bool) error {
 	// needs to be master, or slave that's not too far behind
 	slaveStatus, err := mysqld.slaveStatus()
 	if err != nil {
 		if err != ErrNotSlave {
-			return fmt.Errorf("mysqlctl: ValidateCloneSource failed, %v", err)
+			return fmt.Errorf("mysqlctl: validateCloneSource failed, %v", err)
 		}
 	} else {
 		lagSeconds, _ := strconv.Atoi(slaveStatus["seconds_behind_master"])
 		if lagSeconds > maxLagSeconds {
-			return fmt.Errorf("mysqlctl: ValidateCloneSource failed, lag_seconds exceed maximum tolerance (%v)", lagSeconds)
+			return fmt.Errorf("mysqlctl: validateCloneSource failed, lag_seconds exceed maximum tolerance (%v)", lagSeconds)
 		}
 	}
 
 	// make sure we can write locally
 	if err := mysqld.ValidateSnapshotPath(); err != nil {
 		return err
+	}
+
+	// run a hook to check local things
+	// FIXME(alainjobart) What other parameters do we have to
+	// provide? dbname, host, socket?
+	params := make(map[string]string)
+	if serverMode {
+		params["server-mode"] = ""
+	}
+	hr := hook.NewHook("preflight_snapshot", params).Execute()
+	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
+		relog.Info("preflight_snapshot hook doesn't exist")
+	} else if hr.ExitStatus != hook.HOOK_SUCCESS {
+		return fmt.Errorf("preflight_snapshot hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
 	}
 
 	// FIXME(msolomon) check free space based on an estimate of the current
@@ -60,10 +72,20 @@ func (mysqld *Mysqld) ValidateCloneSource() error {
 	return nil
 }
 
-func (mysqld *Mysqld) ValidateCloneTarget() error {
+func (mysqld *Mysqld) validateCloneTarget() error {
+	// run a hook to check local things
+	// FIXME(alainjobart) What other parameters do we have to
+	// provide? dbname, host, socket?
+	hr := hook.NewSimpleHook("preflight_restore").Execute()
+	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
+		relog.Info("preflight_restore hook doesn't exist")
+	} else if hr.ExitStatus != hook.HOOK_SUCCESS {
+		return fmt.Errorf("preflight_restore hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
+	}
+
 	rows, err := mysqld.fetchSuperQuery("SHOW DATABASES")
 	if err != nil {
-		return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, %v", err)
+		return fmt.Errorf("mysqlctl: validateCloneTarget failed, %v", err)
 	}
 
 	for _, row := range rows {
@@ -71,12 +93,12 @@ func (mysqld *Mysqld) ValidateCloneTarget() error {
 			dbName := row[0].String()
 			tableRows, err := mysqld.fetchSuperQuery("SHOW TABLES FROM " + dbName)
 			if err != nil {
-				return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, %v", err)
+				return fmt.Errorf("mysqlctl: validateCloneTarget failed, %v", err)
 			} else if len(tableRows) == 0 {
 				// no tables == empty db, all is well
 				continue
 			}
-			return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, found active db %v", dbName)
+			return fmt.Errorf("mysqlctl: validateCloneTarget failed, found active db %v", dbName)
 		}
 	}
 
@@ -180,7 +202,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		return "", false, false, errors.New("CreateSnapshot failed: no database name provided")
 	}
 
-	if err = mysqld.ValidateCloneSource(); err != nil {
+	if err = mysqld.validateCloneSource(serverMode); err != nil {
 		return
 	}
 
@@ -337,8 +359,8 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
 
-	relog.Debug("ValidateCloneTarget")
-	if err := mysqld.ValidateCloneTarget(); err != nil {
+	relog.Debug("validateCloneTarget")
+	if err := mysqld.validateCloneTarget(); err != nil {
 		return err
 	}
 
