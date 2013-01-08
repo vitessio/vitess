@@ -40,8 +40,11 @@ class TabletConnection(object):
     self.transaction_id = 0
     self.session_id = 0
     if self.use_auth:
-      self.authenticate()
-
+      try:
+        self.authenticate()
+      except gorpc.GoRpcError:
+        self.close()
+        raise
   # You need to obtain and set the session_id for things to work.
   def set_session_id(self, session_id):
     self.session_id = session_id
@@ -94,6 +97,7 @@ class TabletConnection(object):
     # db and the client shouldn't affect this part of the bookkeeping.
     # Do this after fill_session, since this is a critical part.
     self.transaction_id = 0
+
     try:
       response = self.client.call('SqlQuery.Commit', req)
       return response.reply

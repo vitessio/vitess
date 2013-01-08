@@ -83,7 +83,9 @@ class VtOCCConnection(tablet2.TabletConnection):
     except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
 
-  def _convert_error(self, exception, *error_hints):
+  def _convert_error(self, exception, method, *error_hints):
+    # method used to be part of error_hints, now it's obligatory.
+    error_hints = (method,) + error_hints
     now = time.time()
     if not self._time_failed:
       self._time_failed = now
@@ -131,7 +133,7 @@ class VtOCCConnection(tablet2.TabletConnection):
       error_type = ERROR_APP_LEVEL
 
 
-    if error_type == ERROR_RETRY and self.transaction_id:
+    if method == 'commit' or error_type == ERROR_RETRY and self.transaction_id:
       # With a transaction, you cannot retry, so just redial. The next action
       # will be successful. Masquerade as commands-out-of-sync - an operational
       # error that can be reattempted at the app level.
@@ -140,10 +142,14 @@ class VtOCCConnection(tablet2.TabletConnection):
       try:
         time.sleep(RECONNECT_DELAY)
         self.dial()
-      except Exception as e:
+      except dbexceptions.OperationalError as dial_error:
+        # Some sort of error in the authentication - better scrap the
+        # connection as it may be in a bad state.
+        raise MySQLErrors.OperationalError(2003, str(dial_error), self.addr, 'dial')
+      except Exception as dial_error:
         # If this fails now, the code will retry later as the session_id
         # won't be valid until the handshake finishes.
-        logging.warning('error dialing vtocc %s (%s)', self.addr, e)
+        logging.warning('error dialing vtocc %s (%s)', self.addr, dial_error)
 
     exc_class = _mysql_error_map.get(err, MySQLErrors.DatabaseError)
     return error_type, exc_class(err, str(exception), self.addr,
@@ -201,7 +207,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         self._time_failed = 0
         return result
       except dbexceptions.OperationalError as e:
-        error_type, e = self._convert_error(e, sql, sane_bind_vars)
+        error_type, e = self._convert_error(e, 'execute', sql, sane_bind_vars)
         if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
         while True:
@@ -241,7 +247,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         self._time_failed = 0
         return result
       except dbexceptions.OperationalError as e:
-        error_type, e = self._convert_error(e, sql_list, sane_bind_vars_list)
+        error_type, e = self._convert_error(e, 'execute_batch', sql_list, sane_bind_vars_list)
         if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
         while True:
@@ -277,7 +283,7 @@ class VtOCCConnection(tablet2.TabletConnection):
         self._time_failed = 0
         return result
       except dbexceptions.OperationalError as e:
-        error_type, e = self._convert_error(e, sql, sane_bind_vars)
+        error_type, e = self._convert_error(e, 'stream_execute', sql, sane_bind_vars)
         if error_type not in (ERROR_RETRY, ERROR_TIMEOUT):
           raise e
         while True:
