@@ -31,7 +31,7 @@ import (
 
 const (
 	DefaultLameDuckPeriod = 30.0
-	DefaultRebindDelay    = 0.0
+	DefaultRebindDelay    = 0.01
 )
 
 var (
