@@ -189,6 +189,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.reparentPosition(actionNode)
 	case TABLET_ACTION_SNAPSHOT:
 		err = ta.snapshot(actionNode)
+	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
+		err = ta.snapshotSourceEnd(actionNode)
 	case TABLET_ACTION_STOP_SLAVE:
 		err = ta.mysqld.StopSlave()
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
@@ -540,12 +542,12 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.CompressConcurrency)
+	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode)
 	if err != nil {
 		return err
 	}
 
-	sr := &SnapshotReply{ManifestPath: filename}
+	sr := &SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
@@ -555,6 +557,21 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	}
 	actionNode.reply = sr
 	return nil
+}
+
+func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
+	args := actionNode.args.(*SnapshotSourceEndArgs)
+
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	if tablet.Type != TYPE_BACKUP {
+		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly)
 }
 
 // fetch a json file and parses it
@@ -602,7 +619,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 		return err
 	}
 	if strings.ToLower(args.SrcFilePath) == "default" {
-		args.SrcFilePath = path.Join(mysqlctl.SnapshotDir(sourceTablet.Uid), mysqlctl.SnapshotManifestFile)
+		args.SrcFilePath = path.Join(mysqlctl.SnapshotURLPath, mysqlctl.SnapshotManifestFile)
 	}
 
 	// read the parent tablet, verify its state
@@ -610,8 +627,8 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if parentTablet.Type != TYPE_MASTER {
-		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, args.ZkParentPath)
+	if parentTablet.Type != TYPE_MASTER && parentTablet.Type != TYPE_BACKUP {
+		return fmt.Errorf("restore expected master or backup parent: %v %v", parentTablet.Type, args.ZkParentPath)
 	}
 
 	// read & unpack the manifest
@@ -621,7 +638,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// and do the action
-	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart); err != nil {
 		relog.Error("RestoreFromSnapshot failed: %v", err)
 		return err
 	}
@@ -654,7 +671,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.CompressConcurrency)
+	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.Concurrency)
 	if err != nil {
 		return err
 	}

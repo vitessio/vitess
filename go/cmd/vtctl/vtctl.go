@@ -92,27 +92,30 @@ var commands = []commandGroup{
 				"<zk tablet path> <duration>",
 				"Block the action queue for the specified duration (mostly for testing)."},
 			command{"Snapshot", commandSnapshot,
-				"[-force] [-compress-concurrency=3] <zk tablet path>",
+				"[-force] [-server-mode] [-concurrency=3] <zk tablet path>",
 				"Stop mysqld and copy compressed data aside."},
+			command{"SnapshotSourceEnd", commandSnapshotSourceEnd,
+				"[-slave-start] [-read-write] <zk tablet path> <original tablet type>",
+				"Restarts Mysql and restore original server type."},
 			command{"Restore", commandRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
+				"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
 				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"Clone", commandClone,
-				"[-force] [-compress-concurrency=3] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <zk dst tablet path>",
+				"[-force] [-concurrency=3] [-fetch-concurrency=3] [-fetch-retry-count=3] [-serverMode] <zk src tablet path> <zk dst tablet path>",
 				"This performs Snapshot and then Restore.  The advantage of having separate actions is that one snapshot can be used for many restores."},
 			command{"ReparentTablet", commandReparentTablet,
 				"<zk tablet path>",
 				"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."},
 			command{"PartialSnapshot", commandPartialSnapshot,
-				"[-force] [-compress-concurrency=3] <zk tablet path> <key name> <start key> <end key>",
+				"[-force] [-concurrency=3] <zk tablet path> <key name> <start key> <end key>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"PartialRestore", commandPartialRestore,
 				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
 				"Copy the given partial snaphot from the source tablet and starts partial replication to the new master path (or uses the src tablet path if not specified).\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"PartialClone", commandPartialClone,
-				"[-force] [-compress-concurrency=3] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>",
+				"[-force] [-concurrency=3] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>",
 				"This performs PartialSnapshot and then PartialRestore.  The advantage of having separate actions is that one partial snapshot can be used for many restores."},
 			command{"ExecuteHook", commandExecuteHook,
 				"<zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
@@ -715,23 +718,41 @@ func commandSleep(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) 
 	return wrangler.ActionInitiator().Sleep(subFlags.Arg(0), duration)
 }
 
+func commandSnapshotSourceEnd(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	slaveStartRequired := subFlags.Bool("slave-start", false, "will restart replication")
+	readWrite := subFlags.Bool("read-write", false, "will make the server read-write")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		relog.Fatal("action SnapshotSourceEnd requires <zk tablet path> <original server type>")
+	}
+
+	return "", wrangler.SnapshotSourceEnd(subFlags.Arg(0), *slaveStartRequired, !(*readWrite), tm.TabletType(subFlags.Arg(1)))
+}
+
 func commandSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	compressConcurrency := subFlags.Int("compress-concurrency", 3, "how many compression jobs to run simultaneously")
+	serverMode := subFlags.Bool("server-mode", false, "will symlink the data files and leave mysqld stopped")
+	concurrency := subFlags.Int("concurrency", 3, "how many compression/checksum jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action Snapshot requires <zk src tablet path>")
 	}
 
-	filename, zkParentPath, err := wrangler.Snapshot(subFlags.Arg(0), *force, *compressConcurrency)
+	filename, zkParentPath, slaveStartRequired, readOnly, originalType, err := wrangler.Snapshot(subFlags.Arg(0), *force, *concurrency, *serverMode)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
 		relog.Info("ParentPath: %v", zkParentPath)
+		if *serverMode {
+			relog.Info("SlaveStartRequired: %v", slaveStartRequired)
+			relog.Info("ReadOnly: %v", readOnly)
+			relog.Info("OriginalType: %v", originalType)
+		}
 	}
 	return "", err
 }
 
 func commandRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from snapshot source that is the replication master)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -742,20 +763,21 @@ func commandRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string
 	if subFlags.NArg() == 4 {
 		zkParentPath = subFlags.Arg(3)
 	}
-	return "", wrangler.Restore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount)
+	return "", wrangler.Restore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart)
 }
 
 func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	compressConcurrency := subFlags.Int("compress-concurrency", 3, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 3, "how many compression/checksum jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
+	serverMode := subFlags.Bool("server-mode", false, "will keep the snapshot server offline to serve DB files directly")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action Clone requires <zk src tablet path> <zk dst tablet path>")
 	}
 
-	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Arg(1), *force, *compressConcurrency, *fetchConcurrency, *fetchRetryCount)
+	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Arg(1), *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
 func commandReparentTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -768,13 +790,13 @@ func commandReparentTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 
 func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	compressConcurrency := subFlags.Int("compress-concurrency", 3, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 4 {
 		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name> <start key> <end key>")
 	}
 
-	filename, zkParentPath, err := wrangler.PartialSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *compressConcurrency)
+	filename, zkParentPath, err := wrangler.PartialSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *concurrency)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
 		relog.Info("ParentPath: %v", zkParentPath)
@@ -798,7 +820,7 @@ func commandPartialRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 
 func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	compressConcurrency := subFlags.Int("compress-concurrency", 3, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -806,7 +828,7 @@ func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("action PartialClone requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>")
 	}
 
-	return "", wrangler.PartialClone(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *compressConcurrency, *fetchConcurrency, *fetchRetryCount)
+	return "", wrangler.PartialClone(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *concurrency, *fetchConcurrency, *fetchRetryCount)
 }
 
 func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -13,7 +13,7 @@ import (
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, compressConcurrency int) (manifest, parent string, err error) {
+func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, concurrency int) (manifest, parent string, err error) {
 	var ti *tm.TabletInfo
 	ti, err = tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {
@@ -38,7 +38,7 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 		return
 	}
 
-	actionPath, err := wr.ai.PartialSnapshot(zkTabletPath, &tm.PartialSnapshotArgs{keyName, startKey, endKey, compressConcurrency})
+	actionPath, err := wr.ai.PartialSnapshot(zkTabletPath, &tm.PartialSnapshotArgs{keyName, startKey, endKey, concurrency})
 	if err != nil {
 		return
 	}
@@ -75,7 +75,7 @@ func (wr *Wrangler) PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath
 		return err
 	}
 
-	actionPath, err := wr.ai.PartialRestore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount})
+	actionPath, err := wr.ai.PartialRestore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, false})
 	if err != nil {
 		return err
 	}
@@ -89,8 +89,8 @@ func (wr *Wrangler) PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath
 	return nil
 }
 
-func (wr *Wrangler) PartialClone(zkSrcTabletPath, zkDstTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, compressConcurrency, fetchConcurrency, fetchRetryCount int) error {
-	srcFilePath, zkParentPath, err := wr.PartialSnapshot(zkSrcTabletPath, keyName, startKey, endKey, forceMasterSnapshot, compressConcurrency)
+func (wr *Wrangler) PartialClone(zkSrcTabletPath, zkDstTabletPath, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int) error {
+	srcFilePath, zkParentPath, err := wr.PartialSnapshot(zkSrcTabletPath, keyName, startKey, endKey, forceMasterSnapshot, concurrency)
 	if err != nil {
 		return err
 	}

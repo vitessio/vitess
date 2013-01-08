@@ -168,8 +168,14 @@ populate_vt_select_test = [
     for x in xrange(4)]
 
 
-@utils.test_case
-def run_test_mysqlctl_clone():
+def _run_test_mysqlctl_clone(server_mode):
+  if server_mode:
+    snapshot_cmd = "snapshotsourcestart -concurrency=8"
+    restore_flags = "-dont-wait-for-slave-start"
+  else:
+    snapshot_cmd = "snapshot -concurrency=5"
+    restore_flags = ""
+
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
@@ -184,23 +190,44 @@ def run_test_mysqlctl_clone():
 
   tablet_62344.start_vttablet()
 
-  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshot -compress-concurrency=5 vt_snapshot_test').wait()
+  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 %s vt_snapshot_test' % snapshot_cmd).wait()
   if err != 0:
-    raise utils.TestError('mysqlctl snapshot failed')
+    raise utils.TestError('mysqlctl %s failed' % snapshot_cmd)
 
-  utils.pause("snapshot finished")
+  utils.pause("%s finished" % snapshot_cmd)
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 %s/snapshot/vt_0000062344/snapshot_manifest.json' % vtdataroot).wait()
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (restore_flags, vtdataroot)).wait()
   if err != 0:
     raise utils.TestError('mysqlctl restore failed')
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
+  if server_mode:
+    err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshotsourceend -read-write vt_snapshot_test').wait()
+    if err != 0:
+      raise utils.TestError('mysqlctl snapshotsourceend failed')
+
+    # see if server restarted properly
+    tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
+
   tablet_62344.kill_vttablet()
 
 @utils.test_case
-def run_test_vtctl_snapshot_restore():
+def run_test_mysqlctl_clone():
+  _run_test_mysqlctl_clone(False)
+
+@utils.test_case
+def run_test_mysqlctl_clone_server():
+  _run_test_mysqlctl_clone(True)
+
+def _run_test_vtctl_snapshot_restore(server_mode):
+  if server_mode:
+    snapshot_flags = '-server-mode -concurrency=8'
+    restore_flags = '-dont-wait-for-slave-start'
+  else:
+    snapshot_flags = '-concurrency=4'
+    restore_flags = ''
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
@@ -213,39 +240,68 @@ def run_test_vtctl_snapshot_restore():
   tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
                         populate_vt_insert_test)
 
+  tablet_62044.create_db('vt_snapshot_test')
+
   tablet_62344.start_vttablet()
 
   # Need to force snapshot since this is a master db.
-  out, err = utils.run_vtctl('Snapshot -force -compress-concurrency=4 ' + tablet_62344.zk_tablet_path, log_level='INFO', trap_output=True)
-  errPos = err.find("Manifest: ")
-  if errPos == -1:
+  out, err = utils.run_vtctl('Snapshot -force %s %s ' % (snapshot_flags, tablet_62344.zk_tablet_path), log_level='INFO', trap_output=True)
+  results = {}
+  for name in ['Manifest', 'ParentPath', 'SlaveStartRequired', 'ReadOnly', 'OriginalType']:
+    sepPos = err.find(name + ": ")
+    if sepPos != -1:
+      results[name] = err[sepPos+len(name)+2:].splitlines()[0]
+  if not "Manifest" in results:
     raise utils.TestError("Snapshot didn't echo Manifest file", err)
-  manifest = err[errPos+10:].splitlines()[0]
-  errPos = err.find("ParentPath: ")
-  if errPos == -1:
+  if not "ParentPath" in results:
     raise utils.TestError("Snapshot didn't echo ParentPath", err)
-  parentPath = err[errPos+12:].splitlines()[0]
-  utils.pause("snapshot finished: " + manifest + " " + parentPath)
-
+  utils.pause("snapshot finished: " + results['Manifest'] + " " + results['ParentPath'])
+  if server_mode:
+    if not "SlaveStartRequired" in results:
+      raise utils.TestError("Snapshot didn't echo SlaveStartRequired", err)
+    if not "ReadOnly" in results:
+      raise utils.TestError("Snapshot didn't echo ReadOnly", err)
+    if not "OriginalType" in results:
+      raise utils.TestError("Snapshot didn't echo OriginalType", err)
+    if (results['SlaveStartRequired'] != 'false' or
+        results['ReadOnly'] != 'true' or
+        results['OriginalType'] != 'master'):
+      raise utils.TestError("Bad values returned by Snapshot", err)
   tablet_62044.init_tablet('idle', start=True)
 
-  # do not specify a MANIFEST, see if default works
+  # do not specify a MANIFEST, see if 'default' works
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  utils.run_vtctl('Restore -fetch-concurrency=2 -fetch-retry-count=4 %s default %s %s' %
-                  (tablet_62344.zk_tablet_path,
-                   tablet_62044.zk_tablet_path, parentPath), log_level='INFO')
+  utils.run_vtctl('Restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s default %s %s' %
+                  (restore_flags, tablet_62344.zk_tablet_path,
+                   tablet_62044.zk_tablet_path, results['ParentPath']), log_level='INFO')
   utils.pause("restore finished")
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
+  # in server_mode, get the server out of it and check it
+  if server_mode:
+    utils.run_vtctl('SnapshotSourceEnd %s %s' % (tablet_62344.zk_tablet_path, results['OriginalType']), log_level='INFO')
+    tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
+    utils.run_vtctl('Validate /zk/global/vt/keyspaces')
+
   tablet_62344.kill_vttablet()
   tablet_62044.kill_vttablet()
 
+@utils.test_case
+def run_test_vtctl_snapshot_restore():
+  _run_test_vtctl_snapshot_restore(server_mode=False)
 
 @utils.test_case
-def run_test_vtctl_clone():
+def run_test_vtctl_snapshot_restore_server():
+  _run_test_vtctl_snapshot_restore(server_mode=True)
+
+def _run_test_vtctl_clone(server_mode):
+  if server_mode:
+    clone_flags = '-server-mode'
+  else:
+    clone_flags = ''
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
@@ -267,8 +323,8 @@ def run_test_vtctl_clone():
   utils.run("rm -rf %s" % snapshot_dir)
   utils.run("mkdir -p %s" % snapshot_dir)
   utils.run("chmod -w %s" % snapshot_dir)
-  out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s' %
-                       (tablet_62344.zk_tablet_path,
+  out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s %s' %
+                       (clone_flags, tablet_62344.zk_tablet_path,
                         tablet_62044.zk_tablet_path),
                        trap_output=True, raise_on_error=False)
   if err.find("Cannot validate snapshot directory") == -1:
@@ -276,16 +332,26 @@ def run_test_vtctl_clone():
   utils.run("chmod +w %s" % snapshot_dir)
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  utils.run_vtctl('Clone -force %s %s' %
-                  (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('Clone -force %s %s %s' %
+                  (clone_flags, tablet_62344.zk_tablet_path,
+                   tablet_62044.zk_tablet_path))
 
   utils.pause("look at logs!")
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
+  tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.kill_vttablet()
   tablet_62044.kill_vttablet()
+
+@utils.test_case
+def run_test_vtctl_clone():
+  _run_test_vtctl_clone(server_mode=False)
+
+@utils.test_case
+def run_test_vtctl_clone_server():
+  _run_test_vtctl_clone(server_mode=True)
 
 @utils.test_case
 def run_test_mysqlctl_split():
@@ -788,9 +854,13 @@ def run_all():
   run_test_scrap()
   run_test_restart_during_action()
 
-  # Subsumed by vtctl_clone test.
+  # Subsumed by vtctl_clone* tests.
   # run_test_mysqlctl_clone()
+  # run_test_mysqlctl_clone_server()
+  # run_test_vtctl_snapshot_restore()
+  # run_test_vtctl_snapshot_restore_server()
   run_test_vtctl_clone()
+  run_test_vtctl_clone_server()
 
   # This test does not pass as it requires an experimental mysql patch.
   #run_test_vtctl_partial_clone()
@@ -801,6 +871,7 @@ def run_all():
   run_test_reparent_down_master()
   run_test_vttablet_authenticated()
   run_test_reparent_lag_slave()
+  run_test_hook()
 
 def main():
   args = utils.get_args()

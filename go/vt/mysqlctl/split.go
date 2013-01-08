@@ -167,7 +167,7 @@ startKey, endKey - the row range to prepare
 sourceAddr - the ip addr of the machine running the export
 allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, compressConcurrency int) (snapshotManifestFilename string, err error) {
+func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, concurrency int) (snapshotManifestFilename string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -250,7 +250,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	}
 
 	var ssmFile string
-	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd, compressConcurrency)
+	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd, concurrency)
 	if snapshotErr != nil {
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 	} else {
@@ -295,7 +295,7 @@ const dumpConcurrency = 4
 
 // createSplitSnapshotManifest exports each table to a CSV-like file
 // and compresses the results.
-func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition, compressConcurrency int) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition, concurrency int) ([]SnapshotFile, error) {
 	n := len(sd.TableDefinitions)
 	errors := make(chan error)
 	work := make(chan int, n)
@@ -346,7 +346,7 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 		}
 		return nil, err
 	}
-	dataFiles, err := compressFiles(tableFiles, compressedFiles, mysqld.SnapshotDir, compressConcurrency)
+	dataFiles, err := newSnapshotFiles(tableFiles, compressedFiles, mysqld.SnapshotDir, concurrency, true)
 	if err != nil {
 		for _, srcPath := range tableFiles {
 			os.Remove(srcPath)

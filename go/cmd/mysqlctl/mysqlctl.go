@@ -50,13 +50,13 @@ func partialRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []s
 func partialSnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	start := subFlags.String("start", "", "start of the key range")
 	end := subFlags.String("end", "", "end of the key range")
-	compressConcurrency := subFlags.Int("compress-concurrency", 3, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action partialsnapshot requires <db name> <key name>")
 	}
 
-	filename, err := mysqld.CreateSplitSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(*start), key.HexKeyspaceId(*end), tabletAddr, false, *compressConcurrency)
+	filename, err := mysqld.CreateSplitSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(*start), key.HexKeyspaceId(*end), tabletAddr, false, *concurrency)
 	if err != nil {
 		relog.Fatal("partialsnapshot failed: %v", err)
 	} else {
@@ -65,6 +65,7 @@ func partialSnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []
 }
 
 func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from master server)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -74,7 +75,7 @@ func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) 
 
 	rs, err := mysqlctl.ReadSnapshotManifest(subFlags.Arg(0))
 	if err == nil {
-		err = mysqld.RestoreFromSnapshot(rs, *fetchConcurrency, *fetchRetryCount)
+		err = mysqld.RestoreFromSnapshot(rs, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart)
 	}
 	if err != nil {
 		relog.Fatal("restore failed: %v", err)
@@ -91,17 +92,45 @@ func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 }
 
 func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	compressConcurrency := subFlags.Int("compress-concurrency", 3, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("Command snapshot requires <db name>")
 	}
 
-	filename, err := mysqld.CreateSnapshot(subFlags.Arg(0), tabletAddr, false, *compressConcurrency)
+	filename, _, _, err := mysqld.CreateSnapshot(subFlags.Arg(0), tabletAddr, false, *concurrency, false)
 	if err != nil {
 		relog.Fatal("snapshot failed: %v", err)
 	} else {
 		relog.Info("manifest location: %v", filename)
+	}
+}
+
+func snapshotSourceStartCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	concurrency := subFlags.Int("concurrency", 3, "how many checksum jobs to run simultaneously")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		relog.Fatal("Command snapshotsourcestart requires <db name>")
+	}
+
+	filename, slaveStartRequired, readOnly, err := mysqld.CreateSnapshot(subFlags.Arg(0), tabletAddr, false, *concurrency, true)
+	if err != nil {
+		relog.Fatal("snapshot failed: %v", err)
+	} else {
+		relog.Info("manifest location: %v", filename)
+		relog.Info("slave start required: %v", slaveStartRequired)
+		relog.Info("read only: %v", readOnly)
+	}
+}
+
+func snapshotSourceEndCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	slaveStartRequired := subFlags.Bool("slave-start", false, "will restart replication")
+	readWrite := subFlags.Bool("read-write", false, "will make the server read-write")
+	subFlags.Parse(args)
+
+	err := mysqld.SnapshotSourceEnd(*slaveStartRequired, !(*readWrite))
+	if err != nil {
+		relog.Fatal("snapshotsourceend failed: %v", err)
 	}
 }
 
@@ -142,14 +171,20 @@ var commands = []command{
 		"Shuts down mysqld, does not remove any file"},
 
 	command{"snapshot", snapshotCmd,
-		"[-compress-concurrency=3] <db name>",
+		"[-concurrency=3] <db name>",
 		"Takes a full snapshot, copying the innodb data files"},
+	command{"snapshotsourcestart", snapshotSourceStartCmd,
+		"[-concurrency=3] <db name>",
+		"Enters snapshot server mode (mysqld stopped, serving innodb data files)"},
+	command{"snapshotsourceend", snapshotSourceEndCmd,
+		"[-slave-start] [-read-write]",
+		"Gets out of snapshot server mode"},
 	command{"restore", restoreCmd,
-		"[-fetch-concurrency=3] [-fetch-retry-count=3] <snapshot manifest file>",
+		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 
 	command{"partialsnapshot", partialSnapshotCmd,
-		"[-start=<start key>] [-stop=<stop key>] [-compress-concurrency=3] <db name> <key name>",
+		"[-start=<start key>] [-stop=<stop key>] [-concurrency=3] <db name> <key name>",
 		"Takes a partial snapshot using 'select * into' commands"},
 	command{"partialrestore", partialRestoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",

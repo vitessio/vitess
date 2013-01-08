@@ -116,24 +116,38 @@ func (ai *ActionInitiator) DemoteMaster(zkTabletPath string) (actionPath string,
 }
 
 type SnapshotArgs struct {
-	CompressConcurrency int
+	Concurrency int
+	ServerMode  bool
 }
 
 // used by both Snapshot and PartialSnapshot
 type SnapshotReply struct {
 	ZkParentPath string
 	ManifestPath string
+
+	// these two are only used for ServerMode=true full snapshot
+	SlaveStartRequired bool
+	ReadOnly           bool
 }
 
 func (ai *ActionInitiator) Snapshot(zkTabletPath string, args *SnapshotArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT, args: args})
 }
 
+type SnapshotSourceEndArgs struct {
+	SlaveStartRequired bool
+	ReadOnly           bool
+}
+
+func (ai *ActionInitiator) SnapshotSourceEnd(zkTabletPath string, args *SnapshotSourceEndArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT_SOURCE_END, args: args})
+}
+
 type PartialSnapshotArgs struct {
-	KeyName             string
-	StartKey            key.HexKeyspaceId
-	EndKey              key.HexKeyspaceId
-	CompressConcurrency int
+	KeyName     string
+	StartKey    key.HexKeyspaceId
+	EndKey      key.HexKeyspaceId
+	Concurrency int
 }
 
 func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
@@ -149,7 +163,7 @@ func (ai *ActionInitiator) PromoteSlave(zkTabletPath, zkShardActionPath string) 
 }
 
 type RestartSlaveArgs struct {
-	// only one of these should be set
+	// only one of these two should be set
 	ShardActionPath  string
 	RestartSlaveData *RestartSlaveData
 }
@@ -183,11 +197,12 @@ func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, er
 
 // used for both Restore and PartialRestore
 type RestoreArgs struct {
-	ZkSrcTabletPath  string
-	SrcFilePath      string
-	ZkParentPath     string
-	FetchConcurrency int
-	FetchRetryCount  int
+	ZkSrcTabletPath       string
+	SrcFilePath           string
+	ZkParentPath          string
+	FetchConcurrency      int
+	FetchRetryCount       int
+	DontWaitForSlaveStart bool
 }
 
 func (ai *ActionInitiator) Restore(zkDstTabletPath string, args *RestoreArgs) (actionPath string, err error) {

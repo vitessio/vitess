@@ -83,8 +83,7 @@ func (mysqld *Mysqld) ValidateCloneTarget() error {
 	return nil
 }
 
-// FIXME(msolomon) add compress flag
-func findFilesToCompress(srcDir, dstDir string) ([]string, []string, error) {
+func findFilesToServe(srcDir, dstDir string, compress bool) ([]string, []string, error) {
 	fiList, err := ioutil.ReadDir(srcDir)
 	if err != nil {
 		return nil, nil, err
@@ -94,7 +93,12 @@ func findFilesToCompress(srcDir, dstDir string) ([]string, []string, error) {
 	for _, fi := range fiList {
 		if !fi.IsDir() {
 			srcPath := path.Join(srcDir, fi.Name())
-			dstPath := path.Join(dstDir, fi.Name()+".gz")
+			var dstPath string
+			if compress {
+				dstPath = path.Join(dstDir, fi.Name()+".gz")
+			} else {
+				dstPath = path.Join(dstDir, fi.Name())
+			}
 			sources = append(sources, srcPath)
 			destinations = append(destinations, dstPath)
 		}
@@ -117,7 +121,7 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 	return dbNames, nil
 }
 
-func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcurrency int) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, concurrency int, serverMode bool) ([]SnapshotFile, error) {
 	sources := make([]string, 0, 128)
 	destinations := make([]string, 0, 128)
 
@@ -127,8 +131,8 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcur
 		return nil, err
 	}
 
-	// FIXME(msolomon) innodb paths must match patterns in mycnf - probably belongs
-	// as a derived path.
+	// FIXME(msolomon) innodb paths must match patterns in mycnf -
+	// probably belongs as a derived path.
 	dps := []struct{ srcDir, dstDir string }{
 		{path.Join(mysqld.config.DataDir, dbName), path.Join(snapshotPath, dataDir, dbName)},
 		{path.Join(mysqld.config.DataDir, "_vt"), path.Join(snapshotPath, dataDir, "_vt")},
@@ -141,7 +145,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcur
 		if err := os.MkdirAll(dp.dstDir, 0775); err != nil {
 			return nil, err
 		}
-		if s, d, err := findFilesToCompress(dp.srcDir, dp.dstDir); err != nil {
+		if s, d, err := findFilesToServe(dp.srcDir, dp.dstDir, !serverMode); err != nil {
 			return nil, err
 		} else {
 			sources = append(sources, s...)
@@ -149,7 +153,7 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcur
 		}
 	}
 
-	return compressFiles(sources, destinations, mysqld.SnapshotDir, compressConcurrency)
+	return newSnapshotFiles(sources, destinations, mysqld.SnapshotDir, concurrency, !serverMode)
 }
 
 // This function runs on the machine acting as the source for the clone.
@@ -159,13 +163,21 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, compressConcur
 // Record replication position.
 // Shutdown mysql
 // Check paths for storing data
-// Compress /vt/vt_[0-9a-f]+/data/vt_.+
-// Compute md5() sums
-// Place in /vt/clone_src where they will be served by http server (not rpc)
-// Restart mysql
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, compressConcurrency int) (snapshotManifestUrlPath string, err error) {
+//
+// Depending on the serverMode flag, we do the following:
+// serverMode = false:
+//   Compress /vt/vt_[0-9a-f]+/data/vt_.+
+//   Compute md5() sums (of compressed files)
+//   Place in /vt/clone_src where they will be served by http server (not rpc)
+//   Restart mysql
+// serverMode = true:
+//   Make symlinks for /vt/vt_[0-9a-f]+/data/vt_.+ to innodb files
+//   Compute md5() sums (of uncompressed files)
+//   Place symlinks in /vt/clone_src where they will be served by http server
+//   Leave mysql stopped, return slaveStartRequired, readOnly
+func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
 	if dbName == "" {
-		return "", errors.New("CreateSnapshot failed: no database name provided")
+		return "", false, false, errors.New("CreateSnapshot failed: no database name provided")
 	}
 
 	if err = mysqld.ValidateCloneSource(); err != nil {
@@ -173,9 +185,9 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	}
 
 	// save initial state so we can restore on Start()
-	slaveStartRequired := false
+	slaveStartRequired = false
 	sourceIsMaster := false
-	readOnly := true
+	readOnly = true
 
 	slaveStatus, slaveErr := mysqld.slaveStatus()
 	if slaveErr == nil {
@@ -214,8 +226,8 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		if err != nil {
 			return
 		}
-		// We are a slave, check our replication strategy before choosing
-		// the master address.
+		// We are a slave, check our replication strategy before
+		// choosing the master address.
 		if allowHierarchicalReplication {
 			masterAddr = mysqld.Addr()
 		} else {
@@ -231,7 +243,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	}
 
 	var smFile string
-	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir, compressConcurrency)
+	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir, concurrency, serverMode)
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
@@ -244,34 +256,49 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		}
 	}
 
-	// Try to restart mysqld regardless of snapshot success.
-	if err = Start(mysqld, MysqlWaitTime); err != nil {
-		return
+	// restore our state if required
+	if serverMode && snapshotErr == nil {
+		relog.Info("server mode snapshot worked, not restarting mysql")
+	} else {
+		if err = mysqld.SnapshotSourceEnd(slaveStartRequired, readOnly); err != nil {
+			return
+		}
+	}
+
+	if snapshotErr != nil {
+		return "", slaveStartRequired, readOnly, snapshotErr
+	}
+	relative, err := filepath.Rel(mysqld.SnapshotDir, smFile)
+	if err != nil {
+		return "", slaveStartRequired, readOnly, nil
+	}
+	return path.Join(SnapshotURLPath, relative), slaveStartRequired, readOnly, nil
+}
+
+func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly bool) error {
+	// Try to restart mysqld
+	if err := Start(mysqld, MysqlWaitTime); err != nil {
+		return err
 	}
 
 	// Restore original mysqld state that we saved above.
 	if slaveStartRequired {
-		if err = mysqld.StartSlave(); err != nil {
-			return
+		if err := mysqld.StartSlave(); err != nil {
+			return err
 		}
+
 		// this should be quick, but we might as well just wait
-		if err = mysqld.WaitForSlaveStart(SlaveStartDeadline); err != nil {
-			return
+		if err := mysqld.WaitForSlaveStart(SlaveStartDeadline); err != nil {
+			return err
 		}
 	}
 
-	if err = mysqld.SetReadOnly(readOnly); err != nil {
-		return
+	// And set read-only mode
+	if err := mysqld.SetReadOnly(readOnly); err != nil {
+		return err
 	}
 
-	if snapshotErr != nil {
-		return "", snapshotErr
-	}
-	relative, err := filepath.Rel(mysqld.SnapshotDir, smFile)
-	if err != nil {
-		return "", nil
-	}
-	return path.Join(SnapshotURLPath, relative), nil
+	return nil
 }
 
 func writeJson(filename string, x interface{}) error {
@@ -305,7 +332,7 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
-func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int) error {
+func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool) error {
 	if snapshotManifest == nil {
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
@@ -336,10 +363,12 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		return err
 	}
 
+	if dontWaitForSlaveStart {
+		return nil
+	}
 	return mysqld.WaitForSlaveStart(SlaveStartDeadline)
 }
 
-// FIXME(alainjobart) move this to replication.go, and use in split.go as well
 func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int) error {
 	replicaDbPath := path.Join(mysqld.config.DataDir, snapshotManifest.DbName)
 

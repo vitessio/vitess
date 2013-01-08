@@ -42,10 +42,11 @@ const (
 	TABLET_ACTION_APPLY_SCHEMA        = "ApplySchema"
 	TABLET_ACTION_EXECUTE_HOOK        = "ExecuteHook"
 
-	TABLET_ACTION_SNAPSHOT         = "Snapshot"
-	TABLET_ACTION_RESTORE          = "Restore"
-	TABLET_ACTION_PARTIAL_SNAPSHOT = "PartialSnapshot"
-	TABLET_ACTION_PARTIAL_RESTORE  = "PartialRestore"
+	TABLET_ACTION_SNAPSHOT            = "Snapshot"
+	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
+	TABLET_ACTION_RESTORE             = "Restore"
+	TABLET_ACTION_PARTIAL_SNAPSHOT    = "PartialSnapshot"
+	TABLET_ACTION_PARTIAL_RESTORE     = "PartialRestore"
 
 	// Shard actions - involve all tablets in a shard
 	SHARD_ACTION_REPARENT = "ReparentShard"
@@ -134,6 +135,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_SNAPSHOT:
 		node.args = &SnapshotArgs{}
 		node.reply = &SnapshotReply{}
+	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
+		node.args = &SnapshotSourceEndArgs{}
 	case TABLET_ACTION_RESTORE:
 		node.args = &RestoreArgs{}
 	case TABLET_ACTION_PARTIAL_SNAPSHOT:

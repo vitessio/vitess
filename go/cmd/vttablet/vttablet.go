@@ -6,9 +6,11 @@
 package main
 
 import (
+	"compress/gzip"
 	"expvar"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -73,6 +75,20 @@ var qsConfig = ts.Config{
 	StreamBufferSize:   32 * 1024,
 }
 
+// this is a http.ResponseWriter adapter / proxy layer
+// to support gzipping on the fly. Both listed interfaces have mostly different
+// methods, so the anonymous member variables work great.
+// Only 'Write' needs to be special-cased to the gzip Writer.
+// See: http://nf.id.au/roll-your-own-gzip-encoded-http-handler
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+}
+
+func (w gzipResponseWriter) Write(b []byte) (int, error) {
+	return w.Writer.Write(b)
+}
+
 func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
@@ -109,9 +125,20 @@ func main() {
 	serveRPC()
 
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
-	// FIXME(msolomon) this path needs to be obtained from the config.
 	http.Handle(mysqlctl.SnapshotURLPath+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleSnapshot(w, r, mysqlctl.SnapshotDir(uint32(tabletId)))
+		// let's support gzip Accept-Encoding for files whose name
+		// doesn't end in .gz (no double-zipping!)
+		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !strings.HasSuffix(r.URL.Path, ".gz") {
+			gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Encoding", "gzip")
+			w = gzipResponseWriter{Writer: gz, ResponseWriter: w}
+			defer gz.Close()
+		}
+		handleSnapshot(w, r, mysqlctl.TabletDir(uint32(tabletId)), mysqlctl.SnapshotDir(uint32(tabletId)))
 	}))
 
 	// we delegate out startup to the micromanagement server so these actions
@@ -235,8 +262,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	})
 }
 
-func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir string) {
-	// FIXME(msolomon) some sort of security, no?
+func handleSnapshot(rw http.ResponseWriter, req *http.Request, tabletDir, snapshotDir string) {
 	// /snapshot must be rewritten to the actual location of the snapshot.
 	relative, err := filepath.Rel(mysqlctl.SnapshotURLPath, req.URL.Path)
 	if err != nil {
@@ -263,7 +289,10 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 
 	// Make sure that we are not serving something like
 	// /snapshot/../../../etc/passwd.
-	if strings.HasPrefix(realPath, snapshotDir) {
+	// by making sure we only serve files from:
+	// - the tablet directory (for symlinked data files)
+	// - the snapshot directory
+	if strings.HasPrefix(realPath, tabletDir) || strings.HasPrefix(realPath, snapshotDir) {
 		relog.Info("serve %v %v", req.URL.Path, realPath)
 		http.ServeFile(rw, req, realPath)
 	} else {
