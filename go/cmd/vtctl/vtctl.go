@@ -22,6 +22,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/client2"
+	hk "code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
@@ -837,7 +838,7 @@ func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 		relog.Fatal("action ExecuteHook requires <zk tablet path> <hook name>")
 	}
 
-	hook := &tm.Hook{Name: subFlags.Arg(1), Parameters: parseParams(subFlags.Args()[2:])}
+	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: parseParams(subFlags.Args()[2:])}
 	hr, err := wrangler.ExecuteHook(subFlags.Arg(0), hook)
 	if err == nil {
 		relog.Info(hr.String())

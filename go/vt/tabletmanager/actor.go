@@ -15,6 +15,7 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/zk"
@@ -524,8 +525,8 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 }
 
 func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
-	hook := actionNode.args.(*Hook)
-	actionNode.reply = hook.Execute()
+	// FIXME(msolomon) should't the reply get distilled into an error?
+	actionNode.reply = actionNode.args.(*hook.Hook).Execute()
 	return nil
 }
 

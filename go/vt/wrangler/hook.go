@@ -10,10 +10,11 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	hk "code.google.com/p/vitess/go/vt/hook"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) ExecuteHook(zkTabletPath string, hook *tm.Hook) (hookResult *tm.HookResult, err error) {
+func (wr *Wrangler) ExecuteHook(zkTabletPath string, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 	if strings.Contains(hook.Name, "/") {
 		return nil, fmt.Errorf("hook name cannot have a '/' in it")
 	}
@@ -24,7 +25,7 @@ func (wr *Wrangler) ExecuteHook(zkTabletPath string, hook *tm.Hook) (hookResult 
 	return wr.ExecuteTabletInfoHook(ti, hook)
 }
 
-func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *tm.Hook) (hookResult *tm.HookResult, err error) {
+func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 
 	actionPath, err := wr.ai.ExecuteHook(ti.Path(), hook)
 	if err != nil {
@@ -35,23 +36,23 @@ func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *tm.Hook) (hoo
 	if hr, err = wr.ai.WaitForCompletionReply(actionPath, 10*time.Minute); err != nil {
 		return nil, err
 	}
-	return hr.(*tm.HookResult), nil
+	return hr.(*hk.HookResult), nil
 }
 
 // Execute a hook and returns an error only if the hook failed, not if
 // the hook doesn't exist.
-func (wr *Wrangler) ExecuteOptionalTabletInfoHook(ti *tm.TabletInfo, hook *tm.Hook) (err error) {
+func (wr *Wrangler) ExecuteOptionalTabletInfoHook(ti *tm.TabletInfo, hook *hk.Hook) (err error) {
 	hr, err := wr.ExecuteTabletInfoHook(ti, hook)
 	if err != nil {
 		return err
 	}
 
-	if hr.ExitStatus == tm.HOOK_DOES_NOT_EXIST {
+	if hr.ExitStatus == hk.HOOK_DOES_NOT_EXIST {
 		relog.Info("Hook %v doesn't exist on tablet %v", hook.Name, ti.Path())
 		return nil
 	}
 
-	if hr.ExitStatus != tm.HOOK_SUCCESS {
+	if hr.ExitStatus != hk.HOOK_SUCCESS {
 		return fmt.Errorf("Hook %v failed(%v): %v", hook.Name, hr.ExitStatus, hr.Stderr)
 	}
 

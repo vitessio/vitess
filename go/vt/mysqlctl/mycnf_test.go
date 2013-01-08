@@ -24,9 +24,12 @@ func TestMycnf(t *testing.T) {
 	if err != nil {
 		t.Errorf("err: %v", err)
 	}
-	cnfTemplatePath := path.Join(root, "src/code.google.com/p/vitess/config/mycnf")
-	// FIXME(msolomon) make a path that has a chance of succeeding elsewhere
-	data, err := MakeMycnfForMysqld(tablet0, cnfTemplatePath, "test header")
+	cnfTemplatePaths := []string{
+		path.Join(root, "src/code.google.com/p/vitess/config/mycnf/default.cnf"),
+		path.Join(root, "src/code.google.com/p/vitess/config/mycnf/replica.cnf"),
+		path.Join(root, "src/code.google.com/p/vitess/config/mycnf/master.cnf"),
+	}
+	data, err := MakeMycnf(tablet0.config, cnfTemplatePaths)
 	if err != nil {
 		t.Errorf("err: %v", err)
 	} else {

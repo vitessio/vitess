@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/hook"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -69,7 +70,7 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 	} else {
 		// if the tablet was idle, run the idle_server_check hook
 		if ti.Tablet.Type == tm.TYPE_IDLE {
-			err = wr.ExecuteOptionalTabletInfoHook(ti, tm.NewSimpleHook("idle_server_check"))
+			err = wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("idle_server_check"))
 			if err != nil {
 				return err
 			}
@@ -77,7 +78,7 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 
 		// run the live_server_check hook unless we're going to scrap
 		if dbType != tm.TYPE_SCRAP {
-			err = wr.ExecuteOptionalTabletInfoHook(ti, tm.NewSimpleHook("live_server_check"))
+			err = wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("live_server_check"))
 			if err != nil {
 				return err
 			}

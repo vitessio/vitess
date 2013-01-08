@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/jscfg"
+	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 )
 
@@ -129,8 +130,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &mysqlctl.SchemaChange{}
 		node.reply = &mysqlctl.SchemaChangeResult{}
 	case TABLET_ACTION_EXECUTE_HOOK:
-		node.args = &Hook{}
-		node.reply = &HookResult{}
+		node.args = &hook.Hook{}
+		node.reply = &hook.HookResult{}
 
 	case TABLET_ACTION_SNAPSHOT:
 		node.args = &SnapshotArgs{}

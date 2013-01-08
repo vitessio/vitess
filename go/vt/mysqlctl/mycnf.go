@@ -43,6 +43,7 @@ type Mycnf struct {
 }
 
 func (cnf *Mycnf) lookupAndCheck(key string) string {
+	key = normKey([]byte(key))
 	val := cnf.mycnfMap[key]
 	if val == "" {
 		panic(fmt.Errorf("Value for key '%v' not set", key))
@@ -65,6 +66,12 @@ func fqdn() string {
 		panic(err)
 	}
 	return strings.TrimRight(cname, ".")
+}
+
+func normKey(bkey []byte) string {
+	return string(bytes.TrimSpace(bkey))
+	// FIXME(msolomon) People are careless about hyphen vs underscore - we should normalize.
+	//return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("-"), []byte("_"), -1))
 }
 
 func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
@@ -97,7 +104,7 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 		if len(parts) < 2 {
 			continue
 		}
-		lval = string(bytes.TrimSpace(parts[0]))
+		lval = normKey(parts[0])
 		rval = string(bytes.TrimSpace(parts[1]))
 		mycnf.mycnfMap[lval] = rval
 	}
