@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path"
-	"strings"
 	"text/template"
 
 	"code.google.com/p/vitess/go/vt/env"
@@ -92,11 +91,8 @@ func DirectoryList(cnf *Mycnf) []string {
 }
 
 // Join cnf files cnfPaths and subsitute in the right values.
-func MakeMycnf(cnfFiles []string, mycnf *Mycnf, header string) (string, error) {
+func MakeMycnf(mycnf *Mycnf, cnfFiles []string) (string, error) {
 	myTemplateSource := new(bytes.Buffer)
-	for _, line := range strings.Split(header, "\n") {
-		fmt.Fprintf(myTemplateSource, "## %v\n", strings.TrimSpace(line))
-	}
 	myTemplateSource.WriteString("[mysqld]\n")
 	for _, path := range cnfFiles {
 		data, dataErr := ioutil.ReadFile(path)
@@ -106,8 +102,11 @@ func MakeMycnf(cnfFiles []string, mycnf *Mycnf, header string) (string, error) {
 		myTemplateSource.WriteString("## " + path + "\n")
 		myTemplateSource.Write(data)
 	}
+	return fillMycnfTemplate(mycnf, myTemplateSource.String())
+}
 
-	myTemplate, err := template.New("").Parse(myTemplateSource.String())
+func fillMycnfTemplate(mycnf *Mycnf, tmplSrc string) (string, error) {
+	myTemplate, err := template.New("").Parse(tmplSrc)
 	if err != nil {
 		return "", err
 	}
@@ -117,16 +116,4 @@ func MakeMycnf(cnfFiles []string, mycnf *Mycnf, header string) (string, error) {
 		return "", err
 	}
 	return mycnfData.String(), nil
-}
-
-// Create a config for this instance. Search cnfFiles for the
-// appropriate cnf template files.
-func MakeMycnfForMysqld(mysqld *Mysqld, cnfFiles, header string) (string, error) {
-	// FIXME(msolomon) determine config list from mysqld struct
-	cnfs := []string{"default", "master", "replica"}
-	paths := make([]string, len(cnfs))
-	for i, name := range cnfs {
-		paths[i] = fmt.Sprintf("%v/%v.cnf", cnfFiles, name)
-	}
-	return MakeMycnf(paths, mysqld.config, header)
 }

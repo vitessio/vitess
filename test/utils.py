@@ -167,7 +167,7 @@ def wait_procs(proc_list, raise_on_error=True):
       if options.verbose and proc.returncode not in (-9,):
         sys.stderr.write("proc failed: %s %s\n" % (proc.returncode, proc.args))
       if raise_on_error:
-        raise CalledProcessError(proc.returncode, proc.args)
+        raise CalledProcessError(proc.returncode, ' '.join(proc.args))
 
 def run_procs(cmds, raise_on_error=True):
   procs = []

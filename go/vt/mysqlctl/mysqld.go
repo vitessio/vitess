@@ -13,6 +13,7 @@ package mysqlctl
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -24,6 +25,7 @@ import (
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
 	vtenv "code.google.com/p/vitess/go/vt/env"
+	"code.google.com/p/vitess/go/vt/hook"
 )
 
 const (
@@ -178,8 +180,24 @@ func Init(mt *Mysqld) error {
 		relog.Error("%s", err.Error())
 		return err
 	}
-	cnfTemplatePath := path.Join(root, "config/mycnf")
-	configData, err := MakeMycnfForMysqld(mt, cnfTemplatePath, "tablet uid?")
+
+	hr := hook.NewSimpleHook("make_mycnf").Execute()
+
+	configData := ""
+	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
+		relog.Info("make_mycnf hook doesn't exist")
+		cnfTemplatePaths := []string{
+			path.Join(root, "config/mycnf/default.cnf"),
+			path.Join(root, "config/mycnf/master.cnf"),
+			path.Join(root, "config/mycnf/replica.cnf"),
+		}
+		configData, err = MakeMycnf(mt.config, cnfTemplatePaths)
+	} else if hr.ExitStatus == hook.HOOK_SUCCESS {
+		configData, err = fillMycnfTemplate(mt.config, hr.Stdout)
+	} else {
+		err = fmt.Errorf("make_mycnf hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
+	}
+
 	if err == nil {
 		err = ioutil.WriteFile(mt.MycnfFile, []byte(configData), 0664)
 	}
