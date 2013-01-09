@@ -1,4 +1,4 @@
-package zkwrangler
+package wrangler
 
 import (
 	"fmt"
