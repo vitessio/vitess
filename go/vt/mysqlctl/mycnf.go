@@ -69,9 +69,9 @@ func fqdn() string {
 }
 
 func normKey(bkey []byte) string {
-	return string(bytes.TrimSpace(bkey))
 	// FIXME(msolomon) People are careless about hyphen vs underscore - we should normalize.
-	//return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("-"), []byte("_"), -1))
+	// But you have to normalize to hyphen, or mysqld_safe can fail.
+	return string(bytes.Replace(bytes.TrimSpace(bkey), []byte("_"), []byte("-"), -1))
 }
 
 func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {

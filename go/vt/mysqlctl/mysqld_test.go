@@ -18,12 +18,12 @@ func TestStartShutdown(t *testing.T) {
 	tablet1 := NewMysqld(mycnf1, DefaultDbaParams, DefaultReplParams)
 	var err error
 
-	err = Init(tablet0)
+	err = Init(tablet0, MysqlWaitTime)
 	if err != nil {
 		t.Errorf("Init(0) err: %v", err)
 	}
 
-	err = Init(tablet1)
+	err = Init(tablet1, MysqlWaitTime)
 
 	if err != nil {
 		t.Errorf("Init(1) err: %v", err)
