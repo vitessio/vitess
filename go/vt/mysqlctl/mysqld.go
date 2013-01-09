@@ -168,7 +168,7 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 	return cmd, err
 }
 
-func Init(mt *Mysqld) error {
+func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	relog.Info("mysqlctl.Init")
 	err := mt.createDirs()
 	if err != nil {
@@ -214,7 +214,7 @@ func Init(mt *Mysqld) error {
 		relog.Error("failed unpacking %v: %v", dbTbzPath, tarErr)
 		return tarErr
 	}
-	if err = Start(mt, MysqlWaitTime); err != nil {
+	if err = Start(mt, mysqlWaitTime); err != nil {
 		relog.Error("failed starting, check %v", mt.config.ErrorLogPath)
 		return err
 	}
@@ -328,13 +328,6 @@ func deleteTopDir(dir string) (removalErr error) {
 		removalErr = err
 	}
 	return
-}
-
-func Reinit(mt *Mysqld) error {
-	if err := Teardown(mt, false); err != nil {
-		return err
-	}
-	return Init(mt)
 }
 
 func (mysqld *Mysqld) Addr() string {

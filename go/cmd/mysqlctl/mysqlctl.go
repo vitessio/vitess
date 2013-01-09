@@ -23,9 +23,10 @@ var logLevel = flag.String("log.level", "WARNING", "set log level")
 var tabletAddr string
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	waitTime := subFlags.Duration("wait-time", mysqlctl.MysqlWaitTime, "how long to wait for startup")
 	subFlags.Parse(args)
 
-	if err := mysqlctl.Init(mysqld); err != nil {
+	if err := mysqlctl.Init(mysqld, *waitTime); err != nil {
 		relog.Fatal("failed init mysql: %v", err)
 	}
 }
