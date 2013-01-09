@@ -4,6 +4,7 @@ import (
 	"expvar"
 	"io"
 	"net/http"
+	"net/url"
 	"sync"
 	"sync/atomic"
 )
@@ -12,8 +13,8 @@ var droppedMessages = expvar.NewMap("streamlog-dropped-messages")
 
 // A StreamLogger makes messages sent to it available through HTTP.
 type StreamLogger struct {
-	dataQueue  chan Stringer
-	subscribed map[io.Writer]chan bool
+	dataQueue  chan Formatter
+	subscribed map[io.Writer]subscription
 	url        string
 	mu         sync.Mutex
 	// size is used to check if there are any subscriptions. Keep
@@ -24,20 +25,28 @@ type StreamLogger struct {
 	seq uint32
 }
 
-type Stringer interface {
-	String() string
+type subscription struct {
+	done   chan bool
+	params url.Values
+}
+
+type Formatter interface {
+	Format(url.Values) string
 }
 
 func (logger *StreamLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	<-logger.subscribe(w)
+	if err := r.ParseForm(); err != nil {
+		// FIXME(szopa): send a malformed request error.
+	}
+	<-logger.subscribe(w, r.Form)
 }
 
-func (logger *StreamLogger) subscribe(w io.Writer) chan bool {
+func (logger *StreamLogger) subscribe(w io.Writer, params url.Values) chan bool {
 	done := make(chan bool)
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	logger.subscribed[w] = done
+	logger.subscribed[w] = subscription{done: done, params: params}
 	atomic.AddUint32(&logger.seq, 1)
 	atomic.StoreUint32(&logger.size, uint32(len(logger.subscribed)))
 	return done
@@ -47,8 +56,8 @@ func (logger *StreamLogger) subscribe(w io.Writer) chan bool {
 // messages. Any messages sent to it will be available at url.
 func New(url string, size int) *StreamLogger {
 	logger := &StreamLogger{
-		dataQueue:  make(chan Stringer, size),
-		subscribed: make(map[io.Writer]chan bool),
+		dataQueue:  make(chan Formatter, size),
+		subscribed: make(map[io.Writer]subscription),
 		url:        url,
 	}
 	go logger.stream()
@@ -60,15 +69,15 @@ func New(url string, size int) *StreamLogger {
 // writers. This method should be called in a goroutine.
 func (logger *StreamLogger) stream() {
 	seq := uint32(0)
-	var subscribed map[io.Writer]chan bool
+	var subscribed map[io.Writer]subscription
 
 	for message := range logger.dataQueue {
 
 		if s := atomic.LoadUint32(&(logger.seq)); s != seq {
 			logger.mu.Lock()
-			subscribed = make(map[io.Writer]chan bool, len(logger.subscribed))
-			for subscription, done := range logger.subscribed {
-				subscribed[subscription] = done
+			subscribed = make(map[io.Writer]subscription, len(logger.subscribed))
+			for w, subscription := range logger.subscribed {
+				subscribed[w] = subscription
 			}
 			seq = atomic.LoadUint32(&(logger.seq))
 			logger.mu.Unlock()
@@ -78,18 +87,18 @@ func (logger *StreamLogger) stream() {
 			continue
 		}
 
-		messageString := message.String() + "\n"
-		for subscription, done := range subscribed {
-			if _, err := io.WriteString(subscription, messageString); err != nil {
-				done <- true
+		for w, subscription := range subscribed {
+			messageString := message.Format(subscription.params) + "\n"
+			if _, err := io.WriteString(w, messageString); err != nil {
+				subscription.done <- true
 
 				logger.mu.Lock()
-				delete(logger.subscribed, subscription)
+				delete(logger.subscribed, w)
 				atomic.AddUint32(&logger.seq, 1)
 				atomic.StoreUint32(&logger.size, uint32(len(logger.subscribed)))
 				logger.mu.Unlock()
 			} else {
-				subscription.(http.Flusher).Flush()
+				w.(http.Flusher).Flush()
 			}
 		}
 	}
@@ -97,7 +106,7 @@ func (logger *StreamLogger) stream() {
 
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
-func (logger *StreamLogger) Send(message Stringer) {
+func (logger *StreamLogger) Send(message Formatter) {
 	if atomic.LoadUint32(&logger.size) == 0 {
 		// There are no subscribers, do nothing.
 		return

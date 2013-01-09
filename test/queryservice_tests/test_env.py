@@ -54,10 +54,19 @@ class TestEnv(object):
         print "FAIL:", case, fail
     return error_count
 
+  def check_full_streamlog(self, fi):
+    # FIXME(szopa): better test?
+    for line in fi:
+      if '"name":"bytes 4"' in line:
+        print "FAIL: full streamlog doesn't contain all bind variables."
+        return 1
+    return 0
+
   def run_cases(self, cases):
     cursor = self.conn.cursor()
     error_count = 0
     curl = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/vt/querylog'], stdout=open('/tmp/vtocc_streamlog.log', 'w'))
+    curl_full = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/vt/querylog?full=true'], stdout=open('/tmp/vtocc_streamlog_full.log', 'w'))
     time.sleep(1)
     for case in cases:
       if isinstance(case, basestring):
@@ -72,7 +81,9 @@ class TestEnv(object):
       for fail in failures:
         print "FAIL:", case, fail
     curl.terminate()
+    curl_full.terminate()
     error_count += self.check_streamlog(cases, open('/tmp/vtocc_streamlog.log', 'r'))
+    error_count += self.check_full_streamlog(open('/tmp/vtocc_streamlog_full.log', 'r'))
     return error_count
 
 

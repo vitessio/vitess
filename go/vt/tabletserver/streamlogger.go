@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -85,21 +86,26 @@ func (stats *sqlQueryStats) SizeOfResponse() int {
 // FmtBindVariables returns the map of bind variables as JSON. For
 // values that are strings or byte slices it only reports their type
 // and length.
-func (stats *sqlQueryStats) FmtBindVariables() string {
-	// NOTE(szopa): I am getting rid of potentially large bind
-	// variables.
-	scrubbed := make(map[string]interface{})
-	for k, v := range stats.BindVariables {
-		switch val := v.(type) {
-		case string:
-			scrubbed[k] = fmt.Sprintf("string %v", len(val))
-		case []byte:
-			scrubbed[k] = fmt.Sprintf("bytes %v", len(val))
-		default:
-			scrubbed[k] = v
+func (stats *sqlQueryStats) FmtBindVariables(full bool) string {
+	var out map[string]interface{}
+	if full {
+		out = stats.BindVariables
+	} else {
+		// NOTE(szopa): I am getting rid of potentially large bind
+		// variables.
+		out := make(map[string]interface{})
+		for k, v := range stats.BindVariables {
+			switch val := v.(type) {
+			case string:
+				out[k] = fmt.Sprintf("string %v", len(val))
+			case []byte:
+				out[k] = fmt.Sprintf("bytes %v", len(val))
+			default:
+				out[k] = v
+			}
 		}
 	}
-	b, err := json.Marshal(scrubbed)
+	b, err := json.Marshal(out)
 	if err != nil {
 		relog.Warning("could not marshal %q", stats.BindVariables)
 		return ""
@@ -140,7 +146,8 @@ func (log sqlQueryStats) Username() string {
 }
 
 //String returns a tab separated list of logged fields.
-func (log sqlQueryStats) String() string {
+func (log sqlQueryStats) Format(params url.Values) string {
+	_, fullBindParams := params["full"]
 	return fmt.Sprintf(
 		"%v\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t%v\t%v\t%q\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t",
 		log.Method,
@@ -151,7 +158,7 @@ func (log sqlQueryStats) String() string {
 		log.TotalTime(),
 		log.PlanType,
 		log.OriginalSql,
-		log.FmtBindVariables(),
+		log.FmtBindVariables(fullBindParams),
 		log.NumberOfQueries,
 		log.RewrittenSql(),
 		log.FmtQuerySources(),
