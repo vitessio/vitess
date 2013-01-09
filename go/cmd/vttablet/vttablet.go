@@ -124,6 +124,17 @@ func main() {
 
 	serveRPC()
 
+	// make a list of paths we can serve HTTP traffic from.
+	// we don't resolve them here to real paths, as they might not exits yet
+	snapshotDir := mysqlctl.SnapshotDir(uint32(tabletId))
+	allowedPaths := []string{
+		mysqlctl.TabletDir(uint32(tabletId)),
+		snapshotDir,
+		mycnf.DataDir,
+		mycnf.InnodbDataHomeDir,
+		mycnf.InnodbLogGroupHomeDir,
+	}
+
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
 	http.Handle(mysqlctl.SnapshotURLPath+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// let's support gzip Accept-Encoding for files whose name
@@ -138,7 +149,7 @@ func main() {
 			w = gzipResponseWriter{Writer: gz, ResponseWriter: w}
 			defer gz.Close()
 		}
-		handleSnapshot(w, r, mysqlctl.TabletDir(uint32(tabletId)), mysqlctl.SnapshotDir(uint32(tabletId)))
+		handleSnapshot(w, r, snapshotDir, allowedPaths)
 	}))
 
 	// we delegate out startup to the micromanagement server so these actions
@@ -262,7 +273,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	})
 }
 
-func handleSnapshot(rw http.ResponseWriter, req *http.Request, tabletDir, snapshotDir string) {
+func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir string, allowedPaths []string) {
 	// /snapshot must be rewritten to the actual location of the snapshot.
 	relative, err := filepath.Rel(mysqlctl.SnapshotURLPath, req.URL.Path)
 	if err != nil {
@@ -271,7 +282,7 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, tabletDir, snapsh
 		return
 	}
 
-	// Make sure that realPath is absolute and isn't escaping from
+	// Make sure that realPath is absolute and resolve any escaping from
 	// snapshotDir through a symlink.
 	realPath, err := filepath.Abs(path.Join(snapshotDir, relative))
 	if err != nil {
@@ -287,18 +298,23 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, tabletDir, snapsh
 		return
 	}
 
-	// Make sure that we are not serving something like
-	// /snapshot/../../../etc/passwd.
-	// by making sure we only serve files from:
-	// - the tablet directory (for symlinked data files)
-	// - the snapshot directory
-	if strings.HasPrefix(realPath, tabletDir) || strings.HasPrefix(realPath, snapshotDir) {
-		relog.Info("serve %v %v", req.URL.Path, realPath)
-		http.ServeFile(rw, req, realPath)
-	} else {
-		relog.Error("bad request %v", req.URL.Path)
-		http.Error(rw, "400 bad request", http.StatusBadRequest)
+	// Resolve all the possible roots and make sure we're serving
+	// from one of them
+	for _, allowedPath := range allowedPaths {
+		// eval the symlinks of the allowed path
+		allowedPath, err := filepath.EvalSymlinks(allowedPath)
+		if err != nil {
+			continue
+		}
+		if strings.HasPrefix(realPath, allowedPath) {
+			relog.Info("serve %v %v", req.URL.Path, realPath)
+			http.ServeFile(rw, req, realPath)
+			return
+		}
 	}
+
+	relog.Error("bad request %v", req.URL.Path)
+	http.Error(rw, "400 bad request", http.StatusBadRequest)
 }
 
 func initUpdateStreamService(mycnf *mysqlctl.Mycnf) {
