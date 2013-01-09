@@ -354,7 +354,7 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
-func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool) error {
+func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, encoding string, dontWaitForSlaveStart bool) error {
 	if snapshotManifest == nil {
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
@@ -370,7 +370,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	}
 
 	relog.Debug("Fetch snapshot")
-	if err := mysqld.fetchSnapshot(snapshotManifest, fetchConcurrency, fetchRetryCount); err != nil {
+	if err := mysqld.fetchSnapshot(snapshotManifest, fetchConcurrency, fetchRetryCount, encoding); err != nil {
 		return err
 	}
 
@@ -391,7 +391,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	return mysqld.WaitForSlaveStart(SlaveStartDeadline)
 }
 
-func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int) error {
+func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, encoding string) error {
 	replicaDbPath := path.Join(mysqld.config.DataDir, snapshotManifest.DbName)
 
 	cleanDirs := []string{mysqld.SnapshotDir, replicaDbPath,
@@ -409,5 +409,5 @@ func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest, fetchCon
 		}
 	}
 
-	return fetchFiles(snapshotManifest, mysqld.TabletDir, fetchConcurrency, fetchRetryCount)
+	return fetchFiles(snapshotManifest, mysqld.TabletDir, fetchConcurrency, fetchRetryCount, encoding)
 }

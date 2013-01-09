@@ -15,11 +15,13 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
@@ -75,20 +77,6 @@ var qsConfig = ts.Config{
 	StreamBufferSize:   32 * 1024,
 }
 
-// this is a http.ResponseWriter adapter / proxy layer
-// to support gzipping on the fly. Both listed interfaces have mostly different
-// methods, so the anonymous member variables work great.
-// Only 'Write' needs to be special-cased to the gzip Writer.
-// See: http://nf.id.au/roll-your-own-gzip-encoded-http-handler
-type gzipResponseWriter struct {
-	io.Writer
-	http.ResponseWriter
-}
-
-func (w gzipResponseWriter) Write(b []byte) (int, error) {
-	return w.Writer.Write(b)
-}
-
 func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
@@ -137,18 +125,6 @@ func main() {
 
 	// NOTE: trailing slash in pattern means we handle all paths with this prefix
 	http.Handle(mysqlctl.SnapshotURLPath+"/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// let's support gzip Accept-Encoding for files whose name
-		// doesn't end in .gz (no double-zipping!)
-		if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") && !strings.HasSuffix(r.URL.Path, ".gz") {
-			gz, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Encoding", "gzip")
-			w = gzipResponseWriter{Writer: gz, ResponseWriter: w}
-			defer gz.Close()
-		}
 		handleSnapshot(w, r, snapshotDir, allowedPaths)
 	}))
 
@@ -309,14 +285,92 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 			continue
 		}
 		if strings.HasPrefix(realPath, allowedPath) {
-			relog.Info("serve %v %v", req.URL.Path, realPath)
-			http.ServeFile(rw, req, realPath)
+			sendFile(rw, req, realPath)
 			return
 		}
 	}
 
 	relog.Error("bad request %v", req.URL.Path)
 	http.Error(rw, "400 bad request", http.StatusBadRequest)
+}
+
+// custom function to serve files
+func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
+	relog.Info("serve %v %v", req.URL.Path, path)
+	file, err := os.Open(path)
+	if err != nil {
+		http.NotFound(rw, req)
+		return
+	}
+	defer file.Close()
+
+	fileinfo, err := file.Stat()
+	if err != nil {
+		http.NotFound(rw, req)
+		return
+	}
+
+	// for directories, or for files smaller than 1k, use library
+	if fileinfo.Mode().IsDir() || fileinfo.Size() < 1024 {
+		http.ServeFile(rw, req, path)
+		return
+	}
+
+	// supports If-Modified-Since header
+	if t, err := time.Parse(http.TimeFormat, req.Header.Get("If-Modified-Since")); err == nil && fileinfo.ModTime().Before(t.Add(1*time.Second)) {
+		rw.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	// support Accept-Encoding header
+	var writer io.Writer = rw
+	var reader io.Reader = file
+	if !strings.HasSuffix(path, ".gz") {
+		ae := req.Header.Get("Accept-Encoding")
+
+		if strings.Contains(ae, "fgzip") {
+			relog.Info("Forking gzip to serve %v", path)
+			cmd := exec.Command("gzip", "--fast", "-c", path)
+			stdout, err := cmd.StdoutPipe()
+			if err != nil {
+				http.Error(rw, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			if err = cmd.Start(); err != nil {
+				http.Error(rw, err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			rw.Header().Set("Content-Encoding", "gzip")
+			defer func() {
+				cmd.Wait()
+				relog.Info("Gzip done for %v", path)
+			}()
+
+			reader = stdout
+
+		} else if strings.Contains(ae, "gzip") {
+			gz, err := gzip.NewWriterLevel(rw, gzip.BestSpeed)
+			if err != nil {
+				http.Error(rw, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			rw.Header().Set("Content-Encoding", "gzip")
+			defer gz.Close()
+			writer = gz
+		}
+	}
+
+	// add content-length if we know it
+	if writer == rw && reader == file {
+		rw.Header().Set("Content-Length", fmt.Sprintf("%v", fileinfo.Size()))
+	}
+
+	// and just copy content out
+	rw.Header().Set("Last-Modified", fileinfo.ModTime().UTC().Format(http.TimeFormat))
+	rw.WriteHeader(http.StatusOK)
+	io.Copy(writer, reader)
 }
 
 func initUpdateStreamService(mycnf *mysqlctl.Mycnf) {

@@ -639,7 +639,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// and do the action
-	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding, args.DontWaitForSlaveStart); err != nil {
 		relog.Error("RestoreFromSnapshot failed: %v", err)
 		return err
 	}
@@ -732,7 +732,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// and do the action
-	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
+	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
 		return err
 	}

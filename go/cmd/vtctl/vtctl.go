@@ -99,11 +99,11 @@ var commands = []commandGroup{
 				"[-slave-start] [-read-write] <zk tablet path> <original tablet type>",
 				"Restarts Mysql and restore original server type."},
 			command{"Restore", commandRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
+				"[-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
 				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"Clone", commandClone,
-				"[-force] [-concurrency=3] [-fetch-concurrency=3] [-fetch-retry-count=3] [-serverMode] <zk src tablet path> <zk dst tablet path>",
+				"[-force] [-concurrency=3] [-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] [-serverMode] <zk src tablet path> <zk dst tablet path>",
 				"This performs Snapshot and then Restore.  The advantage of having separate actions is that one snapshot can be used for many restores."},
 			command{"ReparentTablet", commandReparentTablet,
 				"<zk tablet path>",
@@ -112,11 +112,11 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=3] <zk tablet path> <key name> <start key> <end key>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"PartialRestore", commandPartialRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
+				"[-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
 				"Copy the given partial snaphot from the source tablet and starts partial replication to the new master path (or uses the src tablet path if not specified).\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"PartialClone", commandPartialClone,
-				"[-force] [-concurrency=3] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>",
+				"[-force] [-concurrency=3] [-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>",
 				"This performs PartialSnapshot and then PartialRestore.  The advantage of having separate actions is that one partial snapshot can be used for many restores."},
 			command{"ExecuteHook", commandExecuteHook,
 				"<zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
@@ -754,6 +754,7 @@ func commandSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 
 func commandRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from snapshot source that is the replication master)")
+	encoding := subFlags.String("encoding", "", "Accept-Encoding to use for HTTP transfer (empty means default, gzip, use 'raw' for no encoding)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -764,12 +765,13 @@ func commandRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string
 	if subFlags.NArg() == 4 {
 		zkParentPath = subFlags.Arg(3)
 	}
-	return "", wrangler.Restore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart)
+	return "", wrangler.Restore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount, *encoding, *dontWaitForSlaveStart)
 }
 
 func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
 	concurrency := subFlags.Int("concurrency", 3, "how many compression/checksum jobs to run simultaneously")
+	encoding := subFlags.String("encoding", "", "Accept-Encoding to use for HTTP transfer (empty means default, gzip, use 'raw' for no encoding)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	serverMode := subFlags.Bool("server-mode", false, "will keep the snapshot server offline to serve DB files directly")
@@ -778,7 +780,7 @@ func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) 
 		relog.Fatal("action Clone requires <zk src tablet path> <zk dst tablet path>")
 	}
 
-	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Arg(1), *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
+	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Arg(1), *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *encoding, *serverMode)
 }
 
 func commandReparentTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -806,6 +808,7 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 }
 
 func commandPartialRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	encoding := subFlags.String("encoding", "", "Accept-Encoding to use for HTTP transfer (empty means default, gzip, use 'raw' for no encoding)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -816,12 +819,13 @@ func commandPartialRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 	if subFlags.NArg() == 4 {
 		zkParentPath = subFlags.Arg(3)
 	}
-	return "", wrangler.PartialRestore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount)
+	return "", wrangler.PartialRestore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount, *encoding)
 }
 
 func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
 	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
+	encoding := subFlags.String("encoding", "", "Accept-Encoding to use for HTTP transfer (empty means default, gzip, use 'raw' for no encoding)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -829,7 +833,7 @@ func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("action PartialClone requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>")
 	}
 
-	return "", wrangler.PartialClone(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *concurrency, *fetchConcurrency, *fetchRetryCount)
+	return "", wrangler.PartialClone(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *encoding)
 }
 
 func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

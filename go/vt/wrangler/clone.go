@@ -105,13 +105,13 @@ func (wr *Wrangler) SnapshotSourceEnd(zkTabletPath string, slaveStartRequired, r
 	return err
 }
 
-func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool) error {
+func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, encoding string, dontWaitForSlaveStart bool) error {
 	err := wr.ChangeType(zkDstTabletPath, tm.TYPE_RESTORE, false)
 	if err != nil {
 		return err
 	}
 
-	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, dontWaitForSlaveStart})
+	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, encoding, dontWaitForSlaveStart})
 	if err != nil {
 		return err
 	}
@@ -125,7 +125,7 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkPar
 	return nil
 }
 
-func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
+func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int, encoding string, serverMode bool) error {
 	// take the snapshot, or put the server in SnapshotSource mode
 	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, concurrency, serverMode)
 	if err != nil {
@@ -135,7 +135,7 @@ func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSn
 	// try to restore the snapshot
 	// In serverMode, and in the case where we're replicating from
 	// the master, we can't wait for replication, as the master is down.
-	restoreErr := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, serverMode && originalType == tm.TYPE_MASTER)
+	restoreErr := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, encoding, serverMode && originalType == tm.TYPE_MASTER)
 
 	// in any case, fix the server
 	if serverMode {

@@ -6,7 +6,6 @@ package mysqlctl
 
 import (
 	"bufio"
-	"code.google.com/p/vitess/go/relog"
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/hex"
@@ -18,6 +17,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"code.google.com/p/vitess/go/relog"
 )
 
 // Use this to simulate failures in tests
@@ -174,7 +175,7 @@ func newSnapshotFiles(sources, destinations []string, root string, concurrency i
 // tee, which on one side has an md5 checksum reader, and on the other
 // a gunzip reader writing to a file.  It will compare the md5
 // checksum after the copy is done.
-func fetchFile(srcUrl, srcHash, dstFilename string) error {
+func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	relog.Info("fetchFile: starting to fetch %v from %v", dstFilename, srcUrl)
 
 	// create destination directory
@@ -184,11 +185,33 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	}
 
 	// open the URL
-	resp, err := http.Get(srcUrl)
+	req, err := http.NewRequest("GET", srcUrl, nil)
+	if err != nil {
+		return fmt.Errorf("NewRequest failed for %v: %v", srcUrl, err)
+	}
+	if encoding != "" {
+		req.Header.Set("Accept-Encoding", encoding)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed fetching %v: %v", srcUrl, resp.Status)
 	}
 	defer resp.Body.Close()
+
+	// see if we need some uncompression
+	var reader io.Reader = resp.Body
+	ce := resp.Header.Get("Content-Encoding")
+	if ce != "" {
+		if ce == "gzip" {
+			reader, err = gzip.NewReader(reader)
+			if err != nil {
+				return err
+			}
+
+		} else {
+			return fmt.Errorf("unsupported Content-Encoding: %v", ce)
+		}
+	}
 
 	// create a temporary file to uncompress to
 	dir, filePrefix := path.Split(dstFilename)
@@ -212,7 +235,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 
 	// create a Tee: we split the HTTP input into the md5 hasher
 	// and into the gunziper
-	tee := io.TeeReader(resp.Body, hasher)
+	tee := io.TeeReader(reader, hasher)
 
 	// create the uncompresser
 	var decompressor io.Reader
@@ -230,7 +253,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	// see if we need to introduce failures
 	if simulateFailures {
 		failureCounter++
-		if failureCounter%5 == 0 {
+		if failureCounter%10 == 0 {
 			return fmt.Errorf("Simulated error")
 		}
 	}
@@ -260,9 +283,9 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 
 // fetchFileWithRetry fetches data from the web server, retrying a few
 // times.
-func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int) (err error) {
+func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int, encoding string) (err error) {
 	for i := 0; i < fetchRetryCount; i++ {
-		err = fetchFile(srcUrl, srcHash, dstFilename)
+		err = fetchFile(srcUrl, srcHash, dstFilename, encoding)
 		if err == nil {
 			return nil
 		}
@@ -277,7 +300,7 @@ func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int
 // than a deadline is probably a sense of progress, more like a
 // "progress timeout" - how long will we wait if there is no change in
 // received bytes.
-func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetchConcurrency, fetchRetryCount int) (err error) {
+func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetchConcurrency, fetchRetryCount int, encoding string) (err error) {
 	workQueue := make(chan SnapshotFile, len(snapshotManifest.Files))
 	for _, fi := range snapshotManifest.Files {
 		workQueue <- fi
@@ -290,7 +313,7 @@ func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetc
 			for fi := range workQueue {
 				filename := fi.getLocalFilename(destinationPath)
 				furl := "http://" + snapshotManifest.Addr + path.Join(SnapshotURLPath, fi.Path)
-				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename, fetchRetryCount)
+				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename, fetchRetryCount, encoding)
 			}
 		}()
 	}

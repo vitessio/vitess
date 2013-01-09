@@ -203,6 +203,7 @@ type RestoreArgs struct {
 	ZkParentPath          string
 	FetchConcurrency      int
 	FetchRetryCount       int
+	Encoding              string
 	DontWaitForSlaveStart bool
 }
 
