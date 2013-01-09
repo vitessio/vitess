@@ -27,13 +27,14 @@ class Log(object):
        self.rewritten_sql,
        self.query_sources,
        self.mysql_response_time,
+       self.waiting_for_connection_time,
        self.size_of_response,
        self.cache_hits,
        self.cache_misses,
        self.cache_absent,
        self.cache_invalidations) = line.strip().split('\t')
     except ValueError:
-      print "Wrong looking line: %r"
+      print "Wrong looking line: %r" % line
       raise
 
   def check(self, case):
