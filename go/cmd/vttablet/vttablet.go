@@ -252,6 +252,8 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 		}
 	}
 
+	ts.SqlQueryLogger.ServeLogs("/debug/vt/querylog")
+
 	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
 		relog.Warning("%s", err)
 	}

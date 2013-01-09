@@ -14,7 +14,7 @@ import (
 	"code.google.com/p/vitess/go/streamlog"
 )
 
-var sqlQueryLogger = streamlog.New("/debug/vt/querylog", 50)
+var SqlQueryLogger = streamlog.New("SqlQuery", 50)
 
 const (
 	QUERY_SOURCE_ROWCACHE = 1 << iota
@@ -50,7 +50,7 @@ func newSqlQueryStats(methodName string, context *proto.Context) *sqlQueryStats 
 
 func (stats *sqlQueryStats) Send() {
 	stats.EndTime = time.Now()
-	sqlQueryLogger.Send(stats)
+	SqlQueryLogger.Send(stats)
 }
 
 func (stats *sqlQueryStats) AddRewrittenSql(sql []byte) {

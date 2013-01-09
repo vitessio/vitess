@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"sync"
 	"sync/atomic"
+
+	"code.google.com/p/vitess/go/relog"
 )
 
 var droppedMessages = expvar.NewMap("streamlog-dropped-messages")
@@ -15,7 +17,7 @@ var droppedMessages = expvar.NewMap("streamlog-dropped-messages")
 type StreamLogger struct {
 	dataQueue  chan Formatter
 	subscribed map[io.Writer]subscription
-	url        string
+	name       string
 	mu         sync.Mutex
 	// size is used to check if there are any subscriptions. Keep
 	// it atomically in sync with the size of subscribed.
@@ -36,9 +38,13 @@ type Formatter interface {
 
 func (logger *StreamLogger) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		// FIXME(szopa): send a malformed request error.
+		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 	<-logger.subscribe(w, r.Form)
+}
+
+func (logger *StreamLogger) String() string {
+	return logger.name
 }
 
 func (logger *StreamLogger) subscribe(w io.Writer, params url.Values) chan bool {
@@ -54,15 +60,20 @@ func (logger *StreamLogger) subscribe(w io.Writer, params url.Values) chan bool 
 
 // New returns a new StreamLogger with a buffer that can contain size
 // messages. Any messages sent to it will be available at url.
-func New(url string, size int) *StreamLogger {
+func New(name string, size int) *StreamLogger {
 	logger := &StreamLogger{
+		name:       name,
 		dataQueue:  make(chan Formatter, size),
 		subscribed: make(map[io.Writer]subscription),
-		url:        url,
 	}
 	go logger.stream()
-	http.Handle(url, logger)
 	return logger
+}
+
+// Handle makes logs sent to logger available throught HTTP at url.
+func (logger *StreamLogger) ServeLogs(url string) {
+	http.Handle(url, logger)
+	relog.Info("Streaming logs from %v at %v.", logger, url)
 }
 
 // stream sends messages sent to logger to all of its subscribed
@@ -114,6 +125,6 @@ func (logger *StreamLogger) Send(message Formatter) {
 	select {
 	case logger.dataQueue <- message:
 	default:
-		droppedMessages.Add(logger.url, 1)
+		droppedMessages.Add(logger.name, 1)
 	}
 }
