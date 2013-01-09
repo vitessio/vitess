@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"code.google.com/p/vitess/go/ioutil2"
@@ -32,18 +31,19 @@ const (
 
 // Validate that this instance is a reasonable source of data.
 func (mysqld *Mysqld) validateCloneSource(serverMode bool) error {
-	// needs to be master, or slave that's not too far behind
-	slaveStatus, err := mysqld.slaveStatus()
-	if err != nil {
-		if err != ErrNotSlave {
-			return fmt.Errorf("mysqlctl: validateCloneSource failed, %v", err)
-		}
-	} else {
-		lagSeconds, _ := strconv.Atoi(slaveStatus["seconds_behind_master"])
-		if lagSeconds > maxLagSeconds {
-			return fmt.Errorf("mysqlctl: validateCloneSource failed, lag_seconds exceed maximum tolerance (%v)", lagSeconds)
-		}
-	}
+	// NOTE(msolomon) Removing this check for now - I don't see the value of validating this.
+	// // needs to be master, or slave that's not too far behind
+	// slaveStatus, err := mysqld.slaveStatus()
+	// if err != nil {
+	// 	if err != ErrNotSlave {
+	// 		return fmt.Errorf("mysqlctl: validateCloneSource failed, %v", err)
+	// 	}
+	// } else {
+	// 	lagSeconds, _ := strconv.Atoi(slaveStatus["seconds_behind_master"])
+	// 	if lagSeconds > maxLagSeconds {
+	// 		return fmt.Errorf("mysqlctl: validateCloneSource failed, lag_seconds exceed maximum tolerance (%v)", lagSeconds)
+	// 	}
+	// }
 
 	// make sure we can write locally
 	if err := mysqld.ValidateSnapshotPath(); err != nil {
