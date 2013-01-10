@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -72,8 +73,16 @@ func NewReplicationState(masterAddr, user, passwd string) *ReplicationState {
 
 type SnapshotFile struct {
 	Path string
+	Size int64  // size of the uncompressed file
 	Hash string // md5 sum of the compressed file
 }
+
+type SnapshotFiles []SnapshotFile
+
+// sort.Interface
+func (s SnapshotFiles) Len() int           { return len(s) }
+func (s SnapshotFiles) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s SnapshotFiles) Less(i, j int) bool { return s[i].Size > s[j].Size }
 
 // This function returns the local file used to store the SnapshotFile,
 // relative to the basePath.
@@ -95,7 +104,7 @@ type SnapshotManifest struct {
 	Addr string // this is the address of the tabletserver, not mysql
 
 	DbName string
-	Files  []SnapshotFile
+	Files  SnapshotFiles
 
 	ReplicationState *ReplicationState
 }
@@ -106,6 +115,7 @@ func NewSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []S
 		DbName:           dbName,
 		Files:            files,
 		ReplicationState: NewReplicationState(mysqlAddr, user, passwd)}
+	sort.Sort(rs.Files)
 	rs.ReplicationState.ReplicationPosition = *pos
 	return rs
 }

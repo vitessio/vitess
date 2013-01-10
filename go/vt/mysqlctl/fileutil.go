@@ -50,6 +50,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 	src := bufio.NewReaderSize(srcFile, 2*1024*1024)
 
 	var hash string
+	var size int64
 	if compress {
 		relog.Info("newSnapshotFile: starting to compress %v into %v", srcPath, dstPath)
 		dir, filePrefix := path.Split(dstPath)
@@ -91,6 +92,13 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		if err != nil {
 			return nil, err
 		}
+
+		// and get the size
+		fi, err := os.Stat(dstPath)
+		if err != nil {
+			return nil, err
+		}
+		size = fi.Size()
 	} else {
 		relog.Info("newSnapshotFile: starting to hash and symlinking %v to %v", srcPath, dstPath)
 
@@ -107,6 +115,13 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		if err != nil {
 			return nil, err
 		}
+
+		// and get the size
+		fi, err := os.Stat(srcPath)
+		if err != nil {
+			return nil, err
+		}
+		size = fi.Size()
 	}
 
 	relog.Info("clone data ready %v:%v", dstPath, hash)
@@ -114,7 +129,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 	if err != nil {
 		return nil, err
 	}
-	return &SnapshotFile{relativeDst, hash}, nil
+	return &SnapshotFile{relativeDst, size, hash}, nil
 }
 
 // newSnapshotFiles processes multiple files in parallel. The Paths of
