@@ -650,6 +650,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	tablet.Shard = sourceTablet.Shard
 	tablet.Type = TYPE_SPARE
 	tablet.KeyRange = sourceTablet.KeyRange
+	tablet.DbNameOverride = sourceTablet.DbNameOverride
 
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err
@@ -743,6 +744,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	tablet.Shard = sourceTablet.Shard
 	tablet.Type = TYPE_SPARE
 	tablet.KeyRange = ssm.KeyRange
+	tablet.DbNameOverride = sourceTablet.DbNameOverride
 
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err
