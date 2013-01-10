@@ -103,7 +103,7 @@ var commands = []commandGroup{
 				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"Clone", commandClone,
-				"[-force] [-concurrency=3] [-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] [-serverMode] <zk src tablet path> <zk dst tablet path>",
+				"[-force] [-concurrency=3] [-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <zk src tablet path> <zk dst tablet path>",
 				"This performs Snapshot and then Restore.  The advantage of having separate actions is that one snapshot can be used for many restores."},
 			command{"ReparentTablet", commandReparentTablet,
 				"<zk tablet path>",
@@ -756,7 +756,7 @@ func commandRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string
 	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from snapshot source that is the replication master)")
 	encoding := subFlags.String("encoding", "", "Accept-Encoding to use for HTTP transfer (empty means default, gzip, use 'raw' for no encoding)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
+	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
 		relog.Fatal("action Restore requires <zk src tablet path> <src manifest path> <zk dst tablet path> [<zk new master path>]")

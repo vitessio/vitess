@@ -47,6 +47,8 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
+	relog.Info("started vtaction %v", os.Args)
+
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()
 	jsonrpc.ServeRPC()
@@ -90,7 +92,6 @@ func main() {
 		}
 	}()
 
-	relog.Info("started vtaction %v", os.Args)
 	actionErr := actor.HandleAction(*actionNode, *action, *actionGuid, *force)
 	if actionErr != nil {
 		relog.Fatal("action error: %v", actionErr)

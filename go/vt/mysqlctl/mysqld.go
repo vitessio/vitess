@@ -51,7 +51,6 @@ type Mysqld struct {
 	createConnection CreateConnection
 	TabletDir        string
 	SnapshotDir      string
-	MycnfFile        string
 }
 
 func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
@@ -68,7 +67,6 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 		createSuperConnection,
 		TabletDir(config.ServerId),
 		SnapshotDir(config.ServerId),
-		MycnfFile(config.ServerId),
 	}
 }
 
@@ -78,7 +76,7 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
 	name := dir + "/bin/mysqld_safe"
 	arg := []string{
-		"--defaults-file=" + mt.MycnfFile}
+		"--defaults-file=" + mt.config.path}
 	env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
 	cmd := exec.Command(name, arg...)
@@ -199,10 +197,10 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	}
 
 	if err == nil {
-		err = ioutil.WriteFile(mt.MycnfFile, []byte(configData), 0664)
+		err = ioutil.WriteFile(mt.config.path, []byte(configData), 0664)
 	}
 	if err != nil {
-		relog.Error("failed creating %v: %v", mt.MycnfFile, err)
+		relog.Error("failed creating %v: %v", mt.config.path, err)
 		return err
 	}
 

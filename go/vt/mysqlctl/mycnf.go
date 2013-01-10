@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -40,6 +41,7 @@ type Mycnf struct {
 	TmpDir                string
 	SlaveLoadTmpDir       string
 	mycnfMap              map[string]string
+	path                  string // the actual path that represents this mycnf
 }
 
 func (cnf *Mycnf) lookupAndCheck(key string) string {
@@ -89,6 +91,10 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 
 	buf := bufio.NewReader(f)
 	mycnf = new(Mycnf)
+	mycnf.path, err = filepath.Abs(cnfFile)
+	if err != nil {
+		return nil, err
+	}
 	mycnf.mycnfMap = make(map[string]string)
 	var lval, rval string
 	var parts [][]byte
