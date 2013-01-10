@@ -5,6 +5,8 @@
 package wrangler
 
 import (
+	"fmt"
+
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
@@ -70,9 +72,14 @@ func (wr *Wrangler) PartialSnapshot(zkTabletPath, keyName string, startKey, endK
 }
 
 func (wr *Wrangler) PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, encoding string) error {
-	err := wr.ChangeType(zkDstTabletPath, tm.TYPE_RESTORE, false)
+	// read our current tablet, verify its state before sending it
+	// to the tablet itself
+	tablet, err := tm.ReadTablet(wr.zconn, zkDstTabletPath)
 	if err != nil {
 		return err
+	}
+	if tablet.Type != tm.TYPE_IDLE {
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, zkDstTabletPath)
 	}
 
 	actionPath, err := wr.ai.PartialRestore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, encoding, false})

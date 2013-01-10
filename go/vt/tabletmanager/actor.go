@@ -610,8 +610,8 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != TYPE_RESTORE {
-		return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	if tablet.Type != TYPE_IDLE {
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
 	// read the source tablet, compute args.SrcFilePath if default
@@ -638,25 +638,33 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 		return err
 	}
 
-	// and do the action
-	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding, args.DontWaitForSlaveStart); err != nil {
-		relog.Error("RestoreFromSnapshot failed: %v", err)
-		return err
-	}
-
-	// Once this action completes, update authoritive tablet node first.
+	// change our type to RESTORE and set all the other arguments.
+	// from now on, we have to go to either SPARE or SCRAP
 	tablet.Parent = parentTablet.Alias()
 	tablet.Keyspace = sourceTablet.Keyspace
 	tablet.Shard = sourceTablet.Shard
-	tablet.Type = TYPE_SPARE
+	tablet.Type = TYPE_RESTORE
 	tablet.KeyRange = sourceTablet.KeyRange
 	tablet.DbNameOverride = sourceTablet.DbNameOverride
-
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err
 	}
+	if err := CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet); err != nil {
+		return err
+	}
 
-	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
+	// do the work
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding, args.DontWaitForSlaveStart); err != nil {
+		relog.Error("RestoreFromSnapshot failed (%v), scrapping", err)
+		if err := Scrap(ta.zconn, ta.zkTabletPath, false); err != nil {
+			relog.Error("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
+		}
+
+		return err
+	}
+
+	// change to TYPE_SPARE, we're done!
+	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE)
 }
 
 // Operate on a backup tablet. Halt mysqld (read-only, lock tables)
@@ -707,8 +715,8 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != TYPE_RESTORE {
-		return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	if tablet.Type != TYPE_IDLE {
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
 	// read the source tablet
@@ -732,25 +740,32 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 		return err
 	}
 
-	// and do the action
-	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding); err != nil {
-		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
-		return err
-	}
-
-	// Once this action completes, update authoritive tablet node first.
+	// change our type to RESTORE and set all the other arguments.
+	// from now on, we have to go to either SPARE or SCRAP
 	tablet.Parent = parentTablet.Alias()
 	tablet.Keyspace = sourceTablet.Keyspace
 	tablet.Shard = sourceTablet.Shard
-	tablet.Type = TYPE_SPARE
+	tablet.Type = TYPE_RESTORE
 	tablet.KeyRange = ssm.KeyRange
 	tablet.DbNameOverride = sourceTablet.DbNameOverride
-
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
 		return err
 	}
+	if err := CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet); err != nil {
+		return err
+	}
 
-	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
+	// do the work
+	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding); err != nil {
+		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
+		if err := Scrap(ta.zconn, ta.zkTabletPath, false); err != nil {
+			relog.Error("Failed to Scrap after failed RestoreFromPartialSnapshot: %v", err)
+		}
+		return err
+	}
+
+	// change to TYPE_SPARE, we're done!
+	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE)
 }
 
 // Make this external, since in needs to be forced from time to time.

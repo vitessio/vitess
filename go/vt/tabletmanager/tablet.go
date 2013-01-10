@@ -129,10 +129,8 @@ func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 		}
 	case TYPE_SCRAP:
 		return newTabletType == TYPE_IDLE
-	case TYPE_IDLE:
-		return newTabletType == TYPE_RESTORE
 	case TYPE_RESTORE:
-		return newTabletType == TYPE_IDLE
+		return newTabletType == TYPE_SPARE
 	}
 	return false
 }
