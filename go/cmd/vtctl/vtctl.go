@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"database/sql/driver"
 	"flag"
 	"fmt"
@@ -73,7 +74,7 @@ var commands = []commandGroup{
 				"<zk tablet path>",
 				"Demotes a master tablet."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
-				"[-force] <zk tablet path> <db type>",
+				"[-force] [-dry-run] <zk tablet path> <db type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
 					"NOTE: This will automatically update the serving graph.\n" +
 					"Valid <db type>:\n" +
@@ -232,6 +233,8 @@ var commands = []commandGroup{
 	},
 }
 
+var stdin *bufio.Reader
+
 func init() {
 	// FIXME(msolomon) need to send all of this to stdout
 	flag.Usage = func() {
@@ -250,6 +253,16 @@ func init() {
 			fmt.Fprintf(os.Stderr, "\n")
 		}
 	}
+	stdin = bufio.NewReader(os.Stdin)
+}
+
+func confirm(prompt string, force bool) bool {
+	if force {
+		return true
+	}
+	fmt.Fprintf(os.Stderr, prompt+" [NO/yes] ")
+	line, _ := stdin.ReadString('\n')
+	return strings.ToLower(strings.TrimSpace(line)) == "yes"
 }
 
 // this is a placeholder implementation. right now very little information
@@ -679,12 +692,29 @@ func commandDemoteMaster(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 
 func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will change the type in zookeeper, and not run hooks")
+	dryRun := subFlags.Bool("dry-run", false, "just list the proposed change")
+
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action ChangeSlaveType requires <zk tablet path> <db type>")
 	}
 
-	return "", wrangler.ChangeType(subFlags.Arg(0), tm.TabletType(subFlags.Arg(1)), *force)
+	zkTabletPath := subFlags.Arg(0)
+	newType := tm.TabletType(subFlags.Arg(1))
+	if *dryRun {
+		ti, err := tm.ReadTablet(wrangler.ZkConn(), zkTabletPath)
+		if err != nil {
+			relog.Fatal("failed reading tablet %v: %v", zkTabletPath, err)
+		}
+		if !tm.IsTrivialTypeChange(ti.Type, newType) {
+			relog.Fatal("invalid type transition %v: %v -> %v", zkTabletPath, ti.Type, newType)
+		}
+		fmt.Printf("- %v\n", fmtTabletAwkable(ti))
+		ti.Type = newType
+		fmt.Printf("+ %v\n", fmtTabletAwkable(ti))
+		return "", nil
+	}
+	return "", wrangler.ChangeType(zkTabletPath, newType, *force)
 }
 
 func commandPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
