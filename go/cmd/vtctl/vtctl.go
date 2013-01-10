@@ -226,7 +226,7 @@ var commands = []commandGroup{
 				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] [-new-parent=<zk tablet path>] <zk shard path>",
 				"Apply the schema change to the specified shard. If simple is specified, we just apply on the live master. Otherwise we will need to do the shell game. So we will apply the schema change to every single slave. if new_parent is set, we will also reparent (otherwise the master won't be touched at all). Using the force flag will cause a bunch of checks to be ignored, use with care."},
 			command{"ApplySchemaKeyspace", commandApplySchemaKeyspace,
-				"[-force] {-sql=<sql> || -sql_file=<filename>} [-simple] <zk keyspace path>",
+				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] <zk keyspace path>",
 				"Apply the schema change to the specified keyspace. If simple is specified, we just apply on the live masters. Otherwise we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). We will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care."},
 		},
 	},
@@ -603,7 +603,7 @@ func getFileParam(flag, flagFile, name string) string {
 	}
 
 	if flagFile == "" {
-		relog.Fatal("action requires one of " + name + " or " + name + "_file")
+		relog.Fatal("action requires one of " + name + " or " + name + "-file")
 	}
 	data, err := ioutil.ReadFile(flagFile)
 	if err != nil {
