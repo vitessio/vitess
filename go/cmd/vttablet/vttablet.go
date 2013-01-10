@@ -32,6 +32,7 @@ import (
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
+	vtenv "code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
@@ -116,6 +117,7 @@ func main() {
 	// we don't resolve them here to real paths, as they might not exits yet
 	snapshotDir := mysqlctl.SnapshotDir(uint32(tabletId))
 	allowedPaths := []string{
+		path.Join(vtenv.VtDataRoot(), "data"),
 		mysqlctl.TabletDir(uint32(tabletId)),
 		snapshotDir,
 		mycnf.DataDir,
@@ -255,7 +257,7 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 	// /snapshot must be rewritten to the actual location of the snapshot.
 	relative, err := filepath.Rel(mysqlctl.SnapshotURLPath, req.URL.Path)
 	if err != nil {
-		relog.Error("bad request %v %v", req.URL.Path, err)
+		relog.Error("bad snapshot relative path %v %v", req.URL.Path, err)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)
 		return
 	}
@@ -264,14 +266,14 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 	// snapshotDir through a symlink.
 	realPath, err := filepath.Abs(path.Join(snapshotDir, relative))
 	if err != nil {
-		relog.Error("bad request %v", req.URL.Path)
+		relog.Error("bad snapshot absolute path %v %v", req.URL.Path, err)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)
 		return
 	}
 
 	realPath, err = filepath.EvalSymlinks(realPath)
 	if err != nil {
-		relog.Error("bad request %v", req.URL.Path)
+		relog.Error("bad snapshot symlink eval %v %v", req.URL.Path, err)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)
 		return
 	}
@@ -290,7 +292,7 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 		}
 	}
 
-	relog.Error("bad request %v", req.URL.Path)
+	relog.Error("bad snapshot real path %v %v", req.URL.Path, realPath)
 	http.Error(rw, "400 bad request", http.StatusBadRequest)
 }
 
