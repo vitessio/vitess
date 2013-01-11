@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	MysqlWaitTime = 20 * time.Second // default number of seconds to wait
+	MysqlWaitTime = 120 * time.Second // default number of seconds to wait
 )
 
 type CreateConnection func() (*mysql.Connection, error)
