@@ -831,6 +831,21 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType) error {
 	if err != nil {
 		return err
 	}
+
+	// if the tablet was idle, run the idle_server_check hook
+	if tablet.Type == TYPE_IDLE {
+		if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {
+			return err
+		}
+	}
+
+	// run the live_server_check hook unless we're going to scrap
+	if newType != TYPE_SCRAP {
+		if err := hook.NewSimpleHook("live_server_check").ExecuteOptional(); err != nil {
+			return err
+		}
+	}
+
 	if !IsTrivialTypeChange(tablet.Type, newType) {
 		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, zkTabletPath)
 	}

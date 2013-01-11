@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/hook"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -65,27 +64,13 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	if force {
-		// with --force, we do not run the hooks
+		// with --force, we do not run any hook
 		err = tm.ChangeType(wr.zconn, zkTabletPath, dbType)
 	} else {
-		// if the tablet was idle, run the idle_server_check hook
-		if ti.Tablet.Type == tm.TYPE_IDLE {
-			err = wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("idle_server_check"))
-			if err != nil {
-				return err
-			}
-		}
-
-		// run the live_server_check hook unless we're going to scrap
-		if dbType != tm.TYPE_SCRAP {
-			err = wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("live_server_check"))
-			if err != nil {
-				return err
-			}
-		}
-
+		// the remote action will run the hooks
 		actionPath, err := wr.ai.ChangeType(zkTabletPath, dbType)
-		// You don't have a choice - you must wait for completion before rebuilding.
+		// You don't have a choice - you must wait for
+		// completion before rebuilding.
 		if err == nil {
 			err = wr.ai.WaitForCompletion(actionPath, DefaultActionTimeout)
 		}

@@ -6,6 +6,7 @@ package hook
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -111,6 +112,17 @@ func (hook *Hook) Execute() (result *HookResult) {
 	relog.Info("hook: result is %v", result.String())
 
 	return result
+}
+
+// Execute an optional hook, returns a printable error
+func (hook *Hook) ExecuteOptional() error {
+	hr := hook.Execute()
+	if hr.ExitStatus == HOOK_DOES_NOT_EXIST {
+		relog.Info("%v hook doesn't exist", hook.Name)
+	} else if hr.ExitStatus != HOOK_SUCCESS {
+		return fmt.Errorf("%v hook failed(%v): %v", hook.Name, hr.ExitStatus, hr.Stderr)
+	}
+	return nil
 }
 
 func (hr *HookResult) String() string {

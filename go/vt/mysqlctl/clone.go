@@ -57,11 +57,8 @@ func (mysqld *Mysqld) validateCloneSource(serverMode bool) error {
 	if serverMode {
 		params["server-mode"] = ""
 	}
-	hr := hook.NewHook("preflight_snapshot", params).Execute()
-	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
-		relog.Info("preflight_snapshot hook doesn't exist")
-	} else if hr.ExitStatus != hook.HOOK_SUCCESS {
-		return fmt.Errorf("preflight_snapshot hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
+	if err := hook.NewHook("preflight_snapshot", params).ExecuteOptional(); err != nil {
+		return err
 	}
 
 	// FIXME(msolomon) check free space based on an estimate of the current
@@ -76,11 +73,8 @@ func (mysqld *Mysqld) validateCloneTarget() error {
 	// run a hook to check local things
 	// FIXME(alainjobart) What other parameters do we have to
 	// provide? dbname, host, socket?
-	hr := hook.NewSimpleHook("preflight_restore").Execute()
-	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
-		relog.Info("preflight_restore hook doesn't exist")
-	} else if hr.ExitStatus != hook.HOOK_SUCCESS {
-		return fmt.Errorf("preflight_restore hook failed(%v): %v", hr.ExitStatus, hr.Stderr)
+	if err := hook.NewSimpleHook("preflight_restore").ExecuteOptional(); err != nil {
+		return err
 	}
 
 	rows, err := mysqld.fetchSuperQuery("SHOW DATABASES")
