@@ -16,7 +16,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 	"text/template"
@@ -69,55 +68,6 @@ func NewReplicationState(masterAddr, user, passwd string) *ReplicationState {
 	}
 	return &ReplicationState{MasterUser: user, MasterPassword: passwd, MasterConnectRetry: 10,
 		MasterHost: addrPieces[0], MasterPort: port}
-}
-
-type SnapshotFile struct {
-	Path string
-	Size int64  // size of the uncompressed file
-	Hash string // md5 sum of the compressed file
-}
-
-type SnapshotFiles []SnapshotFile
-
-// sort.Interface
-func (s SnapshotFiles) Len() int           { return len(s) }
-func (s SnapshotFiles) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s SnapshotFiles) Less(i, j int) bool { return s[i].Size > s[j].Size }
-
-// This function returns the local file used to store the SnapshotFile,
-// relative to the basePath.
-// for instance, if the source path is something like:
-// /vt/snapshot/vt_0000062344/data/vt_snapshot_test-MA,Mw/vt_insert_test.csv.gz
-// we will get everything starting with 'data/...', append it to basepath,
-// and remove the .gz extension. So with basePath=myPath, it will return:
-// myPath/data/vt_snapshot_test-MA,Mw/vt_insert_test.csv
-func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
-	filename := path.Join(basePath, dataFile.Path)
-	// trim compression extension if present
-	if strings.HasSuffix(filename, ".gz") {
-		filename = filename[:len(filename)-3]
-	}
-	return filename
-}
-
-type SnapshotManifest struct {
-	Addr string // this is the address of the tabletserver, not mysql
-
-	DbName string
-	Files  SnapshotFiles
-
-	ReplicationState *ReplicationState
-}
-
-func NewSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition) *SnapshotManifest {
-	rs := &SnapshotManifest{
-		Addr:             addr,
-		DbName:           dbName,
-		Files:            files,
-		ReplicationState: NewReplicationState(mysqlAddr, user, passwd)}
-	sort.Sort(rs.Files)
-	rs.ReplicationState.ReplicationPosition = *pos
-	return rs
 }
 
 var changeMasterCmd = `CHANGE MASTER TO

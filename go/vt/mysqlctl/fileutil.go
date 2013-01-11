@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"code.google.com/p/vitess/go/relog"
@@ -63,6 +64,41 @@ func (h *hasher) HashString() string {
 	buf := make([]byte, 10)
 	size := binary.PutUvarint(buf, sum)
 	return hex.EncodeToString(buf[0:size])
+}
+
+// SnapshotFile describes a file to serve.
+// 'Path' is the path component of the URL. SnapshotManifest.Addr is
+// the host+port component of the URL.
+// If path ends in '.gz', it is compressed.
+// Size and Hash are computed on the Path itself
+type SnapshotFile struct {
+	Path string
+	Size int64
+	Hash string
+}
+
+type SnapshotFiles []SnapshotFile
+
+// sort.Interface
+// we sort by descending file size
+func (s SnapshotFiles) Len() int           { return len(s) }
+func (s SnapshotFiles) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s SnapshotFiles) Less(i, j int) bool { return s[i].Size > s[j].Size }
+
+// This function returns the local file used to store the SnapshotFile,
+// relative to the basePath.
+// for instance, if the source path is something like:
+// /vt/snapshot/vt_0000062344/data/vt_snapshot_test-MA,Mw/vt_insert_test.csv.gz
+// we will get everything starting with 'data/...', append it to basepath,
+// and remove the .gz extension. So with basePath=myPath, it will return:
+// myPath/data/vt_snapshot_test-MA,Mw/vt_insert_test.csv
+func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
+	filename := path.Join(basePath, dataFile.Path)
+	// trim compression extension if present
+	if strings.HasSuffix(filename, ".gz") {
+		filename = filename[:len(filename)-3]
+	}
+	return filename
 }
 
 // newSnapshotFile behavior depends on the compress flag:
@@ -221,6 +257,28 @@ func newSnapshotFiles(sources, destinations []string, root string, concurrency i
 	}
 
 	return snapshotFiles, nil
+}
+
+// a SnapshotManifest describes multiple SnapshotFiles and where
+// to get them from.
+type SnapshotManifest struct {
+	Addr string // this is the address of the tabletserver, not mysql
+
+	DbName string
+	Files  SnapshotFiles
+
+	ReplicationState *ReplicationState
+}
+
+func newSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition) *SnapshotManifest {
+	rs := &SnapshotManifest{
+		Addr:             addr,
+		DbName:           dbName,
+		Files:            files,
+		ReplicationState: NewReplicationState(mysqlAddr, user, passwd)}
+	sort.Sort(rs.Files)
+	rs.ReplicationState.ReplicationPosition = *pos
+	return rs
 }
 
 // fetchFile fetches data from the web server.  It then sends it to a

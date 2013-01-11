@@ -106,7 +106,7 @@ type SplitSnapshotManifest struct {
 }
 
 func NewSplitSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) *SplitSnapshotManifest {
-	return &SplitSnapshotManifest{Source: NewSnapshotManifest(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
+	return &SplitSnapshotManifest{Source: newSnapshotManifest(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
 }
 
 // In MySQL for both bigint and varbinary, 0x1234 is a valid value. For
@@ -154,7 +154,7 @@ func (mysqld *Mysqld) validateSplitReplicaTarget() error {
 // Check paths for storing data
 // Create one file per table
 // Compress each file
-// Compute md5() sums
+// Compute hash of each file
 // Place in /vt/snapshot they will be served by http server (not rpc)
 
 /*
@@ -378,7 +378,7 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
  shutdown_mysql()
  create temp data directory /vt/target/vt_<keyspace>
  copy compressed data files via HTTP
- verify md5sum of compressed files
+ verify hash of compressed files
  uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
  start_mysql()
  clean up compressed files

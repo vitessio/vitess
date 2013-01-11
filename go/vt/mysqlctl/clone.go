@@ -210,12 +210,12 @@ func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serve
 // Depending on the serverMode flag, we do the following:
 // serverMode = false:
 //   Compress /vt/vt_[0-9a-f]+/data/vt_.+
-//   Compute md5() sums (of compressed files)
+//   Compute hash (of compressed files, as we serve .gz files here)
 //   Place in /vt/clone_src where they will be served by http server (not rpc)
 //   Restart mysql
 // serverMode = true:
 //   Make symlinks for /vt/vt_[0-9a-f]+/data/vt_.+ to innodb files
-//   Compute md5() sums (of uncompressed files)
+//   Compute hash (of uncompressed files, as we serve uncompressed files)
 //   Place symlinks in /vt/clone_src where they will be served by http server
 //   Leave mysql stopped, return slaveStartRequired, readOnly
 func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
@@ -291,7 +291,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
 
-		sm := NewSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+		sm := newSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
 			dbName, dataFiles, replicationPosition)
 		smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
 		if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
@@ -371,7 +371,7 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 // shutdown_mysql()
 // create temp data directory /vt/target/vt_<keyspace>
 // copy compressed data files via HTTP
-// verify md5sum of compressed files
+// verify hash of compressed files
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
