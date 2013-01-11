@@ -206,12 +206,16 @@ func (tablet *Tablet) Alias() TabletAlias {
 	return TabletAlias{tablet.Cell, tablet.Uid}
 }
 
-func (tablet *Tablet) IsServingType() bool {
-	switch tablet.Type {
+func IsServingType(tt TabletType) bool {
+	switch tt {
 	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH:
 		return true
 	}
 	return false
+}
+
+func (tablet *Tablet) IsServingType() bool {
+	return IsServingType(tablet.Type)
 }
 
 // Should this tablet appear in the replication graph?

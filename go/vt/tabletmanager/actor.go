@@ -832,15 +832,16 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType) error {
 		return err
 	}
 
-	// if the tablet was idle, run the idle_server_check hook
-	if tablet.Type == TYPE_IDLE {
+	// Only run the idle_server_check hook when transitioning from non-serving
+	// to serving.
+	if !IsServingType(tablet.Type) && IsServingType(newType) {
 		if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {
 			return err
 		}
 	}
 
-	// run the live_server_check hook unless we're going to scrap
-	if newType != TYPE_SCRAP {
+	// Run the live_server_check any time we transition to a serving type.
+	if IsServingType(newType) {
 		if err := hook.NewSimpleHook("live_server_check").ExecuteOptional(); err != nil {
 			return err
 		}
