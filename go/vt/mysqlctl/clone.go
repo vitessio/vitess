@@ -137,7 +137,7 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 	return dbNames, nil
 }
 
-func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, concurrency int, serverMode bool) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serverMode bool) ([]SnapshotFile, error) {
 	sources := make([]string, 0, 128)
 	destinations := make([]string, 0, 128)
 
@@ -149,12 +149,26 @@ func (mysqld *Mysqld) createSnapshot(dbName, snapshotPath string, concurrency in
 
 	// FIXME(msolomon) innodb paths must match patterns in mycnf -
 	// probably belongs as a derived path.
-	dps := []struct{ srcDir, dstDir string }{
-		{path.Join(mysqld.config.DataDir, dbName), path.Join(snapshotPath, dataDir, dbName)},
-		{path.Join(mysqld.config.DataDir, "_vt"), path.Join(snapshotPath, dataDir, "_vt")},
+	type snapPair struct{ srcDir, dstDir string }
+	dps := []snapPair{
 		{path.Join(mysqld.config.DataDir, "mysql"), path.Join(snapshotPath, dataDir, "mysql")},
 		{mysqld.config.InnodbDataHomeDir, path.Join(snapshotPath, innodbDataSubdir)},
 		{mysqld.config.InnodbLogGroupHomeDir, path.Join(snapshotPath, innodbLogSubdir)},
+	}
+
+	dirEntries, err := ioutil.ReadDir(mysqld.config.DataDir)
+	if err != nil {
+		return nil, err
+	}
+
+	// Copy anything that defines a db.opt file - that includes empty databases.
+	for _, de := range dirEntries {
+		if de.IsDir() {
+			_, err := os.Stat(path.Join(mysqld.config.DataDir, de.Name(), "db.opt"))
+			if err == nil {
+				dps = append(dps, snapPair{path.Join(mysqld.config.DataDir, de.Name()), path.Join(snapshotPath, dataDir, de.Name())})
+			}
+		}
 	}
 
 	for _, dp := range dps {
@@ -259,7 +273,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	}
 
 	var smFile string
-	dataFiles, snapshotErr := mysqld.createSnapshot(dbName, mysqld.SnapshotDir, concurrency, serverMode)
+	dataFiles, snapshotErr := mysqld.createSnapshot(mysqld.SnapshotDir, concurrency, serverMode)
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
