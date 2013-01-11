@@ -151,22 +151,35 @@ func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serve
 	// probably belongs as a derived path.
 	type snapPair struct{ srcDir, dstDir string }
 	dps := []snapPair{
-		{path.Join(mysqld.config.DataDir, "mysql"), path.Join(snapshotPath, dataDir, "mysql")},
 		{mysqld.config.InnodbDataHomeDir, path.Join(snapshotPath, innodbDataSubdir)},
 		{mysqld.config.InnodbLogGroupHomeDir, path.Join(snapshotPath, innodbLogSubdir)},
 	}
 
-	dirEntries, err := ioutil.ReadDir(mysqld.config.DataDir)
+	dataDirEntries, err := ioutil.ReadDir(mysqld.config.DataDir)
 	if err != nil {
 		return nil, err
 	}
 
-	// Copy anything that defines a db.opt file - that includes empty databases.
-	for _, de := range dirEntries {
+	for _, de := range dataDirEntries {
 		if de.IsDir() {
-			_, err := os.Stat(path.Join(mysqld.config.DataDir, de.Name(), "db.opt"))
+			// Copy anything that defines a db.opt file - that includes empty databases.
+			dbDirPath := path.Join(mysqld.config.DataDir, de.Name())
+			_, err := os.Stat(path.Join(dbDirPath, "db.opt"))
 			if err == nil {
-				dps = append(dps, snapPair{path.Join(mysqld.config.DataDir, de.Name()), path.Join(snapshotPath, dataDir, de.Name())})
+				dps = append(dps, snapPair{dbDirPath, path.Join(snapshotPath, dataDir, de.Name())})
+			} else {
+				// Look for at least one .frm file
+				dbDirEntries, err := ioutil.ReadDir(dbDirPath)
+				if err == nil {
+					for _, dbEntry := range dbDirEntries {
+						if strings.HasSuffix(dbEntry.Name(), ".frm") {
+							dps = append(dps, snapPair{dbDirPath, path.Join(snapshotPath, dataDir, de.Name())})
+							break
+						}
+					}
+				} else {
+					relog.Warning("unable to scan db dir: %v", err)
+				}
 			}
 		}
 	}
@@ -393,10 +406,17 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		return err
 	}
 
-	if dontWaitForSlaveStart {
-		return nil
+	if !dontWaitForSlaveStart {
+		if err := mysqld.WaitForSlaveStart(SlaveStartDeadline); err != nil {
+			return err
+		}
 	}
-	return mysqld.WaitForSlaveStart(SlaveStartDeadline)
+
+	if err := hook.NewSimpleHook("postflight_restore").ExecuteOptional(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (mysqld *Mysqld) fetchSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, encoding string) error {
