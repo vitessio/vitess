@@ -68,7 +68,8 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 		err = tm.ChangeType(wr.zconn, zkTabletPath, dbType)
 	} else {
 		// the remote action will run the hooks
-		actionPath, err := wr.ai.ChangeType(zkTabletPath, dbType)
+		var actionPath string
+		actionPath, err = wr.ai.ChangeType(zkTabletPath, dbType)
 		// You don't have a choice - you must wait for
 		// completion before rebuilding.
 		if err == nil {
