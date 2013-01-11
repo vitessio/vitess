@@ -7,13 +7,17 @@ package mysqlctl
 import (
 	"bufio"
 	"compress/gzip"
-	"crypto/md5"
+	//	"crypto/md5"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"hash"
+	"hash/crc64"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -32,29 +36,64 @@ func init() {
 	simulateFailures = statErr == nil
 }
 
+// our hasher, implemented using md5
+// type hasher struct {
+// 	hash.Hash
+// }
+
+// func newHasher() *hasher {
+// 	return &hasher{md5.New()}
+// }
+
+// func (h *hasher) HashString() string {
+// 	return hex.EncodeToString(h.Sum(nil))
+// }
+
+// our hasher, implemented using crc64
+type hasher struct {
+	hash.Hash64
+}
+
+func newHasher() *hasher {
+	return &hasher{crc64.New(crc64.MakeTable(crc64.ECMA))}
+}
+
+func (h *hasher) HashString() string {
+	sum := h.Sum64()
+	buf := make([]byte, 10)
+	size := binary.PutUvarint(buf, sum)
+	return hex.EncodeToString(buf[0:size])
+}
+
 // newSnapshotFile behavior depends on the compress flag:
 // - if compress is true , it compresses a single file with gzip, and
-// computes the md5 on the compressed version.
-// - if compress is false, just symlinks and computes the md5 on the file
+// computes the hash on the compressed version.
+// - if compress is false, just symlinks and computes the hash on the file
 // The source file is always left intact.
 // The path of the returned SnapshotFile will be relative
-// to root. Also computes the md5 hash on the fly.
+// to root.
 func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFile, error) {
 	relog.Info("newSnapshotFile: starting to compress %v into %v", srcPath, dstPath)
-	srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer srcFile.Close()
-
-	src := bufio.NewReaderSize(srcFile, 2*1024*1024)
-
 	var hash string
 	var size int64
 	if compress {
 		relog.Info("newSnapshotFile: starting to compress %v into %v", srcPath, dstPath)
-		dir, filePrefix := path.Split(dstPath)
 
+		// forking gzip
+		cmd := exec.Command("gzip", "--fast", "-c", srcPath)
+		gzipStdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, err
+		}
+		if err = cmd.Start(); err != nil {
+			return nil, err
+		}
+		defer func() {
+			cmd.Wait()
+		}()
+
+		// open the temporary destination file
+		dir, filePrefix := path.Split(dstPath)
 		dstFile, err := ioutil.TempFile(dir, filePrefix)
 		if err != nil {
 			return nil, err
@@ -67,48 +106,46 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 			dstFile.Close()
 			os.Remove(dstFile.Name())
 		}()
-
 		dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
 
-		hasher := md5.New()
+		// create the hasher and the tee on top
+		hasher := newHasher()
 		tee := io.MultiWriter(dst, hasher)
 
-		compressor := gzip.NewWriter(tee)
-		defer compressor.Close()
-
-		_, err = io.Copy(compressor, src)
+		// copy from gzip's output to tee to output file and hasher
+		size, err = io.Copy(tee, gzipStdout)
 		if err != nil {
 			return nil, err
 		}
 
 		// close dst manually to flush all buffers to disk
-		compressor.Close()
 		dst.Flush()
 		dstFile.Close()
-		hash = hex.EncodeToString(hasher.Sum(nil))
+		hash = hasher.HashString()
 
 		// atomically move completed compressed file
 		err = os.Rename(dstFile.Name(), dstPath)
 		if err != nil {
 			return nil, err
 		}
-
-		// and get the size
-		fi, err := os.Stat(dstPath)
-		if err != nil {
-			return nil, err
-		}
-		size = fi.Size()
 	} else {
 		relog.Info("newSnapshotFile: starting to hash and symlinking %v to %v", srcPath, dstPath)
 
-		// get the md5
-		hasher := md5.New()
+		// open the source file
+		srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
+		if err != nil {
+			return nil, err
+		}
+		defer srcFile.Close()
+		src := bufio.NewReaderSize(srcFile, 2*1024*1024)
+
+		// get the hash
+		hasher := newHasher()
 		_, err = io.Copy(hasher, src)
 		if err != nil {
 			return nil, err
 		}
-		hash = hex.EncodeToString(hasher.Sum(nil))
+		hash = hasher.HashString()
 
 		// do the symlink
 		err = os.Symlink(srcPath, dstPath)
@@ -134,9 +171,9 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 
 // newSnapshotFiles processes multiple files in parallel. The Paths of
 // the returned SnapshotFiles will be relative to root.
-// - if compress is true, we compress the files and compute the md5 on
+// - if compress is true, we compress the files and compute the hash on
 // the compressed version.
-// - if compress is false, we symlink the files, and compute the md5 on
+// - if compress is false, we symlink the files, and compute the hash on
 // the original version.
 func newSnapshotFiles(sources, destinations []string, root string, concurrency int, compress bool) ([]SnapshotFile, error) {
 	if len(sources) != len(destinations) || len(sources) == 0 {
@@ -174,7 +211,7 @@ func newSnapshotFiles(sources, destinations []string, root string, concurrency i
 	// FIXME(alainjobart) it seems extreme to delete all files if
 	// the last one failed. Since we only move the file into
 	// its destination when it worked, we could assume if the file
-	// already exists it's good, and re-compute its md5.
+	// already exists it's good, and re-compute its hash.
 	if err != nil {
 		relog.Info("Error happened, deleting all the files we already compressed")
 		for _, dest := range destinations {
@@ -187,8 +224,8 @@ func newSnapshotFiles(sources, destinations []string, root string, concurrency i
 }
 
 // fetchFile fetches data from the web server.  It then sends it to a
-// tee, which on one side has an md5 checksum reader, and on the other
-// a gunzip reader writing to a file.  It will compare the md5
+// tee, which on one side has an hash checksum reader, and on the other
+// a gunzip reader writing to a file.  It will compare the hash
 // checksum after the copy is done.
 func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	relog.Info("fetchFile: starting to fetch %v from %v", dstFilename, srcUrl)
@@ -245,10 +282,10 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	// create a buffering output
 	dst := bufio.NewWriterSize(dstFile, 2*1024*1024)
 
-	// create md5 hash to write the compressed data to
-	hasher := md5.New()
+	// create hash to write the compressed data to
+	hasher := newHasher()
 
-	// create a Tee: we split the HTTP input into the md5 hasher
+	// create a Tee: we split the HTTP input into the hasher
 	// and into the gunziper
 	tee := io.TeeReader(reader, hasher)
 
@@ -278,8 +315,8 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 		return err
 	}
 
-	// check the md5
-	hash := hex.EncodeToString(hasher.Sum(nil))
+	// check the hash
+	hash := hasher.HashString()
 	if srcHash != hash {
 		return fmt.Errorf("hash mismatch for %v, %v != %v", dstFilename, srcHash, hash)
 	}
@@ -342,7 +379,7 @@ func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetc
 	// clean up files if we had an error
 	// FIXME(alainjobart) it seems extreme to delete all files if
 	// the last one failed. Maybe we shouldn't, and if a file already
-	// exists, we md5 it before retransmitting.
+	// exists, we hash it before retransmitting.
 	if err != nil {
 		relog.Info("Error happened, deleting all the files we already got")
 		for _, fi := range snapshotManifest.Files {

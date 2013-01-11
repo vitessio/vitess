@@ -291,8 +291,6 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	return path.Join(SnapshotURLPath, relative), nil
 }
 
-const dumpConcurrency = 4
-
 // createSplitSnapshotManifest exports each table to a CSV-like file
 // and compresses the results.
 func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition, concurrency int) ([]SnapshotFile, error) {
@@ -300,21 +298,27 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 	errors := make(chan error)
 	work := make(chan int, n)
 
+	filenames := make([]string, n)
+	compressedFilenames := make([]string, n)
 	for i := 0; i < n; i++ {
+		td := sd.TableDefinitions[i]
+		filenames[i] = path.Join(cloneSourcePath, td.Name+".csv")
+		compressedFilenames[i] = filenames[i] + ".gz"
 		work <- i
 	}
 	close(work)
 
-	tableFiles := make([]string, n)
-	compressedFiles := make([]string, n)
+	dataFiles := make([]SnapshotFile, n)
 
-	for i := 0; i < dumpConcurrency; i++ {
+	for i := 0; i < concurrency; i++ {
 		go func() {
 			for i := range work {
 				td := sd.TableDefinitions[i]
 				relog.Info("Dump table %v...", td.Name)
-				filename := path.Join(cloneSourcePath, td.Name+".csv")
+				filename := filenames[i]
+				compressedFilename := compressedFilenames[i]
 
+				// do the SQL query
 				queryParams := map[string]string{
 					"TableName":            dbName + "." + td.Name,
 					"KeyspaceIdColumnName": keyName,
@@ -324,10 +328,17 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 					"EndKey":          string(endKey),
 				}
 				err := mysqld.executeSuperQuery(mustFillStringTemplate(selectIntoOutfile, queryParams))
-				if err == nil {
-					tableFiles[i] = filename
-					compressedFiles[i] = filename + ".gz"
+				if err != nil {
+					errors <- err
+					continue
 				}
+
+				// compress the file
+				snapshotFile, err := newSnapshotFile(filename, compressedFilename, mysqld.SnapshotDir, true)
+				if err == nil {
+					dataFiles[i] = *snapshotFile
+				}
+
 				errors <- err
 			}
 		}()
@@ -335,24 +346,27 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 	var err error
 	for i := 0; i < n; i++ {
 		if dumpErr := <-errors; dumpErr != nil {
+			if err != nil {
+				relog.Error("Multiple errors, this one happened but won't be returned: %v", err)
+			}
 			err = dumpErr
 		}
 	}
+
 	if err != nil {
-		for _, srcPath := range tableFiles {
-			if srcPath != "" {
-				os.Remove(srcPath)
-			}
+		// clean up files if we had an error
+		// FIXME(alainjobart) it seems extreme to delete all files if
+		// the last one failed. Since we only move the file into
+		// its destination when it worked, we could assume if the file
+		// already exists it's good, and re-compute its hash.
+		relog.Info("Error happened, deleting all the files we already compressed")
+		for i := 0; i < n; i++ {
+			os.Remove(filenames[i])
+			os.Remove(compressedFilenames[i])
 		}
 		return nil, err
 	}
-	dataFiles, err := newSnapshotFiles(tableFiles, compressedFiles, mysqld.SnapshotDir, concurrency, true)
-	if err != nil {
-		for _, srcPath := range tableFiles {
-			os.Remove(srcPath)
-		}
-		return nil, err
-	}
+
 	return dataFiles, nil
 }
 
