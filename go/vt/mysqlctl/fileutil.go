@@ -6,7 +6,6 @@ package mysqlctl
 
 import (
 	"bufio"
-	"compress/gzip"
 	//	"crypto/md5"
 	"encoding/binary"
 	"encoding/hex"
@@ -109,7 +108,6 @@ func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
 // The path of the returned SnapshotFile will be relative
 // to root.
 func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFile, error) {
-	relog.Info("newSnapshotFile: starting to compress %v into %v", srcPath, dstPath)
 	var hash string
 	var size int64
 	if compress {
@@ -281,6 +279,37 @@ func newSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []S
 	return rs
 }
 
+// helper class to fork a gunzip process and let it decompress data
+// it starts reading reader in the background as soon as it is created
+// (but the pipes will be filled up pretty quickly if you don't read)
+// Calling 'Close' on it will close gzip's stdout, which will cause
+// gzip to exit with an error (at which point we don't really know
+// how much was read from reader)
+type forkedGunzipReader struct {
+	io.ReadCloser
+}
+
+func newForkedGunzipReader(reader io.Reader) (*forkedGunzipReader, error) {
+	cmd := exec.Command("gunzip", "-c")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err = cmd.Start(); err != nil {
+		return nil, err
+	}
+	go func() {
+		io.Copy(stdin, reader)
+		stdin.Close()
+		cmd.Wait()
+	}()
+	return &forkedGunzipReader{stdout}, nil
+}
+
 // fetchFile fetches data from the web server.  It then sends it to a
 // tee, which on one side has an hash checksum reader, and on the other
 // a gunzip reader writing to a file.  It will compare the hash
@@ -313,11 +342,12 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	ce := resp.Header.Get("Content-Encoding")
 	if ce != "" {
 		if ce == "gzip" {
-			reader, err = gzip.NewReader(reader)
+			gz, err := newForkedGunzipReader(reader)
 			if err != nil {
 				return err
 			}
-
+			defer gz.Close()
+			reader = gz
 		} else {
 			return fmt.Errorf("unsupported Content-Encoding: %v", ce)
 		}
@@ -350,7 +380,7 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	// create the uncompresser
 	var decompressor io.Reader
 	if strings.HasSuffix(srcUrl, ".gz") {
-		gz, err := gzip.NewReader(tee)
+		gz, err := newForkedGunzipReader(tee)
 		if err != nil {
 			return err
 		}
