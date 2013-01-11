@@ -805,14 +805,20 @@ def run_test_vttablet_authenticated():
   # TODO(szopa): Test that non-authenticated queries do not pass
   # through (when we get to that point).
 
+def _check_string_in_hook_result(text, expected):
+  if isinstance(expected, basestring):
+    expected = [expected]
+  for exp in expected:
+    if text.find(exp) != -1:
+      return
+  print "ExecuteHook output:"
+  print text
+  raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
+
 def _run_hook(params, expectedStrings):
   out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO ExecuteHook %s %s' % (tablet_62344.zk_tablet_path, params), trap_output=True, raise_on_error=False)
   for expected in expectedStrings:
-    if err.find(expected) == -1:
-      print "ExecuteHook output:"
-      print err
-      raise utils.TestError('ExecuteHook returned unexpected result, no string: ' + expected)
-
+    _check_string_in_hook_result(err, expected)
 
 @utils.test_case
 def run_test_hook():
@@ -827,7 +833,9 @@ def run_test_hook():
   # test a regular program works
   _run_hook("test.sh flag1 param1=hello", [
       '"ExitStatus": 0',
-      '"Stdout": "PARAM: --flag1\\nPARAM: --param1=hello\\n"',
+      ['"Stdout": "PARAM: --flag1\\nPARAM: --param1=hello\\n"',
+       '"Stdout": "PARAM: --param1=hello\\nPARAM: --flag1\\n"',
+       ],
       '"Stderr": ""',
       ])
 
