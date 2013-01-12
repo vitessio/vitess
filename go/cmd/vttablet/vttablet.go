@@ -372,7 +372,9 @@ func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
 	// and just copy content out
 	rw.Header().Set("Last-Modified", fileinfo.ModTime().UTC().Format(http.TimeFormat))
 	rw.WriteHeader(http.StatusOK)
-	io.Copy(writer, reader)
+	if _, err := io.Copy(writer, reader); err != nil {
+		relog.Warning("transfer failed %v: %v", path, err)
+	}
 }
 
 func initUpdateStreamService(mycnf *mysqlctl.Mycnf) {

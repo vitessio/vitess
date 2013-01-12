@@ -287,6 +287,13 @@ func newSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []S
 // how much was read from reader)
 type forkedGunzipReader struct {
 	io.ReadCloser
+	cmd *exec.Cmd
+}
+
+func (fgzr *forkedGunzipReader) Close() error {
+	// You cannot wait until you are done with all pipes.
+	fgzr.cmd.Wait()
+	return fgzr.ReadCloser.Close()
 }
 
 func newForkedGunzipReader(reader io.Reader) (*forkedGunzipReader, error) {
@@ -303,11 +310,14 @@ func newForkedGunzipReader(reader io.Reader) (*forkedGunzipReader, error) {
 		return nil, err
 	}
 	go func() {
-		io.Copy(stdin, reader)
+		_, err := io.Copy(stdin, reader)
+		if err != nil {
+			relog.Warning("failed piping through gunzip: %v", err)
+		}
 		stdin.Close()
-		cmd.Wait()
+		//		cmd.Wait()
 	}()
-	return &forkedGunzipReader{stdout}, nil
+	return &forkedGunzipReader{stdout, cmd}, nil
 }
 
 // fetchFile fetches data from the web server.  It then sends it to a
