@@ -161,9 +161,20 @@ func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serve
 	}
 
 	for _, de := range dataDirEntries {
+		dbDirPath := path.Join(mysqld.config.DataDir, de.Name())
+		// If this is not a directory, try to eval it as a syslink.
+		if !de.IsDir() {
+			dbDirPath, err = filepath.EvalSymlinks(dbDirPath)
+			if err != nil {
+				return nil, err
+			}
+			de, err = os.Stat(dbDirPath)
+			if err != nil {
+				return nil, err
+			}
+		}
 		if de.IsDir() {
 			// Copy anything that defines a db.opt file - that includes empty databases.
-			dbDirPath := path.Join(mysqld.config.DataDir, de.Name())
 			_, err := os.Stat(path.Join(dbDirPath, "db.opt"))
 			if err == nil {
 				dps = append(dps, snapPair{dbDirPath, path.Join(snapshotPath, dataDir, de.Name())})
@@ -178,7 +189,7 @@ func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serve
 						}
 					}
 				} else {
-					relog.Warning("unable to scan db dir: %v", err)
+					return nil, err
 				}
 			}
 		}
