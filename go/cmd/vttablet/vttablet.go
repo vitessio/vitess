@@ -338,7 +338,7 @@ func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
 				return
 			}
-
+			defer stdout.Close()
 			if err = cmd.Start(); err != nil {
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
 				return
@@ -346,8 +346,13 @@ func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
 
 			rw.Header().Set("Content-Encoding", "gzip")
 			defer func() {
-				cmd.Wait()
-				relog.Info("Gzip done for %v", path)
+				// An early abort leaves a process dangling.
+				cmd.Process.Kill()
+				if err := cmd.Wait(); err != nil {
+					relog.Warning("gzip err for %v: %v", path, err)
+				} else {
+					relog.Info("gzip done for %v", path)
+				}
 			}()
 
 			reader = stdout
