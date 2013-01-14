@@ -900,7 +900,7 @@ func commandReparentShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 }
 
 func commandValidateShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	pingTablets := subFlags.Bool("ping-tablets", false, "ping all tablets during validate")
+	pingTablets := subFlags.Bool("ping-tablets", true, "ping all tablets during validate")
 	subFlags.Parse(args)
 
 	if subFlags.NArg() != 1 {

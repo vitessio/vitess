@@ -328,7 +328,11 @@ func (wr *Wrangler) ValidateShard(zkShardPath string, pingTablets bool) error {
 	// returns, we are done.
 	wg := &sync.WaitGroup{}
 	results := make(chan vresult, 16)
-	wr.validateShard(zkShardPath, pingTablets, results)
+	go func() {
+		wg.Add(1)
+		wr.validateShard(zkShardPath, pingTablets, results)
+		wg.Done()
+	}()
 	return wr.waitForResults(wg, results)
 }
 
