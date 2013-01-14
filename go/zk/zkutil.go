@@ -212,6 +212,10 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 			_, _, watch, err := zconn.GetW(zkPath)
 			if err != nil {
 				log.Printf("WARNING: failed reading pid node: %v", err)
+				if !zookeeper.IsError(err, zookeeper.ZNONODE) {
+					time.Sleep(30 * time.Second)
+					continue
+				}
 			} else {
 				event := <-watch
 				log.Printf("INFO: pid node event: %v", event)
@@ -229,6 +233,7 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 			_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 			if err != nil {
 				if zookeeper.IsError(err, zookeeper.ZCLOSING) {
+					log.Printf("INFO: pid watcher stopped on closing: %v", zkPath)
 					return
 				}
 				log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
