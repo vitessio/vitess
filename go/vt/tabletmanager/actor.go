@@ -253,7 +253,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 
 func (ta *TabletActor) changeType(actionNode *ActionNode) error {
 	dbType := actionNode.args.(*TabletType)
-	return ChangeType(ta.zconn, ta.zkTabletPath, *dbType)
+	return ChangeType(ta.zconn, ta.zkTabletPath, *dbType, true)
 }
 
 func (ta *TabletActor) demoteMaster() error {
@@ -664,7 +664,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE)
+	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE, true)
 }
 
 // Operate on a backup tablet. Halt mysqld (read-only, lock tables)
@@ -765,7 +765,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE)
+	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE, true)
 }
 
 // Make this external, since in needs to be forced from time to time.
@@ -826,24 +826,26 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 }
 
 // Make this external, since these transitions need to be forced from time to time.
-func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType) error {
+func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks bool) error {
 	tablet, err := ReadTablet(zconn, zkTabletPath)
 	if err != nil {
 		return err
 	}
 
-	// Only run the idle_server_check hook when transitioning from non-serving
-	// to serving.
-	if !IsServingType(tablet.Type) && IsServingType(newType) {
-		if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {
-			return err
+	if runHooks {
+		// Only run the idle_server_check hook when
+		// transitioning from non-serving to serving.
+		if !IsServingType(tablet.Type) && IsServingType(newType) {
+			if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {
+				return err
+			}
 		}
-	}
 
-	// Run the live_server_check any time we transition to a serving type.
-	if IsServingType(newType) {
-		if err := hook.NewSimpleHook("live_server_check").ExecuteOptional(); err != nil {
-			return err
+		// Run the live_server_check any time we transition to a serving type.
+		if IsServingType(newType) {
+			if err := hook.NewSimpleHook("live_server_check").ExecuteOptional(); err != nil {
+				return err
+			}
 		}
 	}
 

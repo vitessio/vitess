@@ -65,7 +65,7 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 
 	if force {
 		// with --force, we do not run any hook
-		err = tm.ChangeType(wr.zconn, zkTabletPath, dbType)
+		err = tm.ChangeType(wr.zconn, zkTabletPath, dbType, false)
 	} else {
 		// the remote action will run the hooks
 		var actionPath string
