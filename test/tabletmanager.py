@@ -867,6 +867,32 @@ def run_test_hook():
 
   tablet_62344.kill_vttablet()
 
+@utils.test_case
+def run_test_sigterm():
+  utils.zk_wipe()
+  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+
+  # create the database so vttablets start, as it is serving
+  tablet_62344.create_db('vt_test_keyspace')
+
+  tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
+
+  # start a 'vtctl Sleep' command in the background
+  sp = utils.run_bg(vtroot+'/bin/vtctl -logfile=/dev/null Sleep %s 60s' %
+                    tablet_62344.zk_tablet_path,
+                    stdout=PIPE, stderr=PIPE)
+
+  # wait for it to start, and let's kill it
+  time.sleep(2.0)
+  utils.run(['pkill', 'vtaction'])
+  out, err = sp.communicate()
+
+  # check the vtctl command got the right remote error back
+  if err.find("vtaction interrupted by signal") == -1:
+    raise utils.TestError("cannot find expected output in error:", err)
+  utils.debug("vtaction was interrupted correctly:\n" + err)
+
+  tablet_62344.kill_vttablet()
 
 def run_all():
   run_test_sanity()
@@ -892,6 +918,7 @@ def run_all():
   run_test_vttablet_authenticated()
   run_test_reparent_lag_slave()
   run_test_hook()
+  run_test_sigterm()
 
 def main():
   args = utils.get_args()

@@ -9,8 +9,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"os/signal"
 	"path"
 	"strings"
+	"syscall"
 	"time"
 
 	"code.google.com/p/vitess/go/jscfg"
@@ -106,6 +109,20 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			return zkErr
 		}
 	}
+
+	// signal handler after we've signed up for the action
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		for sig := range c {
+			err := StoreActionResponse(ta.zconn, actionNode, actionPath, fmt.Errorf("vtaction interrupted by signal: %v", sig))
+			if err != nil {
+				relog.Error("Signal handler failed to update actionNode: %v", err)
+				os.Exit(-2)
+			}
+			os.Exit(-1)
+		}
+	}()
 
 	ta.zkTabletPath = TabletPathFromActionPath(actionPath)
 	ta.zkVtRoot = VtRootFromTabletPath(ta.zkTabletPath)
