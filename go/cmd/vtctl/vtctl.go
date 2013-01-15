@@ -1422,12 +1422,12 @@ func (rts rTablets) Swap(i, j int) { rts[i], rts[j] = rts[j], rts[i] }
 func (rts rTablets) Less(i, j int) bool {
 	// NOTE: Swap order of unpack to reverse sort
 	l, r := rts[j], rts[i]
-	// l or r would be nil if we failed to get the position
-	// (put them at the beginning of the list)
-	if l == nil {
-		return r != nil
+	// l or r ReplicationPosition would be nil if we failed to get
+	// the position (put them at the beginning of the list)
+	if l.ReplicationPosition == nil {
+		return r.ReplicationPosition != nil
 	}
-	if r == nil {
+	if r.ReplicationPosition == nil {
 		return false
 	}
 	var lTypeMaster, rTypeMaster int
