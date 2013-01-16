@@ -71,6 +71,7 @@ import (
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
@@ -228,6 +229,18 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		if _, ok := restartableSlaveTabletMap[masterElectTablet.Uid]; !ok {
 			return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Path(), shardInfo.ShardPath(), mapKeys(restartableSlaveTabletMap))
 		}
+
+		// check the master-elect is in good shape
+		if tm.IsServingType(masterElectTablet.Type) {
+			if err := wr.ExecuteOptionalTabletInfoHook(masterElectTablet, hook.NewSimpleHook("live_server_check")); err != nil {
+				return err
+			}
+		} else {
+			if err := wr.ExecuteOptionalTabletInfoHook(masterElectTablet, hook.NewSimpleHook("idle_server_check")); err != nil {
+				return err
+			}
+		}
+
 		relog.Info("check slaves %v", zkMasterTabletPath)
 		err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition, zkShardActionPath)
 		if err != nil {
