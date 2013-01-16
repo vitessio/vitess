@@ -7,11 +7,10 @@ package mysqlctl
 import (
 	"bufio"
 	//	"crypto/md5"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"hash"
-	"hash/crc64"
+	//	"hash/crc64"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -50,19 +49,29 @@ func init() {
 // }
 
 // our hasher, implemented using crc64
+//type hasher struct {
+//	hash.Hash64
+//}
+
+//func newHasher() *hasher {
+//	return &hasher{crc64.New(crc64.MakeTable(crc64.ECMA))}
+//}
+
+//func (h *hasher) HashString() string {
+//	return hex.EncodeToString(h.Sum(nil))
+//}
+
+// our hasher, implemented using cgzip crc32
 type hasher struct {
-	hash.Hash64
+	hash.Hash32
 }
 
 func newHasher() *hasher {
-	return &hasher{crc64.New(crc64.MakeTable(crc64.ECMA))}
+	return &hasher{cgzip.NewCrc32()}
 }
 
 func (h *hasher) HashString() string {
-	sum := h.Sum64()
-	buf := make([]byte, 10)
-	size := binary.PutUvarint(buf, sum)
-	return hex.EncodeToString(buf[0:size])
+	return hex.EncodeToString(h.Sum(nil))
 }
 
 // SnapshotFile describes a file to serve.
