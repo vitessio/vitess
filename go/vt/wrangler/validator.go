@@ -121,13 +121,13 @@ func (wr *Wrangler) validateKeyspace(zkKeyspacePath string, pingTablets bool, wg
 		zkShardPath := path.Join(zkShardsPath, shard)
 		wg.Add(1)
 		go func() {
-			wr.validateShard(zkShardPath, pingTablets, results)
+			wr.validateShard(zkShardPath, pingTablets, wg, results)
 			wg.Done()
 		}()
 	}
 }
 
-func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, results chan<- vresult) {
+func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
 		results <- vresult{zkShardPath, err}
@@ -169,7 +169,6 @@ func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, results 
 		results <- vresult{zkShardPath, fmt.Errorf("master mismatch for shard %v: found %v, expected %v", zkShardPath, masterAlias, shardInfo.MasterAlias)}
 	}
 
-	wg := sync.WaitGroup{}
 	for _, alias := range aliases {
 		zkTabletPath := tm.TabletPathForAlias(alias)
 		zkTabletReplicationPath := path.Join(zkShardPath, masterAlias.String())
@@ -185,10 +184,9 @@ func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, results 
 
 	if pingTablets {
 		wr.validateReplication(shardInfo, tabletMap, results)
-		wr.pingTablets(tabletMap, results)
+		wr.pingTablets(tabletMap, wg, results)
 	}
 
-	wg.Wait()
 	return
 }
 
@@ -259,8 +257,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 	}
 }
 
-func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
-	wg := sync.WaitGroup{}
+func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, wg *sync.WaitGroup, results chan<- vresult) {
 	for zkTabletPath, tabletInfo := range tabletMap {
 		wg.Add(1)
 		go func(zkTabletPath string, tabletInfo *tm.TabletInfo) {
@@ -285,8 +282,6 @@ func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, results cha
 			}
 		}(zkTabletPath, tabletInfo)
 	}
-
-	wg.Wait()
 }
 
 // Validate a whole zk tree
@@ -324,15 +319,9 @@ func (wr *Wrangler) ValidateKeyspace(zkKeyspacePath string, pingTablets bool) er
 }
 
 func (wr *Wrangler) ValidateShard(zkShardPath string, pingTablets bool) error {
-	// create an empty waitgroup - validateShard blocks, so when it
-	// returns, we are done.
 	wg := &sync.WaitGroup{}
 	results := make(chan vresult, 16)
-	go func() {
-		wg.Add(1)
-		wr.validateShard(zkShardPath, pingTablets, results)
-		wg.Done()
-	}()
+	wr.validateShard(zkShardPath, pingTablets, wg, results)
 	return wr.waitForResults(wg, results)
 }
 

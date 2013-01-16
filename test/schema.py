@@ -113,6 +113,9 @@ def run_test_complex_schema():
   shard_1_master.start_vttablet()
   shard_1_replica1.start_vttablet()
 
+  # check after all tablets are here
+  utils.zk_check(ping_tablets=True)
+
   # make sure all replication is good
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path, auto_log=True)

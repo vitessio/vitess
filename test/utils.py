@@ -219,9 +219,9 @@ def zk_wipe():
 
 def zk_check(ping_tablets=False):
   if ping_tablets:
-    run_vtctl('Validate -ping-tablets /zk/global/vt/keyspaces')
-  else:
     run_vtctl('Validate /zk/global/vt/keyspaces')
+  else:
+    run_vtctl('Validate -ping-tablets=false /zk/global/vt/keyspaces')
 
 # vars helpers
 def get_vars(port):
