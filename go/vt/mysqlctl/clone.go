@@ -69,7 +69,7 @@ func (mysqld *Mysqld) validateCloneSource(serverMode bool) error {
 	return nil
 }
 
-func (mysqld *Mysqld) validateCloneTarget() error {
+func (mysqld *Mysqld) ValidateCloneTarget() error {
 	// run a hook to check local things
 	// FIXME(alainjobart) What other parameters do we have to
 	// provide? dbname, host, socket?
@@ -79,7 +79,7 @@ func (mysqld *Mysqld) validateCloneTarget() error {
 
 	rows, err := mysqld.fetchSuperQuery("SHOW DATABASES")
 	if err != nil {
-		return fmt.Errorf("mysqlctl: validateCloneTarget failed, %v", err)
+		return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, %v", err)
 	}
 
 	for _, row := range rows {
@@ -87,12 +87,12 @@ func (mysqld *Mysqld) validateCloneTarget() error {
 			dbName := row[0].String()
 			tableRows, err := mysqld.fetchSuperQuery("SHOW TABLES FROM " + dbName)
 			if err != nil {
-				return fmt.Errorf("mysqlctl: validateCloneTarget failed, %v", err)
+				return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, %v", err)
 			} else if len(tableRows) == 0 {
 				// no tables == empty db, all is well
 				continue
 			}
-			return fmt.Errorf("mysqlctl: validateCloneTarget failed, found active db %v", dbName)
+			return fmt.Errorf("mysqlctl: ValidateCloneTarget failed, found active db %v", dbName)
 		}
 	}
 
@@ -391,8 +391,8 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
 
-	relog.Debug("validateCloneTarget")
-	if err := mysqld.validateCloneTarget(); err != nil {
+	relog.Debug("ValidateCloneTarget")
+	if err := mysqld.ValidateCloneTarget(); err != nil {
 		return err
 	}
 

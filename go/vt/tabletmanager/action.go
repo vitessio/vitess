@@ -45,6 +45,7 @@ const (
 
 	TABLET_ACTION_SNAPSHOT            = "Snapshot"
 	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
+	TABLET_ACTION_RESERVE_FOR_RESTORE = "ReserveForRestore"
 	TABLET_ACTION_RESTORE             = "Restore"
 	TABLET_ACTION_PARTIAL_SNAPSHOT    = "PartialSnapshot"
 	TABLET_ACTION_PARTIAL_RESTORE     = "PartialRestore"
@@ -138,6 +139,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.reply = &SnapshotReply{}
 	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		node.args = &SnapshotSourceEndArgs{}
+	case TABLET_ACTION_RESERVE_FOR_RESTORE:
+		node.args = &ReserveForRestoreArgs{}
 	case TABLET_ACTION_RESTORE:
 		node.args = &RestoreArgs{}
 	case TABLET_ACTION_PARTIAL_SNAPSHOT:

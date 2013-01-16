@@ -196,6 +196,14 @@ func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, er
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
 }
 
+type ReserveForRestoreArgs struct {
+	ZkSrcTabletPath string
+}
+
+func (ai *ActionInitiator) ReserveForRestore(zkDstTabletPath string, args *ReserveForRestoreArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESERVE_FOR_RESTORE, args: args})
+}
+
 // used for both Restore and PartialRestore
 type RestoreArgs struct {
 	ZkSrcTabletPath       string
@@ -204,6 +212,7 @@ type RestoreArgs struct {
 	FetchConcurrency      int
 	FetchRetryCount       int
 	Encoding              string
+	WasReserved           bool
 	DontWaitForSlaveStart bool
 }
 

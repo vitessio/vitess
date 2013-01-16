@@ -183,6 +183,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.promoteSlave(actionNode)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
+	case TABLET_ACTION_RESERVE_FOR_RESTORE:
+		err = ta.reserveForRestore(actionNode)
 	case TABLET_ACTION_RESTORE:
 		err = ta.restore(actionNode)
 	case TABLET_ACTION_SCRAP:
@@ -613,6 +615,52 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 	return json.Unmarshal(data, result)
 }
 
+// Reserve a tablet for restore.
+// Can be called remotely
+func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
+	// first check mysql, no need to go further if we can't restore
+	if err := ta.mysqld.ValidateCloneTarget(); err != nil {
+		return err
+	}
+	args := actionNode.args.(*ReserveForRestoreArgs)
+
+	// read our current tablet, verify its state
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+	if tablet.Type != TYPE_IDLE {
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	// read the source tablet
+	sourceTablet, err := ReadTablet(ta.zconn, args.ZkSrcTabletPath)
+	if err != nil {
+		return err
+	}
+
+	// find the parent tablet alias we will be using
+	if sourceTablet.Parent.Uid == NO_TABLET {
+		// If this is a master, this will be the new parent.
+		// FIXME(msolomon) this doesn't work in hierarchical replication.
+		tablet.Parent = sourceTablet.Alias()
+	} else {
+		tablet.Parent = sourceTablet.Parent
+	}
+
+	// change our type to RESTORE and set all the other arguments.
+	// from now on, we have to go to either SPARE or SCRAP
+	tablet.Keyspace = sourceTablet.Keyspace
+	tablet.Shard = sourceTablet.Shard
+	tablet.Type = TYPE_RESTORE
+	tablet.KeyRange = sourceTablet.KeyRange
+	tablet.DbNameOverride = sourceTablet.DbNameOverride
+	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
+		return err
+	}
+	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
+}
+
 // Operate on restore tablet.
 // Check that the SnapshotManifest is valid and the master has not changed.
 // Shutdown mysqld.
@@ -627,8 +675,14 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != TYPE_IDLE {
-		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	if args.WasReserved {
+		if tablet.Type != TYPE_RESTORE {
+			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		}
+	} else {
+		if tablet.Type != TYPE_IDLE {
+			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		}
 	}
 
 	// read the source tablet, compute args.SrcFilePath if default
@@ -655,19 +709,21 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 		return err
 	}
 
-	// change our type to RESTORE and set all the other arguments.
-	// from now on, we have to go to either SPARE or SCRAP
-	tablet.Parent = parentTablet.Alias()
-	tablet.Keyspace = sourceTablet.Keyspace
-	tablet.Shard = sourceTablet.Shard
-	tablet.Type = TYPE_RESTORE
-	tablet.KeyRange = sourceTablet.KeyRange
-	tablet.DbNameOverride = sourceTablet.DbNameOverride
-	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
-		return err
-	}
-	if err := CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet); err != nil {
-		return err
+	if !args.WasReserved {
+		// change our type to RESTORE and set all the other arguments.
+		// from now on, we have to go to either SPARE or SCRAP
+		tablet.Parent = parentTablet.Alias()
+		tablet.Keyspace = sourceTablet.Keyspace
+		tablet.Shard = sourceTablet.Shard
+		tablet.Type = TYPE_RESTORE
+		tablet.KeyRange = sourceTablet.KeyRange
+		tablet.DbNameOverride = sourceTablet.DbNameOverride
+		if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
+			return err
+		}
+		if err := CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet); err != nil {
+			return err
+		}
 	}
 
 	// do the work

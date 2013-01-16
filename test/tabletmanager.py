@@ -347,6 +347,10 @@ def _run_test_vtctl_clone(server_mode):
     raise utils.TestError("expected validation error", err)
   utils.run("chmod +w %s" % snapshot_dir)
 
+  # the snapshot failed, which means Clone left the destination tablet
+  # in scrap mode, so we need to re-init it
+  tablet_62044.init_tablet('idle')
+
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Clone -force %s %s %s' %
                   (clone_flags, tablet_62344.zk_tablet_path,
