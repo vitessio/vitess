@@ -346,6 +346,8 @@ func resolveSlaveNames(addrs []string) (hostnames []string, err error) {
 }
 
 // Get list of slave ip addresses from the tablet.
+// FIXME(alainjobart) this should not use RPC, but an actionNode
+// FIXME(alainjobart) once this uses an actionNode, remove TabletManager RPC
 func getSlaves(tablet *tm.Tablet) ([]string, error) {
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()

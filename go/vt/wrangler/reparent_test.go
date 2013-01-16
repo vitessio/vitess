@@ -31,12 +31,12 @@ func TestGetMasterPosition(t *testing.T) {
 		t.Logf("skipping")
 		return
 	}
-	wr := NewWrangler(zconn, 30*time.Second)
+	wr := NewWrangler(zconn, 30*time.Second, 30*time.Second)
 	tablet, err := wr.readTablet("/zk/test/vt/tablets/0000062344")
 	if err != nil {
 		t.Error(err)
 	}
-	replicationPosition, err := getMasterPosition(tablet.Tablet)
+	replicationPosition, err := wr.getMasterPosition(tablet)
 	if err != nil {
 		t.Error(err)
 	}

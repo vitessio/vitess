@@ -14,12 +14,19 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
+// helper struct to queue up results
+type rpcContext struct {
+	tablet   *tm.TabletInfo
+	position *mysqlctl.ReplicationPosition
+	err      error
+}
+
 // These functions reimplement a few actions that were originally
 // implemented as direct RPCs.  This gives a consistent, if not slower
 // mechanism for performing critical actions. It also leaves more
 // centralize debug information in zk when a failure occurs.
 
-func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardActionPath string) (*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) getMasterPosition(ti *tm.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
 	actionPath, err := wr.ai.MasterPosition(ti.Path())
 	if err != nil {
 		return nil, err
@@ -34,8 +41,8 @@ func (wr *Wrangler) getMasterPositionWithAction(ti *tm.TabletInfo, zkShardAction
 // Check all the tablets to see if we can proceed with reparenting.
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
-func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint32]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
-	relog.Debug("checkSlaveConsistencyWithActions %v %#v", mapKeys(tabletMap), masterPosition)
+func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
+	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
 	calls := make(chan *rpcContext, len(tabletMap))
@@ -138,7 +145,7 @@ func (wr *Wrangler) checkSlaveConsistencyWithActions(tabletMap map[uint32]*tm.Ta
 }
 
 // Shut off all replication.
-func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint32]*tm.TabletInfo, zkShardActionPath string) error {
+func (wr *Wrangler) stopSlaves(tabletMap map[uint32]*tm.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *tm.TabletInfo) {
 		actionPath, err := wr.ai.StopSlave(ti.Path())
@@ -169,7 +176,7 @@ func (wr *Wrangler) stopSlavesWithAction(tabletMap map[uint32]*tm.TabletInfo, zk
 // Return a map of all tablets to the current replication position.
 // Handles masters and slaves, but it's up to the caller to guarantee
 // all tablets are in the same shard.
-func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint32]*tm.TabletInfo, zkShardActionPath string) (map[uint32]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint32]*tm.TabletInfo) (map[uint32]*mysqlctl.ReplicationPosition, error) {
 	relog.Debug("tabletReplicationPositions %v", mapKeys(tabletMap))
 
 	calls := make(chan *rpcContext, len(tabletMap))

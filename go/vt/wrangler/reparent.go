@@ -66,16 +66,12 @@ On X: (promoted slave)
 
 import (
 	"fmt"
-	"net/rpc"
 	"reflect"
-	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	vtrpc "code.google.com/p/vitess/go/vt/rpc"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -193,8 +189,8 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 	var masterPosition *mysqlctl.ReplicationPosition
 	// If the masterTablet type doesn't match, we can assume that it's been
-	// removed by other operations. For instance, a DBA or health-check process
-	// setting it's type to SCRAP.
+	// removed by other operations. For instance, a DBA or health-check
+	// process setting its type to SCRAP.
 	shouldDemoteMaster := masterTablet.Type == tm.TYPE_MASTER && masterTablet.Uid != masterElectTablet.Uid
 	if shouldDemoteMaster {
 		relog.Info("demote master %v", zkMasterTabletPath)
@@ -203,8 +199,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 		}
 		if err == nil {
-			// masterPosition, err = getMasterPosition(masterTablet.Tablet)
-			masterPosition, err = wr.getMasterPositionWithAction(masterTablet, zkShardActionPath)
+			masterPosition, err = wr.getMasterPosition(masterTablet)
 		}
 		if err != nil {
 			// FIXME(msolomon) This suggests that the master is dead and we
@@ -234,8 +229,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 			return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Path(), shardInfo.ShardPath(), mapKeys(restartableSlaveTabletMap))
 		}
 		relog.Info("check slaves %v", zkMasterTabletPath)
-		// err = checkSlaveConsistency(slaveTabletMap, masterPosition, zkShardActionPath)
-		err = wr.checkSlaveConsistencyWithActions(restartableSlaveTabletMap, masterPosition, zkShardActionPath)
+		err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition, zkShardActionPath)
 		if err != nil {
 			return err
 		}
@@ -244,7 +238,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		// We are forcing a reparenting. Make sure that all slaves stop so
 		// no data is accidentally replicated through before we call RestartSlave.
 		relog.Info("stop slaves %v", zkMasterTabletPath)
-		err = wr.stopSlavesWithAction(slaveTabletMap, zkShardActionPath)
+		err = wr.stopSlaves(slaveTabletMap)
 		if err != nil {
 			return err
 		}
@@ -374,46 +368,6 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	return err
 }
 
-func getMasterPosition(tablet *tm.Tablet) (*mysqlctl.ReplicationPosition, error) {
-	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
-	defer timer.Stop()
-
-	callChan := make(chan *rpc.Call, 1)
-	var client *rpc.Client
-	go func() {
-		var clientErr error
-		client, clientErr := rpc.DialHTTP("tcp", tablet.Addr)
-		if clientErr != nil {
-			callChan <- &rpc.Call{Error: fmt.Errorf("dial failed: %v", clientErr)}
-		} else {
-			client.Go("TabletManager.MasterPosition", vtrpc.NilRequest, new(mysqlctl.ReplicationPosition), callChan)
-		}
-	}()
-
-	var call *rpc.Call
-	select {
-	case <-timer.C:
-	case call = <-callChan:
-	}
-	if client != nil {
-		client.Close()
-	}
-	if call == nil {
-		return nil, fmt.Errorf("TabletManager.MasterPosition deadline exceeded %v", tablet.Addr)
-	}
-	if call.Error != nil {
-		return nil, call.Error
-	}
-	return call.Reply.(*mysqlctl.ReplicationPosition), nil
-}
-
-type rpcContext struct {
-	tablet   *tm.TabletInfo
-	client   *rpc.Client
-	position *mysqlctl.ReplicationPosition
-	err      error
-}
-
 func mapKeys(m interface{}) []interface{} {
 	keys := make([]interface{}, 0, 16)
 	mapVal := reflect.ValueOf(m)
@@ -421,153 +375,6 @@ func mapKeys(m interface{}) []interface{} {
 		keys = append(keys, kv.Interface())
 	}
 	return keys
-}
-
-func mapStrKeys(m interface{}) []string {
-	keys := make([]string, 0, 16)
-	mapVal := reflect.ValueOf(m)
-	for _, kv := range mapVal.MapKeys() {
-		keys = append(keys, fmt.Sprintf("%v", kv.Interface()))
-	}
-	return keys
-}
-
-// Check all the tablets to see if we can proceed with reparenting.
-// masterPosition is supplied from the demoted master if we are doing
-// this gracefully.
-// FIXME(msolomon) This has been superceded by the action based version.
-// This should be removed, but the RPC based version is much simpler to
-// understand even though they are starting to diverge.
-func checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
-	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
-
-	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
-	defer timer.Stop()
-
-	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
-	calls := make(chan *rpcContext, len(tabletMap))
-	f := func(tablet *tm.TabletInfo) {
-		ctx := &rpcContext{tablet: tablet}
-		ctx.client, ctx.err = rpc.DialHTTP("tcp", tablet.Addr)
-		if ctx.err == nil {
-			ctx.position = new(mysqlctl.ReplicationPosition)
-			if masterPosition != nil {
-				// If the master position is known, do our best to wait for replication to catch up.
-				args := &tm.SlavePositionReq{*masterPosition, int(SLAVE_STATUS_DEADLINE / 1e9)}
-				ctx.err = ctx.client.Call("TabletManager.WaitSlavePosition", args, ctx.position)
-			} else {
-				ctx.err = ctx.client.Call("TabletManager.SlavePosition", vtrpc.NilRequest, ctx.position)
-				if ctx.err == nil {
-					// In the case where a master is down, look for the last bit of data copied and wait
-					// for that to apply. That gives us a chance to wait for all data.
-					lastDataPos := mysqlctl.ReplicationPosition{MasterLogFile: ctx.position.MasterLogFileIo,
-						MasterLogPositionIo: ctx.position.MasterLogPositionIo}
-					args := &tm.SlavePositionReq{lastDataPos, int(SLAVE_STATUS_DEADLINE / 1e9)}
-					ctx.err = ctx.client.Call("TabletManager.WaitSlavePosition", args, ctx.position)
-				}
-			}
-			ctx.client.Close()
-		}
-		calls <- ctx
-	}
-
-	for _, tablet := range tabletMap {
-		// Pass loop variable explicitly so we don't have a concurrency issue.
-		go f(tablet)
-	}
-
-	replies := make([]*rpcContext, 0, len(tabletMap))
-	// wait for responses
-wait:
-	for i := 0; i < len(tabletMap); i++ {
-		select {
-		case <-timer.C:
-			break wait
-		case call := <-calls:
-			replies = append(replies, call)
-		}
-	}
-
-	replyErrorCount := len(tabletMap) - len(replies)
-	// map positions to tablets
-	positionMap := make(map[string][]uint32)
-	for _, ctx := range replies {
-		if ctx.err != nil {
-			replyErrorCount++
-		} else {
-			mapKey := ctx.position.MapKey()
-			if _, ok := positionMap[mapKey]; !ok {
-				positionMap[mapKey] = make([]uint32, 0, 32)
-			}
-			positionMap[mapKey] = append(positionMap[mapKey], ctx.tablet.Uid)
-		}
-	}
-
-	if len(positionMap) == 1 && replyErrorCount == 0 {
-		// great, everyone agrees
-		// demotedMasterReplicationState is nil if demotion failed
-		if masterPosition != nil {
-			demotedMapKey := masterPosition.MapKey()
-			if _, ok := positionMap[demotedMapKey]; !ok {
-				for slaveMapKey, _ := range positionMap {
-					return fmt.Errorf("slave position doesn't match demoted master: %v != %v", demotedMapKey,
-						slaveMapKey)
-				}
-			}
-		}
-	} else {
-		// FIXME(msolomon) in the event of a crash, do you pick replica that is
-		// furthest along or do you promote the majority? data loss vs availability
-		// sounds like you pick the latest group and reclone.
-		items := make([]string, 0, 32)
-		for slaveMapKey, uids := range positionMap {
-			items = append(items, fmt.Sprintf("%v %v", slaveMapKey, uids))
-		}
-		sort.Strings(items)
-		// FIXME(msolomon) add instructions how to do so.
-		return fmt.Errorf("inconsistent slaves, mark some offline (rpc error count: %v) %v", replyErrorCount, strings.Join(items, ", "))
-	}
-	return nil
-}
-
-// Shut off all replication.
-func stopSlaves(tabletMap map[uint32]*tm.TabletInfo) error {
-	timer := time.NewTimer(SLAVE_STATUS_DEADLINE)
-
-	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
-	errs := make(chan error, len(tabletMap))
-	f := func(tablet *tm.TabletInfo) {
-		client, err := rpc.DialHTTP("tcp", tablet.Addr)
-		if err == nil {
-			err = client.Call("TabletManager.StopSlave", vtrpc.NilRequest, vtrpc.NilResponse)
-			client.Close()
-		}
-		if err != nil {
-			relog.Debug("TabletManager.StopSlave failed: %v", err)
-		}
-		errs <- err
-	}
-
-	for _, tablet := range tabletMap {
-		// Pass loop variable explicitly so we don't have a concurrency issue.
-		go f(tablet)
-	}
-
-	// wait for responses
-	var err error
-wait:
-	for i := 0; i < len(tabletMap); i++ {
-		select {
-		case <-timer.C:
-			break wait
-		case lastErr := <-errs:
-			if err == nil && lastErr != nil {
-				err = lastErr
-			}
-		}
-	}
-
-	return err
 }
 
 func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*tm.TabletInfo, map[uint32]*mysqlctl.ReplicationPosition, error) {
@@ -591,7 +398,7 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*t
 		return nil, nil, fmt.Errorf("failed to obtain action lock: %v", actionPath)
 	}
 
-	tabletMap, posMap, slaveErr := wr.shardReplicationPositions(shardInfo, actionPath)
+	tabletMap, posMap, slaveErr := wr.shardReplicationPositions(shardInfo)
 
 	// regardless of error, just clean up
 	err = wr.handleActionError(actionPath, nil)
@@ -604,7 +411,7 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*t
 	return tabletMap, posMap, err
 }
 
-func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardActionPath string) (map[uint32]*tm.TabletInfo, map[uint32]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo) (map[uint32]*tm.TabletInfo, map[uint32]*mysqlctl.ReplicationPosition, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
 	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
 	if err != nil {
@@ -619,7 +426,7 @@ func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo, zkShardAc
 		}
 		tabletMap[alias.Uid] = tablet
 	}
-	posMap, err := wr.tabletReplicationPositions(tabletMap, zkShardActionPath)
+	posMap, err := wr.tabletReplicationPositions(tabletMap)
 	return tabletMap, posMap, err
 }
 
