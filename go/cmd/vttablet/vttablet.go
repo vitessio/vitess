@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
@@ -356,6 +357,16 @@ func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
 			}()
 
 			reader = stdout
+
+		} else if strings.Contains(ae, "cgzip") {
+			gz, err := cgzip.NewWriterLevel(rw, cgzip.Z_BEST_SPEED)
+			if err != nil {
+				http.Error(rw, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			rw.Header().Set("Content-Encoding", "gzip")
+			defer gz.Close()
+			writer = gz
 
 		} else if strings.Contains(ae, "gzip") {
 			gz, err := gzip.NewWriterLevel(rw, gzip.BestSpeed)

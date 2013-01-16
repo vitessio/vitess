@@ -309,6 +309,10 @@ def run_test_vtctl_snapshot_restore_server_gzip():
 def run_test_vtctl_snapshot_restore_server_fgzip():
   _run_test_vtctl_snapshot_restore(server_mode=True, encoding='fgzip')
 
+@utils.test_case
+def run_test_vtctl_snapshot_restore_server_cgzip():
+  _run_test_vtctl_snapshot_restore(server_mode=True, encoding='cgzip')
+
 def _run_test_vtctl_clone(server_mode):
   if server_mode:
     clone_flags = '-server-mode'
