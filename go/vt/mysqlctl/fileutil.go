@@ -16,12 +16,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/relog"
 )
 
@@ -108,23 +108,18 @@ func (dataFile *SnapshotFile) getLocalFilename(basePath string) string {
 // The path of the returned SnapshotFile will be relative
 // to root.
 func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFile, error) {
+	// open the source file
+	srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer srcFile.Close()
+	src := bufio.NewReaderSize(srcFile, 2*1024*1024)
+
 	var hash string
 	var size int64
 	if compress {
 		relog.Info("newSnapshotFile: starting to compress %v into %v", srcPath, dstPath)
-
-		// forking gzip
-		cmd := exec.Command("gzip", "--fast", "-c", srcPath)
-		gzipStdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return nil, err
-		}
-		if err = cmd.Start(); err != nil {
-			return nil, err
-		}
-		defer func() {
-			cmd.Wait()
-		}()
 
 		// open the temporary destination file
 		dir, filePrefix := path.Split(dstPath)
@@ -146,9 +141,20 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		hasher := newHasher()
 		tee := io.MultiWriter(dst, hasher)
 
-		// copy from gzip's output to tee to output file and hasher
-		size, err = io.Copy(tee, gzipStdout)
+		// create the gzip compression filter
+		gzip, err := cgzip.NewWriterLevel(tee, cgzip.Z_BEST_SPEED)
 		if err != nil {
+			return nil, err
+		}
+
+		// copy from the file to gzip to tee to output file and hasher
+		size, err = io.Copy(gzip, src)
+		if err != nil {
+			return nil, err
+		}
+
+		// close gzip to flush it
+		if err = gzip.Close(); err != nil {
 			return nil, err
 		}
 
@@ -164,14 +170,6 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		}
 	} else {
 		relog.Info("newSnapshotFile: starting to hash and symlinking %v to %v", srcPath, dstPath)
-
-		// open the source file
-		srcFile, err := os.OpenFile(srcPath, os.O_RDONLY, 0)
-		if err != nil {
-			return nil, err
-		}
-		defer srcFile.Close()
-		src := bufio.NewReaderSize(srcFile, 2*1024*1024)
 
 		// get the hash
 		hasher := newHasher()
@@ -279,47 +277,6 @@ func newSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []S
 	return rs
 }
 
-// helper class to fork a gunzip process and let it decompress data
-// it starts reading reader in the background as soon as it is created
-// (but the pipes will be filled up pretty quickly if you don't read)
-// Calling 'Close' on it will close gzip's stdout, which will cause
-// gzip to exit with an error (at which point we don't really know
-// how much was read from reader)
-type forkedGunzipReader struct {
-	io.ReadCloser
-	cmd *exec.Cmd
-}
-
-func (fgzr *forkedGunzipReader) Close() error {
-	// You cannot wait until you are done with all pipes.
-	fgzr.cmd.Wait()
-	return fgzr.ReadCloser.Close()
-}
-
-func newForkedGunzipReader(reader io.Reader) (*forkedGunzipReader, error) {
-	cmd := exec.Command("gunzip", "-c")
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return nil, err
-	}
-	if err = cmd.Start(); err != nil {
-		return nil, err
-	}
-	go func() {
-		_, err := io.Copy(stdin, reader)
-		if err != nil {
-			relog.Warning("failed piping through gunzip: %v", err)
-		}
-		stdin.Close()
-		//		cmd.Wait()
-	}()
-	return &forkedGunzipReader{stdout, cmd}, nil
-}
-
 // fetchFile fetches data from the web server.  It then sends it to a
 // tee, which on one side has an hash checksum reader, and on the other
 // a gunzip reader writing to a file.  It will compare the hash
@@ -352,7 +309,7 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	ce := resp.Header.Get("Content-Encoding")
 	if ce != "" {
 		if ce == "gzip" {
-			gz, err := newForkedGunzipReader(reader)
+			gz, err := cgzip.NewReader(reader)
 			if err != nil {
 				return err
 			}
@@ -390,7 +347,7 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	// create the uncompresser
 	var decompressor io.Reader
 	if strings.HasSuffix(srcUrl, ".gz") {
-		gz, err := newForkedGunzipReader(tee)
+		gz, err := cgzip.NewReader(tee)
 		if err != nil {
 			return err
 		}
