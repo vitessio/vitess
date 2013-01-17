@@ -12,7 +12,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -51,8 +50,6 @@ type ReplicationState struct {
 	ReplicationPosition ReplicationPosition
 	MasterHost          string
 	MasterPort          int
-	MasterUser          string
-	MasterPassword      string
 	MasterConnectRetry  int
 }
 
@@ -60,58 +57,54 @@ func (rs ReplicationState) MasterAddr() string {
 	return fmt.Sprintf("%v:%v", rs.MasterHost, rs.MasterPort)
 }
 
-func NewReplicationState(masterAddr, user, passwd string) *ReplicationState {
+func NewReplicationState(masterAddr string) *ReplicationState {
 	addrPieces := strings.Split(masterAddr, ":")
 	port, err := strconv.Atoi(addrPieces[1])
 	if err != nil {
 		panic(err)
 	}
-	return &ReplicationState{MasterUser: user, MasterPassword: passwd, MasterConnectRetry: 10,
+	return &ReplicationState{MasterConnectRetry: 10,
 		MasterHost: addrPieces[0], MasterPort: port}
 }
 
 var changeMasterCmd = `CHANGE MASTER TO
-  MASTER_HOST = '{{.MasterHost}}',
-  MASTER_PORT = {{.MasterPort}},
+  MASTER_HOST = '{{.ReplicationState.MasterHost}}',
+  MASTER_PORT = {{.ReplicationState.MasterPort}},
   MASTER_USER = '{{.MasterUser}}',
   MASTER_PASSWORD = '{{.MasterPassword}}',
-  MASTER_LOG_FILE = '{{.ReplicationPosition.MasterLogFile}}',
-  MASTER_LOG_POS = {{.ReplicationPosition.MasterLogPosition}},
-  MASTER_CONNECT_RETRY = {{.MasterConnectRetry}}
+  MASTER_LOG_FILE = '{{.ReplicationState.ReplicationPosition.MasterLogFile}}',
+  MASTER_LOG_POS = {{.ReplicationState.ReplicationPosition.MasterLogPosition}},
+  MASTER_CONNECT_RETRY = {{.ReplicationState.MasterConnectRetry}}
 `
 
 //  RELAY_LOG_FILE = '{{.ReplicationPosition.RelayLogFile}}',
 //  RELAY_LOG_POS = {{.ReplicationPosition.RelayLogPosition}},
 
-func StartReplicationCommands(replState *ReplicationState) []string {
+type newMasterData struct {
+	ReplicationState *ReplicationState
+	MasterUser       string
+	MasterPassword   string
+}
+
+func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) []string {
+	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
 	return []string{
 		"RESET SLAVE",
-		mustFillStringTemplate(changeMasterCmd, replState),
+		mustFillStringTemplate(changeMasterCmd, nmd),
 		"START SLAVE"}
 }
 
-// Read replication state from local files.
-func ReadReplicationState(mysqld *Mysqld) (*ReplicationState, error) {
-	relayInfo, err := ioutil.ReadFile(mysqld.config.RelayLogInfoPath)
-	if err != nil {
-		return nil, err
-	}
-	// FIXME(msolomon) not sure i'll need this data
-	masterInfo, err := ioutil.ReadFile(mysqld.config.MasterInfoFile)
-	if err != nil {
-		return nil, err
-	}
-	relayParts := strings.Split(string(relayInfo), " ")
-	masterParts := strings.Split(string(masterInfo), " ")
-	// FIXME(msolomon) does the file supply port?
-	addr := fmt.Sprintf("%v:%v", masterParts[3], 3306)
-	replState := NewReplicationState(addr, mysqld.replParams.Uname, mysqld.replParams.Pass)
-	replState.ReplicationPosition.MasterLogFile = relayParts[2]
-	temp, _ := strconv.ParseUint(relayParts[3], 10, 0)
-	replState.ReplicationPosition.MasterLogPosition = uint(temp)
-	replState.MasterUser = masterParts[4]
-	replState.MasterPassword = masterParts[5]
-	return replState, nil
+func StartSplitReplicationCommands(mysqld *Mysqld, replState *ReplicationState, keyRange key.KeyRange) []string {
+	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
+	startKey := string(keyRange.Start.Hex())
+	endKey := string(keyRange.End.Hex())
+	return []string{
+		"SET GLOBAL vt_enable_binlog_splitter_rbr = 1",
+		"SET GLOBAL vt_shard_key_range_start = \"" + startKey + "\"",
+		"SET GLOBAL vt_shard_key_range_end = \"" + endKey + "\"",
+		"RESET SLAVE",
+		mustFillStringTemplate(changeMasterCmd, nmd),
+		"START SLAVE"}
 }
 
 func mustFillStringTemplate(tmpl string, vars interface{}) string {
@@ -236,7 +229,7 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *
 	if err != nil {
 		return
 	}
-	rs = NewReplicationState(rows[0][1].String(), mysqld.replParams.Uname, mysqld.replParams.Pass)
+	rs = NewReplicationState(rows[0][1].String())
 	rs.ReplicationPosition.MasterLogFile = file
 	rs.ReplicationPosition.MasterLogPosition = uint(pos)
 

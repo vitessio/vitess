@@ -105,8 +105,8 @@ type SplitSnapshotManifest struct {
 	SchemaDefinition *SchemaDefinition
 }
 
-func NewSplitSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) *SplitSnapshotManifest {
-	return &SplitSnapshotManifest{Source: newSnapshotManifest(addr, mysqlAddr, user, passwd, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
+func NewSplitSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) *SplitSnapshotManifest {
+	return &SplitSnapshotManifest{Source: newSnapshotManifest(addr, mysqlAddr, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
 }
 
 // In MySQL for both bigint and varbinary, 0x1234 is a valid value. For
@@ -254,7 +254,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	if snapshotErr != nil {
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 	} else {
-		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr,
 			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
 		ssmFile = path.Join(cloneSourcePath, partialSnapshotManifestFile)
 		if snapshotErr = writeJson(ssmFile, ssm); snapshotErr != nil {
@@ -444,7 +444,7 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 
 	// FIXME(msolomon) start *split* replication, you need the new start/end
 	// keys
-	cmdList := StartSplitReplicationCommands(snapshotManifest.Source.ReplicationState, snapshotManifest.KeyRange)
+	cmdList := StartSplitReplicationCommands(mysqld, snapshotManifest.Source.ReplicationState, snapshotManifest.KeyRange)
 	relog.Info("StartSplitReplicationCommands %#v", cmdList)
 	if err = mysqld.executeSuperQueryList(cmdList); err != nil {
 		return
@@ -460,18 +460,6 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 	}
 	// don't set readonly until the rest of the system is ready
 	return
-}
-
-func StartSplitReplicationCommands(replState *ReplicationState, keyRange key.KeyRange) []string {
-	startKey := string(keyRange.Start.Hex())
-	endKey := string(keyRange.End.Hex())
-	return []string{
-		"SET GLOBAL vt_enable_binlog_splitter_rbr = 1",
-		"SET GLOBAL vt_shard_key_range_start = \"" + startKey + "\"",
-		"SET GLOBAL vt_shard_key_range_end = \"" + endKey + "\"",
-		"RESET SLAVE",
-		mustFillStringTemplate(changeMasterCmd, replState),
-		"START SLAVE"}
 }
 
 func ReadSplitSnapshotManifest(filename string) (*SplitSnapshotManifest, error) {

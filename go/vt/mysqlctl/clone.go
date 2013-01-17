@@ -302,7 +302,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
 
-		sm := newSnapshotManifest(sourceAddr, masterAddr, mysqld.replParams.Uname, mysqld.replParams.Pass,
+		sm := newSnapshotManifest(sourceAddr, masterAddr,
 			dbName, dataFiles, replicationPosition)
 		smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
 		if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
@@ -411,7 +411,7 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		return err
 	}
 
-	cmdList := StartReplicationCommands(snapshotManifest.ReplicationState)
+	cmdList := StartReplicationCommands(mysqld, snapshotManifest.ReplicationState)
 	relog.Info("StartReplicationCommands %#v", cmdList)
 	if err := mysqld.executeSuperQueryList(cmdList); err != nil {
 		return err

@@ -275,12 +275,12 @@ type SnapshotManifest struct {
 	ReplicationState *ReplicationState
 }
 
-func newSnapshotManifest(addr, mysqlAddr, user, passwd, dbName string, files []SnapshotFile, pos *ReplicationPosition) *SnapshotManifest {
+func newSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition) *SnapshotManifest {
 	rs := &SnapshotManifest{
 		Addr:             addr,
 		DbName:           dbName,
 		Files:            files,
-		ReplicationState: NewReplicationState(mysqlAddr, user, passwd)}
+		ReplicationState: NewReplicationState(mysqlAddr)}
 	sort.Sort(rs.Files)
 	rs.ReplicationState.ReplicationPosition = *pos
 	return rs

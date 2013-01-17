@@ -56,7 +56,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 	if err != nil {
 		return
 	}
-	replicationState = NewReplicationState(mysqld.Addr(), mysqld.replParams.Uname, mysqld.replParams.Pass)
+	replicationState = NewReplicationState(mysqld.Addr())
 	replicationState.ReplicationPosition = *replicationPosition
 	lastPos := lastRepPos.MapKey()
 	newAddr := replicationState.MasterAddr()
@@ -94,7 +94,7 @@ func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosit
 		"STOP SLAVE",
 		"RESET SLAVE",
 	}
-	cmds = append(cmds, StartReplicationCommands(replicationState)...)
+	cmds = append(cmds, StartReplicationCommands(mysqld, replicationState)...)
 	if err := mysqld.executeSuperQueryList(cmds); err != nil {
 		return err
 	}
