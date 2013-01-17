@@ -139,6 +139,7 @@ def run_fail(cmd, **kargs):
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode == 0:
+    debug("stdout:\n" + stdout + "stderr:\n" + stderr)
     raise TestError('expected fail:', args, stdout, stderr)
   return stdout, stderr
 

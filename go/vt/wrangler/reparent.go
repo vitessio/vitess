@@ -154,38 +154,64 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		return fmt.Errorf("masterTablet has ParentUid: %v", masterTablet.Parent.Uid)
 	}
 
+	// Run Validate, unless it is a special case
+	if masterTablet.Uid == masterElectTablet.Uid {
+		relog.Info("Skipping ValidateShard as we're reparenting to the current master")
+	} else if masterTablet.Type == tm.TYPE_SCRAP {
+		relog.Info("Skipping ValidateShard as the master is scrapped")
+	} else {
+		if err := wr.ValidateShard(shardInfo.ShardPath(), true); err != nil {
+			relog.Warning("ValidateShard verification failed. If the master if dead, please Scrap it first, running:")
+			relog.Warning("vtctl ScrapTablet -force -skip-rebuild %v", masterTablet.Path())
+			return err
+		}
+	}
+
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
 	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
 	if err != nil {
 		return err
 	}
 
-	// FIXME(msolomon) Run validate shard first? What about the case when the
-	// master is dead?
-
-	// FIXME(msolomon) Ping all tablets before demote to minimize unavailaility.
-
-	// FIXME(msolomon) Use GetTabletMap to parallelize.
-
-	// FIXME(msolomon) this assumes that the replica nodes must all be
-	// in a good state when the reparent happens. The better thing to
-	// guarantee is that *enough* replica nodes are in a good state. In
-	// fact, "enough" is probably a function of each datacenter. It's
-	// complicated.
-	slaveTabletMap := make(map[uint32]*tm.TabletInfo)
+	// build a list of all the tabletPaths we're going to read
+	// (that is all except the master)
+	tabletPaths := make([]string, 0, len(tabletAliases)-1)
 	for _, alias := range tabletAliases {
 		if alias.Uid == masterTablet.Uid {
 			// skip master
 			continue
 		}
-		tablet, err := wr.readTablet(shardInfo.TabletPath(alias))
-		if err != nil {
-			return fmt.Errorf("tablet unavailable: %v", err)
-		}
+		tabletPaths = append(tabletPaths, shardInfo.TabletPath(alias))
+	}
+
+	// read the tablets, make sure they all have the right parent
+	// FIXME(msolomon) this assumes that the replica nodes must all be
+	// in a good state when the reparent happens. The better thing to
+	// guarantee is that *enough* replica nodes are in a good state. In
+	// fact, "enough" is probably a function of each datacenter. It's
+	// complicated.
+	slaveTabletMap, err := GetTabletMap(wr.zconn, tabletPaths)
+	if err != nil {
+		return err
+	}
+	for _, tablet := range slaveTabletMap {
 		if tablet.Parent.Uid != masterTablet.Uid {
 			return fmt.Errorf("tablet not slaved correctly, expected %v, found %v", masterTablet.Uid, tablet.Parent.Uid)
 		}
-		slaveTabletMap[alias.Uid] = tablet
+	}
+
+	// check the master-elect is in good shape (when it's not
+	// already the master!)
+	if masterTablet.Uid != masterElectTablet.Uid {
+		if tm.IsServingType(masterElectTablet.Type) {
+			if err := wr.ExecuteOptionalTabletInfoHook(masterElectTablet, hook.NewSimpleHook("live_server_check")); err != nil {
+				return err
+			}
+		} else {
+			if err := wr.ExecuteOptionalTabletInfoHook(masterElectTablet, hook.NewSimpleHook("idle_server_check")); err != nil {
+				return err
+			}
+		}
 	}
 
 	var masterPosition *mysqlctl.ReplicationPosition
@@ -218,27 +244,16 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		// up.  A possible improvement is waiting for the io thread to
 		// reach the same position as the sql thread on a normal slave.
 		restartableSlaveTabletMap := make(map[uint32]*tm.TabletInfo)
-		for uid, ti := range slaveTabletMap {
+		for _, ti := range slaveTabletMap {
 			if ti.Type == tm.TYPE_LAG {
 				relog.Info("skipping reparent action for tablet %v %v", ti.Type, ti.Path())
 				continue
 			}
-			restartableSlaveTabletMap[uid] = ti
+			restartableSlaveTabletMap[ti.Uid] = ti
 		}
 
 		if _, ok := restartableSlaveTabletMap[masterElectTablet.Uid]; !ok {
 			return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Path(), shardInfo.ShardPath(), mapKeys(restartableSlaveTabletMap))
-		}
-
-		// check the master-elect is in good shape
-		if tm.IsServingType(masterElectTablet.Type) {
-			if err := wr.ExecuteOptionalTabletInfoHook(masterElectTablet, hook.NewSimpleHook("live_server_check")); err != nil {
-				return err
-			}
-		} else {
-			if err := wr.ExecuteOptionalTabletInfoHook(masterElectTablet, hook.NewSimpleHook("idle_server_check")); err != nil {
-				return err
-			}
 		}
 
 		relog.Info("check slaves %v", zkMasterTabletPath)
@@ -285,7 +300,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 	// Once the slave is promoted, remove it from our map
 	if masterTablet.Uid != masterElectTablet.Uid {
-		delete(slaveTabletMap, masterElectTablet.Uid)
+		delete(slaveTabletMap, zkMasterElectPath)
 	}
 
 	restartSlaveErrors := make([]error, 0, len(slaveTabletMap))

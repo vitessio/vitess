@@ -581,11 +581,18 @@ def run_test_reparent_down_master():
   expected_addr = hostname + ':6700'
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
-  # Perform a reparent operation - this will hang for some amount of time.
-  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_alias)
+  # Perform a reparent operation - the Validate part will try to ping
+  # the master and fail somewhat quickly
+  stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
+  utils.debug("Failed ReparentShard output:\n" + stderr)
+  if stderr.find('dial failed') == -1 or stderr.find('ValidateShard verification failed') == -1:
+    raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
   # Should timeout and fail
-  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_alias)
+  stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_path)
+  utils.debug("Failed ScrapTablet output:\n" + stderr)
+  if stderr.find('deadline exceeded') == -1:
+    raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Force the scrap action in zk even though tablet is not accessible.
   utils.run_vtctl('ScrapTablet -force -skip-rebuild ' + tablet_62344.zk_tablet_path, auto_log=True)

@@ -145,7 +145,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 }
 
 // Shut off all replication.
-func (wr *Wrangler) stopSlaves(tabletMap map[uint32]*tm.TabletInfo) error {
+func (wr *Wrangler) stopSlaves(tabletMap map[string]*tm.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *tm.TabletInfo) {
 		actionPath, err := wr.ai.StopSlave(ti.Path())

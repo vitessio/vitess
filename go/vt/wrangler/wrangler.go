@@ -189,6 +189,9 @@ func (wr *Wrangler) Scrap(zkTabletPath string, force, skipRebuild bool) (actionP
 	} else {
 		actionPath, err = wr.ai.Scrap(zkTabletPath)
 	}
+	if err != nil {
+		return "", err
+	}
 
 	if !rebuildRequired {
 		relog.Info("Rebuild not required")
@@ -203,7 +206,7 @@ func (wr *Wrangler) Scrap(zkTabletPath string, force, skipRebuild bool) (actionP
 	if actionPath != "" {
 		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 		if err != nil {
-			return "", nil
+			return "", err
 		}
 	}
 

@@ -43,11 +43,7 @@ func GetTabletMap(zconn zk.Conn, tabletPaths []string) (map[string]*tm.TabletInf
 			mutex.Unlock()
 		}()
 	}
-
 	wg.Wait()
-
-	mutex.Lock()
-	defer mutex.Unlock()
 	return tabletMap, someError
 }
 
