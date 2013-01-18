@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/relog"
@@ -157,7 +158,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		}
 
 		// copy from the file to gzip to tee to output file and hasher
-		size, err = io.Copy(gzip, src)
+		_, err = io.Copy(gzip, src)
 		if err != nil {
 			return nil, err
 		}
@@ -177,6 +178,13 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		if err != nil {
 			return nil, err
 		}
+
+		// and get its size
+		fi, err := os.Stat(dstPath)
+		if err != nil {
+			return nil, err
+		}
+		size = fi.Size()
 	} else {
 		relog.Info("newSnapshotFile: starting to hash and symlinking %v to %v", srcPath, dstPath)
 
@@ -416,28 +424,69 @@ func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int
 // than a deadline is probably a sense of progress, more like a
 // "progress timeout" - how long will we wait if there is no change in
 // received bytes.
+// FIXME(alainjobart) support fetching files in chunks: create a new
+// struct fileChunk {
+//    snapshotFile  *SnapshotFile
+//    relatedChunks []*fileChunk
+//    start,end     uint64
+//    observedCrc32 uint32
+// }
+// Create a slice of fileChunk objects, populate it:
+// For files smaller than <threshold>, create one fileChunk
+// For files bigger than <threshold>, create N fileChunks
+//   (the first one has the list of all the others)
+// Fetch them all:
+//   - change the workqueue to have indexes on the fileChunk slice
+//   - compute the crc32 while fetching, but don't compare right away
+// Collect results the same way, write observedCrc32 in the fileChunk
+// For each fileChunk, compare checksum:
+//   - if single file, compare snapshotFile.hash with observedCrc32
+//   - if multiple chunks and first chunk, merge observedCrc32, and compare
 func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetchConcurrency, fetchRetryCount int, encoding string) (err error) {
+	// create a workQueue, a resultQueue, and the go routines
+	// to process entries out of workQueue into resultQueue
+	// the mutex protects the error response
 	workQueue := make(chan SnapshotFile, len(snapshotManifest.Files))
-	for _, fi := range snapshotManifest.Files {
-		workQueue <- fi
-	}
-	close(workQueue)
-
 	resultQueue := make(chan error, len(snapshotManifest.Files))
+	mutex := sync.Mutex{}
 	for i := 0; i < fetchConcurrency; i++ {
 		go func() {
-			for fi := range workQueue {
-				filename := fi.getLocalFilename(destinationPath)
-				furl := "http://" + snapshotManifest.Addr + path.Join(SnapshotURLPath, fi.Path)
-				resultQueue <- fetchFileWithRetry(furl, fi.Hash, filename, fetchRetryCount, encoding)
+			for sf := range workQueue {
+				// if someone else errored out, we skip our job
+				mutex.Lock()
+				previousError := err
+				mutex.Unlock()
+				if previousError != nil {
+					resultQueue <- previousError
+					continue
+				}
+
+				// do our fetch, save the error
+				filename := sf.getLocalFilename(destinationPath)
+				furl := "http://" + snapshotManifest.Addr + path.Join(SnapshotURLPath, sf.Path)
+				fetchErr := fetchFileWithRetry(furl, sf.Hash, filename, fetchRetryCount, encoding)
+				if fetchErr != nil {
+					mutex.Lock()
+					err = fetchErr
+					mutex.Unlock()
+				}
+				resultQueue <- fetchErr
 			}
 		}()
 	}
 
-	for i := 0; i < len(snapshotManifest.Files); i++ {
-		if fetchErr := <-resultQueue; fetchErr != nil {
-			err = fetchErr
-		}
+	// add the jobs (writing on the channel will block if the queue
+	// is full, no big deal)
+	jobCount := 0
+	for _, fi := range snapshotManifest.Files {
+		workQueue <- fi
+		jobCount++
+	}
+	close(workQueue)
+
+	// read the responses (we guarantee one response per job)
+	for i := 0; i < jobCount; i++ {
+		<-resultQueue
 	}
 
 	// clean up files if we had an error
