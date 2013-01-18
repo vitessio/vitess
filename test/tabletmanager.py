@@ -275,7 +275,7 @@ def _run_test_vtctl_snapshot_restore(server_mode):
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s default %s %s' %
                   (restore_flags, tablet_62344.zk_tablet_path,
-                   tablet_62044.zk_tablet_path, results['ParentPath']), log_level='INFO')
+                   tablet_62044.zk_tablet_path, results['ParentPath']), auto_log=True)
   utils.pause("restore finished")
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
@@ -284,7 +284,7 @@ def _run_test_vtctl_snapshot_restore(server_mode):
 
   # in server_mode, get the server out of it and check it
   if server_mode:
-    utils.run_vtctl('SnapshotSourceEnd %s %s' % (tablet_62344.zk_tablet_path, results['OriginalType']), log_level='INFO')
+    utils.run_vtctl('SnapshotSourceEnd %s %s' % (tablet_62344.zk_tablet_path, results['OriginalType']), auto_log=True)
     tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
     utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
@@ -555,7 +555,7 @@ def run_test_reparent_down_master():
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62344.zk_tablet_path, log_level='INFO')
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62344.zk_tablet_path, auto_log=True)
   utils.zk_check()
 
   # Make the master agent unavailable.
@@ -593,7 +593,7 @@ def run_test_reparent_down_master():
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
   # Re-run reparent operation, this shoud now proceed unimpeded.
-  utils.run_vtctl('-wait-time 3m ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path, log_level='INFO')
+  utils.run_vtctl('-wait-time 3m ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path, auto_log=True)
 
   utils.zk_check()
   expected_addr = hostname + ':6701'
