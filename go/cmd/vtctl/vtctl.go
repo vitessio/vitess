@@ -267,29 +267,24 @@ func confirm(prompt string, force bool) bool {
 
 // this is a placeholder implementation. right now very little information
 // is needed for a keyspace.
-func createKeyspace(zconn zk.Conn, path string, force bool) error {
-	tm.MustBeKeyspacePath(path)
-	actionPath := tm.KeyspaceActionPath(path)
-	_, err := zk.CreateRecursive(zconn, actionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			if !force {
-				relog.Fatal("keyspace already exists: %v", path)
-			}
-		} else {
-			relog.Fatal("error creating keyspace: %v %v", path, err)
-		}
+func createKeyspace(zconn zk.Conn, keyspacePath string, force bool) error {
+	tm.MustBeKeyspacePath(keyspacePath)
+	pathList := []string{
+		tm.KeyspaceActionPath(keyspacePath),
+		tm.KeyspaceActionLogPath(keyspacePath),
+		path.Join(keyspacePath, "shards"),
 	}
 
-	actionLogPath := tm.KeyspaceActionLogPath(path)
-	_, err = zk.CreateRecursive(zconn, actionLogPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			if !force {
-				relog.Fatal("keyspace already exists: %v", path)
+	for _, zkPath := range pathList {
+		_, err := zk.CreateRecursive(zconn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		if err != nil {
+			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+				if !force {
+					relog.Fatal("path already exists: %v", zkPath)
+				}
+			} else {
+				relog.Fatal("error creating keyspace: %v %v", keyspacePath, err)
 			}
-		} else {
-			relog.Fatal("error creating keyspace: %v %v", path, err)
 		}
 	}
 
