@@ -6,7 +6,6 @@
 package main
 
 import (
-	"compress/gzip"
 	"expvar"
 	"flag"
 	"fmt"
@@ -15,7 +14,6 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path"
 	"path/filepath"
@@ -331,45 +329,8 @@ func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
 	if !strings.HasSuffix(path, ".gz") {
 		ae := req.Header.Get("Accept-Encoding")
 
-		if strings.Contains(ae, "fgzip") {
-			relog.Info("Forking gzip to serve %v", path)
-			cmd := exec.Command("gzip", "--fast", "-c", path)
-			stdout, err := cmd.StdoutPipe()
-			if err != nil {
-				http.Error(rw, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			defer stdout.Close()
-			if err = cmd.Start(); err != nil {
-				http.Error(rw, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
-			rw.Header().Set("Content-Encoding", "gzip")
-			defer func() {
-				// An early abort leaves a process dangling.
-				cmd.Process.Kill()
-				if err := cmd.Wait(); err != nil {
-					relog.Warning("gzip err for %v: %v", path, err)
-				} else {
-					relog.Info("gzip done for %v", path)
-				}
-			}()
-
-			reader = stdout
-
-		} else if strings.Contains(ae, "cgzip") {
+		if strings.Contains(ae, "gzip") {
 			gz, err := cgzip.NewWriterLevel(rw, cgzip.Z_BEST_SPEED)
-			if err != nil {
-				http.Error(rw, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			rw.Header().Set("Content-Encoding", "gzip")
-			defer gz.Close()
-			writer = gz
-
-		} else if strings.Contains(ae, "gzip") {
-			gz, err := gzip.NewWriterLevel(rw, gzip.BestSpeed)
 			if err != nil {
 				http.Error(rw, err.Error(), http.StatusInternalServerError)
 				return

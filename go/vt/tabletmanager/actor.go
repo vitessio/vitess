@@ -727,7 +727,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// do the work
-	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding, args.DontWaitForSlaveStart); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart); err != nil {
 		relog.Error("RestoreFromSnapshot failed (%v), scrapping", err)
 		if err := Scrap(ta.zconn, ta.zkTabletPath, false); err != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
@@ -829,7 +829,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// do the work
-	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount, args.Encoding); err != nil {
+	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
 		if err := Scrap(ta.zconn, ta.zkTabletPath, false); err != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromPartialSnapshot: %v", err)

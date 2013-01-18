@@ -383,7 +383,7 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
  start_mysql()
  clean up compressed files
 */
-func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshotManifest, fetchConcurrency, fetchRetryCount int, encoding string) (err error) {
+func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshotManifest, fetchConcurrency, fetchRetryCount int) (err error) {
 	if err = mysqld.validateSplitReplicaTarget(); err != nil {
 		return
 	}
@@ -418,7 +418,7 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 		return
 	}
 
-	if err = fetchFiles(snapshotManifest.Source, tempStoragePath, fetchConcurrency, fetchRetryCount, encoding); err != nil {
+	if err = fetchFiles(snapshotManifest.Source, tempStoragePath, fetchConcurrency, fetchRetryCount); err != nil {
 		return
 	}
 

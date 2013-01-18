@@ -32,7 +32,6 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 }
 
 func partialRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	encoding := subFlags.String("encoding", "", "Accept-Encoding to use for HTTP transfer (empty means default, gzip, use 'raw' for no encoding)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -42,7 +41,7 @@ func partialRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []s
 
 	rs, err := mysqlctl.ReadSplitSnapshotManifest(subFlags.Arg(0))
 	if err == nil {
-		err = mysqld.RestoreFromPartialSnapshot(rs, *fetchConcurrency, *fetchRetryCount, *encoding)
+		err = mysqld.RestoreFromPartialSnapshot(rs, *fetchConcurrency, *fetchRetryCount)
 	}
 	if err != nil {
 		relog.Fatal("partialrestore failed: %v", err)
@@ -68,7 +67,6 @@ func partialSnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []
 
 func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from master server)")
-	encoding := subFlags.String("encoding", "", "Accept-Encoding to use for HTTP transfer (empty means default, gzip, use 'raw' for no encoding)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retyr a failed transfer")
 	subFlags.Parse(args)
@@ -78,7 +76,7 @@ func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) 
 
 	rs, err := mysqlctl.ReadSnapshotManifest(subFlags.Arg(0))
 	if err == nil {
-		err = mysqld.RestoreFromSnapshot(rs, *fetchConcurrency, *fetchRetryCount, *encoding, *dontWaitForSlaveStart)
+		err = mysqld.RestoreFromSnapshot(rs, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart)
 	}
 	if err != nil {
 		relog.Fatal("restore failed: %v", err)
@@ -183,14 +181,14 @@ var commands = []command{
 		"[-slave-start] [-read-write]",
 		"Gets out of snapshot server mode"},
 	command{"restore", restoreCmd,
-		"[-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
+		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 
 	command{"partialsnapshot", partialSnapshotCmd,
 		"[-start=<start key>] [-stop=<stop key>] [-concurrency=3] <db name> <key name>",
 		"Takes a partial snapshot using 'select * into' commands"},
 	command{"partialrestore", partialRestoreCmd,
-		"[-encoding=<encoding>] [-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",
+		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",
 		"Restores a database from a partial snapshot"},
 }
 

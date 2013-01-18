@@ -127,7 +127,7 @@ func (wr *Wrangler) ReserveForRestore(zkSrcTabletPath, zkDstTabletPath string) (
 	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
-func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, encoding string, wasReserved, dontWaitForSlaveStart bool) error {
+func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
 	tablet, err := tm.ReadTablet(wr.zconn, zkDstTabletPath)
@@ -145,7 +145,7 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkPar
 	}
 
 	// do the work
-	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, encoding, wasReserved, dontWaitForSlaveStart})
+	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, wasReserved, dontWaitForSlaveStart})
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkPar
 	return nil
 }
 
-func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int, encoding string, serverMode bool) error {
+func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
 	// make sure the destination can be restored into (otherwise
 	// there is no point in taking the snapshot in the first place),
 	// and reserve it.
@@ -185,7 +185,7 @@ func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSn
 	// try to restore the snapshot
 	// In serverMode, and in the case where we're replicating from
 	// the master, we can't wait for replication, as the master is down.
-	restoreErr := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, encoding, true, serverMode && originalType == tm.TYPE_MASTER)
+	restoreErr := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == tm.TYPE_MASTER)
 
 	// in any case, fix the server
 	if serverMode {

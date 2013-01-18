@@ -298,7 +298,7 @@ func newSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, p
 // tee, which on one side has an hash checksum reader, and on the other
 // a gunzip reader writing to a file.  It will compare the hash
 // checksum after the copy is done.
-func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
+func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	relog.Info("fetchFile: starting to fetch %v from %v", dstFilename, srcUrl)
 
 	// create destination directory
@@ -312,9 +312,10 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 	if err != nil {
 		return fmt.Errorf("NewRequest failed for %v: %v", srcUrl, err)
 	}
-	if encoding != "" {
-		req.Header.Set("Accept-Encoding", encoding)
-	}
+	// we set the 'gzip' encoding ourselves so the library doesn't
+	// do it for us and ends up using go gzip (we want to use our own
+	// cgzip which is much faster)
+	req.Header.Set("Accept-Encoding", "gzip")
 	resp, err := http.DefaultClient.Do(req)
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed fetching %v: %v", srcUrl, resp.Status)
@@ -407,9 +408,9 @@ func fetchFile(srcUrl, srcHash, dstFilename, encoding string) error {
 
 // fetchFileWithRetry fetches data from the web server, retrying a few
 // times.
-func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int, encoding string) (err error) {
+func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int) (err error) {
 	for i := 0; i < fetchRetryCount; i++ {
-		err = fetchFile(srcUrl, srcHash, dstFilename, encoding)
+		err = fetchFile(srcUrl, srcHash, dstFilename)
 		if err == nil {
 			return nil
 		}
@@ -442,7 +443,7 @@ func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int
 // For each fileChunk, compare checksum:
 //   - if single file, compare snapshotFile.hash with observedCrc32
 //   - if multiple chunks and first chunk, merge observedCrc32, and compare
-func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetchConcurrency, fetchRetryCount int, encoding string) (err error) {
+func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetchConcurrency, fetchRetryCount int) (err error) {
 	// create a workQueue, a resultQueue, and the go routines
 	// to process entries out of workQueue into resultQueue
 	// the mutex protects the error response
@@ -464,7 +465,7 @@ func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetc
 				// do our fetch, save the error
 				filename := sf.getLocalFilename(destinationPath)
 				furl := "http://" + snapshotManifest.Addr + path.Join(SnapshotURLPath, sf.Path)
-				fetchErr := fetchFileWithRetry(furl, sf.Hash, filename, fetchRetryCount, encoding)
+				fetchErr := fetchFileWithRetry(furl, sf.Hash, filename, fetchRetryCount)
 				if fetchErr != nil {
 					mutex.Lock()
 					err = fetchErr
