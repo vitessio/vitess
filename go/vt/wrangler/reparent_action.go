@@ -2,16 +2,14 @@ package wrangler
 
 import (
 	"fmt"
-	"path"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
-	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-
-	"launchpad.net/gozk/zookeeper"
 )
 
 // helper struct to queue up results
@@ -38,10 +36,81 @@ func (wr *Wrangler) getMasterPosition(ti *tm.TabletInfo) (*mysqlctl.ReplicationP
 	return result.(*mysqlctl.ReplicationPosition), nil
 }
 
+// Check all the tablets replication positions to find if some
+// will have a problem, and suggest a fix for them.
+func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo) error {
+	relog.Info("Checking all replication positions will allow the transition:")
+	// check everybody has the right parent
+	for _, tablet := range tabletMap {
+		// check the master is right
+		if tablet.Parent.Uid != masterTablet.Uid {
+			return fmt.Errorf("tablet not slaved correctly, expected %v, found %v", masterTablet.Uid, tablet.Parent.Uid)
+		}
+	}
+
+	// now check all the replication positions will allow us to proceed
+	var lastError error
+	mutex := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	for _, tablet := range tabletMap {
+		wg.Add(1)
+		go func(tablet *tm.TabletInfo) {
+			defer wg.Done()
+			if masterTablet.Uid != masterElectTablet.Uid {
+				// will reparent to different tablet, skip LAG
+				if tablet.Type == tm.TYPE_LAG {
+					relog.Info("  skipping slave position check for %v tablet %v", tablet.Type, tablet.Path())
+					return
+				}
+			}
+
+			actionPath, err := wr.ai.SlavePosition(tablet.Path())
+			if err != nil {
+				mutex.Lock()
+				lastError = err
+				mutex.Unlock()
+				relog.Error("  error asking tablet %v for slave position: %v", tablet.Path(), err)
+				return
+			}
+			result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+			if err != nil {
+				if masterTablet.Uid == masterElectTablet.Uid {
+					// we are setting up replication on an empty keyspace, most likely
+					relog.Info("  slave not configured, will set up replication on current keyspace data for %v (%v)", tablet.Path(), err)
+					return
+				}
+
+				mutex.Lock()
+				lastError = err
+				mutex.Unlock()
+				if tablet.Type == tm.TYPE_BACKUP {
+					relog.Warning("  failed to get slave position from backup tablet %v, either wait for backup to finish or scrap tablet (%v)", tablet.Path(), err)
+				} else {
+					relog.Warning("  failed to get slave position from %v: %v", tablet.Path(), err)
+				}
+				return
+			}
+			replPos := result.(*mysqlctl.ReplicationPosition)
+			var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
+			if dur > wr.actionTimeout() {
+				relog.Warning("  slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Path())
+				mutex.Lock()
+				lastError = err
+				mutex.Unlock()
+				return
+			}
+
+			relog.Debug("  slave is %v behind master (<%v), reparent should work for %v", dur, wr.actionTimeout(), tablet.Path())
+		}(tablet)
+	}
+	wg.Wait()
+	return lastError
+}
+
 // Check all the tablets to see if we can proceed with reparenting.
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
-func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition, zkShardActionPath string) error {
+func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
 	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
@@ -52,7 +121,6 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 			calls <- ctx
 		}()
 
-		zkArgsPath := path.Join(zkShardActionPath, path.Base(ti.Path())+"_slave_position_args.json")
 		var args *tm.SlavePositionReq
 		if masterPosition != nil {
 			// If the master position is known, do our best to wait for replication to catch up.
@@ -77,12 +145,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 		}
 
 		// This option waits for the SQL thread to apply all changes to this instance.
-		_, err := wr.zconn.Create(zkArgsPath, jscfg.ToJson(args), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil {
-			ctx.err = err
-			return
-		}
-		actionPath, err := wr.ai.WaitSlavePosition(ti.Path(), zkArgsPath)
+		actionPath, err := wr.ai.WaitSlavePosition(ti.Path(), args)
 		if err != nil {
 			ctx.err = err
 			return

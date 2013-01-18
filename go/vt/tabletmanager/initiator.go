@@ -188,8 +188,8 @@ func (ai *ActionInitiator) SlavePosition(zkTabletPath string) (actionPath string
 }
 
 // NOTE(msolomon) Also available as RPC.
-func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath, zkArgsPath string) (actionPath string, err error) {
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, args: &zkArgsPath})
+func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath string, args *SlavePositionReq) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, args: args})
 }
 
 func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, err error) {

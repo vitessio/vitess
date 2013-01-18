@@ -399,20 +399,9 @@ func (ta *TabletActor) reparentPosition(actionNode *ActionNode) error {
 }
 
 func (ta *TabletActor) waitSlavePosition(actionNode *ActionNode) error {
-	zkArgsPath := actionNode.args.(*string)
-	data, _, err := ta.zconn.Get(*zkArgsPath)
-	if err != nil {
-		return err
-	}
-
-	slavePos := new(SlavePositionReq)
-	if err = json.Unmarshal([]byte(data), slavePos); err != nil {
-		return err
-	}
-
-	relog.Debug("WaitSlavePosition %#v %v", *slavePos, zkArgsPath)
-	err = ta.mysqld.WaitMasterPos(&slavePos.ReplicationPosition, slavePos.WaitTimeout)
-	if err != nil {
+	slavePos := actionNode.args.(*SlavePositionReq)
+	relog.Debug("WaitSlavePosition %#v", *slavePos)
+	if err := ta.mysqld.WaitMasterPos(&slavePos.ReplicationPosition, slavePos.WaitTimeout); err != nil {
 		return err
 	}
 

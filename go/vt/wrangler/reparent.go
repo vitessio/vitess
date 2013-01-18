@@ -168,6 +168,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 	}
 
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
+	relog.Debug("Finding all shard tablets from zookeeper")
 	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
 	if err != nil {
 		return err
@@ -184,20 +185,17 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		tabletPaths = append(tabletPaths, shardInfo.TabletPath(alias))
 	}
 
-	// read the tablets, make sure they all have the right parent
-	// FIXME(msolomon) this assumes that the replica nodes must all be
-	// in a good state when the reparent happens. The better thing to
-	// guarantee is that *enough* replica nodes are in a good state. In
-	// fact, "enough" is probably a function of each datacenter. It's
-	// complicated.
+	// read the tablets
+	relog.Debug("Reading all the tablets from zookeeper")
 	slaveTabletMap, err := GetTabletMap(wr.zconn, tabletPaths)
 	if err != nil {
 		return err
 	}
-	for _, tablet := range slaveTabletMap {
-		if tablet.Parent.Uid != masterTablet.Uid {
-			return fmt.Errorf("tablet not slaved correctly, expected %v, found %v", masterTablet.Uid, tablet.Parent.Uid)
-		}
+
+	// make sure all tablets have the right parent
+	// find the replication position on them all, make sure they're ok
+	if err := wr.checkSlaveReplication(slaveTabletMap, masterTablet, masterElectTablet); err != nil {
+		return err
 	}
 
 	// check the master-elect is in good shape (when it's not
@@ -257,7 +255,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		}
 
 		relog.Info("check slaves %v", zkMasterTabletPath)
-		err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition, zkShardActionPath)
+		err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
 		if err != nil {
 			return err
 		}

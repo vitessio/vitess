@@ -119,7 +119,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_SLAVE_POSITION:
 		node.reply = &mysqlctl.ReplicationPosition{}
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
-		node.args = new(string)
+		node.args = &SlavePositionReq{}
 		node.reply = &mysqlctl.ReplicationPosition{}
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_GET_SCHEMA:

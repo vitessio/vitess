@@ -555,7 +555,7 @@ def run_test_reparent_down_master():
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62344.zk_tablet_path, log_level='INFO')
   utils.zk_check()
 
   # Make the master agent unavailable.
@@ -567,7 +567,7 @@ def run_test_reparent_down_master():
 
   # Perform a reparent operation - the Validate part will try to ping
   # the master and fail somewhat quickly
-  stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
+  stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
   utils.debug("Failed ReparentShard output:\n" + stderr)
   if stderr.find('dial failed') == -1 or stderr.find('ValidateShard verification failed') == -1:
     raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
@@ -593,7 +593,7 @@ def run_test_reparent_down_master():
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
   # Re-run reparent operation, this shoud now proceed unimpeded.
-  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
+  utils.run_vtctl('-wait-time 3m ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path, log_level='INFO')
 
   utils.zk_check()
   expected_addr = hostname + ':6701'
