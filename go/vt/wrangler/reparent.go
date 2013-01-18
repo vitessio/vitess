@@ -125,7 +125,7 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 	}
 
 	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, actionPath)
-	reparentErr := wr.reparentShard(shardInfo, masterElectTablet, actionPath, leaveMasterReadOnly)
+	reparentErr := wr.reparentShard(shardInfo, masterElectTablet, leaveMasterReadOnly)
 	relog.Info("reparentShard finished %v", reparentErr)
 
 	err = wr.handleActionError(actionPath, reparentErr)
@@ -138,7 +138,7 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 	return err
 }
 
-func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm.TabletInfo, zkShardActionPath string, leaveMasterReadOnly bool) error {
+func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm.TabletInfo, leaveMasterReadOnly bool) error {
 	// Get shard's master tablet.
 	zkMasterTabletPath, err := shardInfo.MasterTabletPath()
 	if err != nil {
@@ -283,9 +283,10 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 
 	zkMasterElectPath := masterElectTablet.Path()
 	relog.Info("promote slave %v", zkMasterElectPath)
-	actionPath, err := wr.ai.PromoteSlave(zkMasterElectPath, zkShardActionPath)
+	actionPath, err := wr.ai.PromoteSlave(zkMasterElectPath)
+	var result interface{}
 	if err == nil {
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		result, err = wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	}
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master-elect is dead.
@@ -295,6 +296,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		}
 		return err
 	}
+	rsd := result.(*tm.RestartSlaveData)
 
 	// Once the slave is promoted, remove it from our map
 	if masterTablet.Uid != masterElectTablet.Uid {
@@ -308,7 +310,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		relog.Info("restart slave %v", slaveTablet.Path())
 		wg.Add(1)
 		f := func(zkSlavePath string) {
-			actionPath, err := wr.ai.RestartSlave(zkSlavePath, &tm.RestartSlaveArgs{zkShardActionPath, nil})
+			actionPath, err := wr.ai.RestartSlave(zkSlavePath, rsd)
 			if err == nil {
 				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			}
@@ -521,7 +523,7 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == tm.TYPE_LAG_ORPHAN
-	actionPath, err = wr.ai.RestartSlave(zkTabletPath, &tm.RestartSlaveArgs{"", rsd})
+	actionPath, err = wr.ai.RestartSlave(zkTabletPath, rsd)
 	if err != nil {
 		return err
 	}

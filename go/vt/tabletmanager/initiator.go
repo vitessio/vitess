@@ -159,17 +159,11 @@ func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, 
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_BREAK_SLAVES})
 }
 
-func (ai *ActionInitiator) PromoteSlave(zkTabletPath, zkShardActionPath string) (actionPath string, err error) {
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE, args: &zkShardActionPath})
+func (ai *ActionInitiator) PromoteSlave(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE})
 }
 
-type RestartSlaveArgs struct {
-	// only one of these two should be set
-	ShardActionPath  string
-	RestartSlaveData *RestartSlaveData
-}
-
-func (ai *ActionInitiator) RestartSlave(zkTabletPath string, args *RestartSlaveArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) RestartSlave(zkTabletPath string, args *RestartSlaveData) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, args: args})
 }
 

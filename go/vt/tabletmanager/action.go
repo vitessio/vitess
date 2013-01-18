@@ -106,9 +106,9 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 
 	case TABLET_ACTION_DEMOTE_MASTER:
 	case TABLET_ACTION_PROMOTE_SLAVE:
-		node.args = new(string)
+		node.reply = &RestartSlaveData{}
 	case TABLET_ACTION_RESTART_SLAVE:
-		node.args = &RestartSlaveArgs{}
+		node.args = &RestartSlaveData{}
 	case TABLET_ACTION_STOP_SLAVE:
 	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_MASTER_POSITION:

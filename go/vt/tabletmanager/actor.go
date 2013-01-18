@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
@@ -33,10 +32,6 @@ import (
 //
 // Errors are written to the action node and must (currently) be resolved
 // by hand using zk tools.
-
-const (
-	restartSlaveDataFilename = "restart_slave_data.json"
-)
 
 type TabletActorError string
 
@@ -293,36 +288,20 @@ func (ta *TabletActor) demoteMaster() error {
 }
 
 func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
-	zkShardActionPath := actionNode.args.(*string)
-
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
 		return err
 	}
 
-	zkRestartSlaveDataPath := path.Join(*zkShardActionPath, restartSlaveDataFilename)
-	// The presence of this node indicates that the promote action succeeded.
-	stat, err := ta.zconn.Exists(zkRestartSlaveDataPath)
-	if stat != nil {
-		err = fmt.Errorf("slave restart data already exists - suspicious: %v", zkRestartSlaveDataPath)
-	}
-	if err != nil {
-		return err
-	}
-
-	// No slave data, perform the action.
+	// Perform the action.
 	alias := TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
 	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false)
 	if err != nil {
 		return err
 	}
-	relog.Debug("PromoteSlave %#v", *rsd)
-	// This data is valuable - commit it to zk first.
-	_, err = ta.zconn.Create(zkRestartSlaveDataPath, jscfg.ToJson(rsd), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		return err
-	}
+	relog.Info("PromoteSlave %#v", *rsd)
+	actionNode.reply = rsd
 
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != NO_TABLET {
@@ -409,25 +388,11 @@ func (ta *TabletActor) waitSlavePosition(actionNode *ActionNode) error {
 }
 
 func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
+	rsd := actionNode.args.(*RestartSlaveData)
+
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
 		return err
-	}
-
-	args := actionNode.args.(*RestartSlaveArgs)
-	rsd := args.RestartSlaveData
-	if rsd == nil {
-		zkRestartSlaveDataPath := path.Join(args.ShardActionPath, restartSlaveDataFilename)
-		data, _, err := ta.zconn.Get(zkRestartSlaveDataPath)
-		if err != nil {
-			return err
-		}
-
-		rsd = &RestartSlaveData{}
-		err = json.Unmarshal([]byte(data), rsd)
-		if err != nil {
-			return err
-		}
 	}
 
 	// If this check fails, we seem reparented. The only part that could have failed
