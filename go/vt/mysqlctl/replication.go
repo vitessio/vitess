@@ -465,7 +465,8 @@ func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
 	}
 	defer conn.Close()
 	for _, query := range queryList {
-		relog.Info("exec %v", query)
+		toLog := strings.Replace(query, mysqld.replParams.Pass, strings.Repeat("*", len(mysqld.replParams.Pass)), -1)
+		relog.Info("exec %v", toLog)
 		if _, err := conn.ExecuteFetch([]byte(query), 10000, false); err != nil {
 			return err
 		}

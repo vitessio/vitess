@@ -445,7 +445,6 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 	// FIXME(msolomon) start *split* replication, you need the new start/end
 	// keys
 	cmdList := StartSplitReplicationCommands(mysqld, snapshotManifest.Source.ReplicationState, snapshotManifest.KeyRange)
-	relog.Info("StartSplitReplicationCommands %#v", cmdList)
 	if err = mysqld.executeSuperQueryList(cmdList); err != nil {
 		return
 	}

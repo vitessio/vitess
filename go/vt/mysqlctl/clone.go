@@ -412,7 +412,6 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 	}
 
 	cmdList := StartReplicationCommands(mysqld, snapshotManifest.ReplicationState)
-	relog.Info("StartReplicationCommands %#v", cmdList)
 	if err := mysqld.executeSuperQueryList(cmdList); err != nil {
 		return err
 	}
