@@ -184,7 +184,8 @@ trylock:
 	return fmt.Errorf("zkutil: empty queue node: %v", queueNode)
 }
 
-func CreatePidNode(zconn Conn, zkPath string) error {
+// Close done when you want to exit cleanly.
+func CreatePidNode(zconn Conn, zkPath string, done chan struct{}) error {
 	hostname, err := os.Hostname()
 	if err != nil {
 		return fmt.Errorf("zkutil: failed creating pid node %v: %v", zkPath, err)
@@ -209,6 +210,12 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 
 	go func() {
 		for {
+			select {
+			case <-done:
+				log.Printf("INFO: pid watcher stopped on done: %v", zkPath)
+				return
+			default:
+			}
 			_, _, watch, err := zconn.GetW(zkPath)
 			if err != nil {
 				log.Printf("WARNING: failed reading pid node: %v", err)
@@ -227,15 +234,14 @@ func CreatePidNode(zconn Conn, zkPath string) error {
 						return
 					}
 					continue
+				} else {
+					time.Sleep(30 * time.Second)
+					continue
 				}
 			}
 
 			_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 			if err != nil {
-				if zookeeper.IsError(err, zookeeper.ZCLOSING) {
-					log.Printf("INFO: pid watcher stopped on closing: %v", zkPath)
-					return
-				}
 				log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
 				time.Sleep(30 * time.Second)
 			} else {

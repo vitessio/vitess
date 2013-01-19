@@ -53,8 +53,8 @@ type ActionAgent struct {
 	changeCallbacks []TabletChangeCallback
 
 	mutex   sync.Mutex
-	_tablet *TabletInfo // must be accessed with lock - TabletInfo objects are not synchronized.
-	done    chan bool
+	_tablet *TabletInfo   // must be accessed with lock - TabletInfo objects are not synchronized.
+	done    chan struct{} // closed when we are done.
 }
 
 // bindAddr: the address for the query service advertised by this agent
@@ -68,7 +68,7 @@ func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile, dbCre
 		DbConfigsFile:     dbConfigsFile,
 		DbCredentialsFile: dbCredentialsFile,
 		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
-		done:              make(chan bool, 1),
+		done:              make(chan struct{}),
 	}
 }
 
@@ -406,7 +406,7 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 		panic(err)
 	}
 
-	if err := zk.CreatePidNode(agent.zconn, agent.Tablet().PidPath()); err != nil {
+	if err := zk.CreatePidNode(agent.zconn, agent.Tablet().PidPath(), agent.done); err != nil {
 		panic(err)
 	}
 
@@ -425,7 +425,7 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 }
 
 func (agent *ActionAgent) Stop() {
-	agent.done <- true
+	close(agent.done)
 }
 
 func (agent *ActionAgent) actionEventLoop() {
