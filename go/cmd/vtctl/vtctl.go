@@ -366,7 +366,10 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shar
 			}
 		}
 		if force {
-			zk.DeleteRecursive(zconn, zkPath, -1)
+			err = zk.DeleteRecursive(zconn, zkPath, -1)
+			if err != nil {
+				relog.Error("failed deleting tablet %v: %v", zkPath, err)
+			}
 			err = tm.CreateTablet(zconn, zkPath, tablet)
 		}
 	}
