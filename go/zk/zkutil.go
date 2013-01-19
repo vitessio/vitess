@@ -120,7 +120,7 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	}
 	for _, child := range children {
 		err := DeleteRecursive(zconn, path.Join(zkPath, child), -1)
-		if err != nil {
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return fmt.Errorf("zkutil: recursive delete failed: %v", err)
 		}
 	}
