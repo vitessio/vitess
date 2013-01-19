@@ -17,7 +17,7 @@ if __name__ == "__main__":
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
   parser.add_option("-m", "--memcache", action="store_true", default=False,
                     help="starts a memcached, and tests rowcache")
-  parser.add_option("-e", "--env", default='vttablet',
+  parser.add_option("-e", "--env", default='vttablet,vtocc',
                     help="Environment that will be used. Valid options: vttablet, vtocc")
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
   parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
@@ -42,19 +42,19 @@ if __name__ == "__main__":
     if options.memcache:
       suite.addTests(unittest.TestLoader().loadTestsFromModule(cache_tests))
 
-  try:
-    if options.env == 'vttablet':
-      env = test_env.VttabletTestEnv()
-    elif options.env == 'vtocc':
-      env = test_env.VtoccTestEnv()
-    else:
-      raise Exception("Valid options for -e: vtocc, vttablet")
+  for env_name in options.env.split(','):
+    try:
+      if env_name == 'vttablet':
+        env = test_env.VttabletTestEnv()
+      elif env_name == 'vtocc':
+        env = test_env.VtoccTestEnv()
+      else:
+        raise Exception("Valid options for -e: vtocc, vttablet")
 
-    env.setUp()
-    print "Starting queryservice_test.py: %s" % options.env
-    sys.stdout.flush()
-    framework.TestCase.setenv(env)
-    unittest.TextTestRunner(verbosity=options.verbose).run(suite)
-  finally:
-    env.tearDown()
-    
+      env.setUp()
+      print "Starting queryservice_test.py: %s" % env_name
+      sys.stdout.flush()
+      framework.TestCase.setenv(env)
+      unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+    finally:
+      env.tearDown()

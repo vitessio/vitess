@@ -46,25 +46,22 @@ unit_test:
 #	cd go/zk/zkctl; go test
 
 queryservice_test:
+	echo "queryservice test"
 	if [ -e "/usr/bin/memcached" ]; then \
-		cd test && \
-		./queryservice_test.py -m -e vttablet && \
-		./queryservice_test.py -m -e vtocc; \
+		time test/queryservice_test.py -m ; \
 	else \
-		cd test && \
-		./queryservice_test.py -e vttablet && \
-		./queryservice_test.py -e vtocc; \
+		time test/queryservice_test.py ; \
 	fi
 
 # export VT_TEST_FLAGS=-v for instance
 
 integration_test:
-	cd test ; ./schema.py $$VT_TEST_FLAGS
-	cd test ; ./sharded.py $$VT_TEST_FLAGS
-	cd test ; ./tabletmanager.py $$VT_TEST_FLAGS
-	cd test ; ./zkocc.py $$VT_TEST_FLAGS
-	cd test ; ./connection_test.py
-	cd test ; ./update_stream.py
+	cd test ; echo "schema test"; time ./schema.py $$VT_TEST_FLAGS
+	cd test ; echo "sharded test"; time ./sharded.py $$VT_TEST_FLAGS
+	cd test ; echo "tabletmanager test"; time ./tabletmanager.py $$VT_TEST_FLAGS
+	cd test ; echo "zkocc test"; time ./zkocc.py $$VT_TEST_FLAGS
+	cd test ; echo "connection test"; time ./connection_test.py
+	cd test ; echo "updatestream test"; time ./update_stream.py
 
 clean:
 	cd go/cmd/mysqlctl; go clean
