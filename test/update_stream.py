@@ -167,7 +167,7 @@ def run_test_service_disabled():
   _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_insert_test)
   _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_insert_test',])
   utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
-  time.sleep(20)
+#  time.sleep(20)
   replica_conn = _get_replica_stream_conn()
   replica_conn.dial()
   try:
@@ -194,7 +194,7 @@ def run_test_service_enabled():
   utils.debug("run_test_service_enabled starting @ %s" % start_position)
   utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
   utils.debug("sleeping a bit for the replica action to complete")
-  time.sleep(30)
+  time.sleep(1)
   thd = threading.Thread(target=perform_writes, name='write_thd', args=(400,))
   thd.daemon = True
   thd.start()
@@ -232,7 +232,7 @@ def run_test_service_enabled():
     binlog_pos, data, err = replica_conn.stream_start(start_position)
     utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
     utils.debug("Sleeping a bit for the spare action to complete")
-    time.sleep(20)
+#    time.sleep(20)
     while(1):
       binlog_pos, data, err = replica_conn.stream_next()
       if err != None and err == "Disconnecting because the Update Stream service has been disabled":
@@ -383,7 +383,7 @@ def run_all():
   #The above test leaves the service in disabled state, hence enabling it.
   utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
   utils.debug("Sleeping a bit for the action to complete")
-  time.sleep(20)
+#  time.sleep(20)
   run_test_ddl()
   run_test_stream_parity()
   run_test_log_rotation()
