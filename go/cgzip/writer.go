@@ -95,7 +95,7 @@ func NewWriterLevelBuffer(w io.Writer, level, bufferSize int) (*Writer, error) {
 // this is the main function: it advances the write with either
 // new data or something else to do, like a flush
 func (z *Writer) write(p []byte, flush int) int {
-	if p == nil {
+	if len(p) == 0 {
 		z.strm.next_in = (*C.Bytef)(unsafe.Pointer(nil))
 		z.strm.avail_in = 0
 	} else {

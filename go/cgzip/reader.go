@@ -57,6 +57,10 @@ func (z *reader) Read(p []byte) (int, error) {
 		return 0, z.err
 	}
 
+	if len(p) == 0 {
+		return 0, nil
+	}
+
 	// read and deflate until the output buffer is full
 	z.strm.next_out = (*C.Bytef)(unsafe.Pointer(&p[0]))
 	z.strm.avail_out = (C.uInt)(len(p))

@@ -30,7 +30,9 @@ func NewAdler32() hash.Hash32 {
 
 // io.Writer interface
 func (a *adler32Hash) Write(p []byte) (n int, err error) {
-	a.adler = C.adler32(a.adler, (*C.Bytef)(unsafe.Pointer(&p[0])), (C.uInt)(len(p)))
+	if len(p) > 0 {
+		a.adler = C.adler32(a.adler, (*C.Bytef)(unsafe.Pointer(&p[0])), (C.uInt)(len(p)))
+	}
 	return len(p), nil
 }
 

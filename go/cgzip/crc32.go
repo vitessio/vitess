@@ -30,7 +30,9 @@ func NewCrc32() hash.Hash32 {
 
 // io.Writer interface
 func (a *crc32Hash) Write(p []byte) (n int, err error) {
-	a.crc = C.crc32(a.crc, (*C.Bytef)(unsafe.Pointer(&p[0])), (C.uInt)(len(p)))
+	if len(p) > 0 {
+		a.crc = C.crc32(a.crc, (*C.Bytef)(unsafe.Pointer(&p[0])), (C.uInt)(len(p)))
+	}
 	return len(p), nil
 }
 
