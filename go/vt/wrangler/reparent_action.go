@@ -93,7 +93,8 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, m
 			replPos := result.(*mysqlctl.ReplicationPosition)
 			var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
 			if dur > wr.actionTimeout() {
-				relog.Warning("  slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Path())
+				err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Path())
+				relog.Error("  %v", err)
 				mutex.Lock()
 				lastError = err
 				mutex.Unlock()

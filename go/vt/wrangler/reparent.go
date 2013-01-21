@@ -191,15 +191,15 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		return err
 	}
 
-	// make sure all tablets have the right parent
-	// find the replication position on them all, make sure they're ok
-	if err := wr.checkSlaveReplication(slaveTabletMap, masterTablet, masterElectTablet); err != nil {
-		return err
-	}
-
-	// check the master-elect is in good shape (when it's not
-	// already the master!)
+	// check the master-elect and slaves are in good shape when the action
+	// has not been forced.
 	if masterTablet.Uid != masterElectTablet.Uid {
+		// make sure all tablets have the right parent
+		// find the replication position on them all, make sure they're ok
+		if err := wr.checkSlaveReplication(slaveTabletMap, masterTablet, masterElectTablet); err != nil {
+			return err
+		}
+
 		if tm.IsServingType(masterElectTablet.Type) {
 			if err := wr.ExecuteOptionalTabletInfoHook(masterElectTablet, hook.NewSimpleHook("live_server_check")); err != nil {
 				return err

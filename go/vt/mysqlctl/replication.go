@@ -288,8 +288,14 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPositionIo = uint(temp)
-	temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
-	pos.SecondsBehindMaster = uint(temp)
+
+	if fields["Slave_IO_Running"] == "Yes" && fields["Slave_SQL_Running"] == "Yes" {
+		temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+		pos.SecondsBehindMaster = uint(temp)
+	} else {
+		// replications isn't running - report it as MAXINT since it won't resolve itself.
+		pos.SecondsBehindMaster = 0xFFFFFFFF
+	}
 	return pos, nil
 }
 
