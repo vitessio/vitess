@@ -15,6 +15,7 @@ package tabletmanager
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"os/user"
 	"path"
 	"sort"
@@ -35,6 +36,13 @@ import (
 //
 // Errors are written to the action node and must (currently) be resolved by
 // hand using zk tools.
+
+var sigChan chan os.Signal
+
+func init() {
+	sigChan = make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+}
 
 type InitiatorError string
 
@@ -325,6 +333,8 @@ wait:
 			}
 		case <-timer.C:
 			return nil, fmt.Errorf("action err: %v deadline exceeded %v", actionLogPath, waitTime)
+		case <-sigChan:
+			return nil, fmt.Errorf("action err: %v interrupted by signal", actionLogPath)
 		}
 	}
 
