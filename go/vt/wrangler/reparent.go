@@ -161,8 +161,7 @@ func (wr *Wrangler) reparentShard(shardInfo *tm.ShardInfo, masterElectTablet *tm
 		relog.Info("Skipping ValidateShard as the master is scrapped")
 	} else {
 		if err := wr.ValidateShard(shardInfo.ShardPath(), true); err != nil {
-			relog.Warning("ValidateShard verification failed. If the master if dead, please Scrap it first, running:")
-			relog.Warning("vtctl ScrapTablet -force -skip-rebuild %v", masterTablet.Path())
+			relog.Warning("ValidateShard verification failed. If the master if dead, please Scrap it first, running: vtctl ScrapTablet -force -skip-rebuild %v", masterTablet.Path())
 			return err
 		}
 	}
