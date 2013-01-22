@@ -137,13 +137,13 @@ func (mysqld *Mysqld) FindVtDatabases() ([]string, error) {
 	return dbNames, nil
 }
 
-func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serverMode bool) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSnapshot(concurrency int, serverMode bool) ([]SnapshotFile, error) {
 	sources := make([]string, 0, 128)
 	destinations := make([]string, 0, 128)
 
 	// clean out and start fresh
-	relog.Info("removing previous snapshots: %v", snapshotPath)
-	if err := os.RemoveAll(snapshotPath); err != nil {
+	relog.Info("removing previous snapshots: %v", mysqld.SnapshotDir)
+	if err := os.RemoveAll(mysqld.SnapshotDir); err != nil {
 		return nil, err
 	}
 
@@ -151,8 +151,8 @@ func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serve
 	// probably belongs as a derived path.
 	type snapPair struct{ srcDir, dstDir string }
 	dps := []snapPair{
-		{mysqld.config.InnodbDataHomeDir, path.Join(snapshotPath, innodbDataSubdir)},
-		{mysqld.config.InnodbLogGroupHomeDir, path.Join(snapshotPath, innodbLogSubdir)},
+		{mysqld.config.InnodbDataHomeDir, path.Join(mysqld.SnapshotDir, innodbDataSubdir)},
+		{mysqld.config.InnodbLogGroupHomeDir, path.Join(mysqld.SnapshotDir, innodbLogSubdir)},
 	}
 
 	dataDirEntries, err := ioutil.ReadDir(mysqld.config.DataDir)
@@ -177,14 +177,14 @@ func (mysqld *Mysqld) createSnapshot(snapshotPath string, concurrency int, serve
 			// Copy anything that defines a db.opt file - that includes empty databases.
 			_, err := os.Stat(path.Join(dbDirPath, "db.opt"))
 			if err == nil {
-				dps = append(dps, snapPair{dbDirPath, path.Join(snapshotPath, dataDir, de.Name())})
+				dps = append(dps, snapPair{dbDirPath, path.Join(mysqld.SnapshotDir, dataDir, de.Name())})
 			} else {
 				// Look for at least one .frm file
 				dbDirEntries, err := ioutil.ReadDir(dbDirPath)
 				if err == nil {
 					for _, dbEntry := range dbDirEntries {
 						if strings.HasSuffix(dbEntry.Name(), ".frm") {
-							dps = append(dps, snapPair{dbDirPath, path.Join(snapshotPath, dataDir, de.Name())})
+							dps = append(dps, snapPair{dbDirPath, path.Join(mysqld.SnapshotDir, dataDir, de.Name())})
 							break
 						}
 					}
@@ -297,7 +297,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	}
 
 	var smFile string
-	dataFiles, snapshotErr := mysqld.createSnapshot(mysqld.SnapshotDir, concurrency, serverMode)
+	dataFiles, snapshotErr := mysqld.createSnapshot(concurrency, serverMode)
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
@@ -314,7 +314,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	if serverMode && snapshotErr == nil {
 		relog.Info("server mode snapshot worked, not restarting mysql")
 	} else {
-		if err = mysqld.SnapshotSourceEnd(slaveStartRequired, readOnly); err != nil {
+		if err = mysqld.SnapshotSourceEnd(slaveStartRequired, readOnly /*deleteSnapshot*/, false); err != nil {
 			return
 		}
 	}
@@ -329,7 +329,16 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	return path.Join(SnapshotURLPath, relative), slaveStartRequired, readOnly, nil
 }
 
-func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly bool) error {
+func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnapshot bool) error {
+	if deleteSnapshot {
+		// clean out our files
+		relog.Info("removing snapshot links: %v", mysqld.SnapshotDir)
+		if err := os.RemoveAll(mysqld.SnapshotDir); err != nil {
+			relog.Warning("failed to remove old snapshot: %v", err)
+			return err
+		}
+	}
+
 	// Try to restart mysqld
 	if err := Start(mysqld, MysqlWaitTime); err != nil {
 		return err

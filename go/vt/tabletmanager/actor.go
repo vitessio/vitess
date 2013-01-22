@@ -545,7 +545,7 @@ func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly)
+	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true)
 }
 
 // fetch a json file and parses it
