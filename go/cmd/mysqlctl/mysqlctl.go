@@ -51,7 +51,7 @@ func partialRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []s
 func partialSnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	start := subFlags.String("start", "", "start of the key range")
 	end := subFlags.String("end", "", "end of the key range")
-	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action partialsnapshot requires <db name> <key name>")
@@ -93,7 +93,7 @@ func shutdownCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 }
 
 func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("Command snapshot requires <db name>")
@@ -108,7 +108,7 @@ func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 }
 
 func snapshotSourceStartCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	concurrency := subFlags.Int("concurrency", 3, "how many checksum jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 4, "how many checksum jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("Command snapshotsourcestart requires <db name>")
@@ -172,10 +172,10 @@ var commands = []command{
 		"Shuts down mysqld, does not remove any file"},
 
 	command{"snapshot", snapshotCmd,
-		"[-concurrency=3] <db name>",
+		"[-concurrency=4] <db name>",
 		"Takes a full snapshot, copying the innodb data files"},
 	command{"snapshotsourcestart", snapshotSourceStartCmd,
-		"[-concurrency=3] <db name>",
+		"[-concurrency=4] <db name>",
 		"Enters snapshot server mode (mysqld stopped, serving innodb data files)"},
 	command{"snapshotsourceend", snapshotSourceEndCmd,
 		"[-slave-start] [-read-write]",
@@ -185,7 +185,7 @@ var commands = []command{
 		"Restores a full snapshot"},
 
 	command{"partialsnapshot", partialSnapshotCmd,
-		"[-start=<start key>] [-stop=<stop key>] [-concurrency=3] <db name> <key name>",
+		"[-start=<start key>] [-stop=<stop key>] [-concurrency=4] <db name> <key name>",
 		"Takes a partial snapshot using 'select * into' commands"},
 	command{"partialrestore", partialRestoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",
