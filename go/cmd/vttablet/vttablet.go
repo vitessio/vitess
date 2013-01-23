@@ -253,6 +253,16 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 }
 
 func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir string, allowedPaths []string) {
+	// if we get any error, we'll try to write a server error
+	// (it will fail if the header has already been written, but at least
+	// we won't crash vttablet)
+	defer func() {
+		if x := recover(); x != nil {
+			relog.Error("vttablet http server panic: %v", x)
+			http.Error(rw, fmt.Sprintf("500 internal server error: %v", x), http.StatusInternalServerError)
+		}
+	}()
+
 	// /snapshot must be rewritten to the actual location of the snapshot.
 	relative, err := filepath.Rel(mysqlctl.SnapshotURLPath, req.URL.Path)
 	if err != nil {
