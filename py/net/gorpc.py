@@ -12,7 +12,7 @@ import socket
 import time
 import urlparse
 
-_lastStreamResponseError = "EOS"
+_lastStreamResponseError = 'EOS'
 
 class GoRpcError(Exception):
   pass
@@ -73,9 +73,12 @@ class _GoRpcConn(object):
 
   def dial(self, uri):
     parts = urlparse.urlparse(uri)
-    netloc = parts.netloc.split(':')
-    self.conn = socket.create_connection((netloc[0], int(netloc[1])),
-                                         self.socket_timeout)
+    conhost, conport = parts.netloc.split(':')
+    try:
+      conip = socket.gethostbyname(conhost)
+    except NameError:
+      conip = socket.getaddrinfo(conhost, None)[0][4][0]
+    self.conn = socket.create_connection((conip, int(conport)), self.socket_timeout)
     self.conn.sendall('CONNECT %s HTTP/1.0\n\n' % parts.path)
     while True:
       data = self.conn.recv(1024)

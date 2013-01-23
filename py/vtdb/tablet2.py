@@ -45,6 +45,9 @@ class TabletConnection(object):
       except gorpc.GoRpcError:
         self.close()
         raise
+    response = self.client.call('SqlQuery.GetSessionId', {"DbName": self.dbname})
+    self.set_session_id(response.reply["SessionId"])
+
   # You need to obtain and set the session_id for things to work.
   def set_session_id(self, session_id):
     self.session_id = session_id
@@ -269,3 +272,8 @@ def _make_row(row, conversions):
       v = field_data
     converted_row.append(v)
   return converted_row
+
+def connect(addr, timeout, dbname=None, user=None, password=None):
+  conn = TabletConnection(addr, dbname, timeout, user=user, password=password)
+  conn.dial()
+  return conn

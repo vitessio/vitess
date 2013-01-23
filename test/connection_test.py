@@ -20,9 +20,6 @@ QUERYLOGFILE = "/tmp/vtocc_queries.log"
 
 # This is a VtOCCConnection that doesn't attempt to do authentication.
 class BareOCCConnection(db.VtOCCConnection):
-  def dial(self):
-    tablet2.TabletConnection.dial(self)
-
   @property
   def uri(self):
     return 'http://%s/_bson_rpc_/auth' % self.addr
@@ -142,15 +139,7 @@ class BaseTest(unittest.TestCase):
 class TestAuthentication(BaseTest):
 
   def setUp(self):
-    for i in range(30):
-      try:
-        self.conn = BareOCCConnection(self.vtocc_uri, None, 2)
-        self.conn.dial()
-        return
-      except dbexceptions.OperationalError:
-        if i == 29:
-          raise
-        time.sleep(1)
+    self.conn = BareOCCConnection(self.vtocc_uri, None, 2)
 
   def call(self, *args, **kwargs):
     return self.conn.client.call(*args, **kwargs)
