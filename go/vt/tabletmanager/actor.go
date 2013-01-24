@@ -305,7 +305,10 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != NO_TABLET {
-		oldReplicationPath := tablet.ReplicationPath()
+		oldReplicationPath, err := tablet.ReplicationPath()
+		if err != nil {
+			return err
+		}
 		err = ta.zconn.Delete(oldReplicationPath, -1)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return err
@@ -326,7 +329,10 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath := tablet.ReplicationPath()
+	newReplicationPath, err := tablet.ReplicationPath()
+	if err != nil {
+		return err
+	}
 	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
@@ -401,7 +407,10 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	if tablet.Parent != rsd.Parent {
 		relog.Debug("restart with new parent")
 		// Remove tablet from the replication graph.
-		oldReplicationPath := tablet.ReplicationPath()
+		oldReplicationPath, err := tablet.ReplicationPath()
+		if err != nil {
+			return err
+		}
 		err = ta.zconn.Delete(oldReplicationPath, -1)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return err
@@ -440,7 +449,10 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath := tablet.ReplicationPath()
+	newReplicationPath, err := tablet.ReplicationPath()
+	if err != nil {
+		return err
+	}
 	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
@@ -807,7 +819,10 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	if tablet.Type == TYPE_IDLE {
 		wasIdle = true
 	} else {
-		replicationPath = tablet.ReplicationPath()
+		replicationPath, err = tablet.ReplicationPath()
+		if err != nil {
+			return err
+		}
 	}
 	tablet.Type = TYPE_SCRAP
 	tablet.Parent = TabletAlias{}
@@ -885,7 +900,11 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks
 			// With a master the node cannot be set to idle unless we have already removed all of
 			// the derived paths. The global replication path is a good indication that this has
 			// been resolved.
-			stat, err := zconn.Exists(tablet.ReplicationPath())
+			rp, err := tablet.ReplicationPath()
+			if err != nil {
+				return err
+			}
+			stat, err := zconn.Exists(rp)
 			if err != nil {
 				return err
 			}

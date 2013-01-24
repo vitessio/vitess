@@ -286,19 +286,18 @@ func (ti *TabletInfo) KeyspacePath() string {
 
 // This is the path that indicates the tablet's position in the shard replication graph.
 // This is too complicated for zk_path, so it's on this struct.
-func (ti *TabletInfo) ReplicationPath() string {
+func (ti *TabletInfo) ReplicationPath() (string, error) {
 	return TabletReplicationPath(ti.zkVtRoot, ti.Tablet)
 }
 
-// FIXME(alainjobart) this may panic, return an error instead
-func TabletReplicationPath(zkVtRoot string, tablet *Tablet) string {
+func TabletReplicationPath(zkVtRoot string, tablet *Tablet) (string, error) {
 	zkPath := ShardPath(zkVtRoot, tablet.Keyspace, tablet.Shard)
 	cell, err := zk.ZkCellFromZkPath(zkVtRoot)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	if cell == "local" || cell == "global" {
-		panic(fmt.Errorf("invalid cell name for replication path: %v", cell))
+		return "", fmt.Errorf("invalid cell name for replication path: %v", cell)
 	}
 	if tablet.Parent.Uid == NO_TABLET {
 		zkPath = path.Join(zkPath, fmtAlias(tablet.Cell, tablet.Uid))
@@ -307,7 +306,7 @@ func TabletReplicationPath(zkVtRoot string, tablet *Tablet) string {
 		zkPath = path.Join(zkPath, fmtAlias(tablet.Parent.Cell, tablet.Parent.Uid),
 			fmtAlias(tablet.Cell, tablet.Uid))
 	}
-	return zkPath
+	return zkPath, nil
 }
 
 func NewTablet(cell string, uid uint32, parent TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType TabletType) *Tablet {
@@ -381,22 +380,30 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 	// their keyspace / shard to know where to check.
 	if tablet.IsInReplicationGraph() {
 		zkPaths = append(zkPaths, ShardActionPath(tablet.ShardPath()))
-		if zkTabletReplicationPath != "" && zkTabletReplicationPath != tablet.ReplicationPath() {
+		rp, err := tablet.ReplicationPath()
+		if err != nil {
+			return err
+		}
+		if zkTabletReplicationPath != "" && zkTabletReplicationPath != rp {
 			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
-				tablet.ReplicationPath(), zkTabletReplicationPath)
+				rp, zkTabletReplicationPath)
 		}
 		// Unless we are scrapped or idle, check we are in the replication graph
-		zkPaths = append(zkPaths, tablet.ReplicationPath())
+		zkPaths = append(zkPaths, rp)
 
 	} else if tablet.IsAssigned() {
 		// this case is to make sure a scrap node that used to be in
 		// a replication graph doesn't leave a node behind.
 		// However, while an action is running, there is some
 		// time where this might be inconsistent.
-		_, _, err := zconn.Get(tablet.ReplicationPath())
+		rp, err := tablet.ReplicationPath()
+		if err != nil {
+			return err
+		}
+		_, _, err = zconn.Get(rp)
 		if !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return fmt.Errorf("unexpected replication path found(possible pending action?): %v (%v)",
-				tablet.ReplicationPath(), tablet.Type)
+				rp, tablet.Type)
 		}
 	}
 
@@ -466,7 +473,11 @@ func CreateTabletReplicationPaths(zconn zk.Conn, zkTabletPath string, tablet *Ta
 		return err
 	}
 
-	_, err = zk.CreateRecursive(zconn, TabletReplicationPath(zkVtRootPath, tablet), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	trp, err := TabletReplicationPath(zkVtRootPath, tablet)
+	if err != nil {
+		return err
+	}
+	_, err = zk.CreateRecursive(zconn, trp, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
