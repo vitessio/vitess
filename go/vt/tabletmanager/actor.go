@@ -461,7 +461,7 @@ func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
 	}
 
 	// and get the schema
-	sd, err := ta.mysqld.GetSchema(tablet.DbName())
+	sd, err := ta.mysqld.GetSchema(tablet.DbName(), nil)
 	if err != nil {
 		return err
 	}

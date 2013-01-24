@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
@@ -62,6 +63,27 @@ func partialSnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []
 		relog.Fatal("partialsnapshot failed: %v", err)
 	} else {
 		relog.Info("manifest location: %v", filename)
+	}
+}
+
+func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
+	spec := subFlags.String("spec", "-", "shard specification")
+	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		relog.Fatal("action partialsnapshot requires <db name> <key name>")
+	}
+	shards, err := key.ParseShardingSpec(*spec)
+	if err != nil {
+		relog.Fatal("multisnapshot failed: %v", err)
+	}
+	tables := strings.Split(*tablesString, ",")
+	filenames, err := mysqld.CreateMultisnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables)
+	if err != nil {
+		relog.Fatal("multisnapshot failed: %v", err)
+	} else {
+		relog.Info("manifest locations: %v", filenames)
 	}
 }
 
@@ -165,7 +187,6 @@ var commands = []command{
 		"Initalizes the directory structure and starts mysqld"},
 	command{"teardown", teardownCmd, "[-force]",
 		"Shuts mysqld down, and removes the directory"},
-
 	command{"start", startCmd, "[-wait-time=20s]",
 		"Starts mysqld on an already 'init'-ed directory"},
 	command{"shutdown", shutdownCmd, "[-wait-time=20s]",
@@ -190,6 +211,8 @@ var commands = []command{
 	command{"partialrestore", partialRestoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",
 		"Restores a database from a partial snapshot"},
+	command{"multisnapshot", multisnapshotCmd, "[-concurrency=3] <sharding spec> <db name> <key name>",
+		"Makes a complete snapshot using 'select * into' commands."},
 }
 
 func main() {

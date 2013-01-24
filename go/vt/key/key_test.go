@@ -83,3 +83,63 @@ func TestKeyStringSort(t *testing.T) {
 		}
 	}
 }
+
+func TestParseShardingSpec(t *testing.T) {
+	goodTable := map[string]KeyRangeArray{
+		"-": {{Start: MinKey, End: MaxKey}},
+		"-4000000000000000-8000000000000000-": {
+			{Start: MinKey, End: HexKeyspaceId("4000000000000000").Unhex()},
+			{Start: HexKeyspaceId("4000000000000000").Unhex(), End: HexKeyspaceId("8000000000000000").Unhex()},
+			{Start: HexKeyspaceId("8000000000000000").Unhex(), End: MaxKey},
+		},
+	}
+	badTable := []string{
+		"4000000000000000",
+		"---",
+		"4000000000000000--8000000000000000",
+		"4000000000000000-3000000000000000", // not in order
+	}
+	for key, wanted := range goodTable {
+		r, err := ParseShardingSpec(key)
+		if err != nil {
+			t.Errorf("Unexpected error: %v.", err)
+		}
+		if len(r) != len(wanted) {
+			t.Errorf("Wrong result: wanted %v, got %v", wanted, r)
+			continue
+		}
+		for i, w := range wanted {
+			if r[i] != w {
+				t.Errorf("Wrong result: wanted %v, got %v", wanted, r)
+				break
+			}
+		}
+	}
+	for _, bad := range badTable {
+		_, err := ParseShardingSpec(bad)
+		if err == nil {
+			t.Errorf("Didn't get expected error for %v.", bad)
+		}
+	}
+}
+
+func TestContains(t *testing.T) {
+	var table = []struct {
+		kid       string
+		start     string
+		end       string
+		contained bool
+	}{
+		{kid: "3000000000000000", start: "3000000000000000", end: "", contained: true},
+		{kid: "3000000000000000", start: "", end: "3000000000000000", contained: false},
+		{kid: "4000000000000000", start: "3000000000000000", end: "", contained: true},
+		{kid: "2000000000000000", start: "3000000000000000", end: "", contained: false},
+	}
+
+	for _, el := range table {
+		kr := KeyRange{Start: HexKeyspaceId(el.start).Unhex(), End: HexKeyspaceId(el.end).Unhex()}
+		if c := kr.Contains(HexKeyspaceId(el.kid).Unhex()); c != el.contained {
+			t.Errorf("Unexpected result: contains for %v and (%v-%v) yields %v.", el.kid, el.start, el.end, c)
+		}
+	}
+}

@@ -5,6 +5,7 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
+import gzip
 import os
 import shutil
 import socket
@@ -358,6 +359,43 @@ def run_test_vtctl_clone():
 @utils.test_case
 def run_test_vtctl_clone_server():
   _run_test_vtctl_clone(server_mode=True)
+
+@utils.test_case
+def test_multisnapshot():
+  populate = sum([[
+    "insert into vt_insert_test_%s (msg) values ('test %s')" % (i, x)
+    for x in xrange(4)] for i in range(6)], [])
+  create = ['''create table vt_insert_test_%s (
+id bigint auto_increment,
+msg varchar(64),
+primary key (id)
+) Engine=InnoDB''' % i for i in range(6)]
+
+  utils.zk_wipe()
+
+  # Start up a master mysql and vttablet
+  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+
+  tablet_62344.init_tablet('master', 'test_keyspace', '0')
+  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('Validate /zk/global/vt/keyspaces')
+
+  tablet_62344.populate('vt_test_keyspace', create,
+                        populate)
+
+  tablet_62344.start_vttablet()
+
+  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 multisnapshot --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- vt_test_keyspace id').wait()
+  if err != 0:
+    raise utils.TestError('mysqlctl multisnapshot failed')
+  if os.path.exists(os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.csv.gz')):
+    raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
+  for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
+    path = os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.csv.gz')
+    with gzip.open(path) as f:
+      if len(f.readlines()) != 2:
+        raise utils.TestError("Data looks wrong in %s" % path)
+
 
 @utils.test_case
 def run_test_mysqlctl_split():

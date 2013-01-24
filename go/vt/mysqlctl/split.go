@@ -82,16 +82,20 @@ leave the 24 lag for 1 day
 */
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
 
+	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/mysqlctl/csvsplitter"
 )
 
 const (
@@ -190,7 +194,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	}
 
 	// get the schema for each table
-	sd, fetchErr := mysqld.GetSchema(dbName)
+	sd, fetchErr := mysqld.GetSchema(dbName, nil)
 	if fetchErr != nil {
 		return "", fetchErr
 	}
@@ -198,54 +202,8 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		return "", fmt.Errorf("empty table list for %v", dbName)
 	}
 
-	// save initial state so we can restore on Start()
-	slaveStartRequired := false
-	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
-		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
-	}
-	readOnly := true
-	if readOnly, err = mysqld.IsReadOnly(); err != nil {
-		return
-	}
-
-	relog.Info("Set Read Only")
-	if !readOnly {
-		mysqld.SetReadOnly(true)
-	}
-	relog.Info("Stop Slave")
-	if err = mysqld.StopSlave(); err != nil {
-		return
-	}
-
-	// If the source is a slave use the master replication position,
-	// unless we are allowing hierachical replicas.
-	masterAddr := ""
-	replicationPosition, statusErr := mysqld.SlaveStatus()
-	if statusErr != nil {
-		if statusErr != ErrNotSlave {
-			// this is a real error
-			return "", statusErr
-		}
-		// we are really a master, so we need that position
-		replicationPosition, statusErr = mysqld.MasterStatus()
-		if statusErr != nil {
-			return "", statusErr
-		}
-		masterAddr = mysqld.Addr()
-	} else {
-		// we are a slave, check our replication strategy
-		if allowHierarchicalReplication {
-			masterAddr = mysqld.Addr()
-		} else {
-			masterAddr, err = mysqld.GetMasterAddr()
-			if err != nil {
-				return "", err
-			}
-		}
-	}
-
-	relog.Info("Flush tables")
-	if err = mysqld.executeSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
+	slaveStartRequired, readOnly, replicationPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
+	if err != nil {
 		return
 	}
 
@@ -262,25 +220,10 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		}
 	}
 
-	// Try to fix mysqld regardless of snapshot success..
-	if err = mysqld.executeSuperQuery("UNLOCK TABLES"); err != nil {
-		return
+	err = mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly)
+	if err != nil {
+		return "", err
 	}
-
-	// restore original mysqld state that we saved above
-	if slaveStartRequired {
-		if err = mysqld.StartSlave(); err != nil {
-			return
-		}
-		// this should be quick, but we might as well just wait
-		if err = mysqld.WaitForSlaveStart(5); err != nil {
-			return
-		}
-	}
-	if err = mysqld.SetReadOnly(readOnly); err != nil {
-		return
-	}
-
 	if snapshotErr != nil {
 		return "", snapshotErr
 	}
@@ -368,6 +311,315 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 	}
 
 	return dataFiles, nil
+}
+
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slaveStartRequired, readOnly bool, replicationPosition *ReplicationPosition, masterAddr string, err error) {
+	// save initial state so we can restore on Start()
+	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
+		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
+	}
+	// FIXME(szopa): is this necessary?
+	readOnly = true
+	if readOnly, err = mysqld.IsReadOnly(); err != nil {
+		return
+	}
+
+	relog.Info("Set Read Only")
+	if !readOnly {
+		mysqld.SetReadOnly(true)
+	}
+	relog.Info("Stop Slave")
+	if err = mysqld.StopSlave(); err != nil {
+		return
+	}
+
+	// If the source is a slave use the master replication position,
+	// unless we are allowing hierachical replicas.
+	replicationPosition, err = mysqld.SlaveStatus()
+	if err != nil {
+		if err != ErrNotSlave {
+			// this is a real error
+			return
+		}
+		// we are really a master, so we need that position
+		replicationPosition, err = mysqld.MasterStatus()
+		if err != nil {
+			return
+		}
+		masterAddr = mysqld.Addr()
+	} else {
+		// we are a slave, check our replication strategy
+		if allowHierarchicalReplication {
+			masterAddr = mysqld.Addr()
+		} else {
+			masterAddr, err = mysqld.GetMasterAddr()
+			if err != nil {
+				return
+			}
+		}
+	}
+
+	relog.Info("Flush tables")
+	if err = mysqld.executeSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
+		return
+	}
+	return
+}
+
+func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool) (err error) {
+	// Try to fix mysqld regardless of snapshot success..
+	if err = mysqld.executeSuperQuery("UNLOCK TABLES"); err != nil {
+		return
+	}
+
+	// restore original mysqld state that we saved above
+	if slaveStartRequired {
+		if err = mysqld.StartSlave(); err != nil {
+			return
+		}
+		// this should be quick, but we might as well just wait
+		if err = mysqld.WaitForSlaveStart(5); err != nil {
+			return
+		}
+	}
+	if err = mysqld.SetReadOnly(readOnly); err != nil {
+		return
+	}
+	return nil
+}
+
+type namedHasherWriter struct {
+	*bufio.Writer
+	Hasher     *hasher
+	Filename   string
+	gzip       io.Closer
+	file       *os.File
+	fileBuffer *bufio.Writer
+}
+
+func newCompressedNamedHasherWriter(filename string) (*namedHasherWriter, error) {
+	// The pipeline looks like this:
+	//
+	//                             +---> buffer +---> file
+	//                             |       2M
+	// buffer +---> gzip +---> tee +
+	//   2M                        |
+	//                             +---> hasher
+
+	dstFile, err := os.Create(filename)
+	if err != nil {
+		return nil, err
+	}
+	fileBuffer := bufio.NewWriterSize(dstFile, 2*1024*1024)
+	hasher := newHasher()
+	tee := io.MultiWriter(fileBuffer, hasher)
+	// create the gzip compression filter
+	gzip, err := cgzip.NewWriterLevel(tee, cgzip.Z_BEST_SPEED)
+	if err != nil {
+		return nil, err
+	}
+	gzipBuffer := bufio.NewWriterSize(gzip, 2*1024*1024)
+	return &namedHasherWriter{
+		Writer:     gzipBuffer,
+		Hasher:     hasher,
+		Filename:   filename,
+		gzip:       gzip,
+		file:       dstFile,
+		fileBuffer: fileBuffer,
+	}, nil
+}
+
+func (w namedHasherWriter) Close() (err error) {
+	// I have to dismantle the pipeline, starting from the
+	// top. Some of the elements are flushers, others are closers,
+	// which is why this code is so ugly.
+	if err = w.Flush(); err != nil {
+		return
+	}
+	if err = w.gzip.Close(); err != nil {
+		return
+	}
+	if err = w.fileBuffer.Flush(); err != nil {
+		return
+	}
+	if err = w.file.Close(); err != nil {
+		return
+	}
+	return nil
+}
+
+func (w namedHasherWriter) SnapshotFile(snapshotDir string) (*SnapshotFile, error) {
+	fi, err := os.Stat(w.Filename)
+	if err != nil {
+		return nil, err
+	}
+	relativePath, err := filepath.Rel(snapshotDir, w.Filename)
+	if err != nil {
+		return nil, err
+	}
+	return &SnapshotFile{relativePath, fi.Size(), w.Hasher.HashString()}, nil
+}
+
+func (mysqld *Mysqld) CreateMultisnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string) (snapshotManifestFilenames []string, err error) {
+	if dbName == "" {
+		err = fmt.Errorf("no database name provided")
+		return
+	}
+
+	// same logic applies here
+	relog.Info("validateCloneSource")
+	if err = mysqld.validateCloneSource(false); err != nil {
+		return
+	}
+
+	// clean out and start fresh
+	cloneSourcePaths := make(map[key.KeyRange]string)
+	for _, keyRange := range keyRanges {
+		cloneSourcePaths[keyRange] = path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+string(keyRange.Start.Hex())+","+string(keyRange.End.Hex()))
+	}
+	for _, _path := range cloneSourcePaths {
+		if err = os.RemoveAll(_path); err != nil {
+			return
+		}
+		if err = os.MkdirAll(_path, 0775); err != nil {
+			return
+		}
+	}
+
+	mainCloneSourcePath := path.Join(mysqld.SnapshotDir, dataDir, dbName+"-all")
+	if err = os.RemoveAll(mainCloneSourcePath); err != nil {
+		return
+	}
+	if err = os.MkdirAll(mainCloneSourcePath, 0775); err != nil {
+		return
+	}
+
+	// get the schema for each table
+	sd, fetchErr := mysqld.GetSchema(dbName, tables)
+	if fetchErr != nil {
+		return []string{}, fetchErr
+	}
+
+	if len(sd.TableDefinitions) == 0 {
+		return []string{}, fmt.Errorf("empty table list for %v", dbName)
+	}
+
+	slaveStartRequired, readOnly, replicationPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
+	if err != nil {
+		return
+	}
+	defer func() {
+		if e := mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly); e != nil {
+			snapshotManifestFilenames, err = []string{}, e
+		}
+	}()
+
+	selectIntoOutfile := `SELECT * INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
+
+	// We need interfaces to pass them into ConcurrentMap.
+	itds := make([]interface{}, len(sd.TableDefinitions))
+	for i, td := range sd.TableDefinitions {
+		itds[i] = td
+	}
+	datafiles, dumpErr := ConcurrentMap(concurrency, itds, func(itd interface{}) (data interface{}, err error) {
+		td := itd.(TableDefinition)
+		filename := path.Join(mainCloneSourcePath, td.Name+".csv")
+		queryParams := map[string]string{
+			"TableName":            dbName + "." + td.Name,
+			"KeyspaceIdColumnName": keyName,
+			"TableOutputPath":      filename,
+		}
+		if err = mysqld.executeSuperQuery(mustFillStringTemplate(selectIntoOutfile, queryParams)); err != nil {
+			return
+		}
+
+		file, err := os.Open(filename)
+		defer file.Close()
+		if err != nil {
+			return nil, err
+		}
+
+		realData := make(map[key.KeyRange]*namedHasherWriter)
+
+		for _, kr := range keyRanges {
+			filename := path.Join(cloneSourcePaths[kr], td.Name+".csv.gz")
+			w, err := newCompressedNamedHasherWriter(filename)
+			if err != nil {
+				return nil, err
+			}
+
+			defer func(w *namedHasherWriter) {
+				if e := w.Close(); e != nil {
+					err = e
+				}
+			}(w)
+
+			realData[kr] = w
+		}
+
+		splitter := csvsplitter.NewKeyspaceCSVReader(file, ',').Iterator()
+		for splitter.Next() {
+			for kr, w := range realData {
+				if kr.Contains(splitter.KeyspaceId) {
+					_, err = w.Write(splitter.Line)
+					if err != nil {
+						return nil, err
+					}
+					break
+				}
+			}
+		}
+
+		if splitter.Error != nil {
+			return nil, splitter.Error
+		}
+		if e := os.Remove(filename); e != nil {
+			relog.Error("Cannot remove %v: %v", filename, e)
+		}
+
+		return realData, nil
+	})
+	if dumpErr != nil {
+		err = dumpErr
+		return
+	}
+
+	if e := os.Remove(mainCloneSourcePath); e != nil {
+		relog.Error("Cannot remove %v: %v", mainCloneSourcePath, e)
+	}
+
+	ssmFiles := make([]string, len(keyRanges))
+	for i, kr := range keyRanges {
+		krDatafiles := make([]*namedHasherWriter, len(datafiles))
+		for j, im := range datafiles {
+			m := im.(map[key.KeyRange]*namedHasherWriter)
+			krDatafiles[j] = m[kr]
+		}
+		snapshotFiles := make([]SnapshotFile, len(krDatafiles))
+		for j, w := range krDatafiles {
+			sf, err := w.SnapshotFile(mysqld.SnapshotDir)
+			if err != nil {
+				return []string{}, err
+			}
+			snapshotFiles[j] = *sf
+		}
+
+		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, snapshotFiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
+		ssmFiles[i] = path.Join(cloneSourcePaths[kr], partialSnapshotManifestFile)
+		if err = writeJson(ssmFiles[i], ssm); err != nil {
+			return []string{}, err
+		}
+	}
+
+	snapshotURLPaths := make([]string, len(keyRanges))
+	for i := 0; i < len(keyRanges); i++ {
+		relative, err := filepath.Rel(mysqld.SnapshotDir, ssmFiles[i])
+		if err != nil {
+			return []string{}, err
+		}
+		snapshotURLPaths[i] = path.Join(SnapshotURLPath, relative)
+	}
+	return snapshotURLPaths, nil
 }
 
 /*

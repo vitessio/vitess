@@ -8,7 +8,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"sort"
+	"strings"
 )
 
 var MinKey = KeyspaceId("")
@@ -63,7 +65,7 @@ func (kr KeyRange) MapKey() string {
 }
 
 func (kr KeyRange) Contains(i KeyspaceId) bool {
-	return kr.Start <= i && kr.End != MaxKey && i < kr.End
+	return kr.Start <= i && (kr.End == MaxKey || i < kr.End)
 }
 
 type KeyspaceRange struct {
@@ -98,3 +100,31 @@ func (p KeyRangeArray) Swap(i, j int) {
 }
 
 func (p KeyRangeArray) Sort() { sort.Sort(p) }
+
+// ParseShardingSpec parses a string that describes a sharding
+// specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
+// string may serve both as the start and end of the keyspace: -a-b-
+// will be parsed as start-a, a-b, b-end.
+func ParseShardingSpec(spec string) (KeyRangeArray, error) {
+	parts := strings.Split(spec, "-")
+	if len(parts) == 1 {
+		return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
+	}
+	old := parts[0]
+	ranges := make([]KeyRange, len(parts)-1)
+
+	for i, p := range parts[1:] {
+		if p == "" && i != (len(parts)-2) {
+			return nil, fmt.Errorf("malformed spec: MinKey/MaxKey cannot be in the middle of the spec: %q", spec)
+		}
+		if p != "" && p <= old {
+			return nil, fmt.Errorf("malformed spec: shard limits should be in order: %q", spec)
+		}
+		ranges[i] = KeyRange{
+			Start: HexKeyspaceId(old).Unhex(),
+			End:   HexKeyspaceId(p).Unhex(),
+		}
+		old = p
+	}
+	return ranges, nil
+}

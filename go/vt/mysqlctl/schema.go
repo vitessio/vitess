@@ -96,18 +96,24 @@ func (left *SchemaDefinition) DiffSchemaToArray(leftName, rightName string, righ
 
 var autoIncr = regexp.MustCompile("auto_increment=\\d+")
 
-// Return the schema for a database
-func (mysqld *Mysqld) GetSchema(dbName string) (*SchemaDefinition, error) {
-	rows, err := mysqld.fetchSuperQuery("SHOW TABLES IN " + dbName)
-	if err != nil {
-		return nil, err
+// GetSchema returns the schema for database for tables listed in
+// tables. If tables is empty, return the schema for all tables.
+func (mysqld *Mysqld) GetSchema(dbName string, tables []string) (*SchemaDefinition, error) {
+	if len(tables) == 0 {
+		rows, err := mysqld.fetchSuperQuery("SHOW TABLES IN " + dbName)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) == 0 {
+			return &SchemaDefinition{}, nil
+		}
+		tables = make([]string, len(rows))
+		for i, row := range rows {
+			tables[i] = row[0].String()
+		}
 	}
-	if len(rows) == 0 {
-		return &SchemaDefinition{}, nil
-	}
-	sd := &SchemaDefinition{TableDefinitions: make([]TableDefinition, len(rows))}
-	for i, row := range rows {
-		tableName := row[0].String()
+	sd := &SchemaDefinition{TableDefinitions: make([]TableDefinition, len(tables))}
+	for i, tableName := range tables {
 		relog.Info("GetSchema(table: %v)", tableName)
 
 		rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
@@ -155,7 +161,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (resul
 
 	// gather current schema on real database
 	var err error
-	result.BeforeSchema, err = mysqld.GetSchema(dbName)
+	result.BeforeSchema, err = mysqld.GetSchema(dbName, nil)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -186,7 +192,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (resul
 	}
 
 	// get the result
-	result.AfterSchema, err = mysqld.GetSchema("_vt_preflight")
+	result.AfterSchema, err = mysqld.GetSchema("_vt_preflight", nil)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -209,7 +215,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (re
 
 	// check current schema matches
 	var err error
-	result.BeforeSchema, err = mysqld.GetSchema(dbName)
+	result.BeforeSchema, err = mysqld.GetSchema(dbName, nil)
 	if err != nil {
 		result.Error = err.Error()
 		return result
@@ -259,7 +265,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (re
 	}
 
 	// populate AfterSchema
-	result.AfterSchema, err = mysqld.GetSchema(dbName)
+	result.AfterSchema, err = mysqld.GetSchema(dbName, nil)
 	if err != nil {
 		result.Error = err.Error()
 		return result

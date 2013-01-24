@@ -132,7 +132,10 @@ class Tablet(object):
 
   def populate(self, dbname, create_sql, insert_sqls=[]):
       self.create_db(dbname)
-      self.mquery(dbname, create_sql)
+      if isinstance(create_sql, basestring):
+        create_sql= [create_sql]
+      for q in create_sql:
+        self.mquery(dbname, q)
       for q in insert_sqls:
         self.mquery(dbname, q, write=True)
 
@@ -167,7 +170,7 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, key_start=None, key_end=None, start=False):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, key_start=None, key_end=None, start=False, auth=False):
     self.keyspace = keyspace
     self.shard = shard
     if keyspace:
@@ -204,7 +207,7 @@ class Tablet(object):
         expected_state = "OPEN"
       else:
         expected_state = "NOT_SERVING"
-      self.start_vttablet(wait_for_state=expected_state)
+      self.start_vttablet(wait_for_state=expected_state, auth=auth)
 
   @property
   def tablet_dir(self):
