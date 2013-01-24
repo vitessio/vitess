@@ -77,11 +77,11 @@ def run_test_zkocc():
   time.sleep(1)
 
   # create a python client. The first address is bad, will test the retry logic
-  zkocc_client = zkocc.ZkOccConnection("localhost:14849,localhost:14850,localhost:14851", 30)
+  zkocc_client = zkocc.ZkOccConnection("localhost:14849,localhost:14850,localhost:14851", "test_nj", 30)
   zkocc_client.dial()
 
   # test failure for a python client that cannot connect
-  bad_zkocc_client = zkocc.ZkOccConnection("localhost:14848,localhost:14849", 30)
+  bad_zkocc_client = zkocc.ZkOccConnection("localhost:14848,localhost:14849", "test_nj", 30)
   bad_zkocc_client.dial()
   logging.getLogger().setLevel(logging.ERROR)
   try:

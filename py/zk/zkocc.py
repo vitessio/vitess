@@ -103,11 +103,12 @@ class ZkOccConnection(object):
   max_attempts = 2
 
   # addrs is a comma separated list of server:ip pairs.
-  def __init__(self, addrs, timeout, user=None, password=None):
+  def __init__(self, addrs, local_cell, timeout, user=None, password=None):
     self.timeout = timeout
     addrs_array = addrs.split(',')
     self.addr_count = len(addrs_array)
     self.addrs = itertools.cycle(addrs_array)
+    self.local_cell = local_cell
 
     if bool(user) != bool(password):
       raise ValueError("You must provide either both or none of user and password.")
@@ -115,6 +116,20 @@ class ZkOccConnection(object):
     self.password = password
 
     self.simpleConn = None
+
+  def _resolve_path(self, zk_path):
+    # Maps a 'meta-path' to a cell specific path.
+    # '/zk/local/blah' -> '/zk/vb/blah'
+    parts = zk_path.split('/')
+
+    if len(parts) < 3:
+      return zk_path
+
+    if parts[2] != 'local':
+      return zk_path
+
+    parts[2] = self.local_cell
+    return '/'.join(parts)
 
   def dial(self):
     if self.simpleConn:
@@ -146,7 +161,7 @@ class ZkOccConnection(object):
     attempt = 0
     while True:
       try:
-        return self.simpleConn.get(path)
+        return self.simpleConn.get(self._resolve_path(path))
       except Exception as e:
         attempt += 1
         if attempt >= self.max_attempts:
@@ -165,7 +180,7 @@ class ZkOccConnection(object):
     attempt = 0
     while True:
       try:
-        return self.simpleConn.getv(paths)
+        return self.simpleConn.getv([self._resolve_path(p) for p in paths])
       except Exception as e:
         attempt += 1
         if attempt >= self.max_attempts:
@@ -184,7 +199,7 @@ class ZkOccConnection(object):
     attempt = 0
     while True:
       try:
-        return self.simpleConn.children(path)
+        return self.simpleConn.children(self._resolve_path(path))
       except Exception as e:
         attempt += 1
         if attempt >= self.max_attempts:
