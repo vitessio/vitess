@@ -3,6 +3,7 @@
 
 import hmac
 import json
+import logging
 import os
 import subprocess
 import shutil
@@ -11,18 +12,19 @@ import unittest
 
 import MySQLdb
 from net import gorpc
+from net import bsonrpc
 from vtdb import vt_occ2 as db
-from vtdb import tablet2
 from vtdb import dbexceptions
 
 LOGFILE = "/tmp/vtocc.log"
 QUERYLOGFILE = "/tmp/vtocc_queries.log"
 
 # This is a VtOCCConnection that doesn't attempt to do authentication.
-class BareOCCConnection(db.VtOCCConnection):
-  @property
-  def uri(self):
-    return 'http://%s/_bson_rpc_/auth' % self.addr
+class BsonConnection(bsonrpc.BsonRpcClient):
+  def __init__(self, addr, timeout, user=None, password=None):
+    bsonrpc.BsonRpcClient.__init__(self, addr, timeout, user, password)
+    # Force uri to use the auth
+    self.uri = 'http://%s/_bson_rpc_/auth' % self.addr
 
 
 class BaseTest(unittest.TestCase):
@@ -139,15 +141,22 @@ class BaseTest(unittest.TestCase):
 class TestAuthentication(BaseTest):
 
   def setUp(self):
-    self.conn = BareOCCConnection(self.vtocc_uri, None, 2)
+    for i in range(30):
+      try:
+        self.conn = BsonConnection(self.vtocc_uri, 2)
+        self.conn.dial()
+      except dbexceptions.OperationalError:
+        if i == 29:
+          raise
+        time.sleep(1)
 
   def call(self, *args, **kwargs):
-    return self.conn.client.call(*args, **kwargs)
+    return self.conn.call(*args, **kwargs)
 
   def authenticate(self, user, password):
-    challenge = self.call('AuthenticatorCRAMMD5.GetNewChallenge', "").reply['Challenge']
-    proof = user + " " + hmac.HMAC(str(password), challenge).hexdigest()
-    return self.call('AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
+    self.conn.user = user
+    self.conn.password = password
+    self.conn.authenticate()
 
   def test_correct_credentials(self):
     self.authenticate(self.user, self.password)
@@ -212,6 +221,7 @@ class TestConnection(BaseTest):
       BaseTest.start_vtocc()
 
 if __name__=="__main__":
+  logging.getLogger().setLevel(logging.ERROR)
   try:
     BaseTest._setUpClass()
     unittest.main(argv=["auth_test.py"])

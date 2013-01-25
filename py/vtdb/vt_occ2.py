@@ -4,7 +4,6 @@ import re
 import time
 import socket
 
-from net import gorpc
 from vtdb import tablet2
 from vtdb import dbexceptions
 
@@ -75,12 +74,6 @@ class VtOCCConnection(tablet2.TabletConnection):
   # failure after presumably being healthy.
   _time_failed = 0
 
-  def dial(self):
-    try:
-      tablet2.TabletConnection.dial(self)
-    except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
-
   def _convert_error(self, exception, method, *error_hints):
     # method used to be part of error_hints, now it's obligatory.
     error_hints = (method,) + error_hints
@@ -131,7 +124,7 @@ class VtOCCConnection(tablet2.TabletConnection):
       error_type = ERROR_APP_LEVEL
 
 
-    if method == 'commit' or error_type == ERROR_RETRY and self.transaction_id:
+    if error_type == ERROR_RETRY and (method == 'commit' or self.transaction_id):
       # With a transaction, you cannot retry, so just redial. The next action
       # will be successful. Masquerade as commands-out-of-sync - an operational
       # error that can be reattempted at the app level.

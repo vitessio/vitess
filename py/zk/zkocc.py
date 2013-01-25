@@ -1,4 +1,3 @@
-import hmac
 import itertools
 import logging
 
@@ -38,39 +37,13 @@ class ZkOccError(Exception):
 class SimpleZkOccConnection(object):
 
   def __init__(self, addr, timeout, user=None, password=None):
-    self.addr = addr
-    self.timeout = timeout
-
-    if bool(user) != bool(password):
-      raise ValueError("You must provide either both or none of user and password.")
-    self.user = user
-    self.password = password
-    self.use_auth = bool(user)
-
-    self.client = bsonrpc.BsonRpcClient(self.uri, self.timeout)
+    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
 
   def dial(self):
-    if self.client:
-      self.client.close()
-    if self.use_auth:
-      self.authenticate()
-
-  def authenticate(self):
-    challenge = self.client.call('AuthenticatorCRAMMD5.GetNewChallenge', "").reply['Challenge']
-    # CRAM-MD5 authentication.
-    proof = self.user + " " + hmac.HMAC(self.password, challenge).hexdigest()
-    self.client.call('AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
-
-  @property
-  def uri(self):
-    if self.use_auth:
-      return 'http://%s/_bson_rpc_/auth' % self.addr
-    return 'http://%s/_bson_rpc_' % self.addr
+    self.client.dial()
 
   def close(self):
     self.client.close()
-
-  __del__ = close
 
   # returns a ZkNode, see header
   def get(self, path):

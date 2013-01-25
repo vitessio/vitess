@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-from net import mc_bson_request
 from vtdb import dbexceptions
 
 class BaseCursor(object):
@@ -107,12 +106,7 @@ class TabletCursor(BaseCursor):
 # Standard cursor when connecting to a sharded backend.
 class Cursor(BaseCursor):
   def execute(self, sql, bind_variables=None, key=None, keys=None):
-    try:
-      return self._execute(sql, bind_variables, key=key, keys=keys)
-    except mc_bson_request.MCBSonException as e:
-      if str(e) == 'unavailable':
-        self.connection._load_tablets()
-      raise
+    return self._execute(sql, bind_variables, key=key, keys=keys)
 
 class KeyedCursor(BaseCursor):
   def __init__(self, connection, key=None, keys=None):

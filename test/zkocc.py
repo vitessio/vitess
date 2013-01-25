@@ -82,13 +82,18 @@ def run_test_zkocc():
 
   # test failure for a python client that cannot connect
   bad_zkocc_client = zkocc.ZkOccConnection("localhost:14848,localhost:14849", "test_nj", 30)
-  bad_zkocc_client.dial()
+  try:
+    bad_zkocc_client.dial()
+    raise utils.TestError('exception expected')
+  except zkocc.ZkOccError as e:
+    if str(e) != "Cannot dial to any server":
+      raise utils.TestError('Unexpected exception: ', str(e))
   logging.getLogger().setLevel(logging.ERROR)
   try:
     bad_zkocc_client.get("/zk/test_nj/zkocc1/data1")
     raise utils.TestError('exception expected')
   except zkocc.ZkOccError as e:
-    if str(e) != "zkocc get command failed 2 times: ('get failed', GoRpcError(error(111, 'Connection refused'), 'ZkReader.Get'))":
+    if str(e) != "Cannot dial to any server":
       raise utils.TestError('Unexpected exception: ', str(e))
   logging.getLogger().setLevel(logging.WARNING)
 
@@ -203,7 +208,7 @@ Stale = false
     zkocc_client.get("/zk/test_nj/zkocc1/data1")
     raise utils.TestError('exception expected')
   except zkocc.ZkOccError as e:
-    if str(e) != "zkocc get command failed 2 times: ('get failed', GoRpcError(error(111, 'Connection refused'), 'ZkReader.Get'))":
+    if str(e) != "Cannot dial to any server":
       raise utils.TestError('Unexpected exception: ', str(e))
   logging.getLogger().setLevel(logging.WARNING)
 

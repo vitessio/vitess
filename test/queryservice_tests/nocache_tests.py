@@ -71,7 +71,7 @@ class TestNocache(framework.TestCase):
       self.assertEqual(e[0], 1062)
       self.assertContains(e[1], "error: Duplicate")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
     finally:
       self.env.execute("rollback")
     vend = self.env.debug_vars()
@@ -97,7 +97,7 @@ class TestNocache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: DMLs")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Errors.Fail", 0)+1, vend.Errors.Fail)
 
@@ -123,7 +123,7 @@ class TestNocache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Disallowed")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
 
     # If these throw no exceptions, we're good
     self.env.execute("begin")
@@ -154,7 +154,7 @@ class TestNocache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "timeout")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
     finally:
       cu2.close()
       co2.close()
@@ -177,7 +177,7 @@ class TestNocache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Transaction")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)
@@ -237,7 +237,7 @@ class TestNocache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Row")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
     self.env.execute("set vt_max_result_size=10000")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.MaxResultSize, 10000)
@@ -252,25 +252,19 @@ class TestNocache(framework.TestCase):
       cu.execute("select sleep(0.5) from vtocc_test", {})
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       if "error: Query" not in e[1] and "error: Lost connection" not in e[1]:
-        print e[1]
-        self.assertFail("Query not killed as expected")
+        self.fail("Query not killed as expected")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
 
     try:
       cu.execute("select 1 from dual", {})
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Transaction")
     else:
-      self.assertFail("Did not receive exception")
+      self.fail("Did not receive exception")
 
-    try:
-      cu.close()
-      conn.close()
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
-      self.assertContains(str(e), "error: Transaction")
-    else:
-      self.assertFail("Did not receive exception")
+    cu.close()
+    conn.close()
 
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActivePool.Timeout, 250000000)
@@ -357,7 +351,7 @@ class TestNocache(framework.TestCase):
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
       self.assertContains(e[1], err)
     else:
-      self.assertFail("Did not receive exception: " + query)
+      self.fail("Did not receive exception: " + query)
     finally:
       self.env.execute("rollback")
 

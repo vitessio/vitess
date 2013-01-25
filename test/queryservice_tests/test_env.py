@@ -28,13 +28,19 @@ class EnvironmentError(Exception):
 class TestEnv(object):
 
   def connect(self):
-    return db.connect("localhost:%s" % self.tablet.port, 2, dbname='vt_test_keyspace')
+    c = db.connect("localhost:%s" % self.tablet.port, 2, dbname='vt_test_keyspace')
+    c.max_attempts = 1
+    return c
 
   def execute(self, query, binds=None, cursorclass=None):
     if binds is None:
       binds = {}
     curs = self.conn.cursor(cursorclass=cursorclass)
-    curs.execute(query, binds)
+    try:
+      curs.execute(query, binds)
+    except mysql.OperationalError:
+      self.conn = self.connect()
+      raise
     return curs
 
   def debug_vars(self):
@@ -292,7 +298,9 @@ class VtoccTestEnv(TestEnv):
     shutil.rmtree(self.mysqldir)
 
   def connect(self):
-    return db.connect("localhost:9461", 2, dbname='vt_test_keyspace')
+    c = db.connect("localhost:9461", 2, dbname='vt_test_keyspace')
+    c.max_attempts = 1
+    return c
 
   def mysql_connect(self):
     return mysql.connect(

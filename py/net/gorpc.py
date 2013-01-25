@@ -120,21 +120,26 @@ class GoRpcClient(object):
     self.start_time = None
     # FIXME(msolomon) make this random initialized?
     self.seq = 0
-    self._conn = None
+    self.conn = None
     self.data = None
 
-  @property
-  def conn(self):
-    if not self._conn:
-      self._conn = _GoRpcConn(self.timeout)
-      self._conn.dial(self.uri)
-    return self._conn
+  def dial(self):
+    if self.conn:
+      self.close()
+    conn = _GoRpcConn(self.timeout)
+    try:
+      conn.dial(self.uri)
+    except socket.error as e:
+      raise GoRpcError(e)
+    self.conn = conn
 
   def close(self):
-    if self._conn:
-      self._conn.close()
-      self._conn = None
+    if self.conn:
+      self.conn.close()
+      self.conn = None
     self.start_time = None
+
+  __del__ = close
 
   def next_sequence_id(self):
     self.seq += 1

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import logging
 import optparse
 import unittest
 import sys
@@ -24,6 +25,7 @@ if __name__ == "__main__":
   parser.add_option("--no-build", action="store_true")
   (options, args) = parser.parse_args()
   utils.options = options
+  logging.getLogger().setLevel(logging.ERROR)
 
   suite = unittest.TestSuite()
   if args:

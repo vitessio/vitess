@@ -5,6 +5,7 @@
 # Go-style RPC client using BSON as the codec.
 
 import bson
+import hmac
 import struct
 try:
   # use optimized cbson which has slightly different API
@@ -25,6 +26,33 @@ unpack_length = len_struct.unpack_from
 len_struct_size = len_struct.size
 
 class BsonRpcClient(gorpc.GoRpcClient):
+  def __init__(self, addr, timeout, user=None, password=None):
+    if bool(user) != bool(password):
+      raise ValueError("You must provide either both or none of user and password.")
+    self.addr = addr
+    self.user = user
+    self.password = password
+    if self.user:
+      uri = 'http://%s/_bson_rpc_/auth' % self.addr
+    else:
+      uri = 'http://%s/_bson_rpc_' % self.addr
+    gorpc.GoRpcClient.__init__(self, uri, timeout)
+
+  def dial(self):
+    gorpc.GoRpcClient.dial(self)
+    if self.user:
+      try:
+        self.authenticate()
+      except gorpc.GoRpcError:
+        self.close()
+        raise
+
+  def authenticate(self):
+    challenge = self.call('AuthenticatorCRAMMD5.GetNewChallenge', "").reply['Challenge']
+    # CRAM-MD5 authentication.
+    proof = self.user + " " + hmac.HMAC(self.password, challenge).hexdigest()
+    self.call('AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
+
   def encode_request(self, req):
     try:
       if not isinstance(req.body, dict):
