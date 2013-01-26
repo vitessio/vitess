@@ -59,3 +59,23 @@ func ReloadSchema() {
 func GetSessionId() int64 {
 	return SqlQueryRpcService.sessionId
 }
+
+func IsCachePoolAvailable() bool {
+	return !SqlQueryRpcService.qe.cachePool.IsClosed()
+}
+
+func GetCurrentInvalidationPosition() (invalidationPosition string, err error) {
+	return SqlQueryRpcService.qe.getCurrentInvalidationPosition()
+}
+
+func PurgeRowCache() {
+	SqlQueryRpcService.qe.purgeRowCache()
+}
+
+func InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
+	SqlQueryRpcService.qe.Invalidate(cacheInvalidate)
+}
+
+func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
+	SqlQueryRpcService.qe.InvalidateForDDL(ddlInvalidate)
+}

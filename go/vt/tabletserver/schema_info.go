@@ -45,6 +45,7 @@ type SchemaInfo struct {
 	reloadTime     time.Duration
 	lastChange     time.Time
 	ticks          *timer.Timer
+	hashRegistry   map[string]string
 }
 
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
@@ -72,8 +73,10 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
+
+	si.hashRegistry = make(map[string]string)
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
-	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", sqltypes.NULL, "", si.cachePool)
+	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", sqltypes.NULL, "", si.cachePool, si.hashRegistry)
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])
@@ -84,6 +87,7 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 			row[2],          // create_time
 			row[3].String(), // table_comment
 			si.cachePool,
+			si.hashRegistry,
 		)
 		if tableInfo == nil {
 			continue
@@ -113,6 +117,7 @@ func (si *SchemaInfo) Close() {
 	si.connPool.Close()
 	si.tables = nil
 	si.queries = nil
+	si.hashRegistry = nil
 }
 
 func (si *SchemaInfo) Reload() {
@@ -123,6 +128,7 @@ func (si *SchemaInfo) Reload() {
 	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix())), maxTableCount, false)
 	if err != nil {
 		relog.Warning("Could not get table list for reload: %v", err)
+		return
 	}
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
@@ -165,6 +171,7 @@ func (si *SchemaInfo) createTable(conn PoolConnection, tableName string) {
 		tables.Rows[0][2],          // create_time
 		tables.Rows[0][3].String(), // table_comment
 		si.cachePool,
+		si.hashRegistry,
 	)
 	if tableInfo == nil {
 		panic(NewTabletError(FATAL, "Could not read table info: %s", tableName))

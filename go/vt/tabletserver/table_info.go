@@ -19,8 +19,6 @@ import (
 	"code.google.com/p/vitess/go/vt/schema"
 )
 
-var hashRegistry map[string]string = make(map[string]string)
-
 type TableInfo struct {
 	*schema.Table
 	Cache *RowCache
@@ -28,12 +26,12 @@ type TableInfo struct {
 	hits, absent, misses, invalidations int64
 }
 
-func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (self *TableInfo) {
+func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) (self *TableInfo) {
 	if tableName == "dual" {
 		return &TableInfo{Table: schema.NewTable(tableName)}
 	}
 	self = loadTableInfo(conn, tableName)
-	self.initRowCache(conn, tableType, createTime, comment, cachePool)
+	self.initRowCache(conn, tableType, createTime, comment, cachePool, hashRegistry)
 	return self
 }
 
@@ -105,7 +103,7 @@ func (self *TableInfo) fetchIndexes(conn PoolConnection) bool {
 	return true
 }
 
-func (self *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
+func (self *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) {
 	if cachePool.IsClosed() {
 		return
 	}
@@ -131,7 +129,7 @@ func (self *TableInfo) initRowCache(conn PoolConnection, tableType string, creat
 		}
 	}
 
-	thash := self.computePrefix(conn, createTime)
+	thash := self.computePrefix(conn, createTime, hashRegistry)
 	if thash == "" {
 		return
 	}
@@ -142,7 +140,7 @@ func (self *TableInfo) initRowCache(conn PoolConnection, tableType string, creat
 
 var autoIncr = regexp.MustCompile("auto_increment=\\d+")
 
-func (self *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Value) string {
+func (self *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Value, hashRegistry map[string]string) string {
 	if createTime.IsNull() {
 		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
 		return ""

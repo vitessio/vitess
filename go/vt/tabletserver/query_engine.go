@@ -19,7 +19,8 @@ import (
 )
 
 const (
-	MAX_RESULT_NAME = "_vtMaxResultSize"
+	MAX_RESULT_NAME                = "_vtMaxResultSize"
+	ROWCACHE_INVALIDATION_POSITION = "ROWCACHE_INVALIDATION_POSITION"
 )
 
 //-----------------------------------------------
@@ -28,7 +29,9 @@ type QueryEngine struct {
 	// Obtain write lock to start/stop query service
 	mu sync.RWMutex
 
-	cachePool      *CachePool
+	cachePool *CachePool
+	//this is used to access administrative keys in row-cache using the same.
+	adminCache     *GenericCache
 	schemaInfo     *SchemaInfo
 	connPool       *ConnectionPool
 	streamConnPool *ConnectionPool
@@ -67,6 +70,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
 	qe.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.adminCache = NewGenericCache(qe.cachePool)
 	qe.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool(config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.reservedPool = NewReservedPool()
@@ -326,6 +330,18 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	qe.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
+func (qe *QueryEngine) getCurrentInvalidationPosition() (invalidationPosition string, err error) {
+	value, _, _, err := qe.adminCache.Gets(ROWCACHE_INVALIDATION_POSITION)
+	if err != nil {
+		return "", err
+	}
+	return string(value), nil
+}
+
+func (qe *QueryEngine) purgeRowCache() {
+	qe.adminCache.PurgeCache()
+}
+
 func (qe *QueryEngine) Invalidate(cacheInvalidate *proto.CacheInvalidate) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
@@ -351,13 +367,14 @@ func (qe *QueryEngine) Invalidate(cacheInvalidate *proto.CacheInvalidate) {
 		}
 		atomic.AddInt64(&tableInfo.invalidations, invalidations)
 	}
+	qe.adminCache.Set(ROWCACHE_INVALIDATION_POSITION, 0, 0, []byte(cacheInvalidate.Position))
 }
 
-func (qe *QueryEngine) InvalidateForDDL(ddl string) {
+func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
 
-	ddlPlan := sqlparser.DDLParse(ddl)
+	ddlPlan := sqlparser.DDLParse(ddlInvalidate.DDL)
 	if ddlPlan.Action == 0 {
 		panic(NewTabletError(FAIL, "DDL is not understood"))
 	}
@@ -365,6 +382,7 @@ func (qe *QueryEngine) InvalidateForDDL(ddl string) {
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
 		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
+	qe.adminCache.Set(ROWCACHE_INVALIDATION_POSITION, 0, 0, []byte(ddlInvalidate.Position))
 }
 
 //-----------------------------------------------
@@ -425,7 +443,7 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
 	for _, pk := range pkRows {
-		key := buildKey(tableInfo, pk)
+		key := buildKey(pk)
 		if cacheRow, cas := tableInfo.Cache.Get(key); cacheRow != nil {
 			/*if dbrow := qe.compareRow(plan, cacheRow, pk); dbrow != nil {
 				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
@@ -440,7 +458,7 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 			}
 			row := resultFromdb.Rows[0]
 			pkRow := applyFilter(tableInfo.PKColumns, row)
-			newKey := buildKey(tableInfo, pkRow)
+			newKey := buildKey(pkRow)
 			if newKey != key {
 				relog.Warning("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, key, newKey)
 			}
@@ -542,7 +560,7 @@ func (qe *QueryEngine) execInsertPKRows(logStats *sqlQueryStats, conn PoolConnec
 	// TODO: We need to do this only if insert has on duplicate key clause
 	if invalidator != nil {
 		for _, pk := range pkRows {
-			if key := buildKey(plan.TableInfo, pk); key != "" {
+			if key := buildKey(pk); key != "" {
 				invalidator.Delete(key)
 			}
 		}
@@ -557,7 +575,7 @@ func (qe *QueryEngine) execDMLPK(logStats *sqlQueryStats, conn PoolConnection, p
 	result = qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, nil, bsc)
 	if invalidator != nil {
 		for _, pk := range pkRows {
-			key := buildKey(plan.TableInfo, pk)
+			key := buildKey(pk)
 			invalidator.Delete(key)
 		}
 	}
@@ -582,7 +600,7 @@ func (qe *QueryEngine) execDMLPKRows(logStats *sqlQueryStats, conn PoolConnectio
 		bsc := buildStreamComment(plan.TableInfo, singleRow, secondaryList)
 		rowsAffected += qe.directFetch(logStats, conn, plan.OuterQuery, plan.BindVars, pkRow, bsc).RowsAffected
 		if invalidator != nil {
-			key := buildKey(plan.TableInfo, pkRow)
+			key := buildKey(pkRow)
 			invalidator.Delete(key)
 		}
 	}

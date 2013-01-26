@@ -42,13 +42,17 @@ type ConnectionInfo struct {
 	ConnectionId int64
 }
 
+type DmlType struct {
+	Table string
+	Keys  []interface{}
+}
+
 type CacheInvalidate struct {
-	Dmls []struct {
-		Table string
-		Keys  []interface{}
-	}
+	Position string
+	Dmls     []DmlType
 }
 
 type DDLInvalidate struct {
-	DDL string
+	Position string
+	DDL      string
 }

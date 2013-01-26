@@ -31,7 +31,9 @@ func NewCachePool(capacity int, queryTimeout time.Duration, idleTimeout time.Dur
 	if seconds != 0 {
 		seconds += 15
 	}
-	return &CachePool{pools.NewRoundRobin(capacity, idleTimeout), seconds}
+	cachePool := &CachePool{pools.NewRoundRobin(capacity, idleTimeout), seconds}
+	http.Handle(statsURL, cachePool)
+	return cachePool
 }
 
 func (self *CachePool) Open(connFactory CreateCacheFunc) {
@@ -46,7 +48,6 @@ func (self *CachePool) Open(connFactory CreateCacheFunc) {
 		return &Cache{c, self}, nil
 	}
 	self.RoundRobin.Open(f)
-	http.Handle(statsURL, self)
 }
 
 // You must call Recycle on the *Cache once done.

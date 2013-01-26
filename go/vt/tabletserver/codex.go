@@ -115,7 +115,7 @@ func validateValue(col *schema.TableColumn, value sqltypes.Value) {
 	}
 }
 
-func buildKey(tableInfo *TableInfo, row []sqltypes.Value) (key string) {
+func buildKey(row []sqltypes.Value) (key string) {
 	buf := bytes.NewBuffer(make([]byte, 0, 32))
 	for i, pkValue := range row {
 		if pkValue.IsNull() {
@@ -208,8 +208,8 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 			pkValues[i] = n
 		}
 	}
-	if newKey = buildKey(tableInfo, pkValues); newKey != key {
+	if newKey = buildKey(pkValues); newKey != key {
 		relog.Warning("Error: Key mismatch, received: %s, computed: %s", key, newKey)
 	}
-	return buildKey(tableInfo, pkValues)
+	return buildKey(pkValues)
 }

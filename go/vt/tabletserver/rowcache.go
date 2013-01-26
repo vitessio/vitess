@@ -14,6 +14,7 @@ import (
 )
 
 var cacheStats = stats.NewTimings("Cache")
+var cacheCounters = stats.NewCounters("CacheCounters")
 
 var pack = binary.BigEndian
 
@@ -152,4 +153,68 @@ func rowLen(row []sqltypes.Value) int {
 		length += len(v.Raw())
 	}
 	return length
+}
+
+type GenericCache struct {
+	cachePool *CachePool
+}
+
+func NewGenericCache(cachePool *CachePool) *GenericCache {
+	return &GenericCache{cachePool}
+}
+
+func (gc *GenericCache) Gets(key string) (value []byte, flags uint16, cas uint64, err error) {
+	if gc.cachePool.IsClosed() {
+		return
+	}
+
+	if key == "" {
+		return
+	}
+
+	conn := gc.cachePool.Get()
+	defer conn.Recycle()
+
+	defer cacheStats.Record("Exec", time.Now())
+	value, flags, cas, err = conn.Gets(key)
+	if err != nil {
+		conn.Close()
+		panic(NewTabletError(FATAL, "%s", err))
+	}
+	return
+}
+
+func (gc *GenericCache) Set(key string, flags uint16, timeout uint64, value []byte) {
+	if gc.cachePool.IsClosed() {
+		return
+	}
+
+	if key == "" || value == nil {
+		return
+	}
+
+	conn := gc.cachePool.Get()
+	defer conn.Recycle()
+
+	_, err := conn.Set(key, flags, timeout, value)
+	if err != nil {
+		conn.Close()
+		panic(NewTabletError(FATAL, "%s", err))
+	}
+}
+
+func (gc *GenericCache) PurgeCache() {
+	if gc.cachePool.IsClosed() {
+		return
+	}
+
+	conn := gc.cachePool.Get()
+	defer conn.Recycle()
+
+	err := conn.FlushAll()
+	if err != nil {
+		conn.Close()
+		panic(NewTabletError(FATAL, "%s", err))
+	}
+	cacheCounters.Add("PurgeCache", 1)
 }

@@ -98,6 +98,7 @@ func main() {
 	initQueryService(dbcfgs)
 	initUpdateStreamService(mycnf)
 	initAgent(dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
+	ts.RegisterCacheInvalidator()                                // depends on both query and updateStream
 
 	rpc.HandleHTTP()
 
@@ -202,9 +203,15 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 			}
 			ts.AllowQueries(dbcfgs.App)
 			mysqlctl.EnableUpdateStreamService(string(newTablet.Type), dbcfgs)
+			if newTablet.Type != tm.TYPE_MASTER {
+				ts.StartRowCacheInvalidation()
+			}
 		} else {
 			ts.DisallowQueries(false)
 			mysqlctl.DisableUpdateStreamService()
+			if newTablet.Type != tm.TYPE_MASTER {
+				ts.StopRowCacheInvalidation()
+			}
 		}
 	})
 	agent.Start(bindAddr, mycnf.MysqlAddr())

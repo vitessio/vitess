@@ -204,7 +204,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 			return fmt.Errorf("Invalid start position %v", req.StartPosition)
 		}
 	} else {
-		if !isRelayPositionValid(startCoordinates) {
+		if !IsRelayPositionValid(startCoordinates) {
 			return fmt.Errorf("Could not locate the start position %v", req.StartPosition)
 		}
 	}
@@ -223,7 +223,7 @@ func isMasterPositionValid(startCoordinates *ReplicationCoordinates) bool {
 
 //This verifies the correctness of the start position.
 //The seek for relay logs depends on the RelayFilename and correct MasterFilename and Position.
-func isRelayPositionValid(startCoordinates *ReplicationCoordinates) bool {
+func IsRelayPositionValid(startCoordinates *ReplicationCoordinates) bool {
 	if startCoordinates.RelayFilename == "" || startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
 		return false
 	}

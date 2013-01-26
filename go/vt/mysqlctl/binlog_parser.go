@@ -34,7 +34,7 @@ const (
 	USE           = "Use "
 )
 
-var sqlKwMap = map[string]string{
+var SqlKwMap = map[string]string{
 	"create":   DDL,
 	"alter":    DDL,
 	"drop":     DDL,
@@ -71,6 +71,14 @@ type BinlogPosition struct {
 	Timestamp   int64
 	Xid         uint64
 	GroupId     uint64
+}
+
+func (binlogPosition *BinlogPosition) GetCoordinates() *ReplicationCoordinates {
+	return binlogPosition.coordinates
+}
+
+func (binlogPosition *BinlogPosition) SetCoordinates(repl *ReplicationCoordinates) {
+	binlogPosition.coordinates = repl
 }
 
 //Api Interface
@@ -140,8 +148,8 @@ type Blp struct {
 	startPosition    *ReplicationCoordinates
 	currentPosition  *BinlogPosition
 	globalState      *UpdateStream
+	dbmatch          bool
 	blpStats
-	dbmatch bool
 }
 
 func NewBlp(startCoordinates *ReplicationCoordinates, updateStream *UpdateStream) *Blp {
@@ -710,7 +718,7 @@ func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos BinlogP
 	response.SqlType = dmlType
 	response.TableName = tableName
 	response.PkColNames = pkColNames
-	response.PkValues = make([][]interface{}, len(eventTree.Sub[2:]))
+	response.PkValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))
 
 	rowPk := make([]interface{}, pkColLen)
 	for _, node := range eventTree.Sub[2:] {
@@ -809,14 +817,14 @@ func createDdlStream(lineBuffer *eventBuffer) (ddlStream *UpdateResponse) {
 func getSqlType(line []byte) string {
 	line = bytes.TrimSpace(line)
 	firstKw := string(bytes.SplitN(line, SPACE, 2)[0])
-	sqlType, _ := sqlKwMap[firstKw]
+	sqlType, _ := SqlKwMap[firstKw]
 	return sqlType
 }
 
 func getDmlType(line []byte) string {
 	line = bytes.TrimSpace(line)
 	dmlKw := string(bytes.SplitN(line, SPACE, 2)[0])
-	sqlType, ok := sqlKwMap[dmlKw]
+	sqlType, ok := SqlKwMap[dmlKw]
 	if ok && sqlType == DML {
 		return dmlKw
 	}
