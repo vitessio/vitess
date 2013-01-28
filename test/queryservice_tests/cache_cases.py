@@ -78,9 +78,9 @@ cases = [
   # (1.foo, 2.bar, 2.foo)
 
   MultiCase(
-      "SELECT_CACHE_RESULT", #  it currently doesn't cache
+      "PASS_SELECT", #  it currently doesn't cache
       ['select * from vtocc_cached',
-       Case(query_plan="SELECT_CACHE_RESULT",
+       Case(query_plan="PASS_SELECT",
             sql="select eid, bid, name, foo from vtocc_cached",
             rewritten=[
               "select eid, bid, name, foo from vtocc_cached where 1 != 1",

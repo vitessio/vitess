@@ -18,7 +18,6 @@ type PlanType int
 const (
 	PLAN_PASS_SELECT PlanType = iota
 	PLAN_PASS_DML
-	PLAN_SELECT_CACHE_RESULT
 	PLAN_SELECT_PK
 	PLAN_SELECT_SUBQUERY
 	PLAN_DML_PK
@@ -27,28 +26,33 @@ const (
 	PLAN_INSERT_SUBQUERY
 	PLAN_SET
 	PLAN_DDL
+	NumPlans
 )
 
-func (pt PlanType) IsSelect() bool {
-	return pt == PLAN_PASS_SELECT || pt == PLAN_SELECT_CACHE_RESULT || pt == PLAN_SELECT_PK || pt == PLAN_SELECT_SUBQUERY
+// Must exactly match order of plan constants.
+var planName = []string{
+	"PASS_SELECT",
+	"PASS_DML",
+	"SELECT_PK",
+	"SELECT_SUBQUERY",
+	"DML_PK",
+	"DML_SUBQUERY",
+	"INSERT_PK",
+	"INSERT_SUBQUERY",
+	"SET",
+	"DDL",
 }
 
-var planName = map[PlanType]string{
-	PLAN_PASS_SELECT:         "PASS_SELECT",
-	PLAN_PASS_DML:            "PASS_DML",
-	PLAN_SELECT_CACHE_RESULT: "SELECT_CACHE_RESULT",
-	PLAN_SELECT_PK:           "SELECT_PK",
-	PLAN_SELECT_SUBQUERY:     "SELECT_SUBQUERY",
-	PLAN_DML_PK:              "DML_PK",
-	PLAN_DML_SUBQUERY:        "DML_SUBQUERY",
-	PLAN_INSERT_PK:           "INSERT_PK",
-	PLAN_INSERT_SUBQUERY:     "INSERT_SUBQUERY",
-	PLAN_SET:                 "SET",
-	PLAN_DDL:                 "DDL",
+func (pt PlanType) String() string {
+	return planName[pt]
+}
+
+func (pt PlanType) IsSelect() bool {
+	return pt == PLAN_PASS_SELECT || pt == PLAN_SELECT_PK || pt == PLAN_SELECT_SUBQUERY
 }
 
 func (pt PlanType) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", planName[pt])), nil
+	return ([]byte)(fmt.Sprintf("\"%s\"", pt.String())), nil
 }
 
 type ReasonType int
@@ -69,24 +73,29 @@ const (
 	REASON_HAS_HINTS
 )
 
-var reasonName = map[ReasonType]string{
-	REASON_DEFAULT:       "DEFAULT",
-	REASON_SELECT:        "SELECT",
-	REASON_TABLE:         "TABLE",
-	REASON_NOCACHE:       "NOCACHE",
-	REASON_SELECT_LIST:   "SELECT_LIST",
-	REASON_FOR_UPDATE:    "FOR_UPDATE",
-	REASON_WHERE:         "WHERE",
-	REASON_ORDER:         "ORDER",
-	REASON_PKINDEX:       "PKINDEX",
-	REASON_NOINDEX_MATCH: "NOINDEX_MATCH",
-	REASON_TABLE_NOINDEX: "TABLE_NOINDEX",
-	REASON_PK_CHANGE:     "PK_CHANGE",
-	REASON_HAS_HINTS:     "HAS_HINTS",
+// Must exactly match order of reason constants.
+var reasonName = []string{
+	"DEFAULT",
+	"SELECT",
+	"TABLE",
+	"NOCACHE",
+	"SELECT_LIST",
+	"FOR_UPDATE",
+	"WHERE",
+	"ORDER",
+	"PKINDEX",
+	"NOINDEX_MATCH",
+	"TABLE_NOINDEX",
+	"PK_CHANGE",
+	"HAS_HINTS",
+}
+
+func (rt ReasonType) String() string {
+	return reasonName[rt]
 }
 
 func (rt ReasonType) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", reasonName[rt])), nil
+	return ([]byte)(fmt.Sprintf("\"%s\"", rt.String())), nil
 }
 
 // ExecPlan is built for selects and DMLs.
@@ -259,10 +268,7 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 		plan.Reason = REASON_SELECT_LIST
 		return plan
 	}
-	// The plan has improved
-	plan.PlanId = PLAN_SELECT_CACHE_RESULT
 	plan.ColumnNumbers = selects
-	plan.OuterQuery = node.GenerateDefaultQuery(tableInfo)
 
 	// where
 	conditions := node.At(SELECT_WHERE_OFFSET).execAnalyzeWhere()

@@ -5,7 +5,11 @@
 package tabletserver
 
 import (
+	"net/http"
+
+	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
+	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -33,6 +37,7 @@ func RegisterQueryService(config Config) {
 	}
 	SqlQueryRpcService = NewSqlQuery(config)
 	proto.RegisterAuthenticated(SqlQueryRpcService)
+	http.HandleFunc("/debug/health", healthCheck)
 }
 
 // AllowQueries can take an indefinite amount of time to return because
@@ -78,4 +83,17 @@ func InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
 
 func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	SqlQueryRpcService.qe.InvalidateForDDL(ddlInvalidate)
+}
+
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	err := SqlQueryRpcService.Execute(
+		new(rpcproto.Context),
+		&proto.Query{Sql: "select 1 from dual", SessionId: SqlQueryRpcService.sessionId},
+		new(mproto.QueryResult),
+	)
+	if err != nil {
+		w.Write([]byte("notok"))
+	}
+	w.Write([]byte("ok"))
 }

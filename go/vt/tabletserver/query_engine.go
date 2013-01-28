@@ -202,8 +202,19 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 	// cheap hack: strip trailing comment into a special bind var
 	stripTrailing(query)
 	basePlan := qe.schemaInfo.GetPlan(logStats, query.Sql)
+	planName := basePlan.PlanId.String()
+	logStats.PlanType = planName
+	defer func(start time.Time) {
+		duration := time.Now().Sub(start)
+		queryStats.Add(planName, duration)
+		if reply == nil {
+			basePlan.AddStats(1, duration, 0, 1)
+		} else {
+			basePlan.AddStats(1, duration, int64(len(reply.Rows)), 0)
+		}
+	}(time.Now())
+
 	if basePlan.PlanId == sqlparser.PLAN_DDL {
-		defer queryStats.Record("DDL", time.Now())
 		return qe.execDDL(logStats, query.Sql)
 	}
 
@@ -221,40 +232,24 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 			if plan.TableInfo != nil && plan.TableInfo.CacheType != 0 {
 				panic(NewTabletError(FAIL, "DML too complex for cached table"))
 			}
-			logStats.PlanType = "PASS_DML"
-			defer queryStats.Record("PASS_DML", time.Now())
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		case sqlparser.PLAN_INSERT_PK:
-			logStats.PlanType = "INSERT_PK"
-			defer queryStats.Record("INSERT_PK", time.Now())
 			reply = qe.execInsertPK(logStats, conn, plan, invalidator)
 		case sqlparser.PLAN_INSERT_SUBQUERY:
-			logStats.PlanType = "INSERT_SUBQUERY"
-			defer queryStats.Record("INSERT_SUBQUERY", time.Now())
 			reply = qe.execInsertSubquery(logStats, conn, plan, invalidator)
 		case sqlparser.PLAN_DML_PK:
-			logStats.PlanType = "DML_PK"
-			defer queryStats.Record("DML_PK", time.Now())
 			reply = qe.execDMLPK(logStats, conn, plan, invalidator)
 		case sqlparser.PLAN_DML_SUBQUERY:
-			logStats.PlanType = "DML_SUBQUERY"
-			defer queryStats.Record("DML_SUBQUERY", time.Now())
 			reply = qe.execDMLSubquery(logStats, conn, plan, invalidator)
 		default: // select or set in a transaction, just count as select
-			logStats.PlanType = "PASS_SELECT"
-			defer queryStats.Record("PASS_SELECT", time.Now())
 			reply = qe.execDirect(logStats, plan, conn)
 		}
 	} else if plan.ConnectionId != 0 {
 		conn := qe.reservedPool.Get(plan.ConnectionId)
 		defer conn.Recycle()
 		if plan.PlanId.IsSelect() {
-			logStats.PlanType = "PASS_SELECT"
-			defer queryStats.Record("PASS_SELECT", time.Now())
 			reply = qe.execDirect(logStats, plan, conn)
 		} else if plan.PlanId == sqlparser.PLAN_SET {
-			logStats.PlanType = "SET"
-			defer queryStats.Record("SET", time.Now())
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		} else {
 			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))
@@ -265,29 +260,16 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 			if plan.Reason == sqlparser.REASON_FOR_UPDATE {
 				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
-			logStats.PlanType = "PASS_SELECT"
-			defer queryStats.Record("PASS_SELECT", time.Now())
 			reply = qe.execSelect(logStats, plan)
 		case sqlparser.PLAN_SELECT_PK:
-			logStats.PlanType = "SELECT_PK"
-			defer queryStats.Record("SELECT_PK", time.Now())
 			reply = qe.execPK(logStats, plan)
 		case sqlparser.PLAN_SELECT_SUBQUERY:
-			logStats.PlanType = "SELECT_SUBQUERY"
-			defer queryStats.Record("SELECT_SUBQUERY", time.Now())
 			reply = qe.execSubquery(logStats, plan)
-		case sqlparser.PLAN_SELECT_CACHE_RESULT:
-			logStats.PlanType = "SELECT_CACHE_RESULT"
-			defer queryStats.Record("SELECT_CACHE_RESULT", time.Now())
-			// It may not be worth caching the results. So, just pass through.
-			reply = qe.execSelect(logStats, plan)
 		case sqlparser.PLAN_SET:
 			waitingForConnectionStart := time.Now()
 			conn := qe.connPool.Get()
 			logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 			defer conn.Recycle()
-			logStats.PlanType = "SET"
-			defer queryStats.Record("SET", time.Now())
 			reply = qe.execSet(logStats, conn, plan)
 		default:
 			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))

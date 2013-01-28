@@ -49,6 +49,12 @@ class TestEnv(object):
   def table_stats(self):
     return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/schema/tables")))
 
+  def query_stats(self):
+    return json.load(urllib2.urlopen("http://localhost:9461/debug/schema/query_stats"))
+
+  def health(self):
+    return urllib2.urlopen("http://localhost:9461/debug/health").read()
+
   def check_streamlog(self, cases, log):
     error_count = 0
 

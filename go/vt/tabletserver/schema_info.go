@@ -29,10 +29,35 @@ type ExecPlan struct {
 	*sqlparser.ExecPlan
 	TableInfo *TableInfo
 	Fields    []mproto.Field
+
+	mu         sync.Mutex
+	QueryCount int64
+	Time       time.Duration
+	RowCount   int64
+	ErrorCount int64
 }
 
 func (*ExecPlan) Size() int {
 	return 1
+}
+
+func (ep *ExecPlan) AddStats(queryCount int64, duration time.Duration, rowCount, errorCount int64) {
+	ep.mu.Lock()
+	ep.QueryCount += queryCount
+	ep.Time += duration
+	ep.RowCount += rowCount
+	ep.ErrorCount += errorCount
+	ep.mu.Unlock()
+}
+
+func (ep *ExecPlan) Stats() (queryCount int64, duration time.Duration, rowCount, errorCount int64) {
+	ep.mu.Lock()
+	queryCount = ep.QueryCount
+	duration = ep.Time
+	rowCount = ep.RowCount
+	errorCount = ep.ErrorCount
+	ep.mu.Unlock()
+	return
 }
 
 type SchemaInfo struct {
@@ -216,7 +241,7 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
-	plan = &ExecPlan{splan, tableInfo, nil}
+	plan = &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
 			relog.Warning("Cannot cache field info: %s", sql)
@@ -277,28 +302,53 @@ func (si *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
 	si.ticks.SetInterval(reloadTime)
 }
 
+type perQueryStats struct {
+	Query      string
+	Table      string
+	Plan       sqlparser.PlanType
+	QueryCount int64
+	Time       time.Duration
+	RowCount   int64
+	ErrorCount int64
+}
+
 func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if request.URL.Path == "/debug/schema/query_cache" {
+	if request.URL.Path == "/debug/schema/query_plans" {
 		keys := si.queries.Keys()
 		response.Header().Set("Content-Type", "text/plain")
-		if keys == nil {
-			response.Write([]byte("empty\n"))
-			return
-		}
 		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
 		for _, v := range keys {
-			response.Write([]byte(fmt.Sprintf("%s\n", v)))
+			response.Write([]byte(fmt.Sprintf("%#v\n", v)))
 			if plan := si.getQuery(v); plan != nil {
 				if b, err := json.MarshalIndent(plan.ExecPlan, "", "  "); err != nil {
 					response.Write([]byte(err.Error()))
 				} else {
 					response.Write(b)
-					response.Write(([]byte)("\n\n"))
 				}
+				response.Write(([]byte)("\n\n"))
 			}
 		}
+	} else if request.URL.Path == "/debug/schema/query_stats" {
+		keys := si.queries.Keys()
+		response.Header().Set("Content-Type", "application/json; charset=utf-8")
+		qstats := make([]perQueryStats, 0, len(keys))
+		for _, v := range keys {
+			if plan := si.getQuery(v); plan != nil {
+				var pqstats perQueryStats
+				pqstats.Query = unicoded(v)
+				pqstats.Table = plan.TableName
+				pqstats.Plan = plan.PlanId
+				pqstats.QueryCount, pqstats.Time, pqstats.RowCount, pqstats.ErrorCount = plan.Stats()
+				qstats = append(qstats, pqstats)
+			}
+		}
+		if b, err := json.MarshalIndent(qstats, "", "  "); err != nil {
+			response.Write([]byte(err.Error()))
+		} else {
+			response.Write(b)
+		}
 	} else if request.URL.Path == "/debug/schema/tables" {
-		response.Header().Set("Content-Type", "text/plain")
+		response.Header().Set("Content-Type", "application/json; charset=utf-8")
 		si.mu.Lock()
 		tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
 		var temp, totals struct{ hits, absent, misses, invalidations int64 }
@@ -332,4 +382,14 @@ func applyFieldFilter(columnNumbers []int, input []mproto.Field) (output []mprot
 		}
 	}
 	return output
+}
+
+// unicoded returns a valid UTF-8 string that json won't reject
+func unicoded(in string) (out string) {
+	for i, v := range in {
+		if v == 0xFFFD {
+			return in[:i]
+		}
+	}
+	return in
 }

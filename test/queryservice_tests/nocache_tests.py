@@ -18,8 +18,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("begin")
     binary_data = '\x00\'\"\b\n\r\t\x1a\\\x00\x0f\xf0\xff'
     self.env.execute("insert into vtocc_test values(4, null, null, '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\\x00\x0f\xf0\xff')")
-    bvar = {}
-    bvar['bindata'] = binary_data
+    bvar = {'bindata': binary_data}
     self.env.execute("insert into vtocc_test values(5, null, null, %(bindata)s)", bvar)
     self.env.execute("commit")
     cu = self.env.execute("select * from vtocc_test where intval=4")
@@ -103,8 +102,7 @@ class TestNocache(framework.TestCase):
 
   def test_trailing_comment(self):
     vstart = self.env.debug_vars()
-    bv={}
-    bv["ival"] = 1
+    bv={'ival': 1}
     self.env.execute("select * from vtocc_test where intval=%(ival)s", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
@@ -187,10 +185,8 @@ class TestNocache(framework.TestCase):
 
   def test_query_cache(self):
     self.env.execute("set vt_query_cache_size=1")
-    bv={}
-    bv["ival1"] = 1
+    bv={'ival1': 1, 'ival2': 1}
     self.env.execute("select * from vtocc_test where intval=%(ival1)s", bv)
-    bv["ival2"] = 1
     self.env.execute("select * from vtocc_test where intval=%(ival2)s", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.QueryCache.Length, 1)
@@ -306,11 +302,10 @@ class TestNocache(framework.TestCase):
     self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
 
   def test_bind_in_select(self):
-    bv = {}
-    bv['bv'] = 1
+    bv = {'bv': 1}
     cu = self.env.execute('select %(bv)s from vtocc_test', bv)
     self.assertEqual(cu.description, [('1', 8)])
-    bv['bv'] = 'abcd'
+    bv = {'bv': 'abcd'}
     cu = self.env.execute('select %(bv)s from vtocc_test', bv)
     self.assertEqual(cu.description, [('abcd', 253)])
 
@@ -341,6 +336,21 @@ class TestNocache(framework.TestCase):
       self.env.execute("delete from vtocc_strings")
       self.env.execute("commit")
 
+  def test_health(self):
+    self.assertEqual(self.env.health(), "ok")
+
+  def test_query_stats(self):
+    bv = {'eid': 1}
+    self.env.execute("select eid as query_stats from vtocc_a where eid = %(eid)s", bv)
+    self._verify_query_stats(self.env.query_stats(), "select eid as query_stats from vtocc_a where eid = :eid", "vtocc_a", "PASS_SELECT", 1, 2, 0)
+    try:
+      self.env.execute("select eid as query_stats from vtocc_a where dontexist(eid) = %(eid)s", bv)
+    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+      pass
+    else:
+      self.fail("Did not receive exception: " + query)
+    self._verify_query_stats(self.env.query_stats(), "select eid as query_stats from vtocc_a where dontexist(eid) = :eid", "vtocc_a", "PASS_SELECT", 1, 0, 1)
+
   def _verify_mismatch(self, query, bindvars=None):
     self._verify_error(query, bindvars, "error: Type mismatch")
 
@@ -354,6 +364,19 @@ class TestNocache(framework.TestCase):
       self.fail("Did not receive exception: " + query)
     finally:
       self.env.execute("rollback")
+
+  def _verify_query_stats(self, query_stats, query, table, plan, count, rows, errors):
+    for stat in query_stats:
+      if stat["Query"] != query:
+        continue
+      self.assertEqual(stat["Table"], table)
+      self.assertEqual(stat["Plan"], plan)
+      self.assertEqual(stat["QueryCount"], count)
+      self.assertEqual(stat["RowCount"], rows)
+      self.assertEqual(stat["ErrorCount"], errors)
+      self.assertTrue(stat["Time"] > 0)
+      return
+    self.fail("query %s not found" % query)
 
   def test_sqls(self):
     error_count = self.env.run_cases(nocache_cases.cases)
