@@ -86,11 +86,6 @@ def _get_repl_current_position():
 
 def setup():
   utils.zk_setup()
-  utils.prog_compile(['mysqlctl',
-                      'vtaction',
-                      'vtctl',
-                      'vttablet',
-                      ])
 
   # start mysql instance external to the test
   setup_procs = [master_tablet.start_mysql(),
@@ -109,6 +104,8 @@ def teardown():
   utils.zk_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
+  master_tablet.kill_vttablet()
+  replica_tablet.kill_vttablet()
   master_tablet.remove_tree()
   replica_tablet.remove_tree()
 
@@ -249,16 +246,11 @@ def test_all():
 
 
 def main():
-  parser = OptionParser()
-  parser.add_option('-v', '--verbose', action='store_true')
-  parser.add_option('-d', '--debug', action='store_true')
-  parser.add_option('-m', '--memcache', action='store_true')
-  parser.add_option('--skip-teardown', action='store_true')
-  (utils.options, args) = parser.parse_args()
+  args = utils.get_args()
 
   try:
     suite = unittest.TestSuite()
-    if not args:
+    if args[0] == 'run_all':
       setup()
       suite.addTests(unittest.TestLoader().loadTestsFromTestCase(RowCacheInvalidator))
     else:
@@ -266,7 +258,8 @@ def main():
         setup()
         if args[0] != 'setup':
           for arg in args:
-            suite.addTest(arg)
+            if hasattr(RowCacheInvalidator,arg):
+              suite.addTest(RowCacheInvalidator(arg))
     unittest.TextTestRunner(verbosity=utils.options.verbose).run(suite)
   except KeyboardInterrupt:
     pass
