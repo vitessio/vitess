@@ -83,7 +83,7 @@ class _GoRpcConn(object):
     while True:
       data = self.conn.recv(1024)
       if not data:
-        raise GoRpcError('Unexpected EOF in handshake')
+        raise GoRpcError('Unexpected EOF in handshake to %s:%s %s' % (str(conip), str(conport), parts.path))
       if '\n\n' in data:
         return
 
