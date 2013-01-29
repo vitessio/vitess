@@ -112,6 +112,9 @@ var commands = []commandGroup{
 			command{"PartialSnapshot", commandPartialSnapshot,
 				"[-force] [-concurrency=4] <zk tablet path> <key name> <start key> <end key>",
 				"Locks mysqld and copy compressed data aside."},
+			command{"MultiSnapshot", commandMultiSnapshot,
+				"[-force] [-concurrency=4] -shard_spec='-' -tables='' <zk tablet path> <key name>",
+				"Locks mysqld and copy compressed data aside."},
 			command{"PartialRestore", commandPartialRestore,
 				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
 				"Copy the given partial snaphot from the source tablet and starts partial replication to the new master path (or uses the src tablet path if not specified).\n" +
@@ -828,6 +831,31 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	filename, zkParentPath, err := wrangler.PartialSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *concurrency)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
+		relog.Info("ParentPath: %v", zkParentPath)
+	}
+	return "", err
+}
+
+func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
+	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
+	spec := subFlags.String("spec", "-", "shard specification")
+	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name>")
+	}
+
+	shards, err := key.ParseShardingSpec(*spec)
+	if err != nil {
+		relog.Fatal("multisnapshot failed: %v", err)
+	}
+	tables := strings.Split(*tablesString, ",")
+
+	filenames, zkParentPath, err := wrangler.MultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), *concurrency, tables, *force)
+
+	if err == nil {
+		relog.Info("manifest locations: %v", filenames)
 		relog.Info("ParentPath: %v", zkParentPath)
 	}
 	return "", err

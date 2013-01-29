@@ -123,14 +123,12 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	ta.zkVtRoot = VtRootFromTabletPath(ta.zkTabletPath)
 
 	relog.Info("HandleAction: %v %v", actionPath, data)
-
 	// validate actions, but don't write this back into zk
 	if actionNode.Action != action || actionNode.ActionGuid != actionGuid {
 		relog.Error("HandleAction validation failed %v: (%v,%v) (%v,%v)",
 			actionPath, actionNode.Action, action, actionNode.ActionGuid, actionGuid)
 		return TabletActorError("invalid action initiation: " + action + " " + actionGuid)
 	}
-
 	actionErr := ta.dispatchAction(actionNode)
 	err = StoreActionResponse(ta.zconn, actionNode, actionPath, actionErr)
 	if err != nil {
@@ -171,6 +169,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.partialRestore(actionNode)
 	case TABLET_ACTION_PARTIAL_SNAPSHOT:
 		err = ta.partialSnapshot(actionNode)
+	case TABLET_ACTION_MULTI_SNAPSHOT:
+		err = ta.multisnapshot(actionNode)
 	case TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
@@ -726,6 +726,35 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	}
 
 	sr := &SnapshotReply{ManifestPath: filename}
+	if tablet.Parent.Uid == NO_TABLET {
+		// If this is a master, this will be the new parent.
+		// FIXME(msolomon) this doens't work in hierarchical replication.
+		sr.ZkParentPath = tablet.Path()
+	} else {
+		sr.ZkParentPath = TabletPathForAlias(tablet.Parent)
+	}
+	actionNode.reply = sr
+	return nil
+}
+
+func (ta *TabletActor) multisnapshot(actionNode *ActionNode) error {
+	args := actionNode.args.(*MultiSnapshotArgs)
+
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	if tablet.Type != TYPE_BACKUP {
+		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables)
+	if err != nil {
+		return err
+	}
+
+	sr := &MultiSnapshotReply{ManifestPaths: filenames}
 	if tablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.

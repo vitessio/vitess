@@ -10,6 +10,7 @@ package tabletmanager
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -48,6 +49,7 @@ const (
 	TABLET_ACTION_RESERVE_FOR_RESTORE = "ReserveForRestore"
 	TABLET_ACTION_RESTORE             = "Restore"
 	TABLET_ACTION_PARTIAL_SNAPSHOT    = "PartialSnapshot"
+	TABLET_ACTION_MULTI_SNAPSHOT      = "MultiSnapshot"
 	TABLET_ACTION_PARTIAL_RESTORE     = "PartialRestore"
 
 	// Shard actions - involve all tablets in a shard
@@ -146,6 +148,9 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_PARTIAL_SNAPSHOT:
 		node.args = &PartialSnapshotArgs{}
 		node.reply = &SnapshotReply{}
+	case TABLET_ACTION_MULTI_SNAPSHOT:
+		node.args = &MultiSnapshotArgs{}
+		node.reply = &MultiSnapshotReply{}
 	case TABLET_ACTION_PARTIAL_RESTORE:
 		node.args = &RestoreArgs{}
 
@@ -159,6 +164,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:
 		node.args = &ApplySchemaKeyspaceArgs{}
+	default:
+		return nil, fmt.Errorf("unrecognized action: %v", node.Action)
 	}
 
 	// decode the args

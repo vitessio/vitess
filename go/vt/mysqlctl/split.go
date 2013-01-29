@@ -103,6 +103,19 @@ const (
 	SnapshotURLPath             = "/snapshot"
 )
 
+// replaceError replaces original with recent if recent is not nil,
+// logging original if it wasn't nil. This should be used in deferred
+// cleanup functions if they change the returned error.
+func replaceError(original, recent error) error {
+	if recent == nil {
+		return original
+	}
+	if original != nil {
+		relog.Error("One of multiple error: %v", original)
+	}
+	return recent
+}
+
 type SplitSnapshotManifest struct {
 	Source           *SnapshotManifest
 	KeyRange         key.KeyRange
@@ -207,26 +220,24 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		return
 	}
 
+	defer func() {
+		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly))
+	}()
+
 	var ssmFile string
 	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd, concurrency)
 	if snapshotErr != nil {
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
+		return "", snapshotErr
 	} else {
 		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr,
 			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
 		ssmFile = path.Join(cloneSourcePath, partialSnapshotManifestFile)
 		if snapshotErr = writeJson(ssmFile, ssm); snapshotErr != nil {
-			relog.Error("CreateSnapshot failed: %v", snapshotErr)
+			return "", snapshotErr
 		}
 	}
 
-	err = mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly)
-	if err != nil {
-		return "", err
-	}
-	if snapshotErr != nil {
-		return "", snapshotErr
-	}
 	relative, err := filepath.Rel(mysqld.SnapshotDir, ssmFile)
 	if err != nil {
 		return "", err
@@ -460,7 +471,7 @@ func (w namedHasherWriter) SnapshotFile(snapshotDir string) (*SnapshotFile, erro
 	return &SnapshotFile{relativePath, fi.Size(), w.Hasher.HashString()}, nil
 }
 
-func (mysqld *Mysqld) CreateMultisnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -509,9 +520,7 @@ func (mysqld *Mysqld) CreateMultisnapshot(keyRanges []key.KeyRange, dbName, keyN
 		return
 	}
 	defer func() {
-		if e := mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly); e != nil {
-			snapshotManifestFilenames, err = []string{}, e
-		}
+		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly))
 	}()
 
 	selectIntoOutfile := `SELECT * INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`

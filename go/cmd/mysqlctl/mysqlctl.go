@@ -79,7 +79,7 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 		relog.Fatal("multisnapshot failed: %v", err)
 	}
 	tables := strings.Split(*tablesString, ",")
-	filenames, err := mysqld.CreateMultisnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables)
+	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables)
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
 	} else {
@@ -211,7 +211,7 @@ var commands = []command{
 	command{"partialrestore", partialRestoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",
 		"Restores a database from a partial snapshot"},
-	command{"multisnapshot", multisnapshotCmd, "[-concurrency=3] <sharding spec> <db name> <key name>",
+	command{"multisnapshot", multisnapshotCmd, "[-concurrency=3] [-spec='-'] [-tables=''] <db name> <key name>",
 		"Makes a complete snapshot using 'select * into' commands."},
 }
 

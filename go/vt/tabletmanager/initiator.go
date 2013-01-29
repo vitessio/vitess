@@ -139,6 +139,11 @@ type SnapshotReply struct {
 	ReadOnly           bool
 }
 
+type MultiSnapshotReply struct {
+	ZkParentPath  string
+	ManifestPaths []string
+}
+
 func (ai *ActionInitiator) Snapshot(zkTabletPath string, args *SnapshotArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT, args: args})
 }
@@ -159,8 +164,19 @@ type PartialSnapshotArgs struct {
 	Concurrency int
 }
 
+type MultiSnapshotArgs struct {
+	KeyName     string
+	KeyRanges   []key.KeyRange
+	Tables      []string
+	Concurrency int
+}
+
 func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, args: args})
+}
+
+func (ai *ActionInitiator) MultiSnapshot(zkTabletPath string, args *MultiSnapshotArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MULTI_SNAPSHOT, args: args})
 }
 
 func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, err error) {
