@@ -566,11 +566,18 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			realData[kr] = w
 		}
 
-		splitter := csvsplitter.NewKeyspaceCSVReader(file, ',').Iterator()
-		for splitter.Next() {
+		splitter := csvsplitter.NewKeyspaceCSVReader(file, ',')
+		for {
+			keyspaceId, line, err := splitter.ReadRecord()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
 			for kr, w := range realData {
-				if kr.Contains(splitter.KeyspaceId) {
-					_, err = w.Write(splitter.Line)
+				if kr.Contains(keyspaceId) {
+					_, err = w.Write(line)
 					if err != nil {
 						return nil, err
 					}
@@ -579,9 +586,6 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			}
 		}
 
-		if splitter.Error != nil {
-			return nil, splitter.Error
-		}
 		if e := os.Remove(filename); e != nil {
 			relog.Error("Cannot remove %v: %v", filename, e)
 		}

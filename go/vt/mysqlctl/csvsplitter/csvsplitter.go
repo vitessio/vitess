@@ -12,26 +12,28 @@ import (
 type KeyspaceCSVReader struct {
 	*bufio.Reader
 	delim byte
+	buf   *bytes.Buffer
 }
 
 func NewKeyspaceCSVReader(r io.Reader, delim byte) *KeyspaceCSVReader {
-	return &KeyspaceCSVReader{Reader: bufio.NewReader(r), delim: delim}
+	return &KeyspaceCSVReader{Reader: bufio.NewReader(r), delim: delim, buf: bytes.NewBuffer(make([]byte, 0, 1024))}
 }
 
 // ReadRecord returns a keyspaceId and a line from which it was
 // extracted, with the keyspaceId stripped.
-func (r KeyspaceCSVReader) ReadRecord() (err error, keyspaceId key.KeyspaceId, line []byte) {
+func (r KeyspaceCSVReader) ReadRecord() (keyspaceId key.KeyspaceId, line []byte, err error) {
 	k, err := r.ReadString(r.delim)
 	if err != nil {
-		return err, key.KeyspaceId(""), []byte{}
+		return key.MinKey, nil, err
 	}
 	kid, err := strconv.ParseUint(k[:len(k)-1], 10, 64)
 	if err != nil {
-		return err, key.KeyspaceId(""), []byte{}
+		return key.MinKey, nil, err
 	}
 	keyspaceId = key.Uint64Key(kid).KeyspaceId()
 
-	buffer := bytes.NewBuffer([]byte{})
+	defer r.buf.Reset()
+
 	escaped := false
 	inQuote := false
 	for {
@@ -40,10 +42,10 @@ func (r KeyspaceCSVReader) ReadRecord() (err error, keyspaceId key.KeyspaceId, l
 			// Assumption: the csv file ends with a
 			// newline. Otherwise io.EOF should be treated
 			// separately.
-			return err, key.KeyspaceId(""), []byte{}
+			return key.MinKey, nil, err
 		}
 
-		buffer.WriteByte(b)
+		r.buf.WriteByte(b)
 
 		if escaped {
 			escaped = false
@@ -56,42 +58,9 @@ func (r KeyspaceCSVReader) ReadRecord() (err error, keyspaceId key.KeyspaceId, l
 			inQuote = !inQuote
 		case '\n':
 			if !inQuote {
-				return nil, keyspaceId, buffer.Bytes()
+				return keyspaceId, r.buf.Bytes(), nil
 			}
 		}
 	}
 	panic("unreachable")
-}
-
-// Iterator returns an iterator that yields all lines in r.
-func (r KeyspaceCSVReader) Iterator() iterator {
-	return iterator{r: r}
-}
-
-type iterator struct {
-	r          KeyspaceCSVReader
-	KeyspaceId key.KeyspaceId
-	Line       []byte
-	Error      error
-}
-
-// Next advances the iterator and returns true as long as there are
-// items it can yield and no errors have occurred. i.KeyspaceId will
-// contain the keyspac id, and i.Line the line itself (with the
-// keyspace id part stripped). You should check i.Error for any errors
-// that might have occurred.
-func (i *iterator) Next() bool {
-	err, k, line := i.r.ReadRecord()
-
-	if err != nil {
-		if err != io.EOF {
-			i.Error = err
-		}
-		return false
-	}
-
-	i.KeyspaceId = k
-	i.Line = line
-
-	return true
 }
