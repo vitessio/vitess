@@ -850,7 +850,10 @@ func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
 	}
-	tables := strings.Split(*tablesString, ",")
+	var tables []string
+	if *tablesString != "" {
+		tables = strings.Split(*tablesString, ",")
+	}
 
 	filenames, zkParentPath, err := wrangler.MultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), *concurrency, tables, *force)
 

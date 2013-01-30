@@ -78,7 +78,10 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
 	}
-	tables := strings.Split(*tablesString, ",")
+	var tables []string
+	if *tablesString != "" {
+		tables = strings.Split(*tablesString, ",")
+	}
 	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables)
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
