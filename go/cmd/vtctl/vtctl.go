@@ -1357,6 +1357,7 @@ func main() {
 		os.Exit(1)
 	}
 	action := args[0]
+	tm.InstallSigHandler()
 
 	logPrefix := "vtctl "
 	logFlag := log.Ldate | log.Lmicroseconds | log.Lshortfile

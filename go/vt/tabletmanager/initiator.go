@@ -39,9 +39,14 @@ import (
 
 var sigChan chan os.Signal
 
-func init() {
-	sigChan = make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
+// In certain cases (vtctl most notably) having SIGINT manifest itself as an instant timeout
+// lets us break out cleanly. However, this needs to be registered properly at the top level
+// and cannot be implicity run at module initialization.
+func InstallSigHandler() {
+	if sigChan == nil {
+		sigChan = make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt)
+	}
 }
 
 type InitiatorError string
