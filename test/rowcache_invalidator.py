@@ -101,9 +101,9 @@ def teardown():
                     replica_tablet.teardown_mysql()]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
   master_tablet.kill_vttablet()
   replica_tablet.kill_vttablet()
+  utils.zk_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
   master_tablet.remove_tree()
