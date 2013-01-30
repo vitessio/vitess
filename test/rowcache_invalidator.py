@@ -102,10 +102,10 @@ def teardown():
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   utils.zk_teardown()
-  utils.kill_sub_processes()
-  utils.remove_tmp_files()
   master_tablet.kill_vttablet()
   replica_tablet.kill_vttablet()
+  utils.kill_sub_processes()
+  utils.remove_tmp_files()
   master_tablet.remove_tree()
   replica_tablet.remove_tree()
 
