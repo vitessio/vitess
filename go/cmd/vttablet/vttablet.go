@@ -97,8 +97,8 @@ func main() {
 
 	initQueryService(dbcfgs)
 	initUpdateStreamService(mycnf)
-	initAgent(dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
 	ts.RegisterCacheInvalidator()                                // depends on both query and updateStream
+	initAgent(dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
 
 	rpc.HandleHTTP()
 
