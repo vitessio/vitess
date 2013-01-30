@@ -14,6 +14,10 @@ import (
 	"time"
 )
 
+var (
+	waitError = NewTabletError(FAIL, "Error waiting for consolidation")
+)
+
 type Consolidator struct {
 	mu             sync.Mutex
 	queries        map[string]*Result
@@ -40,7 +44,9 @@ func (self *Consolidator) Create(sql string) (r *Result, created bool) {
 	if r, ok := self.queries[sql]; ok {
 		return r, false
 	}
-	r = &Result{consolidator: self, sql: sql}
+	// Preset the error. If there was an unexpected panic during the main
+	// query, then all those who waited will return the waitError.
+	r = &Result{consolidator: self, sql: sql, Err: waitError}
 	r.executing.Lock()
 	self.queries[sql] = r
 	return r, true

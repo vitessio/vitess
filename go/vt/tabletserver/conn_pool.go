@@ -39,6 +39,15 @@ func (self *ConnectionPool) Get() PoolConnection {
 }
 
 // You must call Recycle on the PoolConnection once done.
+func (self *ConnectionPool) SafeGet() (PoolConnection, error) {
+	r, err := self.RoundRobin.Get()
+	if err != nil {
+		return nil, err
+	}
+	return r.(*pooledConnection), nil
+}
+
+// You must call Recycle on the PoolConnection once done.
 func (self *ConnectionPool) TryGet() PoolConnection {
 	r, err := self.RoundRobin.TryGet()
 	if err != nil {

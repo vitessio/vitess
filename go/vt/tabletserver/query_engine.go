@@ -641,12 +641,16 @@ func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parse
 	sql := qe.generateFinalSql(parsed_query, plan.BindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
 	if ok {
+		defer q.Broadcast()
 		waitingForConnectionStart := time.Now()
-		conn := qe.connPool.Get()
+		conn, err := qe.connPool.SafeGet()
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
-		defer conn.Recycle()
-		q.Result, q.Err = qe.executeSql(logStats, conn, sql, false)
-		q.Broadcast()
+		if err != nil {
+			q.Err = err
+		} else {
+			defer conn.Recycle()
+			q.Result, q.Err = qe.executeSql(logStats, conn, sql, false)
+		}
 	} else {
 		logStats.QuerySources |= QUERY_SOURCE_CONSOLIDATOR
 		q.Wait()
