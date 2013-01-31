@@ -1,5 +1,7 @@
 import itertools
+import json
 import logging
+import os
 
 from net import bsonrpc
 from net import gorpc
@@ -182,3 +184,70 @@ class ZkOccConnection(object):
         # try the next server if there is one
         if self.addr_count > 1:
           self.dial()
+
+# use this class for faking out a zkocc client. The startup config values
+# can be loaded from a json file. After that, they can be mass-altered
+# to replace default values with test-specific values, for instance.
+class FakeZkOccConnection(object):
+  def __init__(self, local_cell):
+    self.data = {}
+    self.local_cell = local_cell
+
+  @classmethod
+  def from_data_path(cls, local_cell, data_path):
+    # Returns client with data at given data_path loaded.
+    client = cls(local_cell)
+    with open(data_path) as f:
+      data = f.read()
+    for key, value in json.loads(data).iteritems():
+      client.data[key] = json.dumps(value)
+    return client
+
+  def replace_zk_data(self, before, after):
+    # Does a string substitution on all zk data.
+    # This is for testing purpose only.
+    for key, data in self.data.iteritems():
+      self.data[key] = data.replace(before, after)
+
+  def _resolve_path(self, zk_path):
+    # Maps a 'meta-path' to a cell specific path.
+    # '/zk/local/blah' -> '/zk/vb/blah'
+    parts = zk_path.split('/')
+
+    if len(parts) < 3:
+      return zk_path
+
+    if parts[2] != 'local':
+      return zk_path
+
+    parts[2] = self.local_cell
+    return '/'.join(parts)
+
+  def dial(self):
+    pass
+
+  def close(self):
+    pass
+
+  def get(self, path):
+    path = self._resolve_path(path)
+    if not path in self.data:
+      raise ZkOccError("FakeZkOccConnection: not found: " + path)
+    return {
+        'Data':self.data[path],
+        'Children':[]
+        }
+
+  def getv(self, paths):
+    raise ZkOccError("FakeZkOccConnection: not found: " + " ".join(paths))
+
+  def children(self, path):
+    path = self._resolve_path(path)
+    children = [os.path.basename(node) for node in self.data
+                if os.path.dirname(node) == path]
+    if len(children) == 0:
+      raise ZkOccError("FakeZkOccConnection: not found: " + path)
+    return {
+        'Data':'',
+        'Children':children
+        }
