@@ -646,7 +646,7 @@ func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parse
 		conn, err := qe.connPool.SafeGet()
 		logStats.WaitingForConnection += time.Now().Sub(waitingForConnectionStart)
 		if err != nil {
-			q.Err = err
+			q.Err = NewTabletErrorSql(FATAL, err)
 		} else {
 			defer conn.Recycle()
 			q.Result, q.Err = qe.executeSql(logStats, conn, sql, false)
