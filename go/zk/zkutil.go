@@ -7,6 +7,7 @@ package zk
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"path"
 	"sort"
@@ -16,6 +17,10 @@ import (
 
 	"launchpad.net/gozk/zookeeper"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // Create a path and any pieces required, think mkdir -p.
 // Intermediate znodes are always created empty.
@@ -210,42 +215,45 @@ func CreatePidNode(zconn Conn, zkPath string, done chan struct{}) error {
 
 	go func() {
 		for {
+			_, _, watch, err := zconn.GetW(zkPath)
+			if err != nil {
+				if zookeeper.IsError(err, zookeeper.ZNONODE) {
+					_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
+					if err == nil {
+						log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
+					} else {
+						log.Printf("INFO: recreated pid node: %v", zkPath)
+						continue
+					}
+				} else {
+					log.Printf("WARNING: failed reading pid node: %v", err)
+				}
+			} else {
+				select {
+				case event := <-watch:
+					if event.Ok() && event.Type == zookeeper.EVENT_DELETED {
+						// Most likely another process has started up. However,
+						// there is a chance that an ephemeral node is deleted by
+						// the session expiring, yet that same session gets a watch
+						// notification. This seems like buggy behavior, but rather
+						// than race too hard on the node, just wait a bit and see
+						// if the situation resolves itself.
+						log.Printf("WARNING: pid deleted: %v", zkPath)
+					} else {
+						log.Printf("INFO: pid node event: %v", event)
+					}
+					// break here and wait for a bit before attempting
+				case <-done:
+					log.Printf("INFO: pid watcher stopped on done: %v", zkPath)
+					return
+				}
+			}
 			select {
+			// No one likes a thundering herd, least of all zookeeper.
+			case <-time.After(5*time.Second + time.Duration(rand.Int63n(55*1e9))):
 			case <-done:
 				log.Printf("INFO: pid watcher stopped on done: %v", zkPath)
 				return
-			default:
-			}
-			_, _, watch, err := zconn.GetW(zkPath)
-			if err != nil {
-				log.Printf("WARNING: failed reading pid node: %v", err)
-				if !zookeeper.IsError(err, zookeeper.ZNONODE) {
-					time.Sleep(30 * time.Second)
-					continue
-				}
-			} else {
-				event := <-watch
-				log.Printf("INFO: pid node event: %v", event)
-				if event.Ok() {
-					if event.Type == zookeeper.EVENT_DELETED {
-						// Another process took over (most likely), but no sense in starting
-						// a data race. Just stop watching.
-						log.Printf("INFO: pid watcher stopped on delete: %v", zkPath)
-						return
-					}
-					continue
-				} else {
-					time.Sleep(30 * time.Second)
-					continue
-				}
-			}
-
-			_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
-			if err != nil {
-				log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
-				time.Sleep(30 * time.Second)
-			} else {
-				log.Printf("INFO: recreated pid node: %v", zkPath)
 			}
 		}
 	}()
