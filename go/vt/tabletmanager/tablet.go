@@ -135,6 +135,21 @@ func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	return false
 }
 
+// Should we allow this transition at all?  Most transitions are
+// allowed, but some don't make sense under any circumstances. If a
+// transistion could be forced, don't disallow it here.
+func IsValidTypeChange(oldTabletType, newTabletType TabletType) bool {
+	switch oldTabletType {
+	case TYPE_SNAPSHOT_SOURCE:
+		switch newTabletType {
+		case TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE:
+			return false
+		}
+	}
+
+	return true
+}
+
 const (
 	// According to docs, the tablet uid / (mysql server id) is uint32.
 	// However, zero appears to be a sufficiently degenerate value to use

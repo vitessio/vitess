@@ -707,7 +707,7 @@ func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		if err != nil {
 			relog.Fatal("failed reading tablet %v: %v", zkTabletPath, err)
 		}
-		if !tm.IsTrivialTypeChange(ti.Type, newType) {
+		if !tm.IsTrivialTypeChange(ti.Type, newType) || !tm.IsValidTypeChange(ti.Type, newType) {
 			relog.Fatal("invalid type transition %v: %v -> %v", zkTabletPath, ti.Type, newType)
 		}
 		fmt.Printf("- %v\n", fmtTabletAwkable(ti))

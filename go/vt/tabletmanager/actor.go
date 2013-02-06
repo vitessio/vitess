@@ -903,6 +903,10 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks
 		return err
 	}
 
+	if !IsTrivialTypeChange(tablet.Type, newType) || !IsValidTypeChange(tablet.Type, newType) {
+		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, zkTabletPath)
+	}
+
 	if runHooks {
 		// Only run the idle_server_check hook when
 		// transitioning from non-serving to serving.
@@ -920,9 +924,6 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks
 		}
 	}
 
-	if !IsTrivialTypeChange(tablet.Type, newType) {
-		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, zkTabletPath)
-	}
 	tablet.Type = newType
 	if newType == TYPE_IDLE {
 		if tablet.Parent.Uid == NO_TABLET {
