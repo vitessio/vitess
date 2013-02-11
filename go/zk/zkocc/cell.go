@@ -5,9 +5,11 @@
 package zkocc
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -68,6 +70,13 @@ type zkCell struct {
 	ready   *sync.Cond // will be signaled at connection time
 	lastErr error      // last connection error
 	states  *stats.States
+
+	// stats, use sync/atomic to access them
+	zkReads            int32
+	cacheReads         int32
+	staleReads         int32
+	nodeNotFoundErrors int32
+	otherErrors        int32
 }
 
 func newZkCell(name, zkaddr string) *zkCell {
@@ -218,7 +227,6 @@ func (zcell *zkCell) getConnection() (*zookeeper.Conn, error) {
 }
 
 // runs in the background and refreshes the cache if we're in connected state
-// FIXME(alainjobart) configure the refresh interval
 func (zcell *zkCell) backgroundRefresher() {
 	ticker := time.NewTicker(*refreshInterval)
 	for _ = range ticker.C {
@@ -239,5 +247,14 @@ func (zcell *zkCell) backgroundRefresher() {
 
 // Implements expvar.Var()
 func (zcell *zkCell) String() string {
-	return zcell.states.String()
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	fmt.Fprintf(b, "{")
+	fmt.Fprintf(b, "\"CacheReads\": %v,", atomic.LoadInt32(&zcell.cacheReads))
+	fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", atomic.LoadInt32(&zcell.nodeNotFoundErrors))
+	fmt.Fprintf(b, "\"OtherErrors\": %v,", atomic.LoadInt32(&zcell.otherErrors))
+	fmt.Fprintf(b, "\"StaleReads\": %v,", atomic.LoadInt32(&zcell.staleReads))
+	fmt.Fprintf(b, "\"State\": %v,", zcell.states.String())
+	fmt.Fprintf(b, "\"ZkReads\": %v", atomic.LoadInt32(&zcell.zkReads))
+	fmt.Fprintf(b, "}")
+	return b.String()
 }

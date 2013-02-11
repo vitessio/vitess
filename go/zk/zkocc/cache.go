@@ -183,7 +183,6 @@ func (zkc *ZkCache) markForRefresh() {
 }
 
 // return a few values that need to be refreshed
-// FIXME(alainjobart) configure the refresh count
 func (zkc *ZkCache) refreshSomeValues(zconn *zookeeper.Conn, maxToRefresh int) {
 	// build a list of a few values we want to refresh
 	refreshThreshold := time.Now().Add(-10 * time.Minute)
