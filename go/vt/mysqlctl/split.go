@@ -412,16 +412,19 @@ func newCompressedNamedHasherWriter(filename string) (*namedHasherWriter, error)
 	// The pipeline looks like this:
 	//
 	//                             +---> buffer +---> file
-	//                             |       2M
+	//                             |      32K
 	// buffer +---> gzip +---> tee +
-	//   2M                        |
+	//   32K                       |
 	//                             +---> hasher
+	//
+	// The buffer in front of gzip is needed so that the data is
+	// compressed only when there's a reasonable amount of it.
 
 	dstFile, err := os.Create(filename)
 	if err != nil {
 		return nil, err
 	}
-	fileBuffer := bufio.NewWriterSize(dstFile, 2*1024*1024)
+	fileBuffer := bufio.NewWriterSize(dstFile, 32*1024)
 	hasher := newHasher()
 	tee := io.MultiWriter(fileBuffer, hasher)
 	// create the gzip compression filter
@@ -429,7 +432,7 @@ func newCompressedNamedHasherWriter(filename string) (*namedHasherWriter, error)
 	if err != nil {
 		return nil, err
 	}
-	gzipBuffer := bufio.NewWriterSize(gzip, 2*1024*1024)
+	gzipBuffer := bufio.NewWriterSize(gzip, 32*1024)
 	return &namedHasherWriter{
 		Writer:     gzipBuffer,
 		Hasher:     hasher,
@@ -459,16 +462,22 @@ func (w namedHasherWriter) Close() (err error) {
 	return nil
 }
 
-func (w namedHasherWriter) SnapshotFile(snapshotDir string) (*SnapshotFile, error) {
-	fi, err := os.Stat(w.Filename)
+// SnapshotFile returns the snapshot file appropriate for the data
+// written by the namedHasherWriter. Calling SnapshotFile will close
+// the namedHasherWriter.
+func (nhw namedHasherWriter) SnapshotFile(snapshotDir string) (*SnapshotFile, error) {
+	if err := nhw.Close(); err != nil {
+		return nil, err
+	}
+	fi, err := os.Stat(nhw.Filename)
 	if err != nil {
 		return nil, err
 	}
-	relativePath, err := filepath.Rel(snapshotDir, w.Filename)
+	relativePath, err := filepath.Rel(snapshotDir, nhw.Filename)
 	if err != nil {
 		return nil, err
 	}
-	return &SnapshotFile{relativePath, fi.Size(), w.Hasher.HashString()}, nil
+	return &SnapshotFile{relativePath, fi.Size(), nhw.Hasher.HashString()}, nil
 }
 
 func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string) (snapshotManifestFilenames []string, err error) {
@@ -523,18 +532,14 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly))
 	}()
 
-	selectIntoOutfile := `SELECT * INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
+	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 
-	// We need interfaces to pass them into ConcurrentMap.
-	itds := make([]interface{}, len(sd.TableDefinitions))
-	for i, td := range sd.TableDefinitions {
-		itds[i] = td
-	}
-	datafiles, dumpErr := ConcurrentMap(concurrency, itds, func(itd interface{}) (data interface{}, err error) {
+	dumpTable := func(itd interface{}) (data interface{}, err error) {
 		td := itd.(TableDefinition)
 		filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 		queryParams := map[string]string{
 			"TableName":            dbName + "." + td.Name,
+			"Columns":              strings.Join(td.Columns, ", "),
 			"KeyspaceIdColumnName": keyName,
 			"TableOutputPath":      filename,
 		}
@@ -543,12 +548,18 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		}
 
 		file, err := os.Open(filename)
-		defer file.Close()
 		if err != nil {
 			return nil, err
 		}
 
-		realData := make(map[key.KeyRange]*namedHasherWriter)
+		defer func() {
+			file.Close()
+			if e := os.Remove(filename); e != nil {
+				relog.Error("Cannot remove %v: %v", filename, e)
+			}
+		}()
+
+		hasherWriters := make(map[key.KeyRange]*namedHasherWriter)
 
 		for _, kr := range keyRanges {
 			filename := path.Join(cloneSourcePaths[kr], td.Name+".csv.gz")
@@ -556,14 +567,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			if err != nil {
 				return nil, err
 			}
-
-			defer func(w *namedHasherWriter) {
-				if e := w.Close(); e != nil {
-					err = e
-				}
-			}(w)
-
-			realData[kr] = w
+			hasherWriters[kr] = w
 		}
 
 		splitter := csvsplitter.NewKeyspaceCSVReader(file, ',')
@@ -575,7 +579,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			if err != nil {
 				return nil, err
 			}
-			for kr, w := range realData {
+			for kr, w := range hasherWriters {
 				if kr.Contains(keyspaceId) {
 					_, err = w.Write(line)
 					if err != nil {
@@ -586,14 +590,23 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			}
 		}
 
-		if e := os.Remove(filename); e != nil {
-			relog.Error("Cannot remove %v: %v", filename, e)
+		snapshotFiles := make(map[key.KeyRange]*SnapshotFile)
+		for i, hw := range hasherWriters {
+			if snapshotFiles[i], err = hw.SnapshotFile(mysqld.SnapshotDir); err != nil {
+				return
+			}
 		}
+		return snapshotFiles, nil
+	}
 
-		return realData, nil
-	})
-	if dumpErr != nil {
-		err = dumpErr
+	// We need interfaces to pass them into ConcurrentMap.
+	itds := make([]interface{}, len(sd.TableDefinitions))
+	for i, td := range sd.TableDefinitions {
+		itds[i] = td
+	}
+
+	datafiles, err := ConcurrentMap(concurrency, itds, dumpTable)
+	if err != nil {
 		return
 	}
 
@@ -603,24 +616,15 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	ssmFiles := make([]string, len(keyRanges))
 	for i, kr := range keyRanges {
-		krDatafiles := make([]*namedHasherWriter, len(datafiles))
+		krDatafiles := make([]SnapshotFile, len(datafiles))
 		for j, im := range datafiles {
-			m := im.(map[key.KeyRange]*namedHasherWriter)
-			krDatafiles[j] = m[kr]
+			m := im.(map[key.KeyRange]*SnapshotFile)
+			krDatafiles[j] = *m[kr]
 		}
-		snapshotFiles := make([]SnapshotFile, len(krDatafiles))
-		for j, w := range krDatafiles {
-			sf, err := w.SnapshotFile(mysqld.SnapshotDir)
-			if err != nil {
-				return []string{}, err
-			}
-			snapshotFiles[j] = *sf
-		}
-
-		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, snapshotFiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
+		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, krDatafiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
 		ssmFiles[i] = path.Join(cloneSourcePaths[kr], partialSnapshotManifestFile)
 		if err = writeJson(ssmFiles[i], ssm); err != nil {
-			return []string{}, err
+			return nil, err
 		}
 	}
 

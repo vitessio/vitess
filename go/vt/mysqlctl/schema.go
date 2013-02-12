@@ -16,8 +16,9 @@ import (
 )
 
 type TableDefinition struct {
-	Name   string // the table name
-	Schema string // the SQL to run to create the table
+	Name    string   // the table name
+	Schema  string   // the SQL to run to create the table
+	Columns []string // the columns in the order that will be used to dump and load the data
 }
 
 type SchemaDefinition struct {
@@ -132,10 +133,35 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string) (*SchemaDefiniti
 
 		sd.TableDefinitions[i].Name = tableName
 		sd.TableDefinitions[i].Schema = norm2
+
+		columns, err := mysqld.GetColumns(tableName)
+		if err != nil {
+			return nil, err
+		}
+		sd.TableDefinitions[i].Columns = columns
 	}
 
 	sd.generateSchemaVersion()
 	return sd, nil
+}
+
+// GetColumns returns the columns of table.
+func (mysqld *Mysqld) GetColumns(table string) ([]string, error) {
+	conn, err := mysqld.createConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %v where 1=0", table)), 0, true)
+	if err != nil {
+		return nil, err
+	}
+	columns := make([]string, len(qr.Fields))
+	for i, field := range qr.Fields {
+		columns[i] = field.Name
+	}
+	return columns, nil
+
 }
 
 type SchemaChange struct {

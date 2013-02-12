@@ -10,19 +10,19 @@ import (
 )
 
 type KeyspaceCSVReader struct {
-	*bufio.Reader
-	delim byte
-	buf   *bytes.Buffer
+	reader *bufio.Reader
+	delim  byte
+	buf    *bytes.Buffer
 }
 
 func NewKeyspaceCSVReader(r io.Reader, delim byte) *KeyspaceCSVReader {
-	return &KeyspaceCSVReader{Reader: bufio.NewReader(r), delim: delim, buf: bytes.NewBuffer(make([]byte, 0, 1024))}
+	return &KeyspaceCSVReader{reader: bufio.NewReader(r), delim: delim, buf: bytes.NewBuffer(make([]byte, 0, 1024))}
 }
 
 // ReadRecord returns a keyspaceId and a line from which it was
 // extracted, with the keyspaceId stripped.
 func (r KeyspaceCSVReader) ReadRecord() (keyspaceId key.KeyspaceId, line []byte, err error) {
-	k, err := r.ReadString(r.delim)
+	k, err := r.reader.ReadString(r.delim)
 	if err != nil {
 		return key.MinKey, nil, err
 	}
@@ -37,7 +37,7 @@ func (r KeyspaceCSVReader) ReadRecord() (keyspaceId key.KeyspaceId, line []byte,
 	escaped := false
 	inQuote := false
 	for {
-		b, err := r.ReadByte()
+		b, err := r.reader.ReadByte()
 		if err != nil {
 			// Assumption: the csv file ends with a
 			// newline. Otherwise io.EOF should be treated
