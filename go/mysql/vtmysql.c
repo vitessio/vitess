@@ -10,7 +10,16 @@
 
 void clear_result(VT_CONN *conn);
 
+// this macro produces a compilation-time check for a condition
+// if the condition is different than zero, this will abort
+// if the condition is zero, this won't generate any code
+// (this was imported from Linux kernel source tree)
+#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
+
 void vt_library_init(void) {
+  // we depend on linking with the 64 bits version of the MySQL library:
+  // the go code depends on mysql_fetch_lengths() returning 64 bits unsigned.
+  BUILD_BUG_ON(sizeof(unsigned long) - 8);
   mysql_library_init(0, 0, 0);
 }
 
