@@ -2,6 +2,7 @@ import itertools
 import json
 import logging
 import os
+import random
 
 from net import bsonrpc
 from net import gorpc
@@ -81,6 +82,7 @@ class ZkOccConnection(object):
   def __init__(self, addrs, local_cell, timeout, user=None, password=None):
     self.timeout = timeout
     addrs_array = addrs.split(',')
+    random.shuffle(addrs_array)
     self.addr_count = len(addrs_array)
     self.addrs = itertools.cycle(addrs_array)
     self.local_cell = local_cell
