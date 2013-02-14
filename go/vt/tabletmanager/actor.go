@@ -581,6 +581,29 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 	return json.Unmarshal(data, result)
 }
 
+// change a tablet type to RESTORE and set all the other arguments.
+// from now on, we have to go to either SPARE or SCRAP
+func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, parentAlias TabletAlias, keyRange key.KeyRange) error {
+	// run the optional idle_server_check hook
+	if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {
+		return err
+	}
+
+	// change the type
+	tablet.Parent = parentAlias
+	tablet.Keyspace = sourceTablet.Keyspace
+	tablet.Shard = sourceTablet.Shard
+	tablet.Type = TYPE_RESTORE
+	tablet.KeyRange = keyRange
+	tablet.DbNameOverride = sourceTablet.DbNameOverride
+	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
+		return err
+	}
+
+	// and create the replication graph items
+	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
+}
+
 // Reserve a tablet for restore.
 // Can be called remotely
 func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
@@ -606,25 +629,16 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	}
 
 	// find the parent tablet alias we will be using
+	var parentAlias TabletAlias
 	if sourceTablet.Parent.Uid == NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		tablet.Parent = sourceTablet.Alias()
+		parentAlias = sourceTablet.Alias()
 	} else {
-		tablet.Parent = sourceTablet.Parent
+		parentAlias = sourceTablet.Parent
 	}
 
-	// change our type to RESTORE and set all the other arguments.
-	// from now on, we have to go to either SPARE or SCRAP
-	tablet.Keyspace = sourceTablet.Keyspace
-	tablet.Shard = sourceTablet.Shard
-	tablet.Type = TYPE_RESTORE
-	tablet.KeyRange = sourceTablet.KeyRange
-	tablet.DbNameOverride = sourceTablet.DbNameOverride
-	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
-		return err
-	}
-	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
+	return ta.changeTypeToRestore(tablet, sourceTablet, parentAlias, sourceTablet.KeyRange)
 }
 
 // Operate on restore tablet.
@@ -676,18 +690,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	if !args.WasReserved {
-		// change our type to RESTORE and set all the other arguments.
-		// from now on, we have to go to either SPARE or SCRAP
-		tablet.Parent = parentTablet.Alias()
-		tablet.Keyspace = sourceTablet.Keyspace
-		tablet.Shard = sourceTablet.Shard
-		tablet.Type = TYPE_RESTORE
-		tablet.KeyRange = sourceTablet.KeyRange
-		tablet.DbNameOverride = sourceTablet.DbNameOverride
-		if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
-			return err
-		}
-		if err := CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet); err != nil {
+		if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.Alias(), sourceTablet.KeyRange); err != nil {
 			return err
 		}
 	}
@@ -809,17 +812,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// change our type to RESTORE and set all the other arguments.
-	// from now on, we have to go to either SPARE or SCRAP
-	tablet.Parent = parentTablet.Alias()
-	tablet.Keyspace = sourceTablet.Keyspace
-	tablet.Shard = sourceTablet.Shard
-	tablet.Type = TYPE_RESTORE
-	tablet.KeyRange = ssm.KeyRange
-	tablet.DbNameOverride = sourceTablet.DbNameOverride
-	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
-		return err
-	}
-	if err := CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet); err != nil {
+	if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.Alias(), ssm.KeyRange); err != nil {
 		return err
 	}
 
