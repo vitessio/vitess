@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -71,12 +70,12 @@ type zkCell struct {
 	lastErr error      // last connection error
 	states  *stats.States
 
-	// stats, use sync/atomic to access them
-	zkReads            int32
-	cacheReads         int32
-	staleReads         int32
-	nodeNotFoundErrors int32
-	otherErrors        int32
+	// stats
+	zkReads            stats.AtomicInt32
+	cacheReads         stats.AtomicInt32
+	staleReads         stats.AtomicInt32
+	nodeNotFoundErrors stats.AtomicInt32
+	otherErrors        stats.AtomicInt32
 }
 
 func newZkCell(name, zkaddr string) *zkCell {
@@ -249,12 +248,12 @@ func (zcell *zkCell) backgroundRefresher() {
 func (zcell *zkCell) String() string {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
-	fmt.Fprintf(b, "\"CacheReads\": %v,", atomic.LoadInt32(&zcell.cacheReads))
-	fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", atomic.LoadInt32(&zcell.nodeNotFoundErrors))
-	fmt.Fprintf(b, "\"OtherErrors\": %v,", atomic.LoadInt32(&zcell.otherErrors))
-	fmt.Fprintf(b, "\"StaleReads\": %v,", atomic.LoadInt32(&zcell.staleReads))
+	fmt.Fprintf(b, "\"CacheReads\": %v,", zcell.cacheReads.Get())
+	fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", zcell.nodeNotFoundErrors.Get())
+	fmt.Fprintf(b, "\"OtherErrors\": %v,", zcell.otherErrors.Get())
+	fmt.Fprintf(b, "\"StaleReads\": %v,", zcell.staleReads.Get())
 	fmt.Fprintf(b, "\"State\": %v,", zcell.states.String())
-	fmt.Fprintf(b, "\"ZkReads\": %v", atomic.LoadInt32(&zcell.zkReads))
+	fmt.Fprintf(b, "\"ZkReads\": %v", zcell.zkReads.Get())
 	fmt.Fprintf(b, "}")
 	return b.String()
 }

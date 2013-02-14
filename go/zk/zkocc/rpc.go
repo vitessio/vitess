@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
@@ -37,9 +36,9 @@ type ZkReader struct {
 	resolveLocal bool
 	localCell    string
 
-	// stats, use sync/atomic to access them
-	rpcCalls          int32
-	unknownCellErrors int32
+	// stats
+	rpcCalls          stats.AtomicInt32
+	unknownCellErrors stats.AtomicInt32
 }
 
 var (
@@ -115,7 +114,7 @@ func handleError(err *error) {
 
 func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 	defer handleError(&err)
-	atomic.AddInt32(&zkr.rpcCalls, 1)
+	zkr.rpcCalls.Add(1)
 
 	return zkr.get(req, reply)
 }
@@ -124,7 +123,7 @@ func (zkr *ZkReader) get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
 		relog.Warning("Unknown cell for path %v: %v", req.Path, err)
-		atomic.AddInt32(&zkr.unknownCellErrors, 1)
+		zkr.unknownCellErrors.Add(1)
 		return err
 	}
 
@@ -133,9 +132,9 @@ func (zkr *ZkReader) get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 		reply.Cached = true
 		reply.Stale = stale
 		if stale {
-			atomic.AddInt32(&cell.staleReads, 1)
+			cell.staleReads.Add(1)
 		} else {
-			atomic.AddInt32(&cell.cacheReads, 1)
+			cell.cacheReads.Add(1)
 		}
 		return nil
 	}
@@ -145,7 +144,7 @@ func (zkr *ZkReader) get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 	zconn, err := cell.getConnection()
 	if err != nil {
 		relog.Warning("ZK connection error for path %v: %v", req.Path, err)
-		atomic.AddInt32(&cell.otherErrors, 1)
+		cell.otherErrors.Add(1)
 		return err
 	}
 
@@ -156,13 +155,13 @@ func (zkr *ZkReader) get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 	if err != nil {
 		relog.Warning("ZK error for path %v: %v", req.Path, err)
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			atomic.AddInt32(&cell.nodeNotFoundErrors, 1)
+			cell.nodeNotFoundErrors.Add(1)
 		} else {
-			atomic.AddInt32(&cell.otherErrors, 1)
+			cell.otherErrors.Add(1)
 		}
 		return err
 	}
-	atomic.AddInt32(&cell.zkReads, 1)
+	cell.zkReads.Add(1)
 	reply.Stat.FromZookeeperStat(stat)
 
 	// update cache, set channel
@@ -172,7 +171,7 @@ func (zkr *ZkReader) get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 
 func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) (err error) {
 	defer handleError(&err)
-	atomic.AddInt32(&zkr.rpcCalls, 1)
+	zkr.rpcCalls.Add(1)
 
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
@@ -209,7 +208,7 @@ func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) (err error) 
 
 func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 	defer handleError(&err)
-	atomic.AddInt32(&zkr.rpcCalls, 1)
+	zkr.rpcCalls.Add(1)
 
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
@@ -221,9 +220,9 @@ func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error
 		reply.Cached = true
 		reply.Stale = stale
 		if stale {
-			atomic.AddInt32(&cell.staleReads, 1)
+			cell.staleReads.Add(1)
 		} else {
-			atomic.AddInt32(&cell.cacheReads, 1)
+			cell.cacheReads.Add(1)
 		}
 		return nil
 	}
@@ -233,7 +232,7 @@ func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error
 	zconn, err := cell.getConnection()
 	if err != nil {
 		relog.Warning("ZK connection error for path %v: %v", req.Path, err)
-		atomic.AddInt32(&cell.otherErrors, 1)
+		cell.otherErrors.Add(1)
 		return err
 	}
 
@@ -244,13 +243,13 @@ func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error
 	if err != nil {
 		relog.Warning("ZK error for path %v: %v", req.Path, err)
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			atomic.AddInt32(&cell.nodeNotFoundErrors, 1)
+			cell.nodeNotFoundErrors.Add(1)
 		} else {
-			atomic.AddInt32(&cell.otherErrors, 1)
+			cell.otherErrors.Add(1)
 		}
 		return err
 	}
-	atomic.AddInt32(&cell.zkReads, 1)
+	cell.zkReads.Add(1)
 	reply.Stat.FromZookeeperStat(stat)
 
 	// update cache
@@ -264,8 +263,8 @@ func (zkr *ZkReader) statsJSON() string {
 
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
-	fmt.Fprintf(b, "\"RpcCalls\": %v,", atomic.LoadInt32(&zkr.rpcCalls))
-	fmt.Fprintf(b, "\"UnknownCellErrors\": %v", atomic.LoadInt32(&zkr.unknownCellErrors))
+	fmt.Fprintf(b, "\"RpcCalls\": %v,", zkr.rpcCalls.Get())
+	fmt.Fprintf(b, "\"UnknownCellErrors\": %v", zkr.unknownCellErrors.Get())
 	var zkReads int32
 	var cacheReads int32
 	var staleReads int32
@@ -273,11 +272,11 @@ func (zkr *ZkReader) statsJSON() string {
 	var otherErrors int32
 	for name, zcell := range zkr.zcell {
 		fmt.Fprintf(b, ", \"%v\": %v", name, zcell.String())
-		zkReads += atomic.LoadInt32(&zcell.zkReads)
-		cacheReads += atomic.LoadInt32(&zcell.cacheReads)
-		staleReads += atomic.LoadInt32(&zcell.staleReads)
-		nodeNotFoundErrors += atomic.LoadInt32(&zcell.nodeNotFoundErrors)
-		otherErrors += atomic.LoadInt32(&zcell.otherErrors)
+		zkReads += zcell.zkReads.Get()
+		cacheReads += zcell.cacheReads.Get()
+		staleReads += zcell.staleReads.Get()
+		nodeNotFoundErrors += zcell.nodeNotFoundErrors.Get()
+		otherErrors += zcell.otherErrors.Get()
 	}
 	fmt.Fprintf(b, ", \"total\": {")
 	fmt.Fprintf(b, "\"CacheReads\": %v,", cacheReads)
