@@ -126,6 +126,20 @@ func NewSplitSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFi
 	return &SplitSnapshotManifest{Source: newSnapshotManifest(addr, mysqlAddr, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
 }
 
+// SanityCheckManifests checks if the ssms can be restored together.
+func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
+	first := ssms[0]
+	for _, ssm := range ssms[1:] {
+		if ssm.Source.DbName != first.Source.DbName {
+			return fmt.Errorf("multirestore sanity check: database names don't match: %v, %v", ssm, first)
+		}
+		if ssm.SchemaDefinition.Version != first.SchemaDefinition.Version {
+			return fmt.Errorf("multirestore sanity check: schema versions don't match: %v, %v", ssm, first)
+		}
+	}
+	return nil
+}
+
 // In MySQL for both bigint and varbinary, 0x1234 is a valid value. For
 // varbinary, it is left justified and for bigint it is correctly
 // interpreted. So in all cases, we can use '0x' plus the hex version
@@ -480,6 +494,71 @@ func (nhw namedHasherWriter) SnapshotFile(snapshotDir string) (*SnapshotFile, er
 	return &SnapshotFile{relativePath, fi.Size(), nhw.Hasher.HashString()}, nil
 }
 
+func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoOutfile, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string) (map[key.KeyRange]*SnapshotFile, error) {
+	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
+	queryParams := map[string]string{
+		"TableName":            dbName + "." + td.Name,
+		"Columns":              strings.Join(td.Columns, ", "),
+		"KeyspaceIdColumnName": keyName,
+		"TableOutputPath":      filename,
+	}
+	if err := mysqld.executeSuperQuery(mustFillStringTemplate(selectIntoOutfile, queryParams)); err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		file.Close()
+		if e := os.Remove(filename); e != nil {
+			relog.Error("Cannot remove %v: %v", filename, e)
+		}
+	}()
+
+	hasherWriters := make(map[key.KeyRange]*namedHasherWriter)
+
+	for kr, cloneSourcePath := range cloneSourcePaths {
+		filename := path.Join(cloneSourcePath, td.Name+".csv.gz")
+		w, err := newCompressedNamedHasherWriter(filename)
+		if err != nil {
+			return nil, err
+		}
+		hasherWriters[kr] = w
+	}
+
+	splitter := csvsplitter.NewKeyspaceCSVReader(file, ',')
+	for {
+		keyspaceId, line, err := splitter.ReadRecord()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		for kr, w := range hasherWriters {
+			if kr.Contains(keyspaceId) {
+				_, err = w.Write(line)
+				if err != nil {
+					return nil, err
+				}
+				break
+			}
+		}
+	}
+
+	snapshotFiles := make(map[key.KeyRange]*SnapshotFile)
+	for i, hw := range hasherWriters {
+		if snapshotFiles[i], err = hw.SnapshotFile(mysqld.SnapshotDir); err != nil {
+			return nil, err
+		}
+	}
+
+	return snapshotFiles, nil
+}
+
 func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
@@ -534,79 +613,17 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 
-	dumpTable := func(itd interface{}) (data interface{}, err error) {
-		td := itd.(TableDefinition)
-		filename := path.Join(mainCloneSourcePath, td.Name+".csv")
-		queryParams := map[string]string{
-			"TableName":            dbName + "." + td.Name,
-			"Columns":              strings.Join(td.Columns, ", "),
-			"KeyspaceIdColumnName": keyName,
-			"TableOutputPath":      filename,
-		}
-		if err = mysqld.executeSuperQuery(mustFillStringTemplate(selectIntoOutfile, queryParams)); err != nil {
+	datafiles := make([]map[key.KeyRange]*SnapshotFile, len(sd.TableDefinitions))
+	dumpTableWorker := func(i int) (err error) {
+		table := sd.TableDefinitions[i]
+		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, selectIntoOutfile, mainCloneSourcePath, cloneSourcePaths)
+		if err != nil {
 			return
 		}
-
-		file, err := os.Open(filename)
-		if err != nil {
-			return nil, err
-		}
-
-		defer func() {
-			file.Close()
-			if e := os.Remove(filename); e != nil {
-				relog.Error("Cannot remove %v: %v", filename, e)
-			}
-		}()
-
-		hasherWriters := make(map[key.KeyRange]*namedHasherWriter)
-
-		for _, kr := range keyRanges {
-			filename := path.Join(cloneSourcePaths[kr], td.Name+".csv.gz")
-			w, err := newCompressedNamedHasherWriter(filename)
-			if err != nil {
-				return nil, err
-			}
-			hasherWriters[kr] = w
-		}
-
-		splitter := csvsplitter.NewKeyspaceCSVReader(file, ',')
-		for {
-			keyspaceId, line, err := splitter.ReadRecord()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			for kr, w := range hasherWriters {
-				if kr.Contains(keyspaceId) {
-					_, err = w.Write(line)
-					if err != nil {
-						return nil, err
-					}
-					break
-				}
-			}
-		}
-
-		snapshotFiles := make(map[key.KeyRange]*SnapshotFile)
-		for i, hw := range hasherWriters {
-			if snapshotFiles[i], err = hw.SnapshotFile(mysqld.SnapshotDir); err != nil {
-				return
-			}
-		}
-		return snapshotFiles, nil
+		datafiles[i] = snapshotFiles
+		return nil
 	}
-
-	// We need interfaces to pass them into ConcurrentMap.
-	itds := make([]interface{}, len(sd.TableDefinitions))
-	for i, td := range sd.TableDefinitions {
-		itds[i] = td
-	}
-
-	datafiles, err := ConcurrentMap(concurrency, itds, dumpTable)
-	if err != nil {
+	if err = ConcurrentMap(concurrency, len(sd.TableDefinitions), dumpTableWorker); err != nil {
 		return
 	}
 
@@ -617,8 +634,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	ssmFiles := make([]string, len(keyRanges))
 	for i, kr := range keyRanges {
 		krDatafiles := make([]SnapshotFile, len(datafiles))
-		for j, im := range datafiles {
-			m := im.(map[key.KeyRange]*SnapshotFile)
+		for j, m := range datafiles {
 			krDatafiles[j] = *m[kr]
 		}
 		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, krDatafiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
@@ -637,6 +653,125 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		snapshotURLPaths[i] = path.Join(SnapshotURLPath, relative)
 	}
 	return snapshotURLPaths, nil
+}
+
+type localSnapshotFile struct {
+	manifest *SplitSnapshotManifest
+	file     *SnapshotFile
+	basePath string
+}
+
+func (lsf localSnapshotFile) filename() string {
+	return lsf.file.getLocalFilename(path.Join(lsf.basePath, lsf.manifest.Source.Addr))
+}
+
+func (lsf localSnapshotFile) url() string {
+	return "http://" + lsf.manifest.Source.Addr + path.Join(SnapshotURLPath, lsf.file.Path)
+}
+
+func (lsf localSnapshotFile) queryParams() (map[string]string, error) {
+	tableName := strings.Replace(path.Base(lsf.filename()), ".csv", "", -1)
+	td, ok := lsf.manifest.SchemaDefinition.GetTable(tableName)
+	if !ok {
+		return nil, fmt.Errorf("no definition for table %v in %v", tableName, lsf.manifest.SchemaDefinition)
+	}
+	return map[string]string{
+		"TableInputPath": lsf.filename(),
+		"TableName":      lsf.manifest.Source.DbName + "." + tableName,
+		"Columns":        strings.Join(td.Columns, ", "),
+	}, nil
+
+}
+
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRange, sourceAddrs []string, concurrency, fetchConcurrency, fetchRetryCount int, force bool) (err error) {
+	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
+	err = ConcurrentMap(fetchConcurrency, len(sourceAddrs), func(i int) error {
+		ssm, e := fetchSnapshotManifestWithRetry(sourceAddrs[i], dbName, keyRange, fetchRetryCount)
+		manifests[i] = ssm
+		return e
+	})
+	if err != nil {
+		return
+	}
+
+	if err = mysqld.SetReadOnly(true); err != nil {
+		return
+	}
+
+	if e := SanityCheckManifests(manifests); e != nil {
+		if force {
+			relog.Error("sanity check failing, continuing nevertheless: %v", e)
+		} else {
+			return e
+		}
+	}
+
+	tempStoragePath := path.Join(mysqld.SnapshotDir, "multirestore", dbName)
+
+	// Start fresh
+	if err = os.RemoveAll(tempStoragePath); err != nil {
+		return
+	}
+
+	if err = os.MkdirAll(tempStoragePath, 0775); err != nil {
+		return err
+	}
+
+	defer func() {
+		if e := os.RemoveAll(tempStoragePath); e != nil {
+			relog.Error("error removing %v: %v", tempStoragePath, e)
+		}
+
+	}()
+
+	// fetch all the csv files
+	todo := []localSnapshotFile{}
+	for _, manifest := range manifests {
+		if err = os.Mkdir(path.Join(tempStoragePath, manifest.Source.Addr), 0775); err != nil {
+			return err
+		}
+		for _, file := range manifest.Source.Files {
+			todo = append(todo, localSnapshotFile{manifest: manifest, file: &file, basePath: tempStoragePath})
+		}
+	}
+
+	err = ConcurrentMap(fetchConcurrency, len(todo), func(i int) error {
+		lsf := todo[i]
+		return fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
+	})
+	// FIXME: Should this create the database?
+	// RestoreFromPartialSnapshot doesn't do this.
+	manifest := manifests[0] // I am assuming they all match
+	createDbCmds := []string{
+		"USE " + manifest.Source.DbName}
+	for _, td := range manifest.SchemaDefinition.TableDefinitions {
+		createDbCmds = append(createDbCmds, td.Schema)
+	}
+	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
+		return
+	}
+
+	loadDataInfile := `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}} CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' ({{.Columns}})`
+
+	err = ConcurrentMap(concurrency, len(todo), func(i int) error {
+		lsf := todo[i]
+		queryParams, e := lsf.queryParams()
+		if e != nil {
+			return e
+		}
+		query := mustFillStringTemplate(loadDataInfile, queryParams)
+		return mysqld.executeSuperQuery(query)
+		// TODO: Remove files after they were loaded? This
+		// could decrease the peak amount of space needed for
+		// the restore.
+	})
+	if err != nil {
+		return err
+	}
+
+	// TODO: Enable Shruti's branchy replication.
+
+	return nil
 }
 
 /*

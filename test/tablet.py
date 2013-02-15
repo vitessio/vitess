@@ -170,13 +170,18 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, key_start=None, key_end=None, start=False, auth=False):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, key_start=None, key_end=None, start=False, auth=False, dbname=None):
     self.keyspace = keyspace
     self.shard = shard
     if keyspace:
       self.zk_tablet_alias = "/zk/global/vt/keyspaces/%s/shards/%s/test_%s-%010d" % (self.keyspace, self.shard, self.cell, self.tablet_uid)
     else:
       self.zk_tablet_alias = ""
+
+    if dbname is None:
+      self.dbname = "vt_" + self.keyspace
+    else:
+      self.dbname = dbname
 
     args = ['InitTablet']
     if force:
@@ -278,9 +283,9 @@ class Tablet(object):
   def _write_db_configs_file(self):
     config = dict(self.default_db_config)
     if self.keyspace:
-      config['app']['dbname'] = "vt_" + self.keyspace
-      config['dba']['dbname'] = "vt_" + self.keyspace
-      config['repl']['dbname'] = "vt_" + self.keyspace
+      config['app']['dbname'] = self.dbname
+      config['dba']['dbname'] = self.dbname
+      config['repl']['dbname'] = self.dbname
     path = os.path.join(self.tablet_dir, 'db-configs.json')
 
     if self.memcached:

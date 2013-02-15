@@ -44,6 +44,15 @@ func (sd *SchemaDefinition) generateSchemaVersion() {
 	sd.Version = hex.EncodeToString(hasher.Sum(nil))
 }
 
+func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool) {
+	for _, td := range sd.TableDefinitions {
+		if td.Name == table {
+			return &td, true
+		}
+	}
+	return nil, false
+}
+
 // generates a report on what's different between two SchemaDefinition
 func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *SchemaDefinition, result chan string) {
 	leftIndex := 0

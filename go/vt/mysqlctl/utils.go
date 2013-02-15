@@ -4,16 +4,14 @@ import (
 	"code.google.com/p/vitess/go/relog"
 )
 
-type MapFunc func(interface{}) (interface{}, error)
+type MapFunc func(index int) error
 
-// ConcurrentMap calls fun on every element of todo using concurrency
-// goroutines and returns the aggregated results (in the same order as
-// they were provided in todo). If any call to fun returns an error,
-// its result will be nil, and ConcurrentMap will also return a
-// non-nil error.
-func ConcurrentMap(concurrency int, todo []interface{}, fun MapFunc) ([]interface{}, error) {
-	n := len(todo)
-	results := make([]interface{}, n)
+// ConcurrentMap applies fun in a concurrent manner on integers from 0
+// to n-1 (they are assumed to be indexes of some slice containing
+// items to be processed). The first error returned by a fun
+// application will returned (subsequent errors will only be
+// logged). It will use concurrency goroutines.
+func ConcurrentMap(concurrency, n int, fun MapFunc) error {
 	errors := make(chan error)
 	work := make(chan int, n)
 
@@ -25,13 +23,7 @@ func ConcurrentMap(concurrency int, todo []interface{}, fun MapFunc) ([]interfac
 	for j := 0; j < concurrency; j++ {
 		go func() {
 			for i := range work {
-				item := todo[i]
-				result, err := fun(item)
-				if err != nil {
-					result = nil
-				}
-				results[i] = result
-				errors <- err
+				errors <- fun(i)
 			}
 		}()
 	}
@@ -45,5 +37,5 @@ func ConcurrentMap(concurrency int, todo []interface{}, fun MapFunc) ([]interfac
 			err = e
 		}
 	}
-	return results, err
+	return err
 }

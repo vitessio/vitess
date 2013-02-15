@@ -90,6 +90,27 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	}
 }
 
+func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
+	force := subFlags.Bool("force", false, "restore even if the schemas don't match")
+	start := subFlags.String("start", "", "start of the key range")
+	end := subFlags.String("end", "", "end of the key range")
+	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
+	concurrency := subFlags.Int("concurrency", 4, "how many concurrent jobs to run simultaneously")
+	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
+
+	subFlags.Parse(args)
+
+	keyRange := key.KeyRange{Start: key.HexKeyspaceId(*start).Unhex(), End: key.HexKeyspaceId(*end).Unhex()}
+
+	if subFlags.NArg() < 2 {
+		relog.Fatal("multirestore requires <dbname> <host>... %v", args)
+	}
+	dbName := subFlags.Arg(0)
+	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, subFlags.Args()[1:], *concurrency, *fetchConcurrency, *fetchRetryCount, *force); err != nil {
+		relog.Fatal("multirestore failed: %v", err)
+	}
+}
+
 func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	dontWaitForSlaveStart := subFlags.Bool("dont-wait-for-slave-start", false, "won't wait for replication to start (useful when restoring from master server)")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
@@ -207,9 +228,11 @@ var commands = []command{
 	command{"restore", restoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
-
+	command{"multirestore", multiRestoreCmd,
+		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] <host>...",
+		"Restores a snapshot form multiple hosts"},
 	command{"partialsnapshot", partialSnapshotCmd,
-		"[-start=<start key>] [-stop=<stop key>] [-concurrency=4] <db name> <key name>",
+		"[-start=<start key>] [-end=<end key>] [-concurrency=4] <db name> <key name>",
 		"Takes a partial snapshot using 'select * into' commands"},
 	command{"partialrestore", partialRestoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",

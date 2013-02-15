@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"hash"
 	//	"hash/crc64"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 
 	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 )
 
 // Use this to simulate failures in tests
@@ -292,6 +294,43 @@ func newSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, p
 	sort.Sort(rs.Files)
 	rs.ReplicationState.ReplicationPosition = *pos
 	return rs
+}
+
+func fetchSnapshotManifestWithRetry(addr, dbName string, keyRange key.KeyRange, retryCount int) (ssm *SplitSnapshotManifest, err error) {
+	for i := 0; i < retryCount; i++ {
+		if ssm, err = fetchSnapshotManifest(addr, dbName, keyRange); err == nil {
+			return
+		}
+	}
+	return
+}
+
+// fetchSnapshotManifest fetches the manifest for keyRange from
+// vttablet serving at addr.
+func fetchSnapshotManifest(addr, dbName string, keyRange key.KeyRange) (*SplitSnapshotManifest, error) {
+	shardName := fmt.Sprintf("%v-%v,%v", dbName, keyRange.Start.Hex(), keyRange.End.Hex())
+	path := path.Join(SnapshotURLPath, "data", shardName, partialSnapshotManifestFile)
+	url := addr + path
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if sc := resp.StatusCode; sc != 200 {
+		return nil, fmt.Errorf("GET %v returned with a non-200 status code (%v): %q", url, sc, data)
+	}
+
+	ssm := new(SplitSnapshotManifest)
+	if err = json.Unmarshal(data, ssm); err != nil {
+		return nil, fmt.Errorf("ReadSplitSnapshotManifest failed: %v %v", url, err)
+	}
+	return ssm, nil
 }
 
 // fetchFile fetches data from the web server.  It then sends it to a
