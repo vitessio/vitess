@@ -886,6 +886,17 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 			}
 		}
 	}
+
+	// run a hook for final cleanup, only in non-force mode.
+	// (force mode executes on the vtctl side, not on the vttablet side)
+	if !force {
+		if err := hook.NewSimpleHook("postflight_scrap").ExecuteOptional(); err != nil {
+			// we don't want to return an error, the server
+			// is already in bad shape probably.
+			relog.Warning("Scrap: postflight_scrap failed: %v", err)
+		}
+	}
+
 	return nil
 }
 
