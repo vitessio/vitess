@@ -106,12 +106,12 @@ class VttabletTestEnv(TestEnv):
 
   def setUp(self):
     utils.zk_setup()
-    if vttop is None:
+    if self.vttop is None:
       raise EnvironmentError("VTTOP not defined")
     if self.vtroot is None:
       raise EnvironmentError("VTROOT not defined")
 
-    framework.execute('go build', verbose=utils.options.verbose, cwd=vttop+'/go/cmd/mysqlctl')
+    framework.execute('go build', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
 
     utils.wait_procs([self.tablet.start_mysql()])
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
@@ -120,7 +120,7 @@ class VttabletTestEnv(TestEnv):
     self.clean_sqls = []
     self.init_sqls = []
     clean_mode = False
-    with open(os.path.join(vttop, "test", "test_data", "test_schema.sql")) as f:
+    with open(os.path.join(self.vttop, "test", "test_data", "test_schema.sql")) as f:
       for line in f:
         line = line.rstrip()
         if line == "# clean":
