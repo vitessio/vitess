@@ -83,6 +83,7 @@ func parseDbi(dbi string) (*url.URL, error) {
 }
 
 func DialTablet(dbi string, stream bool) (conn *Conn, err error) {
+	conn = new(Conn)
 	if conn.dbi, err = parseDbi(dbi); err != nil {
 		return
 	}

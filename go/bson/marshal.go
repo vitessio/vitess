@@ -157,6 +157,8 @@ func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 		} else {
 			encodeField(buf, key, val.Elem())
 		}
+	case reflect.Invalid: // nil interfaces are represented like this
+		EncodePrefix(buf, Null, key)
 	default:
 		panic(NewBsonError("don't know how to marshal %v\n", val.Type()))
 	}

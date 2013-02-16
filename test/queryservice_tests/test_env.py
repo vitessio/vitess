@@ -101,13 +101,13 @@ class TestEnv(object):
 
 class VttabletTestEnv(TestEnv):
   tablet = tablet.Tablet(62344, 9461, 9460)
+  vttop = os.getenv("VTTOP")
+  vtroot = os.getenv("VTROOT")
 
   def setUp(self):
     utils.zk_setup()
-    vttop = os.getenv("VTTOP")
     if vttop is None:
       raise EnvironmentError("VTTOP not defined")
-    self.vtroot = os.getenv("VTROOT")
     if self.vtroot is None:
       raise EnvironmentError("VTROOT not defined")
 
