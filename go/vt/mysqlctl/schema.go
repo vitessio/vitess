@@ -143,7 +143,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string) (*SchemaDefiniti
 		sd.TableDefinitions[i].Name = tableName
 		sd.TableDefinitions[i].Schema = norm2
 
-		columns, err := mysqld.GetColumns(tableName)
+		columns, err := mysqld.GetColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -155,13 +155,13 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string) (*SchemaDefiniti
 }
 
 // GetColumns returns the columns of table.
-func (mysqld *Mysqld) GetColumns(table string) ([]string, error) {
+func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 	conn, err := mysqld.createConnection()
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	qr, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %v where 1=0", table)), 0, true)
+	qr, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %v.%v where 1=0", dbName, table)), 0, true)
 	if err != nil {
 		return nil, err
 	}
