@@ -101,11 +101,11 @@ def teardown():
                     replica_tablet.teardown_mysql()]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  master_tablet.kill_vttablet()
-  replica_tablet.kill_vttablet()
   utils.zk_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
+  master_tablet.kill_vttablet()
+  replica_tablet.kill_vttablet()
   master_tablet.remove_tree()
   replica_tablet.remove_tree()
 
@@ -121,7 +121,7 @@ def setup_tablets():
   replica_tablet.create_db('vt_test_keyspace')
   master_tablet.start_vttablet(memcache=True)
 
-  replica_tablet.init_tablet('idle', start=True)
+  replica_tablet.init_tablet('idle', 'test_keyspace', start=True)
   replica_tablet.start_memcache()
   utils.run("mkdir -p /vt/snapshot")
   utils.run("chmod +w /vt/snapshot")

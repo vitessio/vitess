@@ -301,7 +301,8 @@ class Tablet(object):
 
   def kill_vttablet(self):
     utils.debug("killing vttablet: " + self.zk_tablet_path)
-    utils.kill_sub_process(self.proc)
+    if self.proc is not None:
+      utils.kill_sub_process(self.proc)
     if self.memcached:
       self.kill_memcache()
 

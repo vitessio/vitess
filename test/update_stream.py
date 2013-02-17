@@ -122,7 +122,7 @@ def setup_tablets():
   #master_tablet.start_vttablet(auth=True)
   master_tablet.start_vttablet()
 
-  replica_tablet.init_tablet('idle', start=True)
+  replica_tablet.init_tablet('idle', 'test_keyspace', start=True)
   snapshot_dir = os.path.join(vtdataroot, 'snapshot')
   utils.run("mkdir -p " + snapshot_dir)
   utils.run("chmod +w " + snapshot_dir)
