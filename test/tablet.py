@@ -179,7 +179,7 @@ class Tablet(object):
       self.zk_tablet_alias = ""
 
     if dbname is None:
-      self.dbname = "vt_" + self.keyspace
+      self.dbname = "vt_" + (self.keyspace or "database")
     else:
       self.dbname = dbname
 
