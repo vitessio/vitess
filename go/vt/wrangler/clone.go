@@ -167,6 +167,7 @@ func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSn
 	if err != nil {
 		return err
 	}
+	relog.Info("Successfully reserved %v for restore", zkDstTabletPath)
 
 	// take the snapshot, or put the server in SnapshotSource mode
 	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, concurrency, serverMode)
@@ -176,6 +177,7 @@ func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSn
 		// FIXME(alainjobart) destination was idle, we could
 		// just force transition back to idle and delete
 		// replication path in ZK
+		relog.Warning("Snapshot failed on source server %v (see error below), scrapping destination tablet %v", zkSrcTabletPath, zkDstTabletPath)
 		if _, err := wr.Scrap(zkDstTabletPath, false, false); err != nil {
 			relog.Error("Failed to scrap destination tablet after failed source snapshot: %v", err.Error())
 		}
