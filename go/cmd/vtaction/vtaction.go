@@ -64,6 +64,7 @@ func main() {
 		log.Ldate|log.Lmicroseconds|log.Lshortfile,
 		relog.LogNameToLogLevel(*logLevel))
 	relog.SetLogger(logger)
+	relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
