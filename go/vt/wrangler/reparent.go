@@ -126,7 +126,10 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 
 	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, actionPath)
 	reparentErr := wr.reparentShard(shardInfo, masterElectTablet, leaveMasterReadOnly)
-	relog.Info("reparentShard finished %v", reparentErr)
+	if reparentErr == nil {
+		// only log if it works, if it fails we'll show the error
+		relog.Info("reparentShard finished")
+	}
 
 	err = wr.handleActionError(actionPath, reparentErr)
 	if reparentErr != nil {

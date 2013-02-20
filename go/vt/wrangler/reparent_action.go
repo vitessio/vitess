@@ -200,10 +200,10 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 			for i, uid := range uids {
 				tabletPaths[i] = tabletMap[uid].Path()
 			}
-			items = append(items, fmt.Sprintf("%v %v", slaveMapKey, tabletPaths))
+			items = append(items, fmt.Sprintf("  %v\n    %v", slaveMapKey, strings.Join(tabletPaths, "\n    ")))
 		}
 		sort.Strings(items)
-		return fmt.Errorf("inconsistent slaves, mark some offline with vtctl ScrapTablet {%v}", strings.Join(items, ", "))
+		return fmt.Errorf("inconsistent slaves, mark some offline with vtctl ScrapTablet\n%v", strings.Join(items, "\n"))
 	}
 	return nil
 }
