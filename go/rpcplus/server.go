@@ -269,7 +269,7 @@ func prepareMethod(method reflect.Method) *methodType {
 		replyType = mtype.In(3)
 		contextType = mtype.In(1)
 	default:
-		log.Println("method", mname, "has wrong number of ins:", mtype.NumIn())
+		log.Println("method", mname, "of", mtype, "has wrong number of ins:", mtype.NumIn())
 		return nil
 	}
 
