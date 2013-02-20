@@ -61,7 +61,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 		"Enabled",
 	}, time.Now(), DISABLED)
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
-	expvar.Publish("UpdateStreamRpcService", UpdateStreamRpcService)
+	expvar.Publish("UpdateStreamRpcService", estats.StrFunc(func() string { return UpdateStreamRpcService.statsJSON() }))
 }
 
 func logError() {
@@ -159,8 +159,9 @@ func (updateStream *UpdateStream) setState(state int32) {
 	updateStream.states.SetState(int(state))
 }
 
-// expvar.Var interface
-func (updateStream *UpdateStream) String() string {
+// expvar.Var interface.
+// NOTE(szopa): It's unexported to avoid rpc logspam.
+func (updateStream *UpdateStream) statsJSON() string {
 	return fmt.Sprintf("{"+
 		"\"States\": %v"+
 		"}", updateStream.states.String())
