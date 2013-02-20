@@ -1028,7 +1028,6 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	zkPaths := subFlags.Args()
 	workq := make(chan string, len(zkPaths))
 	wg := sync.WaitGroup{}
-	results := make(chan string, len(zkPaths))
 	for _, zkPath := range zkPaths {
 		workq <- zkPath
 	}
@@ -1044,19 +1043,13 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 					continue
 				}
 				for _, path := range staleActions {
-					results <- path
+					fmt.Println(path)
 				}
 			}
 			wg.Done()
 		}()
 	}
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-	for path := range results {
-		fmt.Println(path)
-	}
+	wg.Wait()
 	return "", nil
 }
 
