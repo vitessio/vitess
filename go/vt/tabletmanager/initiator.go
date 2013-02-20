@@ -175,6 +175,15 @@ type MultiSnapshotArgs struct {
 	Tables      []string
 	Concurrency int
 }
+type MultiRestoreArgs struct {
+	ZkSrcTabletPaths []string
+	Concurrency      int
+	FetchConcurrency int
+	FetchRetryCount  int
+	Force            bool
+	KeyRange         key.KeyRange
+	DbName           string
+}
 
 func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, args: args})
@@ -182,6 +191,10 @@ func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSna
 
 func (ai *ActionInitiator) MultiSnapshot(zkTabletPath string, args *MultiSnapshotArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MULTI_SNAPSHOT, args: args})
+}
+
+func (ai *ActionInitiator) RestoreFromMultiSnapshot(zkTabletPath string, args *MultiRestoreArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MULTI_RESTORE, args: args})
 }
 
 func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, err error) {

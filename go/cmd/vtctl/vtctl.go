@@ -115,6 +115,9 @@ var commands = []commandGroup{
 			command{"MultiSnapshot", commandMultiSnapshot,
 				"[-force] [-concurrency=4] -shard_spec='-' -tables='' <zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
+			command{"MultiRestore", commandMultiRestore,
+				"[-force] [-concurrency=4] [-start=''] [-end=''] [-fetch-concurrency=4] [-fetch-retry-count=3] <dbname> <destination zk path> <source zk path>...",
+				"Restores a snapshot from multiple hosts."},
 			command{"PartialRestore", commandPartialRestore,
 				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
 				"Copy the given partial snaphot from the source tablet and starts partial replication to the new master path (or uses the src tablet path if not specified).\n" +
@@ -834,6 +837,27 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		relog.Info("ParentPath: %v", zkParentPath)
 	}
 	return "", err
+}
+
+func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
+	force := subFlags.Bool("force", false, "restore even if the schemas don't match")
+	start := subFlags.String("start", "", "start of the key range")
+	end := subFlags.String("end", "", "end of the key range")
+	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
+	concurrency := subFlags.Int("concurrency", 4, "how many concurrent jobs to run simultaneously")
+	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
+
+	subFlags.Parse(args)
+	keyRange := key.KeyRange{Start: key.HexKeyspaceId(*start).Unhex(), End: key.HexKeyspaceId(*end).Unhex()}
+	if subFlags.NArg() < 3 {
+		relog.Fatal("MultiRestore requires <dbname> <destination zk path> <source zk path>... %v", args)
+	}
+	dbName := subFlags.Arg(0)
+	destination := subFlags.Arg(1)
+	sources := subFlags.Args()[2:]
+
+	err = wrangler.RestoreFromMultiSnapshot(dbName, keyRange, destination, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *force)
+	return
 }
 
 func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

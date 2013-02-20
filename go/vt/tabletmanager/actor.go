@@ -183,7 +183,9 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_PARTIAL_SNAPSHOT:
 		err = ta.partialSnapshot(actionNode)
 	case TABLET_ACTION_MULTI_SNAPSHOT:
-		err = ta.multisnapshot(actionNode)
+		err = ta.multiSnapshot(actionNode)
+	case TABLET_ACTION_MULTI_RESTORE:
+		err = ta.multiRestore(actionNode)
 	case TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
@@ -762,7 +764,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	return nil
 }
 
-func (ta *TabletActor) multisnapshot(actionNode *ActionNode) error {
+func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*MultiSnapshotArgs)
 
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
@@ -789,6 +791,46 @@ func (ta *TabletActor) multisnapshot(actionNode *ActionNode) error {
 	}
 	actionNode.reply = sr
 	return nil
+}
+
+func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
+	args := actionNode.args.(*MultiRestoreArgs)
+
+	// read our current tablet, verify its state
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+	if !args.Force && tablet.Type != TYPE_IDLE {
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	}
+
+	// get source tablets addresses
+	sourceAddrs := make([]string, len(args.ZkSrcTabletPaths))
+	for i, path := range args.ZkSrcTabletPaths {
+		t, e := ReadTablet(ta.zconn, path)
+		if e != nil {
+			return e
+		}
+		sourceAddrs[i] = "http://" + t.Addr
+	}
+	// NOTE(szopa): This is a subset of what changeTypeToRestore
+	// does. This guy is going to be a master, it should not
+	// inherit the keyspace or db name from the sources.
+	tablet.Type = TYPE_RESTORE
+	tablet.KeyRange = args.KeyRange
+	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
+		return err
+	}
+
+	if err := ta.mysqld.RestoreFromMultiSnapshot(args.DbName, args.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.FetchRetryCount, args.Force); err != nil {
+		if e := Scrap(ta.zconn, ta.zkTabletPath, false); e != nil {
+			relog.Error("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
+		}
+		return err
+	}
+
+	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE, true)
 }
 
 // Operate on restore tablet.
@@ -848,7 +890,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE, true)
+	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_MASTER, true)
 }
 
 // Make this external, since in needs to be forced from time to time.

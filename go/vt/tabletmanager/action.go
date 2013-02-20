@@ -51,6 +51,7 @@ const (
 	TABLET_ACTION_PARTIAL_SNAPSHOT    = "PartialSnapshot"
 	TABLET_ACTION_MULTI_SNAPSHOT      = "MultiSnapshot"
 	TABLET_ACTION_PARTIAL_RESTORE     = "PartialRestore"
+	TABLET_ACTION_MULTI_RESTORE       = "MultiRestore"
 
 	// Shard actions - involve all tablets in a shard
 	SHARD_ACTION_REPARENT = "ReparentShard"
@@ -154,6 +155,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.reply = &MultiSnapshotReply{}
 	case TABLET_ACTION_PARTIAL_RESTORE:
 		node.args = &RestoreArgs{}
+	case TABLET_ACTION_MULTI_RESTORE:
+		node.args = &MultiRestoreArgs{}
 
 	case SHARD_ACTION_REPARENT:
 		node.args = new(string)

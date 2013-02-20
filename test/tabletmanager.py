@@ -401,7 +401,57 @@ primary key (id)
 
   # 0x28 = 40
   tablet_62344.mysqlctl("multirestore --end=0000000000000028 vt_test_keyspace %s" % tablet_urls)
-  #utils.run_vtctl('MultiRestore --end=0000000000000028 %s id %s' % (tablet_urls, tablet.zk_tablet_path), trap_output=True, raise_on_error=True)
+  time.sleep(1)
+  rows = tablet_62344.mquery('vt_test_keyspace', 'select id from vt_insert_test')
+  if len(rows) == 0:
+    raise utils.TestError("There are no rows in the restored database.")
+  for row in rows:
+    if row[0] > 32:
+      raise utils.TestError("Bad row: %s" % row)
+  for tablet in tablet_62044, tablet_41983, tablet_31981, tablet_62344:
+    tablet.kill_vttablet()
+
+
+@utils.test_case
+def test_multisnapshot_and_restore_vtctl():
+  create = '''create table vt_insert_test (
+id bigint auto_increment,
+msg varchar(64),
+primary key (id)
+) Engine=InnoDB'''
+  insert_template = "insert into vt_insert_test (id, msg) values (%s, 'test %s')"
+  utils.zk_wipe()
+
+  # Start up a master mysql and vttablet
+  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+
+  # Start three tablets for three different shards. At this point the
+  # sharding schema is not really important, as long as it is
+  # consistent.
+  new_spec = '-0000000000000028-'
+  old_tablets = [tablet_62044, tablet_41983, tablet_31981]
+  for i, tablet in enumerate(old_tablets):
+    tablet.init_tablet('master', 'test_keyspace', str(i))
+    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/%s' % i)
+  utils.run_vtctl('Validate /zk/global/vt/keyspaces')
+
+  for i, tablet in enumerate(old_tablets):
+    tablet.populate("vt_test_keyspace", create, [insert_template % (10*j + i, 10*j + i)
+                                                 for j in range(1, 8)])
+    tablet.start_vttablet()
+    print utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
+
+
+  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
+  tablet_62344.create_db('vt_test_keyspace')
+  tablet_62344.init_tablet('master', 'test_keyspace_new', "0", dbname="vt_test_keyspace")
+  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace_new/shards/0')
+  utils.run_vtctl('Validate /zk/global/vt/keyspaces')
+  tablet_62344.start_vttablet()
+
+  # 0x28 = 40
+  source_zk_paths = ' '.join(t.zk_tablet_path for t in old_tablets)
+  utils.run_vtctl('MultiRestore --force --end=0000000000000028 vt_test_keyspace %s %s' % (tablet_62344.zk_tablet_path, source_zk_paths), trap_output=True, raise_on_error=True)
   time.sleep(1)
   rows = tablet_62344.mquery('vt_test_keyspace', 'select id from vt_insert_test')
   if len(rows) == 0:
@@ -1040,6 +1090,11 @@ def run_all():
   # This test does not pass as it requires an experimental mysql patch.
   #run_test_vtctl_partial_clone()
   #run_test_vtctl_partial_clone_varbinary()
+
+  test_multisnapshot_vtctl()
+  test_multisnapshot_mysqlctl()
+  test_multisnapshot_and_restore()
+  test_multisnapshot_and_restore_vtctl()
 
   run_test_reparent_graceful()
   run_test_reparent_graceful_range_based()
