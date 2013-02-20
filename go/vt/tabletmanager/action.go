@@ -78,6 +78,7 @@ type ActionNode struct {
 	ActionGuid string
 	Error      string
 	State      ActionState
+	Pid        int // only != 0 if State == ACTION_STATE_RUNNING
 
 	// do not serialize the next fields
 	path  string // path in zookeeper representing this action

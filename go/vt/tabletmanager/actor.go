@@ -76,13 +76,25 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 
 	switch actionNode.State {
 	case ACTION_STATE_RUNNING:
-		if !forceRerun {
+		// see if the process is still running, and if so, wait for it
+		if _, err := os.FindProcess(actionNode.Pid); err != nil {
+			// process is dead, either clean up or re-run
+			if !forceRerun {
+				actionErr := fmt.Errorf("Previous vtaction process died")
+				if err := StoreActionResponse(ta.zconn, actionNode, actionPath, actionErr); err != nil {
+					relog.Error("Dead process detector failed to update actionNode: %v", err)
+				}
+				return actionErr
+			}
+		} else {
 			relog.Warning("HandleAction waiting for running action: %v", actionPath)
 			_, err := WaitForCompletion(ta.zconn, actionPath, 0)
 			return err
 		}
 	case ACTION_STATE_FAILED:
-		// this should not be happening any more, but keep it for now
+		// this happens only in a couple cases:
+		// - vtaction was killed by a signal and we caught it
+		// - vtaction died unexpectedly, and the next vtaction run detected it
 		return fmt.Errorf(actionNode.Error)
 	case ACTION_STATE_DONE:
 		// this is bad
@@ -91,6 +103,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 
 	// Claim the action by this process.
 	actionNode.State = ACTION_STATE_RUNNING
+	actionNode.Pid = os.Getpid()
 	newData := ActionNodeToJson(actionNode)
 	_, zkErr = ta.zconn.Set(actionPath, newData, stat.Version())
 	if zkErr != nil {
@@ -228,6 +241,7 @@ func StoreActionResponse(zconn zk.Conn, actionNode *ActionNode, actionPath strin
 		actionNode.Error = ""
 		actionNode.State = ACTION_STATE_DONE
 	}
+	actionNode.Pid = 0
 
 	// Write the data first to our action node, then to the log.
 	// In the error case, this node will be left behind to debug.
