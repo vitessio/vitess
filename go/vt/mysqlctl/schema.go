@@ -182,7 +182,6 @@ type SchemaChange struct {
 }
 
 type SchemaChangeResult struct {
-	Error        string
 	BeforeSchema *SchemaDefinition
 	AfterSchema  *SchemaDefinition
 }
@@ -191,15 +190,11 @@ func (scr *SchemaChangeResult) String() string {
 	return jscfg.ToJson(scr)
 }
 
-func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (result *SchemaChangeResult) {
-	result = &SchemaChangeResult{}
-
+func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*SchemaChangeResult, error) {
 	// gather current schema on real database
-	var err error
-	result.BeforeSchema, err = mysqld.GetSchema(dbName, nil)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 
 	// populate temporary database with it
@@ -207,56 +202,45 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (resul
 	sql += "DROP DATABASE IF EXISTS _vt_preflight;\n"
 	sql += "CREATE DATABASE _vt_preflight;\n"
 	sql += "USE _vt_preflight;\n"
-	for _, td := range result.BeforeSchema.TableDefinitions {
+	for _, td := range beforeSchema.TableDefinitions {
 		sql += td.Schema + ";\n"
 	}
-	err = mysqld.ExecuteMysqlCommand(sql)
-	if err != nil {
-		result.Error = err.Error()
-		return result
+	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+		return nil, err
 	}
 
 	// apply schema change to the temporary database
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "USE _vt_preflight;\n"
 	sql += change
-	err = mysqld.ExecuteMysqlCommand(sql)
-	if err != nil {
-		result.Error = err.Error()
-		return result
+	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+		return nil, err
 	}
 
 	// get the result
-	result.AfterSchema, err = mysqld.GetSchema("_vt_preflight", nil)
+	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 
 	// and clean up the extra database
 	sql = "SET sql_log_bin = 0;\n"
 	sql += "DROP DATABASE _vt_preflight;\n"
-	err = mysqld.ExecuteMysqlCommand(sql)
-	if err != nil {
-		result.Error = err.Error()
-		return result
+	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+		return nil, err
 	}
 
-	return result
+	return &SchemaChangeResult{beforeSchema, afterSchema}, nil
 }
 
-func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (result *SchemaChangeResult) {
-	result = &SchemaChangeResult{}
-
+func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*SchemaChangeResult, error) {
 	// check current schema matches
-	var err error
-	result.BeforeSchema, err = mysqld.GetSchema(dbName, nil)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 	if change.BeforeSchema != nil {
-		schemaDiffs := result.BeforeSchema.DiffSchemaToArray("actual", "expected", change.BeforeSchema)
+		schemaDiffs := beforeSchema.DiffSchemaToArray("actual", "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				relog.Warning("BeforeSchema differs: %v", msg)
@@ -264,21 +248,19 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (re
 
 			// let's see if the schema was already applied
 			if change.AfterSchema != nil {
-				schemaDiffs = result.BeforeSchema.DiffSchemaToArray("actual", "expected", change.AfterSchema)
+				schemaDiffs = beforeSchema.DiffSchemaToArray("actual", "expected", change.AfterSchema)
 				if len(schemaDiffs) == 0 {
 					// no diff between the schema we expect
 					// after the change and the current
 					// schema, we already applied it
-					result.AfterSchema = result.BeforeSchema
-					return result
+					return &SchemaChangeResult{beforeSchema, beforeSchema}, nil
 				}
 			}
 
 			if change.Force {
 				relog.Warning("BeforeSchema differs, applying anyway")
 			} else {
-				result.Error = "BeforeSchema differs"
-				return result
+				return nil, fmt.Errorf("BeforeSchema differs")
 			}
 		}
 	}
@@ -293,22 +275,19 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (re
 
 	// execute the schema change using an external mysql process
 	// (to benefit from the extra commands in mysql cli)
-	err = mysqld.ExecuteMysqlCommand(sql)
-	if err != nil {
-		result.Error = err.Error()
-		return result
+	if err = mysqld.ExecuteMysqlCommand(sql); err != nil {
+		return nil, err
 	}
 
-	// populate AfterSchema
-	result.AfterSchema, err = mysqld.GetSchema(dbName, nil)
+	// get AfterSchema
+	afterSchema, err := mysqld.GetSchema(dbName, nil)
 	if err != nil {
-		result.Error = err.Error()
-		return result
+		return nil, err
 	}
 
 	// compare to the provided AfterSchema
 	if change.AfterSchema != nil {
-		schemaDiffs := result.AfterSchema.DiffSchemaToArray("actual", "expected", change.AfterSchema)
+		schemaDiffs := afterSchema.DiffSchemaToArray("actual", "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				relog.Warning("AfterSchema differs: %v", msg)
@@ -316,11 +295,10 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (re
 			if change.Force {
 				relog.Warning("AfterSchema differs, not reporting error")
 			} else {
-				result.Error = "AfterSchema differs"
-				return result
+				return nil, fmt.Errorf("AfterSchema differs")
 			}
 		}
 	}
 
-	return result
+	return &SchemaChangeResult{beforeSchema, afterSchema}, nil
 }

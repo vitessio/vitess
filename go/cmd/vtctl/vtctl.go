@@ -1237,9 +1237,6 @@ func commandPreflightSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	scr, err := wrangler.PreflightSchema(subFlags.Arg(0), change)
 	if err == nil {
 		relog.Info(scr.String())
-		if scr.Error != "" {
-			return "", fmt.Errorf("%s", scr.Error)
-		}
 	}
 	return "", err
 }
@@ -1268,10 +1265,6 @@ func commandApplySchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 			relog.Fatal("preflight failed: %v", err)
 		}
 		relog.Info("Preflight: " + scr.String())
-		if scr.Error != "" {
-			relog.Fatal("preflight failed: %v", scr.Error)
-		}
-
 		sc.BeforeSchema = scr.BeforeSchema
 		sc.AfterSchema = scr.AfterSchema
 		sc.Force = *force
@@ -1280,9 +1273,6 @@ func commandApplySchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 	scr, err := wrangler.ApplySchema(subFlags.Arg(0), sc)
 	if err == nil {
 		relog.Info(scr.String())
-		if scr.Error != "" {
-			return "", fmt.Errorf("%s", scr.Error)
-		}
 	}
 	return "", err
 }
@@ -1307,9 +1297,6 @@ func commandApplySchemaShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args
 	scr, err := wrangler.ApplySchemaShard(subFlags.Arg(0), change, *newParent, *simple, *force)
 	if err == nil {
 		relog.Info(scr.String())
-		if scr.Error != "" {
-			return "", fmt.Errorf("%s", scr.Error)
-		}
 	}
 	return "", err
 }
@@ -1329,9 +1316,6 @@ func commandApplySchemaKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, a
 	scr, err := wrangler.ApplySchemaKeyspace(subFlags.Arg(0), change, *simple, *force)
 	if err == nil {
 		relog.Info(scr.String())
-		if scr.Error != "" {
-			return "", fmt.Errorf("%s", scr.Error)
-		}
 	}
 	return "", err
 }

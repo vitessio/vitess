@@ -505,7 +505,11 @@ func (ta *TabletActor) preflightSchema(actionNode *ActionNode) error {
 	}
 
 	// and preflight the change
-	actionNode.reply = ta.mysqld.PreflightSchemaChange(tablet.DbName(), *change)
+	scr, err := ta.mysqld.PreflightSchemaChange(tablet.DbName(), *change)
+	if err != nil {
+		return err
+	}
+	actionNode.reply = scr
 	return nil
 }
 
@@ -519,7 +523,11 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 	}
 
 	// and apply the change
-	actionNode.reply = ta.mysqld.ApplySchemaChange(tablet.DbName(), sc)
+	scr, err := ta.mysqld.ApplySchemaChange(tablet.DbName(), sc)
+	if err != nil {
+		return err
+	}
+	actionNode.reply = scr
 	return nil
 }
 

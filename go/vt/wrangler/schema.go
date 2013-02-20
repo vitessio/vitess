@@ -257,9 +257,6 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 	if schemaErr != nil {
 		return nil, schemaErr
 	}
-	if scr.Error != "" {
-		return nil, fmt.Errorf("applySchemaShard failed on shard %v: %v", shardInfo.ShardPath(), scr.Error)
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -379,9 +376,9 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		// apply the schema change
 		relog.Info("Applying schema change to slave %v in complex mode", status.zkTabletPath)
 		sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
-		scr, err := wr.ApplySchema(status.zkTabletPath, sc)
-		if err != nil || scr.Error != "" {
-			return scr, err
+		_, err = wr.ApplySchema(status.zkTabletPath, sc)
+		if err != nil {
+			return nil, err
 		}
 
 		// put this guy back into the serving graph
