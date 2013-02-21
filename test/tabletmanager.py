@@ -387,7 +387,7 @@ primary key (id)
     tablet.populate("vt_test_keyspace", create, [insert_template % (10*j + i, 10*j + i)
                                                  for j in range(1, 8)])
     tablet.start_vttablet()
-    print utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
+    utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
 
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
@@ -439,7 +439,7 @@ primary key (id)
     tablet.populate("vt_test_keyspace", create, [insert_template % (10*j + i, 10*j + i)
                                                  for j in range(1, 8)])
     tablet.start_vttablet()
-    print utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
+    utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
 
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
