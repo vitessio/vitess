@@ -155,15 +155,17 @@ class GoRpcClient(object):
   def decode_response(self, response, data):
     raise NotImplementedError
 
-  def _check_deadline_exceeded(self):
-    if (time.time() - self.start_time) > self.timeout:
+  def _check_deadline_exceeded(self, timeout):
+    if (time.time() - self.start_time) > timeout:
       raise socket.timeout('deadline exceeded')
     return False
 
   # logic to read the next response off the wire
-  def read_response(self, response):
+  def read_response(self, response, timeout):
     if self.start_time is None:
       raise GoRpcError('no request pending')
+    if not self.conn:
+      raise GoRpcError('closed client')
 
     # get some data if we don't have any so we have somewhere to start
     if self.data is None:
@@ -171,7 +173,7 @@ class GoRpcClient(object):
         self.data = self.conn.read_some()
         if self.data:
           break
-        self._check_deadline_exceeded()
+        self._check_deadline_exceeded(timeout)
 
     # now try to decode, and read more if we need to
     while True:
@@ -192,12 +194,14 @@ class GoRpcClient(object):
           more_data = self.conn.read_some(extra_needed)
           if more_data:
             break
-          self._check_deadline_exceeded()
+          self._check_deadline_exceeded(timeout)
         self.data += more_data
 
   # Perform an rpc, raising a GoRpcError, on errant situations.
   # Pass in a response object if you don't want a generic one created.
   def call(self, method, request, response=None):
+    if not self.conn:
+      raise GoRpcError('closed client', method)
     try:
       h = make_header(method, self.next_sequence_id())
       req = GoRpcRequest(h, request)
@@ -205,7 +209,7 @@ class GoRpcClient(object):
       self.conn.write_request(self.encode_request(req))
       if response is None:
         response = GoRpcResponse()
-      self.read_response(response)
+      self.read_response(response, self.timeout)
       self.start_time = None
     except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
@@ -229,6 +233,8 @@ class GoRpcClient(object):
   # Perform a streaming rpc call
   # This method doesn't fetch any result, use stream_next to get them
   def stream_call(self, method, request):
+    if not self.conn:
+      raise GoRpcError('closed client', method)
     try:
       h = make_header(method, self.next_sequence_id())
       req = GoRpcRequest(h, request)
@@ -244,10 +250,15 @@ class GoRpcClient(object):
       raise GoRpcError(e, method)
 
   # Returns the next value, or None if we're done.
+  # Note the timeout is longer as we don't mind for streaming queries
+  # since they get their own bigger connection pool on the vttablet side
+  # FIXME(alainjobart) The timeout needs to be passed in, not inferred,
+  # otherwise it's going to be hard to debug... Anyway, the value
+  # for the timeout will most likely be 300s here, as timeout is usually 30s.
   def stream_next(self):
     try:
       response = GoRpcResponse()
-      self.read_response(response)
+      self.read_response(response, self.timeout * 10)
     except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
       self.close()
