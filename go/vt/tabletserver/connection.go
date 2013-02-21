@@ -11,6 +11,7 @@ import (
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/stats"
 )
 
@@ -86,7 +87,8 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(interfa
 	}
 
 	// then get all the rows, sending them as we reach a decent packet size
-	qr := &proto.QueryResult{}
+	// start with a pre-allocated array of 256 rows capacity
+	qr := &proto.QueryResult{Rows: make([][]sqltypes.Value, 0, 256)}
 	byteCount := 0
 	for {
 		row, err := conn.FetchNext()
@@ -106,7 +108,9 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(interfa
 			if err != nil {
 				return err
 			}
-			qr = &proto.QueryResult{}
+			// empty the rows so we start over, but we keep the
+			// same capacity
+			qr.Rows = qr.Rows[:0]
 			byteCount = 0
 		}
 	}
