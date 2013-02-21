@@ -74,7 +74,6 @@ import (
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
 )
 
 const (
@@ -117,11 +116,8 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
-	if err != nil {
-		// Regardless of the reason, try to cleanup.
-		wr.zconn.Delete(actionPath, -1)
-		return fmt.Errorf("ReparentShard failed to obtain action lock: %v", actionPath)
+	if err = wr.obtainActionLock(actionPath); err != nil {
+		return err
 	}
 
 	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, actionPath)
@@ -421,11 +417,8 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*t
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
-	if err != nil {
-		// Regardless of the reason, try to cleanup.
-		wr.zconn.Delete(actionPath, -1)
-		return nil, nil, fmt.Errorf("failed to obtain action lock: %v", actionPath)
+	if err = wr.obtainActionLock(actionPath); err != nil {
+		return nil, nil, err
 	}
 
 	tabletMap, posMap, slaveErr := wr.shardReplicationPositions(shardInfo)

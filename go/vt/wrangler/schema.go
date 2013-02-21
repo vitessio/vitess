@@ -13,7 +13,6 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
 )
 
 func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, error) {
@@ -239,11 +238,8 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
-	if err != nil {
-		// Regardless of the reason, try to cleanup.
-		wr.zconn.Delete(actionPath, -1)
-		return nil, fmt.Errorf("ApplySchemaShard failed to obtain action lock: %v", actionPath)
+	if err = wr.obtainActionLock(actionPath); err != nil {
+		return nil, err
 	}
 
 	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, zkMasterTabletPath, change, zkNewParentTabletPath, simple, force)
@@ -428,11 +424,8 @@ func (wr *Wrangler) ApplySchemaKeyspace(zkKeyspacePath string, change string, si
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
-	err = zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
-	if err != nil {
-		// Regardless of the reason, try to cleanup.
-		wr.zconn.Delete(actionPath, -1)
-		return nil, fmt.Errorf("failed to obtain action lock: %v", actionPath)
+	if err = wr.obtainActionLock(actionPath); err != nil {
+		return nil, err
 	}
 
 	scr, schemaErr := wr.applySchemaKeyspace(zkKeyspacePath, change, simple, force)

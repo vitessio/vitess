@@ -5,6 +5,8 @@
 package wrangler
 
 import (
+	"fmt"
+	"path"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -144,6 +146,49 @@ func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType tm.TabletType
 		//			return err
 		//		}
 	}
+	return nil
+}
+
+// Wait for the queue lock, displays a nice error message if we cant get it
+func (wr *Wrangler) obtainActionLock(actionPath string) error {
+	err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	if err != nil {
+		errToReturn := fmt.Errorf("failed to obtain action lock: %v", actionPath)
+
+		// Regardless of the reason, try to cleanup.
+		relog.Warning("Failed to obtain action lock: %v", err)
+		wr.zconn.Delete(actionPath, -1)
+
+		// Show the other actions in the directory
+		dir := path.Dir(actionPath)
+		children, _, err := wr.zconn.Children(dir)
+		if err != nil {
+			relog.Warning("Failed to get children of %v: %v", dir, err)
+			return errToReturn
+		}
+
+		if len(children) == 0 {
+			relog.Warning("No other action running, you may just try again now.")
+			return errToReturn
+		}
+
+		childPath := path.Join(dir, children[0])
+		data, _, err := wr.zconn.Get(childPath)
+		if err != nil {
+			relog.Warning("Failed to get first action node %v (may have just ended): %v", childPath, err)
+			return errToReturn
+		}
+
+		actionNode, err := tm.ActionNodeFromJson(data, childPath)
+		if err != nil {
+			relog.Warning("Failed to parse ActionNode %v: %v\n%v", childPath, err, data)
+			return errToReturn
+		}
+
+		relog.Warning("------ Most likely blocking action: %v %v from %v", actionNode.Action, childPath, actionNode.ActionGuid)
+		return errToReturn
+	}
+
 	return nil
 }
 
