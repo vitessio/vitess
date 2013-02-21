@@ -5,6 +5,7 @@
 package zk
 
 import (
+	"math/rand"
 	"strings"
 	"time"
 
@@ -55,9 +56,9 @@ type Conn interface {
 	SetACL(path string, aclv []zookeeper.ACL, version int) error
 }
 
-/* Smooth API to talk to any zk path in the global system.  Emulates
-"/zk/local" paths by guessing and substituting the correct cell for
-your current environment.  */
+// Smooth API to talk to any zk path in the global system.  Emulates
+// "/zk/local" paths by guessing and substituting the correct cell for
+// your current environment.
 
 type MetaConn struct {
 	connCache *ConnCache
@@ -78,12 +79,46 @@ func resolveZkPath(path string) string {
 	return strings.Join(parts, "/")
 }
 
-func (conn *MetaConn) Get(path string) (data string, stat Stat, err error) {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return
+const (
+	maxAttempts = 2
+)
+
+// Some errors are not gracefully handled by zookeeper client. This is
+// sort of odd, but in general it doesn't affect the kind of code you
+// need to have a truly reliable watcher.
+//
+// However, it can manifest itself as an annoying transient error that
+// is likely avoidable when trying simple operations like Get.
+// To that end, we retry when possible to minimize annoyance at
+// higher levels.
+//
+// Metaconn is a better place to do this than the actual ZkConn glue
+// because you are already doing an implicit connect per call.
+//
+// https://issues.apache.org/jira/browse/ZOOKEEPER-22
+func shouldRetry(err error) bool {
+	if err != nil && zookeeper.IsError(err, zookeeper.ZCONNECTIONLOSS) {
+		// This is slightly gross, but we should inject a bit of backoff
+		// here to give zk a chance to correct itself.
+		time.Sleep(1*time.Second + time.Duration(rand.Int63n(5e9)))
+		return true
 	}
-	return zconn.Get(resolveZkPath(path))
+	return false
+}
+
+func (conn *MetaConn) Get(path string) (data string, stat Stat, err error) {
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		data, stat, err = zconn.Get(resolveZkPath(path))
+		if !shouldRetry(err) {
+			return
+		}
+	}
+	return
 }
 
 func (conn *MetaConn) GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error) {
@@ -95,11 +130,18 @@ func (conn *MetaConn) GetW(path string) (data string, stat Stat, watch <-chan zo
 }
 
 func (conn *MetaConn) Children(path string) (children []string, stat Stat, err error) {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		children, stat, err = zconn.Children(resolveZkPath(path))
+		if !shouldRetry(err) {
+			return
+		}
 	}
-	return zconn.Children(resolveZkPath(path))
+	return
 }
 
 func (conn *MetaConn) ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error) {
@@ -111,17 +153,18 @@ func (conn *MetaConn) ChildrenW(path string) (children []string, stat Stat, watc
 }
 
 func (conn *MetaConn) Exists(path string) (stat Stat, err error) {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		stat, err = zconn.Exists(resolveZkPath(path))
+		if !shouldRetry(err) {
+			return
+		}
 	}
-	s, err := zconn.Exists(resolveZkPath(path))
-	if s == nil {
-		// this is to avoid returning a typed nil interface,
-		// which isn't equal to nil
-		return nil, err
-	}
-	return s, err
+	return
 }
 
 func (conn *MetaConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
@@ -129,35 +172,52 @@ func (conn *MetaConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Ev
 	if err != nil {
 		return
 	}
-	s, w, err := zconn.ExistsW(resolveZkPath(path))
-	if s == nil {
-		return nil, w, err
-	}
-	return s, w, err
+	return zconn.ExistsW(resolveZkPath(path))
 }
 
 func (conn *MetaConn) Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		pathCreated, err = zconn.Create(resolveZkPath(path), value, flags, aclv)
+		if !shouldRetry(err) {
+			return
+		}
 	}
-	return zconn.Create(resolveZkPath(path), value, flags, aclv)
+	return
 }
 
 func (conn *MetaConn) Set(path, value string, version int) (stat Stat, err error) {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		stat, err = zconn.Set(resolveZkPath(path), value, version)
+		if !shouldRetry(err) {
+			return
+		}
 	}
-	return zconn.Set(resolveZkPath(path), value, version)
-
+	return
 }
+
 func (conn *MetaConn) Delete(path string, version int) (err error) {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		err = zconn.Delete(resolveZkPath(path), version)
+		if !shouldRetry(err) {
+			return
+		}
 	}
-	return zconn.Delete(resolveZkPath(path), version)
+	return
 }
 
 func (conn *MetaConn) Close() error {
@@ -172,28 +232,36 @@ func (conn *MetaConn) RetryChange(path string, flags int, acl []zookeeper.ACL, c
 	return zconn.RetryChange(resolveZkPath(path), flags, acl, changeFunc)
 }
 
-func (conn *MetaConn) ACL(path string) ([]zookeeper.ACL, Stat, error) {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return nil, nil, err
+func (conn *MetaConn) ACL(path string) (acl []zookeeper.ACL, stat Stat, err error) {
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		acl, stat, err = zconn.ACL(path)
+		if !shouldRetry(err) {
+			return
+		}
 	}
-	return zconn.ACL(path)
+	return
 }
 
-func (conn *MetaConn) SetACL(path string, aclv []zookeeper.ACL, version int) error {
-	zconn, err := conn.connCache.ConnForPath(path)
-	if err != nil {
-		return err
+func (conn *MetaConn) SetACL(path string, aclv []zookeeper.ACL, version int) (err error) {
+	var zconn Conn
+	for i := 0; i < maxAttempts; i++ {
+		zconn, err = conn.connCache.ConnForPath(path)
+		if err != nil {
+			return
+		}
+		err = zconn.SetACL(path, aclv, version)
+		if !shouldRetry(err) {
+			return
+		}
 	}
-	return zconn.SetACL(path, aclv, version)
-}
 
-/*
- NOTE(msolomon) not a good idea
-func (conn *MetaConn) GetSession(path string) <-chan zookeeper.Event {
-	return conn.connCache.SessionForPath(path)
+	return
 }
-*/
 
 // Implements expvar.Var()
 func (conn *MetaConn) String() string {

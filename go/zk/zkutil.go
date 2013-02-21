@@ -250,7 +250,7 @@ func CreatePidNode(zconn Conn, zkPath string, done chan struct{}) error {
 			}
 			select {
 			// No one likes a thundering herd, least of all zookeeper.
-			case <-time.After(5*time.Second + time.Duration(rand.Int63n(55*1e9))):
+			case <-time.After(5*time.Second + time.Duration(rand.Int63n(55e9))):
 			case <-done:
 				log.Printf("INFO: pid watcher stopped on done: %v", zkPath)
 				return

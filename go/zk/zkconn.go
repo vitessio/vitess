@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+// func init() {
+// 	// The zookeeper C module logs quite a bit of useful information,
+// 	// but much of it does not come back in the error API. To aid
+// 	// debugging, enable the log to stderr for warnings.
+// 	zookeeper.SetLogLevel(zookeeper.LOG_WARN)
+// }
+
 // ZkConn is a client class that implements zk.Conn using a zookeeper.Conn
 type ZkConn struct {
 	conn *zookeeper.Conn
@@ -79,24 +86,53 @@ func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time
 }
 
 func (conn *ZkConn) Get(path string) (data string, stat Stat, err error) {
-	return conn.conn.Get(path)
+	data, s, err := conn.conn.Get(path)
+	if s == nil {
+		// Handle nil-nil interface conversion.
+		stat = nil
+	} else {
+		stat = s
+	}
+	return
 }
 
 func (conn *ZkConn) GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error) {
-	return conn.conn.GetW(path)
+	data, s, watch, err := conn.conn.GetW(path)
+	if s == nil {
+		// Handle nil-nil interface conversion.
+		stat = nil
+	} else {
+		stat = s
+	}
+	return
 }
 
 func (conn *ZkConn) Children(path string) (children []string, stat Stat, err error) {
-	return conn.conn.Children(path)
+	children, s, err := conn.conn.Children(path)
+	if s == nil {
+		// Handle nil-nil interface conversion.
+		stat = nil
+	} else {
+		stat = s
+	}
+	return
 }
 
 func (conn *ZkConn) ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error) {
-	return conn.conn.ChildrenW(path)
+	children, s, watch, err := conn.conn.ChildrenW(path)
+	if s == nil {
+		// Handle nil-nil interface conversion.
+		stat = nil
+	} else {
+		stat = s
+	}
+	return
 }
 
 func (conn *ZkConn) Exists(path string) (stat Stat, err error) {
 	s, err := conn.conn.Exists(path)
 	if s == nil {
+		// Handle nil-nil interface conversion.
 		return nil, err
 	}
 	return s, err
@@ -105,6 +141,7 @@ func (conn *ZkConn) Exists(path string) (stat Stat, err error) {
 func (conn *ZkConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
 	s, w, err := conn.conn.ExistsW(path)
 	if s == nil {
+		// Handle nil-nil interface conversion.
 		return nil, w, err
 	}
 	return s, w, err
@@ -115,7 +152,12 @@ func (conn *ZkConn) Create(path, value string, flags int, aclv []zookeeper.ACL) 
 }
 
 func (conn *ZkConn) Set(path, value string, version int) (stat Stat, err error) {
-	return conn.conn.Set(path, value, version)
+	s, err := conn.conn.Set(path, value, version)
+	if s == nil {
+		// Handle nil-nil interface conversion.
+		return nil, err
+	}
+	return s, err
 }
 
 func (conn *ZkConn) Delete(path string, version int) (err error) {
@@ -130,8 +172,15 @@ func (conn *ZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, cha
 	return conn.conn.RetryChange(path, flags, acl, changeFunc)
 }
 
-func (conn *ZkConn) ACL(path string) ([]zookeeper.ACL, Stat, error) {
-	return conn.conn.ACL(path)
+func (conn *ZkConn) ACL(path string) (acls []zookeeper.ACL, stat Stat, err error) {
+	acls, s, err := conn.conn.ACL(path)
+	if s == nil {
+		// Handle nil-nil interface conversion.
+		stat = nil
+	} else {
+		stat = s
+	}
+	return
 }
 
 func (conn *ZkConn) SetACL(path string, aclv []zookeeper.ACL, version int) error {
