@@ -131,8 +131,8 @@ func (qe *QueryEngine) Begin(logStats *sqlQueryStats, connectionId int64) (trans
 	var conn PoolConnection
 	if connectionId != 0 {
 		conn = qe.reservedPool.Get(connectionId)
-	} else {
-		conn = qe.txPool.Get()
+	} else if conn = qe.txPool.TryGet(); conn == nil {
+		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
 	}
 	transactionId, err := qe.activeTxPool.SafeBegin(conn)
 	if err != nil {

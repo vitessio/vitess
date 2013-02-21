@@ -13,6 +13,7 @@ const (
 	FAIL = iota
 	RETRY
 	FATAL
+	TX_POOL_FULL
 )
 
 const (
@@ -59,6 +60,8 @@ func (self *TabletError) RecordStats() {
 		errorStats.Add("Retry", 1)
 	case FATAL:
 		errorStats.Add("Fatal", 1)
+	case TX_POOL_FULL:
+		errorStats.Add("TxPoolFull", 1)
 	default:
 		if self.SqlError == DUPLICATE_KEY {
 			errorStats.Add("DupKey", 1)

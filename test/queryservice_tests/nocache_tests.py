@@ -144,13 +144,14 @@ class TestNocache(framework.TestCase):
 
   def test_transaction_cap(self):
     self.env.execute("set vt_transaction_cap=1")
+    vstart = self.env.debug_vars()
     co2 = self.env.connect()
     self.env.execute("begin")
     try:
       cu2 = co2.cursor()
       cu2.execute("begin", {})
     except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "timeout")
+      self.assertContains(e[1], "connection limit")
     else:
       self.fail("Did not receive exception")
     finally:
@@ -162,6 +163,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("set vt_transaction_cap=20")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 20)
+    self.assertEqual(vstart.mget("Errors.TxPoolFull", 0) + 1, vend.Errors.TxPoolFull)
 
   def test_transaction_timeout(self):
     self.env.execute("set vt_transaction_timeout=0.25")
