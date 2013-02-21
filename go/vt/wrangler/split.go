@@ -99,13 +99,6 @@ func (wr *Wrangler) prepareToSnapshot(zkTabletPath string, forceMasterSnapshot b
 }
 
 func (wr *Wrangler) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRange, zkDstTabletPath string, sources []string, concurrency, fetchConcurrency, fetchRetryCount int, force bool) error {
-	// read our current tablet, verify its state before sending it
-	// to the tablet itself
-	tablet, err := tm.ReadTablet(wr.zconn, zkDstTabletPath)
-	if err != nil {
-		return err
-	}
-
 	actionPath, err := wr.ai.RestoreFromMultiSnapshot(zkDstTabletPath, &tm.MultiRestoreArgs{
 		ZkSrcTabletPaths: sources,
 		Concurrency:      concurrency,
