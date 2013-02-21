@@ -292,7 +292,11 @@ func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
 
 	// Validate all tablets in all cells, even if they are not discoverable
 	// by the replication graph.
-	wr.validateAllTablets(zkKeyspacesPath, wg, results)
+	wg.Add(1)
+	go func() {
+		wr.validateAllTablets(zkKeyspacesPath, wg, results)
+		wg.Done()
+	}()
 
 	// Validate replication graph by traversing each keyspace and then each shard.
 	keyspaces, _, err := wr.zconn.Children(zkKeyspacesPath)
@@ -314,14 +318,22 @@ func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
 func (wr *Wrangler) ValidateKeyspace(zkKeyspacePath string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
 	results := make(chan vresult, 16)
-	wr.validateKeyspace(zkKeyspacePath, pingTablets, wg, results)
+	wg.Add(1)
+	go func() {
+		wr.validateKeyspace(zkKeyspacePath, pingTablets, wg, results)
+		wg.Done()
+	}()
 	return wr.waitForResults(wg, results)
 }
 
 func (wr *Wrangler) ValidateShard(zkShardPath string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
 	results := make(chan vresult, 16)
-	wr.validateShard(zkShardPath, pingTablets, wg, results)
+	wg.Add(1)
+	go func() {
+		wr.validateShard(zkShardPath, pingTablets, wg, results)
+		wg.Done()
+	}()
 	return wr.waitForResults(wg, results)
 }
 
