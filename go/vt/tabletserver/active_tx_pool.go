@@ -5,13 +5,14 @@
 package tabletserver
 
 import (
+	"fmt"
+	"sync/atomic"
+	"time"
+
 	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/timer"
-	"fmt"
-	"sync/atomic"
-	"time"
 )
 
 /* Function naming convention:
@@ -65,7 +66,7 @@ func (self *ActiveTxPool) WaitForEmpty() {
 func (self *ActiveTxPool) TransactionKiller() {
 	for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
 		conn := v.(*TxConnection)
-		relog.Info("killing transaction %d", conn.transactionId)
+		relog.Info("killing transaction %d: %#v", conn.transactionId, conn.queries)
 		killStats.Add("Transactions", 1)
 		conn.Close()
 		conn.discard()
@@ -137,6 +138,7 @@ type TxConnection struct {
 	inUse         bool
 	startTime     time.Time
 	dirtyTables   map[string]DirtyKeys
+	queries       []string
 }
 
 func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
@@ -146,6 +148,7 @@ func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPoo
 		pool:           pool,
 		startTime:      time.Now(),
 		dirtyTables:    make(map[string]DirtyKeys),
+		queries:        make([]string, 0, 8),
 	}
 }
 
@@ -164,6 +167,10 @@ func (self *TxConnection) Recycle() {
 	} else {
 		self.pool.pool.Put(self.transactionId)
 	}
+}
+
+func (self *TxConnection) RecordQuery(query string) {
+	self.queries = append(self.queries, query)
 }
 
 func (self *TxConnection) discard() {
