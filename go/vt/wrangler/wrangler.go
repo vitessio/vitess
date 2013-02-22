@@ -194,7 +194,7 @@ func (wr *Wrangler) obtainActionLock(actionPath string) error {
 
 // Cleanup an action node and write back status/error to zk.
 // Only returns an error if something went wrong with zk.
-func (wr *Wrangler) handleActionError(actionPath string, actionErr error) error {
+func (wr *Wrangler) handleActionError(actionPath string, actionErr error, blockQueueOnError bool) error {
 	// re-read the action node
 	data, _, err := wr.zconn.Get(actionPath)
 	if err != nil {
@@ -213,7 +213,7 @@ func (wr *Wrangler) handleActionError(actionPath string, actionErr error) error 
 	}
 
 	// no error, we can unblock the action queue
-	if actionErr == nil {
+	if actionErr == nil || !blockQueueOnError {
 		return zk.DeleteRecursive(wr.zconn, actionPath, -1)
 	}
 	return nil

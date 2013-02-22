@@ -33,7 +33,7 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) (actionPath string, er
 	}
 
 	rebuildErr := wr.rebuildShard(zkShardPath, false)
-	err = wr.handleActionError(actionPath, rebuildErr)
+	err = wr.handleActionError(actionPath, rebuildErr, false)
 	if rebuildErr != nil {
 		if err != nil {
 			relog.Warning("handleActionError failed: %v", err)
@@ -190,7 +190,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) (actionPath stri
 	}
 
 	rebuildErr := wr.rebuildKeyspace(zkKeyspacePath)
-	err = wr.handleActionError(actionPath, rebuildErr)
+	err = wr.handleActionError(actionPath, rebuildErr, false)
 	if rebuildErr != nil {
 		if err != nil {
 			relog.Warning("handleActionError failed: %v", err)

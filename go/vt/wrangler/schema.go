@@ -245,7 +245,7 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, zkMasterTabletPath, change, zkNewParentTabletPath, simple, force)
 	relog.Info("applySchemaShard finished on %v error=%v", shardPath, schemaErr)
 
-	err = wr.handleActionError(actionPath, schemaErr)
+	err = wr.handleActionError(actionPath, schemaErr, false)
 	if err != nil {
 		relog.Warning("handleActionError failed: %v", err)
 	}
@@ -429,7 +429,7 @@ func (wr *Wrangler) ApplySchemaKeyspace(zkKeyspacePath string, change string, si
 	}
 
 	scr, schemaErr := wr.applySchemaKeyspace(zkKeyspacePath, change, simple, force)
-	err = wr.handleActionError(actionPath, schemaErr)
+	err = wr.handleActionError(actionPath, schemaErr, false)
 	if schemaErr != nil {
 		if err != nil {
 			relog.Warning("handleActionError failed: %v", err)

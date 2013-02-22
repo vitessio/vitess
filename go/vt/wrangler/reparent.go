@@ -127,7 +127,7 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 		relog.Info("reparentShard finished")
 	}
 
-	err = wr.handleActionError(actionPath, reparentErr)
+	err = wr.handleActionError(actionPath, reparentErr, false)
 	if reparentErr != nil {
 		if err != nil {
 			relog.Warning("handleActionError failed: %v", err)
@@ -424,7 +424,7 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*t
 	tabletMap, posMap, slaveErr := wr.shardReplicationPositions(shardInfo)
 
 	// regardless of error, just clean up
-	err = wr.handleActionError(actionPath, nil)
+	err = wr.handleActionError(actionPath, nil, false)
 	if slaveErr != nil {
 		if err != nil {
 			relog.Warning("handleActionError failed: %v", err)
