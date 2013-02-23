@@ -514,7 +514,7 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 	}
 	rsd := result.(*tm.RestartSlaveData)
 
-	relog.Info("master tablet position: %v %v #%v", masterPath, masterTi.MysqlAddr, rsd)
+	relog.Info("master tablet position: %v %v %v", masterPath, masterTi.MysqlAddr, rsd.ReplicationState.ReplicationPosition.MapKey())
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == tm.TYPE_LAG_ORPHAN
