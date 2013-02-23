@@ -403,7 +403,7 @@ func mapKeys(m interface{}) []interface{} {
 	return keys
 }
 
-func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*tm.TabletInfo, map[uint32]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
 	tm.MustBeShardPath(zkShardPath)
 
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
@@ -434,23 +434,15 @@ func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) (map[uint32]*t
 	return tabletMap, posMap, err
 }
 
-func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo) (map[uint32]*tm.TabletInfo, map[uint32]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
-	tabletAliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
+	tabletMap, err := GetTabletMapForShard(wr.zconn, shardInfo.ShardPath())
 	if err != nil {
 		return nil, nil, err
 	}
-
-	tabletMap := make(map[uint32]*tm.TabletInfo)
-	for _, alias := range tabletAliases {
-		tablet, err := wr.readTablet(shardInfo.TabletPath(alias))
-		if err != nil {
-			return nil, nil, fmt.Errorf("tablet unavailable: %v", err)
-		}
-		tabletMap[alias.Uid] = tablet
-	}
-	posMap, err := wr.tabletReplicationPositions(tabletMap)
-	return tabletMap, posMap, err
+	tablets := CopyMapValues(tabletMap, []*tm.TabletInfo{}).([]*tm.TabletInfo)
+	positions, err := wr.tabletReplicationPositions(tablets)
+	return tablets, positions, err
 }
 
 // Attempt to reparent this tablet to the current master, based on the current

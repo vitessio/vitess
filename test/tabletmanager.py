@@ -837,6 +837,9 @@ def _run_test_reparent_graceful(shard_id):
   expected_addr = hostname + ':6701'
   _check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
 
+  # Run this to make sure it succeeds.
+  utils.run_vtctl('ShardReplicationPositions /zk/global/vt/keyspaces/test_keyspace/shards/%s' % shard_id, stdout=devnull)
+
   # Perform a graceful reparent operation.
   utils.pause("graceful ReparentShard?")
   utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path))

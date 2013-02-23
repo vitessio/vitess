@@ -963,13 +963,13 @@ func commandShardReplicationPositions(wrangler *wr.Wrangler, subFlags *flag.Flag
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action ShardReplicationPositions requires <zk shard path>")
 	}
-	tabletMap, posMap, err := wrangler.ShardReplicationPositions(subFlags.Arg(0))
-	if tabletMap == nil {
+	tablets, positions, err := wrangler.ShardReplicationPositions(subFlags.Arg(0))
+	if tablets == nil {
 		return "", err
 	}
 
 	lines := make([]string, 0, 24)
-	for _, rt := range sortReplicatingTablets(tabletMap, posMap) {
+	for _, rt := range sortReplicatingTablets(tablets, positions) {
 		pos := rt.ReplicationPosition
 		ti := rt.TabletInfo
 		if pos == nil {
@@ -1480,10 +1480,10 @@ func (rts rTablets) Less(i, j int) bool {
 	return false
 }
 
-func sortReplicatingTablets(tabletMap map[uint32]*tm.TabletInfo, posMap map[uint32]*mysqlctl.ReplicationPosition) []*rTablet {
-	rtablets := make([]*rTablet, 0, len(tabletMap))
-	for uid, pos := range posMap {
-		rtablets = append(rtablets, &rTablet{tabletMap[uid], pos})
+func sortReplicatingTablets(tablets []*tm.TabletInfo, positions []*mysqlctl.ReplicationPosition) []*rTablet {
+	rtablets := make([]*rTablet, len(tablets))
+	for i, pos := range positions {
+		rtablets[i] = &rTablet{tablets[i], pos}
 	}
 	sort.Sort(rTablets(rtablets))
 	return rtablets

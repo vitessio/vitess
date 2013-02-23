@@ -237,28 +237,31 @@ func (wr *Wrangler) stopSlaves(tabletMap map[string]*tm.TabletInfo) error {
 	return nil
 }
 
-// Return a map of all tablets to the current replication position.
+// Return a list of corresponding replication positions.
 // Handles masters and slaves, but it's up to the caller to guarantee
 // all tablets are in the same shard.
-func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint32]*tm.TabletInfo) (map[uint32]*mysqlctl.ReplicationPosition, error) {
-	relog.Debug("tabletReplicationPositions %v", mapKeys(tabletMap))
+func (wr *Wrangler) tabletReplicationPositions(tablets []*tm.TabletInfo) ([]*mysqlctl.ReplicationPosition, error) {
+	relog.Debug("tabletReplicationPositions %v", tablets)
+	calls := make([]*rpcContext, len(tablets))
+	wg := sync.WaitGroup{}
 
-	calls := make(chan *rpcContext, len(tabletMap))
-	f := func(ti *tm.TabletInfo) {
+	f := func(idx int) {
+		defer wg.Done()
+		ti := tablets[idx]
 		ctx := &rpcContext{tablet: ti}
-		defer func() {
-			calls <- ctx
-		}()
+		calls[idx] = ctx
 
 		var actionPath string
 		if ti.Type == tm.TYPE_MASTER {
 			actionPath, ctx.err = wr.ai.MasterPosition(ti.Path())
-		} else {
+		} else if ti.IsSlaveType() {
 			actionPath, ctx.err = wr.ai.SlavePosition(ti.Path())
 		}
+
 		if ctx.err != nil {
 			return
 		}
+
 		var result interface{}
 		if result, ctx.err = wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout()); ctx.err != nil {
 			return
@@ -266,24 +269,28 @@ func (wr *Wrangler) tabletReplicationPositions(tabletMap map[uint32]*tm.TabletIn
 		ctx.position = result.(*mysqlctl.ReplicationPosition)
 	}
 
-	for _, tablet := range tabletMap {
-		go f(tablet)
+	for i, tablet := range tablets {
+		// Don't scan tablets that won't return something useful. Otherwise, you'll
+		// end up waiting for a timeout.
+		if tablet.Type == tm.TYPE_MASTER || tablet.IsSlaveType() {
+			wg.Add(1)
+			go f(i)
+		}
 	}
+	wg.Wait()
 
 	someErrors := false
-	positionMap := make(map[uint32]*mysqlctl.ReplicationPosition)
-	for i := 0; i < len(tabletMap); i++ {
-		ctx := <-calls
-		if ctx.err == nil {
-			positionMap[ctx.tablet.Uid] = ctx.position
-		} else {
-			positionMap[ctx.tablet.Uid] = nil
+	positions := make([]*mysqlctl.ReplicationPosition, len(tablets))
+	for i, ctx := range calls {
+		if ctx.err != nil {
 			relog.Warning("could not get replication position for tablet %v %v", ctx.tablet.Path(), ctx.err)
 			someErrors = true
+		} else {
+			positions[i] = ctx.position
 		}
 	}
 	if someErrors {
-		return positionMap, fmt.Errorf("partial position map, some errors")
+		return positions, fmt.Errorf("partial position map, some errors")
 	}
-	return positionMap, nil
+	return positions, nil
 }
