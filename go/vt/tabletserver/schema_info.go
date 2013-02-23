@@ -155,6 +155,7 @@ func (si *SchemaInfo) Reload() {
 		relog.Warning("Could not get table list for reload: %v", err)
 		return
 	}
+	relog.Info("Reloading schema")
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])

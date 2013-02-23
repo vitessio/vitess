@@ -207,10 +207,14 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 5000)
 
   def test_schema_reload_time(self):
+    vend = self.env.debug_vars()
+    self.assertEqual(vend.Voltron.SchemaReloadTime, 1800 * 1e9)
     mcu = self.env.mysql_conn.cursor()
     mcu.execute("create table vtocc_temp(intval int)")
     # This should cause a reload
     self.env.execute("set vt_schema_reload_time=600")
+    vend = self.env.debug_vars()
+    self.assertEqual(vend.Voltron.SchemaReloadTime, 600 * 1e9)
     try:
       for i in range(10):
         try:
