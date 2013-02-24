@@ -19,6 +19,7 @@ import (
 	"os/user"
 	"path"
 	"sort"
+	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -37,16 +38,26 @@ import (
 // Errors are written to the action node and must (currently) be resolved by
 // hand using zk tools.
 
-var sigChan chan os.Signal
+var interrupted chan struct{}
+var once sync.Once
 
-// In certain cases (vtctl most notably) having SIGINT manifest itself as an instant timeout
-// lets us break out cleanly. However, this needs to be registered properly at the top level
-// and cannot be implicity run at module initialization.
+// In certain cases (vtctl most notably) having SIGINT manifest itself
+// as an instant timeout lets us break out cleanly. However, this
+// needs to be registered properly and cannot be implicity run at
+// module initialization.
 func InstallSigHandler() {
-	if sigChan == nil {
-		sigChan = make(chan os.Signal, 1)
+	once.Do(func() {
+		sigChan := make(chan os.Signal, 1)
+		interrupted = make(chan struct{})
 		signal.Notify(sigChan, os.Interrupt)
-	}
+		go func() {
+			<-sigChan
+			// sigChan can't be closed because the dispatcher would panic if
+			// a signal arrived. Closing this channel means all receivers
+			// will get a notification.
+			close(interrupted)
+		}()
+	})
 }
 
 type InitiatorError string
@@ -367,7 +378,7 @@ wait:
 			}
 		case <-timer.C:
 			return nil, fmt.Errorf("action err: %v deadline exceeded %v", actionLogPath, waitTime)
-		case <-sigChan:
+		case <-interrupted:
 			return nil, fmt.Errorf("action err: %v interrupted by signal", actionLogPath)
 		}
 	}

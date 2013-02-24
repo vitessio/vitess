@@ -8,6 +8,7 @@ warnings.simplefilter("ignore")
 import gzip
 import os
 import shutil
+import signal
 import socket
 from subprocess import PIPE, call
 import sys
@@ -754,6 +755,17 @@ def run_test_reparent_down_master():
   stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_path)
   utils.debug("Failed ScrapTablet output:\n" + stderr)
   if stderr.find('deadline exceeded') == -1:
+    raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
+
+  # Should interrupt and fail
+  sp = utils.run_bg(vtroot+'/bin/vtctl -log.level=INFO -wait-time 10s ScrapTablet ' + tablet_62344.zk_tablet_path, stdout=PIPE, stderr=PIPE)
+  # Need time for the process to start before killing it.
+  time.sleep(0.1)
+  os.kill(sp.pid, signal.SIGINT)
+  stdout, stderr = sp.communicate()
+
+  utils.debug("Failed ScrapTablet output:\n" + stderr)
+  if 'interrupted' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Force the scrap action in zk even though tablet is not accessible.
