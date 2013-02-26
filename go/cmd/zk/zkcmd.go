@@ -220,7 +220,14 @@ func cmdQlock(args []string) {
 	if err != nil {
 		log.Fatalf("qlock: invalid timeout %v: %v", *lockWaitTimeout, err)
 	}
-	err = zk.ObtainQueueLock(zconn, zkPath, timeout)
+	sigRecv := make(chan os.Signal, 1)
+	interrupted := make(chan struct{})
+	signal.Notify(sigRecv, os.Interrupt)
+	go func() {
+		<-sigRecv
+		close(interrupted)
+	}()
+	err = zk.ObtainQueueLock(zconn, zkPath, timeout, interrupted)
 	if err != nil {
 		log.Fatalf("qlock: error %v: %v", zkPath, err)
 	}

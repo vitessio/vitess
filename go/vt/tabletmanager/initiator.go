@@ -15,7 +15,6 @@ package tabletmanager
 import (
 	"fmt"
 	"os"
-	"os/signal"
 	"os/user"
 	"path"
 	"sort"
@@ -38,26 +37,13 @@ import (
 // Errors are written to the action node and must (currently) be resolved by
 // hand using zk tools.
 
-var interrupted chan struct{}
+var interrupted = make(chan struct{})
 var once sync.Once
 
 // In certain cases (vtctl most notably) having SIGINT manifest itself
-// as an instant timeout lets us break out cleanly. However, this
-// needs to be registered properly and cannot be implicity run at
-// module initialization.
-func InstallSigHandler() {
-	once.Do(func() {
-		sigChan := make(chan os.Signal, 1)
-		interrupted = make(chan struct{})
-		signal.Notify(sigChan, os.Interrupt)
-		go func() {
-			<-sigChan
-			// sigChan can't be closed because the dispatcher would panic if
-			// a signal arrived. Closing this channel means all receivers
-			// will get a notification.
-			close(interrupted)
-		}()
-	})
+// as an instant timeout lets us break out cleanly.
+func SignalInterrupt() {
+	close(interrupted)
 }
 
 type InitiatorError string

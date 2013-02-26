@@ -141,7 +141,9 @@ func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 // path holds the lock.  Call this queue-lock because the semantics are
 // a hybrid.  Normal zookeeper locks make assumptions about sequential
 // numbering that don't hold when the data in a lock is modified.
-func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration) error {
+// if the provided 'interrupted' chan is closed, we'll just stop waiting
+// and return an interruption error
+func ObtainQueueLock(zconn Conn, zkPath string, wait time.Duration, interrupted chan struct{}) error {
 	queueNode := path.Dir(zkPath)
 	lockNode := path.Base(zkPath)
 
@@ -179,6 +181,8 @@ trylock:
 			select {
 			case <-timer.C:
 				break
+			case <-interrupted:
+				return fmt.Errorf("zkutil: obtaining lock was interrupted %v", zkPath)
 			case <-watch:
 				// The precise event doesn't matter - try to read again regardless.
 				goto trylock

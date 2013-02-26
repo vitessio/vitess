@@ -14,11 +14,13 @@ import (
 	"log"
 	"log/syslog"
 	"os"
+	"os/signal"
 	"path"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -1344,6 +1346,21 @@ func commandApplySchemaKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, a
 	return "", err
 }
 
+// signal handling, centralized here
+func installSignalHandlers() {
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-sigChan
+		// we got a signal, notify our modules:
+		// - tm will interrupt anything waiting on a tablet action
+		// - wr will interrupt anything waiting on a shard or
+		//   keyspace lock
+		tm.SignalInterrupt()
+		wr.SignalInterrupt()
+	}()
+}
+
 func main() {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
@@ -1358,7 +1375,7 @@ func main() {
 		os.Exit(1)
 	}
 	action := args[0]
-	tm.InstallSigHandler()
+	installSignalHandlers()
 
 	logPrefix := "vtctl "
 	logFlag := log.Ldate | log.Lmicroseconds | log.Lshortfile

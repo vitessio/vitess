@@ -149,9 +149,16 @@ func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType tm.TabletType
 	return nil
 }
 
+// signal handling
+var interrupted = make(chan struct{})
+
+func SignalInterrupt() {
+	close(interrupted)
+}
+
 // Wait for the queue lock, displays a nice error message if we cant get it
 func (wr *Wrangler) obtainActionLock(actionPath string) error {
-	err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout)
+	err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout, interrupted)
 	if err != nil {
 		errToReturn := fmt.Errorf("failed to obtain action lock: %v", actionPath)
 
