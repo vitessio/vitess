@@ -62,7 +62,7 @@ type SqlQuery struct {
 	// You should use the statemu lock if you want to execute a transition
 	// where you don't want the state to change from the time you've read it.
 	statemu sync.Mutex
-	state   int32
+	state   stats.AtomicInt32
 	states  *stats.States
 
 	qe        *QueryEngine
@@ -87,13 +87,14 @@ func NewSqlQuery(config Config) *SqlQuery {
 }
 
 func (sq *SqlQuery) setState(state int32) {
-	atomic.StoreInt32(&sq.state, state)
+	relog.Info("SqlQuery state: %v -> %v", stateName[sq.state.Get()], stateName[state])
+	sq.state.Set(state)
 	sq.states.SetState(int(state))
 }
 
 func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 	sq.statemu.Lock()
-	v := atomic.LoadInt32(&sq.state)
+	v := sq.state.Get()
 	switch v {
 	case CONNECTING, ABORT, OPEN:
 		sq.statemu.Unlock()
@@ -120,7 +121,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 		if waitTime < 30*time.Second {
 			waitTime = waitTime * 2
 		}
-		if atomic.LoadInt32(&sq.state) == ABORT {
+		if sq.state.Get() == ABORT {
 			// Exclusive transition. No need to lock statemu.
 			sq.setState(CLOSED)
 			relog.Info("allowQueries aborting")
@@ -131,7 +132,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 	// Connection successful. Keep statemu locked.
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
-	if atomic.LoadInt32(&sq.state) == ABORT {
+	if sq.state.Get() == ABORT {
 		sq.setState(CLOSED)
 		relog.Info("allowQueries aborting")
 		return
@@ -156,7 +157,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 func (sq *SqlQuery) disallowQueries(forRestart bool) {
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
-	switch atomic.LoadInt32(&sq.state) {
+	switch sq.state.Get() {
 	case CONNECTING:
 		sq.setState(ABORT)
 		return
@@ -189,7 +190,7 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 }
 
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
-	switch atomic.LoadInt32(&sq.state) {
+	switch sq.state.Get() {
 	case NOT_SERVING:
 		panic(NewTabletError(FATAL, "not serving"))
 	case CLOSED:
@@ -377,7 +378,7 @@ func (sq *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "{")
 	// TODO(alainjobart) when no monitoring depends on 'State',
 	// remove it (use 'States.Current' instead)
-	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[atomic.LoadInt32(&sq.state)])
+	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[sq.state.Get()])
 	fmt.Fprintf(buf, "\n \"States\": %v,", sq.states.String())
 	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.qe.cachePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.qe.schemaInfo.queries.StatsJSON())
