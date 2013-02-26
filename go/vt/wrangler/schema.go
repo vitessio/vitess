@@ -389,11 +389,22 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 	// if zkNewParentTabletPath is passed in, use that as the new master
 	if zkNewParentTabletPath != "" {
 		relog.Info("Reparenting with new master set to %v", zkNewParentTabletPath)
+		tabletMap, err := GetTabletMapForShard(wr.zconn, shardInfo.ShardPath())
+		if err != nil {
+			return nil, err
+		}
+
+		slaveTabletMap, foundMaster, err := slaveTabletMap(tabletMap)
+		if err != nil {
+			return nil, err
+		}
+
 		newMasterTablet, err := wr.readTablet(zkNewParentTabletPath)
 		if err != nil {
 			return nil, err
 		}
-		err = wr.reparentShard(shardInfo, newMasterTablet /*leaveMasterReadOnly*/, false)
+
+		err = wr.reparentShardGraceful(slaveTabletMap, foundMaster, newMasterTablet /*leaveMasterReadOnly*/, false)
 		if err != nil {
 			return nil, err
 		}

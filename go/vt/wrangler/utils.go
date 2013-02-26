@@ -109,3 +109,12 @@ func CopyMapValues(m interface{}, typeHint interface{}) interface{} {
 	}
 	return vals.Interface()
 }
+
+func mapKeys(m interface{}) []interface{} {
+	keys := make([]interface{}, 0, 16)
+	mapVal := reflect.ValueOf(m)
+	for _, kv := range mapVal.MapKeys() {
+		keys = append(keys, kv.Interface())
+	}
+	return keys
+}

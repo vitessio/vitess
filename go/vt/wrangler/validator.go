@@ -127,6 +127,8 @@ func (wr *Wrangler) validateKeyspace(zkKeyspacePath string, pingTablets bool, wg
 	}
 }
 
+// FIXME(msolomon) This validate presumes the master is up and running.
+// Even when that isn't true, there are validation processes that might be valuable.
 func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
