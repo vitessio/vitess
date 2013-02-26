@@ -19,6 +19,10 @@ select /* column alias */ a b from t#select /* column alias */ a as b from t
 select /* column alias with as */ a as b from t
 select /* a.* */ a.* from t
 select /* select with bool expr */ a = b from t
+select /* case_when */ case when a = b then c end from t
+select /* case_when_else */ case when a = b then c else d end from t
+select /* case_when_when_else */ case when a = b then c when b = d then d else d end from t
+select /* case */ case aa when a = b then c end from t
 select /* parenthesis */ 1 from (t)
 select /* table list */ 1 from t1, t2
 select /* use */ 1 from t1 use index (a) where b = 1

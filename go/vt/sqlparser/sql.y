@@ -32,10 +32,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 %{
 package sqlparser
 
-import(
-	"fmt"
-)
-
 func SetParseTree(yylex interface{}, root *Node) {
 	tn := yylex.(*Tokenizer)
 	tn.ParseTree = root
@@ -114,6 +110,8 @@ const (
 %left <node> '*' '/' '%'
 %nonassoc <node> '.'
 %left <node> UNARY
+%right <node> CASE, WHEN, THEN, ELSE
+%left <node> END
 
 // DDL Tokens
 %token <node> CREATE ALTER DROP RENAME
@@ -122,8 +120,8 @@ const (
 %start any_command
 
 // Fake Tokens
-%token <node> NODE_LIST UPLUS UMINUS SELECT_STAR NO_DISTINCT FUNCTION FOR_UPDATE NOT_FOR_UPDATE
-%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST, TABLE_EXPR
+%token <node> NODE_LIST UPLUS UMINUS CASE_WHEN WHEN_LIST SELECT_STAR NO_DISTINCT FUNCTION FOR_UPDATE NOT_FOR_UPDATE
+%token <node> NOT_IN NOT_LIKE NOT_BETWEEN IS_NULL IS_NOT_NULL UNION_ALL COMMENT_LIST COLUMN_LIST TABLE_EXPR
 
 %type <node> command
 %type <node> select_statement insert_statement update_statement delete_statement set_statement
@@ -134,7 +132,7 @@ const (
 %type <node> table_expression_list table_expression join_type simple_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <node> values parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
-%type <node> unary_operator column_name value
+%type <node> unary_operator case_expression when_expression_list when_expression column_name value
 %type <node> group_by_opt having_opt order_by_opt order_list order asc_desc_opt limit_opt for_update_opt on_dup_opt
 %type <node> column_list_opt column_list update_list update_expression
 %type <node> exists_opt not_exists_opt ignore_opt non_rename_operation to_opt constraint_opt using_opt
@@ -643,6 +641,7 @@ value_expression:
 		$1.Type = FUNCTION
 		$$ = $1.Push($3)
 	}
+| case_expression
 
 keyword_as_func:
 	IF
@@ -658,6 +657,38 @@ unary_operator:
 		$$ = NewSimpleParseNode(UMINUS, "-")
 	}
 | '~'
+
+case_expression:
+  CASE when_expression_list END
+  {
+    $$ = NewSimpleParseNode(CASE_WHEN, "case")
+    $$.Push($2)
+  }
+| CASE expression when_expression_list END
+  {
+    $$.PushTwo($2, $3)
+  }
+
+when_expression_list:
+  when_expression
+  {
+    $$ = NewSimpleParseNode(WHEN_LIST, "when_list")
+    $$.Push($1)
+  }
+| when_expression_list when_expression
+  {
+    $$.Push($2)
+  }
+
+when_expression:
+  WHEN expression THEN expression
+  {
+    $$.PushTwo($2, $4)
+  }
+| ELSE expression
+  {
+    $$.Push($2)
+  }
 
 column_name:
 	ID

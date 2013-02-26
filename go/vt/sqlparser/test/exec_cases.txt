@@ -193,6 +193,25 @@ select eid+1 from a
   "SetValue": null
 }
 
+# case in select list
+select case when eid = 1 then 1 end from a
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "SELECT_LIST",
+  "TableName": "a",
+  "FieldQuery": "select case when eid = 1 then 1 end from a where 1 != 1",
+  "FullQuery": "select case when eid = 1 then 1 end from a limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # simple
 select eid from a
 {

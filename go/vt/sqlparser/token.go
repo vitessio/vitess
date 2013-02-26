@@ -64,6 +64,11 @@ var keywords = map[string]int{
 	"into":          INTO,
 
 	"distinct":  DISTINCT,
+	"case":      CASE,
+	"when":      WHEN,
+	"then":      THEN,
+	"else":      ELSE,
+	"end":       END,
 	"as":        AS,
 	"and":       AND,
 	"or":        OR,
