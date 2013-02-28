@@ -91,11 +91,14 @@ class Tablet(object):
       if utils.options.verbose:
         print >> sys.stderr, e, path
 
+  def mysql_connection_parameters(self, dbname):
+    return dict(user='vt_dba',
+                unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, self.tablet_uid),
+                db=dbname)
+
   def connect(self, dbname=''):
     conn = MySQLdb.Connect(
-        user='vt_dba',
-        unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, self.tablet_uid),
-        db=dbname)
+      **self.mysql_connection_parameters(dbname))
     return conn, conn.cursor()
 
   # Query the MySQL instance directly
