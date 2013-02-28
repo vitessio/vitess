@@ -73,6 +73,7 @@ func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
 
 	dataRdFile, dataWrFile, pipeErr := os.Pipe()
 	if pipeErr != nil {
+		relog.Error("DecodeMysqlBinlog: error in creating pipe %v", pipeErr)
 		return nil, pipeErr
 	}
 	// let the caller close the read file
@@ -88,6 +89,7 @@ func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
 
 	process, err := os.StartProcess(name, arg, attrs)
 	if err != nil {
+		relog.Error("DecodeMysqlBinlog: error in decoding binlog %v", err)
 		return nil, err
 	}
 
@@ -96,6 +98,8 @@ func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
 		waitMsg, err := process.Wait()
 		if err != nil {
 			relog.Error("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
+		} else {
+			relog.Info("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
 		}
 	}()
 

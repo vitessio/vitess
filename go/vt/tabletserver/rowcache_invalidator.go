@@ -45,7 +45,7 @@ func NewInvalidationProcessor() *InvalidationProcessor {
 
 func RegisterCacheInvalidator() {
 	if CacheInvalidationProcessor != nil {
-		relog.Warning("Row cache invalidation service has already been initialized.")
+		//relog.Warning("Row cache invalidation service has already been initialized.")
 		return
 	}
 	CacheInvalidationProcessor = NewInvalidationProcessor()
@@ -53,13 +53,13 @@ func RegisterCacheInvalidator() {
 
 func StartRowCacheInvalidation() {
 	if !shouldInvalidatorRun() {
-		relog.Warning("Row-cache invalidator not being enabled, criteria not met")
+		//relog.Warning("Row-cache invalidator not being enabled, criteria not met")
 		CacheInvalidationProcessor.stopRowCacheInvalidation()
 		return
 	}
 
 	if CacheInvalidationProcessor.isServiceEnabled() {
-		relog.Warning("Row-cache invalidator service is already enabled")
+		//relog.Warning("Row-cache invalidator service is already enabled")
 		return
 	}
 
@@ -73,7 +73,7 @@ func StartRowCacheInvalidation() {
 		return
 	}
 	CacheInvalidationProcessor.startInvalidation()
-	relog.Info("Starting RowCacheInvalidation Service")
+	//relog.Info("Starting RowCacheInvalidation Service")
 }
 
 func StopRowCacheInvalidation() {
@@ -121,7 +121,7 @@ func (rowCache *InvalidationProcessor) getStartPosition() string {
 		relog.Warning("Purging the cache and starting at current replication position - No position set")
 	} else {
 		replPosition, err := mysqlctl.DecodePositionToCoordinates(currentPosition)
-		if err != nil || !mysqlctl.IsRelayPositionValid(replPosition) {
+		if err != nil || !mysqlctl.IsRelayPositionValid(replPosition, mysqlctl.LogsDir()) {
 			purgeCache = true
 			relog.Warning("Purging the cache and starting at current replication position - Invalid start position")
 		}
@@ -200,7 +200,7 @@ func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateRespon
 		}
 		rowCache.dmlBuffer = append(rowCache.dmlBuffer, dml)
 	default:
-		return fmt.Errorf("Unknown SqlType")
+		return fmt.Errorf("Unknown SqlType, %v %v", event.EventData.SqlType, event.EventData.Sql)
 	}
 	return nil
 }

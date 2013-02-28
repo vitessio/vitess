@@ -28,6 +28,8 @@ import (
 const (
 	BINLOG_HEADER_SIZE = 4  // copied from mysqlbinlog.cc for mysql 5.0.33
 	EVENT_HEADER_SIZE  = 19 // 4.0 and above, can be larger in 5.x
+	//mysqlbinlog reads in chunks of 64k hence writing in similar chunks to avoid failures due to incomplete reads.
+	BINLOG_BLOCK_SIZE = 16 * 1024 * 4
 )
 
 type stats struct {
@@ -59,7 +61,7 @@ func (blr *BinlogReader) binLogPathForId(fileId int) string {
 }
 
 func NewBinlogReader(binLogPrefix string) *BinlogReader {
-	return &BinlogReader{binLogPrefix: binLogPrefix, BinlogBlockSize: 16 * 1024, MaxWaitTimeout: 3600.0, LogWaitTimeout: 5.0}
+	return &BinlogReader{binLogPrefix: binLogPrefix, BinlogBlockSize: BINLOG_BLOCK_SIZE, MaxWaitTimeout: 3600.0, LogWaitTimeout: 5.0}
 }
 
 /*
@@ -237,7 +239,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 	positionWaitStart := make(map[int64]time.Time)
 
 	//var offsetString string
-	bufWriter := bufio.NewWriterSize(writer, 16*1024)
+	bufWriter := bufio.NewWriterSize(writer, BINLOG_BLOCK_SIZE)
 
 	if startPosition > 0 {
 		size, err := binlogFile.Seek(0, 2)
@@ -276,7 +278,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 	}
 
 	for {
-		//position, _ := binlogFile.Seek(0, 1)
+		position, _ := binlogFile.Seek(0, 1)
 		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
 		if err != nil && err != io.EOF {
 			relog.Error("BinlogReader.serve err: %v", err)
@@ -287,15 +289,24 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 		stats.Reads++
 		stats.Bytes += written
 
+		//EOF is implicit in this case - either we have reached end of current file
+		//and are waiting for more data or rotating to next log.
 		if written != blr.BinlogBlockSize {
-			bufWriter.Flush()
 			if _, statErr := os.Stat(nextLog); statErr == nil {
-				//relog.Info("BinlogReader swap log file: %v", nextLog)
+				bufWriter.Flush()
 				// swap to next log file
-				binlogFile.Close()
-				binlogFile, nextLog = blr.open(nextLog)
-				positionWaitStart = make(map[int64]time.Time)
-				binlogFile.Seek(BINLOG_HEADER_SIZE, 0)
+				size, err := binlogFile.Seek(0, 2)
+				if err != nil {
+					relog.Error("BinlogReader.ServeData seek err: %v", err)
+					return
+				}
+				if size == position+written {
+					//relog.Info("BinlogReader swap log file: %v", nextLog)
+					binlogFile.Close()
+					binlogFile, nextLog = blr.open(nextLog)
+					positionWaitStart = make(map[int64]time.Time)
+					binlogFile.Seek(BINLOG_HEADER_SIZE, 0)
+				}
 			} else {
 				position, _ := binlogFile.Seek(0, 1)
 				//relog.Info("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
@@ -311,6 +322,8 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				} else {
 					positionWaitStart[position] = now
 				}
+				//Flush after waiting for more data to be available to avoid delays between writes as that can cause vt_mysqlbinlog to fail.
+				bufWriter.Flush()
 			}
 		}
 	}

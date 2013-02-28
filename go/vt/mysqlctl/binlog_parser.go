@@ -25,13 +25,12 @@ Functionality to parse a binlog/relay log and send event streams to clients.
 */
 
 const (
-	BLP_LINE_SIZE = 16 * 1024 * 1024
 	MAX_TXN_BATCH = 1024
 	DML           = "DML"
 	DDL           = "DDL"
 	BEGIN         = "BEGIN"
 	COMMIT        = "COMMIT"
-	USE           = "Use "
+	USE           = "use"
 )
 
 var SqlKwMap = map[string]string{
@@ -60,9 +59,14 @@ var (
 	BINLOG_END_LOG_POS     = []byte("end_log_pos ")
 	BINLOG_XID             = []byte("Xid = ")
 	BINLOG_START           = []byte("Start: binlog")
-	BINLOG_DB_CHANGE       = []byte("Use ")
+	BINLOG_DB_CHANGE       = []byte(USE)
 	POS                    = []byte(" pos: ")
 	SPACE                  = []byte(" ")
+	COMMENT                = []byte("/*!")
+	SET_SESSION_VAR        = []byte("SET @@session")
+	DELIMITER              = []byte("DELIMITER ")
+	BINLOG                 = []byte("BINLOG ")
+	SEMICOLON_BYTE         = []byte(";")
 )
 
 type BinlogPosition struct {
@@ -100,12 +104,16 @@ type EventData struct {
 type eventBuffer struct {
 	BinlogPosition
 	LogLine []byte
+	firstKw string
 }
 
 func NewEventBuffer(pos *BinlogPosition, line []byte) *eventBuffer {
 	buf := &eventBuffer{}
 	buf.LogLine = make([]byte, len(line))
-	_ = copy(buf.LogLine, line)
+	written := copy(buf.LogLine, line)
+	if written < len(line) {
+		relog.Warning("Logline not properly copied while creating new event written: %v len: %v", written, len(line))
+	}
 	//The RelayPosition is never used, so using the default value
 	buf.BinlogPosition.coordinates = &ReplicationCoordinates{RelayFilename: pos.coordinates.RelayFilename,
 		MasterFilename: pos.coordinates.MasterFilename,
@@ -225,38 +233,34 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogReader io.Reader) {
 	// read over the stream and buffer up the transactions
 	var err error
-	var tmpLine, line []byte
-	bigLine := make([]byte, 0, BLP_LINE_SIZE)
-	// make the line as big as the max packet size - currently 16MB
-	lineReader := bufio.NewReaderSize(binlogReader, BLP_LINE_SIZE)
+	var line []byte
+	lineReader := bufio.NewReaderSize(binlogReader, BINLOG_BLOCK_SIZE)
 	readAhead := false
+	var event *eventBuffer
+	var delimIndex int
 
 	for {
 		if !blp.globalState.isServiceEnabled() {
 			panic(NewBinlogParseError("Disconnecting because the Update Stream service has been disabled"))
 		}
-		bigLine = bigLine[:0]
-		tmpLine, err = blp.readBlpLine(lineReader, bigLine)
+		line = line[:0]
+		line, err = blp.readBlpLine(lineReader)
 		if err != nil {
 			if err == io.EOF {
 				//end of stream
-				relog.Info("encountered EOF, quitting")
+				panic(NewBinlogParseError("EOF"))
 				return
 			}
 			panic(NewBinlogParseError(fmt.Sprintf("ReadLine err: , %v", err)))
 		}
-		if readAhead {
-			line = append(line, tmpLine...)
-		} else {
-			line = tmpLine
-		}
-		blp.LineCount++
 		if len(line) == 0 {
 			continue
 		}
+		blp.LineCount++
 
 		if line[0] == '#' {
 			//parse positional data
+			line = bytes.TrimSpace(line)
 			blp.parsePositionData(line)
 		} else {
 			//parse event data
@@ -266,21 +270,28 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 				continue
 			}
 
-			//Update Stream processes statements only for the dbname that it is subscribed to.
-			blp.parseDbChange(line)
-			if !blp.dbmatch {
+			//readAhead is used for reading a log line that is spread across multiple lines and has newlines within it.
+			if readAhead {
+				event.LogLine = append(event.LogLine, line...)
+			} else {
+				event = NewEventBuffer(blp.currentPosition, line)
+			}
+
+			delimIndex = bytes.LastIndex(event.LogLine, BINLOG_DELIMITER)
+			if delimIndex != -1 {
+				event.LogLine = event.LogLine[:delimIndex]
+				readAhead = false
+			} else {
+				readAhead = true
 				continue
 			}
 
-			readAhead = true
-			if bytes.HasSuffix(line, BINLOG_DELIMITER) {
-				readAhead = false
-				line = line[:len(line)-len(BINLOG_DELIMITER)]
-			}
-			if !readAhead {
-				blp.parseEventData(sendReply, line)
-				line = line[:0]
-			}
+			event.LogLine = bytes.TrimSpace(event.LogLine)
+			event.firstKw = string(bytes.ToLower(bytes.SplitN(event.LogLine, SPACE, 2)[0]))
+
+			//processes statements only for the dbname that it is subscribed to.
+			blp.parseDbChange(event)
+			blp.parseEventData(sendReply, event)
 		}
 	}
 	//TODO: revisit printing/exporting of stats
@@ -288,8 +299,8 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 }
 
 //Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
-func (blp *Blp) parseDbChange(line []byte) {
-	if !bytes.HasPrefix(line, BINLOG_DB_CHANGE) {
+func (blp *Blp) parseDbChange(event *eventBuffer) {
+	if event.firstKw != USE {
 		return
 	}
 	if blp.globalState.dbname == "" {
@@ -297,9 +308,11 @@ func (blp *Blp) parseDbChange(line []byte) {
 		return
 	}
 
-	new_db := string(bytes.TrimLeft(line, USE))
+	new_db := string(bytes.TrimSpace(bytes.SplitN(event.LogLine, BINLOG_DB_CHANGE, 2)[1]))
 	if new_db != blp.globalState.dbname {
 		blp.dbmatch = false
+	} else {
+		blp.dbmatch = true
 	}
 }
 
@@ -309,7 +322,6 @@ func (blp *Blp) parsePositionData(line []byte) {
 		if blp.nextStmtPosition == 0 {
 			return
 		}
-		blp.currentPosition.coordinates.MasterPosition = blp.nextStmtPosition
 	} else if bytes.Index(line, BINLOG_ROTATE_TO) != -1 {
 		blp.parseRotateEvent(line)
 	} else if bytes.Index(line, BINLOG_END_LOG_POS) != -1 {
@@ -318,27 +330,52 @@ func (blp *Blp) parsePositionData(line []byte) {
 			return
 		}
 		blp.parseMasterPosition(line)
+		if blp.nextStmtPosition != 0 {
+			blp.currentPosition.GetCoordinates().MasterPosition = blp.nextStmtPosition
+		}
 	}
 	if bytes.Index(line, BINLOG_XID) != -1 {
 		blp.parseXid(line)
 	}
 }
 
-func (blp *Blp) parseEventData(sendReply SendUpdateStreamResponse, line []byte) {
-	if bytes.HasPrefix(line, BINLOG_SET_TIMESTAMP) {
-		blp.extractEventTimestamp(line)
+func (blp *Blp) parseEventData(sendReply SendUpdateStreamResponse, event *eventBuffer) {
+	if bytes.HasPrefix(event.LogLine, BINLOG_SET_TIMESTAMP) {
+		blp.extractEventTimestamp(event)
 		blp.initialSeek = false
-	} else if bytes.HasPrefix(line, BINLOG_BEGIN) {
-		blp.handleBeginEvent(line)
-	} else if bytes.HasPrefix(line, BINLOG_ROLLBACK) {
+		if blp.inTxn {
+			blp.txnLineBuffer = append(blp.txnLineBuffer, event)
+		}
+	} else if bytes.HasPrefix(event.LogLine, BINLOG_SET_INSERT) {
+		if blp.inTxn {
+			blp.txnLineBuffer = append(blp.txnLineBuffer, event)
+		} else {
+			panic(NewBinlogParseError(fmt.Sprintf("SET INSERT_ID outside a txn - len %v, dml '%v'", len(blp.txnLineBuffer), string(event.LogLine))))
+		}
+	} else if bytes.HasPrefix(event.LogLine, BINLOG_BEGIN) {
+		blp.handleBeginEvent(event)
+	} else if bytes.HasPrefix(event.LogLine, BINLOG_COMMIT) {
+		blp.handleCommitEvent(sendReply, event)
 		blp.inTxn = false
 		blp.txnLineBuffer = blp.txnLineBuffer[0:0]
-	} else if len(line) > 0 {
-		sqlType := getSqlType(line)
-		if blp.inTxn {
-			blp.handleTxnEvent(sendReply, line, sqlType)
+	} else if bytes.HasPrefix(event.LogLine, BINLOG_ROLLBACK) {
+		blp.inTxn = false
+		blp.txnLineBuffer = blp.txnLineBuffer[0:0]
+	} else if len(event.LogLine) > 0 {
+		sqlType := GetSqlType(event.firstKw)
+		if blp.inTxn && IsTxnStatement(event.LogLine, event.firstKw) {
+			blp.txnLineBuffer = append(blp.txnLineBuffer, event)
+			blp.DmlCount++
 		} else if sqlType == DDL {
-			blp.handleDdlEvent(sendReply, line)
+			blp.handleDdlEvent(sendReply, event)
+		} else {
+			if sqlType == DML {
+				panic(NewBinlogParseError(fmt.Sprintf("DML outside a txn - len %v, dml '%v'", len(blp.txnLineBuffer), string(event.LogLine))))
+			}
+			//Ignore these often occuring statement types.
+			if !IgnoredStatement(event.LogLine) {
+				relog.Warning("Unknown statement '%v'", string(event.LogLine))
+			}
 		}
 	}
 }
@@ -366,12 +403,14 @@ func (blp *Blp) parseXid(line []byte) {
 	blp.currentPosition.Xid = xid
 }
 
-func (blp *Blp) extractEventTimestamp(line []byte) {
+func (blp *Blp) extractEventTimestamp(event *eventBuffer) {
+	line := event.LogLine
 	currentTimestamp, err := strconv.ParseInt(string(line[len(BINLOG_SET_TIMESTAMP):]), 10, 64)
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting timestamp %v", err)))
 	}
 	blp.currentPosition.Timestamp = currentTimestamp
+	event.BinlogPosition.Timestamp = currentTimestamp
 }
 
 func (blp *Blp) parseRotateEvent(line []byte) {
@@ -409,17 +448,16 @@ func (blp *Blp) parseRotateEvent(line []byte) {
 Data event parsing and handling functions.
 */
 
-func (blp *Blp) handleBeginEvent(line []byte) {
+func (blp *Blp) handleBeginEvent(event *eventBuffer) {
 	if len(blp.txnLineBuffer) != 0 || blp.inTxn {
 		panic(NewBinlogParseError(fmt.Sprintf("BEGIN encountered with non-empty trxn buffer, len: %d", len(blp.txnLineBuffer))))
 	}
+	blp.txnLineBuffer = blp.txnLineBuffer[:0]
 	blp.inTxn = true
-	event := NewEventBuffer(blp.currentPosition, line)
 	blp.txnLineBuffer = append(blp.txnLineBuffer, event)
 }
 
-func (blp *Blp) handleDdlEvent(sendReply SendUpdateStreamResponse, line []byte) {
-	event := NewEventBuffer(blp.currentPosition, line)
+func (blp *Blp) handleDdlEvent(sendReply SendUpdateStreamResponse, event *eventBuffer) {
 	ddlStream := createDdlStream(event)
 	buf := []*UpdateResponse{ddlStream}
 	if err := sendStream(sendReply, buf); err != nil {
@@ -428,23 +466,11 @@ func (blp *Blp) handleDdlEvent(sendReply SendUpdateStreamResponse, line []byte) 
 	blp.DdlCount++
 }
 
-func (blp *Blp) handleTxnEvent(sendReply SendUpdateStreamResponse, line []byte, sqlType string) {
-	//AutoIncrement parsing
-	if bytes.HasPrefix(line, BINLOG_SET_INSERT) {
-		blp.extractAutoIncrementId(line)
-	} else if bytes.HasPrefix(line, BINLOG_COMMIT) {
-		blp.handleCommitEvent(sendReply, line)
-	} else if sqlType == DML {
-		blp.handleDmlEvent(line)
+func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEvent *eventBuffer) {
+	if !blp.dbmatch {
+		return
 	}
-}
 
-func (blp *Blp) extractAutoIncrementId(line []byte) {
-	event := NewEventBuffer(blp.currentPosition, line)
-	blp.txnLineBuffer = append(blp.txnLineBuffer, event)
-}
-
-func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, line []byte) {
 	if blp.globalState.usingRelayLogs {
 		for !blp.slavePosBehindReplication() {
 			rp := &ReplicationPosition{MasterLogFile: blp.currentPosition.coordinates.MasterFilename,
@@ -454,16 +480,14 @@ func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, line []byt
 			}
 		}
 	}
-	commitEvent := NewEventBuffer(blp.currentPosition, line)
 	commitEvent.BinlogPosition.Xid = blp.currentPosition.Xid
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	//txn block for DMLs, parse it and send events for a txn
-	blp.responseStream = buildTxnResponse(blp.txnLineBuffer)
+	var dmlCount uint
+	blp.responseStream, dmlCount = buildTxnResponse(blp.txnLineBuffer)
 
-	//Only Begin and Commit events - no point in sending this.
-	if len(blp.responseStream) <= 2 {
-		blp.inTxn = false
-		blp.txnLineBuffer = blp.txnLineBuffer[0:0]
+	//No dml events - no point in sending this.
+	if dmlCount == 0 {
 		return
 	}
 
@@ -471,18 +495,7 @@ func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, line []byt
 		panic(NewBinlogParseError(fmt.Sprintf("Error in sending event to client %v", err)))
 	}
 
-	blp.inTxn = false
-	blp.txnLineBuffer = blp.txnLineBuffer[0:0]
 	blp.TxnCount += 1
-}
-
-func (blp *Blp) handleDmlEvent(line []byte) {
-	if getDmlType(line) == "" {
-		panic(NewBinlogParseError(fmt.Sprintf("Invalid dml or out of txn context %v", string(line))))
-	}
-	event := NewEventBuffer(blp.currentPosition, line)
-	blp.txnLineBuffer = append(blp.txnLineBuffer, event)
-	blp.DmlCount++
 }
 
 /*
@@ -490,16 +503,25 @@ Other utility functions.
 */
 
 //This reads a binlog log line.
-func (blp *Blp) readBlpLine(lineReader *bufio.Reader, bigLine []byte) (line []byte, err error) {
+func (blp *Blp) readBlpLine(lineReader *bufio.Reader) (line []byte, err error) {
+	var bigLine []byte
+	bigLineAllocated := false
 	for {
 		tempLine, tempErr := lineReader.ReadSlice('\n')
 		if tempErr == bufio.ErrBufferFull {
+			if !bigLineAllocated {
+				bigLine = make([]byte, 0, BINLOG_BLOCK_SIZE)
+				bigLineAllocated = true
+			}
 			blp.BufferFullErrors++
 			bigLine = append(bigLine, tempLine...)
 			continue
 		} else if tempErr != nil {
 			err = tempErr
 		} else if len(bigLine) > 0 {
+			if len(tempLine) > 0 {
+				bigLine = append(bigLine, tempLine...)
+			}
 			line = bigLine[:len(bigLine)-1]
 			blp.BigLineCount++
 		} else {
@@ -557,12 +579,13 @@ func (blp *Blp) slavePosBehindReplication() bool {
 }
 
 //This builds UpdateResponse for each transaction.
-func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateResponse) {
+func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateResponse, dmlCount uint) {
 	var err error
 	var line []byte
 	var dmlType string
 	var eventNodeTree *parser.Node
 	var autoincId uint64
+	dmlBuffer := make([][]byte, 0, 10)
 
 	for _, event := range trxnLineBuffer {
 		line = event.LogLine
@@ -590,30 +613,36 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 			continue
 		}
 
-		dmlType = string(bytes.SplitN(line, []byte(" "), 2)[0])
-		if dmlType == "" {
-			relog.Error("Invalid DML line : %v", string(line))
-			panic(NewBinlogParseError(fmt.Sprintf("Invalid DML, query %s", string(line))))
+		sqlType := GetSqlType(event.firstKw)
+		if sqlType == DML {
+			//valid dml
+			commentIndex := bytes.Index(line, STREAM_COMMENT_START)
+			//stream comment not found.
+			if commentIndex == -1 {
+				relog.Warning("Invalid DML - doesn't have a valid stream comment : %v", string(line))
+				dmlBuffer = dmlBuffer[:0]
+				continue
+				//FIXME: track such cases and potentially change them to errors at a later point.
+				//panic(NewBinlogParseError(fmt.Sprintf("Invalid DML, doesn't have a valid stream comment. Sql: %v", string(line))))
+			}
+			dmlBuffer = append(dmlBuffer, line)
+			streamComment := string(line[commentIndex+len(STREAM_COMMENT_START):])
+			eventNodeTree = parseStreamComment(streamComment, autoincId)
+			dmlType = GetDmlType(event.firstKw)
+			response := createUpdateResponse(eventNodeTree, dmlType, event.BinlogPosition)
+			response.EventData.Sql = string(bytes.Join(dmlBuffer, SEMICOLON_BYTE))
+			txnResponseList = append(txnResponseList, response)
+			autoincId = 0
+			dmlBuffer = dmlBuffer[:0]
+			dmlCount += 1
+		} else {
+			//add as prefixes to the DML from last DML.
+			//start a new dml buffer and keep adding to it.
+			dmlBuffer = append(dmlBuffer, line)
 		}
-
-		//valid dml
-		commentIndex := bytes.Index(line, STREAM_COMMENT_START)
-		//stream comment not found.
-		if commentIndex == -1 {
-			relog.Warning("Invalid DML - doesn't have a valid stream comment : %v", string(line))
-			continue
-			//FIXME: track such cases and potentially change them to errors at a later point.
-			//panic(NewBinlogParseError(fmt.Sprintf("Invalid DML, doesn't have a valid stream comment. Sql: %v", string(line))))
-		}
-		//fmt.Println(lineTxn)
-		streamComment := string(line[commentIndex+len(STREAM_COMMENT_START):])
-		eventNodeTree = parseStreamComment(streamComment, autoincId)
-		response := createUpdateResponse(eventNodeTree, dmlType, event.BinlogPosition)
-		txnResponseList = append(txnResponseList, response)
-		autoincId = 0
 	}
 
-	return txnResponseList
+	return
 }
 
 /*
@@ -781,10 +810,11 @@ func SendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputEr
 		}
 	}
 	buf := []*UpdateResponse{streamBuf}
-	err = sendStream(sendReply, buf)
-	if err != nil {
-		relog.Error("Error in communicating message %v with the client: %v", inputErr, err)
-	}
+	_ = sendStream(sendReply, buf)
+	//err = sendStream(sendReply, buf)
+	//if err != nil {
+	//	relog.Error("Error in communicating message %v with the client: %v", inputErr, err)
+	//}
 }
 
 //This creates the response for COMMIT event.
@@ -814,19 +844,33 @@ func createDdlStream(lineBuffer *eventBuffer) (ddlStream *UpdateResponse) {
 	return ddlStream
 }
 
-func getSqlType(line []byte) string {
-	line = bytes.TrimSpace(line)
-	firstKw := string(bytes.SplitN(line, SPACE, 2)[0])
+func GetSqlType(firstKw string) string {
 	sqlType, _ := SqlKwMap[firstKw]
 	return sqlType
 }
 
-func getDmlType(line []byte) string {
-	line = bytes.TrimSpace(line)
-	dmlKw := string(bytes.SplitN(line, SPACE, 2)[0])
-	sqlType, ok := SqlKwMap[dmlKw]
+func GetDmlType(firstKw string) string {
+	sqlType, ok := SqlKwMap[firstKw]
 	if ok && sqlType == DML {
-		return dmlKw
+		return firstKw
 	}
 	return ""
+}
+
+func IgnoredStatement(line []byte) bool {
+	if bytes.HasPrefix(line, COMMENT) || bytes.HasPrefix(line, SET_SESSION_VAR) ||
+		bytes.HasPrefix(line, DELIMITER) || bytes.HasPrefix(line, BINLOG) || bytes.HasPrefix(line, BINLOG_DB_CHANGE) {
+		return true
+	}
+	return false
+}
+
+func IsTxnStatement(line []byte, firstKw string) bool {
+	if GetSqlType(firstKw) == DML ||
+		bytes.HasPrefix(line, BINLOG_SET_TIMESTAMP) ||
+		bytes.HasPrefix(line, BINLOG_SET_INSERT) ||
+		firstKw == USE {
+		return true
+	}
+	return false
 }

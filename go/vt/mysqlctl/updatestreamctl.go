@@ -167,6 +167,10 @@ func (updateStream *UpdateStream) statsJSON() string {
 		"}", updateStream.states.String())
 }
 
+func LogsDir() string {
+	return UpdateStreamRpcService.logsDir
+}
+
 func ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) error {
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
@@ -201,11 +205,11 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 
 	//locate the relay filename and position based on the masterPosition map
 	if !updateStream.usingRelayLogs {
-		if !isMasterPositionValid(startCoordinates) {
+		if !IsMasterPositionValid(startCoordinates) {
 			return fmt.Errorf("Invalid start position %v", req.StartPosition)
 		}
 	} else {
-		if !IsRelayPositionValid(startCoordinates) {
+		if !IsRelayPositionValid(startCoordinates, UpdateStreamRpcService.logsDir) {
 			return fmt.Errorf("Could not locate the start position %v", req.StartPosition)
 		}
 	}
@@ -215,7 +219,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 	return nil
 }
 
-func isMasterPositionValid(startCoordinates *ReplicationCoordinates) bool {
+func IsMasterPositionValid(startCoordinates *ReplicationCoordinates) bool {
 	if startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
 		return false
 	}
@@ -224,14 +228,14 @@ func isMasterPositionValid(startCoordinates *ReplicationCoordinates) bool {
 
 //This verifies the correctness of the start position.
 //The seek for relay logs depends on the RelayFilename and correct MasterFilename and Position.
-func IsRelayPositionValid(startCoordinates *ReplicationCoordinates) bool {
+func IsRelayPositionValid(startCoordinates *ReplicationCoordinates, logsDir string) bool {
 	if startCoordinates.RelayFilename == "" || startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
 		return false
 	}
 	var relayFile string
 	d, f := path.Split(startCoordinates.RelayFilename)
 	if d == "" {
-		relayFile = path.Join(UpdateStreamRpcService.logsDir, f)
+		relayFile = path.Join(logsDir, f)
 	} else {
 		relayFile = startCoordinates.RelayFilename
 	}
