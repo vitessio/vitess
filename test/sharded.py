@@ -207,7 +207,7 @@ def run_test_sharding():
 
   # and create zkns on this complex keyspace, make sure a few files are created
   utils.run_vtctl('ExportZknsForKeyspace /zk/global/vt/keyspaces/test_keyspace')
-  out, err = utils.run(vtroot+'/bin/zk ls -R /zk/test_nj/zkns/vt/test_keyspace', trap_output=True)
+  out, err = utils.run(vtroot+'/bin/zk ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
   lines = out.splitlines()
   for base in ['0000000000000000-8000000000000000',
                 '8000000000000000-0000000000000000']:

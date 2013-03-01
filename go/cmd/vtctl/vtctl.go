@@ -1051,7 +1051,14 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("action StaleActions requires <zk action path>")
 	}
 
-	zkPaths := subFlags.Args()
+	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	if err != nil {
+		return "", err
+	}
+	if len(zkPaths) == 0 {
+		return "", nil
+	}
+
 	workq := make(chan string, len(zkPaths))
 	wg := sync.WaitGroup{}
 	for _, zkPath := range zkPaths {
@@ -1178,7 +1185,11 @@ func commandRebuildReplicationGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSe
 	params := parseParams(args)
 	var keyspaces, zkVtPaths []string
 	if _, ok := params["zk-vt-paths"]; ok {
-		zkVtPaths = strings.Split(params["zk-vt-paths"], ",")
+		var err error
+		zkVtPaths, err = zk.ResolveWildcards(wrangler.ZkConn(), strings.Split(params["zk-vt-paths"], ","))
+		if err != nil {
+			return "", err
+		}
 	}
 	if _, ok := params["keyspaces"]; ok {
 		keyspaces = strings.Split(params["keyspaces"], ",")
@@ -1222,7 +1233,11 @@ func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 	if strings.HasPrefix(subFlags.Arg(0), "/zk") {
 		return "", dumpTablets(wrangler.ZkConn(), subFlags.Args())
 	}
-	return "", listTabletsByAliases(wrangler.ZkConn(), subFlags.Args())
+	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	if err != nil {
+		return "", err
+	}
+	return "", listTabletsByAliases(wrangler.ZkConn(), zkPaths)
 }
 
 func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -326,6 +326,15 @@ func cmdLs(args []string) {
 	if len(args) == 0 {
 		log.Fatal("ls: no path specified")
 	}
+	args, err := zk.ResolveWildcards(zconn, args)
+	if err != nil {
+		log.Fatalf("ls: invalid wildcards: %v", err)
+	}
+	if len(args) == 0 {
+		// the wildcards didn't result in anything, we're done
+		return
+	}
+
 	hasError := false
 	needsHeader := len(args) > 1
 	for _, arg := range args {
@@ -471,6 +480,15 @@ func cmdRm(args []string) {
 	if len(args) == 0 {
 		log.Fatal("rm: no path specified")
 	}
+	args, err := zk.ResolveWildcards(zconn, args)
+	if err != nil {
+		log.Fatalf("rm: invalid wildcards: %v", err)
+	}
+	if len(args) == 0 {
+		// the wildcards didn't result in anything, we're done
+		return
+	}
+
 	hasError := false
 	for _, arg := range args {
 		zkPath := fixZkPath(arg)
@@ -496,6 +514,15 @@ func cmdCat(args []string) {
 	if len(args) == 0 {
 		log.Fatal("cat: no path specified")
 	}
+	args, err := zk.ResolveWildcards(zconn, args)
+	if err != nil {
+		log.Fatalf("cat: invalid wildcards: %v", err)
+	}
+	if len(args) == 0 {
+		// the wildcards didn't result in anything, we're done
+		return
+	}
+
 	hasError := false
 	for _, arg := range args {
 		zkPath := fixZkPath(arg)
@@ -575,6 +602,14 @@ func cmdEdit(args []string) {
 func cmdStat(args []string) {
 	if len(args) == 0 {
 		log.Fatal("stat: no path specified")
+	}
+	args, err := zk.ResolveWildcards(zconn, args)
+	if err != nil {
+		log.Fatalf("stat: invalid wildcards: %v", err)
+	}
+	if len(args) == 0 {
+		// the wildcards didn't result in anything, we're done
+		return
 	}
 
 	hasError := false
@@ -657,8 +692,17 @@ func cmdChmod(args []string) {
 		permMask |= charPermMap[string(c)]
 	}
 
+	args, err := zk.ResolveWildcards(zconn, args[1:])
+	if err != nil {
+		log.Fatalf("chmod: invalid wildcards: %v", err)
+	}
+	if len(args) == 0 {
+		// the wildcards didn't result in anything, we're done
+		return
+	}
+
 	hasError := false
-	for _, arg := range args[1:] {
+	for _, arg := range args {
 		zkPath := fixZkPath(arg)
 		aclv, _, err := zconn.ACL(zkPath)
 		if err != nil {
