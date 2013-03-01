@@ -87,6 +87,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -669,7 +670,7 @@ func (lsf localSnapshotFile) url() string {
 	return "http://" + lsf.manifest.Source.Addr + path.Join(SnapshotURLPath, lsf.file.Path)
 }
 
-func (lsf localSnapshotFile) queryParams() (map[string]string, error) {
+func (lsf localSnapshotFile) queryParams(destinationDbName string) (map[string]string, error) {
 	tableName := strings.Replace(path.Base(lsf.filename()), ".csv", "", -1)
 	td, ok := lsf.manifest.SchemaDefinition.GetTable(tableName)
 	if !ok {
@@ -677,16 +678,17 @@ func (lsf localSnapshotFile) queryParams() (map[string]string, error) {
 	}
 	return map[string]string{
 		"TableInputPath": lsf.filename(),
-		"TableName":      lsf.manifest.Source.DbName + "." + tableName,
+		"TableName":      destinationDbName + "." + tableName,
 		"Columns":        strings.Join(td.Columns, ", "),
 	}, nil
 
 }
 
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRange, sourceAddrs []string, concurrency, fetchConcurrency, fetchRetryCount int, force bool) (err error) {
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, fetchRetryCount int, force bool) (err error) {
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
 	err = ConcurrentMap(fetchConcurrency, len(sourceAddrs), func(i int) error {
-		ssm, e := fetchSnapshotManifestWithRetry(sourceAddrs[i], dbName, keyRange, fetchRetryCount)
+		dbi := sourceAddrs[i]
+		ssm, e := fetchSnapshotManifestWithRetry("http://"+dbi.Host, dbi.Path[1:], keyRange, fetchRetryCount)
 		manifests[i] = ssm
 		return e
 	})
@@ -706,7 +708,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRa
 		}
 	}
 
-	tempStoragePath := path.Join(mysqld.SnapshotDir, "multirestore", dbName)
+	tempStoragePath := path.Join(mysqld.SnapshotDir, "multirestore", destinationDbName)
 
 	// Start fresh
 	if err = os.RemoveAll(tempStoragePath); err != nil {
@@ -730,8 +732,12 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRa
 		if err = os.Mkdir(path.Join(tempStoragePath, manifest.Source.Addr), 0775); err != nil {
 			return err
 		}
-		for _, file := range manifest.Source.Files {
-			todo = append(todo, localSnapshotFile{manifest: manifest, file: &file, basePath: tempStoragePath})
+
+		// NOTE(szopa): I am not doing
+		// for _, file := range ... { ... }
+		// because I want a pointer to file.
+		for i := range manifest.Source.Files {
+			todo = append(todo, localSnapshotFile{manifest: manifest, file: &manifest.Source.Files[i], basePath: tempStoragePath})
 		}
 	}
 
@@ -743,7 +749,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRa
 	// RestoreFromPartialSnapshot doesn't do this.
 	manifest := manifests[0] // I am assuming they all match
 	createDbCmds := []string{
-		"USE " + manifest.Source.DbName}
+		"USE " + destinationDbName}
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		createDbCmds = append(createDbCmds, td.Schema)
 	}
@@ -755,7 +761,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRa
 
 	err = ConcurrentMap(concurrency, len(todo), func(i int) error {
 		lsf := todo[i]
-		queryParams, e := lsf.queryParams()
+		queryParams, e := lsf.queryParams(destinationDbName)
 		if e != nil {
 			return e
 		}

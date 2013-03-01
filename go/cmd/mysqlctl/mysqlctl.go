@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 
@@ -103,10 +104,21 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 	keyRange := key.KeyRange{Start: key.HexKeyspaceId(*start).Unhex(), End: key.HexKeyspaceId(*end).Unhex()}
 
 	if subFlags.NArg() < 2 {
-		relog.Fatal("multirestore requires <dbname> <host>... %v", args)
+		relog.Fatal("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)
 	}
-	dbName := subFlags.Arg(0)
-	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, subFlags.Args()[1:], *concurrency, *fetchConcurrency, *fetchRetryCount, *force); err != nil {
+	dbName, dbis := subFlags.Arg(0), subFlags.Args()[1:]
+	sources := make([]*url.URL, len(dbis))
+	for i, dbi := range dbis {
+		if !strings.HasPrefix(dbi, "vttp://") && !strings.HasPrefix(dbi, "http://") {
+			dbi = "vttp://" + dbi
+		}
+		dbUrl, err := url.Parse(dbi)
+		if err != nil {
+			relog.Fatal("incorrect source url: %v", err)
+		}
+		sources[i] = dbUrl
+	}
+	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *force); err != nil {
 		relog.Fatal("multirestore failed: %v", err)
 	}
 }
@@ -229,7 +241,7 @@ var commands = []command{
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] <host>...",
+		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
 	command{"partialsnapshot", partialSnapshotCmd,
 		"[-start=<start key>] [-end=<end key>] [-concurrency=4] <db name> <key name>",

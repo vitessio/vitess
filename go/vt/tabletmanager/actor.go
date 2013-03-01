@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
@@ -806,13 +807,13 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	}
 
 	// get source tablets addresses
-	sourceAddrs := make([]string, len(args.ZkSrcTabletPaths))
+	sourceAddrs := make([]*url.URL, len(args.ZkSrcTabletPaths))
 	for i, path := range args.ZkSrcTabletPaths {
 		t, e := ReadTablet(ta.zconn, path)
 		if e != nil {
 			return e
 		}
-		sourceAddrs[i] = "http://" + t.Addr
+		sourceAddrs[i] = &url.URL{Host: t.Addr, Path: "/" + t.DbName()}
 	}
 	// NOTE(szopa): This is a subset of what changeTypeToRestore
 	// does. This guy is going to be a master, it should not
