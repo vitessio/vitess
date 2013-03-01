@@ -33,12 +33,14 @@ func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, 
 func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMasterTabletPath string, alias tm.TabletAlias, wg *sync.WaitGroup, result chan string) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
+	relog.Info("Gathering schema for %v", zkTabletPath)
 	slaveSchema, err := wr.GetSchema(zkTabletPath)
 	if err != nil {
 		result <- err.Error()
 		return
 	}
 
+	relog.Info("Diffing schema for %v", zkTabletPath)
 	masterSchema.DiffSchema(zkMasterTabletPath, zkTabletPath, slaveSchema, result)
 }
 
@@ -68,6 +70,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 		return fmt.Errorf("No master in shard " + zkShardPath)
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
+	relog.Info("Gathering schema for master %v", zkMasterTabletPath)
 	masterSchema, err := wr.GetSchema(zkMasterTabletPath)
 	if err != nil {
 		return err
@@ -76,17 +79,19 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 	// then diff with all slaves
 	result := make(chan string, 10)
 	wg := &sync.WaitGroup{}
-	for _, alias := range si.ReplicaAliases {
-		wg.Add(1)
-		go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, wg, result)
-	}
-	for _, alias := range si.RdonlyAliases {
-		wg.Add(1)
-		go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, wg, result)
-	}
+	go func() {
+		for _, alias := range si.ReplicaAliases {
+			wg.Add(1)
+			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, wg, result)
+		}
+		for _, alias := range si.RdonlyAliases {
+			wg.Add(1)
+			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, wg, result)
+		}
 
-	wg.Wait()
-	close(result)
+		wg.Wait()
+		close(result)
+	}()
 	return channelToError(result)
 }
 
@@ -116,6 +121,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 		return fmt.Errorf("No master in shard " + referenceShardPath)
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
+	relog.Info("Gathering schema for reference master %v", zkReferenceTabletPath)
 	referenceSchema, err := wr.GetSchema(zkReferenceTabletPath)
 	if err != nil {
 		return err
@@ -126,33 +132,8 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	result := make(chan string, 10)
 	wg := &sync.WaitGroup{}
 
-	// first diff the slaves in the main shard
-	for _, alias := range si.ReplicaAliases {
-		wg.Add(1)
-		go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
-	}
-	for _, alias := range si.RdonlyAliases {
-		wg.Add(1)
-		go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
-	}
-
-	// then diffs the masters in the other shards, along with
-	// their slaves
-	for _, shard := range shards[1:] {
-		shardPath := path.Join(zkShardsPath, shard)
-		si, err := tm.ReadShard(wr.zconn, shardPath)
-		if err != nil {
-			result <- err.Error()
-			continue
-		}
-
-		if si.MasterAlias.Uid == tm.NO_TABLET {
-			result <- "No master in shard " + shardPath
-			continue
-		}
-
-		wg.Add(1)
-		go wr.diffSchema(referenceSchema, zkReferenceTabletPath, si.MasterAlias, wg, result)
+	go func() {
+		// first diff the slaves in the reference shard 0
 		for _, alias := range si.ReplicaAliases {
 			wg.Add(1)
 			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
@@ -161,10 +142,37 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 			wg.Add(1)
 			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
 		}
-	}
 
-	wg.Wait()
-	close(result)
+		// then diffs the masters in the other shards, along with
+		// their slaves
+		for _, shard := range shards[1:] {
+			shardPath := path.Join(zkShardsPath, shard)
+			si, err := tm.ReadShard(wr.zconn, shardPath)
+			if err != nil {
+				result <- err.Error()
+				continue
+			}
+
+			if si.MasterAlias.Uid == tm.NO_TABLET {
+				result <- "No master in shard " + shardPath
+				continue
+			}
+
+			wg.Add(1)
+			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, si.MasterAlias, wg, result)
+			for _, alias := range si.ReplicaAliases {
+				wg.Add(1)
+				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
+			}
+			for _, alias := range si.RdonlyAliases {
+				wg.Add(1)
+				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
+			}
+		}
+
+		wg.Wait()
+		close(result)
+	}()
 	return channelToError(result)
 }
 
