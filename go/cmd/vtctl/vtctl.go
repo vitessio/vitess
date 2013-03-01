@@ -1084,11 +1084,16 @@ func commandPruneActionLogs(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	subFlags.Parse(args)
 
 	if subFlags.NArg() == 0 {
-		relog.Fatal("action PruneActionLogs requires <zk action log path>")
+		relog.Fatal("action PruneActionLogs requires <zk action log path> ...")
+	}
+
+	paths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	if err != nil {
+		return "", err
 	}
 
 	errCount := 0
-	for _, zkActionLogPath := range subFlags.Args() {
+	for _, zkActionLogPath := range paths {
 		purgedCount, err := tm.PruneActionLogs(wrangler.ZkConn(), zkActionLogPath, *keepCount)
 		if err == nil {
 			relog.Debug("%v pruned %v", zkActionLogPath, purgedCount)

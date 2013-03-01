@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func TestZkPathToZkAddr(t *testing.T) {
+func TestZkConfig(t *testing.T) {
 	configPath := fmt.Sprintf("./.zk-test-conf-%v", time.Now().UnixNano())
 	defer func() {
 		os.Remove(configPath)
@@ -29,7 +29,10 @@ func TestZkPathToZkAddr(t *testing.T) {
 
 	fakeCell := hostname[:2]
 	fakeAddr := "localhost:2181"
-	configMap := map[string]string{fakeCell: fakeAddr}
+	configMap := map[string]string{
+		fakeCell:              fakeAddr,
+		fakeCell + "z:_zkocc": "localhost:2182",
+	}
 
 	file, err := os.Create(configPath)
 	if err != nil {
@@ -41,6 +44,7 @@ func TestZkPathToZkAddr(t *testing.T) {
 	}
 	file.Close()
 
+	// test ZkPathToZkAddr
 	for _, path := range []string{"/zk/" + fakeCell, "/zk/" + fakeCell + "/", "/zk/local", "/zk/local/"} {
 		zkAddr, err := ZkPathToZkAddr(path, false)
 		if err != nil {
@@ -49,5 +53,15 @@ func TestZkPathToZkAddr(t *testing.T) {
 		if zkAddr != fakeAddr {
 			t.Errorf("addr mismatch for path %v %v != %v", path, zkAddr, fakeAddr)
 		}
+	}
+
+	// test ZkKnownCells
+	knownCells := ZkKnownCells(false)
+	if len(knownCells) != 1 || knownCells[0] != fakeCell {
+		t.Errorf("ZkKnownCells(false) failed, expected %v got %v", []string{fakeCell}, knownCells)
+	}
+	knownCells = ZkKnownCells(true)
+	if len(knownCells) != 1 || knownCells[0] != fakeCell+"z" {
+		t.Errorf("ZkKnownCells(true) failed, expected %v got %v", []string{fakeCell}, knownCells)
 	}
 }

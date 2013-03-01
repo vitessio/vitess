@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,12 +80,7 @@ func getConfigPaths() []string {
 	return zkConfigPaths
 }
 
-func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
-	cell, err := ZkCellFromZkPath(zkPath)
-	if err != nil {
-		return "", err
-	}
-
+func getCellAddrMap() map[string]string {
 	var cellAddrMap map[string]string
 	for _, configPath := range getConfigPaths() {
 		file, err := os.Open(configPath)
@@ -101,7 +97,16 @@ func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
 
 		break
 	}
+	return cellAddrMap
+}
 
+func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
+	cell, err := ZkCellFromZkPath(zkPath)
+	if err != nil {
+		return "", err
+	}
+
+	cellAddrMap := getCellAddrMap()
 	if cell == "local" {
 		cell = GuessLocalCell()
 	} else if cell == "global" {
@@ -123,6 +128,24 @@ func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
 	}
 
 	return "", fmt.Errorf("no addr found for zk cell: %#v", cell)
+}
+
+func ZkKnownCells(useCache bool) []string {
+	cellAddrMap := getCellAddrMap()
+	result := make([]string, 0, len(cellAddrMap))
+	for cell, _ := range cellAddrMap {
+		if useCache {
+			if strings.HasSuffix(cell, ":_zkocc") {
+				result = append(result, cell[:len(cell)-7])
+			}
+		} else {
+			if !strings.HasSuffix(cell, ":_zkocc") {
+				result = append(result, cell)
+			}
+		}
+	}
+	sort.Strings(result)
+	return result
 }
 
 // GetZkSubprocessFlags returns the flags necessary to run a sub-process

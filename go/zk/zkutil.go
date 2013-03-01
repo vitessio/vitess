@@ -104,6 +104,108 @@ func ChildrenRecursive(zconn Conn, zkPath string) ([]string, error) {
 	return pathList, nil
 }
 
+// resolve paths like:
+// /zk/nyc/vt/tablets/*/action
+// /zk/global/vt/keyspaces/*/shards/*/action
+// /zk/*/vt/tablets/*/action
+// into real existing paths
+//
+// If you send paths that don't contain any wildcard and
+// don't exist, this function will return an empty array.
+func ResolveWildcards(zconn Conn, zkPaths []string) ([]string, error) {
+	// check all the paths start with /zk/ before doing anything
+	// time consuming
+	for _, zkPath := range zkPaths {
+
+		if _, err := ZkCellFromZkPath(zkPath); err != nil {
+			return nil, err
+		}
+	}
+
+	result := make([]string, 0, 32)
+
+	for _, zkPath := range zkPaths {
+		parts := strings.Split(zkPath, "/")
+		subResult, err := resolveRecursive(zconn, parts)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, subResult...)
+	}
+
+	return result, nil
+}
+
+// for now, we only support non-escaped '*'
+// the real rule would need to iterate over the path to find non-escaped
+// things like '*', '?', '[abc]'
+func hasWildcard(path string) bool {
+	return strings.Contains(path, "*")
+}
+
+func resolveRecursive(zconn Conn, parts []string) (result []string, err error) {
+	for i, part := range parts {
+		if hasWildcard(part) {
+			var children []string
+			if i == 2 {
+				children = ZkKnownCells(false)
+			} else {
+				zkParentPath := strings.Join(parts[:i], "/")
+				children, _, err = zconn.Children(zkParentPath)
+				if err != nil {
+					// we asked for something like
+					// /zk/cell/aaa/* and
+					// /zk/cell/aaa doesn't exist
+					// -> return empty list, no error
+					// (note we check both a regular zk
+					// error and the error the test
+					// produces)
+					if zookeeper.IsError(err, zookeeper.ZNONODE) {
+						return nil, nil
+					}
+					// otherwise we return the error
+					return
+				}
+			}
+
+			result = make([]string, 0, 32)
+			for _, child := range children {
+				matched, err := path.Match(part, child)
+				if err != nil {
+					return nil, err
+				}
+				if matched {
+					// we have a match!
+					newParts := make([]string, len(parts))
+					copy(newParts, parts)
+					newParts[i] = child
+					subResult, err := resolveRecursive(zconn, newParts)
+					if err != nil {
+						return nil, err
+					}
+					result = append(result, subResult...)
+				}
+			}
+
+			// we found a part that is a wildcard, we
+			// added the children already, we're done
+			return result, nil
+		}
+	}
+
+	// no part contains a wildcard, add the path if it exists, and done
+	result = make([]string, 1)
+	path := strings.Join(parts, "/")
+	stat, err := zconn.Exists(path)
+	if err != nil {
+		return nil, err
+	}
+	if stat != nil {
+		return []string{path}, nil
+	}
+	return nil, nil
+}
+
 func DeleteRecursive(zconn Conn, zkPath string, version int) error {
 	// version: -1 delete any version of the node at path - only applies to the top node
 	err := zconn.Delete(zkPath, version)
