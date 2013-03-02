@@ -178,6 +178,7 @@ func resolveRecursive(zconn Conn, parts []string) (result []string, err error) {
 					return
 				}
 			}
+			sort.Strings(children)
 
 			result = make([]string, 0, 32)
 			for _, child := range children {

@@ -251,7 +251,7 @@ func TestResolveWildcardsCell(t *testing.T) {
 		"/zk/ny/shards/subpath.ny.2/actionlog",
 	}
 	zconn.children = map[string][]string{
-		"/zk/nj/shards": []string{"subpath.nj.1", "subpath.nj.2"},
+		"/zk/nj/shards": []string{"subpath.nj.2", "subpath.nj.1"},
 		"/zk/ny/shards": []string{"subpath.ny.1", "subpath.ny.2"},
 	}
 	result, err = ResolveWildcards(zconn, []string{

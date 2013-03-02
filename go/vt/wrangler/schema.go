@@ -7,6 +7,7 @@ package wrangler
 import (
 	"fmt"
 	"path"
+	"sort"
 	"strings"
 	"sync"
 
@@ -107,6 +108,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	if len(shards) == 0 {
 		return fmt.Errorf("No shards in keyspace " + zkKeyspacePath)
 	}
+	sort.Strings(shards)
 	referenceShardPath := path.Join(zkShardsPath, shards[0])
 	if len(shards) == 1 {
 		return wr.ValidateSchemaShard(referenceShardPath)
