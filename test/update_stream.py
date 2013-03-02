@@ -447,6 +447,9 @@ populate_vt_select_test = [
 
 def main():
   args = utils.get_args()
+  vt_mysqlbinlog =  os.environ.get('VT_MYSQL_ROOT') + '/bin/vt_mysqlbinlog'
+  if not os.path.isfile(vt_mysqlbinlog):
+    sys.exit("%s is not present, please install it and then re-run the test" % vt_mysqlbinlog)
 
   try:
     if args[0] != 'teardown':

@@ -158,8 +158,10 @@ class RowCacheInvalidator(unittest.TestCase):
   def test_cache_invalidation(self):
     utils.debug("===========test_cache_invalidation=========")
     perform_insert(500)
-    #The sleep is needed here, so the invalidator can catch and the number can be tested.
-    time.sleep(2)
+    master_position = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
+    #The sleep is needed here, so the invalidator can catch up and the number can be tested.
+    replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
+    time.sleep(5)
     invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['Totals']['Invalidations']
     utils.debug("test_cache_invalidation invalidations %d" % invalidations)
     self.assertTrue(invalidations > 0, "invalidator code is working")
@@ -238,15 +240,11 @@ def _exec_vt_txn(host, dbname, query_list=None):
     vtdb_cursor.execute(q, {})
   vtdb_cursor.execute('commit', {})
 
-def test_all():
-  test_cache_invalidation()
-  test_cache_hit()
-  test_purge_cache()
-  test_service_disabled()
-
-
 def main():
   args = utils.get_args()
+  vt_mysqlbinlog =  os.environ.get('VT_MYSQL_ROOT') + '/bin/vt_mysqlbinlog'
+  if not os.path.isfile(vt_mysqlbinlog):
+    sys.exit("%s is not present, please install it and then re-run the test" % vt_mysqlbinlog)
 
   try:
     suite = unittest.TestSuite()
@@ -260,7 +258,8 @@ def main():
           for arg in args:
             if hasattr(RowCacheInvalidator,arg):
               suite.addTest(RowCacheInvalidator(arg))
-    unittest.TextTestRunner(verbosity=utils.options.verbose).run(suite)
+    if suite.countTestCases() > 0:
+      unittest.TextTestRunner(verbosity=utils.options.verbose).run(suite)
   except KeyboardInterrupt:
     pass
   except utils.Break:

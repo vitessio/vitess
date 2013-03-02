@@ -311,7 +311,11 @@ class Tablet(object):
 
   def start_memcache(self):
       self.memcache_path = os.path.join(self.tablet_dir, "memcache.sock")
-      self.memcached = utils.run_bg(' '.join(["memcached", "-s", self.memcache_path]), stdout=utils.devnull)
+      try:
+        self.memcached = utils.run_bg(' '.join(["memcached", "-s", self.memcache_path]), stdout=utils.devnull)
+      except Exception as e:
+        print "Error: memcached couldn't start"
+        raise
 
   def kill_memcache(self):
     utils.kill_sub_process(self.memcached)
