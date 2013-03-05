@@ -5,6 +5,7 @@ import heapq
 import itertools
 import json
 import logging
+import optparse
 import os
 import pprint
 import Queue
@@ -15,6 +16,7 @@ import threading
 import time
 
 import MySQLdb
+import MySQLdb.cursors
 
 
 ws = re.compile(r'\s+')
@@ -33,9 +35,9 @@ class AtomicWriter(object):
   """AtomicWriter is a file-like object that allows you to do an
   atomic write (on close), using os.rename.
   """
-  def __init__(self, filename):
+  def __init__(self, filename, directory):
     self.filename = filename
-    self.tempfile  = tempfile.NamedTemporaryFile(delete=False)
+    self.tempfile  = tempfile.NamedTemporaryFile(delete=False, dir=directory)
 
   def write(self, s):
     return self.tempfile.write(s)
@@ -289,7 +291,7 @@ class Stats(object):
 
 
 class Checker(object):
-  def __init__(self, configuration, table, directory, batch_count=0, blocks=1, ratio=1.0, block_size=16384, logging_level=logging.INFO, stats_interval=1):
+  def __init__(self, configuration, table, directory, batch_count=0, blocks=1, ratio=1.0, block_size=16384, logging_level=logging.INFO, stats_interval=1, temp_directory=None):
     self.table_name = table
 
     table_data = configuration['tables'][table]
@@ -307,6 +309,7 @@ class Checker(object):
       self.batch_size = int(rows_per_block * ratio * blocks)
 
     self.iterations = 0
+    self.temp_directory = temp_directory
     self.checkpoint_file = os.path.join(directory, table + '.json')
     self.done = False
     try:
@@ -393,7 +396,7 @@ class Checker(object):
     data = {'current_pk': self.current_pk,
             'done': done,
             'timestamp': str(datetime.datetime.now())}
-    with AtomicWriter(self.checkpoint_file) as fi:
+    with AtomicWriter(self.checkpoint_file, self.temp_directory) as fi:
       json.dump(data, fi)
     self.stats.update('checkpoint', start)
 
@@ -434,6 +437,10 @@ def main():
                     dest='checkpoint_directory', type='string',
                     help='Directory to store checkpoints.',
                     default='.')
+  parser.add_option('-t', '--temp-directory',
+                    dest='temp_directory', type='string',
+                    help='Directory to store temporary files.',
+                    default='.')
   parser.add_option('-r', '--ratio', dest='ratio',
                     type='float', default=1.0,
                     help='Assumed block fill ratio.')
@@ -451,5 +458,8 @@ def main():
     config = json.load(fi)
 
   checker = Checker(config, table, options.checkpoint_directory,
-                    batch_count=options.batch_count, block_size=options.block_size, ratio=options.ratio)
+                    batch_count=options.batch_count, block_size=options.block_size, ratio=options.ratio, temp_directory=options.temp_directory)
   checker.run()
+
+if __name__ == '__main__':
+  main()

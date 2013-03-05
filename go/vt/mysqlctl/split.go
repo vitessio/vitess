@@ -688,7 +688,13 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
 	err = ConcurrentMap(fetchConcurrency, len(sourceAddrs), func(i int) error {
 		dbi := sourceAddrs[i]
-		ssm, e := fetchSnapshotManifestWithRetry("http://"+dbi.Host, dbi.Path[1:], keyRange, fetchRetryCount)
+		var sourceDbName string
+		if len(dbi.Path) < 2 { // "" or "/"
+			sourceDbName = destinationDbName
+		} else {
+			sourceDbName = dbi.Path[1:]
+		}
+		ssm, e := fetchSnapshotManifestWithRetry("http://"+dbi.Host, sourceDbName, keyRange, fetchRetryCount)
 		manifests[i] = ssm
 		return e
 	})
