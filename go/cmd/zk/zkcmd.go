@@ -376,6 +376,7 @@ func cmdLs(args []string) {
 			}
 			sort.Strings(children)
 			stats := make([]zk.Stat, len(children))
+			wg := sync.WaitGroup{}
 			f := func(i int) {
 				localPath := path.Join(zkPath, children[i])
 				stat, err := zconn.Exists(localPath)
@@ -384,8 +385,13 @@ func cmdLs(args []string) {
 				} else {
 					stats[i] = stat
 				}
+				wg.Done()
 			}
-			fmap(f, len(children), defaultConcurrency)
+			for i, _ := range children {
+				wg.Add(1)
+				go f(i)
+			}
+			wg.Wait()
 
 			for i, child := range children {
 				localPath := path.Join(zkPath, child)

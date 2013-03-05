@@ -6,16 +6,41 @@ package zk
 
 import (
 	"fmt"
-	"launchpad.net/gozk/zookeeper"
+	"log"
+	"os"
+	"strconv"
 	"time"
+
+	"code.google.com/p/vitess/go/sync2"
+	"launchpad.net/gozk/zookeeper"
 )
 
-// func init() {
-// 	// The zookeeper C module logs quite a bit of useful information,
-// 	// but much of it does not come back in the error API. To aid
-// 	// debugging, enable the log to stderr for warnings.
-// 	zookeeper.SetLogLevel(zookeeper.LOG_WARN)
-// }
+// Every blocking call into CGO causes another thread which blows up
+// the the virtual memory.  It seems better to solve this here at the
+// root of the problem rather than forcing all other apps to take into
+// account limiting the number of concurrent operations on a zk
+// connection.  Since this applies to any zookeeper connection, this
+// is global.
+var sem sync2.Semaphore
+
+func init() {
+	// The zookeeper C module logs quite a bit of useful information,
+	// but much of it does not come back in the error API. To aid
+	// debugging, enable the log to stderr for warnings.
+	//zookeeper.SetLogLevel(zookeeper.LOG_WARN)
+
+	maxConcurrency := 64
+	x := os.Getenv("ZK_CLIENT_MAX_CONCURRENCY")
+	if x != "" {
+		var err error
+		maxConcurrency, err = strconv.Atoi(x)
+		if err != nil {
+			log.Printf("invalid ZK_CLIENT_MAX_CONCURRENCY: %v", err)
+		}
+	}
+
+	sem = sync2.NewSemaphore(maxConcurrency)
+}
 
 // ZkConn is a client class that implements zk.Conn using a zookeeper.Conn
 type ZkConn struct {
@@ -46,6 +71,8 @@ type ZkConn struct {
 // (after each timeout), and may *never* send an event if the TCP connections
 // always fail. Use DialZkTimeout to enforce a timeout for the initial connect.
 func DialZk(zkAddr string, baseTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
+	sem.Acquire()
+	defer sem.Release()
 	zconn, session, err := zookeeper.Dial(zkAddr, baseTimeout)
 	if err == nil {
 		// Wait for connection, possibly forever
@@ -63,6 +90,8 @@ func DialZk(zkAddr string, baseTimeout time.Duration) (*ZkConn, <-chan zookeeper
 }
 
 func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
+	sem.Acquire()
+	defer sem.Release()
 	zconn, session, err := zookeeper.Dial(zkAddr, baseTimeout)
 	if err == nil {
 		// Wait for connection, with a timeout
@@ -86,6 +115,8 @@ func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time
 }
 
 func (conn *ZkConn) Get(path string) (data string, stat Stat, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	data, s, err := conn.conn.Get(path)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -97,6 +128,8 @@ func (conn *ZkConn) Get(path string) (data string, stat Stat, err error) {
 }
 
 func (conn *ZkConn) GetW(path string) (data string, stat Stat, watch <-chan zookeeper.Event, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	data, s, watch, err := conn.conn.GetW(path)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -108,6 +141,8 @@ func (conn *ZkConn) GetW(path string) (data string, stat Stat, watch <-chan zook
 }
 
 func (conn *ZkConn) Children(path string) (children []string, stat Stat, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	children, s, err := conn.conn.Children(path)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -119,6 +154,8 @@ func (conn *ZkConn) Children(path string) (children []string, stat Stat, err err
 }
 
 func (conn *ZkConn) ChildrenW(path string) (children []string, stat Stat, watch <-chan zookeeper.Event, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	children, s, watch, err := conn.conn.ChildrenW(path)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -130,6 +167,8 @@ func (conn *ZkConn) ChildrenW(path string) (children []string, stat Stat, watch 
 }
 
 func (conn *ZkConn) Exists(path string) (stat Stat, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	s, err := conn.conn.Exists(path)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -139,6 +178,8 @@ func (conn *ZkConn) Exists(path string) (stat Stat, err error) {
 }
 
 func (conn *ZkConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Event, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	s, w, err := conn.conn.ExistsW(path)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -148,10 +189,14 @@ func (conn *ZkConn) ExistsW(path string) (stat Stat, watch <-chan zookeeper.Even
 }
 
 func (conn *ZkConn) Create(path, value string, flags int, aclv []zookeeper.ACL) (pathCreated string, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	return conn.conn.Create(path, value, flags, aclv)
 }
 
 func (conn *ZkConn) Set(path, value string, version int) (stat Stat, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	s, err := conn.conn.Set(path, value, version)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -161,18 +206,26 @@ func (conn *ZkConn) Set(path, value string, version int) (stat Stat, err error) 
 }
 
 func (conn *ZkConn) Delete(path string, version int) (err error) {
+	sem.Acquire()
+	defer sem.Release()
 	return conn.conn.Delete(path, version)
 }
 
 func (conn *ZkConn) Close() error {
+	sem.Acquire()
+	defer sem.Release()
 	return conn.conn.Close()
 }
 
 func (conn *ZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zookeeper.ChangeFunc) error {
+	sem.Acquire()
+	defer sem.Release()
 	return conn.conn.RetryChange(path, flags, acl, changeFunc)
 }
 
 func (conn *ZkConn) ACL(path string) (acls []zookeeper.ACL, stat Stat, err error) {
+	sem.Acquire()
+	defer sem.Release()
 	acls, s, err := conn.conn.ACL(path)
 	if s == nil {
 		// Handle nil-nil interface conversion.
@@ -184,5 +237,7 @@ func (conn *ZkConn) ACL(path string) (acls []zookeeper.ACL, stat Stat, err error
 }
 
 func (conn *ZkConn) SetACL(path string, aclv []zookeeper.ACL, version int) error {
+	sem.Acquire()
+	defer sem.Release()
 	return conn.conn.SetACL(path, aclv, version)
 }
