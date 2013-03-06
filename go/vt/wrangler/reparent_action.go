@@ -271,6 +271,8 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*tm.TabletInfo) ([]*mys
 		if tablet.Type == tm.TYPE_MASTER || tablet.IsSlaveType() {
 			wg.Add(1)
 			go f(i)
+		} else {
+			relog.Info("tabletReplicationPositions: skipping tablet %v type %v", tablet.Path(), tablet.Type)
 		}
 	}
 	wg.Wait()
@@ -278,6 +280,9 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*tm.TabletInfo) ([]*mys
 	someErrors := false
 	positions := make([]*mysqlctl.ReplicationPosition, len(tablets))
 	for i, ctx := range calls {
+		if ctx == nil {
+			continue
+		}
 		if ctx.err != nil {
 			relog.Warning("could not get replication position for tablet %v %v", ctx.tablet.Path(), ctx.err)
 			someErrors = true
