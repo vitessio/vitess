@@ -412,7 +412,7 @@ func PurgeActions(zconn zk.Conn, zkActionPath string) error {
 		if err != nil {
 			relog.Warning("bad action data: %v %v %#v", actionPath, err, data)
 		} else if actionNode.State == ACTION_STATE_RUNNING {
-			relog.Warning("cannot remove running action: %v %v %v", actionPath, actionNode.Action, actionNode.ActionGuid)
+			relog.Info("cannot remove running action: %v %v %v", actionPath, actionNode.Action, actionNode.ActionGuid)
 			continue
 		}
 
