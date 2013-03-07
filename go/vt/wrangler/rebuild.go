@@ -20,16 +20,16 @@ import (
 
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
-func (wr *Wrangler) RebuildShardGraph(zkShardPath string) (actionPath string, err error) {
+func (wr *Wrangler) RebuildShardGraph(zkShardPath string) error {
 	tm.MustBeShardPath(zkShardPath)
-	actionPath, err = wr.ai.RebuildShard(zkShardPath)
+	actionPath, err := wr.ai.RebuildShard(zkShardPath)
 	if err != nil {
-		return
+		return err
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
 	if err = wr.obtainActionLock(actionPath); err != nil {
-		return "", err
+		return err
 	}
 
 	rebuildErr := wr.rebuildShard(zkShardPath, false)
@@ -38,9 +38,9 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) (actionPath string, er
 		if err != nil {
 			relog.Warning("handleActionError failed: %v", err)
 		}
-		return actionPath, rebuildErr
+		return rebuildErr
 	}
-	return
+	return err
 }
 
 // Update shard file with new master, replicas, etc.
@@ -177,16 +177,16 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 }
 
 // Rebuild the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) (actionPath string, err error) {
+func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) error {
 	tm.MustBeKeyspacePath(zkKeyspacePath)
-	actionPath, err = wr.ai.RebuildKeyspace(zkKeyspacePath)
+	actionPath, err := wr.ai.RebuildKeyspace(zkKeyspacePath)
 	if err != nil {
-		return
+		return err
 	}
 
 	// Make sure two of these don't get scheduled at the same time.
 	if err = wr.obtainActionLock(actionPath); err != nil {
-		return "", err
+		return err
 	}
 
 	rebuildErr := wr.rebuildKeyspace(zkKeyspacePath)
@@ -195,9 +195,9 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) (actionPath stri
 		if err != nil {
 			relog.Warning("handleActionError failed: %v", err)
 		}
-		return actionPath, rebuildErr
+		return rebuildErr
 	}
-	return
+	return err
 }
 
 // This function should only be used with an action lock on the shard - otherwise the
@@ -222,7 +222,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 		zkShardPath := tm.ShardPath(vtRoot, keyspace, shardName)
 		wg.Add(1)
 		go func() {
-			if _, err := wr.RebuildShardGraph(zkShardPath); err != nil {
+			if err := wr.RebuildShardGraph(zkShardPath); err != nil {
 				relog.Error("RebuildShardGraph failed: %v %v", zkShardPath, err)
 				mu.Lock()
 				rebuildErr = fmt.Errorf("RebuildShardGraph failed on some shards")
@@ -368,8 +368,7 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 		wg.Add(1)
 		go func(keyspacePath string) {
 			defer wg.Done()
-			_, err := wr.RebuildKeyspaceGraph(keyspacePath)
-			if err != nil {
+			if err := wr.RebuildKeyspaceGraph(keyspacePath); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()

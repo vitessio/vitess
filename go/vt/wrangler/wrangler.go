@@ -100,7 +100,7 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 	}
 
 	if rebuildRequired {
-		if _, err := wr.RebuildShardGraph(shardToRebuild); err != nil {
+		if err := wr.RebuildShardGraph(shardToRebuild); err != nil {
 			return err
 		}
 	}
@@ -263,5 +263,5 @@ func (wr *Wrangler) Scrap(zkTabletPath string, force, skipRebuild bool) (actionP
 	}
 
 	// and rebuild the original shard / keyspace
-	return wr.RebuildShardGraph(ti.ShardPath())
+	return "", wr.RebuildShardGraph(ti.ShardPath())
 }

@@ -97,10 +97,9 @@ def run_test_sharding():
   shard_1_master.init_tablet( 'master',  'test_keyspace', '8000000000000000-0000000000000000', key_start='8000000000000000')
   shard_1_replica.init_tablet('replica', 'test_keyspace', '8000000000000000-0000000000000000', key_start='8000000000000000')
 
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000')
+  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
 
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
 
   # run checks now before we start the tablets
   utils.zk_check()

@@ -135,7 +135,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Shards", []command{
 			command{"RebuildShardGraph", commandRebuildShardGraph,
-				"<zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
+				"<zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
 			command{"ReparentShard", commandReparentShard,
 				"[-force] [-leave-master-read-only] <zk shard path> <zk tablet path>",
@@ -160,7 +160,7 @@ var commands = []commandGroup{
 				"[-force] <zk keyspaces path>/<name>",
 				"e.g. CreateKeyspace /zk/global/vt/keyspaces/my_keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"<zk keyspace path> (/zk/global/vt/keyspaces/<keyspace>)",
+				"<zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
 			command{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <zk keyspace path> (/zk/global/vt/keyspaces/<keyspace>)",
@@ -176,7 +176,7 @@ var commands = []commandGroup{
 				"[-max-staleness=<duration>] <zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
 				"List any queued actions that are considered stale."},
 			command{"PruneActionLogs", commandPruneActionLogs,
-				"[-keep-count=<count to keep>] <zk actionlog path>",
+				"[-keep-count=<count to keep>] <zk actionlog path> ...",
 				"e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog\n" +
 					"Removes older actionlog entries until at most <count to keep> are left."},
 			command{"WaitForAction", commandWaitForAction,
@@ -933,10 +933,24 @@ func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 
 func commandRebuildShardGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		relog.Fatal("action RebuildShardGraph requires <zk shard path>")
+	if subFlags.NArg() == 0 {
+		relog.Fatal("action RebuildShardGraph requires at least one <zk shard path>")
 	}
-	return wrangler.RebuildShardGraph(subFlags.Arg(0))
+
+	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	if err != nil {
+		return "", err
+	}
+	if len(zkPaths) == 0 {
+		return "", nil
+	}
+
+	for _, zkPath := range zkPaths {
+		if err := wrangler.RebuildShardGraph(zkPath); err != nil {
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 func commandReparentShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1014,10 +1028,24 @@ func commandCreateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 
 func commandRebuildKeyspaceGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		relog.Fatal("action RebuildKeyspaceGraph requires <zk keyspace path>")
+	if subFlags.NArg() == 0 {
+		relog.Fatal("action RebuildKeyspaceGraph requires at least one <zk keyspace path>")
 	}
-	return wrangler.RebuildKeyspaceGraph(subFlags.Arg(0))
+
+	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	if err != nil {
+		return "", err
+	}
+	if len(zkPaths) == 0 {
+		return "", nil
+	}
+
+	for _, zkPath := range zkPaths {
+		if err := wrangler.RebuildKeyspaceGraph(zkPath); err != nil {
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 func commandValidateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
