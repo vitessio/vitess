@@ -369,6 +369,7 @@ id bigint auto_increment,
 msg varchar(64),
 primary key (id)
 ) Engine=InnoDB'''
+  create_view = '''create view vt_insert_view(id, msg) as select id, msg from vt_insert_test'''
   insert_template = "insert into %s (id, msg) values (%s, 'test %s')"
 
   utils.zk_wipe()
@@ -389,11 +390,22 @@ primary key (id)
   for i, tablet in enumerate(old_tablets):
     tablet.populate(
       "vt_test_keyspace",
-      [create_template % table for table in tables],
+      [create_template % table for table in tables] + [create_view],
       sum([[insert_template % (table, 10*j + i, 10*j + i) for j in range(1, 8)] for table in tables], []))
     tablet.start_vttablet()
     utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
 
+  # try to get the schema on the source, make sure the view is there
+  out, err = utils.run_vtctl('GetSchema --include-views ' +
+                             tablet_62044.zk_tablet_path,
+                             log_level='INFO', trap_output=True)
+  if not 'vt_insert_view' in err:
+    raise utils.TestError('Unexpected GetSchema --include-views output: %s' % err)
+  out, err = utils.run_vtctl('GetSchema ' +
+                             tablet_62044.zk_tablet_path,
+                             log_level='INFO', trap_output=True)
+  if 'vt_insert_view' in err:
+    raise utils.TestError('Unexpected GetSchema output: %s' % err)
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
   tablet_62344.create_db('not_vt_test_keyspace')
@@ -414,6 +426,14 @@ primary key (id)
     for row in rows:
       if row[0] > 32:
         raise utils.TestError("Bad row: %s" % row)
+
+  # try to get the schema on multi-restored guy, make sure the view is not there
+  out, err = utils.run_vtctl('GetSchema --include-views ' +
+                             tablet_62344.zk_tablet_path,
+                             log_level='INFO', trap_output=True)
+  if 'vt_insert_view' in err:
+    raise utils.TestError('Unexpected GetSchema --include-views output after multirestore: %s' % err)
+
   for tablet in tablet_62044, tablet_41983, tablet_31981, tablet_62344:
     tablet.kill_vttablet()
 

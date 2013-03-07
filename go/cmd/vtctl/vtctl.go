@@ -217,7 +217,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Schema (beta)", []command{
 			command{"GetSchema", commandGetSchema,
-				"[-tables=<table1>,<table2>,...] <zk tablet path>",
+				"[-tables=<table1>,<table2>,...] [-include-views] <zk tablet path>",
 				"Display the full schema for a tablet, or just the schema for the provided tables."},
 			command{"ValidateSchemaShard", commandValidateSchemaShard,
 				"<zk shard path>",
@@ -1242,6 +1242,7 @@ func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 
 func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	tables := subFlags.String("tables", "", "comma separated tables to gather schema information for")
+	includeViews := subFlags.Bool("include-views", false, "include the views in the output")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action GetSchema requires <zk tablet path>")
@@ -1251,7 +1252,7 @@ func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []stri
 		tableArray = strings.Split(*tables, ",")
 	}
 
-	sd, err := wrangler.GetSchema(subFlags.Arg(0), tableArray)
+	sd, err := wrangler.GetSchema(subFlags.Arg(0), tableArray, *includeViews)
 	if err == nil {
 		relog.Info(sd.String())
 	}

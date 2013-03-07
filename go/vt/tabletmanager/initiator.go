@@ -261,11 +261,12 @@ func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err er
 }
 
 type GetSchemaArgs struct {
-	Tables []string
+	Tables       []string
+	IncludeViews bool
 }
 
-func (ai *ActionInitiator) GetSchema(zkTabletPath string, tables []string) (actionPath string, err error) {
-	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, args: &GetSchemaArgs{Tables: tables}})
+func (ai *ActionInitiator) GetSchema(zkTabletPath string, tables []string, includeViews bool) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, args: &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}})
 }
 
 func (ai *ActionInitiator) PreflightSchema(zkTabletPath, change string) (actionPath string, err error) {

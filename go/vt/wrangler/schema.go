@@ -16,9 +16,9 @@ import (
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string) (*mysqlctl.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
 	tm.MustBeTabletPath(zkTabletPath)
-	actionPath, err := wr.ai.GetSchema(zkTabletPath, tables)
+	actionPath, err := wr.ai.GetSchema(zkTabletPath, tables, includeViews)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMaster
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering schema for %v", zkTabletPath)
-	slaveSchema, err := wr.GetSchema(zkTabletPath, nil)
+	slaveSchema, err := wr.GetSchema(zkTabletPath, nil, false)
 	if err != nil {
 		result <- err.Error()
 		return
@@ -72,7 +72,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering schema for master %v", zkMasterTabletPath)
-	masterSchema, err := wr.GetSchema(zkMasterTabletPath, nil)
+	masterSchema, err := wr.GetSchema(zkMasterTabletPath, nil, false)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering schema for reference master %v", zkReferenceTabletPath)
-	referenceSchema, err := wr.GetSchema(zkReferenceTabletPath, nil)
+	referenceSchema, err := wr.GetSchema(zkReferenceTabletPath, nil, false)
 	if err != nil {
 		return err
 	}
@@ -322,7 +322,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 	for _, status := range statusArray {
 		wg.Add(1)
 		go func(status *TabletStatus) {
-			status.beforeSchema, status.lastError = wr.GetSchema(status.zkTabletPath, nil)
+			status.beforeSchema, status.lastError = wr.GetSchema(status.zkTabletPath, nil, false)
 			wg.Done()
 		}(status)
 	}
@@ -527,7 +527,7 @@ func (wr *Wrangler) applySchemaKeyspace(zkKeyspacePath string, change string, si
 				return
 			}
 
-			beforeSchemas[i], err = wr.GetSchema(zkMasterTabletPaths[i], nil)
+			beforeSchemas[i], err = wr.GetSchema(zkMasterTabletPaths[i], nil, false)
 		}(i)
 	}
 	wg.Wait()

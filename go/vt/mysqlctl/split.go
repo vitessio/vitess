@@ -222,7 +222,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	}
 
 	// get the schema for each table
-	sd, fetchErr := mysqld.GetSchema(dbName, nil)
+	sd, fetchErr := mysqld.GetSchema(dbName, nil, false)
 	if fetchErr != nil {
 		return "", fetchErr
 	}
@@ -595,7 +595,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 
 	// get the schema for each table
-	sd, fetchErr := mysqld.GetSchema(dbName, tables)
+	sd, fetchErr := mysqld.GetSchema(dbName, tables, false)
 	if fetchErr != nil {
 		return []string{}, fetchErr
 	}
