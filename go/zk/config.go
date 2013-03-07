@@ -130,19 +130,45 @@ func ZkPathToZkAddr(zkPath string, useCache bool) (string, error) {
 	return "", fmt.Errorf("no addr found for zk cell: %#v", cell)
 }
 
+// returns all the known cells, alphabetically ordered. It will
+// include 'global' if there is a dc-specific global cell or a global cell
 func ZkKnownCells(useCache bool) []string {
+	localCell := GuessLocalCell()
 	cellAddrMap := getCellAddrMap()
 	result := make([]string, 0, len(cellAddrMap))
+	foundGlobal := false
 	for cell, _ := range cellAddrMap {
-		if useCache {
-			if strings.HasSuffix(cell, ":_zkocc") {
-				result = append(result, cell[:len(cell)-7])
-			}
-		} else {
-			if !strings.HasSuffix(cell, ":_zkocc") {
-				result = append(result, cell)
-			}
+		// figure out cell name and if it's zkocc
+		isZkoccCell := false
+		name := cell
+		if strings.HasSuffix(name, ":_zkocc") {
+			name = name[:len(name)-7]
+			isZkoccCell = true
 		}
+		if (useCache && !isZkoccCell) || (!useCache && isZkoccCell) {
+			// this is not the zkocc you're looking for
+			continue
+		}
+
+		// handle global, we just remember it
+		if name == "global" {
+			foundGlobal = true
+			continue
+		}
+
+		// skip global cells, remember if we have our global
+		if strings.HasSuffix(name, "-global") {
+			if name == localCell+"-global" {
+				foundGlobal = true
+			}
+			continue
+		}
+
+		// non-global cell
+		result = append(result, name)
+	}
+	if foundGlobal {
+		result = append(result, "global")
 	}
 	sort.Strings(result)
 	return result

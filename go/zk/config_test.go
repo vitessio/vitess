@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"testing"
 	"time"
 )
@@ -19,7 +20,10 @@ func TestZkConfig(t *testing.T) {
 	}()
 
 	if err := os.Setenv("ZK_CLIENT_CONFIG", configPath); err != nil {
-		t.Errorf("setenv failed: %v", err)
+		t.Errorf("setenv ZK_CLIENT_CONFIG failed: %v", err)
+	}
+	if err := os.Setenv("ZK_CLIENT_LOCAL_CELL", ""); err != nil {
+		t.Errorf("setenv ZK_CLIENT_LOCAL_CELL failed: %v", err)
 	}
 
 	hostname, err := os.Hostname()
@@ -32,6 +36,7 @@ func TestZkConfig(t *testing.T) {
 	configMap := map[string]string{
 		fakeCell:              fakeAddr,
 		fakeCell + "z:_zkocc": "localhost:2182",
+		fakeCell + "-global":  "localhost:2183",
 	}
 
 	file, err := os.Create(configPath)
@@ -57,8 +62,10 @@ func TestZkConfig(t *testing.T) {
 
 	// test ZkKnownCells
 	knownCells := ZkKnownCells(false)
-	if len(knownCells) != 1 || knownCells[0] != fakeCell {
-		t.Errorf("ZkKnownCells(false) failed, expected %v got %v", []string{fakeCell}, knownCells)
+	expectedKnownCells := []string{fakeCell, "global"}
+	sort.Strings(expectedKnownCells)
+	if len(knownCells) != 2 || knownCells[0] != expectedKnownCells[0] || knownCells[1] != expectedKnownCells[1] {
+		t.Errorf("ZkKnownCells(false) failed, expected %v got %v", expectedKnownCells, knownCells)
 	}
 	knownCells = ZkKnownCells(true)
 	if len(knownCells) != 1 || knownCells[0] != fakeCell+"z" {
