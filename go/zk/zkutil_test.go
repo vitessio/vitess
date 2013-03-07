@@ -122,8 +122,12 @@ func checkResult(t *testing.T, expectedResult []string, expectedError string, ac
 func TestResolveWildcards(t *testing.T) {
 	zconn := &TestZkConn{}
 
-	// path that doesn't exist
+	// path that doesn't exist, no wildcard
 	result, err := ResolveWildcards(zconn, []string{"/zk/nyc/path"})
+	checkResult(t, []string{"/zk/nyc/path"}, "", result, err)
+
+	// path that doesn't exist, with wildcard
+	result, err = ResolveWildcards(zconn, []string{"/zk/nyc/path*"})
 	checkResult(t, nil, "", result, err)
 
 	// single path that exists
@@ -206,6 +210,7 @@ func TestResolveWildcards(t *testing.T) {
 	checkResult(t, []string{
 		"/zk/nyc/path1",
 		"/zk/nyc/path2",
+		"/zk/nyc/path3",
 	}, "", result, err)
 }
 

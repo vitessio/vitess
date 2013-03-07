@@ -126,7 +126,7 @@ func ResolveWildcards(zconn Conn, zkPaths []string) ([]string, error) {
 
 	for _, zkPath := range zkPaths {
 		parts := strings.Split(zkPath, "/")
-		subResult, err := resolveRecursive(zconn, parts)
+		subResult, err := resolveRecursive(zconn, parts, true)
 		if err != nil {
 			return nil, err
 		}
@@ -154,7 +154,7 @@ func hasWildcard(path string) bool {
 	return false
 }
 
-func resolveRecursive(zconn Conn, parts []string) (result []string, err error) {
+func resolveRecursive(zconn Conn, parts []string, toplevel bool) (result []string, err error) {
 	for i, part := range parts {
 		if hasWildcard(part) {
 			var children []string
@@ -191,7 +191,7 @@ func resolveRecursive(zconn Conn, parts []string) (result []string, err error) {
 					newParts := make([]string, len(parts))
 					copy(newParts, parts)
 					newParts[i] = child
-					subResult, err := resolveRecursive(zconn, newParts)
+					subResult, err := resolveRecursive(zconn, newParts, false)
 					if err != nil {
 						return nil, err
 					}
@@ -206,8 +206,14 @@ func resolveRecursive(zconn Conn, parts []string) (result []string, err error) {
 	}
 
 	// no part contains a wildcard, add the path if it exists, and done
-	result = make([]string, 1)
 	path := strings.Join(parts, "/")
+	if toplevel {
+		// for whatever the user typed at the toplevel, we don't
+		// check it exists or not, we just return it
+		return []string{path}, nil
+	}
+
+	// this is an expanded path, we need to check if it exists
 	stat, err := zconn.Exists(path)
 	if err != nil {
 		return nil, err
