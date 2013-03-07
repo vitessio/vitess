@@ -201,8 +201,8 @@ def run_test_sharding():
   utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
   utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000')
   out, err = utils.run_vtctl('ValidateSchemaKeyspace /zk/global/vt/keyspaces/test_keyspace', trap_output=True, raise_on_error=False)
-  if (err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test") == -1 or \
-      err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test") == -1):
+  if (err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test:\ncreate table") == -1 or \
+      err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\ncreate table") == -1):
         raise utils.TestError('wrong ValidateSchemaKeyspace output: ' + err)
 
   # and create zkns on this complex keyspace, make sure a few files are created

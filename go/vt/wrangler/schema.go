@@ -16,9 +16,9 @@ import (
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) GetSchema(zkTabletPath string) (*mysqlctl.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string) (*mysqlctl.SchemaDefinition, error) {
 	tm.MustBeTabletPath(zkTabletPath)
-	actionPath, err := wr.ai.GetSchema(zkTabletPath)
+	actionPath, err := wr.ai.GetSchema(zkTabletPath, tables)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMaster
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering schema for %v", zkTabletPath)
-	slaveSchema, err := wr.GetSchema(zkTabletPath)
+	slaveSchema, err := wr.GetSchema(zkTabletPath, nil)
 	if err != nil {
 		result <- err.Error()
 		return
@@ -72,7 +72,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering schema for master %v", zkMasterTabletPath)
-	masterSchema, err := wr.GetSchema(zkMasterTabletPath)
+	masterSchema, err := wr.GetSchema(zkMasterTabletPath, nil)
 	if err != nil {
 		return err
 	}
@@ -124,7 +124,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering schema for reference master %v", zkReferenceTabletPath)
-	referenceSchema, err := wr.GetSchema(zkReferenceTabletPath)
+	referenceSchema, err := wr.GetSchema(zkReferenceTabletPath, nil)
 	if err != nil {
 		return err
 	}
@@ -288,9 +288,28 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 	statusArray := make([]*TabletStatus, 0, len(aliases)-1)
 	for _, alias := range aliases {
 		tabletPath := tm.TabletPathForAlias(alias)
-		if tabletPath != zkMasterTabletPath {
-			statusArray = append(statusArray, &TabletStatus{zkTabletPath: tabletPath})
+		if tabletPath == zkMasterTabletPath {
+			// we skip the master
+			continue
 		}
+
+		ti, err := tm.ReadTablet(wr.zconn, tabletPath)
+		if err != nil {
+			return nil, err
+		}
+		if ti.Type == tm.TYPE_LAG {
+			// lag tablets are usually behind, not replicating,
+			// and a general pain. So let's just skip them
+			// all together.
+			// TODO(alainjobart) figure out other types to skip:
+			// ValidateSchemaShard only does the serving types.
+			// We do everything in the replication graph
+			// but LAG. This seems fine for now.
+			relog.Info("Skipping tablet %v as it is LAG", ti.Path())
+			continue
+		}
+
+		statusArray = append(statusArray, &TabletStatus{zkTabletPath: tabletPath})
 	}
 
 	// get schema on all tablets. This is an action, so returning
@@ -303,7 +322,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 	for _, status := range statusArray {
 		wg.Add(1)
 		go func(status *TabletStatus) {
-			status.beforeSchema, status.lastError = wr.GetSchema(status.zkTabletPath)
+			status.beforeSchema, status.lastError = wr.GetSchema(status.zkTabletPath, nil)
 			wg.Done()
 		}(status)
 	}
@@ -508,7 +527,7 @@ func (wr *Wrangler) applySchemaKeyspace(zkKeyspacePath string, change string, si
 				return
 			}
 
-			beforeSchemas[i], err = wr.GetSchema(zkMasterTabletPaths[i])
+			beforeSchemas[i], err = wr.GetSchema(zkMasterTabletPaths[i], nil)
 		}(i)
 	}
 	wg.Wait()

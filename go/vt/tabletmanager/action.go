@@ -127,6 +127,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.reply = &mysqlctl.ReplicationPosition{}
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_GET_SCHEMA:
+		node.args = &GetSchemaArgs{}
 		node.reply = &mysqlctl.SchemaDefinition{}
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		node.args = new(string)

@@ -217,8 +217,8 @@ var commands = []commandGroup{
 	commandGroup{
 		"Schema (beta)", []command{
 			command{"GetSchema", commandGetSchema,
-				"<zk tablet path>",
-				"Display the full schema for a tablet."},
+				"[-tables=<table1>,<table2>,...] <zk tablet path>",
+				"Display the full schema for a tablet, or just the schema for the provided tables."},
 			command{"ValidateSchemaShard", commandValidateSchemaShard,
 				"<zk shard path>",
 				"Validate the master schema matches all the slaves."},
@@ -1241,12 +1241,17 @@ func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 }
 
 func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	tables := subFlags.String("tables", "", "comma separated tables to gather schema information for")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action GetSchema requires <zk tablet path>")
 	}
+	var tableArray []string
+	if *tables != "" {
+		tableArray = strings.Split(*tables, ",")
+	}
 
-	sd, err := wrangler.GetSchema(subFlags.Arg(0))
+	sd, err := wrangler.GetSchema(subFlags.Arg(0), tableArray)
 	if err == nil {
 		relog.Info(sd.String())
 	}

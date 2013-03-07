@@ -74,7 +74,7 @@ func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *Sche
 
 		// same name, let's see content
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
-			result <- leftName + " and " + rightName + " disagree on schema for table " + left.TableDefinitions[leftIndex].Name
+			result <- leftName + " and " + rightName + " disagree on schema for table " + left.TableDefinitions[leftIndex].Name + ":\n" + left.TableDefinitions[leftIndex].Schema + "\n differs from:\n" + right.TableDefinitions[rightIndex].Schema
 		}
 		leftIndex++
 		rightIndex++
@@ -104,7 +104,7 @@ func (left *SchemaDefinition) DiffSchemaToArray(leftName, rightName string, righ
 	return result
 }
 
-var autoIncr = regexp.MustCompile("auto_increment=\\d+")
+var autoIncr = regexp.MustCompile(" auto_increment=\\d+")
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.

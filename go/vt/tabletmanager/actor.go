@@ -487,6 +487,8 @@ func (ta *TabletActor) scrap() error {
 }
 
 func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
+	tables := actionNode.args.(*GetSchemaArgs)
+
 	// read the tablet to get the dbname
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
@@ -494,7 +496,7 @@ func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
 	}
 
 	// and get the schema
-	sd, err := ta.mysqld.GetSchema(tablet.DbName(), nil)
+	sd, err := ta.mysqld.GetSchema(tablet.DbName(), tables.Tables)
 	if err != nil {
 		return err
 	}

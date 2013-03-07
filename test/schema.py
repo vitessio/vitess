@@ -158,6 +158,13 @@ def run_test_complex_schema():
   check_tables(shard_0_rdonly, 2)
   check_tables(shard_0_backup, 2)
 
+  # verify GetSchema --tables works
+  out, err = utils.run_vtctl('GetSchema --tables=vt_select_test0 ' +
+                             shard_0_replica1.zk_tablet_path,
+                             log_level='INFO', trap_output=True)
+  if not "vt_select_test0" in err or "vt_select_test1" in err:
+    raise utils.TestError('Unexpected GetSchema --tables=vt_select_test0 output: %s' % err)
+
   # keyspace: try to apply a keyspace-wide schema change, should fail
   # as the preflight would be different in both shards
   out, err = utils.run_vtctl(['ApplySchemaKeyspace',
