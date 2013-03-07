@@ -71,7 +71,6 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 }
 
 func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
-	relog.Info("mysqlctl.Start")
 	// FIXME(szopa): add VtMysqlRoot to env.
 	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
 	name := dir + "/bin/mysqld_safe"
@@ -82,7 +81,7 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	cmd := exec.Command(name, arg...)
 	cmd.Dir = dir
 	cmd.Env = env
-	relog.Info("Start %v", cmd)
+	relog.Info("mysqlctl.Start mysqlWaitTime:%v %#v", mysqlWaitTime, cmd)
 	_, err := cmd.StderrPipe()
 	if err != nil {
 		return nil
@@ -100,7 +99,12 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	for i := mysqlWaitTime; i >= 0; i -= time.Second {
 		_, statErr := os.Stat(mt.config.SocketFile)
 		if statErr == nil {
-			return nil
+			// Make sure the socket file isn't stale.
+			conn, connErr := mt.createConnection()
+			if connErr == nil {
+				conn.Close()
+				return nil
+			}
 		} else if !os.IsNotExist(statErr) {
 			return statErr
 		}
