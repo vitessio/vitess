@@ -138,48 +138,6 @@ func (conn *DBConnection) VerifyStrict() bool {
 	return strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES")
 }
 
-// CreateConnection returns a connection for running user queries. No DDL.
-func CreateConnection(socketPath, dbName string) (*DBConnection, error) {
-	info := mysql.ConnectionParams{
-		Host:       "localhost",
-		UnixSocket: socketPath,
-		Uname:      "vt_app",
-		Dbname:     dbName,
-		Charset:    "utf8",
-	}
-	c, err := mysql.Connect(info)
-	return &DBConnection{c}, err
-}
-
-// ConnectionCreator creates a closure that wraps CreateConnection
-func ConnectionCreator(socketPath, dbName string) CreateConnectionFunc {
-	return func() (connection *DBConnection, err error) {
-		return CreateConnection(socketPath, dbName)
-	}
-}
-
-/* CreateSuperConnection retuns a connection for doing DDLs and maintenence operations
-where you need full control over mysql.
-*/
-func CreateSuperConnection(socketPath, dbName string) (*DBConnection, error) {
-	info := mysql.ConnectionParams{
-		Host:       "localhost",
-		UnixSocket: socketPath,
-		Uname:      "vt_dba",
-		Dbname:     dbName,
-		Charset:    "utf8",
-	}
-	c, err := mysql.Connect(info)
-	return &DBConnection{c}, err
-}
-
-// SuperConnectionCreator is a closure that wraps CreateSuperConnection
-func SuperConnectionCreator(socketPath, dbName string) CreateConnectionFunc {
-	return func() (connection *DBConnection, err error) {
-		return CreateSuperConnection(socketPath, dbName)
-	}
-}
-
 func CreateGenericConnection(info mysql.ConnectionParams) (*DBConnection, error) {
 	c, err := mysql.Connect(info)
 	return &DBConnection{c}, err
