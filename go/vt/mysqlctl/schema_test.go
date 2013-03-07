@@ -47,5 +47,5 @@ func TestSchemaDiff(t *testing.T) {
 	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 has an extra table named table2"})
 
 	sd2.TableDefinitions = append(sd2.TableDefinitions, TableDefinition{Name: "table2", Schema: "schema3"})
-	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 disagree on schema for table table2"})
+	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 disagree on schema for table table2:\nschema2\n differs from:\nschema3"})
 }
