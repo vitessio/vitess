@@ -48,6 +48,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 	cmds := []string{
 		"RESET MASTER",
 		"RESET SLAVE",
+		"CHANGE MASTER TO MASTER_HOST = ''",
 	}
 	if err = mysqld.executeSuperQueryList(cmds); err != nil {
 		return
@@ -74,6 +75,13 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 	if err != nil {
 		return
 	}
+	if waitPosition.MasterLogFile == replicationPosition.MasterLogFile && waitPosition.MasterLogPosition == replicationPosition.MasterLogPosition {
+		// we inserted a row, but our binlog position didn't
+		// change. This is a serious problem. we don't want to
+		// ever promote a master like that.
+		err = fmt.Errorf("cannot promote slave to master, non-functional binlogs")
+		return
+	}
 
 	cmds = []string{
 		fmt.Sprintf("INSERT INTO _vt.reparent_log (time_created_ns, last_position, new_addr, new_position, wait_position) VALUES (%v, '%v', '%v', '%v', '%v')", timePromoted, lastPos, newAddr, newPos, waitPosition.MapKey()),
@@ -90,11 +98,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 
 func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosition *ReplicationPosition, timeCheck int64) error {
 	relog.Info("Restart Slave")
-	cmds := []string{
-		"STOP SLAVE",
-		"RESET SLAVE",
-	}
-	cmds = append(cmds, StartReplicationCommands(mysqld, replicationState)...)
+	cmds := StartReplicationCommands(mysqld, replicationState)
 	if err := mysqld.executeSuperQueryList(cmds); err != nil {
 		return err
 	}

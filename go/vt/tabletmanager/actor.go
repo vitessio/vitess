@@ -48,6 +48,10 @@ type RestartSlaveData struct {
 	Force            bool
 }
 
+func (rsd *RestartSlaveData) String() string {
+	return fmt.Sprintf("RestartSlaveData{ReplicationState:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
+}
+
 type TabletActor struct {
 	mysqld       *mysqlctl.Mysqld
 	zconn        zk.Conn
@@ -317,7 +321,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	relog.Info("PromoteSlave %#v", *rsd)
+	relog.Info("PromoteSlave %v", rsd.String())
 	actionNode.reply = rsd
 
 	// Remove tablet from the replication graph if this is not already the master.
@@ -395,7 +399,7 @@ func (ta *TabletActor) reparentPosition(actionNode *ActionNode) error {
 		return err
 	}
 	rsd.Parent = TabletAlias{parts[2], uid}
-	relog.Debug("reparentPosition %#v", *rsd)
+	relog.Debug("reparentPosition %v", rsd.String())
 	actionNode.reply = rsd
 	return nil
 }

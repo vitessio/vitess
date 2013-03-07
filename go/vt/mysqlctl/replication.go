@@ -89,6 +89,7 @@ type newMasterData struct {
 func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) []string {
 	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
 	return []string{
+		"STOP SLAVE",
 		"RESET SLAVE",
 		mustFillStringTemplate(changeMasterCmd, nmd),
 		"START SLAVE"}

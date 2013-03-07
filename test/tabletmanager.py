@@ -857,7 +857,7 @@ def _run_test_reparent_graceful(shard_id):
 
   # Perform a graceful reparent operation.
   utils.pause("graceful ReparentShard?")
-  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path), auto_log=True)
   utils.zk_check()
 
   expected_addr = hostname + ':6701'
