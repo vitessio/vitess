@@ -356,6 +356,9 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	// cgzip which is much faster)
 	req.Header.Set("Accept-Encoding", "gzip")
 	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed fetching %v: %v", srcUrl, resp.Status)
 	}
