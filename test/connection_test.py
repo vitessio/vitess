@@ -186,7 +186,7 @@ class TestAuthentication(BaseTest):
 
   def test_authenticated_methods_are_available(self):
     self.authenticate(self.user, self.password)
-    self.call('OccManager.GetSessionId', self.dbconfig['dbname'])
+    self.call('SqlQuery.GetSessionId', {"DbName": self.dbconfig['dbname']})
 
 
 class TestConnection(BaseTest):

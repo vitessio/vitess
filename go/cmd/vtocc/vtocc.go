@@ -6,7 +6,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -18,7 +17,6 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	rpc "code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap"
 	"code.google.com/p/vitess/go/rpcwrap/auth"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
@@ -94,8 +92,6 @@ func main() {
 	unmarshalFile(*dbConfigFile, &dbconfig)
 	relog.Info("dbconfig: %s\n", dbconfig)
 
-	qm := &OccManager{config, dbconfig}
-	rpcwrap.RegisterAuthenticated(qm)
 	ts.RegisterQueryService(config)
 	ts.AllowQueries(dbconfig)
 
@@ -155,19 +151,4 @@ func unmarshalFile(name string, val interface{}) {
 			relog.Fatal("could not read %s: %v", val, err)
 		}
 	}
-}
-
-// OccManager is deprecated. Use SqlQuery.GetSessionId instead.
-type OccManager struct {
-	config   ts.Config
-	dbconfig dbconfigs.DBConfig
-}
-
-func (m *OccManager) GetSessionId(dbname *string, sessionId *int64) error {
-	if *dbname != m.dbconfig.Dbname {
-		return errors.New(fmt.Sprintf("db name mismatch, expecting %v, received %v",
-			m.dbconfig.Dbname, *dbname))
-	}
-	*sessionId = ts.GetSessionId()
-	return nil
 }
