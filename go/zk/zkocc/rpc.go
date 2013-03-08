@@ -14,6 +14,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkocc/proto"
 	"launchpad.net/gozk/zookeeper"
@@ -37,8 +38,8 @@ type ZkReader struct {
 	localCell    string
 
 	// stats
-	rpcCalls          stats.AtomicInt32
-	unknownCellErrors stats.AtomicInt32
+	rpcCalls          sync2.AtomicInt32
+	unknownCellErrors sync2.AtomicInt32
 }
 
 var (

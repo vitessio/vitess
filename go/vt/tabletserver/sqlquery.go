@@ -19,6 +19,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -62,7 +63,7 @@ type SqlQuery struct {
 	// You should use the statemu lock if you want to execute a transition
 	// where you don't want the state to change from the time you've read it.
 	statemu sync.Mutex
-	state   stats.AtomicInt32
+	state   sync2.AtomicInt32
 	states  *stats.States
 
 	qe        *QueryEngine

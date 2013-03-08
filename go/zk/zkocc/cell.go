@@ -13,6 +13,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/sync2"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -71,11 +72,11 @@ type zkCell struct {
 	states  *stats.States
 
 	// stats
-	zkReads            stats.AtomicInt32
-	cacheReads         stats.AtomicInt32
-	staleReads         stats.AtomicInt32
-	nodeNotFoundErrors stats.AtomicInt32
-	otherErrors        stats.AtomicInt32
+	zkReads            sync2.AtomicInt32
+	cacheReads         sync2.AtomicInt32
+	staleReads         sync2.AtomicInt32
+	nodeNotFoundErrors sync2.AtomicInt32
+	otherErrors        sync2.AtomicInt32
 }
 
 func newZkCell(name, zkaddr string) *zkCell {
