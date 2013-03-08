@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import collections
 import datetime
 import difflib
@@ -437,7 +439,7 @@ class Checker(object):
       if any([missing, unexpected, different]):
         raise Mismatch(missing, unexpected, different)
       start = time.time()
-      self.stats.maybe_print_local(force=True)
+      self.stats.maybe_print_local()
 
     self.checkpoint(done=True)
     self.stats.print_total()
@@ -460,10 +462,6 @@ def main():
                     dest='checkpoint_directory', type='string',
                     help='Directory to store checkpoints.',
                     default='.')
-  parser.add_option('-t', '--temp-directory',
-                    dest='temp_directory', type='string',
-                    help='Directory to store temporary files.',
-                    default='.')
   parser.add_option('-r', '--ratio', dest='ratio',
                     type='float', default=1.0,
                     help='Assumed block fill ratio.')
@@ -481,7 +479,9 @@ def main():
     config = json.load(fi)
 
   checker = Checker(config, table, options.checkpoint_directory,
-                    batch_count=options.batch_count, block_size=options.block_size, ratio=options.ratio, temp_directory=options.temp_directory)
+                    stats_interval=options.stats, batch_count=options.batch_count,
+                    block_size=options.block_size, ratio=options.ratio,
+                    temp_directory=options.checkpoint_directory)
   checker.run()
 
 if __name__ == '__main__':
