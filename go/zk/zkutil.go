@@ -122,15 +122,42 @@ func ResolveWildcards(zconn Conn, zkPaths []string) ([]string, error) {
 		}
 	}
 
-	result := make([]string, 0, 32)
+	results := make([][]string, len(zkPaths))
+	wg := &sync.WaitGroup{}
+	mu := &sync.Mutex{}
+	var firstError error
 
-	for _, zkPath := range zkPaths {
+	for i, zkPath := range zkPaths {
+		wg.Add(1)
 		parts := strings.Split(zkPath, "/")
-		subResult, err := resolveRecursive(zconn, parts, true)
-		if err != nil {
-			return nil, err
+		go func(i int) {
+			defer wg.Done()
+			subResult, err := resolveRecursive(zconn, parts, true)
+			if err != nil {
+				mu.Lock()
+				if firstError != nil {
+					log.Printf("Multiple error: %v", err)
+				} else {
+					firstError = err
+				}
+				mu.Unlock()
+			} else {
+				results[i] = subResult
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	if firstError != nil {
+		return nil, firstError
+	}
+
+	result := make([]string, 0, 32)
+	for i := 0; i < len(zkPaths); i++ {
+		subResult := results[i]
+		if subResult != nil {
+			result = append(result, subResult...)
 		}
-		result = append(result, subResult...)
 	}
 
 	return result, nil
@@ -154,7 +181,7 @@ func hasWildcard(path string) bool {
 	return false
 }
 
-func resolveRecursive(zconn Conn, parts []string, toplevel bool) (result []string, err error) {
+func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, error) {
 	for i, part := range parts {
 		if hasWildcard(part) {
 			var children []string
@@ -162,6 +189,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) (result []strin
 				children = ZkKnownCells(false)
 			} else {
 				zkParentPath := strings.Join(parts[:i], "/")
+				var err error
 				children, _, err = zconn.Children(zkParentPath)
 				if err != nil {
 					// we asked for something like
@@ -175,26 +203,54 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) (result []strin
 						return nil, nil
 					}
 					// otherwise we return the error
-					return
+					return nil, err
 				}
 			}
 			sort.Strings(children)
 
-			result = make([]string, 0, 32)
-			for _, child := range children {
+			results := make([][]string, len(children))
+			wg := &sync.WaitGroup{}
+			mu := &sync.Mutex{}
+			var firstError error
+
+			for j, child := range children {
 				matched, err := path.Match(part, child)
 				if err != nil {
 					return nil, err
 				}
 				if matched {
 					// we have a match!
+					wg.Add(1)
 					newParts := make([]string, len(parts))
 					copy(newParts, parts)
 					newParts[i] = child
-					subResult, err := resolveRecursive(zconn, newParts, false)
-					if err != nil {
-						return nil, err
-					}
+					go func(j int) {
+						defer wg.Done()
+						subResult, err := resolveRecursive(zconn, newParts, false)
+						if err != nil {
+							mu.Lock()
+							if firstError != nil {
+								log.Printf("Multiple error: %v", err)
+							} else {
+								firstError = err
+							}
+							mu.Unlock()
+						} else {
+							results[j] = subResult
+						}
+					}(j)
+				}
+			}
+
+			wg.Wait()
+			if firstError != nil {
+				return nil, firstError
+			}
+
+			result := make([]string, 0, 32)
+			for j := 0; j < len(children); j++ {
+				subResult := results[j]
+				if subResult != nil {
 					result = append(result, subResult...)
 				}
 			}
