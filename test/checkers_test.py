@@ -30,6 +30,7 @@ source_tablets = [tablet.Tablet(62044, 6701, 3701),
 tablets = [destination_tablet] + source_tablets
 
 db_configuration = {
+  "keyrange": {"end": 900},
   "sources": [t.mysql_connection_parameters("test_checkers%i" % i) for i, t in enumerate(source_tablets)],
   "destination": destination_tablet.mysql_connection_parameters("test_checkers")
 }
@@ -55,14 +56,14 @@ class TestCheckers(unittest.TestCase):
     config = dict(db_configuration)
     config["tables"] = {
     "test": {
-      "columns": ["pk1", "pk2", "pk3", "msg"],
+      "columns": ["pk1", "pk2", "pk3", "msg", "keyspace_id"],
       "pk": ["pk1", "pk2", "pk3"],
       }
     }
     cls.configuration = config
 
   def setUp(self):
-    create_table = "create table test (pk1 bigint, pk2 bigint, pk3 bigint, msg varchar(64), primary key (pk1, pk2, pk3)) Engine=InnoDB"
+    create_table = "create table test (pk1 bigint, pk2 bigint, pk3 bigint, keyspace_id bigint, msg varchar(64), primary key (pk1, pk2, pk3)) Engine=InnoDB"
     destination_tablet.create_db("test_checkers")
     destination_tablet.mquery("test_checkers", create_table, True)
     for i, t in enumerate(source_tablets):
@@ -72,9 +73,12 @@ class TestCheckers(unittest.TestCase):
     destination_queries = []
     source_queries = [[] for t in source_tablets]
     for i in range(1, 400):
-      query = "insert into test (pk1, pk2, pk3, msg) values (%s, %s, %s, 'message %s')" % (i/100+1, i/10+1, i, i)
+      query = "insert into test (pk1, pk2, pk3, msg, keyspace_id) values (%s, %s, %s, 'message %s', %s)" % (i/100+1, i/10+1, i, i, i)
       destination_queries.append(query)
       source_queries[i % 2].append(query)
+    for i in range(1100, 1110):
+      query = "insert into test (pk1, pk2, pk3, msg, keyspace_id) values (%s, %s, %s, 'message %s', %s)" % (i/100+1, i/10+1, i, i, i)
+      source_queries[0].append(query)
 
     destination_tablet.mquery("test_checkers", destination_queries, write=True)
     for i, (tablet, queries) in enumerate(zip(source_tablets, source_queries)):
@@ -116,14 +120,14 @@ class TestDifferentEncoding(unittest.TestCase):
     config = dict(db_configuration)
     config["tables"] = {
     "test": {
-      "columns": ["pk1", "pk2", "pk3", "msg"],
+      "columns": ["pk1", "pk2", "pk3", "msg", "keyspace_id"],
       "pk": ["pk1", "pk2", "pk3"],
       }
     }
     cls.configuration = config
 
   def setUp(self):
-    create_table = "create table test (pk1 bigint, pk2 bigint, pk3 bigint, msg varchar(64), primary key (pk1, pk2, pk3)) Engine=InnoDB"
+    create_table = "create table test (pk1 bigint, pk2 bigint, pk3 bigint, keyspace_id bigint, msg varchar(64), primary key (pk1, pk2, pk3)) Engine=InnoDB"
     destination_tablet.create_db("test_checkers")
     destination_tablet.mquery("test_checkers", create_table + "default character set = utf8", True)
     for i, t in enumerate(source_tablets):
@@ -137,7 +141,7 @@ class TestDifferentEncoding(unittest.TestCase):
       c.set_character_set('latin2')
       c.begin()
     for i in range(1, 400):
-      query = u"insert into test (pk1, pk2, pk3, msg) values (%s, %s, %s, '\xb1 %s')" % (i/100+1, i/10+1, i, i)
+      query = u"insert into test (pk1, pk2, pk3, keyspace_id, msg) values (%s, %s, %s, %s, '\xb1 %s')" % (i/100+1, i/10+1, i, i, i)
       destination_queries.append(query)
       #source_queries[i % 2].append(query.encode('utf-8').decode('iso-8859-2'))
       source_connections[i % 2][1].execute(query.encode('utf-8').decode('iso-8859-2'))
@@ -173,11 +177,12 @@ class TestConfguration(unittest.TestCase):
       "insert into test2 (pk1, pk2, msg) values (1, 1, 'msg')",
       True)
     connection_params = destination_tablet.mysql_connection_parameters("test_checkers")
-    config = write_configuration.get_configuration(connection_params)
+    config = write_configuration.get_configuration(connection_params, "", "100")
     self.assertEqual(config['destination'], connection_params)
     self.assertItemsEqual(config['tables'].keys(), ['test1', 'test2'])
     self.assertEqual(config['tables']['test1']['columns'], ['pk1', 'pk2', 'pk3', 'msg'])
     self.assertEqual(config['tables']['test1']['pk'], ['pk1', 'pk2', 'pk3'])
+    self.assertEqual(config['keyrange'], {'end': 256})
 
 
 def main():

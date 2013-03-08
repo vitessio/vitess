@@ -175,15 +175,15 @@ class DatastoreThread(threading.Thread):
         try:
           self.out_queue.put(self.datastore.query(sql, params))
           break
-        except Mysqldb.OperationalError as e:
+        except MySQLdb.OperationalError as e:
           i += 1
-          log.exception("Error reading from %s", self.datastore.dbname)
+          logging.exception("Error reading from %s", self.datastore.dbname)
           if i < self.retries:
             self.out_queue.put(e)
             break
           time.sleep(1)
         except Exception as e:
-          log.exception("Unexpected exception while reading from %s", self.datastore.dbname)
+          logging.exception("Unexpected exception while reading from %s", self.datastore.dbname)
           self.out_queue.put(e)
           break
 
@@ -317,6 +317,14 @@ class Checker(object):
     except IOError:
       pass
 
+    keyrange = configuration["keyrange"]
+    keyspace_sql_parts = []
+    if keyrange.get('start') or keyrange.get('end'):
+      if keyrange.get('start'):
+        keyspace_sql_parts.append("keyspace_id >= %s and" % keyrange.get('start'))
+      if keyrange.get('end'):
+        keyspace_sql_parts.append("keyspace_id < %s and" % keyrange.get('end'))
+
     self.destination_sql = """
            select
              %(columns)s
@@ -329,14 +337,29 @@ class Checker(object):
                'pk_columns': ', '.join(self.primary_key),
                'range_sql': sql_tuple_comparison(self.table_name, self.primary_key)}
 
+    # Almost like destination SQL except for the keyspace_sql clause.
+    self.last_source_sql = """
+           select
+             %(columns)s
+           from %(table_name)s use index (primary)
+           where %(keyspace_sql)s
+             %(range_sql)s
+           order by %(pk_columns)s limit %%(limit)s""" % {
+               'table_name': self.table_name,
+               'keyspace_sql': ' '.join(keyspace_sql_parts),
+               'columns': ', '.join(self.columns),
+               'pk_columns': ', '.join(self.primary_key),
+               'range_sql': sql_tuple_comparison(self.table_name, self.primary_key)}
+
     self.source_sql = """
            select
              %(columns)s
            from %(table_name)s use index (primary)
-           where
-             (%(min_range_sql)s) and not (%(max_range_sql)s)
+           where %(keyspace_sql)s
+             ((%(min_range_sql)s) and not (%(max_range_sql)s))
            order by %(pk_columns)s""" % {
                'table_name': self.table_name,
+               'keyspace_sql': ' '.join(keyspace_sql_parts),
                'columns': ', '.join(self.columns),
                'pk_columns': ', '.join(self.primary_key),
                'min_range_sql': sql_tuple_comparison(self.table_name, self.primary_key),
@@ -372,8 +395,8 @@ class Checker(object):
         source_data = self.sources.query(self.source_sql, source_params)
         self.current_pk = new_current_pk
       else:
-        logging.debug("no more items in destination, trying same query in sources")
-        source_data = self.sources.query(self.destination_sql, params)
+        logging.debug("no more items in destination, trying an unbound query in source")
+        source_data = self.sources.query(self.last_source_sql, params)
         # NOTE(szopa): I am setting self.current_pk event though it
         # probably won't be used (run will raise an exception after
         # the first suspicious batch).

@@ -6,8 +6,8 @@ import optparse
 
 import MySQLdb
 
-def get_configuration(params):
-  config = {'destination': params, 'tables': {}}
+def get_configuration(params, start, end):
+  config = {'destination': params, 'tables': {}, 'keyrange': get_range(start, end)}
   conn = MySQLdb.connect(**params)
   cursor = conn.cursor()
   tables = config['tables']
@@ -25,8 +25,20 @@ def get_configuration(params):
 
   return config
 
+def get_range(start, end):
+  ret = {}
+  if start != "":
+    ret['start'] = int(start, 16)
+  if end != "":
+    ret['end'] = int(end, 16)
+  return ret
+
 if __name__=="__main__":
   parser = optparse.OptionParser(usage="usage: %prog [connection_param_name connection_param value]...")
+  parser.add_option('--start', type='string', dest='start', default='',
+                    help="keyrange start (hexadecimal)")
+  parser.add_option('--end', type='string', dest='end', default='',
+                    help="keyrange end (hexadecimal)")
   options, args = parser.parse_args()
   if len(args) %2 != 0:
     raise Exception("even number of arguments")
@@ -38,4 +50,4 @@ if __name__=="__main__":
       key = arg
     else:
       params[key] = arg
-  print json.dumps(get_configuration(params), indent=2)
+  print json.dumps(get_configuration(params, options.start, options.end), indent=2)
