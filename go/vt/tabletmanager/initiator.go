@@ -441,17 +441,22 @@ func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration
 		return nil, err
 	}
 
-	sort.Strings(children)
-
-	// Purge newer items first so the action queues don't try to process something.
 	staleActions := make([]string, 0, 16)
+	// Purge newer items first so the action queues don't try to process something.
+	sort.Strings(children)
 	for i := 0; i < len(children); i++ {
 		actionPath := path.Join(zkActionPath, children[i])
-		stat, err := zconn.Exists(actionPath)
+		data, stat, err := zconn.Get(actionPath)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return nil, fmt.Errorf("stale action err: %v", err)
 		}
-		if stat != nil && time.Since(stat.MTime()) > maxStaleness {
+		if stat == nil || time.Since(stat.MTime()) <= maxStaleness {
+			continue
+		}
+		actionNode, err := ActionNodeFromJson(data, actionPath)
+		if err != nil {
+			relog.Warning("bad action data: %v %v %#v", actionPath, err, data)
+		} else if actionNode.State != ACTION_STATE_RUNNING {
 			staleActions = append(staleActions, actionPath)
 		}
 	}
