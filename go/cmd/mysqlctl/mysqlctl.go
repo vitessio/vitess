@@ -22,6 +22,7 @@ var port = flag.Int("port", 6612, "vtocc port")
 var mysqlPort = flag.Int("mysql-port", 3306, "mysql port")
 var tabletUid = flag.Uint("tablet-uid", 41983, "tablet uid")
 var logLevel = flag.String("log.level", "WARNING", "set log level")
+var mysqlSocket = flag.String("mysql-socket", "", "path to the mysql socket")
 var tabletAddr string
 
 func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
@@ -280,6 +281,11 @@ func main() {
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
+
+	if *mysqlSocket != "" {
+		mycnf.SocketFile = *mysqlSocket
+	}
+
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
 		relog.Fatal("%v", err)
