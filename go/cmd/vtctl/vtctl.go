@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/client2"
 	hk "code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
@@ -173,7 +174,7 @@ var commands = []commandGroup{
 				"<zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
 				"Remove all actions - be careful, this is powerful cleanup magic."},
 			command{"StaleActions", commandStaleActions,
-				"[-max-staleness=<duration>] <zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
+				"[-max-staleness=<duration> -purge] <zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
 				"List any queued actions that are considered stale."},
 			command{"PruneActionLogs", commandPruneActionLogs,
 				"[-keep-count=<count to keep>] <zk actionlog path> ...",
@@ -1074,6 +1075,7 @@ func commandPurgeActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 
 func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	maxStaleness := subFlags.Duration("max-staleness", 5*time.Minute, "how long since the last modification before an action considered stale")
+	purge := subFlags.Bool("purge", false, "purge stale actions")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action StaleActions requires <zk action path>")
@@ -1083,34 +1085,35 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	if err != nil {
 		return "", err
 	}
-	if len(zkPaths) == 0 {
-		return "", nil
-	}
-
-	workq := make(chan string, len(zkPaths))
+	var errCount sync2.AtomicInt32
 	wg := sync.WaitGroup{}
-	for _, zkPath := range zkPaths {
-		workq <- zkPath
-	}
-	close(workq)
-
-	for i := 16; i >= 0; i-- {
+	for _, apath := range zkPaths {
 		wg.Add(1)
-		go func() {
-			for zkActionPath := range workq {
-				staleActions, err := tm.StaleActions(wrangler.ZkConn(), zkActionPath, *maxStaleness)
+		go func(zkActionPath string) {
+			defer wg.Done()
+			staleActions, err := tm.StaleActions(wrangler.ZkConn(), zkActionPath, *maxStaleness)
+			if err != nil {
+				errCount.Add(1)
+				relog.Error("can't check stale actions: %v %v", zkActionPath, err)
+				return
+			}
+			for _, path := range staleActions {
+				fmt.Println(path)
+			}
+			if *purge {
+				err := tm.PurgeActions(wrangler.ZkConn(), zkActionPath)
 				if err != nil {
-					relog.Warning("can't check stale actions: %v %v", zkActionPath, err)
-					continue
-				}
-				for _, path := range staleActions {
-					fmt.Println(path)
+					errCount.Add(1)
+					relog.Error("can't purge stale actions: %v %v", zkActionPath, err)
+					return
 				}
 			}
-			wg.Done()
-		}()
+		}(apath)
 	}
 	wg.Wait()
+	if errCount.Get() > 0 {
+		return "", fmt.Errorf("some errors occurred, check the log")
+	}
 	return "", nil
 }
 
@@ -1127,18 +1130,24 @@ func commandPruneActionLogs(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		return "", err
 	}
 
-	errCount := 0
+	var errCount sync2.AtomicInt32
+	wg := sync.WaitGroup{}
 	for _, zkActionLogPath := range paths {
-		purgedCount, err := tm.PruneActionLogs(wrangler.ZkConn(), zkActionLogPath, *keepCount)
-		if err == nil {
-			relog.Debug("%v pruned %v", zkActionLogPath, purgedCount)
-		} else {
-			relog.Error("%v pruning failed: %v", zkActionLogPath, err)
-			errCount++
-		}
+		wg.Add(1)
+		go func(zkActionLogPath string) {
+			defer wg.Done()
+			purgedCount, err := tm.PruneActionLogs(wrangler.ZkConn(), zkActionLogPath, *keepCount)
+			if err == nil {
+				relog.Debug("%v pruned %v", zkActionLogPath, purgedCount)
+			} else {
+				relog.Error("%v pruning failed: %v", zkActionLogPath, err)
+				errCount.Add(1)
+			}
+		}(zkActionLogPath)
 	}
-	if errCount > 0 {
-		return "", fmt.Errorf("some error occurred, check the log")
+	wg.Wait()
+	if errCount.Get() > 0 {
+		return "", fmt.Errorf("some errors occurred, check the log")
 	}
 	return "", nil
 }
