@@ -772,7 +772,10 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 			return e
 		}
 		query := mustFillStringTemplate(loadDataInfile, queryParams)
-		return mysqld.executeSuperQuery(query)
+		// NOTE(szopa): The binlog has to be disabled,
+		// otherwise the whole thing trips on
+		// max_binlog_cache_size.
+		return mysqld.executeSuperQueryList([]string{"SET sql_log_bin = OFF", query})
 		// TODO: Remove files after they were loaded? This
 		// could decrease the peak amount of space needed for
 		// the restore.
