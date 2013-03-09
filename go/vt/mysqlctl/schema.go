@@ -100,14 +100,14 @@ func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *Sche
 	for leftIndex < len(left.TableDefinitions) {
 		if left.TableDefinitions[leftIndex].Type == TABLE_BASE_TABLE {
 			result <- leftName + " has an extra table named " + left.TableDefinitions[leftIndex].Name
-			leftIndex++
 		}
+		leftIndex++
 	}
 	for rightIndex < len(right.TableDefinitions) {
 		if right.TableDefinitions[rightIndex].Type == TABLE_BASE_TABLE {
 			result <- rightName + " has an extra table named " + right.TableDefinitions[rightIndex].Name
-			rightIndex++
 		}
+		rightIndex++
 	}
 	return
 }
