@@ -27,7 +27,7 @@ type RoutingPlan struct {
 	criteria    *Node
 }
 
-func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys []string) (shardlist []int, err error) {
+func GetShardList(sql string, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardlist []int, err error) {
 	defer handleError(&err)
 
 	plan := buildPlan(sql)
@@ -42,7 +42,7 @@ func buildPlan(sql string) (plan *RoutingPlan) {
 	return tree.getRoutingPlan()
 }
 
-func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []string) (shardList []int) {
+func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) (shardList []int) {
 	if plan.routingType == ROUTE_BY_VALUE {
 		index := plan.criteria.findInsertShard(bindVariables, tabletKeys)
 		return []int{index}
@@ -174,7 +174,7 @@ func (self *Node) routingAnalyzeValue() int {
 	return OTHER_NODE
 }
 
-func (self *Node) findShardList(bindVariables map[string]interface{}, tabletKeys []string) []int {
+func (self *Node) findShardList(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) []int {
 	shardset := make(map[int]bool)
 	switch self.Type {
 	case '(':
@@ -194,7 +194,7 @@ func (self *Node) findShardList(bindVariables map[string]interface{}, tabletKeys
 	return shardlist
 }
 
-func (self *Node) findInsertShard(bindVariables map[string]interface{}, tabletKeys []string) int {
+func (self *Node) findInsertShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
 	index := -1
 	for i := 0; i < self.Len(); i++ {
 		first_value_expression := self.At(i).At(0).At(0) // '('->value_expression_list->first_value
@@ -208,7 +208,7 @@ func (self *Node) findInsertShard(bindVariables map[string]interface{}, tabletKe
 	return index
 }
 
-func (self *Node) findShard(bindVariables map[string]interface{}, tabletKeys []string) int {
+func (self *Node) findShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
 	value := self.getBoundValue(bindVariables)
 	return key.FindShardForValue(value, tabletKeys)
 }

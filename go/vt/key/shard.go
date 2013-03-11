@@ -30,9 +30,9 @@ func handleError(err *error) {
 //
 // This function will not check the value is under the last shard's max
 // (we assume it will be empty, as checked by RebuildKeyspace)
-func FindShardForValue(value string, tabletKeys []string) int {
+func FindShardForValue(value string, tabletKeys []KeyspaceId) int {
 	index := 0
-	for index < len(tabletKeys)-1 && value >= tabletKeys[index] {
+	for index < len(tabletKeys)-1 && value >= string(tabletKeys[index]) {
 		index++
 	}
 	return index
@@ -41,7 +41,7 @@ func FindShardForValue(value string, tabletKeys []string) int {
 // Finds the shard that covers the given interface. The returned index
 // is between 0 and len(tabletKeys)-1). The tabletKeys is an ordered
 // list of the End values of the KeyRange structures for the shards.
-func FindShardForKey(key interface{}, tabletKeys []string) (i int, err error) {
+func FindShardForKey(key interface{}, tabletKeys []KeyspaceId) (i int, err error) {
 	defer handleError(&err)
 	return FindShardForValue(EncodeValue(key), tabletKeys), nil
 }

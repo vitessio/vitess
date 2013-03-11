@@ -28,10 +28,13 @@ class TabletConnection(object):
   cursorclass = cursor.TabletCursor
 
   def __init__(self, addr, dbname, timeout, user=None, password=None,
-               key_range=KeyRange()):
+               key_range=None):
     self.addr = addr
     self.dbname = dbname
-    self.key_range = key_range
+    if key_range:
+      self.key_range = key_range
+    else:
+      self.key_range = KeyRange()
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
 

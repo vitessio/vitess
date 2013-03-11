@@ -80,7 +80,7 @@ type ShardedConn struct {
 	// connByType []map[string]*Conn
 
 	// Sorted list of the max keys for each shard.
-	shardMaxKeys []string
+	shardMaxKeys []key.KeyspaceId
 	conns        []*tablet.VtConn
 
 	timeout time.Duration // How long should we wait for a given operation?
@@ -140,28 +140,10 @@ func (sc *ShardedConn) readKeyspace() error {
 	}
 
 	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Shards))
-	sc.shardMaxKeys = make([]string, len(sc.srvKeyspace.Shards))
+	sc.shardMaxKeys = make([]key.KeyspaceId, len(sc.srvKeyspace.Shards))
 
-	// FIXME(alainjobart) this logic is wrong for non-int keyspaces
-	// Will fix it shortly.
 	for i, srvShard := range sc.srvKeyspace.Shards {
-		// FIXME(msolomon) do this as string, or make everyting in terms of KeyspaceId?
-		sc.shardMaxKeys[i] = string(srvShard.KeyRange.End)
-		// FIXME(msolomon) this needs to be revisited for non-int keys. The problem is that
-		// KeyspaceId is lossy - you don't know if it was originally a Uint64KeyspaceId. For
-		// now I'm making that assumption and padding the data accordingly. Otherwise, zero
-		// gets hex encoded to "".  Depends if shard names need to be guaranteed to match the
-		// sort order.
-		zkShardPath := fmt.Sprintf("%v/%016v-%016v", sc.zkKeyspacePath, srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
-		// Hack to handle non-range based shards.
-		if srvShard.KeyRange.Start == key.MinKey && srvShard.KeyRange.End == key.MaxKey {
-			zkShardPath = fmt.Sprintf("%v/%v", sc.zkKeyspacePath, i)
-		}
-		realSrvShard, err := naming.ReadSrvShard(sc.zconn, zkShardPath)
-		if err != nil {
-			return fmt.Errorf("vt: readKeyspace failed %v", err)
-		}
-		sc.srvKeyspace.Shards[i] = *realSrvShard
+		sc.shardMaxKeys[i] = srvShard.KeyRange.End
 	}
 
 	// Disabled for now.
@@ -591,9 +573,18 @@ func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{})
 */
 
 func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
-	// FIXME(msolomon) do we need to send the key range we expect, or
-	// any additional validation?
-	addrs := sc.srvKeyspace.Shards[shardIdx].AddrsByType[sc.dbType]
+	srvShard := &(sc.srvKeyspace.Shards[shardIdx])
+	zkShardPath := fmt.Sprintf("%v/%v-%v", sc.zkKeyspacePath, srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
+	// Hack to handle non-range based shards.
+	if srvShard.KeyRange.Start == key.MinKey && srvShard.KeyRange.End == key.MaxKey {
+		zkShardPath = fmt.Sprintf("%v/%v", sc.zkKeyspacePath, shardIdx)
+	}
+	realSrvShard, err := naming.ReadSrvShard(sc.zconn, zkShardPath)
+	if err != nil {
+		return nil, fmt.Errorf("vt: ReadSrvShard failed %v", err)
+	}
+
+	addrs := realSrvShard.AddrsByType[sc.dbType]
 	srvs, err := naming.SrvEntries(&addrs, DefaultPortName)
 	if err != nil {
 		return nil, err

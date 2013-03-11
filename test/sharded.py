@@ -12,10 +12,10 @@ vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
 hostname = socket.gethostname()
 
-# range 0000000000000000 - 8000000000000000
+# range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
-# range 8000000000000000 - 0000000000000000
+# range 80 - ""
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 
@@ -94,10 +94,10 @@ def run_test_sharding():
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
 
-  shard_0_master.init_tablet( 'master',  'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
-  shard_0_replica.init_tablet('replica', 'test_keyspace', '0000000000000000-8000000000000000', key_end='8000000000000000')
-  shard_1_master.init_tablet( 'master',  'test_keyspace', '8000000000000000-0000000000000000', key_start='8000000000000000')
-  shard_1_replica.init_tablet('replica', 'test_keyspace', '8000000000000000-0000000000000000', key_start='8000000000000000')
+  shard_0_master.init_tablet( 'master',  'test_keyspace', '-80', key_end='80')
+  shard_0_replica.init_tablet('replica', 'test_keyspace', '-80', key_end='80')
+  shard_1_master.init_tablet( 'master',  'test_keyspace', '80-', key_start='80')
+  shard_1_replica.init_tablet('replica', 'test_keyspace', '80-', key_start='80')
 
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
 
@@ -133,14 +133,14 @@ def run_test_sharding():
   # start zkocc, we'll use it later
   zkocc = utils.zkocc_start()
 
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000 ' + shard_0_master.zk_tablet_path, auto_log=True)
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000 ' + shard_1_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/-80 ' + shard_0_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/80- ' + shard_1_master.zk_tablet_path, auto_log=True)
 
   # apply the schema on the second shard using a simple schema upgrade
   utils.run_vtctl(['ApplySchemaShard',
                    '-simple',
                    '-sql=' + create_vt_select_test_reverse.replace("\n", ""),
-                   '/zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000'])
+                   '/zk/global/vt/keyspaces/test_keyspace/shards/80-'])
 
   # insert some values directly (db is RO after minority reparent)
   # FIXME(alainjobart) these values don't match the shard map
@@ -199,8 +199,8 @@ def run_test_sharding():
 
   # throw in some schema validation step
   # we created the schema differently, so it should show
-  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/0000000000000000-8000000000000000')
-  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/8000000000000000-0000000000000000')
+  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/-80')
+  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/80-')
   out, err = utils.run_vtctl('ValidateSchemaKeyspace /zk/global/vt/keyspaces/test_keyspace', trap_output=True, raise_on_error=False)
   if (err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test:\ncreate table") == -1 or \
       err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\ncreate table") == -1):
@@ -210,8 +210,7 @@ def run_test_sharding():
   utils.run_vtctl('ExportZknsForKeyspace /zk/global/vt/keyspaces/test_keyspace')
   out, err = utils.run(vtroot+'/bin/zk ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
   lines = out.splitlines()
-  for base in ['0000000000000000-8000000000000000',
-                '8000000000000000-0000000000000000']:
+  for base in ['-80', '80-']:
     for db_type in ['master', 'replica']:
       for sub_path in ['', '.vdns', '/0', '/_vtocc.vdns']:
         expected = '/zk/test_nj/zkns/vt/test_keyspace/' + base + '/' + db_type + sub_path
@@ -224,7 +223,7 @@ def run_test_sharding():
   # when emd_topology.py is exported to this depot
   conn = tablet2.TabletConnection("localhost:%u" % shard_0_master.port,
                                   "vt_test_keyspace", 10.0,
-                                  key_range=tablet2.KeyRange(end="\x80\x00\x00\x00\x00\x00\x00\x00"))
+                                  key_range=tablet2.KeyRange(end="\x80"))
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
   if (len(results) != 2 or \
@@ -234,7 +233,7 @@ def run_test_sharding():
     raise utils.TestError('wrong conn._execute output')
   conn = tablet2.TabletConnection("localhost:%u" % shard_1_master.port,
                                   "vt_test_keyspace", 10.0,
-                                  key_range=tablet2.KeyRange(start="\x80\x00\x00\x00\x00\x00\x00\x00"))
+                                  key_range=tablet2.KeyRange(start="\x80"))
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
   if (len(results) != 1 or \
@@ -246,11 +245,11 @@ def run_test_sharding():
   try:
     conn = tablet2.TabletConnection("localhost:%u" % shard_0_master.port,
                                     "vt_test_keyspace", 10.0,
-                                    key_range=tablet2.KeyRange(end="\x90\x00\x00\x00\x00\x00\x00\x00"))
+                                    key_range=tablet2.KeyRange(end="\x90"))
     conn.dial()
     raise utils.TestError('expected an exception')
   except Exception as e:
-    if not "fatal: KeyRange mismatch, expecting {Start: , End: 8000000000000000}, received {Start: , End: 9000000000000000}" in str(e):
+    if not "fatal: KeyRange mismatch, expecting {Start: , End: 80}, received {Start: , End: 90}" in str(e):
       raise utils.TestError('unexpected exception: ' + str(e))
 
   utils.kill_sub_process(zkocc)

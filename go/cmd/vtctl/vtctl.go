@@ -333,6 +333,14 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shar
 		return err
 	}
 
+	// if keyStart or keyEnd is set, check the shard name is
+	// keyStart-keyEnd
+	if keyStart != "" || keyEnd != "" {
+		if shardId != keyStart+"-"+keyEnd {
+			return fmt.Errorf("Invalid shardId, was expecting '%v-%v' but got '%v'", keyStart, keyEnd, shardId)
+		}
+	}
+
 	parent := tm.TabletAlias{}
 	if parentAlias == "" && tm.TabletType(tabletType) != tm.TYPE_MASTER && tm.TabletType(tabletType) != tm.TYPE_IDLE {
 		vtRoot := path.Join("/zk/global", tm.VtSubtree(zkPath))

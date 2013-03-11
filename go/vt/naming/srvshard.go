@@ -27,7 +27,7 @@ type SrvShard struct {
 }
 
 // A distilled serving copy of keyspace detail stored in the local
-// zk cell for fast access. Derived from the global keypsace and
+// zk cell for fast access. Derived from the global keyspace and
 // local details.
 // /zk/local/vt/ns/<keyspace>
 type SrvKeyspace struct {
