@@ -139,7 +139,7 @@ func LookupName(zconn zk.Conn, zkPath string) ([]*net.SRV, error) {
 
 	addrs, err := ReadAddrs(zconn, zkPath)
 	if err != nil {
-		return nil, fmt.Errorf("LookupNames failed: %v %v", zkPath, err)
+		return nil, fmt.Errorf("LookupName failed: %v %v", zkPath, err)
 	}
 
 	srvs := make([]*net.SRV, 0, len(addrs.Entries))
