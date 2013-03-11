@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/schema"
 )
 
@@ -148,7 +149,7 @@ func TestParse(t *testing.T) {
 }
 
 func TestRouting(t *testing.T) {
-	tabletkeys := []string{
+	tabletkeys := []key.KeyspaceId{
 		"\x00\x00\x00\x00\x00\x00\x00\x02",
 		"\x00\x00\x00\x00\x00\x00\x00\x04",
 		"\x00\x00\x00\x00\x00\x00\x00\x06",
