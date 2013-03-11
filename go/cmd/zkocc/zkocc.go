@@ -26,12 +26,10 @@ const (
 	DefaultRebindDelay    = 0.01
 )
 
-var usage = `
-Cache open zk connections and allow cheap read request through go RPCs.
-The optional parameters are cell names to try to connect to at startup,
-versus waiting for the first request to connect (local and global for
-instance).
-`
+var usage = `Cache open zookeeper connections and allow cheap read requests
+through a lightweight RPC interface.  The optional parameters are cell
+names to try to connect to at startup, versus waiting for the first
+request to connect.`
 
 var (
 	resolveLocal   = flag.Bool("resolve-local", false, "if specified, will try to resolve /zk/local/ paths. If not set, they will fail.")
