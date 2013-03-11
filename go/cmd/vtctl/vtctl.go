@@ -1148,10 +1148,10 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 				relog.Error("can't check stale actions: %v %v", zkActionPath, err)
 				return
 			}
-			for _, path := range staleActions {
-				fmt.Println(path)
+			for _, action := range staleActions {
+				fmt.Println(fmtAction(action))
 			}
-			if *purge {
+			if *purge && len(staleActions) > 0 {
 				err := tm.PurgeActions(wrangler.ZkConn(), zkActionPath)
 				if err != nil {
 					errCount.Add(1)

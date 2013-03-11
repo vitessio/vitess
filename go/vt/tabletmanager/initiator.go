@@ -452,7 +452,7 @@ func PurgeActions(zconn zk.Conn, zkActionPath string) error {
 
 // Return a list of queued actions that have been sitting for more
 // than some amount of time.
-func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration) ([]string, error) {
+func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration) ([]*ActionNode, error) {
 	if path.Base(zkActionPath) != "action" {
 		return nil, fmt.Errorf("not action path: %v", zkActionPath)
 	}
@@ -462,7 +462,7 @@ func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration
 		return nil, err
 	}
 
-	staleActions := make([]string, 0, 16)
+	staleActions := make([]*ActionNode, 0, 16)
 	// Purge newer items first so the action queues don't try to process something.
 	sort.Strings(children)
 	for i := 0; i < len(children); i++ {
@@ -478,7 +478,7 @@ func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration
 		if err != nil {
 			relog.Warning("bad action data: %v %v %#v", actionPath, err, data)
 		} else if actionNode.State != ACTION_STATE_RUNNING {
-			staleActions = append(staleActions, actionPath)
+			staleActions = append(staleActions, actionNode)
 		}
 	}
 	return staleActions, nil
