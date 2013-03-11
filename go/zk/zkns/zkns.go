@@ -19,8 +19,9 @@ type ZknsAddr struct {
 	// These fields came from a Python app originally that used a different
 	// naming convention.
 	Host         string         `json:"host"`
-	Port         int            `json:"port"`
+	Port         int            `json:"port"` // DEPRECATED
 	NamedPortMap map[string]int `json:"named_port_map"`
+	IPv4         string         `json:"ipv4"`
 	version      int            // zk version to allow non-stomping writes
 }
 
@@ -28,6 +29,9 @@ func NewAddr(host string, port int) *ZknsAddr {
 	return &ZknsAddr{Host: host, Port: port, NamedPortMap: make(map[string]int)}
 }
 
+// SRV records can have multiple endpoints, so this is always a list.
+// A record with one entry and a port number zero is interpreted as a CNAME.
+// A record with one entry, a port number zero and an IP address is interpreted as an A.
 type ZknsAddrs struct {
 	Entries []ZknsAddr
 	version int // zk version to allow non-stomping writes
@@ -123,11 +127,8 @@ func Sort(srvs []*net.SRV) {
 	byPriorityWeight(srvs).sort()
 }
 
-/*
-zkPath is normally just the path to a file in zk. It can also reference a named
-port like this:
-  /zk/cell/zkns/path:_named_port
-*/
+// zkPath is the path to a json file in zk. It can also reference a
+// named port: /zk/cell/zkns/path:_named_port
 func LookupName(zconn zk.Conn, zkPath string) ([]*net.SRV, error) {
 	zkPathParts := strings.Split(zkPath, ":")
 	namedPort := ""
@@ -138,27 +139,20 @@ func LookupName(zconn zk.Conn, zkPath string) ([]*net.SRV, error) {
 
 	addrs, err := ReadAddrs(zconn, zkPath)
 	if err != nil {
-		return nil, fmt.Errorf("LookupName failed: %v %v", zkPath, err)
+		return nil, fmt.Errorf("LookupNames failed: %v %v", zkPath, err)
 	}
 
 	srvs := make([]*net.SRV, 0, len(addrs.Entries))
-	hasError := false
 	for _, addr := range addrs.Entries {
 		srv := &net.SRV{Target: addr.Host}
 		if namedPort == "" {
+			// FIXME(msolomon) remove this clause - allow only named ports.
 			srv.Port = uint16(addr.Port)
 		} else {
 			srv.Port = uint16(addr.NamedPortMap[namedPort])
 		}
-		if srv.Port == 0 {
-			hasError = true
-		} else {
-			srvs = append(srvs, srv)
-		}
+		srvs = append(srvs, srv)
 	}
 	Sort(srvs)
-	if hasError && len(srvs) == 0 {
-		return nil, fmt.Errorf("LookupName failed: %v no valid endpoints found", zkPath)
-	}
 	return srvs, nil
 }
