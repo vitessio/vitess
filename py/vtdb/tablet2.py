@@ -11,6 +11,14 @@ from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
 
+# TODO(alainjobart) move into topology file eventually
+class KeyRange(object):
+  def __init__(self, start="", end=""):
+    self.start = start
+    self.end = end
+
+  def to_dict(self):
+    return {'Start': self.start, 'End': self.end}
 
 # A simple, direct connection to the voltron query server.
 # This is shard-unaware and only handles the most basic communication.
@@ -19,9 +27,11 @@ class TabletConnection(object):
   session_id = 0
   cursorclass = cursor.TabletCursor
 
-  def __init__(self, addr, dbname, timeout, user=None, password=None):
+  def __init__(self, addr, dbname, timeout, user=None, password=None,
+               key_range=KeyRange()):
     self.addr = addr
     self.dbname = dbname
+    self.key_range = key_range
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
 
@@ -30,7 +40,8 @@ class TabletConnection(object):
       if self.session_id:
         self.client.close()
       self.client.dial()
-      response = self.client.call('SqlQuery.GetSessionId', {"DbName": self.dbname})
+      params = {"DbName": self.dbname, "KeyRange": self.key_range.to_dict()}
+      response = self.client.call('SqlQuery.GetSessionId', params)
       self.session_id = response.reply["SessionId"]
     except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
@@ -243,7 +254,9 @@ def _make_row(row, conversions):
     converted_row.append(v)
   return converted_row
 
-def connect(addr, timeout, dbname=None, user=None, password=None):
-  conn = TabletConnection(addr, dbname, timeout, user=user, password=password)
+def connect(addr, timeout, dbname=None, user=None, password=None,
+            key_range=KeyRange()):
+  conn = TabletConnection(addr, dbname, timeout, user=user, password=password,
+                          key_range=key_range)
   conn.dial()
   return conn

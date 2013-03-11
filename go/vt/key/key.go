@@ -68,6 +68,10 @@ func (kr KeyRange) Contains(i KeyspaceId) bool {
 	return kr.Start <= i && (kr.End == MaxKey || i < kr.End)
 }
 
+func (kr KeyRange) String() string {
+	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
+}
+
 type KeyspaceRange struct {
 	Keyspace string
 	KeyRange

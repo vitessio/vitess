@@ -21,6 +21,7 @@ import (
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/vt/key"
 	tproto "code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
@@ -133,6 +134,16 @@ func (conn *Conn) dial() (err error) {
 	}
 
 	sessionParams := tproto.SessionParams{DbName: conn.dbName()}
+	if conn.dbi.Fragment != "" {
+		parts := strings.Split(conn.dbi.Fragment, "-")
+		if len(parts) != 2 {
+			return errors.New("fragment needs two parts for start and end keyrange")
+		}
+		// FIXME(alainjobart): Unhex panics, that's not good,
+		// change to return errors.
+		sessionParams.KeyRange.Start = key.HexKeyspaceId(parts[0]).Unhex()
+		sessionParams.KeyRange.End = key.HexKeyspaceId(parts[1]).Unhex()
+	}
 	var sessionInfo tproto.SessionInfo
 	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
 		return

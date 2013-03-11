@@ -295,7 +295,9 @@ class VtOCCConnection(tablet2.TabletConnection):
   # Note we don't have a retry policy on this one:
   #  def _stream_next(self, conversions, query_result, index):
 
-def connect(addr, timeout, dbname=None, user=None, password=None):
-  conn = VtOCCConnection(addr, dbname, timeout, user=user, password=password)
+def connect(addr, timeout, dbname=None, user=None, password=None,
+            key_range=tablet2.KeyRange()):
+  conn = VtOCCConnection(addr, dbname, timeout, user=user, password=password,
+                         key_range=key_range)
   conn.dial()
   return conn

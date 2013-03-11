@@ -21,6 +21,7 @@ import (
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
+	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
@@ -69,6 +70,7 @@ type SqlQuery struct {
 	qe        *QueryEngine
 	sessionId int64
 	dbName    string
+	keyRange  key.KeyRange
 }
 
 func NewSqlQuery(config Config) *SqlQuery {
@@ -152,6 +154,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 	sq.qe.Open(dbconfig)
 	sq.sessionId = Rand()
 	sq.dbName = dbconfig.Dbname
+	sq.keyRange = dbconfig.KeyRange
 	relog.Info("Session id: %d", sq.sessionId)
 }
 
@@ -188,6 +191,8 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 	sq.qe.Close(forRestart)
 	sq.sessionId = 0
 	sq.dbName = ""
+	sq.keyRange.Start = key.MinKey
+	sq.keyRange.End = key.MaxKey
 }
 
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
@@ -212,6 +217,9 @@ func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
 	if sessionParams.DbName != sq.dbName {
 		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", sq.dbName, sessionParams.DbName)
+	}
+	if sessionParams.KeyRange != sq.keyRange {
+		return NewTabletError(FATAL, "KeyRange mismatch, expecting %v, received %v", sq.keyRange.String(), sessionParams.KeyRange.String())
 	}
 	sessionInfo.SessionId = sq.sessionId
 	return nil

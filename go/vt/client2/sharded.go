@@ -142,6 +142,8 @@ func (sc *ShardedConn) readKeyspace() error {
 	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Shards))
 	sc.shardMaxKeys = make([]string, len(sc.srvKeyspace.Shards))
 
+	// FIXME(alainjobart) this logic is wrong for non-int keyspaces
+	// Will fix it shortly.
 	for i, srvShard := range sc.srvKeyspace.Shards {
 		// FIXME(msolomon) do this as string, or make everyting in terms of KeyspaceId?
 		sc.shardMaxKeys[i] = string(srvShard.KeyRange.End)
@@ -602,6 +604,10 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 		name := naming.SrvAddr(srv) + "/" + sc.dbName
 		if sc.user != "" {
 			name = sc.user + ":" + sc.password + "@" + name
+		}
+
+		if sc.srvKeyspace.Shards[shardIdx].KeyRange.Start != key.MinKey || sc.srvKeyspace.Shards[shardIdx].KeyRange.End != key.MaxKey {
+			name += "#" + string(sc.srvKeyspace.Shards[shardIdx].KeyRange.Start.Hex()) + "-" + string(sc.srvKeyspace.Shards[shardIdx].KeyRange.End.Hex())
 		}
 		conn, err = tablet.DialVtdb(name, sc.stream, tablet.DefaultTimeout)
 		if err == nil {

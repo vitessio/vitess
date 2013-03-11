@@ -6,6 +6,8 @@ import socket
 import utils
 import tablet
 
+from vtdb import tablet2
+
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
 hostname = socket.gethostname()
@@ -215,6 +217,41 @@ def run_test_sharding():
         expected = '/zk/test_nj/zkns/vt/test_keyspace/' + base + '/' + db_type + sub_path
         if not expected in lines:
           raise utils.TestError('missing zkns part:\n%s\nin:%s' %(expected, out))
+
+  # now try to connect using the python client and shard-aware connection
+  # to both shards
+  # FIXME(alainjobart) get key_range from the topology
+  # when emd_topology.py is exported to this depot
+  conn = tablet2.TabletConnection("localhost:%u" % shard_0_master.port,
+                                  "vt_test_keyspace", 10.0,
+                                  key_range=tablet2.KeyRange(end="\x80\x00\x00\x00\x00\x00\x00\x00"))
+  conn.dial()
+  (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
+  if (len(results) != 2 or \
+        results[0][0] != 1 or \
+        results[1][0] != 2):
+    print "conn._execute returned:", results
+    raise utils.TestError('wrong conn._execute output')
+  conn = tablet2.TabletConnection("localhost:%u" % shard_1_master.port,
+                                  "vt_test_keyspace", 10.0,
+                                  key_range=tablet2.KeyRange(start="\x80\x00\x00\x00\x00\x00\x00\x00"))
+  conn.dial()
+  (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
+  if (len(results) != 1 or \
+        results[0][0] != 10):
+    print "conn._execute returned:", results
+    raise utils.TestError('wrong conn._execute output')
+
+  # try to connect with bad keyrange
+  try:
+    conn = tablet2.TabletConnection("localhost:%u" % shard_0_master.port,
+                                    "vt_test_keyspace", 10.0,
+                                    key_range=tablet2.KeyRange(end="\x90\x00\x00\x00\x00\x00\x00\x00"))
+    conn.dial()
+    raise utils.TestError('expected an exception')
+  except Exception as e:
+    if not "fatal: KeyRange mismatch, expecting {Start: , End: 8000000000000000}, received {Start: , End: 9000000000000000}" in str(e):
+      raise utils.TestError('unexpected exception: ' + str(e))
 
   utils.kill_sub_process(zkocc)
   shard_0_master.kill_vttablet()

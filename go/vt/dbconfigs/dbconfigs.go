@@ -13,6 +13,7 @@ import (
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 )
 
 // Offer a sample config - probably should load this when file isn't set.
@@ -38,14 +39,15 @@ func RegisterCommonFlags() (*string, *string) {
 }
 
 type DBConfig struct {
-	Host       string `json:"host"`
-	Port       int    `json:"port"`
-	Uname      string `json:"uname"`
-	Pass       string `json:"pass"`
-	Dbname     string `json:"dbname"`
-	UnixSocket string `json:"unix_socket"`
-	Charset    string `json:"charset"`
-	Memcache   string `json:"memcache"`
+	Host       string       `json:"host"`
+	Port       int          `json:"port"`
+	Uname      string       `json:"uname"`
+	Pass       string       `json:"pass"`
+	Dbname     string       `json:"dbname"`
+	UnixSocket string       `json:"unix_socket"`
+	Charset    string       `json:"charset"`
+	Memcache   string       `json:"memcache"`
+	KeyRange   key.KeyRange `json:"keyrange"`
 }
 
 func (d DBConfig) String() string {
