@@ -13,11 +13,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 type Mycnf struct {
@@ -51,27 +49,6 @@ func (cnf *Mycnf) lookupAndCheck(key string) string {
 		panic(fmt.Errorf("Value for key '%v' not set", key))
 	}
 	return val
-}
-
-func (cnf *Mycnf) MysqlAddr() (string, error) {
-	h, err := fqdn()
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%v:%v", h, cnf.MysqlPort), nil
-}
-
-func fqdn() (string, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-
-	cname, err := net.LookupCNAME(hostname)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(cname, "."), nil
 }
 
 func normKey(bkey []byte) string {

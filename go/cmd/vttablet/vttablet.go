@@ -223,18 +223,14 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 			}
 		}
 	})
-	mysqlAddr, err := mycnf.MysqlAddr()
-	if err != nil {
-		return err
-	}
-	if err := agent.Start(bindAddr, mysqlAddr); err != nil {
+
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
+	if err := agent.Start(bindAddr, mysqld.Addr()); err != nil {
 		return err
 	}
 	umgmt.AddCloseCallback(func() {
 		agent.Stop()
 	})
-
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
 	// The TabletManager service exports read-only management related
 	// data.

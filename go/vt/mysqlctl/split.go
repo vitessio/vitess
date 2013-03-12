@@ -392,17 +392,11 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 		if err != nil {
 			return
 		}
-		masterAddr, err = mysqld.Addr()
-		if err != nil {
-			return
-		}
+		masterAddr = mysqld.Addr()
 	} else {
 		// we are a slave, check our replication strategy
 		if allowHierarchicalReplication {
-			masterAddr, err = mysqld.Addr()
-			if err != nil {
-				return
-			}
+			masterAddr = mysqld.Addr()
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {

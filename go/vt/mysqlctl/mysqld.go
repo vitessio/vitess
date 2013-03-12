@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -332,8 +333,20 @@ func deleteTopDir(dir string) (removalErr error) {
 	return
 }
 
-func (mysqld *Mysqld) Addr() (string, error) {
-	return mysqld.config.MysqlAddr()
+func (mysqld *Mysqld) Addr() string {
+	// build the hostname
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err) // should never happen
+	}
+	hostname, err = net.LookupCNAME(hostname)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	hostname = strings.TrimRight(hostname, ".")
+
+	// and add the port
+	return fmt.Sprintf("%v:%v", hostname, mysqld.config.MysqlPort)
 }
 
 // executes some SQL commands using a mysql command line interface process

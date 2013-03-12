@@ -271,10 +271,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		if err != nil {
 			return
 		}
-		masterAddr, err = mysqld.Addr()
-		if err != nil {
-			return
-		}
+		masterAddr = mysqld.Addr()
 	} else {
 		if err = mysqld.StopSlave(); err != nil {
 			return
@@ -286,10 +283,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		// We are a slave, check our replication strategy before
 		// choosing the master address.
 		if allowHierarchicalReplication {
-			masterAddr, err = mysqld.Addr()
-			if err != nil {
-				return
-			}
+			masterAddr = mysqld.Addr()
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {
