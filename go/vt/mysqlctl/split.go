@@ -123,8 +123,20 @@ type SplitSnapshotManifest struct {
 	SchemaDefinition *SchemaDefinition
 }
 
-func NewSplitSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) *SplitSnapshotManifest {
-	return &SplitSnapshotManifest{Source: newSnapshotManifest(addr, mysqlAddr, dbName, files, pos), KeyRange: key.KeyRange{Start: startKey.Unhex(), End: endKey.Unhex()}, SchemaDefinition: sd}
+func NewSplitSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
+	s, err := startKey.Unhex()
+	if err != nil {
+		return nil, err
+	}
+	e, err := endKey.Unhex()
+	if err != nil {
+		return nil, err
+	}
+	sm, err := newSnapshotManifest(addr, mysqlAddr, dbName, files, pos)
+	if err != nil {
+		return nil, err
+	}
+	return &SplitSnapshotManifest{Source: sm, KeyRange: key.KeyRange{Start: s, End: e}, SchemaDefinition: sd}, nil
 }
 
 // SanityCheckManifests checks if the ssms can be restored together.
@@ -245,8 +257,11 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 		return "", snapshotErr
 	} else {
-		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr,
+		ssm, err := NewSplitSnapshotManifest(sourceAddr, masterAddr,
 			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
+		if err != nil {
+			return "", err
+		}
 		ssmFile = path.Join(cloneSourcePath, partialSnapshotManifestFile)
 		if snapshotErr = writeJson(ssmFile, ssm); snapshotErr != nil {
 			return "", snapshotErr
@@ -296,7 +311,12 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 					"StartKey":        string(startKey),
 					"EndKey":          string(endKey),
 				}
-				err := mysqld.executeSuperQuery(mustFillStringTemplate(selectIntoOutfile, queryParams))
+				sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
+				if err != nil {
+					errors <- err
+					continue
+				}
+				err = mysqld.executeSuperQuery(sio)
 				if err != nil {
 					errors <- err
 					continue
@@ -372,11 +392,17 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 		if err != nil {
 			return
 		}
-		masterAddr = mysqld.Addr()
+		masterAddr, err = mysqld.Addr()
+		if err != nil {
+			return
+		}
 	} else {
 		// we are a slave, check our replication strategy
 		if allowHierarchicalReplication {
-			masterAddr = mysqld.Addr()
+			masterAddr, err = mysqld.Addr()
+			if err != nil {
+				return
+			}
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {
@@ -503,7 +529,11 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoO
 		"KeyspaceIdColumnName": keyName,
 		"TableOutputPath":      filename,
 	}
-	if err := mysqld.executeSuperQuery(mustFillStringTemplate(selectIntoOutfile, queryParams)); err != nil {
+	sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
+	if err != nil {
+		return nil, err
+	}
+	if err := mysqld.executeSuperQuery(sio); err != nil {
 		return nil, err
 	}
 
@@ -638,7 +668,10 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		for j, m := range datafiles {
 			krDatafiles[j] = *m[kr]
 		}
-		ssm := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, krDatafiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
+		ssm, err := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, krDatafiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
+		if err != nil {
+			return nil, err
+		}
 		ssmFiles[i] = path.Join(cloneSourcePaths[kr], partialSnapshotManifestFile)
 		if err = writeJson(ssmFiles[i], ssm); err != nil {
 			return nil, err
@@ -771,7 +804,10 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		if e != nil {
 			return e
 		}
-		query := mustFillStringTemplate(loadDataInfile, queryParams)
+		query, e := fillStringTemplate(loadDataInfile, queryParams)
+		if e != nil {
+			return e
+		}
 		// NOTE(szopa): The binlog has to be disabled,
 		// otherwise the whole thing trips on
 		// max_binlog_cache_size.
@@ -832,7 +868,6 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 		createDbCmds = append(createDbCmds, td.Schema)
 	}
 
-	// FIXME(msolomon) make sure this works with multiple tables
 	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
 		return
 	}
@@ -850,7 +885,11 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 			"TableInputPath": filename,
 			"TableName":      snapshotManifest.Source.DbName + "." + tableName,
 		}
-		query := mustFillStringTemplate(loadDataInfile, queryParams)
+		var query string
+		query, err = fillStringTemplate(loadDataInfile, queryParams)
+		if err != nil {
+			return
+		}
 		if err = mysqld.executeSuperQuery(query); err != nil {
 			// FIXME(msolomon) on abort, we should just tear down
 			// alternatively, we could just leave it and wait for the wrangler to
@@ -861,9 +900,10 @@ func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshot
 		relog.Info("%v ready", filename)
 	}
 
-	// FIXME(msolomon) start *split* replication, you need the new start/end
-	// keys
-	cmdList := StartSplitReplicationCommands(mysqld, snapshotManifest.Source.ReplicationState, snapshotManifest.KeyRange)
+	cmdList, err := StartSplitReplicationCommands(mysqld, snapshotManifest.Source.ReplicationState, snapshotManifest.KeyRange)
+	if err != nil {
+		return
+	}
 	if err = mysqld.executeSuperQueryList(cmdList); err != nil {
 		return
 	}

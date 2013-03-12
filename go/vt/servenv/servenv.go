@@ -40,11 +40,11 @@ var (
 		"profile every n bytes allocated")
 )
 
-func Init(logPrefix string) {
+func Init(logPrefix string) error {
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
-		panic(fmt.Errorf("running this as root makes no sense"))
+		return fmt.Errorf("running this as root makes no sense")
 	}
 	if logPrefix != "" {
 		logPrefix += " "
@@ -52,7 +52,7 @@ func Init(logPrefix string) {
 	logPrefix += fmt.Sprintf("[%v]", os.Getpid())
 	f, err := logfile.Open(*logfileName, *logFrequency, *logMaxSize, *logMaxFiles)
 	if err != nil {
-		panic(fmt.Errorf("unable to open logfile %s: %v", *logfileName, err))
+		return fmt.Errorf("unable to open logfile %s: %v", *logfileName, err)
 	}
 	logger := relog.New(f, logPrefix+" ",
 		log.Ldate|log.Lmicroseconds|log.Lshortfile, relog.DEBUG)
@@ -79,26 +79,27 @@ func Init(logPrefix string) {
 		relog.Info("max-open-fds: %v", fdLimit.Cur)
 	}
 
-	exportBinaryVersion()
+	return exportBinaryVersion()
 }
 
-func exportBinaryVersion() {
+func exportBinaryVersion() error {
 	hasher := md5.New()
 	exeFile, err := os.Open("/proc/self/exe")
 	if err != nil {
-		panic(err)
+		return err
 	}
 	if _, err = io.Copy(hasher, exeFile); err != nil {
-		panic(err)
+		return err
 	}
 	md5sum := hex.EncodeToString(hasher.Sum(nil))
 	fileInfo, err := exeFile.Stat()
 	if err != nil {
-		panic(err)
+		return err
 	}
 	mtime := fileInfo.ModTime().Format(time.RFC3339)
 	version := mtime + " " + md5sum
 	expvar.NewString("binary-version").Set(version)
 	// rexport this value for varz scraper
 	expvar.NewString("Version").Set(version)
+	return nil
 }

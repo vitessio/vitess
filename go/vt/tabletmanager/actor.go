@@ -63,9 +63,9 @@ func NewTabletActor(mysqld *mysqlctl.Mysqld, zconn zk.Conn) *TabletActor {
 	return &TabletActor{mysqld, zconn, "", ""}
 }
 
-// FIXME(msolomon) protect against unforeseen panics and classify errors as "fatal" or
-// resolvable. For instance, if your zk connection fails, better to just fail. If data
-// is corrupt, you can't fix it gracefully.
+// This function should be protected from unforseen panics, as
+// dispatchAction will catch everything. The rest of the code in this
+// function should not panic.
 func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, forceRerun bool) error {
 	var err error
 	ta.zkTabletPath, err = TabletPathFromActionPath(actionPath)

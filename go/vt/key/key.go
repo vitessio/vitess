@@ -40,19 +40,19 @@ func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
 	return []byte("\"" + string(kid.Hex()) + "\""), nil
 }
 
-func (kid *KeyspaceId) UnmarshalJSON(data []byte) error {
-	*kid = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
-	return nil
+func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
+	*kid, err = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
+	return err
 }
 
 type HexKeyspaceId string
 
-func (hkid HexKeyspaceId) Unhex() KeyspaceId {
+func (hkid HexKeyspaceId) Unhex() (KeyspaceId, error) {
 	b, err := hex.DecodeString(string(hkid))
 	if err != nil {
-		panic(err)
+		return KeyspaceId(""), err
 	}
-	return KeyspaceId(string(b))
+	return KeyspaceId(string(b)), nil
 }
 
 type KeyRange struct {
@@ -124,10 +124,15 @@ func ParseShardingSpec(spec string) (KeyRangeArray, error) {
 		if p != "" && p <= old {
 			return nil, fmt.Errorf("malformed spec: shard limits should be in order: %q", spec)
 		}
-		ranges[i] = KeyRange{
-			Start: HexKeyspaceId(old).Unhex(),
-			End:   HexKeyspaceId(p).Unhex(),
+		s, err := HexKeyspaceId(old).Unhex()
+		if err != nil {
+			return nil, err
 		}
+		e, err := HexKeyspaceId(p).Unhex()
+		if err != nil {
+			return nil, err
+		}
+		ranges[i] = KeyRange{Start: s, End: e}
 		old = p
 	}
 	return ranges, nil

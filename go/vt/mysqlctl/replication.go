@@ -57,14 +57,14 @@ func (rs ReplicationState) MasterAddr() string {
 	return fmt.Sprintf("%v:%v", rs.MasterHost, rs.MasterPort)
 }
 
-func NewReplicationState(masterAddr string) *ReplicationState {
+func NewReplicationState(masterAddr string) (*ReplicationState, error) {
 	addrPieces := strings.Split(masterAddr, ":")
 	port, err := strconv.Atoi(addrPieces[1])
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return &ReplicationState{MasterConnectRetry: 10,
-		MasterHost: addrPieces[0], MasterPort: port}
+		MasterHost: addrPieces[0], MasterPort: port}, nil
 }
 
 var changeMasterCmd = `CHANGE MASTER TO
@@ -86,35 +86,43 @@ type newMasterData struct {
 	MasterPassword   string
 }
 
-func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) []string {
+func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) ([]string, error) {
 	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
+	cmc, err := fillStringTemplate(changeMasterCmd, nmd)
+	if err != nil {
+		return nil, err
+	}
 	return []string{
 		"STOP SLAVE",
 		"RESET SLAVE",
-		mustFillStringTemplate(changeMasterCmd, nmd),
-		"START SLAVE"}
+		cmc,
+		"START SLAVE"}, nil
 }
 
-func StartSplitReplicationCommands(mysqld *Mysqld, replState *ReplicationState, keyRange key.KeyRange) []string {
+func StartSplitReplicationCommands(mysqld *Mysqld, replState *ReplicationState, keyRange key.KeyRange) ([]string, error) {
 	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
 	startKey := string(keyRange.Start.Hex())
 	endKey := string(keyRange.End.Hex())
+	cmc, err := fillStringTemplate(changeMasterCmd, nmd)
+	if err != nil {
+		return nil, err
+	}
 	return []string{
 		"SET GLOBAL vt_enable_binlog_splitter_rbr = 1",
 		"SET GLOBAL vt_shard_key_range_start = \"" + startKey + "\"",
 		"SET GLOBAL vt_shard_key_range_end = \"" + endKey + "\"",
 		"RESET SLAVE",
-		mustFillStringTemplate(changeMasterCmd, nmd),
-		"START SLAVE"}
+		cmc,
+		"START SLAVE"}, nil
 }
 
-func mustFillStringTemplate(tmpl string, vars interface{}) string {
+func fillStringTemplate(tmpl string, vars interface{}) (string, error) {
 	myTemplate := template.Must(template.New("").Parse(tmpl))
 	data := new(bytes.Buffer)
 	if err := myTemplate.Execute(data, vars); err != nil {
-		panic(err)
+		return "", err
 	}
-	return data.String()
+	return data.String(), nil
 }
 
 func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) (err error) {
@@ -230,7 +238,10 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *
 	if err != nil {
 		return
 	}
-	rs = NewReplicationState(rows[0][1].String())
+	rs, err = NewReplicationState(rows[0][1].String())
+	if err != nil {
+		return
+	}
 	rs.ReplicationPosition.MasterLogFile = file
 	rs.ReplicationPosition.MasterLogPosition = uint(pos)
 

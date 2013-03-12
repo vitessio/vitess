@@ -271,7 +271,10 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		if err != nil {
 			return
 		}
-		masterAddr = mysqld.Addr()
+		masterAddr, err = mysqld.Addr()
+		if err != nil {
+			return
+		}
 	} else {
 		if err = mysqld.StopSlave(); err != nil {
 			return
@@ -283,7 +286,10 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		// We are a slave, check our replication strategy before
 		// choosing the master address.
 		if allowHierarchicalReplication {
-			masterAddr = mysqld.Addr()
+			masterAddr, err = mysqld.Addr()
+			if err != nil {
+				return
+			}
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {
@@ -301,12 +307,16 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	if snapshotErr != nil {
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
-
-		sm := newSnapshotManifest(sourceAddr, masterAddr,
+		var sm *SnapshotManifest
+		sm, snapshotErr = newSnapshotManifest(sourceAddr, masterAddr,
 			dbName, dataFiles, replicationPosition)
-		smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
-		if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
+		if snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
+		} else {
+			smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
+			if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
+				relog.Error("CreateSnapshot failed: %v", snapshotErr)
+			}
 		}
 	}
 
@@ -420,7 +430,10 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		return err
 	}
 
-	cmdList := StartReplicationCommands(mysqld, snapshotManifest.ReplicationState)
+	cmdList, err := StartReplicationCommands(mysqld, snapshotManifest.ReplicationState)
+	if err != nil {
+		return err
+	}
 	if err := mysqld.executeSuperQueryList(cmdList); err != nil {
 		return err
 	}

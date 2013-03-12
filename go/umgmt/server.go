@@ -280,7 +280,7 @@ func ListenAndServe(addr string) error {
 		}
 	}
 	if server.listener == nil {
-		panic("unable to rebind umgmt socket")
+		return fmt.Errorf("unable to rebind umgmt socket")
 	}
 	// register the umgmt server itself for dropping - this seems like
 	// the common case. i can't see when you *wouldn't* want to drop yourself

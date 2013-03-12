@@ -139,10 +139,14 @@ func (conn *Conn) dial() (err error) {
 		if len(parts) != 2 {
 			return errors.New("fragment needs two parts for start and end keyrange")
 		}
-		// FIXME(alainjobart): Unhex panics, that's not good,
-		// change to return errors.
-		sessionParams.KeyRange.Start = key.HexKeyspaceId(parts[0]).Unhex()
-		sessionParams.KeyRange.End = key.HexKeyspaceId(parts[1]).Unhex()
+		sessionParams.KeyRange.Start, err = key.HexKeyspaceId(parts[0]).Unhex()
+		if err != nil {
+			return
+		}
+		sessionParams.KeyRange.End, err = key.HexKeyspaceId(parts[1]).Unhex()
+		if err != nil {
+			return
+		}
 	}
 	var sessionInfo tproto.SessionInfo
 	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {

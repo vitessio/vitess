@@ -273,7 +273,10 @@ func (tablet *Tablet) Json() string {
 }
 
 func (tablet *Tablet) Hostname() string {
-	host, _ := splitHostPort(tablet.Addr)
+	host, _, err := splitHostPort(tablet.Addr)
+	if err != nil {
+		panic(err) // should not happen, Addr was checked at creation
+	}
 	return host
 }
 
@@ -324,27 +327,37 @@ func TabletReplicationPath(zkVtRoot string, tablet *Tablet) (string, error) {
 	return zkPath, nil
 }
 
-func NewTablet(cell string, uid uint32, parent TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType TabletType) *Tablet {
+func NewTablet(cell string, uid uint32, parent TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType TabletType) (*Tablet, error) {
 	state := STATE_READ_ONLY
 	if tabletType == TYPE_MASTER {
 		state = STATE_READ_WRITE
 		if parent.Uid != NO_TABLET {
-			panic(fmt.Errorf("master cannot have parent: %v", parent.Uid))
+			return nil, fmt.Errorf("master cannot have parent: %v", parent.Uid)
 		}
+	}
+
+	// check the values for vtAddr and mysqlAddr are correct
+	_, _, err := splitHostPort(vtAddr)
+	if err != nil {
+		return nil, err
+	}
+	_, _, err = splitHostPort(mysqlAddr)
+	if err != nil {
+		return nil, err
 	}
 
 	// This value will get resolved on tablet server startup.
 	mysqlIpAddr := ""
-	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, mysqlIpAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}
+	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, mysqlIpAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}, nil
 }
 
-func tabletFromJson(data string) *Tablet {
+func tabletFromJson(data string) (*Tablet, error) {
 	t := &Tablet{}
 	err := json.Unmarshal([]byte(data), t)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return t
+	return t, nil
 }
 
 func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
@@ -355,7 +368,10 @@ func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	tablet := tabletFromJson(data)
+	tablet, err := tabletFromJson(data)
+	if err != nil {
+		return nil, err
+	}
 	zkVtRoot, err := VtRootFromTabletPath(zkTabletPath)
 	if err != nil {
 		return nil, err

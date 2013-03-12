@@ -228,7 +228,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 // the original version.
 func newSnapshotFiles(sources, destinations []string, root string, concurrency int, compress bool) ([]SnapshotFile, error) {
 	if len(sources) != len(destinations) || len(sources) == 0 {
-		panic(fmt.Errorf("bad array lengths: %v %v", len(sources), len(destinations)))
+		return nil, fmt.Errorf("programming error: bad array lengths: %v %v", len(sources), len(destinations))
 	}
 
 	workQueue := make(chan int, len(sources))
@@ -285,15 +285,19 @@ type SnapshotManifest struct {
 	ReplicationState *ReplicationState
 }
 
-func newSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition) *SnapshotManifest {
+func newSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition) (*SnapshotManifest, error) {
+	nrs, err := NewReplicationState(mysqlAddr)
+	if err != nil {
+		return nil, err
+	}
 	rs := &SnapshotManifest{
 		Addr:             addr,
 		DbName:           dbName,
 		Files:            files,
-		ReplicationState: NewReplicationState(mysqlAddr)}
+		ReplicationState: nrs}
 	sort.Sort(rs.Files)
 	rs.ReplicationState.ReplicationPosition = *pos
-	return rs
+	return rs, nil
 }
 
 func fetchSnapshotManifestWithRetry(addr, dbName string, keyRange key.KeyRange, retryCount int) (ssm *SplitSnapshotManifest, err error) {

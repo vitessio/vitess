@@ -418,7 +418,7 @@ wait:
 // so this is a rare cleaup action, not a normal part of the flow.
 func PurgeActions(zconn zk.Conn, zkActionPath string) error {
 	if path.Base(zkActionPath) != "action" {
-		panic(fmt.Errorf("not action path: %v", zkActionPath))
+		return fmt.Errorf("not action path: %v", zkActionPath)
 	}
 
 	children, _, err := zconn.Children(zkActionPath)
@@ -491,7 +491,7 @@ func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration
 // results, but it is very very small.
 func PruneActionLogs(zconn zk.Conn, zkActionLogPath string, keepCount int) (prunedCount int, err error) {
 	if path.Base(zkActionLogPath) != "actionlog" {
-		panic(fmt.Errorf("not actionlog path: %v", zkActionLogPath))
+		return 0, fmt.Errorf("not actionlog path: %v", zkActionLogPath)
 	}
 
 	// get sorted list of children

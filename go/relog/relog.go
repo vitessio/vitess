@@ -148,14 +148,14 @@ func (logger *Logger) SetLevel(level int) {
 	logger.level = level
 }
 
-func LogNameToLogLevel(name string) int {
+func LogNameToLogLevel(name string) (int, error) {
 	s := strings.ToUpper(name)
 	for i, level := range levelNames {
 		if level == s {
-			return i
+			return i, nil
 		}
 	}
-	panic(fmt.Errorf("no log level: %v", name))
+	return 0, fmt.Errorf("no log level: %v", name)
 }
 
 // Replace stdout and stderr with a file. This overwrites the actual file

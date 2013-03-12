@@ -57,7 +57,15 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 	if err != nil {
 		return
 	}
-	replicationState = NewReplicationState(mysqld.Addr())
+	var mysqldAddr string
+	mysqldAddr, err = mysqld.Addr()
+	if err != nil {
+		return
+	}
+	replicationState, err = NewReplicationState(mysqldAddr)
+	if err != nil {
+		return
+	}
 	replicationState.ReplicationPosition = *replicationPosition
 	lastPos := lastRepPos.MapKey()
 	newAddr := replicationState.MasterAddr()
@@ -98,7 +106,10 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 
 func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosition *ReplicationPosition, timeCheck int64) error {
 	relog.Info("Restart Slave")
-	cmds := StartReplicationCommands(mysqld, replicationState)
+	cmds, err := StartReplicationCommands(mysqld, replicationState)
+	if err != nil {
+		return err
+	}
 	if err := mysqld.executeSuperQueryList(cmds); err != nil {
 		return err
 	}

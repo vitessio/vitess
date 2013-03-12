@@ -43,7 +43,7 @@ unit_test:
 	cd go/vt/sqlparser; go test
 	cd go/vt/tabletmanager; go test
 #	cd go/vt/wrangler; go test
-#	cd go/zk; go test
+	cd go/zk; go test
 #	cd go/zk/zkctl; go test
 
 queryservice_test:

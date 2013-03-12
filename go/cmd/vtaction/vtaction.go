@@ -58,11 +58,15 @@ func main() {
 	logFile, err := os.OpenFile(*logFilename,
 		os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		panic(err)
+		relog.Fatal("Can't open log file: %v", err)
+	}
+	logLevelInt, err := relog.LogNameToLogLevel(*logLevel)
+	if err != nil {
+		relog.Fatal("%v", err)
 	}
 	logger := relog.New(logFile, fmt.Sprintf("vtaction [%v] ", os.Getpid()),
 		log.Ldate|log.Lmicroseconds|log.Lshortfile,
-		relog.LogNameToLogLevel(*logLevel))
+		logLevelInt)
 	relog.SetLogger(logger)
 	relog.HijackStdio(logFile, logFile)
 

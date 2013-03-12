@@ -332,7 +332,7 @@ func deleteTopDir(dir string) (removalErr error) {
 	return
 }
 
-func (mysqld *Mysqld) Addr() string {
+func (mysqld *Mysqld) Addr() (string, error) {
 	return mysqld.config.MysqlAddr()
 }
 

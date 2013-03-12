@@ -76,7 +76,9 @@ func serveRPC() {
 
 func main() {
 	flag.Parse()
-	servenv.Init("vtocc")
+	if err := servenv.Init("vtocc"); err != nil {
+		relog.Fatal("Error in servenv.Init: %v", err)
+	}
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
 			ts.QueryLogger = relog.New(f, "", log.Ldate|log.Lmicroseconds, relog.DEBUG)

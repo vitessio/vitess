@@ -120,7 +120,11 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 			pathAddrsMap[zkPath] = addrs
 		}
 
-		entry := tm.VtnsAddrForTablet(tablet.Tablet)
+		entry, err := tm.VtnsAddrForTablet(tablet.Tablet)
+		if err != nil {
+			relog.Warning("VtnsAddrForTablet failed for tablet %v: %v", tablet.Path(), err)
+			continue
+		}
 		addrs.Entries = append(addrs.Entries, *entry)
 	}
 

@@ -81,7 +81,9 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
-	servenv.Init("vttablet")
+	if err := servenv.Init("vttablet"); err != nil {
+		relog.Fatal("Error in servenv.Init: %s", err)
+	}
 
 	_, tabletidStr := path.Split(*tabletPath)
 	tabletId, err := tm.ParseUid(tabletidStr)
@@ -97,8 +99,11 @@ func main() {
 
 	initQueryService(dbcfgs)
 	initUpdateStreamService(mycnf)
-	ts.RegisterCacheInvalidator()                                // depends on both query and updateStream
-	initAgent(dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
+	ts.RegisterCacheInvalidator()                                      // depends on both query and updateStream
+	err = initAgent(dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
+	if err != nil {
+		relog.Fatal("%s", err)
+	}
 
 	rpc.HandleHTTP()
 
@@ -178,7 +183,7 @@ func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 	return mycnf
 }
 
-func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) {
+func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) error {
 	zconn := zk.NewMetaConn(false)
 	expvar.Publish("ZkMetaConn", zconn)
 	umgmt.AddCloseCallback(func() {
@@ -191,7 +196,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 	// modifications to this tablet.
 	agent, err := tm.NewActionAgent(zconn, *tabletPath, *mycnfFile, dbConfigsFile, dbCredentialsFile)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet tm.Tablet) {
 		if newTablet.IsServingType() {
@@ -218,7 +223,13 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 			}
 		}
 	})
-	agent.Start(bindAddr, mycnf.MysqlAddr())
+	mysqlAddr, err := mycnf.MysqlAddr()
+	if err != nil {
+		return err
+	}
+	if err := agent.Start(bindAddr, mysqlAddr); err != nil {
+		return err
+	}
 	umgmt.AddCloseCallback(func() {
 		agent.Stop()
 	})
@@ -229,6 +240,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 	// data.
 	tm := tm.NewTabletManager(bindAddr, nil, mysqld)
 	rpc.Register(tm)
+	return nil
 }
 
 func initQueryService(dbcfgs dbconfigs.DBConfigs) {

@@ -370,14 +370,23 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shar
 		}
 	}
 
-	tablet := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
+	tablet, err := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
+	if err != nil {
+		return err
+	}
 	tablet.DbNameOverride = dbNameOverride
 
 	if keyStart != "" {
-		tablet.KeyRange.Start = key.HexKeyspaceId(keyStart).Unhex()
+		tablet.KeyRange.Start, err = key.HexKeyspaceId(keyStart).Unhex()
+		if err != nil {
+			return err
+		}
 	}
 	if keyEnd != "" {
-		tablet.KeyRange.End = key.HexKeyspaceId(keyEnd).Unhex()
+		tablet.KeyRange.End, err = key.HexKeyspaceId(keyEnd).Unhex()
+		if err != nil {
+			return err
+		}
 	}
 
 	err = tm.CreateTablet(zconn, zkPath, tablet)
@@ -883,9 +892,17 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 4, "how many concurrent jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-
 	subFlags.Parse(args)
-	keyRange := key.KeyRange{Start: key.HexKeyspaceId(*start).Unhex(), End: key.HexKeyspaceId(*end).Unhex()}
+
+	s, err := key.HexKeyspaceId(*start).Unhex()
+	if err != nil {
+		relog.Fatal("Invalid start key %v: %v", *start, err)
+	}
+	e, err := key.HexKeyspaceId(*end).Unhex()
+	if err != nil {
+		relog.Fatal("Invalid end key %v: %v", *end, err)
+	}
+	keyRange := key.KeyRange{Start: s, End: e}
 	if subFlags.NArg() < 3 {
 		relog.Fatal("MultiRestore requires <dbname> <destination zk path> <source zk path>... %v", args)
 	}
@@ -1476,7 +1493,10 @@ func main() {
 
 	logPrefix := "vtctl "
 	logFlag := log.Ldate | log.Lmicroseconds | log.Lshortfile
-	logLevel := relog.LogNameToLogLevel(*logLevel)
+	logLevel, err := relog.LogNameToLogLevel(*logLevel)
+	if err != nil {
+		relog.Fatal("%v", err)
+	}
 	logger := relog.New(os.Stderr, logPrefix, logFlag, logLevel)
 	// Set default logger to stderr.
 	relog.SetLogger(logger)
@@ -1505,7 +1525,6 @@ func main() {
 
 	wrangler := wr.NewWrangler(zconn, *waitTime, *lockWaitTimeout)
 	var actionPath string
-	var err error
 
 	found := false
 	for _, group := range commands {

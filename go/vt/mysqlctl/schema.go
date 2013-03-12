@@ -43,8 +43,7 @@ func (sd *SchemaDefinition) generateSchemaVersion() {
 	hasher := md5.New()
 	for _, td := range sd.TableDefinitions {
 		if _, err := hasher.Write([]byte(td.Schema)); err != nil {
-			// extremely unlikely
-			panic(err)
+			panic(err) // extremely unlikely
 		}
 	}
 	sd.Version = hex.EncodeToString(hasher.Sum(nil))

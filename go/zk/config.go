@@ -46,7 +46,7 @@ func GuessLocalCell() string {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		panic(err)
+		panic(err) // should never happen
 	}
 
 	shortHostname := strings.Split(hostname, ".")[0]

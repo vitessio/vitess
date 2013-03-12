@@ -222,7 +222,7 @@ func (agent *ActionAgent) handleActionQueue() (<-chan zookeeper.Event, error) {
 func (agent *ActionAgent) verifyZkPaths() error {
 	tablet := agent.Tablet()
 	if tablet == nil {
-		panic(fmt.Errorf("agent._tablet is nil"))
+		return fmt.Errorf("agent._tablet is nil")
 	}
 
 	if err := Validate(agent.zconn, agent.zkTabletPath, ""); err != nil {
@@ -296,10 +296,16 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 				mysqlAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_mysql"])
 				if vtAddr != agent.Tablet().Addr || mysqlAddr != agent.Tablet().MysqlAddr {
 					// update needed
-					host, port := splitHostPort(agent.Tablet().Addr)
+					host, port, err := splitHostPort(agent.Tablet().Addr)
+					if err != nil {
+						return "", err
+					}
 					entry.Host = host
 					entry.NamedPortMap["_vtocc"] = port
-					host, port = splitHostPort(agent.Tablet().MysqlAddr)
+					host, port, err = splitHostPort(agent.Tablet().MysqlAddr)
+					if err != nil {
+						return "", err
+					}
 					entry.NamedPortMap["_mysql"] = port
 				}
 				break
@@ -307,46 +313,60 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 		}
 
 		if !foundTablet {
-			addrs.Entries = append(addrs.Entries, *VtnsAddrForTablet(agent.Tablet().Tablet))
+			v, err := VtnsAddrForTablet(agent.Tablet().Tablet)
+			if err != nil {
+				return "", err
+			}
+			addrs.Entries = append(addrs.Entries, *v)
 		}
 	} else {
-		addrs.Entries = append(addrs.Entries, *VtnsAddrForTablet(agent.Tablet().Tablet))
+		v, err := VtnsAddrForTablet(agent.Tablet().Tablet)
+		if err != nil {
+			return "", err
+		}
+		addrs.Entries = append(addrs.Entries, *v)
 	}
 	return jscfg.ToJson(addrs), nil
 }
 
-func splitHostPort(addr string) (string, int) {
+func splitHostPort(addr string) (string, int, error) {
 	host, port, err := net.SplitHostPort(addr)
 	if err != nil {
-		panic(err)
+		return "", 0, err
 	}
 	p, err := strconv.ParseInt(port, 10, 16)
 	if err != nil {
-		panic(err)
+		return "", 0, err
 	}
-	return host, int(p)
+	return host, int(p), nil
 }
 
-func fqdn() string {
+func fqdn() (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	cname, err := net.LookupCNAME(hostname)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	return strings.TrimRight(cname, ".")
+	return strings.TrimRight(cname, "."), nil
 }
 
 // Resolve an address where the host has been left blank, like ":3306"
-func resolveAddr(addr string) string {
-	host, port := splitHostPort(addr)
-	if host == "" {
-		host = fqdn()
+func resolveAddr(addr string) (string, error) {
+	host, port, err := splitHostPort(addr)
+	if err != nil {
+		return "", err
 	}
-	return fmt.Sprintf("%v:%v", host, port)
+	if host == "" {
+		host, err = fqdn()
+		if err != nil {
+			return "", err
+		}
+	}
+	return fmt.Sprintf("%v:%v", host, port), nil
 }
 
 func resolveIpAddr(addr string) (string, error) {
@@ -361,30 +381,42 @@ func resolveIpAddr(addr string) (string, error) {
 	return net.JoinHostPort(ipAddrs[0], port), nil
 }
 
-func VtnsAddrForTablet(tablet *Tablet) *naming.VtnsAddr {
-	host, port := splitHostPort(tablet.Addr)
+func VtnsAddrForTablet(tablet *Tablet) (*naming.VtnsAddr, error) {
+	host, port, err := splitHostPort(tablet.Addr)
+	if err != nil {
+		return nil, err
+	}
 	entry := naming.NewAddr(tablet.Uid, host, 0)
 	entry.NamedPortMap["_vtocc"] = port
-	host, port = splitHostPort(tablet.MysqlAddr)
+	host, port, err = splitHostPort(tablet.MysqlAddr)
+	if err != nil {
+		return nil, err
+	}
 	entry.NamedPortMap["_mysql"] = port
-	return entry
+	return entry, nil
 }
 
-func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
+func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) error {
 	var err error
 	if err = agent.readTablet(); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err = agent.resolvePaths(); err != nil {
-		panic(err)
+		return err
 	}
 
-	bindAddr = resolveAddr(bindAddr)
-	mysqlAddr = resolveAddr(mysqlAddr)
+	bindAddr, err = resolveAddr(bindAddr)
+	if err != nil {
+		return err
+	}
+	mysqlAddr, err = resolveAddr(mysqlAddr)
+	if err != nil {
+		return err
+	}
 	mysqlIpAddr, err := resolveIpAddr(mysqlAddr)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	// Update bind addr for mysql and query service in the tablet node.
@@ -393,7 +425,10 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 			return "", fmt.Errorf("no data for tablet addr update: %v", agent.zkTabletPath)
 		}
 
-		tablet := tabletFromJson(oldValue)
+		tablet, err := tabletFromJson(oldValue)
+		if err != nil {
+			return "", err
+		}
 		tablet.Addr = bindAddr
 		tablet.MysqlAddr = mysqlAddr
 		tablet.MysqlIpAddr = mysqlIpAddr
@@ -401,30 +436,31 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) {
 	}
 	err = agent.zconn.RetryChange(agent.Tablet().Path(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	// Reread in case there were changes
 	if err := agent.readTablet(); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := zk.CreatePidNode(agent.zconn, agent.Tablet().PidPath(), agent.done); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err = agent.verifyZkPaths(); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err = agent.verifyZkServingAddrs(); err != nil {
-		panic(err)
+		return err
 	}
 
 	oldTablet := &Tablet{}
 	agent.runChangeCallbacks(oldTablet, "Start")
 
 	go agent.actionEventLoop()
+	return nil
 }
 
 func (agent *ActionAgent) Stop() {

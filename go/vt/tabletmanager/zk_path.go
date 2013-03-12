@@ -77,8 +77,7 @@ func IsTabletPath(zkTabletPath string) error {
 func TabletPath(zkVtRoot string, tabletUid uint32) string {
 	tabletPath := path.Join(zkVtRoot, "tablets", tabletUidStr(tabletUid))
 	if err := IsTabletPath(tabletPath); err != nil {
-		// this should never happen
-		panic(err)
+		panic(err) // this should never happen
 	}
 	return tabletPath
 }
@@ -116,8 +115,7 @@ func IsShardPath(zkShardPath string) error {
 func ShardPath(zkVtRoot, keyspace, shard string) string {
 	shardPath := path.Join("/zk/global/vt", "keyspaces", keyspace, "shards", shard)
 	if err := IsShardPath(shardPath); err != nil {
-		// this should never happen
-		panic(err)
+		panic(err) // this should never happen
 	}
 	return shardPath
 }
@@ -142,8 +140,7 @@ func ShardActionLogPath(zkShardPath string) (string, error) {
 func KeyspacePath(zkVtRoot, keyspace string) string {
 	keyspacePath := path.Join("/zk/global/vt", "keyspaces", keyspace)
 	if err := IsKeyspacePath(keyspacePath); err != nil {
-		// this should never happen
-		panic(err)
+		panic(err) // this should never happen
 	}
 	return keyspacePath
 }

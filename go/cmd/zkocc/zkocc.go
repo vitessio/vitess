@@ -49,7 +49,9 @@ func init() {
 // zkocc: a proxy for zk
 func main() {
 	flag.Parse()
-	servenv.Init("zkocc")
+	if err := servenv.Init("zkocc"); err != nil {
+		relog.Fatal("Error in servenv.Init: %v", err)
+	}
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()

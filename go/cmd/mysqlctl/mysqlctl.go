@@ -102,7 +102,15 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 
 	subFlags.Parse(args)
 
-	keyRange := key.KeyRange{Start: key.HexKeyspaceId(*start).Unhex(), End: key.HexKeyspaceId(*end).Unhex()}
+	s, err := key.HexKeyspaceId(*start).Unhex()
+	if err != nil {
+		relog.Fatal("Invalid start key %v: %v", *start, err)
+	}
+	e, err := key.HexKeyspaceId(*end).Unhex()
+	if err != nil {
+		relog.Fatal("Invalid end key %v: %v", *end, err)
+	}
+	keyRange := key.KeyRange{Start: s, End: e}
 
 	if subFlags.NArg() < 2 {
 		relog.Fatal("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)
@@ -274,9 +282,13 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
+	logLevelInt, err := relog.LogNameToLogLevel(*logLevel)
+	if err != nil {
+		relog.Fatal("%v", err)
+	}
 	logger := relog.New(os.Stderr, "",
 		log.Ldate|log.Lmicroseconds|log.Lshortfile,
-		relog.LogNameToLogLevel(*logLevel))
+		logLevelInt)
 	relog.SetLogger(logger)
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)

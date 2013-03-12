@@ -53,21 +53,25 @@ func (cnf *Mycnf) lookupAndCheck(key string) string {
 	return val
 }
 
-func (cnf *Mycnf) MysqlAddr() string {
-	return fmt.Sprintf("%v:%v", fqdn(), cnf.MysqlPort)
+func (cnf *Mycnf) MysqlAddr() (string, error) {
+	h, err := fqdn()
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v:%v", h, cnf.MysqlPort), nil
 }
 
-func fqdn() string {
+func fqdn() (string, error) {
 	hostname, err := os.Hostname()
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	cname, err := net.LookupCNAME(hostname)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
-	return strings.TrimRight(cname, ".")
+	return strings.TrimRight(cname, "."), nil
 }
 
 func normKey(bkey []byte) string {
@@ -118,14 +122,14 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	serverIdStr := mycnf.lookupAndCheck("server-id")
 	serverId, err := strconv.Atoi(serverIdStr)
 	if err != nil {
-		panic(fmt.Errorf("Failed to convert server-id %v", err))
+		return nil, fmt.Errorf("Failed to convert server-id %v", err)
 	}
 	mycnf.ServerId = uint32(serverId)
 
 	portStr := mycnf.lookupAndCheck("port")
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		panic(fmt.Errorf("Failed: failed to convert port %v", err))
+		return nil, fmt.Errorf("Failed: failed to convert port %v", err)
 	}
 	mycnf.MysqlPort = port
 	mycnf.DataDir = mycnf.lookupAndCheck("datadir")
