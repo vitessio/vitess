@@ -58,8 +58,11 @@ type ActionAgent struct {
 }
 
 // bindAddr: the address for the query service advertised by this agent
-func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile, dbCredentialsFile string) *ActionAgent {
-	actionPath := TabletActionPath(zkTabletPath)
+func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
+	actionPath, err := TabletActionPath(zkTabletPath)
+	if err != nil {
+		return nil, err
+	}
 	return &ActionAgent{
 		zconn:             zconn,
 		zkTabletPath:      zkTabletPath,
@@ -69,7 +72,7 @@ func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile, dbCre
 		DbCredentialsFile: dbCredentialsFile,
 		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
 		done:              make(chan struct{}),
-	}
+	}, nil
 }
 
 func (agent *ActionAgent) AddChangeCallback(f TabletChangeCallback) {

@@ -189,7 +189,10 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
-	agent := tm.NewActionAgent(zconn, *tabletPath, *mycnfFile, dbConfigsFile, dbCredentialsFile)
+	agent, err := tm.NewActionAgent(zconn, *tabletPath, *mycnfFile, dbConfigsFile, dbCredentialsFile)
+	if err != nil {
+		panic(err)
+	}
 	agent.AddChangeCallback(func(oldTablet, newTablet tm.Tablet) {
 		if newTablet.IsServingType() {
 			if dbcfgs.App.Dbname == "" {

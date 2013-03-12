@@ -21,7 +21,9 @@ import (
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(zkShardPath string) error {
-	tm.MustBeShardPath(zkShardPath)
+	if err := tm.IsShardPath(zkShardPath); err != nil {
+		return err
+	}
 	actionPath, err := wr.ai.RebuildShard(zkShardPath)
 	if err != nil {
 		return err
@@ -178,7 +180,9 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 
 // Rebuild the serving graph data while locking out other changes.
 func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) error {
-	tm.MustBeKeyspacePath(zkKeyspacePath)
+	if err := tm.IsKeyspacePath(zkKeyspacePath); err != nil {
+		return err
+	}
 	actionPath, err := wr.ai.RebuildKeyspace(zkKeyspacePath)
 	if err != nil {
 		return err
@@ -207,7 +211,10 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) error {
 // copies in each cell.
 func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 	relog.Info("rebuildKeyspace %v", zkKeyspacePath)
-	vtRoot := tm.VtRootFromKeyspacePath(zkKeyspacePath)
+	vtRoot, err := tm.VtRootFromKeyspacePath(zkKeyspacePath)
+	if err != nil {
+		return err
+	}
 	keyspace := path.Base(zkKeyspacePath)
 	shardNames, _, err := wr.zconn.Children(path.Join(zkKeyspacePath, "shards"))
 	if err != nil {
@@ -328,9 +335,12 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 
 	vtRoot := zkVtPaths[0]
 	for _, keyspace := range keyspaces {
-		shardsPath := tm.KeyspaceShardsPath(tm.KeyspacePath(vtRoot, keyspace))
+		shardsPath, err := tm.KeyspaceShardsPath(tm.KeyspacePath(vtRoot, keyspace))
+		if err != nil {
+			return err
+		}
 		relog.Debug("delete keyspace shards: %v", shardsPath)
-		err := zk.DeleteRecursive(wr.zconn, shardsPath, -1)
+		err = zk.DeleteRecursive(wr.zconn, shardsPath, -1)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return err
 		}

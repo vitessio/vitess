@@ -9,19 +9,15 @@ import (
 )
 
 func testExpectedShardPanic(t *testing.T, path string) {
-	defer func() {
-		recover()
-	}()
-	MustBeShardPath(path)
-	t.Errorf("expected shard panic: %v", path)
+	if err := IsShardPath(path); err == nil {
+		t.Errorf("expected shard error: %v", path)
+	}
 }
 
 func testExpectedTabletPanic(t *testing.T, path string) {
-	defer func() {
-		recover()
-	}()
-	MustBeTabletPath(path)
-	t.Errorf("expected tablet panic: %v", path)
+	if err := IsTabletPath(path); err == nil {
+		t.Errorf("expected tablet error: %v", path)
+	}
 }
 
 func TestInvalidShard(t *testing.T) {
@@ -33,12 +29,9 @@ func TestEmptyShard(t *testing.T) {
 }
 
 func TestValidShard(t *testing.T) {
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error(x)
-		}
-	}()
-	MustBeShardPath("/zk/global/vt/keyspaces/test/shards/0")
+	if err := IsShardPath("/zk/global/vt/keyspaces/test/shards/0"); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestValidShardWithTrailingSlash(t *testing.T) {
@@ -47,12 +40,9 @@ func TestValidShardWithTrailingSlash(t *testing.T) {
 }
 
 func TestValidTablet(t *testing.T) {
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error(x)
-		}
-	}()
-	MustBeTabletPath("/vt/tablets/0")
+	if err := IsTabletPath("/vt/tablets/0"); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestValidTabletWithTrailingSlash(t *testing.T) {
@@ -60,12 +50,9 @@ func TestValidTabletWithTrailingSlash(t *testing.T) {
 }
 
 func TestRealPath(t *testing.T) {
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error(x)
-		}
-	}()
-	MustBeTabletPath("/zk/test/vt/tablets/0000062344")
+	if err := IsTabletPath("/zk/test/vt/tablets/0000062344"); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestShardInfo(t *testing.T) {
@@ -95,12 +82,10 @@ func TestShardInfo(t *testing.T) {
 }
 
 func TestVtRootFromShardPath(t *testing.T) {
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error(x)
-		}
-	}()
-	path := VtRootFromShardPath("/zk/global/vt/keyspaces/test_keyspace/shards/shard0")
+	path, err := VtRootFromShardPath("/zk/global/vt/keyspaces/test_keyspace/shards/shard0")
+	if err != nil {
+		t.Error(err)
+	}
 	expectedPath := "/zk/global/vt"
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)
@@ -108,12 +93,10 @@ func TestVtRootFromShardPath(t *testing.T) {
 }
 
 func TestVtRootFromTabletPath(t *testing.T) {
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error(x)
-		}
-	}()
-	path := VtRootFromTabletPath("/zk/test/vt/tablets/0000062344")
+	path, err := VtRootFromTabletPath("/zk/test/vt/tablets/0000062344")
+	if err != nil {
+		t.Error(err)
+	}
 	expectedPath := "/zk/test/vt"
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)
@@ -128,32 +111,39 @@ func TestTabletPathFromReplicationPath(t *testing.T) {
 	}()
 
 	expectedPath := "/zk/nj/vt/tablets/0000062344"
-	path := TabletPathFromReplicationPath("/zk/global/vt/keyspaces/test_keyspace/shards/0/nj-0000062344")
+	path, err := TabletPathFromReplicationPath("/zk/global/vt/keyspaces/test_keyspace/shards/0/nj-0000062344")
+	if err != nil {
+		t.Error(err)
+	}
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)
 	}
 
 	expectedPath = "/zk/ny/vt/tablets/0000031981"
-	path = TabletPathFromReplicationPath("/zk/global/vt/keyspaces/test_keyspace/shards/0/nj-0000062344/ny-0000031981")
+	path, err = TabletPathFromReplicationPath("/zk/global/vt/keyspaces/test_keyspace/shards/0/nj-0000062344/ny-0000031981")
+	if err != nil {
+		t.Error(err)
+	}
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)
 	}
 
 	// Test we don't assume /vt/ here.
 	expectedPath = "/zk/ny/vt-x/tablets/0000031981"
-	path = TabletPathFromReplicationPath("/zk/global/vt-x/keyspaces/test_keyspace/shards/0/nj-0000062344/ny-0000031981")
+	path, err = TabletPathFromReplicationPath("/zk/global/vt-x/keyspaces/test_keyspace/shards/0/nj-0000062344/ny-0000031981")
+	if err != nil {
+		t.Error(err)
+	}
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)
 	}
 }
 
 func TestTabletPathFromActionPath(t *testing.T) {
-	defer func() {
-		if x := recover(); x != nil {
-			t.Error(x)
-		}
-	}()
-	path := TabletPathFromActionPath("/zk/test/vt/tablets/0000062344/action/0000000001")
+	path, err := TabletPathFromActionPath("/zk/test/vt/tablets/0000062344/action/0000000001")
+	if err != nil {
+		t.Error(err)
+	}
 	expectedPath := "/zk/test/vt/tablets/0000062344"
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)

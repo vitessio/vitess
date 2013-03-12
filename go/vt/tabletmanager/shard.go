@@ -139,7 +139,10 @@ func NewShardInfo(zkShardPath, shardData string) (shardInfo *ShardInfo, err erro
 		return nil, fmt.Errorf("empty shard data: %v", zkShardPath)
 	}
 
-	zkVtRoot := VtRootFromShardPath(zkShardPath)
+	zkVtRoot, err := VtRootFromShardPath(zkShardPath)
+	if err != nil {
+		return nil, err
+	}
 	pathParts := strings.Split(zkShardPath, "/")
 	keyspace := pathParts[len(pathParts)-3]
 	shardName := pathParts[len(pathParts)-1]
@@ -156,7 +159,9 @@ func NewShardInfo(zkShardPath, shardData string) (shardInfo *ShardInfo, err erro
 }
 
 func ReadShard(zconn zk.Conn, zkShardPath string) (*ShardInfo, error) {
-	MustBeShardPath(zkShardPath)
+	if err := IsShardPath(zkShardPath); err != nil {
+		return nil, err
+	}
 	data, _, err := zconn.Get(zkShardPath)
 	if err != nil {
 		return nil, err
@@ -186,7 +191,7 @@ func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]TabletAli
 			continue
 		}
 		zkTabletReplicationPath := path.Join(zkShardPath, child)
-		cell, uid, err := parseTabletReplicationPath(zkTabletReplicationPath)
+		cell, uid, err := ParseTabletReplicationPath(zkTabletReplicationPath)
 		if err != nil {
 			continue
 		}

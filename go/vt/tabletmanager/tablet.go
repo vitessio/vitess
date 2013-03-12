@@ -348,19 +348,26 @@ func tabletFromJson(data string) *Tablet {
 }
 
 func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
-	MustBeTabletPath(zkTabletPath)
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return nil, err
+	}
 	data, stat, err := zconn.Get(zkTabletPath)
 	if err != nil {
 		return nil, err
 	}
 	tablet := tabletFromJson(data)
-	zkVtRoot := VtRootFromTabletPath(zkTabletPath)
+	zkVtRoot, err := VtRootFromTabletPath(zkTabletPath)
+	if err != nil {
+		return nil, err
+	}
 	return &TabletInfo{zkVtRoot, stat.Version(), tablet}, nil
 }
 
 // Update tablet data only - not associated paths.
 func UpdateTablet(zconn zk.Conn, zkTabletPath string, tablet *TabletInfo) error {
-	MustBeTabletPath(zkTabletPath)
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return err
+	}
 	version := -1
 	if tablet.version != 0 {
 		version = tablet.version
@@ -374,15 +381,19 @@ func UpdateTablet(zconn zk.Conn, zkTabletPath string, tablet *TabletInfo) error 
 }
 
 func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string) error {
-	MustBeTabletPath(zkTabletPath)
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return err
+	}
 
 	tablet, err := ReadTablet(zconn, zkTabletPath)
 	if err != nil {
 		return err
 	}
 
-	zkPaths := []string{
-		TabletActionPath(zkTabletPath),
+	zkPaths := make([]string, 1, 2)
+	zkPaths[0], err = TabletActionPath(zkTabletPath)
+	if err != nil {
+		return err
 	}
 
 	// Some tablets have no information to generate valid replication paths.
@@ -394,7 +405,11 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
 	if tablet.IsInReplicationGraph() {
-		zkPaths = append(zkPaths, ShardActionPath(tablet.ShardPath()))
+		sap, err := ShardActionPath(tablet.ShardPath())
+		if err != nil {
+			return err
+		}
+		zkPaths = append(zkPaths, sap)
 		rp, err := tablet.ReplicationPath()
 		if err != nil {
 			return err
@@ -434,7 +449,9 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 
 // Create a new tablet and all associated global zk paths for the replication graph.
 func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
-	MustBeTabletPath(zkTabletPath)
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return err
+	}
 
 	// Create /vt/tablets/<uid>
 	_, err := zk.CreateRecursive(zconn, zkTabletPath, tablet.Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -443,13 +460,21 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 	}
 
 	// Create /vt/tablets/<uid>/action
-	_, err = zconn.Create(TabletActionPath(zkTabletPath), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	tap, err := TabletActionPath(zkTabletPath)
+	if err != nil {
+		return err
+	}
+	_, err = zconn.Create(tap, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		return err
 	}
 
 	// Create /vt/tablets/<uid>/actionlog
-	_, err = zconn.Create(TabletActionLogPath(zkTabletPath), "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	talp, err := TabletActionLogPath(zkTabletPath)
+	if err != nil {
+		return err
+	}
+	_, err = zconn.Create(talp, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		return err
 	}
@@ -463,25 +488,36 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 
 func CreateTabletReplicationPaths(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 	relog.Debug("CreateTabletReplicationPaths %v", zkTabletPath)
-	MustBeTabletPath(zkTabletPath)
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return err
+	}
 
-	zkVtRootPath := VtRootFromTabletPath(zkTabletPath)
+	zkVtRootPath, err := VtRootFromTabletPath(zkTabletPath)
+	if err != nil {
+		return err
+	}
 
 	shardPath := ShardPath(zkVtRootPath, tablet.Keyspace, tablet.Shard)
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>
-	_, err := zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err = zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
 
-	shardActionPath := ShardActionPath(shardPath)
+	shardActionPath, err := ShardActionPath(shardPath)
+	if err != nil {
+		return err
+	}
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>/action
 	_, err = zk.CreateRecursive(zconn, shardActionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
 
-	shardActionLogPath := ShardActionLogPath(shardPath)
+	shardActionLogPath, err := ShardActionLogPath(shardPath)
+	if err != nil {
+		return err
+	}
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>/actionlog
 	_, err = zk.CreateRecursive(zconn, shardActionLogPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {

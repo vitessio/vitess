@@ -15,96 +15,88 @@ import (
 
 // Functions for extracting and deriving zk paths.
 
-func VtRootFromTabletPath(zkTabletPath string) string {
-	defer func() {
-		if e := recover(); e != nil {
-			panic(fmt.Errorf("invalid tablet path: %v", e))
-		}
-	}()
+func VtRootFromTabletPath(zkTabletPath string) (string, error) {
 	pathParts := strings.Split(zkTabletPath, "/")
-	if pathParts[len(pathParts)-2] != "tablets" {
-		panic(fmt.Errorf("invalid tablet path: %v", zkTabletPath))
+	if len(pathParts) < 2 || pathParts[len(pathParts)-2] != "tablets" {
+		return "", fmt.Errorf("invalid tablet path: %v", zkTabletPath)
 	}
 
-	return strings.Join(pathParts[:len(pathParts)-2], "/")
+	return strings.Join(pathParts[:len(pathParts)-2], "/"), nil
 }
 
-func VtRootFromShardPath(zkShardPath string) string {
-	defer func() {
-		if e := recover(); e != nil {
-			panic(fmt.Errorf("invalid shard path: %v %v", zkShardPath, e))
-		}
-	}()
-
+func VtRootFromShardPath(zkShardPath string) (string, error) {
 	pathParts := strings.Split(zkShardPath, "/")
-	if pathParts[len(pathParts)-2] != "shards" || pathParts[len(pathParts)-4] != "keyspaces" {
-		panic(fmt.Errorf("invalid shard path: %v", zkShardPath))
+	if len(pathParts) < 4 || pathParts[len(pathParts)-2] != "shards" || pathParts[len(pathParts)-4] != "keyspaces" {
+		return "", fmt.Errorf("invalid shard path: %v", zkShardPath)
 	}
 
 	if pathParts[2] != "global" {
-		panic(fmt.Errorf("invalid shard path - not global: %v", zkShardPath))
+		return "", fmt.Errorf("invalid shard path - not global: %v", zkShardPath)
 	}
 
-	return strings.Join(pathParts[:len(pathParts)-4], "/")
+	return strings.Join(pathParts[:len(pathParts)-4], "/"), nil
 }
 
-func VtRootFromKeyspacePath(zkKeyspacePath string) string {
-	defer func() {
-		if e := recover(); e != nil {
-			panic(fmt.Errorf("invalid keyspace path: %v %v", zkKeyspacePath, e))
-		}
-	}()
-
+func VtRootFromKeyspacePath(zkKeyspacePath string) (string, error) {
 	pathParts := strings.Split(zkKeyspacePath, "/")
-	if pathParts[len(pathParts)-2] != "keyspaces" {
-		panic(fmt.Errorf("invalid keyspace path: %v", zkKeyspacePath))
+	if len(pathParts) < 2 || pathParts[len(pathParts)-2] != "keyspaces" {
+		return "", fmt.Errorf("invalid keyspace path: %v", zkKeyspacePath)
 	}
 
 	if pathParts[2] != "global" {
-		panic(fmt.Errorf("invalid keyspace path - not global: %v", zkKeyspacePath))
+		return "", fmt.Errorf("invalid keyspace path - not global: %v", zkKeyspacePath)
 	}
 
-	return strings.Join(pathParts[:len(pathParts)-2], "/")
+	return strings.Join(pathParts[:len(pathParts)-2], "/"), nil
 }
 
 // In most cases the substree is just "vt" - i.e. /zk/global/vt/keyspaces.
-func VtSubtree(zkPath string) string {
+func VtSubtree(zkPath string) (string, error) {
 	pathParts := strings.Split(zkPath, "/")
 	for i, part := range pathParts {
-		if part == "keyspaces" || part == "tablets" {
-			return strings.Join(pathParts[3:i], "/")
+		if i >= 3 && (part == "keyspaces" || part == "tablets") {
+			return strings.Join(pathParts[3:i], "/"), nil
 		}
 	}
-	panic(fmt.Errorf("invalid path: %v", zkPath))
+	return "", fmt.Errorf("invalid path: %v", zkPath)
 }
 
 // /zk/global/vt/keyspaces/<keyspace name>
-func MustBeKeyspacePath(zkKeyspacePath string) {
-	VtRootFromKeyspacePath(zkKeyspacePath)
+func IsKeyspacePath(zkKeyspacePath string) error {
+	_, err := VtRootFromKeyspacePath(zkKeyspacePath)
+	return err
 }
 
 // /zk/<cell>/vt/tablets/<tablet uid>
-func MustBeTabletPath(zkTabletPath string) {
-	VtRootFromTabletPath(zkTabletPath)
+func IsTabletPath(zkTabletPath string) error {
+	_, err := VtRootFromTabletPath(zkTabletPath)
+	return err
 }
 
 // This is the path that indicates the authoritive table node.
 func TabletPath(zkVtRoot string, tabletUid uint32) string {
 	tabletPath := path.Join(zkVtRoot, "tablets", tabletUidStr(tabletUid))
-	MustBeTabletPath(tabletPath)
+	if err := IsTabletPath(tabletPath); err != nil {
+		// this should never happen
+		panic(err)
+	}
 	return tabletPath
 }
 
 // /zk/<cell>/vt/tablets/<tablet uid>/action
-func TabletActionPath(zkTabletPath string) string {
-	MustBeTabletPath(zkTabletPath)
-	return path.Join(zkTabletPath, "action")
+func TabletActionPath(zkTabletPath string) (string, error) {
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return "", err
+	}
+	return path.Join(zkTabletPath, "action"), nil
 }
 
 // /zk/<cell>/vt/tablets/<tablet uid>/actionlog
-func TabletActionLogPath(zkTabletPath string) string {
-	MustBeTabletPath(zkTabletPath)
-	return path.Join(zkTabletPath, "actionlog")
+func TabletActionLogPath(zkTabletPath string) (string, error) {
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return "", err
+	}
+	return path.Join(zkTabletPath, "actionlog"), nil
 }
 
 // From an action path and a filename, returns the actionlog path, e.g from
@@ -115,62 +107,79 @@ func ActionToActionLogPath(zkTabletActionPath string) string {
 }
 
 // /vt/keyspaces/<keyspace>/shards/<shard uid>
-func MustBeShardPath(zkShardPath string) {
-	VtRootFromShardPath(zkShardPath)
+func IsShardPath(zkShardPath string) error {
+	_, err := VtRootFromShardPath(zkShardPath)
+	return err
 }
 
 // zkVtRoot: /zk/XX/vt
 func ShardPath(zkVtRoot, keyspace, shard string) string {
 	shardPath := path.Join("/zk/global/vt", "keyspaces", keyspace, "shards", shard)
-	MustBeShardPath(shardPath)
+	if err := IsShardPath(shardPath); err != nil {
+		// this should never happen
+		panic(err)
+	}
 	return shardPath
 }
 
 // zkShardPath: /zk/global/vt/keyspaces/XX/shards/YY
-func ShardActionPath(zkShardPath string) string {
-	MustBeShardPath(zkShardPath)
-	return path.Join(zkShardPath, "action")
+func ShardActionPath(zkShardPath string) (string, error) {
+	if err := IsShardPath(zkShardPath); err != nil {
+		return "", err
+	}
+	return path.Join(zkShardPath, "action"), nil
 }
 
 // zkShardPath: /zk/global/vt/keyspaces/XX/shards/YY
-func ShardActionLogPath(zkShardPath string) string {
-	MustBeShardPath(zkShardPath)
-	return path.Join(zkShardPath, "actionlog")
+func ShardActionLogPath(zkShardPath string) (string, error) {
+	if err := IsShardPath(zkShardPath); err != nil {
+		return "", err
+	}
+	return path.Join(zkShardPath, "actionlog"), nil
 }
 
 // zkVtRoot: /zk/XX/vt
 func KeyspacePath(zkVtRoot, keyspace string) string {
 	keyspacePath := path.Join("/zk/global/vt", "keyspaces", keyspace)
-	MustBeKeyspacePath(keyspacePath)
+	if err := IsKeyspacePath(keyspacePath); err != nil {
+		// this should never happen
+		panic(err)
+	}
 	return keyspacePath
 }
 
 // zkKeyspacePath: /zk/global/vt/keyspaces/XX
-func KeyspaceActionPath(zkKeyspacePath string) string {
-	MustBeKeyspacePath(zkKeyspacePath)
-	return path.Join(zkKeyspacePath, "action")
+func KeyspaceActionPath(zkKeyspacePath string) (string, error) {
+	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
+		return "", err
+	}
+	return path.Join(zkKeyspacePath, "action"), nil
 }
 
 // zkKeyspacePath: /zk/global/vt/keyspaces/XX
-func KeyspaceActionLogPath(zkKeyspacePath string) string {
-	MustBeKeyspacePath(zkKeyspacePath)
-	return path.Join(zkKeyspacePath, "actionlog")
+func KeyspaceActionLogPath(zkKeyspacePath string) (string, error) {
+	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
+		return "", err
+	}
+	return path.Join(zkKeyspacePath, "actionlog"), nil
 }
 
 // zkKeyspacePath: /zk/global/vt/keyspaces/XX
-func KeyspaceShardsPath(zkKeyspacePath string) string {
-	MustBeKeyspacePath(zkKeyspacePath)
-	return path.Join(zkKeyspacePath, "shards")
+func KeyspaceShardsPath(zkKeyspacePath string) (string, error) {
+	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
+		return "", err
+	}
+	return path.Join(zkKeyspacePath, "shards"), nil
 }
 
 // Tablet aliases are the nodes that point into /vt/tablets/<uid> from the keyspace
 // Note that these are *global*
 func IsTabletReplicationPath(zkReplicationPath string) bool {
-	_, _, err := parseTabletReplicationPath(zkReplicationPath)
+	_, _, err := ParseTabletReplicationPath(zkReplicationPath)
 	return err == nil
 }
 
-func parseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint32, err error) {
+func ParseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint32, err error) {
 	cell, err = zk.ZkCellFromZkPath(zkReplicationPath)
 	if err != nil {
 		return
@@ -204,14 +213,6 @@ func parseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint
 	return
 }
 
-func ParseTabletReplicationPath(zkReplicationPath string) (cell string, uid uint32) {
-	cell, uid, err := parseTabletReplicationPath(zkReplicationPath)
-	if err != nil {
-		panic(err)
-	}
-	return
-}
-
 func tabletUidStr(uid uint32) string {
 	return fmt.Sprintf("%010d", uid)
 }
@@ -234,19 +235,27 @@ func TabletPathForAlias(alias TabletAlias) string {
 }
 
 // Extract cell, uid and vt subtree from path and return a local tablet path.
-func TabletPathFromReplicationPath(zkReplicationPath string) string {
-	vtSubtree := VtSubtree(zkReplicationPath)
-	cell, uid := ParseTabletReplicationPath(zkReplicationPath)
-	return fmt.Sprintf("/zk/%v/%v/tablets/%v", cell, vtSubtree, tabletUidStr(uid))
+func TabletPathFromReplicationPath(zkReplicationPath string) (string, error) {
+	vtSubtree, err := VtSubtree(zkReplicationPath)
+	if err != nil {
+		return "", err
+	}
+	cell, uid, err := ParseTabletReplicationPath(zkReplicationPath)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("/zk/%v/%v/tablets/%v", cell, vtSubtree, tabletUidStr(uid)), nil
 }
 
 // zkActionPath is /zk/test/vt/tablets/<uid>/action/0000000001
-func TabletPathFromActionPath(zkActionPath string) string {
+func TabletPathFromActionPath(zkActionPath string) (string, error) {
 	zkPathParts := strings.Split(zkActionPath, "/")
-	if zkPathParts[len(zkPathParts)-2] != "action" {
-		panic(fmt.Errorf("invalid action path: %v", zkActionPath))
+	if len(zkPathParts) < 2 || zkPathParts[len(zkPathParts)-2] != "action" {
+		return "", fmt.Errorf("invalid action path: %v", zkActionPath)
 	}
 	tabletPath := strings.Join(zkPathParts[:len(zkPathParts)-2], "/")
-	MustBeTabletPath(tabletPath)
-	return tabletPath
+	if err := IsTabletPath(tabletPath); err != nil {
+		return "", err
+	}
+	return tabletPath, nil
 }

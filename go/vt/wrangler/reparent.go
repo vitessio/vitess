@@ -85,8 +85,12 @@ const (
 // forceReparentToCurrentMaster: mostly for test setups, this can
 //   cause data loss.
 func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
-	tm.MustBeShardPath(zkShardPath)
-	tm.MustBeTabletPath(zkMasterElectTabletPath)
+	if err := tm.IsShardPath(zkShardPath); err != nil {
+		return err
+	}
+	if err := tm.IsTabletPath(zkMasterElectTabletPath); err != nil {
+		return err
+	}
 
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
@@ -154,7 +158,9 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 }
 
 func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
-	tm.MustBeShardPath(zkShardPath)
+	if err := tm.IsShardPath(zkShardPath); err != nil {
+		return nil, nil, err
+	}
 
 	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
@@ -205,7 +211,9 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 	// Get reparent position from master for the given slave position.
 	// Issue a restart slave on the specified tablet.
 
-	tm.MustBeTabletPath(zkTabletPath)
+	if err := tm.IsTabletPath(zkTabletPath); err != nil {
+		return err
+	}
 	ti, err := wr.readTablet(zkTabletPath)
 	if err != nil {
 		return err

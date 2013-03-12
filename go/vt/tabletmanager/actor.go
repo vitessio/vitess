@@ -67,6 +67,16 @@ func NewTabletActor(mysqld *mysqlctl.Mysqld, zconn zk.Conn) *TabletActor {
 // resolvable. For instance, if your zk connection fails, better to just fail. If data
 // is corrupt, you can't fix it gracefully.
 func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, forceRerun bool) error {
+	var err error
+	ta.zkTabletPath, err = TabletPathFromActionPath(actionPath)
+	if err != nil {
+		return err
+	}
+	ta.zkVtRoot, err = VtRootFromTabletPath(ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
 	data, stat, zkErr := ta.zconn.Get(actionPath)
 	if zkErr != nil {
 		relog.Error("HandleAction failed: %v", zkErr)
@@ -136,9 +146,6 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			os.Exit(-1)
 		}
 	}()
-
-	ta.zkTabletPath = TabletPathFromActionPath(actionPath)
-	ta.zkVtRoot = VtRootFromTabletPath(ta.zkTabletPath)
 
 	relog.Info("HandleAction: %v %v", actionPath, data)
 	// validate actions, but don't write this back into zk
@@ -928,10 +935,14 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	// Remove any pending actions. Presumably forcing a scrap means you don't
 	// want the agent doing anything and the machine requires manual attention.
 	if force {
-		actionPath := TabletActionPath(zkTabletPath)
-		err = PurgeActions(zconn, actionPath)
+		actionPath, err := TabletActionPath(zkTabletPath)
 		if err != nil {
-			relog.Warning("purge actions failed: %v %v", actionPath, err)
+			relog.Warning("TabletActionPath(%v) failed: %v", zkTabletPath, err)
+		} else {
+			err = PurgeActions(zconn, actionPath)
+			if err != nil {
+				relog.Warning("purge actions failed: %v %v", actionPath, err)
+			}
 		}
 	}
 

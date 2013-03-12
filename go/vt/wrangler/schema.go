@@ -17,7 +17,9 @@ import (
 )
 
 func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
-	tm.MustBeTabletPath(zkTabletPath)
+	if err := tm.IsTabletPath(zkTabletPath); err != nil {
+		return nil, err
+	}
 	actionPath, err := wr.ai.GetSchema(zkTabletPath, tables, includeViews)
 	if err != nil {
 		return nil, err
@@ -179,7 +181,9 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 }
 
 func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
-	tm.MustBeTabletPath(zkTabletPath)
+	if err := tm.IsTabletPath(zkTabletPath); err != nil {
+		return nil, err
+	}
 	actionPath, err := wr.ai.PreflightSchema(zkTabletPath, change)
 	if err != nil {
 		return nil, err
@@ -193,7 +197,9 @@ func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlc
 }
 
 func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
-	tm.MustBeTabletPath(zkTabletPath)
+	if err := tm.IsTabletPath(zkTabletPath); err != nil {
+		return nil, err
+	}
 	actionPath, err := wr.ai.ApplySchema(zkTabletPath, sc)
 
 	// FIXME(alainjobart) the timeout value is wrong here, we need
@@ -211,9 +217,13 @@ func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) 
 // has the schema change already applied, and will just pass through them
 // very quickly.
 func (wr *Wrangler) ApplySchemaShard(zkShardPath string, change, zkNewParentTabletPath string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
-	tm.MustBeShardPath(zkShardPath)
+	if err := tm.IsShardPath(zkShardPath); err != nil {
+		return nil, err
+	}
 	if zkNewParentTabletPath != "" {
-		tm.MustBeTabletPath(zkNewParentTabletPath)
+		if err := tm.IsTabletPath(zkNewParentTabletPath); err != nil {
+			return nil, err
+		}
 	}
 
 	// read the shard from zk
@@ -457,7 +467,9 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 // if complex, we do the shell game in parallel on all shards
 func (wr *Wrangler) ApplySchemaKeyspace(zkKeyspacePath string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	relog.Info("Reading keyspace and getting lock")
-	tm.MustBeKeyspacePath(zkKeyspacePath)
+	if err := tm.IsKeyspacePath(zkKeyspacePath); err != nil {
+		return nil, err
+	}
 	actionPath, err := wr.ai.ApplySchemaKeyspace(zkKeyspacePath, change, simple)
 	if err != nil {
 		return nil, err

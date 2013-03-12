@@ -87,13 +87,19 @@ func (wr *Wrangler) validateAllTablets(zkKeyspacesPath string, wg *sync.WaitGrou
 	for _, p := range replicationPaths {
 		p := path.Join(zkKeyspacesPath, p)
 		if tm.IsTabletReplicationPath(p) {
-			cell, _ := tm.ParseTabletReplicationPath(p)
+			cell, _, _ := tm.ParseTabletReplicationPath(p)
 			cellSet[cell] = true
 		}
 	}
 
+	vtSubTree, err := tm.VtSubtree(zkKeyspacesPath)
+	if err != nil {
+		results <- vresult{zkKeyspacesPath, err}
+		return
+	}
+
 	for cell, _ := range cellSet {
-		zkTabletsPath := path.Join("/zk", cell, tm.VtSubtree(zkKeyspacesPath), "tablets")
+		zkTabletsPath := path.Join("/zk", cell, vtSubTree, "tablets")
 		tabletUids, _, err := wr.zconn.Children(zkTabletsPath)
 		if err != nil {
 			results <- vresult{zkTabletsPath, err}

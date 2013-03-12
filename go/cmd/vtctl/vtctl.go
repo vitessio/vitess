@@ -277,12 +277,21 @@ func confirm(prompt string, force bool) bool {
 // this is a placeholder implementation. right now very little information
 // is needed for a keyspace.
 func createKeyspace(zconn zk.Conn, keyspacePath string, force bool) error {
-	tm.MustBeKeyspacePath(keyspacePath)
-	pathList := []string{
-		tm.KeyspaceActionPath(keyspacePath),
-		tm.KeyspaceActionLogPath(keyspacePath),
-		path.Join(keyspacePath, "shards"),
+	if err := tm.IsKeyspacePath(keyspacePath); err != nil {
+		return err
 	}
+	pathList := make([]string, 0, 3)
+	p, err := tm.KeyspaceActionPath(keyspacePath)
+	if err != nil {
+		return err
+	}
+	pathList = append(pathList, p)
+	p, err = tm.KeyspaceActionLogPath(keyspacePath)
+	if err != nil {
+		return err
+	}
+	pathList = append(pathList, p)
+	pathList = append(pathList, path.Join(keyspacePath, "shards"))
 
 	for _, zkPath := range pathList {
 		_, err := zk.CreateRecursive(zconn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -321,8 +330,9 @@ func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
 }
 
 func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride, keyStart, keyEnd string, force, update bool) error {
-	tm.MustBeTabletPath(zkPath)
-
+	if err := tm.IsTabletPath(zkPath); err != nil {
+		return err
+	}
 	cell, err := zk.ZkCellFromZkPath(zkPath)
 	if err != nil {
 		return err
@@ -343,14 +353,21 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shar
 
 	parent := tm.TabletAlias{}
 	if parentAlias == "" && tm.TabletType(tabletType) != tm.TYPE_MASTER && tm.TabletType(tabletType) != tm.TYPE_IDLE {
-		vtRoot := path.Join("/zk/global", tm.VtSubtree(zkPath))
+		vtSubStree, err := tm.VtSubtree(zkPath)
+		if err != nil {
+			return err
+		}
+		vtRoot := path.Join("/zk/global", vtSubStree)
 		parentAlias, err = getMasterAlias(zconn, tm.ShardPath(vtRoot, keyspace, shardId))
 		if err != nil {
 			return err
 		}
 	}
 	if parentAlias != "" {
-		parent.Cell, parent.Uid = tm.ParseTabletReplicationPath(parentAlias)
+		parent.Cell, parent.Uid, err = tm.ParseTabletReplicationPath(parentAlias)
+		if err != nil {
+			return err
+		}
 	}
 
 	tablet := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
@@ -453,11 +470,20 @@ func getActions(zconn zk.Conn, actionPath string) ([]*tm.ActionNode, error) {
 }
 
 func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
-	tabletPaths, err := tabletPathsForShard(zconn, zkShardPath)
+	// print the shard action nodes
+	shardActionPath, err := tm.ShardActionPath(zkShardPath)
 	if err != nil {
 		return err
 	}
+	shardActionNodes, err := getActions(zconn, shardActionPath)
+	if err != nil {
+		return err
+	}
+	for _, shardAction := range shardActionNodes {
+		fmt.Println(fmtAction(shardAction))
+	}
 
+	// get and print the tablet action nodes
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	actionMap := make(map[string]*tm.ActionNode)
@@ -476,23 +502,23 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 		mu.Unlock()
 	}
 
-	shardActionNodes, err := getActions(zconn, tm.ShardActionPath(zkShardPath))
+	tabletPaths, err := tabletPathsForShard(zconn, zkShardPath)
 	if err != nil {
-		relog.Warning("listActionsByShard %v", err)
+		return err
 	}
 	for _, tabletPath := range tabletPaths {
-		actionPath := tm.TabletActionPath(tabletPath)
-		wg.Add(1)
-		go f(actionPath)
+		actionPath, err := tm.TabletActionPath(tabletPath)
+		if err != nil {
+			relog.Warning("listActionsByShard %v", err)
+		} else {
+			wg.Add(1)
+			go f(actionPath)
+		}
 	}
 
 	wg.Wait()
 	mu.Lock()
 	defer mu.Unlock()
-
-	for _, shardAction := range shardActionNodes {
-		fmt.Println(fmtAction(shardAction))
-	}
 
 	keys := wr.CopyMapKeys(actionMap, []string{}).([]string)
 	sort.Strings(keys)

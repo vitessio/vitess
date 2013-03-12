@@ -76,27 +76,40 @@ func actionGuid() string {
 func (ai *ActionInitiator) writeTabletAction(zkTabletPath string, node *ActionNode) (actionPath string, err error) {
 	node.ActionGuid = actionGuid()
 	data := ActionNodeToJson(node)
-	actionPath = TabletActionPath(zkTabletPath)
+	actionPath, err = TabletActionPath(zkTabletPath)
+	if err != nil {
+		return
+	}
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
 	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
 func (ai *ActionInitiator) writeShardAction(zkShardPath string, node *ActionNode) (actionPath string, err error) {
-	MustBeShardPath(zkShardPath)
+	if err := IsShardPath(zkShardPath); err != nil {
+		return "", err
+	}
 	node.ActionGuid = actionGuid()
 	data := ActionNodeToJson(node)
-	actionPath = ShardActionPath(zkShardPath)
+	actionPath, err = ShardActionPath(zkShardPath)
+	if err != nil {
+		return
+	}
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
 	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
 func (ai *ActionInitiator) writeKeyspaceAction(zkKeyspacePath string, node *ActionNode) (actionPath string, err error) {
-	MustBeKeyspacePath(zkKeyspacePath)
+	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
+		return "", err
+	}
 	node.ActionGuid = actionGuid()
 	data := ActionNodeToJson(node)
-	actionPath = KeyspaceActionPath(zkKeyspacePath)
+	actionPath, err = KeyspaceActionPath(zkKeyspacePath)
+	if err != nil {
+		return
+	}
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
 	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -282,12 +295,16 @@ func (ai *ActionInitiator) ExecuteHook(zkTabletPath string, _hook *hook.Hook) (a
 }
 
 func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (actionPath string, err error) {
-	MustBeTabletPath(zkTabletPath)
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return "", err
+	}
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REPARENT, args: &zkTabletPath})
 }
 
 func (ai *ActionInitiator) RebuildShard(zkShardPath string) (actionPath string, err error) {
-	MustBeShardPath(zkShardPath)
+	if err := IsShardPath(zkShardPath); err != nil {
+		return "", err
+	}
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REBUILD})
 }
 
@@ -307,7 +324,9 @@ func (ai *ActionInitiator) ApplySchemaShard(zkShardPath, zkMasterTabletPath, cha
 }
 
 func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath string, err error) {
-	MustBeKeyspacePath(zkKeyspacePath)
+	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
+		return "", err
+	}
 	node := &ActionNode{Action: KEYSPACE_ACTION_REBUILD}
 	return ai.writeKeyspaceAction(zkKeyspacePath, node)
 }
@@ -319,7 +338,9 @@ type ApplySchemaKeyspaceArgs struct {
 }
 
 func (ai *ActionInitiator) ApplySchemaKeyspace(zkKeyspacePath, change string, simple bool) (actionPath string, err error) {
-	MustBeKeyspacePath(zkKeyspacePath)
+	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
+		return "", err
+	}
 	return ai.writeKeyspaceAction(zkKeyspacePath, &ActionNode{Action: KEYSPACE_ACTION_APPLY_SCHEMA, args: &ApplySchemaKeyspaceArgs{Change: change, Simple: simple}})
 }
 

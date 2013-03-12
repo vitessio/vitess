@@ -49,7 +49,10 @@ func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
 
 // Export addresses from the VT serving graph to a legacy zkns server.
 func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
-	vtRoot := tm.VtRootFromKeyspacePath(zkKeyspacePath)
+	vtRoot, err := tm.VtRootFromKeyspacePath(zkKeyspacePath)
+	if err != nil {
+		return err
+	}
 	keyspace := path.Base(zkKeyspacePath)
 	shardNames, _, err := wr.zconn.Children(path.Join(zkKeyspacePath, "shards"))
 	if err != nil {
