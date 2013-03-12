@@ -27,7 +27,8 @@ import (
 )
 
 const (
-	StartWaitTime = 20 // number of seconds to wait
+	StartWaitTime    = 20 // number of seconds to wait at Start
+	ShutdownWaitTime = 20 // number of seconds to wait at Shutdown
 )
 
 func init() {
@@ -115,6 +116,18 @@ func (zkd *Zkd) Shutdown() error {
 	err = syscall.Kill(pid, 9)
 	if err != nil && err != syscall.ESRCH {
 		return err
+	}
+	proc, _ := os.FindProcess(pid)
+	processIsDead := false
+	for i := 0; i < ShutdownWaitTime; i++ {
+		if proc.Signal(syscall.Signal(0)) == syscall.ESRCH {
+			processIsDead = true
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if !processIsDead {
+		return fmt.Errorf("Shutdown didn't kill process %v", pid)
 	}
 	return nil
 }

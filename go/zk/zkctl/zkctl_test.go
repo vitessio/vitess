@@ -6,16 +6,20 @@ package zkctl
 
 import "testing"
 
+// these test depend on starting and stopping ZK instances,
+// but may leave files/processes behind if they don't succeed,
+// so some manual cleanup may be required.
+
 func TestLifeCycle(t *testing.T) {
-	testLifeCycle(t, "255@voltron:2889:3889:2182")
+	testLifeCycle(t, "255@voltron:2889:3889:2182", 255)
 }
 
 func TestLifeCycleGlobal(t *testing.T) {
-	testLifeCycle(t, "1255@voltron:2890:3890:2183")
+	testLifeCycle(t, "1255@voltron:2890:3890:2183", 1255)
 }
 
-func testLifeCycle(t *testing.T, config string) {
-	zkConf := MakeZkConfigFromString(config)
+func testLifeCycle(t *testing.T, config string, myId uint32) {
+	zkConf := MakeZkConfigFromString(config, myId)
 	zkd := NewZkd(zkConf)
 	var err error
 
@@ -41,7 +45,7 @@ func testLifeCycle(t *testing.T, config string) {
 }
 
 func testInit(t *testing.T) {
-	zkConf := MakeZkConfigFromString("255@voltron:2889:3889:2182")
+	zkConf := MakeZkConfigFromString("255@voltron:2889:3889:2182", 0)
 	zkd := NewZkd(zkConf)
 	var err error
 

@@ -92,7 +92,8 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	switch actionNode.State {
 	case ACTION_STATE_RUNNING:
 		// see if the process is still running, and if so, wait for it
-		if _, err := os.FindProcess(actionNode.Pid); err != nil {
+		proc, _ := os.FindProcess(actionNode.Pid)
+		if proc.Signal(syscall.Signal(0)) == syscall.ESRCH {
 			// process is dead, either clean up or re-run
 			if !forceRerun {
 				actionErr := fmt.Errorf("Previous vtaction process died")
