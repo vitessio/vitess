@@ -260,10 +260,10 @@ func runCompare(t *testing.T, testSize int, level int) {
 		t.Errorf("Copy failed: %v", err)
 	}
 	stdin.Close()
+	wg.Wait()
 	if err := cmd.Wait(); err != nil {
 		t.Errorf("Wait failed: %v", err)
 	}
-	wg.Wait()
 	pt.stopAndPrintCompress(t, compressed2.Len(), len(toEncode))
 	compareCompressedBuffer(t, toEncode, compressed2)
 
