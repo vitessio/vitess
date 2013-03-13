@@ -331,7 +331,7 @@ def _run_test_vtctl_clone(server_mode):
                        (clone_flags, tablet_62344.zk_tablet_path,
                         tablet_62044.zk_tablet_path),
                        trap_output=True, raise_on_error=False)
-  if "Cannot validate snapshot directory" not in err:
+  if not "Cannot validate snapshot directory" in err:
     raise utils.TestError("expected validation error", err)
   utils.run("chmod +w %s" % snapshot_dir)
 
@@ -660,8 +660,7 @@ def _run_test_vtctl_partial_clone(create, populate,
   # end keys are set properly
   out, err = utils.run(vtroot+'/bin/zk cat ' + tablet_62044.zk_tablet_path,
                        trap_output=True)
-  if (out.find('"Start": "%s"' % start) == -1 or \
-        out.find('"End": "%s"' % end) == -1):
+  if not '"Start": "%s"' % start in out or not '"End": "%s"' % end in out:
     print "Tablet output:"
     print "out"
     raise utils.TestError('wrong Start or End')
@@ -776,13 +775,13 @@ def run_test_reparent_down_master():
   # the master and fail somewhat quickly
   stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
   utils.debug("Failed ReparentShard output:\n" + stderr)
-  if stderr.find('dial failed') == -1 or stderr.find('ValidateShard verification failed') == -1:
+  if not 'dial failed' in stderr or not 'ValidateShard verification failed' in stderr:
     raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
   # Should timeout and fail
   stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_path)
   utils.debug("Failed ScrapTablet output:\n" + stderr)
-  if stderr.find('deadline exceeded') == -1:
+  if not 'deadline exceeded' in stderr:
     raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Should interrupt and fail
@@ -1026,7 +1025,7 @@ def _check_string_in_hook_result(text, expected):
   if isinstance(expected, basestring):
     expected = [expected]
   for exp in expected:
-    if text.find(exp) != -1:
+    if exp in text:
       return
   print "ExecuteHook output:"
   print text
@@ -1105,7 +1104,7 @@ def run_test_sigterm():
   out, err = sp.communicate()
 
   # check the vtctl command got the right remote error back
-  if err.find("vtaction interrupted by signal") == -1:
+  if not "vtaction interrupted by signal" in err:
     raise utils.TestError("cannot find expected output in error:", err)
   utils.debug("vtaction was interrupted correctly:\n" + err)
 

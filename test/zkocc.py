@@ -158,7 +158,7 @@ Stale = false
 
   # test /zk/local is not resolved and rejected
   out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/local/zkocc1/data1', trap_output=True, raise_on_error=False)
-  if err.find("zkocc: cannot resolve local cell") == -1:
+  if not "zkocc: cannot resolve local cell" in err:
     raise utils.TestError('unexpected get output, not local cell error: ', err)
 
   # start a background process to query the same value over and over again

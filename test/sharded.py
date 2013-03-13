@@ -69,7 +69,7 @@ primary key (id)
 def check_rows(to_look_for, driver="vtdb"):
   out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
   for pattern in to_look_for:
-    if err.find(pattern) == -1:
+    if not pattern in err:
       print "vtclient2 returned:"
       print out
       print err
@@ -79,8 +79,8 @@ def check_rows(to_look_for, driver="vtdb"):
 
 def check_rows_schema_diff(driver):
   out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
-  if (err.find("column[0] name mismatch: id != msg") == -1 and
-      err.find("column[0] name mismatch: msg != id") == -1):
+  if not "column[0] name mismatch: id != msg" in err and \
+      not "column[0] name mismatch: msg != id" in err:
     print "vtclient2 returned:"
     print out
     print err
@@ -202,8 +202,8 @@ def run_test_sharding():
   utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/-80')
   utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/80-')
   out, err = utils.run_vtctl('ValidateSchemaKeyspace /zk/global/vt/keyspaces/test_keyspace', trap_output=True, raise_on_error=False)
-  if (err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test:\ncreate table") == -1 or \
-      err.find("/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\ncreate table") == -1):
+  if not "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test:\ncreate table" in err or \
+      not "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\ncreate table" in err:
         raise utils.TestError('wrong ValidateSchemaKeyspace output: ' + err)
 
   # and create zkns on this complex keyspace, make sure a few files are created
