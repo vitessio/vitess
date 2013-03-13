@@ -329,7 +329,8 @@ func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
 	return result, nil
 }
 
-func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride, keyStart, keyEnd string, force, update bool) error {
+func initTablet(wrangler *wr.Wrangler, zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride, keyStart, keyEnd string, force, update bool) error {
+	zconn := wrangler.ZkConn()
 	if err := tm.IsTabletPath(zkPath); err != nil {
 		return err
 	}
@@ -409,6 +410,11 @@ func initTablet(zconn zk.Conn, zkPath, hostname, mysqlPort, port, keyspace, shar
 			}
 		}
 		if force {
+			_, err = wrangler.Scrap(zkPath, force, false)
+			if err != nil {
+				relog.Error("failed scrapping tablet %v: %v", zkPath, err)
+				return err
+			}
 			err = zk.DeleteRecursive(zconn, zkPath, -1)
 			if err != nil {
 				relog.Error("failed deleting tablet %v: %v", zkPath, err)
@@ -689,7 +695,7 @@ func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []str
 	if subFlags.NArg() == 8 {
 		parentAlias = subFlags.Arg(7)
 	}
-	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *keyStart, *keyEnd, *force, false)
+	return "", initTablet(wrangler, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *keyStart, *keyEnd, *force, false)
 }
 
 func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -702,7 +708,7 @@ func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("action UpdateTablet requires <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>")
 	}
 
-	return "", initTablet(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *keyStart, *keyEnd, *force, true)
+	return "", initTablet(wrangler, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *keyStart, *keyEnd, *force, true)
 }
 
 func commandScrapTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

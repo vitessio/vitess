@@ -443,7 +443,7 @@ func PurgeActions(zconn zk.Conn, zkActionPath string) error {
 		}
 
 		err = zk.DeleteRecursive(zconn, actionPath, -1)
-		if err != nil {
+		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return fmt.Errorf("purge action err: %v", err)
 		}
 	}

@@ -172,29 +172,39 @@ func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSn
 	// take the snapshot, or put the server in SnapshotSource mode
 	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, concurrency, serverMode)
 	if err != nil {
-		// the snapshot failed, need to scrap the destination
-		// as we already added it to replication graph
-		// FIXME(alainjobart) destination was idle, we could
-		// just force transition back to idle and delete
-		// replication path in ZK
+		// The snapshot failed so scrap the destination since it was
+		// already added to replication graph.
+		//
+		// FIXME(alainjobart) destination was idle, we could just force
+		// transition back to idle and delete replication path in ZK
 		relog.Warning("Snapshot failed on source server %v (see error below), scrapping destination tablet %v", zkSrcTabletPath, zkDstTabletPath)
-		if _, err := wr.Scrap(zkDstTabletPath, false, false); err != nil {
-			relog.Error("Failed to scrap destination tablet after failed source snapshot: %v", err.Error())
+		scrapAction, scrapErr := wr.Scrap(zkDstTabletPath, false, false)
+		if scrapErr == nil {
+			scrapErr = wr.ai.WaitForCompletion(scrapAction, wr.actionTimeout())
 		}
-		return err
+		if scrapErr != nil {
+			relog.Error("Failed to scrap destination tablet after failed source snapshot: %v", scrapErr)
+		}
+	} else {
+		// try to restore the snapshot
+		// In serverMode, and in the case where we're replicating from
+		// the master, we can't wait for replication, as the master is down.
+		err = wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == tm.TYPE_MASTER)
 	}
-
-	// try to restore the snapshot
-	// In serverMode, and in the case where we're replicating from
-	// the master, we can't wait for replication, as the master is down.
-	restoreErr := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == tm.TYPE_MASTER)
 
 	// in any case, fix the server
 	if serverMode {
-		if err = wr.SnapshotSourceEnd(zkSrcTabletPath, slaveStartRequired, readWrite, originalType); err != nil {
-			return err
+		resetErr := wr.SnapshotSourceEnd(zkSrcTabletPath, slaveStartRequired, readWrite, originalType)
+		if resetErr != nil {
+			if err == nil {
+				// If there is no other error, this matters.
+				err = resetErr
+			} else {
+				// In the context of a larger failure, just log a not to cleanup.
+				relog.Error("Failed to reset snapshot source: %v - vtctl SnapshotSourceEnd is required", resetErr)
+			}
 		}
 	}
 
-	return restoreErr
+	return err
 }

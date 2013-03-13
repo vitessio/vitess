@@ -57,7 +57,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[string]*tm.TabletInfo
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 
 	if !force {
-		relog.Info("scrap failed master %v", failedMaster.Path())
+		relog.Info("scrap dead master %v", failedMaster.Path())
 		// The master is dead so execute the action locally instead of
 		// enqueing the scrap action for an arbitrary amount of time.
 		if scrapErr := tm.Scrap(wr.zconn, failedMaster.Path(), false); scrapErr != nil {

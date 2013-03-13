@@ -914,16 +914,17 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 		return err
 	}
 
-	wasIdle := false
+	// If you are already scrap, skip deleting the path. It won't
+	// be correct since the Parent will be cleared already.
+	wasAssigned := tablet.IsAssigned()
 	replicationPath := ""
-	if tablet.Type == TYPE_IDLE {
-		wasIdle = true
-	} else {
+	if wasAssigned {
 		replicationPath, err = tablet.ReplicationPath()
 		if err != nil {
 			return err
 		}
 	}
+
 	tablet.Type = TYPE_SCRAP
 	tablet.Parent = TabletAlias{}
 	// Update the tablet first, since that is canonical.
@@ -946,13 +947,13 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 		}
 	}
 
-	if !wasIdle {
+	if wasAssigned {
 		err = zconn.Delete(replicationPath, -1)
 		if err != nil {
 			switch err.(*zookeeper.Error).Code {
 			case zookeeper.ZNONODE:
 				relog.Debug("no replication path: %v", replicationPath)
-				return nil
+				err = nil
 			case zookeeper.ZNOTEMPTY:
 				// If you are forcing the scrapping of a master, you can't update the
 				// replication graph yet, since other nodes are still under the impression
@@ -961,10 +962,11 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 				// graph needs to be fixed by reparenting. If the action was forced, assume
 				// the user knows best and squelch the error.
 				if tablet.Parent.Uid == NO_TABLET && force {
-					return nil
+					err = nil
 				}
-			default:
-				return err
+			}
+			if err != nil {
+				relog.Warning("remove replication path failed: %v %v", replicationPath, err)
 			}
 		}
 	}
@@ -972,10 +974,10 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	// run a hook for final cleanup, only in non-force mode.
 	// (force mode executes on the vtctl side, not on the vttablet side)
 	if !force {
-		if err := hook.NewSimpleHook("postflight_scrap").ExecuteOptional(); err != nil {
+		if hookErr := hook.NewSimpleHook("postflight_scrap").ExecuteOptional(); hookErr != nil {
 			// we don't want to return an error, the server
 			// is already in bad shape probably.
-			relog.Warning("Scrap: postflight_scrap failed: %v", err)
+			relog.Warning("Scrap: postflight_scrap failed: %v", hookErr)
 		}
 	}
 

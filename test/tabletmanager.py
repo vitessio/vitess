@@ -331,7 +331,7 @@ def _run_test_vtctl_clone(server_mode):
                        (clone_flags, tablet_62344.zk_tablet_path,
                         tablet_62044.zk_tablet_path),
                        trap_output=True, raise_on_error=False)
-  if err.find("Cannot validate snapshot directory") == -1:
+  if "Cannot validate snapshot directory" not in err:
     raise utils.TestError("expected validation error", err)
   utils.run("chmod +w %s" % snapshot_dir)
 
