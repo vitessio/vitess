@@ -43,6 +43,7 @@ const (
 	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
 	TABLET_ACTION_APPLY_SCHEMA        = "ApplySchema"
 	TABLET_ACTION_EXECUTE_HOOK        = "ExecuteHook"
+	TABLET_ACTION_GET_SLAVES          = "GetSlaves"
 
 	TABLET_ACTION_SNAPSHOT            = "Snapshot"
 	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
@@ -138,6 +139,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_EXECUTE_HOOK:
 		node.args = &hook.Hook{}
 		node.reply = &hook.HookResult{}
+	case TABLET_ACTION_GET_SLAVES:
+		node.reply = &SlaveList{}
 
 	case TABLET_ACTION_SNAPSHOT:
 		node.args = &SnapshotArgs{}

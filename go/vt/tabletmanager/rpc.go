@@ -44,11 +44,6 @@ func (tm *TabletManager) SlavePosition(_ *rpc.UnusedRequest, reply *mysqlctl.Rep
 	return tm.wrapErr(err)
 }
 
-type SlavePositionReq struct {
-	ReplicationPosition mysqlctl.ReplicationPosition
-	WaitTimeout         int // seconds, zero to wait indefinitely
-}
-
 // Return slave position in terms of the master logs after waiting to catch up.
 func (tm *TabletManager) WaitSlavePosition(args *SlavePositionReq, reply *mysqlctl.ReplicationPosition) (err error) {
 	relog.Debug("WaitSlavePosition")
@@ -77,10 +72,6 @@ func (tm *TabletManager) StopSlave(_ *rpc.UnusedRequest, _ *rpc.UnusedResponse) 
 	relog.Debug("StopSlave")
 	err = tm.mysqld.StopSlave()
 	return tm.wrapErr(err)
-}
-
-type SlaveList struct {
-	Addrs []string
 }
 
 func (tm *TabletManager) GetSlaves(_ *rpc.UnusedRequest, reply *SlaveList) (err error) {

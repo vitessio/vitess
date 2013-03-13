@@ -220,6 +220,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.applySchema(actionNode)
 	case TABLET_ACTION_EXECUTE_HOOK:
 		err = ta.executeHook(actionNode)
+	case TABLET_ACTION_GET_SLAVES:
+		err = ta.getSlaves(actionNode)
 	case TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
 	case TABLET_ACTION_SET_RDWR:
@@ -551,6 +553,16 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
 	// FIXME(msolomon) should't the reply get distilled into an error?
 	actionNode.reply = actionNode.args.(*hook.Hook).Execute()
+	return nil
+}
+
+func (ta *TabletActor) getSlaves(actionNode *ActionNode) (err error) {
+	slaveList := &SlaveList{}
+	slaveList.Addrs, err = ta.mysqld.FindSlaves()
+	if err != nil {
+		return err
+	}
+	actionNode.reply = slaveList
 	return nil
 }
 

@@ -223,17 +223,19 @@ func (ai *ActionInitiator) ReparentPosition(zkTabletPath string, slavePos *mysql
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, args: slavePos})
 }
 
-// NOTE(msolomon) Also available as RPC.
 func (ai *ActionInitiator) MasterPosition(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MASTER_POSITION})
 }
 
-// NOTE(msolomon) Also available as RPC.
 func (ai *ActionInitiator) SlavePosition(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_POSITION})
 }
 
-// NOTE(msolomon) Also available as RPC.
+type SlavePositionReq struct {
+	ReplicationPosition mysqlctl.ReplicationPosition
+	WaitTimeout         int // seconds, zero to wait indefinitely
+}
+
 func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath string, args *SlavePositionReq) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, args: args})
 }
@@ -292,6 +294,14 @@ func (ai *ActionInitiator) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaC
 
 func (ai *ActionInitiator) ExecuteHook(zkTabletPath string, _hook *hook.Hook) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, args: _hook})
+}
+
+type SlaveList struct {
+	Addrs []string
+}
+
+func (ai *ActionInitiator) GetSlaves(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SLAVES})
 }
 
 func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (actionPath string, err error) {
