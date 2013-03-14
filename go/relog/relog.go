@@ -278,7 +278,7 @@ func (shim *logShim) Write(buf []byte) (n int, err error) {
 }
 
 // Place a shim in the default log package to route messages to a
-// single file.
+// single file. If rl is nil, use the standard relog instance.
 func HijackLog(rl *Logger) {
 	if rl == nil {
 		rl = std

@@ -56,7 +56,11 @@ func Init(logPrefix string) error {
 	relog.SetOutput(f)
 	relog.SetPrefix(logPrefix)
 	relog.SetLevel(relog.DEBUG)
-
+	relog.HijackLog(nil)
+	// FIXME(msolomon) Can't hijack with a logfile because the file descriptor
+	// changes after every rotation. Might need to make the logfile more posix
+	// friendly.
+	//relog.HijackStdio(f, f)
 	runtime.MemProfileRate = *memProfileRate
 	gomaxprocs := os.Getenv("GOMAXPROCS")
 	if gomaxprocs == "" {

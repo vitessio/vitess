@@ -64,6 +64,7 @@ func main() {
 	if err := relog.SetLevelByName(*logLevel); err != nil {
 		relog.Fatal("%v", err)
 	}
+	relog.HijackLog(nil)
 	relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
