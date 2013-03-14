@@ -28,8 +28,7 @@ import (
 const (
 	BINLOG_HEADER_SIZE = 4  // copied from mysqlbinlog.cc for mysql 5.0.33
 	EVENT_HEADER_SIZE  = 19 // 4.0 and above, can be larger in 5.x
-	//mysqlbinlog reads in chunks of 64k hence writing in similar chunks to avoid failures due to incomplete reads.
-	BINLOG_BLOCK_SIZE = 16 * 1024 * 4
+	BINLOG_BLOCK_SIZE  = 16 * 1024
 )
 
 type stats struct {

@@ -193,7 +193,7 @@ func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse, binlog
 		if x := recover(); x != nil {
 			serr, ok := x.(*BinlogParseError)
 			if !ok {
-				relog.Error("[%v:%v] Uncaught panic for stream @ %v, err: %x ", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, x)
+				relog.Error("[%v:%v] Uncaught panic for stream @ %v, err: %v ", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, x)
 				panic(x)
 			}
 			err := *serr
@@ -242,6 +242,7 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 	// read over the stream and buffer up the transactions
 	var err error
 	var line []byte
+	bigLine := make([]byte, 0, mysqlctl.BINLOG_BLOCK_SIZE)
 	lineReader := bufio.NewReaderSize(binlogReader, mysqlctl.BINLOG_BLOCK_SIZE)
 	readAhead := false
 	var event *eventBuffer
@@ -249,7 +250,8 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 
 	for {
 		line = line[:0]
-		line, err = blp.readBlpLine(lineReader)
+		bigLine = bigLine[:0]
+		line, err = blp.readBlpLine(lineReader, bigLine)
 		if err != nil {
 			if err == io.EOF {
 				//end of stream
@@ -303,18 +305,12 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 }
 
 //This reads a binlog log line.
-func (blp *Blp) readBlpLine(lineReader *bufio.Reader) (line []byte, err error) {
-	var bigLine []byte
-	bigLineAllocated := false
+func (blp *Blp) readBlpLine(lineReader *bufio.Reader, bigLine []byte) (line []byte, err error) {
 	for {
 		tempLine, tempErr := lineReader.ReadSlice('\n')
 		if tempErr == bufio.ErrBufferFull {
-			if !bigLineAllocated {
-				bigLine = make([]byte, 0, mysqlctl.BINLOG_BLOCK_SIZE)
-				bigLineAllocated = true
-			}
 			bigLine = append(bigLine, tempLine...)
-			blp.parseStats.Add("BufferFullErrors."+blp.keyrangeTag, 1)
+			blp.globalState.parseStats.Add("BufferFullErrors."+blp.keyrangeTag, 1)
 			continue
 		} else if tempErr != nil {
 			relog.Error("[%v:%v] Error in reading %v, data read %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), tempErr, string(tempLine))
@@ -324,15 +320,11 @@ func (blp *Blp) readBlpLine(lineReader *bufio.Reader) (line []byte, err error) {
 				bigLine = append(bigLine, tempLine...)
 			}
 			line = bigLine[:len(bigLine)-1]
-			blp.parseStats.Add("BigLineCount."+blp.keyrangeTag, 1)
+			blp.globalState.parseStats.Add("BigLineCount."+blp.keyrangeTag, 1)
 		} else {
 			line = tempLine[:len(tempLine)-1]
 		}
 		break
-	}
-	//We have a valid log-line now, do some cleanup and sanitization.
-	if bigLineAllocated {
-		relog.Info("big line len %v", len(line))
 	}
 	return line, err
 }
@@ -521,7 +513,8 @@ func createDdlStream(lineBuffer *eventBuffer) (ddlStream *mysqlctl.BinlogRespons
 		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v position %v:%v", err, coord.MasterFilename, coord.MasterPosition)))
 	}
 	ddlStream.SqlType = mysqlctl.DDL
-	ddlStream.Sql = string(lineBuffer.LogLine)
+	ddlStream.Sql = make([]string, 1)
+	ddlStream.Sql = append(ddlStream.Sql, string(lineBuffer.LogLine))
 	return ddlStream
 }
 
@@ -604,7 +597,7 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 	var keyspaceId key.KeyspaceId
 	var coord *mysqlctl.ReplicationCoordinates
 
-	dmlBuffer := make([][]byte, 0, 10)
+	dmlBuffer := make([]string, 0, 10)
 
 	for _, event := range blp.txnLineBuffer {
 		line = event.LogLine
@@ -638,15 +631,19 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 			dmlCount += 1
 			//extract keyspace id - match it with client's request,
 			//extract seq and index ids.
-			dmlBuffer = append(dmlBuffer, line)
+			dmlBuffer = append(dmlBuffer, string(line))
 			dmlEvent := blp.createDmlEvent(event, keyspaceIdStr)
-			dmlEvent.Sql = string(bytes.Join(dmlBuffer, mysqlctl.SEMICOLON_BYTE))
+			dmlEvent.Sql = make([]string, len(dmlBuffer))
+			dmlLines := copy(dmlEvent.Sql, dmlBuffer)
+			if dmlLines < len(dmlBuffer) {
+				relog.Warning("The entire dml buffer was not properly copied")
+			}
 			txnResponseList = append(txnResponseList, dmlEvent)
 			dmlBuffer = dmlBuffer[:0]
 		} else {
 			//add as prefixes to the DML from last DML.
 			//start a new dml buffer and keep adding to it.
-			dmlBuffer = append(dmlBuffer, line)
+			dmlBuffer = append(dmlBuffer, string(line))
 		}
 	}
 	return txnResponseList, dmlCount
@@ -799,7 +796,12 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	defer func() {
 		if x := recover(); x != nil {
 			//Send the error to the client.
-			sendError(sendReply, req.StartPosition, x.(error), nil)
+			_, ok := x.(*BinlogParseError)
+			if !ok {
+				relog.Error("Uncaught panic at top-most level")
+				//panic(x)
+			}
+			sendError(sendReply, req.StartPosition, x, nil)
 		}
 	}()
 

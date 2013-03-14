@@ -18,7 +18,7 @@ type BinlogServerRequest struct {
 
 type BinlogData struct {
 	SqlType    string
-	Sql        string
+	Sql        []string
 	KeyspaceId string
 	IndexType  string
 	IndexId    interface{}

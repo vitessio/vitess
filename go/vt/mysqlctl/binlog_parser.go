@@ -868,8 +868,7 @@ func IgnoredStatement(line []byte) bool {
 func IsTxnStatement(line []byte, firstKw string) bool {
 	if GetSqlType(firstKw) == DML ||
 		bytes.HasPrefix(line, BINLOG_SET_TIMESTAMP) ||
-		bytes.HasPrefix(line, BINLOG_SET_INSERT) ||
-		firstKw == USE {
+		bytes.HasPrefix(line, BINLOG_SET_INSERT) {
 		return true
 	}
 	return false
