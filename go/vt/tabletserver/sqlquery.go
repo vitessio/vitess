@@ -20,6 +20,7 @@ import (
 	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/sync2"
+	"code.google.com/p/vitess/go/tb"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
@@ -276,7 +277,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
-			relog.Error("Uncaught panic for %v:\n%v\n%s", query, x, relog.Stack(4))
+			relog.Error("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic for %v", x, query)
 			errorStats.Add("Panic", 1)
 			return

@@ -5,8 +5,10 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/relog"
 	"fmt"
+
+	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/tb"
 )
 
 const (
@@ -78,7 +80,7 @@ func handleError(err *error, logStats *sqlQueryStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
-			relog.Error("Uncaught panic:\n%v\n%s", x, relog.Stack(4))
+			relog.Error("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic", x)
 			errorStats.Add("Panic", 1)
 			return

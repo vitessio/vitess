@@ -24,6 +24,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sync2"
+	"code.google.com/p/vitess/go/tb"
 	"code.google.com/p/vitess/go/vt/client2"
 	hk "code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
@@ -1483,7 +1484,7 @@ func installSignalHandlers() {
 func main() {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
-			relog.Fatal("panic: %v", relog.Errorf("%v", panicErr))
+			relog.Fatal("panic: %v", tb.Errorf("%v", panicErr))
 		}
 	}()
 

@@ -43,8 +43,9 @@ var levelNames = []string{
 }
 
 const (
-	Ltsv  = 1 << iota // guarantee a single line of tab-separated values
-	Lblob             // include JSON enoded annotations
+	Ltsv      = 1 << iota // guarantee a single line of tab-separated values
+	Lblob                 // include JSON enoded annotations
+	Lstdflags = 0
 )
 
 type Logger struct {
@@ -102,6 +103,7 @@ func (logger *Logger) fmtStandardFields(evtTime time.Time, level int, msg string
 	}
 
 	// FIXME(msolomon) compute on flag set.
+	// NOTE(msolomon) mu is locked while we run this, which is expensive.
 	logFmt := "%v %v %v:%v %v: %v"
 	if logger.flags&Lblob != 0 {
 		logFmt += " %v"
@@ -145,29 +147,29 @@ func (logger *Logger) OutputWithData(level int, data interface{}, format string,
 		}
 	}
 	msg := fmt.Sprintf(format, redactedArgs...)
-	line := logger.fmtStandardFields(now, level, msg, data)
 	logger.mu.Lock()
+	line := logger.fmtStandardFields(now, level, msg, data)
 	_, err := io.WriteString(logger.out, line)
 	logger.mu.Unlock()
 	return err
 }
 
-func (l *Logger) Prefix() string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.prefix
+func (logger *Logger) Prefix() string {
+	logger.mu.Lock()
+	defer logger.mu.Unlock()
+	return logger.prefix
 }
 
-func (l *Logger) SetPrefix(prefix string) {
-	l.mu.Lock()
-	l.prefix = prefix
-	l.mu.Unlock()
+func (logger *Logger) SetPrefix(prefix string) {
+	logger.mu.Lock()
+	logger.prefix = prefix
+	logger.mu.Unlock()
 }
 
-func (l *Logger) SetFlags(flags int) {
-	l.mu.Lock()
-	l.flags = flags
-	l.mu.Unlock()
+func (logger *Logger) SetFlags(flags int) {
+	logger.mu.Lock()
+	logger.flags = flags
+	logger.mu.Unlock()
 }
 
 func (logger *Logger) SetLevel(level int) {
@@ -218,11 +220,6 @@ func SetOutput(w io.Writer) {
 	std.mu.Lock()
 	defer std.mu.Unlock()
 	std.out = w
-}
-
-// Prefix returns the output prefix for the standard logger.
-func Prefix() string {
-	return std.Prefix()
 }
 
 // SetPrefix sets the output prefix for the standard logger.

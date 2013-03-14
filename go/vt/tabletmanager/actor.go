@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/tb"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
@@ -173,7 +174,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			err = relog.Errorf("dispatchAction panic %v", x)
+			err = tb.Errorf("dispatchAction panic %v", x)
 		}
 	}()
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package relog
+package tb
 
 import (
 	"bytes"
@@ -17,9 +17,17 @@ var (
 	dot       = []byte(".")
 )
 
+// This package exposes some handy traceback functionality buried in the runtime.
+//
+// It can also be used to provide context to errors reducing the temptation to
+// panic carelessly, just to get stack information.
+//
+// The theory is that most errors that are created with the fmt.Errorf
+// style are likely to be rare, but require more context to debug
+// properly. The additional cost of computing a stack trace is
+// therefore negligible.
 type StackError interface {
 	Error() string
-	String() string
 	StackTrace() string
 }
 
@@ -29,15 +37,11 @@ type stackError struct {
 }
 
 func (e stackError) Error() string {
-	return e.String()
+	return fmt.Sprintf("%v\n%v", e.err, e.stackTrace)
 }
 
 func (e stackError) StackTrace() string {
 	return e.stackTrace
-}
-
-func (e stackError) String() string {
-	return fmt.Sprintf("%v\n%v", e.err, e.stackTrace)
 }
 
 func Errorf(msg string, args ...interface{}) error {
