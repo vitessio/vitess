@@ -357,7 +357,9 @@ func cmdLs(args []string) {
 		}
 		if err != nil {
 			hasError = true
-			log.Printf("ls: cannot access %v: %v", zkPath, err)
+			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+				log.Printf("ls: cannot access %v: %v", zkPath, err)
+			}
 		}
 
 		// Show the full path when it helps.
@@ -381,7 +383,9 @@ func cmdLs(args []string) {
 				localPath := path.Join(zkPath, children[i])
 				stat, err := zconn.Exists(localPath)
 				if err != nil {
-					log.Printf("ls: cannot access: %v: %v", localPath, err)
+					if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+						log.Printf("ls: cannot access: %v: %v", localPath, err)
+					}
 				} else {
 					stats[i] = stat
 				}
@@ -505,13 +509,15 @@ func cmdRm(args []string) {
 			err = zconn.Delete(zkPath, -1)
 		}
 		if err != nil {
-			hasError = true
-			if !*force {
+			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+				hasError = true
 				log.Printf("rm: cannot delete %v: %v", zkPath, err)
 			}
 		}
 	}
-	if hasError && !*force {
+	if hasError {
+		// to be consistent with the command line 'rm -f', return
+		// 0 if using 'zk rm -f' and the file doesn't exist.
 		os.Exit(1)
 	}
 }
@@ -535,7 +541,9 @@ func cmdCat(args []string) {
 		data, _, err := zconn.Get(zkPath)
 		if err != nil {
 			hasError = true
-			log.Printf("cat: cannot access %v: %v", zkPath, err)
+			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+				log.Printf("cat: cannot access %v: %v", zkPath, err)
+			}
 		} else {
 			if *longListing {
 				fmt.Printf("%v:\n", zkPath)
@@ -559,7 +567,9 @@ func cmdEdit(args []string) {
 	zkPath := fixZkPath(arg)
 	data, stat, err := zconn.Get(zkPath)
 	if err != nil {
-		log.Printf("edit: cannot access %v: %v", zkPath, err)
+		if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+			log.Printf("edit: cannot access %v: %v", zkPath, err)
+		}
 		os.Exit(1)
 	}
 
@@ -627,7 +637,9 @@ func cmdStat(args []string) {
 		}
 		if err != nil {
 			hasError = true
-			log.Printf("stat: cannot access %v: %v", zkPath, err)
+			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
+				log.Printf("stat: cannot access %v: %v", zkPath, err)
+			}
 			continue
 		}
 		fmt.Printf("Path: %s\n", zkPath)
