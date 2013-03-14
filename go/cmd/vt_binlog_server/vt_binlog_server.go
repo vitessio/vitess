@@ -32,10 +32,9 @@ import (
 )
 
 var (
-	port         = flag.Int("port", 6614, "port for the server")
-	binlogPrefix = flag.String("binlog-prefix", "", "binlog prefix")
-	dbname       = flag.String("dbname", "", "database name")
-	mycnfFile    = flag.String("mycnf-file", "", "path of mycnf file")
+	port      = flag.Int("port", 6614, "port for the server")
+	dbname    = flag.String("dbname", "", "database name")
+	mycnfFile = flag.String("mycnf-file", "", "path of mycnf file")
 )
 
 const (
@@ -53,30 +52,6 @@ var (
 	DOT_BYTE            = []byte(DOT)
 	END_COMMENT         = []byte("*/")
 )
-
-//FIXME (shrutip): Added this for debug purposes, can be removed later.
-var HexShardRange = []struct {
-	Start string
-	End   string
-}{
-	{Start: "", End: "1000000000000000"},
-	{Start: "1000000000000000", End: "2000000000000000"},
-	{Start: "2000000000000000", End: "3000000000000000"},
-	{Start: "3000000000000000", End: "4000000000000000"},
-	{Start: "3000000000000000", End: "4000000000000000"},
-	{Start: "4000000000000000", End: "5000000000000000"},
-	{Start: "5000000000000000", End: "6000000000000000"},
-	{Start: "6000000000000000", End: "7000000000000000"},
-	{Start: "7000000000000000", End: "8000000000000000"},
-	{Start: "8000000000000000", End: "9000000000000000"},
-	{Start: "9000000000000000", End: "a000000000000000"},
-	{Start: "a000000000000000", End: "b000000000000000"},
-	{Start: "b000000000000000", End: "c000000000000000"},
-	{Start: "c000000000000000", End: "d000000000000000"},
-	{Start: "d000000000000000", End: "e000000000000000"},
-	{Start: "e000000000000000", End: "f000000000000000"},
-	{Start: "f000000000000000", End: ""},
-}
 
 type blpStats struct {
 	parseStats     *stats.Counters
@@ -97,13 +72,9 @@ func NewBlpStats() *blpStats {
 }
 
 type BinlogServer struct {
-	clients        []*Blp
-	logsDir        string
-	dbname         string
-	binlogPrefix   string
-	usingRelayLogs bool
-	logMetadata    *mysqlctl.SlaveMetadata
-	keyRangeShards []key.KeyRange
+	clients []*Blp
+	dbname  string
+	mycnf   *mysqlctl.Mycnf
 	*blpStats
 }
 
@@ -143,6 +114,9 @@ type Blp struct {
 	keyspaceRange    key.KeyRange
 	keyrangeTag      string
 	globalState      *BinlogServer
+	logMetadata      *mysqlctl.SlaveMetadata
+	usingRelayLogs   bool
+	binlogPrefix     string
 	//FIXME: this is for debug, remove it.
 	currentLine string
 	*blpStats
@@ -184,7 +158,7 @@ func (err BinlogParseError) Error() string {
 	return err.Msg
 }
 
-func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse, binlogPrefix string) {
+func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse) {
 	var binlogReader io.Reader
 	defer func() {
 		currentCoord := blp.currentPosition.GetCoordinates()
@@ -202,7 +176,7 @@ func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse, binlog
 		}
 	}()
 
-	blr := mysqlctl.NewBinlogReader(binlogPrefix)
+	blr := mysqlctl.NewBinlogReader(blp.binlogPrefix)
 
 	var blrReader, blrWriter *os.File
 	var err, pipeErr error
@@ -227,7 +201,7 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *mysqlctl.BinlogReader) {
 			relog.Error("getBinlogStream failed: %v", err)
 		}
 	}()
-	if blp.globalState.usingRelayLogs {
+	if blp.usingRelayLogs {
 		//we use RelayPosition for initial seek in case the caller has precise coordinates. But the code
 		//is designed to primarily use RelayFilename, MasterFilename and MasterPosition to correctly start
 		//streaming the logs if relay logs are being used.
@@ -273,7 +247,7 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 			//parse event data
 
 			//This is to accont for replicas where we seek to a point before the desired startPosition
-			if blp.initialSeek && blp.globalState.usingRelayLogs && blp.nextStmtPosition < blp.startPosition.MasterPosition {
+			if blp.initialSeek && blp.usingRelayLogs && blp.nextStmtPosition < blp.startPosition.MasterPosition {
 				continue
 			}
 
@@ -456,7 +430,7 @@ func (blp *Blp) parseRotateEvent(line []byte) {
 	}
 	coord := blp.currentPosition.GetCoordinates()
 
-	if !blp.globalState.usingRelayLogs {
+	if !blp.usingRelayLogs {
 		//If the file being parsed is a binlog,
 		//then the rotate events only correspond to itself.
 		coord.MasterFilename = rotateFilename
@@ -532,7 +506,7 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 		return
 	}
 
-	if blp.globalState.usingRelayLogs {
+	if blp.usingRelayLogs {
 		for !blp.slavePosBehindReplication() {
 			//relog.Info("[%v:%v] parsing is not behind replication, sleeping", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex())
 			time.Sleep(2 * time.Second)
@@ -561,7 +535,7 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 
 //This function determines whether streaming is behind replication as it should be.
 func (blp *Blp) slavePosBehindReplication() bool {
-	repl, err := blp.globalState.logMetadata.GetCurrentReplicationPosition()
+	repl, err := blp.logMetadata.GetCurrentReplicationPosition()
 	if err != nil {
 		relog.Error(err.Error())
 		panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
@@ -625,9 +599,6 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 				dmlBuffer = dmlBuffer[:0]
 				continue
 			}
-			//FIXME: added for debug purposes, can be removed later.
-			//kr := blp.globalState.checkRange(keyspaceId)
-			//relog.Info("In range, keyspace id str %v, hex %v start: %v end: %v", keyspaceIdStr, keyspaceId.Hex(), kr.Start.Hex(), kr.End.Hex())
 			dmlCount += 1
 			//extract keyspace id - match it with client's request,
 			//extract seq and index ids.
@@ -798,10 +769,10 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 			//Send the error to the client.
 			_, ok := x.(*BinlogParseError)
 			if !ok {
-				relog.Error("Uncaught panic at top-most level")
+				relog.Error("Uncaught panic at top-most level: '%v'", x)
 				//panic(x)
 			}
-			sendError(sendReply, req.StartPosition, x, nil)
+			sendError(sendReply, req.StartPosition, x.(error), nil)
 		}
 	}()
 
@@ -814,70 +785,59 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, err %v", req.StartPosition, err)))
 	}
-	if blServer.usingRelayLogs {
-		if !mysqlctl.IsRelayPositionValid(startCoordinates, blServer.logsDir) {
+
+	usingRelayLogs := false
+	var binlogPrefix, logsDir string
+	if startCoordinates.RelayFilename != "" {
+		usingRelayLogs = true
+		binlogPrefix = blServer.mycnf.RelayLogPath
+		logsDir = path.Dir(binlogPrefix)
+		if !mysqlctl.IsRelayPositionValid(startCoordinates, logsDir) {
 			panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
 		}
-	} else if !mysqlctl.IsMasterPositionValid(startCoordinates) {
-		panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
+	} else {
+		binlogPrefix = blServer.mycnf.BinLogPath
+		logsDir = path.Dir(binlogPrefix)
+		if !mysqlctl.IsMasterPositionValid(startCoordinates) {
+			panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
+		}
 	}
 
-	startKey := key.HexKeyspaceId(req.KeyspaceStart).Unhex()
-	endKey := key.HexKeyspaceId(req.KeyspaceEnd).Unhex()
+	startKey, err := key.HexKeyspaceId(req.KeyspaceStart).Unhex()
+	if err != nil {
+		panic(NewBinlogParseError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceStart)))
+	}
+	endKey, err := key.HexKeyspaceId(req.KeyspaceEnd).Unhex()
+	if err != nil {
+		panic(NewBinlogParseError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceEnd)))
+	}
 	keyRange := &key.KeyRange{Start: startKey, End: endKey}
 
 	blp := NewBlp(startCoordinates, blServer, keyRange)
+	blp.usingRelayLogs = usingRelayLogs
+	blp.binlogPrefix = binlogPrefix
+	blp.logMetadata = mysqlctl.NewSlaveMetadata(logsDir, blServer.mycnf.RelayLogInfoPath)
+
 	blServer.clients = append(blServer.clients, blp)
-	blp.streamBinlog(sendReply, blServer.binlogPrefix)
+	blp.streamBinlog(sendReply)
 	return nil
-}
-
-func createKeyrangeShards() []key.KeyRange {
-	krShards := make([]key.KeyRange, 0, len(HexShardRange))
-	for _, hkr := range HexShardRange {
-		var kr key.KeyRange
-		kr.Start = key.HexKeyspaceId(hkr.Start).Unhex()
-		kr.End = key.HexKeyspaceId(hkr.End).Unhex()
-		krShards = append(krShards, kr)
-	}
-	return krShards
-}
-
-func (bls *BinlogServer) checkRange(keyspaceId key.KeyspaceId) key.KeyRange {
-	for _, kr := range bls.keyRangeShards {
-		if kr.Contains(keyspaceId) {
-			return kr
-		}
-	}
-	return key.KeyRange{Start: key.MinKey, End: key.MaxKey}
 }
 
 func main() {
 	flag.Parse()
 	servenv.Init("vt_binlog_server")
 
-	if *binlogPrefix == "" {
-		relog.Fatal("please specify -binlog-prefix")
-	}
 	binlogServer := new(BinlogServer)
-	binlogServer.binlogPrefix = *binlogPrefix
-	binlogServer.logsDir = path.Dir(*binlogPrefix)
-	binlogServer.usingRelayLogs = false
-	if strings.Index(binlogServer.binlogPrefix, "relay") != -1 {
-		if *mycnfFile == "" {
-			relog.Fatal("Using relay logs please specify the path for mycnf file.")
-		}
-		mycnf, err := mysqlctl.ReadMycnf(*mycnfFile)
-		if err != nil {
-			relog.Fatal("Error reading mycnf file %v", *mycnfFile)
-		}
-
-		binlogServer.usingRelayLogs = true
-		binlogServer.logMetadata = mysqlctl.NewSlaveMetadata(binlogServer.logsDir, mycnf.RelayLogInfoPath)
+	if *mycnfFile == "" {
+		relog.Fatal("Please specify the path for mycnf file.")
 	}
+	mycnf, err := mysqlctl.ReadMycnf(*mycnfFile)
+	if err != nil {
+		relog.Fatal("Error reading mycnf file %v", *mycnfFile)
+	}
+	binlogServer.mycnf = mycnf
 
-	binlogServer.dbname = strings.ToLower(*dbname)
-	binlogServer.keyRangeShards = createKeyrangeShards()
+	binlogServer.dbname = strings.ToLower(strings.TrimSpace(*dbname))
 	binlogServer.blpStats = NewBlpStats()
 
 	rpc.Register(binlogServer)
