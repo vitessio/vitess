@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"runtime"
 	"syscall"
@@ -49,14 +48,14 @@ func Init(logPrefix string) error {
 	if logPrefix != "" {
 		logPrefix += " "
 	}
-	logPrefix += fmt.Sprintf("[%v]", os.Getpid())
+	logPrefix += fmt.Sprintf("[%v] ", os.Getpid())
 	f, err := logfile.Open(*logfileName, *logFrequency, *logMaxSize, *logMaxFiles)
 	if err != nil {
 		return fmt.Errorf("unable to open logfile %s: %v", *logfileName, err)
 	}
-	logger := relog.New(f, logPrefix+" ",
-		log.Ldate|log.Lmicroseconds|log.Lshortfile, relog.DEBUG)
-	relog.SetLogger(logger)
+	relog.SetOutput(f)
+	relog.SetPrefix(logPrefix)
+	relog.SetLevel(relog.DEBUG)
 
 	runtime.MemProfileRate = *memProfileRate
 	gomaxprocs := os.Getenv("GOMAXPROCS")

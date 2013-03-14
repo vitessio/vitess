@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -240,14 +239,6 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 }
 
 func initQueryService(dbcfgs dbconfigs.DBConfigs) {
-	if *queryLog != "" {
-		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
-			ts.QueryLogger = relog.New(f, "", log.Ldate|log.Lmicroseconds, relog.DEBUG)
-		} else {
-			relog.Fatal("Error opening file %v: %v", *queryLog, err)
-		}
-	}
-
 	ts.SqlQueryLogger.ServeLogs("/debug/vt/querylog")
 
 	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
@@ -261,7 +252,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	}
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
-			ts.QueryLogger = relog.New(f, "", log.Ldate|log.Lmicroseconds, relog.DEBUG)
+			ts.QueryLogger = relog.New(f, "", relog.DEBUG)
 		} else {
 			relog.Fatal("Error opening file %v: %v", *queryLog, err)
 		}

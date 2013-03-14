@@ -59,11 +59,6 @@ func Errorf(msg string, args ...interface{}) error {
 	return stackError{fmt.Errorf(msg, args...), stack}
 }
 
-func NewPanicError(err error) error {
-	// magic 5 trims off just enough stack data to be clear
-	return stackError{err, string(Stack(5))}
-}
-
 // Taken from runtime/debug.go
 func Stack(calldepth int) []byte {
 	return stack(calldepth)

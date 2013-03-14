@@ -58,19 +58,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	logLevelInt, err := relog.LogNameToLogLevel(*logLevel)
-	if err != nil {
-		log.Fatalf("%v", err)
+	relog.SetPrefix("zkctl ")
+	if err := relog.SetLevelByName(*logLevel); err != nil {
+		log.Fatal(err)
 	}
-	logger := relog.New(os.Stderr, "zkctl ",
-		log.Ldate|log.Lmicroseconds|log.Lshortfile,
-		logLevelInt)
-	relog.SetLogger(logger)
-
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myId))
 	zkd := zkctl.NewZkd(zkConfig)
 
 	action := flag.Arg(0)
+	var err error
 	switch action {
 	case "init":
 		err = zkd.Init()

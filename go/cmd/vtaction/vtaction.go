@@ -8,7 +8,6 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -60,14 +59,11 @@ func main() {
 	if err != nil {
 		relog.Fatal("Can't open log file: %v", err)
 	}
-	logLevelInt, err := relog.LogNameToLogLevel(*logLevel)
-	if err != nil {
+	relog.SetOutput(logFile)
+	relog.SetPrefix(fmt.Sprintf("vtaction [%v] ", os.Getpid()))
+	if err := relog.SetLevelByName(*logLevel); err != nil {
 		relog.Fatal("%v", err)
 	}
-	logger := relog.New(logFile, fmt.Sprintf("vtaction [%v] ", os.Getpid()),
-		log.Ldate|log.Lmicroseconds|log.Lshortfile,
-		logLevelInt)
-	relog.SetLogger(logger)
 	relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)

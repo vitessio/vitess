@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"strings"
@@ -282,14 +281,9 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
-	logLevelInt, err := relog.LogNameToLogLevel(*logLevel)
-	if err != nil {
+	if err := relog.SetLevelByName(*logLevel); err != nil {
 		relog.Fatal("%v", err)
 	}
-	logger := relog.New(os.Stderr, "",
-		log.Ldate|log.Lmicroseconds|log.Lshortfile,
-		logLevelInt)
-	relog.SetLogger(logger)
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})

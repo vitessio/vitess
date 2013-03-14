@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"log/syslog"
 	"os"
 	"os/signal"
@@ -1498,26 +1497,23 @@ func main() {
 	installSignalHandlers()
 
 	logPrefix := "vtctl "
-	logFlag := log.Ldate | log.Lmicroseconds | log.Lshortfile
 	logLevel, err := relog.LogNameToLogLevel(*logLevel)
 	if err != nil {
 		relog.Fatal("%v", err)
 	}
-	logger := relog.New(os.Stderr, logPrefix, logFlag, logLevel)
-	// Set default logger to stderr.
-	relog.SetLogger(logger)
+	relog.SetLevel(logLevel)
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
 
 	if log, err := os.OpenFile(*logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		// Use a temp logger to keep a consistent trail of events in the log.
-		fileLogger := relog.New(log, logPrefix, logFlag, logLevel)
+		// Use a temp logger to keep a consistent trail of events in the log
+		// without polluting stderr in the averge case.
+		fileLogger := relog.New(log, logPrefix, logLevel)
 		fileLogger.Info(startMsg)
 		// Redefine the default logger to keep events in both places.
-		logger = relog.New(io.MultiWriter(log, os.Stderr), logPrefix, logFlag, logLevel)
-		relog.SetLogger(logger)
+		relog.SetOutput(io.MultiWriter(log, os.Stderr))
 	} else {
-		logger.Warning("cannot write to provided logfile: %v", err)
+		relog.Warning("cannot write to provided logfile: %v", err)
 	}
 
 	if syslogger, err := syslog.New(syslog.LOG_INFO, logPrefix); err == nil {
@@ -1536,7 +1532,6 @@ func main() {
 	for _, group := range commands {
 		for _, cmd := range group.commands {
 			if cmd.name == action {
-
 				subFlags := flag.NewFlagSet(action, flag.ExitOnError)
 				subFlags.Usage = func() {
 					fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.name, cmd.params)

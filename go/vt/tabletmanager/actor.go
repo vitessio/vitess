@@ -173,12 +173,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			if panicErr, ok := x.(error); ok {
-				err = panicErr
-			} else {
-				err = fmt.Errorf("dispatchAction panic: %v", x)
-			}
-			err = relog.NewPanicError(err)
+			err = relog.Errorf("dispatchAction panic %v", x)
 		}
 	}()
 
