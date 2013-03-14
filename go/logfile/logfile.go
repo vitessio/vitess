@@ -15,95 +15,106 @@ import (
 )
 
 type Logfile struct {
-	sync.Mutex
+	mu      sync.Mutex
+	handle  *os.File
+	curName string
+	curSize int64
+
+	// These vars cannot be changed after Logfile is created
 	baseName  string
 	frequency int64
 	maxSize   int64
 	maxFiles  int64
-	handle    *os.File
-	curName   string
-	curSize   int64
 }
 
 func Open(baseName string, frequency, maxSize, maxFiles int64) (file io.WriteCloser, err error) {
 	if frequency <= 0 && maxSize <= 0 && maxFiles <= 0 {
 		return os.OpenFile(baseName, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 	}
-	self := &Logfile{baseName: baseName, frequency: frequency, maxSize: maxSize, maxFiles: maxFiles}
-	err = self.Rotate()
-	go self.LogRotator()
-	return self, err
+	lf := &Logfile{baseName: baseName, frequency: frequency, maxSize: maxSize, maxFiles: maxFiles}
+	// Open the first logfile
+	err = lf.rotate()
+	if err != nil {
+		return nil, err
+	}
+	go lf.logRotator()
+	return lf, nil
 }
 
-func (self *Logfile) Rotate() error {
-	format := "20060102.150405"
-	t := time.Now()
-	newName := fmt.Sprintf("%s.%s", self.baseName, t.Format(format))
-	if newName == self.curName {
+func (lf *Logfile) Close() error {
+	lf.mu.Lock()
+	defer lf.mu.Unlock()
+	// This will close the current file, if any
+	return lf.switchFile(nil, "")
+}
+
+func (lf *Logfile) Write(b []byte) (n int, err error) {
+	lf.mu.Lock()
+	defer lf.mu.Unlock()
+	if lf.handle == nil {
+		return 0, os.ErrInvalid
+	}
+	n, err = lf.handle.Write(b)
+	lf.curSize += int64(n)
+	if lf.maxSize > 0 && lf.curSize > lf.maxSize {
+		lf.rotate()
+	}
+	return n, err
+}
+
+func (lf *Logfile) logRotator() {
+	if lf.frequency <= 0 {
+		return
+	}
+	nanoFreq := lf.frequency * 1e9
+	for {
+		now := time.Now().UnixNano()
+		next := (now/nanoFreq)*nanoFreq + nanoFreq
+		<-time.After(time.Duration(next - now))
+		lf.mu.Lock()
+		if lf.handle == nil {
+			lf.mu.Unlock()
+			return
+		} else {
+			lf.rotate()
+			lf.mu.Unlock()
+		}
+	}
+}
+
+func (lf *Logfile) rotate() error {
+	newName := fmt.Sprintf("%s.%s", lf.baseName, time.Now().Format("20060102.150405"))
+	if newName == lf.curName {
 		return nil
 	}
 	handle, err := os.Create(newName)
 	if err != nil {
 		return err
 	}
-	self.curName = newName
-	self.switchHandle(handle)
-	os.Remove(self.baseName)
-	os.Symlink(path.Base(newName), self.baseName)
-	go self.LogPurge()
+	lf.switchFile(handle, newName)
+	os.Remove(lf.baseName)
+	os.Symlink(path.Base(newName), lf.baseName)
+	go lf.logPurge()
 	return nil
 }
 
-func (self *Logfile) Close() error {
-	return self.switchHandle(nil)
-}
-
-func (self *Logfile) switchHandle(newHandle *os.File) error {
-	self.Lock()
-	oldHandle := self.handle
-	self.handle = newHandle
-	self.curSize = 0
-	self.Unlock()
+func (lf *Logfile) switchFile(newHandle *os.File, newName string) error {
+	oldHandle := lf.handle
+	lf.handle = newHandle
+	lf.curName = newName
+	lf.curSize = 0
 	if oldHandle != nil {
 		return oldHandle.Close()
 	}
 	return nil
 }
 
-func (self *Logfile) Write(b []byte) (n int, err error) {
-	self.Lock()
-	if self.handle == nil {
-		self.Unlock()
-		return 0, os.ErrInvalid
-	}
-	n, err = self.handle.Write(b)
-	self.Unlock()
-	self.curSize += int64(n)
-	if self.maxSize > 0 && self.curSize > self.maxSize {
-		self.Rotate()
-	}
-	return n, err
-}
-
-func (self *Logfile) LogRotator() {
-	if self.frequency <= 0 {
+func (lf *Logfile) logPurge() {
+	if lf.maxFiles <= 0 {
 		return
 	}
-	nanoFreq := self.frequency * 1e9
-	for self.handle != nil {
-		now := time.Now().UnixNano()
-		next := (now/nanoFreq)*nanoFreq + nanoFreq
-		<-time.After(time.Duration(next - now))
-		self.Rotate()
-	}
-}
-
-func (self *Logfile) LogPurge() {
-	if self.maxFiles <= 0 {
-		return
-	}
-	files, _ := filepath.Glob(fmt.Sprintf("%s.*", self.baseName))
-	for i := 0; i < len(files)-int(self.maxFiles); i++ {
+	files, _ := filepath.Glob(fmt.Sprintf("%s.*", lf.baseName))
+	for i := 0; i < len(files)-int(lf.maxFiles); i++ {
 		os.Remove(files[i])
 	}
 }

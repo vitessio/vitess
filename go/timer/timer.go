@@ -29,6 +29,8 @@ package timer
 import (
 	"sync"
 	"time"
+
+	"code.google.com/p/vitess/go/sync2"
 )
 
 // Out-of-band messages
@@ -42,7 +44,7 @@ const (
 
 // Timer implements the timer functionality described above.
 type Timer struct {
-	interval time.Duration
+	interval sync2.AtomicDuration
 
 	// state management
 	mu      sync.Mutex
@@ -54,10 +56,11 @@ type Timer struct {
 
 // Create a new Timer object
 func NewTimer(interval time.Duration) *Timer {
-	return &Timer{
-		interval: interval,
-		msg:      make(chan typeAction),
+	tm := &Timer{
+		msg: make(chan typeAction),
 	}
+	tm.interval.Set(interval)
+	return tm
 }
 
 // Start starts the timer.
@@ -74,10 +77,11 @@ func (tm *Timer) Start(keephouse func()) {
 func (tm *Timer) run(keephouse func()) {
 	for {
 		var ch <-chan time.Time
-		if tm.interval <= 0 {
+		interval := tm.interval.Get()
+		if interval <= 0 {
 			ch = nil
 		} else {
-			ch = time.After(tm.interval)
+			ch = time.After(interval)
 		}
 		select {
 		case action := <-tm.msg:
@@ -97,7 +101,7 @@ func (tm *Timer) run(keephouse func()) {
 // SetInterval changes the wait interval.
 // It will cause the timer to restart the wait.
 func (tm *Timer) SetInterval(ns time.Duration) {
-	tm.interval = ns
+	tm.interval.Set(ns)
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	if tm.running {
