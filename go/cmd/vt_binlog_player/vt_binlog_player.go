@@ -44,6 +44,7 @@ var (
 	recoveryStatePath = flag.String("recovery-path", "", "path to save the recovery position")
 	debug             = flag.Bool("debug", true, "run a debug version - prints the sql statements rather than executing them")
 	tables            = flag.String("tables", "", "tables to play back")
+	dbCredFile        = flag.String("db-credentials-file", "", "db-creditials file to look up passwd to connect to lookup host")
 )
 
 var (
@@ -58,6 +59,7 @@ var (
 	SEQ_INSERT_SQL        = "insert into vt_sequence (name, id) values ('%v', %v)"
 	STREAM_COMMENT_START  = "/* _stream "
 	SPACE                 = " "
+	BACKDOOR              = "backdoor" //this is the db account name for lookup writes.
 )
 
 /*
@@ -245,7 +247,7 @@ func main() {
 		}
 	}
 
-	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *debug)
+	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *debug)
 	if err != nil {
 		relog.Fatal("Error in initializing binlog player - '%v'", err)
 	}
@@ -308,7 +310,7 @@ func startPositionValid(startPos *binlogRecoveryState) bool {
 	return true
 }
 
-func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile string, debug bool) (*BinlogPlayer, error) {
+func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, debug bool) (*BinlogPlayer, error) {
 	startData, err := ioutil.ReadFile(startPosFile)
 	if err != nil {
 		return nil, fmt.Errorf("Error %s in reading start position file %s", err, startPosFile)
@@ -348,7 +350,6 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile string, debug
 		if err != nil {
 			return nil, fmt.Errorf("Error %s in reading lookup-config-file %s", err, lookupConfigFile)
 		}
-		relog.Info("lookupConfigData %v", string(lookupConfigData))
 
 		dbClient := DBClient{}
 		dbConfig := new(mysql.ConnectionParams)
@@ -363,12 +364,32 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile string, debug
 		}
 		binlogPlayer.dbClient = dbClient
 
+		//Below is the code to lookup "backdoor" user's passwd
+		//for loookup writes.
+		var lookupPasswd string
+		if dbCredFile != "" {
+			dbCredentials := make(map[string][]string)
+			dbCredData, err := ioutil.ReadFile(dbCredFile)
+			if err != nil {
+				return nil, fmt.Errorf("Error %s in reading db-credentials-file %s", err, dbCredFile)
+			}
+			err = json.Unmarshal(dbCredData, &dbCredentials)
+			if err != nil {
+				return nil, fmt.Errorf("Error in unmarshaling db-credentials-file %s", err)
+			}
+			if passwd, ok := dbCredentials[BACKDOOR]; ok {
+				lookupPasswd = passwd[0]
+			}
+		}
+
 		lookupClient := DBClient{}
 		lookupConfig := new(mysql.ConnectionParams)
 		err = json.Unmarshal(lookupConfigData, lookupConfig)
 		if err != nil {
 			return nil, fmt.Errorf("error in unmarshaling lookupConfig data, err '%v'", err)
 		}
+		lookupConfig.Pass = lookupPasswd
+		relog.Info("lookupConfig %v", lookupConfig)
 		lookupClient.dbConfig = lookupConfig
 
 		lookupClient.dbConn, err = lookupClient.Connect()
