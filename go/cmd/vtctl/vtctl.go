@@ -116,7 +116,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] <zk tablet path> <key name> <start key> <end key>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=4] -shard_spec='-' -tables='' <zk tablet path> <key name>",
+				"[-force] [-concurrency=4] -spec='-' -tables='' <zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
 				"[-force] [-concurrency=4] [-start=''] [-end=''] [-fetch-concurrency=4] [-fetch-retry-count=3] <dbname> <destination zk path> <source zk path>...",

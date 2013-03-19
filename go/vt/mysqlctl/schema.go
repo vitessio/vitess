@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"code.google.com/p/vitess/go/jscfg"
@@ -21,15 +22,36 @@ const (
 )
 
 type TableDefinition struct {
-	Name    string   // the table name
-	Schema  string   // the SQL to run to create the table
-	Columns []string // the columns in the order that will be used to dump and load the data
-	Type    string   // TABLE_BASE_TABLE or TABLE_VIEW
+	Name       string   // the table name
+	Schema     string   // the SQL to run to create the table
+	Columns    []string // the columns in the order that will be used to dump and load the data
+	Type       string   // TABLE_BASE_TABLE or TABLE_VIEW
+	DataLength uint64   // how much space the data file takes.
+}
+
+// helper methods for sorting
+type TableDefinitions []TableDefinition
+
+func (tds TableDefinitions) Len() int {
+	return len(tds)
+}
+
+func (tds TableDefinitions) Swap(i, j int) {
+	tds[i], tds[j] = tds[j], tds[i]
+}
+
+// sort by reverse DataLength
+type ByReverseDataLength struct {
+	TableDefinitions
+}
+
+func (bdl ByReverseDataLength) Less(i, j int) bool {
+	return bdl.TableDefinitions[j].DataLength < bdl.TableDefinitions[i].DataLength
 }
 
 type SchemaDefinition struct {
-	// ordered by TableDefinition.Name
-	TableDefinitions []TableDefinition
+	// ordered by TableDefinition.Name by default
+	TableDefinitions TableDefinitions
 
 	// the md5 of the concatenation of TableDefinition.Schema
 	Version string
@@ -37,6 +59,10 @@ type SchemaDefinition struct {
 
 func (sd *SchemaDefinition) String() string {
 	return jscfg.ToJson(sd)
+}
+
+func (sd *SchemaDefinition) SortByReverseDataLength() {
+	sort.Sort(ByReverseDataLength{sd.TableDefinitions})
 }
 
 func (sd *SchemaDefinition) generateSchemaVersion() {
@@ -129,7 +155,7 @@ var autoIncr = regexp.MustCompile(" auto_increment=\\d+")
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
 func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews bool) (*SchemaDefinition, error) {
-	sql := "SELECT table_name, table_type FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
+	sql := "SELECT table_name, table_type, data_length FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if len(tables) != 0 {
 		sql += " AND table_name IN ('" + strings.Join(tables, "','") + "')"
 	}
@@ -148,6 +174,14 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 	for i, row := range rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
+		var dataLength uint64
+		if !row[2].IsNull() {
+			// dataLength is NULL for views, then we use 0
+			dataLength, err = row[2].ParseUint64()
+			if err != nil {
+				return nil, err
+			}
+		}
 		relog.Info("GetSchema(table: %v)", tableName)
 
 		rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
@@ -173,6 +207,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		}
 		sd.TableDefinitions[i].Columns = columns
 		sd.TableDefinitions[i].Type = tableType
+		sd.TableDefinitions[i].DataLength = dataLength
 	}
 
 	sd.generateSchemaVersion()

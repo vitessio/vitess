@@ -77,6 +77,18 @@ func (v Value) String() string {
 	return hack.String(v.Inner.raw())
 }
 
+// ParseUint64 will parse a Numeric value into a uint64
+func (v Value) ParseUint64() (val uint64, err error) {
+	if v.Inner == nil {
+		return 0, fmt.Errorf("value is null")
+	}
+	n, ok := v.Inner.(Numeric)
+	if !ok {
+		return 0, fmt.Errorf("value is not Numeric")
+	}
+	return strconv.ParseUint(string(n.raw()), 10, 64)
+}
+
 // EncodeSql encodes the value into an SQL statement. Can be binary.
 func (v Value) EncodeSql(b BinWriter) {
 	if v.Inner == nil {

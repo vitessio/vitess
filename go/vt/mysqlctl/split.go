@@ -241,6 +241,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	if len(sd.TableDefinitions) == 0 {
 		return "", fmt.Errorf("empty table list for %v", dbName)
 	}
+	sd.SortByReverseDataLength()
 
 	slaveStartRequired, readOnly, replicationPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
 	if err != nil {
@@ -623,10 +624,10 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	if fetchErr != nil {
 		return []string{}, fetchErr
 	}
-
 	if len(sd.TableDefinitions) == 0 {
 		return []string{}, fmt.Errorf("empty table list for %v", dbName)
 	}
+	sd.SortByReverseDataLength()
 
 	slaveStartRequired, readOnly, replicationPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
 	if err != nil {

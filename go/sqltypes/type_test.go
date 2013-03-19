@@ -146,6 +146,10 @@ func TestBuildValue(t *testing.T) {
 	if !v.IsNull() {
 		t.Errorf("Expecting null")
 	}
+	n64, err := v.ParseUint64()
+	if err == nil || err.Error() != "value is null" {
+		t.Errorf("%v", err)
+	}
 	v, err = BuildValue(int(-1))
 	if err != nil {
 		t.Errorf("%v", err)
@@ -167,6 +171,10 @@ func TestBuildValue(t *testing.T) {
 	if !v.IsNumeric() || v.String() != "-1" {
 		t.Errorf("Expecting -1, received %T: %s", v.Inner, v.String())
 	}
+	n64, err = v.ParseUint64()
+	if err == nil {
+		t.Errorf("-1 shouldn't convert into uint64")
+	}
 	v, err = BuildValue(uint(1))
 	if err != nil {
 		t.Errorf("%v", err)
@@ -185,6 +193,13 @@ func TestBuildValue(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
+	n64, err = v.ParseUint64()
+	if err != nil {
+		t.Errorf("%v", err)
+	}
+	if n64 != 1 {
+		t.Errorf("Expecting 1, got %v", n64)
+	}
 	if !v.IsNumeric() || v.String() != "1" {
 		t.Errorf("Expecting 1, received %T: %s", v.Inner, v.String())
 	}
@@ -194,6 +209,10 @@ func TestBuildValue(t *testing.T) {
 	}
 	if !v.IsFractional() || v.String() != "1.23" {
 		t.Errorf("Expecting 1.23, received %T: %s", v.Inner, v.String())
+	}
+	n64, err = v.ParseUint64()
+	if err == nil {
+		t.Errorf("1.23 shouldn't convert into uint64")
 	}
 	v, err = BuildValue("abcd")
 	if err != nil {
@@ -208,6 +227,10 @@ func TestBuildValue(t *testing.T) {
 	}
 	if !v.IsString() || v.String() != "abcd" {
 		t.Errorf("Expecting abcd, received %T: %s", v.Inner, v.String())
+	}
+	n64, err = v.ParseUint64()
+	if err == nil || err.Error() != "value is not Numeric" {
+		t.Errorf("%v", err)
 	}
 	v, err = BuildValue(time.Date(2012, time.February, 24, 23, 19, 43, 10, time.UTC))
 	if err != nil {
