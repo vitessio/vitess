@@ -2,12 +2,11 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
-
 /*
-This tool reads data from the a remote host via vt_binlog_server
+The vt_binlog_player reads data from the a remote host via vt_binlog_server.
 This is mostly intended for online data migrations.
 */
+package main
 
 import (
 	"bufio"
