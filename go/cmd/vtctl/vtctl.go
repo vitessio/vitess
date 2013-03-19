@@ -116,7 +116,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] <zk tablet path> <key name> <start key> <end key>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=4] -spec='-' -tables='' <zk tablet path> <key name>",
+				"[-force] [-concurrency=4] [-skip-slave-restart] -spec='-' -tables='' <zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
 				"[-force] [-concurrency=4] [-start=''] [-end=''] [-fetch-concurrency=4] [-fetch-retry-count=3] <dbname> <destination zk path> <source zk path>...",
@@ -925,6 +925,7 @@ func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
 	spec := subFlags.String("spec", "-", "shard specification")
 	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
+	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name>")
@@ -939,7 +940,7 @@ func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 		tables = strings.Split(*tablesString, ",")
 	}
 
-	filenames, zkParentPath, err := wrangler.MultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), *concurrency, tables, *force)
+	filenames, zkParentPath, err := wrangler.MultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), *concurrency, tables, *force, *skipSlaveRestart)
 
 	if err == nil {
 		relog.Info("manifest locations: %v", filenames)

@@ -585,7 +585,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoO
 	return snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string, skipSlaveRestart bool) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -632,6 +632,12 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	slaveStartRequired, readOnly, replicationPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
 	if err != nil {
 		return
+	}
+	if skipSlaveRestart {
+		if slaveStartRequired {
+			relog.Info("Overriding slaveStartRequired to false")
+		}
+		slaveStartRequired = false
 	}
 	defer func() {
 		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly))

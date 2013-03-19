@@ -71,6 +71,7 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	concurrency := subFlags.Int("concurrency", 3, "how many compression jobs to run simultaneously")
 	spec := subFlags.String("spec", "-", "shard specification")
 	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
+	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action partialsnapshot requires <db name> <key name>")
@@ -83,7 +84,7 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
-	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables)
+	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart)
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
 	} else {

@@ -180,10 +180,11 @@ type PartialSnapshotArgs struct {
 }
 
 type MultiSnapshotArgs struct {
-	KeyName     string
-	KeyRanges   []key.KeyRange
-	Tables      []string
-	Concurrency int
+	KeyName          string
+	KeyRanges        []key.KeyRange
+	Tables           []string
+	Concurrency      int
+	SkipSlaveRestart bool
 }
 type MultiRestoreArgs struct {
 	ZkSrcTabletPaths []string
