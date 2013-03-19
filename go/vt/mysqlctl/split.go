@@ -718,7 +718,7 @@ func (lsf localSnapshotFile) queryParams(destinationDbName string) (map[string]s
 
 }
 
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, fetchRetryCount int, force bool) (err error) {
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, fetchRetryCount int, force, toMaster bool) (err error) {
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
 	err = ConcurrentMap(fetchConcurrency, len(sourceAddrs), func(i int) error {
 		dbi := sourceAddrs[i]
@@ -809,10 +809,18 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		if e != nil {
 			return e
 		}
-		// NOTE(szopa): The binlog has to be disabled,
-		// otherwise the whole thing trips on
-		// max_binlog_cache_size.
+
+		if toMaster {
+			// for masters, we obviously can't disable
+			// binlogs.  we assume the incoming data was
+			// split in small chuncks.
+			return mysqld.executeSuperQuery(query)
+		}
+
+		// NOTE(szopa): The binlog should be disabled for non-master,
+		// otherwise the whole thing trips on max_binlog_cache_size.
 		return mysqld.executeSuperQueryList([]string{"SET sql_log_bin = OFF", query})
+
 		// TODO: Remove files after they were loaded? This
 		// could decrease the peak amount of space needed for
 		// the restore.

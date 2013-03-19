@@ -119,7 +119,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] [-skip-slave-restart] -spec='-' -tables='' <zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
-				"[-force] [-concurrency=4] [-start=''] [-end=''] [-fetch-concurrency=4] [-fetch-retry-count=3] <dbname> <destination zk path> <source zk path>...",
+				"[-force] [-concurrency=4] [-start=''] [-end=''] [-fetch-concurrency=4] [-fetch-retry-count=3] [-to-master] <dbname> <destination zk path> <source zk path>...",
 				"Restores a snapshot from multiple hosts."},
 			command{"PartialRestore", commandPartialRestore,
 				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
@@ -898,6 +898,7 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 4, "how many concurrent jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
+	toMaster := subFlags.Bool("to-master", false, "the restore happens on a master, not an idle tablet")
 	subFlags.Parse(args)
 
 	s, err := key.HexKeyspaceId(*start).Unhex()
@@ -916,7 +917,7 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	destination := subFlags.Arg(1)
 	sources := subFlags.Args()[2:]
 
-	err = wrangler.RestoreFromMultiSnapshot(dbName, keyRange, destination, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *force)
+	err = wrangler.RestoreFromMultiSnapshot(dbName, keyRange, destination, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *force, *toMaster)
 	return
 }
 

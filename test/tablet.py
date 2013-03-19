@@ -193,6 +193,8 @@ class Tablet(object):
       args.append('-key-start='+key_start)
     if key_end:
       args.append('-key-end='+key_end)
+    if dbname:
+      args.append('-db-name-override='+dbname)
     args.extend([self.zk_tablet_path,
                  'localhost',
                  str(self.mysql_port),

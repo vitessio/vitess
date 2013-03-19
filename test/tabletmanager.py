@@ -472,14 +472,14 @@ primary key (id)
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
   tablet_62344.create_db('not_vt_test_keyspace')
-  tablet_62344.init_tablet('master', 'test_keyspace_new', "0", dbname="not_vt_test_keyspace")
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace_new/shards/0')
+  tablet_62344.init_tablet('master', 'test_keyspace_new', "-0000000000000028", dbname="not_vt_test_keyspace", key_end="0000000000000028")
+  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace_new/shards/-0000000000000028')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
   tablet_62344.start_vttablet()
 
   # 0x28 = 40
   source_zk_paths = ' '.join(t.zk_tablet_path for t in old_tablets)
-  utils.run_vtctl('MultiRestore --force --end=0000000000000028 not_vt_test_keyspace %s %s' % (tablet_62344.zk_tablet_path, source_zk_paths), trap_output=True, raise_on_error=True)
+  utils.run_vtctl('MultiRestore --to-master --end=0000000000000028 not_vt_test_keyspace %s %s' % (tablet_62344.zk_tablet_path, source_zk_paths), auto_log=True, raise_on_error=True)
   time.sleep(1)
   for table in tables:
     rows = tablet_62344.mquery('not_vt_test_keyspace', 'select id from %s' % table)

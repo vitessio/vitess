@@ -194,6 +194,7 @@ type MultiRestoreArgs struct {
 	Force            bool
 	KeyRange         key.KeyRange
 	DbName           string
+	ToMaster         bool
 }
 
 func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
