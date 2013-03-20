@@ -115,7 +115,7 @@ func (wr *Wrangler) RestoreFromMultiSnapshot(dbName string, keyRange key.KeyRang
 	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
-func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, zkTabletPath, keyName string, concurrency int, tables []string, forceMasterSnapshot, skipSlaveRestart bool) (manifests []string, parent string, err error) {
+func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, zkTabletPath, keyName string, concurrency int, tables []string, forceMasterSnapshot, skipSlaveRestart bool, maximumFilesize uint64) (manifests []string, parent string, err error) {
 	restoreAfterSnapshot, err := wr.prepareToSnapshot(zkTabletPath, forceMasterSnapshot)
 	if err != nil {
 		return
@@ -124,7 +124,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, zkTabletPath, keyNam
 		err = replaceError(err, restoreAfterSnapshot())
 	}()
 
-	actionPath, err := wr.ai.MultiSnapshot(zkTabletPath, &tm.MultiSnapshotArgs{KeyName: keyName, KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, SkipSlaveRestart: skipSlaveRestart})
+	actionPath, err := wr.ai.MultiSnapshot(zkTabletPath, &tm.MultiSnapshotArgs{KeyName: keyName, KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, SkipSlaveRestart: skipSlaveRestart, MaximumFilesize: maximumFilesize})
 	if err != nil {
 		return
 	}

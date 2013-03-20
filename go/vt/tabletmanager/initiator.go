@@ -185,7 +185,9 @@ type MultiSnapshotArgs struct {
 	Tables           []string
 	Concurrency      int
 	SkipSlaveRestart bool
+	MaximumFilesize  uint64
 }
+
 type MultiRestoreArgs struct {
 	ZkSrcTabletPaths []string
 	Concurrency      int

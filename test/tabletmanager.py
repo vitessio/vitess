@@ -468,7 +468,7 @@ primary key (id)
       [create_template % table for table in tables],
       sum([[insert_template % (table, 10*j + i, 10*j + i) for j in range(1, 8)] for table in tables], []))
     tablet.start_vttablet()
-    utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
+    utils.run_vtctl('MultiSnapshot -force -maximum-file-size=1 -spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
   tablet_62344.create_db('not_vt_test_keyspace')
@@ -479,7 +479,7 @@ primary key (id)
 
   # 0x28 = 40
   source_zk_paths = ' '.join(t.zk_tablet_path for t in old_tablets)
-  utils.run_vtctl('MultiRestore --to-master --end=0000000000000028 not_vt_test_keyspace %s %s' % (tablet_62344.zk_tablet_path, source_zk_paths), auto_log=True, raise_on_error=True)
+  utils.run_vtctl('MultiRestore --to-master -end=0000000000000028 not_vt_test_keyspace %s %s' % (tablet_62344.zk_tablet_path, source_zk_paths), auto_log=True, raise_on_error=True)
   time.sleep(1)
   for table in tables:
     rows = tablet_62344.mquery('not_vt_test_keyspace', 'select id from %s' % table)

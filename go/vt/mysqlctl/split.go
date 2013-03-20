@@ -436,15 +436,34 @@ func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool) (e
 }
 
 type namedHasherWriter struct {
-	*bufio.Writer
-	Hasher     *hasher
-	Filename   string
-	gzip       io.Closer
-	file       *os.File
-	fileBuffer *bufio.Writer
+	// creation parameters
+	filenamePattern string
+	snapshotDir     string
+	tableName       string
+	maximumFilesize uint64
+
+	// our current pipeline
+	inputBuffer *bufio.Writer
+	gzip        *cgzip.Writer
+	hasher      *hasher
+	fileBuffer  *bufio.Writer
+	file        *os.File
+
+	// where we are
+	currentSize   uint64
+	currentIndex  uint
+	snapshotFiles []SnapshotFile
 }
 
-func newCompressedNamedHasherWriter(filename string) (*namedHasherWriter, error) {
+func newCompressedNamedHasherWriter(filenamePattern, snapshotDir, tableName string, maximumFilesize uint64) (*namedHasherWriter, error) {
+	w := &namedHasherWriter{filenamePattern: filenamePattern, snapshotDir: snapshotDir, tableName: tableName, maximumFilesize: maximumFilesize, snapshotFiles: make([]SnapshotFile, 0, 5)}
+	if err := w.Open(); err != nil {
+		return nil, err
+	}
+	return w, nil
+}
+
+func (nhw *namedHasherWriter) Open() (err error) {
 	// The pipeline looks like this:
 	//
 	//                             +---> buffer +---> file
@@ -456,67 +475,100 @@ func newCompressedNamedHasherWriter(filename string) (*namedHasherWriter, error)
 	// The buffer in front of gzip is needed so that the data is
 	// compressed only when there's a reasonable amount of it.
 
-	dstFile, err := os.Create(filename)
+	filename := fmt.Sprintf(nhw.filenamePattern, nhw.currentIndex)
+	nhw.file, err = os.Create(filename)
 	if err != nil {
-		return nil, err
+		return
 	}
-	fileBuffer := bufio.NewWriterSize(dstFile, 32*1024)
-	hasher := newHasher()
-	tee := io.MultiWriter(fileBuffer, hasher)
+	nhw.fileBuffer = bufio.NewWriterSize(nhw.file, 32*1024)
+	nhw.hasher = newHasher()
+	tee := io.MultiWriter(nhw.fileBuffer, nhw.hasher)
 	// create the gzip compression filter
-	gzip, err := cgzip.NewWriterLevel(tee, cgzip.Z_BEST_SPEED)
+	nhw.gzip, err = cgzip.NewWriterLevel(tee, cgzip.Z_BEST_SPEED)
 	if err != nil {
-		return nil, err
+		return
 	}
-	gzipBuffer := bufio.NewWriterSize(gzip, 32*1024)
-	return &namedHasherWriter{
-		Writer:     gzipBuffer,
-		Hasher:     hasher,
-		Filename:   filename,
-		gzip:       gzip,
-		file:       dstFile,
-		fileBuffer: fileBuffer,
-	}, nil
+	nhw.inputBuffer = bufio.NewWriterSize(nhw.gzip, 32*1024)
+	return
 }
 
-func (w namedHasherWriter) Close() (err error) {
+func (nhw *namedHasherWriter) Close() (err error) {
 	// I have to dismantle the pipeline, starting from the
 	// top. Some of the elements are flushers, others are closers,
 	// which is why this code is so ugly.
-	if err = w.Flush(); err != nil {
+	if err = nhw.inputBuffer.Flush(); err != nil {
 		return
 	}
-	if err = w.gzip.Close(); err != nil {
+	if err = nhw.gzip.Close(); err != nil {
 		return
 	}
-	if err = w.fileBuffer.Flush(); err != nil {
+	if err = nhw.fileBuffer.Flush(); err != nil {
 		return
 	}
-	if err = w.file.Close(); err != nil {
+	filename := nhw.file.Name()
+	if err = nhw.file.Close(); err != nil {
 		return
+	}
+
+	// then add the snapshot file we created to our list
+	fi, err := os.Stat(filename)
+	if err != nil {
+		return err
+	}
+	relativePath, err := filepath.Rel(nhw.snapshotDir, filename)
+	if err != nil {
+		return err
+	}
+	nhw.snapshotFiles = append(nhw.snapshotFiles, SnapshotFile{relativePath, fi.Size(), nhw.hasher.HashString(), nhw.tableName})
+
+	nhw.inputBuffer = nil
+	nhw.hasher = nil
+	nhw.gzip = nil
+	nhw.file = nil
+	nhw.fileBuffer = nil
+	nhw.currentSize = 0
+	return nil
+}
+
+func (nhw *namedHasherWriter) Rotate() error {
+	if err := nhw.Close(); err != nil {
+		return err
+	}
+	nhw.currentIndex++
+	if err := nhw.Open(); err != nil {
+		return err
 	}
 	return nil
 }
 
-// SnapshotFile returns the snapshot file appropriate for the data
-// written by the namedHasherWriter. Calling SnapshotFile will close
-// the namedHasherWriter.
-func (nhw namedHasherWriter) SnapshotFile(snapshotDir string) (*SnapshotFile, error) {
-	if err := nhw.Close(); err != nil {
-		return nil, err
+func (nhw *namedHasherWriter) Write(p []byte) (n int, err error) {
+	size := uint64(len(p))
+	if size+nhw.currentSize > nhw.maximumFilesize && nhw.currentSize > 0 {
+		// if we write this, we'll go over the file limit
+		// (make sure we've written something at least to move
+		// forward)
+		if err := nhw.Rotate(); err != nil {
+			return 0, err
+		}
 	}
-	fi, err := os.Stat(nhw.Filename)
-	if err != nil {
-		return nil, err
-	}
-	relativePath, err := filepath.Rel(snapshotDir, nhw.Filename)
-	if err != nil {
-		return nil, err
-	}
-	return &SnapshotFile{relativePath, fi.Size(), nhw.Hasher.HashString()}, nil
+	nhw.currentSize += size
+
+	return nhw.inputBuffer.Write(p)
 }
 
-func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoOutfile, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string) (map[key.KeyRange]*SnapshotFile, error) {
+// SnapshotFiles returns the snapshot files appropriate for the data
+// written by the namedHasherWriter. Calling SnapshotFiles will close
+// any outstanding file.
+func (nhw *namedHasherWriter) SnapshotFiles() ([]SnapshotFile, error) {
+	if nhw.inputBuffer != nil {
+		if err := nhw.Close(); err != nil {
+			return nil, err
+		}
+	}
+	return nhw.snapshotFiles, nil
+}
+
+func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoOutfile, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	queryParams := map[string]string{
 		"TableName":            dbName + "." + td.Name,
@@ -547,8 +599,8 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoO
 	hasherWriters := make(map[key.KeyRange]*namedHasherWriter)
 
 	for kr, cloneSourcePath := range cloneSourcePaths {
-		filename := path.Join(cloneSourcePath, td.Name+".csv.gz")
-		w, err := newCompressedNamedHasherWriter(filename)
+		filenamePattern := path.Join(cloneSourcePath, td.Name+".%v.csv.gz")
+		w, err := newCompressedNamedHasherWriter(filenamePattern, mysqld.SnapshotDir, td.Name, maximumFilesize)
 		if err != nil {
 			return nil, err
 		}
@@ -575,9 +627,9 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoO
 		}
 	}
 
-	snapshotFiles := make(map[key.KeyRange]*SnapshotFile)
+	snapshotFiles := make(map[key.KeyRange][]SnapshotFile)
 	for i, hw := range hasherWriters {
-		if snapshotFiles[i], err = hw.SnapshotFile(mysqld.SnapshotDir); err != nil {
+		if snapshotFiles[i], err = hw.SnapshotFiles(); err != nil {
 			return nil, err
 		}
 	}
@@ -585,7 +637,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoO
 	return snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string, skipSlaveRestart bool) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -645,10 +697,10 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 
-	datafiles := make([]map[key.KeyRange]*SnapshotFile, len(sd.TableDefinitions))
+	datafiles := make([]map[key.KeyRange][]SnapshotFile, len(sd.TableDefinitions))
 	dumpTableWorker := func(i int) (err error) {
 		table := sd.TableDefinitions[i]
-		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, selectIntoOutfile, mainCloneSourcePath, cloneSourcePaths)
+		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, selectIntoOutfile, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
 		if err != nil {
 			return
 		}
@@ -665,9 +717,9 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	ssmFiles := make([]string, len(keyRanges))
 	for i, kr := range keyRanges {
-		krDatafiles := make([]SnapshotFile, len(datafiles))
-		for j, m := range datafiles {
-			krDatafiles[j] = *m[kr]
+		krDatafiles := make([]SnapshotFile, 0, len(datafiles))
+		for _, m := range datafiles {
+			krDatafiles = append(krDatafiles, m[kr]...)
 		}
 		ssm, err := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, krDatafiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
 		if err != nil {
@@ -704,8 +756,15 @@ func (lsf localSnapshotFile) url() string {
 	return "http://" + lsf.manifest.Source.Addr + path.Join(SnapshotURLPath, lsf.file.Path)
 }
 
+func (lsf localSnapshotFile) tableName() string {
+	if lsf.file.TableName == "" {
+		return strings.Replace(path.Base(lsf.filename()), ".csv", "", -1)
+	}
+	return lsf.file.TableName
+}
+
 func (lsf localSnapshotFile) queryParams(destinationDbName string) (map[string]string, error) {
-	tableName := strings.Replace(path.Base(lsf.filename()), ".csv", "", -1)
+	tableName := lsf.tableName()
 	td, ok := lsf.manifest.SchemaDefinition.GetTable(tableName)
 	if !ok {
 		return nil, fmt.Errorf("no definition for table %v in %v", tableName, lsf.manifest.SchemaDefinition)

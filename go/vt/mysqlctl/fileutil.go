@@ -82,10 +82,12 @@ func (h *hasher) HashString() string {
 // the host+port component of the URL.
 // If path ends in '.gz', it is compressed.
 // Size and Hash are computed on the Path itself
+// if TableName is set, this file belongs to that table
 type SnapshotFile struct {
-	Path string
-	Size int64
-	Hash string
+	Path      string
+	Size      int64
+	Hash      string
+	TableName string
 }
 
 type SnapshotFiles []SnapshotFile
@@ -217,7 +219,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 	if err != nil {
 		return nil, err
 	}
-	return &SnapshotFile{relativeDst, size, hash}, nil
+	return &SnapshotFile{relativeDst, size, hash, ""}, nil
 }
 
 // newSnapshotFiles processes multiple files in parallel. The Paths of

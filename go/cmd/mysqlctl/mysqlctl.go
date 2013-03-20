@@ -72,10 +72,12 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	spec := subFlags.String("spec", "-", "shard specification")
 	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
 	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
+	maximumFilesize := subFlags.Uint64("maximum-file-size", 1*1024*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action partialsnapshot requires <db name> <key name>")
 	}
+
 	shards, err := key.ParseShardingSpec(*spec)
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
@@ -84,7 +86,7 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
-	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart)
+	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize)
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
 	} else {
@@ -259,7 +261,7 @@ var commands = []command{
 	command{"partialrestore", partialRestoreCmd,
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",
 		"Restores a database from a partial snapshot"},
-	command{"multisnapshot", multisnapshotCmd, "[-concurrency=3] [-spec='-'] [-tables=''] <db name> <key name>",
+	command{"multisnapshot", multisnapshotCmd, "[-concurrency=3] [-spec='-'] [-tables=''] [-skip-slave-restart] [-maximum-file-size=1073741824] <db name> <key name>",
 		"Makes a complete snapshot using 'select * into' commands."},
 }
 
