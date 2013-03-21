@@ -775,7 +775,7 @@ def run_test_reparent_down_master():
   # the master and fail somewhat quickly
   stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
   utils.debug("Failed ReparentShard output:\n" + stderr)
-  if not 'dial failed' in stderr or not 'ValidateShard verification failed' in stderr:
+  if 'ValidateShard verification failed: timed out during validate' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
   # Should timeout and fail

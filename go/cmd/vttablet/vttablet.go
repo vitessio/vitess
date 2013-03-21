@@ -231,10 +231,6 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 		agent.Stop()
 	})
 
-	// The TabletManager service exports read-only management related
-	// data.
-	tm := tm.NewTabletManager(bindAddr, nil, mysqld)
-	rpc.Register(tm)
 	return nil
 }
 

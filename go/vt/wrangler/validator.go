@@ -8,13 +8,10 @@ import (
 	"fmt"
 	"net"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	vtrpc "code.google.com/p/vitess/go/vt/rpc"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -209,19 +206,24 @@ func strInList(sl []string, s string) bool {
 
 func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
 	masterTabletPath := tm.TabletPathForAlias(shardInfo.MasterAlias)
-	masterTablet, ok := tabletMap[masterTabletPath]
+	_, ok := tabletMap[masterTabletPath]
 	if !ok {
 		err := fmt.Errorf("master not in tablet map: %v", masterTabletPath)
 		results <- vresult{masterTabletPath, err}
 		return
 	}
 
-	slaveAddrs, err := getSlaves(masterTablet.Tablet)
+	actionPath, err := wr.ai.GetSlaves(masterTabletPath)
 	if err != nil {
 		results <- vresult{masterTabletPath, err}
 		return
 	}
-
+	sa, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	if err != nil {
+		results <- vresult{masterTabletPath, err}
+		return
+	}
+	slaveAddrs := sa.(*tm.SlaveList).Addrs
 	if len(slaveAddrs) == 0 {
 		results <- vresult{masterTabletPath, fmt.Errorf("no slaves found: %v", masterTabletPath)}
 		return
@@ -343,61 +345,4 @@ func (wr *Wrangler) ValidateShard(zkShardPath string, pingTablets bool) error {
 		wg.Done()
 	}()
 	return wr.waitForResults(wg, results)
-}
-
-// Slaves come back as IP addrs, resolve to host names.
-func resolveSlaveNames(addrs []string) (hostnames []string, err error) {
-	hostnames = make([]string, len(addrs))
-	for i, addr := range addrs {
-		if net.ParseIP(addr) != nil {
-			ipAddrs, err := net.LookupAddr(addr)
-			if err != nil {
-				return nil, err
-			}
-			addr = ipAddrs[0]
-		}
-		cname, err := net.LookupCNAME(addr)
-		if err != nil {
-			return nil, err
-		}
-		hostnames[i] = strings.TrimRight(cname, ".")
-	}
-	return
-}
-
-// Get list of slave ip addresses from the tablet.
-// FIXME(alainjobart) this should not use RPC, but an actionNode
-// FIXME(alainjobart) once this uses an actionNode, remove TabletManager RPC
-func getSlaves(tablet *tm.Tablet) ([]string, error) {
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-
-	callChan := make(chan *rpc.Call, 1)
-
-	go func() {
-		client, clientErr := rpc.DialHTTP("tcp", tablet.Addr)
-		if clientErr != nil {
-			callChan <- &rpc.Call{Error: fmt.Errorf("dial failed: %v", clientErr)}
-			return
-		}
-
-		slaveList := new(tm.SlaveList)
-		// Forward the message so we close the connection after the rpc is done.
-		done := make(chan *rpc.Call, 1)
-		client.Go("TabletManager.GetSlaves", vtrpc.NilRequest, slaveList, done)
-		callChan <- <-done
-		client.Close()
-	}()
-
-	select {
-	case <-timer.C:
-		return nil, fmt.Errorf("TabletManager.GetSlaves deadline exceeded %v", tablet.Addr)
-	case call := <-callChan:
-		if call.Error != nil {
-			return nil, call.Error
-		}
-		return call.Reply.(*tm.SlaveList).Addrs, nil
-	}
-
-	panic("unreachable")
 }
