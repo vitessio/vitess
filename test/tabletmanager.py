@@ -522,7 +522,7 @@ primary key (id)
   if os.path.exists(os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.csv.gz')):
     raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
   for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
-    path = os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.csv.gz')
+    path = os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
     with gzip.open(path) as f:
       if len(f.readlines()) != 2:
         raise utils.TestError("Data looks wrong in %s" % path)
@@ -557,10 +557,10 @@ primary key (id)
 
   # if err != 0:
   #   raise utils.TestError('mysqlctl multisnapshot failed')
-  if os.path.exists(os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.csv.gz')):
+  if os.path.exists(os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
     raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
   for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
-    path = os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.csv.gz')
+    path = os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
     with gzip.open(path) as f:
       if len(f.readlines()) != 2:
         raise utils.TestError("Data looks wrong in %s" % path)
