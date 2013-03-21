@@ -92,9 +92,11 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl/csvsplitter"
 )
@@ -777,21 +779,150 @@ func (lsf localSnapshotFile) queryParams(destinationDbName string) (map[string]s
 
 }
 
+// Keeps track of the first error it sees, just logs the rest
+type ErrorRecorder struct {
+	errorCount sync2.AtomicInt32
+	firstError error
+}
+
+// Record a possible error:
+// - does nothing if err is nil
+// - only records the first error reported
+// - the rest is just logged
+func (er *ErrorRecorder) RecordError(err error) {
+	if err == nil {
+		return
+	}
+	c := er.errorCount.Add(1)
+	if c == 1 {
+		// this is the first error we see, we record it
+		er.firstError = err
+	} else {
+		// next errors we just log
+		relog.Error("ResourceConstraint: error[%v]: %v", c, err)
+	}
+}
+
+func (er *ErrorRecorder) HasErrors() bool {
+	return er.errorCount.Get() != 0
+}
+
+// Combines 3 different features:
+// - a WaitGroup to wait for all tasks to be done
+// - a Semaphore to control concurrency
+// - an ErrorRecorder
+type ResourceConstraint struct {
+	semaphore sync2.Semaphore
+	wg        sync.WaitGroup
+	ErrorRecorder
+}
+
+func NewResourceConstraint(concurrency int) *ResourceConstraint {
+	return &ResourceConstraint{semaphore: sync2.NewSemaphore(concurrency)}
+}
+
+func (rc *ResourceConstraint) Add(n int) {
+	rc.wg.Add(n)
+}
+
+func (rc *ResourceConstraint) Done() {
+	rc.wg.Done()
+}
+
+// Returns the firstError we encountered, or nil
+func (rc *ResourceConstraint) Wait() error {
+	rc.wg.Wait()
+	return rc.firstError
+}
+
+// Acquire will wait until we have a resource to use
+func (rc *ResourceConstraint) Acquire() {
+	rc.semaphore.Acquire()
+}
+
+func (rc *ResourceConstraint) Release() {
+	rc.semaphore.Release()
+}
+
+func (rc *ResourceConstraint) ReleaseAndDone() {
+	rc.Release()
+	rc.Done()
+}
+
+// Combines 3 different features:
+// - a WaitGroup to wait for all tasks to be done
+// - a Semaphore map to control multiple concurrencies
+// - an ErrorRecorder
+type MultiResourceConstraint struct {
+	semaphoreMap map[string]sync2.Semaphore
+	wg           sync.WaitGroup
+	ErrorRecorder
+}
+
+func NewMultiResourceConstraint(semaphoreMap map[string]sync2.Semaphore) *MultiResourceConstraint {
+	return &MultiResourceConstraint{semaphoreMap: semaphoreMap}
+}
+
+func (mrc *MultiResourceConstraint) Add(n int) {
+	mrc.wg.Add(n)
+}
+
+func (mrc *MultiResourceConstraint) Done() {
+	mrc.wg.Done()
+}
+
+// Returns the firstError we encountered, or nil
+func (mrc *MultiResourceConstraint) Wait() error {
+	mrc.wg.Wait()
+	return mrc.firstError
+}
+
+// Acquire will wait until we have a resource to use
+func (mrc *MultiResourceConstraint) Acquire(name string) {
+	s, ok := mrc.semaphoreMap[name]
+	if !ok {
+		panic(fmt.Errorf("MultiResourceConstraint: No resource named %v in semaphore map", name))
+	}
+	s.Acquire()
+}
+
+func (mrc *MultiResourceConstraint) Release(name string) {
+	s, ok := mrc.semaphoreMap[name]
+	if !ok {
+		panic(fmt.Errorf("MultiResourceConstraint: No resource named %v in semaphore map", name))
+	}
+	s.Release()
+}
+
+func (mrc *MultiResourceConstraint) ReleaseAndDone(name string) {
+	mrc.Release(name)
+	mrc.Done()
+}
+
 func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, fetchRetryCount int, force, toMaster bool) (err error) {
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
-	err = ConcurrentMap(fetchConcurrency, len(sourceAddrs), func(i int) error {
-		dbi := sourceAddrs[i]
-		var sourceDbName string
-		if len(dbi.Path) < 2 { // "" or "/"
-			sourceDbName = destinationDbName
-		} else {
-			sourceDbName = dbi.Path[1:]
-		}
-		ssm, e := fetchSnapshotManifestWithRetry("http://"+dbi.Host, sourceDbName, keyRange, fetchRetryCount)
-		manifests[i] = ssm
-		return e
-	})
-	if err != nil {
+	rc := NewResourceConstraint(fetchConcurrency)
+	for i, sourceAddr := range sourceAddrs {
+		rc.Add(1)
+		go func(sourceAddr *url.URL, i int) {
+			rc.Acquire()
+			defer rc.ReleaseAndDone()
+			if rc.HasErrors() {
+				return
+			}
+
+			var sourceDbName string
+			if len(sourceAddr.Path) < 2 { // "" or "/"
+				sourceDbName = destinationDbName
+			} else {
+				sourceDbName = sourceAddr.Path[1:]
+			}
+			ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRange, fetchRetryCount)
+			manifests[i] = ssm
+			rc.RecordError(e)
+		}(sourceAddr, i)
+	}
+	if err = rc.Wait(); err != nil {
 		return
 	}
 
@@ -825,25 +956,14 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 
 	}()
 
-	// fetch all the csv files
-	todo := []localSnapshotFile{}
-	for _, manifest := range manifests {
-		if err = os.Mkdir(path.Join(tempStoragePath, manifest.Source.Addr), 0775); err != nil {
-			return err
-		}
+	// Handle our concurrency:
+	// - fetchConcurrency tasks for network
+	// - concurrency tasks for db update
+	// (would be easy to add a concurrency per table too)
+	mrc := NewMultiResourceConstraint(map[string]sync2.Semaphore{
+		"net": sync2.NewSemaphore(fetchConcurrency),
+		"db":  sync2.NewSemaphore(concurrency)})
 
-		// NOTE(szopa): I am not doing
-		// for _, file := range ... { ... }
-		// because I want a pointer to file.
-		for i := range manifest.Source.Files {
-			todo = append(todo, localSnapshotFile{manifest: manifest, file: &manifest.Source.Files[i], basePath: tempStoragePath})
-		}
-	}
-
-	err = ConcurrentMap(fetchConcurrency, len(todo), func(i int) error {
-		lsf := todo[i]
-		return fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
-	})
 	// FIXME: Should this create the database?
 	// RestoreFromPartialSnapshot doesn't do this.
 	manifest := manifests[0] // I am assuming they all match
@@ -858,39 +978,73 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 
 	loadDataInfile := `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}} CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' ({{.Columns}})`
 
-	err = ConcurrentMap(concurrency, len(todo), func(i int) error {
-		lsf := todo[i]
-		queryParams, e := lsf.queryParams(destinationDbName)
-		if e != nil {
-			return e
-		}
-		query, e := fillStringTemplate(loadDataInfile, queryParams)
-		if e != nil {
-			return e
+	// fetch all the csv files, and apply them one at a time. Note
+	// this might start many go routines, and they'll all be
+	// waiting on the resource semaphores.
+	for _, manifest := range manifests {
+		if err = os.Mkdir(path.Join(tempStoragePath, manifest.Source.Addr), 0775); err != nil {
+			return err
 		}
 
-		if toMaster {
-			// for masters, we obviously can't disable
-			// binlogs.  we assume the incoming data was
-			// split in small chuncks.
-			return mysqld.executeSuperQuery(query)
+		for i := range manifest.Source.Files {
+			lsf := localSnapshotFile{manifest: manifest, file: &manifest.Source.Files[i], basePath: tempStoragePath}
+			mrc.Add(1)
+			go func() {
+				defer mrc.Done()
+
+				// get the file, using the network resource
+				mrc.Acquire("net")
+				if mrc.HasErrors() {
+					mrc.Release("net")
+					return
+				}
+				e := fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
+				mrc.Release("net")
+				if e != nil {
+					mrc.RecordError(e)
+					return
+				}
+
+				// compute the parameters we need
+				queryParams, e := lsf.queryParams(destinationDbName)
+				if e != nil {
+					mrc.RecordError(e)
+					return
+				}
+				query, e := fillStringTemplate(loadDataInfile, queryParams)
+				if e != nil {
+					mrc.RecordError(e)
+					return
+				}
+
+				mrc.Acquire("db")
+				if mrc.HasErrors() {
+					mrc.Release("db")
+					os.Remove(lsf.filename())
+					return
+				}
+				if toMaster {
+					// for masters, we obviously can't disable
+					// binlogs.  we assume the incoming data was
+					// split in small chuncks.
+					e = mysqld.executeSuperQuery(query)
+				} else {
+					// NOTE(szopa): The binlog should be disabled for non-master,
+					// otherwise the whole thing trips on max_binlog_cache_size.
+					e = mysqld.executeSuperQueryList([]string{"SET sql_log_bin = OFF", query})
+				}
+				mrc.Release("db")
+				if e != nil {
+					mrc.RecordError(e)
+					return
+				}
+
+				os.Remove(lsf.filename())
+			}()
 		}
-
-		// NOTE(szopa): The binlog should be disabled for non-master,
-		// otherwise the whole thing trips on max_binlog_cache_size.
-		return mysqld.executeSuperQueryList([]string{"SET sql_log_bin = OFF", query})
-
-		// TODO: Remove files after they were loaded? This
-		// could decrease the peak amount of space needed for
-		// the restore.
-	})
-	if err != nil {
-		return err
 	}
 
-	// TODO: Enable Shruti's branchy replication.
-
-	return nil
+	return mrc.Wait()
 }
 
 /*
