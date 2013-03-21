@@ -67,6 +67,16 @@ func (wr *Wrangler) rebuildShard(zkShardPath string, replicationGraphOnly bool) 
 
 	tablets := make([]*tm.TabletInfo, 0, len(tabletMap))
 	for _, ti := range tabletMap {
+		if ti.Keyspace != shardInfo.Keyspace() || ti.Shard != shardInfo.ShardName() {
+			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v but belongs to shard %v:%v (maybe remove its replication path in shard %v)", ti.Path(), zkShardPath, ti.Keyspace, ti.Shard, zkShardPath)
+		}
+		if !ti.IsInReplicationGraph() {
+			// only valid case is a scrapped master in the
+			// catastrophic reparent case
+			if ti.Parent.Uid != tm.NO_TABLET {
+				relog.Warning("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Path())
+			}
+		}
 		tablets = append(tablets, ti)
 	}
 

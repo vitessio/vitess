@@ -83,6 +83,14 @@ type ShardInfo struct {
 	*Shard
 }
 
+func (si *ShardInfo) Keyspace() string {
+	return si.keyspace
+}
+
+func (si *ShardInfo) ShardName() string {
+	return si.shardName
+}
+
 func (si *ShardInfo) Json() string {
 	return si.Shard.Json()
 }
