@@ -270,7 +270,7 @@ class Tablet(object):
       if v == None:
         utils.debug("  vttablet not answering at /debug/vars, waiting...")
       else:
-        if not 'Voltron' in v:
+        if 'Voltron' not in v:
           utils.debug("  vttablet not exporting Voltron, waiting...")
         else:
           s = v['Voltron']['States']['Current']

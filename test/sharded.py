@@ -69,7 +69,7 @@ primary key (id)
 def check_rows(to_look_for, driver="vtdb"):
   out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
   for pattern in to_look_for:
-    if not pattern in err:
+    if pattern not in err:
       print "vtclient2 returned:"
       print out
       print err
@@ -79,8 +79,8 @@ def check_rows(to_look_for, driver="vtdb"):
 
 def check_rows_schema_diff(driver):
   out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
-  if not "column[0] name mismatch: id != msg" in err and \
-      not "column[0] name mismatch: msg != id" in err:
+  if "column[0] name mismatch: id != msg" not in err and \
+      "column[0] name mismatch: msg != id" not in err:
     print "vtclient2 returned:"
     print out
     print err
@@ -202,8 +202,8 @@ def run_test_sharding():
   utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/-80')
   utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/80-')
   out, err = utils.run_vtctl('ValidateSchemaKeyspace /zk/global/vt/keyspaces/test_keyspace', trap_output=True, raise_on_error=False)
-  if not "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test:\ncreate table" in err or \
-      not "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\ncreate table" in err:
+  if "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test:\ncreate table" not in err or \
+      "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\ncreate table" not in err:
         raise utils.TestError('wrong ValidateSchemaKeyspace output: ' + err)
 
   # and create zkns on this complex keyspace, make sure a few files are created
@@ -214,7 +214,7 @@ def run_test_sharding():
     for db_type in ['master', 'replica']:
       for sub_path in ['', '.vdns', '/0', '/_vtocc.vdns']:
         expected = '/zk/test_nj/zkns/vt/test_keyspace/' + base + '/' + db_type + sub_path
-        if not expected in lines:
+        if expected not in lines:
           raise utils.TestError('missing zkns part:\n%s\nin:%s' %(expected, out))
 
   # now try to connect using the python client and shard-aware connection
@@ -249,7 +249,7 @@ def run_test_sharding():
     conn.dial()
     raise utils.TestError('expected an exception')
   except Exception as e:
-    if not "fatal: KeyRange mismatch, expecting {Start: , End: 80}, received {Start: , End: 90}" in str(e):
+    if "fatal: KeyRange mismatch, expecting {Start: , End: 80}, received {Start: , End: 90}" not in str(e):
       raise utils.TestError('unexpected exception: ' + str(e))
 
   utils.kill_sub_process(zkocc)

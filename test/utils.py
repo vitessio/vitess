@@ -90,7 +90,7 @@ def kill_sub_processes():
         pid = int(parts[0])
         proc = pid_map.get(pid)
         if not proc or (proc and proc.pid and proc.returncode is None):
-          if not pid in already_killed:
+          if pid not in already_killed:
             os.kill(pid, signal.SIGTERM)
       except OSError as e:
         if options.verbose:

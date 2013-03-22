@@ -255,17 +255,17 @@ def _run_test_vtctl_snapshot_restore(server_mode):
     sepPos = err.find(name + ": ")
     if sepPos != -1:
       results[name] = err[sepPos+len(name)+2:].splitlines()[0]
-  if not "Manifest" in results:
+  if "Manifest" not in results:
     raise utils.TestError("Snapshot didn't echo Manifest file", err)
-  if not "ParentPath" in results:
+  if "ParentPath" not in results:
     raise utils.TestError("Snapshot didn't echo ParentPath", err)
   utils.pause("snapshot finished: " + results['Manifest'] + " " + results['ParentPath'])
   if server_mode:
-    if not "SlaveStartRequired" in results:
+    if "SlaveStartRequired" not in results:
       raise utils.TestError("Snapshot didn't echo SlaveStartRequired", err)
-    if not "ReadOnly" in results:
+    if "ReadOnly" not in results:
       raise utils.TestError("Snapshot didn't echo ReadOnly", err)
-    if not "OriginalType" in results:
+    if "OriginalType" not in results:
       raise utils.TestError("Snapshot didn't echo OriginalType", err)
     if (results['SlaveStartRequired'] != 'false' or
         results['ReadOnly'] != 'true' or
@@ -399,7 +399,7 @@ primary key (id)
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62044.zk_tablet_path,
                              log_level='INFO', trap_output=True)
-  if not 'vt_insert_view' in err:
+  if 'vt_insert_view' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output: %s' % err)
   out, err = utils.run_vtctl('GetSchema ' +
                              tablet_62044.zk_tablet_path,
@@ -660,7 +660,7 @@ def _run_test_vtctl_partial_clone(create, populate,
   # end keys are set properly
   out, err = utils.run(vtroot+'/bin/zk cat ' + tablet_62044.zk_tablet_path,
                        trap_output=True)
-  if not '"Start": "%s"' % start in out or not '"End": "%s"' % end in out:
+  if '"Start": "%s"' % start not in out or '"End": "%s"' % end not in out:
     print "Tablet output:"
     print "out"
     raise utils.TestError('wrong Start or End')
@@ -781,7 +781,7 @@ def run_test_reparent_down_master():
   # Should timeout and fail
   stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_path)
   utils.debug("Failed ScrapTablet output:\n" + stderr)
-  if not 'deadline exceeded' in stderr:
+  if 'deadline exceeded' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Should interrupt and fail
@@ -1104,7 +1104,7 @@ def run_test_sigterm():
   out, err = sp.communicate()
 
   # check the vtctl command got the right remote error back
-  if not "vtaction interrupted by signal" in err:
+  if "vtaction interrupted by signal" not in err:
     raise utils.TestError("cannot find expected output in error:", err)
   utils.debug("vtaction was interrupted correctly:\n" + err)
 
