@@ -58,7 +58,18 @@ var (
 	SEQ_INSERT_SQL        = "insert into vt_sequence (name, id) values ('%v', %v)"
 	STREAM_COMMENT_START  = "/* _stream "
 	SPACE                 = " "
-	BACKDOOR              = "backdoor" //this is the db account name for lookup writes.
+	USE_VT                = "use _vt"
+	USE_DB                = "use %v"
+	CREATE_RECOVERY_TABLE = `CREATE TABLE IF NOT EXISTS vt_blp_recovery (
+                             host varchar(32) NOT NULL,
+                             port int NOT NULL,
+                             position varchar(255) NOT NULL,
+                             keyrange_start varchar(32) NOT NULL,
+                             keyrange_end varchar(32) NOT NULL,
+                             PRIMARY KEY (host, keyrange_end)
+                             ) ENGINE=InnoDB DEFAULT CHARSET=latin1`
+	INSERT_INTO_RECOVERY = `insert into vt_blp_recovery (host, port, position, keyrange_start, keyrange_end) 
+	                          values ('%v', %v, '%v', '%v', '%v') ON DUPLICATE KEY UPDATE position='%v'`
 )
 
 /*
@@ -194,6 +205,7 @@ type BinlogPlayer struct {
 	lookupClient            VtClient
 	debug                   bool
 	tables                  []string
+	useDb                   string
 }
 
 func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.KeyspaceId) *BinlogPlayer {
@@ -231,6 +243,19 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition string) {
 
 	if err = os.Rename(blp.tmpRecoveryFile, blp.binlogRecoveryStatePath); err != nil {
 		panic(fmt.Errorf("Error in renaming temp file '%v' to recovery '%v', err: %v", blp.tmpRecoveryFile, blp.binlogRecoveryStatePath, err))
+	}
+
+	insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, blp.recoveryState.Host,
+		blp.recoveryState.Port,
+		currentPosition,
+		blp.recoveryState.KeyrangeStart,
+		blp.recoveryState.KeyrangeEnd,
+		currentPosition)
+	recoveryDmls := []string{USE_VT, "begin", insertRecovery, "commit", blp.useDb}
+	for _, sql := range recoveryDmls {
+		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+			panic(fmt.Errorf("Error %v in writing recovery info %v", err, sql))
+		}
 	}
 }
 
@@ -363,8 +388,13 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		}
 		binlogPlayer.dbClient = dbClient
 
-		//Below is the code to lookup "backdoor" user's passwd
-		//for loookup writes.
+		lookupClient := DBClient{}
+		lookupConfig := new(mysql.ConnectionParams)
+		err = json.Unmarshal(lookupConfigData, lookupConfig)
+		if err != nil {
+			return nil, fmt.Errorf("error in unmarshaling lookupConfig data, err '%v'", err)
+		}
+
 		var lookupPasswd string
 		if dbCredFile != "" {
 			dbCredentials := make(map[string][]string)
@@ -376,17 +406,11 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 			if err != nil {
 				return nil, fmt.Errorf("Error in unmarshaling db-credentials-file %s", err)
 			}
-			if passwd, ok := dbCredentials[BACKDOOR]; ok {
+			if passwd, ok := dbCredentials[lookupConfig.Uname]; ok {
 				lookupPasswd = passwd[0]
 			}
 		}
 
-		lookupClient := DBClient{}
-		lookupConfig := new(mysql.ConnectionParams)
-		err = json.Unmarshal(lookupConfigData, lookupConfig)
-		if err != nil {
-			return nil, fmt.Errorf("error in unmarshaling lookupConfig data, err '%v'", err)
-		}
 		lookupConfig.Pass = lookupPasswd
 		relog.Info("lookupConfig %v", lookupConfig)
 		lookupClient.dbConfig = lookupConfig
@@ -396,7 +420,17 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 			return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
 		}
 		binlogPlayer.lookupClient = lookupClient
+
+		binlogPlayer.useDb = fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
+		recovery_ddls := []string{USE_VT, CREATE_RECOVERY_TABLE, binlogPlayer.useDb}
+
+		for _, sql := range recovery_ddls {
+			if _, err := binlogPlayer.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+				panic(fmt.Errorf("Error %v in creating recovery table %v", err, sql))
+			}
+		}
 	}
+
 	return binlogPlayer, nil
 }
 
@@ -434,7 +468,6 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 	switch binlogResponse.SqlType {
 	case mysqlctl.DDL:
 		blp.handleDdl(binlogResponse)
-		//FIXME: should we write recovery info to _vt db for every successful txn ?
 		blp.WriteRecoveryPosition(binlogResponse.Position)
 	case mysqlctl.BEGIN:
 		if blp.inTxn {
@@ -451,7 +484,6 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 		blp.handleTxn()
 		blp.inTxn = false
 		blp.txnBuffer = blp.txnBuffer[:0]
-		//FIXME: should we write recovery info to _vt db for every successful txn ?
 		blp.WriteRecoveryPosition(binlogResponse.Position)
 	case "insert", "update", "delete":
 		if !blp.inTxn {
@@ -467,11 +499,13 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 
 //DDL - apply the schema
 func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
-	if len(ddlEvent.Sql) == 0 || len(ddlEvent.Sql) > 1 {
-		panic(fmt.Errorf("Invalid ddl event type, sqls %v", ddlEvent.Sql))
-	}
-	if _, err := blp.dbClient.ExecuteFetch([]byte(ddlEvent.Sql[0]), 0, false); err != nil {
-		panic(fmt.Errorf("Error %v in executing sql %v", err, ddlEvent.Sql))
+	for _, sql := range ddlEvent.Sql {
+		if sql == "" {
+			continue
+		}
+		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+			panic(fmt.Errorf("Error %v in executing sql %v", err, sql))
+		}
 	}
 }
 
@@ -543,7 +577,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 		}
 		streamCommentIndex := strings.Index(sql, STREAM_COMMENT_START)
 		if streamCommentIndex == -1 {
-			relog.Warning("sql doesn't have stream comment '%v'", sql)
+			//relog.Warning("sql doesn't have stream comment '%v'", sql)
 			//If sql doesn't have stream comment, don't match
 			return false
 		}
@@ -609,7 +643,6 @@ func (blp *BinlogPlayer) handleTxn() {
 }
 
 func createIndexSql(indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
-
 	switch indexType {
 	case "username":
 		indexSlice, ok := indexId.([]byte)

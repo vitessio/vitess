@@ -232,6 +232,7 @@ func (blr *BinlogReader) open(name string) (*os.File, string) {
 
 func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosition int64) {
 	stats := stats{StartTime: time.Now()}
+	//relog.Info("logWait %v maxWait %v", time.Duration(blr.LogWaitTimeout * 1e9), time.Duration(blr.MaxWaitTimeout*1e9))
 
 	binlogFile, nextLog := blr.open(filename)
 	defer binlogFile.Close()
@@ -277,7 +278,11 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 	}
 
 	for {
-		position, _ := binlogFile.Seek(0, 1)
+		position, err := binlogFile.Seek(0, 1)
+		if err != nil {
+			relog.Error("Seek failed on file %v", binlogFile.Name())
+			return
+		}
 		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
 		if err != nil && err != io.EOF {
 			relog.Error("BinlogReader.serve err: %v", err)
@@ -307,15 +312,19 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 					binlogFile.Seek(BINLOG_HEADER_SIZE, 0)
 				}
 			} else {
-				position, _ := binlogFile.Seek(0, 1)
-				//relog.Info("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
+				position, err := binlogFile.Seek(0, 1)
+				if err != nil {
+					relog.Error("Seek failed on file %v", binlogFile.Name())
+					return
+				}
+				//relog.Info("BinlogReader wait for more data: %v:%v %v", binlogFile.Name(), position, time.Duration(blr.LogWaitTimeout * 1e9))
 				// wait for more data
 				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
 				stats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
 					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
-						relog.Error("MAX_WAIT_TIMEOUT exceeded, closing connection")
+						relog.Error("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
 						return
 					}
 				} else {

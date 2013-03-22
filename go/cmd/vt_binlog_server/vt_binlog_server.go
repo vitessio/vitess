@@ -8,6 +8,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -51,30 +52,34 @@ var (
 	COLON_BYTE          = []byte(COLON)
 	DOT_BYTE            = []byte(DOT)
 	END_COMMENT         = []byte("*/")
+	_VT                 = []byte("_vt.")
+	HEARTBEAT           = []byte("heartbeat")
+	ADMIN               = []byte("admin")
 )
 
 type blpStats struct {
-	parseStats     *stats.Counters
-	lineCount      *stats.Counters
-	txnCount       *stats.Counters
-	linesPerSecond *stats.Rates
-	txnsPerSecond  *stats.Rates
+	parseStats    *stats.Counters
+	dmlCount      *stats.Counters
+	txnCount      *stats.Counters
+	queriesPerSec *stats.Rates
+	txnsPerSec    *stats.Rates
 }
 
 func NewBlpStats() *blpStats {
 	bs := &blpStats{}
 	bs.parseStats = stats.NewCounters("ParseEvent")
 	bs.txnCount = stats.NewCounters("TxnCount")
-	bs.lineCount = stats.NewCounters("LineCount")
-	bs.linesPerSecond = stats.NewRates("LinesPerSec", bs.lineCount, 15, 60e9)
-	bs.txnsPerSecond = stats.NewRates("TxnPerSec", bs.txnCount, 15, 60e9)
+	bs.dmlCount = stats.NewCounters("DmlCount")
+	bs.queriesPerSec = stats.NewRates("QueriesPerSec", bs.dmlCount, 15, 60e9)
+	bs.txnsPerSec = stats.NewRates("TxnPerSec", bs.txnCount, 15, 60e9)
 	return bs
 }
 
 type BinlogServer struct {
-	clients []*Blp
-	dbname  string
-	mycnf   *mysqlctl.Mycnf
+	clients      []*Blp
+	dbname       string
+	mycnf        *mysqlctl.Mycnf
+	throttleRate float64
 	*blpStats
 }
 
@@ -120,6 +125,7 @@ type Blp struct {
 	//FIXME: this is for debug, remove it.
 	currentLine string
 	*blpStats
+	sleepToThrottle time.Duration
 }
 
 func NewBlp(startCoordinates *mysqlctl.ReplicationCoordinates, blServer *BinlogServer, keyRange *key.KeyRange) *Blp {
@@ -211,6 +217,20 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *mysqlctl.BinlogReader) {
 	}
 }
 
+func avgRate(rateList []float64) (avg float64) {
+	count := 0.0
+	for _, rate := range rateList {
+		if rate > 0 {
+			avg += rate
+			count += 1
+		}
+	}
+	if count > 0 {
+		return avg / count
+	}
+	return 0
+}
+
 //Main parse loop
 func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, binlogReader io.Reader) {
 	// read over the stream and buffer up the transactions
@@ -229,6 +249,7 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 		if err != nil {
 			if err == io.EOF {
 				//end of stream
+				blp.globalState.parseStats.Add("EOFErrors."+blp.keyrangeTag, 1)
 				panic(NewBinlogParseError(fmt.Sprintf("EOF retry")))
 			}
 			panic(NewBinlogParseError(fmt.Sprintf("ReadLine err: , %v", err)))
@@ -236,12 +257,12 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 		if len(line) == 0 {
 			continue
 		}
-		blp.globalState.lineCount.Add("LineCount."+blp.keyrangeTag, 1)
 
 		if line[0] == '#' {
 			//parse positional data
 			line = bytes.TrimSpace(line)
 			blp.currentLine = string(line)
+			//relog.Info(blp.currentLine)
 			blp.parsePositionData(line)
 		} else {
 			//parse event data
@@ -270,6 +291,7 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 			event.firstKw = string(bytes.ToLower(bytes.SplitN(event.LogLine, mysqlctl.SPACE, 2)[0]))
 
 			blp.currentLine = string(event.LogLine)
+			//relog.Info(blp.currentLine)
 
 			//processes statements only for the dbname that it is subscribed to.
 			blp.parseDbChange(event)
@@ -487,7 +509,7 @@ func createDdlStream(lineBuffer *eventBuffer) (ddlStream *mysqlctl.BinlogRespons
 		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v position %v:%v", err, coord.MasterFilename, coord.MasterPosition)))
 	}
 	ddlStream.SqlType = mysqlctl.DDL
-	ddlStream.Sql = make([]string, 1)
+	ddlStream.Sql = make([]string, 0, 1)
 	ddlStream.Sql = append(ddlStream.Sql, string(lineBuffer.LogLine))
 	return ddlStream
 }
@@ -507,10 +529,10 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 	}
 
 	if blp.usingRelayLogs {
-		for !blp.slavePosBehindReplication() {
-			//relog.Info("[%v:%v] parsing is not behind replication, sleeping", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex())
-			time.Sleep(2 * time.Second)
-		}
+		//for !blp.slavePosBehindReplication() {
+		//	relog.Info("[%v:%v] parsing is not behind replication, sleeping", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex())
+		//time.Sleep(2 * time.Second)
+		//}
 	}
 
 	commitEvent.BinlogPosition.Xid = blp.currentPosition.Xid
@@ -525,11 +547,15 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 		return
 	}
 
-	blp.globalState.parseStats.Add("DmlCount."+blp.keyrangeTag, dmlCount)
-	blp.globalState.txnCount.Add("TxnCount."+blp.keyrangeTag, 1)
-
 	if err := sendStream(sendReply, blp.responseStream); err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in sending event to client %v", err)))
+	}
+
+	blp.globalState.dmlCount.Add("DmlCount."+blp.keyrangeTag, dmlCount)
+	blp.globalState.txnCount.Add("TxnCount."+blp.keyrangeTag, 1)
+	if blp.sleepToThrottle > 0 {
+		relog.Info("%v sleeping now to throttle for %v", blp.keyrangeTag, blp.sleepToThrottle)
+		time.Sleep(blp.sleepToThrottle)
 	}
 }
 
@@ -595,6 +621,9 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 		sqlType := mysqlctl.GetSqlType(event.firstKw)
 		if sqlType == mysqlctl.DML {
 			keyspaceIdStr, keyspaceId = parseKeyspaceId(line, mysqlctl.GetDmlType(event.firstKw))
+			if keyspaceIdStr == "" {
+				continue
+			}
 			if !blp.keyspaceRange.Contains(keyspaceId) {
 				dmlBuffer = dmlBuffer[:0]
 				continue
@@ -650,9 +679,21 @@ func (blp *Blp) createDmlEvent(eventBuf *eventBuffer, keyspaceId string) (dmlEve
 	return dmlEvent
 }
 
+func controlDbStatement(sql []byte, dmlType string) bool {
+	sql = bytes.ToLower(sql)
+	if bytes.Contains(sql, _VT) || (bytes.Contains(sql, ADMIN) && bytes.Contains(sql, HEARTBEAT)) {
+		return true
+	}
+	return false
+}
+
 func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspaceId key.KeyspaceId) {
 	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
 	if keyspaceIndex == -1 {
+		if controlDbStatement(sql, dmlType) {
+			relog.Warning("Ignoring no keyspace id, control db stmt %v", string(sql))
+			return
+		}
 		panic(NewBinlogParseError(fmt.Sprintf("Invalid Sql, doesn't contain keyspace id, sql: %v", string(sql))))
 	}
 	seekIndex := keyspaceIndex + len(KEYSPACE_ID_COMMENT)
@@ -735,6 +776,7 @@ func isRequestValid(req *mysqlctl.BinlogServerRequest) bool {
 //This sends the stream to the client.
 func sendStream(sendReply mysqlctl.SendUpdateStreamResponse, responseBuf []*mysqlctl.BinlogResponse) (err error) {
 	for _, event := range responseBuf {
+		//relog.Info("sendStream %v %v %v", event.BinlogPosition, event.BinlogData, event.Error)
 		err = sendReply(event)
 		if err != nil {
 			return NewBinlogParseError(fmt.Sprintf("Error in sending reply to client, %v", err))
@@ -823,6 +865,57 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	return nil
 }
 
+func (binlogServer *BinlogServer) throttleTicker() {
+	tickerInterval := time.Duration(1 * time.Minute)
+	c := time.Tick(tickerInterval)
+	rateMap := make(map[string][]float64)
+	krRateMap := make(map[string]float64)
+	for _ = range c {
+		if binlogServer.clients == nil {
+			return
+		}
+		if len(binlogServer.clients) == 0 {
+			return
+		}
+
+		//Don't throttle by default.
+		if binlogServer.throttleRate == 0 {
+			for _, blpClient := range binlogServer.clients {
+				blpClient.sleepToThrottle = time.Duration(0)
+			}
+			return
+		}
+
+		err := json.Unmarshal([]byte(binlogServer.blpStats.queriesPerSec.String()), &rateMap)
+		if err != nil {
+			relog.Error("Couldn't unmarshal rate map %v", err)
+			return
+		}
+		var totalQps, clientQps, clientMaxQps float64
+		numClients := 0.0
+		for kr, rateList := range rateMap {
+			clientQps = avgRate(rateList)
+			krRateMap[kr] = clientQps
+			totalQps += clientQps
+			numClients += 1
+		}
+		relog.Info("krRateMap %v totalQps %v binlogServer.throttleRate %v", krRateMap, totalQps, binlogServer.throttleRate)
+		if totalQps > binlogServer.throttleRate {
+			clientMaxQps = binlogServer.throttleRate / numClients
+			for _, blpClient := range binlogServer.clients {
+				krQps, ok := krRateMap["DmlCount."+blpClient.keyrangeTag]
+				if ok && krQps > clientMaxQps {
+					val := tickerInterval.Seconds() * ((krQps - clientMaxQps) / krQps)
+					blpClient.sleepToThrottle = time.Duration(int64(val)) * time.Millisecond
+				} else {
+					blpClient.sleepToThrottle = time.Duration(0)
+				}
+				relog.Info("[%v] krQps %v clientMaxQps %v blpClient.sleepToThrottle %v", blpClient.keyrangeTag, krQps, clientMaxQps, blpClient.sleepToThrottle)
+			}
+		}
+	}
+}
+
 func main() {
 	flag.Parse()
 	servenv.Init("vt_binlog_server")
@@ -839,6 +932,8 @@ func main() {
 
 	binlogServer.dbname = strings.ToLower(strings.TrimSpace(*dbname))
 	binlogServer.blpStats = NewBlpStats()
+	binlogServer.throttleRate = 1200
+	go binlogServer.throttleTicker()
 
 	rpc.Register(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)

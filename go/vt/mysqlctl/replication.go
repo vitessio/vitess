@@ -95,6 +95,7 @@ func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) ([]st
 	return []string{
 		"STOP SLAVE",
 		"RESET SLAVE",
+		"RESET MASTER",
 		cmc,
 		"START SLAVE"}, nil
 }
