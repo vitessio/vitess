@@ -150,7 +150,7 @@ func (left *SchemaDefinition) DiffSchemaToArray(leftName, rightName string, righ
 	return result
 }
 
-var autoIncr = regexp.MustCompile(" auto_increment=\\d+")
+var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
@@ -195,7 +195,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		// Normalize & remove auto_increment because it changes on every insert
 		// FIXME(alainjobart) find a way to share this with
 		// vt/tabletserver/table_info.go:162
-		norm1 := strings.ToLower(rows[0][1].String())
+		norm1 := rows[0][1].String()
 		norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
 
 		sd.TableDefinitions[i].Name = tableName
