@@ -61,36 +61,30 @@ func New(out io.Writer, prefix string, level int) *Logger {
 }
 
 func (logger *Logger) Debug(format string, args ...interface{}) {
-	logger.Output(DEBUG, format, args...)
+	logger.output(DEBUG, 4, format, args...)
 }
 
 func (logger *Logger) Info(format string, args ...interface{}) {
-	logger.Output(INFO, format, args...)
+	logger.output(INFO, 4, format, args...)
 }
 
 func (logger *Logger) Warning(format string, args ...interface{}) {
-	logger.Output(WARNING, format, args...)
+	logger.output(WARNING, 4, format, args...)
 }
 
 func (logger *Logger) Error(format string, args ...interface{}) {
-	logger.Output(ERROR, format, args...)
+	logger.output(ERROR, 4, format, args...)
 }
 
 func (logger *Logger) Fatal(format string, args ...interface{}) {
-	logger.Output(FATAL, format, args...)
+	logger.output(FATAL, 4, format, args...)
 	os.Exit(1)
 }
 
 // time\tprefix\tfile:line\tlevel\tmessage\t{blob}\n
-func (logger *Logger) fmtStandardFields(evtTime time.Time, level int, msg string, data interface{}) string {
+func (logger *Logger) fmtStandardFields(evtTime time.Time, level, callLevel int, msg string, data interface{}) string {
 	timestamp := evtTime.Format(time.RFC3339Nano)
 	levelName := levelNames[level]
-	// Judicious call depth setting: most callers are 3 levels deep
-	callLevel := 3
-	if level == LOG {
-		// LOG message go through extra code due to the shim wrapper.
-		callLevel = 5
-	}
 	_, file, line, ok := runtime.Caller(callLevel)
 	if !ok {
 		file = "???"
@@ -118,7 +112,7 @@ func (logger *Logger) fmtStandardFields(evtTime time.Time, level int, msg string
 		msg = msg[1 : len(msg)-1]
 	}
 	blob := "null"
-	if logger.flags&Lblob != 0 && data != nil {
+	if logger.flags&Lblob != 0 {
 		if js, err := json.Marshal(data); err != nil {
 			blob = "{\"err\": " + strconv.Quote(err.Error()) + "}"
 		} else {
@@ -129,11 +123,11 @@ func (logger *Logger) fmtStandardFields(evtTime time.Time, level int, msg string
 	return fmt.Sprintf(logFmt, timestamp, logger.prefix, file, line, levelName, msg)
 }
 
-func (logger *Logger) Output(level int, format string, args ...interface{}) error {
-	return logger.OutputWithData(level, nil, format, args...)
+func (logger *Logger) output(level, callLevel int, format string, args ...interface{}) error {
+	return logger.outputWithData(level, callLevel, nil, format, args...)
 }
 
-func (logger *Logger) OutputWithData(level int, data interface{}, format string, args ...interface{}) error {
+func (logger *Logger) outputWithData(level, callLevel int, data interface{}, format string, args ...interface{}) error {
 	if logger.level > level {
 		return nil
 	}
@@ -148,7 +142,7 @@ func (logger *Logger) OutputWithData(level int, data interface{}, format string,
 	}
 	msg := fmt.Sprintf(format, redactedArgs...)
 	logger.mu.Lock()
-	line := logger.fmtStandardFields(now, level, msg, data)
+	line := logger.fmtStandardFields(now, level, callLevel, msg, data)
 	_, err := io.WriteString(logger.out, line)
 	logger.mu.Unlock()
 	return err
@@ -195,23 +189,23 @@ func Redact(s string) string {
 var std = New(os.Stderr, "", INFO)
 
 func Debug(format string, args ...interface{}) {
-	std.Output(DEBUG, format, args...)
+	std.output(DEBUG, 4, format, args...)
 }
 
 func Info(format string, args ...interface{}) {
-	std.Output(INFO, format, args...)
+	std.output(INFO, 4, format, args...)
 }
 
 func Warning(format string, args ...interface{}) {
-	std.Output(WARNING, format, args...)
+	std.output(WARNING, 4, format, args...)
 }
 
 func Error(format string, args ...interface{}) {
-	std.Output(ERROR, format, args...)
+	std.output(ERROR, 4, format, args...)
 }
 
 func Fatal(format string, args ...interface{}) {
-	std.Output(FATAL, format, args...)
+	std.output(FATAL, 4, format, args...)
 	os.Exit(1)
 }
 
@@ -230,6 +224,10 @@ func SetPrefix(prefix string) {
 // SetLevel sets the output level for the standard logger.
 func SetLevel(level int) {
 	std.SetLevel(level)
+}
+
+func SetFlags(flags int) {
+	std.SetFlags(flags)
 }
 
 func SetLevelByName(name string) error {
@@ -273,7 +271,7 @@ type logShim struct {
 }
 
 func (shim *logShim) Write(buf []byte) (n int, err error) {
-	shim.log.Output(LOG, string(buf))
+	shim.log.output(LOG, 6, string(buf))
 	return 0, nil
 }
 
