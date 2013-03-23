@@ -8,7 +8,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -76,10 +75,9 @@ func NewBlpStats() *blpStats {
 }
 
 type BinlogServer struct {
-	clients      []*Blp
-	dbname       string
-	mycnf        *mysqlctl.Mycnf
-	throttleRate float64
+	clients []*Blp
+	dbname  string
+	mycnf   *mysqlctl.Mycnf
 	*blpStats
 }
 
@@ -125,7 +123,6 @@ type Blp struct {
 	//FIXME: this is for debug, remove it.
 	currentLine string
 	*blpStats
-	sleepToThrottle time.Duration
 }
 
 func NewBlp(startCoordinates *mysqlctl.ReplicationCoordinates, blServer *BinlogServer, keyRange *key.KeyRange) *Blp {
@@ -217,20 +214,6 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *mysqlctl.BinlogReader) {
 	}
 }
 
-func avgRate(rateList []float64) (avg float64) {
-	count := 0.0
-	for _, rate := range rateList {
-		if rate > 0 {
-			avg += rate
-			count += 1
-		}
-	}
-	if count > 0 {
-		return avg / count
-	}
-	return 0
-}
-
 //Main parse loop
 func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, binlogReader io.Reader) {
 	// read over the stream and buffer up the transactions
@@ -262,7 +245,6 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 			//parse positional data
 			line = bytes.TrimSpace(line)
 			blp.currentLine = string(line)
-			//relog.Info(blp.currentLine)
 			blp.parsePositionData(line)
 		} else {
 			//parse event data
@@ -291,7 +273,6 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 			event.firstKw = string(bytes.ToLower(bytes.SplitN(event.LogLine, mysqlctl.SPACE, 2)[0]))
 
 			blp.currentLine = string(event.LogLine)
-			//relog.Info(blp.currentLine)
 
 			//processes statements only for the dbname that it is subscribed to.
 			blp.parseDbChange(event)
@@ -529,10 +510,10 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 	}
 
 	if blp.usingRelayLogs {
-		//for !blp.slavePosBehindReplication() {
-		//	relog.Info("[%v:%v] parsing is not behind replication, sleeping", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex())
-		//time.Sleep(2 * time.Second)
-		//}
+		for !blp.slavePosBehindReplication() {
+			relog.Info("[%v:%v] parsing is not behind replication, sleeping", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex())
+			time.Sleep(2 * time.Second)
+		}
 	}
 
 	commitEvent.BinlogPosition.Xid = blp.currentPosition.Xid
@@ -553,10 +534,6 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 
 	blp.globalState.dmlCount.Add("DmlCount."+blp.keyrangeTag, dmlCount)
 	blp.globalState.txnCount.Add("TxnCount."+blp.keyrangeTag, 1)
-	if blp.sleepToThrottle > 0 {
-		relog.Info("%v sleeping now to throttle for %v", blp.keyrangeTag, blp.sleepToThrottle)
-		time.Sleep(blp.sleepToThrottle)
-	}
 }
 
 //This function determines whether streaming is behind replication as it should be.
@@ -776,7 +753,6 @@ func isRequestValid(req *mysqlctl.BinlogServerRequest) bool {
 //This sends the stream to the client.
 func sendStream(sendReply mysqlctl.SendUpdateStreamResponse, responseBuf []*mysqlctl.BinlogResponse) (err error) {
 	for _, event := range responseBuf {
-		//relog.Info("sendStream %v %v %v", event.BinlogPosition, event.BinlogData, event.Error)
 		err = sendReply(event)
 		if err != nil {
 			return NewBinlogParseError(fmt.Sprintf("Error in sending reply to client, %v", err))
@@ -865,57 +841,6 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	return nil
 }
 
-func (binlogServer *BinlogServer) throttleTicker() {
-	tickerInterval := time.Duration(1 * time.Minute)
-	c := time.Tick(tickerInterval)
-	rateMap := make(map[string][]float64)
-	krRateMap := make(map[string]float64)
-	for _ = range c {
-		if binlogServer.clients == nil {
-			return
-		}
-		if len(binlogServer.clients) == 0 {
-			return
-		}
-
-		//Don't throttle by default.
-		if binlogServer.throttleRate == 0 {
-			for _, blpClient := range binlogServer.clients {
-				blpClient.sleepToThrottle = time.Duration(0)
-			}
-			return
-		}
-
-		err := json.Unmarshal([]byte(binlogServer.blpStats.queriesPerSec.String()), &rateMap)
-		if err != nil {
-			relog.Error("Couldn't unmarshal rate map %v", err)
-			return
-		}
-		var totalQps, clientQps, clientMaxQps float64
-		numClients := 0.0
-		for kr, rateList := range rateMap {
-			clientQps = avgRate(rateList)
-			krRateMap[kr] = clientQps
-			totalQps += clientQps
-			numClients += 1
-		}
-		relog.Info("krRateMap %v totalQps %v binlogServer.throttleRate %v", krRateMap, totalQps, binlogServer.throttleRate)
-		if totalQps > binlogServer.throttleRate {
-			clientMaxQps = binlogServer.throttleRate / numClients
-			for _, blpClient := range binlogServer.clients {
-				krQps, ok := krRateMap["DmlCount."+blpClient.keyrangeTag]
-				if ok && krQps > clientMaxQps {
-					val := tickerInterval.Seconds() * ((krQps - clientMaxQps) / krQps)
-					blpClient.sleepToThrottle = time.Duration(int64(val)) * time.Millisecond
-				} else {
-					blpClient.sleepToThrottle = time.Duration(0)
-				}
-				relog.Info("[%v] krQps %v clientMaxQps %v blpClient.sleepToThrottle %v", blpClient.keyrangeTag, krQps, clientMaxQps, blpClient.sleepToThrottle)
-			}
-		}
-	}
-}
-
 func main() {
 	flag.Parse()
 	servenv.Init("vt_binlog_server")
@@ -932,8 +857,6 @@ func main() {
 
 	binlogServer.dbname = strings.ToLower(strings.TrimSpace(*dbname))
 	binlogServer.blpStats = NewBlpStats()
-	binlogServer.throttleRate = 1200
-	go binlogServer.throttleTicker()
 
 	rpc.Register(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)
