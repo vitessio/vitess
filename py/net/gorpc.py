@@ -110,6 +110,11 @@ class _GoRpcConn(object):
       # catch the timeout and return empty data for now - this breaks the call
       # and lets the deadline get caught with reasonable precision.
       return None
+    except socket.error as e:
+      if e.args[0] == errno.EINTR:
+        # We were interrupted, let the caller retry.
+        return None
+      raise
 
     return data
 
