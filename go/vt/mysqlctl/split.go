@@ -951,10 +951,13 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	// Handle our concurrency:
 	// - fetchConcurrency tasks for network
 	// - concurrency tasks for db update
-	// (would be easy to add a concurrency per table too)
+	// - one task for tablet updates (otherwise the other 'load
+	//   data' statements time out waiting for table lock while the
+	//   first one is running)
 	mrc := NewMultiResourceConstraint(map[string]sync2.Semaphore{
 		"net": sync2.NewSemaphore(fetchConcurrency),
 		"db":  sync2.NewSemaphore(concurrency)})
+	tableLockMap := make(map[string]*sync.Mutex)
 
 	// Create the database (it's a good check to know if we're running
 	// multirestore a second time too!)
@@ -969,6 +972,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	}
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		createDbCmds = append(createDbCmds, td.Schema)
+		tableLockMap[td.Name] = &sync.Mutex{}
 	}
 	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
 		return
@@ -1002,6 +1006,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 					mrc.RecordError(e)
 					return
 				}
+				defer os.Remove(lsf.filename())
 
 				// compute the parameters we need
 				queryParams, e := lsf.queryParams(destinationDbName)
@@ -1015,10 +1020,25 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 					return
 				}
 
+				// acquire the table lock (we do this first
+				// so we maximize access to db. Otherwise
+				// if 8 threads had gotten the db lock but
+				// were writing to the same table, only one
+				// load would go at once)
+				mu, ok := tableLockMap[lsf.tableName()]
+				if !ok {
+					mrc.RecordError(fmt.Errorf("Table %v has no mutex?", lsf.tableName()))
+					return
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				if mrc.HasErrors() {
+					return
+				}
+
 				mrc.Acquire("db")
 				if mrc.HasErrors() {
 					mrc.Release("db")
-					os.Remove(lsf.filename())
 					return
 				}
 				if writeBinLogs {
@@ -1031,8 +1051,6 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 					mrc.RecordError(e)
 					return
 				}
-
-				os.Remove(lsf.filename())
 			}()
 		}
 	}
