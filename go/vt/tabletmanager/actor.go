@@ -820,23 +820,13 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	args := actionNode.args.(*MultiRestoreArgs)
 
 	// read our current tablet, verify its state
+	// we only support restoring to the master or spare replicas
 	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
 	if err != nil {
 		return err
 	}
-	if !args.Force {
-		if args.ToMaster {
-			if tablet.Type != TYPE_MASTER {
-				return fmt.Errorf("expected master type, not %v: %v", tablet.Type, ta.zkTabletPath)
-			}
-			if args.DbName != tablet.DbName() {
-				return fmt.Errorf("expected %v db name, not %v: %v", tablet.DbName(), args.DbName, ta.zkTabletPath)
-			}
-		} else {
-			if tablet.Type != TYPE_IDLE {
-				return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
-			}
-		}
+	if tablet.Type != TYPE_MASTER && tablet.Type != TYPE_SPARE {
+		return fmt.Errorf("expected master or spare type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
 	// get source tablets addresses
@@ -848,31 +838,12 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 		}
 		sourceAddrs[i] = &url.URL{Host: t.Addr, Path: "/" + t.DbName()}
 	}
-	if args.ToMaster {
-		// check the keyrange matches in the master case
-		if tablet.KeyRange != args.KeyRange {
-			return fmt.Errorf("Mismatch in key ranges: %v != %v", tablet.KeyRange, args.KeyRange)
-		}
-	} else {
-		// NOTE(szopa): This is a subset of what changeTypeToRestore
-		// does. This guy is going to be a master, it should not
-		// inherit the keyspace or db name from the sources.
-		tablet.Type = TYPE_RESTORE
-		tablet.KeyRange = args.KeyRange
-		if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
-			return err
-		}
-	}
 
-	if err := ta.mysqld.RestoreFromMultiSnapshot(args.DbName, args.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.FetchRetryCount, args.Force, args.ToMaster); err != nil {
+	if err := ta.mysqld.RestoreFromMultiSnapshot(tablet.DbName(), tablet.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.FetchRetryCount, args.WriteBinLogs); err != nil {
 		if e := Scrap(ta.zconn, ta.zkTabletPath, false); e != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
-	}
-
-	if !args.ToMaster {
-		return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE, true)
 	}
 	return nil
 }

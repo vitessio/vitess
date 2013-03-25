@@ -193,10 +193,7 @@ type MultiRestoreArgs struct {
 	Concurrency      int
 	FetchConcurrency int
 	FetchRetryCount  int
-	Force            bool
-	KeyRange         key.KeyRange
-	DbName           string
-	ToMaster         bool
+	WriteBinLogs     bool
 }
 
 func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {

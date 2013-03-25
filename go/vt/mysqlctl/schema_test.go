@@ -41,8 +41,12 @@ func TestSchemaDiff(t *testing.T) {
 	testDiff(t, sd1, sd1, "sd1", "sd2", []string{})
 
 	sd2 := &SchemaDefinition{TableDefinitions: make([]TableDefinition, 0, 2)}
-	testDiff(t, sd2, sd2, "sd1", "sd2", []string{})
-	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 has an extra table named table1", "sd1 has an extra table named table2"})
+	testDiff(t, sd2, sd2, "sd2", "sd2", []string{})
+
+	sd1.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
+	sd2.DatabaseSchema = "DONT CREATE DATABASE {{.DatabaseName}}"
+	testDiff(t, sd1, sd2, "sd1", "sd2", []string{"sd1 and sd2 don't agree on database creation command:\nCREATE DATABASE {{.DatabaseName}}\n differs from:\nDONT CREATE DATABASE {{.DatabaseName}}", "sd1 has an extra table named table1", "sd1 has an extra table named table2"})
+	sd2.DatabaseSchema = "CREATE DATABASE {{.DatabaseName}}"
 	testDiff(t, sd2, sd1, "sd2", "sd1", []string{"sd1 has an extra table named table1", "sd1 has an extra table named table2"})
 
 	sd2.TableDefinitions = append(sd2.TableDefinitions, TableDefinition{Name: "table1", Schema: "schema1", Type: TABLE_BASE_TABLE})

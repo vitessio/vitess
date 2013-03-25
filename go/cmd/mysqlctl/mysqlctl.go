@@ -95,13 +95,12 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 }
 
 func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	force := subFlags.Bool("force", false, "restore even if the schemas don't match")
 	start := subFlags.String("start", "", "start of the key range")
 	end := subFlags.String("end", "", "end of the key range")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 4, "how many concurrent jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	toMaster := subFlags.Bool("to-master", false, "the restore happens on a master, not an idle tablet")
+	writeBinLogs := subFlags.Bool("write-bin-logs", false, "write the data into the mysql binary logs")
 
 	subFlags.Parse(args)
 
@@ -130,7 +129,7 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		}
 		sources[i] = dbUrl
 	}
-	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *force, *toMaster); err != nil {
+	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *writeBinLogs); err != nil {
 		relog.Fatal("multirestore failed: %v", err)
 	}
 }

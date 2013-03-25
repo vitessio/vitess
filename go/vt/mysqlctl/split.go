@@ -899,7 +899,7 @@ func (mrc *MultiResourceConstraint) ReleaseAndDone(name string) {
 	mrc.Done()
 }
 
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, fetchRetryCount int, force, toMaster bool) (err error) {
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, fetchRetryCount int, writeBinLogs bool) (err error) {
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
 	rc := NewResourceConstraint(fetchConcurrency)
 	for i, sourceAddr := range sourceAddrs {
@@ -926,16 +926,8 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		return
 	}
 
-	if err = mysqld.SetReadOnly(true); err != nil {
-		return
-	}
-
 	if e := SanityCheckManifests(manifests); e != nil {
-		if force {
-			relog.Error("sanity check failing, continuing nevertheless: %v", e)
-		} else {
-			return e
-		}
+		return e
 	}
 
 	tempStoragePath := path.Join(mysqld.SnapshotDir, "multirestore", destinationDbName)
@@ -964,11 +956,17 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		"net": sync2.NewSemaphore(fetchConcurrency),
 		"db":  sync2.NewSemaphore(concurrency)})
 
-	// FIXME: Should this create the database?
-	// RestoreFromPartialSnapshot doesn't do this.
+	// Create the database (it's a good check to know if we're running
+	// multirestore a second time too!)
 	manifest := manifests[0] // I am assuming they all match
+	createDatabase, e := fillStringTemplate(manifest.SchemaDefinition.DatabaseSchema, map[string]string{"DatabaseName": destinationDbName})
+	if e != nil {
+		return e
+	}
 	createDbCmds := []string{
-		"USE " + destinationDbName}
+		createDatabase,
+		"USE `" + destinationDbName + "`",
+	}
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		createDbCmds = append(createDbCmds, td.Schema)
 	}
@@ -1023,14 +1021,9 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 					os.Remove(lsf.filename())
 					return
 				}
-				if toMaster {
-					// for masters, we obviously can't disable
-					// binlogs.  we assume the incoming data was
-					// split in small chuncks.
+				if writeBinLogs {
 					e = mysqld.executeSuperQuery(query)
 				} else {
-					// NOTE(szopa): The binlog should be disabled for non-master,
-					// otherwise the whole thing trips on max_binlog_cache_size.
 					e = mysqld.executeSuperQueryList([]string{"SET sql_log_bin = OFF", query})
 				}
 				mrc.Release("db")

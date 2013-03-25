@@ -59,8 +59,12 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 		dba.UnixSocket = config.SocketFile
 	}
 
+	// the super connection is not linked to a specific database
+	// (allows us to create them)
+	superParams := dba
+	superParams.Dbname = ""
 	createSuperConnection := func() (*mysql.Connection, error) {
-		return mysql.Connect(dba)
+		return mysql.Connect(superParams)
 	}
 	return &Mysqld{config,
 		dba,

@@ -892,32 +892,19 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 }
 
 func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
-	force := subFlags.Bool("force", false, "restore even if the schemas don't match")
-	start := subFlags.String("start", "", "start of the key range")
-	end := subFlags.String("end", "", "end of the key range")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 4, "how many concurrent jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	toMaster := subFlags.Bool("to-master", false, "the restore happens on a master, not an idle tablet")
+	writeBinLogs := subFlags.Bool("write-bin-logs", false, "write the data into the mysql binary logs")
 	subFlags.Parse(args)
 
-	s, err := key.HexKeyspaceId(*start).Unhex()
-	if err != nil {
-		relog.Fatal("Invalid start key %v: %v", *start, err)
+	if subFlags.NArg() < 2 {
+		relog.Fatal("MultiRestore requires <destination zk path> <source zk path>... %v", args)
 	}
-	e, err := key.HexKeyspaceId(*end).Unhex()
-	if err != nil {
-		relog.Fatal("Invalid end key %v: %v", *end, err)
-	}
-	keyRange := key.KeyRange{Start: s, End: e}
-	if subFlags.NArg() < 3 {
-		relog.Fatal("MultiRestore requires <dbname> <destination zk path> <source zk path>... %v", args)
-	}
-	dbName := subFlags.Arg(0)
-	destination := subFlags.Arg(1)
-	sources := subFlags.Args()[2:]
+	destination := subFlags.Arg(0)
+	sources := subFlags.Args()[1:]
 
-	err = wrangler.RestoreFromMultiSnapshot(dbName, keyRange, destination, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *force, *toMaster)
+	err = wrangler.RestoreFromMultiSnapshot(destination, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *writeBinLogs)
 	return
 }
 

@@ -50,6 +50,9 @@ func (bdl ByReverseDataLength) Less(i, j int) bool {
 }
 
 type SchemaDefinition struct {
+	// the 'CREATE DATABASE...' statement, with db name as {{.DatabaseName}}
+	DatabaseSchema string
+
 	// ordered by TableDefinition.Name by default
 	TableDefinitions TableDefinitions
 
@@ -87,6 +90,10 @@ func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool
 // generates a report on what's different between two SchemaDefinition
 // for now, we skip the VIEW entirely.
 func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *SchemaDefinition, result chan string) {
+	if left.DatabaseSchema != right.DatabaseSchema {
+		result <- leftName + " and " + rightName + " don't agree on database creation command:\n" + left.DatabaseSchema + "\n differs from:\n" + right.DatabaseSchema
+	}
+
 	leftIndex := 0
 	rightIndex := 0
 	for leftIndex < len(left.TableDefinitions) && rightIndex < len(right.TableDefinitions) {
@@ -155,6 +162,19 @@ var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
 func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews bool) (*SchemaDefinition, error) {
+	sd := &SchemaDefinition{}
+
+	// get the database creation command
+	rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE DATABASE " + dbName)
+	if fetchErr != nil {
+		return nil, fetchErr
+	}
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("empty create database statement for %v", dbName)
+	}
+	sd.DatabaseSchema = strings.Replace(rows[0][1].String(), "`"+dbName+"`", "`{{.DatabaseName}}`", 1)
+
+	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
 	if len(tables) != 0 {
 		sql += " AND table_name IN ('" + strings.Join(tables, "','") + "')"
@@ -167,10 +187,10 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		return nil, err
 	}
 	if len(rows) == 0 {
-		return &SchemaDefinition{}, nil
+		return sd, nil
 	}
 
-	sd := &SchemaDefinition{TableDefinitions: make([]TableDefinition, len(rows))}
+	sd.TableDefinitions = make([]TableDefinition, len(rows))
 	for i, row := range rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
