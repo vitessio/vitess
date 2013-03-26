@@ -252,7 +252,7 @@ var commands = []command{
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] <destination_dbname> <source_host>[/<source_dbname>]...",
+		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] [-write-bin-logs] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
 	command{"partialsnapshot", partialSnapshotCmd,
 		"[-start=<start key>] [-end=<end key>] [-concurrency=4] <db name> <key name>",

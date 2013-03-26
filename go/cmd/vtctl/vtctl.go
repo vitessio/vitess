@@ -119,7 +119,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] [-skip-slave-restart] [-maximum-file-size=1073741824] -spec='-' -tables='' <zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
-				"[-force] [-concurrency=4] [-start=''] [-end=''] [-fetch-concurrency=4] [-fetch-retry-count=3] [-to-master] <dbname> <destination zk path> <source zk path>...",
+				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-fetch-retry-count=3] [-write-bin-logs] <destination zk path> <source zk path>...",
 				"Restores a snapshot from multiple hosts."},
 			command{"PartialRestore", commandPartialRestore,
 				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
