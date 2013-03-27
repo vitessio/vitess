@@ -145,9 +145,6 @@ func NewSplitSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFi
 func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 	first := ssms[0]
 	for _, ssm := range ssms[1:] {
-		if ssm.Source.DbName != first.Source.DbName {
-			return fmt.Errorf("multirestore sanity check: database names don't match: %v, %v", ssm, first)
-		}
 		if ssm.SchemaDefinition.Version != first.SchemaDefinition.Version {
 			return fmt.Errorf("multirestore sanity check: schema versions don't match: %v, %v", ssm, first)
 		}
@@ -966,10 +963,15 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	if e != nil {
 		return e
 	}
-	createDbCmds := []string{
-		createDatabase,
-		"USE `" + destinationDbName + "`",
+	if createDatabase == "" {
+		return fmt.Errorf("Empty create database statement")
 	}
+	createDbCmds := make([]string, 0, len(manifest.SchemaDefinition.TableDefinitions)+2)
+	if !writeBinLogs {
+		createDbCmds = append(createDbCmds, "SET sql_log_bin = OFF")
+	}
+	createDbCmds = append(createDbCmds, createDatabase)
+	createDbCmds = append(createDbCmds, "USE `"+destinationDbName+"`")
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		createDbCmds = append(createDbCmds, td.Schema)
 		tableLockMap[td.Name] = &sync.Mutex{}
