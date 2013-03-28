@@ -94,6 +94,7 @@ import (
 	"strings"
 	"sync"
 
+	"code.google.com/p/vitess/go/bufio2"
 	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sync2"
@@ -442,7 +443,7 @@ type namedHasherWriter struct {
 	maximumFilesize uint64
 
 	// our current pipeline
-	inputBuffer *bufio.Writer
+	inputBuffer *bufio2.AsyncWriter
 	gzip        *cgzip.Writer
 	hasher      *hasher
 	fileBuffer  *bufio.Writer
@@ -487,7 +488,7 @@ func (nhw *namedHasherWriter) Open() (err error) {
 	if err != nil {
 		return
 	}
-	nhw.inputBuffer = bufio.NewWriterSize(nhw.gzip, 32*1024)
+	nhw.inputBuffer = bufio2.NewAsyncWriterSize(nhw.gzip, 32*1024, 3)
 	return
 }
 
