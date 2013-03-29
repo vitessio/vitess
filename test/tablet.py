@@ -110,8 +110,8 @@ class Tablet(object):
       query = [query]
 
     for q in query:
-      if utils.options.verbose:
-        print "mysql(%s,%s): %s" % (self.tablet_uid, dbname, q)
+      # if utils.options.verbose:
+      #   print "mysql(%s,%s): %s" % (self.tablet_uid, dbname, q)
       cursor.execute(q)
 
     if write:

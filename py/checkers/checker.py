@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 import time
+import urlparse
 
 import MySQLdb
 import MySQLdb.cursors
@@ -31,6 +32,23 @@ def merge_sorted(seqs, key=None):
     return heapq.merge(*seqs)
   else:
     return (i[1] for i in heapq.merge(*(((key(item), item) for item in seq) for seq in seqs)))
+
+def parse_database_url(url):
+  if not url.startswith('mysql'):
+    url = 'mysql://' + url
+  url = 'http' + url[len('mysql'):]
+  parsed = urlparse.urlparse(url)
+  params = {'user': parsed.username,
+            'host': parsed.hostname,
+            'db': parsed.path[1:]}
+  if parsed.username:
+    params['user'] = parsed.username
+  if parsed.password is not None:
+    params['passwd'] = parsed.password
+  if parsed.port:
+    params['port'] = parsed.port
+  params.update(dict(urlparse.parse_qsl(parsed.query)))
+  return params
 
 
 class AtomicWriter(object):
@@ -215,10 +233,7 @@ class MultiDatastore(object):
     for thread in self.threads:
       thread.query(sql, params)
     data = [thread.get() for thread in self.threads]
-    sdata = list(merge_sorted(data, key=lambda r: r.pk))
-    if self.stats:
-      self.stats.update(self.nickname, start)
-    return sdata
+    return data
 
 
 class Mismatch(Exception):
@@ -245,6 +260,7 @@ class Mismatch(Exception):
 class Stats(object):
 
   def __init__(self, interval=0):
+    self.lock = threading.Lock()
     self.interval = interval
     self.clear()
 
@@ -259,13 +275,14 @@ class Stats(object):
     self.last_flush = time.time()
 
   def update(self, key, from_time, items=0):
-    logging.debug("update: key: %s, from_time: %s, items: %s", key, from_time, items)
-    # Items are incremented only by 'total'
-    t = time.time() - from_time
-    self.local_times[key] += t
-    self.times[key] += t
-    self.items += items
-    self.local_items += items
+    with self.lock:
+      logging.debug("update: key: %s, from_time: %s, items: %s", key, from_time, items)
+      # Items are incremented only by 'total'
+      t = time.time() - from_time
+      self.local_times[key] += t
+      self.times[key] += t
+      self.items += items
+      self.local_items += items
 
   def maybe_print_local(self, force=False):
     if self.interval == 0:
@@ -293,22 +310,21 @@ class Stats(object):
 
 
 class Checker(object):
-  def __init__(self, configuration, table, directory, batch_count=0, blocks=1, ratio=1.0, block_size=16384, logging_level=logging.INFO, stats_interval=1, temp_directory=None):
-    self.table_name = table
 
-    table_data = configuration['tables'][table]
-    self.primary_key = table_data['pk']
-    self.columns = table_data['columns']
+  def __init__(self, destination_url, sources_urls, table, directory='.',
+               keyrange={}, batch_count=0, blocks=1, ratio=1.0, block_size=16384,
+               logging_level=logging.INFO, stats_interval=1, temp_directory=None):
+    self.table_name = table
+    self.table_data = self.get_table_data(table, parse_database_url(sources_urls[0]))
+    self.primary_key = self.table_data['pk']
+    self.columns = self.table_data['columns']
+
+    (self.batch_count, self.block_size,
+     self.ratio, self.blocks) = batch_count, block_size, ratio, blocks
+
+    self.calculate_batch_size()
 
     self.current_pk = dict((k, 0) for k in self.primary_key)
-    if batch_count != 0:
-      self.batch_size = batch_count
-    else:
-      try:
-        rows_per_block = float(block_size) / table_data.get('avg_row_length', 0)
-      except ZeroDivisionError:
-        rows_per_block = 20
-      self.batch_size = int(rows_per_block * ratio * blocks)
 
     self.iterations = 0
     self.temp_directory = temp_directory
@@ -319,7 +335,6 @@ class Checker(object):
     except IOError:
       pass
 
-    keyrange = configuration["keyrange"]
     keyspace_sql_parts = []
     if keyrange.get('start') or keyrange.get('end'):
       if keyrange.get('start'):
@@ -368,81 +383,203 @@ class Checker(object):
                'max_range_sql': sql_tuple_comparison(self.table_name, self.primary_key, column_name_prefix='max_')}
 
     self.stats = Stats(interval=stats_interval)
-    self.destination = Datastore(configuration['destination'], self.primary_key, stats=self.stats)
-    self.sources = MultiDatastore(configuration['sources'], self.primary_key, 'all-sources', stats=self.stats)
+    self.destination = Datastore(parse_database_url(destination_url), self.primary_key, stats=self.stats)
+    self.sources = MultiDatastore([parse_database_url(s) for s in sources_urls], self.primary_key, 'all-sources', stats=self.stats)
 
     logging.basicConfig(level=logging_level)
     logging.debug("destination sql template: %s", clean(self.destination_sql))
     logging.debug("source sql template: %s", clean(self.source_sql))
 
+  def get_table_data(self, table_name, params):
+    table = {'columns': [], 'pk': []}
+    conn = MySQLdb.connect(**params)
+    cursor = conn.cursor()
+    cursor.execute("SELECT avg_row_length FROM information_schema.tables WHERE table_schema = %s AND table_name = %s", (params['db'], table_name))
+    table['avg_row_length'] = cursor.fetchone()[0]
+
+    cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_schema = %s AND table_name = %s ORDER BY table_name, ordinal_position", (params['db'], table_name))
+    for row in cursor.fetchall():
+      table['columns'].append(row[0])
+
+    cursor.execute("select column_name FROM information_schema.key_column_usage WHERE table_schema=%s AND constraint_name='PRIMARY' AND table_name = %s ORDER BY table_name, ordinal_position", (params['db'], table_name))
+    for row in cursor.fetchall():
+      table['pk'].append(row[0])
+    return table
+
+  def calculate_batch_size(self):
+    if self.batch_count != 0:
+      self.batch_size = self.batch_count
+    else:
+      try:
+        rows_per_block = float(self.block_size) / self.table_data.get('avg_row_length', 0)
+      except ZeroDivisionError:
+        rows_per_block = 20
+      self.batch_size = int(rows_per_block * self.ratio * self.blocks)
+
   def get_pk(self, row):
     return dict((k, row[k]) for k in self.primary_key)
 
-  def get_data(self):
+  def _run(self):
+    # initialize destination_in_queue, sources_in_queue, merger_in_queue, comparer_in_queue, comparare_out_queue
+    self.destination_in_queue = Queue.Queue(maxsize=3)
+    self.sources_in_queue = Queue.Queue(maxsize=3)
+    self.merger_in_queue = Queue.Queue(maxsize=3)
+    self.comparer_in_queue = Queue.Queue(maxsize=3)
+    self.comparer_out_queue = Queue.Queue(maxsize=3)
+
+    # start destination, sources, merger, comparer
+    threads = []
+    for worker_name in ['destination_worker', 'sources_worker', 'merger_worker', 'comparer_worker']:
+      worker = getattr(self, worker_name)
+      t = threading.Thread(target=worker, name=worker_name)
+      t.daemon = True
+      threads.append(t)
+      t.start()
+    self.destination_in_queue.put((self.current_pk, None))
+
+    start = time.time()
     while True:
+      # get error from the comparer out-queue, raise if it isn't None.
+
+      error_or_done, processed_rows = self.comparer_out_queue.get()
+      self.stats.update('total', start, processed_rows)
       start = time.time()
-      params = dict(self.current_pk)
-      params['limit'] = self.batch_size
+      self.stats.maybe_print_local()
+      if error_or_done:
+        self.destination_in_queue.put((None, True))
+      if error_or_done is True:
+        self.stats.print_total()
+        return
+      elif error_or_done is not None:
+        raise error_or_done
 
-      logging.debug("destination execute: %r", clean(self.destination_sql % params))
-      destination_data = self.destination.query(self.destination_sql, params)
-      if destination_data:
-        new_current_pk = self.get_pk(destination_data[-1])
 
-        source_params = dict(self.current_pk)
-        for k, v in new_current_pk.items():
-          source_params['max_' + k] = v
+  def destination_worker(self):
+    while True:
+      start_pk, done = self.destination_in_queue.get()
+      start = time.time()
+      if done:
+        self.sources_in_queue.put((None, None, None, True))
+        return
 
-        logging.debug("source execute: %r", clean(self.source_sql % source_params))
-        source_data = self.sources.query(self.source_sql, source_params)
-        self.current_pk = new_current_pk
+      params = {'limit': self.batch_size}
+      params.update(start_pk)
+
+      # query the destination -> data
+      try:
+        destination_data = self.destination.query(self.destination_sql, params)
+      except MySQLdb.ProgrammingError as e:
+        self.sources_in_queue.put((None, None, None, e))
+        return
+
+      try:
+        end_pk = self.get_pk(destination_data[-1])
+      except IndexError:
+        # There's no more data in the destination. The next object we
+        # get from the in-queue is going to be put there by _run or is
+        # going to be an error.
+        self.sources_in_queue.put((start_pk, None, [], None))
       else:
-        logging.debug("no more items in destination, trying an unbound query in source")
-        source_data = self.sources.query(self.last_source_sql, params)
-        # NOTE(szopa): I am setting self.current_pk event though it
-        # probably won't be used (run will raise an exception after
-        # the first suspicious batch).
-        try:
-          self.current_pk = self.get_pk(source_data[-1])
-        except IndexError:
-          break
-      if not source_data and not destination_data:
-        break
-      self.stats.update('selects', start)
-      yield destination_data, source_data
+        # put the (range-pk, data) on the sources in-queue
+        self.sources_in_queue.put((start_pk, end_pk, destination_data, None))
+        self.destination_in_queue.put((end_pk, None))
+      self.stats.update('destination', start)
+
+
+  def sources_worker(self):
+    while True:
+      # get (range-pk, data) from the sources in-queue
+      (start_pk, end_pk, destination_data, error_or_done) = self.sources_in_queue.get()
+      start = time.time()
+      if error_or_done:
+        self.merger_in_queue.put((None, None, error_or_done))
+        return
+
+      # query the sources -> sources_data
+      params = dict(start_pk)
+
+      if destination_data:
+        for k, v in end_pk.items():
+          params['max_' + k] = v
+        sources_data = self.sources.query(self.source_sql, params)
+      else:
+        params['limit'] = self.batch_size
+        sources_data = self.sources.query(self.last_source_sql, params)
+      # put (sources_data, data, done) on the merger in-queue
+      done = not (sources_data or destination_data)
+      self.stats.update('sources', start)
+      self.merger_in_queue.put((destination_data, sources_data, done))
+
+  def merger_worker(self):
+    while True:
+      # get (sources_data, data, done) from the merger in-queue
+      destination_data, sources_data, error_or_done = self.merger_in_queue.get()
+      start = time.time()
+      if error_or_done:
+        # If it's not an error, no need to notify comparer - it sent
+        # the done itself.
+        if error_or_done is not True:
+          self.comparer_in_queue.put((None, None, error_or_done))
+        return
+      # merge sources_data -> merged_data
+      merged_data = list(merge_sorted(sources_data, key=lambda r: r.pk))
+
+      # put (merged_data, data, done) on comparer in-queue
+      self.stats.update('merger', start)
+      self.comparer_in_queue.put((destination_data, merged_data, False))
+
+
+  def comparer_worker(self):
+    while True:
+      # get (merged_data, data, error) from the comparer in-queue
+      destination_data, merged_data, error = self.comparer_in_queue.get()
+
+      start = time.time()
+
+      if error:
+        self.comparer_out_queue.put((error, 0))
+        return
+
+      # No more data in both the sources and the destination, we are
+      # done.
+      if destination_data == [] and merged_data == []:
+        self.comparer_out_queue.put((True, 0))
+        return
+
+      try:
+        last_pk = self.get_pk(destination_data[-1])
+      except IndexError:
+        # Only sources data: maybe shortcircuit here?
+        last_pk = self.get_pk(merged_data[-1])
+
+      # compare the data
+      missing, unexpected, different = sorted_row_list_difference(merged_data, destination_data)
+
+      self.stats.update('comparer', start)
+
+      # put the mismatch or None on comparer out-queue.
+      if any([missing, unexpected, different]):
+        self.comparer_out_queue.put((Mismatch(missing, unexpected, different), len(destination_data)))
+        return
+      else:
+        self.comparer_out_queue.put((None, len(destination_data)))
+
+      # checkpoint
+      self.checkpoint(last_pk, done=False)
 
   def restore_checkpoint(self):
     with open(self.checkpoint_file) as fi:
       checkpoint = json.load(fi)
     self.current_pk, self.done = checkpoint['current_pk'], checkpoint['done']
 
-  def checkpoint(self, done=False):
+  def checkpoint(self, pk, done=False):
     start = time.time()
-    data = {'current_pk': self.current_pk,
+    data = {'current_pk': pk,
             'done': done,
             'timestamp': str(datetime.datetime.now())}
     with AtomicWriter(self.checkpoint_file, self.temp_directory) as fi:
       json.dump(data, fi)
     self.stats.update('checkpoint', start)
-
-  def _run(self):
-    if self.done:
-      return
-    start = time.time()
-    for dd, sd in self.get_data():
-      self.iterations += 1
-      self.checkpoint()
-      start_processing = time.time()
-      missing, unexpected, different = sorted_row_list_difference(sd, dd)
-      self.stats.update('processing', start_processing)
-      self.stats.update('total', start, len(sd))
-      if any([missing, unexpected, different]):
-        raise Mismatch(missing, unexpected, different)
-      start = time.time()
-      self.stats.maybe_print_local()
-
-    self.checkpoint(done=True)
-    self.stats.print_total()
 
   def run(self):
     try:
@@ -450,10 +587,18 @@ class Checker(object):
     except Mismatch as e:
       print e
 
+def get_range(start, end):
+  ret = {}
+  if start != "":
+    ret['start'] = int(start, 16)
+  if end != "":
+    ret['end'] = int(end, 16)
+  return ret
+
 def main():
   parser = optparse.OptionParser()
   parser.add_option('--batch-count',
-                    type='int', default=1000, dest='batch_count',
+                    type='int', default=0, dest='batch_count',
                     help='process this many rows in one batch')
   parser.add_option('--stats', type='int',
                     default=0, dest='stats',
@@ -469,16 +614,18 @@ def main():
                     type='float', default=3,
                     help='Try to send this many blocks in one commit.')
   parser.add_option('--block-size',
-                    type='int', default=16384, dest='block_size',
+                    type='int', default=2097152, dest='block_size',
                     help='Assumed size of a block')
+  parser.add_option('--start', type='string', dest='start', default='',
+                    help="keyrange start (hexadecimal)")
+  parser.add_option('--end', type='string', dest='end', default='',
+                    help="keyrange end (hexadecimal)")
 
   (options, args) = parser.parse_args()
-  config_file, table = args
+  table, destination, sources = args[0], args[1], args[2:]
 
-  with open(config_file) as fi:
-    config = json.load(fi)
-
-  checker = Checker(config, table, options.checkpoint_directory,
+  checker = Checker(destination, sources, table, options.checkpoint_directory,
+                    keyrange=get_range(options.start, options.end),
                     stats_interval=options.stats, batch_count=options.batch_count,
                     block_size=options.block_size, ratio=options.ratio,
                     temp_directory=options.checkpoint_directory)

@@ -30,9 +30,7 @@ source_tablets = [tablet.Tablet(62044, 6701, 3701),
 tablets = [destination_tablet] + source_tablets
 
 db_configuration = {
-  "keyrange": {"end": 900},
   "sources": [t.mysql_connection_parameters("test_checkers%i" % i) for i, t in enumerate(source_tablets)],
-  "destination": destination_tablet.mysql_connection_parameters("test_checkers")
 }
 
 def setUpModule():
@@ -49,17 +47,25 @@ def tearDownModule():
     t.remove_tree()
 
 
-class TestCheckers(unittest.TestCase):
+class TestCheckersBase(unittest.TestCase):
+  keyrange = {"end": 900}
+
+  def make_checker(self, **kwargs):
+    default = {'keyrange': TestCheckers.keyrange,
+               'batch_count': 20,
+               'logging_level': logging.WARNING,
+               'directory': tempfile.mkdtemp()}
+    default.update(kwargs)
+    source_addresses = ['vt_dba@localhost:%s/test_checkers%s?unix_socket=%s' % (s.mysql_port, i, s.mysql_connection_parameters('test_checkers')['unix_socket'])
+                        for i, s in enumerate(source_tablets)]
+    destination_socket = destination_tablet.mysql_connection_parameters('test_checkers')['unix_socket']
+    return checker.Checker('vt_dba@localhost/test_checkers?unix_socket=%s' % destination_socket, source_addresses, 'test', **default)
+
+class TestCheckers(TestCheckersBase):
 
   @classmethod
   def setUpClass(cls):
     config = dict(db_configuration)
-    config["tables"] = {
-    "test": {
-      "columns": ["pk1", "pk2", "pk3", "msg", "keyspace_id"],
-      "pk": ["pk1", "pk2", "pk3"],
-      }
-    }
     cls.configuration = config
 
   def setUp(self):
@@ -83,8 +89,7 @@ class TestCheckers(unittest.TestCase):
     destination_tablet.mquery("test_checkers", destination_queries, write=True)
     for i, (tablet, queries) in enumerate(zip(source_tablets, source_queries)):
       tablet.mquery("test_checkers%s" % i, queries, write=True)
-    directory = tempfile.mkdtemp()
-    self.c = checker.Checker(self.configuration, 'test', directory, batch_count=20, logging_level=logging.WARNING)
+    self.c = self.make_checker()
 
   def tearDown(self):
     destination_tablet.mquery("test_checkers", "drop table test", True)
@@ -109,21 +114,16 @@ class TestCheckers(unittest.TestCase):
       self.c._run()
 
   def test_batch_size(self):
-    self.configuration['tables']['test']['avg_row_length'] = 1024
-    c = checker.Checker(self.configuration, 'test', tempfile.mkdtemp(), blocks=1, ratio=1.0)
+    c = self.make_checker(batch_count=0)
+    c.table_data['avg_row_length'] = 1024
+    c.calculate_batch_size()
     self.assertEqual(c.batch_size, 16)
 
 
-class TestDifferentEncoding(unittest.TestCase):
+class TestDifferentEncoding(TestCheckersBase):
   @classmethod
   def setUpClass(cls):
     config = dict(db_configuration)
-    config["tables"] = {
-    "test": {
-      "columns": ["pk1", "pk2", "pk3", "msg", "keyspace_id"],
-      "pk": ["pk1", "pk2", "pk3"],
-      }
-    }
     cls.configuration = config
 
   def setUp(self):
@@ -149,40 +149,11 @@ class TestDifferentEncoding(unittest.TestCase):
       c.commit()
 
     destination_tablet.mquery("test_checkers", destination_queries, write=True)
-    directory = tempfile.mkdtemp()
-    self.c = checker.Checker(self.configuration, 'test', directory, batch_count=20, logging_level=logging.WARNING)
+    self.c = self.make_checker()
 
   def test_problem(self):
     with self.assertRaises(checker.Mismatch):
       self.c._run()
-
-
-class TestConfguration(unittest.TestCase):
-  def test_config(self):
-    destination_tablet.create_db("test_checkers")
-    destination_tablet.mquery(
-      "test_checkers",
-      "create table test1 (pk1 bigint, pk2 bigint, pk3 bigint, msg varchar(64), primary key (pk1, pk2, pk3)) Engine=InnoDB",
-      True)
-    destination_tablet.mquery(
-      "test_checkers",
-      "insert into test1 (pk1, pk2, pk3, msg) values (1, 1, 1, 'msg')",
-      True)
-    destination_tablet.mquery(
-      "test_checkers",
-      "create table test2 (pk1 bigint, pk2 bigint, msg varchar(64), primary key (pk1, pk2)) Engine=InnoDB",
-      True)
-    destination_tablet.mquery(
-      "test_checkers",
-      "insert into test2 (pk1, pk2, msg) values (1, 1, 'msg')",
-      True)
-    connection_params = destination_tablet.mysql_connection_parameters("test_checkers")
-    config = write_configuration.get_configuration(connection_params, "", "100")
-    self.assertEqual(config['destination'], connection_params)
-    self.assertItemsEqual(config['tables'].keys(), ['test1', 'test2'])
-    self.assertEqual(config['tables']['test1']['columns'], ['pk1', 'pk2', 'pk3', 'msg'])
-    self.assertEqual(config['tables']['test1']['pk'], ['pk1', 'pk2', 'pk3'])
-    self.assertEqual(config['keyrange'], {'end': 256})
 
 
 def main():
@@ -201,7 +172,7 @@ def main():
   if options.teardown:
     tearDownModule()
     sys.exit()
-  unittest.main(argv=sys.argv[:1])
+  unittest.main(argv=sys.argv[:1] + ['-f'])
 
 
 if __name__ == '__main__':
