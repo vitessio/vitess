@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,9 +33,11 @@ import (
 )
 
 var (
-	port      = flag.Int("port", 6614, "port for the server")
-	dbname    = flag.String("dbname", "", "database name")
-	mycnfFile = flag.String("mycnf-file", "", "path of mycnf file")
+	port       = flag.Int("port", 6614, "port for the server")
+	dbname     = flag.String("dbname", "", "database name")
+	mycnfFile  = flag.String("mycnf-file", "", "path of mycnf file")
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	memprofile = flag.String("memprofile", "", "write memory profile to this file")
 )
 
 const (
@@ -392,8 +395,8 @@ Position Parsing Functions.
 
 func (blp *Blp) parseMasterPosition(line []byte) {
 	var err error
-	rem := bytes.Split(line, mysqlctl.BINLOG_END_LOG_POS)
-	masterPosStr := string(bytes.Split(rem[1], mysqlctl.SPACE)[0])
+	rem := bytes.SplitN(line, mysqlctl.BINLOG_END_LOG_POS, 2)
+	masterPosStr := string(bytes.SplitN(rem[1], mysqlctl.SPACE, 2)[0])
 	blp.nextStmtPosition, err = strconv.ParseUint(masterPosStr, 10, 64)
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting master position, %v, sql %v, pos string %v", err, string(line), masterPosStr)))
@@ -401,7 +404,7 @@ func (blp *Blp) parseMasterPosition(line []byte) {
 }
 
 func (blp *Blp) parseXid(line []byte) {
-	rem := bytes.Split(line, mysqlctl.BINLOG_XID)
+	rem := bytes.SplitN(line, mysqlctl.BINLOG_XID, 2)
 	xid, err := strconv.ParseUint(string(rem[1]), 10, 64)
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting Xid position %v, sql %v", err, string(line))))
@@ -424,8 +427,8 @@ func (blp *Blp) extractEventTimestamp(event *eventBuffer) {
 }
 
 func (blp *Blp) parseRotateEvent(line []byte) {
-	rem := bytes.Split(line, mysqlctl.BINLOG_ROTATE_TO)
-	rem2 := bytes.Split(rem[1], mysqlctl.POS)
+	rem := bytes.SplitN(line, mysqlctl.BINLOG_ROTATE_TO, 2)
+	rem2 := bytes.SplitN(rem[1], mysqlctl.POS, 2)
 	rotateFilename := strings.TrimSpace(string(rem2[0]))
 	rotatePos, err := strconv.ParseUint(string(rem2[1]), 10, 64)
 	if err != nil {
@@ -639,19 +642,17 @@ func (blp *Blp) createDmlEvent(eventBuf *eventBuffer, keyspaceId string) (dmlEve
 	}
 	dmlEvent.SqlType = mysqlctl.GetDmlType(eventBuf.firstKw)
 	dmlEvent.KeyspaceId = keyspaceId
-	if dmlEvent.SqlType == "insert" {
-		indexType, indexId, seqName, seqId, userId := parseIndexSeq(eventBuf.LogLine)
-		if userId != 0 {
-			dmlEvent.UserId = userId
-		}
-		if indexType != "" {
-			dmlEvent.IndexType = indexType
-			dmlEvent.IndexId = indexId
-		}
-		if seqName != "" {
-			dmlEvent.SeqName = seqName
-			dmlEvent.SeqId = seqId
-		}
+	indexType, indexId, seqName, seqId, userId := parseIndexSeq(eventBuf.LogLine)
+	if userId != 0 {
+		dmlEvent.UserId = userId
+	}
+	if indexType != "" {
+		dmlEvent.IndexType = indexType
+		dmlEvent.IndexId = indexId
+	}
+	if seqName != "" {
+		dmlEvent.SeqName = seqName
+		dmlEvent.SeqId = seqId
 	}
 	return dmlEvent
 }
@@ -675,7 +676,7 @@ func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspace
 	}
 	seekIndex := keyspaceIndex + len(KEYSPACE_ID_COMMENT)
 	keyspaceIdComment := sql[seekIndex:]
-	keyspaceIdStr = string(bytes.TrimSpace(bytes.Split(keyspaceIdComment, USER_ID)[0]))
+	keyspaceIdStr = string(bytes.TrimSpace(bytes.SplitN(keyspaceIdComment, USER_ID, 2)[0]))
 	if keyspaceIdStr == "" {
 		panic(NewBinlogParseError(fmt.Sprintf("Invalid keyspace id, sql %v", string(sql))))
 	}
@@ -696,8 +697,8 @@ func parseIndexSeq(sql []byte) (indexName string, indexId interface{}, seqName s
 	keyspaceIdComment := sql[keyspaceIndex+len(KEYSPACE_ID_COMMENT):]
 	indexCommentStart := bytes.Index(keyspaceIdComment, INDEX_COMMENT)
 	if indexCommentStart != -1 {
-		indexCommentParts := bytes.Split(keyspaceIdComment[indexCommentStart:], COLON_BYTE)
-		userId, err = strconv.ParseUint(string(bytes.Split(indexCommentParts[1], []byte(" "))[0]), 10, 64)
+		indexCommentParts := bytes.SplitN(keyspaceIdComment[indexCommentStart:], COLON_BYTE, 2)
+		userId, err = strconv.ParseUint(string(bytes.SplitN(indexCommentParts[1], mysqlctl.SPACE, 2)[0]), 10, 64)
 		if err != nil {
 			panic(NewBinlogParseError(fmt.Sprintf("Error converting user_id %v", string(sql))))
 		}
@@ -714,14 +715,14 @@ func parseIndexSeq(sql []byte) (indexName string, indexId interface{}, seqName s
 	}
 	seqCommentStart := bytes.Index(keyspaceIdComment, SEQ_COMMENT)
 	if seqCommentStart != -1 {
-		seqComment := bytes.TrimSpace(bytes.Split(keyspaceIdComment[seqCommentStart:], END_COMMENT)[0])
-		seqCommentParts := bytes.Split(seqComment, COLON_BYTE)
+		seqComment := bytes.TrimSpace(bytes.SplitN(keyspaceIdComment[seqCommentStart:], END_COMMENT, 2)[0])
+		seqCommentParts := bytes.SplitN(seqComment, COLON_BYTE, 2)
 		seqCommentPrefix := seqCommentParts[0]
 		seqId, err = strconv.ParseUint(string(bytes.TrimSpace(seqCommentParts[1])), 10, 64)
 		if err != nil {
 			panic(NewBinlogParseError(fmt.Sprintf("Error converting seq id %v for sql %v", string(seqCommentParts[1]), string(sql))))
 		}
-		seqName = string(bytes.Split(seqCommentPrefix, DOT_BYTE)[1])
+		seqName = string(bytes.SplitN(seqCommentPrefix, DOT_BYTE, 2)[1])
 	}
 	return
 }
@@ -836,6 +837,7 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	blp.binlogPrefix = binlogPrefix
 	blp.logMetadata = mysqlctl.NewSlaveMetadata(logsDir, blServer.mycnf.RelayLogInfoPath)
 
+	relog.Info("usingRelayLogs %v blp.binlogPrefix %v logsDir %v", blp.usingRelayLogs, blp.binlogPrefix, logsDir)
 	blServer.clients = append(blServer.clients, blp)
 	blp.streamBinlog(sendReply)
 	return nil
@@ -857,6 +859,25 @@ func main() {
 
 	binlogServer.dbname = strings.ToLower(strings.TrimSpace(*dbname))
 	binlogServer.blpStats = NewBlpStats()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			relog.Fatal("Error create cpuprofile %v file, err %v", *cpuprofile, err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			relog.Fatal("Error creating memprofile %v file %v", err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+		return
+	}
 
 	rpc.Register(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)

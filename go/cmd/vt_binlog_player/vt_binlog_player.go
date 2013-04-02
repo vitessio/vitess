@@ -51,11 +51,13 @@ var (
 	COMMIT                = []byte("commit")
 	ROLLBACK              = []byte("rollback")
 	USERNAME_INDEX_INSERT = "insert into vt_username_map (username, user_id) values ('%v', %v)"
+	USERNAME_INDEX_UPDATE = "update vt_username_map set username='%v' where user_id=%v"
+	USERNAME_INDEX_DELETE = "delete from vt_username_map where username='%v' and user_id=%v"
 	VIDEOID_INDEX_INSERT  = "insert into vt_video_id_map (video_id, user_id) values (%v, %v)"
+	VIDEOID_INDEX_DELETE  = "delete from vt_video_id_map where video_id=%v and user_id=%v"
 	SETID_INDEX_INSERT    = "insert into vt_set_id_map (set_id, user_id) values (%v, %v)"
-	CURRENT_SEQ_SELECT    = "select id from vt_sequence where name='%v' FOR UPDATE"
-	SEQ_UPDATE_SQL        = "update vt_sequence set id=%v where name='%v'"
-	SEQ_INSERT_SQL        = "insert into vt_sequence (name, id) values ('%v', %v)"
+	SETID_INDEX_DELETE    = "delete from vt_set_id_map where set_id=%v and user_id=%v"
+	SEQ_UPDATE_SQL        = "update vt_sequence set id=%v where name='%v' and id<%v"
 	STREAM_COMMENT_START  = "/* _stream "
 	SPACE                 = " "
 	USE_VT                = "use _vt"
@@ -548,13 +550,13 @@ func (blp *BinlogPlayer) createIndexSeqSql(dmlEvent *mysqlctl.BinlogResponse) (i
 	}
 
 	if dmlEvent.IndexType != "" {
-		indexSql, err = createIndexSql(dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId)
+		indexSql, err = createIndexSql(dmlEvent.SqlType, dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId)
 		if err != nil {
 			panic(fmt.Errorf("Error creating index update sql %v, IndexType %v, IndexId %v, UserId %v Sql '%v'", err, dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId, dmlEvent.Sql))
 		}
 	}
 	if dmlEvent.SeqName != "" {
-		seqSql, err = blp.createSeqSql(dmlEvent.SeqName, dmlEvent.SeqId)
+		seqSql, err = blp.createSeqSql(dmlEvent.SqlType, dmlEvent.SeqName, dmlEvent.SeqId)
 		if err != nil {
 			panic(fmt.Errorf("Error creating seq update sql %v, SeqName %v SeqId %v, Sql '%v'", err, dmlEvent.SeqName, dmlEvent.SeqId, dmlEvent.Sql))
 		}
@@ -642,7 +644,7 @@ func (blp *BinlogPlayer) handleTxn() {
 	}
 }
 
-func createIndexSql(indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
+func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
 	switch indexType {
 	case "username":
 		indexSlice, ok := indexId.([]byte)
@@ -650,26 +652,52 @@ func createIndexSql(indexType string, indexId interface{}, userId uint64) (index
 			return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
 		}
 		index := string(indexSlice)
-		indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
+		switch dmlType {
+		case "insert":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
+		case "update":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
+		case "delete":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
+		default:
+			return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
+		}
 	case "video_id":
 		index, ok := indexId.(uint64)
 		if !ok {
 			return nil, fmt.Errorf("Invalid IndexId value %v for 'video_id'", indexId)
 		}
-		indexSql = []byte(fmt.Sprintf(VIDEOID_INDEX_INSERT, index, userId))
+		switch dmlType {
+		case "insert":
+			indexSql = []byte(fmt.Sprintf(VIDEOID_INDEX_INSERT, index, userId))
+		case "delete":
+			indexSql = []byte(fmt.Sprintf(VIDEOID_INDEX_DELETE, index, userId))
+		default:
+			return nil, fmt.Errorf("Invalid dmlType %v - for 'video_id' %v", dmlType, indexId)
+		}
 	case "set_id":
 		index, ok := indexId.(uint64)
 		if !ok {
 			return nil, fmt.Errorf("Invalid IndexId value %v for 'set_id'", indexId)
 		}
-		indexSql = []byte(fmt.Sprintf(SETID_INDEX_INSERT, index, userId))
+		switch dmlType {
+		case "insert":
+			indexSql = []byte(fmt.Sprintf(SETID_INDEX_INSERT, index, userId))
+		case "delete":
+			indexSql = []byte(fmt.Sprintf(SETID_INDEX_DELETE, index, userId))
+		default:
+			return nil, fmt.Errorf("Invalid dmlType %v - for 'set_id' %v", dmlType, indexId)
+		}
 	default:
 		err = fmt.Errorf("Invalid IndexType %v", indexType)
 	}
 	return
 }
 
-func (blp *BinlogPlayer) createSeqSql(seqName string, seqId uint64) (seqSql []byte, err error) {
+func (blp *BinlogPlayer) createSeqSql(dmlType, seqName string, seqId uint64) (seqSql []byte, err error) {
+	if dmlType != "insert" {
+		return
+	}
 	if blp.debug {
 		switch seqName {
 		case "user_id", "video_id", "set_id":
@@ -680,48 +708,10 @@ func (blp *BinlogPlayer) createSeqSql(seqName string, seqId uint64) (seqSql []by
 		return
 	}
 	//Real-case
-	seqQuery := fmt.Sprintf(CURRENT_SEQ_SELECT, seqName)
-	res, err := blp.lookupClient.ExecuteFetch([]byte(seqQuery), 1, true)
-	if err != nil {
-		return nil, fmt.Errorf("Error in obtaining vt_sequence data")
-	}
-	//vt_sequence isn't initialized
-	if res.RowsAffected != 1 {
-		switch seqName {
-		case "video_id", "set_id", "user_id":
-			seqSql = []byte(fmt.Sprintf(SEQ_INSERT_SQL, seqName, seqId))
-		default:
-			err = fmt.Errorf("Invalid Seq Name %v", seqName)
-		}
-		return
-	}
-
-	//vt_sequence is initialized - insert rows
-	indexOfId := 0
-	for i, field := range res.Fields {
-		if field.Name == "id" {
-			indexOfId = i
-			break
-		}
-	}
-	row := res.Rows[0]
-	if !row[indexOfId].IsNumeric() {
-		return nil, fmt.Errorf("Invalid Id field")
-	}
-	currentIndexStr := string(row[indexOfId].Raw())
-	currentIndex, err := strconv.ParseUint(currentIndexStr, 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("Error in converting seqId value %v", currentIndexStr)
-	}
-	//If the current value of sequence Id > to be updated value, skip.
-	//This is possible since the ranges from different shards are being merged.
-	if currentIndex > seqId {
-		return nil, nil
-	}
-
+	//Assume vt_sequence is initialized - insert rows
 	switch seqName {
 	case "video_id", "set_id", "user_id":
-		seqSql = []byte(fmt.Sprintf(SEQ_UPDATE_SQL, seqId, seqName))
+		seqSql = []byte(fmt.Sprintf(SEQ_UPDATE_SQL, seqId, seqName, seqId))
 	default:
 		err = fmt.Errorf("Invalid Seq Name %v", seqName)
 	}
