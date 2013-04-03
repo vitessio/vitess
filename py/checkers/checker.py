@@ -257,9 +257,10 @@ class Mismatch(Exception):
 
 class Stats(object):
 
-  def __init__(self, interval=0):
+  def __init__(self, interval=0, name=""):
     self.lock = threading.Lock()
     self.interval = interval
+    self.name = name
     self.clear()
 
   def clear(self):
@@ -291,7 +292,7 @@ class Stats(object):
       except KeyError:
         pass
       else:
-        data = ["total speed: %0.2f items/s" % (self.local_items / total)]
+        data = [self.name, "total speed: %0.2f items/s" % (self.local_items / total)]
         data.extend("\t%s: %0.2f%%" % (k, (v * 100) / total) for k, v in self.local_times.items())
         logging.info('\t'.join(data))
       self.clear_local()
@@ -302,7 +303,7 @@ class Stats(object):
     except KeyError:
       logging.info('No stats: no work was necessary.')
     else:
-      data = ["(FINAL) total speed: %0.2f items/s" % (self.items / total)]
+      data = [self.name, "(FINAL) total speed: %0.2f items/s" % (self.items / total)]
       data.extend("\t%s: %0.2f%%" % (k, (v * 100) / total) for k, v in self.times.items())
       logging.info('\t'.join(data))
 
@@ -380,7 +381,7 @@ class Checker(object):
                'min_range_sql': sql_tuple_comparison(self.table_name, self.primary_key),
                'max_range_sql': sql_tuple_comparison(self.table_name, self.primary_key, column_name_prefix='max_')}
 
-    self.stats = Stats(interval=stats_interval)
+    self.stats = Stats(interval=stats_interval, name=self.table_name)
     self.destination = Datastore(parse_database_url(destination_url), self._pk_indexes, stats=self.stats)
     self.sources = MultiDatastore([parse_database_url(s) for s in sources_urls], self._pk_indexes, 'all-sources', stats=self.stats)
 
