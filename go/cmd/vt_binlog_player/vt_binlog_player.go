@@ -647,22 +647,24 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition string) {
 
 func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
 	switch indexType {
-	case "username":
-		indexSlice, ok := indexId.([]byte)
-		if !ok {
-			return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
-		}
-		index := string(indexSlice)
-		switch dmlType {
-		case "insert":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
-		case "update":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
-		case "delete":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
-		default:
-			return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
-		}
+	/*
+		case "username":
+			indexSlice, ok := indexId.([]byte)
+			if !ok {
+				return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
+			}
+			index := string(indexSlice)
+			switch dmlType {
+			case "insert":
+				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
+			case "update":
+				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
+			case "delete":
+				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
+			default:
+				return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
+			}
+	*/
 	case "video_id":
 		index, ok := indexId.(uint64)
 		if !ok {
