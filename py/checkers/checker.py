@@ -164,9 +164,7 @@ class Datastore(object):
     # NOTE(szopa): This is a property so that connection object is
     # created in the first thread that tries to access it.
     if self._cursor is None:
-      self._cursor = MySQLdb.connect(
-        cursorclass=MySQLdb.cursors.DictCursor,
-        **self.connection_params).cursor()
+      self._cursor = MySQLdb.connect(**self.connection_params).cursor()
     return self._cursor
 
   def query(self, sql, params, retries=3):
@@ -318,7 +316,7 @@ class Checker(object):
     self.table_data = self.get_table_data(table, parse_database_url(sources_urls[0]))
     self.primary_key = self.table_data['pk']
     self.columns = self.table_data['columns']
-
+    self._pk_indexes = [self.columns.index(pk) for pk in self.primary_key]
     (self.batch_count, self.block_size,
      self.ratio, self.blocks) = batch_count, block_size, ratio, blocks
 
@@ -383,8 +381,8 @@ class Checker(object):
                'max_range_sql': sql_tuple_comparison(self.table_name, self.primary_key, column_name_prefix='max_')}
 
     self.stats = Stats(interval=stats_interval)
-    self.destination = Datastore(parse_database_url(destination_url), self.primary_key, stats=self.stats)
-    self.sources = MultiDatastore([parse_database_url(s) for s in sources_urls], self.primary_key, 'all-sources', stats=self.stats)
+    self.destination = Datastore(parse_database_url(destination_url), self._pk_indexes, stats=self.stats)
+    self.sources = MultiDatastore([parse_database_url(s) for s in sources_urls], self._pk_indexes, 'all-sources', stats=self.stats)
 
     logging.basicConfig(level=logging_level)
     logging.debug("destination sql template: %s", clean(self.destination_sql))
@@ -417,7 +415,7 @@ class Checker(object):
       self.batch_size = int(rows_per_block * self.ratio * self.blocks)
 
   def get_pk(self, row):
-    return dict((k, row[k]) for k in self.primary_key)
+    return dict((k, row[i]) for k, i in zip(self.primary_key, self._pk_indexes))
 
   def _run(self):
     # initialize destination_in_queue, sources_in_queue, merger_in_queue, comparer_in_queue, comparare_out_queue
