@@ -11,10 +11,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path"
-	"runtime/pprof"
 	"strconv"
 	"strings"
 	"syscall"
@@ -33,11 +33,9 @@ import (
 )
 
 var (
-	port       = flag.Int("port", 6614, "port for the server")
-	dbname     = flag.String("dbname", "", "database name")
-	mycnfFile  = flag.String("mycnf-file", "", "path of mycnf file")
-	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-	memprofile = flag.String("memprofile", "", "write memory profile to this file")
+	port      = flag.Int("port", 6614, "port for the server")
+	dbname    = flag.String("dbname", "", "database name")
+	mycnfFile = flag.String("mycnf-file", "", "path of mycnf file")
 )
 
 const (
@@ -192,12 +190,15 @@ func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse) {
 		panic(NewBinlogParseError(pipeErr.Error()))
 	}
 	defer blrWriter.Close()
+	defer blrReader.Close()
 
 	go blp.getBinlogStream(blrWriter, blr)
-	binlogReader, err = mysqlctl.DecodeMysqlBinlog(blrReader)
+	binlogDecoder := new(mysqlctl.BinlogDecoder)
+	binlogReader, err = binlogDecoder.DecodeMysqlBinlog(blrReader)
 	if err != nil {
 		panic(NewBinlogParseError(err.Error()))
 	}
+	defer binlogDecoder.Kill()
 	blp.parseBinlogEvents(sendReply, binlogReader)
 }
 
@@ -859,25 +860,6 @@ func main() {
 
 	binlogServer.dbname = strings.ToLower(strings.TrimSpace(*dbname))
 	binlogServer.blpStats = NewBlpStats()
-
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			relog.Fatal("Error create cpuprofile %v file, err %v", *cpuprofile, err)
-		}
-		pprof.StartCPUProfile(f)
-		defer pprof.StopCPUProfile()
-	}
-
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		if err != nil {
-			relog.Fatal("Error creating memprofile %v file %v", err)
-		}
-		pprof.WriteHeapProfile(f)
-		f.Close()
-		return
-	}
 
 	rpc.Register(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)

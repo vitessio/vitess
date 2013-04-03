@@ -11,7 +11,6 @@ condition is if EOF is reached *and* the next file has appeared.
 */
 
 import (
-	"bufio"
 	"code.google.com/p/vitess/go/relog"
 	"encoding/binary"
 	"errors"
@@ -232,14 +231,10 @@ func (blr *BinlogReader) open(name string) (*os.File, string) {
 
 func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosition int64) {
 	stats := stats{StartTime: time.Now()}
-	//relog.Info("logWait %v maxWait %v", time.Duration(blr.LogWaitTimeout * 1e9), time.Duration(blr.MaxWaitTimeout*1e9))
 
 	binlogFile, nextLog := blr.open(filename)
 	defer binlogFile.Close()
 	positionWaitStart := make(map[int64]time.Time)
-
-	//var offsetString string
-	bufWriter := bufio.NewWriterSize(writer, BINLOG_BLOCK_SIZE)
 
 	if startPosition > 0 {
 		size, err := binlogFile.Seek(0, 2)
@@ -257,13 +252,10 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 		// 5.1.50 is 106, 5.0.24 is 98
 		firstEventSize := readFirstEventSize(binlogFile)
 		prefixSize := int64(BINLOG_HEADER_SIZE + firstEventSize)
-		//relog.Info("BinlogReader.serve inject header + first event: %v", prefixSize)
-		//offsetString = fmt.Sprintf("Vt-Binlog-Offset: %v\n", strconv.FormatInt(prefixSize, 10))
 
 		position, err := binlogFile.Seek(0, 0)
 		if err == nil {
 			_, err = io.CopyN(writer, binlogFile, prefixSize)
-			//relog.Info("Sending prefix, BinlogReader copy @ %v:%v,%v", binlogFile.Name(), position, written)
 		}
 		if err != nil {
 			relog.Error("BinlogReader.ServeData err: %v", err)
@@ -274,16 +266,14 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 			relog.Error("Failed BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
 			return
 		}
-		//relog.Info("BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
 	}
 
+	buf := make([]byte, blr.BinlogBlockSize)
 	for {
-		position, err := binlogFile.Seek(0, 1)
-		if err != nil {
-			relog.Error("Seek failed on file %v", binlogFile.Name())
-			return
-		}
-		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
+		buf = buf[:0]
+		position, _ := binlogFile.Seek(0, 1)
+		//written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
+		written, err := copyBufN(writer, binlogFile, blr.BinlogBlockSize, buf)
 		if err != nil && err != io.EOF {
 			relog.Error("BinlogReader.serve err: %v", err)
 			return
@@ -297,13 +287,8 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 		//and are waiting for more data or rotating to next log.
 		if written != blr.BinlogBlockSize {
 			if _, statErr := os.Stat(nextLog); statErr == nil {
-				bufWriter.Flush()
 				// swap to next log file
-				size, err := binlogFile.Seek(0, 2)
-				if err != nil {
-					relog.Error("BinlogReader.ServeData seek err: %v", err)
-					return
-				}
+				size, _ := binlogFile.Seek(0, 2)
 				if size == position+written {
 					//relog.Info("BinlogReader swap log file: %v", nextLog)
 					binlogFile.Close()
@@ -312,11 +297,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 					binlogFile.Seek(BINLOG_HEADER_SIZE, 0)
 				}
 			} else {
-				position, err := binlogFile.Seek(0, 1)
-				if err != nil {
-					relog.Error("Seek failed on file %v", binlogFile.Name())
-					return
-				}
+				position, _ := binlogFile.Seek(0, 1)
 				//relog.Info("BinlogReader wait for more data: %v:%v %v", binlogFile.Name(), position, time.Duration(blr.LogWaitTimeout * 1e9))
 				// wait for more data
 				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
@@ -330,9 +311,51 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				} else {
 					positionWaitStart[position] = now
 				}
-				//Flush after waiting for more data to be available to avoid delays between writes as that can cause vt_mysqlbinlog to fail.
-				bufWriter.Flush()
 			}
 		}
 	}
+}
+
+func copyBufN(dst io.Writer, src io.Reader, totalLen int64, buf []byte) (written int64, err error) {
+	// If the writer has a ReadFrom method, use it to do the copy.
+	// Avoids a buffer allocation and a copy.
+	if rt, ok := dst.(io.ReaderFrom); ok {
+		relog.Info("dst implements ReaderFrom")
+		written, err = rt.ReadFrom(io.LimitReader(src, totalLen))
+		if written < totalLen && err == nil {
+			// rt stopped early; must have been EOF.
+			err = io.EOF
+		}
+		return
+	}
+	for written < totalLen {
+		toBeRead := totalLen
+		if diffLen := totalLen - written; diffLen < toBeRead {
+			toBeRead = diffLen
+		}
+		nr, er := src.Read(buf[0:toBeRead])
+		//relog.Info("Read %v er %v", nr, er)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[0:nr])
+			if nw > 0 {
+				written += int64(nw)
+			}
+			if ew != nil {
+				//relog.Error("Error in writing to dst %v", ew)
+				err = ew
+				break
+			}
+			if nr != nw {
+				relog.Warning("Short write to dst")
+				err = io.ErrShortWrite
+				break
+			}
+		}
+		if er != nil {
+			//relog.Error("Error in reading from src %v", er)
+			err = er
+			break
+		}
+	}
+	return written, err
 }

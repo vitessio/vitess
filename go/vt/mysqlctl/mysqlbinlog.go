@@ -57,16 +57,12 @@ import (
 
 */
 
-type BinlogImport struct {
-	User          string
-	Password      string
-	Host          string
-	Port          uint
-	StartPosition uint
+type BinlogDecoder struct {
+	process *os.Process
 }
 
 // return a Reader from which the decoded binlog can be read
-func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
+func (decoder *BinlogDecoder) DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
 	dir := os.ExpandEnv("$VT_MYSQL_ROOT/bin")
 	name := "vt_mysqlbinlog"
 	arg := []string{"vt_mysqlbinlog", "-"}
@@ -92,10 +88,11 @@ func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
 		relog.Error("DecodeMysqlBinlog: error in decoding binlog %v", err)
 		return nil, err
 	}
+	decoder.process = process
 
 	go func() {
 		// just make sure we don't spawn zombies
-		waitMsg, err := process.Wait()
+		waitMsg, err := decoder.process.Wait()
 		if err != nil {
 			relog.Error("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
 		} else {
@@ -104,4 +101,9 @@ func DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
 	}()
 
 	return dataRdFile, nil
+}
+
+func (decoder *BinlogDecoder) Kill() error {
+	//relog.Info("Killing vt_mysqlbinlog pid %v", decoder.process.Pid)
+	return decoder.process.Kill()
 }

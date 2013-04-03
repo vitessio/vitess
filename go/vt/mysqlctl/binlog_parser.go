@@ -222,10 +222,12 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 	defer blrWriter.Close()
 
 	go blp.getBinlogStream(blrWriter, blr)
-	binlogReader, err = DecodeMysqlBinlog(blrReader)
+	binlogDecoder := new(BinlogDecoder)
+	binlogReader, err = binlogDecoder.DecodeMysqlBinlog(blrReader)
 	if err != nil {
 		panic(NewBinlogParseError(err.Error()))
 	}
+	defer binlogDecoder.Kill()
 	blp.parseBinlogEvents(sendReply, binlogReader)
 }
 
