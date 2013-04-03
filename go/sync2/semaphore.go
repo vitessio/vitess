@@ -23,13 +23,13 @@ type Semaphore interface {
 }
 
 type semaphore struct {
-	slots chan bool
+	slots chan struct{}
 }
 
 func NewSemaphore(max int) Semaphore {
-	sem := &semaphore{slots: make(chan bool, max)}
+	sem := &semaphore{slots: make(chan struct{}, max)}
 	for i := 0; i < max; i++ {
-		sem.slots <- true
+		sem.slots <- struct{}{}
 	}
 	return sem
 }
@@ -39,5 +39,5 @@ func (sem *semaphore) Acquire() {
 }
 
 func (sem *semaphore) Release() {
-	sem.slots <- true
+	sem.slots <- struct{}{}
 }
