@@ -70,7 +70,7 @@ var (
                              keyrange_end varchar(32) NOT NULL,
                              PRIMARY KEY (host, keyrange_end)
                              ) ENGINE=InnoDB DEFAULT CHARSET=latin1`
-	INSERT_INTO_RECOVERY = `insert into vt_blp_recovery (host, port, position, keyrange_start, keyrange_end) 
+	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (host, port, position, keyrange_start, keyrange_end) 
 	                          values ('%v', %v, '%v', '%v', '%v') ON DUPLICATE KEY UPDATE position='%v'`
 )
 
@@ -253,11 +253,8 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition string) {
 		blp.recoveryState.KeyrangeStart,
 		blp.recoveryState.KeyrangeEnd,
 		currentPosition)
-	recoveryDmls := []string{USE_VT, "begin", insertRecovery, "commit", blp.useDb}
-	for _, sql := range recoveryDmls {
-		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
-			panic(fmt.Errorf("Error %v in writing recovery info %v", err, sql))
-		}
+	if _, err := blp.dbClient.ExecuteFetch([]byte(insertRecovery), 0, false); err != nil {
+		panic(fmt.Errorf("Error %v in writing recovery info %v", err, insertRecovery))
 	}
 }
 
@@ -470,7 +467,6 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 	switch binlogResponse.SqlType {
 	case mysqlctl.DDL:
 		blp.handleDdl(binlogResponse)
-		blp.WriteRecoveryPosition(binlogResponse.Position)
 	case mysqlctl.BEGIN:
 		if blp.inTxn {
 			return fmt.Errorf("Invalid txn: txn already in progress, len(blp.txnBuffer) %v", len(blp.txnBuffer))
@@ -483,10 +479,9 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 			return fmt.Errorf("Invalid event: COMMIT event without a transaction.")
 		}
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
-		blp.handleTxn()
+		blp.handleTxn(binlogResponse.Position)
 		blp.inTxn = false
 		blp.txnBuffer = blp.txnBuffer[:0]
-		blp.WriteRecoveryPosition(binlogResponse.Position)
 	case "insert", "update", "delete":
 		if !blp.inTxn {
 			return fmt.Errorf("Invalid event: DML outside txn context.")
@@ -508,6 +503,14 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
 			panic(fmt.Errorf("Error %v in executing sql %v", err, sql))
 		}
+	}
+	var err error
+	if err = blp.dbClient.Begin(); err != nil {
+		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
+	}
+	blp.WriteRecoveryPosition(ddlEvent.Position)
+	if err = blp.dbClient.Commit(); err != nil {
+		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 	}
 }
 
@@ -598,7 +601,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 //for each dml - verify that keyspace is correct for this shard - abort immediately for a wrong sql.
 // if indexType, indexid is set, update r_lookup.
 //if seqName and seqId is set, update r_lookup.
-func (blp *BinlogPlayer) handleTxn() {
+func (blp *BinlogPlayer) handleTxn(recoveryPosition string) {
 	var err error
 	indexUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	seqUpdates := make([][]byte, 0, len(blp.txnBuffer))
@@ -608,11 +611,9 @@ func (blp *BinlogPlayer) handleTxn() {
 		switch dmlEvent.SqlType {
 		case mysqlctl.BEGIN:
 			continue
-			//if err = blp.dbClient.Begin(); err != nil {
-			//	panic(fmt.Errorf("Failed query '%v', err: %s", dmlEvent.Sql, err))
-			//}
 		case mysqlctl.COMMIT:
 			blp.handleLookupWrites(indexUpdates, seqUpdates)
+			blp.WriteRecoveryPosition(recoveryPosition)
 			if err = blp.dbClient.Commit(); err != nil {
 				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 			}
