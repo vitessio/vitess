@@ -555,7 +555,7 @@ func (blp *BinlogPlayer) createIndexSeqSql(dmlEvent *mysqlctl.BinlogResponse) (i
 	if dmlEvent.IndexType != "" {
 		indexSql, err = createIndexSql(dmlEvent.SqlType, dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId)
 		if err != nil {
-			panic(fmt.Errorf("Error creating index update sql %v, IndexType %v, IndexId %v, UserId %v Sql '%v'", err, dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId, dmlEvent.Sql))
+			panic(fmt.Errorf("Error creating index update sql - IndexType %v, IndexId %v, UserId %v Sql '%v', err: '%v'", dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId, dmlEvent.Sql, err))
 		}
 	}
 	if dmlEvent.SeqName != "" {
@@ -665,6 +665,8 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 				return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
 			}
 	*/
+	case "username":
+		return
 	case "video_id":
 		index, ok := indexId.(uint64)
 		if !ok {
