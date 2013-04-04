@@ -763,8 +763,7 @@ func (lsf localSnapshotFile) tableName() string {
 	return lsf.file.TableName
 }
 
-func (lsf localSnapshotFile) queryParams(destinationDbName string) (map[string]string, error) {
-	tableName := lsf.tableName()
+func (lsf localSnapshotFile) queryParams(destinationDbName, tableName string) (map[string]string, error) {
 	td, ok := lsf.manifest.SchemaDefinition.GetTable(tableName)
 	if !ok {
 		return nil, fmt.Errorf("no definition for table %v in %v", tableName, lsf.manifest.SchemaDefinition)
@@ -897,7 +896,36 @@ func (mrc *MultiResourceConstraint) ReleaseAndDone(name string) {
 	mrc.Done()
 }
 
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, fetchRetryCount int, writeBinLogs bool) (err error) {
+// makeTempTableSql modifies the SQL statement to have the following properties:
+// - the name is the tmp name
+// - the engine is MyISAM
+// - no keys
+// - no auto increment
+func makeTempTableSql(schema, tableName string) string {
+	result := ""
+
+	lines := strings.Split(schema, "\n")
+	last := len(lines) - 1
+	for i, line := range lines {
+		if i == 0 {
+			line = "CREATE TABLE `" + tableName + "` ("
+		} else if i == last {
+			line = strings.Replace(line, "ENGINE=InnoDB", "ENGINE=MyISAM", 1)
+		} else {
+			if strings.Contains(line, " KEY ") {
+				if strings.HasSuffix(result, ",\n") {
+					result = result[0:len(result)-2] + "\n"
+				}
+				continue
+			}
+			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+		}
+		result += line + "\n"
+	}
+	return result
+}
+
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, loadConcurrency, insertTableConcurrency, fetchRetryCount int, writeBinLogs bool) (err error) {
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
 	rc := NewResourceConstraint(fetchConcurrency)
 	for i, sourceAddr := range sourceAddrs {
@@ -948,14 +976,14 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 
 	// Handle our concurrency:
 	// - fetchConcurrency tasks for network
-	// - concurrency tasks for db update
-	// - one task for tablet updates (otherwise the other 'load
-	//   data' statements time out waiting for table lock while the
-	//   first one is running)
-	mrc := NewMultiResourceConstraint(map[string]sync2.Semaphore{
-		"net": sync2.NewSemaphore(fetchConcurrency),
-		"db":  sync2.NewSemaphore(concurrency)})
-	tableLockMap := make(map[string]*sync.Mutex)
+	// - loadConcurrency tasks for loading from a csv to myisam table
+	// - insertTableConcurrency for table inserts from a myisam
+	//   table into an innodb table
+	// - concurrency tasks for table inserts
+	sems := make(map[string]sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+3)
+	sems["net"] = sync2.NewSemaphore(fetchConcurrency)
+	sems["load"] = sync2.NewSemaphore(loadConcurrency)
+	sems["db"] = sync2.NewSemaphore(concurrency)
 
 	// Create the database (it's a good check to know if we're running
 	// multirestore a second time too!)
@@ -975,18 +1003,21 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	createDbCmds = append(createDbCmds, "USE `"+destinationDbName+"`")
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
 		createDbCmds = append(createDbCmds, td.Schema)
-		tableLockMap[td.Name] = &sync.Mutex{}
+		sems["table-"+td.Name] = sync2.NewSemaphore(insertTableConcurrency)
 	}
 	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
 		return
 	}
 
-	loadDataInfile := `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}} CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' ({{.Columns}})`
+	loadDataInfile := `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TmpTableName}} CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' ({{.Columns}})`
+	copyData := `INSERT INTO {{.TableName}} SELECT * FROM {{.TmpTableName}}`
+	dropTmpTable := `DROP TABLE {{.TmpTableName}}`
 
 	// fetch all the csv files, and apply them one at a time. Note
 	// this might start many go routines, and they'll all be
 	// waiting on the resource semaphores.
-	for _, manifest := range manifests {
+	mrc := NewMultiResourceConstraint(sems)
+	for manifestIndex, manifest := range manifests {
 		if err = os.Mkdir(path.Join(tempStoragePath, manifest.Source.Addr), 0775); err != nil {
 			return err
 		}
@@ -994,30 +1025,82 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		for i := range manifest.Source.Files {
 			lsf := localSnapshotFile{manifest: manifest, file: &manifest.Source.Files[i], basePath: tempStoragePath}
 			mrc.Add(1)
-			go func() {
+			go func(manifestIndex, i int) {
 				defer mrc.Done()
 
-				// get the file, using the network resource
+				// compute a few things now, so if we can't we
+				// don't take resources:
+				// - the tmp table name we'll use
+				tmpTableName := fmt.Sprintf("%v__%v_%v", lsf.tableName(), manifestIndex, i)
+
+				// the create statement for the tmp table
+				td, ok := manifest.SchemaDefinition.GetTable(lsf.tableName())
+				if !ok {
+					mrc.RecordError(fmt.Errorf("No table named %v in schema", lsf.tableName()))
+					return
+				}
+				tmpTableCreate := makeTempTableSql(td.Schema, tmpTableName)
+
+				// all the statements
+				queryParams := map[string]string{
+					"TableInputPath": lsf.filename(),
+					"TmpTableName":   tmpTableName,
+					"TableName":      lsf.tableName(),
+					"Columns":        strings.Join(td.Columns, ", "),
+				}
+
+				// the load statement into tmp table
+				loadStatement, e := fillStringTemplate(loadDataInfile, queryParams)
+				if e != nil {
+					mrc.RecordError(e)
+					return
+				}
+
+				// the insert statement from tmp table
+				copyStatement, e := fillStringTemplate(copyData, queryParams)
+				if e != nil {
+					mrc.RecordError(e)
+					return
+				}
+
+				// the drop statement for the tmp table
+				dropStatement, e := fillStringTemplate(dropTmpTable, queryParams)
+				if e != nil {
+					mrc.RecordError(e)
+					return
+				}
+
+				// get the file, using the 'net' resource
 				mrc.Acquire("net")
 				if mrc.HasErrors() {
 					mrc.Release("net")
 					return
 				}
-				e := fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
+				e = fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
 				mrc.Release("net")
 				if e != nil {
 					mrc.RecordError(e)
 					return
 				}
-				defer os.Remove(lsf.filename())
 
-				// compute the parameters we need
-				queryParams, e := lsf.queryParams(destinationDbName)
-				if e != nil {
-					mrc.RecordError(e)
+				// load the file using the 'load' resource
+				mrc.Acquire("load")
+				if mrc.HasErrors() {
+					mrc.Release("load")
+					os.Remove(lsf.filename())
 					return
 				}
-				query, e := fillStringTemplate(loadDataInfile, queryParams)
+				queries := make([]string, 0, 5)
+				if !writeBinLogs {
+					queries = append(queries, "SET sql_log_bin = OFF")
+				}
+				queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+				queries = append(queries, "USE `"+destinationDbName+"`")
+				queries = append(queries, tmpTableCreate)
+				queries = append(queries, loadStatement)
+				e = mysqld.executeSuperQueryList(queries)
+				mrc.Release("load")
+				os.Remove(lsf.filename())
 				if e != nil {
 					mrc.RecordError(e)
 					return
@@ -1028,13 +1111,11 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 				// if 8 threads had gotten the db lock but
 				// were writing to the same table, only one
 				// load would go at once)
-				mu, ok := tableLockMap[lsf.tableName()]
-				if !ok {
-					mrc.RecordError(fmt.Errorf("Table %v has no mutex?", lsf.tableName()))
-					return
-				}
-				mu.Lock()
-				defer mu.Unlock()
+				tableLockName := "table-" + lsf.tableName()
+				mrc.Acquire(tableLockName)
+				defer func() {
+					mrc.Release(tableLockName)
+				}()
 				if mrc.HasErrors() {
 					return
 				}
@@ -1044,17 +1125,21 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 					mrc.Release("db")
 					return
 				}
-				if writeBinLogs {
-					e = mysqld.executeSuperQuery(query)
-				} else {
-					e = mysqld.executeSuperQueryList([]string{"SET sql_log_bin = OFF", query})
+				queries = make([]string, 0, 5)
+				if !writeBinLogs {
+					queries = append(queries, "SET sql_log_bin = OFF")
 				}
+				queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+				queries = append(queries, "USE `"+destinationDbName+"`")
+				queries = append(queries, copyStatement)
+				queries = append(queries, dropStatement)
+				e = mysqld.executeSuperQueryList(queries)
 				mrc.Release("db")
 				if e != nil {
 					mrc.RecordError(e)
 					return
 				}
-			}()
+			}(manifestIndex, i)
 		}
 	}
 

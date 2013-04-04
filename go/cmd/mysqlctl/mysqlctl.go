@@ -98,8 +98,10 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 	start := subFlags.String("start", "", "start of the key range")
 	end := subFlags.String("end", "", "end of the key range")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	concurrency := subFlags.Int("concurrency", 4, "how many concurrent jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 8, "how many concurrent db inserts to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
+	loadConcurrency := subFlags.Int("load-concurrency", 4, "how many files to insert into myisam tables simultaneously")
+	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
 	writeBinLogs := subFlags.Bool("write-bin-logs", false, "write the data into the mysql binary logs")
 
 	subFlags.Parse(args)
@@ -129,7 +131,7 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		}
 		sources[i] = dbUrl
 	}
-	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *fetchRetryCount, *writeBinLogs); err != nil {
+	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *loadConcurrency, *insertTableConcurrency, *fetchRetryCount, *writeBinLogs); err != nil {
 		relog.Fatal("multirestore failed: %v", err)
 	}
 }
@@ -252,7 +254,7 @@ var commands = []command{
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] [-write-bin-logs] <destination_dbname> <source_host>[/<source_dbname>]...",
+		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-load-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] [-write-bin-logs] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
 	command{"partialsnapshot", partialSnapshotCmd,
 		"[-start=<start key>] [-end=<end key>] [-concurrency=4] <db name> <key name>",
