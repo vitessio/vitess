@@ -417,7 +417,7 @@ primary key (id)
   tablet_urls = ' '.join("vttp://localhost:%s/vt_test_keyspace" % tablet.port for tablet in old_tablets)
 
   # 0x28 = 40
-  tablet_62344.mysqlctl("multirestore --end=0000000000000028 not_vt_test_keyspace %s" % tablet_urls)
+  tablet_62344.mysqlctl("multirestore --end=0000000000000028 -skip-auto-increment-on-tables=vt_insert_test1 not_vt_test_keyspace %s" % tablet_urls)
   time.sleep(1)
   for table in tables:
     rows = tablet_62344.mquery('not_vt_test_keyspace', 'select id from %s' % table)

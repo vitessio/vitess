@@ -757,23 +757,7 @@ func (lsf localSnapshotFile) url() string {
 }
 
 func (lsf localSnapshotFile) tableName() string {
-	if lsf.file.TableName == "" {
-		return strings.Replace(path.Base(lsf.filename()), ".csv", "", -1)
-	}
 	return lsf.file.TableName
-}
-
-func (lsf localSnapshotFile) queryParams(destinationDbName, tableName string) (map[string]string, error) {
-	td, ok := lsf.manifest.SchemaDefinition.GetTable(tableName)
-	if !ok {
-		return nil, fmt.Errorf("no definition for table %v in %v", tableName, lsf.manifest.SchemaDefinition)
-	}
-	return map[string]string{
-		"TableInputPath": lsf.filename(),
-		"TableName":      destinationDbName + "." + tableName,
-		"Columns":        strings.Join(td.Columns, ", "),
-	}, nil
-
 }
 
 // Keeps track of the first error it sees, just logs the rest
@@ -896,36 +880,39 @@ func (mrc *MultiResourceConstraint) ReleaseAndDone(name string) {
 	mrc.Done()
 }
 
-// makeTempTableSql modifies the SQL statement to have the following properties:
-// - the name is the tmp name
-// - the engine is MyISAM
-// - no keys
-// - no auto increment
-func makeTempTableSql(schema, tableName string) string {
-	result := ""
+// makeCreatetableSql returns a table creation statement
+// that doesn't include any auto_increment field if any,
+// and possibly an 'alter table' to re-add it later.
+func makeCreatetableSql(schema, tableName string) (string, string, error) {
+	modify := ""
 
 	lines := strings.Split(schema, "\n")
-	last := len(lines) - 1
 	for i, line := range lines {
-		if i == 0 {
-			line = "CREATE TABLE `" + tableName + "` ("
-		} else if i == last {
-			line = strings.Replace(line, "ENGINE=InnoDB", "ENGINE=MyISAM", 1)
-		} else {
-			if strings.Contains(line, " KEY ") {
-				if strings.HasSuffix(result, ",\n") {
-					result = result[0:len(result)-2] + "\n"
-				}
-				continue
+		if strings.Contains(line, " AUTO_INCREMENT") {
+			if modify != "" {
+				return "", "", fmt.Errorf("Can I really have two auto_increment in statement: %v", schema)
 			}
-			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+			modify = "ALTER TABLE `" + tableName + "` MODIFY " + line[:len(line)-1]
+			lines[i] = strings.Replace(line, " AUTO_INCREMENT", "", 1)
 		}
-		result += line + "\n"
 	}
-	return result
+	return strings.Join(lines, "\n"), modify, nil
 }
 
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, loadConcurrency, insertTableConcurrency, fetchRetryCount int, writeBinLogs bool) (err error) {
+// buildQueryList builds the list of queries to use to run the provided
+// query on the provided database
+func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string {
+	queries := make([]string, 0, 4)
+	if !writeBinLogs {
+		queries = append(queries, "SET sql_log_bin = OFF")
+	}
+	queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+	queries = append(queries, "USE `"+destinationDbName+"`")
+	queries = append(queries, query)
+	return queries
+}
+
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, writeBinLogs bool, skipAutoIncrementOnTables []string) (err error) {
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
 	rc := NewResourceConstraint(fetchConcurrency)
 	for i, sourceAddr := range sourceAddrs {
@@ -976,14 +963,21 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 
 	// Handle our concurrency:
 	// - fetchConcurrency tasks for network
-	// - loadConcurrency tasks for loading from a csv to myisam table
-	// - insertTableConcurrency for table inserts from a myisam
-	//   table into an innodb table
-	// - concurrency tasks for table inserts
+	// - insertTableConcurrency for table inserts from a file
+	//   into an innodb table
+	// - concurrency tasks for table inserts / modify tables
 	sems := make(map[string]sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+3)
 	sems["net"] = sync2.NewSemaphore(fetchConcurrency)
-	sems["load"] = sync2.NewSemaphore(loadConcurrency)
 	sems["db"] = sync2.NewSemaphore(concurrency)
+
+	// Store the alter table statements for after restore,
+	// and how many jobs we're running on each table
+	// TODO(alainjobart) the jobCount map is a bit weird. replace it
+	// with a map of WaitGroups, initialized to the number of files
+	// per table. Have extra go routines for the tables with auto_increment
+	// to wait on the waitgroup, and apply the modify_table.
+	postSql := make(map[string]string, len(manifests[0].SchemaDefinition.TableDefinitions))
+	jobCount := make(map[string]*sync2.AtomicInt32)
 
 	// Create the database (it's a good check to know if we're running
 	// multirestore a second time too!)
@@ -995,6 +989,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	if createDatabase == "" {
 		return fmt.Errorf("Empty create database statement")
 	}
+
 	createDbCmds := make([]string, 0, len(manifest.SchemaDefinition.TableDefinitions)+2)
 	if !writeBinLogs {
 		createDbCmds = append(createDbCmds, "SET sql_log_bin = OFF")
@@ -1002,16 +997,35 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	createDbCmds = append(createDbCmds, createDatabase)
 	createDbCmds = append(createDbCmds, "USE `"+destinationDbName+"`")
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
-		createDbCmds = append(createDbCmds, td.Schema)
+		createDbCmd, modifyTable, err := makeCreatetableSql(td.Schema, td.Name)
+		if err != nil {
+			return err
+		}
+		if modifyTable != "" {
+			postSql[td.Name] = modifyTable
+			for _, saiot := range skipAutoIncrementOnTables {
+				if td.Name == saiot {
+					relog.Info("Will not add AUTO_INCREMENT back on table %v", td.Name)
+					delete(postSql, td.Name)
+				}
+			}
+		}
+		jobCount[td.Name] = new(sync2.AtomicInt32)
+		createDbCmds = append(createDbCmds, createDbCmd)
 		sems["table-"+td.Name] = sync2.NewSemaphore(insertTableConcurrency)
 	}
 	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
 		return
 	}
 
-	loadDataInfile := `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TmpTableName}} CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' ({{.Columns}})`
-	copyData := `INSERT INTO {{.TableName}} SELECT * FROM {{.TmpTableName}}`
-	dropTmpTable := `DROP TABLE {{.TmpTableName}}`
+	// compute how many jobs we will have
+	for _, manifest := range manifests {
+		for _, file := range manifest.Source.Files {
+			jobCount[file.TableName].Add(1)
+		}
+	}
+
+	loadDataInfile := `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}} CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' ({{.Columns}})`
 
 	// fetch all the csv files, and apply them one at a time. Note
 	// this might start many go routines, and they'll all be
@@ -1030,41 +1044,20 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 
 				// compute a few things now, so if we can't we
 				// don't take resources:
-				// - the tmp table name we'll use
-				tmpTableName := fmt.Sprintf("%v__%v_%v", lsf.tableName(), manifestIndex, i)
-
-				// the create statement for the tmp table
+				// - get the schema
 				td, ok := manifest.SchemaDefinition.GetTable(lsf.tableName())
 				if !ok {
 					mrc.RecordError(fmt.Errorf("No table named %v in schema", lsf.tableName()))
 					return
 				}
-				tmpTableCreate := makeTempTableSql(td.Schema, tmpTableName)
 
-				// all the statements
+				// - get the load data statement
 				queryParams := map[string]string{
 					"TableInputPath": lsf.filename(),
-					"TmpTableName":   tmpTableName,
 					"TableName":      lsf.tableName(),
 					"Columns":        strings.Join(td.Columns, ", "),
 				}
-
-				// the load statement into tmp table
 				loadStatement, e := fillStringTemplate(loadDataInfile, queryParams)
-				if e != nil {
-					mrc.RecordError(e)
-					return
-				}
-
-				// the insert statement from tmp table
-				copyStatement, e := fillStringTemplate(copyData, queryParams)
-				if e != nil {
-					mrc.RecordError(e)
-					return
-				}
-
-				// the drop statement for the tmp table
-				dropStatement, e := fillStringTemplate(dropTmpTable, queryParams)
 				if e != nil {
 					mrc.RecordError(e)
 					return
@@ -1078,29 +1071,6 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 				}
 				e = fetchFileWithRetry(lsf.url(), lsf.file.Hash, lsf.filename(), fetchRetryCount)
 				mrc.Release("net")
-				if e != nil {
-					mrc.RecordError(e)
-					return
-				}
-
-				// load the file using the 'load' resource
-				mrc.Acquire("load")
-				if mrc.HasErrors() {
-					mrc.Release("load")
-					os.Remove(lsf.filename())
-					return
-				}
-				queries := make([]string, 0, 5)
-				if !writeBinLogs {
-					queries = append(queries, "SET sql_log_bin = OFF")
-				}
-				queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-				queries = append(queries, "USE `"+destinationDbName+"`")
-				queries = append(queries, tmpTableCreate)
-				queries = append(queries, loadStatement)
-				e = mysqld.executeSuperQueryList(queries)
-				mrc.Release("load")
-				os.Remove(lsf.filename())
 				if e != nil {
 					mrc.RecordError(e)
 					return
@@ -1120,24 +1090,33 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 					return
 				}
 
+				// acquire the db lock
 				mrc.Acquire("db")
-				if mrc.HasErrors() {
+				defer func() {
 					mrc.Release("db")
+				}()
+				if mrc.HasErrors() {
 					return
 				}
-				queries = make([]string, 0, 5)
-				if !writeBinLogs {
-					queries = append(queries, "SET sql_log_bin = OFF")
-				}
-				queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
-				queries = append(queries, "USE `"+destinationDbName+"`")
-				queries = append(queries, copyStatement)
-				queries = append(queries, dropStatement)
+
+				// load the data in
+				queries := buildQueryList(destinationDbName, loadStatement, writeBinLogs)
 				e = mysqld.executeSuperQueryList(queries)
-				mrc.Release("db")
 				if e != nil {
 					mrc.RecordError(e)
 					return
+				}
+
+				// if we're running the last insert,
+				// potentially re-add the auto-increments
+				remainingInserts := jobCount[lsf.tableName()].Add(-1)
+				if remainingInserts == 0 && postSql[lsf.tableName()] != "" {
+					queries = buildQueryList(destinationDbName, postSql[lsf.tableName()], writeBinLogs)
+					e = mysqld.executeSuperQueryList(queries)
+					if e != nil {
+						mrc.RecordError(e)
+						return
+					}
 				}
 			}(manifestIndex, i)
 		}

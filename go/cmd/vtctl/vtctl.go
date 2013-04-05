@@ -119,7 +119,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] [-skip-slave-restart] [-maximum-file-size=1073741824] -spec='-' -tables='' <zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-load-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-write-bin-logs] <destination zk path> <source zk path>...",
+				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-write-bin-logs] [-skip-auto-increment-on-tables=] <destination zk path> <source zk path>...",
 				"Restores a snapshot from multiple hosts."},
 			command{"PartialRestore", commandPartialRestore,
 				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
@@ -895,9 +895,9 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	loadConcurrency := subFlags.Int("load-concurrency", 4, "how many files to insert into myisam tables simultaneously")
 	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
 	writeBinLogs := subFlags.Bool("write-bin-logs", false, "write the data into the mysql binary logs")
+	skipAutoIncrementOnTables := subFlags.String("skip-auto-increment-on-tables", "", "comma-separated list of tables for which we won't re-create the auto_increment")
 	subFlags.Parse(args)
 
 	if subFlags.NArg() < 2 {
@@ -905,8 +905,12 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	}
 	destination := subFlags.Arg(0)
 	sources := subFlags.Args()[1:]
+	var saiot []string
+	if *skipAutoIncrementOnTables != "" {
+		saiot = strings.Split(*skipAutoIncrementOnTables, ",")
+	}
 
-	err = wrangler.RestoreFromMultiSnapshot(destination, sources, *concurrency, *fetchConcurrency, *loadConcurrency, *insertTableConcurrency, *fetchRetryCount, *writeBinLogs)
+	err = wrangler.RestoreFromMultiSnapshot(destination, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *writeBinLogs, saiot)
 	return
 }
 

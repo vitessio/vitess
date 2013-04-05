@@ -189,13 +189,13 @@ type MultiSnapshotArgs struct {
 }
 
 type MultiRestoreArgs struct {
-	ZkSrcTabletPaths       []string
-	Concurrency            int
-	FetchConcurrency       int
-	LoadConcurrency        int
-	InsertTableConcurrency int
-	FetchRetryCount        int
-	WriteBinLogs           bool
+	ZkSrcTabletPaths          []string
+	Concurrency               int
+	FetchConcurrency          int
+	InsertTableConcurrency    int
+	FetchRetryCount           int
+	WriteBinLogs              bool
+	SkipAutoIncrementOnTables []string
 }
 
 func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
