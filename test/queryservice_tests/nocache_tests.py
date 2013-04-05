@@ -342,6 +342,13 @@ class TestNocache(framework.TestCase):
       self.env.execute("delete from vtocc_strings")
       self.env.execute("commit")
 
+  def test_customrules(self):
+    bv = {'asdfg': 1}
+    try:
+      self.env.execute("select * from vtocc_test where intval=%(asdfg)s", bv)
+    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+      self.assertContains(e[1], "error: Query disallowed")
+
   def test_health(self):
     self.assertEqual(self.env.health(), "ok")
 

@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	"code.google.com/p/vitess/go/vt/key"
@@ -215,7 +216,7 @@ func TestBindVarStruct(t *testing.T) {
 		t.Errorf("expecting false, received true")
 	}
 	if qr.bindVarConds[1].op != QR_NOOP {
-		t.Errorf("exepecting NOOP, received %s", opname[qr.bindVarConds[1].op])
+		t.Errorf("exepecting NOOP, received %s", qr.bindVarConds[1])
 	}
 	if qr.bindVarConds[1].value != nil {
 		t.Errorf("expecting nil, received %#v", qr.bindVarConds[1].value)
@@ -292,73 +293,75 @@ var bvtestcases = []BindVarTestCase{
 	{BindVarCond{"a", true, true, QR_NOOP, nil}, 1, false},
 	{BindVarCond{"a", false, true, QR_NOOP, nil}, 1, true},
 
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, int8(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, int8(10), true},
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, int16(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, int32(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, int64(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, uint64(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, int8(-1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcuint(10)}, "abc", true},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, int(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, int8(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, int8(10), true},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, int16(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, int32(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, int64(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, uint64(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, int8(-1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcuint64(10)}, "abc", true},
 
-	{BindVarCond{"a", true, true, QR_NE, bvcuint(10)}, int8(1), true},
-	{BindVarCond{"a", true, true, QR_NE, bvcuint(10)}, int8(10), false},
-	{BindVarCond{"a", true, true, QR_NE, bvcuint(10)}, int8(11), true},
-	{BindVarCond{"a", true, true, QR_NE, bvcuint(10)}, int8(-1), true},
+	{BindVarCond{"a", true, true, QR_NE, bvcuint64(10)}, int8(1), true},
+	{BindVarCond{"a", true, true, QR_NE, bvcuint64(10)}, int8(10), false},
+	{BindVarCond{"a", true, true, QR_NE, bvcuint64(10)}, int8(11), true},
+	{BindVarCond{"a", true, true, QR_NE, bvcuint64(10)}, int8(-1), true},
 
-	{BindVarCond{"a", true, true, QR_LT, bvcuint(10)}, int8(1), true},
-	{BindVarCond{"a", true, true, QR_LT, bvcuint(10)}, int8(10), false},
-	{BindVarCond{"a", true, true, QR_LT, bvcuint(10)}, int8(11), false},
-	{BindVarCond{"a", true, true, QR_LT, bvcuint(10)}, int8(-1), true},
+	{BindVarCond{"a", true, true, QR_LT, bvcuint64(10)}, int8(1), true},
+	{BindVarCond{"a", true, true, QR_LT, bvcuint64(10)}, int8(10), false},
+	{BindVarCond{"a", true, true, QR_LT, bvcuint64(10)}, int8(11), false},
+	{BindVarCond{"a", true, true, QR_LT, bvcuint64(10)}, int8(-1), true},
 
-	{BindVarCond{"a", true, true, QR_GE, bvcuint(10)}, int8(1), false},
-	{BindVarCond{"a", true, true, QR_GE, bvcuint(10)}, int8(10), true},
-	{BindVarCond{"a", true, true, QR_GE, bvcuint(10)}, int8(11), true},
-	{BindVarCond{"a", true, true, QR_GE, bvcuint(10)}, int8(-1), false},
+	{BindVarCond{"a", true, true, QR_GE, bvcuint64(10)}, int8(1), false},
+	{BindVarCond{"a", true, true, QR_GE, bvcuint64(10)}, int8(10), true},
+	{BindVarCond{"a", true, true, QR_GE, bvcuint64(10)}, int8(11), true},
+	{BindVarCond{"a", true, true, QR_GE, bvcuint64(10)}, int8(-1), false},
 
-	{BindVarCond{"a", true, true, QR_GT, bvcuint(10)}, int8(1), false},
-	{BindVarCond{"a", true, true, QR_GT, bvcuint(10)}, int8(10), false},
-	{BindVarCond{"a", true, true, QR_GT, bvcuint(10)}, int8(11), true},
-	{BindVarCond{"a", true, true, QR_GT, bvcuint(10)}, int8(-1), false},
+	{BindVarCond{"a", true, true, QR_GT, bvcuint64(10)}, int8(1), false},
+	{BindVarCond{"a", true, true, QR_GT, bvcuint64(10)}, int8(10), false},
+	{BindVarCond{"a", true, true, QR_GT, bvcuint64(10)}, int8(11), true},
+	{BindVarCond{"a", true, true, QR_GT, bvcuint64(10)}, int8(-1), false},
 
-	{BindVarCond{"a", true, true, QR_LE, bvcuint(10)}, int8(1), true},
-	{BindVarCond{"a", true, true, QR_LE, bvcuint(10)}, int8(10), true},
-	{BindVarCond{"a", true, true, QR_LE, bvcuint(10)}, int8(11), false},
-	{BindVarCond{"a", true, true, QR_LE, bvcuint(10)}, int8(-1), true},
+	{BindVarCond{"a", true, true, QR_LE, bvcuint64(10)}, int8(1), true},
+	{BindVarCond{"a", true, true, QR_LE, bvcuint64(10)}, int8(10), true},
+	{BindVarCond{"a", true, true, QR_LE, bvcuint64(10)}, int8(11), false},
+	{BindVarCond{"a", true, true, QR_LE, bvcuint64(10)}, int8(-1), true},
 
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, int8(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, int8(10), true},
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, int16(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, int32(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, int64(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, uint64(1), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
-	{BindVarCond{"a", true, true, QR_EQ, bvcint(10)}, "abc", true},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, int(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, int8(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, int8(10), true},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, int16(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, int32(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, int64(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, uint64(1), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QR_EQ, bvcint64(10)}, "abc", true},
 
-	{BindVarCond{"a", true, true, QR_NE, bvcint(10)}, int8(1), true},
-	{BindVarCond{"a", true, true, QR_NE, bvcint(10)}, int8(10), false},
-	{BindVarCond{"a", true, true, QR_NE, bvcint(10)}, int8(11), true},
-	{BindVarCond{"a", true, true, QR_NE, bvcint(10)}, uint64(0xFFFFFFFFFFFFFFFF), true},
+	{BindVarCond{"a", true, true, QR_NE, bvcint64(10)}, int8(1), true},
+	{BindVarCond{"a", true, true, QR_NE, bvcint64(10)}, int8(10), false},
+	{BindVarCond{"a", true, true, QR_NE, bvcint64(10)}, int8(11), true},
+	{BindVarCond{"a", true, true, QR_NE, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), true},
 
-	{BindVarCond{"a", true, true, QR_LT, bvcint(10)}, int8(1), true},
-	{BindVarCond{"a", true, true, QR_LT, bvcint(10)}, int8(10), false},
-	{BindVarCond{"a", true, true, QR_LT, bvcint(10)}, int8(11), false},
-	{BindVarCond{"a", true, true, QR_LT, bvcint(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QR_LT, bvcint64(10)}, int8(1), true},
+	{BindVarCond{"a", true, true, QR_LT, bvcint64(10)}, int8(10), false},
+	{BindVarCond{"a", true, true, QR_LT, bvcint64(10)}, int8(11), false},
+	{BindVarCond{"a", true, true, QR_LT, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
 
-	{BindVarCond{"a", true, true, QR_GE, bvcint(10)}, int8(1), false},
-	{BindVarCond{"a", true, true, QR_GE, bvcint(10)}, int8(10), true},
-	{BindVarCond{"a", true, true, QR_GE, bvcint(10)}, int8(11), true},
-	{BindVarCond{"a", true, true, QR_GE, bvcint(10)}, uint64(0xFFFFFFFFFFFFFFFF), true},
+	{BindVarCond{"a", true, true, QR_GE, bvcint64(10)}, int8(1), false},
+	{BindVarCond{"a", true, true, QR_GE, bvcint64(10)}, int8(10), true},
+	{BindVarCond{"a", true, true, QR_GE, bvcint64(10)}, int8(11), true},
+	{BindVarCond{"a", true, true, QR_GE, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), true},
 
-	{BindVarCond{"a", true, true, QR_GT, bvcint(10)}, int8(1), false},
-	{BindVarCond{"a", true, true, QR_GT, bvcint(10)}, int8(10), false},
-	{BindVarCond{"a", true, true, QR_GT, bvcint(10)}, int8(11), true},
-	{BindVarCond{"a", true, true, QR_GT, bvcint(10)}, uint64(0xFFFFFFFFFFFFFFFF), true},
+	{BindVarCond{"a", true, true, QR_GT, bvcint64(10)}, int8(1), false},
+	{BindVarCond{"a", true, true, QR_GT, bvcint64(10)}, int8(10), false},
+	{BindVarCond{"a", true, true, QR_GT, bvcint64(10)}, int8(11), true},
+	{BindVarCond{"a", true, true, QR_GT, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), true},
 
-	{BindVarCond{"a", true, true, QR_LE, bvcint(10)}, int8(1), true},
-	{BindVarCond{"a", true, true, QR_LE, bvcint(10)}, int8(10), true},
-	{BindVarCond{"a", true, true, QR_LE, bvcint(10)}, int8(11), false},
-	{BindVarCond{"a", true, true, QR_LE, bvcint(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
+	{BindVarCond{"a", true, true, QR_LE, bvcint64(10)}, int8(1), true},
+	{BindVarCond{"a", true, true, QR_LE, bvcint64(10)}, int8(10), true},
+	{BindVarCond{"a", true, true, QR_LE, bvcint64(10)}, int8(11), false},
+	{BindVarCond{"a", true, true, QR_LE, bvcint64(10)}, uint64(0xFFFFFFFFFFFFFFFF), false},
 
 	{BindVarCond{"a", true, true, QR_EQ, bvcstring("b")}, "a", false},
 	{BindVarCond{"a", true, true, QR_EQ, bvcstring("b")}, "b", true},
@@ -462,17 +465,285 @@ func TestAction(t *testing.T) {
 
 	bv := make(map[string]interface{})
 	bv["a"] = uint64(0)
-	if qrs.getAction("123", "user1", bv) != QR_FAIL_QUERY {
+	action, desc := qrs.getAction("123", "user1", bv)
+	if action != QR_FAIL_QUERY {
 		t.Errorf("Expecting fail")
 	}
-	if qrs.getAction("1234", "user", bv) != QR_FAIL_QUERY {
+	if desc != "rule 1" {
+		t.Errorf("Expecting rule 1, received %s", desc)
+	}
+	action, desc = qrs.getAction("1234", "user", bv)
+	if action != QR_FAIL_QUERY {
 		t.Errorf("Expecting fail")
 	}
-	if qrs.getAction("1234", "user1", bv) != QR_CONTINUE {
+	if desc != "rule 2" {
+		t.Errorf("Expecting rule 2, received %s", desc)
+	}
+	action, desc = qrs.getAction("1234", "user1", bv)
+	if action != QR_CONTINUE {
 		t.Errorf("Expecting continue")
 	}
 	bv["a"] = uint64(1)
-	if qrs.getAction("1234", "user1", bv) != QR_FAIL_QUERY {
+	action, desc = qrs.getAction("1234", "user1", bv)
+	if action != QR_FAIL_QUERY {
 		t.Errorf("Expecting fail")
+	}
+	if desc != "rule 3" {
+		t.Errorf("Expecting rule 2, received %s", desc)
+	}
+}
+
+var jsondata = `[{
+	"Description": "desc1",
+	"Name": "name1",
+	"RequestIP": "123.123.123",
+	"User": "user",
+	"Query": "query",
+	"Plans": ["PASS_SELECT", "INSERT_PK"],
+	"BindVarConds": [{
+		"Name": "bvname1",
+		"OnAbsent": true,
+		"Operator": "NOOP"
+	},{
+		"Name": "bvname2",
+		"OnAbsent": true,
+		"OnMismatch": true,
+		"Operator": "UEQ",
+		"Value": "123"
+	}]
+},{
+	"Description": "desc2",
+	"Name": "name2"
+}]`
+
+func TestImport(t *testing.T) {
+	var qrs = NewQueryRules()
+	err := qrs.UnmarshalJSON([]byte(jsondata))
+	if err != nil {
+		t.Errorf("Unexptected: %v", err)
+		return
+	}
+	if qrs.rules[0].Description != "desc1" {
+		t.Errorf("Expecting desc1, received %s", qrs.rules[0].Description)
+	}
+	if qrs.rules[0].Name != "name1" {
+		t.Errorf("Expecting name1, received %s", qrs.rules[0].Name)
+	}
+	if qrs.rules[0].requestIP == nil {
+		t.Errorf("Expecting non-nil")
+	}
+	if qrs.rules[0].user == nil {
+		t.Errorf("Expecting non-nil")
+	}
+	if qrs.rules[0].query == nil {
+		t.Errorf("Expecting non-nil")
+	}
+	if qrs.rules[0].plans[0] != sqlparser.PLAN_PASS_SELECT {
+		t.Errorf("Expecting PASS_SELECT, received %s", qrs.rules[0].plans[0].String())
+	}
+	if qrs.rules[0].plans[1] != sqlparser.PLAN_INSERT_PK {
+		t.Errorf("Expecting PASS_INSERT_PK, received %s", qrs.rules[0].plans[0].String())
+	}
+	bvc := qrs.rules[0].bindVarConds[0]
+	if bvc.name != "bvname1" {
+		t.Errorf("Expecting bvname1, received %v", bvc.name)
+	}
+	if !bvc.onAbsent {
+		t.Errorf("Expecting true")
+	}
+	if bvc.op != QR_NOOP {
+		t.Errorf("Expecting NOOP, received %v", bvc.op)
+	}
+	bvc = qrs.rules[0].bindVarConds[1]
+	if bvc.name != "bvname2" {
+		t.Errorf("Expecting bvname2, received %v", bvc.name)
+	}
+	if !bvc.onAbsent {
+		t.Errorf("Expecting true")
+	}
+	if !bvc.onMismatch {
+		t.Errorf("Expecting true")
+	}
+	if bvc.op != QR_EQ {
+		t.Errorf("Expecting %v, received %v", QR_EQ, bvc.op)
+	}
+	if bvc.value.(bvcuint64) != 123 {
+		t.Errorf("Expecting 123, received %v", bvc.value.(bvcuint64))
+	}
+	if qrs.rules[1].Description != "desc2" {
+		t.Errorf("Expecting desc2, received %s", qrs.rules[0].Description)
+	}
+	if qrs.rules[1].Name != "name2" {
+		t.Errorf("Expecting name2, received %s", qrs.rules[0].Name)
+	}
+	if qrs.rules[1].requestIP != nil {
+		t.Errorf("Expecting nil")
+	}
+	if qrs.rules[1].user != nil {
+		t.Errorf("Expecting nil")
+	}
+	if qrs.rules[1].query != nil {
+		t.Errorf("Expecting nil")
+	}
+	if qrs.rules[1].plans != nil {
+		t.Errorf("Expecting nil")
+	}
+	if qrs.rules[1].bindVarConds != nil {
+		t.Errorf("Expecting nil")
+	}
+}
+
+type ValidJSONCase struct {
+	input string
+	op    Operator
+	typ   int
+}
+
+const (
+	UINT = iota
+	INT
+	STR
+	REGEXP
+	KEYRANGE
+)
+
+var validjsons = []ValidJSONCase{
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UEQ", "Value": "123"}]}]`, QR_EQ, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UNE", "Value": "123"}]}]`, QR_NE, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ULT", "Value": "123"}]}]`, QR_LT, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UGE", "Value": "123"}]}]`, QR_GE, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "UGT", "Value": "123"}]}]`, QR_GT, UINT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ULE", "Value": "123"}]}]`, QR_LE, UINT},
+
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "IEQ", "Value": "123"}]}]`, QR_EQ, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "INE", "Value": "123"}]}]`, QR_NE, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ILT", "Value": "123"}]}]`, QR_LT, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "IGE", "Value": "123"}]}]`, QR_GE, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "IGT", "Value": "123"}]}]`, QR_GT, INT},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "ILE", "Value": "123"}]}]`, QR_LE, INT},
+
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SEQ", "Value": "123"}]}]`, QR_EQ, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SNE", "Value": "123"}]}]`, QR_NE, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SLT", "Value": "123"}]}]`, QR_LT, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SGE", "Value": "123"}]}]`, QR_GE, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SGT", "Value": "123"}]}]`, QR_GT, STR},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "SLE", "Value": "123"}]}]`, QR_LE, STR},
+
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "123"}]}]`, QR_MATCH, REGEXP},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "123"}]}]`, QR_NOMATCH, REGEXP},
+
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "IN", "Value": {"Start": "1", "End": "2"}}]}]`, QR_IN, KEYRANGE},
+	{`[{"BindVarConds": [{"Name": "bvname1", "OnAbsent": true, "OnMismatch": true, "Operator": "NOTIN", "Value": {"Start": "1", "End": "2"}}]}]`, QR_NOTIN, KEYRANGE},
+}
+
+func TestValidJSON(t *testing.T) {
+	for i, tcase := range validjsons {
+		qrs := NewQueryRules()
+		err := qrs.UnmarshalJSON([]byte(tcase.input))
+		if err != nil {
+			t.Errorf("Unexpected error for case %d: %v", i, err)
+		}
+		bvc := qrs.rules[0].bindVarConds[0]
+		if bvc.op != tcase.op {
+			t.Errorf("Expecting %v, received %v", tcase.op, bvc.op)
+		}
+		switch tcase.typ {
+		case UINT:
+			if bvc.value.(bvcuint64) != 123 {
+				t.Errorf("Expecting %v, received %v", 123, bvc.value.(bvcuint64))
+			}
+		case INT:
+			if bvc.value.(bvcint64) != 123 {
+				t.Errorf("Expecting %v, received %v", 123, bvc.value.(bvcint64))
+			}
+		case STR:
+			if bvc.value.(bvcstring) != "123" {
+				t.Errorf("Expecting %v, received %v", "123", bvc.value.(bvcint64))
+			}
+		case REGEXP:
+			if bvc.value.(bvcre).re == nil {
+				t.Errorf("Expecting non-nil")
+			}
+		case KEYRANGE:
+			if kr := bvc.value.(bvcKeyRange); kr.Start != "1" || kr.End != "2" {
+				t.Errorf(`Execting {"1", "2"}, received %v`, kr)
+			}
+		}
+	}
+}
+
+type InvalidJSONCase struct {
+	input, err string
+}
+
+var invalidjsons = []InvalidJSONCase{
+	{`[{"Name": 1 }]`, "Expecting string for Name"},
+	{`[{"Description": 1 }]`, "Expecting string for Description"},
+	{`[{"RequestIP": 1 }]`, "Expecting string for RequestIP"},
+	{`[{"User": 1 }]`, "Expecting string for User"},
+	{`[{"Query": 1 }]`, "Expecting string for Query"},
+	{`[{"Plans": 1 }]`, "Expecting list for Plans"},
+	{`[{"BindVarConds": 1 }]`, "Expecting list for BindVarConds"},
+	{`[{"RequestIP": "[" }]`, "Could not set IP condition: ["},
+	{`[{"User": "[" }]`, "Could not set User condition: ["},
+	{`[{"Query": "[" }]`, "Could not set Query condition: ["},
+	{`[{"Plans": [1] }]`, "Expecting string for Plans"},
+	{`[{"Plans": ["invalid"] }]`, "Invalid plan name: invalid"},
+	{`[{"BindVarConds": [1] }]`, "Expecting json object for bind var conditions"},
+	{`[{"BindVarConds": [{}] }]`, "Name missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": 1}] }]`, "Expecting string for Name in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a"}] }]`, "OnAbsent missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": 1}] }]`, "Expecting bool for OnAbsent"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true}]}]`, "Operator missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "a"}]}]`, "Invalid Operator a"},
+
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ"}]}]`, "Value missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ", "Value": "a"}]}]`, "Expecting uint64: a"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UEQ", "Value": "-1"}]}]`, "Expecting uint64: -1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UNE", "Value": "-1"}]}]`, "Expecting uint64: -1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ULT", "Value": "-1"}]}]`, "Expecting uint64: -1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UGE", "Value": "-1"}]}]`, "Expecting uint64: -1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "UGT", "Value": "-1"}]}]`, "Expecting uint64: -1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ULE", "Value": "-1"}]}]`, "Expecting uint64: -1"},
+
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IEQ"}]}]`, "Value missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IEQ", "Value": "a"}]}]`, "Expecting int64: a"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IEQ", "Value": "0x8000000000000000"}]}]`, "Expecting int64: 0x8000000000000000"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "INE", "Value": "0x8000000000000000"}]}]`, "Expecting int64: 0x8000000000000000"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILT", "Value": "0x8000000000000000"}]}]`, "Expecting int64: 0x8000000000000000"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IGE", "Value": "0x8000000000000000"}]}]`, "Expecting int64: 0x8000000000000000"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "IGT", "Value": "0x8000000000000000"}]}]`, "Expecting int64: 0x8000000000000000"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILE", "Value": "0x8000000000000000"}]}]`, "Expecting int64: 0x8000000000000000"},
+
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SEQ"}]}]`, "Value missing in BindVarConds"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SEQ", "Value": 1}]}]`, "Expecting string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SEQ", "Value": 1}]}]`, "Expecting string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SNE", "Value": 1}]}]`, "Expecting string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SLT", "Value": 1}]}]`, "Expecting string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SGE", "Value": 1}]}]`, "Expecting string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SGT", "Value": 1}]}]`, "Expecting string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "SLE", "Value": 1}]}]`, "Expecting string: 1"},
+
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "MATCH", "Value": 1}]}]`, "Expecting string: 1"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "NOMATCH", "Value": 1}]}]`, "Expecting string: 1"},
+
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "Operator": "ILE", "Value": "1"}]}]`, "OnMismatch missing in BindVarConds"},
+
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "MATCH", "Value": "["}]}]`, "Processing [: error parsing regexp: missing closing ]: `[$`"},
+	{`[{"BindVarConds": [{"Name": "a", "OnAbsent": true, "OnMismatch": true, "Operator": "NOMATCH", "Value": "["}]}]`, "Processing [: error parsing regexp: missing closing ]: `[$`"},
+}
+
+func TestInvalidJSON(t *testing.T) {
+	for i, tcase := range invalidjsons {
+		qrs := NewQueryRules()
+		err := qrs.UnmarshalJSON([]byte(tcase.input))
+		if err == nil {
+			t.Errorf("Expecting error for case %d", i)
+			continue
+		}
+		recvd := strings.Replace(err.Error(), "error: ", "", 1)
+		if recvd != tcase.err {
+			t.Errorf("Expecting '%v', received '%v'", tcase.err, recvd)
+		}
 	}
 }

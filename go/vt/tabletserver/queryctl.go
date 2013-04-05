@@ -85,6 +85,14 @@ func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	SqlQueryRpcService.qe.InvalidateForDDL(ddlInvalidate)
 }
 
+func SetQueryRules(qrs *QueryRules) {
+	SqlQueryRpcService.qe.schemaInfo.SetRules(qrs)
+}
+
+func GetQueryRules() (qrs *QueryRules) {
+	return SqlQueryRpcService.qe.schemaInfo.GetRules()
+}
+
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	err := SqlQueryRpcService.Execute(

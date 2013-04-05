@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -52,6 +53,7 @@ var (
 	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
 	authConfig     = flag.String("auth-credentials", "", "name of file containing auth credentials")
 	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
+	customrules    = flag.String("customrules", "", "custom query rules file")
 )
 
 // Default values for the config
@@ -241,6 +243,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 		relog.Warning("%s", err)
 	}
 	ts.RegisterQueryService(qsConfig)
+	loadCustomRules()
 	usefulLameDuckPeriod := float64(qsConfig.QueryTimeout + 1)
 	if usefulLameDuckPeriod > *lameDuckPeriod {
 		*lameDuckPeriod = usefulLameDuckPeriod
@@ -256,6 +259,24 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	umgmt.AddCloseCallback(func() {
 		ts.DisallowQueries(true)
 	})
+}
+
+func loadCustomRules() {
+	if *customrules == "" {
+		return
+	}
+
+	data, err := ioutil.ReadFile(*customrules)
+	if err != nil {
+		relog.Fatal("Error reading file %v: %v", *customrules, err)
+	}
+
+	qrs := ts.NewQueryRules()
+	err = qrs.UnmarshalJSON(data)
+	if err != nil {
+		relog.Fatal("Error unmarshaling query rules %v", err)
+	}
+	ts.SetQueryRules(qrs)
 }
 
 func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir string, allowedPaths []string) {

@@ -231,7 +231,7 @@ class Tablet(object):
   def logfile(self):
     return os.path.join(self.tablet_dir, "vttablet.log")
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN"):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -251,6 +251,9 @@ class Tablet(object):
             '-debug-querylog-file', self.querylog_file]
     if auth:
       args.extend(['-auth-credentials', os.path.join(vttop, 'test', 'test_data', 'authcredentials_test.json')])
+
+    if customrules:
+      args.extend(['-customrules', customrules])
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)

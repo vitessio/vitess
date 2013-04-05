@@ -47,6 +47,15 @@ func (pt PlanType) String() string {
 	return planName[pt]
 }
 
+func PlanByName(s string) (pt PlanType, ok bool) {
+	for i, v := range planName {
+		if v == s {
+			return PlanType(i), true
+		}
+	}
+	return NumPlans, false
+}
+
 func (pt PlanType) IsSelect() bool {
 	return pt == PLAN_PASS_SELECT || pt == PLAN_SELECT_PK || pt == PLAN_SELECT_SUBQUERY
 }

@@ -39,6 +39,7 @@ var (
 	configFile     = flag.String("config", "", "config file name")
 	dbConfigFile   = flag.String("dbconfig", "", "db config file name")
 	queryLog       = flag.String("querylog", "", "for testing: log all queries to this file")
+	customrules    = flag.String("customrules", "", "custom query rules file")
 )
 
 var config = ts.Config{
@@ -94,6 +95,7 @@ func main() {
 	relog.Info("dbconfig: %s\n", dbconfig)
 
 	ts.RegisterQueryService(config)
+	loadCustomRules()
 	ts.AllowQueries(dbconfig)
 
 	rpc.HandleHTTP()
@@ -140,6 +142,24 @@ func main() {
 		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
 	}
 	relog.Info("done")
+}
+
+func loadCustomRules() {
+	if *customrules == "" {
+		return
+	}
+
+	data, err := ioutil.ReadFile(*customrules)
+	if err != nil {
+		relog.Fatal("Error reading file %v: %v", *customrules, err)
+	}
+
+	qrs := ts.NewQueryRules()
+	err = qrs.UnmarshalJSON(data)
+	if err != nil {
+		relog.Fatal("Error unmarshaling query rules %v", err)
+	}
+	ts.SetQueryRules(qrs)
 }
 
 func unmarshalFile(name string, val interface{}) {

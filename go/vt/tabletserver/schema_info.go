@@ -29,6 +29,7 @@ type ExecPlan struct {
 	*sqlparser.ExecPlan
 	TableInfo *TableInfo
 	Fields    []mproto.Field
+	Rules     *QueryRules
 
 	mu         sync.Mutex
 	QueryCount int64
@@ -65,6 +66,7 @@ type SchemaInfo struct {
 	tables         map[string]*TableInfo
 	queryCacheSize int
 	queries        *cache.LRUCache
+	rules          *QueryRules
 	connPool       *ConnectionPool
 	cachePool      *CachePool
 	reloadTime     time.Duration
@@ -262,6 +264,7 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 	} else if plan.PlanId == sqlparser.PLAN_DDL || plan.PlanId == sqlparser.PLAN_SET {
 		return plan
 	}
+	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId)
 	si.queries.Set(sql, plan)
 	return plan
 }
@@ -274,6 +277,21 @@ func (si *SchemaInfo) GetStreamPlan(sql string) *sqlparser.ParsedQuery {
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	return fullQuery
+}
+
+func (si *SchemaInfo) SetRules(qrs *QueryRules) {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	si.rules = qrs.Copy()
+	if si.queries != nil {
+		si.queries.Clear()
+	}
+}
+
+func (si *SchemaInfo) GetRules() (qrs *QueryRules) {
+	si.mu.Lock()
+	defer si.mu.Unlock()
+	return si.rules.Copy()
 }
 
 func (si *SchemaInfo) GetTable(tableName string) *TableInfo {

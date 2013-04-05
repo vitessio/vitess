@@ -74,6 +74,18 @@ class TestEnv(object):
         return 1
     return 0
 
+  def create_customrules(self, filename):
+    with open(filename, "w") as f:
+      f.write("""[{
+        "Name": "r1",
+        "Description": "disallow bindvar 'asdfg'",
+        "BindVarConds":[{
+          "Name": "asdfg",
+          "OnAbsent": false,
+          "Operator": "NOOP"
+        }]
+      }]""")
+
   def run_cases(self, cases):
     cursor = self.conn.cursor()
     error_count = 0
@@ -140,10 +152,12 @@ class VttabletTestEnv(TestEnv):
     utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
     self.tablet.init_tablet('master', 'test_keyspace', '0')
 
+    customrules = '/tmp/customrules.json'
+    self.create_customrules(customrules)
     if utils.options.memcache:
-      self.tablet.start_vttablet(memcache=True)
+      self.tablet.start_vttablet(memcache=True, customrules=customrules)
     else:
-      self.tablet.start_vttablet()
+      self.tablet.start_vttablet(customrules=customrules)
 
     # FIXME(szopa): This is necessary here only because of a bug that
     # makes the qs reload its config only after an action.
@@ -255,6 +269,9 @@ class VtoccTestEnv(TestEnv):
     finally:
       mcu.close()
 
+    customrules = '/tmp/customrules.json'
+    self.create_customrules(customrules)
+
     if utils.options.memcache:
       self.memcached = subprocess.Popen(["memcached", "-s", memcache])
     occ_args = [
@@ -263,6 +280,7 @@ class VtoccTestEnv(TestEnv):
       "-dbconfig", dbconfig,
       "-logfile", self.logfile,
       "-querylog", self.querylogfile,
+      "-customrules", customrules,
     ]
     self.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
     self.vtocc = subprocess.Popen(occ_args, stderr=self.vtstderr)

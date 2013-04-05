@@ -5,8 +5,10 @@
 package tabletserver
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
+	"strconv"
 
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/sqlparser"
@@ -72,6 +74,22 @@ func (qrs *QueryRules) Delete(name string) (qr *QueryRule) {
 	return nil
 }
 
+func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
+	var rulesInfo []map[string]interface{}
+	err = json.Unmarshal(data, &rulesInfo)
+	if err != nil {
+		return NewTabletError(FAIL, "%v", err)
+	}
+	for _, ruleInfo := range rulesInfo {
+		qr, err := buildQueryRule(ruleInfo)
+		if err != nil {
+			return err
+		}
+		qrs.Add(qr)
+	}
+	return nil
+}
+
 // filterByPlan creates a new QueryRules by prefiltering on the query and planId. This allows
 // us to create query plan specific QueryRules out of the original QueryRules. In the new rules,
 // query and plans predicates are empty.
@@ -91,13 +109,16 @@ func (qrs *QueryRules) filterByPlan(query string, planid sqlparser.PlanType) (ne
 	return &QueryRules{newrules}
 }
 
-func (qrs *QueryRules) getAction(ip, user string, bindVars map[string]interface{}) Action {
+func (qrs *QueryRules) getAction(ip, user string, bindVars map[string]interface{}) (action Action, desc string) {
+	if qrs == nil {
+		return QR_CONTINUE, ""
+	}
 	for _, qr := range qrs.rules {
 		if qr.getAction(ip, user, bindVars) == QR_FAIL_QUERY {
-			return QR_FAIL_QUERY
+			return QR_FAIL_QUERY, qr.Description
 		}
 	}
-	return QR_CONTINUE
+	return QR_CONTINUE, ""
 }
 
 //-----------------------------------------------
@@ -197,10 +218,11 @@ func makeExact(pattern string) string {
 // Value & operator rules
 // Type     Operators                              Bindvar
 // nil      NOOP                                   any type
-// uint64   EQ, NE, LT, GE, GT, LE                 int8, int16, int32, int64, uint64
-// int64    EQ, NE, LT, GE, GT, LE                 int8, int16, int32, int64, uint64
+// uint64   EQ, NE, LT, GE, GT, LE                 whole numbers
+// int64    EQ, NE, LT, GE, GT, LE                 whole numbers
 // string   EQ, NE, LT, GE, GT, LE, MATCH, NOMATCH []byte, string
-// KeyRange IN, NOTIN                              int8, int16, int32, int64, uint64
+// KeyRange IN, NOTIN                              whole numbers
+// whole numbers can be: int, int8, int16, int32, int64, uint64
 func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op Operator, value interface{}) error {
 	var converted bvcValue
 	if op == QR_NOOP {
@@ -212,12 +234,12 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 		if op < QR_EQ || op > QR_LE {
 			goto Error
 		}
-		converted = bvcuint(v)
+		converted = bvcuint64(v)
 	case int64:
 		if op < QR_EQ || op > QR_LE {
 			goto Error
 		}
-		converted = bvcint(v)
+		converted = bvcint64(v)
 	case string:
 		if op >= QR_EQ && op <= QR_LE {
 			converted = bvcstring(v)
@@ -244,7 +266,7 @@ func (qr *QueryRule) AddBindVarCond(name string, onAbsent, onMismatch bool, op O
 	return nil
 
 Error:
-	return NewTabletError(FAIL, "Invalid operator %s for type %T (%v)", opname[op], value, value)
+	return NewTabletError(FAIL, "Invalid operator %s for type %T (%v)", op, value, value)
 }
 
 // filterByPlan returns a new QueryRule if the query and planid match.
@@ -342,19 +364,30 @@ const (
 	QR_NOTIN
 )
 
-// Order must exactly match operator constants
-var opname = []string{
-	"NOOP",
-	"EQ",
-	"NE",
-	"LT",
-	"GE",
-	"GT",
-	"LE",
-	"MATCH",
-	"NOMATCH",
-	"IN",
-	"NOTIN",
+var opmap = map[string]Operator{
+	"NOOP":    QR_NOOP,
+	"UEQ":     QR_EQ,
+	"UNE":     QR_NE,
+	"ULT":     QR_LT,
+	"UGE":     QR_GE,
+	"UGT":     QR_GT,
+	"ULE":     QR_LE,
+	"IEQ":     QR_EQ,
+	"INE":     QR_NE,
+	"ILT":     QR_LT,
+	"IGE":     QR_GE,
+	"IGT":     QR_GT,
+	"ILE":     QR_LE,
+	"SEQ":     QR_EQ,
+	"SNE":     QR_NE,
+	"SLT":     QR_LT,
+	"SGE":     QR_GE,
+	"SGT":     QR_GT,
+	"SLE":     QR_LE,
+	"MATCH":   QR_MATCH,
+	"NOMATCH": QR_NOMATCH,
+	"IN":      QR_IN,
+	"NOTIN":   QR_NOTIN,
 }
 
 const (
@@ -369,9 +402,9 @@ type bvcValue interface {
 	eval(bv interface{}, op Operator, onMismatch bool) bool
 }
 
-type bvcuint uint64
+type bvcuint64 uint64
 
-func (uval bvcuint) eval(bv interface{}, op Operator, onMismatch bool) bool {
+func (uval bvcuint64) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	num, status := getuint64(bv)
 	switch op {
 	case QR_EQ:
@@ -423,9 +456,9 @@ func (uval bvcuint) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	return onMismatch
 }
 
-type bvcint int64
+type bvcint64 int64
 
-func (ival bvcint) eval(bv interface{}, op Operator, onMismatch bool) bool {
+func (ival bvcint64) eval(bv interface{}, op Operator, onMismatch bool) bool {
 	num, status := getint64(bv)
 	switch op {
 	case QR_EQ:
@@ -558,6 +591,11 @@ func (krval bvcKeyRange) eval(bv interface{}, op Operator, onMismatch bool) bool
 // getuint64 returns QR_OUT_OF_RANGE for negative values
 func getuint64(val interface{}) (uv uint64, status int) {
 	switch v := val.(type) {
+	case int:
+		if v < 0 {
+			return 0, QR_OUT_OF_RANGE
+		}
+		return uint64(v), QR_OK
 	case int8:
 		if v < 0 {
 			return 0, QR_OUT_OF_RANGE
@@ -587,6 +625,8 @@ func getuint64(val interface{}) (uv uint64, status int) {
 // getint64 returns QR_OUT_OF_RANGE if a uint64 is too large
 func getint64(val interface{}) (iv int64, status int) {
 	switch v := val.(type) {
+	case int:
+		return int64(v), QR_OK
 	case int8:
 		return int64(v), QR_OK
 	case int16:
@@ -612,4 +652,205 @@ func getstring(val interface{}) (sv string, status int) {
 		return v, QR_OK
 	}
 	return "", QR_MISMATCH
+}
+
+//-----------------------------------------------
+// Support functions for JSON
+
+func buildQueryRule(ruleInfo map[string]interface{}) (qr *QueryRule, err error) {
+	qr = NewQueryRule("", "", QR_FAIL_QUERY)
+	for k, v := range ruleInfo {
+		var sv string
+		var lv []interface{}
+		var ok bool
+		switch k {
+		case "Name", "Description", "RequestIP", "User", "Query":
+			sv, ok = v.(string)
+			if !ok {
+				return nil, NewTabletError(FAIL, "Expecting string for %s", k)
+			}
+		case "Plans", "BindVarConds":
+			lv, ok = v.([]interface{})
+			if !ok {
+				return nil, NewTabletError(FAIL, "Expecting list for %s", k)
+			}
+		default:
+			return nil, NewTabletError(FAIL, "unrecognized tag %s", k)
+		}
+		switch k {
+		case "Name":
+			qr.Name = sv
+		case "Description":
+			qr.Description = sv
+		case "RequestIP":
+			err = qr.SetIPCond(sv)
+			if err != nil {
+				return nil, NewTabletError(FAIL, "Could not set IP condition: %v", sv)
+			}
+		case "User":
+			err = qr.SetUserCond(sv)
+			if err != nil {
+				return nil, NewTabletError(FAIL, "Could not set User condition: %v", sv)
+			}
+		case "Query":
+			err = qr.SetQueryCond(sv)
+			if err != nil {
+				return nil, NewTabletError(FAIL, "Could not set Query condition: %v", sv)
+			}
+		case "Plans":
+			for _, p := range lv {
+				pv, ok := p.(string)
+				if !ok {
+					return nil, NewTabletError(FAIL, "Expecting string for Plans")
+				}
+				pt, ok := sqlparser.PlanByName(pv)
+				if !ok {
+					return nil, NewTabletError(FAIL, "Invalid plan name: %s", pv)
+				}
+				qr.AddPlanCond(pt)
+			}
+		case "BindVarConds":
+			for _, bvc := range lv {
+				name, onAbsent, onMismatch, op, value, err := buildBindVarCondition(bvc)
+				if err != nil {
+					return nil, err
+				}
+				err = qr.AddBindVarCond(name, onAbsent, onMismatch, op, value)
+				// Shouldn't happen, but check anyway
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	return qr, nil
+}
+
+func buildBindVarCondition(bvc interface{}) (name string, onAbsent, onMismatch bool, op Operator, value interface{}, err error) {
+	bvcinfo, ok := bvc.(map[string]interface{})
+	if !ok {
+		err = NewTabletError(FAIL, "Expecting json object for bind var conditions")
+		return
+	}
+
+	var v interface{}
+	v, ok = bvcinfo["Name"]
+	if !ok {
+		err = NewTabletError(FAIL, "Name missing in BindVarConds")
+		return
+	}
+	name, ok = v.(string)
+	if !ok {
+		err = NewTabletError(FAIL, "Expecting string for Name in BindVarConds")
+		return
+	}
+
+	v, ok = bvcinfo["OnAbsent"]
+	if !ok {
+		err = NewTabletError(FAIL, "OnAbsent missing in BindVarConds")
+		return
+	}
+	onAbsent, ok = v.(bool)
+	if !ok {
+		err = NewTabletError(FAIL, "Expecting bool for OnAbsent")
+		return
+	}
+
+	v, ok = bvcinfo["Operator"]
+	if !ok {
+		err = NewTabletError(FAIL, "Operator missing in BindVarConds")
+		return
+	}
+	strop, ok := v.(string)
+	if !ok {
+		err = NewTabletError(FAIL, "Expecting string for Operator")
+		return
+	}
+	op, ok = opmap[strop]
+	if !ok {
+		err = NewTabletError(FAIL, "Invalid Operator %s", strop)
+		return
+	}
+	if op == QR_NOOP {
+		return
+	}
+	v, ok = bvcinfo["Value"]
+	if !ok {
+		err = NewTabletError(FAIL, "Value missing in BindVarConds")
+		return
+	}
+	if op >= QR_EQ && op <= QR_LE {
+		strvalue, ok := v.(string)
+		if !ok {
+			err = NewTabletError(FAIL, "Expecting string: %v", v)
+			return
+		}
+		if strop[0] == 'U' {
+			value, err = strconv.ParseUint(strvalue, 0, 64)
+			if err != nil {
+				err = NewTabletError(FAIL, "Expecting uint64: %s", strvalue)
+				return
+			}
+		} else if strop[0] == 'I' {
+			value, err = strconv.ParseInt(strvalue, 0, 64)
+			if err != nil {
+				err = NewTabletError(FAIL, "Expecting int64: %s", strvalue)
+				return
+			}
+		} else if strop[0] == 'S' {
+			value = strvalue
+		} else {
+			panic("unexpected")
+		}
+	} else if op == QR_MATCH || op == QR_NOMATCH {
+		strvalue, ok := v.(string)
+		if !ok {
+			err = NewTabletError(FAIL, "Expecting string: %v", v)
+			return
+		}
+		value = strvalue
+	} else if op == QR_IN || op == QR_NOTIN {
+		kr, ok := v.(map[string]interface{})
+		if !ok {
+			err = NewTabletError(FAIL, "Expecting keyrange for Value")
+			return
+		}
+		var keyrange key.KeyRange
+		strstart, ok := kr["Start"]
+		if !ok {
+			err = NewTabletError(FAIL, "Start missing in KeyRange")
+			return
+		}
+		start, ok := strstart.(string)
+		if !ok {
+			err = NewTabletError(FAIL, "Expecting string for Start")
+			return
+		}
+		keyrange.Start = key.KeyspaceId(start)
+
+		strend, ok := kr["End"]
+		if !ok {
+			err = NewTabletError(FAIL, "End missing in KeyRange")
+			return
+		}
+		end, ok := strend.(string)
+		if !ok {
+			err = NewTabletError(FAIL, "Expecting string for End")
+			return
+		}
+		keyrange.End = key.KeyspaceId(end)
+		value = keyrange
+	}
+
+	v, ok = bvcinfo["OnMismatch"]
+	if !ok {
+		err = NewTabletError(FAIL, "OnMismatch missing in BindVarConds")
+		return
+	}
+	onMismatch, ok = v.(bool)
+	if !ok {
+		err = NewTabletError(FAIL, "Expecting bool for OnAbsent")
+		return
+	}
+	return
 }
