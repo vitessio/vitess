@@ -89,7 +89,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	return qe
 }
 
-func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig) {
+func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, qrs *QueryRules) {
 	// Wait for Close, in case it's running
 	qe.mu.Lock()
 	defer qe.mu.Unlock()
@@ -99,7 +99,7 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig) {
 
 	start := time.Now().UnixNano()
 	qe.cachePool.Open(cacheFactory)
-	qe.schemaInfo.Open(connFactory, qe.cachePool)
+	qe.schemaInfo.Open(connFactory, qe.cachePool, qrs)
 	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)

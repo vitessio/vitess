@@ -78,8 +78,8 @@ func TestCopy(t *testing.T) {
 		t.Errorf("expecting a, received %s", qrf1.bindVarConds[1].name)
 	}
 
-	var qrs2 *QueryRules
-	if qrs3 := qrs2.Copy(); qrs3 != nil {
+	qrs2 := NewQueryRules()
+	if qrs3 := qrs2.Copy(); qrs3.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
 }
@@ -145,7 +145,7 @@ func TestFilterByPlan(t *testing.T) {
 	}
 
 	qrs1 = qrs.filterByPlan("sel", sqlparser.PLAN_INSERT_PK)
-	if qrs1 != nil {
+	if qrs1.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
 
@@ -160,8 +160,8 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("want r4, got %s", qrs1.rules[0].Name)
 	}
 
-	var qrsnil1 *QueryRules
-	if qrsnil2 := qrsnil1.filterByPlan("", sqlparser.PLAN_PASS_SELECT); qrsnil2 != nil {
+	qrsnil1 := NewQueryRules()
+	if qrsnil2 := qrsnil1.filterByPlan("", sqlparser.PLAN_PASS_SELECT); qrsnil2.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
 }

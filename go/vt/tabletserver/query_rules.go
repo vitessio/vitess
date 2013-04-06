@@ -29,9 +29,6 @@ func NewQueryRules() *QueryRules {
 // Copy performs a deep copy of QueryRules.
 // A nil input produces a nil output.
 func (qrs *QueryRules) Copy() (newqrs *QueryRules) {
-	if qrs == nil {
-		return nil
-	}
 	newqrs = NewQueryRules()
 	if qrs.rules != nil {
 		newqrs.rules = make([]*QueryRule, 0, len(qrs.rules))
@@ -94,25 +91,16 @@ func (qrs *QueryRules) UnmarshalJSON(data []byte) (err error) {
 // us to create query plan specific QueryRules out of the original QueryRules. In the new rules,
 // query and plans predicates are empty.
 func (qrs *QueryRules) filterByPlan(query string, planid sqlparser.PlanType) (newqrs *QueryRules) {
-	if qrs == nil {
-		return nil
-	}
 	var newrules []*QueryRule
 	for _, qr := range qrs.rules {
 		if newrule := qr.filterByPlan(query, planid); newrule != nil {
 			newrules = append(newrules, newrule)
 		}
 	}
-	if newrules == nil {
-		return nil
-	}
 	return &QueryRules{newrules}
 }
 
 func (qrs *QueryRules) getAction(ip, user string, bindVars map[string]interface{}) (action Action, desc string) {
-	if qrs == nil {
-		return QR_CONTINUE, ""
-	}
 	for _, qr := range qrs.rules {
 		if qr.getAction(ip, user, bindVars) == QR_FAIL_QUERY {
 			return QR_FAIL_QUERY, qr.Description

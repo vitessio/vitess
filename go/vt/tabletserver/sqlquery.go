@@ -96,7 +96,7 @@ func (sq *SqlQuery) setState(state int32) {
 	sq.states.SetState(int(state))
 }
 
-func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
+func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, qrs *QueryRules) {
 	sq.statemu.Lock()
 	v := sq.state.Get()
 	switch v {
@@ -152,7 +152,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig) {
 		sq.setState(OPEN)
 	}()
 
-	sq.qe.Open(dbconfig)
+	sq.qe.Open(dbconfig, qrs)
 	sq.sessionId = Rand()
 	sq.dbName = dbconfig.Dbname
 	sq.keyRange = dbconfig.KeyRange

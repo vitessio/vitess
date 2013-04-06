@@ -42,9 +42,9 @@ func RegisterQueryService(config Config) {
 
 // AllowQueries can take an indefinite amount of time to return because
 // it keeps retrying until it obtains a valid connection to the database.
-func AllowQueries(dbconfig dbconfigs.DBConfig) {
+func AllowQueries(dbconfig dbconfigs.DBConfig, qrs *QueryRules) {
 	defer logError()
-	SqlQueryRpcService.allowQueries(dbconfig)
+	SqlQueryRpcService.allowQueries(dbconfig, qrs)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because

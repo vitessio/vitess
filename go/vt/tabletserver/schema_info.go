@@ -78,6 +78,8 @@ type SchemaInfo struct {
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
 		queryCacheSize: queryCacheSize,
+		queries:        cache.NewLRUCache(uint64(queryCacheSize)),
+		rules:          NewQueryRules(),
 		connPool:       NewConnectionPool(2, idleTimeout),
 		reloadTime:     reloadTime,
 		ticks:          timer.NewTimer(reloadTime),
@@ -86,7 +88,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return si
 }
 
-func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePool) {
+func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePool, qrs *QueryRules) {
 	si.connPool.Open(connFactory)
 	conn := si.connPool.Get()
 	defer conn.Recycle()
@@ -121,7 +123,9 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 		}
 		si.tables[tableName] = tableInfo
 	}
-	si.queries = cache.NewLRUCache(uint64(si.queryCacheSize))
+	// Clear is not really needed. Doing it for good measure.
+	si.queries.Clear()
+	si.rules = qrs.Copy()
 	si.ticks.Start(func() { si.Reload() })
 }
 
@@ -143,7 +147,8 @@ func (si *SchemaInfo) Close() {
 	si.ticks.Stop()
 	si.connPool.Close()
 	si.tables = nil
-	si.queries = nil
+	si.queries.Clear()
+	si.rules = NewQueryRules()
 	si.hashRegistry = nil
 }
 
@@ -245,6 +250,7 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	plan = &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
+	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId)
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
 			relog.Warning("Cannot cache field info: %s", sql)
@@ -264,7 +270,6 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 	} else if plan.PlanId == sqlparser.PLAN_DDL || plan.PlanId == sqlparser.PLAN_SET {
 		return plan
 	}
-	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId)
 	si.queries.Set(sql, plan)
 	return plan
 }
@@ -283,9 +288,7 @@ func (si *SchemaInfo) SetRules(qrs *QueryRules) {
 	si.mu.Lock()
 	defer si.mu.Unlock()
 	si.rules = qrs.Copy()
-	if si.queries != nil {
-		si.queries.Clear()
-	}
+	si.queries.Clear()
 }
 
 func (si *SchemaInfo) GetRules() (qrs *QueryRules) {

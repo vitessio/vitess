@@ -211,7 +211,8 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 			if newTablet.Type == tm.TYPE_MASTER && oldTablet.Type != tm.TYPE_MASTER {
 				ts.DisallowQueries(false)
 			}
-			ts.AllowQueries(dbcfgs.App)
+			qrs := loadCustomRules()
+			ts.AllowQueries(dbcfgs.App, qrs)
 			mysqlctl.EnableUpdateStreamService(string(newTablet.Type), dbcfgs)
 			if newTablet.Type != tm.TYPE_MASTER {
 				ts.StartRowCacheInvalidation()
@@ -243,7 +244,6 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 		relog.Warning("%s", err)
 	}
 	ts.RegisterQueryService(qsConfig)
-	loadCustomRules()
 	usefulLameDuckPeriod := float64(qsConfig.QueryTimeout + 1)
 	if usefulLameDuckPeriod > *lameDuckPeriod {
 		*lameDuckPeriod = usefulLameDuckPeriod
@@ -261,9 +261,9 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	})
 }
 
-func loadCustomRules() {
+func loadCustomRules() (qrs *ts.QueryRules) {
 	if *customrules == "" {
-		return
+		return ts.NewQueryRules()
 	}
 
 	data, err := ioutil.ReadFile(*customrules)
@@ -271,12 +271,12 @@ func loadCustomRules() {
 		relog.Fatal("Error reading file %v: %v", *customrules, err)
 	}
 
-	qrs := ts.NewQueryRules()
+	qrs = ts.NewQueryRules()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
 		relog.Fatal("Error unmarshaling query rules %v", err)
 	}
-	ts.SetQueryRules(qrs)
+	return qrs
 }
 
 func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir string, allowedPaths []string) {

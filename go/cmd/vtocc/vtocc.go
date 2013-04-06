@@ -95,8 +95,8 @@ func main() {
 	relog.Info("dbconfig: %s\n", dbconfig)
 
 	ts.RegisterQueryService(config)
-	loadCustomRules()
-	ts.AllowQueries(dbconfig)
+	qrs := loadCustomRules()
+	ts.AllowQueries(dbconfig, qrs)
 
 	rpc.HandleHTTP()
 
@@ -144,9 +144,9 @@ func main() {
 	relog.Info("done")
 }
 
-func loadCustomRules() {
+func loadCustomRules() (qrs *ts.QueryRules) {
 	if *customrules == "" {
-		return
+		return ts.NewQueryRules()
 	}
 
 	data, err := ioutil.ReadFile(*customrules)
@@ -154,12 +154,12 @@ func loadCustomRules() {
 		relog.Fatal("Error reading file %v: %v", *customrules, err)
 	}
 
-	qrs := ts.NewQueryRules()
+	qrs = ts.NewQueryRules()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
 		relog.Fatal("Error unmarshaling query rules %v", err)
 	}
-	ts.SetQueryRules(qrs)
+	return qrs
 }
 
 func unmarshalFile(name string, val interface{}) {
