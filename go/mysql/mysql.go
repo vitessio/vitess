@@ -67,6 +67,11 @@ type ConnectionParams struct {
 	Dbname     string `json:"dbname"`
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
+	Flags      uint64 `json:"flags"`
+}
+
+func (c *ConnectionParams) EnableMultiStatements() {
+	c.Flags |= C.CLIENT_MULTI_STATEMENTS
 }
 
 func (c ConnectionParams) Redacted() interface{} {
@@ -94,9 +99,10 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer cfree(unix_socket)
 	charset := C.CString(params.Charset)
 	defer cfree(charset)
+	flags := C.ulong(params.Flags)
 
 	conn = &Connection{}
-	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unix_socket, charset, 0) != 0 {
+	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unix_socket, charset, flags) != 0 {
 		defer conn.Close()
 		return nil, conn.lastError(nil)
 	}
