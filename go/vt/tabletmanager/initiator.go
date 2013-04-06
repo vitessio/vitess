@@ -14,6 +14,7 @@ package tabletmanager
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"os/user"
 	"path"
@@ -379,13 +380,15 @@ func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration)
 	actionLogPath := ActionToActionLogPath(actionPath)
 wait:
 	for {
+		var retryDelay <-chan time.Time
 		stat, watch, err := zconn.ExistsW(actionLogPath)
 		if err != nil {
-			return nil, fmt.Errorf("action err: %v %v", actionLogPath, err)
-		}
-
-		// file exists, go on
-		if stat != nil {
+			delay := 5*time.Second + time.Duration(rand.Int63n(55e9))
+			relog.Warning("unexpected zk error, delay retry %v: %v", delay, err)
+			// No one likes a thundering herd.
+			retryDelay = time.After(delay)
+		} else if stat != nil {
+			// file exists, go on
 			break wait
 		}
 
@@ -401,6 +404,8 @@ wait:
 				// will handle a disconnect.
 				relog.Warning("unexpected zk event: %v", actionEvent)
 			}
+		case <-retryDelay:
+			continue wait
 		case <-timer.C:
 			return nil, fmt.Errorf("action err: %v deadline exceeded %v", actionLogPath, waitTime)
 		case <-interrupted:
