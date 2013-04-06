@@ -252,7 +252,7 @@ class Mismatch(Exception):
     if self.different:
       data.append("Different:\n%s" % '\n'.join(self.dict_diff(*d) for d in self.different))
 
-    return '\n'.join(data)
+    return '\n'.join(data) + '\n'
 
 
 class Stats(object):
@@ -328,6 +328,7 @@ class Checker(object):
     self.iterations = 0
     self.temp_directory = temp_directory
     self.checkpoint_file = os.path.join(directory, table + '.json')
+    self.mismatches_file = os.path.join(directory, table + '_mismatches.txt')
     self.done = False
     try:
       self.restore_checkpoint()
@@ -444,6 +445,10 @@ class Checker(object):
       self.stats.update('total', start, processed_rows)
       start = time.time()
       self.stats.maybe_print_local()
+      if isinstance(error_or_done, Mismatch):
+        self.handle_mismatch(error_or_done)
+        continue
+
       if error_or_done:
         self.destination_in_queue.put((None, True))
       if error_or_done is True:
@@ -452,6 +457,9 @@ class Checker(object):
       elif error_or_done is not None:
         raise error_or_done
 
+  def handle_mismatch(self, mismatch):
+    with open(self.mismatches_file, 'a') as fi:
+      fi.write(str(mismatch))
 
   def destination_worker(self):
     while True:
@@ -559,7 +567,6 @@ class Checker(object):
       # put the mismatch or None on comparer out-queue.
       if any([missing, unexpected, different]):
         self.comparer_out_queue.put((Mismatch(missing, unexpected, different), len(destination_data)))
-        return
       else:
         self.comparer_out_queue.put((None, len(destination_data)))
 

@@ -33,8 +33,10 @@ db_configuration = {
   "sources": [t.mysql_connection_parameters("test_checkers%i" % i) for i, t in enumerate(source_tablets)],
 }
 
+
 def setUpModule():
   utils.wait_procs([t.start_mysql() for t in tablets])
+
 
 def tearDownModule():
   global skip_teardown
@@ -46,6 +48,15 @@ def tearDownModule():
   for t in tablets:
     t.remove_tree()
 
+
+class MockChecker(checker.Checker):
+
+  def __init__(self, *args, **kwargs):
+    super(MockChecker, self).__init__(*args, **kwargs)
+    self.mismatches = []
+
+  def handle_mismatch(self, mismatch):
+    self.mismatches.append(mismatch)
 
 class TestCheckersBase(unittest.TestCase):
   keyrange = {"end": 900}
@@ -59,7 +70,7 @@ class TestCheckersBase(unittest.TestCase):
     source_addresses = ['vt_dba@localhost:%s/test_checkers%s?unix_socket=%s' % (s.mysql_port, i, s.mysql_connection_parameters('test_checkers')['unix_socket'])
                         for i, s in enumerate(source_tablets)]
     destination_socket = destination_tablet.mysql_connection_parameters('test_checkers')['unix_socket']
-    return checker.Checker('vt_dba@localhost/test_checkers?unix_socket=%s' % destination_socket, source_addresses, 'test', **default)
+    return MockChecker('vt_dba@localhost/test_checkers?unix_socket=%s' % destination_socket, source_addresses, 'test', **default)
 
 class TestCheckers(TestCheckersBase):
 
@@ -102,16 +113,23 @@ class TestCheckers(TestCheckersBase):
 
   def test_ok(self):
     self.c._run()
+    self.assertFalse(self.c.mismatches)
 
   def test_different_value(self):
     destination_tablet.mquery("test_checkers", "update test set msg='something else' where pk2 = 29 and pk3 = 280 and pk1 = 3", write=True)
-    with self.assertRaises(checker.Mismatch):
-      self.c._run()
+    self.c._run()
+    self.assertTrue(self.c.mismatches)
 
   def test_additional_value(self):
     destination_tablet.mquery("test_checkers", "insert into test (pk1, pk2, pk3) values (1, 1, 900)", write=True)
-    with self.assertRaises(checker.Mismatch):
-      self.c._run()
+    self.c._run()
+    self.assertTrue(self.c.mismatches)
+
+  def test_more_mismatches(self):
+    destination_tablet.mquery("test_checkers", "insert into test (pk1, pk2, pk3) values (1, 1, 900)", write=True)
+    destination_tablet.mquery("test_checkers", "insert into test (pk1, pk2, pk3) values (1000, 1000, 1000)", write=True)
+    self.c._run()
+    self.assertEqual(len(self.c.mismatches), 2)
 
   def test_batch_size(self):
     c = self.make_checker(batch_count=0)
@@ -152,8 +170,8 @@ class TestDifferentEncoding(TestCheckersBase):
     self.c = self.make_checker()
 
   def test_problem(self):
-    with self.assertRaises(checker.Mismatch):
-      self.c._run()
+    self.c._run()
+    self.assertTrue(self.c.mismatches)
 
 
 def main():
