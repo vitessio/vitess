@@ -1075,6 +1075,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 					mrc.RecordError(e)
 					return
 				}
+				defer os.Remove(lsf.filename())
 
 				// acquire the table lock (we do this first
 				// so we maximize access to db. Otherwise
