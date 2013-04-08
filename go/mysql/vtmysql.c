@@ -99,10 +99,22 @@ VT_ROW vt_fetch_next(VT_CONN *conn) {
 }
 
 void vt_close_result(VT_CONN *conn) {
+  MYSQL_RES *result;
+
   if(conn->result) {
     my_thread_init();
     mysql_free_result(conn->result);
     clear_result(conn);
+  }
+  // Ignore subsequent results if any. We only
+  // return the first set of results for now.
+  while(mysql_next_result(conn->mysql) == 0) {
+    result = mysql_store_result(conn->mysql);
+    if (result) {
+      while(mysql_fetch_row(result)) {
+      }
+      mysql_free_result(result);
+    }
   }
 }
 
