@@ -880,23 +880,67 @@ func (mrc *MultiResourceConstraint) ReleaseAndDone(name string) {
 	mrc.Done()
 }
 
-// makeCreatetableSql returns a table creation statement
-// that doesn't include any auto_increment field if any,
-// and possibly an 'alter table' to re-add it later.
-func makeCreatetableSql(schema, tableName string) (string, string, error) {
-	modify := ""
-
+// makeCreateTableSql returns a table creation statement
+// that is modified to be faster, and the associated optional
+// 'alter table' to modify the table at the end.
+// - If the strategy contains the string 'skipAutoIncrement(NNN)' then
+// we do not re-add the auto_increment on that table.
+// - If the strategy contains the string 'delaySecondaryIndexes',
+// then non-primary key indexes will be added afterwards.
+// - If the strategy contains the string 'useMyIsam' we load
+// the data into a myisam table and we then convert to innodb
+// - If the strategy contains the string 'delayPrimaryKey',
+// then the primary key index will be added afterwards (use with useMyIsam)
+func makeCreateTableSql(schema, tableName string, strategy string) (string, string, error) {
+	alters := make([]string, 0, 5)
 	lines := strings.Split(schema, "\n")
+	delayPrimaryKey := strings.Contains(strategy, "delayPrimaryKey")
+	delaySecondaryIndexes := strings.Contains(strategy, "delaySecondaryIndexes")
+	useMyIsam := strings.Contains(strategy, "useMyIsam")
+
 	for i, line := range lines {
 		if strings.Contains(line, " AUTO_INCREMENT") {
-			if modify != "" {
-				return "", "", fmt.Errorf("Can I really have two auto_increment in statement: %v", schema)
+			// only add to the final ALTER TABLE if we're not
+			// dropping the AUTO_INCREMENT on the table
+			if strings.Contains(strategy, "skipAutoIncrement("+tableName+")") {
+				relog.Info("Will not add AUTO_INCREMENT back on table %v", tableName)
+			} else {
+				alters = append(alters, "MODIFY "+line[:len(line)-1])
 			}
-			modify = "ALTER TABLE `" + tableName + "` MODIFY " + line[:len(line)-1]
 			lines[i] = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+			continue
+		}
+
+		isPrimaryKey := strings.Contains(line, " PRIMARY KEY")
+		isSecondaryIndex := !isPrimaryKey && strings.Contains(line, " KEY")
+		if (isPrimaryKey && delayPrimaryKey) || (isSecondaryIndex && delaySecondaryIndexes) {
+
+			// remove the comma at the end of the previous line,
+			lines[i-1] = lines[i-1][:len(lines[i-1])-1]
+
+			// keep our comma if any (so the next index
+			// might remove it)
+			// also add the key definition to the alters
+			if strings.HasSuffix(line, ",") {
+				lines[i] = ","
+				alters = append(alters, "ADD "+line[:len(line)-1])
+			} else {
+				lines[i] = ""
+				alters = append(alters, "ADD "+line)
+			}
+		}
+
+		if useMyIsam && strings.Contains(line, " ENGINE=InnoDB") {
+			lines[i] = strings.Replace(line, " ENGINE=InnoDB", " ENGINE=MyISAM", 1)
+			alters = append(alters, "ENGINE=InnoDB")
 		}
 	}
-	return strings.Join(lines, "\n"), modify, nil
+
+	alter := ""
+	if len(alters) > 0 {
+		alter = "ALTER TABLE `" + tableName + "` " + strings.Join(alters, ", ")
+	}
+	return strings.Join(lines, "\n"), alter, nil
 }
 
 // buildQueryList builds the list of queries to use to run the provided
@@ -912,7 +956,12 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 	return queries
 }
 
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, writeBinLogs bool, skipAutoIncrementOnTables []string) (err error) {
+// RestoreFromMultiSnapshot is the main entry point for multi restore.
+// - If the strategy contains the string 'writeBinLogs' then we will
+//   also write to the binary logs.
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
+
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
 	rc := NewResourceConstraint(fetchConcurrency)
 	for i, sourceAddr := range sourceAddrs {
@@ -997,18 +1046,12 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	createDbCmds = append(createDbCmds, createDatabase)
 	createDbCmds = append(createDbCmds, "USE `"+destinationDbName+"`")
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
-		createDbCmd, modifyTable, err := makeCreatetableSql(td.Schema, td.Name)
+		createDbCmd, alterTable, err := makeCreateTableSql(td.Schema, td.Name, strategy)
 		if err != nil {
 			return err
 		}
-		if modifyTable != "" {
-			postSql[td.Name] = modifyTable
-			for _, saiot := range skipAutoIncrementOnTables {
-				if td.Name == saiot {
-					relog.Info("Will not add AUTO_INCREMENT back on table %v", td.Name)
-					delete(postSql, td.Name)
-				}
-			}
+		if alterTable != "" {
+			postSql[td.Name] = alterTable
 		}
 		jobCount[td.Name] = new(sync2.AtomicInt32)
 		createDbCmds = append(createDbCmds, createDbCmd)

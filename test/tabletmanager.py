@@ -367,7 +367,8 @@ def test_multisnapshot_and_restore():
   create_template = '''create table %s (
 id bigint auto_increment,
 msg varchar(64),
-primary key (id)
+primary key (id),
+index by_msg (msg)
 ) Engine=InnoDB'''
   create_view = '''create view vt_insert_view(id, msg) as select id, msg from vt_insert_test'''
   insert_template = "insert into %s (id, msg) values (%s, 'test %s')"
@@ -417,8 +418,9 @@ primary key (id)
   tablet_urls = ' '.join("vttp://localhost:%s/vt_test_keyspace" % tablet.port for tablet in old_tablets)
 
   # 0x28 = 40
-  tablet_62344.mysqlctl("multirestore --end=0000000000000028 -skip-auto-increment-on-tables=vt_insert_test1 not_vt_test_keyspace %s" % tablet_urls)
-  time.sleep(1)
+  err = tablet_62344.mysqlctl("multirestore --end=0000000000000028 -strategy=skipAutoIncrement(vt_insert_test1),delayPrimaryKey,delaySecondaryIndexes,useMyIsam not_vt_test_keyspace %s" % tablet_urls).wait()
+  if err != 0:
+    raise utils.TestError("mysqlctl failed: %u" % err)
   for table in tables:
     rows = tablet_62344.mquery('not_vt_test_keyspace', 'select id from %s' % table)
     if len(rows) == 0:

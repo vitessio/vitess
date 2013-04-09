@@ -308,7 +308,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
 						relog.Error("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
 						//vt_mysqlbinlog reads in chunks of 64k bytes, the code below pads null bytes so the remaining data
-						//in the buffer can be flushed before closing this stream. This manifests itself as end of log file, 
+						//in the buffer can be flushed before closing this stream. This manifests itself as end of log file,
 						//and would make the upstream code flow exit gracefully.
 						nullPadLen := MYSQLBINLOG_CHUNK - written
 						emptyBuf := make([]byte, MYSQLBINLOG_CHUNK)

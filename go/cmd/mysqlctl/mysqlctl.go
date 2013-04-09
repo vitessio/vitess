@@ -101,8 +101,12 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent db inserts to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
 	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
-	writeBinLogs := subFlags.Bool("write-bin-logs", false, "write the data into the mysql binary logs")
-	skipAutoIncrementOnTables := subFlags.String("skip-auto-increment-on-tables", "", "comma-separated list of tables for which we won't re-create the auto_increment")
+	strategy := subFlags.String("strategy", "", "which strategy to use for restore, can contain:\n"+
+		"    skipAutoIncrement(TTT): we won't add the AUTO_INCREMENT back to that table\n"+
+		"    delayPrimaryKey: we won't add the primary key until after the table is populated\n"+
+		"    delaySecondaryIndexes: we won't add the secondary indexes until after the table is populated\n"+
+		"    useMyIsam: create the table as MyISAM, then convert it to InnoDB after population\n"+
+		"    writeBinLogs: write all operations to the binlogs")
 
 	subFlags.Parse(args)
 
@@ -131,11 +135,7 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		}
 		sources[i] = dbUrl
 	}
-	var saiot []string
-	if *skipAutoIncrementOnTables != "" {
-		saiot = strings.Split(*skipAutoIncrementOnTables, ",")
-	}
-	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *writeBinLogs, saiot); err != nil {
+	if err := mysqld.RestoreFromMultiSnapshot(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
 		relog.Fatal("multirestore failed: %v", err)
 	}
 }
@@ -258,7 +258,7 @@ var commands = []command{
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] [-write-bin-logs] [-skip-auto-increment-on-tables=] <destination_dbname> <source_host>[/<source_dbname>]...",
+		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
 	command{"partialsnapshot", partialSnapshotCmd,
 		"[-start=<start key>] [-end=<end key>] [-concurrency=4] <db name> <key name>",

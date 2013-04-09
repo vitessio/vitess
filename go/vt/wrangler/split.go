@@ -98,15 +98,14 @@ func (wr *Wrangler) prepareToSnapshot(zkTabletPath string, forceMasterSnapshot b
 
 }
 
-func (wr *Wrangler) RestoreFromMultiSnapshot(zkDstTabletPath string, sources []string, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, writeBinLogs bool, skipAutoIncrementOnTables []string) error {
+func (wr *Wrangler) RestoreFromMultiSnapshot(zkDstTabletPath string, sources []string, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
 	actionPath, err := wr.ai.RestoreFromMultiSnapshot(zkDstTabletPath, &tm.MultiRestoreArgs{
-		ZkSrcTabletPaths:          sources,
-		Concurrency:               concurrency,
-		FetchConcurrency:          fetchConcurrency,
-		InsertTableConcurrency:    insertTableConcurrency,
-		FetchRetryCount:           fetchRetryCount,
-		WriteBinLogs:              writeBinLogs,
-		SkipAutoIncrementOnTables: skipAutoIncrementOnTables})
+		ZkSrcTabletPaths:       sources,
+		Concurrency:            concurrency,
+		FetchConcurrency:       fetchConcurrency,
+		InsertTableConcurrency: insertTableConcurrency,
+		FetchRetryCount:        fetchRetryCount,
+		Strategy:               strategy})
 	if err != nil {
 		return err
 	}
