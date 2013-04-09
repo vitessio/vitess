@@ -905,8 +905,8 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 	queries := make([]string, 0, 4)
 	if !writeBinLogs {
 		queries = append(queries, "SET sql_log_bin = OFF")
+		queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 	}
-	queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 	queries = append(queries, "USE `"+destinationDbName+"`")
 	queries = append(queries, query)
 	return queries
