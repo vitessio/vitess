@@ -28,6 +28,7 @@ const (
 	BINLOG_HEADER_SIZE = 4  // copied from mysqlbinlog.cc for mysql 5.0.33
 	EVENT_HEADER_SIZE  = 19 // 4.0 and above, can be larger in 5.x
 	BINLOG_BLOCK_SIZE  = 16 * 1024
+	MYSQLBINLOG_CHUNK  = 64 * 1024
 )
 
 type stats struct {
@@ -59,7 +60,7 @@ func (blr *BinlogReader) binLogPathForId(fileId int) string {
 }
 
 func NewBinlogReader(binLogPrefix string) *BinlogReader {
-	return &BinlogReader{binLogPrefix: binLogPrefix, BinlogBlockSize: BINLOG_BLOCK_SIZE, MaxWaitTimeout: 3600.0, LogWaitTimeout: 5.0}
+	return &BinlogReader{binLogPrefix: binLogPrefix, BinlogBlockSize: BINLOG_BLOCK_SIZE, MaxWaitTimeout: 300.0, LogWaitTimeout: 5.0}
 }
 
 /*
@@ -306,6 +307,15 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				if lastSlept, ok := positionWaitStart[position]; ok {
 					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
 						relog.Error("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
+						//vt_mysqlbinlog reads in chunks of 64k bytes, the code below pads null bytes so the remaining data
+						//in the buffer can be flushed before closing this stream. This manifests itself as end of log file, 
+						//and would make the upstream code flow exit gracefully.
+						nullPadLen := MYSQLBINLOG_CHUNK - written
+						emptyBuf := make([]byte, MYSQLBINLOG_CHUNK)
+						_, err = writer.Write(emptyBuf[0:nullPadLen])
+						if err != nil {
+							relog.Warning("Error in writing pad bytes to vt_mysqlbinlog %v", err)
+						}
 						return
 					}
 				} else {

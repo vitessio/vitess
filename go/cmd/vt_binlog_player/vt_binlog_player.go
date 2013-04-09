@@ -298,20 +298,9 @@ func main() {
 
 	//Make a request to the server and start processing the events.
 	stdout = bufio.NewWriterSize(os.Stdout, 16*1024)
-	for {
-		err := blp.applyBinlogEvents()
-		if err != nil {
-			relog.Error("Error in applying binlog events, err %v", err)
-			//FIXME: should this retry 'n' times only ?
-			if strings.Contains(err.Error(), "EOF") {
-				blp.startPosition.Position = blp.recoveryState.Position
-				blp.inTxn = false
-				blp.txnBuffer = blp.txnBuffer[:0]
-				relog.Warning("Encountered EOF, retrying at last position %v", blp.startPosition.Position)
-			} else {
-				break
-			}
-		}
+	err = blp.applyBinlogEvents()
+	if err != nil {
+		relog.Error("Error in applying binlog events, err %v", err)
 	}
 	relog.Info("vt_binlog_player done")
 }

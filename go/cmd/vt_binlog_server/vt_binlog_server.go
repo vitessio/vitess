@@ -237,7 +237,7 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 			if err == io.EOF {
 				//end of stream
 				blp.globalState.parseStats.Add("EOFErrors."+blp.keyrangeTag, 1)
-				panic(NewBinlogParseError(fmt.Sprintf("EOF retry")))
+				panic(NewBinlogParseError(fmt.Sprintf("EOF")))
 			}
 			panic(NewBinlogParseError(fmt.Sprintf("ReadLine err: , %v", err)))
 		}
