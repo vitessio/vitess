@@ -6,7 +6,6 @@ package main
 
 import (
 	"bufio"
-	"database/sql/driver"
 	"flag"
 	"fmt"
 	"io"
@@ -620,17 +619,15 @@ func kquery(zconn zk.Conn, zkKeyspacePath, user, password, query string) error {
 	if err != nil {
 		return err
 	}
-	rows, err := sconn.QueryBind(query, nil)
+	rows, err := sconn.Exec(query, nil)
 	if err != nil {
 		return err
 	}
 	cols := rows.Columns()
 	fmt.Println(strings.Join(cols, "\t"))
 
-	rowIndex := 0
-	row := make([]driver.Value, len(cols))
 	rowStrs := make([]string, len(cols)+1)
-	for rows.Next(row) == nil {
+	for row := rows.Next(); row != nil; row = rows.Next() {
 		for i, value := range row {
 			switch value.(type) {
 			case []byte:
@@ -641,7 +638,6 @@ func kquery(zconn zk.Conn, zkKeyspacePath, user, password, query string) error {
 		}
 
 		fmt.Println(strings.Join(rowStrs, "\t"))
-		rowIndex++
 	}
 	return nil
 }

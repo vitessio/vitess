@@ -72,6 +72,10 @@ func (kr KeyRange) String() string {
 	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
+func (kr KeyRange) IsPartial() bool {
+	return !(kr.Start == MinKey && kr.End == MaxKey)
+}
+
 type KeyspaceRange struct {
 	Keyspace string
 	KeyRange

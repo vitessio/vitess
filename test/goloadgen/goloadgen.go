@@ -56,7 +56,7 @@ func run(connections, queries int) {
 		for _, plan := range distribution {
 			bindVars["id"] = rand.Intn(10000) + 1
 			for i := 0; i < plan.iterations; i++ {
-				_, err := conns[connid].ExecBind(baseQuery+plan.where_clause, bindVars)
+				_, err := conns[connid].Exec(baseQuery+plan.whereClause, bindVars)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%v\n", err)
 					return

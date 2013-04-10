@@ -9,14 +9,13 @@
 package tablet
 
 import (
-	"database/sql/driver"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/url"
 	"strings"
 
+	"code.google.com/p/vitess/go/db"
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
@@ -51,11 +50,6 @@ type Conn struct {
 	tproto.Session
 }
 
-type Stmt struct {
-	conn  *Conn
-	query string
-}
-
 type Tx struct {
 	conn *Conn
 }
@@ -67,6 +61,7 @@ type StreamResult struct {
 	// current result and index on it
 	qr    *mproto.QueryResult
 	index int
+	err   error
 }
 
 func (conn *Conn) dbName() string {
@@ -156,19 +151,12 @@ func (conn *Conn) dial() (err error) {
 	return
 }
 
-// driver.Conn interface
-func (conn *Conn) Prepare(query string) (driver.Stmt, error) {
-	return &Stmt{conn, query}, nil
-}
-
 func (conn *Conn) Close() error {
 	conn.Session = tproto.Session{0, 0, 0}
 	return conn.rpcClient.Close()
 }
 
-// ExecBind can be used to execute queries with explicitly named bind vars.
-// You will need to bypass go's database api to use this function.
-func (conn *Conn) ExecBind(query string, bindVars map[string]interface{}) (driver.Result, error) {
+func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result, error) {
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
@@ -185,27 +173,17 @@ func (conn *Conn) ExecBind(query string, bindVars map[string]interface{}) (drive
 		if !ok {
 			return nil, conn.fmtErr(c.Error)
 		}
-		return &StreamResult{c, sr, cols, nil, 0}, nil
+		return &StreamResult{c, sr, cols, nil, 0, nil}, nil
 	}
 
 	qr := new(mproto.QueryResult)
 	if err := conn.rpcClient.Call("SqlQuery.Execute", req, qr); err != nil {
 		return nil, conn.fmtErr(err)
 	}
-	return &Result{qr, 0}, nil
+	return &Result{qr, 0, nil}, nil
 }
 
-// driver.Execer interface
-func (conn *Conn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	bindVars := make(map[string]interface{})
-	for i, v := range args {
-		bindVars[fmt.Sprintf("v%d", i)] = v
-	}
-
-	return conn.ExecBind(query, bindVars)
-}
-
-func (conn *Conn) Begin() (driver.Tx, error) {
+func (conn *Conn) Begin() (db.Tx, error) {
 	if conn.TransactionId != 0 {
 		return &Tx{}, ErrNoNestedTxn
 	}
@@ -241,31 +219,6 @@ func (conn *Conn) Rollback() error {
 	return conn.fmtErr(conn.rpcClient.Call("SqlQuery.Rollback", &conn.Session, &noOutput))
 }
 
-// driver.Stmt interface
-func (stmt *Stmt) Close() error {
-	stmt.query = ""
-	return nil
-}
-
-func (*Stmt) NumInput() int {
-	return -1
-}
-
-func (stmt *Stmt) Exec(args []driver.Value) (driver.Result, error) {
-	return stmt.conn.Exec(stmt.query, args)
-}
-
-func (stmt *Stmt) Query(args []driver.Value) (driver.Rows, error) {
-	// we use driver.Execer interface, we know it's a Result return,
-	// and our Result implements driver.Rows
-	// (or a StreamResult that does too)
-	res, err := stmt.conn.Exec(stmt.query, args)
-	if err != nil {
-		return nil, err
-	}
-	return res.(driver.Rows), nil
-}
-
 // driver.Tx interface (forwarded to Conn)
 func (tx *Tx) Commit() error {
 	return tx.conn.Commit()
@@ -278,6 +231,7 @@ func (tx *Tx) Rollback() error {
 type Result struct {
 	qr    *mproto.QueryResult
 	index int
+	err   error
 }
 
 func NewResult(rowCount, rowsAffected, insertId int64, fields []mproto.Field) *Result {
@@ -295,7 +249,6 @@ func (result *Result) RowsRetrieved() int64 {
 	return int64(len(result.qr.Rows))
 }
 
-// driver.Result interface
 func (result *Result) LastInsertId() (int64, error) {
 	return int64(result.qr.InsertId), nil
 }
@@ -327,20 +280,22 @@ func (result *Result) Close() error {
 	return nil
 }
 
-func (result *Result) Next(dest []driver.Value) error {
-	if len(dest) != len(result.qr.Fields) {
-		return ErrFieldLengthMismatch
-	}
+func (result *Result) Next() (row []interface{}) {
 	if result.index >= len(result.qr.Rows) {
-		return io.EOF
+		return nil
 	}
-	defer func() { result.index++ }()
+	row = make([]interface{}, len(result.qr.Rows[result.index]))
 	for i, v := range result.qr.Rows[result.index] {
 		if !v.IsNull() {
-			dest[i] = convert(int(result.qr.Fields[i].Type), v.String())
+			row[i] = convert(int(result.qr.Fields[i].Type), v.String())
 		}
 	}
-	return nil
+	result.index++
+	return row
+}
+
+func (result *Result) Err() error {
+	return result.err
 }
 
 // driver.Result interface
@@ -365,32 +320,26 @@ func (*StreamResult) Close() error {
 	return nil
 }
 
-func (sr *StreamResult) Next(dest []driver.Value) error {
-	if len(dest) != len(sr.columns.Fields) {
-		return errors.New("vt: field length mismatch")
-	}
-
+func (sr *StreamResult) Next() (row []interface{}) {
 	if sr.qr == nil {
 		// we need to read the next record that may contain
 		// multiple rows
 		qr, ok := <-sr.sr
 		if !ok {
-			// if there was an error, we return that, otherwise
-			// we return EOF
 			if sr.call.Error != nil {
 				log.Printf("vt: error reading the next value %v", sr.call.Error.Error())
-				return sr.call.Error
+				sr.err = sr.call.Error
 			}
-			return io.EOF
+			return nil
 		}
 		sr.qr = qr
 		sr.index = 0
 	}
 
-	row := sr.qr.Rows[sr.index]
-	for i, v := range row {
+	row = make([]interface{}, len(sr.qr.Rows[sr.index]))
+	for i, v := range sr.qr.Rows[sr.index] {
 		if !v.IsNull() {
-			dest[i] = convert(int(sr.columns.Fields[i].Type), v.String())
+			row[i] = convert(int(sr.columns.Fields[i].Type), v.String())
 		}
 	}
 
@@ -401,5 +350,9 @@ func (sr *StreamResult) Next(dest []driver.Value) error {
 		sr.qr = nil
 	}
 
-	return nil
+	return row
+}
+
+func (sr *StreamResult) Err() error {
+	return sr.err
 }

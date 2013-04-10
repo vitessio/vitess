@@ -160,7 +160,7 @@ def run_test_sharding():
               "10\ttest 10"])
 
   # write a value, re-read them all
-  utils.vtclient2(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (2, 'test 2')", driver="vtdb", verbose=True)
+  utils.vtclient2(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (:keyspace_id, 'test 2')", bindvars='{"keyspace_id": 2}', driver="vtdb", verbose=True)
   check_rows(["Index\tid\tmsg",
               "1\ttest 1",
               "2\ttest 2",

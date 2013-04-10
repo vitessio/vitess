@@ -7,13 +7,12 @@
 package tablet
 
 import (
-	"database/sql"
-	"database/sql/driver"
 	"fmt"
 	"net"
 	"strings"
 	"time"
 
+	"code.google.com/p/vitess/go/db"
 	"code.google.com/p/vitess/go/relog"
 )
 
@@ -81,12 +80,10 @@ func (vtc *VtConn) handleErr(err error) (int, error) {
 	return errType, err
 }
 
-// ExecBind can be used to execute queries with explicitly named bind vars.
-// You will need to bypass go's database api to use this function.
-func (vtc *VtConn) ExecBind(query string, bindVars map[string]interface{}) (driver.Result, error) {
+func (vtc *VtConn) Exec(query string, bindVars map[string]interface{}) (db.Result, error) {
 	attempt := 0
 	for {
-		result, err := vtc.Conn.ExecBind(query, bindVars)
+		result, err := vtc.Conn.Exec(query, bindVars)
 		if err == nil {
 			vtc.timeFailed = zeroTime
 			return result, nil
@@ -113,7 +110,7 @@ func (vtc *VtConn) ExecBind(query string, bindVars map[string]interface{}) (driv
 	panic("unreachable")
 }
 
-func (vtc *VtConn) Begin() (driver.Tx, error) {
+func (vtc *VtConn) Begin() (db.Tx, error) {
 	attempt := 0
 	for {
 		tx, err := vtc.Conn.Begin()
@@ -175,11 +172,11 @@ type vDriver struct {
 	stream bool
 }
 
-func (driver *vDriver) Open(name string) (driver.Conn, error) {
+func (driver *vDriver) Open(name string) (db.Conn, error) {
 	return DialVtdb(name, driver.stream, DefaultTimeout)
 }
 
 func init() {
-	sql.Register("vttablet", &vDriver{})
-	sql.Register("vttablet-streaming", &vDriver{true})
+	db.Register("vttablet", &vDriver{})
+	db.Register("vttablet-streaming", &vDriver{true})
 }

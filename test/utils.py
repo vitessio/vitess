@@ -289,7 +289,7 @@ def run_vtctl(clargs, log_level='WARNING', auto_log=False, **kwargs):
 
 # vtclient2 helpers
 # driver is one of vttablet (default), vttablet-streaming, vtdb, vtdb-streaming
-def vtclient2(uid, dbname, query, user=None, password=None, driver=None,
+def vtclient2(uid, dbname, query, bindvars=None, user=None, password=None, driver=None,
               verbose=False, raise_on_error=True):
   prog_compile(['vtclient2'])
   if (user is None) != (password is None):
@@ -303,6 +303,8 @@ def vtclient2(uid, dbname, query, user=None, password=None, driver=None,
     server = "%s:%s@%s" % (user, password, server)
 
   cmdline = [vtroot+'/bin/vtclient2', '-server', server]
+  if bindvars:
+    cmdline.extend(['-bindvars', bindvars])
   if driver:
     cmdline.extend(['-driver', driver])
   if verbose:

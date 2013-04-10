@@ -34,6 +34,7 @@ import (
 	vtenv "code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	ts "code.google.com/p/vitess/go/vt/tabletserver"
 	"code.google.com/p/vitess/go/zk"
@@ -212,6 +213,16 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 				ts.DisallowQueries(false)
 			}
 			qrs := loadCustomRules()
+			if dbcfgs.App.KeyRange.IsPartial() {
+				qr := ts.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", ts.QR_FAIL_QUERY)
+				qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
+				err = qr.AddBindVarCond("keyspace_id", true, true, ts.QR_NOTIN, dbcfgs.App.KeyRange)
+				if err != nil {
+					relog.Warning("Unable to add keyspace rule: %v", err)
+				} else {
+					qrs.Add(qr)
+				}
+			}
 			ts.AllowQueries(dbcfgs.App, qrs)
 			mysqlctl.EnableUpdateStreamService(string(newTablet.Type), dbcfgs)
 			if newTablet.Type != tm.TYPE_MASTER {

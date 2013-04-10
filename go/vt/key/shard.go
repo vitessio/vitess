@@ -59,5 +59,5 @@ func EncodeValue(value interface{}) string {
 	case []byte:
 		return string(val)
 	}
-	panic(NewKeyError("Unexpected key variable type"))
+	panic(NewKeyError("Unexpected key variable type %T", value))
 }
