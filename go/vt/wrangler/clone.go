@@ -127,6 +127,23 @@ func (wr *Wrangler) ReserveForRestore(zkSrcTabletPath, zkDstTabletPath string) (
 	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
+func (wr *Wrangler) UnreserveForRestore(zkDstTabletPath string) (err error) {
+	tablet, err := tm.ReadTablet(wr.zconn, zkDstTabletPath)
+	if err != nil {
+		return err
+	}
+	rp, err := tablet.ReplicationPath()
+	if err != nil {
+		return err
+	}
+	err = wr.zconn.Delete(rp, -1)
+	if err != nil {
+		return err
+	}
+
+	return wr.ChangeType(zkDstTabletPath, tm.TYPE_IDLE, false)
+}
+
 func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
@@ -172,18 +189,12 @@ func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSn
 	// take the snapshot, or put the server in SnapshotSource mode
 	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, concurrency, serverMode)
 	if err != nil {
-		// The snapshot failed so scrap the destination since it was
-		// already added to replication graph.
-		//
-		// FIXME(alainjobart) destination was idle, we could just force
-		// transition back to idle and delete replication path in ZK
-		relog.Warning("Snapshot failed on source server %v (see error below), scrapping destination tablet %v", zkSrcTabletPath, zkDstTabletPath)
-		scrapAction, scrapErr := wr.Scrap(zkDstTabletPath, false, false)
-		if scrapErr == nil {
-			scrapErr = wr.ai.WaitForCompletion(scrapAction, wr.actionTimeout())
-		}
-		if scrapErr != nil {
-			relog.Error("Failed to scrap destination tablet after failed source snapshot: %v", scrapErr)
+		// The snapshot failed so un-reserve the destination
+		ufrErr := wr.UnreserveForRestore(zkDstTabletPath)
+		if ufrErr != nil {
+			relog.Error("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
+		} else {
+			relog.Info("Un-reserved %v", zkDstTabletPath)
 		}
 	} else {
 		// try to restore the snapshot

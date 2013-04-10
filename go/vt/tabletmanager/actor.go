@@ -629,7 +629,11 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 }
 
 // change a tablet type to RESTORE and set all the other arguments.
-// from now on, we have to go to either SPARE or SCRAP
+// from now on, we can go to:
+// - back to IDLE if we don't use the tablet at all (after for instance
+//   a successful ReserveForRestore but a failed Snapshot)
+// - to SCRAP if something in the process on the target host fails
+// - to SPARE if the clone works
 func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, parentAlias TabletAlias, keyRange key.KeyRange) error {
 	// run the optional idle_server_check hook
 	if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {

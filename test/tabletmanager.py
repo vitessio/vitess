@@ -333,11 +333,10 @@ def _run_test_vtctl_clone(server_mode):
                        trap_output=True, raise_on_error=False)
   if "Cannot validate snapshot directory" not in err:
     raise utils.TestError("expected validation error", err)
+  if "Un-reserved /zk/test_nj/vt/tablets/0000062044" not in err:
+    raise utils.TestError("expected Un-reserved", err)
+  utils.debug("Failed Clone output: " + err)
   utils.run("chmod +w %s" % snapshot_dir)
-
-  # the snapshot failed, which means Clone left the destination tablet
-  # in scrap mode, so we need to re-init it
-  tablet_62044.init_tablet('idle')
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Clone -force %s %s %s' %
