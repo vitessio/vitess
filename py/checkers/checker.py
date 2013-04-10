@@ -95,25 +95,7 @@ def sql_tuple_comparison(tablename, columns, column_name_prefix=''):
                 'column_name_prefix': column_name_prefix}
 
 
-class Row(object):
-  def __init__(self, pk, data):
-    self.data = data
-    self.pk = tuple(self.data[k] for k in pk)
-
-  def __getitem__(self, key):
-    return self.data[key]
-
-  def __eq__(self, other):
-    return self.data == other.data
-
-  def __ne__(self, other):
-    return not(self == other)
-
-  def __repr__(self):
-    return repr(self.data)
-
-
-def sorted_row_list_difference(expected, actual):
+def sorted_row_list_difference(expected, actual, key_length):
   """Finds elements in only one or the other of two, sorted input lists.
 
   Returns a three-element tuple of lists. The first list contains
@@ -128,19 +110,26 @@ def sorted_row_list_difference(expected, actual):
   different = []
 
   expected, actual = iter(expected), iter(actual)
+  enext = expected.next
+  anext = actual.next
   try:
-    e, a = expected.next(), actual.next()
+    e, a = enext(), anext()
     while True:
-      if e.pk < a.pk:
+      if a == e:
+        e, a = enext(), anext()
+        continue
+
+      ekey, akey = e[:key_length], a[:key_length]
+
+      if ekey < akey:
         missing.append(e)
-        e = expected.next()
-      elif e.pk > a.pk:
+        e = enext()
+      elif ekey > akey:
         unexpected.append(a)
-        a = actual.next()
+        a = anext()
       else:
-        if a != e:
-          different.append((a, e))
-        e, a = expected.next(), actual.next()
+        different.append((a, e))
+        e, a = enext(), anext()
   except StopIteration:
     missing.extend(expected)
     unexpected.extend(actual)
@@ -152,8 +141,7 @@ class Datastore(object):
   """Datastore is database which expects that all queries sent to it
   will use the same primary key.
   """
-  def __init__(self, connection_params, primary_key, stats=None):
-    self.primary_key = primary_key
+  def __init__(self, connection_params, stats=None):
     self.stats = stats
     self.connection_params = dict((str(key), value) for key, value in connection_params.items())
     self.dbname = connection_params['db']
@@ -172,7 +160,7 @@ class Datastore(object):
     self.cursor.execute(sql, params)
     if self.stats:
       self.stats.update(self.dbname, start)
-    return [Row(self.primary_key, item) for item in self.cursor.fetchall()]
+    return self.cursor.fetchall()
 
 
 class DatastoreThread(threading.Thread):
@@ -219,10 +207,10 @@ class MultiDatastore(object):
   """MultiDatastore gathers results from a list of Datastores. Each
   datastore is queried in a separate thread.
   """
-  def __init__(self, connection_params_list, primary_key, nickname, stats=None):
+  def __init__(self, connection_params_list, nickname, stats=None):
     self.nickname = nickname
     self.stats = stats
-    self.threads = [DatastoreThread(Datastore(params, primary_key)) for params in connection_params_list]
+    self.threads = [DatastoreThread(Datastore(params)) for params in connection_params_list]
 
   def query(self, sql, params):
     """Query all the child datastores in parallel.
@@ -316,8 +304,11 @@ class Checker(object):
     self.table_name = table
     self.table_data = self.get_table_data(table, parse_database_url(sources_urls[0]))
     self.primary_key = self.table_data['pk']
-    self.columns = self.table_data['columns']
-    self._pk_indexes = [self.columns.index(pk) for pk in self.primary_key]
+    columns = self.table_data['columns']
+    for k in self.primary_key:
+      columns.remove(k)
+    self.columns = self.primary_key + columns
+    self.pk_length = len(self.primary_key)
     (self.batch_count, self.block_size,
      self.ratio, self.blocks) = batch_count, block_size, ratio, blocks
 
@@ -383,8 +374,8 @@ class Checker(object):
                'max_range_sql': sql_tuple_comparison(self.table_name, self.primary_key, column_name_prefix='max_')}
 
     self.stats = Stats(interval=stats_interval, name=self.table_name)
-    self.destination = Datastore(parse_database_url(destination_url), self._pk_indexes, stats=self.stats)
-    self.sources = MultiDatastore([parse_database_url(s) for s in sources_urls], self._pk_indexes, 'all-sources', stats=self.stats)
+    self.destination = Datastore(parse_database_url(destination_url), stats=self.stats)
+    self.sources = MultiDatastore([parse_database_url(s) for s in sources_urls], 'all-sources', stats=self.stats)
 
     logging.basicConfig(level=logging_level)
     logging.debug("destination sql template: %s", clean(self.destination_sql))
@@ -417,7 +408,7 @@ class Checker(object):
       self.batch_size = int(rows_per_block * self.ratio * self.blocks)
 
   def get_pk(self, row):
-    return dict((k, row[i]) for k, i in zip(self.primary_key, self._pk_indexes))
+    return dict((k, v) for k, v in zip(self.primary_key, row))
 
   def _run(self):
     # initialize destination_in_queue, sources_in_queue, merger_in_queue, comparer_in_queue, comparare_out_queue
@@ -524,24 +515,24 @@ class Checker(object):
       if error_or_done:
         self.merger_comparer_out_queue.put((error_or_done, 0))
         return
-
-      merged_data = list(merge_sorted(sources_data, key=lambda r: r.pk))
-
-
       # No more data in both the sources and the destination, we are
       # done.
-      if destination_data == [] and merged_data == []:
+      if destination_data == [] and not any(len(s) for s in sources_data):
         self.merger_comparer_out_queue.put((True, 0))
         return
+
+      merged_data = heapq.merge(*sources_data)
 
       try:
         last_pk = self.get_pk(destination_data[-1])
       except IndexError:
-        # Only sources data: maybe shortcircuit here?
+        # Only sources data: short-circuit
+        merged_data = list(merged_data)
         last_pk = self.get_pk(merged_data[-1])
-
-      # compare the data
-      missing, unexpected, different = sorted_row_list_difference(merged_data, destination_data)
+        missing, unexpected, different = merged_data, [], []
+      else:
+        # compare the data
+        missing, unexpected, different = sorted_row_list_difference(merged_data, destination_data, self.pk_length)
 
       self.stats.update('comparer', start)
 

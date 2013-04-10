@@ -74,15 +74,13 @@ class TestCheckersBase(unittest.TestCase):
 
 class TestSortedRowListDifference(unittest.TestCase):
   def test_sorted_row_list_difference(self):
-    def rows(l):
-      return [checker.Row([0], d) for d in l]
 
-    expected = rows([(1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)])
-    actual = rows([(1, 0), (3, 0), (4, 0), (5, 0), (6, 1), (10, 0)])
-    missing, unexpected, different = checker.sorted_row_list_difference(expected, actual)
-    self.assertEqual(missing, rows([(2, 0)]))
-    self.assertEqual(unexpected, rows([(10, 0)]))
-    self.assertEqual(different, [(checker.Row([0], (6, 1)), checker.Row([0], (6, 0)))])
+    expected = [(1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0)]
+    actual = [(1, 0), (3, 0), (4, 0), (5, 0), (6, 1), (10, 0)]
+    missing, unexpected, different = checker.sorted_row_list_difference(expected, actual, 1)
+    self.assertEqual(missing, [(2, 0)])
+    self.assertEqual(unexpected, [(10, 0)])
+    self.assertEqual(different, [((6, 1), (6, 0))])
 
 class TestCheckers(TestCheckersBase):
 
