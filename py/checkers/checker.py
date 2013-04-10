@@ -423,13 +423,12 @@ class Checker(object):
     # initialize destination_in_queue, sources_in_queue, merger_in_queue, comparer_in_queue, comparare_out_queue
     self.destination_in_queue = Queue.Queue(maxsize=3)
     self.sources_in_queue = Queue.Queue(maxsize=3)
-    self.merger_in_queue = Queue.Queue(maxsize=3)
-    self.comparer_in_queue = Queue.Queue(maxsize=3)
-    self.comparer_out_queue = Queue.Queue(maxsize=3)
+    self.merger_comparer_in_queue = Queue.Queue(maxsize=3)
+    self.merger_comparer_out_queue = Queue.Queue(maxsize=3)
 
     # start destination, sources, merger, comparer
     threads = []
-    for worker_name in ['destination_worker', 'sources_worker', 'merger_worker', 'comparer_worker']:
+    for worker_name in ['destination_worker', 'sources_worker', 'merger_comparer_worker']:
       worker = getattr(self, worker_name)
       t = threading.Thread(target=worker, name=worker_name)
       t.daemon = True
@@ -441,7 +440,7 @@ class Checker(object):
     while True:
       # get error from the comparer out-queue, raise if it isn't None.
 
-      error_or_done, processed_rows = self.comparer_out_queue.get()
+      error_or_done, processed_rows = self.merger_comparer_out_queue.get()
       self.stats.update('total', start, processed_rows)
       start = time.time()
       self.stats.maybe_print_local()
@@ -499,7 +498,7 @@ class Checker(object):
       (start_pk, end_pk, destination_data, error_or_done) = self.sources_in_queue.get()
       start = time.time()
       if error_or_done:
-        self.merger_in_queue.put((None, None, error_or_done))
+        self.merger_comparer_in_queue.put((None, None, error_or_done))
         return
 
       # query the sources -> sources_data
@@ -515,42 +514,24 @@ class Checker(object):
       # put (sources_data, data, done) on the merger in-queue
       done = not (sources_data or destination_data)
       self.stats.update('sources', start)
-      self.merger_in_queue.put((destination_data, sources_data, done))
+      self.merger_comparer_in_queue.put((destination_data, sources_data, done))
 
-  def merger_worker(self):
+  def merger_comparer_worker(self):
     while True:
-      # get (sources_data, data, done) from the merger in-queue
-      destination_data, sources_data, error_or_done = self.merger_in_queue.get()
+      destination_data, sources_data, error_or_done = self.merger_comparer_in_queue.get()
       start = time.time()
+
       if error_or_done:
-        # If it's not an error, no need to notify comparer - it sent
-        # the done itself.
-        if error_or_done is not True:
-          self.comparer_in_queue.put((None, None, error_or_done))
+        self.merger_comparer_out_queue.put((error_or_done, 0))
         return
-      # merge sources_data -> merged_data
+
       merged_data = list(merge_sorted(sources_data, key=lambda r: r.pk))
 
-      # put (merged_data, data, done) on comparer in-queue
-      self.stats.update('merger', start)
-      self.comparer_in_queue.put((destination_data, merged_data, False))
-
-
-  def comparer_worker(self):
-    while True:
-      # get (merged_data, data, error) from the comparer in-queue
-      destination_data, merged_data, error = self.comparer_in_queue.get()
-
-      start = time.time()
-
-      if error:
-        self.comparer_out_queue.put((error, 0))
-        return
 
       # No more data in both the sources and the destination, we are
       # done.
       if destination_data == [] and merged_data == []:
-        self.comparer_out_queue.put((True, 0))
+        self.merger_comparer_out_queue.put((True, 0))
         return
 
       try:
@@ -566,9 +547,9 @@ class Checker(object):
 
       # put the mismatch or None on comparer out-queue.
       if any([missing, unexpected, different]):
-        self.comparer_out_queue.put((Mismatch(missing, unexpected, different), len(destination_data)))
+        self.merger_comparer_out_queue.put((Mismatch(missing, unexpected, different), len(destination_data)))
       else:
-        self.comparer_out_queue.put((None, len(destination_data)))
+        self.merger_comparer_out_queue.put((None, len(destination_data)))
 
       # checkpoint
       self.checkpoint(last_pk, done=False)
