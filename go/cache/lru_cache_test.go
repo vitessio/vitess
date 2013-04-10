@@ -12,8 +12,8 @@ type CacheValue struct {
 	size int
 }
 
-func (self *CacheValue) Size() int {
-	return self.size
+func (cv *CacheValue) Size() int {
+	return cv.size
 }
 
 func TestInitialState(t *testing.T) {

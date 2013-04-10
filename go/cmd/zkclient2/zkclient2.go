@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sync/atomic"
 	"time"
 
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/zk/zkocc/proto"
 )
 
@@ -90,14 +90,14 @@ func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 }
 
 func qps(paths []string) {
-	var count int32
+	var count sync2.AtomicInt32
 	for _, path := range paths {
 		for i := 0; i < 100; i++ {
 			go func() {
 				rpcClient := connect()
 				for true {
 					get(rpcClient, path, false)
-					atomic.AddInt32(&count, 1)
+					count.Add(1)
 				}
 			}()
 		}
@@ -105,8 +105,8 @@ func qps(paths []string) {
 
 	ticker := time.NewTicker(time.Second)
 	for _ = range ticker.C {
-		c := atomic.LoadInt32(&count)
-		atomic.StoreInt32(&count, 0)
+		c := count.Get()
+		count.Set(0)
 		println(fmt.Sprintf("QPS = %v", c))
 	}
 }

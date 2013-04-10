@@ -5,8 +5,9 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/pools"
 	"time"
+
+	"code.google.com/p/vitess/go/pools"
 )
 
 // ConnectionPool re-exposes RoundRobin as a pool of DBConnection objects
@@ -18,20 +19,20 @@ func NewConnectionPool(capacity int, idleTimeout time.Duration) *ConnectionPool 
 	return &ConnectionPool{pools.NewRoundRobin(capacity, idleTimeout)}
 }
 
-func (self *ConnectionPool) Open(connFactory CreateConnectionFunc) {
+func (cp *ConnectionPool) Open(connFactory CreateConnectionFunc) {
 	f := func() (pools.Resource, error) {
 		c, err := connFactory()
 		if err != nil {
 			return nil, err
 		}
-		return &pooledConnection{c, self}, nil
+		return &pooledConnection{c, cp}, nil
 	}
-	self.RoundRobin.Open(f)
+	cp.RoundRobin.Open(f)
 }
 
 // You must call Recycle on the PoolConnection once done.
-func (self *ConnectionPool) Get() PoolConnection {
-	r, err := self.RoundRobin.Get()
+func (cp *ConnectionPool) Get() PoolConnection {
+	r, err := cp.RoundRobin.Get()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -39,8 +40,8 @@ func (self *ConnectionPool) Get() PoolConnection {
 }
 
 // You must call Recycle on the PoolConnection once done.
-func (self *ConnectionPool) SafeGet() (PoolConnection, error) {
-	r, err := self.RoundRobin.Get()
+func (cp *ConnectionPool) SafeGet() (PoolConnection, error) {
+	r, err := cp.RoundRobin.Get()
 	if err != nil {
 		return nil, err
 	}
@@ -48,8 +49,8 @@ func (self *ConnectionPool) SafeGet() (PoolConnection, error) {
 }
 
 // You must call Recycle on the PoolConnection once done.
-func (self *ConnectionPool) TryGet() PoolConnection {
-	r, err := self.RoundRobin.TryGet()
+func (cp *ConnectionPool) TryGet() PoolConnection {
+	r, err := cp.RoundRobin.TryGet()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -65,6 +66,6 @@ type pooledConnection struct {
 	pool *ConnectionPool
 }
 
-func (self *pooledConnection) Recycle() {
-	self.pool.Put(self)
+func (pc *pooledConnection) Recycle() {
+	pc.pool.Put(pc)
 }

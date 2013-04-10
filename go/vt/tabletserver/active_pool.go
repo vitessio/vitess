@@ -5,17 +5,18 @@
 package tabletserver
 
 import (
+	"fmt"
+	"time"
+
 	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/timer"
-	"fmt"
-	"sync/atomic"
-	"time"
 )
 
 type ActivePool struct {
 	pool     *pools.Numbered
-	timeout  int64
+	timeout  sync2.AtomicDuration
 	connPool *ConnectionPool
 	ticks    *timer.Timer
 }
@@ -23,34 +24,34 @@ type ActivePool struct {
 func NewActivePool(queryTimeout, idleTimeout time.Duration) *ActivePool {
 	return &ActivePool{
 		pool:     pools.NewNumbered(),
-		timeout:  int64(queryTimeout),
+		timeout:  sync2.AtomicDuration(queryTimeout),
 		connPool: NewConnectionPool(1, idleTimeout),
 		ticks:    timer.NewTimer(queryTimeout / 10),
 	}
 }
 
-func (self *ActivePool) Open(ConnFactory CreateConnectionFunc) {
-	self.connPool.Open(ConnFactory)
-	self.ticks.Start(func() { self.QueryKiller() })
+func (ap *ActivePool) Open(ConnFactory CreateConnectionFunc) {
+	ap.connPool.Open(ConnFactory)
+	ap.ticks.Start(func() { ap.QueryKiller() })
 }
 
-func (self *ActivePool) Close() {
-	self.ticks.Stop()
-	self.connPool.Close()
-	self.pool = pools.NewNumbered()
+func (ap *ActivePool) Close() {
+	ap.ticks.Stop()
+	ap.connPool.Close()
+	ap.pool = pools.NewNumbered()
 }
 
-func (self *ActivePool) QueryKiller() {
-	for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
-		self.kill(v.(int64))
+func (ap *ActivePool) QueryKiller() {
+	for _, v := range ap.pool.GetTimedout(time.Duration(ap.Timeout())) {
+		ap.kill(v.(int64))
 	}
 }
 
-func (self *ActivePool) kill(connid int64) {
-	self.Remove(connid)
+func (ap *ActivePool) kill(connid int64) {
+	ap.Remove(connid)
 	killStats.Add("Queries", 1)
 	relog.Info("killing query %d", connid)
-	killConn := self.connPool.Get()
+	killConn := ap.connPool.Get()
 	defer killConn.Recycle()
 	sql := []byte(fmt.Sprintf("kill %d", connid))
 	if _, err := killConn.ExecuteFetch(sql, 10000, false); err != nil {
@@ -58,32 +59,32 @@ func (self *ActivePool) kill(connid int64) {
 	}
 }
 
-func (self *ActivePool) Put(id int64) {
-	self.pool.Register(id, id)
+func (ap *ActivePool) Put(id int64) {
+	ap.pool.Register(id, id)
 }
 
-func (self *ActivePool) Remove(id int64) {
-	self.pool.Unregister(id)
+func (ap *ActivePool) Remove(id int64) {
+	ap.pool.Unregister(id)
 }
 
-func (self *ActivePool) Timeout() time.Duration {
-	return time.Duration(atomic.LoadInt64(&self.timeout))
+func (ap *ActivePool) Timeout() time.Duration {
+	return ap.timeout.Get()
 }
 
-func (self *ActivePool) SetTimeout(timeout time.Duration) {
-	atomic.StoreInt64(&self.timeout, int64(timeout))
-	self.ticks.SetInterval(timeout / 10)
+func (ap *ActivePool) SetTimeout(timeout time.Duration) {
+	ap.timeout.Set(timeout)
+	ap.ticks.SetInterval(timeout / 10)
 }
 
-func (self *ActivePool) SetIdleTimeout(idleTimeout time.Duration) {
-	self.connPool.SetIdleTimeout(idleTimeout)
+func (ap *ActivePool) SetIdleTimeout(idleTimeout time.Duration) {
+	ap.connPool.SetIdleTimeout(idleTimeout)
 }
 
-func (self *ActivePool) StatsJSON() string {
-	s, t := self.Stats()
+func (ap *ActivePool) StatsJSON() string {
+	s, t := ap.Stats()
 	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
 }
 
-func (self *ActivePool) Stats() (size int, timeout time.Duration) {
-	return self.pool.Stats(), self.Timeout()
+func (ap *ActivePool) Stats() (size int, timeout time.Duration) {
+	return ap.pool.Stats(), ap.Timeout()
 }

@@ -34,33 +34,33 @@ func NewNumbered() *Numbered {
 // Register starts tracking a resource by the supplied id.
 // It does not lock the object.
 // It returns an error if the id already exists.
-func (self *Numbered) Register(id int64, val interface{}) error {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	if _, ok := self.resources[id]; ok {
+func (nu *Numbered) Register(id int64, val interface{}) error {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	if _, ok := nu.resources[id]; ok {
 		return errors.New("already present")
 	}
-	self.resources[id] = &numberedWrapper{val, false, time.Now()}
+	nu.resources[id] = &numberedWrapper{val, false, time.Now()}
 	return nil
 }
 
 // Unregiester forgets the specified resource.
 // If the resource is not present, it's ignored.
-func (self *Numbered) Unregister(id int64) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	delete(self.resources, id)
-	if len(self.resources) == 0 {
-		self.empty.Broadcast()
+func (nu *Numbered) Unregister(id int64) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	delete(nu.resources, id)
+	if len(nu.resources) == 0 {
+		nu.empty.Broadcast()
 	}
 }
 
 // Get locks the resource for use. If it cannot be found or
 // is already in use, it returns an error.
-func (self *Numbered) Get(id int64) (val interface{}, err error) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	nw, ok := self.resources[id]
+func (nu *Numbered) Get(id int64) (val interface{}, err error) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	nw, ok := nu.resources[id]
 	if !ok {
 		return nil, errors.New("not found")
 	}
@@ -72,21 +72,21 @@ func (self *Numbered) Get(id int64) (val interface{}, err error) {
 }
 
 // Put unlocks a resource for someone else to use.
-func (self *Numbered) Put(id int64) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	if nw, ok := self.resources[id]; ok {
+func (nu *Numbered) Put(id int64) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	if nw, ok := nu.resources[id]; ok {
 		nw.inUse = false
 	}
 }
 
 // GetTimedout returns a list of timedout resources, and locks them.
 // It does not return any resources that are already locked.
-func (self *Numbered) GetTimedout(timeout time.Duration) (vals []interface{}) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+func (nu *Numbered) GetTimedout(timeout time.Duration) (vals []interface{}) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
 	now := time.Now()
-	for _, nw := range self.resources {
+	for _, nw := range nu.resources {
 		if nw.inUse {
 			continue
 		}
@@ -99,21 +99,21 @@ func (self *Numbered) GetTimedout(timeout time.Duration) (vals []interface{}) {
 }
 
 // WaitForEmpty returns as soon as the pool becomes empty
-func (self *Numbered) WaitForEmpty() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	for len(self.resources) != 0 {
-		self.empty.Wait()
+func (nu *Numbered) WaitForEmpty() {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	for len(nu.resources) != 0 {
+		nu.empty.Wait()
 	}
 }
 
-func (self *Numbered) StatsJSON() string {
-	s := self.Stats()
+func (nu *Numbered) StatsJSON() string {
+	s := nu.Stats()
 	return fmt.Sprintf("{\"Size\": %v}", s)
 }
 
-func (self *Numbered) Stats() (size int) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	return len(self.resources)
+func (nu *Numbered) Stats() (size int) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	return len(nu.resources)
 }

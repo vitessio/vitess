@@ -23,6 +23,20 @@ func (i *AtomicInt32) Get() int32 {
 	return atomic.LoadInt32((*int32)(i))
 }
 
+type AtomicUint32 uint32
+
+func (i *AtomicUint32) Add(n uint32) uint32 {
+	return atomic.AddUint32((*uint32)(i), n)
+}
+
+func (i *AtomicUint32) Set(n uint32) {
+	atomic.StoreUint32((*uint32)(i), n)
+}
+
+func (i *AtomicUint32) Get() uint32 {
+	return atomic.LoadUint32((*uint32)(i))
+}
+
 type AtomicInt64 int64
 
 func (i *AtomicInt64) Add(n int64) int64 {

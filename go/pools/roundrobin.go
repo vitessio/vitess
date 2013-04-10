@@ -59,134 +59,134 @@ func NewRoundRobin(capacity int, idleTimeout time.Duration) *RoundRobin {
 }
 
 // Open starts allowing the creation of resources
-func (self *RoundRobin) Open(factory Factory) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.factory = factory
+func (rr *RoundRobin) Open(factory Factory) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	rr.factory = factory
 }
 
 // Close empties the pool calling Close on all its resources.
 // It waits for all resources to be returned (Put).
-func (self *RoundRobin) Close() {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	for self.size > 0 {
+func (rr *RoundRobin) Close() {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	for rr.size > 0 {
 		select {
-		case fw := <-self.resources:
+		case fw := <-rr.resources:
 			go fw.resource.Close()
-			self.size--
+			rr.size--
 		default:
-			self.available.Wait()
+			rr.available.Wait()
 		}
 	}
-	self.factory = nil
+	rr.factory = nil
 }
 
-func (self *RoundRobin) IsClosed() bool {
-	return self.factory == nil
+func (rr *RoundRobin) IsClosed() bool {
+	return rr.factory == nil
 }
 
 // Get will return the next available resource. If none is available, and capacity
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will indefinitely wait till the next resource becomes available.
-func (self *RoundRobin) Get() (resource Resource, err error) {
-	return self.get(true)
+func (rr *RoundRobin) Get() (resource Resource, err error) {
+	return rr.get(true)
 }
 
 // TryGet will return the next available resource. If none is available, and capacity
 // has not been reached, it will create a new one using the factory. Otherwise,
 // it will return nil with no error.
-func (self *RoundRobin) TryGet() (resource Resource, err error) {
-	return self.get(false)
+func (rr *RoundRobin) TryGet() (resource Resource, err error) {
+	return rr.get(false)
 }
 
-func (self *RoundRobin) get(wait bool) (resource Resource, err error) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+func (rr *RoundRobin) get(wait bool) (resource Resource, err error) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
 	// Any waits in this loop will release the lock, and it will be
 	// reacquired before the waits return.
 	for {
 		select {
-		case fw := <-self.resources:
+		case fw := <-rr.resources:
 			// Found a free resource in the channel
-			if self.idleTimeout > 0 && fw.timeUsed.Add(self.idleTimeout).Sub(time.Now()) < 0 {
+			if rr.idleTimeout > 0 && fw.timeUsed.Add(rr.idleTimeout).Sub(time.Now()) < 0 {
 				// resource has been idle for too long. Discard & go for next.
 				go fw.resource.Close()
-				self.size--
+				rr.size--
 				// Nobody else should be waiting, but signal anyway.
-				self.available.Signal()
+				rr.available.Signal()
 				continue
 			}
 			return fw.resource, nil
 		default:
 			// resource channel is empty
-			if self.size >= int64(cap(self.resources)) {
+			if rr.size >= int64(cap(rr.resources)) {
 				// The pool is full
 				if wait {
 					start := time.Now()
-					self.available.Wait()
-					self.recordWait(start)
+					rr.available.Wait()
+					rr.recordWait(start)
 					continue
 				}
 				return nil, nil
 			}
 			// Pool is not full. Create a resource.
-			if resource, err = self.waitForCreate(); err != nil {
+			if resource, err = rr.waitForCreate(); err != nil {
 				// size was decremented, and somebody could be waiting.
-				self.available.Signal()
+				rr.available.Signal()
 				return nil, err
 			}
 			// Creation successful. Account for this by incrementing size.
-			self.size++
+			rr.size++
 			return resource, err
 		}
 	}
 	panic("unreachable")
 }
 
-func (self *RoundRobin) recordWait(start time.Time) {
-	self.waitCount++
-	self.waitTime += time.Now().Sub(start)
+func (rr *RoundRobin) recordWait(start time.Time) {
+	rr.waitCount++
+	rr.waitTime += time.Now().Sub(start)
 }
 
-func (self *RoundRobin) waitForCreate() (resource Resource, err error) {
+func (rr *RoundRobin) waitForCreate() (resource Resource, err error) {
 	// Prevent thundering herd: increment size before creating resource, and decrement after.
-	self.size++
-	self.mu.Unlock()
+	rr.size++
+	rr.mu.Unlock()
 	defer func() {
-		self.mu.Lock()
-		self.size--
+		rr.mu.Lock()
+		rr.size--
 	}()
-	return self.factory()
+	return rr.factory()
 }
 
 // Put will return a resource to the pool. You MUST return every resource to the pool,
 // even if it's closed. If a resource is closed, Put will discard it. Thread synchronization
 // between Close() and IsClosed() is the caller's responsibility.
-func (self *RoundRobin) Put(resource Resource) {
-	self.mu.Lock()
-	defer self.available.Signal()
-	defer self.mu.Unlock()
+func (rr *RoundRobin) Put(resource Resource) {
+	rr.mu.Lock()
+	defer rr.available.Signal()
+	defer rr.mu.Unlock()
 
-	if self.size > int64(cap(self.resources)) {
+	if rr.size > int64(cap(rr.resources)) {
 		go resource.Close()
-		self.size--
+		rr.size--
 	} else if resource.IsClosed() {
-		self.size--
+		rr.size--
 	} else {
-		if len(self.resources) == cap(self.resources) {
+		if len(rr.resources) == cap(rr.resources) {
 			panic("unexpected")
 		}
-		self.resources <- fifoWrapper{resource, time.Now()}
+		rr.resources <- fifoWrapper{resource, time.Now()}
 	}
 }
 
 // Set capacity changes the capacity of the pool.
 // You can use it to expand or shrink.
-func (self *RoundRobin) SetCapacity(capacity int) {
-	self.mu.Lock()
-	defer self.available.Broadcast()
-	defer self.mu.Unlock()
+func (rr *RoundRobin) SetCapacity(capacity int) {
+	rr.mu.Lock()
+	defer rr.available.Broadcast()
+	defer rr.mu.Unlock()
 
 	nr := make(chan fifoWrapper, capacity)
 	// This loop transfers resources from the old channel
@@ -194,34 +194,34 @@ func (self *RoundRobin) SetCapacity(capacity int) {
 	// It discards extras, if any.
 	for {
 		select {
-		case fw := <-self.resources:
+		case fw := <-rr.resources:
 			if len(nr) < cap(nr) {
 				nr <- fw
 			} else {
 				go fw.resource.Close()
-				self.size--
+				rr.size--
 			}
 			continue
 		default:
 		}
 		break
 	}
-	self.resources = nr
+	rr.resources = nr
 }
 
-func (self *RoundRobin) SetIdleTimeout(idleTimeout time.Duration) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	self.idleTimeout = idleTimeout
+func (rr *RoundRobin) SetIdleTimeout(idleTimeout time.Duration) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	rr.idleTimeout = idleTimeout
 }
 
-func (self *RoundRobin) StatsJSON() string {
-	s, c, a, wc, wt, it := self.Stats()
+func (rr *RoundRobin) StatsJSON() string {
+	s, c, a, wc, wt, it := rr.Stats()
 	return fmt.Sprintf("{\"Size\": %v, \"Capacity\": %v, \"Available\": %v, \"WaitCount\": %v, \"WaitTime\": %v, \"IdleTimeout\": %v}", s, c, a, wc, int64(wt), int64(it))
 }
 
-func (self *RoundRobin) Stats() (size, capacity, available, waitCount int64, waitTime, idleTimeout time.Duration) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	return self.size, int64(cap(self.resources)), int64(len(self.resources)), self.waitCount, self.waitTime, self.idleTimeout
+func (rr *RoundRobin) Stats() (size, capacity, available, waitCount int64, waitTime, idleTimeout time.Duration) {
+	rr.mu.Lock()
+	defer rr.mu.Unlock()
+	return rr.size, int64(cap(rr.resources)), int64(len(rr.resources)), rr.waitCount, rr.waitTime, rr.idleTimeout
 }

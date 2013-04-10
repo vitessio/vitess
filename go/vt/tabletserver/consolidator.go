@@ -5,13 +5,14 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/cache"
-	"code.google.com/p/vitess/go/mysql/proto"
 	"fmt"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"code.google.com/p/vitess/go/cache"
+	"code.google.com/p/vitess/go/mysql/proto"
 )
 
 var (
@@ -25,9 +26,9 @@ type Consolidator struct {
 }
 
 func NewConsolidator() *Consolidator {
-	self := &Consolidator{queries: make(map[string]*Result), consolidations: cache.NewLRUCache(1000)}
-	http.Handle("/debug/consolidations", self)
-	return self
+	co := &Consolidator{queries: make(map[string]*Result), consolidations: cache.NewLRUCache(1000)}
+	http.Handle("/debug/consolidations", co)
+	return co
 }
 
 type Result struct {
@@ -38,22 +39,22 @@ type Result struct {
 	Err          error
 }
 
-func (self *Consolidator) Create(sql string) (r *Result, created bool) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-	if r, ok := self.queries[sql]; ok {
+func (co *Consolidator) Create(sql string) (r *Result, created bool) {
+	co.mu.Lock()
+	defer co.mu.Unlock()
+	if r, ok := co.queries[sql]; ok {
 		return r, false
 	}
 	// Preset the error. If there was an unexpected panic during the main
 	// query, then all those who waited will return the waitError.
-	r = &Result{consolidator: self, sql: sql, Err: waitError}
+	r = &Result{consolidator: co, sql: sql, Err: waitError}
 	r.executing.Lock()
-	self.queries[sql] = r
+	co.queries[sql] = r
 	return r, true
 }
 
-func (self *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	items := self.consolidations.Items()
+func (co *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+	items := co.consolidations.Items()
 	response.Header().Set("Content-Type", "text/plain")
 	if items == nil {
 		response.Write([]byte("empty\n"))
@@ -61,34 +62,46 @@ func (self *Consolidator) ServeHTTP(response http.ResponseWriter, request *http.
 	}
 	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
 	for _, v := range items {
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", *(v.Value.(*ccount)), v.Key)))
+		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Value.(*ccount).Get(), v.Key)))
 	}
 }
 
-func (self *Consolidator) record(sql string) {
-	if v, ok := self.consolidations.Get(sql); ok {
-		atomic.AddInt64((*int64)(v.(*ccount)), 1)
+func (co *Consolidator) record(sql string) {
+	if v, ok := co.consolidations.Get(sql); ok {
+		v.(*ccount).Add(1)
 	} else {
 		c := ccount(1)
-		self.consolidations.Set(sql, &c)
+		co.consolidations.Set(sql, &c)
 	}
 }
 
-func (self *Result) Broadcast() {
-	self.consolidator.mu.Lock()
-	defer self.consolidator.mu.Unlock()
-	delete(self.consolidator.queries, self.sql)
-	self.executing.Unlock()
+func (rs *Result) Broadcast() {
+	rs.consolidator.mu.Lock()
+	defer rs.consolidator.mu.Unlock()
+	delete(rs.consolidator.queries, rs.sql)
+	rs.executing.Unlock()
 }
 
-func (self *Result) Wait() {
-	self.consolidator.record(self.sql)
+func (rs *Result) Wait() {
+	rs.consolidator.record(rs.sql)
 	defer waitStats.Record("Consolidations", time.Now())
-	self.executing.RLock()
+	rs.executing.RLock()
 }
 
 type ccount int64
 
-func (self *ccount) Size() int {
+func (cc *ccount) Size() int {
 	return 1
+}
+
+func (cc *ccount) Add(n int64) int64 {
+	return atomic.AddInt64((*int64)(cc), n)
+}
+
+func (cc *ccount) Set(n int64) {
+	atomic.StoreInt64((*int64)(cc), n)
+}
+
+func (cc *ccount) Get() int64 {
+	return atomic.LoadInt64((*int64)(cc))
 }

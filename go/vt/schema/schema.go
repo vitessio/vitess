@@ -43,33 +43,33 @@ func NewTable(name string) *Table {
 	}
 }
 
-func (self *Table) AddColumn(name string, columnType string, defval sqltypes.Value, extra string) {
-	index := len(self.Columns)
-	self.Columns = append(self.Columns, TableColumn{Name: name})
+func (ta *Table) AddColumn(name string, columnType string, defval sqltypes.Value, extra string) {
+	index := len(ta.Columns)
+	ta.Columns = append(ta.Columns, TableColumn{Name: name})
 	if strings.Contains(columnType, "int") {
-		self.Columns[index].Category = CAT_NUMBER
+		ta.Columns[index].Category = CAT_NUMBER
 	} else if strings.HasPrefix(columnType, "varbinary") {
-		self.Columns[index].Category = CAT_VARBINARY
+		ta.Columns[index].Category = CAT_VARBINARY
 	} else {
-		self.Columns[index].Category = CAT_OTHER
+		ta.Columns[index].Category = CAT_OTHER
 	}
 	if extra == "auto_increment" {
-		self.Columns[index].IsAuto = true
+		ta.Columns[index].IsAuto = true
 		// Ignore default value, if any
 		return
 	}
 	if defval.IsNull() {
 		return
 	}
-	if self.Columns[index].Category == CAT_NUMBER {
-		self.Columns[index].Default = sqltypes.MakeNumeric(defval.Raw())
+	if ta.Columns[index].Category == CAT_NUMBER {
+		ta.Columns[index].Default = sqltypes.MakeNumeric(defval.Raw())
 	} else {
-		self.Columns[index].Default = sqltypes.MakeString(defval.Raw())
+		ta.Columns[index].Default = sqltypes.MakeString(defval.Raw())
 	}
 }
 
-func (self *Table) FindColumn(name string) int {
-	for i, col := range self.Columns {
+func (ta *Table) FindColumn(name string) int {
+	for i, col := range ta.Columns {
 		if col.Name == name {
 			return i
 		}
@@ -77,13 +77,13 @@ func (self *Table) FindColumn(name string) int {
 	return -1
 }
 
-func (self *Table) GetPKColumn(index int) *TableColumn {
-	return &self.Columns[self.PKColumns[index]]
+func (ta *Table) GetPKColumn(index int) *TableColumn {
+	return &ta.Columns[ta.PKColumns[index]]
 }
 
-func (self *Table) AddIndex(name string) (index *Index) {
+func (ta *Table) AddIndex(name string) (index *Index) {
 	index = NewIndex(name)
-	self.Indexes = append(self.Indexes, index)
+	ta.Indexes = append(ta.Indexes, index)
 	return index
 }
 
@@ -98,16 +98,16 @@ func NewIndex(name string) *Index {
 	return &Index{name, make([]string, 0, 8), make([]uint64, 0, 8), nil}
 }
 
-func (self *Index) AddColumn(name string, cardinality uint64) {
-	self.Columns = append(self.Columns, name)
+func (idx *Index) AddColumn(name string, cardinality uint64) {
+	idx.Columns = append(idx.Columns, name)
 	if cardinality == 0 {
-		cardinality = uint64(len(self.Cardinality) + 1)
+		cardinality = uint64(len(idx.Cardinality) + 1)
 	}
-	self.Cardinality = append(self.Cardinality, cardinality)
+	idx.Cardinality = append(idx.Cardinality, cardinality)
 }
 
-func (self *Index) FindColumn(name string) int {
-	for i, colName := range self.Columns {
+func (idx *Index) FindColumn(name string) int {
+	for i, colName := range idx.Columns {
 		if name == colName {
 			return i
 		}
@@ -115,8 +115,8 @@ func (self *Index) FindColumn(name string) int {
 	return -1
 }
 
-func (self *Index) FindDataColumn(name string) int {
-	for i, colName := range self.DataColumns {
+func (idx *Index) FindDataColumn(name string) int {
+	for i, colName := range idx.DataColumns {
 		if name == colName {
 			return i
 		}

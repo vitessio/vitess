@@ -7,10 +7,10 @@ package tabletserver
 import (
 	"fmt"
 	"sync"
-	"sync/atomic"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -24,7 +24,7 @@ const (
 
 type InvalidationProcessor struct {
 	currentPosition string
-	state           uint32
+	state           sync2.AtomicUint32
 	stateLock       sync.Mutex
 	inTxn           bool
 	dmlBuffer       []*proto.DmlType
@@ -65,10 +65,10 @@ func StartRowCacheInvalidation() {
 
 	CacheInvalidationProcessor.stateLock.Lock()
 	if shouldInvalidatorRun() {
-		atomic.StoreUint32(&CacheInvalidationProcessor.state, ENABLED)
+		CacheInvalidationProcessor.state.Set(ENABLED)
 		CacheInvalidationProcessor.stateLock.Unlock()
 	} else {
-		atomic.StoreUint32(&CacheInvalidationProcessor.state, DISABLED)
+		CacheInvalidationProcessor.state.Set(DISABLED)
 		CacheInvalidationProcessor.stateLock.Unlock()
 		return
 	}
@@ -82,7 +82,7 @@ func StopRowCacheInvalidation() {
 
 func (rowCache *InvalidationProcessor) stopRowCacheInvalidation() {
 	rowCache.stateLock.Lock()
-	atomic.StoreUint32(&rowCache.state, DISABLED)
+	rowCache.state.Set(DISABLED)
 	rowCache.stateLock.Unlock()
 }
 
@@ -95,7 +95,7 @@ func shouldInvalidatorRun() bool {
 }
 
 func (rowCache *InvalidationProcessor) isServiceEnabled() bool {
-	return atomic.LoadUint32(&rowCache.state) == ENABLED
+	return rowCache.state.Get() == ENABLED
 }
 
 func (rowCache *InvalidationProcessor) invalidateEvent(response interface{}) error {

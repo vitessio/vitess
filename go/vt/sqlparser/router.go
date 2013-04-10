@@ -75,26 +75,26 @@ func shardListFromPlan(plan *RoutingPlan, bindVariables map[string]interface{}, 
 	return makeList(0, len(tabletKeys))
 }
 
-func (self *Node) getRoutingPlan() (plan *RoutingPlan) {
+func (node *Node) getRoutingPlan() (plan *RoutingPlan) {
 	plan = &RoutingPlan{}
-	if self.Type == INSERT {
-		if self.At(INSERT_VALUES_OFFSET).Type == VALUES {
+	if node.Type == INSERT {
+		if node.At(INSERT_VALUES_OFFSET).Type == VALUES {
 			plan.routingType = ROUTE_BY_VALUE
-			plan.criteria = self.At(INSERT_VALUES_OFFSET).At(0).routingAnalyzeValues()
+			plan.criteria = node.At(INSERT_VALUES_OFFSET).At(0).routingAnalyzeValues()
 			return plan
 		} else { // SELECT, let us recurse
-			return self.At(INSERT_VALUES_OFFSET).getRoutingPlan()
+			return node.At(INSERT_VALUES_OFFSET).getRoutingPlan()
 		}
 	}
 	var where *Node
 	plan.routingType = ROUTE_BY_CONDITION
-	switch self.Type {
+	switch node.Type {
 	case SELECT:
-		where = self.At(SELECT_WHERE_OFFSET)
+		where = node.At(SELECT_WHERE_OFFSET)
 	case UPDATE:
-		where = self.At(UPDATE_WHERE_OFFSET)
+		where = node.At(UPDATE_WHERE_OFFSET)
 	case DELETE:
-		where = self.At(DELETE_WHERE_OFFSET)
+		where = node.At(DELETE_WHERE_OFFSET)
 	}
 	if where != nil && where.Len() > 0 {
 		plan.criteria = where.At(0).routingAnalyzeBoolean()
@@ -102,23 +102,23 @@ func (self *Node) getRoutingPlan() (plan *RoutingPlan) {
 	return plan
 }
 
-func (self *Node) routingAnalyzeValues() *Node {
+func (node *Node) routingAnalyzeValues() *Node {
 	// Analyze first value of every item in the list
-	for i := 0; i < self.Len(); i++ {
-		value_expression_list := self.At(i).At(0)
+	for i := 0; i < node.Len(); i++ {
+		value_expression_list := node.At(i).At(0)
 		result := value_expression_list.At(0).routingAnalyzeValue()
 		if result != VALUE_NODE {
 			panic(NewParserError("insert is too complex"))
 		}
 	}
-	return self
+	return node
 }
 
-func (self *Node) routingAnalyzeBoolean() *Node {
-	switch self.Type {
+func (node *Node) routingAnalyzeBoolean() *Node {
+	switch node.Type {
 	case AND:
-		left := self.At(0).routingAnalyzeBoolean()
-		right := self.At(1).routingAnalyzeBoolean()
+		left := node.At(0).routingAnalyzeBoolean()
+		right := node.At(1).routingAnalyzeBoolean()
 		if left != nil && right != nil {
 			return nil
 		} else if left != nil {
@@ -127,43 +127,43 @@ func (self *Node) routingAnalyzeBoolean() *Node {
 			return right
 		}
 	case '(':
-		return self.At(0).routingAnalyzeBoolean()
+		return node.At(0).routingAnalyzeBoolean()
 	case '=', '<', '>', LE, GE, NULL_SAFE_EQUAL:
-		left := self.At(0).routingAnalyzeValue()
-		right := self.At(1).routingAnalyzeValue()
+		left := node.At(0).routingAnalyzeValue()
+		right := node.At(1).routingAnalyzeValue()
 		if (left == EID_NODE && right == VALUE_NODE) || (left == VALUE_NODE && right == EID_NODE) {
-			return self
+			return node
 		}
 	case IN:
-		left := self.At(0).routingAnalyzeValue()
-		right := self.At(1).routingAnalyzeValue()
+		left := node.At(0).routingAnalyzeValue()
+		right := node.At(1).routingAnalyzeValue()
 		if left == EID_NODE && right == LIST_NODE {
-			return self
+			return node
 		}
 	case BETWEEN:
-		left := self.At(0).routingAnalyzeValue()
-		right1 := self.At(1).routingAnalyzeValue()
-		right2 := self.At(2).routingAnalyzeValue()
+		left := node.At(0).routingAnalyzeValue()
+		right1 := node.At(1).routingAnalyzeValue()
+		right2 := node.At(2).routingAnalyzeValue()
 		if left == EID_NODE && right1 == VALUE_NODE && right2 == VALUE_NODE {
-			return self
+			return node
 		}
 	}
 	return nil
 }
 
-func (self *Node) routingAnalyzeValue() int {
-	switch self.Type {
+func (node *Node) routingAnalyzeValue() int {
+	switch node.Type {
 	case ID:
-		if string(self.Value) == "entity_id" {
+		if string(node.Value) == "entity_id" {
 			return EID_NODE
 		}
 	case '.':
-		return self.At(1).routingAnalyzeValue()
+		return node.At(1).routingAnalyzeValue()
 	case '(':
-		return self.At(0).routingAnalyzeValue()
+		return node.At(0).routingAnalyzeValue()
 	case NODE_LIST:
-		for i := 0; i < self.Len(); i++ {
-			if self.At(i).routingAnalyzeValue() != VALUE_NODE {
+		for i := 0; i < node.Len(); i++ {
+			if node.At(i).routingAnalyzeValue() != VALUE_NODE {
 				return OTHER_NODE
 			}
 		}
@@ -174,14 +174,14 @@ func (self *Node) routingAnalyzeValue() int {
 	return OTHER_NODE
 }
 
-func (self *Node) findShardList(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) []int {
+func (node *Node) findShardList(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) []int {
 	shardset := make(map[int]bool)
-	switch self.Type {
+	switch node.Type {
 	case '(':
-		return self.At(0).findShardList(bindVariables, tabletKeys)
+		return node.At(0).findShardList(bindVariables, tabletKeys)
 	case NODE_LIST:
-		for i := 0; i < self.Len(); i++ {
-			index := self.At(i).findShard(bindVariables, tabletKeys)
+		for i := 0; i < node.Len(); i++ {
+			index := node.At(i).findShard(bindVariables, tabletKeys)
 			shardset[index] = true
 		}
 	}
@@ -194,10 +194,10 @@ func (self *Node) findShardList(bindVariables map[string]interface{}, tabletKeys
 	return shardlist
 }
 
-func (self *Node) findInsertShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
+func (node *Node) findInsertShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
 	index := -1
-	for i := 0; i < self.Len(); i++ {
-		first_value_expression := self.At(i).At(0).At(0) // '('->value_expression_list->first_value
+	for i := 0; i < node.Len(); i++ {
+		first_value_expression := node.At(i).At(0).At(0) // '('->value_expression_list->first_value
 		newIndex := first_value_expression.findShard(bindVariables, tabletKeys)
 		if index == -1 {
 			index = newIndex
@@ -208,37 +208,37 @@ func (self *Node) findInsertShard(bindVariables map[string]interface{}, tabletKe
 	return index
 }
 
-func (self *Node) findShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
-	value := self.getBoundValue(bindVariables)
+func (node *Node) findShard(bindVariables map[string]interface{}, tabletKeys []key.KeyspaceId) int {
+	value := node.getBoundValue(bindVariables)
 	return key.FindShardForValue(value, tabletKeys)
 }
 
-func (self *Node) getBoundValue(bindVariables map[string]interface{}) string {
-	switch self.Type {
+func (node *Node) getBoundValue(bindVariables map[string]interface{}) string {
+	switch node.Type {
 	case '(':
-		return self.At(0).getBoundValue(bindVariables)
+		return node.At(0).getBoundValue(bindVariables)
 	case STRING:
-		return string(self.Value)
+		return string(node.Value)
 	case NUMBER:
-		val, err := strconv.ParseInt(string(self.Value), 10, 64)
+		val, err := strconv.ParseInt(string(node.Value), 10, 64)
 		if err != nil {
 			panic(NewParserError("%s", err.Error()))
 		}
 		return key.Uint64Key(val).String()
 	case VALUE_ARG:
-		value := self.findBindValue(bindVariables)
+		value := node.findBindValue(bindVariables)
 		return key.EncodeValue(value)
 	}
 	panic("Unexpected token")
 }
 
-func (self *Node) findBindValue(bindVariables map[string]interface{}) interface{} {
+func (node *Node) findBindValue(bindVariables map[string]interface{}) interface{} {
 	if bindVariables == nil {
-		panic(NewParserError("No bind variable for " + string(self.Value)))
+		panic(NewParserError("No bind variable for " + string(node.Value)))
 	}
-	value, ok := bindVariables[string(self.Value[1:])]
+	value, ok := bindVariables[string(node.Value[1:])]
 	if !ok {
-		panic(NewParserError("No bind variable for " + string(self.Value)))
+		panic(NewParserError("No bind variable for " + string(node.Value)))
 	}
 	return value
 }

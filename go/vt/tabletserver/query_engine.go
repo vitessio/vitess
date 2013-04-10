@@ -6,13 +6,13 @@ package tabletserver
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
@@ -41,8 +41,8 @@ type QueryEngine struct {
 	activePool     *ActivePool
 	consolidator   *Consolidator
 
-	maxResultSize    int32 // Use atomic
-	streamBufferSize int32 // Use atomic
+	maxResultSize    sync2.AtomicInt32
+	streamBufferSize sync2.AtomicInt32
 }
 
 type CompiledPlan struct {
@@ -78,8 +78,8 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.activeTxPool = NewActiveTxPool(time.Duration(config.TransactionTimeout * 1e9))
 	qe.activePool = NewActivePool(time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
-	qe.maxResultSize = int32(config.MaxResultSize)
-	qe.streamBufferSize = int32(config.StreamBufferSize)
+	qe.maxResultSize = sync2.AtomicInt32(config.MaxResultSize)
+	qe.streamBufferSize = sync2.AtomicInt32(config.StreamBufferSize)
 	queryStats = stats.NewTimings("Queries")
 	stats.NewRates("QPS", queryStats, 15, 60e9)
 	waitStats = stats.NewTimings("Waits")
@@ -165,7 +165,7 @@ func (qe *QueryEngine) invalidateRows(logStats *sqlQueryStats, dirtyTables map[s
 			invalidations++
 		}
 		logStats.CacheInvalidations += invalidations
-		atomic.AddInt64(&tableInfo.invalidations, invalidations)
+		tableInfo.invalidations.Add(invalidations)
 	}
 }
 
@@ -354,7 +354,7 @@ func (qe *QueryEngine) Invalidate(cacheInvalidate *proto.CacheInvalidate) {
 			}
 			invalidations++
 		}
-		atomic.AddInt64(&tableInfo.invalidations, invalidations)
+		tableInfo.invalidations.Add(invalidations)
 	}
 	qe.adminCache.Set(ROWCACHE_INVALIDATION_POSITION, 0, 0, []byte(cacheInvalidate.Position))
 }
@@ -463,9 +463,9 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 
 	logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
 
-	atomic.AddInt64(&tableInfo.hits, hits)
-	atomic.AddInt64(&tableInfo.absent, absent)
-	atomic.AddInt64(&tableInfo.misses, misses)
+	tableInfo.hits.Add(hits)
+	tableInfo.absent.Add(absent)
+	tableInfo.misses.Add(misses)
 	result.RowsAffected = uint64(len(rows))
 	result.Rows = rows
 	return result
@@ -621,14 +621,14 @@ func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, pla
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
-		atomic.StoreInt32(&qe.maxResultSize, val)
+		qe.maxResultSize.Set(val)
 		return &mproto.QueryResult{}
 	case "vt_stream_buffer_size":
 		val := int32(plan.SetValue.(float64))
 		if val < 1024 {
 			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
 		}
-		atomic.StoreInt32(&qe.streamBufferSize, val)
+		qe.streamBufferSize.Set(val)
 		return &mproto.QueryResult{}
 	case "vt_query_timeout":
 		qe.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
@@ -693,7 +693,7 @@ func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnect
 }
 
 func (qe *QueryEngine) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) []byte {
-	bindVars[MAX_RESULT_NAME] = atomic.LoadInt32(&qe.maxResultSize) + 1
+	bindVars[MAX_RESULT_NAME] = qe.maxResultSize.Get() + 1
 	sql, err := parsed_query.GenerateQuery(bindVars, listVars)
 	if err != nil {
 		panic(NewTabletError(FAIL, "%s", err))
@@ -719,7 +719,7 @@ func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, 
 	// conn.ExecuteFetch because that would require changing the
 	// PoolConnection interface. Same applies to executeStreamSql.
 	fetchStart := time.Now()
-	result, err := conn.ExecuteFetch(sql, int(atomic.LoadInt32(&qe.maxResultSize)), wantfields)
+	result, err := conn.ExecuteFetch(sql, int(qe.maxResultSize.Get()), wantfields)
 	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
 
 	if err != nil {
@@ -733,7 +733,7 @@ func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnec
 	logStats.NumberOfQueries += 1
 	logStats.AddRewrittenSql(sql)
 	fetchStart := time.Now()
-	err := conn.ExecuteStreamFetch(sql, callback, int(atomic.LoadInt32(&qe.streamBufferSize)))
+	err := conn.ExecuteStreamFetch(sql, callback, int(qe.streamBufferSize.Get()))
 	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
 	if err != nil {
 		return NewTabletErrorSql(FAIL, err)

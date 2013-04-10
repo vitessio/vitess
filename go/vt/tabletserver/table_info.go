@@ -12,10 +12,10 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync/atomic"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/schema"
 )
 
@@ -23,43 +23,43 @@ type TableInfo struct {
 	*schema.Table
 	Cache *RowCache
 	// stats updated by sqlquery.go
-	hits, absent, misses, invalidations int64
+	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
-func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) (self *TableInfo) {
+func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) (ti *TableInfo) {
 	if tableName == "dual" {
 		return &TableInfo{Table: schema.NewTable(tableName)}
 	}
-	self = loadTableInfo(conn, tableName)
-	self.initRowCache(conn, tableType, createTime, comment, cachePool, hashRegistry)
-	return self
+	ti = loadTableInfo(conn, tableName)
+	ti.initRowCache(conn, tableType, createTime, comment, cachePool, hashRegistry)
+	return ti
 }
 
-func loadTableInfo(conn PoolConnection, tableName string) (self *TableInfo) {
-	self = &TableInfo{Table: schema.NewTable(tableName)}
-	if !self.fetchColumns(conn) {
+func loadTableInfo(conn PoolConnection, tableName string) (ti *TableInfo) {
+	ti = &TableInfo{Table: schema.NewTable(tableName)}
+	if !ti.fetchColumns(conn) {
 		return nil
 	}
-	if !self.fetchIndexes(conn) {
+	if !ti.fetchIndexes(conn) {
 		return nil
 	}
-	return self
+	return ti
 }
 
-func (self *TableInfo) fetchColumns(conn PoolConnection) bool {
-	columns, err := conn.ExecuteFetch([]byte(fmt.Sprintf("describe %s", self.Name)), 10000, false)
+func (ti *TableInfo) fetchColumns(conn PoolConnection) bool {
+	columns, err := conn.ExecuteFetch([]byte(fmt.Sprintf("describe %s", ti.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
 		return false
 	}
 	for _, row := range columns.Rows {
-		self.AddColumn(row[0].String(), row[1].String(), row[4], row[5].String())
+		ti.AddColumn(row[0].String(), row[1].String(), row[4], row[5].String())
 	}
 	return true
 }
 
-func (self *TableInfo) fetchIndexes(conn PoolConnection) bool {
-	indexes, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show index from %s", self.Name)), 10000, false)
+func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
+	indexes, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show index from %s", ti.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
 		return false
@@ -69,7 +69,7 @@ func (self *TableInfo) fetchIndexes(conn PoolConnection) bool {
 	for _, row := range indexes.Rows {
 		indexName := row[2].String()
 		if currentName != indexName {
-			currentIndex = self.AddIndex(indexName)
+			currentIndex = ti.AddIndex(indexName)
 			currentName = indexName
 		}
 		var cardinality uint64
@@ -81,71 +81,71 @@ func (self *TableInfo) fetchIndexes(conn PoolConnection) bool {
 		}
 		currentIndex.AddColumn(row[4].String(), cardinality)
 	}
-	if len(self.Indexes) == 0 {
+	if len(ti.Indexes) == 0 {
 		return true
 	}
-	pkIndex := self.Indexes[0]
+	pkIndex := ti.Indexes[0]
 	if pkIndex.Name != "PRIMARY" {
 		return true
 	}
-	self.PKColumns = make([]int, len(pkIndex.Columns))
+	ti.PKColumns = make([]int, len(pkIndex.Columns))
 	for i, pkCol := range pkIndex.Columns {
-		self.PKColumns[i] = self.FindColumn(pkCol)
+		ti.PKColumns[i] = ti.FindColumn(pkCol)
 	}
 	// Primary key contains all table columns
-	for _, col := range self.Columns {
+	for _, col := range ti.Columns {
 		pkIndex.DataColumns = append(pkIndex.DataColumns, col.Name)
 	}
 	// Secondary indices contain all primary key columns
-	for i := 1; i < len(self.Indexes); i++ {
-		self.Indexes[i].DataColumns = pkIndex.Columns
+	for i := 1; i < len(ti.Indexes); i++ {
+		ti.Indexes[i].DataColumns = pkIndex.Columns
 	}
 	return true
 }
 
-func (self *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) {
+func (ti *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) {
 	if cachePool.IsClosed() {
 		return
 	}
 
 	if strings.Contains(comment, "vtocc_nocache") {
-		relog.Info("%s commented as vtocc_nocache. Will not be cached.", self.Name)
+		relog.Info("%s commented as vtocc_nocache. Will not be cached.", ti.Name)
 		return
 	}
 
 	if tableType == "VIEW" {
-		relog.Info("%s is a view. Will not be cached.", self.Name)
+		relog.Info("%s is a view. Will not be cached.", ti.Name)
 		return
 	}
 
-	if self.PKColumns == nil {
-		relog.Info("Table %s has no primary key. Will not be cached.", self.Name)
+	if ti.PKColumns == nil {
+		relog.Info("Table %s has no primary key. Will not be cached.", ti.Name)
 		return
 	}
-	for _, col := range self.PKColumns {
-		if self.Columns[col].Category == schema.CAT_OTHER {
-			relog.Info("Table %s pk has unsupported column types. Will not be cached.", self.Name)
+	for _, col := range ti.PKColumns {
+		if ti.Columns[col].Category == schema.CAT_OTHER {
+			relog.Info("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
 			return
 		}
 	}
 
-	thash := self.computePrefix(conn, createTime, hashRegistry)
+	thash := ti.computePrefix(conn, createTime, hashRegistry)
 	if thash == "" {
 		return
 	}
 
-	self.CacheType = 1
-	self.Cache = NewRowCache(self, thash, cachePool)
+	ti.CacheType = 1
+	ti.Cache = NewRowCache(ti, thash, cachePool)
 }
 
 var autoIncr = regexp.MustCompile("auto_increment=\\d+")
 
-func (self *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Value, hashRegistry map[string]string) string {
+func (ti *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Value, hashRegistry map[string]string) string {
 	if createTime.IsNull() {
-		relog.Warning("%s has no time stamp. Will not be cached.", self.Name)
+		relog.Warning("%s has no time stamp. Will not be cached.", ti.Name)
 		return ""
 	}
-	createTable, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show create table %s", self.Name)), 10000, false)
+	createTable, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show create table %s", ti.Name)), 10000, false)
 	if err != nil {
 		relog.Warning("Couldnt read table info: %v", err)
 		return ""
@@ -155,23 +155,23 @@ func (self *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Va
 	norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
 	thash := base64fnv(norm2 + createTime.String())
 	if _, ok := hashRegistry[thash]; ok {
-		relog.Warning("Hash collision for %s (schema revert?). Will not be cached", self.Name)
+		relog.Warning("Hash collision for %s (schema revert?). Will not be cached", ti.Name)
 		return ""
 	}
-	hashRegistry[thash] = self.Name
+	hashRegistry[thash] = ti.Name
 	return thash
 }
 
-func (self *TableInfo) StatsJSON() string {
-	if self.Cache == nil {
+func (ti *TableInfo) StatsJSON() string {
+	if ti.Cache == nil {
 		return fmt.Sprintf("null")
 	}
-	h, a, m, i := self.Stats()
+	h, a, m, i := ti.Stats()
 	return fmt.Sprintf("{\"Hits\": %v, \"Absent\": %v, \"Misses\": %v, \"Invalidations\": %v}", h, a, m, i)
 }
 
-func (self *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
-	return atomic.LoadInt64(&self.hits), atomic.LoadInt64(&self.absent), atomic.LoadInt64(&self.misses), atomic.LoadInt64(&self.invalidations)
+func (ti *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
+	return ti.hits.Get(), ti.absent.Get(), ti.misses.Get(), ti.invalidations.Get()
 }
 
 func base64fnv(s string) string {

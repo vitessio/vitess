@@ -8,14 +8,15 @@ package main
 
 import (
 	"bufio"
-	"code.google.com/p/vitess/go/bson"
-	"code.google.com/p/vitess/go/vt/sqlparser"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+
+	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/vt/sqlparser"
 )
 
 type NormalizedQuery struct {
@@ -99,17 +100,17 @@ func NormalizeTree(tree *sqlparser.Node) (normalized string, bindVars map[string
 	return tree.String(), bindVars, nil
 }
 
-func NormalizeNode(self *sqlparser.Node, bindVars map[string]interface{}, counter *int) {
-	for i := 0; i < self.Len(); i++ {
-		switch self.At(i).Type {
+func NormalizeNode(node *sqlparser.Node, bindVars map[string]interface{}, counter *int) {
+	for i := 0; i < node.Len(); i++ {
+		switch node.At(i).Type {
 		case sqlparser.STRING:
 			*counter++
-			bindVars[fmt.Sprintf("v%d", *counter)] = string(self.At(i).Value)
-			self.Set(i, newArgumentNode(counter))
+			bindVars[fmt.Sprintf("v%d", *counter)] = string(node.At(i).Value)
+			node.Set(i, newArgumentNode(counter))
 		case sqlparser.NUMBER:
 			*counter++
 			varname := fmt.Sprintf("v%d", *counter)
-			valstr := string(self.At(i).Value)
+			valstr := string(node.At(i).Value)
 			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
 				bindVars[varname] = ival
 			} else if uval, err := strconv.ParseUint(valstr, 0, 64); err == nil {
@@ -119,10 +120,10 @@ func NormalizeNode(self *sqlparser.Node, bindVars map[string]interface{}, counte
 			} else {
 				panic(sqlparser.NewParserError("%v", err))
 			}
-			self.Set(i, newArgumentNode(counter))
+			node.Set(i, newArgumentNode(counter))
 		default:
-			for i := 0; i < self.Len(); i++ {
-				NormalizeNode(self.At(i), bindVars, counter)
+			for i := 0; i < node.Len(); i++ {
+				NormalizeNode(node.At(i), bindVars, counter)
 			}
 		}
 	}

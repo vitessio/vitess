@@ -6,12 +6,12 @@ package tabletserver
 
 import (
 	"fmt"
-	"sync/atomic"
 	"time"
 
 	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/timer"
 )
 
@@ -29,8 +29,8 @@ var (
 
 type ActiveTxPool struct {
 	pool    *pools.Numbered
-	lastId  int64
-	timeout int64
+	lastId  sync2.AtomicInt64
+	timeout sync2.AtomicDuration
 	ticks   *timer.Timer
 	txStats *stats.Timings
 }
@@ -38,33 +38,33 @@ type ActiveTxPool struct {
 func NewActiveTxPool(timeout time.Duration) *ActiveTxPool {
 	return &ActiveTxPool{
 		pool:    pools.NewNumbered(),
-		lastId:  time.Now().UnixNano(),
-		timeout: int64(timeout),
+		lastId:  sync2.AtomicInt64(time.Now().UnixNano()),
+		timeout: sync2.AtomicDuration(timeout),
 		ticks:   timer.NewTimer(timeout / 10),
 		txStats: stats.NewTimings("Transactions"),
 	}
 }
 
-func (self *ActiveTxPool) Open() {
-	relog.Info("Starting transaction id: %d", self.lastId)
-	self.ticks.Start(func() { self.TransactionKiller() })
+func (axp *ActiveTxPool) Open() {
+	relog.Info("Starting transaction id: %d", axp.lastId)
+	axp.ticks.Start(func() { axp.TransactionKiller() })
 }
 
-func (self *ActiveTxPool) Close() {
-	self.ticks.Stop()
-	for _, v := range self.pool.GetTimedout(time.Duration(0)) {
+func (axp *ActiveTxPool) Close() {
+	axp.ticks.Stop()
+	for _, v := range axp.pool.GetTimedout(time.Duration(0)) {
 		conn := v.(*TxConnection)
 		conn.Close()
 		conn.discard()
 	}
 }
 
-func (self *ActiveTxPool) WaitForEmpty() {
-	self.pool.WaitForEmpty()
+func (axp *ActiveTxPool) WaitForEmpty() {
+	axp.pool.WaitForEmpty()
 }
 
-func (self *ActiveTxPool) TransactionKiller() {
-	for _, v := range self.pool.GetTimedout(time.Duration(self.Timeout())) {
+func (axp *ActiveTxPool) TransactionKiller() {
+	for _, v := range axp.pool.GetTimedout(time.Duration(axp.Timeout())) {
 		conn := v.(*TxConnection)
 		relog.Info("killing transaction %d: %#v", conn.transactionId, conn.queries)
 		killStats.Add("Transactions", 1)
@@ -73,31 +73,31 @@ func (self *ActiveTxPool) TransactionKiller() {
 	}
 }
 
-func (self *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
+func (axp *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, err error) {
 	defer handleError(&err, nil)
 	if _, err := conn.ExecuteFetch(BEGIN, 1, false); err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
-	transactionId = atomic.AddInt64(&self.lastId, 1)
-	self.pool.Register(transactionId, newTxConnection(conn, transactionId, self))
+	transactionId = axp.lastId.Add(1)
+	axp.pool.Register(transactionId, newTxConnection(conn, transactionId, axp))
 	return transactionId, nil
 }
 
-func (self *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
+func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
 	defer handleError(&err, nil)
-	conn := self.Get(transactionId)
+	conn := axp.Get(transactionId)
 	defer conn.discard()
-	self.txStats.Add("Completed", time.Now().Sub(conn.startTime))
+	axp.txStats.Add("Completed", time.Now().Sub(conn.startTime))
 	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
 	}
 	return conn.dirtyTables, err
 }
 
-func (self *ActiveTxPool) Rollback(transactionId int64) {
-	conn := self.Get(transactionId)
+func (axp *ActiveTxPool) Rollback(transactionId int64) {
+	conn := axp.Get(transactionId)
 	defer conn.discard()
-	self.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
+	axp.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
 	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
 		conn.Close()
 		panic(NewTabletErrorSql(FAIL, err))
@@ -105,30 +105,30 @@ func (self *ActiveTxPool) Rollback(transactionId int64) {
 }
 
 // You must call Recycle on TxConnection once done.
-func (self *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
-	v, err := self.pool.Get(transactionId)
+func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
+	v, err := axp.pool.Get(transactionId)
 	if err != nil {
 		panic(NewTabletError(FAIL, "Transaction %d: %v", transactionId, err))
 	}
 	return v.(*TxConnection)
 }
 
-func (self *ActiveTxPool) Timeout() time.Duration {
-	return time.Duration(atomic.LoadInt64(&self.timeout))
+func (axp *ActiveTxPool) Timeout() time.Duration {
+	return axp.timeout.Get()
 }
 
-func (self *ActiveTxPool) SetTimeout(timeout time.Duration) {
-	atomic.StoreInt64(&self.timeout, int64(timeout))
-	self.ticks.SetInterval(timeout / 10)
+func (axp *ActiveTxPool) SetTimeout(timeout time.Duration) {
+	axp.timeout.Set(timeout)
+	axp.ticks.SetInterval(timeout / 10)
 }
 
-func (self *ActiveTxPool) StatsJSON() string {
-	s, t := self.Stats()
+func (axp *ActiveTxPool) StatsJSON() string {
+	s, t := axp.Stats()
 	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
 }
 
-func (self *ActiveTxPool) Stats() (size int, timeout time.Duration) {
-	return self.pool.Stats(), self.Timeout()
+func (axp *ActiveTxPool) Stats() (size int, timeout time.Duration) {
+	return axp.pool.Stats(), axp.Timeout()
 }
 
 type TxConnection struct {
@@ -152,36 +152,36 @@ func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPoo
 	}
 }
 
-func (self *TxConnection) DirtyKeys(tableName string) DirtyKeys {
-	if list, ok := self.dirtyTables[tableName]; ok {
+func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
+	if list, ok := txc.dirtyTables[tableName]; ok {
 		return list
 	}
 	list := make(DirtyKeys)
-	self.dirtyTables[tableName] = list
+	txc.dirtyTables[tableName] = list
 	return list
 }
 
-func (self *TxConnection) Recycle() {
-	if self.IsClosed() {
-		self.discard()
+func (txc *TxConnection) Recycle() {
+	if txc.IsClosed() {
+		txc.discard()
 	} else {
-		self.pool.pool.Put(self.transactionId)
+		txc.pool.pool.Put(txc.transactionId)
 	}
 }
 
-func (self *TxConnection) RecordQuery(query string) {
-	self.queries = append(self.queries, query)
+func (txc *TxConnection) RecordQuery(query string) {
+	txc.queries = append(txc.queries, query)
 }
 
-func (self *TxConnection) discard() {
-	self.pool.pool.Unregister(self.transactionId)
-	self.PoolConnection.Recycle()
+func (txc *TxConnection) discard() {
+	txc.pool.pool.Unregister(txc.transactionId)
+	txc.PoolConnection.Recycle()
 }
 
 type DirtyKeys map[string]bool
 
 // Delete just keeps track of what needs to be deleted
-func (self DirtyKeys) Delete(key string) bool {
-	self[key] = true
+func (dk DirtyKeys) Delete(key string) bool {
+	dk[key] = true
 	return true
 }

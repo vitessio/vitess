@@ -17,12 +17,12 @@ type TestResource struct {
 	closed bool
 }
 
-func (self *TestResource) Close() {
-	self.closed = true
+func (tr *TestResource) Close() {
+	tr.closed = true
 }
 
-func (self *TestResource) IsClosed() bool {
-	return self.closed
+func (tr *TestResource) IsClosed() bool {
+	return tr.closed
 }
 
 func PoolFactory() (Resource, error) {

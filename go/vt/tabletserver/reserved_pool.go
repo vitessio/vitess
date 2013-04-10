@@ -5,14 +5,15 @@
 package tabletserver
 
 import (
-	"code.google.com/p/vitess/go/pools"
-	"sync/atomic"
 	"time"
+
+	"code.google.com/p/vitess/go/pools"
+	"code.google.com/p/vitess/go/sync2"
 )
 
 type ReservedPool struct {
 	pool        *pools.Numbered
-	lastId      int64
+	lastId      sync2.AtomicInt64
 	connFactory CreateConnectionFunc
 }
 
@@ -20,50 +21,50 @@ func NewReservedPool() *ReservedPool {
 	return &ReservedPool{pool: pools.NewNumbered(), lastId: 1}
 }
 
-func (self *ReservedPool) Open(connFactory CreateConnectionFunc) {
-	self.connFactory = connFactory
+func (rp *ReservedPool) Open(connFactory CreateConnectionFunc) {
+	rp.connFactory = connFactory
 }
 
-func (self *ReservedPool) Close() {
-	for _, v := range self.pool.GetTimedout(time.Duration(0)) {
+func (rp *ReservedPool) Close() {
+	for _, v := range rp.pool.GetTimedout(time.Duration(0)) {
 		conn := v.(*reservedConnection)
 		conn.Close()
-		self.pool.Unregister(conn.connectionId)
+		rp.pool.Unregister(conn.connectionId)
 	}
 }
 
-func (self *ReservedPool) CreateConnection() (connectionId int64) {
-	conn, err := self.connFactory()
+func (rp *ReservedPool) CreateConnection() (connectionId int64) {
+	conn, err := rp.connFactory()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
-	connectionId = atomic.AddInt64(&self.lastId, 1)
-	rconn := &reservedConnection{DBConnection: conn, connectionId: connectionId, pool: self}
-	self.pool.Register(connectionId, rconn)
+	connectionId = rp.lastId.Add(1)
+	rconn := &reservedConnection{DBConnection: conn, connectionId: connectionId, pool: rp}
+	rp.pool.Register(connectionId, rconn)
 	return connectionId
 }
 
-func (self *ReservedPool) CloseConnection(connectionId int64) {
-	conn := self.Get(connectionId).(*reservedConnection)
+func (rp *ReservedPool) CloseConnection(connectionId int64) {
+	conn := rp.Get(connectionId).(*reservedConnection)
 	conn.Close()
-	self.pool.Unregister(connectionId)
+	rp.pool.Unregister(connectionId)
 }
 
 // You must call Recycle on the PoolConnection once done.
-func (self *ReservedPool) Get(connectionId int64) PoolConnection {
-	v, err := self.pool.Get(connectionId)
+func (rp *ReservedPool) Get(connectionId int64) PoolConnection {
+	v, err := rp.pool.Get(connectionId)
 	if err != nil {
 		panic(NewTabletError(FAIL, "Error getting connection %d: %v", connectionId, err))
 	}
 	return v.(*reservedConnection)
 }
 
-func (self *ReservedPool) StatsJSON() string {
-	return self.pool.StatsJSON()
+func (rp *ReservedPool) StatsJSON() string {
+	return rp.pool.StatsJSON()
 }
 
-func (self *ReservedPool) Stats() (size int) {
-	return self.pool.Stats()
+func (rp *ReservedPool) Stats() (size int) {
+	return rp.pool.Stats()
 }
 
 type reservedConnection struct {
@@ -73,10 +74,10 @@ type reservedConnection struct {
 	inUse        bool
 }
 
-func (self *reservedConnection) Recycle() {
-	if self.IsClosed() {
-		self.pool.pool.Unregister(self.connectionId)
+func (pr *reservedConnection) Recycle() {
+	if pr.IsClosed() {
+		pr.pool.pool.Unregister(pr.connectionId)
 	} else {
-		self.pool.pool.Put(self.connectionId)
+		pr.pool.pool.Put(pr.connectionId)
 	}
 }

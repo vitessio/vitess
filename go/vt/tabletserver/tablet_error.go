@@ -38,26 +38,26 @@ func NewTabletError(errorType int, format string, args ...interface{}) *TabletEr
 }
 
 func NewTabletErrorSql(errorType int, err error) *TabletError {
-	self := NewTabletError(errorType, "%s", err)
+	te := NewTabletError(errorType, "%s", err)
 	if sqlErr, ok := err.(hasNumber); ok {
-		self.SqlError = sqlErr.Number()
+		te.SqlError = sqlErr.Number()
 	}
-	return self
+	return te
 }
 
-func (self *TabletError) Error() string {
+func (te *TabletError) Error() string {
 	format := "error: %s"
-	switch self.ErrorType {
+	switch te.ErrorType {
 	case RETRY:
 		format = "retry: %s"
 	case FATAL:
 		format = "fatal: %s"
 	}
-	return fmt.Sprintf(format, self.Message)
+	return fmt.Sprintf(format, te.Message)
 }
 
-func (self *TabletError) RecordStats() {
-	switch self.ErrorType {
+func (te *TabletError) RecordStats() {
+	switch te.ErrorType {
 	case RETRY:
 		errorStats.Add("Retry", 1)
 	case FATAL:
@@ -65,7 +65,7 @@ func (self *TabletError) RecordStats() {
 	case TX_POOL_FULL:
 		errorStats.Add("TxPoolFull", 1)
 	default:
-		if self.SqlError == DUPLICATE_KEY {
+		if te.SqlError == DUPLICATE_KEY {
 			errorStats.Add("DupKey", 1)
 		} else {
 			errorStats.Add("Fail", 1)

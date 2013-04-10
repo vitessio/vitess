@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
-	"sync/atomic"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/sync2"
 )
 
 var droppedMessages = expvar.NewMap("streamlog-dropped-messages")
@@ -21,10 +21,10 @@ type StreamLogger struct {
 	mu         sync.Mutex
 	// size is used to check if there are any subscriptions. Keep
 	// it atomically in sync with the size of subscribed.
-	size uint32
+	size sync2.AtomicUint32
 	// seq is a guard for modifications of subscribed - increment
 	// it atomically whenever you modify it.
-	seq uint32
+	seq sync2.AtomicUint32
 }
 
 type subscription struct {
@@ -53,8 +53,8 @@ func (logger *StreamLogger) subscribe(w io.Writer, params url.Values) chan bool 
 	defer logger.mu.Unlock()
 
 	logger.subscribed[w] = subscription{done: done, params: params}
-	atomic.AddUint32(&logger.seq, 1)
-	atomic.StoreUint32(&logger.size, uint32(len(logger.subscribed)))
+	logger.seq.Add(1)
+	logger.size.Set(uint32(len(logger.subscribed)))
 	return done
 }
 
@@ -84,13 +84,13 @@ func (logger *StreamLogger) stream() {
 
 	for message := range logger.dataQueue {
 
-		if s := atomic.LoadUint32(&(logger.seq)); s != seq {
+		if s := logger.seq.Get(); s != seq {
 			logger.mu.Lock()
 			subscribed = make(map[io.Writer]subscription, len(logger.subscribed))
 			for w, subscription := range logger.subscribed {
 				subscribed[w] = subscription
 			}
-			seq = atomic.LoadUint32(&(logger.seq))
+			seq = logger.seq.Get()
 			logger.mu.Unlock()
 		}
 
@@ -105,8 +105,8 @@ func (logger *StreamLogger) stream() {
 
 				logger.mu.Lock()
 				delete(logger.subscribed, w)
-				atomic.AddUint32(&logger.seq, 1)
-				atomic.StoreUint32(&logger.size, uint32(len(logger.subscribed)))
+				logger.seq.Add(1)
+				logger.size.Set(uint32(len(logger.subscribed)))
 				logger.mu.Unlock()
 			} else {
 				w.(http.Flusher).Flush()
@@ -118,7 +118,7 @@ func (logger *StreamLogger) stream() {
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
 func (logger *StreamLogger) Send(message Formatter) {
-	if atomic.LoadUint32(&logger.size) == 0 {
+	if logger.size.Get() == 0 {
 		// There are no subscribers, do nothing.
 		return
 	}

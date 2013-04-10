@@ -23,15 +23,15 @@ type ParsedQuery struct {
 
 type EncoderFunc func(value interface{}) ([]byte, error)
 
-func (self *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listVariables []sqltypes.Value) ([]byte, error) {
-	if len(self.BindLocations) == 0 {
-		return []byte(self.Query), nil
+func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listVariables []sqltypes.Value) ([]byte, error) {
+	if len(pq.BindLocations) == 0 {
+		return []byte(pq.Query), nil
 	}
-	buf := bytes.NewBuffer(make([]byte, 0, len(self.Query)))
+	buf := bytes.NewBuffer(make([]byte, 0, len(pq.Query)))
 	current := 0
-	for _, loc := range self.BindLocations {
-		buf.WriteString(self.Query[current:loc.Offset])
-		varName := self.Query[loc.Offset+1 : loc.Offset+loc.Length]
+	for _, loc := range pq.BindLocations {
+		buf.WriteString(pq.Query[current:loc.Offset])
+		varName := pq.Query[loc.Offset+1 : loc.Offset+loc.Length]
 		var supplied interface{}
 		if varName[0] >= '0' && varName[0] <= '9' {
 			index, err := strconv.Atoi(varName)
@@ -54,12 +54,12 @@ func (self *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, lis
 		}
 		current = loc.Offset + loc.Length
 	}
-	buf.WriteString(self.Query[current:])
+	buf.WriteString(pq.Query[current:])
 	return buf.Bytes(), nil
 }
 
-func (self *ParsedQuery) MarshalJSON() ([]byte, error) {
-	return json.Marshal(self.Query)
+func (pq *ParsedQuery) MarshalJSON() ([]byte, error) {
+	return json.Marshal(pq.Query)
 }
 
 func EncodeValue(buf *bytes.Buffer, value interface{}) error {

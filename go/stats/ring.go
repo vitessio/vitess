@@ -15,19 +15,19 @@ func NewRingInt64(capacity int) *RingInt64 {
 	return &RingInt64{values: make([]int64, 0, capacity)}
 }
 
-func (self *RingInt64) Add(val int64) {
-	if len(self.values) == cap(self.values) {
-		self.values[self.position] = val
-		self.position = (self.position + 1) % cap(self.values)
+func (ri *RingInt64) Add(val int64) {
+	if len(ri.values) == cap(ri.values) {
+		ri.values[ri.position] = val
+		ri.position = (ri.position + 1) % cap(ri.values)
 	} else {
-		self.values = append(self.values, val)
+		ri.values = append(ri.values, val)
 	}
 }
 
-func (self *RingInt64) Values() (values []int64) {
-	values = make([]int64, len(self.values))
-	for i := 0; i < len(self.values); i++ {
-		values[i] = self.values[(self.position+i)%cap(self.values)]
+func (ri *RingInt64) Values() (values []int64) {
+	values = make([]int64, len(ri.values))
+	for i := 0; i < len(ri.values); i++ {
+		values[i] = ri.values[(ri.position+i)%cap(ri.values)]
 	}
 	return values
 }

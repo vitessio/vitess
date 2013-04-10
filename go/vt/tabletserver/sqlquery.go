@@ -11,7 +11,6 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"code.google.com/p/vitess/go/mysql"
@@ -398,8 +397,8 @@ func (sq *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "\n \"TxPool\": %v,", sq.qe.txPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", sq.qe.activeTxPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", sq.qe.activePool.StatsJSON())
-	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", atomic.LoadInt32(&sq.qe.maxResultSize))
-	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v,", atomic.LoadInt32(&sq.qe.streamBufferSize))
+	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", sq.qe.maxResultSize.Get())
+	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v,", sq.qe.streamBufferSize.Get())
 	fmt.Fprintf(buf, "\n \"ReservedPool\": %v", sq.qe.reservedPool.StatsJSON())
 	fmt.Fprintf(buf, "\n}")
 	return buf.String()

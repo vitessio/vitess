@@ -36,7 +36,7 @@ func NewCachePool(capacity int, queryTimeout time.Duration, idleTimeout time.Dur
 	return cachePool
 }
 
-func (self *CachePool) Open(connFactory CreateCacheFunc) {
+func (cp *CachePool) Open(connFactory CreateCacheFunc) {
 	if connFactory == nil {
 		return
 	}
@@ -45,21 +45,21 @@ func (self *CachePool) Open(connFactory CreateCacheFunc) {
 		if err != nil {
 			return nil, err
 		}
-		return &Cache{c, self}, nil
+		return &Cache{c, cp}, nil
 	}
-	self.RoundRobin.Open(f)
+	cp.RoundRobin.Open(f)
 }
 
 // You must call Recycle on the *Cache once done.
-func (self *CachePool) Get() *Cache {
-	r, err := self.RoundRobin.Get()
+func (cp *CachePool) Get() *Cache {
+	r, err := cp.RoundRobin.Get()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
 	return r.(*Cache)
 }
 
-func (self *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
+func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	defer func() {
 		if x := recover(); x != nil {
 			response.Write(([]byte)(x.(error).Error()))
@@ -70,7 +70,7 @@ func (self *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Req
 	if command == "stats" {
 		command = ""
 	}
-	conn := self.Get()
+	conn := cp.Get()
 	defer conn.Recycle()
 	r, err := conn.Stats(command)
 	if err != nil {
@@ -86,8 +86,8 @@ type Cache struct {
 	pool *CachePool
 }
 
-func (self *Cache) Recycle() {
-	self.pool.Put(self)
+func (cache *Cache) Recycle() {
+	cache.pool.Put(cache)
 }
 
 func CacheCreator(dbconfig dbconfigs.DBConfig) CreateCacheFunc {

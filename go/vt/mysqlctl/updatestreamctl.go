@@ -10,12 +10,12 @@ import (
 	"os"
 	"path"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap"
 	estats "code.google.com/p/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
+	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 )
 
@@ -29,7 +29,7 @@ const (
 type UpdateStream struct {
 	mycnf          *Mycnf
 	tabletType     string
-	state          int32
+	state          sync2.AtomicInt32
 	states         *estats.States
 	actionLock     sync.Mutex
 	binlogPrefix   string
@@ -151,11 +151,11 @@ func disableUpdateStreamService() {
 }
 
 func (updateStream *UpdateStream) isServiceEnabled() bool {
-	return atomic.LoadInt32(&updateStream.state) == ENABLED
+	return updateStream.state.Get() == ENABLED
 }
 
 func (updateStream *UpdateStream) setState(state int32) {
-	atomic.StoreInt32(&UpdateStreamRpcService.state, state)
+	UpdateStreamRpcService.state.Set(state)
 	updateStream.states.SetState(int(state))
 }
 

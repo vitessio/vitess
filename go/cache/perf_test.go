@@ -10,8 +10,8 @@ import (
 
 type MyValue []byte
 
-func (self MyValue) Size() int {
-	return cap(self)
+func (mv MyValue) Size() int {
+	return cap(mv)
 }
 
 func BenchmarkGet(b *testing.B) {

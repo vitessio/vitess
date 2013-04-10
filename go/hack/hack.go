@@ -21,28 +21,28 @@ type StringArena struct {
 
 // NewStringArena creates an arena of the specified size.
 func NewStringArena(size int) *StringArena {
-	self := &StringArena{buf: make([]byte, 0, size)}
-	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&self.buf))
-	pstring := (*reflect.StringHeader)(unsafe.Pointer(&self.str))
+	sa := &StringArena{buf: make([]byte, 0, size)}
+	pbytes := (*reflect.SliceHeader)(unsafe.Pointer(&sa.buf))
+	pstring := (*reflect.StringHeader)(unsafe.Pointer(&sa.str))
 	pstring.Data = pbytes.Data
 	pstring.Len = pbytes.Cap
-	return self
+	return sa
 }
 
 // NewString copies a byte slice into the arena and returns it as a string.
 // If the arena is full, it returns a traditional go string.
-func (self *StringArena) NewString(b []byte) string {
-	if len(self.buf)+len(b) > cap(self.buf) {
+func (sa *StringArena) NewString(b []byte) string {
+	if len(sa.buf)+len(b) > cap(sa.buf) {
 		return string(b)
 	}
-	start := len(self.buf)
-	self.buf = append(self.buf, b...)
-	return self.str[start : start+len(b)]
+	start := len(sa.buf)
+	sa.buf = append(sa.buf, b...)
+	return sa.str[start : start+len(b)]
 }
 
 // SpaceLeft returns the amount of space left in the arena.
-func (self *StringArena) SpaceLeft() int {
-	return cap(self.buf) - len(self.buf)
+func (sa *StringArena) SpaceLeft() int {
+	return cap(sa.buf) - len(sa.buf)
 }
 
 // String force casts a []byte to a string.
