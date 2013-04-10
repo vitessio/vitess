@@ -5,10 +5,10 @@ import datetime
 import difflib
 import heapq
 import itertools
-import json
 import logging
 import optparse
 import os
+import cPickle as pickle
 import pprint
 import Queue
 import re
@@ -327,7 +327,7 @@ class Checker(object):
 
     self.iterations = 0
     self.temp_directory = temp_directory
-    self.checkpoint_file = os.path.join(directory, table + '.json')
+    self.checkpoint_file = os.path.join(directory, table + '.pickle')
     self.mismatches_file = os.path.join(directory, table + '_mismatches.txt')
     self.done = False
     try:
@@ -575,7 +575,7 @@ class Checker(object):
 
   def restore_checkpoint(self):
     with open(self.checkpoint_file) as fi:
-      checkpoint = json.load(fi)
+      checkpoint = pickle.load(fi)
     self.current_pk, self.done = checkpoint['current_pk'], checkpoint['done']
 
   def checkpoint(self, pk, done=False):
@@ -584,7 +584,7 @@ class Checker(object):
             'done': done,
             'timestamp': str(datetime.datetime.now())}
     with AtomicWriter(self.checkpoint_file, self.temp_directory) as fi:
-      json.dump(data, fi)
+      pickle.dump(data, fi)
     self.stats.update('checkpoint', start)
 
   def run(self):
