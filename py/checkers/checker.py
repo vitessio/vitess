@@ -123,28 +123,28 @@ def sorted_row_list_difference(expected, actual):
   different despite having the same primary key.
   """
   # adapted from unittest.
-  i = j = 0
   missing = []
   unexpected = []
   different = []
-  while True:
-    try:
-      e, a = expected[i], actual[j]
+
+  expected, actual = iter(expected), iter(actual)
+  try:
+    e, a = expected.next(), actual.next()
+    while True:
       if e.pk < a.pk:
         missing.append(e)
-        i += 1
+        e = expected.next()
       elif e.pk > a.pk:
         unexpected.append(a)
-        j += 1
+        a = actual.next()
       else:
         if a != e:
           different.append((a, e))
-        i += 1
-        j += 1
-    except IndexError:
-      missing.extend(expected[i:])
-      unexpected.extend(actual[j:])
-      break
+        e, a = expected.next(), actual.next()
+  except StopIteration:
+    missing.extend(expected)
+    unexpected.extend(actual)
+
   return missing, unexpected, different
 
 
