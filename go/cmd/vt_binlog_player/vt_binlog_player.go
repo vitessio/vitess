@@ -14,6 +14,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"strconv"
 	"strings"
@@ -31,19 +33,15 @@ import (
 
 var stdout *bufio.Writer
 
-const (
-	TMP_RECOVERY_PREFIX  = "/tmp/vt_blp-tmp."
-	RECOVERY_FILE_PREFIX = "/tmp/vt_blp."
-)
-
 var (
-	startPosFile      = flag.String("start-pos-file", "", "server address and start coordinates")
-	dbConfigFile      = flag.String("db-config-file", "", "json file for db credentials")
-	lookupConfigFile  = flag.String("lookup-config-file", "", "json file for lookup db credentials")
-	recoveryStatePath = flag.String("recovery-path", "", "path to save the recovery position")
-	debug             = flag.Bool("debug", true, "run a debug version - prints the sql statements rather than executing them")
-	tables            = flag.String("tables", "", "tables to play back")
-	dbCredFile        = flag.String("db-credentials-file", "", "db-creditials file to look up passwd to connect to lookup host")
+	port             = flag.Int("port", 0, "port for the server")
+	startPosFile     = flag.String("start-pos-file", "", "server address and start coordinates")
+	useCheckpoint    = flag.Bool("use-checkpoint", false, "use the saved checkpoint to start")
+	dbConfigFile     = flag.String("db-config-file", "", "json file for db credentials")
+	lookupConfigFile = flag.String("lookup-config-file", "", "json file for lookup db credentials")
+	debug            = flag.Bool("debug", true, "run a debug version - prints the sql statements rather than executing them")
+	tables           = flag.String("tables", "", "tables to play back")
+	dbCredFile       = flag.String("db-credentials-file", "", "db-creditials file to look up passwd to connect to lookup host")
 )
 
 var (
@@ -71,7 +69,9 @@ var (
                              PRIMARY KEY (host, keyrange_end)
                              ) ENGINE=InnoDB DEFAULT CHARSET=latin1`
 	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (host, port, position, keyrange_start, keyrange_end) 
-	                          values ('%v', %v, '%v', '%v', '%v') ON DUPLICATE KEY UPDATE position='%v'`
+	                          values ('%v', %v, '%v', '%v', '%v')`
+	UPDATE_RECOVERY      = "update _vt.vt_blp_recovery set position='%v' where host='%v' and keyrange_end='%v'"
+	SELECT_FROM_RECOVERY = "select * from _vt.vt_blp_recovery where host='%v' and keyrange_end='%v'"
 )
 
 /*
@@ -194,20 +194,17 @@ func (dc DBClient) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*pr
 }
 
 type BinlogPlayer struct {
-	keyrange                key.KeyRange
-	keyrangeTag             string
-	tmpRecoveryFile         string
-	binlogRecoveryStatePath string
-	recoveryState           *binlogRecoveryState
-	startPosition           *binlogRecoveryState
-	rpcClient               *rpcplus.Client
-	inTxn                   bool
-	txnBuffer               []*mysqlctl.BinlogResponse
-	dbClient                VtClient
-	lookupClient            VtClient
-	debug                   bool
-	tables                  []string
-	useDb                   string
+	keyrange      key.KeyRange
+	keyrangeTag   string
+	recoveryState *binlogRecoveryState
+	startPosition *binlogRecoveryState
+	rpcClient     *rpcplus.Client
+	inTxn         bool
+	txnBuffer     []*mysqlctl.BinlogResponse
+	dbClient      VtClient
+	lookupClient  VtClient
+	debug         bool
+	tables        []string
 }
 
 func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.KeyspaceId) *BinlogPlayer {
@@ -224,7 +221,6 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.Keys
 	if blp.keyrangeTag == "" {
 		blp.keyrangeTag = "MAX"
 	}
-	blp.tmpRecoveryFile = fmt.Sprintf("%v%v.%v", TMP_RECOVERY_PREFIX, blp.keyrangeTag, blp.startPosition.Host)
 
 	blp.inTxn = false
 	blp.txnBuffer = make([]*mysqlctl.BinlogResponse, 0, mysqlctl.MAX_TXN_BATCH)
@@ -234,27 +230,10 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.Keys
 
 func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition string) {
 	blp.recoveryState.Position = currentPosition
-	data, err := json.Marshal(blp.recoveryState)
-	if err != nil {
-		panic(fmt.Errorf("Error in marshaling recovery info, err: %v", err))
-	}
+	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY, currentPosition, blp.recoveryState.Host, blp.recoveryState.KeyrangeEnd)
 
-	if err = ioutil.WriteFile(blp.tmpRecoveryFile, data, 0664); err != nil {
-		panic(fmt.Errorf("Error in writing temp recovery file '%v' to disk, err: %v", blp.tmpRecoveryFile, err))
-	}
-
-	if err = os.Rename(blp.tmpRecoveryFile, blp.binlogRecoveryStatePath); err != nil {
-		panic(fmt.Errorf("Error in renaming temp file '%v' to recovery '%v', err: %v", blp.tmpRecoveryFile, blp.binlogRecoveryStatePath, err))
-	}
-
-	insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, blp.recoveryState.Host,
-		blp.recoveryState.Port,
-		currentPosition,
-		blp.recoveryState.KeyrangeStart,
-		blp.recoveryState.KeyrangeEnd,
-		currentPosition)
-	if _, err := blp.dbClient.ExecuteFetch([]byte(insertRecovery), 0, false); err != nil {
-		panic(fmt.Errorf("Error %v in writing recovery info %v", err, insertRecovery))
+	if _, err := blp.dbClient.ExecuteFetch([]byte(updateRecovery), 0, false); err != nil {
+		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
 	}
 }
 
@@ -263,14 +242,10 @@ func main() {
 	servenv.Init("vt_binlog_player")
 
 	if *startPosFile == "" {
-		if *recoveryStatePath != "" {
-			*startPosFile = *recoveryStatePath
-		} else {
-			relog.Fatal("Invalid start position and recovery path")
-		}
+		relog.Fatal("start-pos-file was not supplied.")
 	}
 
-	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *debug)
+	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *useCheckpoint, *debug)
 	if err != nil {
 		relog.Fatal("Error in initializing binlog player - '%v'", err)
 	}
@@ -284,17 +259,20 @@ func main() {
 		relog.Info("len tables %v tables %v", len(blp.tables), blp.tables)
 	}
 
-	if *recoveryStatePath == "" {
-		*recoveryStatePath = fmt.Sprintf("%v%v.%v", RECOVERY_FILE_PREFIX, blp.keyrangeTag, blp.startPosition.Host)
-		relog.Warning("Recovery state path empty, assigned default '%v'", *recoveryStatePath)
-	}
-	blp.binlogRecoveryStatePath = *recoveryStatePath
-
-	relog.Info("BinlogPlayer client for keyrange '%v:%v' starting @ '%v', checkpoint saved @ %v",
+	relog.Info("BinlogPlayer client for keyrange '%v:%v' starting @ '%v'",
 		blp.startPosition.KeyrangeStart,
 		blp.startPosition.KeyrangeEnd,
-		blp.startPosition.Position,
-		blp.binlogRecoveryStatePath)
+		blp.startPosition.Position)
+
+	if *port != 0 {
+		go func() {
+			serverAddr := fmt.Sprintf("localhost:%v", *port)
+			err = http.ListenAndServe(serverAddr, nil)
+			if err != nil {
+				relog.Fatal("Error starting http server %v", err)
+			}
+		}()
+	}
 
 	//Make a request to the server and start processing the events.
 	stdout = bufio.NewWriterSize(os.Stdout, 16*1024)
@@ -322,7 +300,69 @@ func startPositionValid(startPos *binlogRecoveryState) bool {
 	return true
 }
 
-func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, debug bool) (*BinlogPlayer, error) {
+func createDbClient(dbConfigFile string) (*DBClient, error) {
+	dbConfigData, err := ioutil.ReadFile(dbConfigFile)
+	if err != nil {
+		return nil, fmt.Errorf("Error %s in reading db-config-file %s", err, dbConfigFile)
+	}
+	relog.Info("dbConfigData %v", string(dbConfigData))
+
+	dbClient := &DBClient{}
+	dbConfig := new(mysql.ConnectionParams)
+	err = json.Unmarshal(dbConfigData, dbConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error in unmarshaling dbconfig data, err '%v'", err)
+	}
+	dbClient.dbConfig = dbConfig
+	dbClient.dbConn, err = dbClient.Connect()
+	if err != nil {
+		return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
+	}
+	return dbClient, nil
+}
+
+func createLookupClient(lookupConfigFile, dbCredFile string) (*DBClient, error) {
+	lookupConfigData, err := ioutil.ReadFile(lookupConfigFile)
+	if err != nil {
+		return nil, fmt.Errorf("Error %s in reading lookup-config-file %s", err, lookupConfigFile)
+	}
+
+	lookupClient := &DBClient{}
+	lookupConfig := new(mysql.ConnectionParams)
+	err = json.Unmarshal(lookupConfigData, lookupConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error in unmarshaling lookupConfig data, err '%v'", err)
+	}
+
+	var lookupPasswd string
+	if dbCredFile != "" {
+		dbCredentials := make(map[string][]string)
+		dbCredData, err := ioutil.ReadFile(dbCredFile)
+		if err != nil {
+			return nil, fmt.Errorf("Error %s in reading db-credentials-file %s", err, dbCredFile)
+		}
+		err = json.Unmarshal(dbCredData, &dbCredentials)
+		if err != nil {
+			return nil, fmt.Errorf("Error in unmarshaling db-credentials-file %s", err)
+		}
+		if passwd, ok := dbCredentials[lookupConfig.Uname]; ok {
+			lookupPasswd = passwd[0]
+		}
+	}
+
+	lookupConfig.Pass = lookupPasswd
+	relog.Info("lookupConfig %v", lookupConfig)
+	lookupClient.dbConfig = lookupConfig
+
+	lookupClient.dbConn, err = lookupClient.Connect()
+	if err != nil {
+		return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
+	}
+	return lookupClient, nil
+}
+
+func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, useCheckpoint, debug bool) (*BinlogPlayer, error) {
+	var dbClient *DBClient
 	startData, err := ioutil.ReadFile(startPosFile)
 	if err != nil {
 		return nil, fmt.Errorf("Error %s in reading start position file %s", err, startPosFile)
@@ -332,6 +372,34 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 	if err != nil {
 		return nil, fmt.Errorf("Error in unmarshaling recovery data: %s, startData %v", err, string(startData))
 	}
+
+	if useCheckpoint {
+		if dbConfigFile == "" {
+			relog.Fatal("Cannot use checkpoint to start without db-config-file")
+		}
+		dbClient, err = createDbClient(dbConfigFile)
+		if err != nil {
+			return nil, err
+		}
+		selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Host, startPosition.KeyrangeEnd)
+		qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)
+		if err != nil {
+			panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
+		}
+		if qr.RowsAffected != 1 {
+			relog.Fatal("Checkpoint information not available in db")
+		}
+		for i, field := range qr.Fields {
+			if strings.ToLower(field.Name) == "position" {
+				position := qr.Rows[0][i]
+				if !position.IsNull() {
+					startPosition.Position = position.String()
+				}
+				break
+			}
+		}
+	}
+
 	if !startPositionValid(startPosition) {
 		return nil, fmt.Errorf("Invalid Start Position")
 	}
@@ -352,74 +420,46 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		binlogPlayer.dbClient = dummyVtClient{}
 		binlogPlayer.lookupClient = dummyVtClient{}
 	} else {
-		dbConfigData, err := ioutil.ReadFile(dbConfigFile)
+		binlogPlayer.dbClient = *dbClient
+
+		lookupClient, err := createLookupClient(lookupConfigFile, dbCredFile)
 		if err != nil {
-			return nil, fmt.Errorf("Error %s in reading db-config-file %s", err, dbConfigFile)
+			return nil, err
 		}
-		relog.Info("dbConfigData %v", string(dbConfigData))
+		binlogPlayer.lookupClient = *lookupClient
 
-		lookupConfigData, err := ioutil.ReadFile(lookupConfigFile)
-		if err != nil {
-			return nil, fmt.Errorf("Error %s in reading lookup-config-file %s", err, lookupConfigFile)
-		}
-
-		dbClient := DBClient{}
-		dbConfig := new(mysql.ConnectionParams)
-		err = json.Unmarshal(dbConfigData, dbConfig)
-		if err != nil {
-			return nil, fmt.Errorf("error in unmarshaling dbconfig data, err '%v'", err)
-		}
-		dbClient.dbConfig = dbConfig
-		dbClient.dbConn, err = dbClient.Connect()
-		if err != nil {
-			return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
-		}
-		binlogPlayer.dbClient = dbClient
-
-		lookupClient := DBClient{}
-		lookupConfig := new(mysql.ConnectionParams)
-		err = json.Unmarshal(lookupConfigData, lookupConfig)
-		if err != nil {
-			return nil, fmt.Errorf("error in unmarshaling lookupConfig data, err '%v'", err)
-		}
-
-		var lookupPasswd string
-		if dbCredFile != "" {
-			dbCredentials := make(map[string][]string)
-			dbCredData, err := ioutil.ReadFile(dbCredFile)
-			if err != nil {
-				return nil, fmt.Errorf("Error %s in reading db-credentials-file %s", err, dbCredFile)
-			}
-			err = json.Unmarshal(dbCredData, &dbCredentials)
-			if err != nil {
-				return nil, fmt.Errorf("Error in unmarshaling db-credentials-file %s", err)
-			}
-			if passwd, ok := dbCredentials[lookupConfig.Uname]; ok {
-				lookupPasswd = passwd[0]
-			}
-		}
-
-		lookupConfig.Pass = lookupPasswd
-		relog.Info("lookupConfig %v", lookupConfig)
-		lookupClient.dbConfig = lookupConfig
-
-		lookupClient.dbConn, err = lookupClient.Connect()
-		if err != nil {
-			return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
-		}
-		binlogPlayer.lookupClient = lookupClient
-
-		binlogPlayer.useDb = fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
-		recovery_ddls := []string{USE_VT, CREATE_RECOVERY_TABLE, binlogPlayer.useDb}
-
-		for _, sql := range recovery_ddls {
-			if _, err := binlogPlayer.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
-				panic(fmt.Errorf("Error %v in creating recovery table %v", err, sql))
-			}
+		if !useCheckpoint {
+			initialize_recovery_table(dbClient, startPosition)
 		}
 	}
 
 	return binlogPlayer, nil
+}
+
+func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecoveryState) {
+	useDb := fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
+
+	recovery_ddls := []string{USE_VT, CREATE_RECOVERY_TABLE, useDb}
+	for _, sql := range recovery_ddls {
+		if _, err := dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+			panic(fmt.Errorf("Error %v in creating recovery table %v", err, sql))
+		}
+	}
+
+	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Host, startPosition.KeyrangeEnd)
+	qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)
+	if err != nil {
+		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
+	}
+	if qr.RowsAffected == 0 {
+		insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, startPosition.Host, startPosition.Port, startPosition.Position, startPosition.KeyrangeStart, startPosition.KeyrangeEnd)
+		recoveryDmls := []string{USE_VT, "begin", insertRecovery, "commit", useDb}
+		for _, sql := range recoveryDmls {
+			if _, err := dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+				panic(fmt.Errorf("Error %v in inserting into recovery table %v", err, sql))
+			}
+		}
+	}
 }
 
 func handleError(err *error, blp *BinlogPlayer) {
@@ -636,26 +676,22 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition string) {
 
 func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
 	switch indexType {
-	/*
-		case "username":
-			indexSlice, ok := indexId.([]byte)
-			if !ok {
-				return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
-			}
-			index := string(indexSlice)
-			switch dmlType {
-			case "insert":
-				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
-			case "update":
-				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
-			case "delete":
-				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
-			default:
-				return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
-			}
-	*/
 	case "username":
-		return
+		indexSlice, ok := indexId.([]byte)
+		if !ok {
+			return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
+		}
+		index := string(indexSlice)
+		switch dmlType {
+		case "insert":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
+		case "update":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
+		case "delete":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
+		default:
+			return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
+		}
 	case "video_id":
 		index, ok := indexId.(uint64)
 		if !ok {
