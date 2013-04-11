@@ -19,13 +19,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"code.google.com/p/vitess/go/mysql"
 	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	_ "code.google.com/p/vitess/go/snitch"
+	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
@@ -193,6 +194,24 @@ func (dc DBClient) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*pr
 	return &qr, nil
 }
 
+type blpStats struct {
+	queryCount    *stats.Counters
+	txnCount      *stats.Counters
+	queriesPerSec *stats.Rates
+	txnsPerSec    *stats.Rates
+	txnTime       *stats.Timings
+}
+
+func NewBlpStats() *blpStats {
+	bs := &blpStats{}
+	bs.txnCount = stats.NewCounters("TxnCount")
+	bs.queryCount = stats.NewCounters("QueryCount")
+	bs.queriesPerSec = stats.NewRates("QueriesPerSec", bs.queryCount, 15, 60e9)
+	bs.txnsPerSec = stats.NewRates("TxnPerSec", bs.txnCount, 15, 60e9)
+	bs.txnTime = stats.NewTimings("TxnTime")
+	return bs
+}
+
 type BinlogPlayer struct {
 	keyrange      key.KeyRange
 	keyrangeTag   string
@@ -205,6 +224,7 @@ type BinlogPlayer struct {
 	lookupClient  VtClient
 	debug         bool
 	tables        []string
+	*blpStats
 }
 
 func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.KeyspaceId) *BinlogPlayer {
@@ -225,6 +245,7 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.Keys
 	blp.inTxn = false
 	blp.txnBuffer = make([]*mysqlctl.BinlogResponse, 0, mysqlctl.MAX_TXN_BATCH)
 	blp.debug = false
+	blp.blpStats = NewBlpStats()
 	return blp
 }
 
@@ -635,17 +656,25 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition string) {
 	indexUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	seqUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	dmlMatch := 0
+	var queryCount int64
+	var txnStartTime time.Time
 
 	for _, dmlEvent := range blp.txnBuffer {
 		switch dmlEvent.SqlType {
 		case mysqlctl.BEGIN:
-			continue
+			queryCount += 1
+			txnStartTime = time.Now()
 		case mysqlctl.COMMIT:
 			blp.handleLookupWrites(indexUpdates, seqUpdates)
 			blp.WriteRecoveryPosition(recoveryPosition)
 			if err = blp.dbClient.Commit(); err != nil {
 				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 			}
+			//added 1 for recovery dml
+			queryCount += 2
+			blp.queryCount.Add("QueryCount", queryCount)
+			blp.txnCount.Add("TxnCount", 1)
+			blp.txnTime.Record("TxnTime", txnStartTime)
 		case "update", "delete", "insert":
 			if blp.dmlTableMatch(dmlEvent.Sql) {
 				dmlMatch += 1
@@ -667,6 +696,7 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition string) {
 						panic(fmt.Errorf("Error %v in executing sql '%v'", err, sql))
 					}
 				}
+				queryCount += int64(len(dmlEvent.Sql))
 			}
 		default:
 			panic(fmt.Errorf("Invalid SqlType %v", dmlEvent.SqlType))
