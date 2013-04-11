@@ -351,7 +351,7 @@ class Checker(object):
              %(columns)s
            from %(table_name)s use index (primary)
            where %(keyspace_sql)s
-             %(range_sql)s
+             (%(range_sql)s)
            order by %(pk_columns)s limit %%(limit)s""" % {
                'table_name': self.table_name,
                'keyspace_sql': ' '.join(keyspace_sql_parts),
