@@ -266,6 +266,10 @@ func main() {
 		relog.Fatal("start-pos-file was not supplied.")
 	}
 
+	if *dbConfigFile == "" {
+		relog.Fatal("Cannot start without db-config-file")
+	}
+
 	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *useCheckpoint, *debug)
 	if err != nil {
 		relog.Fatal("Error in initializing binlog player - '%v'", err)
@@ -383,7 +387,6 @@ func createLookupClient(lookupConfigFile, dbCredFile string) (*DBClient, error) 
 }
 
 func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, useCheckpoint, debug bool) (*BinlogPlayer, error) {
-	var dbClient *DBClient
 	startData, err := ioutil.ReadFile(startPosFile)
 	if err != nil {
 		return nil, fmt.Errorf("Error %s in reading start position file %s", err, startPosFile)
@@ -394,14 +397,11 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		return nil, fmt.Errorf("Error in unmarshaling recovery data: %s, startData %v", err, string(startData))
 	}
 
+	dbClient, err := createDbClient(dbConfigFile)
+	if err != nil {
+		return nil, err
+	}
 	if useCheckpoint {
-		if dbConfigFile == "" {
-			relog.Fatal("Cannot use checkpoint to start without db-config-file")
-		}
-		dbClient, err = createDbClient(dbConfigFile)
-		if err != nil {
-			return nil, err
-		}
 		selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Host, startPosition.KeyrangeEnd)
 		qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)
 		if err != nil {
