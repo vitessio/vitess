@@ -22,7 +22,6 @@ import tablet
 devnull = open('/dev/null', 'w')
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
-vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 hostname = socket.gethostname()
 
 tablet_62344 = tablet.Tablet(62344, 6700, 3700)
@@ -63,7 +62,7 @@ def teardown():
   tablet_41983.remove_tree()
   tablet_31981.remove_tree()
 
-  path = os.path.join(vtdataroot, 'snapshot')
+  path = os.path.join(utils.vtdataroot, 'snapshot')
   try:
     shutil.rmtree(path)
   except OSError as e:
@@ -201,7 +200,7 @@ def _run_test_mysqlctl_clone(server_mode):
   utils.pause("%s finished" % snapshot_cmd)
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (restore_flags, vtdataroot)).wait()
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (restore_flags, utils.vtdataroot)).wait()
   if err != 0:
     raise utils.TestError('mysqlctl restore failed')
 
@@ -323,7 +322,7 @@ def _run_test_vtctl_clone(server_mode):
   tablet_62044.init_tablet('idle', start=True)
 
   # small test to make sure the directory validation works
-  snapshot_dir = os.path.join(vtdataroot, 'snapshot')
+  snapshot_dir = os.path.join(utils.vtdataroot, 'snapshot')
   utils.run("rm -rf %s" % snapshot_dir)
   utils.run("mkdir -p %s" % snapshot_dir)
   utils.run("chmod -w %s" % snapshot_dir)
@@ -520,10 +519,10 @@ primary key (id)
   err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 multisnapshot --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- vt_test_keyspace id').wait()
   if err != 0:
     raise utils.TestError('mysqlctl multisnapshot failed')
-  if os.path.exists(os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.csv.gz')):
+  if os.path.exists(os.path.join(utils.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.csv.gz')):
     raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
   for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
-    path = os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
+    path = os.path.join(utils.vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
     with gzip.open(path) as f:
       if len(f.readlines()) != 2:
         raise utils.TestError("Data looks wrong in %s" % path)
@@ -558,10 +557,10 @@ primary key (id)
 
   # if err != 0:
   #   raise utils.TestError('mysqlctl multisnapshot failed')
-  if os.path.exists(os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
+  if os.path.exists(os.path.join(utils.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
     raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
   for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
-    path = os.path.join(vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
+    path = os.path.join(utils.vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
     with gzip.open(path) as f:
       if len(f.readlines()) != 2:
         raise utils.TestError("Data looks wrong in %s" % path)
@@ -593,7 +592,7 @@ def run_test_mysqlctl_split():
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_test_keyspace')
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore %s/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json' % vtdataroot).wait()
+  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore %s/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json' % utils.vtdataroot).wait()
   if err != 0:
     raise utils.TestError('mysqlctl partialrestore failed')
 

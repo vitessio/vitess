@@ -20,6 +20,7 @@ vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
 vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 hostname = socket.gethostname()
+vtportstart = int(os.environ.get('VTPORTSTART', '6700'))
 
 class TestError(Exception):
   pass
@@ -68,6 +69,13 @@ def remove_tmp_files():
 def pause(prompt):
   if options.debug:
     raw_input(prompt)
+
+# port management: reserve count consecutive ports, returns the first one
+def reserve_ports(count):
+  global vtportstart
+  result = vtportstart
+  vtportstart += count
+  return result
 
 # sub-process management
 pid_map = {}
@@ -190,19 +198,24 @@ def prog_compile(names):
 
 # background zk process
 # (note the zkocc addresses will only work with an extra zkocc process)
+zk_port_base = reserve_ports(3)
+zkocc_port_base = reserve_ports(3)
 def zk_setup():
+  global zk_port_base
+  global zkocc_port_base
+  zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
   prog_compile(['zkctl', 'zk'])
-  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 init')
+  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':'+zk_ports+' init')
   config = tmp_root+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
-    zk_cell_mapping = {'test_nj': 'localhost:3803',
-                       'test_ny': 'localhost:3803',
-                       'test_ca': 'localhost:3803',
-                       'global': 'localhost:3803',
-                       'test_nj:_zkocc': 'localhost:14850,localhost:14851,localhost:14852',
-                       'test_ny:_zkocc': 'localhost:14850',
-                       'test_ca:_zkocc': 'localhost:14850',
-                       'global:_zkocc': 'localhost:14850',}
+    zk_cell_mapping = {'test_nj': 'localhost:%u'%(zk_port_base+2),
+                       'test_ny': 'localhost:%u'%(zk_port_base+2),
+                       'test_ca': 'localhost:%u'%(zk_port_base+2),
+                       'global': 'localhost:%u'%(zk_port_base+2),
+                       'test_nj:_zkocc': 'localhost:%u,localhost:%u,localhost:%u'%(zkocc_port_base,zkocc_port_base+1,zkocc_port_base+2),
+                       'test_ny:_zkocc': 'localhost:%u'%(zkocc_port_base),
+                       'test_ca:_zkocc': 'localhost:%u'%(zkocc_port_base),
+                       'global:_zkocc': 'localhost:%u'%(zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
   os.putenv('ZK_CLIENT_CONFIG', config)
   run(vtroot+'/bin/zk touch -p /zk/test_nj/vt')
@@ -210,7 +223,9 @@ def zk_setup():
   run(vtroot+'/bin/zk touch -p /zk/test_ca/vt')
 
 def zk_teardown():
-  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 teardown', raise_on_error=False)
+  global zk_port_base
+  zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
+  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':'+zk_ports+' teardown', raise_on_error=False)
 
 def zk_wipe():
   run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt')
@@ -239,11 +254,12 @@ def get_vars(port):
   return json.loads(data)
 
 # zkocc helpers
-def zkocc_start(port=14850, cells=['test_nj'], extra_params=[]):
+def zkocc_start(cells=['test_nj'], extra_params=[]):
+  global zkocc_port_base
   prog_compile(['zkocc'])
-  logfile = tmp_root + '/zkocc_%u.log' % port
+  logfile = tmp_root + '/zkocc_%u.log' % zkocc_port_base
   args = [vtroot+'/bin/zkocc',
-          '-port', str(port),
+          '-port', str(zkocc_port_base),
           '-logfile', logfile,
           '-log.level', 'INFO',
           ] + extra_params + cells
@@ -252,7 +268,7 @@ def zkocc_start(port=14850, cells=['test_nj'], extra_params=[]):
   # wait for vars
   timeout = 5.0
   while True:
-    v = get_vars(port)
+    v = get_vars(zkocc_port_base)
     if v == None:
       debug("  zkocc not answering at /debug/vars, waiting...")
     else:

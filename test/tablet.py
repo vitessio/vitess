@@ -14,7 +14,6 @@ import utils
 
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
-vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 
 tablet_cell_map = {
     62344: 'nj',
@@ -84,7 +83,7 @@ class Tablet(object):
     return self.mysqlctl('teardown -force', quiet=True)
 
   def remove_tree(self):
-    path = '%s/vt_%010d' % (vtdataroot, self.tablet_uid)
+    path = '%s/vt_%010d' % (utils.vtdataroot, self.tablet_uid)
     try:
       shutil.rmtree(path)
     except OSError as e:
@@ -93,7 +92,7 @@ class Tablet(object):
 
   def mysql_connection_parameters(self, dbname):
     return dict(user='vt_dba',
-                unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, self.tablet_uid),
+                unix_socket='%s/vt_%010d/mysql.sock' % (utils.vtdataroot, self.tablet_uid),
                 db=dbname)
 
   def connect(self, dbname=''):
@@ -221,7 +220,7 @@ class Tablet(object):
 
   @property
   def tablet_dir(self):
-    return "%s/vt_%010d" % (vtdataroot, self.tablet_uid)
+    return "%s/vt_%010d" % (utils.vtdataroot, self.tablet_uid)
 
   @property
   def querylog_file(self):

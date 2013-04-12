@@ -57,7 +57,7 @@ def _check_zk_output(cmd, expected):
     raise utils.TestError('unexpected direct zk output: ', cmd, "is", out, "but expected", expected)
 
   # using zkocc
-  out, err = utils.run(vtroot+'/bin/zk --zk.zkocc-addr=localhost:14850 ' + cmd, trap_output=True)
+  out, err = utils.run(vtroot+'/bin/zk --zk.zkocc-addr=localhost:%u %s' % (utils.zkocc_port_base, cmd), trap_output=True)
   if out != expected:
     raise utils.TestError('unexpected zk zkocc output: ', cmd, "is", out, "but expected", expected)
 
@@ -77,11 +77,12 @@ def run_test_zkocc():
   time.sleep(1)
 
   # create a python client. The first address is bad, will test the retry logic
-  zkocc_client = zkocc.ZkOccConnection("localhost:14849,localhost:14850,localhost:14851", "test_nj", 30)
+  bad_port = utils.reserve_ports(3)
+  zkocc_client = zkocc.ZkOccConnection("localhost:%u,localhost:%u,localhost:%u" % (bad_port, utils.zkocc_port_base, bad_port+1), "test_nj", 30)
   zkocc_client.dial()
 
   # test failure for a python client that cannot connect
-  bad_zkocc_client = zkocc.ZkOccConnection("localhost:14848,localhost:14849", "test_nj", 30)
+  bad_zkocc_client = zkocc.ZkOccConnection("localhost:%u,localhost:%u" % (bad_port+2, bad_port), "test_nj", 30)
   try:
     bad_zkocc_client.dial()
     raise utils.TestError('exception expected')
@@ -98,7 +99,7 @@ def run_test_zkocc():
   logging.getLogger().setLevel(logging.WARNING)
 
   # get test
-  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1', trap_output=True)
+  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/zkocc1/data1' % utils.zkocc_port_base, trap_output=True)
   if err != "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=false, Stale=false)\n":
     raise utils.TestError('unexpected get output: ', err)
   zkNode = zkocc_client.get("/zk/test_nj/zkocc1/data1")
@@ -110,7 +111,7 @@ def run_test_zkocc():
     raise utils.TestError('unexpected zkocc_client.get output: ', zkNode)
 
   # getv test
-  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2 /zk/test_nj/zkocc1/data3', trap_output=True)
+  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2 /zk/test_nj/zkocc1/data3' % utils.zkocc_port_base, trap_output=True)
   if err != """[0] /zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)
 [1] /zk/test_nj/zkocc1/data2 = Test data 2 (NumChildren=0, Version=0, Cached=false, Stale=false)
 [2] /zk/test_nj/zkocc1/data3 = Test data 3 (NumChildren=0, Version=0, Cached=false, Stale=false)
@@ -135,7 +136,7 @@ def run_test_zkocc():
     raise utils.TestError('unexpected zkocc_client.getv output: ', zkNodes)
 
   # children test
-  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:14850 -mode children /zk/test_nj', trap_output=True)
+  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:%u -mode children /zk/test_nj' % utils.zkocc_port_base, trap_output=True)
   if err != """Path = /zk/test_nj
 Child[0] = zkocc1
 Child[1] = zkocc2
@@ -157,7 +158,7 @@ Stale = false
        _format_time(zkNodes['Nodes'][2]['Stat']['MTime'])))
 
   # test /zk/local is not resolved and rejected
-  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:14850 /zk/local/zkocc1/data1', trap_output=True, raise_on_error=False)
+  out, err = utils.run(vtroot+'/bin/zkclient2 -server localhost:%u /zk/local/zkocc1/data1' % utils.zkocc_port_base, trap_output=True, raise_on_error=False)
   if "zkocc: cannot resolve local cell" not in err:
     raise utils.TestError('unexpected get output, not local cell error: ', err)
 
@@ -165,14 +166,14 @@ Stale = false
   # while we kill the zk server and restart it
   outfd = tempfile.NamedTemporaryFile(dir=utils.tmp_root, delete=False)
   filename = outfd.name
-  querier = utils.run_bg('/bin/bash -c "while true ; do '+vtroot+'/bin/zkclient2 -server localhost:14850 /zk/test_nj/zkocc1/data1 ; sleep 0.1 ; done"', stderr=outfd.file)
+  querier = utils.run_bg('/bin/bash -c "while true ; do '+vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/zkocc1/data1 ; sleep 0.1 ; done"' % utils.zkocc_port_base, stderr=outfd.file)
   outfd.close()
   time.sleep(1)
 
   # kill zk server, sleep a bit, restart zk server, sleep a bit
-  utils.run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 shutdown')
+  utils.run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':%u:%u:%u shutdown' % (utils.zk_port_base, utils.zk_port_base+1, utils.zk_port_base+2))
   time.sleep(3)
-  utils.run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':3801:3802:3803 start')
+  utils.run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':%u:%u:%u start' % (utils.zk_port_base, utils.zk_port_base+1, utils.zk_port_base+2))
   time.sleep(3)
 
   utils.kill_sub_process(querier)
@@ -219,12 +220,12 @@ def run_test_zkocc_qps():
   # preload the test_nj cell
   zkocc_14850 = utils.zkocc_start()
 
-  qpser = utils.run_bg(vtroot+'/bin/zkclient2 -server localhost:14850 -mode qps /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2')
+  qpser = utils.run_bg(vtroot+'/bin/zkclient2 -server localhost:%u -mode qps /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2' % utils.zkocc_port_base)
   time.sleep(10)
   utils.kill_sub_process(qpser)
 
   # get the zkocc vars, make sure we have what we need
-  v = utils.get_vars(14850)
+  v = utils.get_vars(utils.zkocc_port_base)
   if v['ZkReader']['test_nj']['State']['Current'] != 'Connected':
     raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State']['Current'])
   if v['ZkReader']['test_nj']['State']['DurationConnected'] < 9e9:

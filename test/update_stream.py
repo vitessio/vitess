@@ -28,7 +28,6 @@ from vtdb import vt_occ2
 devnull = open('/dev/null', 'w')
 vttop = os.environ['VTTOP']
 vtroot = os.environ['VTROOT']
-vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 hostname = socket.gethostname()
 master_host = "localhost:6700"
 replica_host = "localhost:6701"
@@ -63,7 +62,7 @@ def _get_master_current_position():
 
 def _get_repl_current_position():
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket=os.path.join(vtdataroot, 'vt_%010d/mysql.sock' % 62345),
+                         unix_socket=os.path.join(utils.vtdataroot, 'vt_%010d/mysql.sock' % 62345),
                          db='vt_test_keyspace')
   cursor = MySQLdb.cursors.DictCursor(conn)
   cursor.execute('show slave status')
@@ -123,7 +122,7 @@ def setup_tablets():
   master_tablet.start_vttablet()
 
   replica_tablet.init_tablet('idle', 'test_keyspace', start=True)
-  snapshot_dir = os.path.join(vtdataroot, 'snapshot')
+  snapshot_dir = os.path.join(utils.vtdataroot, 'snapshot')
   utils.run("mkdir -p " + snapshot_dir)
   utils.run("chmod +w " + snapshot_dir)
   utils.run_vtctl('Clone -force %s %s' %

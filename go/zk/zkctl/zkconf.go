@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"code.google.com/p/vitess/go/vt/env"
 )
 
 type zkServerAddr struct {
@@ -45,10 +47,11 @@ func NewZkConfig() *ZkConfig {
 }
 
 func (cnf *ZkConfig) DataDir() string {
+	baseDir := env.VtDataRoot()
 	if cnf.Global {
-		return fmt.Sprintf("/vt/zk_global_%03d", cnf.ServerId)
+		return fmt.Sprintf("%v/zk_global_%03d", baseDir, cnf.ServerId)
 	}
-	return fmt.Sprintf("/vt/zk_%03d", cnf.ServerId)
+	return fmt.Sprintf("%v/zk_%03d", baseDir, cnf.ServerId)
 }
 
 func (cnf *ZkConfig) DirectoryList() []string {
