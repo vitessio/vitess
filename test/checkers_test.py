@@ -12,7 +12,6 @@ import tablet
 import utils
 
 from checkers import checker
-from checkers import write_configuration
 
 
 # Dropping a table inexplicably produces a warning despite
@@ -23,9 +22,9 @@ warnings.simplefilter("ignore")
 skip_teardown = False
 
 # I need this mostly for mysql
-destination_tablet = tablet.Tablet(62344, 6700, 3700)
-source_tablets = [tablet.Tablet(62044, 6701, 3701),
-                  tablet.Tablet(41983, 6702, 3702)]
+destination_tablet = tablet.Tablet(62344)
+source_tablets = [tablet.Tablet(62044),
+                  tablet.Tablet(41983)]
 tablets = [destination_tablet] + source_tablets
 
 db_configuration = {
