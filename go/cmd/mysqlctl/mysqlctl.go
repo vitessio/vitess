@@ -59,7 +59,7 @@ func partialSnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []
 		relog.Fatal("action partialsnapshot requires <db name> <key name>")
 	}
 
-	filename, err := mysqld.CreateSplitSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(*start), key.HexKeyspaceId(*end), tabletAddr, false, *concurrency)
+	filename, err := mysqld.CreateSplitSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(*start), key.HexKeyspaceId(*end), tabletAddr, false, *concurrency, nil)
 	if err != nil {
 		relog.Fatal("partialsnapshot failed: %v", err)
 	} else {
@@ -86,7 +86,7 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
-	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize)
+	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize, nil)
 	if err != nil {
 		relog.Fatal("multisnapshot failed: %v", err)
 	} else {
@@ -151,7 +151,7 @@ func restoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) 
 
 	rs, err := mysqlctl.ReadSnapshotManifest(subFlags.Arg(0))
 	if err == nil {
-		err = mysqld.RestoreFromSnapshot(rs, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart)
+		err = mysqld.RestoreFromSnapshot(rs, *fetchConcurrency, *fetchRetryCount, *dontWaitForSlaveStart, nil)
 	}
 	if err != nil {
 		relog.Fatal("restore failed: %v", err)
@@ -174,7 +174,7 @@ func snapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string)
 		relog.Fatal("Command snapshot requires <db name>")
 	}
 
-	filename, _, _, err := mysqld.CreateSnapshot(subFlags.Arg(0), tabletAddr, false, *concurrency, false)
+	filename, _, _, err := mysqld.CreateSnapshot(subFlags.Arg(0), tabletAddr, false, *concurrency, false, nil)
 	if err != nil {
 		relog.Fatal("snapshot failed: %v", err)
 	} else {
@@ -189,7 +189,7 @@ func snapshotSourceStartCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, arg
 		relog.Fatal("Command snapshotsourcestart requires <db name>")
 	}
 
-	filename, slaveStartRequired, readOnly, err := mysqld.CreateSnapshot(subFlags.Arg(0), tabletAddr, false, *concurrency, true)
+	filename, slaveStartRequired, readOnly, err := mysqld.CreateSnapshot(subFlags.Arg(0), tabletAddr, false, *concurrency, true, nil)
 	if err != nil {
 		relog.Fatal("snapshot failed: %v", err)
 	} else {

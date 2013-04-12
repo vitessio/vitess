@@ -30,7 +30,7 @@ const (
 )
 
 // Validate that this instance is a reasonable source of data.
-func (mysqld *Mysqld) validateCloneSource(serverMode bool) error {
+func (mysqld *Mysqld) validateCloneSource(serverMode bool, hookExtraEnv map[string]string) error {
 	// NOTE(msolomon) Removing this check for now - I don't see the value of validating this.
 	// // needs to be master, or slave that's not too far behind
 	// slaveStatus, err := mysqld.slaveStatus()
@@ -57,7 +57,9 @@ func (mysqld *Mysqld) validateCloneSource(serverMode bool) error {
 	if serverMode {
 		params["server-mode"] = ""
 	}
-	if err := hook.NewHook("preflight_snapshot", params).ExecuteOptional(); err != nil {
+	h := hook.NewHook("preflight_snapshot", params)
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
 
@@ -69,11 +71,11 @@ func (mysqld *Mysqld) validateCloneSource(serverMode bool) error {
 	return nil
 }
 
-func (mysqld *Mysqld) ValidateCloneTarget() error {
+func (mysqld *Mysqld) ValidateCloneTarget(hookExtraEnv map[string]string) error {
 	// run a hook to check local things
-	// FIXME(alainjobart) What other parameters do we have to
-	// provide? dbname, host, socket?
-	if err := hook.NewSimpleHook("preflight_restore").ExecuteOptional(); err != nil {
+	h := hook.NewSimpleHook("preflight_restore")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
 
@@ -229,12 +231,12 @@ func (mysqld *Mysqld) createSnapshot(concurrency int, serverMode bool) ([]Snapsh
 //   Compute hash (of uncompressed files, as we serve uncompressed files)
 //   Place symlinks in /vt/clone_src where they will be served by http server
 //   Leave mysql stopped, return slaveStartRequired, readOnly
-func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
+func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchicalReplication bool, concurrency int, serverMode bool, hookExtraEnv map[string]string) (snapshotManifestUrlPath string, slaveStartRequired, readOnly bool, err error) {
 	if dbName == "" {
 		return "", false, false, errors.New("CreateSnapshot failed: no database name provided")
 	}
 
-	if err = mysqld.validateCloneSource(serverMode); err != nil {
+	if err = mysqld.validateCloneSource(serverMode, hookExtraEnv); err != nil {
 		return
 	}
 
@@ -399,13 +401,13 @@ func ReadSnapshotManifest(filename string) (*SnapshotManifest, error) {
 // uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
 // start_mysql()
 // clean up compressed files
-func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool) error {
+func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fetchConcurrency, fetchRetryCount int, dontWaitForSlaveStart bool, hookExtraEnv map[string]string) error {
 	if snapshotManifest == nil {
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
 
 	relog.Debug("ValidateCloneTarget")
-	if err := mysqld.ValidateCloneTarget(); err != nil {
+	if err := mysqld.ValidateCloneTarget(hookExtraEnv); err != nil {
 		return err
 	}
 
@@ -438,7 +440,9 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		}
 	}
 
-	if err := hook.NewSimpleHook("postflight_restore").ExecuteOptional(); err != nil {
+	h := hook.NewSimpleHook("postflight_restore")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
 		return err
 	}
 

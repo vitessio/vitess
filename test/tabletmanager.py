@@ -1047,8 +1047,8 @@ def run_test_hook():
   # test a regular program works
   _run_hook("test.sh flag1 param1=hello", [
       '"ExitStatus": 0',
-      ['"Stdout": "PARAM: --flag1\\nPARAM: --param1=hello\\n"',
-       '"Stdout": "PARAM: --param1=hello\\nPARAM: --flag1\\n"',
+      ['"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --flag1\\nPARAM: --param1=hello\\n"',
+       '"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --param1=hello\\nPARAM: --flag1\\n"',
        ],
       '"Stderr": ""',
       ])
@@ -1056,14 +1056,14 @@ def run_test_hook():
   # test stderr output
   _run_hook("test.sh to-stderr", [
       '"ExitStatus": 0',
-      '"Stdout": "PARAM: --to-stderr\\n"',
+      '"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --to-stderr\\n"',
       '"Stderr": "ERR: --to-stderr\\n"',
       ])
 
   # test commands that fail
   _run_hook("test.sh exit-error", [
       '"ExitStatus": 1',
-      '"Stdout": "PARAM: --exit-error\\n"',
+      '"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --exit-error\\n"',
       '"Stderr": "ERROR: exit status 1\\n"',
       ])
 

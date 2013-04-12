@@ -8,6 +8,8 @@
 
 EXIT_CODE=0
 
+echo "ZK_TABLET_PATH:" $ZK_TABLET_PATH
+
 for arg in $@ ; do
   echo "PARAM:" $arg
   if [ "$arg" == "--to-stderr" ]; then

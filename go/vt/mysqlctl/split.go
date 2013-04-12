@@ -211,14 +211,14 @@ startKey, endKey - the row range to prepare
 sourceAddr - the ip addr of the machine running the export
 allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, concurrency int) (snapshotManifestFilename string, err error) {
+func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, concurrency int, hookExtraEnv map[string]string) (snapshotManifestFilename string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
 	}
 	// same logic applies here
 	relog.Info("validateCloneSource")
-	if err = mysqld.validateCloneSource(false); err != nil {
+	if err = mysqld.validateCloneSource(false, hookExtraEnv); err != nil {
 		return
 	}
 
@@ -637,7 +637,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoO
 	return snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -645,7 +645,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	// same logic applies here
 	relog.Info("validateCloneSource")
-	if err = mysqld.validateCloneSource(false); err != nil {
+	if err = mysqld.validateCloneSource(false, hookExtraEnv); err != nil {
 		return
 	}
 

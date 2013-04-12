@@ -21,6 +21,7 @@ import (
 type Hook struct {
 	Name       string
 	Parameters map[string]string
+	ExtraEnv   map[string]string
 }
 
 type HookResult struct {
@@ -92,6 +93,12 @@ func (hook *Hook) Execute() (result *HookResult) {
 	}
 	relog.Info("hook: executing hook: %v %v", vthook, strings.Join(args, " "))
 	cmd := exec.Command(vthook, args...)
+	if len(hook.ExtraEnv) > 0 {
+		cmd.Env = os.Environ()
+		for key, value := range hook.ExtraEnv {
+			cmd.Env = append(cmd.Env, key+"="+value)
+		}
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

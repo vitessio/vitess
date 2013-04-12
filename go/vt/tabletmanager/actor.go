@@ -548,7 +548,12 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 
 func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
 	// FIXME(msolomon) should't the reply get distilled into an error?
-	actionNode.reply = actionNode.args.(*hook.Hook).Execute()
+	h := actionNode.args.(*hook.Hook)
+	if h.ExtraEnv == nil {
+		h.ExtraEnv = make(map[string]string, 1)
+	}
+	h.ExtraEnv["ZK_TABLET_PATH"] = ta.zkTabletPath
+	actionNode.reply = h.Execute()
 	return nil
 }
 
@@ -575,7 +580,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode)
+	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath})
 	if err != nil {
 		return err
 	}
@@ -659,7 +664,7 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, par
 // Can be called remotely
 func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	// first check mysql, no need to go further if we can't restore
-	if err := ta.mysqld.ValidateCloneTarget(); err != nil {
+	if err := ta.mysqld.ValidateCloneTarget(map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath}); err != nil {
 		return err
 	}
 	args := actionNode.args.(*ReserveForRestoreArgs)
@@ -747,7 +752,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// do the work
-	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath}); err != nil {
 		relog.Error("RestoreFromSnapshot failed (%v), scrapping", err)
 		if err := Scrap(ta.zconn, ta.zkTabletPath, false); err != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
@@ -774,7 +779,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.Concurrency)
+	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.Concurrency, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath})
 	if err != nil {
 		return err
 	}
@@ -803,7 +808,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize)
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath})
 	if err != nil {
 		return err
 	}
