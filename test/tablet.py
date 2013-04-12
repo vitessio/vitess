@@ -12,9 +12,6 @@ import MySQLdb
 
 import utils
 
-vttop = os.environ['VTTOP']
-vtroot = os.environ['VTROOT']
-
 tablet_cell_map = {
     62344: 'nj',
     62044: 'nj',
@@ -24,8 +21,6 @@ tablet_cell_map = {
 
 class Tablet(object):
   default_uid = 62344
-  default_port = 6700
-  default_mysql_port = 3700
   seq = 0
   default_db_config = {
     "app": {
@@ -45,8 +40,8 @@ class Tablet(object):
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
-    self.port = port or (Tablet.default_port + Tablet.seq)
-    self.mysql_port = mysql_port or (Tablet.default_mysql_port + Tablet.seq)
+    self.port = port or (utils.reserve_ports(1))
+    self.mysql_port = mysql_port or (utils.reserve_ports(1))
     Tablet.seq += 1
 
     if cell:
@@ -73,7 +68,7 @@ class Tablet(object):
     if utils.options.verbose and not quiet:
       logLevel = ' -log.level=INFO'
 
-    return utils.run_bg(os.path.join(vtroot, 'bin', 'mysqlctl') +
+    return utils.run_bg(os.path.join(utils.vtroot, 'bin', 'mysqlctl') +
                         logLevel + ' -tablet-uid %u ' % self.tablet_uid + cmd)
 
   def start_mysql(self):
@@ -241,7 +236,7 @@ class Tablet(object):
     if memcache:
       self.start_memcache()
 
-    args = [os.path.join(vtroot, 'bin', 'vttablet'),
+    args = [os.path.join(utils.vtroot, 'bin', 'vttablet'),
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.zk_tablet_path,
             '-logfile', self.logfile,
@@ -249,7 +244,7 @@ class Tablet(object):
             '-db-configs-file', self._write_db_configs_file(),
             '-debug-querylog-file', self.querylog_file]
     if auth:
-      args.extend(['-auth-credentials', os.path.join(vttop, 'test', 'test_data', 'authcredentials_test.json')])
+      args.extend(['-auth-credentials', os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')])
 
     if customrules:
       args.extend(['-customrules', customrules])
@@ -259,7 +254,7 @@ class Tablet(object):
     stderr_fd.close()
 
     # wait for zookeeper PID just to be sure we have it
-    utils.run(vtroot+'/bin/zk wait -e ' + self.zk_pid, stdout=utils.devnull)
+    utils.run(utils.vtroot+'/bin/zk wait -e ' + self.zk_pid, stdout=utils.devnull)
 
     # wait for query service to be in the right state
     self.wait_for_vttablet_state(wait_for_state, port=port)

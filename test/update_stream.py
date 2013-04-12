@@ -26,14 +26,11 @@ from vtdb import update_stream_service
 from vtdb import vt_occ2
 
 devnull = open('/dev/null', 'w')
-vttop = os.environ['VTTOP']
-vtroot = os.environ['VTROOT']
-hostname = socket.gethostname()
-master_host = "localhost:6700"
-replica_host = "localhost:6701"
 
-master_tablet = tablet.Tablet(62344, 6700, 3700)
-replica_tablet = tablet.Tablet(62345, 6701, 3702)
+master_tablet = tablet.Tablet(62344)
+replica_tablet = tablet.Tablet(62345)
+master_host = "localhost:%u" % master_tablet.port
+replica_host = "localhost:%u" % replica_tablet.port
 GLOBAL_MASTER_START_POSITION = None
 
 class Position(object):

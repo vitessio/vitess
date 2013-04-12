@@ -20,14 +20,11 @@ import utils
 import tablet
 
 devnull = open('/dev/null', 'w')
-vttop = os.environ['VTTOP']
-vtroot = os.environ['VTROOT']
-hostname = socket.gethostname()
 
-tablet_62344 = tablet.Tablet(62344, 6700, 3700)
-tablet_62044 = tablet.Tablet(62044, 6701, 3701)
-tablet_41983 = tablet.Tablet(41983, 6702, 3702)
-tablet_31981 = tablet.Tablet(31981, 6703, 3703)
+tablet_62344 = tablet.Tablet(62344)
+tablet_62044 = tablet.Tablet(62044)
+tablet_41983 = tablet.Tablet(41983)
+tablet_31981 = tablet.Tablet(31981)
 
 def setup():
   utils.zk_setup()
@@ -71,7 +68,7 @@ def teardown():
 
 def _check_db_addr(db_addr, expected_addr):
   # Run in the background to capture output.
-  proc = utils.run_bg(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
+  proc = utils.run_bg(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
   stdout = proc.communicate()[0].strip()
   if stdout != expected_addr:
     raise utils.TestError('wrong zk address', db_addr, stdout, expected_addr)
@@ -193,21 +190,21 @@ def _run_test_mysqlctl_clone(server_mode):
 
   tablet_62344.start_vttablet()
 
-  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 %s vt_snapshot_test' % snapshot_cmd).wait()
+  err = tablet_62344.mysqlctl('-port %u -mysql-port %u %s vt_snapshot_test' % (tablet_62344.port, tablet_62344.mysql_port, snapshot_cmd)).wait()
   if err != 0:
     raise utils.TestError('mysqlctl %s failed' % snapshot_cmd)
 
   utils.pause("%s finished" % snapshot_cmd)
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (restore_flags, utils.vtdataroot)).wait()
+  err = tablet_62044.mysqlctl('-port %u -mysql-port %u restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (tablet_62044.port, tablet_62044.mysql_port, restore_flags, utils.vtdataroot)).wait()
   if err != 0:
     raise utils.TestError('mysqlctl restore failed')
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
   if server_mode:
-    err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 snapshotsourceend -read-write vt_snapshot_test').wait()
+    err = tablet_62344.mysqlctl('-port %u -mysql-port %u snapshotsourceend -read-write vt_snapshot_test' % (tablet_62344.port, tablet_62344.mysql_port)).wait()
     if err != 0:
       raise utils.TestError('mysqlctl snapshotsourceend failed')
 
@@ -326,7 +323,7 @@ def _run_test_vtctl_clone(server_mode):
   utils.run("rm -rf %s" % snapshot_dir)
   utils.run("mkdir -p %s" % snapshot_dir)
   utils.run("chmod -w %s" % snapshot_dir)
-  out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s %s' %
+  out, err = utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s %s' %
                        (clone_flags, tablet_62344.zk_tablet_path,
                         tablet_62044.zk_tablet_path),
                        trap_output=True, raise_on_error=False)
@@ -516,7 +513,7 @@ primary key (id)
                         populate)
 
   tablet_62344.start_vttablet()
-  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 multisnapshot --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- vt_test_keyspace id').wait()
+  err = tablet_62344.mysqlctl('-port %u -mysql-port %u multisnapshot --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- vt_test_keyspace id' % (tablet_62344.port, tablet_62344.mysql_port)).wait()
   if err != 0:
     raise utils.TestError('mysqlctl multisnapshot failed')
   if os.path.exists(os.path.join(utils.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.csv.gz')):
@@ -582,7 +579,7 @@ def run_test_mysqlctl_split():
 
   tablet_62344.start_vttablet()
 
-  err = tablet_62344.mysqlctl('-port 6700 -mysql-port 3700 partialsnapshot -end=0000000000000003 vt_test_keyspace id').wait()
+  err = tablet_62344.mysqlctl('-port %u -mysql-port %u partialsnapshot -end=0000000000000003 vt_test_keyspace id' % (tablet_62344.port, tablet_62344.mysql_port)).wait()
   if err != 0:
     raise utils.TestError('mysqlctl partialsnapshot failed')
 
@@ -592,7 +589,7 @@ def run_test_mysqlctl_split():
   tablet_62044.mquery('', 'stop slave')
   tablet_62044.create_db('vt_test_keyspace')
   call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port 6701 -mysql-port 3701 partialrestore %s/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json' % utils.vtdataroot).wait()
+  err = tablet_62044.mysqlctl('-port %u -mysql-port %u partialrestore %s/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json' % (tablet_62044.port, tablet_62044.mysql_port, utils.vtdataroot)).wait()
   if err != 0:
     raise utils.TestError('mysqlctl partialrestore failed')
 
@@ -658,7 +655,7 @@ def _run_test_vtctl_partial_clone(create, populate,
 
   # grab the new tablet definition from zk, make sure the start and
   # end keys are set properly
-  out, err = utils.run(vtroot+'/bin/zk cat ' + tablet_62044.zk_tablet_path,
+  out, err = utils.run(utils.vtroot+'/bin/zk cat ' + tablet_62044.zk_tablet_path,
                        trap_output=True)
   if '"Start": "%s"' % start not in out or '"End": "%s"' % end not in out:
     print "Tablet output:"
@@ -712,13 +709,13 @@ def run_test_restart_during_action():
 
   # we expect this action with a short wait time to fail. this isn't the best
   # and has some potential for flakiness.
-  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 2s WaitForAction ' + action_path)
+  utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 2s WaitForAction ' + action_path)
 
   # wait until the background sleep action is done, otherwise there will be
   # a leftover vtaction whose result may overwrite running actions
   # NOTE(alainjobart): Yes, I've seen it happen, it's a pain to debug:
   # the zombie Sleep clobbers the Clone command in the following tests
-  utils.run(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 20s WaitForAction ' + action_path)
+  utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 20s WaitForAction ' + action_path)
 
   # extra small test: we ran for a while, get the states we were in,
   # make sure they're accounted for properly
@@ -768,24 +765,24 @@ def run_test_reparent_down_master():
   tablet_62344.kill_vttablet()
 
 
-  expected_addr = hostname + ':6700'
+  expected_addr = utils.hostname + ':' + str(tablet_62344.port)
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
   # Perform a reparent operation - the Validate part will try to ping
   # the master and fail somewhat quickly
-  stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
+  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
   utils.debug("Failed ReparentShard output:\n" + stderr)
   if 'ValidateShard verification failed: timed out during validate' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
   # Should timeout and fail
-  stdout, stderr = utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_path)
+  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_path)
   utils.debug("Failed ScrapTablet output:\n" + stderr)
   if 'deadline exceeded' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Should interrupt and fail
-  sp = utils.run_bg(vtroot+'/bin/vtctl -log.level=INFO -wait-time 10s ScrapTablet ' + tablet_62344.zk_tablet_path, stdout=PIPE, stderr=PIPE)
+  sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log.level=INFO -wait-time 10s ScrapTablet ' + tablet_62344.zk_tablet_path, stdout=PIPE, stderr=PIPE)
   # Need time for the process to start before killing it.
   time.sleep(0.1)
   os.kill(sp.pid, signal.SIGINT)
@@ -798,7 +795,7 @@ def run_test_reparent_down_master():
   # Force the scrap action in zk even though tablet is not accessible.
   utils.run_vtctl('ScrapTablet -force ' + tablet_62344.zk_tablet_path, auto_log=True)
 
-  utils.run_fail(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING ChangeSlaveType -force %s idle' %
+  utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING ChangeSlaveType -force %s idle' %
                  tablet_62344.zk_tablet_path)
 
   # Remove pending locks (make this the force option to ReparentShard?)
@@ -808,7 +805,7 @@ def run_test_reparent_down_master():
   utils.run_vtctl('-wait-time 1m ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path, auto_log=True)
 
   utils.zk_check()
-  expected_addr = hostname + ':6701'
+  expected_addr = utils.hostname + ':' + str(tablet_62044.port)
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
   utils.run_vtctl('ChangeSlaveType -force %s idle' % tablet_62344.zk_tablet_path)
@@ -860,7 +857,7 @@ def _run_test_reparent_graceful(shard_id):
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
   utils.zk_check(ping_tablets=True)
 
-  expected_addr = hostname + ':6700'
+  expected_addr = utils.hostname + ':' + str(tablet_62344.port)
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
 
   # Convert two replica to spare. That should leave only one node serving traffic,
@@ -868,7 +865,7 @@ def _run_test_reparent_graceful(shard_id):
   utils.run_vtctl('ChangeSlaveType ' + tablet_41983.zk_tablet_path + ' spare')
   utils.run_vtctl('ChangeSlaveType ' + tablet_31981.zk_tablet_path + ' spare')
   utils.zk_check()
-  expected_addr = hostname + ':6701'
+  expected_addr = utils.hostname + ':' + str(tablet_62044.port)
   _check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
 
   # Run this to make sure it succeeds.
@@ -879,7 +876,7 @@ def _run_test_reparent_graceful(shard_id):
   utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path), auto_log=True)
   utils.zk_check()
 
-  expected_addr = hostname + ':6701'
+  expected_addr = utils.hostname + ':' + str(tablet_62044.port)
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
 
   tablet_62344.kill_vttablet()
@@ -888,11 +885,12 @@ def _run_test_reparent_graceful(shard_id):
   tablet_31981.kill_vttablet()
 
   # Test address correction.
-  tablet_62044.start_vttablet(port=6773)
+  new_port = utils.reserve_ports(1)
+  tablet_62044.start_vttablet(port=new_port)
   # Wait a moment for address to reregister.
   time.sleep(1.0)
 
-  expected_addr = hostname + ':6773'
+  expected_addr = utils.hostname + ':' + str(new_port)
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
 
   tablet_62044.kill_vttablet()
@@ -927,7 +925,7 @@ def run_test_reparent_slave_offline(shard_id='0'):
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
   utils.zk_check(ping_tablets=True)
 
-  expected_addr = hostname + ':6700'
+  expected_addr = utils.hostname + ':' + str(tablet_62344.port)
   _check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
 
   # Kill one tablet so we seem offline
@@ -1032,7 +1030,7 @@ def _check_string_in_hook_result(text, expected):
   raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
 def _run_hook(params, expectedStrings):
-  out, err = utils.run(vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO ExecuteHook %s %s' % (tablet_62344.zk_tablet_path, params), trap_output=True, raise_on_error=False)
+  out, err = utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO ExecuteHook %s %s' % (tablet_62344.zk_tablet_path, params), trap_output=True, raise_on_error=False)
   for expected in expectedStrings:
     _check_string_in_hook_result(err, expected)
 
@@ -1094,7 +1092,7 @@ def run_test_sigterm():
   tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
   # start a 'vtctl Sleep' command in the background
-  sp = utils.run_bg(vtroot+'/bin/vtctl -logfile=/dev/null Sleep %s 60s' %
+  sp = utils.run_bg(utils.vtroot+'/bin/vtctl -logfile=/dev/null Sleep %s 60s' %
                     tablet_62344.zk_tablet_path,
                     stdout=PIPE, stderr=PIPE)
 

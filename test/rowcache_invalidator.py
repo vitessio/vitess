@@ -30,11 +30,11 @@ from vtdb import update_stream_service
 from vtdb import vt_occ2
 
 
-master_host = "localhost:6700"
-replica_host = "localhost:6701"
+master_tablet = tablet.Tablet(62344)
+replica_tablet = tablet.Tablet(62345)
 
-master_tablet = tablet.Tablet(62344, 6700, 3700)
-replica_tablet = tablet.Tablet(62345, 6701, 3702)
+master_host = "localhost:%u" % master_tablet.port
+replica_host = "localhost:%u" % replica_tablet.port
 
 
 create_vt_insert_test = '''create table vt_insert_test (
@@ -70,7 +70,7 @@ def _get_master_current_position():
 
 def _get_repl_current_position():
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='/vt/vt_%010d/mysql.sock' % 62345,
+                         unix_socket='%s/vt_%010d/mysql.sock' % (utils.vtdataroot, 62345),
                          db='vt_test_keyspace')
   cursor = MySQLdb.cursors.DictCursor(conn)
   cursor.execute('show slave status')
@@ -123,8 +123,8 @@ def setup_tablets():
 
   replica_tablet.init_tablet('idle', 'test_keyspace', start=True)
   replica_tablet.start_memcache()
-  utils.run("mkdir -p /vt/snapshot")
-  utils.run("chmod +w /vt/snapshot")
+  utils.run("mkdir -p %s/snapshot" % utils.vtdataroot)
+  utils.run("chmod +w %s/snapshot" % utils.vtdataroot)
   utils.run_vtctl('Clone -force %s %s' %
                   (master_tablet.zk_tablet_path, replica_tablet.zk_tablet_path))
 
@@ -162,7 +162,7 @@ class RowCacheInvalidator(unittest.TestCase):
     #The sleep is needed here, so the invalidator can catch up and the number can be tested.
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
     time.sleep(5)
-    invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['Totals']['Invalidations']
+    invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['Totals']['Invalidations']
     utils.debug("test_cache_invalidation invalidations %d" % invalidations)
     self.assertTrue(invalidations > 0, "invalidator code is working")
 
@@ -171,18 +171,18 @@ class RowCacheInvalidator(unittest.TestCase):
     res = replica_tablet.mquery('vt_test_keyspace', "select min(id) from vt_insert_test")
     self.assertNotEqual(res[0][0], None, "Cannot proceed, no rows in vt_insert_test")
     id = int(res[0][0])
-    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']
+    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict["Hits"]
     replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
-    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']
+    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1, "This shouldn't have hit the cache")
 
     replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
-    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']
+    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Hits'] - hits, 1, "This should have hit the cache")
 
-    purge_cache_counter = framework.MultiDict(utils.get_vars(6701))['CacheCounters']['PurgeCache']
+    purge_cache_counter = framework.MultiDict(utils.get_vars(replica_tablet.port))['CacheCounters']['PurgeCache']
     utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
     #Flush logs will make sure that the InvalidationPosition saved in the cache will become invalid.
     #which should cause purge cache.
@@ -194,12 +194,12 @@ class RowCacheInvalidator(unittest.TestCase):
     #The sleep is needed here, so the invalidator can catch and the number can be tested.
     time.sleep(5)
 
-    cache_counters = framework.MultiDict(utils.get_vars(6701))['CacheCounters']
+    cache_counters = framework.MultiDict(utils.get_vars(replica_tablet.port))['CacheCounters']
     self.assertEqual(cache_counters['PurgeCache'] - purge_cache_counter, 1, "Check that the cache has been purged")
 
-    misses = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']['Misses']
+    misses = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']['Misses']
     replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
-    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']
+    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1, "This shouldn't have hit the cache")
 
   def test_cache_hit(self):
@@ -207,22 +207,22 @@ class RowCacheInvalidator(unittest.TestCase):
     res = replica_tablet.mquery('vt_test_keyspace', "select min(id) from vt_insert_test")
     self.assertNotEqual(res[0][0], None, "Cannot proceed, no rows in vt_insert_test")
     id = int(res[0][0])
-    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']
+    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict["Hits"]
     replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
-    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']
+    stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1, "This shouldn't have hit the cache")
 
     replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
-    hits2 = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['vt_insert_test']['Hits']
+    hits2 = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['vt_insert_test']['Hits']
     self.assertEqual(hits2 - hits, 1, "This should have hit the cache")
 
 
   def test_service_disabled(self):
     utils.debug("===========test_service_disabled=========")
     utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
-    invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://localhost:6701/debug/schema/tables")))['Totals']['Invalidations']
+    invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/schema/tables" % replica_host)))['Totals']['Invalidations']
     utils.debug("test_service_disabled invalidations %d" % invalidations)
     self.assertEqual(invalidations, 0, "Row-cache invalidator should be disabled, no invalidations")
 

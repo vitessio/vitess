@@ -6,10 +6,6 @@ import socket
 import utils
 import tablet
 
-vttop = os.environ['VTTOP']
-vtroot = os.environ['VTROOT']
-hostname = socket.gethostname()
-
 shard_0_master = tablet.Tablet()
 shard_0_replica1 = tablet.Tablet()
 shard_0_replica2 = tablet.Tablet()
@@ -226,7 +222,7 @@ def run_test_complex_schema():
   check_tables(shard_1_replica1, 4)
 
   # now test action log pruning
-  out, err = utils.run(vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
+  out, err = utils.run(utils.vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
   oldLines = out.splitlines()
   oldCount = len(oldLines)
   if utils.options.verbose:
@@ -236,7 +232,7 @@ def run_test_complex_schema():
 
   utils.run_vtctl('PruneActionLogs -keep-count=5 /zk/*/vt/tablets/*/actionlog', auto_log=True)
 
-  out, err = utils.run(vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
+  out, err = utils.run(utils.vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
   newLines = out.splitlines()
   newCount = len(newLines)
   if utils.options.verbose:
