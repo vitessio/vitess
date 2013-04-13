@@ -106,8 +106,8 @@ var commands = []commandGroup{
 				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"Clone", commandClone,
-				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <zk src tablet path> <zk dst tablet path>",
-				"This performs Snapshot and then Restore.  The advantage of having separate actions is that one snapshot can be used for many restores."},
+				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <zk src tablet path> <zk dst tablet path> ...",
+				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
 			command{"ReparentTablet", commandReparentTablet,
 				"<zk tablet path>",
 				"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."},
@@ -856,11 +856,11 @@ func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) 
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	serverMode := subFlags.Bool("server-mode", false, "will keep the snapshot server offline to serve DB files directly")
 	subFlags.Parse(args)
-	if subFlags.NArg() != 2 {
-		relog.Fatal("action Clone requires <zk src tablet path> <zk dst tablet path>")
+	if subFlags.NArg() < 2 {
+		relog.Fatal("action Clone requires <zk src tablet path> <zk dst tablet path> ...")
 	}
 
-	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Arg(1), *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
+	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Args()[1:], *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
 func commandReparentTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -6,6 +6,7 @@ package wrangler
 
 import (
 	"fmt"
+	"sync"
 
 	"code.google.com/p/vitess/go/relog"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
@@ -176,31 +177,60 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkPar
 	return nil
 }
 
-func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
-	// make sure the destination can be restored into (otherwise
-	// there is no point in taking the snapshot in the first place),
-	// and reserve it.
-	err := wr.ReserveForRestore(zkSrcTabletPath, zkDstTabletPath)
-	if err != nil {
-		return err
-	}
-	relog.Info("Successfully reserved %v for restore", zkDstTabletPath)
-
-	// take the snapshot, or put the server in SnapshotSource mode
-	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, concurrency, serverMode)
-	if err != nil {
-		// The snapshot failed so un-reserve the destination
+func (wr *Wrangler) UnreserveForRestoreMulti(zkDstTabletPaths []string) {
+	for _, zkDstTabletPath := range zkDstTabletPaths {
 		ufrErr := wr.UnreserveForRestore(zkDstTabletPath)
 		if ufrErr != nil {
 			relog.Error("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
 		} else {
 			relog.Info("Un-reserved %v", zkDstTabletPath)
 		}
+	}
+}
+
+func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
+	// make sure the destination can be restored into (otherwise
+	// there is no point in taking the snapshot in the first place),
+	// and reserve it.
+	reserved := make([]string, 0, len(zkDstTabletPaths))
+	for _, zkDstTabletPath := range zkDstTabletPaths {
+		err := wr.ReserveForRestore(zkSrcTabletPath, zkDstTabletPath)
+		if err != nil {
+			wr.UnreserveForRestoreMulti(reserved)
+			return err
+		}
+		reserved = append(reserved, zkDstTabletPath)
+		relog.Info("Successfully reserved %v for restore", zkDstTabletPath)
+	}
+
+	// take the snapshot, or put the server in SnapshotSource mode
+	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, concurrency, serverMode)
+	if err != nil {
+		// The snapshot failed so un-reserve the destinations
+		wr.UnreserveForRestoreMulti(reserved)
 	} else {
 		// try to restore the snapshot
 		// In serverMode, and in the case where we're replicating from
 		// the master, we can't wait for replication, as the master is down.
-		err = wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == tm.TYPE_MASTER)
+		wg := sync.WaitGroup{}
+		mu := sync.Mutex{} // to protect err
+		for _, zkDstTabletPath := range zkDstTabletPaths {
+			wg.Add(1)
+			go func(zkDstTabletPath string) {
+				e := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == tm.TYPE_MASTER)
+				if e != nil {
+					mu.Lock()
+					if err != nil {
+						relog.Error("Multiple errors while running Restore: %v", err)
+					} else {
+						err = e
+					}
+					mu.Unlock()
+				}
+				wg.Done()
+			}(zkDstTabletPath)
+		}
+		wg.Wait()
 	}
 
 	// in any case, fix the server
@@ -211,7 +241,7 @@ func (wr *Wrangler) Clone(zkSrcTabletPath, zkDstTabletPath string, forceMasterSn
 				// If there is no other error, this matters.
 				err = resetErr
 			} else {
-				// In the context of a larger failure, just log a not to cleanup.
+				// In the context of a larger failure, just log a note to cleanup.
 				relog.Error("Failed to reset snapshot source: %v - vtctl SnapshotSourceEnd is required", resetErr)
 			}
 		}
