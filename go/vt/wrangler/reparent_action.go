@@ -379,11 +379,11 @@ func (wr *Wrangler) restartSlave(ti *tm.TabletInfo, rsd *tm.RestartSlaveData) (e
 
 func (wr *Wrangler) checkMasterElect(ti *tm.TabletInfo) error {
 	// Check the master-elect is fit for duty - call out for hardware checks.
-	hookName := "live_server_check"
-	if !tm.IsServingType(ti.Type) {
-		hookName = "idle_server_check"
+	// if the server was already serving live traffic, it's probably good
+	if tm.IsServingType(ti.Type) {
+		return nil
 	}
-	return wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook(hookName))
+	return wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("preflight_serving_type"))
 }
 
 func (wr *Wrangler) finishReparent(masterElect *tm.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {

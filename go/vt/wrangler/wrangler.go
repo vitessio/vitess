@@ -57,7 +57,7 @@ func (wr *Wrangler) ActionInitiator() *tm.ActionInitiator {
 // Change the type of tablet and recompute all necessary derived paths in the
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and
-// do not run the idle_server_check nor live_server_check hooks
+// do not run the remote hooks
 func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force bool) error {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned

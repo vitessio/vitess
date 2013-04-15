@@ -640,8 +640,8 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 // - to SCRAP if something in the process on the target host fails
 // - to SPARE if the clone works
 func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, parentAlias TabletAlias, keyRange key.KeyRange) error {
-	// run the optional idle_server_check hook
-	if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {
+	// run the optional preflight_assigned hook
+	if err := hook.NewSimpleHook("preflight_assigned").ExecuteOptional(); err != nil {
 		return err
 	}
 
@@ -848,13 +848,25 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 		sourceAddrs[i] = &url.URL{Host: t.Addr, Path: "/" + t.DbName()}
 	}
 
+	// change type to restore, no change to replication graph
+	originalType := tablet.Type
+	tablet.Type = TYPE_RESTORE
+	err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	if err != nil {
+		return err
+	}
+
+	// run the action, scrap if it fails
 	if err := ta.mysqld.RestoreFromMultiSnapshot(tablet.DbName(), tablet.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
 		if e := Scrap(ta.zconn, ta.zkTabletPath, false); e != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
 	}
-	return nil
+
+	// restore type back
+	tablet.Type = originalType
+	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 }
 
 // Operate on restore tablet.
@@ -913,7 +925,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 		return err
 	}
 
-	// change to TYPE_SPARE, we're done!
+	// change to TYPE_MASTER, we're done!
 	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_MASTER, true)
 }
 
@@ -1006,17 +1018,10 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks
 	}
 
 	if runHooks {
-		// Only run the idle_server_check hook when
+		// Only run the preflight_serving_type hook when
 		// transitioning from non-serving to serving.
 		if !IsServingType(tablet.Type) && IsServingType(newType) {
-			if err := hook.NewSimpleHook("idle_server_check").ExecuteOptional(); err != nil {
-				return err
-			}
-		}
-
-		// Run the live_server_check any time we transition to a serving type.
-		if IsServingType(newType) {
-			if err := hook.NewSimpleHook("live_server_check").ExecuteOptional(); err != nil {
+			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
 				return err
 			}
 		}
