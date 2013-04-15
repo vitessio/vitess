@@ -7,11 +7,14 @@ package wrangler
 import (
 	"fmt"
 	"path"
+	"strings"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/key"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
+	"launchpad.net/gozk/zookeeper"
 )
 
 const (
@@ -224,6 +227,123 @@ func (wr *Wrangler) handleActionError(actionPath string, actionErr error, blockQ
 		return zk.DeleteRecursive(wr.zconn, actionPath, -1)
 	}
 	return nil
+}
+
+func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
+	// FIXME(msolomon) just read the shard node data instead - that is tearing resistant.
+	children, _, err := zconn.Children(zkShardPath)
+	if err != nil {
+		return "", err
+	}
+	result := ""
+	for _, child := range children {
+		if child == "action" || child == "actionlog" {
+			continue
+		}
+		if result != "" {
+			return "", fmt.Errorf("master search failed: %v", zkShardPath)
+		}
+		result = path.Join(zkShardPath, child)
+	}
+
+	return result, nil
+}
+
+func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride string, force, update bool) error {
+	if err := tm.IsTabletPath(zkPath); err != nil {
+		return err
+	}
+	cell, err := zk.ZkCellFromZkPath(zkPath)
+	if err != nil {
+		return err
+	}
+	pathParts := strings.Split(zkPath, "/")
+	uid, err := tm.ParseUid(pathParts[len(pathParts)-1])
+	if err != nil {
+		return err
+	}
+
+	// if shardId contains a '-', we assume it's a range-based shard,
+	// so we try to extract the KeyRange.
+	var keyRange key.KeyRange
+	if strings.Contains(shardId, "-") {
+		parts := strings.Split(shardId, "-")
+		if len(parts) != 2 {
+			return fmt.Errorf("Invalid shardId, can only contains one '-': %v", shardId)
+		}
+
+		keyRange.Start, err = key.HexKeyspaceId(parts[0]).Unhex()
+		if err != nil {
+			return err
+		}
+
+		keyRange.End, err = key.HexKeyspaceId(parts[1]).Unhex()
+		if err != nil {
+			return err
+		}
+
+		shardId = strings.ToUpper(shardId)
+	}
+
+	parent := tm.TabletAlias{}
+	if parentAlias == "" && tm.TabletType(tabletType) != tm.TYPE_MASTER && tm.TabletType(tabletType) != tm.TYPE_IDLE {
+		vtSubStree, err := tm.VtSubtree(zkPath)
+		if err != nil {
+			return err
+		}
+		vtRoot := path.Join("/zk/global", vtSubStree)
+		parentAlias, err = getMasterAlias(wr.zconn, tm.ShardPath(vtRoot, keyspace, shardId))
+		if err != nil {
+			return err
+		}
+	}
+	if parentAlias != "" {
+		parent.Cell, parent.Uid, err = tm.ParseTabletReplicationPath(parentAlias)
+		if err != nil {
+			return err
+		}
+	}
+
+	tablet, err := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
+	if err != nil {
+		return err
+	}
+	tablet.DbNameOverride = dbNameOverride
+	tablet.KeyRange = keyRange
+
+	err = tm.CreateTablet(wr.zconn, zkPath, tablet)
+	if err != nil && zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		// Try to update nicely, but if it fails fall back to force behavior.
+		if update {
+			oldTablet, err := tm.ReadTablet(wr.zconn, zkPath)
+			if err != nil {
+				relog.Warning("failed reading tablet %v: %v", zkPath, err)
+			} else {
+				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
+					*(oldTablet.Tablet) = *tablet
+					err := tm.UpdateTablet(wr.zconn, zkPath, oldTablet)
+					if err != nil {
+						relog.Warning("failed updating tablet %v: %v", zkPath, err)
+					} else {
+						return nil
+					}
+				}
+			}
+		}
+		if force {
+			_, err = wr.Scrap(zkPath, force, false)
+			if err != nil {
+				relog.Error("failed scrapping tablet %v: %v", zkPath, err)
+				return err
+			}
+			err = zk.DeleteRecursive(wr.zconn, zkPath, -1)
+			if err != nil {
+				relog.Error("failed deleting tablet %v: %v", zkPath, err)
+			}
+			err = tm.CreateTablet(wr.zconn, zkPath, tablet)
+		}
+	}
+	return err
 }
 
 // Scrap a tablet. If force is used, we write to ZK directly and don't

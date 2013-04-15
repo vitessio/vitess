@@ -468,7 +468,7 @@ primary key (id)
     utils.run_vtctl('MultiSnapshot -force -maximum-file-size=1 -spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
-  tablet_62344.init_tablet('master', 'test_keyspace_new', '-0000000000000028', dbname='not_vt_test_keyspace', key_end='0000000000000028')
+  tablet_62344.init_tablet('master', 'test_keyspace_new', '-0000000000000028', dbname='not_vt_test_keyspace')
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace_new/shards/-0000000000000028')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
   tablet_62344.mquery('', 'DROP DATABASE IF EXISTS not_vt_test_keyspace')
