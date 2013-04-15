@@ -546,13 +546,18 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 	return nil
 }
 
+// add ZK_TABLET_PATH to environment
+func configureTabletHook(hk *hook.Hook, zkTabletPath string) {
+	if hk.ExtraEnv == nil {
+		hk.ExtraEnv = make(map[string]string, 1)
+	}
+	hk.ExtraEnv["ZK_TABLET_PATH"] = zkTabletPath
+}
+
 func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
 	// FIXME(msolomon) should't the reply get distilled into an error?
 	h := actionNode.args.(*hook.Hook)
-	if h.ExtraEnv == nil {
-		h.ExtraEnv = make(map[string]string, 1)
-	}
-	h.ExtraEnv["ZK_TABLET_PATH"] = ta.zkTabletPath
+	configureTabletHook(h, ta.zkTabletPath)
 	actionNode.reply = h.Execute()
 	return nil
 }
@@ -641,7 +646,9 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 // - to SPARE if the clone works
 func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, parentAlias TabletAlias, keyRange key.KeyRange) error {
 	// run the optional preflight_assigned hook
-	if err := hook.NewSimpleHook("preflight_assigned").ExecuteOptional(); err != nil {
+	hk := hook.NewSimpleHook("preflight_assigned")
+	configureTabletHook(hk, ta.zkTabletPath)
+	if err := hk.ExecuteOptional(); err != nil {
 		return err
 	}
 
@@ -996,7 +1003,9 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	// run a hook for final cleanup, only in non-force mode.
 	// (force mode executes on the vtctl side, not on the vttablet side)
 	if !force {
-		if hookErr := hook.NewSimpleHook("postflight_scrap").ExecuteOptional(); hookErr != nil {
+		hk := hook.NewSimpleHook("postflight_scrap")
+		configureTabletHook(hk, zkTabletPath)
+		if hookErr := hk.ExecuteOptional(); hookErr != nil {
 			// we don't want to return an error, the server
 			// is already in bad shape probably.
 			relog.Warning("Scrap: postflight_scrap failed: %v", hookErr)
