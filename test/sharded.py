@@ -90,10 +90,10 @@ def run_test_sharding():
 
   utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
 
-  shard_0_master.init_tablet( 'master',  'test_keyspace', '-80', key_end='80')
-  shard_0_replica.init_tablet('replica', 'test_keyspace', '-80', key_end='80')
-  shard_1_master.init_tablet( 'master',  'test_keyspace', '80-', key_start='80')
-  shard_1_replica.init_tablet('replica', 'test_keyspace', '80-', key_start='80')
+  shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
+  shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
+  shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
+  shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
 
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
 

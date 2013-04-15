@@ -167,7 +167,7 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, key_start=None, key_end=None, start=False, auth=False, dbname=None):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, start=False, auth=False, dbname=None):
     self.keyspace = keyspace
     self.shard = shard
     if keyspace:
@@ -183,10 +183,6 @@ class Tablet(object):
     args = ['InitTablet']
     if force:
       args.append('-force')
-    if key_start:
-      args.append('-key-start='+key_start)
-    if key_end:
-      args.append('-key-end='+key_end)
     if dbname:
       args.append('-db-name-override='+dbname)
     args.extend([self.zk_tablet_path,

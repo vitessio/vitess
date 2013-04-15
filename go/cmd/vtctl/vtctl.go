@@ -57,10 +57,10 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-db-name-override=<db name>] [-key-start=<key start>] [-key-end=<key end>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]",
+				"[-force] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]",
 				"Initializes a tablet in zookeeper."},
 			command{"UpdateTablet", commandUpdateTablet,
-				"[-force] [-db-name-override=<db name>] [-key-start=<key start>] [-key-end=<key end>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
+				"[-force] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
 				"DEPRECATED (use ChangeSlaveType or other operations instead).\n" +
 					"Updates a tablet in zookeeper."},
 			command{"ScrapTablet", commandScrapTablet,
@@ -328,7 +328,7 @@ func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
 	return result, nil
 }
 
-func initTablet(wrangler *wr.Wrangler, zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride, keyStart, keyEnd string, force, update bool) error {
+func initTablet(wrangler *wr.Wrangler, zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride string, force, update bool) error {
 	zconn := wrangler.ZkConn()
 	if err := tm.IsTabletPath(zkPath); err != nil {
 		return err
@@ -343,12 +343,25 @@ func initTablet(wrangler *wr.Wrangler, zkPath, hostname, mysqlPort, port, keyspa
 		return err
 	}
 
-	// if keyStart or keyEnd is set, check the shard name is
-	// keyStart-keyEnd
-	if keyStart != "" || keyEnd != "" {
-		if shardId != keyStart+"-"+keyEnd {
-			return fmt.Errorf("Invalid shardId, was expecting '%v-%v' but got '%v'", keyStart, keyEnd, shardId)
+	// if shardId contains a '-', we assume it's a range-based shard,
+	// so we try to extract the KeyRange.
+	var keyRange key.KeyRange
+	if strings.Contains(shardId, "-") {
+		parts := strings.Split(shardId, "-")
+		if len(parts) != 2 {
+			return fmt.Errorf("Invalid shardId, can only contains one '-': %v", shardId)
 		}
+
+		keyRange.Start, err = key.HexKeyspaceId(parts[0]).Unhex()
+		if err != nil {
+			return err
+		}
+
+		keyRange.End, err = key.HexKeyspaceId(parts[1]).Unhex()
+		if err != nil {
+			return err
+		}
+		shardId = strings.ToUpper(shardId)
 	}
 
 	parent := tm.TabletAlias{}
@@ -375,19 +388,7 @@ func initTablet(wrangler *wr.Wrangler, zkPath, hostname, mysqlPort, port, keyspa
 		return err
 	}
 	tablet.DbNameOverride = dbNameOverride
-
-	if keyStart != "" {
-		tablet.KeyRange.Start, err = key.HexKeyspaceId(keyStart).Unhex()
-		if err != nil {
-			return err
-		}
-	}
-	if keyEnd != "" {
-		tablet.KeyRange.End, err = key.HexKeyspaceId(keyEnd).Unhex()
-		if err != nil {
-			return err
-		}
-	}
+	tablet.KeyRange = keyRange
 
 	err = tm.CreateTablet(zconn, zkPath, tablet)
 	if err != nil && zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
@@ -680,8 +681,6 @@ func getFileParam(flag, flagFile, name string) string {
 func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
-	keyStart := subFlags.String("key-start", "", "start of the key range")
-	keyEnd := subFlags.String("key-end", "", "end of the key range")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 7 && subFlags.NArg() != 8 {
 		relog.Fatal("action InitTablet requires <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]")
@@ -691,20 +690,18 @@ func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []str
 	if subFlags.NArg() == 8 {
 		parentAlias = subFlags.Arg(7)
 	}
-	return "", initTablet(wrangler, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *keyStart, *keyEnd, *force, false)
+	return "", initTablet(wrangler, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, false)
 }
 
 func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
-	keyStart := subFlags.String("key-start", "", "start of the key range")
-	keyEnd := subFlags.String("key-end", "", "end of the key range")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 8 {
 		relog.Fatal("action UpdateTablet requires <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>")
 	}
 
-	return "", initTablet(wrangler, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *keyStart, *keyEnd, *force, true)
+	return "", initTablet(wrangler, subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *force, true)
 }
 
 func commandScrapTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
