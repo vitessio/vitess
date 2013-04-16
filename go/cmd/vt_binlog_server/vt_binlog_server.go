@@ -84,12 +84,12 @@ type BinlogServer struct {
 
 //Raw event buffer used to gather data during parsing.
 type eventBuffer struct {
-	mysqlctl.BinlogPosition
+	mysqlctl.BlPosition
 	LogLine []byte
 	firstKw string
 }
 
-func NewEventBuffer(pos *mysqlctl.BinlogPosition, line []byte) *eventBuffer {
+func NewEventBuffer(pos *mysqlctl.BlPosition, line []byte) *eventBuffer {
 	buf := &eventBuffer{}
 	buf.LogLine = make([]byte, len(line))
 	//buf.LogLine = append(buf.LogLine, line...)
@@ -97,12 +97,8 @@ func NewEventBuffer(pos *mysqlctl.BinlogPosition, line []byte) *eventBuffer {
 	if written < len(line) {
 		relog.Warning("Problem in copying logline to new buffer, written %v, len %v", written, len(line))
 	}
-	posCoordinates := pos.GetCoordinates()
-	buf.BinlogPosition.SetCoordinates(&mysqlctl.ReplicationCoordinates{RelayFilename: posCoordinates.RelayFilename,
-		MasterFilename: posCoordinates.MasterFilename,
-		MasterPosition: posCoordinates.MasterPosition,
-	})
-	buf.BinlogPosition.Timestamp = pos.Timestamp
+	buf.BlPosition = *pos
+	buf.BlPosition.Timestamp = pos.Timestamp
 	return buf
 }
 
@@ -113,7 +109,7 @@ type Blp struct {
 	responseStream   []*mysqlctl.BinlogResponse
 	initialSeek      bool
 	startPosition    *mysqlctl.ReplicationCoordinates
-	currentPosition  *mysqlctl.BinlogPosition
+	currentPosition  *mysqlctl.BlPosition
 	dbmatch          bool
 	keyspaceRange    key.KeyRange
 	keyrangeTag      string
@@ -130,12 +126,9 @@ func NewBlp(startCoordinates *mysqlctl.ReplicationCoordinates, blServer *BinlogS
 	blp := &Blp{}
 	blp.startPosition = startCoordinates
 	blp.keyspaceRange = *keyRange
-	currentCoord := mysqlctl.NewReplicationCoordinates(startCoordinates.RelayFilename,
-		0,
-		startCoordinates.MasterFilename,
-		startCoordinates.MasterPosition)
-	blp.currentPosition = &mysqlctl.BinlogPosition{}
-	blp.currentPosition.SetCoordinates(currentCoord)
+	blp.currentPosition = &mysqlctl.BlPosition{}
+	blp.currentPosition.Position = *startCoordinates
+	blp.currentPosition.Position.RelayPosition = 0
 	blp.inTxn = false
 	blp.initialSeek = true
 	blp.txnLineBuffer = make([]*eventBuffer, 0, mysqlctl.MAX_TXN_BATCH)
@@ -165,9 +158,7 @@ func (err BinlogParseError) Error() string {
 func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse) {
 	var binlogReader io.Reader
 	defer func() {
-		currentCoord := blp.currentPosition.GetCoordinates()
-		//FIXME: added for debug, can remove later.
-		reqIdentifier := fmt.Sprintf("%v:%v relay %v, line: '%v'", currentCoord.MasterFilename, currentCoord.MasterPosition, currentCoord.RelayFilename, blp.currentLine)
+		reqIdentifier := fmt.Sprintf("%v, line: '%v'", blp.currentPosition.Position.String(), blp.currentLine)
 		if x := recover(); x != nil {
 			serr, ok := x.(*BinlogParseError)
 			if !ok {
@@ -344,7 +335,7 @@ func (blp *Blp) parsePositionData(line []byte) {
 		}
 		blp.parseMasterPosition(line)
 		if blp.nextStmtPosition != 0 {
-			blp.currentPosition.GetCoordinates().MasterPosition = blp.nextStmtPosition
+			blp.currentPosition.Position.MasterPosition = blp.nextStmtPosition
 		}
 	}
 	if bytes.Index(line, mysqlctl.BINLOG_XID) != -1 {
@@ -424,7 +415,7 @@ func (blp *Blp) extractEventTimestamp(event *eventBuffer) {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting timestamp %v, sql %v", err, string(line))))
 	}
 	blp.currentPosition.Timestamp = currentTimestamp
-	event.BinlogPosition.Timestamp = currentTimestamp
+	event.BlPosition.Timestamp = currentTimestamp
 }
 
 func (blp *Blp) parseRotateEvent(line []byte) {
@@ -435,28 +426,27 @@ func (blp *Blp) parseRotateEvent(line []byte) {
 	if err != nil {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting rotate pos %v from line %s", err, string(line))))
 	}
-	coord := blp.currentPosition.GetCoordinates()
 
 	if !blp.usingRelayLogs {
 		//If the file being parsed is a binlog,
 		//then the rotate events only correspond to itself.
-		coord.MasterFilename = rotateFilename
-		coord.MasterPosition = rotatePos
+		blp.currentPosition.Position.MasterFilename = rotateFilename
+		blp.currentPosition.Position.MasterPosition = rotatePos
 		blp.globalState.parseStats.Add("BinlogRotate."+blp.keyrangeTag, 1)
 	} else {
 		//For relay logs, the rotate events could be that of relay log or the binlog,
 		//the prefix of rotateFilename is used to test which case is it.
-		logsDir, relayFile := path.Split(coord.RelayFilename)
+		logsDir, relayFile := path.Split(blp.currentPosition.Position.RelayFilename)
 		currentPrefix := strings.Split(relayFile, ".")[0]
 		rotatePrefix := strings.Split(rotateFilename, ".")[0]
 		if currentPrefix == rotatePrefix {
 			//relay log rotated
-			coord.RelayFilename = path.Join(logsDir, rotateFilename)
+			blp.currentPosition.Position.RelayFilename = path.Join(logsDir, rotateFilename)
 			blp.globalState.parseStats.Add("RelayRotate."+blp.keyrangeTag, 1)
 		} else {
 			//master file rotated
-			coord.MasterFilename = rotateFilename
-			coord.MasterPosition = rotatePos
+			blp.currentPosition.Position.MasterFilename = rotateFilename
+			blp.currentPosition.Position.MasterPosition = rotatePos
 			blp.globalState.parseStats.Add("BinlogRotate."+blp.keyrangeTag, 1)
 		}
 	}
@@ -485,14 +475,8 @@ func (blp *Blp) handleBeginEvent(event *eventBuffer) {
 
 //This creates the response for DDL event.
 func createDdlStream(lineBuffer *eventBuffer) (ddlStream *mysqlctl.BinlogResponse) {
-	var err error
 	ddlStream = new(mysqlctl.BinlogResponse)
-	ddlStream.BinlogPosition = lineBuffer.BinlogPosition
-	coord := lineBuffer.BinlogPosition.GetCoordinates()
-	ddlStream.BinlogPosition.Position, err = mysqlctl.EncodeCoordinatesToPosition(coord)
-	if err != nil {
-		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v position %v:%v", err, coord.MasterFilename, coord.MasterPosition)))
-	}
+	ddlStream.BlPosition = lineBuffer.BlPosition
 	ddlStream.SqlType = mysqlctl.DDL
 	ddlStream.Sql = make([]string, 0, 1)
 	ddlStream.Sql = append(ddlStream.Sql, string(lineBuffer.LogLine))
@@ -520,7 +504,7 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 		}
 	}
 
-	commitEvent.BinlogPosition.Xid = blp.currentPosition.Xid
+	commitEvent.BlPosition.Xid = blp.currentPosition.Xid
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	//txn block for DMLs, parse it and send events for a txn
 	var dmlCount int64
@@ -547,7 +531,7 @@ func (blp *Blp) slavePosBehindReplication() bool {
 		relog.Error(err.Error())
 		panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
 	}
-	currentCoord := blp.currentPosition.GetCoordinates()
+	currentCoord := blp.currentPosition.Position
 	if repl.MasterFilename == currentCoord.MasterFilename {
 		if currentCoord.MasterPosition <= repl.MasterPosition {
 			return true
@@ -572,11 +556,9 @@ func (blp *Blp) slavePosBehindReplication() bool {
 
 //This builds BinlogResponse for each transaction.
 func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, dmlCount int64) {
-	var err error
 	var line []byte
 	var keyspaceIdStr string
 	var keyspaceId key.KeyspaceId
-	var coord *mysqlctl.ReplicationCoordinates
 
 	dmlBuffer := make([]string, 0, 10)
 
@@ -584,12 +566,7 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 		line = event.LogLine
 		if bytes.HasPrefix(line, mysqlctl.BINLOG_BEGIN) {
 			streamBuf := new(mysqlctl.BinlogResponse)
-			streamBuf.BinlogPosition = event.BinlogPosition
-			coord = event.BinlogPosition.GetCoordinates()
-			streamBuf.BinlogPosition.Position, err = mysqlctl.EncodeCoordinatesToPosition(coord)
-			if err != nil {
-				panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v, position %v:%v", err, coord.MasterFilename, coord.MasterPosition)))
-			}
+			streamBuf.BlPosition = event.BlPosition
 			streamBuf.SqlType = mysqlctl.BEGIN
 			txnResponseList = append(txnResponseList, streamBuf)
 			continue
@@ -633,14 +610,8 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 func (blp *Blp) createDmlEvent(eventBuf *eventBuffer, keyspaceId string) (dmlEvent *mysqlctl.BinlogResponse) {
 	//parse keyspace id
 	//for inserts check for index and seq comments
-	var err error
 	dmlEvent = new(mysqlctl.BinlogResponse)
-	dmlEvent.BinlogPosition = eventBuf.BinlogPosition
-	coord := eventBuf.BinlogPosition.GetCoordinates()
-	dmlEvent.BinlogPosition.Position, err = mysqlctl.EncodeCoordinatesToPosition(coord)
-	if err != nil {
-		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v, position %v:%v", err, coord.MasterFilename, coord.MasterPosition)))
-	}
+	dmlEvent.BlPosition = eventBuf.BlPosition
 	dmlEvent.SqlType = mysqlctl.GetDmlType(eventBuf.firstKw)
 	dmlEvent.KeyspaceId = keyspaceId
 	indexType, indexId, seqName, seqId, userId := parseIndexSeq(eventBuf.LogLine)
@@ -730,20 +701,14 @@ func parseIndexSeq(sql []byte) (indexName string, indexId interface{}, seqName s
 
 //This creates the response for COMMIT event.
 func createCommitEvent(eventBuf *eventBuffer) (streamBuf *mysqlctl.BinlogResponse) {
-	var err error
 	streamBuf = new(mysqlctl.BinlogResponse)
-	streamBuf.BinlogPosition = eventBuf.BinlogPosition
-	coord := eventBuf.BinlogPosition.GetCoordinates()
-	streamBuf.BinlogPosition.Position, err = mysqlctl.EncodeCoordinatesToPosition(coord)
-	if err != nil {
-		panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v %v:%v", err, coord.MasterFilename, coord.MasterPosition)))
-	}
+	streamBuf.BlPosition = eventBuf.BlPosition
 	streamBuf.SqlType = mysqlctl.COMMIT
 	return
 }
 
 func isRequestValid(req *mysqlctl.BinlogServerRequest) bool {
-	if req.StartPosition == "" {
+	if req.StartPosition.MasterFilename == "" || req.StartPosition.MasterPosition == 0 {
 		return false
 	}
 	if req.KeyspaceStart == "" && req.KeyspaceEnd == "" {
@@ -764,17 +729,12 @@ func sendStream(sendReply mysqlctl.SendUpdateStreamResponse, responseBuf []*mysq
 }
 
 //This sends the error to the client.
-func sendError(sendReply mysqlctl.SendUpdateStreamResponse, reqIdentifier string, inputErr error, blpPos *mysqlctl.BinlogPosition) {
+func sendError(sendReply mysqlctl.SendUpdateStreamResponse, reqIdentifier string, inputErr error, blpPos *mysqlctl.BlPosition) {
 	var err error
 	streamBuf := new(mysqlctl.BinlogResponse)
 	streamBuf.Error = inputErr.Error()
 	if blpPos != nil {
-		streamBuf.BinlogPosition = *blpPos
-		coord := blpPos.GetCoordinates()
-		streamBuf.BinlogPosition.Position, err = mysqlctl.EncodeCoordinatesToPosition(coord)
-		if err != nil {
-			panic(NewBinlogParseError(fmt.Sprintf("Error in encoding the position %v, position %v:%v", err, coord.MasterFilename, coord.MasterPosition)))
-		}
+		streamBuf.BlPosition = *blpPos
 	}
 	buf := []*mysqlctl.BinlogResponse{streamBuf}
 	err = sendStream(sendReply, buf)
@@ -792,33 +752,28 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 				relog.Error("Uncaught panic at top-most level: '%v'", x)
 				//panic(x)
 			}
-			sendError(sendReply, req.StartPosition, x.(error), nil)
+			sendError(sendReply, req.StartPosition.String(), x.(error), nil)
 		}
 	}()
 
-	relog.Info("received req: %v kr start %v end %v", req.StartPosition, req.KeyspaceStart, req.KeyspaceEnd)
+	relog.Info("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
 	if !isRequestValid(req) {
 		panic(NewBinlogParseError("Invalid request, cannot serve the stream"))
 	}
 
-	startCoordinates, err := mysqlctl.DecodePositionToCoordinates(req.StartPosition)
-	if err != nil {
-		panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, err %v", req.StartPosition, err)))
-	}
-
 	usingRelayLogs := false
 	var binlogPrefix, logsDir string
-	if startCoordinates.RelayFilename != "" {
+	if req.StartPosition.RelayFilename != "" {
 		usingRelayLogs = true
 		binlogPrefix = blServer.mycnf.RelayLogPath
 		logsDir = path.Dir(binlogPrefix)
-		if !mysqlctl.IsRelayPositionValid(startCoordinates, logsDir) {
+		if !mysqlctl.IsRelayPositionValid(&req.StartPosition, logsDir) {
 			panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
 		}
 	} else {
 		binlogPrefix = blServer.mycnf.BinLogPath
 		logsDir = path.Dir(binlogPrefix)
-		if !mysqlctl.IsMasterPositionValid(startCoordinates) {
+		if !mysqlctl.IsMasterPositionValid(&req.StartPosition) {
 			panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
 		}
 	}
@@ -833,7 +788,7 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	}
 	keyRange := &key.KeyRange{Start: startKey, End: endKey}
 
-	blp := NewBlp(startCoordinates, blServer, keyRange)
+	blp := NewBlp(&req.StartPosition, blServer, keyRange)
 	blp.usingRelayLogs = usingRelayLogs
 	blp.binlogPrefix = binlogPrefix
 	blp.logMetadata = mysqlctl.NewSlaveMetadata(logsDir, blServer.mycnf.RelayLogInfoPath)

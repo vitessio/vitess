@@ -25,7 +25,6 @@ import (
 	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
@@ -64,14 +63,18 @@ var (
 	CREATE_RECOVERY_TABLE = `CREATE TABLE IF NOT EXISTS vt_blp_recovery (
                              host varchar(32) NOT NULL,
                              port int NOT NULL,
-                             position varchar(255) NOT NULL,
+                             master_filename varchar(255) NOT NULL,
+                             master_position bigint(20) unsigned NOT NULL,
+                             relay_filename varchar(255) default NULL,
+                             relay_position bigint(20) unsigned default 0,
                              keyrange_start varchar(32) NOT NULL,
                              keyrange_end varchar(32) NOT NULL,
+                             time_updated int(10) unsigned NOT NULL,
                              PRIMARY KEY (host, keyrange_end)
                              ) ENGINE=InnoDB DEFAULT CHARSET=latin1`
-	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (host, port, position, keyrange_start, keyrange_end) 
-	                          values ('%v', %v, '%v', '%v', '%v')`
-	UPDATE_RECOVERY      = "update _vt.vt_blp_recovery set position='%v' where host='%v' and keyrange_end='%v'"
+	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, time_updated) 
+	                          values ('%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp())`
+	UPDATE_RECOVERY      = "update _vt.vt_blp_recovery set master_filename='%v', master_position=%v, relay_filename='%v', relay_position=%v, time_updated=unix_timestamp() where host='%v' and keyrange_end='%v'"
 	SELECT_FROM_RECOVERY = "select * from _vt.vt_blp_recovery where host='%v' and keyrange_end='%v'"
 )
 
@@ -87,7 +90,7 @@ var (
 type binlogRecoveryState struct {
 	Host          string
 	Port          int
-	Position      string //json string
+	Position      mysqlctl.ReplicationCoordinates
 	KeyrangeStart string //hex string
 	KeyrangeEnd   string //hex string
 }
@@ -249,9 +252,14 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.Keys
 	return blp
 }
 
-func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition string) {
-	blp.recoveryState.Position = currentPosition
-	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY, currentPosition, blp.recoveryState.Host, blp.recoveryState.KeyrangeEnd)
+func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.ReplicationCoordinates) {
+	blp.recoveryState.Position = *currentPosition
+	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY, currentPosition.MasterFilename,
+		currentPosition.MasterPosition,
+		currentPosition.RelayFilename,
+		currentPosition.RelayPosition,
+		blp.recoveryState.Host,
+		blp.recoveryState.KeyrangeEnd)
 
 	if _, err := blp.dbClient.ExecuteFetch([]byte(updateRecovery), 0, false); err != nil {
 		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
@@ -313,8 +321,8 @@ func startPositionValid(startPos *binlogRecoveryState) bool {
 		relog.Error("Invalid connection params.")
 		return false
 	}
-	if startPos.Position == "" {
-		relog.Error("Empty start position.")
+	if startPos.Position.MasterFilename == "" || startPos.Position.MasterPosition == 0 {
+		relog.Error("Invalid start coordinates.")
 		return false
 	}
 	//One of them can be empty for min or max key.
@@ -386,6 +394,48 @@ func createLookupClient(lookupConfigFile, dbCredFile string) (*DBClient, error) 
 	return lookupClient, nil
 }
 
+func getStartPosition(qr *proto.QueryResult) (*mysqlctl.ReplicationCoordinates, error) {
+	startPosition := &mysqlctl.ReplicationCoordinates{}
+	row := qr.Rows[0]
+	for i, field := range qr.Fields {
+		switch strings.ToLower(field.Name) {
+		case "master_filename":
+			val := row[i]
+			if !val.IsNull() {
+				startPosition.MasterFilename = val.String()
+			}
+		case "master_position":
+			val := row[i]
+			if !val.IsNull() {
+				strVal := val.String()
+				masterPos, err := strconv.ParseUint(strVal, 0, 64)
+				if err != nil {
+					return nil, fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
+				}
+				startPosition.MasterPosition = masterPos
+			}
+		case "relay_filename":
+			val := row[i]
+			if !val.IsNull() {
+				startPosition.RelayFilename = val.String()
+			}
+		case "relay_position":
+			val := row[i]
+			if !val.IsNull() {
+				strVal := val.String()
+				relayPos, err := strconv.ParseUint(strVal, 0, 64)
+				if err != nil {
+					return nil, fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
+				}
+				startPosition.RelayPosition = relayPos
+			}
+		default:
+			continue
+		}
+	}
+	return startPosition, nil
+}
+
 func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, useCheckpoint, debug bool) (*BinlogPlayer, error) {
 	startData, err := ioutil.ReadFile(startPosFile)
 	if err != nil {
@@ -410,15 +460,11 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		if qr.RowsAffected != 1 {
 			relog.Fatal("Checkpoint information not available in db")
 		}
-		for i, field := range qr.Fields {
-			if strings.ToLower(field.Name) == "position" {
-				position := qr.Rows[0][i]
-				if !position.IsNull() {
-					startPosition.Position = position.String()
-				}
-				break
-			}
+		startCoord, err := getStartPosition(qr)
+		if err != nil {
+			relog.Fatal("Error in obtaining checkpoint information")
 		}
+		startPosition.Position = *startCoord
 	}
 
 	if !startPositionValid(startPosition) {
@@ -473,7 +519,14 @@ func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecovery
 		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
 	if qr.RowsAffected == 0 {
-		insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, startPosition.Host, startPosition.Port, startPosition.Position, startPosition.KeyrangeStart, startPosition.KeyrangeEnd)
+		insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, startPosition.Host,
+			startPosition.Port,
+			startPosition.Position.MasterFilename,
+			startPosition.Position.MasterPosition,
+			startPosition.Position.RelayFilename,
+			startPosition.Position.RelayPosition,
+			startPosition.KeyrangeStart,
+			startPosition.KeyrangeEnd)
 		recoveryDmls := []string{USE_VT, "begin", insertRecovery, "commit", useDb}
 		for _, sql := range recoveryDmls {
 			if _, err := dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
@@ -502,13 +555,8 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 
 	//Read event
 	if binlogResponse.Error != "" {
-		//EOF error, retry.
-		if strings.Contains(binlogResponse.Error, "EOF") {
-			relog.Error("Retry %v", binlogResponse.Error)
-			panic(fmt.Errorf(binlogResponse.Error))
-		}
-		if binlogResponse.BinlogPosition.Position != "" {
-			panic(fmt.Errorf("Error encountered at position %v: %v", binlogResponse.BinlogPosition.Position, binlogResponse.Error))
+		if binlogResponse.BlPosition.Position.MasterFilename != "" {
+			panic(fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.BlPosition.Position.String(), binlogResponse.Error))
 		} else {
 			panic(fmt.Errorf("Error encountered from server %v", binlogResponse.Error))
 		}
@@ -529,7 +577,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 			return fmt.Errorf("Invalid event: COMMIT event without a transaction.")
 		}
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
-		blp.handleTxn(binlogResponse.Position)
+		blp.handleTxn(&binlogResponse.Position)
 		blp.inTxn = false
 		blp.txnBuffer = blp.txnBuffer[:0]
 	case "insert", "update", "delete":
@@ -551,6 +599,13 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 			continue
 		}
 		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+			if sqlErr, ok := err.(*mysql.SqlError); ok {
+				//1050: Create table failed since table already exists, 1051: drop table failed since table doesn't exist.
+				if sqlErr.Number() == 1050 || sqlErr.Number() == 1051 {
+					relog.Warning("Ignoring error '%v' thrown by ddl '%v'", err, sql)
+					continue
+				}
+			}
 			panic(fmt.Errorf("Error %v in executing sql %v", err, sql))
 		}
 	}
@@ -558,7 +613,7 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 	if err = blp.dbClient.Begin(); err != nil {
 		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
 	}
-	blp.WriteRecoveryPosition(ddlEvent.Position)
+	blp.WriteRecoveryPosition(&ddlEvent.Position)
 	if err = blp.dbClient.Commit(); err != nil {
 		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 	}
@@ -651,7 +706,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 //for each dml - verify that keyspace is correct for this shard - abort immediately for a wrong sql.
 // if indexType, indexid is set, update r_lookup.
 //if seqName and seqId is set, update r_lookup.
-func (blp *BinlogPlayer) handleTxn(recoveryPosition string) {
+func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordinates) {
 	var err error
 	indexUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	seqUpdates := make([][]byte, 0, len(blp.txnBuffer))
@@ -707,7 +762,7 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition string) {
 func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
 	switch indexType {
 	case "username":
-		indexSlice, ok := indexId.([]byte)
+		indexSlice, ok := indexId.(string)
 		if !ok {
 			return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
 		}
@@ -784,7 +839,7 @@ func (blp *BinlogPlayer) applyBinlogEvents() error {
 	var err error
 	connectionStr := fmt.Sprintf("%v:%v", blp.startPosition.Host, blp.startPosition.Port)
 	relog.Info("Dialing server @ %v", connectionStr)
-	blp.rpcClient, err = bsonrpc.DialHTTP("tcp", connectionStr, 0)
+	blp.rpcClient, err = rpcplus.DialHTTP("tcp", connectionStr)
 	defer blp.rpcClient.Close()
 	if err != nil {
 		relog.Error("Error in dialing to vt_binlog_server, %v", err)

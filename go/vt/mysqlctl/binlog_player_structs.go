@@ -4,14 +4,21 @@
 
 package mysqlctl
 
+type BlPosition struct {
+	Position  ReplicationCoordinates
+	Timestamp int64
+	Xid       uint64
+	GroupId   uint64
+}
+
 type BinlogResponse struct {
 	Error string
-	BinlogPosition
+	BlPosition
 	BinlogData
 }
 
 type BinlogServerRequest struct {
-	StartPosition string
+	StartPosition ReplicationCoordinates
 	KeyspaceStart string
 	KeyspaceEnd   string
 }

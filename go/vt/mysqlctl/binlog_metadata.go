@@ -31,6 +31,10 @@ func NewReplicationCoordinates(slaveLog string, slavePosition uint64, masterFile
 	return &ReplicationCoordinates{RelayFilename: slaveLog, RelayPosition: slavePosition, MasterFilename: masterFile, MasterPosition: masterPos}
 }
 
+func (repl *ReplicationCoordinates) String() string {
+	return fmt.Sprintf("Master %v:%v Relay %v:%v", repl.MasterFilename, repl.MasterPosition, repl.RelayFilename, repl.RelayPosition)
+}
+
 type SlaveMetadata struct {
 	logsDir           string
 	relayInfoFile     string
