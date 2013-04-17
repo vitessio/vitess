@@ -61,6 +61,7 @@ var (
 	USE_VT                = "use _vt"
 	USE_DB                = "use %v"
 	CREATE_RECOVERY_TABLE = `CREATE TABLE IF NOT EXISTS vt_blp_recovery (
+                             uid  int(10) unsigned NOT NULL,
                              host varchar(32) NOT NULL,
                              port int NOT NULL,
                              master_filename varchar(255) NOT NULL,
@@ -69,17 +70,19 @@ var (
                              relay_position bigint(20) unsigned default 0,
                              keyrange_start varchar(32) NOT NULL,
                              keyrange_end varchar(32) NOT NULL,
+                             txn_timestamp int(10) unsigned NOT NULL,
                              time_updated int(10) unsigned NOT NULL,
-                             PRIMARY KEY (host, keyrange_end)
+                             PRIMARY KEY (uid)
                              ) ENGINE=InnoDB DEFAULT CHARSET=latin1`
-	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, time_updated) 
-	                          values ('%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp())`
-	UPDATE_RECOVERY      = "update _vt.vt_blp_recovery set master_filename='%v', master_position=%v, relay_filename='%v', relay_position=%v, time_updated=unix_timestamp() where host='%v' and keyrange_end='%v'"
-	SELECT_FROM_RECOVERY = "select * from _vt.vt_blp_recovery where host='%v' and keyrange_end='%v'"
+	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
+	                          values (%v, '%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp(), %v)`
+	UPDATE_RECOVERY      = "update _vt.vt_blp_recovery set master_filename='%v', master_position=%v, relay_filename='%v', relay_position=%v, txn_timestamp=unix_timestamp(), time_updated=%v where uid=%v"
+	SELECT_FROM_RECOVERY = "select * from _vt.vt_blp_recovery where uid=%v"
 )
 
 /*
 {
+ "Uid: : <tabet uid>",
  "Host": "<vt_binlog_server host>>",
  "Port": <vt_binlog_server port>,
  "startPosition": "MasterFilename:dbXX.000123-bin.000123, MasterPosition:1234567",
@@ -88,6 +91,7 @@ var (
  }
 */
 type binlogRecoveryState struct {
+	Uid           uint32
 	Host          string
 	Port          int
 	Position      mysqlctl.ReplicationCoordinates
@@ -233,7 +237,8 @@ type BinlogPlayer struct {
 func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.KeyspaceId) *BinlogPlayer {
 	blp := new(BinlogPlayer)
 	blp.startPosition = startPosition
-	blp.recoveryState = &binlogRecoveryState{Host: blp.startPosition.Host,
+	blp.recoveryState = &binlogRecoveryState{Uid: blp.startPosition.Uid,
+		Host:          blp.startPosition.Host,
 		Port:          blp.startPosition.Port,
 		Position:      blp.startPosition.Position,
 		KeyrangeStart: blp.startPosition.KeyrangeStart,
@@ -258,8 +263,8 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.Replica
 		currentPosition.MasterPosition,
 		currentPosition.RelayFilename,
 		currentPosition.RelayPosition,
-		blp.recoveryState.Host,
-		blp.recoveryState.KeyrangeEnd)
+		time.Now().Unix(),
+		blp.recoveryState.Uid)
 
 	if _, err := blp.dbClient.ExecuteFetch([]byte(updateRecovery), 0, false); err != nil {
 		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
@@ -317,6 +322,10 @@ func main() {
 }
 
 func startPositionValid(startPos *binlogRecoveryState) bool {
+	if startPos.Uid == 0 {
+		relog.Error("Missing Uid")
+		return false
+	}
 	if startPos.Host == "" || startPos.Port == 0 {
 		relog.Error("Invalid connection params.")
 		return false
@@ -452,7 +461,7 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		return nil, err
 	}
 	if useCheckpoint {
-		selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Host, startPosition.KeyrangeEnd)
+		selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
 		qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)
 		if err != nil {
 			panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
@@ -513,20 +522,21 @@ func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecovery
 		}
 	}
 
-	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Host, startPosition.KeyrangeEnd)
+	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
 	qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)
 	if err != nil {
 		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
 	if qr.RowsAffected == 0 {
-		insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, startPosition.Host,
+		insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, startPosition.Uid, startPosition.Host,
 			startPosition.Port,
 			startPosition.Position.MasterFilename,
 			startPosition.Position.MasterPosition,
 			startPosition.Position.RelayFilename,
 			startPosition.Position.RelayPosition,
 			startPosition.KeyrangeStart,
-			startPosition.KeyrangeEnd)
+			startPosition.KeyrangeEnd,
+			time.Now().Unix())
 		recoveryDmls := []string{USE_VT, "begin", insertRecovery, "commit", useDb}
 		for _, sql := range recoveryDmls {
 			if _, err := dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
@@ -762,21 +772,25 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordin
 func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
 	switch indexType {
 	case "username":
-		indexSlice, ok := indexId.(string)
-		if !ok {
-			return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
-		}
-		index := string(indexSlice)
-		switch dmlType {
-		case "insert":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
-		case "update":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
-		case "delete":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
-		default:
-			return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
-		}
+		return
+	/*
+		case "username":
+			indexSlice, ok := indexId.(string)
+			if !ok {
+				return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
+			}
+			index := string(indexSlice)
+			switch dmlType {
+			case "insert":
+				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
+			case "update":
+				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
+			case "delete":
+				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
+			default:
+				return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
+			}
+	*/
 	case "video_id":
 		index, ok := indexId.(uint64)
 		if !ok {
