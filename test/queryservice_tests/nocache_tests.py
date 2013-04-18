@@ -40,10 +40,15 @@ class TestNocache(framework.TestCase):
 
   def test_commit(self):
     vstart = self.env.debug_vars()
+    self.env.txlog.reset()
     self.env.execute("begin")
     self.assertNotEqual(self.env.conn.transaction_id, 0)
     self.env.execute("insert into vtocc_test (intval, floatval, charval, binval) values(4, null, null, null)")
     self.env.execute("commit")
+    time.sleep(0.1)
+    txlog = self.env.txlog.read().split('\t')
+    self.assertEqual(txlog[4], "commit")
+    self.assertEqual(txlog[5], "insert into vtocc_test (intval, floatval, charval, binval) values(4, null, null, null)")
     cu = self.env.execute("select * from vtocc_test")
     self.assertEqual(cu.rowcount, 4)
     self.env.execute("begin")
@@ -78,10 +83,15 @@ class TestNocache(framework.TestCase):
 
   def test_rollback(self):
     vstart = self.env.debug_vars()
+    self.env.txlog.reset()
     self.env.execute("begin")
     self.assertNotEqual(self.env.conn.transaction_id, 0)
     self.env.execute("insert into vtocc_test values(4, null, null, null)")
     self.env.execute("rollback")
+    time.sleep(0.1)
+    txlog = self.env.txlog.read().split('\t')
+    self.assertEqual(txlog[4], "rollback")
+    self.assertEqual(txlog[5], "insert into vtocc_test values(4, null, null, null)")
     cu = self.env.execute("select * from vtocc_test")
     self.assertEqual(cu.rowcount, 3)
     vend = self.env.debug_vars()
@@ -170,6 +180,7 @@ class TestNocache(framework.TestCase):
     # wait for any pending transactions to timeout
     time.sleep(0.3)
     vstart = self.env.debug_vars()
+    self.env.txlog.reset()
     self.env.execute("begin")
     time.sleep(0.3)
     try:
@@ -178,6 +189,9 @@ class TestNocache(framework.TestCase):
       self.assertContains(e[1], "error: Transaction")
     else:
       self.fail("Did not receive exception")
+    time.sleep(0.1)
+    txlog = self.env.txlog.read().split('\t')
+    self.assertEqual(txlog[4], "kill")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)

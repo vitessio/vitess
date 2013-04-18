@@ -84,7 +84,9 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 		reloadTime:     reloadTime,
 		ticks:          timer.NewTimer(reloadTime),
 	}
-	http.Handle("/debug/schema/", si)
+	http.Handle("/debug/query_plans", si)
+	http.Handle("/debug/query_stats", si)
+	http.Handle("/debug/table_stats", si)
 	return si
 }
 
@@ -335,7 +337,7 @@ type perQueryStats struct {
 }
 
 func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if request.URL.Path == "/debug/schema/query_plans" {
+	if request.URL.Path == "/debug/query_plans" {
 		keys := si.queries.Keys()
 		response.Header().Set("Content-Type", "text/plain")
 		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
@@ -350,7 +352,7 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 				response.Write(([]byte)("\n\n"))
 			}
 		}
-	} else if request.URL.Path == "/debug/schema/query_stats" {
+	} else if request.URL.Path == "/debug/query_stats" {
 		keys := si.queries.Keys()
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
 		qstats := make([]perQueryStats, 0, len(keys))
@@ -369,7 +371,7 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		} else {
 			response.Write(b)
 		}
-	} else if request.URL.Path == "/debug/schema/tables" {
+	} else if request.URL.Path == "/debug/table_stats" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
 		si.mu.Lock()
 		tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
@@ -404,14 +406,4 @@ func applyFieldFilter(columnNumbers []int, input []mproto.Field) (output []mprot
 		}
 	}
 	return output
-}
-
-// unicoded returns a valid UTF-8 string that json won't reject
-func unicoded(in string) (out string) {
-	for i, v := range in {
-		if v == 0xFFFD {
-			return in[:i]
-		}
-	}
-	return in
 }

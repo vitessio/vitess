@@ -195,6 +195,14 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 	sq.keyRange.End = key.MaxKey
 }
 
+// checkState checks if we can serve queries. If not, it causes an
+// error whose category is state dependent:
+// OPEN: Everything is allowed.
+// SHUTTING_DOWN:
+//   SELECT & BEGIN: RETRY errors
+//   DMLs & COMMITS: Allowed
+// CLOSED: RETRY for all.
+// NOT_SERVING: FATAL for all.
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	switch sq.state.Get() {
 	case NOT_SERVING:

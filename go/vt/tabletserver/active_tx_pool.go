@@ -6,11 +6,14 @@ package tabletserver
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
 	"code.google.com/p/vitess/go/pools"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/streamlog"
 	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/timer"
 )
@@ -21,10 +24,22 @@ lowerCaseFunctions() are not thread safe
 SafeFunctions() return os.Error instead of throwing exceptions
 */
 
+// TxLogger can be used to enable logging of transactions.
+// Call TxLogger.ServeLogs in your main program to enable logging.
+// The log format can be inferred by looking at TxConnection.Format.
+var TxLogger = streamlog.New("TxLog", 10)
+
 var (
 	BEGIN    = []byte("begin")
 	COMMIT   = []byte("commit")
 	ROLLBACK = []byte("rollback")
+)
+
+const (
+	TX_CLOSE    = "close"
+	TX_COMMIT   = "commit"
+	TX_ROLLBACK = "rollback"
+	TX_KILL     = "kill"
 )
 
 type ActiveTxPool struct {
@@ -55,7 +70,7 @@ func (axp *ActiveTxPool) Close() {
 	for _, v := range axp.pool.GetTimedout(time.Duration(0)) {
 		conn := v.(*TxConnection)
 		conn.Close()
-		conn.discard()
+		conn.discard(TX_CLOSE)
 	}
 }
 
@@ -69,7 +84,7 @@ func (axp *ActiveTxPool) TransactionKiller() {
 		relog.Info("killing transaction %d: %#v", conn.transactionId, conn.queries)
 		killStats.Add("Transactions", 1)
 		conn.Close()
-		conn.discard()
+		conn.discard(TX_KILL)
 	}
 }
 
@@ -86,7 +101,7 @@ func (axp *ActiveTxPool) SafeBegin(conn PoolConnection) (transactionId int64, er
 func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string]DirtyKeys, err error) {
 	defer handleError(&err, nil)
 	conn := axp.Get(transactionId)
-	defer conn.discard()
+	defer conn.discard(TX_COMMIT)
 	axp.txStats.Add("Completed", time.Now().Sub(conn.startTime))
 	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
@@ -96,7 +111,7 @@ func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string
 
 func (axp *ActiveTxPool) Rollback(transactionId int64) {
 	conn := axp.Get(transactionId)
-	defer conn.discard()
+	defer conn.discard(TX_ROLLBACK)
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
 	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
 		conn.Close()
@@ -137,8 +152,10 @@ type TxConnection struct {
 	pool          *ActiveTxPool
 	inUse         bool
 	startTime     time.Time
+	endTime       time.Time
 	dirtyTables   map[string]DirtyKeys
 	queries       []string
+	conclusion    string
 }
 
 func newTxConnection(conn PoolConnection, transactionId int64, pool *ActiveTxPool) *TxConnection {
@@ -163,7 +180,7 @@ func (txc *TxConnection) DirtyKeys(tableName string) DirtyKeys {
 
 func (txc *TxConnection) Recycle() {
 	if txc.IsClosed() {
-		txc.discard()
+		txc.discard(TX_CLOSE)
 	} else {
 		txc.pool.pool.Put(txc.transactionId)
 	}
@@ -173,9 +190,24 @@ func (txc *TxConnection) RecordQuery(query string) {
 	txc.queries = append(txc.queries, query)
 }
 
-func (txc *TxConnection) discard() {
+func (txc *TxConnection) discard(conclusion string) {
+	txc.conclusion = conclusion
+	txc.endTime = time.Now()
+	TxLogger.Send(txc)
 	txc.pool.pool.Unregister(txc.transactionId)
 	txc.PoolConnection.Recycle()
+}
+
+func (txc *TxConnection) Format(params url.Values) string {
+	return fmt.Sprintf(
+		"%v\t%v\t%v\t%v\t%v\t%v\t\n",
+		txc.transactionId,
+		txc.startTime,
+		txc.endTime,
+		txc.endTime.Sub(txc.startTime).Seconds(),
+		txc.conclusion,
+		strings.Join(txc.queries, ";"),
+	)
 }
 
 type DirtyKeys map[string]bool

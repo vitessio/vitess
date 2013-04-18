@@ -113,6 +113,7 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 // string: bind variable name starting with ':', or
 // nil if no value was specified
 type ExecPlan struct {
+	Query     string
 	PlanId    PlanType
 	Reason    ReasonType
 	TableName string
@@ -151,6 +152,7 @@ type ExecPlan struct {
 }
 
 type DDLPlan struct {
+	Query     string
 	Action    int
 	TableName string
 	NewName   string
@@ -166,6 +168,7 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 		return nil, err
 	}
 	plan = tree.execAnalyzeSql(getTable)
+	plan.Query = sql
 	if plan.PlanId == PLAN_PASS_DML {
 		relog.Warning("PASS_DML: %s", sql)
 	}
@@ -190,29 +193,33 @@ func StreamExecParse(sql string) (fullQuery *ParsedQuery, err error) {
 		return nil, NewParserError("%s not allowed for streaming", string(tree.Value))
 	}
 
-	return tree.GenerateFullQuery(), nil
+	p := tree.GenerateFullQuery()
+	p.Query = sql
+	return p, nil
 }
 
 func DDLParse(sql string) (plan *DDLPlan) {
 	rootNode, err := Parse(sql)
 	if err != nil {
-		return &DDLPlan{Action: 0}
+		return &DDLPlan{Query: sql, Action: 0}
 	}
 	switch rootNode.Type {
 	case CREATE, ALTER, DROP:
 		return &DDLPlan{
+			Query:     sql,
 			Action:    rootNode.Type,
 			TableName: string(rootNode.At(0).Value),
 			NewName:   string(rootNode.At(0).Value),
 		}
 	case RENAME:
 		return &DDLPlan{
+			Query:     sql,
 			Action:    rootNode.Type,
 			TableName: string(rootNode.At(0).Value),
 			NewName:   string(rootNode.At(1).Value),
 		}
 	}
-	return &DDLPlan{Action: 0}
+	return &DDLPlan{Query: sql, Action: 0}
 }
 
 //-----------------------------------------------

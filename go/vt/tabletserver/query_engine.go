@@ -229,7 +229,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		// Need upfront connection for DMLs and transactions
 		conn := qe.activeTxPool.Get(query.TransactionId)
 		defer conn.Recycle()
-		conn.RecordQuery(plan.FullQuery.Query)
+		conn.RecordQuery(plan.Query)
 		var invalidator CacheInvalidator
 		if plan.TableInfo != nil && plan.TableInfo.CacheType != 0 {
 			invalidator = conn.DirtyKeys(plan.TableName)

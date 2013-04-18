@@ -213,3 +213,13 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 	}
 	return buildKey(pkValues)
 }
+
+// unicoded returns a valid UTF-8 string that json won't reject
+func unicoded(in string) (out string) {
+	for i, v := range in {
+		if v == 0xFFFD {
+			return in[:i]
+		}
+	}
+	return in
+}

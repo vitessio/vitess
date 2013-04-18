@@ -1,6 +1,7 @@
 # union
 select * from a union select * from b
 {
+  "Query": "select * from a union select * from b",
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
   "TableName": "",
@@ -20,6 +21,7 @@ select * from a union select * from b
 # distinct
 select distinct * from a
 {
+  "Query": "select distinct * from a",
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
   "TableName": "",
@@ -39,6 +41,7 @@ select distinct * from a
 # group by
 select * from a group by b
 {
+  "Query": "select * from a group by b",
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
   "TableName": "",
@@ -58,6 +61,7 @@ select * from a group by b
 # having
 select * from a having b=1
 {
+  "Query": "select * from a having b=1",
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT",
   "TableName": "",
@@ -77,6 +81,7 @@ select * from a having b=1
 # limit
 select * from a limit 5
 {
+  "Query": "select * from a limit 5",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -101,6 +106,7 @@ select * from a limit 5
 # multi-table
 select * from a,b
 {
+  "Query": "select * from a,b",
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
   "TableName": "",
@@ -120,6 +126,7 @@ select * from a,b
 # multi-table (join)
 select * from a join b
 {
+  "Query": "select * from a join b",
   "PlanId": "PASS_SELECT",
   "Reason": "TABLE",
   "TableName": "",
@@ -139,6 +146,7 @@ select * from a join b
 # table not cached
 select * from b
 {
+  "Query": "select * from b",
   "PlanId": "PASS_SELECT",
   "Reason": "NOCACHE",
   "TableName": "b",
@@ -158,6 +166,7 @@ select * from b
 # bind in select list
 select :bv from a
 {
+  "Query": "select :bv from a",
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "",
@@ -177,6 +186,7 @@ select :bv from a
 # complex select list
 select eid+1 from a
 {
+  "Query": "select eid+1 from a",
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "a",
@@ -196,6 +206,7 @@ select eid+1 from a
 # case in select list
 select case when eid = 1 then 1 end from a
 {
+  "Query": "select case when eid = 1 then 1 end from a",
   "PlanId": "PASS_SELECT",
   "Reason": "SELECT_LIST",
   "TableName": "a",
@@ -215,6 +226,7 @@ select case when eid = 1 then 1 end from a
 # simple
 select eid from a
 {
+  "Query": "select eid from a",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -236,6 +248,7 @@ select eid from a
 # *
 select * from a
 {
+  "Query": "select * from a",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -260,6 +273,7 @@ select * from a
 # c.eid
 select c.eid from a as c
 {
+  "Query": "select c.eid from a as c",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -281,6 +295,7 @@ select c.eid from a as c
 # (eid)
 select (eid) from a as c
 {
+  "Query": "select (eid) from a as c",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -302,6 +317,7 @@ select (eid) from a as c
 # for update
 select eid from a for update
 {
+  "Query": "select eid from a for update",
   "PlanId": "PASS_SELECT",
   "Reason": "FOR_UPDATE",
   "TableName": "a",
@@ -321,6 +337,7 @@ select eid from a for update
 # simple where
 select * from a where eid=1
 {
+  "Query": "select * from a where eid=1",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -345,6 +362,7 @@ select * from a where eid=1
 # complex where (expression)
 select * from a where eid+1 = 1
 {
+  "Query": "select * from a where eid+1 = 1",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -369,6 +387,7 @@ select * from a where eid+1 = 1
 # complex where (non-value operand)
 select * from a where eid = id
 {
+  "Query": "select * from a where eid = id",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -393,6 +412,7 @@ select * from a where eid = id
 # and
 select * from a where eid=1 and foo='b'
 {
+  "Query": "select * from a where eid=1 and foo='b'",
   "PlanId": "PASS_SELECT",
   "Reason": "PKINDEX",
   "TableName": "a",
@@ -417,6 +437,7 @@ select * from a where eid=1 and foo='b'
 # (condition)
 select * from a where (eid=1)
 {
+  "Query": "select * from a where (eid=1)",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -441,6 +462,7 @@ select * from a where (eid=1)
 # pk match
 select * from a where eid=1 and id=1
 {
+  "Query": "select * from a where eid=1 and id=1",
   "PlanId": "SELECT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -468,6 +490,7 @@ select * from a where eid=1 and id=1
 # string pk match
 select * from d where name='foo'
 {
+  "Query": "select * from d where name='foo'",
   "PlanId": "SELECT_PK",
   "Reason": "DEFAULT",
   "TableName": "d",
@@ -492,6 +515,7 @@ select * from d where name='foo'
 # pk IN
 select * from a where eid=1 and id in (1, 2)
 {
+  "Query": "select * from a where eid=1 and id in (1, 2)",
   "PlanId": "SELECT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -522,6 +546,7 @@ select * from a where eid=1 and id in (1, 2)
 # pk IN parameter list
 select * from a where eid=1 and id in (:a, :b)
 {
+  "Query": "select * from a where eid=1 and id in (:a, :b)",
   "PlanId": "SELECT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -552,6 +577,7 @@ select * from a where eid=1 and id in (:a, :b)
 # pk IN, single value list
 select * from a where eid=1 and id in (1)
 {
+  "Query": "select * from a where eid=1 and id in (1)",
   "PlanId": "SELECT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -581,6 +607,7 @@ select * from a where eid=1 and id in (1)
 # double pk IN
 select * from a where eid in (1) and id in (1, 2)
 {
+  "Query": "select * from a where eid in (1) and id in (1, 2)",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -605,6 +632,7 @@ select * from a where eid in (1) and id in (1, 2)
 # double pk IN 2
 select * from a where eid in (1, 2) and id in (1, 2)
 {
+  "Query": "select * from a where eid in (1, 2) and id in (1, 2)",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -629,6 +657,7 @@ select * from a where eid in (1, 2) and id in (1, 2)
 # pk as tuple
 select * from a where (eid, id) in ((1, 1), (2, 2))
 {
+  "Query": "select * from a where (eid, id) in ((1, 1), (2, 2))",
   "PlanId": "SELECT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -662,6 +691,7 @@ select * from a where (eid, id) in ((1, 1), (2, 2))
 # pk IN, single value parameter list
 select * from a where eid=1 and id in (:a)
 {
+  "Query": "select * from a where eid=1 and id in (:a)",
   "PlanId": "SELECT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -691,6 +721,7 @@ select * from a where eid=1 and id in (:a)
 # inequality on pk columns
 select * from a where eid=1 and id>1
 {
+  "Query": "select * from a where eid=1 and id\u003e1",
   "PlanId": "PASS_SELECT",
   "Reason": "PKINDEX",
   "TableName": "a",
@@ -715,6 +746,7 @@ select * from a where eid=1 and id>1
 # non-pk match
 select * from a where eid=1 and name='foo'
 {
+  "Query": "select * from a where eid=1 and name='foo'",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -739,6 +771,7 @@ select * from a where eid=1 and name='foo'
 # non-pk match with limit
 select * from a where eid=1 and name='foo' limit 10
 {
+  "Query": "select * from a where eid=1 and name='foo' limit 10",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -763,6 +796,7 @@ select * from a where eid=1 and name='foo' limit 10
 # no index match
 select * from a where foo='bar'
 {
+  "Query": "select * from a where foo='bar'",
   "PlanId":"PASS_SELECT",
   "Reason":"NOINDEX_MATCH",
   "TableName":"a",
@@ -787,6 +821,7 @@ select * from a where foo='bar'
 # covering index in where through data column
 select * from a where name = 'foo' and id = 1
 {
+  "Query": "select * from a where name = 'foo' and id = 1",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -811,6 +846,7 @@ select * from a where name = 'foo' and id = 1
 # table alias & subquery
 select * from a as c where c.eid=1 and name='foo'
 {
+  "Query": "select * from a as c where c.eid=1 and name='foo'",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -835,6 +871,7 @@ select * from a as c where c.eid=1 and name='foo'
 # non-pk inequality match
 select * from a where eid=1 and name<'foo'
 {
+  "Query": "select * from a where eid=1 and name\u003c'foo'",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -859,6 +896,7 @@ select * from a where eid=1 and name<'foo'
 # non-pk IN
 select * from a where eid in (1, 2) and name='foo'
 {
+  "Query": "select * from a where eid in (1, 2) and name='foo'",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -883,6 +921,7 @@ select * from a where eid in (1, 2) and name='foo'
 # non-pk IN non-value operand
 select * from a where eid in (1, id) and name='foo'
 {
+  "Query": "select * from a where eid in (1, id) and name='foo'",
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
@@ -907,6 +946,7 @@ select * from a where eid in (1, id) and name='foo'
 # non-pk between
 select * from a where eid between 1 and 2 and name='foo'
 {
+  "Query": "select * from a where eid between 1 and 2 and name='foo'",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -931,6 +971,7 @@ select * from a where eid between 1 and 2 and name='foo'
 # order by (pk)
 select * from a where eid=1 and id=1 order by name
 {
+  "Query": "select * from a where eid=1 and id=1 order by name",
   "PlanId": "PASS_SELECT",
   "Reason": "PKINDEX",
   "TableName": "a",
@@ -955,6 +996,7 @@ select * from a where eid=1 and id=1 order by name
 # order by
 select * from a where eid=1 order by name
 {
+  "Query": "select * from a where eid=1 order by name",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -979,6 +1021,7 @@ select * from a where eid=1 order by name
 # cardinality override
 select * from a where name='foo'
 { 
+  "Query": "select * from a where name='foo'",
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1003,6 +1046,7 @@ select * from a where name='foo'
 # index override
 select * from a use index(a_name) where eid = 1
 {
+  "Query": "select * from a use index(a_name) where eid = 1",
   "PlanId": "PASS_SELECT",
   "Reason": "HAS_HINTS",
   "TableName": "a",
@@ -1027,6 +1071,7 @@ select * from a use index(a_name) where eid = 1
 # insert with bind value
 insert into a (eid, id) values (1, :a)
 {
+  "Query": "insert into a (eid, id) values (1, :a)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1049,6 +1094,7 @@ insert into a (eid, id) values (1, :a)
 # default number
 insert into a (id) values (1)
 {
+  "Query": "insert into a (id) values (1)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1071,6 +1117,7 @@ insert into a (id) values (1)
 # default string
 insert into d(id) values(1)
 {
+  "Query": "insert into d(id) values(1)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "d",
@@ -1096,6 +1143,7 @@ insert into a (eid, id) values (1)
 # negative number
 insert into a (eid, id) values (-1, 2)
 {
+  "Query": "insert into a (eid, id) values (-1, 2)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1118,6 +1166,7 @@ insert into a (eid, id) values (-1, 2)
 # positive number
 insert into a (eid, id) values (+1, 2)
 {
+  "Query": "insert into a (eid, id) values (+1, 2)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1140,6 +1189,7 @@ insert into a (eid, id) values (+1, 2)
 # non-trivial unary
 insert into a (eid, id) values (~1, 2)
 {
+  "Query": "insert into a (eid, id) values (~1, 2)",
   "PlanId": "PASS_DML",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1159,6 +1209,7 @@ insert into a (eid, id) values (~1, 2)
 # complex
 insert into a (eid, id) values (1+1, 2)
 {
+  "Query": "insert into a (eid, id) values (1+1, 2)",
   "PlanId": "PASS_DML",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1178,6 +1229,7 @@ insert into a (eid, id) values (1+1, 2)
 # no index
 insert into c (eid, id) values (1, 2)
 {
+  "Query": "insert into c (eid, id) values (1, 2)",
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
@@ -1197,6 +1249,7 @@ insert into c (eid, id) values (1, 2)
 # no column list
 insert into a values (1, 2)
 {
+  "Query": "insert into a values (1, 2)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1219,6 +1272,7 @@ insert into a values (1, 2)
 # on dup
 insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)
 {
+  "Query": "insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "b",
@@ -1241,6 +1295,7 @@ insert into b (eid, id) values (1, 2) on duplicate key update name = values(a)
 # on dup pk change
 insert into b (eid, id) values (1, 2) on duplicate key update eid = 2
 {
+  "Query": "insert into b (eid, id) values (1, 2) on duplicate key update eid = 2",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "b",
@@ -1266,6 +1321,7 @@ insert into b (eid, id) values (1, 2) on duplicate key update eid = 2
 # on dup complex pk change
 insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)
 {
+  "Query": "insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)",
   "PlanId": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
@@ -1285,6 +1341,7 @@ insert into b (id, eid) values (1, 2) on duplicate key update eid = values(a)
 # subquery
 insert into b (eid, id) select * from a
 {
+  "Query": "insert into b (eid, id) select * from a",
   "PlanId": "INSERT_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "b",
@@ -1310,6 +1367,7 @@ insert into b (eid, id) select * from a
 # multi-row
 insert into b (eid, id) values (1, 2), (3, 4)
 {
+  "Query": "insert into b (eid, id) values (1, 2), (3, 4)",
   "PlanId": "INSERT_PK",
   "Reason": "DEFAULT",
   "TableName": "b",
@@ -1338,6 +1396,7 @@ insert into b (eid, id) values (1, 2), (3, 4)
 # pk changed
 update b set eid=1
 {
+  "Query": "update b set eid=1",
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
   "TableName": "b",
@@ -1360,6 +1419,7 @@ update b set eid=1
 # complex pk change
 update b set eid=foo()
 {
+  "Query": "update b set eid=foo()",
   "PlanId": "PASS_DML",
   "Reason": "PK_CHANGE",
   "TableName": "b",
@@ -1378,6 +1438,7 @@ update b set eid=foo()
 
 update a set name='foo'
 {
+  "Query": "update a set name='foo'",
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
   "TableName": "a",
@@ -1396,6 +1457,7 @@ update a set name='foo'
 
 update a set name='foo' where eid+1=1
 {
+  "Query": "update a set name='foo' where eid+1=1",
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
   "TableName": "a",
@@ -1415,6 +1477,7 @@ update a set name='foo' where eid+1=1
 # pk
 update a set name='foo' where eid=1 and id=1
 {
+  "Query": "update a set name='foo' where eid=1 and id=1",
   "PlanId": "DML_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1437,6 +1500,7 @@ update a set name='foo' where eid=1 and id=1
 # partial pk
 update a set name='foo' where eid=1
 {
+  "Query": "update a set name='foo' where eid=1",
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1456,6 +1520,7 @@ update a set name='foo' where eid=1
 # partial pk with limit
 update a set name='foo' where eid=1 limit 10
 {
+  "Query": "update a set name='foo' where eid=1 limit 10",
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1475,6 +1540,7 @@ update a set name='foo' where eid=1 limit 10
 # non-pk
 update a set name='foo' where eid=1 and name='foo'
 {
+  "Query": "update a set name='foo' where eid=1 and name='foo'",
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1494,6 +1560,7 @@ update a set name='foo' where eid=1 and name='foo'
 # no index
 update c set eid=1
 {
+  "Query": "update c set eid=1",
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
@@ -1512,6 +1579,7 @@ update c set eid=1
 
 delete from a
 {
+  "Query": "delete from a",
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
   "TableName": "a",
@@ -1530,6 +1598,7 @@ delete from a
 
 delete from a where eid+1=1
 {
+  "Query": "delete from a where eid+1=1",
   "PlanId": "DML_SUBQUERY",
   "Reason": "WHERE",
   "TableName": "a",
@@ -1549,6 +1618,7 @@ delete from a where eid+1=1
 # pk
 delete from a where eid=1 and id=1
 {
+  "Query": "delete from a where eid=1 and id=1",
   "PlanId": "DML_PK",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1571,6 +1641,7 @@ delete from a where eid=1 and id=1
 # partial pk
 delete from a where eid=1
 {
+  "Query": "delete from a where eid=1",
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1590,6 +1661,7 @@ delete from a where eid=1
 # non-pk
 delete from a where eid=1 and name='foo'
 {
+  "Query": "delete from a where eid=1 and name='foo'",
   "PlanId": "DML_SUBQUERY",
   "Reason": "DEFAULT",
   "TableName": "a",
@@ -1609,6 +1681,7 @@ delete from a where eid=1 and name='foo'
 # no index
 delete from c
 {
+  "Query": "delete from c",
   "PlanId": "PASS_DML",
   "Reason": "TABLE_NOINDEX",
   "TableName": "c",
@@ -1628,6 +1701,7 @@ delete from c
 # int
 set  a=1
 {
+  "Query": "set  a=1",
   "PlanId": "SET",
   "Reason": "DEFAULT",
   "TableName": "",
@@ -1647,6 +1721,7 @@ set  a=1
 # string
 set a='b'
 {
+  "Query": "set a='b'",
   "PlanId": "SET",
   "Reason": "DEFAULT",
   "TableName": "",
@@ -1666,6 +1741,7 @@ set a='b'
 # multi
 set a=1, b=2
 {
+  "Query": "set a=1, b=2",
   "PlanId": "SET",
   "Reason": "DEFAULT",
   "TableName": "",

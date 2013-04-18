@@ -99,7 +99,7 @@ func (logger *StreamLogger) stream() {
 		}
 
 		for w, subscription := range subscribed {
-			messageString := message.Format(subscription.params) + "\n"
+			messageString := message.Format(subscription.params)
 			if _, err := io.WriteString(w, messageString); err != nil {
 				subscription.done <- true
 

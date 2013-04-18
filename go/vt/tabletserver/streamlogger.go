@@ -1,3 +1,7 @@
+// Copyright 2012, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package tabletserver
 
 import (
@@ -137,19 +141,19 @@ func (stats *sqlQueryStats) FmtQuerySources() string {
 	return strings.Join(sources[:n], ",")
 }
 
-func (log sqlQueryStats) RemoteAddr() string {
+func (log *sqlQueryStats) RemoteAddr() string {
 	return log.context.RemoteAddr
 }
 
-func (log sqlQueryStats) Username() string {
+func (log *sqlQueryStats) Username() string {
 	return log.context.Username
 }
 
-//String returns a tab separated list of logged fields.
-func (log sqlQueryStats) Format(params url.Values) string {
+// String returns a tab separated list of logged fields.
+func (log *sqlQueryStats) Format(params url.Values) string {
 	_, fullBindParams := params["full"]
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t%v\t%v\t%q\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t",
+		"%v\t%v\t%v\t%v\t%v\t%v\t%v\t%q\t%v\t%v\t%q\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\t\n",
 		log.Method,
 		log.RemoteAddr(),
 		log.Username(),

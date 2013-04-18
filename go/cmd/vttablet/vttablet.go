@@ -249,7 +249,8 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 }
 
 func initQueryService(dbcfgs dbconfigs.DBConfigs) {
-	ts.SqlQueryLogger.ServeLogs("/debug/vt/querylog")
+	ts.SqlQueryLogger.ServeLogs("/debug/querylog")
+	ts.TxLogger.ServeLogs("/debug/txlog")
 
 	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
 		relog.Warning("%s", err)

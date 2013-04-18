@@ -86,7 +86,8 @@ func main() {
 			relog.Fatal("Error opening file %v: %v", *queryLog, err)
 		}
 	}
-	ts.SqlQueryLogger.ServeLogs("/debug/vt/querylog")
+	ts.SqlQueryLogger.ServeLogs("/debug/querylog")
+	ts.TxLogger.ServeLogs("/debug/txlog")
 	unmarshalFile(*configFile, &config)
 	data, _ := json.MarshalIndent(config, "", "  ")
 	relog.Info("config: %s\n", data)

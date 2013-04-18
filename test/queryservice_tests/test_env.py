@@ -47,10 +47,10 @@ class TestEnv(object):
     return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/vars")))
 
   def table_stats(self):
-    return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/schema/tables")))
+    return framework.MultiDict(json.load(urllib2.urlopen("http://localhost:9461/debug/table_stats")))
 
   def query_stats(self):
-    return json.load(urllib2.urlopen("http://localhost:9461/debug/schema/query_stats"))
+    return json.load(urllib2.urlopen("http://localhost:9461/debug/query_stats"))
 
   def health(self):
     return urllib2.urlopen("http://localhost:9461/debug/health").read()
@@ -89,8 +89,8 @@ class TestEnv(object):
   def run_cases(self, cases):
     cursor = self.conn.cursor()
     error_count = 0
-    curl = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/vt/querylog'], stdout=open('/tmp/vtocc_streamlog.log', 'w'))
-    curl_full = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/vt/querylog?full=true'], stdout=open('/tmp/vtocc_streamlog_full.log', 'w'))
+    curl = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/querylog'], stdout=open('/tmp/vtocc_streamlog.log', 'w'))
+    curl_full = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/querylog?full=true'], stdout=open('/tmp/vtocc_streamlog_full.log', 'w'))
     time.sleep(1)
     for case in cases:
       if isinstance(case, basestring):
@@ -168,6 +168,8 @@ class VttabletTestEnv(TestEnv):
         self.conn = self.connect()
         self.querylog = framework.Tailer(open(self.tablet.querylog_file, "r"))
         self.log = framework.Tailer(open(self.tablet.logfile, "r"))
+        self.txlogger = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/txlog'], stdout=open('/tmp/vtocc_txlog.log', 'w'))
+        self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log', 'r'))
         return
       except dbexceptions.OperationalError:
         if i == 29:
@@ -184,6 +186,8 @@ class VttabletTestEnv(TestEnv):
     except:
       # FIXME: remove
       pass
+    if getattr(self, "txlogger", None):
+      self.txlogger.terminate()
     utils.zk_teardown()
     utils.kill_sub_processes()
     utils.remove_tmp_files()
@@ -289,6 +293,8 @@ class VtoccTestEnv(TestEnv):
         self.conn = self.connect()
         self.querylog = framework.Tailer(open(self.querylogfile, "r"))
         self.log = framework.Tailer(open(self.logfile, "r"))
+        self.txlogger = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/txlog'], stdout=open('/tmp/vtocc_txlog.log', 'w'))
+        self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log', 'r'))
         return
       except dbexceptions.OperationalError:
         if i == 29:
@@ -306,6 +312,8 @@ class VtoccTestEnv(TestEnv):
       mcu.close()
     except:
       pass
+    if getattr(self, "txlogger", None):
+      self.txlogger.terminate()
     if getattr(self, "vtocc", None):
       self.vtocc.kill()
     if getattr(self, "vtstderr", None):

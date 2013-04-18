@@ -193,7 +193,7 @@ class Case(object):
     return result
 
   def table_stats(self):
-    return json.load(urllib2.urlopen("http://localhost:9461/debug/schema/tables"))[self.cache_table]
+    return json.load(urllib2.urlopen("http://localhost:9461/debug/table_stats"))[self.cache_table]
 
   def __str__(self):
     return "Case %r" % self.doc
