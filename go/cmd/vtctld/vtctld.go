@@ -86,6 +86,23 @@ func Htmlize(data interface{}) string {
 var funcMap = template.FuncMap{
 	"htmlize":   Htmlize,
 	"hasprefix": strings.HasPrefix,
+	"breadcrumbs": func(zkPath string) string {
+		parts := strings.Split(zkPath, "/")
+		paths := make([]string, len(parts))
+		for i, part := range parts {
+			if i == 0 {
+				paths[i] = "/"
+				continue
+			}
+			paths[i] = path.Join(paths[i-1], part)
+		}
+		b := new(bytes.Buffer)
+		for i, part := range parts[1 : len(parts)-1] {
+			fmt.Fprintf(b, "/ <a href=\"%v\">%v</a>&nbsp;", paths[i+1], part)
+		}
+		fmt.Fprintf(b, "/ "+parts[len(parts)-1])
+		return b.String()
+	},
 }
 
 var dummyTemplate = template.Must(template.New("dummy").Funcs(funcMap).Parse(`
@@ -172,6 +189,13 @@ type DbTopologyResult struct {
 	Error    string
 }
 
+type ZkResult struct {
+	Path     string
+	Data     string
+	Children []string
+	Error    string
+}
+
 func main() {
 	flag.Parse()
 
@@ -181,11 +205,20 @@ func main() {
 	wr := wrangler.NewWrangler(zconn, 30*time.Second, 30*time.Second)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/dbtopo", http.StatusTemporaryRedirect)
+		tmpl, err := templateLoader.Lookup("index.html")
+		if err != nil {
+			httpError(w, "error in template loader: %v", err)
+			return
+		}
+		if err := tmpl.Execute(w, nil); err != nil {
+			httpError(w, "error executing template", err)
+		}
+
 	})
 	http.HandleFunc("/dbtopo", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
+			return
 		}
 		result := DbTopologyResult{}
 		topology, err := wr.DbTopology()
@@ -210,6 +243,70 @@ func main() {
 				return
 			}
 			if err := tmpl.Execute(w, result); err != nil {
+				httpError(w, "error executing template", err)
+			}
+		}
+	})
+	http.HandleFunc("/zk/", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		zkPath := r.URL.Path[strings.Index(r.URL.Path, "/zk"):]
+
+		if cleanPath := path.Clean(zkPath); zkPath != cleanPath && zkPath != cleanPath+"/" {
+			relog.Info("redirecting to %v", cleanPath)
+			http.Redirect(w, r, cleanPath, http.StatusTemporaryRedirect)
+			return
+		}
+
+		if strings.HasSuffix(zkPath, "/") {
+			zkPath = zkPath[:len(zkPath)-1]
+		}
+
+		tmpl, err := templateLoader.Lookup("zk.html")
+		if err != nil {
+			httpError(w, "error in template loader: %v", err)
+			return
+		}
+
+		result := ZkResult{Path: zkPath}
+
+		if zkPath == "/zk" {
+			cells, err := zk.ResolveWildcards(zconn, []string{"/zk/*"})
+			if err != nil {
+				httpError(w, "zk error: %v", err)
+				return
+			}
+			for i, cell := range cells {
+				cells[i] = cell[4:] // cut off "/zk/"
+			}
+			result.Children = cells
+		} else {
+
+			if data, _, err := zconn.Get(zkPath); err != nil {
+				result.Error = err.Error()
+			} else {
+				result.Data = data
+				if children, _, err := zconn.Children(zkPath); err != nil {
+					result.Error = err.Error()
+				} else {
+					result.Children = children
+				}
+
+			}
+
+		}
+		switch r.URL.Query().Get("format") {
+		case "json":
+			j, err := json.MarshalIndent(result, "", "  ")
+			if err != nil {
+				httpError(w, "JSON error%s", err)
+				return
+			}
+			w.Write(j)
+		default:
+			if tmpl.Execute(w, result); err != nil {
 				httpError(w, "error executing template", err)
 			}
 		}

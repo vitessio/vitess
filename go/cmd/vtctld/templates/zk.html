@@ -1,0 +1,33 @@
+<html>
+<head>
+<title>Zookeeper Explorer</title>
+</head>
+
+<body>
+{{$path := .Path}}
+
+{{if .Error}}
+<h1>Error</h1>
+{{.Error}}
+{{else}}
+<h1>{{breadcrumbs .Path}}</h1>
+
+<h2>Children</h2>
+<ul>
+  <li><a href="{{$path}}/..">..</a></li>
+  {{range .Children}}
+  <li><a href="{{$path}}/{{.}}">{{.}}</a></li>
+  {{end}}
+
+</ul>
+
+{{with .Data}}
+<h2>Data</h2>
+<pre>{{.}}</pre>
+{{end}}
+
+
+
+{{end}}
+</body>
+</html>
