@@ -89,6 +89,37 @@ func GetAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 	return tablets, nil
 }
 
+// GetAllTabletsAccrossCells returns all tablets from known cells.
+func GetAllTabletsAccrossCells(zconn zk.Conn) ([]*tm.TabletInfo, error) {
+	cells, err := zk.ResolveWildcards(zconn, []string{"/zk/*/vt/tablets"})
+	if err != nil {
+		return nil, err
+	}
+	results := make(chan []*tm.TabletInfo)
+	errors := make(chan error)
+	for _, cell := range cells {
+		go func(cell string) {
+			tablets, err := GetAllTablets(zconn, path.Dir(cell))
+			if err != nil {
+				errors <- err
+				return
+			}
+			results <- tablets
+		}(cell)
+	}
+
+	allTablets := make([]*tm.TabletInfo, 0)
+	for _ = range cells {
+		select {
+		case tablets := <-results:
+			allTablets = append(allTablets, tablets...)
+		case err := <-errors:
+			return nil, err
+		}
+	}
+	return allTablets, nil
+}
+
 // Copy keys from from map m into a new slice with the type specified
 // by typeHint.  Reflection can't make a new slice type just based on
 // the key type AFAICT.

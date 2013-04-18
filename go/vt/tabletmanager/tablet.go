@@ -72,7 +72,7 @@ const (
 	TYPE_SCRAP = TabletType("scrap")
 )
 
-var allTabletTypes = []TabletType{TYPE_IDLE,
+var AllTabletTypes = []TabletType{TYPE_IDLE,
 	TYPE_MASTER,
 	TYPE_REPLICA,
 	TYPE_RDONLY,
@@ -88,7 +88,7 @@ var allTabletTypes = []TabletType{TYPE_IDLE,
 	TYPE_SCRAP,
 }
 
-var slaveTabletTypes = []TabletType{
+var SlaveTabletTypes = []TabletType{
 	TYPE_REPLICA,
 	TYPE_RDONLY,
 	TYPE_BATCH,
@@ -115,8 +115,8 @@ func makeTypeList(types []TabletType) []string {
 }
 
 func init() {
-	AllTabletTypeStrings = makeTypeList(allTabletTypes)
-	SlaveTabletTypeStrings = makeTypeList(slaveTabletTypes)
+	AllTabletTypeStrings = makeTypeList(AllTabletTypes)
+	SlaveTabletTypeStrings = makeTypeList(SlaveTabletTypes)
 }
 
 // Can this db type be trivially reassigned without changes to the replication graph?

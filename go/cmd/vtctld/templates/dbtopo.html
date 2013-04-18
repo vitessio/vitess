@@ -1,0 +1,79 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>DB topology</title>
+  <style>
+    .keyspace {
+      font-family: monospace;
+    }
+    td {
+      border: 1px solid black;
+      vertical-align:text-top;
+    }
+    ul.tablet-list li {
+      list-style-type: none;
+      margin: 0px;
+      position: relative;
+    }
+    ul.tablet-list {
+    padding-left: 0px;
+    }
+    table.keyspace {
+      text-align: center;
+    }
+    .not-replicating {
+      text-decoration: line-through;
+    }
+
+  </style>
+</head>
+<body>
+  {{with .Error}}
+    <h1>{{.}}</h1>
+  {{end}}
+  {{with .Topology}}
+    <h1>Assigned</h1>
+    {{range $keyspace, $shards := .Assigned}}
+      <h2>{{$keyspace}}</h2>
+      <table class="keyspace">
+	<thead>
+	  {{ range $name, $tablets := $shards }}
+	  {{if hasprefix $name "-"}}<td>type</td>{{end}}
+	  <td>{{$name}}</td>
+	  {{end}}
+	</thead>
+	<tbody>
+	  {{range $processedType := $shards.TabletTypes}}
+
+	  <tr>
+	    {{range $name, $tablets := $shards}}
+	    {{if hasprefix $name "-"}}<td>{{$processedType}}</td>{{end}}
+	    <td>
+	      <ul class="tablet-list">
+		{{range index $tablets $processedType}}
+		{{template "tablet.html" .}}
+		{{end}}
+	      </ul>
+	    </td>
+	    {{end}}
+	  </tr>
+	  {{end}}
+	</tbody>
+      </table>
+    {{end}}
+    <h1>Idle</h1>
+    <ul>
+      {{range .Idle}}
+        {{template "tablet.html" .}}
+      {{end}}
+    </ul>
+    <h1>Scrap</h1>
+    <ul>
+    {{range .Scrap}}
+      {{template "tablet.html" .}}
+    {{end}}
+    </ul>
+  {{end}}
+
+</body>
+</html>

@@ -1,0 +1,5 @@
+<li class="{{.Type}} {{if not .IsReplicationOk}}not-replicating{{end}}" title="{{.Path}}">
+  <a href="data:text/html,{{template "tablet_detail.html" .}}">
+      {{.ShortName}}
+  </a>
+</li>

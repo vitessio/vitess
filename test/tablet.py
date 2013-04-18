@@ -167,6 +167,9 @@ class Tablet(object):
     finally:
       conn.close()
 
+  def scrap(self):
+    utils.run_vtctl(['ScrapTablet', self.zk_tablet_path])
+
   def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, start=False, auth=False, dbname=None):
     self.keyspace = keyspace
     self.shard = shard
