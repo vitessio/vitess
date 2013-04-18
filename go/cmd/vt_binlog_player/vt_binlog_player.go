@@ -45,6 +45,7 @@ var (
 )
 
 var (
+	SLOW_TXN_THRESHOLD    = time.Duration(100 * time.Millisecond)
 	BEGIN                 = []byte("begin")
 	COMMIT                = []byte("commit")
 	ROLLBACK              = []byte("rollback")
@@ -207,6 +208,8 @@ type blpStats struct {
 	queriesPerSec *stats.Rates
 	txnsPerSec    *stats.Rates
 	txnTime       *stats.Timings
+	queryTime     *stats.Timings
+	lookupTxn     *stats.Timings
 }
 
 func NewBlpStats() *blpStats {
@@ -216,6 +219,8 @@ func NewBlpStats() *blpStats {
 	bs.queriesPerSec = stats.NewRates("QueriesPerSec", bs.queryCount, 15, 60e9)
 	bs.txnsPerSec = stats.NewRates("TxnPerSec", bs.txnCount, 15, 60e9)
 	bs.txnTime = stats.NewTimings("TxnTime")
+	bs.queryTime = stats.NewTimings("QueryTime")
+	bs.lookupTxn = stats.NewTimings("LookupTxn")
 	return bs
 }
 
@@ -266,8 +271,13 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.Replica
 		time.Now().Unix(),
 		blp.recoveryState.Uid)
 
+	queryStartTime := time.Now()
 	if _, err := blp.dbClient.ExecuteFetch([]byte(updateRecovery), 0, false); err != nil {
 		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
+	}
+	blp.txnTime.Record("QueryTime", queryStartTime)
+	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
+		relog.Info("SLOW QUERY '%v'", updateRecovery)
 	}
 }
 
@@ -722,7 +732,7 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordin
 	seqUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	dmlMatch := 0
 	var queryCount int64
-	var txnStartTime time.Time
+	var txnStartTime, lookupStartTime, queryStartTime time.Time
 
 	for _, dmlEvent := range blp.txnBuffer {
 		switch dmlEvent.SqlType {
@@ -730,7 +740,9 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordin
 			queryCount += 1
 			txnStartTime = time.Now()
 		case mysqlctl.COMMIT:
+			lookupStartTime = time.Now()
 			blp.handleLookupWrites(indexUpdates, seqUpdates)
+			blp.txnTime.Record("LookupTxn", lookupStartTime)
 			blp.WriteRecoveryPosition(recoveryPosition)
 			if err = blp.dbClient.Commit(); err != nil {
 				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
@@ -757,8 +769,13 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordin
 					seqUpdates = append(seqUpdates, seqSql)
 				}
 				for _, sql := range dmlEvent.Sql {
+					queryStartTime = time.Now()
 					if _, err = blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
 						panic(fmt.Errorf("Error %v in executing sql '%v'", err, sql))
+					}
+					blp.txnTime.Record("QueryTime", queryStartTime)
+					if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
+						relog.Info("SLOW QUERY '%v'", sql)
 					}
 				}
 				queryCount += int64(len(dmlEvent.Sql))
