@@ -222,12 +222,15 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		return
 	}
 
+	// clean out and start fresh
+	relog.Info("removing previous snapshots: %v", mysqld.SnapshotDir)
+	if err = os.RemoveAll(mysqld.SnapshotDir); err != nil {
+		return
+	}
+
 	cloneSourcePath := path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+string(startKey)+","+string(endKey))
 	// clean out and start fresh
 	for _, _path := range []string{cloneSourcePath} {
-		if err = os.RemoveAll(_path); err != nil {
-			return
-		}
 		if err = os.MkdirAll(_path, 0775); err != nil {
 			return
 		}
