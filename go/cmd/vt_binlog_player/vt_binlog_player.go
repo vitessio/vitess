@@ -597,7 +597,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 
 	//Read event
 	if binlogResponse.Error != "" {
-		//This is to handle the terminal condition where the client is exiting but there 
+		//This is to handle the terminal condition where the client is exiting but there
 		//maybe pending transactions in the buffer.
 		if strings.Contains(binlogResponse.Error, "EOF") {
 			relog.Info("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
@@ -763,8 +763,8 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 }
 
 // Since each batch of txn maybe not contain max txns, we
-// flush till the last counter (blp.txnIndex). 
-// blp.TxnBuffer contains 'n' complete txns, we 
+// flush till the last counter (blp.txnIndex).
+// blp.TxnBuffer contains 'n' complete txns, we
 // send one begin at the start and then ignore blp.txnIndex - 1 "Commit" events
 // and commit the entire batch at the last commit. Lookup txn is flushed before that.
 func (blp *BinlogPlayer) handleTxn() {
