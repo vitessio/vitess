@@ -33,8 +33,15 @@ import (
 
 var stdout *bufio.Writer
 
+const (
+	TXN_BATCH        = 10
+	MAX_TXN_INTERVAL = 30
+)
+
 var (
 	port             = flag.Int("port", 0, "port for the server")
+	txnBatch         = flag.Int("txn-batch", TXN_BATCH, "transaction batch size")
+	maxTxnInterval   = flag.Int("max-txn-interval", MAX_TXN_INTERVAL, "max txn interval")
 	startPosFile     = flag.String("start-pos-file", "", "server address and start coordinates")
 	useCheckpoint    = flag.Bool("use-checkpoint", false, "use the saved checkpoint to start")
 	dbConfigFile     = flag.String("db-config-file", "", "json file for db credentials")
@@ -225,17 +232,21 @@ func NewBlpStats() *blpStats {
 }
 
 type BinlogPlayer struct {
-	keyrange      key.KeyRange
-	keyrangeTag   string
-	recoveryState *binlogRecoveryState
-	startPosition *binlogRecoveryState
-	rpcClient     *rpcplus.Client
-	inTxn         bool
-	txnBuffer     []*mysqlctl.BinlogResponse
-	dbClient      VtClient
-	lookupClient  VtClient
-	debug         bool
-	tables        []string
+	keyrange       key.KeyRange
+	keyrangeTag    string
+	recoveryState  *binlogRecoveryState
+	startPosition  *binlogRecoveryState
+	rpcClient      *rpcplus.Client
+	inTxn          bool
+	txnBuffer      []*mysqlctl.BinlogResponse
+	dbClient       VtClient
+	lookupClient   VtClient
+	debug          bool
+	tables         []string
+	txnIndex       int
+	batchStart     time.Time
+	txnBatch       int
+	maxTxnInterval time.Duration
 	*blpStats
 }
 
@@ -255,10 +266,12 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.Keys
 		blp.keyrangeTag = "MAX"
 	}
 
+	blp.txnIndex = 0
 	blp.inTxn = false
 	blp.txnBuffer = make([]*mysqlctl.BinlogResponse, 0, mysqlctl.MAX_TXN_BATCH)
 	blp.debug = false
 	blp.blpStats = NewBlpStats()
+	blp.batchStart = time.Now()
 	return blp
 }
 
@@ -297,6 +310,8 @@ func main() {
 	if err != nil {
 		relog.Fatal("Error in initializing binlog player - '%v'", err)
 	}
+	blp.txnBatch = *txnBatch
+	blp.maxTxnInterval = time.Duration(*maxTxnInterval) * time.Second
 
 	if *tables != "" {
 		tables := strings.Split(*tables, ",")
@@ -570,11 +585,26 @@ func handleError(err *error, blp *BinlogPlayer) {
 	}
 }
 
+func (blp *BinlogPlayer) flushTxnBatch() {
+	blp.handleTxn()
+	blp.inTxn = false
+	blp.txnBuffer = blp.txnBuffer[:0]
+	blp.txnIndex = 0
+}
+
 func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogResponse) (err error) {
 	defer handleError(&err, blp)
 
 	//Read event
 	if binlogResponse.Error != "" {
+		//This is to handle the terminal condition where the client is exiting but there 
+		//maybe pending transactions in the buffer.
+		if strings.Contains(binlogResponse.Error, "EOF") {
+			relog.Info("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
+			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].SqlType == mysqlctl.COMMIT {
+				blp.flushTxnBatch()
+			}
+		}
 		if binlogResponse.BlPosition.Position.MasterFilename != "" {
 			panic(fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.BlPosition.Position.String(), binlogResponse.Error))
 		} else {
@@ -584,22 +614,32 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 
 	switch binlogResponse.SqlType {
 	case mysqlctl.DDL:
+		if blp.txnIndex > 0 {
+			relog.Info("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
+			blp.flushTxnBatch()
+		}
 		blp.handleDdl(binlogResponse)
 	case mysqlctl.BEGIN:
-		if blp.inTxn {
-			return fmt.Errorf("Invalid txn: txn already in progress, len(blp.txnBuffer) %v", len(blp.txnBuffer))
+		if blp.txnIndex == 0 {
+			if blp.inTxn {
+				return fmt.Errorf("Invalid txn: txn already in progress, len(blp.txnBuffer) %v", len(blp.txnBuffer))
+			}
+			blp.txnBuffer = blp.txnBuffer[:0]
+			blp.inTxn = true
+			blp.batchStart = time.Now()
 		}
-		blp.txnBuffer = blp.txnBuffer[:0]
-		blp.inTxn = true
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
 	case mysqlctl.COMMIT:
 		if !blp.inTxn {
 			return fmt.Errorf("Invalid event: COMMIT event without a transaction.")
 		}
+		blp.txnIndex += 1
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
-		blp.handleTxn(&binlogResponse.Position)
-		blp.inTxn = false
-		blp.txnBuffer = blp.txnBuffer[:0]
+
+		if time.Now().Sub(blp.batchStart) > blp.maxTxnInterval || blp.txnIndex == blp.txnBatch {
+			//relog.Info("Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
+			blp.flushTxnBatch()
+		}
 	case "insert", "update", "delete":
 		if !blp.inTxn {
 			return fmt.Errorf("Invalid event: DML outside txn context.")
@@ -722,35 +762,40 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 	return false
 }
 
-//Txn - start a context and apply the entire txn.
-//for each dml - verify that keyspace is correct for this shard - abort immediately for a wrong sql.
-// if indexType, indexid is set, update r_lookup.
-//if seqName and seqId is set, update r_lookup.
-func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordinates) {
+// Since each batch of txn maybe not contain max txns, we
+// flush till the last counter (blp.txnIndex). 
+// blp.TxnBuffer contains 'n' complete txns, we 
+// send one begin at the start and then ignore blp.txnIndex - 1 "Commit" events
+// and commit the entire batch at the last commit. Lookup txn is flushed before that.
+func (blp *BinlogPlayer) handleTxn() {
 	var err error
 	indexUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	seqUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	dmlMatch := 0
+	txnCount := 0
 	var queryCount int64
 	var txnStartTime, lookupStartTime, queryStartTime time.Time
 
 	for _, dmlEvent := range blp.txnBuffer {
 		switch dmlEvent.SqlType {
 		case mysqlctl.BEGIN:
-			queryCount += 1
-			txnStartTime = time.Now()
+			continue
 		case mysqlctl.COMMIT:
+			txnCount += 1
+			if txnCount < blp.txnIndex {
+				continue
+			}
 			lookupStartTime = time.Now()
 			blp.handleLookupWrites(indexUpdates, seqUpdates)
 			blp.txnTime.Record("LookupTxn", lookupStartTime)
-			blp.WriteRecoveryPosition(recoveryPosition)
+			blp.WriteRecoveryPosition(&dmlEvent.Position)
 			if err = blp.dbClient.Commit(); err != nil {
 				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 			}
 			//added 1 for recovery dml
 			queryCount += 2
 			blp.queryCount.Add("QueryCount", queryCount)
-			blp.txnCount.Add("TxnCount", 1)
+			blp.txnCount.Add("TxnCount", int64(blp.txnIndex))
 			blp.txnTime.Record("TxnTime", txnStartTime)
 		case "update", "delete", "insert":
 			if blp.dmlTableMatch(dmlEvent.Sql) {
@@ -759,6 +804,8 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordin
 					if err = blp.dbClient.Begin(); err != nil {
 						panic(fmt.Errorf("Failed query 'BEGIN', err: %s", err))
 					}
+					queryCount += 1
+					txnStartTime = time.Now()
 				}
 
 				indexSql, seqSql := blp.createIndexSeqSql(dmlEvent)
@@ -774,9 +821,9 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordin
 						panic(fmt.Errorf("Error %v in executing sql '%v'", err, sql))
 					}
 					blp.txnTime.Record("QueryTime", queryStartTime)
-					if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
-						relog.Info("SLOW QUERY '%v'", sql)
-					}
+					//if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
+					//	relog.Info("SLOW QUERY '%v'", sql)
+					//}
 				}
 				queryCount += int64(len(dmlEvent.Sql))
 			}
@@ -789,25 +836,21 @@ func (blp *BinlogPlayer) handleTxn(recoveryPosition *mysqlctl.ReplicationCoordin
 func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
 	switch indexType {
 	case "username":
-		return
-	/*
-		case "username":
-			indexSlice, ok := indexId.(string)
-			if !ok {
-				return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
-			}
-			index := string(indexSlice)
-			switch dmlType {
-			case "insert":
-				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
-			case "update":
-				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
-			case "delete":
-				indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
-			default:
-				return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
-			}
-	*/
+		indexSlice, ok := indexId.(string)
+		if !ok {
+			return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
+		}
+		index := string(indexSlice)
+		switch dmlType {
+		case "insert":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
+		case "update":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
+		case "delete":
+			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
+		default:
+			return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
+		}
 	case "video_id":
 		index, ok := indexId.(uint64)
 		if !ok {
