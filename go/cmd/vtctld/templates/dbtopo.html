@@ -19,7 +19,21 @@
     padding-left: 0px;
     }
     table.keyspace {
+      border-collapse: collapse;
+    }
+    table.keyspace td {
+      padding-left: 1em;
+      padding-right: 1em;
+    }
+    table.keyspace td.legend {
       text-align: center;
+      padding-left: 1ex;
+      padding-right: 1ex;
+    }
+    table.keyspace thead {
+      text-align: center;
+      border-color: #666;
+      background-color: #dedede;
     }
     .not-replicating {
       text-decoration: line-through;
@@ -38,7 +52,7 @@
       <table class="keyspace">
 	<thead>
 	  {{ range $i, $shard := $shards.ShardNodes }}
-	  {{if intequal $i 0}}<td>type</td>{{end}}
+	  {{if intequal $i 0}}<td class="legend">type</td>{{end}}
 	  <td>{{$shard.Name}}</td>
 	  {{end}}
 	</thead>
@@ -47,7 +61,7 @@
 
 	  <tr>
 	    {{range $i, $shard := $shards.ShardNodes}}
-	    {{if intequal $i 0}}<td>{{$processedType}}</td>{{end}}
+	    {{if intequal $i 0}}<td class="legend">{{$processedType}}</td>{{end}}
 	    <td>
 	      <ul class="tablet-list">
 		{{range index $shard.TabletNodes $processedType}}

@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"net/http"
 	"path"
 	"reflect"
 	"strings"
-	"text/template"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
@@ -84,12 +84,14 @@ func Htmlize(data interface{}) string {
 }
 
 var funcMap = template.FuncMap{
-	"htmlize":   Htmlize,
+	"htmlize": func(o interface{}) template.HTML {
+		return template.HTML(Htmlize(o))
+	},
 	"hasprefix": strings.HasPrefix,
 	"intequal": func(left, right int) bool {
 		return left == right
 	},
-	"breadcrumbs": func(zkPath string) string {
+	"breadcrumbs": func(zkPath string) template.HTML {
 		parts := strings.Split(zkPath, "/")
 		paths := make([]string, len(parts))
 		for i, part := range parts {
@@ -104,7 +106,7 @@ var funcMap = template.FuncMap{
 			fmt.Fprintf(b, "/ <a href=\"%v\">%v</a>&nbsp;", paths[i+1], part)
 		}
 		fmt.Fprintf(b, "/ "+parts[len(parts)-1])
-		return b.String()
+		return template.HTML(b.String())
 	},
 }
 
