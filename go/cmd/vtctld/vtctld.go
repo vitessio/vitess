@@ -86,6 +86,9 @@ func Htmlize(data interface{}) string {
 var funcMap = template.FuncMap{
 	"htmlize":   Htmlize,
 	"hasprefix": strings.HasPrefix,
+	"intequal": func(left, right int) bool {
+		return left == right
+	},
 	"breadcrumbs": func(zkPath string) string {
 		parts := strings.Split(zkPath, "/")
 		paths := make([]string, len(parts))
@@ -179,6 +182,30 @@ func (loader *TemplateLoader) Lookup(name string) (*template.Template, error) {
 	return tmpl, nil
 }
 
+// ServeTemplate executes the named template passing data into it. If
+// the format GET parameter is equal to "json", serves data as JSON
+// instead.
+func (tl *TemplateLoader) ServeTemplate(templateName string, data interface{}, w http.ResponseWriter, r *http.Request) {
+	switch r.URL.Query().Get("format") {
+	case "json":
+		j, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			httpError(w, "JSON error%s", err)
+			return
+		}
+		w.Write(j)
+	default:
+		tmpl, err := tl.Lookup(templateName)
+		if err != nil {
+			httpError(w, "error in template loader: %v", err)
+			return
+		}
+		if err := tmpl.Execute(w, data); err != nil {
+			httpError(w, "error executing template", err)
+		}
+	}
+}
+
 func httpError(w http.ResponseWriter, format string, err error) {
 	relog.Error(format, err)
 	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
@@ -227,25 +254,7 @@ func main() {
 		} else {
 			result.Topology = topology
 		}
-
-		switch r.URL.Query().Get("format") {
-		case "json":
-			j, err := json.MarshalIndent(result, "", "  ")
-			if err != nil {
-				httpError(w, "JSON error%s", err)
-				return
-			}
-			w.Write(j)
-		default:
-			tmpl, err := templateLoader.Lookup("dbtopo.html")
-			if err != nil {
-				httpError(w, "error in template loader: %v", err)
-				return
-			}
-			if err := tmpl.Execute(w, result); err != nil {
-				httpError(w, "error executing template", err)
-			}
-		}
+		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
 	http.HandleFunc("/zk/", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -262,12 +271,6 @@ func main() {
 
 		if strings.HasSuffix(zkPath, "/") {
 			zkPath = zkPath[:len(zkPath)-1]
-		}
-
-		tmpl, err := templateLoader.Lookup("zk.html")
-		if err != nil {
-			httpError(w, "error in template loader: %v", err)
-			return
 		}
 
 		result := ZkResult{Path: zkPath}
@@ -297,19 +300,7 @@ func main() {
 			}
 
 		}
-		switch r.URL.Query().Get("format") {
-		case "json":
-			j, err := json.MarshalIndent(result, "", "  ")
-			if err != nil {
-				httpError(w, "JSON error%s", err)
-				return
-			}
-			w.Write(j)
-		default:
-			if tmpl.Execute(w, result); err != nil {
-				httpError(w, "error executing template", err)
-			}
-		}
+		templateLoader.ServeTemplate("zk.html", result, w, r)
 	})
 	relog.Fatal("%s", http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 }

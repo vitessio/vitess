@@ -37,20 +37,20 @@
       <h2>{{$keyspace}}</h2>
       <table class="keyspace">
 	<thead>
-	  {{ range $name, $tablets := $shards }}
-	  {{if hasprefix $name "-"}}<td>type</td>{{end}}
-	  <td>{{$name}}</td>
+	  {{ range $i, $shard := $shards.ShardNodes }}
+	  {{if intequal $i 0}}<td>type</td>{{end}}
+	  <td>{{$shard.Name}}</td>
 	  {{end}}
 	</thead>
 	<tbody>
 	  {{range $processedType := $shards.TabletTypes}}
 
 	  <tr>
-	    {{range $name, $tablets := $shards}}
-	    {{if hasprefix $name "-"}}<td>{{$processedType}}</td>{{end}}
+	    {{range $i, $shard := $shards.ShardNodes}}
+	    {{if intequal $i 0}}<td>{{$processedType}}</td>{{end}}
 	    <td>
 	      <ul class="tablet-list">
-		{{range index $tablets $processedType}}
+		{{range index $shard.TabletNodes $processedType}}
 		{{template "tablet.html" .}}
 		{{end}}
 	      </ul>

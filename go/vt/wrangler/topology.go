@@ -1,19 +1,93 @@
 package wrangler
 
 import (
-	"net"
+	"sort"
+	"strconv"
 	"strings"
 
-	"code.google.com/p/vitess/go/relog"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
+// TabletNodesByType maps tablet types to slices of tablet nodes.
+type TabletNodesByType map[string][]*TabletNode
+
 // ShardNodes represents all tablet nodes for a shard. The keys are
 // string representations of tablet types.
-type ShardNodes map[string][]*TabletNode
+type ShardNodes struct {
+	TabletNodes TabletNodesByType
+	Name        string
+}
+
+type numericShardNodesList []*ShardNodes
+
+func (nsnl numericShardNodesList) Len() int {
+	return len(nsnl)
+}
+
+func (nsnl numericShardNodesList) Less(i, j int) bool {
+	// This panics, so it shouldn't be called unless all shard
+	// names can be converted to integers.
+	ii, err := strconv.Atoi(nsnl[i].Name)
+	if err != nil {
+		panic("bad numeric shard: " + nsnl[i].Name)
+	}
+
+	jj, err := strconv.Atoi(nsnl[j].Name)
+	if err != nil {
+		panic("bad numeric shard" + nsnl[j].Name)
+	}
+	return ii < jj
+
+}
+
+func (nsnl numericShardNodesList) Swap(i, j int) {
+	nsnl[i], nsnl[j] = nsnl[j], nsnl[i]
+}
+
+type rangeShardNodesList []*ShardNodes
+
+func (rsnl rangeShardNodesList) Len() int {
+	return len(rsnl)
+}
+
+func (rsnl rangeShardNodesList) Less(i, j int) bool {
+	return rsnl[i].Name < rsnl[j].Name
+}
+
+func (rsnl rangeShardNodesList) Swap(i, j int) {
+	rsnl[i], rsnl[j] = rsnl[j], rsnl[i]
+}
 
 // KeyspaceNodes represents all tablet nodes in a keyspace.
-type KeyspaceNodes map[string]ShardNodes
+type KeyspaceNodes map[string]TabletNodesByType
+
+func (ks KeyspaceNodes) hasOnlyNumericShardNames() bool {
+	for name := range ks {
+		if _, err := strconv.Atoi(name); err != nil {
+			return false
+		}
+	}
+	return true
+
+}
+
+// ShardNodes returns all the shard nodes, in a reasonable order.
+func (ks KeyspaceNodes) ShardNodes() []*ShardNodes {
+	result := make([]*ShardNodes, len(ks))
+	i := 0
+	for name, snm := range ks {
+		result[i] = &ShardNodes{Name: name, TabletNodes: snm}
+		i++
+	}
+
+	if ks.hasOnlyNumericShardNames() {
+		sort.Sort(numericShardNodesList(result))
+	} else {
+		sort.Sort(rangeShardNodesList(result))
+	}
+
+	return result
+}
 
 // TabletTypes returns a slice of tablet type names this ks
 // contains.
@@ -41,15 +115,10 @@ func (ks KeyspaceNodes) HasType(name string) bool {
 // TabletNode is the representation of a tablet in the db topology.
 type TabletNode struct {
 	*tm.TabletInfo
-	IsReplicating bool
 }
 
 func (t *TabletNode) ShortName() string {
 	return strings.SplitN(t.Addr, ".", 2)[0]
-}
-
-func (t *TabletNode) IsReplicationOk() bool {
-	return !t.IsSlaveType() || t.IsReplicating
 }
 
 type Topology struct {
@@ -66,18 +135,12 @@ func NewTopology() *Topology {
 	}
 }
 
-type shardAddrPair struct {
-	shard, addr string
-}
-
 func (wr *Wrangler) DbTopology() (*Topology, error) {
 	tabletInfos, err := GetAllTabletsAccrossCells(wr.zconn)
 	if err != nil {
 		return nil, err
 	}
 	topology := NewTopology()
-	masters := make([]*TabletNode, 0)
-	slaves := make(map[shardAddrPair]*TabletNode)
 
 	for _, ti := range tabletInfos {
 		tablet := &TabletNode{TabletInfo: ti}
@@ -87,64 +150,15 @@ func (wr *Wrangler) DbTopology() (*Topology, error) {
 		case tm.TYPE_SCRAP:
 			topology.Scrap = append(topology.Scrap, tablet)
 		default:
-			switch tablet.Type {
-			case tm.TYPE_MASTER:
-				masters = append(masters, tablet)
-			case tm.TYPE_REPLICA:
-				host, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
-				if err != nil {
-					return nil, err
-				}
-				slaves[shardAddrPair{tablet.Shard, host}] = tablet
-			}
 			if _, ok := topology.Assigned[tablet.Keyspace]; !ok {
-				topology.Assigned[tablet.Keyspace] = make(map[string]ShardNodes)
+				topology.Assigned[tablet.Keyspace] = make(map[string]TabletNodesByType)
 			}
 			if _, ok := topology.Assigned[tablet.Keyspace][tablet.Shard]; !ok {
-				topology.Assigned[tablet.Keyspace][tablet.Shard] = make(ShardNodes)
+				topology.Assigned[tablet.Keyspace][tablet.Shard] = make(TabletNodesByType)
 			}
-
 			topology.Assigned[tablet.Keyspace][tablet.Shard][string(tablet.Type)] = append(topology.Assigned[tablet.Keyspace][tablet.Shard][string(tablet.Type)], tablet)
 		}
 
-	}
-	errors := make(chan error)
-	results := make(chan []shardAddrPair)
-	for _, master := range masters {
-		go func(master *TabletNode) {
-			actionPath, err := wr.ai.GetSlaves(master.Path())
-			if err != nil {
-				errors <- err
-				return
-			}
-			slaveList, err := wr.ai.WaitForCompletionReply(actionPath, -1)
-			if err != nil {
-				errors <- err
-				return
-			}
-			sl := slaveList.(*tm.SlaveList)
-			newSlaves := make([]shardAddrPair, len(sl.Addrs))
-			for i, addr := range sl.Addrs {
-				newSlaves[i] = shardAddrPair{master.Shard, addr}
-			}
-			results <- newSlaves
-		}(master)
-	}
-	for _ = range masters {
-		select {
-		case newSlaves := <-results:
-			for _, key := range newSlaves {
-				slave, ok := slaves[key]
-				if !ok {
-					relog.Error("slave not present in Zookeeper returned by GetSlaves: %v (shard %v)", key.addr, key.shard)
-					continue
-				}
-				slave.IsReplicating = true
-
-			}
-		case err := <-errors:
-			return nil, err
-		}
 	}
 	return topology, nil
 }
