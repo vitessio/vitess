@@ -11,3 +11,18 @@ CREATE TABLE _vt.reparent_log (
   new_position varchar(255),
   wait_position varchar(255),
   index (last_position));
+
+CREATE TABLE _vt.vt_blp_recovery (
+  uid int(10) unsigned NOT NULL,
+  host varchar(32) NOT NULL,
+  port int NOT NULL,
+  master_filename varchar(255) NOT NULL,
+  master_position bigint(20) unsigned NOT NULL,
+  relay_filename varchar(255) default NULL,
+  relay_position bigint(20) unsigned default 0,
+  keyrange_start varchar(32) NOT NULL,
+  keyrange_end varchar(32) NOT NULL,
+  txn_timestamp int(10) unsigned NOT NULL,
+  time_updated int(10) unsigned NOT NULL,
+  PRIMARY KEY (uid)
+);

@@ -285,10 +285,15 @@ type SnapshotManifest struct {
 	Files  SnapshotFiles
 
 	ReplicationState *ReplicationState
+	MasterState      *ReplicationState
 }
 
-func newSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition) (*SnapshotManifest, error) {
-	nrs, err := NewReplicationState(mysqlAddr)
+func newSnapshotManifest(addr, mysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, masterPos *ReplicationPosition) (*SnapshotManifest, error) {
+	nrs, err := NewReplicationState(masterAddr)
+	if err != nil {
+		return nil, err
+	}
+	mrs, err := NewReplicationState(mysqlAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -296,9 +301,14 @@ func newSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, p
 		Addr:             addr,
 		DbName:           dbName,
 		Files:            files,
-		ReplicationState: nrs}
+		ReplicationState: nrs,
+		MasterState:      mrs,
+	}
 	sort.Sort(rs.Files)
 	rs.ReplicationState.ReplicationPosition = *pos
+	if masterPos != nil {
+		rs.MasterState.ReplicationPosition = *masterPos
+	}
 	return rs, nil
 }
 

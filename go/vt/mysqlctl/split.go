@@ -91,8 +91,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"code.google.com/p/vitess/go/bufio2"
 	"code.google.com/p/vitess/go/cgzip"
@@ -105,6 +107,9 @@ import (
 const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
+
+	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated)
+	                          values (%v, '%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -126,7 +131,12 @@ type SplitSnapshotManifest struct {
 	SchemaDefinition *SchemaDefinition
 }
 
-func NewSplitSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFile, pos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
+// NewSplitSnapshotManifest creates a new SplitSnapshotManifest.
+// myAddr and myMysqlAddr are the local server addresses.
+// masterAddr is the address of the server to use as master.
+// pos is the replication position to use on that master.
+// myMasterPos is the local server master position
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
 	s, err := startKey.Unhex()
 	if err != nil {
 		return nil, err
@@ -135,7 +145,7 @@ func NewSplitSnapshotManifest(addr, mysqlAddr, dbName string, files []SnapshotFi
 	if err != nil {
 		return nil, err
 	}
-	sm, err := newSnapshotManifest(addr, mysqlAddr, dbName, files, pos)
+	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +256,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	}
 	sd.SortByReverseDataLength()
 
-	slaveStartRequired, readOnly, replicationPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
+	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
 	if err != nil {
 		return
 	}
@@ -261,8 +271,9 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 		return "", snapshotErr
 	} else {
-		ssm, err := NewSplitSnapshotManifest(sourceAddr, masterAddr,
-			dbName, dataFiles, replicationPosition, startKey, endKey, sd)
+		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.Addr(),
+			masterAddr, dbName, dataFiles, replicationPosition,
+			myMasterPosition, startKey, endKey, sd)
 		if err != nil {
 			return "", err
 		}
@@ -363,7 +374,7 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 	return dataFiles, nil
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slaveStartRequired, readOnly bool, replicationPosition *ReplicationPosition, masterAddr string, err error) {
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *ReplicationPosition, masterAddr string, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
 		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
@@ -407,6 +418,13 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 				return
 			}
 		}
+	}
+
+	// get our master position, some targets may use it
+	myMasterPosition, err = mysqld.MasterStatus()
+	if err != nil && err != ErrNotMaster {
+		// this is a real error
+		return
 	}
 
 	relog.Info("Flush tables")
@@ -684,7 +702,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 	sd.SortByReverseDataLength()
 
-	slaveStartRequired, readOnly, replicationPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
+	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
 	if err != nil {
 		return
 	}
@@ -724,7 +742,9 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		for _, m := range datafiles {
 			krDatafiles = append(krDatafiles, m[kr]...)
 		}
-		ssm, err := NewSplitSnapshotManifest(sourceAddr, masterAddr, dbName, krDatafiles, replicationPosition, kr.Start.Hex(), kr.End.Hex(), sd)
+		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.Addr(),
+			masterAddr, dbName, krDatafiles, replicationPosition,
+			myMasterPosition, kr.Start.Hex(), kr.End.Hex(), sd)
 		if err != nil {
 			return nil, err
 		}
@@ -962,7 +982,9 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 // RestoreFromMultiSnapshot is the main entry point for multi restore.
 // - If the strategy contains the string 'writeBinLogs' then we will
 //   also write to the binary logs.
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+// - If the strategy contains the command 'populateBlpRecovery(NNN)' then we
+//   will populate the vt_blp_recovery table with master positions to start from
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, uids []uint32, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
@@ -1169,7 +1191,43 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		}
 	}
 
-	return mrc.Wait()
+	if err = mrc.Wait(); err != nil {
+		return err
+	}
+
+	// populate vt_blp_recovery table if we want to
+	if start := strings.Index(strategy, "populateBlpRecovery("); start != -1 {
+		param := strategy[start+len("populateBlpRecovery("):]
+		param = param[:strings.Index(param, ")")]
+		port, err := strconv.ParseInt(param, 0, 32)
+		if err != nil {
+			return err
+		}
+
+		queries := make([]string, 0, 4)
+		queries = append(queries, "USE `_vt`")
+		if !writeBinLogs {
+			queries = append(queries, "SET sql_log_bin = OFF")
+			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
+		}
+		for manifestIndex, manifest := range manifests {
+			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
+				uids[manifestIndex],
+				manifest.Source.MasterState.MasterHost,
+				port,
+				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
+				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
+				"", 0,
+				keyRange.Start.Hex(),
+				keyRange.End.Hex(),
+				time.Now().Unix())
+			queries = append(queries, insertRecovery)
+		}
+		if err = mysqld.executeSuperQueryList(queries); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 /*

@@ -304,8 +304,8 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		relog.Error("CreateSnapshot failed: %v", snapshotErr)
 	} else {
 		var sm *SnapshotManifest
-		sm, snapshotErr = newSnapshotManifest(sourceAddr, masterAddr,
-			dbName, dataFiles, replicationPosition)
+		sm, snapshotErr = newSnapshotManifest(sourceAddr, mysqld.Addr(),
+			masterAddr, dbName, dataFiles, replicationPosition, nil)
 		if snapshotErr != nil {
 			relog.Error("CreateSnapshot failed: %v", snapshotErr)
 		} else {

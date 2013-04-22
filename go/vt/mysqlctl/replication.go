@@ -194,7 +194,8 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 }
 
 var (
-	ErrNotSlave = errors.New("no slave status")
+	ErrNotSlave  = errors.New("no slave status")
+	ErrNotMaster = errors.New("no master status")
 )
 
 func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
@@ -325,8 +326,7 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 		return
 	}
 	if len(rows) != 1 {
-		err = errors.New("unexpected result for show master status")
-		return
+		return nil, ErrNotMaster
 	}
 	rp = &ReplicationPosition{}
 	rp.MasterLogFile = rows[0][0].String()

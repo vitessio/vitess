@@ -391,6 +391,8 @@ index by_msg (msg)
     tablet.start_vttablet()
     utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
 
+  utils.pause("After snapshot")
+
   # try to get the schema on the source, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62044.zk_tablet_path,
@@ -413,7 +415,7 @@ index by_msg (msg)
   tablet_urls = ' '.join("vttp://localhost:%s/vt_test_keyspace" % tablet.port for tablet in old_tablets)
 
   # 0x28 = 40
-  err = tablet_62344.mysqlctl("multirestore --end=0000000000000028 -strategy=skipAutoIncrement(vt_insert_test1),delayPrimaryKey,delaySecondaryIndexes,useMyIsam not_vt_test_keyspace %s" % tablet_urls).wait()
+  err = tablet_62344.mysqlctl("multirestore --end=0000000000000028 -strategy=skipAutoIncrement(vt_insert_test1),delayPrimaryKey,delaySecondaryIndexes,useMyIsam,populateBlpRecovery(6514) not_vt_test_keyspace %s" % tablet_urls).wait()
   if err != 0:
     raise utils.TestError("mysqlctl failed: %u" % err)
   for table in tables:
@@ -423,6 +425,9 @@ index by_msg (msg)
     for row in rows:
       if row[0] > 32:
         raise utils.TestError("Bad row: %s" % row)
+  rows = tablet_62344.mquery('_vt', 'select * from vt_blp_recovery')
+  if len(rows) != 3:
+    raise utils.TestError("Was expecting 3 rows in vt_blp_recovery but got: %s" % str(rows))
 
   # try to get the schema on multi-restored guy, make sure the view is not there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
