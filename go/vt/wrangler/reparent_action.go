@@ -41,6 +41,8 @@ func (wr *Wrangler) getMasterPosition(ti *tm.TabletInfo) (*mysqlctl.ReplicationP
 // will have a problem, and suggest a fix for them.
 func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, masterTabletUid uint32) error {
 	relog.Info("Checking all replication positions will allow the transition:")
+	masterIsDead := masterTabletUid == tm.NO_TABLET
+
 	// Check everybody has the right master. If there is no master
 	// (crash) just check that everyone has the same parent.
 	for _, tablet := range tabletMap {
@@ -53,6 +55,9 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, m
 	}
 
 	// now check all the replication positions will allow us to proceed
+	if masterIsDead {
+		relog.Debug("  master is dead, not checking Seconds Behind Master value")
+	}
 	var lastError error
 	mutex := sync.Mutex{}
 	wg := sync.WaitGroup{}
@@ -86,18 +91,21 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, m
 				}
 				return
 			}
-			replPos := result.(*mysqlctl.ReplicationPosition)
-			var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
-			if dur > wr.actionTimeout() {
-				err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Path())
-				relog.Error("  %v", err)
-				mutex.Lock()
-				lastError = err
-				mutex.Unlock()
-				return
-			}
 
-			relog.Debug("  slave is %v behind master (<%v), reparent should work for %v", dur, wr.actionTimeout(), tablet.Path())
+			if !masterIsDead {
+				replPos := result.(*mysqlctl.ReplicationPosition)
+				var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
+				if dur > wr.actionTimeout() {
+					err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Path())
+					relog.Error("  %v", err)
+					mutex.Lock()
+					lastError = err
+					mutex.Unlock()
+					return
+				}
+
+				relog.Debug("  slave is %v behind master (<%v), reparent should work for %v", dur, wr.actionTimeout(), tablet.Path())
+			}
 		}(tablet)
 	}
 	wg.Wait()

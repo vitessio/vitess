@@ -62,7 +62,7 @@ class BaseTest(unittest.TestCase):
   def _setUpClass(klass):
     os.mkdir(klass.mysqldir)
     klass.dump_config_files()
-    klass.start_mysql()
+    klass.init_mysql()
     klass.start_vtocc()
 
   @classmethod
@@ -117,7 +117,7 @@ class BaseTest(unittest.TestCase):
     klass.process.wait()
 
   @classmethod
-  def start_mysql(klass):
+  def init_mysql(klass):
     res = subprocess.call([
         os.path.join(klass.vtroot+"/bin/mysqlctl"),
         "-tablet-uid",  klass.tabletuid,

@@ -125,7 +125,7 @@ class VttabletTestEnv(TestEnv):
 
     framework.execute('go build', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
 
-    utils.wait_procs([self.tablet.start_mysql()])
+    utils.wait_procs([self.tablet.init_mysql()])
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
 
     self.mysql_conn, mcu = self.tablet.connect('vt_test_keyspace')

@@ -71,8 +71,14 @@ class Tablet(object):
     return utils.run_bg(os.path.join(utils.vtroot, 'bin', 'mysqlctl') +
                         logLevel + ' -tablet-uid %u ' % self.tablet_uid + cmd)
 
-  def start_mysql(self):
+  def init_mysql(self):
     return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port), quiet=True)
+
+  def start_mysql(self):
+    return self.mysqlctl('-port %u -mysql-port %u start' % (self.port, self.mysql_port), quiet=True)
+
+  def shutdown_mysql(self):
+    return self.mysqlctl('-port %u -mysql-port %u shutdown' % (self.port, self.mysql_port), quiet=True)
 
   def teardown_mysql(self):
     return self.mysqlctl('teardown -force', quiet=True)

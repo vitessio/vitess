@@ -31,10 +31,10 @@ def setup():
 
   # start mysql instance external to the test
   setup_procs = [
-      tablet_62344.start_mysql(),
-      tablet_62044.start_mysql(),
-      tablet_41983.start_mysql(),
-      tablet_31981.start_mysql(),
+      tablet_62344.init_mysql(),
+      tablet_62044.init_mysql(),
+      tablet_41983.init_mysql(),
+      tablet_31981.init_mysql(),
       ]
   utils.wait_procs(setup_procs)
 
@@ -766,9 +766,9 @@ def run_test_reparent_down_master():
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62344.zk_tablet_path, auto_log=True)
   utils.zk_check()
 
-  # Make the master agent unavailable.
+  # Make the master agent and database unavailable.
   tablet_62344.kill_vttablet()
-
+  tablet_62344.shutdown_mysql().wait()
 
   expected_addr = utils.hostname + ':' + str(tablet_62344.port)
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
@@ -822,6 +822,9 @@ def run_test_reparent_down_master():
   tablet_62044.kill_vttablet()
   tablet_41983.kill_vttablet()
   tablet_31981.kill_vttablet()
+
+  # sothe other tests don't have any surprise
+  tablet_62344.start_mysql().wait()
 
 
 @utils.test_case

@@ -88,8 +88,8 @@ def setup():
   utils.zk_setup()
 
   # start mysql instance external to the test
-  setup_procs = [master_tablet.start_mysql(),
-                 replica_tablet.start_mysql()
+  setup_procs = [master_tablet.init_mysql(),
+                 replica_tablet.init_mysql()
                 ]
   utils.wait_procs(setup_procs)
   setup_tablets()
@@ -270,6 +270,3 @@ def main():
 
 if __name__ == '__main__':
   main()
-
-
-

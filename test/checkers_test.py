@@ -33,7 +33,7 @@ db_configuration = {
 
 
 def setUpModule():
-  utils.wait_procs([t.start_mysql() for t in tablets])
+  utils.wait_procs([t.init_mysql() for t in tablets])
 
 
 def tearDownModule():

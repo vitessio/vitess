@@ -19,13 +19,13 @@ def setup():
   utils.zk_setup()
 
   setup_procs = [
-      shard_0_master.start_mysql(),
-      shard_0_replica1.start_mysql(),
-      shard_0_replica2.start_mysql(),
-      shard_0_rdonly.start_mysql(),
-      shard_0_backup.start_mysql(),
-      shard_1_master.start_mysql(),
-      shard_1_replica1.start_mysql(),
+      shard_0_master.init_mysql(),
+      shard_0_replica1.init_mysql(),
+      shard_0_replica2.init_mysql(),
+      shard_0_rdonly.init_mysql(),
+      shard_0_backup.init_mysql(),
+      shard_1_master.init_mysql(),
+      shard_1_replica1.init_mysql(),
       ]
   utils.wait_procs(setup_procs)
 

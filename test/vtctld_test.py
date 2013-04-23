@@ -55,7 +55,7 @@ def setUpModule():
   try:
     utils.zk_setup()
 
-    setup_procs = [t.start_mysql() for t in tablets]
+    setup_procs = [t.init_mysql() for t in tablets]
     utils.wait_procs(setup_procs)
     vtctld.start()
 
