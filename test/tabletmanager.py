@@ -425,9 +425,9 @@ index by_msg (msg)
     for row in rows:
       if row[0] > 32:
         raise utils.TestError("Bad row: %s" % row)
-  rows = tablet_62344.mquery('_vt', 'select * from vt_blp_recovery')
+  rows = tablet_62344.mquery('_vt', 'select * from blp_checkpoint')
   if len(rows) != 3:
-    raise utils.TestError("Was expecting 3 rows in vt_blp_recovery but got: %s" % str(rows))
+    raise utils.TestError("Was expecting 3 rows in blp_checkpoint but got: %s" % str(rows))
 
   # try to get the schema on multi-restored guy, make sure the view is not there
   out, err = utils.run_vtctl('GetSchema --include-views ' +

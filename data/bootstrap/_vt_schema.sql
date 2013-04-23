@@ -12,7 +12,7 @@ CREATE TABLE _vt.reparent_log (
   wait_position varchar(255),
   index (last_position));
 
-CREATE TABLE _vt.vt_blp_recovery (
+CREATE TABLE _vt.blp_checkpoint (
   uid int(10) unsigned NOT NULL,
   host varchar(32) NOT NULL,
   port int NOT NULL,

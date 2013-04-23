@@ -68,24 +68,10 @@ var (
 	SPACE                 = " "
 	USE_VT                = "use _vt"
 	USE_DB                = "use %v"
-	CREATE_RECOVERY_TABLE = `CREATE TABLE IF NOT EXISTS vt_blp_recovery (
-                             uid  int(10) unsigned NOT NULL,
-                             host varchar(32) NOT NULL,
-                             port int NOT NULL,
-                             master_filename varchar(255) NOT NULL,
-                             master_position bigint(20) unsigned NOT NULL,
-                             relay_filename varchar(255) default NULL,
-                             relay_position bigint(20) unsigned default 0,
-                             keyrange_start varchar(32) NOT NULL,
-                             keyrange_end varchar(32) NOT NULL,
-                             txn_timestamp int(10) unsigned NOT NULL,
-                             time_updated int(10) unsigned NOT NULL,
-                             PRIMARY KEY (uid)
-                             ) ENGINE=InnoDB DEFAULT CHARSET=latin1`
-	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
+	INSERT_INTO_RECOVERY  = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
 	                          values (%v, '%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp(), %v)`
-	UPDATE_RECOVERY      = "update _vt.vt_blp_recovery set master_filename='%v', master_position=%v, relay_filename='%v', relay_position=%v, txn_timestamp=unix_timestamp(), time_updated=%v where uid=%v"
-	SELECT_FROM_RECOVERY = "select * from _vt.vt_blp_recovery where uid=%v"
+	UPDATE_RECOVERY      = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, relay_filename='%v', relay_position=%v, txn_timestamp=unix_timestamp(), time_updated=%v where uid=%v"
+	SELECT_FROM_RECOVERY = "select * from _vt.blp_checkpoint where uid=%v"
 )
 
 /*
@@ -539,13 +525,6 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 
 func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecoveryState) {
 	useDb := fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
-
-	recovery_ddls := []string{USE_VT, CREATE_RECOVERY_TABLE, useDb}
-	for _, sql := range recovery_ddls {
-		if _, err := dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
-			panic(fmt.Errorf("Error %v in creating recovery table %v", err, sql))
-		}
-	}
 
 	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
 	qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)

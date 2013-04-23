@@ -108,7 +108,7 @@ const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
 
-	INSERT_INTO_RECOVERY = `insert into _vt.vt_blp_recovery (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated)
+	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated)
 	                          values (%v, '%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp(), %v)`
 )
 
@@ -983,7 +983,7 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 // - If the strategy contains the string 'writeBinLogs' then we will
 //   also write to the binary logs.
 // - If the strategy contains the command 'populateBlpRecovery(NNN)' then we
-//   will populate the vt_blp_recovery table with master positions to start from
+//   will populate the blp_checkpoint table with master positions to start from
 func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, uids []uint32, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
@@ -1195,7 +1195,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		return err
 	}
 
-	// populate vt_blp_recovery table if we want to
+	// populate blp_checkpoint table if we want to
 	if start := strings.Index(strategy, "populateBlpRecovery("); start != -1 {
 		param := strategy[start+len("populateBlpRecovery("):]
 		param = param[:strings.Index(param, ")")]
