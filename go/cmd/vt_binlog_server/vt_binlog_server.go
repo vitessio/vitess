@@ -156,7 +156,7 @@ func (err BinlogParseError) Error() string {
 }
 
 func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse) {
-	var binlogReader io.Reader
+	var readErr error
 	defer func() {
 		reqIdentifier := fmt.Sprintf("%v, line: '%v'", blp.currentPosition.Position.String(), blp.currentLine)
 		if x := recover(); x != nil {
@@ -166,13 +166,19 @@ func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse) {
 				panic(x)
 			}
 			err := *serr
-			relog.Error("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err)
+			if readErr != nil {
+				relog.Error("[%v:%v] StreamBinlog error @ %v, error: %v, readErr %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err, readErr)
+				err = BinlogParseError{Msg: fmt.Sprintf("%v, readErr: %v", err, readErr)}
+			} else {
+				relog.Error("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err)
+			}
 			sendError(sendReply, reqIdentifier, err, blp.currentPosition)
 		}
 	}()
 
 	blr := mysqlctl.NewBinlogReader(blp.binlogPrefix)
 
+	var binlogReader io.Reader
 	var blrReader, blrWriter *os.File
 	var err, pipeErr error
 
@@ -183,20 +189,32 @@ func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse) {
 	defer blrWriter.Close()
 	defer blrReader.Close()
 
-	go blp.getBinlogStream(blrWriter, blr)
+	readErrChan := make(chan error, 1)
+	//This reads the binlogs - read end of data pipeline.
+	go blp.getBinlogStream(blrWriter, blr, readErrChan)
+
+	//Decode end of the data pipeline.
 	binlogDecoder := new(mysqlctl.BinlogDecoder)
 	binlogReader, err = binlogDecoder.DecodeMysqlBinlog(blrReader)
 	if err != nil {
 		panic(NewBinlogParseError(err.Error()))
 	}
-	defer binlogDecoder.Kill()
+
+	//This function monitors the exit of read data pipeline.
+	go func(readErr *error, readErrChan chan error, binlogDecoder *mysqlctl.BinlogDecoder) {
+		*readErr = <-readErrChan
+		//relog.Info("Read data-pipeline returned readErr: '%v'", *readErr)
+		binlogDecoder.Kill()
+	}(&readErr, readErrChan, binlogDecoder)
+
 	blp.parseBinlogEvents(sendReply, binlogReader)
 }
 
-func (blp *Blp) getBinlogStream(writer *os.File, blr *mysqlctl.BinlogReader) {
+func (blp *Blp) getBinlogStream(writer *os.File, blr *mysqlctl.BinlogReader, readErrChan chan error) {
 	defer func() {
 		if err := recover(); err != nil {
 			relog.Error("getBinlogStream failed: %v", err)
+			readErrChan <- err.(error)
 		}
 	}()
 	if blp.usingRelayLogs {
@@ -207,6 +225,7 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *mysqlctl.BinlogReader) {
 	} else {
 		blr.ServeData(writer, blp.startPosition.MasterFilename, int64(blp.startPosition.MasterPosition))
 	}
+	readErrChan <- nil
 }
 
 //Main parse loop

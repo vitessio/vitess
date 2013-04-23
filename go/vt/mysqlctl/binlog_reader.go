@@ -13,7 +13,6 @@ condition is if EOF is reached *and* the next file has appeared.
 import (
 	"code.google.com/p/vitess/go/relog"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -216,11 +215,11 @@ func (blr *BinlogReader) open(name string) (*os.File, string) {
 	ext := path.Ext(name)
 	fileId, err := strconv.Atoi(ext[1:])
 	if err != nil {
-		panic(errors.New("bad binlog name: " + name))
+		panic(fmt.Errorf("bad binlog name: %v", name))
 	}
 	logPath := blr.binLogPathForId(fileId)
 	if !strings.HasSuffix(logPath, name) {
-		panic(errors.New("binlog name mismatch: " + logPath + " vs " + name))
+		panic(fmt.Errorf("binlog name mismatch: %v vs %v", logPath, name))
 	}
 	file, err := os.Open(logPath)
 	if err != nil {
@@ -240,12 +239,10 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 	if startPosition > 0 {
 		size, err := binlogFile.Seek(0, 2)
 		if err != nil {
-			relog.Error("BinlogReader.ServeData seek err: %v", err)
-			return
+			panic(fmt.Errorf("BinlogReader.ServeData seek err: %v", err))
 		}
 		if startPosition > size {
-			relog.Error("BinlogReader.ServeData: start position %v greater than size %v", startPosition, size)
-			return
+			panic(fmt.Errorf("BinlogReader.ServeData: start position %v greater than size %v", startPosition, size))
 		}
 
 		// inject the header again to fool mysqlbinlog
@@ -259,13 +256,11 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 			_, err = io.CopyN(writer, binlogFile, prefixSize)
 		}
 		if err != nil {
-			relog.Error("BinlogReader.ServeData err: %v", err)
-			return
+			panic(fmt.Errorf("BinlogReader.ServeData err: %v", err))
 		}
 		position, err = binlogFile.Seek(startPosition, 0)
 		if err != nil {
-			relog.Error("Failed BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position)
-			return
+			panic(fmt.Errorf("Failed BinlogReader seek to startPosition %v @ %v:%v", startPosition, binlogFile.Name(), position))
 		}
 	}
 
@@ -273,11 +268,9 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 	for {
 		buf = buf[:0]
 		position, _ := binlogFile.Seek(0, 1)
-		//written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
 		written, err := copyBufN(writer, binlogFile, blr.BinlogBlockSize, buf)
 		if err != nil && err != io.EOF {
-			relog.Error("BinlogReader.serve err: %v", err)
-			return
+			panic(fmt.Errorf("BinlogReader.serve err: %v", err))
 		}
 		//relog.Info("BinlogReader copy @ %v:%v,%v", binlogFile.Name(), position, written)
 
@@ -306,7 +299,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
 					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
-						relog.Error("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
+						//relog.Error("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
 						//vt_mysqlbinlog reads in chunks of 64k bytes, the code below pads null bytes so the remaining data
 						//in the buffer can be flushed before closing this stream. This manifests itself as end of log file,
 						//and would make the upstream code flow exit gracefully.
@@ -314,9 +307,10 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 						emptyBuf := make([]byte, MYSQLBINLOG_CHUNK)
 						_, err = writer.Write(emptyBuf[0:nullPadLen])
 						if err != nil {
-							relog.Warning("Error in writing pad bytes to vt_mysqlbinlog %v", err)
+							//relog.Warning("Error in writing pad bytes to vt_mysqlbinlog %v", err)
+							panic(fmt.Errorf("Error in writing pad bytes to vt_mysqlbinlog %v", err))
 						}
-						return
+						panic(fmt.Errorf("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9)))
 					}
 				} else {
 					positionWaitStart[position] = now
@@ -327,31 +321,18 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 }
 
 func copyBufN(dst io.Writer, src io.Reader, totalLen int64, buf []byte) (written int64, err error) {
-	// If the writer has a ReadFrom method, use it to do the copy.
-	// Avoids a buffer allocation and a copy.
-	if rt, ok := dst.(io.ReaderFrom); ok {
-		relog.Info("dst implements ReaderFrom")
-		written, err = rt.ReadFrom(io.LimitReader(src, totalLen))
-		if written < totalLen && err == nil {
-			// rt stopped early; must have been EOF.
-			err = io.EOF
-		}
-		return
-	}
 	for written < totalLen {
 		toBeRead := totalLen
 		if diffLen := totalLen - written; diffLen < toBeRead {
 			toBeRead = diffLen
 		}
 		nr, er := src.Read(buf[0:toBeRead])
-		//relog.Info("Read %v er %v", nr, er)
 		if nr > 0 {
 			nw, ew := dst.Write(buf[0:nr])
 			if nw > 0 {
 				written += int64(nw)
 			}
 			if ew != nil {
-				//relog.Error("Error in writing to dst %v", ew)
 				err = ew
 				break
 			}
@@ -362,7 +343,6 @@ func copyBufN(dst io.Writer, src io.Reader, totalLen int64, buf []byte) (written
 			}
 		}
 		if er != nil {
-			//relog.Error("Error in reading from src %v", er)
 			err = er
 			break
 		}
