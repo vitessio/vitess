@@ -474,12 +474,12 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 		}
 	} else {
 		// There is nothing to safely reparent, so check replication. If
-		// either replicaiton thread is not running, report an error.
+		// either replication thread is not running, report an error.
 		replicationPos, err := ta.mysqld.SlaveStatus()
 		if err != nil {
 			return fmt.Errorf("cannot verify replication for slave: %v", err)
 		}
-		if replicationPos.SecondsBehindMaster == 0xFFFFFFFF {
+		if replicationPos.SecondsBehindMaster == mysqlctl.InvalidLagSeconds {
 			return fmt.Errorf("replication not running for slave")
 		}
 	}

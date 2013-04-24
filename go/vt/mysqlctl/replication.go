@@ -27,6 +27,7 @@ import (
 
 const (
 	SlaveStartDeadline = 30
+	InvalidLagSeconds  = 0xFFFFFFFF
 )
 
 type ReplicationPosition struct {
@@ -306,8 +307,8 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 		temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
 		pos.SecondsBehindMaster = uint(temp)
 	} else {
-		// replications isn't running - report it as MAXINT since it won't resolve itself.
-		pos.SecondsBehindMaster = 0xFFFFFFFF
+		// replications isn't running - report it as invalid since it won't resolve itself.
+		pos.SecondsBehindMaster = InvalidLagSeconds
 	}
 	return pos, nil
 }
