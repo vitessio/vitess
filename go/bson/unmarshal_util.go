@@ -11,6 +11,8 @@ import (
 	"math"
 	"strconv"
 	"time"
+
+	"code.google.com/p/vitess/go/hack"
 )
 
 var (
@@ -171,17 +173,19 @@ func ExpectIndex(buf *bytes.Buffer, index int) {
 }
 
 func ReadCString(buf *bytes.Buffer) string {
-	b, err := buf.ReadBytes(0)
-	if err != nil {
-		panic(NewBsonError("%s", err))
+	index := bytes.IndexByte(buf.Bytes(), 0)
+	if index < 0 {
+		panic(NewBsonError("Unexpected EOF"))
 	}
-	return string(b[:len(b)-1])
+	// Read including null termination, but
+	// return the string without the null.
+	return hack.String(buf.Next(index + 1)[:index])
 }
 
 func Next(buf *bytes.Buffer, n int) []byte {
 	b := buf.Next(n)
 	if len(b) != n {
-		panic(NewBsonError("EOF"))
+		panic(NewBsonError("Unexpected EOF"))
 	}
 	return b
 }

@@ -6,9 +6,12 @@ package proto
 
 import (
 	"bytes"
+	"fmt"
+	"math"
+	"time"
+
 	"code.google.com/p/vitess/go/bson"
 	"code.google.com/p/vitess/go/bytes2"
-	"fmt"
 )
 
 func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -69,13 +72,43 @@ func (query *Query) UnmarshalBson(buf *bytes.Buffer) {
 func (query *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
 	switch kind {
 	case bson.Object:
-		if err := bson.UnmarshalFromBuffer(buf, &query.BindVariables); err != nil {
-			panic(err)
-		}
+		// valid
 	case bson.Null:
-		// no op
+		return
 	default:
 		panic(bson.NewBsonError("Unexpected data type %v for Query.BindVariables", kind))
+	}
+	bson.Next(buf, 4)
+	query.BindVariables = make(map[string]interface{})
+	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+		key := bson.ReadCString(buf)
+		switch kind {
+		case bson.Number:
+			ui64 := bson.Pack.Uint64(buf.Next(8))
+			query.BindVariables[key] = math.Float64frombits(ui64)
+		case bson.String:
+			l := int(bson.Pack.Uint32(buf.Next(4)))
+			query.BindVariables[key] = buf.Next(l - 1)
+			buf.ReadByte()
+		case bson.Binary:
+			l := int(bson.Pack.Uint32(buf.Next(4)))
+			buf.ReadByte()
+			query.BindVariables[key] = buf.Next(l)
+		case bson.Int:
+			query.BindVariables[key] = int32(bson.Pack.Uint32(buf.Next(4)))
+		case bson.Long:
+			query.BindVariables[key] = int64(bson.Pack.Uint64(buf.Next(8)))
+		case bson.Ulong:
+			query.BindVariables[key] = bson.Pack.Uint64(buf.Next(8))
+		case bson.Datetime:
+			i64 := int64(bson.Pack.Uint64(buf.Next(8)))
+			// micro->nano->UTC
+			query.BindVariables[key] = time.Unix(0, i64*1e6).UTC()
+		case bson.Null:
+			query.BindVariables[key] = nil
+		default:
+			panic(bson.NewBsonError("don't know how to handle kind %v yet", kind))
+		}
 	}
 }
 
