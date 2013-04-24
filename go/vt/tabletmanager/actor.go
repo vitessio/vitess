@@ -430,7 +430,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 
 	// If this check fails, we seem reparented. The only part that could have failed
 	// is the insert in the replication graph. Do NOT try to reparent
-	// again. That will either wedge replication to corrupt data.
+	// again. That will either wedge replication or corrupt data.
 	if tablet.Parent != rsd.Parent {
 		relog.Debug("restart with new parent")
 		// Remove tablet from the replication graph.
@@ -471,6 +471,16 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 			if err != nil {
 				return err
 			}
+		}
+	} else {
+		// There is nothing to safely reparent, so check replication. If
+		// either replicaiton thread is not running, report an error.
+		replicationPos, err := ta.mysqld.SlaveStatus()
+		if err != nil {
+			return fmt.Errorf("cannot verify replication for slave: %v", err)
+		}
+		if replicationPos.SecondsBehindMaster == 0xFFFFFFFF {
+			return fmt.Errorf("replication not running for slave")
 		}
 	}
 
