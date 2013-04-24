@@ -63,7 +63,6 @@ var (
 	VIDEOID_INDEX_DELETE  = "delete from vt_video_id_map where video_id=%v and user_id=%v"
 	SETID_INDEX_INSERT    = "insert into vt_set_id_map (set_id, user_id) values (%v, %v)"
 	SETID_INDEX_DELETE    = "delete from vt_set_id_map where set_id=%v and user_id=%v"
-	SEQ_UPDATE_SQL        = "update vt_sequence set id=%v where name='%v' and id<%v"
 	STREAM_COMMENT_START  = "/* _stream "
 	SPACE                 = " "
 	USE_VT                = "use _vt"
@@ -658,8 +657,8 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 	}
 }
 
-func (blp *BinlogPlayer) handleLookupWrites(indexUpdates, seqUpdates [][]byte) {
-	if len(indexUpdates) == 0 && len(seqUpdates) == 0 {
+func (blp *BinlogPlayer) handleLookupWrites(indexUpdates [][]byte) {
+	if len(indexUpdates) == 0 {
 		return
 	}
 
@@ -674,18 +673,12 @@ func (blp *BinlogPlayer) handleLookupWrites(indexUpdates, seqUpdates [][]byte) {
 		}
 	}
 
-	for _, seqSql := range seqUpdates {
-		if _, err = blp.lookupClient.ExecuteFetch(seqSql, 0, false); err != nil {
-			panic(fmt.Errorf("Failed query %s, err: %s", string(seqSql), err))
-		}
-	}
-
 	if err = blp.lookupClient.Commit(); err != nil {
 		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 	}
 }
 
-func (blp *BinlogPlayer) createIndexSeqSql(dmlEvent *mysqlctl.BinlogResponse) (indexSql, seqSql []byte) {
+func (blp *BinlogPlayer) createIndexUpdates(dmlEvent *mysqlctl.BinlogResponse) (indexSql []byte) {
 	keyspaceIdUint, err := strconv.ParseUint(dmlEvent.KeyspaceId, 10, 64)
 	if err != nil {
 		panic(fmt.Errorf("Invalid keyspaceid '%v', error converting it, %v", dmlEvent.KeyspaceId, err))
@@ -700,12 +693,6 @@ func (blp *BinlogPlayer) createIndexSeqSql(dmlEvent *mysqlctl.BinlogResponse) (i
 		indexSql, err = createIndexSql(dmlEvent.SqlType, dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId)
 		if err != nil {
 			panic(fmt.Errorf("Error creating index update sql - IndexType %v, IndexId %v, UserId %v Sql '%v', err: '%v'", dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId, dmlEvent.Sql, err))
-		}
-	}
-	if dmlEvent.SeqName != "" {
-		seqSql, err = blp.createSeqSql(dmlEvent.SqlType, dmlEvent.SeqName, dmlEvent.SeqId)
-		if err != nil {
-			panic(fmt.Errorf("Error creating seq update sql %v, SeqName %v SeqId %v, Sql '%v'", err, dmlEvent.SeqName, dmlEvent.SeqId, dmlEvent.Sql))
 		}
 	}
 	return
@@ -749,7 +736,6 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 func (blp *BinlogPlayer) handleTxn() {
 	var err error
 	indexUpdates := make([][]byte, 0, len(blp.txnBuffer))
-	seqUpdates := make([][]byte, 0, len(blp.txnBuffer))
 	dmlMatch := 0
 	txnCount := 0
 	var queryCount int64
@@ -765,7 +751,7 @@ func (blp *BinlogPlayer) handleTxn() {
 				continue
 			}
 			lookupStartTime = time.Now()
-			blp.handleLookupWrites(indexUpdates, seqUpdates)
+			blp.handleLookupWrites(indexUpdates)
 			blp.txnTime.Record("LookupTxn", lookupStartTime)
 			blp.WriteRecoveryPosition(&dmlEvent.Position)
 			if err = blp.dbClient.Commit(); err != nil {
@@ -787,12 +773,9 @@ func (blp *BinlogPlayer) handleTxn() {
 					txnStartTime = time.Now()
 				}
 
-				indexSql, seqSql := blp.createIndexSeqSql(dmlEvent)
+				indexSql := blp.createIndexUpdates(dmlEvent)
 				if indexSql != nil {
 					indexUpdates = append(indexUpdates, indexSql)
-				}
-				if seqSql != nil {
-					seqUpdates = append(seqUpdates, seqSql)
 				}
 				for _, sql := range dmlEvent.Sql {
 					queryStartTime = time.Now()
@@ -858,30 +841,6 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 		}
 	default:
 		err = fmt.Errorf("Invalid IndexType %v", indexType)
-	}
-	return
-}
-
-func (blp *BinlogPlayer) createSeqSql(dmlType, seqName string, seqId uint64) (seqSql []byte, err error) {
-	if dmlType != "insert" {
-		return
-	}
-	if blp.debug {
-		switch seqName {
-		case "user_id", "video_id", "set_id":
-			seqSql = []byte(fmt.Sprintf(SEQ_UPDATE_SQL, seqId, seqName))
-		default:
-			err = fmt.Errorf("Invalid Seq Name %v", seqName)
-		}
-		return
-	}
-	//Real-case
-	//Assume vt_sequence is initialized - insert rows
-	switch seqName {
-	case "video_id", "set_id", "user_id":
-		seqSql = []byte(fmt.Sprintf(SEQ_UPDATE_SQL, seqId, seqName, seqId))
-	default:
-		err = fmt.Errorf("Invalid Seq Name %v", seqName)
 	}
 	return
 }

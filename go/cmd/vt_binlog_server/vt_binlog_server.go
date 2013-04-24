@@ -48,7 +48,6 @@ var (
 	KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
 	USER_ID             = []byte("user_id")
 	INDEX_COMMENT       = []byte("index")
-	SEQ_COMMENT         = []byte("seq.")
 	COLON_BYTE          = []byte(COLON)
 	DOT_BYTE            = []byte(DOT)
 	END_COMMENT         = []byte("*/")
@@ -607,7 +606,7 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 			}
 			dmlCount += 1
 			//extract keyspace id - match it with client's request,
-			//extract seq and index ids.
+			//extract index ids.
 			dmlBuffer = append(dmlBuffer, string(line))
 			dmlEvent := blp.createDmlEvent(event, keyspaceIdStr)
 			dmlEvent.Sql = make([]string, len(dmlBuffer))
@@ -628,22 +627,18 @@ func (blp *Blp) buildTxnResponse() (txnResponseList []*mysqlctl.BinlogResponse, 
 
 func (blp *Blp) createDmlEvent(eventBuf *eventBuffer, keyspaceId string) (dmlEvent *mysqlctl.BinlogResponse) {
 	//parse keyspace id
-	//for inserts check for index and seq comments
+	//for inserts check for index comments
 	dmlEvent = new(mysqlctl.BinlogResponse)
 	dmlEvent.BlPosition = eventBuf.BlPosition
 	dmlEvent.SqlType = mysqlctl.GetDmlType(eventBuf.firstKw)
 	dmlEvent.KeyspaceId = keyspaceId
-	indexType, indexId, seqName, seqId, userId := parseIndexSeq(eventBuf.LogLine)
+	indexType, indexId, userId := parseIndex(eventBuf.LogLine)
 	if userId != 0 {
 		dmlEvent.UserId = userId
 	}
 	if indexType != "" {
 		dmlEvent.IndexType = indexType
 		dmlEvent.IndexId = indexId
-	}
-	if seqName != "" {
-		dmlEvent.SeqName = seqName
-		dmlEvent.SeqId = seqId
 	}
 	return dmlEvent
 }
@@ -679,7 +674,7 @@ func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspace
 	return keyspaceIdStr, keyspaceId
 }
 
-func parseIndexSeq(sql []byte) (indexName string, indexId interface{}, seqName string, seqId uint64, userId uint64) {
+func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint64) {
 	var err error
 	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
 	if keyspaceIndex == -1 {
@@ -703,17 +698,6 @@ func parseIndexSeq(sql []byte) (indexName string, indexId interface{}, seqName s
 				panic(NewBinlogParseError(fmt.Sprintf("Error converting index id %v %v", string(bytes.TrimRight(indexNameId[2], COLON)), string(sql))))
 			}
 		}
-	}
-	seqCommentStart := bytes.Index(keyspaceIdComment, SEQ_COMMENT)
-	if seqCommentStart != -1 {
-		seqComment := bytes.TrimSpace(bytes.SplitN(keyspaceIdComment[seqCommentStart:], END_COMMENT, 2)[0])
-		seqCommentParts := bytes.SplitN(seqComment, COLON_BYTE, 2)
-		seqCommentPrefix := seqCommentParts[0]
-		seqId, err = strconv.ParseUint(string(bytes.TrimSpace(seqCommentParts[1])), 10, 64)
-		if err != nil {
-			panic(NewBinlogParseError(fmt.Sprintf("Error converting seq id %v for sql %v", string(seqCommentParts[1]), string(sql))))
-		}
-		seqName = string(bytes.SplitN(seqCommentPrefix, DOT_BYTE, 2)[1])
 	}
 	return
 }

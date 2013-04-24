@@ -29,7 +29,5 @@ type BinlogData struct {
 	KeyspaceId string
 	IndexType  string
 	IndexId    interface{}
-	SeqName    string
-	SeqId      uint64
 	UserId     uint64
 }
