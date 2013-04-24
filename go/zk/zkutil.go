@@ -115,12 +115,13 @@ func ChildrenRecursive(zconn Conn, zkPath string) ([]string, error) {
 func ResolveWildcards(zconn Conn, zkPaths []string) ([]string, error) {
 	// check all the paths start with /zk/ before doing anything
 	// time consuming
-	for _, zkPath := range zkPaths {
-
-		if _, err := ZkCellFromZkPath(zkPath); err != nil {
-			return nil, err
-		}
-	}
+	// relax this in case we are not talking to a metaconn and
+	// just want to talk to a specified instance.
+	// for _, zkPath := range zkPaths {
+	// 	if _, err := ZkCellFromZkPath(zkPath); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	results := make([][]string, len(zkPaths))
 	wg := &sync.WaitGroup{}
