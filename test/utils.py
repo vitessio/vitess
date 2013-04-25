@@ -228,10 +228,14 @@ def zk_teardown():
   run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':'+zk_ports+' teardown', raise_on_error=False)
 
 def zk_wipe():
-  run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt')
-  run(vtroot+'/bin/zk rm -rf /zk/test_ny/vt')
-  #run(vtroot+'/bin/zk rm -rf /zk/test_ca/vt')
-  run(vtroot+'/bin/zk rm -rf /zk/global/vt')
+  # Work around safety check on recursive delete.
+  run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt/*')
+  run(vtroot+'/bin/zk rm -rf /zk/test_ny/vt/*')
+  run(vtroot+'/bin/zk rm -rf /zk/global/vt/*')
+
+  run(vtroot+'/bin/zk rm -f /zk/test_nj/vt')
+  run(vtroot+'/bin/zk rm -f /zk/test_ny/vt')
+  run(vtroot+'/bin/zk rm -f /zk/global/vt')
 
 def zk_check(ping_tablets=False):
   if ping_tablets:

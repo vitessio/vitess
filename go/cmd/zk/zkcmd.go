@@ -336,7 +336,7 @@ func cmdLs(args []string) {
 	}
 
 	hasError := false
-	needsHeader := len(args) > 1
+	needsHeader := len(args) > 1 && !*directoryListing
 	for _, arg := range args {
 		zkPath := fixZkPath(arg)
 		var children []string
@@ -490,6 +490,16 @@ func cmdRm(args []string) {
 	if len(args) == 0 {
 		log.Fatal("rm: no path specified")
 	}
+
+	if *recursiveDelete {
+		for _, arg := range args {
+			zkPath := fixZkPath(arg)
+			if strings.Count(zkPath, "/") < 4 {
+				log.Fatalf("rm: overly general path: %v", zkPath)
+			}
+		}
+	}
+
 	args, err := zk.ResolveWildcards(zconn, args)
 	if err != nil {
 		log.Fatalf("rm: invalid wildcards: %v", err)
