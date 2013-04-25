@@ -48,6 +48,8 @@ type DBConfig struct {
 	Charset    string       `json:"charset"`
 	Memcache   string       `json:"memcache"`
 	KeyRange   key.KeyRange `json:"keyrange"`
+	Keyspace   string       `json:"keyspace"`
+	Shard      string       `json:"shard"`
 }
 
 func (d DBConfig) String() string {

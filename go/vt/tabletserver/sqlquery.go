@@ -21,7 +21,6 @@ import (
 	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/tb"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
@@ -69,8 +68,7 @@ type SqlQuery struct {
 
 	qe        *QueryEngine
 	sessionId int64
-	dbName    string
-	keyRange  key.KeyRange
+	dbconfig  dbconfigs.DBConfig
 }
 
 func NewSqlQuery(config Config) *SqlQuery {
@@ -152,9 +150,8 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, qrs *QueryRules) {
 	}()
 
 	sq.qe.Open(dbconfig, qrs)
+	sq.dbconfig = dbconfig
 	sq.sessionId = Rand()
-	sq.dbName = dbconfig.Dbname
-	sq.keyRange = dbconfig.KeyRange
 	relog.Info("Session id: %d", sq.sessionId)
 }
 
@@ -190,9 +187,7 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 	relog.Info("Stopping query service: %d", sq.sessionId)
 	sq.qe.Close(forRestart)
 	sq.sessionId = 0
-	sq.dbName = ""
-	sq.keyRange.Start = key.MinKey
-	sq.keyRange.End = key.MaxKey
+	sq.dbconfig = dbconfigs.DBConfig{}
 }
 
 // checkState checks if we can serve queries. If not, it causes an
@@ -223,11 +218,20 @@ func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 }
 
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	if sessionParams.DbName != sq.dbName {
-		return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", sq.dbName, sessionParams.DbName)
-	}
-	if sessionParams.KeyRange != sq.keyRange {
-		return NewTabletError(FATAL, "KeyRange mismatch, expecting %v, received %v", sq.keyRange.String(), sessionParams.KeyRange.String())
+	if sessionParams.DbName == "" {
+		if sessionParams.Keyspace != sq.dbconfig.Keyspace {
+			return NewTabletError(FATAL, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
+		}
+		if sessionParams.Shard != sq.dbconfig.Shard {
+			return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
+		}
+	} else {
+		if sessionParams.DbName != sq.dbconfig.Dbname {
+			return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", sq.dbconfig.Dbname, sessionParams.DbName)
+		}
+		if sessionParams.KeyRange != sq.dbconfig.KeyRange {
+			return NewTabletError(FATAL, "KeyRange mismatch, expecting %v, received %v", sq.dbconfig.KeyRange.String(), sessionParams.KeyRange.String())
+		}
 	}
 	sessionInfo.SessionId = sq.sessionId
 	return nil

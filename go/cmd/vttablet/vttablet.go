@@ -206,6 +206,8 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 				dbcfgs.App.Dbname = newTablet.DbName()
 			}
 			dbcfgs.App.KeyRange = newTablet.KeyRange
+			dbcfgs.App.Keyspace = newTablet.Keyspace
+			dbcfgs.App.Shard = newTablet.Shard
 			// Transitioning from replica to master, first disconnect
 			// existing connections. "false" indicateds that clients must
 			// re-resolve their endpoint before reconnecting.

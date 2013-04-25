@@ -12,6 +12,8 @@ import (
 type SessionParams struct {
 	DbName   string
 	KeyRange key.KeyRange
+	Keyspace string
+	Shard    string
 }
 
 type SessionInfo struct {
