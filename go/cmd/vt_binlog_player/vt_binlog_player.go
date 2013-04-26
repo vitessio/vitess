@@ -50,6 +50,7 @@ var (
 	debug            = flag.Bool("debug", true, "run a debug version - prints the sql statements rather than executing them")
 	tables           = flag.String("tables", "", "tables to play back")
 	dbCredFile       = flag.String("db-credentials-file", "", "db-creditials file to look up passwd to connect to lookup host")
+	execDdl          = flag.Bool("exec-ddl", false, "execute ddl")
 )
 
 var (
@@ -234,6 +235,7 @@ type BinlogPlayer struct {
 	batchStart     time.Time
 	txnBatch       int
 	maxTxnInterval time.Duration
+	execDdl        bool
 	*blpStats
 }
 
@@ -310,6 +312,7 @@ func main() {
 	}
 	blp.txnBatch = *txnBatch
 	blp.maxTxnInterval = time.Duration(*maxTxnInterval) * time.Second
+	blp.execDdl = *execDdl
 
 	if *tables != "" {
 		tables := strings.Split(*tables, ",")
@@ -612,7 +615,9 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 			relog.Info("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
 			blp.flushTxnBatch()
 		}
-		blp.handleDdl(binlogResponse)
+		if blp.execDdl {
+			blp.handleDdl(binlogResponse)
+		}
 	case mysqlctl.BEGIN:
 		if blp.txnIndex == 0 {
 			if blp.inTxn {
@@ -653,14 +658,6 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 			continue
 		}
 		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
-			if sqlErr, ok := err.(*mysql.SqlError); ok {
-				//1050: Create table failed since table already exists, 1051: drop table failed since table doesn't exist.
-				//1396: Create/Drop user failed since it has been done already.
-				if sqlErr.Number() == 1050 || sqlErr.Number() == 1051 || sqlErr.Number() == 1396 {
-					relog.Warning("Ignoring error '%v' thrown by ddl '%v'", err, sql)
-					continue
-				}
-			}
 			panic(fmt.Errorf("Error %v in executing sql %v", err, sql))
 		}
 	}
