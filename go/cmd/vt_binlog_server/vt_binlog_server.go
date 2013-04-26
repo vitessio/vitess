@@ -203,7 +203,9 @@ func (blp *Blp) streamBinlog(sendReply mysqlctl.SendUpdateStreamResponse) {
 	go func(readErr *error, readErrChan chan error, binlogDecoder *mysqlctl.BinlogDecoder) {
 		*readErr = <-readErrChan
 		//relog.Info("Read data-pipeline returned readErr: '%v'", *readErr)
-		binlogDecoder.Kill()
+		if *readErr != nil {
+			binlogDecoder.Kill()
+		}
 	}(&readErr, readErrChan, binlogDecoder)
 
 	blp.parseBinlogEvents(sendReply, binlogReader)
