@@ -36,6 +36,7 @@ var stdout *bufio.Writer
 const (
 	TXN_BATCH        = 10
 	MAX_TXN_INTERVAL = 30
+	SERVER_PORT      = 6614
 )
 
 var (
@@ -70,6 +71,7 @@ var (
 	INSERT_INTO_RECOVERY  = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
 	                          values (%v, '%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp(), %v)`
 	UPDATE_RECOVERY      = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, relay_filename='%v', relay_position=%v, txn_timestamp=unix_timestamp(), time_updated=%v where uid=%v"
+	UPDATE_PORT          = "update _vt.blp_checkpoint set port=%v where uid=%v"
 	SELECT_FROM_RECOVERY = "select * from _vt.blp_checkpoint where uid=%v"
 )
 
@@ -235,12 +237,12 @@ type BinlogPlayer struct {
 	*blpStats
 }
 
-func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.KeyspaceId) *BinlogPlayer {
+func NewBinlogPlayer(startPosition *binlogRecoveryState, port int, krStart, krEnd key.KeyspaceId) *BinlogPlayer {
 	blp := new(BinlogPlayer)
 	blp.startPosition = startPosition
 	blp.recoveryState = &binlogRecoveryState{Uid: blp.startPosition.Uid,
 		Host:          blp.startPosition.Host,
-		Port:          blp.startPosition.Port,
+		Port:          port,
 		Position:      blp.startPosition.Position,
 		KeyrangeStart: blp.startPosition.KeyrangeStart,
 		KeyrangeEnd:   blp.startPosition.KeyrangeEnd}
@@ -258,6 +260,17 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, krStart, krEnd key.Keys
 	blp.blpStats = NewBlpStats()
 	blp.batchStart = time.Now()
 	return blp
+}
+
+func (blp *BinlogPlayer) updatePort(port int, uid uint32, useDb string) {
+	updatePortSql := fmt.Sprintf(UPDATE_PORT, port, uid)
+	sqlList := []string{USE_VT, "begin", updatePortSql, "commit", useDb}
+
+	for _, sql := range sqlList {
+		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+			panic(fmt.Errorf("Error %v in writing port %v", err, sql))
+		}
+	}
 }
 
 func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.ReplicationCoordinates) {
@@ -291,7 +304,7 @@ func main() {
 		relog.Fatal("Cannot start without db-config-file")
 	}
 
-	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *useCheckpoint, *debug)
+	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *useCheckpoint, *debug, *port)
 	if err != nil {
 		relog.Fatal("Error in initializing binlog player - '%v'", err)
 	}
@@ -455,7 +468,7 @@ func getStartPosition(qr *proto.QueryResult) (*mysqlctl.ReplicationCoordinates, 
 	return startPosition, nil
 }
 
-func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, useCheckpoint, debug bool) (*BinlogPlayer, error) {
+func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, useCheckpoint, debug bool, port int) (*BinlogPlayer, error) {
 	startData, err := ioutil.ReadFile(startPosFile)
 	if err != nil {
 		return nil, fmt.Errorf("Error %s in reading start position file %s", err, startPosFile)
@@ -499,7 +512,7 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		return nil, fmt.Errorf("Error in Unhex for %v, '%v'", startPosition.KeyrangeEnd, err)
 	}
 
-	binlogPlayer := NewBinlogPlayer(startPosition, krStart, krEnd)
+	binlogPlayer := NewBinlogPlayer(startPosition, port, krStart, krEnd)
 
 	if debug {
 		binlogPlayer.debug = true
@@ -515,14 +528,17 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		binlogPlayer.lookupClient = *lookupClient
 
 		if !useCheckpoint {
-			initialize_recovery_table(dbClient, startPosition)
+			initialize_recovery_table(dbClient, startPosition, port)
 		}
+
+		useDb := fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
+		binlogPlayer.updatePort(port, startPosition.Uid, useDb)
 	}
 
 	return binlogPlayer, nil
 }
 
-func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecoveryState) {
+func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecoveryState, port int) {
 	useDb := fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
 
 	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
@@ -532,7 +548,7 @@ func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecovery
 	}
 	if qr.RowsAffected == 0 {
 		insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, startPosition.Uid, startPosition.Host,
-			startPosition.Port,
+			port,
 			startPosition.Position.MasterFilename,
 			startPosition.Position.MasterPosition,
 			startPosition.Position.RelayFilename,
@@ -849,7 +865,7 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 //and processes the events.
 func (blp *BinlogPlayer) applyBinlogEvents() error {
 	var err error
-	connectionStr := fmt.Sprintf("%v:%v", blp.startPosition.Host, blp.startPosition.Port)
+	connectionStr := fmt.Sprintf("%v:%v", blp.startPosition.Host, SERVER_PORT)
 	relog.Info("Dialing server @ %v", connectionStr)
 	blp.rpcClient, err = rpcplus.DialHTTP("tcp", connectionStr)
 	defer blp.rpcClient.Close()
