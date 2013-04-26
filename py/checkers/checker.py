@@ -299,7 +299,8 @@ class Stats(object):
 class Checker(object):
 
   def __init__(self, destination_url, sources_urls, table, directory='.',
-               source_column_map=None, source_table_name=None,
+               source_column_map=None, source_table_name=None, source_force_index_pk=True,
+               destination_force_index_pk=True,
                keyrange={}, batch_count=0, blocks=1, ratio=1.0, block_size=16384,
                logging_level=logging.INFO, stats_interval=1, temp_directory=None):
     self.table_name = table
@@ -339,6 +340,14 @@ class Checker(object):
       self.restore_checkpoint()
     except IOError:
       pass
+    if source_force_index_pk:
+      source_use_index = 'use index (primary)'
+    else:
+      source_use_index = ''
+    if destination_force_index_pk:
+      destination_use_index = 'use index (primary)'
+    else:
+      destination_use_index = ''
 
     keyspace_sql_parts = []
     if keyrange.get('start') or keyrange.get('end'):
@@ -350,11 +359,12 @@ class Checker(object):
     self.destination_sql = """
            select
              %(columns)s
-           from %(table_name)s use index (primary)
+           from %(table_name)s %(use_index)s
            where
              %(range_sql)s
            order by %(pk_columns)s limit %%(limit)s""" % {
                'table_name': self.table_name,
+               'use_index': destination_use_index,
                'columns': ', '.join(self.columns),
                'pk_columns': ', '.join(self.primary_key),
                'range_sql': sql_tuple_comparison(self.table_name, self.primary_key)}
@@ -363,11 +373,12 @@ class Checker(object):
     self.last_source_sql = """
            select
              %(columns)s
-           from %(table_name)s use index (primary)
+           from %(table_name)s %(use_index)s
            where %(keyspace_sql)s
              (%(range_sql)s)
            order by %(pk_columns)s limit %%(limit)s""" % {
                'table_name': self.source_table_name,
+               'use_index': source_use_index,
                'keyspace_sql': ' '.join(keyspace_sql_parts),
                'columns': ', '.join(self.source_columns),
                'pk_columns': ', '.join(self.source_primary_key),
@@ -376,11 +387,12 @@ class Checker(object):
     self.source_sql = """
            select
              %(columns)s
-           from %(table_name)s use index (primary)
+           from %(table_name)s %(use_index)s
            where %(keyspace_sql)s
              ((%(min_range_sql)s) and not (%(max_range_sql)s))
            order by %(pk_columns)s""" % {
                'table_name': self.source_table_name,
+               'use_index': source_use_index,
                'keyspace_sql': ' '.join(keyspace_sql_parts),
                'columns': ', '.join(self.source_columns),
                'pk_columns': ', '.join(self.source_primary_key),
@@ -610,7 +622,12 @@ def main():
                     dest='source_table_name', type='string',
                     help='name of the table in sources (if different than in destination)',
                     default=None)
-
+  parser.add_option('--no-source-force-index', dest='source_force_index', action='store_false',
+                    default=True,
+                    help='Do not add a "use index (primary)" to the SQL statements issued to the sources.')
+  parser.add_option('--no-destination-force-index', dest='destination_force_index', action='store_false',
+                    default=True,
+                    help='Do not add a "use index (primary)" to the SQL statements issued to the destination.')
   parser.add_option('-b', '--blocks', dest='blocks',
                     type='float', default=3,
                     help='Try to send this many blocks in one commit.')
@@ -623,7 +640,6 @@ def main():
                     help="keyrange end (hexadecimal)")
 
   (options, args) = parser.parse_args()
-
   table, destination, sources = args[0], args[1], args[2:]
 
   source_column_map = {}
@@ -634,6 +650,8 @@ def main():
 
   checker = Checker(destination, sources, table, options.checkpoint_directory,
                     source_column_map=source_column_map,
+                    source_force_index=options.source_force_index,
+                    destination_force_index=options.destination_force_index,
                     source_table_name=options.source_table_name,
                     keyrange=get_range(options.start, options.end),
                     stats_interval=options.stats, batch_count=options.batch_count,
