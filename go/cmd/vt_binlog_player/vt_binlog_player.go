@@ -655,7 +655,8 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
 			if sqlErr, ok := err.(*mysql.SqlError); ok {
 				//1050: Create table failed since table already exists, 1051: drop table failed since table doesn't exist.
-				if sqlErr.Number() == 1050 || sqlErr.Number() == 1051 {
+				//1396: Create/Drop user failed since it has been done already.
+				if sqlErr.Number() == 1050 || sqlErr.Number() == 1051 || sqlErr.Number() == 1396 {
 					relog.Warning("Ignoring error '%v' thrown by ddl '%v'", err, sql)
 					continue
 				}
