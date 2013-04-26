@@ -59,8 +59,8 @@ class MockChecker(checker.Checker):
 class TestCheckersBase(unittest.TestCase):
   keyrange = {"end": 900}
 
-  def make_checker(self, **kwargs):
-    default = {'keyrange': TestCheckers.keyrange,
+  def make_checker(self, destination_table_name="test", **kwargs):
+    default = {'keyrange': TestCheckersBase.keyrange,
                'batch_count': 20,
                'logging_level': logging.WARNING,
                'directory': tempfile.mkdtemp()}
@@ -68,7 +68,7 @@ class TestCheckersBase(unittest.TestCase):
     source_addresses = ['vt_dba@localhost:%s/test_checkers%s?unix_socket=%s' % (s.mysql_port, i, s.mysql_connection_parameters('test_checkers')['unix_socket'])
                         for i, s in enumerate(source_tablets)]
     destination_socket = destination_tablet.mysql_connection_parameters('test_checkers')['unix_socket']
-    return MockChecker('vt_dba@localhost/test_checkers?unix_socket=%s' % destination_socket, source_addresses, 'test', **default)
+    return MockChecker('vt_dba@localhost/test_checkers?unix_socket=%s' % destination_socket, source_addresses, destination_table_name, **default)
 
 
 class TestSortedRowListDifference(unittest.TestCase):
@@ -181,6 +181,51 @@ class TestDifferentEncoding(TestCheckersBase):
   def test_problem(self):
     self.c._run()
     self.assertTrue(self.c.mismatches)
+
+class TestRlookup(TestCheckersBase):
+  def setUp(self):
+    source_create_table = "create table test (pk1 bigint, k2 bigint, k3 bigint, keyspace_id bigint, msg varchar(64), primary key (pk1)) Engine=InnoDB"
+    destination_create_table = "create table test_lookup (pk1_lookup bigint, msg_lookup varchar(64), primary key (pk1_lookup)) Engine=InnoDB"
+    destination_tablet.create_db("test_checkers")
+    destination_tablet.mquery("test_checkers", destination_create_table, True)
+
+    for i, t in enumerate(source_tablets):
+      t.create_db("test_checkers%s" % i)
+      t.mquery("test_checkers%s" % i, source_create_table, True)
+
+    destination_queries = []
+    source_queries = [[] for t in source_tablets]
+    for i in range(1, 400):
+      destination_queries.append("insert into test_lookup (pk1_lookup, msg_lookup) values (%s, 'message %s')" % (i, i))
+      source_queries[i % 2].append("insert into test (pk1, k2, k3, msg, keyspace_id) values (%s, %s, %s, 'message %s', %s)" % (i, i, i, i, i))
+    for i in range(1100, 1110):
+      query = "insert into test (pk1, k2, k3, msg, keyspace_id) values (%s, %s, %s, 'message %s', %s)" % (i, i, i, i, i)
+      source_queries[0].append(query)
+
+    destination_tablet.mquery("test_checkers", destination_queries, write=True)
+    for i, (tablet, queries) in enumerate(zip(source_tablets, source_queries)):
+      tablet.mquery("test_checkers%s" % i, queries, write=True)
+    self.c = self.make_checker(destination_table_name="test_lookup", source_table_name="test", source_column_map={'pk1_lookup': 'pk1', 'msg_lookup': 'msg'})
+
+  def tearDown(self):
+    destination_tablet.mquery("test_checkers", "drop table test_lookup", True)
+    for i, t in enumerate(source_tablets):
+      t.mquery("test_checkers%s" % i, "drop table test", True)
+
+  def test_ok(self):
+    self.c._run()
+    self.assertFalse(self.c.mismatches)
+
+  def test_different_value(self):
+    destination_tablet.mquery("test_checkers", "update test_lookup set msg_lookup='something else' where pk1_lookup = 29", write=True)
+    self.c._run()
+    self.assertTrue(self.c.mismatches)
+
+  def test_additional_value(self):
+    destination_tablet.mquery("test_checkers", "insert into test_lookup (pk1_lookup, msg_lookup) values (11000, 'something new')", write=True)
+    self.c._run()
+    self.assertTrue(self.c.mismatches)
+
 
 
 def main():

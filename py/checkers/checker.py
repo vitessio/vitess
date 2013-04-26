@@ -299,15 +299,29 @@ class Stats(object):
 class Checker(object):
 
   def __init__(self, destination_url, sources_urls, table, directory='.',
+               source_column_map=None, source_table_name=None,
                keyrange={}, batch_count=0, blocks=1, ratio=1.0, block_size=16384,
                logging_level=logging.INFO, stats_interval=1, temp_directory=None):
     self.table_name = table
-    self.table_data = self.get_table_data(table, parse_database_url(sources_urls[0]))
+    if source_table_name is None:
+      self.source_table_name = self.table_name
+    else:
+      self.source_table_name = source_table_name
+    self.table_data = self.get_table_data(table, parse_database_url(destination_url))
     self.primary_key = self.table_data['pk']
+
+    if source_column_map:
+      self.source_column_map = source_column_map
+    else:
+      self.source_column_map = {}
+
     columns = self.table_data['columns']
+
     for k in self.primary_key:
       columns.remove(k)
     self.columns = self.primary_key + columns
+    self.source_columns = [self.source_column_map.get(c, c) for c in self.columns]
+    self.source_primary_key = [self.source_column_map.get(c, c) for c in self.primary_key]
     self.pk_length = len(self.primary_key)
     (self.batch_count, self.block_size,
      self.ratio, self.blocks) = batch_count, block_size, ratio, blocks
@@ -353,11 +367,11 @@ class Checker(object):
            where %(keyspace_sql)s
              (%(range_sql)s)
            order by %(pk_columns)s limit %%(limit)s""" % {
-               'table_name': self.table_name,
+               'table_name': self.source_table_name,
                'keyspace_sql': ' '.join(keyspace_sql_parts),
-               'columns': ', '.join(self.columns),
-               'pk_columns': ', '.join(self.primary_key),
-               'range_sql': sql_tuple_comparison(self.table_name, self.primary_key)}
+               'columns': ', '.join(self.source_columns),
+               'pk_columns': ', '.join(self.source_primary_key),
+               'range_sql': sql_tuple_comparison(self.source_table_name, self.source_primary_key)}
 
     self.source_sql = """
            select
@@ -366,12 +380,12 @@ class Checker(object):
            where %(keyspace_sql)s
              ((%(min_range_sql)s) and not (%(max_range_sql)s))
            order by %(pk_columns)s""" % {
-               'table_name': self.table_name,
+               'table_name': self.source_table_name,
                'keyspace_sql': ' '.join(keyspace_sql_parts),
-               'columns': ', '.join(self.columns),
-               'pk_columns': ', '.join(self.primary_key),
-               'min_range_sql': sql_tuple_comparison(self.table_name, self.primary_key),
-               'max_range_sql': sql_tuple_comparison(self.table_name, self.primary_key, column_name_prefix='max_')}
+               'columns': ', '.join(self.source_columns),
+               'pk_columns': ', '.join(self.source_primary_key),
+               'min_range_sql': sql_tuple_comparison(self.source_table_name, self.source_primary_key),
+               'max_range_sql': sql_tuple_comparison(self.source_table_name, self.source_primary_key, column_name_prefix='max_')}
 
     self.stats = Stats(interval=stats_interval, name=self.table_name)
     self.destination = Datastore(parse_database_url(destination_url), stats=self.stats)
@@ -493,11 +507,11 @@ class Checker(object):
         return
 
       # query the sources -> sources_data
-      params = dict(start_pk)
+      params = dict((self.source_column_map.get(k, k), v) for k, v in start_pk.items())
 
       if destination_data:
         for k, v in end_pk.items():
-          params['max_' + k] = v
+          params['max_' + self.source_column_map.get(k, k)] = v
         sources_data = self.sources.query(self.source_sql, params)
       else:
         params['limit'] = self.batch_size
@@ -588,6 +602,15 @@ def main():
   parser.add_option('-r', '--ratio', dest='ratio',
                     type='float', default=1.0,
                     help='Assumed block fill ratio.')
+  parser.add_option('--source-column-map',
+                    dest='source_column_map', type='string',
+                    help='column_in_destination:column_in_source,column_in_destination2:column_in_source2,...',
+                    default='')
+  parser.add_option('--source-table-name',
+                    dest='source_table_name', type='string',
+                    help='name of the table in sources (if different than in destination)',
+                    default=None)
+
   parser.add_option('-b', '--blocks', dest='blocks',
                     type='float', default=3,
                     help='Try to send this many blocks in one commit.')
@@ -600,9 +623,18 @@ def main():
                     help="keyrange end (hexadecimal)")
 
   (options, args) = parser.parse_args()
+
   table, destination, sources = args[0], args[1], args[2:]
 
+  source_column_map = {}
+  if options.source_column_map:
+    for pair in options.source_column_map.split(','):
+      k, v = pair.split(':')
+      source_column_map[k] = v
+
   checker = Checker(destination, sources, table, options.checkpoint_directory,
+                    source_column_map=source_column_map,
+                    source_table_name=options.source_table_name,
                     keyrange=get_range(options.start, options.end),
                     stats_interval=options.stats, batch_count=options.batch_count,
                     block_size=options.block_size, ratio=options.ratio,
