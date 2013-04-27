@@ -115,7 +115,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] <zk tablet path> <key name> <start key> <end key>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=4] [-skip-slave-restart] [-maximum-file-size=1073741824] -spec='-' -tables='' <zk tablet path> <key name>",
+				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <destination zk path> <source zk path>...",
@@ -787,11 +787,11 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 
 func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
+	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
 	spec := subFlags.String("spec", "-", "shard specification")
 	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
 	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
-	maximumFilesize := subFlags.Uint64("maximum-file-size", 1*1024*1024*1024, "the maximum size for an uncompressed data file")
+	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name>")

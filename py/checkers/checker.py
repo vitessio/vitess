@@ -650,8 +650,8 @@ def main():
 
   checker = Checker(destination, sources, table, options.checkpoint_directory,
                     source_column_map=source_column_map,
-                    source_force_index=options.source_force_index,
-                    destination_force_index=options.destination_force_index,
+                    source_force_index_pk=options.source_force_index,
+                    destination_force_index_pk=options.destination_force_index,
                     source_table_name=options.source_table_name,
                     keyrange=get_range(options.start, options.end),
                     stats_interval=options.stats, batch_count=options.batch_count,
