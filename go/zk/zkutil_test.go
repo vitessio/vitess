@@ -184,11 +184,6 @@ func TestResolveWildcards(t *testing.T) {
 		"/zk/nyc/path2/shards/subpath2.1/actionlog",
 	}, "", result, err)
 
-	// path not starting with /zk/
-	result, err = ResolveWildcards(zconn, []string{
-		"/zook/*/shards/*/actionlog"})
-	checkResult(t, nil, "path should start with /zk/: /zook/*/shards/*/actionlog", result, err)
-
 	// a parent path doesn't exist
 	zconn.exists = nil
 	zconn.children = nil
