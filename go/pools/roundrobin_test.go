@@ -5,42 +5,12 @@
 package pools
 
 import (
-	"errors"
 	"testing"
 	"time"
 )
 
-var lastId int64
-
-type TestResource struct {
-	num    int64
-	closed bool
-}
-
-func (tr *TestResource) Close() {
-	tr.closed = true
-}
-
-func (tr *TestResource) IsClosed() bool {
-	return tr.closed
-}
-
-func PoolFactory() (Resource, error) {
-	lastId++
-	return &TestResource{lastId, false}, nil
-}
-
-func FailFactory() (Resource, error) {
-	return nil, errors.New("Failed")
-}
-
-func SlowFailFactory() (Resource, error) {
-	time.Sleep(1e8)
-	return nil, errors.New("Failed")
-}
-
 func TestPool(t *testing.T) {
-	lastId = 0
+	lastId.Set(0)
 	p := NewRoundRobin(5, time.Duration(10e9))
 	p.Open(PoolFactory)
 	defer p.Close()

@@ -2,10 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-	Package pools provides functionality to manage and reuse resources
-	like connections.
-*/
 package pools
 
 import (
@@ -14,17 +10,7 @@ import (
 	"time"
 )
 
-// Factory is a function that can be used to create a resource.
-type Factory func() (Resource, error)
-
-// Every resource needs to suport the Resource interface.
-// Thread synchronization between Close() and IsClosed()
-// is the responsibility the caller.
-type Resource interface {
-	Close()
-	IsClosed() bool
-}
-
+// RoundRobin is deprecated. Use ResourcePool instead.
 // RoundRobin allows you to use a pool of resources in a round robin fashion.
 type RoundRobin struct {
 	mu          sync.Mutex
