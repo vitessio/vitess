@@ -206,15 +206,15 @@ func (server *UmgmtServer) Addr() net.Addr {
 	return server.listener.Addr()
 }
 
-func (server *UmgmtServer) Close() (err error) {
+func (server *UmgmtServer) Close() error {
 	server.Lock()
 	defer server.Unlock()
 
 	server.quit = true
 	if server.listener != nil {
-		server.listener.Close()
+		return server.listener.Close()
 	}
-	return
+	return nil
 }
 
 func (server *UmgmtServer) handleGracefulShutdown() error {
@@ -238,7 +238,11 @@ var defaultService = newService()
 func ListenAndServe(addr string) error {
 	rpc.Register(defaultService)
 	server := &UmgmtServer{connMap: make(map[net.Conn]bool)}
-	defer server.Close()
+	defer func() {
+		if err := server.Close(); err != nil {
+			relog.Info("umgmt server closed: %v", err)
+		}
+	}()
 
 	var umgmtClient *Client
 
@@ -255,18 +259,19 @@ func ListenAndServe(addr string) error {
 				if clientErr == nil {
 					closeErr := umgmtClient.CloseListeners()
 					if closeErr != nil {
-						relog.Error("closeErr:%v", closeErr)
+						relog.Error("umgmt CloseListeners err:%v", closeErr)
 					}
 					// wait for rpc to finish
 					rebindDelay := defaultService.rebindDelay()
 					if rebindDelay > 0.0 {
-						relog.Info("delaying rebind: %vs", rebindDelay)
+						relog.Info("umgmt delaying rebind %v", rebindDelay)
 						time.Sleep(rebindDelay)
 					}
 					continue
 				} else if checkError(clientErr, syscall.ECONNREFUSED) {
-					if unlinkErr := syscall.Unlink(addr); unlinkErr != nil {
-						relog.Error("can't unlink %v err:%v", addr, unlinkErr)
+					relog.Warning("umgmt forced socket removal: %v", addr)
+					if rmErr := os.Remove(addr); rmErr != nil {
+						relog.Error("umgmt failed removing socket: %v", rmErr)
 					}
 				} else {
 					return e
