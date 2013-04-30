@@ -30,9 +30,9 @@ SafeFunctions() return os.Error instead of throwing exceptions
 var TxLogger = streamlog.New("TxLog", 10)
 
 var (
-	BEGIN    = []byte("begin")
-	COMMIT   = []byte("commit")
-	ROLLBACK = []byte("rollback")
+	BEGIN    = "begin"
+	COMMIT   = "commit"
+	ROLLBACK = "rollback"
 )
 
 const (

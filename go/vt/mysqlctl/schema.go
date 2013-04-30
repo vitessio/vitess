@@ -241,7 +241,7 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 		return nil, err
 	}
 	defer conn.Close()
-	qr, err := conn.ExecuteFetch([]byte(fmt.Sprintf("select * from %v.%v where 1=0", dbName, table)), 0, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %v.%v where 1=0", dbName, table), 0, true)
 	if err != nil {
 		return nil, err
 	}

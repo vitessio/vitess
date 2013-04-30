@@ -100,7 +100,7 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 	}
 
 	si.cachePool = cachePool
-	tables, err := conn.ExecuteFetch([]byte(base_show_tables), maxTableCount, false)
+	tables, err := conn.ExecuteFetch(base_show_tables, maxTableCount, false)
 	if err != nil {
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
@@ -159,7 +159,7 @@ func (si *SchemaInfo) Reload() {
 	defer handleError(&err, nil)
 	conn := si.connPool.Get()
 	defer conn.Recycle()
-	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix())), maxTableCount, false)
+	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
 	if err != nil {
 		relog.Warning("Could not get table list for reload: %v", err)
 		return
@@ -192,7 +192,7 @@ func (si *SchemaInfo) CreateTable(tableName string) {
 }
 
 func (si *SchemaInfo) createTable(conn PoolConnection, tableName string) {
-	tables, err := conn.ExecuteFetch([]byte(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName)), 1, false)
+	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and table_name = '%s'", base_show_tables, tableName), 1, false)
 	if err != nil {
 		panic(NewTabletError(FAIL, "Error fetching table %s: %v", tableName, err))
 	}
@@ -259,7 +259,7 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 		} else {
 			conn := si.connPool.Get()
 			defer conn.Recycle()
-			sql := []byte(plan.FieldQuery.Query)
+			sql := plan.FieldQuery.Query
 			r, err := conn.ExecuteFetch(sql, 1, true)
 			logStats.QuerySources |= QUERY_SOURCE_MYSQL
 			logStats.NumberOfQueries += 1

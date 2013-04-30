@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"code.google.com/p/vitess/go/hack"
 	mproto "code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
@@ -396,7 +397,7 @@ func (qe *QueryEngine) execDDL(logStats *sqlQueryStats, ddl string) *mproto.Quer
 	// Stolen from Execute
 	conn = qe.activeTxPool.Get(txid)
 	defer conn.Recycle()
-	result, err := qe.executeSql(logStats, conn, []byte(ddl), false)
+	result, err := qe.executeSql(logStats, conn, ddl, false)
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))
 	}
@@ -692,7 +693,7 @@ func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnect
 	return qe.executeStreamSql(logStats, conn, sql, callback)
 }
 
-func (qe *QueryEngine) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) []byte {
+func (qe *QueryEngine) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
 	bindVars[MAX_RESULT_NAME] = qe.maxResultSize.Get() + 1
 	sql, err := parsed_query.GenerateQuery(bindVars, listVars)
 	if err != nil {
@@ -703,10 +704,10 @@ func (qe *QueryEngine) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bin
 	}
 	// undo hack done by stripTrailing
 	sql = restoreTrailing(sql, bindVars)
-	return sql
+	return hack.String(sql)
 }
 
-func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, sql []byte, wantfields bool) (*mproto.QueryResult, error) {
+func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, sql string, wantfields bool) (*mproto.QueryResult, error) {
 	connid := conn.Id()
 	qe.activePool.Put(connid)
 	defer qe.activePool.Remove(connid)
@@ -728,7 +729,7 @@ func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, 
 	return result, nil
 }
 
-func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql []byte, callback func(interface{}) error) error {
+func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(interface{}) error) error {
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries += 1
 	logStats.AddRewrittenSql(sql)

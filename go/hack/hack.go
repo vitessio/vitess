@@ -54,3 +54,9 @@ func String(b []byte) (s string) {
 	pstring.Len = pbytes.Len
 	return
 }
+
+// StringPointer returns &s[0], which is not allowed in go
+func StringPointer(s string) unsafe.Pointer {
+	pstring := (*reflect.StringHeader)(unsafe.Pointer(&s))
+	return unsafe.Pointer(pstring.Data)
+}

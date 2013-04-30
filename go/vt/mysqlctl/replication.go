@@ -470,7 +470,7 @@ func (mysqld *Mysqld) fetchSuperQuery(query string) ([][]sqltypes.Value, error) 
 	}
 	defer conn.Close()
 	relog.Info("fetch %v", query)
-	qr, err := conn.ExecuteFetch([]byte(query), 10000, false)
+	qr, err := conn.ExecuteFetch(query, 10000, false)
 	if err != nil {
 		return nil, err
 	}
@@ -486,7 +486,7 @@ func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
 	for _, query := range queryList {
 		toLog := strings.Replace(query, mysqld.replParams.Pass, strings.Repeat("*", len(mysqld.replParams.Pass)), -1)
 		relog.Info("exec %v", toLog)
-		if _, err := conn.ExecuteFetch([]byte(query), 10000, false); err != nil {
+		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", query, err.Error())
 		}
 	}

@@ -55,9 +55,9 @@ var (
 
 var (
 	SLOW_TXN_THRESHOLD    = time.Duration(100 * time.Millisecond)
-	BEGIN                 = []byte("begin")
-	COMMIT                = []byte("commit")
-	ROLLBACK              = []byte("rollback")
+	BEGIN                 = "begin"
+	COMMIT                = "commit"
+	ROLLBACK              = "rollback"
 	USERNAME_INDEX_INSERT = "insert into vt_username_map (username, user_id) values ('%v', %v)"
 	USERNAME_INDEX_UPDATE = "update vt_username_map set username='%v' where user_id=%v"
 	USERNAME_INDEX_DELETE = "delete from vt_username_map where username='%v' and user_id=%v"
@@ -101,7 +101,7 @@ type VtClient interface {
 	Commit() error
 	Rollback() error
 	Close()
-	ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *proto.QueryResult, err error)
+	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error)
 }
 
 type dummyVtClient struct{}
@@ -126,7 +126,7 @@ func (dc dummyVtClient) Close() {
 	return
 }
 
-func (dc dummyVtClient) ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+func (dc dummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	stdout.WriteString(string(query) + ";\n")
 	return nil, nil
 }
@@ -185,7 +185,7 @@ func (dc DBClient) Close() {
 	}
 }
 
-func (dc DBClient) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (dc DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	query = append(query, mysqlctl.SEMICOLON_BYTE...)
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
@@ -269,7 +269,7 @@ func (blp *BinlogPlayer) updatePort(port int, uid uint32, useDb string) {
 	sqlList := []string{USE_VT, "begin", updatePortSql, "commit", useDb}
 
 	for _, sql := range sqlList {
-		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+		if _, err := blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
 			panic(fmt.Errorf("Error %v in writing port %v", err, sql))
 		}
 	}
@@ -285,7 +285,7 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.Replica
 		blp.recoveryState.Uid)
 
 	queryStartTime := time.Now()
-	if _, err := blp.dbClient.ExecuteFetch([]byte(updateRecovery), 0, false); err != nil {
+	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
 		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
 	}
 	blp.txnTime.Record("QueryTime", queryStartTime)
@@ -488,7 +488,7 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 	}
 	if useCheckpoint {
 		selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
-		qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)
+		qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 		if err != nil {
 			panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 		}
@@ -545,7 +545,7 @@ func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecovery
 	useDb := fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
 
 	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
-	qr, err := dbClient.ExecuteFetch([]byte(selectRecovery), 1, true)
+	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
 		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
@@ -561,7 +561,7 @@ func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecovery
 			time.Now().Unix())
 		recoveryDmls := []string{USE_VT, "begin", insertRecovery, "commit", useDb}
 		for _, sql := range recoveryDmls {
-			if _, err := dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+			if _, err := dbClient.ExecuteFetch(sql, 0, false); err != nil {
 				panic(fmt.Errorf("Error %v in inserting into recovery table %v", err, sql))
 			}
 		}
@@ -657,7 +657,7 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 		if sql == "" {
 			continue
 		}
-		if _, err := blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+		if _, err := blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
 			panic(fmt.Errorf("Error %v in executing sql %v", err, sql))
 		}
 	}
@@ -793,7 +793,7 @@ func (blp *BinlogPlayer) handleTxn() {
 				}
 				for _, sql := range dmlEvent.Sql {
 					queryStartTime = time.Now()
-					if _, err = blp.dbClient.ExecuteFetch([]byte(sql), 0, false); err != nil {
+					if _, err = blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
 						panic(fmt.Errorf("Error %v in executing sql '%v'", err, sql))
 					}
 					blp.txnTime.Record("QueryTime", queryStartTime)
@@ -809,7 +809,7 @@ func (blp *BinlogPlayer) handleTxn() {
 	}
 }
 
-func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql []byte, err error) {
+func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql string, err error) {
 	switch indexType {
 	case "username":
 		indexSlice, ok := indexId.(string)
@@ -819,11 +819,11 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 		index := string(indexSlice)
 		switch dmlType {
 		case "insert":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId))
+			indexSql = fmt.Sprintf(USERNAME_INDEX_INSERT, index, userId)
 		case "update":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId))
+			indexSql = fmt.Sprintf(USERNAME_INDEX_UPDATE, index, userId)
 		case "delete":
-			indexSql = []byte(fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId))
+			indexSql = fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId)
 		default:
 			return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
 		}
@@ -834,9 +834,9 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 		}
 		switch dmlType {
 		case "insert":
-			indexSql = []byte(fmt.Sprintf(VIDEOID_INDEX_INSERT, index, userId))
+			indexSql = fmt.Sprintf(VIDEOID_INDEX_INSERT, index, userId)
 		case "delete":
-			indexSql = []byte(fmt.Sprintf(VIDEOID_INDEX_DELETE, index, userId))
+			indexSql = fmt.Sprintf(VIDEOID_INDEX_DELETE, index, userId)
 		default:
 			return nil, fmt.Errorf("Invalid dmlType %v - for 'video_id' %v", dmlType, indexId)
 		}
@@ -847,9 +847,9 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 		}
 		switch dmlType {
 		case "insert":
-			indexSql = []byte(fmt.Sprintf(SETID_INDEX_INSERT, index, userId))
+			indexSql = fmt.Sprintf(SETID_INDEX_INSERT, index, userId)
 		case "delete":
-			indexSql = []byte(fmt.Sprintf(SETID_INDEX_DELETE, index, userId))
+			indexSql = fmt.Sprintf(SETID_INDEX_DELETE, index, userId)
 		default:
 			return nil, fmt.Errorf("Invalid dmlType %v - for 'set_id' %v", dmlType, indexId)
 		}

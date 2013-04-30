@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"unsafe"
 
+	"code.google.com/p/vitess/go/hack"
 	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sqltypes"
@@ -104,7 +105,7 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	conn = &Connection{}
 	if C.vt_connect(&conn.c, host, uname, pass, dbname, port, unix_socket, charset, flags) != 0 {
 		defer conn.Close()
-		return nil, conn.lastError(nil)
+		return nil, conn.lastError("")
 	}
 	return conn, nil
 }
@@ -117,12 +118,12 @@ func (conn *Connection) IsClosed() bool {
 	return conn.c.mysql == nil
 }
 
-func (conn *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+func (conn *Connection) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	if conn.IsClosed() {
 		return nil, NewSqlError(2006, "Connection is closed")
 	}
 
-	if C.vt_execute(&conn.c, (*C.char)(unsafe.Pointer(&query[0])), C.ulong(len(query)), 0) != 0 {
+	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 0) != 0 {
 		return nil, conn.lastError(query)
 	}
 	defer conn.CloseResult()
@@ -145,11 +146,11 @@ func (conn *Connection) ExecuteFetch(query []byte, maxrows int, wantfields bool)
 }
 
 // when using ExecuteStreamFetch, use FetchNext on the Connection until it returns nil or error
-func (conn *Connection) ExecuteStreamFetch(query []byte) (err error) {
+func (conn *Connection) ExecuteStreamFetch(query string) (err error) {
 	if conn.IsClosed() {
 		return NewSqlError(2006, "Connection is closed")
 	}
-	if C.vt_execute(&conn.c, (*C.char)(unsafe.Pointer(&query[0])), C.ulong(len(query)), 1) != 0 {
+	if C.vt_execute(&conn.c, (*C.char)(hack.StringPointer(query)), C.ulong(len(query)), 1) != 0 {
 		return conn.lastError(query)
 	}
 	return nil
@@ -193,7 +194,7 @@ func (conn *Connection) fetchAll() (rows [][]sqltypes.Value, err error) {
 func (conn *Connection) FetchNext() (row []sqltypes.Value, err error) {
 	vtrow := C.vt_fetch_next(&conn.c)
 	if vtrow.has_error != 0 {
-		return nil, conn.lastError(nil)
+		return nil, conn.lastError("")
 	}
 	rowPtr := (*[maxSize]*[maxSize]byte)(unsafe.Pointer(vtrow.mysql_row))
 	if rowPtr == nil {
@@ -232,9 +233,9 @@ func (conn *Connection) Id() int64 {
 	return int64(C.vt_thread_id(&conn.c))
 }
 
-func (conn *Connection) lastError(query []byte) error {
+func (conn *Connection) lastError(query string) error {
 	if err := C.vt_error(&conn.c); *err != 0 {
-		return &SqlError{Num: int(C.vt_errno(&conn.c)), Message: C.GoString(err), Query: string(query)}
+		return &SqlError{Num: int(C.vt_errno(&conn.c)), Message: C.GoString(err), Query: query}
 	}
 	return &SqlError{0, "Dummy", string(query)}
 }

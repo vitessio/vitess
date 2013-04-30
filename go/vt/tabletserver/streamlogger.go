@@ -5,7 +5,6 @@
 package tabletserver
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -31,7 +30,7 @@ type sqlQueryStats struct {
 	PlanType             string
 	OriginalSql          string
 	BindVariables        map[string]interface{}
-	rewrittenSqls        [][]byte
+	rewrittenSqls        []string
 	RowsAffected         int
 	NumberOfQueries      int
 	StartTime            time.Time
@@ -57,7 +56,7 @@ func (stats *sqlQueryStats) Send() {
 	SqlQueryLogger.Send(stats)
 }
 
-func (stats *sqlQueryStats) AddRewrittenSql(sql []byte) {
+func (stats *sqlQueryStats) AddRewrittenSql(sql string) {
 	stats.rewrittenSqls = append(stats.rewrittenSqls, sql)
 }
 
@@ -68,7 +67,7 @@ func (stats *sqlQueryStats) TotalTime() time.Duration {
 // RewrittenSql returns a semicolon separated list of SQL statements
 // that were executed.
 func (stats *sqlQueryStats) RewrittenSql() string {
-	return string(bytes.Join(stats.rewrittenSqls, []byte("; ")))
+	return strings.Join(stats.rewrittenSqls, "; ")
 }
 
 // SizeOfResponse returns the approximate size of the response in

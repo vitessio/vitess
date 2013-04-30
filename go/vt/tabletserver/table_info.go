@@ -47,7 +47,7 @@ func loadTableInfo(conn PoolConnection, tableName string) (ti *TableInfo) {
 }
 
 func (ti *TableInfo) fetchColumns(conn PoolConnection) bool {
-	columns, err := conn.ExecuteFetch([]byte(fmt.Sprintf("describe %s", ti.Name)), 10000, false)
+	columns, err := conn.ExecuteFetch(fmt.Sprintf("describe %s", ti.Name), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
 		return false
@@ -59,7 +59,7 @@ func (ti *TableInfo) fetchColumns(conn PoolConnection) bool {
 }
 
 func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
-	indexes, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show index from %s", ti.Name)), 10000, false)
+	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from %s", ti.Name), 10000, false)
 	if err != nil {
 		relog.Warning("%s", err.Error())
 		return false
@@ -145,7 +145,7 @@ func (ti *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Valu
 		relog.Warning("%s has no time stamp. Will not be cached.", ti.Name)
 		return ""
 	}
-	createTable, err := conn.ExecuteFetch([]byte(fmt.Sprintf("show create table %s", ti.Name)), 10000, false)
+	createTable, err := conn.ExecuteFetch(fmt.Sprintf("show create table %s", ti.Name), 10000, false)
 	if err != nil {
 		relog.Warning("Couldnt read table info: %v", err)
 		return ""

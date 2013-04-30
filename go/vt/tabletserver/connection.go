@@ -23,8 +23,8 @@ func init() {
 }
 
 type PoolConnection interface {
-	ExecuteFetch(query []byte, maxrows int, wantfields bool) (*proto.QueryResult, error)
-	ExecuteStreamFetch(query []byte, callback func(interface{}) error, streamBufferSize int) error
+	ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
+	ExecuteStreamFetch(query string, callback func(interface{}) error, streamBufferSize int) error
 	VerifyStrict() bool
 	Id() int64
 	Close()
@@ -50,7 +50,7 @@ func (conn *DBConnection) handleError(err error) {
 	}
 }
 
-func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
@@ -66,7 +66,7 @@ func (dbc *DBConnection) ExecuteFetch(query []byte, maxrows int, wantfields bool
 	return &qr, nil
 }
 
-func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(interface{}) error, streamBufferSize int) error {
+func (conn *DBConnection) ExecuteStreamFetch(query string, callback func(interface{}) error, streamBufferSize int) error {
 	start := time.Now()
 	if QueryLogger != nil {
 		QueryLogger.Info("%s", query)
@@ -125,7 +125,7 @@ func (conn *DBConnection) ExecuteStreamFetch(query []byte, callback func(interfa
 	return nil
 }
 
-var getModeSql = []byte("select @@global.sql_mode")
+var getModeSql = "select @@global.sql_mode"
 
 func (conn *DBConnection) VerifyStrict() bool {
 	qr, err := conn.ExecuteFetch(getModeSql, 2, false)
