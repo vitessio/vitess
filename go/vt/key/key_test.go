@@ -44,6 +44,11 @@ func TestKey(t *testing.T) {
 	f(k2, "\x7f\xff\xff\xff\xff\xff\xff\xff")
 	f(k3, "\x80\x00\x00\x00\x00\x00\x00\x00")
 	f(k4, "\xff\xff\xff\xff\xff\xff\xff\xff")
+
+	hv := k4.Hex()
+	if hv != "FFFFFFFFFFFFFFFF" {
+		t.Errorf("Was expecting FFFFFFFFFFFFFFFF but got %v", hv)
+	}
 }
 
 func TestKeyUint64Sort(t *testing.T) {
@@ -85,12 +90,21 @@ func TestKeyStringSort(t *testing.T) {
 }
 
 func TestParseShardingSpec(t *testing.T) {
+	x40, err := HexKeyspaceId("4000000000000000").Unhex()
+	if err != nil {
+		t.Errorf("Unexpected error: %v.", err)
+	}
+	x80, err := HexKeyspaceId("8000000000000000").Unhex()
+	if err != nil {
+		t.Errorf("Unexpected error: %v.", err)
+	}
+
 	goodTable := map[string]KeyRangeArray{
 		"-": {{Start: MinKey, End: MaxKey}},
 		"-4000000000000000-8000000000000000-": {
-			{Start: MinKey, End: HexKeyspaceId("4000000000000000").Unhex()},
-			{Start: HexKeyspaceId("4000000000000000").Unhex(), End: HexKeyspaceId("8000000000000000").Unhex()},
-			{Start: HexKeyspaceId("8000000000000000").Unhex(), End: MaxKey},
+			{Start: MinKey, End: x40},
+			{Start: x40, End: x80},
+			{Start: x80, End: MaxKey},
 		},
 	}
 	badTable := []string{
@@ -137,8 +151,20 @@ func TestContains(t *testing.T) {
 	}
 
 	for _, el := range table {
-		kr := KeyRange{Start: HexKeyspaceId(el.start).Unhex(), End: HexKeyspaceId(el.end).Unhex()}
-		if c := kr.Contains(HexKeyspaceId(el.kid).Unhex()); c != el.contained {
+		s, err := HexKeyspaceId(el.start).Unhex()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		e, err := HexKeyspaceId(el.end).Unhex()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		kr := KeyRange{Start: s, End: e}
+		k, err := HexKeyspaceId(el.kid).Unhex()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if c := kr.Contains(k); c != el.contained {
 			t.Errorf("Unexpected result: contains for %v and (%v-%v) yields %v.", el.kid, el.start, el.end, c)
 		}
 	}

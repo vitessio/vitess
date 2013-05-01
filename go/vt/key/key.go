@@ -33,7 +33,7 @@ func (i Uint64Key) KeyspaceId() KeyspaceId {
 type KeyspaceId string
 
 func (kid KeyspaceId) Hex() HexKeyspaceId {
-	return HexKeyspaceId(hex.EncodeToString([]byte(kid)))
+	return HexKeyspaceId(strings.ToUpper(hex.EncodeToString([]byte(kid))))
 }
 
 func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
