@@ -33,11 +33,11 @@ func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string, includeViews
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMasterTabletPath string, alias tm.TabletAlias, wg *sync.WaitGroup, result chan string) {
+func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMasterTabletPath string, alias tm.TabletAlias, includeViews bool, wg *sync.WaitGroup, result chan string) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering schema for %v", zkTabletPath)
-	slaveSchema, err := wr.GetSchema(zkTabletPath, nil, false)
+	slaveSchema, err := wr.GetSchema(zkTabletPath, nil, includeViews)
 	if err != nil {
 		result <- err.Error()
 		return
@@ -62,7 +62,7 @@ func channelToError(stream chan string) error {
 	return fmt.Errorf("Schema diffs:\n%v", result)
 }
 
-func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
+func (wr *Wrangler) ValidateSchemaShard(zkShardPath string, includeViews bool) error {
 	si, err := tm.ReadShard(wr.zconn, zkShardPath)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering schema for master %v", zkMasterTabletPath)
-	masterSchema, err := wr.GetSchema(zkMasterTabletPath, nil, false)
+	masterSchema, err := wr.GetSchema(zkMasterTabletPath, nil, includeViews)
 	if err != nil {
 		return err
 	}
@@ -85,11 +85,11 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 	go func() {
 		for _, alias := range si.ReplicaAliases {
 			wg.Add(1)
-			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, wg, result)
+			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, includeViews, wg, result)
 		}
 		for _, alias := range si.RdonlyAliases {
 			wg.Add(1)
-			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, wg, result)
+			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, includeViews, wg, result)
 		}
 
 		wg.Wait()
@@ -98,7 +98,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string) error {
 	return channelToError(result)
 }
 
-func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
+func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string, includeViews bool) error {
 	// find all the shards
 	zkShardsPath := path.Join(zkKeyspacePath, "shards")
 	shards, _, err := wr.zconn.Children(zkShardsPath)
@@ -113,7 +113,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	sort.Strings(shards)
 	referenceShardPath := path.Join(zkShardsPath, shards[0])
 	if len(shards) == 1 {
-		return wr.ValidateSchemaShard(referenceShardPath)
+		return wr.ValidateSchemaShard(referenceShardPath, includeViews)
 	}
 
 	// find the reference schema using the first shard's master
@@ -126,7 +126,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering schema for reference master %v", zkReferenceTabletPath)
-	referenceSchema, err := wr.GetSchema(zkReferenceTabletPath, nil, false)
+	referenceSchema, err := wr.GetSchema(zkReferenceTabletPath, nil, includeViews)
 	if err != nil {
 		return err
 	}
@@ -140,11 +140,11 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 		// first diff the slaves in the reference shard 0
 		for _, alias := range si.ReplicaAliases {
 			wg.Add(1)
-			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
+			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
 		}
 		for _, alias := range si.RdonlyAliases {
 			wg.Add(1)
-			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
+			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
 		}
 
 		// then diffs the masters in the other shards, along with
@@ -163,14 +163,14 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string) error {
 			}
 
 			wg.Add(1)
-			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, si.MasterAlias, wg, result)
+			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, si.MasterAlias, includeViews, wg, result)
 			for _, alias := range si.ReplicaAliases {
 				wg.Add(1)
-				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
+				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
 			}
 			for _, alias := range si.RdonlyAliases {
 				wg.Add(1)
-				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, wg, result)
+				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
 			}
 		}
 

@@ -220,10 +220,10 @@ var commands = []commandGroup{
 				"[-tables=<table1>,<table2>,...] [-include-views] <zk tablet path>",
 				"Display the full schema for a tablet, or just the schema for the provided tables."},
 			command{"ValidateSchemaShard", commandValidateSchemaShard,
-				"<zk shard path>",
+				"[-include-views] <zk shard path>",
 				"Validate the master schema matches all the slaves."},
 			command{"ValidateSchemaKeyspace", commandValidateSchemaKeyspace,
-				"<zk keyspace path>",
+				"[-include-views] <zk keyspace path>",
 				"Validate the master schema from shard 0 matches all the other tablets in the keyspace."},
 			command{"PreflightSchema", commandPreflightSchema,
 				"{-sql=<sql> || -sql-file=<filename>} <zk tablet path>",
@@ -1203,7 +1203,7 @@ func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 
 func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	tables := subFlags.String("tables", "", "comma separated tables to gather schema information for")
-	includeViews := subFlags.Bool("include-views", false, "include the views in the output")
+	includeViews := subFlags.Bool("include-views", false, "include views in the output")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action GetSchema requires <zk tablet path>")
@@ -1221,21 +1221,23 @@ func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []stri
 }
 
 func commandValidateSchemaShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action ValidateSchemaShard requires <zk shard path>")
 	}
 
-	return "", wrangler.ValidateSchemaShard(subFlags.Arg(0))
+	return "", wrangler.ValidateSchemaShard(subFlags.Arg(0), *includeViews)
 }
 
 func commandValidateSchemaKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	includeViews := subFlags.Bool("include-views", false, "include views in the validation")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action ValidateSchemaKeyspace requires <zk keyspace path>")
 	}
 
-	return "", wrangler.ValidateSchemaKeyspace(subFlags.Arg(0))
+	return "", wrangler.ValidateSchemaKeyspace(subFlags.Arg(0), *includeViews)
 }
 
 func commandPreflightSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

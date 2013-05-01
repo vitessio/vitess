@@ -693,7 +693,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 
 	// get the schema for each table
-	sd, fetchErr := mysqld.GetSchema(dbName, tables, false)
+	sd, fetchErr := mysqld.GetSchema(dbName, tables, true)
 	if fetchErr != nil {
 		return []string{}, fetchErr
 	}
@@ -721,6 +721,10 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	datafiles := make([]map[key.KeyRange][]SnapshotFile, len(sd.TableDefinitions))
 	dumpTableWorker := func(i int) (err error) {
 		table := sd.TableDefinitions[i]
+		if table.Type != TABLE_BASE_TABLE {
+			// we just skip views here
+			return nil
+		}
 		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, selectIntoOutfile, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
 		if err != nil {
 			return
@@ -1070,18 +1074,32 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	}
 	createDbCmds = append(createDbCmds, createDatabase)
 	createDbCmds = append(createDbCmds, "USE `"+destinationDbName+"`")
+	createViewCmds := make([]string, 0, 16)
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
-		createDbCmd, alterTable, err := makeCreateTableSql(td.Schema, td.Name, strategy)
-		if err != nil {
-			return err
+		if td.Type == TABLE_BASE_TABLE {
+			createDbCmd, alterTable, err := makeCreateTableSql(td.Schema, td.Name, strategy)
+			if err != nil {
+				return err
+			}
+			if alterTable != "" {
+				postSql[td.Name] = alterTable
+			}
+			jobCount[td.Name] = new(sync2.AtomicInt32)
+			createDbCmds = append(createDbCmds, createDbCmd)
+			sems["table-"+td.Name] = sync2.NewSemaphore(insertTableConcurrency)
+		} else {
+			// views are just created with the right db name
+			// and no data will ever go in them. We create them
+			// after all tables are created, as they will
+			// probably depend on real tables.
+			createViewCmd, err := fillStringTemplate(td.Schema, map[string]string{"DatabaseName": destinationDbName})
+			if err != nil {
+				return err
+			}
+			createViewCmds = append(createViewCmds, createViewCmd)
 		}
-		if alterTable != "" {
-			postSql[td.Name] = alterTable
-		}
-		jobCount[td.Name] = new(sync2.AtomicInt32)
-		createDbCmds = append(createDbCmds, createDbCmd)
-		sems["table-"+td.Name] = sync2.NewSemaphore(insertTableConcurrency)
 	}
+	createDbCmds = append(createDbCmds, createViewCmds...)
 	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
 		return
 	}

@@ -397,7 +397,7 @@ index by_msg (msg)
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62044.zk_tablet_path,
                              log_level='INFO', trap_output=True)
-  if 'vt_insert_view' not in err:
+  if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output: %s' % err)
   out, err = utils.run_vtctl('GetSchema ' +
                              tablet_62044.zk_tablet_path,
@@ -429,11 +429,11 @@ index by_msg (msg)
   if len(rows) != 3:
     raise utils.TestError("Was expecting 3 rows in blp_checkpoint but got: %s" % str(rows))
 
-  # try to get the schema on multi-restored guy, make sure the view is not there
+  # try to get the schema on multi-restored guy, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62344.zk_tablet_path,
                              log_level='INFO', trap_output=True)
-  if 'vt_insert_view' in err:
+  if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output after multirestore: %s' % err)
 
   for tablet in tablet_62044, tablet_41983, tablet_31981, tablet_62344:

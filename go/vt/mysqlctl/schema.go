@@ -215,11 +215,16 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		// Normalize & remove auto_increment because it changes on every insert
 		// FIXME(alainjobart) find a way to share this with
 		// vt/tabletserver/table_info.go:162
-		norm1 := rows[0][1].String()
-		norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
+		norm := rows[0][1].String()
+		norm = autoIncr.ReplaceAllLiteralString(norm, "")
+		if tableType == TABLE_VIEW {
+			// Views will have the dbname in there, replace it
+			// with {{.DatabaseName}}
+			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
+		}
 
 		sd.TableDefinitions[i].Name = tableName
-		sd.TableDefinitions[i].Schema = norm2
+		sd.TableDefinitions[i].Schema = norm
 
 		columns, err := mysqld.GetColumns(dbName, tableName)
 		if err != nil {
