@@ -1,6 +1,6 @@
 import time
 
-from vtdb import vt_occ2 as db
+from vtdb import vt_occ2
 
 import framework
 import nocache_cases
@@ -71,7 +71,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("begin")
     try:
       self.env.execute("insert into vtocc_test values(1, null, null, null)")
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertEqual(e[0], 1062)
       self.assertContains(e[1], "error: Duplicate")
     else:
@@ -103,7 +103,7 @@ class TestNocache(framework.TestCase):
     vstart = self.env.debug_vars()
     try:
       self.env.execute("insert into vtocc_test values(4, null, null, null)")
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: DMLs")
     else:
       self.fail("Did not receive exception")
@@ -128,7 +128,7 @@ class TestNocache(framework.TestCase):
   def test_for_update(self):
     try:
       self.env.execute("select * from vtocc_test where intval=2 for update")
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Disallowed")
     else:
       self.fail("Did not receive exception")
@@ -143,7 +143,7 @@ class TestNocache(framework.TestCase):
   def test_pool_size(self):
     vstart = self.env.debug_vars()
     self.env.execute("set vt_pool_size=1")
-    self.assertRaises(db.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
+    self.assertRaises(vt_occ2.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
     self.env.execute("select 1 from dual")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 1)
@@ -160,7 +160,7 @@ class TestNocache(framework.TestCase):
     try:
       cu2 = co2.cursor()
       cu2.execute("begin", {})
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "connection limit")
     else:
       self.fail("Did not receive exception")
@@ -185,7 +185,7 @@ class TestNocache(framework.TestCase):
     time.sleep(0.3)
     try:
       self.env.execute("commit")
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Transaction")
     else:
       self.fail("Did not receive exception")
@@ -233,7 +233,7 @@ class TestNocache(framework.TestCase):
       for i in range(10):
         try:
           self.env.execute("select * from vtocc_temp")
-        except db.MySQLErrors.DatabaseError, e:
+        except vt_occ2.MySQLErrors.DatabaseError, e:
           self.assertContains(e[1], "not found in schema")
           time.sleep(1)
         else:
@@ -250,7 +250,7 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.MaxResultSize, 2)
     try:
       self.env.execute("select * from vtocc_test")
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Row")
     else:
       self.fail("Did not receive exception")
@@ -260,13 +260,13 @@ class TestNocache(framework.TestCase):
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
-    conn = db.connect("localhost:9461", 5, dbname="vt_test_keyspace")
+    conn = vt_occ2.connect("localhost:9461", 'test_keyspace', '0', 5)
     cu = conn.cursor()
     self.env.execute("set vt_query_timeout=0.25")
     try:
       cu.execute("begin", {})
       cu.execute("select sleep(0.5) from vtocc_test", {})
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       if "error: Query" not in e[1] and "error: Lost connection" not in e[1]:
         self.fail("Query not killed as expected")
     else:
@@ -274,7 +274,7 @@ class TestNocache(framework.TestCase):
 
     try:
       cu.execute("select 1 from dual", {})
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Transaction")
     else:
       self.fail("Did not receive exception")
@@ -304,12 +304,12 @@ class TestNocache(framework.TestCase):
   def test_consolidation(self):
     vstart = self.env.debug_vars()
     # The first call always does a full fetch for field info
-    self.assertRaises(db.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
+    self.assertRaises(vt_occ2.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
     time.sleep(2)
     for i in range(2):
       try:
         self.env.execute("select sleep(3) from dual")
-      except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError):
+      except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError):
         pass
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Waits.TotalCount", 0)+1, vend.Waits.TotalCount)
@@ -360,7 +360,7 @@ class TestNocache(framework.TestCase):
     bv = {'asdfg': 1}
     try:
       self.env.execute("select * from vtocc_test where intval=%(asdfg)s", bv)
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], "error: Query disallowed")
 
   def test_health(self):
@@ -372,7 +372,7 @@ class TestNocache(framework.TestCase):
     self._verify_query_stats(self.env.query_stats(), "select eid as query_stats from vtocc_a where eid = :eid", "vtocc_a", "PASS_SELECT", 1, 2, 0)
     try:
       self.env.execute("select eid as query_stats from vtocc_a where dontexist(eid) = %(eid)s", bv)
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       pass
     else:
       self.fail("Did not receive exception: " + query)
@@ -385,7 +385,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("begin")
     try:
       self.env.execute(query, bindvars)
-    except (db.MySQLErrors.DatabaseError, db.dbexceptions.OperationalError), e:
+    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
       self.assertContains(e[1], err)
     else:
       self.fail("Did not receive exception: " + query)

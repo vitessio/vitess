@@ -142,10 +142,10 @@ def setup_schema():
 
 def perform_insert(count):
   for i in xrange(count):
-    _exec_vt_txn(master_host, 'vt_test_keyspace', ["insert into vt_insert_test (msg) values ('test %s')" % i])
+    _exec_vt_txn(master_host, ["insert into vt_insert_test (msg) values ('test %s')" % i])
 
 def perform_delete():
-  _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_insert_test',])
+  _exec_vt_txn(master_host, ['delete from vt_insert_test',])
 
 
 class RowCacheInvalidator(unittest.TestCase):
@@ -227,13 +227,13 @@ class RowCacheInvalidator(unittest.TestCase):
     self.assertEqual(invalidations, 0, "Row-cache invalidator should be disabled, no invalidations")
 
 
-def _vtdb_conn(host, dbname):
-  return vt_occ2.connect(host, 2, dbname=dbname)
+def _vtdb_conn(host):
+  return vt_occ2.connect(host, 'test_keyspace', '0', 2)
 
-def _exec_vt_txn(host, dbname, query_list=None):
+def _exec_vt_txn(host, query_list=None):
   if query_list is None:
     return
-  vtdb_conn = _vtdb_conn(host, dbname)
+  vtdb_conn = _vtdb_conn(host)
   vtdb_cursor = vtdb_conn.cursor()
   vtdb_cursor.execute('begin', {})
   for q in query_list:

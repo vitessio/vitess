@@ -218,8 +218,7 @@ def run_test_sharding():
   # FIXME(alainjobart) get key_range from the topology
   # when emd_topology.py is exported to this depot
   conn = tablet2.TabletConnection("localhost:%u" % shard_0_master.port,
-                                  "vt_test_keyspace", 10.0,
-                                  key_range=tablet2.KeyRange(end="\x80"))
+                                  "test_keyspace", "-80", 10.0)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
   if (len(results) != 2 or \
@@ -228,8 +227,7 @@ def run_test_sharding():
     print "conn._execute returned:", results
     raise utils.TestError('wrong conn._execute output')
   conn = tablet2.TabletConnection("localhost:%u" % shard_1_master.port,
-                                  "vt_test_keyspace", 10.0,
-                                  key_range=tablet2.KeyRange(start="\x80"))
+                                  "test_keyspace", "80-", 10.0)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
   if (len(results) != 1 or \
@@ -237,15 +235,14 @@ def run_test_sharding():
     print "conn._execute returned:", results
     raise utils.TestError('wrong conn._execute output')
 
-  # try to connect with bad keyrange
+  # try to connect with bad shard
   try:
     conn = tablet2.TabletConnection("localhost:%u" % shard_0_master.port,
-                                    "vt_test_keyspace", 10.0,
-                                    key_range=tablet2.KeyRange(end="\x90"))
+                                    "test_keyspace", "-90", 10.0)
     conn.dial()
     raise utils.TestError('expected an exception')
   except Exception as e:
-    if "fatal: KeyRange mismatch, expecting {Start: , End: 80}, received {Start: , End: 90}" not in str(e):
+    if "fatal: Shard mismatch, expecting -80, received -90" not in str(e):
       raise utils.TestError('unexpected exception: ' + str(e))
 
   utils.kill_sub_process(zkocc)

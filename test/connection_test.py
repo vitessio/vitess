@@ -7,13 +7,14 @@ import logging
 import os
 import subprocess
 import shutil
+import sys
 import time
 import unittest
 
 import MySQLdb
 from net import gorpc
 from net import bsonrpc
-from vtdb import vt_occ2 as db
+from vtdb import vt_occ2
 from vtdb import dbexceptions
 
 LOGFILE = "/tmp/vtocc.log"
@@ -44,6 +45,8 @@ class BaseTest(unittest.TestCase):
       'host': 'localhost',
       'unix_socket': mysql_socket,
       'uname': 'vt_dba',  # use vt_dba as some tests depend on 'drop'
+      'keyspace' : 'test_keyspace',
+      'shard' : '0',
       }
 
   @property
@@ -82,7 +85,7 @@ class BaseTest(unittest.TestCase):
                                      "-querylog", QUERYLOGFILE],
                                     stderr=klass.vtstderr)
     time.sleep(1)
-    connection = db.VtOCCConnection("localhost:%s" % klass.vtocc_port, klass.dbconfig['dbname'], timeout=10, user=klass.user, password=klass.password)
+    connection = vt_occ2.VtOCCConnection("localhost:%s" % klass.vtocc_port, klass.dbconfig['keyspace'], klass.dbconfig['shard'], timeout=10, user=klass.user, password=klass.password)
     connection.dial()
     cursor = connection.cursor()
     cursor.execute("create table if not exists connection_test (c int)")
@@ -186,13 +189,16 @@ class TestAuthentication(BaseTest):
 
   def test_authenticated_methods_are_available(self):
     self.authenticate(self.user, self.password)
-    self.call('SqlQuery.GetSessionId', {"DbName": self.dbconfig['dbname']})
+    self.call('SqlQuery.GetSessionId', {
+        "Keyspace": self.dbconfig['keyspace'],
+        "Shard": self.dbconfig['shard'],
+        })
 
 
 class TestConnection(BaseTest):
 
   def setUp(self):
-    self.connection = db.VtOCCConnection(self.vtocc_uri, self.dbconfig['dbname'], timeout=1, user=self.user, password=self.password)
+    self.connection = vt_occ2.VtOCCConnection(self.vtocc_uri, self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
     self.connection.dial()
 
   def test_reconnect(self):
@@ -209,7 +215,7 @@ class TestConnection(BaseTest):
     cursor.execute("select 2 from connection_test")
 
   def test_vtocc_not_there(self):
-    connection = db.VtOCCConnection("localhost:7777", self.dbconfig['dbname'], timeout=1, user=self.user, password=self.password)
+    connection = vt_occ2.VtOCCConnection("localhost:7777", self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
     self.assertRaises(dbexceptions.OperationalError, connection.dial)
 
   def test_vtocc_has_gone_away(self):
@@ -227,5 +233,6 @@ if __name__=="__main__":
     unittest.main(argv=["auth_test.py"])
   finally:
     print "Waiting for processes to terminate...",
+    sys.stdout.flush()
     BaseTest._tearDownClass()
     print "OK"

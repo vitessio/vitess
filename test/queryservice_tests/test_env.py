@@ -12,7 +12,7 @@ import time
 import urllib2
 import MySQLdb as mysql
 
-from vtdb import vt_occ2 as db
+from vtdb import vt_occ2
 from vtdb import dbexceptions
 
 import framework
@@ -21,14 +21,14 @@ import tablet
 import utils
 
 
-class EnvironmentError(Exception): 
+class EnvironmentError(Exception):
   pass
 
 
 class TestEnv(object):
 
   def connect(self):
-    c = db.connect("localhost:%s" % self.tablet.port, 2, dbname='vt_test_keyspace')
+    c = vt_occ2.connect("localhost:%s" % self.tablet.port, 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 
@@ -246,6 +246,8 @@ class VtoccTestEnv(TestEnv):
           'host': 'localhost',
           'unix_socket': self.mysqldir+"/mysql.sock",
           'uname': 'vt_dba',   # use vt_dba as some tests depend on 'drop'
+          'keyspace': 'test_keyspace',
+          'shard' : '0',
           }
       if utils.options.memcache:
         conf['memcache'] = memcache
@@ -330,7 +332,7 @@ class VtoccTestEnv(TestEnv):
     shutil.rmtree(self.mysqldir)
 
   def connect(self):
-    c = db.connect("localhost:9461", 2, dbname='vt_test_keyspace')
+    c = vt_occ2.connect("localhost:9461", 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 

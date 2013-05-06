@@ -162,8 +162,8 @@ def _get_replica_stream_conn():
 def run_test_service_disabled():
   start_position = _get_repl_current_position()
   utils.debug("run_test_service_disabled starting @ %s" % start_position)
-  _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_insert_test)
-  _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_insert_test',])
+  _exec_vt_txn(master_host, populate_vt_insert_test)
+  _exec_vt_txn(master_host, ['delete from vt_insert_test',])
   utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
 #  time.sleep(20)
   replica_conn = _get_replica_stream_conn()
@@ -182,8 +182,8 @@ def run_test_service_disabled():
 
 def perform_writes(count):
   for i in xrange(count):
-    _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_insert_test)
-    _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_insert_test',])
+    _exec_vt_txn(master_host, populate_vt_insert_test)
+    _exec_vt_txn(master_host, ['delete from vt_insert_test',])
 
 
 @utils.test_case
@@ -247,13 +247,13 @@ def run_test_service_enabled():
     print traceback.print_exc()
   utils.debug("Streamed %d transactions before exiting" % txn_count)
 
-def _vtdb_conn(host, dbname):
-  return vt_occ2.connect(host, 2, dbname=dbname)
+def _vtdb_conn(host):
+  return vt_occ2.connect(host, 'test_keyspace', '0', 2)
 
-def _exec_vt_txn(host, dbname, query_list=None):
+def _exec_vt_txn(host, query_list=None):
   if not query_list:
     return
-  vtdb_conn = _vtdb_conn(host, dbname)
+  vtdb_conn = _vtdb_conn(host)
   vtdb_cursor = vtdb_conn.cursor()
   vtdb_cursor.execute('begin', {})
   for q in query_list:
@@ -270,10 +270,10 @@ def run_test_stream_parity():
   utils.debug("run_test_stream_parity starting @ %s" % master_start_position)
   master_txn_count = 0
   replica_txn_count = 0
-  _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_a(15))
-  _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_b(14))
-  _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_a',])
-  _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_b',])
+  _exec_vt_txn(master_host, populate_vt_a(15))
+  _exec_vt_txn(master_host, populate_vt_b(14))
+  _exec_vt_txn(master_host, ['delete from vt_a',])
+  _exec_vt_txn(master_host, ['delete from vt_b',])
   master_conn = _get_master_stream_conn()
   master_conn.dial()
   master_tuples = []
@@ -354,8 +354,8 @@ def run_test_log_rotation():
   start_position = _get_master_current_position()
   decoded_start_position = Position().decode_json(start_position)
   master_tablet.mquery('vt_test_keyspace', "flush logs")
-  _exec_vt_txn(master_host, 'vt_test_keyspace', populate_vt_a(15))
-  _exec_vt_txn(master_host, 'vt_test_keyspace', ['delete from vt_a',])
+  _exec_vt_txn(master_host, populate_vt_a(15))
+  _exec_vt_txn(master_host, ['delete from vt_a',])
   master_conn = _get_master_stream_conn()
   master_conn.dial()
   binlog_pos, data, err = master_conn.stream_start(start_position)
