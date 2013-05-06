@@ -16,8 +16,6 @@ import (
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/zk/zkocc/proto"
-	"launchpad.net/gozk/zookeeper"
 )
 
 // zkocc
@@ -113,14 +111,8 @@ func handleError(err *error) {
 	}
 }
 
-func (zkr *ZkReader) Get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
-	defer handleError(&err)
-	zkr.rpcCalls.Add(1)
-
-	return zkr.get(req, reply)
-}
-
-func (zkr *ZkReader) get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
+func (zkr *ZkReader) get(req *zk.ZkPath, reply *zk.ZkNode) (err error) {
+	// get the cell
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
 		relog.Warning("Unknown cell for path %v: %v", req.Path, err)
@@ -128,62 +120,34 @@ func (zkr *ZkReader) get(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
 		return err
 	}
 
-	// check the cell cache
-	if cached, stale := cell.zcache.get(path, reply); cached {
-		reply.Cached = true
-		reply.Stale = stale
-		if stale {
-			cell.staleReads.Add(1)
-		} else {
-			cell.cacheReads.Add(1)
-		}
-		return nil
-	}
+	// get the entry
+	entry := cell.zcache.getEntry(path)
 
-	// not in cache, have to query zk
-	// first get the connection
-	zconn, err := cell.getConnection()
-	if err != nil {
-		relog.Warning("ZK connection error for path %v: %v", req.Path, err)
-		cell.otherErrors.Add(1)
-		return err
-	}
-
-	reply.Path = path
-	var stat *zookeeper.Stat
-	var watch <-chan zookeeper.Event
-	reply.Data, stat, watch, err = zconn.GetW(reply.Path)
-	if err != nil {
-		relog.Warning("ZK error for path %v: %v", req.Path, err)
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			cell.nodeNotFoundErrors.Add(1)
-		} else {
-			cell.otherErrors.Add(1)
-		}
-		return err
-	}
-	cell.zkReads.Add(1)
-	reply.Stat.FromZookeeperStat(stat)
-
-	// update cache, set channel
-	cell.zcache.updateData(path, reply.Data, &reply.Stat, watch)
-	return nil
+	// and fill it in if we can
+	return entry.get(cell, path, reply)
 }
 
-func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) (err error) {
+func (zkr *ZkReader) Get(req *zk.ZkPath, reply *zk.ZkNode) (err error) {
+	defer handleError(&err)
+	zkr.rpcCalls.Add(1)
+
+	return zkr.get(req, reply)
+}
+
+func (zkr *ZkReader) GetV(req *zk.ZkPathV, reply *zk.ZkNodeV) (err error) {
 	defer handleError(&err)
 	zkr.rpcCalls.Add(1)
 
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 
-	reply.Nodes = make([]*proto.ZkNode, len(req.Paths))
+	reply.Nodes = make([]*zk.ZkNode, len(req.Paths))
 	errors := make([]error, 0, len(req.Paths))
 	for i, zkPath := range req.Paths {
 		wg.Add(1)
 		go func(i int, zkPath string) {
-			zp := &proto.ZkPath{zkPath}
-			zn := &proto.ZkNode{}
+			zp := &zk.ZkPath{zkPath}
+			zn := &zk.ZkNode{}
 			err := zkr.get(zp, zn)
 			if err != nil {
 				mu.Lock()
@@ -207,55 +171,23 @@ func (zkr *ZkReader) GetV(req *proto.ZkPathV, reply *proto.ZkNodeV) (err error) 
 	return nil
 }
 
-func (zkr *ZkReader) Children(req *proto.ZkPath, reply *proto.ZkNode) (err error) {
+func (zkr *ZkReader) Children(req *zk.ZkPath, reply *zk.ZkNode) (err error) {
 	defer handleError(&err)
 	zkr.rpcCalls.Add(1)
 
+	// get the cell
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
+		relog.Warning("Unknown cell for path %v: %v", req.Path, err)
+		zkr.unknownCellErrors.Add(1)
 		return err
 	}
 
-	// check the cell cache
-	if cached, stale := cell.zcache.children(path, reply); cached {
-		reply.Cached = true
-		reply.Stale = stale
-		if stale {
-			cell.staleReads.Add(1)
-		} else {
-			cell.cacheReads.Add(1)
-		}
-		return nil
-	}
+	// get the entry
+	entry := cell.zcache.getEntry(path)
 
-	// not in cache, have to query zk
-	// first get the connection
-	zconn, err := cell.getConnection()
-	if err != nil {
-		relog.Warning("ZK connection error for path %v: %v", req.Path, err)
-		cell.otherErrors.Add(1)
-		return err
-	}
-
-	reply.Path = path
-	var stat *zookeeper.Stat
-	var watch <-chan zookeeper.Event
-	reply.Children, stat, watch, err = zconn.ChildrenW(path)
-	if err != nil {
-		relog.Warning("ZK error for path %v: %v", req.Path, err)
-		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			cell.nodeNotFoundErrors.Add(1)
-		} else {
-			cell.otherErrors.Add(1)
-		}
-		return err
-	}
-	cell.zkReads.Add(1)
-	reply.Stat.FromZookeeperStat(stat)
-
-	// update cache
-	cell.zcache.updateChildren(path, reply.Children, &reply.Stat, watch)
-	return nil
+	// and fill it in if we can
+	return entry.children(cell, path, reply)
 }
 
 func (zkr *ZkReader) statsJSON() string {

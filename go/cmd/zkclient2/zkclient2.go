@@ -14,7 +14,7 @@ import (
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/zk/zkocc/proto"
+	"code.google.com/p/vitess/go/zk"
 )
 
 var usage = `
@@ -42,8 +42,8 @@ func connect() *rpcplus.Client {
 
 func get(rpcClient *rpcplus.Client, path string, verbose bool) {
 	// it's a get
-	zkPath := &proto.ZkPath{path}
-	zkNode := &proto.ZkNode{}
+	zkPath := &zk.ZkPath{path}
+	zkNode := &zk.ZkNode{}
 	if err := rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
 		log.Fatalf("ZkReader.Get error: %v", err)
 	}
@@ -54,11 +54,11 @@ func get(rpcClient *rpcplus.Client, path string, verbose bool) {
 }
 
 func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
-	zkPathV := &proto.ZkPathV{make([]string, len(paths))}
+	zkPathV := &zk.ZkPathV{make([]string, len(paths))}
 	for i, v := range paths {
 		zkPathV.Paths[i] = v
 	}
-	zkNodeV := &proto.ZkNodeV{}
+	zkNodeV := &zk.ZkNodeV{}
 	if err := rpcClient.Call("ZkReader.GetV", zkPathV, zkNodeV); err != nil {
 		log.Fatalf("ZkReader.GetV error: %v", err)
 	}
@@ -71,8 +71,8 @@ func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 
 func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 	for _, v := range paths {
-		zkPath := &proto.ZkPath{v}
-		zkNode := &proto.ZkNode{}
+		zkPath := &zk.ZkPath{v}
+		zkNode := &zk.ZkNode{}
 		if err := rpcClient.Call("ZkReader.Children", zkPath, zkNode); err != nil {
 			log.Fatalf("ZkReader.Children error: %v", err)
 		}

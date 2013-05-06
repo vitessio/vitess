@@ -7,7 +7,6 @@ package zk
 import (
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	"code.google.com/p/vitess/go/zk/zkocc/proto"
 	"fmt"
 	"launchpad.net/gozk/zookeeper"
 	"log"
@@ -51,8 +50,8 @@ func DialZkocc(addr string, connectTimeout time.Duration) (zkocc *ZkoccConn, err
 }
 
 func (conn *ZkoccConn) Get(path string) (data string, stat Stat, err error) {
-	zkPath := &proto.ZkPath{path}
-	zkNode := &proto.ZkNode{}
+	zkPath := &ZkPath{path}
+	zkNode := &ZkNode{}
 	if err := conn.rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
 		return "", nil, err
 	}
@@ -64,8 +63,8 @@ func (conn *ZkoccConn) GetW(path string) (data string, stat Stat, watch <-chan z
 }
 
 func (conn *ZkoccConn) Children(path string) (children []string, stat Stat, err error) {
-	zkPath := &proto.ZkPath{path}
-	zkNode := &proto.ZkNode{}
+	zkPath := &ZkPath{path}
+	zkNode := &ZkNode{}
 	if err := conn.rpcClient.Call("ZkReader.Children", zkPath, zkNode); err != nil {
 		return nil, nil, err
 	}
@@ -79,8 +78,8 @@ func (conn *ZkoccConn) ChildrenW(path string) (children []string, stat Stat, wat
 // implement Exists using Get
 // FIXME(alainjobart) Maybe we should add Exists in rpc API?
 func (conn *ZkoccConn) Exists(path string) (stat Stat, err error) {
-	zkPath := &proto.ZkPath{path}
-	zkNode := &proto.ZkNode{}
+	zkPath := &ZkPath{path}
+	zkNode := &ZkNode{}
 	if err := conn.rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
 		return nil, err
 	}

@@ -14,12 +14,15 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/sync2"
+	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 
 // a zkCell object represents a zookeeper cell, with a cache and a connection
 // to the real cell.
 
+var baseTimeout = flag.Duration("base-timeout", 30*time.Second,
+	"zookeeper base time out")
 var connectTimeout = flag.Duration("connect-timeout", 30*time.Second,
 	"zookeeper connection time out")
 var reconnectInterval = flag.Int("reconnect-interval", 3,
@@ -65,7 +68,7 @@ type zkCell struct {
 
 	// connection related variables
 	mutex   sync.Mutex // For connection & state only
-	zconn   *zookeeper.Conn
+	zconn   zk.Conn
 	state   int
 	ready   *sync.Cond // will be signaled at connection time
 	lastErr error      // last connection error
@@ -109,21 +112,10 @@ func (zcell *zkCell) connect() {
 	zcell.mutex.Unlock()
 
 	// now connect
-	zconn, session, err := zookeeper.Dial(zcell.zkAddr, *connectTimeout)
+	zconn, session, err := zk.DialZkTimeout(zcell.zkAddr, *baseTimeout, *connectTimeout)
 	if err == nil {
-		// Wait for connection.
-		// FIXME(msolomon) the deadlines seems to be a bit fuzzy, need to double check
-		// and potentially do a high-level select here.
-		event := <-session
-		if event.State != zookeeper.STATE_CONNECTED {
-			err = fmt.Errorf("zk connect failed: %v", event.State)
-		}
-		if err == nil {
-			zcell.zconn = zconn
-			go zcell.handleSessionEvents(zconn, session)
-		} else {
-			zconn.Close()
-		}
+		zcell.zconn = zconn
+		go zcell.handleSessionEvents(session)
 	}
 
 	// and change our state
@@ -177,12 +169,12 @@ func (zcell *zkCell) connect() {
 // STATE_CONNECTING message as a cache invalidation, close the connection
 // and start over.
 // (alainjobart: Note I've never seen a STATE_CLOSED message)
-func (zcell *zkCell) handleSessionEvents(conn *zookeeper.Conn, session <-chan zookeeper.Event) {
+func (zcell *zkCell) handleSessionEvents(session <-chan zookeeper.Event) {
 	for event := range session {
 		relog.Info("zk cell conn: cell %v received: %v", zcell.cellName, event)
 		switch event.State {
 		case zookeeper.STATE_EXPIRED_SESSION, zookeeper.STATE_CONNECTING:
-			conn.Close()
+			zcell.zconn.Close()
 			fallthrough
 		case zookeeper.STATE_CLOSED:
 			zcell.mutex.Lock()
@@ -201,7 +193,7 @@ func (zcell *zkCell) handleSessionEvents(conn *zookeeper.Conn, session <-chan zo
 	}
 }
 
-func (zcell *zkCell) getConnection() (*zookeeper.Conn, error) {
+func (zcell *zkCell) getConnection() (zk.Conn, error) {
 	zcell.mutex.Lock()
 	defer zcell.mutex.Unlock()
 

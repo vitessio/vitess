@@ -2,15 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package proto
+package zk
 
 // contains the structures used for RPC calls to zkocc.
-// in a different module so the client only links with this.
 
 import (
 	"time"
-
-	"launchpad.net/gozk/zookeeper"
 )
 
 type ZkStat struct {
@@ -93,7 +90,8 @@ func (zkStat *ZkStat) Pzxid() int64 {
 	return zkStat.pzxid
 }
 
-func (zkStat *ZkStat) FromZookeeperStat(zStat *zookeeper.Stat) {
+// helper method
+func (zkStat *ZkStat) FromZookeeperStat(zStat Stat) {
 	zkStat.czxid = zStat.Czxid()
 	zkStat.mzxid = zStat.Mzxid()
 	zkStat.cTime = zStat.CTime()

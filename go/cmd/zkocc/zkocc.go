@@ -17,8 +17,8 @@ import (
 	_ "code.google.com/p/vitess/go/snitch"
 	"code.google.com/p/vitess/go/umgmt"
 	"code.google.com/p/vitess/go/vt/servenv"
+	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkocc"
-	"code.google.com/p/vitess/go/zk/zkocc/proto"
 )
 
 const (
@@ -59,7 +59,7 @@ func main() {
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
 
-	proto.Register(zkocc.NewZkReader(*resolveLocal, flag.Args()))
+	zk.RegisterZkReader(zkocc.NewZkReader(*resolveLocal, flag.Args()))
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
