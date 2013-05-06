@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
@@ -116,8 +117,47 @@ func (ai *ActionInitiator) writeKeyspaceAction(zkKeyspacePath string, node *Acti
 	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
+// TODO(alainjobart) keep a cache of rpcClient by zkTabletPath
+func (ai *ActionInitiator) rpcCall(zkTabletPath, name string, args, reply interface{}, waitTime time.Duration) error {
+	// read the tablet from ZK to get the address to connect to
+	tablet, err := ReadTablet(ai.zconn, zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	// create the RPC client, using waitTime as the connect
+	// timeout, and starting the overall timeout as well
+	timer := time.After(waitTime)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr, waitTime)
+	if err != nil {
+		return err
+	}
+	defer rpcClient.Close()
+
+	// do the call in the remaining time
+	call := rpcClient.Go("TabletManager."+name, args, reply, nil)
+	select {
+	case <-timer:
+		return fmt.Errorf("Timeout waiting for TabletManager." + name)
+	case <-call.Done:
+		return call.Error
+	}
+}
+
 func (ai *ActionInitiator) Ping(zkTabletPath string) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PING})
+}
+
+func (ai *ActionInitiator) RpcPing(zkTabletPath string, waitTime time.Duration) error {
+	var result string
+	err := ai.rpcCall(zkTabletPath, TABLET_ACTION_PING, "payload", &result, waitTime)
+	if err != nil {
+		return err
+	}
+	if result != "payload" {
+		return fmt.Errorf("Bad ping result: %v", result)
+	}
+	return nil
 }
 
 func (ai *ActionInitiator) Sleep(zkTabletPath string, duration time.Duration) (actionPath string, err error) {
@@ -285,6 +325,14 @@ type GetSchemaArgs struct {
 
 func (ai *ActionInitiator) GetSchema(zkTabletPath string, tables []string, includeViews bool) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, args: &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}})
+}
+
+func (ai *ActionInitiator) RpcGetSchema(zkTabletPath string, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
+	var sd mysqlctl.SchemaDefinition
+	if err := ai.rpcCall(zkTabletPath, TABLET_ACTION_GET_SCHEMA, &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}, &sd, waitTime); err != nil {
+		return nil, err
+	}
+	return &sd, nil
 }
 
 func (ai *ActionInitiator) PreflightSchema(zkTabletPath, change string) (actionPath string, err error) {

@@ -202,7 +202,6 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 				return nil, err
 			}
 		}
-		relog.Info("GetSchema(table: %v)", tableName)
 
 		rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
 		if fetchErr != nil {

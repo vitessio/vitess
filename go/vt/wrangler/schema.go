@@ -17,19 +17,7 @@ import (
 )
 
 func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
-	if err := tm.IsTabletPath(zkTabletPath); err != nil {
-		return nil, err
-	}
-	actionPath, err := wr.ai.GetSchema(zkTabletPath, tables, includeViews)
-	if err != nil {
-		return nil, err
-	}
-
-	sd, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
-	if err != nil {
-		return nil, err
-	}
-	return sd.(*mysqlctl.SchemaDefinition), nil
+	return wr.ai.RpcGetSchema(zkTabletPath, tables, includeViews, wr.actionTimeout())
 }
 
 // helper method to asynchronously diff a schema

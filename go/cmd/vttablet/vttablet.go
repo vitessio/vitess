@@ -247,6 +247,9 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 		agent.Stop()
 	})
 
+	// register the RPC services from the agent
+	agent.RegisterQueryService(mysqld)
+
 	return nil
 }
 

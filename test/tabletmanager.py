@@ -96,8 +96,9 @@ def run_test_sanity():
   if len(rows) != 5:
     raise utils.TestError("expected 5 rows in vt_select_test", rows, result)
 
-  # check Ping
+  # check Pings
   utils.run_vtctl('Ping ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('RpcPing ' + tablet_62344.zk_tablet_path)
 
   # Quickly check basic actions.
   utils.run_vtctl('SetReadOnly ' + tablet_62344.zk_tablet_path)

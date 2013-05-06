@@ -89,6 +89,9 @@ var commands = []commandGroup{
 			command{"Ping", commandPing,
 				"<zk tablet path>",
 				"Check that the agent is awake and responding - can be blocked by other in-flight operations."},
+			command{"RpcPing", commandRpcPing,
+				"<zk tablet path>",
+				"Check that the agent is awake and responding to RPCs."},
 			command{"Query", commandQuery,
 				"<zk tablet path> [<user> <password>] <query>",
 				"Send a SQL query to a tablet."},
@@ -655,6 +658,14 @@ func commandPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (
 		relog.Fatal("action Ping requires <zk tablet path>")
 	}
 	return wrangler.ActionInitiator().Ping(subFlags.Arg(0))
+}
+
+func commandRpcPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		relog.Fatal("action Ping requires <zk tablet path>")
+	}
+	return "", wrangler.ActionInitiator().RpcPing(subFlags.Arg(0), *waitTime)
 }
 
 func commandQuery(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
