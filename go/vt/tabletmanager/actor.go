@@ -851,8 +851,8 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != TYPE_MASTER && tablet.Type != TYPE_SPARE {
-		return fmt.Errorf("expected master or spare type, not %v: %v", tablet.Type, ta.zkTabletPath)
+	if tablet.Type != TYPE_MASTER && tablet.Type != TYPE_SPARE && tablet.Type != TYPE_REPLICA && tablet.Type != TYPE_RDONLY {
+		return fmt.Errorf("expected master, spare replica or rdonly type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
 	// get source tablets addresses
