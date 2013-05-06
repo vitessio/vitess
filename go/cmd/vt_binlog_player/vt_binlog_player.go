@@ -186,7 +186,6 @@ func (dc DBClient) Close() {
 }
 
 func (dc DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
-	query = append(query, mysqlctl.SEMICOLON_BYTE...)
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		relog.Error("ExecuteFetch failed w/ error %v", err)
@@ -671,7 +670,7 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 	}
 }
 
-func (blp *BinlogPlayer) handleLookupWrites(indexUpdates [][]byte) {
+func (blp *BinlogPlayer) handleLookupWrites(indexUpdates []string) {
 	if len(indexUpdates) == 0 {
 		return
 	}
@@ -692,7 +691,7 @@ func (blp *BinlogPlayer) handleLookupWrites(indexUpdates [][]byte) {
 	}
 }
 
-func (blp *BinlogPlayer) createIndexUpdates(dmlEvent *mysqlctl.BinlogResponse) (indexSql []byte) {
+func (blp *BinlogPlayer) createIndexUpdates(dmlEvent *mysqlctl.BinlogResponse) (indexSql string) {
 	keyspaceIdUint, err := strconv.ParseUint(dmlEvent.KeyspaceId, 10, 64)
 	if err != nil {
 		panic(fmt.Errorf("Invalid keyspaceid '%v', error converting it, %v", dmlEvent.KeyspaceId, err))
@@ -749,7 +748,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 // and commit the entire batch at the last commit. Lookup txn is flushed before that.
 func (blp *BinlogPlayer) handleTxn() {
 	var err error
-	indexUpdates := make([][]byte, 0, len(blp.txnBuffer))
+	indexUpdates := make([]string, 0, len(blp.txnBuffer))
 	dmlMatch := 0
 	txnCount := 0
 	var queryCount int64
@@ -788,7 +787,7 @@ func (blp *BinlogPlayer) handleTxn() {
 				}
 
 				indexSql := blp.createIndexUpdates(dmlEvent)
-				if indexSql != nil {
+				if indexSql != "" {
 					indexUpdates = append(indexUpdates, indexSql)
 				}
 				for _, sql := range dmlEvent.Sql {
@@ -814,7 +813,7 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 	case "username":
 		indexSlice, ok := indexId.(string)
 		if !ok {
-			return nil, fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
+			return "", fmt.Errorf("Invalid IndexId value %v for 'username'", indexId)
 		}
 		index := string(indexSlice)
 		switch dmlType {
@@ -825,12 +824,12 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 		case "delete":
 			indexSql = fmt.Sprintf(USERNAME_INDEX_DELETE, index, userId)
 		default:
-			return nil, fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
+			return "", fmt.Errorf("Invalid dmlType %v - for 'username' %v", dmlType, indexId)
 		}
 	case "video_id":
 		index, ok := indexId.(uint64)
 		if !ok {
-			return nil, fmt.Errorf("Invalid IndexId value %v for 'video_id'", indexId)
+			return "", fmt.Errorf("Invalid IndexId value %v for 'video_id'", indexId)
 		}
 		switch dmlType {
 		case "insert":
@@ -838,12 +837,12 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 		case "delete":
 			indexSql = fmt.Sprintf(VIDEOID_INDEX_DELETE, index, userId)
 		default:
-			return nil, fmt.Errorf("Invalid dmlType %v - for 'video_id' %v", dmlType, indexId)
+			return "", fmt.Errorf("Invalid dmlType %v - for 'video_id' %v", dmlType, indexId)
 		}
 	case "set_id":
 		index, ok := indexId.(uint64)
 		if !ok {
-			return nil, fmt.Errorf("Invalid IndexId value %v for 'set_id'", indexId)
+			return "", fmt.Errorf("Invalid IndexId value %v for 'set_id'", indexId)
 		}
 		switch dmlType {
 		case "insert":
@@ -851,7 +850,7 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 		case "delete":
 			indexSql = fmt.Sprintf(SETID_INDEX_DELETE, index, userId)
 		default:
-			return nil, fmt.Errorf("Invalid dmlType %v - for 'set_id' %v", dmlType, indexId)
+			return "", fmt.Errorf("Invalid dmlType %v - for 'set_id' %v", dmlType, indexId)
 		}
 	default:
 		err = fmt.Errorf("Invalid IndexType %v", indexType)
