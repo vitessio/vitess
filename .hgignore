@@ -15,6 +15,7 @@ _testmain.go$
 ^go/cmd/mysqlctl/mysqlctl$
 ^go/cmd/normalizer/normalizer$
 ^go/cmd/vt_binlog_player/vt_binlog_player$
+^go/cmd/vt_binlog_server/vt_binlog_server$
 ^go/cmd/vtaction/vtaction$
 ^go/cmd/vtclient2/vtclient2$
 ^go/cmd/vtctl/vtctl$
