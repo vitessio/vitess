@@ -1,6 +1,7 @@
 #!/bin/bash
 
-fmt_errs=$(find . -name '*.go' -exec gofmt -l {} \;)
+fmt_errs=$(hg st -A | awk '$1 ~ /[ACM]/ && $2 ~ /go$/ { print $2 }' | xargs gofmt -l)
+#fmt_errs=$(find . -name '*.go' -exec gofmt -l {} \;)
 err_count=$(echo $fmt_errs | awk '{print NF}')
 
 if [ "$err_count" != 0 ]; then
