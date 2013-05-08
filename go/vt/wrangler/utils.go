@@ -76,14 +76,21 @@ func GetAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 		tabletPaths[i] = path.Join(zkTabletsPath, child)
 	}
 
-	tabletMap, _ := GetTabletMap(zconn, tabletPaths)
+	tabletMap, err := GetTabletMap(zconn, tabletPaths)
+	if err != nil {
+		// we got another error than ZNONODE
+		return nil, err
+	}
 	tablets := make([]*tm.TabletInfo, 0, len(tabletPaths))
 	for _, tabletPath := range tabletPaths {
 		tabletInfo, ok := tabletMap[tabletPath]
 		if !ok {
+			// tablet disappeared on us (GetTabletMap ignores
+			// ZNONODE), just echo a warning
 			relog.Warning("failed to load tablet %v", tabletPath)
+		} else {
+			tablets = append(tablets, tabletInfo)
 		}
-		tablets = append(tablets, tabletInfo)
 	}
 
 	return tablets, nil
