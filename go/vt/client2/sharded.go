@@ -67,7 +67,7 @@ type ShardedConn struct {
 	zconn          zk.Conn
 	zkKeyspacePath string
 	dbType         string
-	dbName         string
+	keyspace       string
 	stream         bool   // Use streaming RPC
 	user           string // "" if not using auth
 	password       string // "" iff userName is ""
@@ -97,7 +97,7 @@ func Dial(zconn zk.Conn, zkKeyspaceSrvPath, dbType string, stream bool, timeout 
 		zconn:          zconn,
 		zkKeyspacePath: zkKeyspaceSrvPath,
 		dbType:         dbType,
-		dbName:         "vt_" + path.Base(zkKeyspaceSrvPath),
+		keyspace:       path.Base(zkKeyspaceSrvPath),
 		stream:         stream,
 		user:           user,
 		password:       password,
@@ -539,12 +539,12 @@ func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{})
 
 func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 	srvShard := &(sc.srvKeyspace.Shards[shardIdx])
-	zkShardPath := fmt.Sprintf("%v/%v-%v", sc.zkKeyspacePath, srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
+	zkShardName := fmt.Sprintf("%v-%v", srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
 	// Hack to handle non-range based shards.
 	if !srvShard.KeyRange.IsPartial() {
-		zkShardPath = fmt.Sprintf("%v/%v", sc.zkKeyspacePath, shardIdx)
+		zkShardName = fmt.Sprintf("%v", shardIdx)
 	}
-	realSrvShard, err := naming.ReadSrvShard(sc.zconn, zkShardPath)
+	realSrvShard, err := naming.ReadSrvShard(sc.zconn, sc.zkKeyspacePath+"/"+zkShardName)
 	if err != nil {
 		return nil, fmt.Errorf("vt: ReadSrvShard failed %v", err)
 	}
@@ -557,14 +557,11 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 
 	// Try to connect to any address.
 	for _, srv := range srvs {
-		name := naming.SrvAddr(srv) + "/" + sc.dbName
+		name := naming.SrvAddr(srv) + "/" + sc.keyspace + "/" + zkShardName
 		if sc.user != "" {
 			name = sc.user + ":" + sc.password + "@" + name
 		}
 
-		if sc.srvKeyspace.Shards[shardIdx].KeyRange.IsPartial() {
-			name += "#" + string(sc.srvKeyspace.Shards[shardIdx].KeyRange.Start.Hex()) + "-" + string(sc.srvKeyspace.Shards[shardIdx].KeyRange.End.Hex())
-		}
 		conn, err = tablet.DialVtdb(name, sc.stream, tablet.DefaultTimeout)
 		if err == nil {
 			return conn, nil

@@ -1020,7 +1020,8 @@ def run_test_vttablet_authenticated():
   agent = tablet_62344.start_vttablet(auth=True)
   utils.run_vtctl('SetReadWrite ' + tablet_62344.zk_tablet_path)
 
-  err, out = tablet_62344.vquery('select * from vt_select_test', dbname='vt_test_keyspace', user='ala', password=r'ma kota')
+  err, out = tablet_62344.vquery('select * from vt_select_test', path='test_keyspace/0', user='ala', password=r'ma kota')
+  utils.debug("Got rows: " + out)
   if 'Row count: ' not in out:
     raise utils.TestError("query didn't go through: %s, %s" % (err, out))
 

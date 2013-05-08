@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // API compliant to the requirements of database/sql
-// Open expects name to be "hostname:port/dbname"
+// Open expects name to be "hostname:port/keyspace/shard"
 // For query arguments, we assume place-holders in the query string
 // in the form of :v0, :v1, etc.
 package tablet
@@ -20,7 +20,6 @@ import (
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/sqltypes"
-	"code.google.com/p/vitess/go/vt/key"
 	tproto "code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
 
@@ -64,9 +63,12 @@ type StreamResult struct {
 	err   error
 }
 
-func (conn *Conn) dbName() string {
-	// get rid of the slash
-	return conn.dbi.Path[1:]
+func (conn *Conn) keyspace() string {
+	return strings.Split(conn.dbi.Path, "/")[1]
+}
+
+func (conn *Conn) shard() string {
+	return strings.Split(conn.dbi.Path, "/")[2]
 }
 
 // parseDbi parses the dbi and a URL. The dbi may or may not contain
@@ -128,23 +130,8 @@ func (conn *Conn) dial() (err error) {
 		return
 	}
 
-	sessionParams := tproto.SessionParams{DbName: conn.dbName()}
-	if conn.dbi.Fragment != "" {
-		parts := strings.Split(conn.dbi.Fragment, "-")
-		if len(parts) != 2 {
-			return errors.New("fragment needs two parts for start and end keyrange")
-		}
-		sessionParams.KeyRange.Start, err = key.HexKeyspaceId(parts[0]).Unhex()
-		if err != nil {
-			return
-		}
-		sessionParams.KeyRange.End, err = key.HexKeyspaceId(parts[1]).Unhex()
-		if err != nil {
-			return
-		}
-	}
 	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", sessionParams, &sessionInfo); err != nil {
+	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: conn.keyspace(), Shard: conn.shard()}, &sessionInfo); err != nil {
 		return
 	}
 	conn.SessionId = sessionInfo.SessionId

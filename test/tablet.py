@@ -122,9 +122,12 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def vquery(self, query, dbname='', user=None, password=None, driver=None,
+  # path is either:
+  # - keyspace/shard for vttablet and vttablet-streaming
+  # - zk path for vtdb, vtdb-streaming
+  def vquery(self, query, path='', user=None, password=None, driver=None,
              verbose=False, raise_on_error=True):
-    return utils.vtclient2(self.port, dbname, query, user=user,
+    return utils.vtclient2(self.port, path, query, user=user,
                            password=password, driver=driver,
                            verbose=verbose, raise_on_error=raise_on_error)
 

@@ -308,17 +308,21 @@ def run_vtctl(clargs, log_level='WARNING', auto_log=False, **kwargs):
   return run(cmd, **kwargs)
 
 # vtclient2 helpers
-# driver is one of vttablet (default), vttablet-streaming, vtdb, vtdb-streaming
-def vtclient2(uid, dbname, query, bindvars=None, user=None, password=None, driver=None,
+# driver is one of:
+# - vttablet (default), vttablet-streaming
+# - vtdb, vtdb-streaming
+# - vtdb-zkocc, vtdb-streaming-zkocc
+# path is either: keyspace/shard for vttablet* or zk path for vtdb*
+def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=None,
               verbose=False, raise_on_error=True):
   prog_compile(['vtclient2'])
   if (user is None) != (password is None):
     raise TypeError("you should provide either both or none of user and password")
 
   # for ZK paths to not have // in the path, that confuses things
-  if dbname.startswith('/'):
-    dbname = dbname[1:]
-  server = "localhost:%u/%s" % (uid, dbname)
+  if path.startswith('/'):
+    path = path[1:]
+  server = "localhost:%u/%s" % (uid, path)
   if user is not None:
     server = "%s:%s@%s" % (user, password, server)
 

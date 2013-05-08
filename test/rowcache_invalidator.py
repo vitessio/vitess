@@ -174,11 +174,11 @@ class RowCacheInvalidator(unittest.TestCase):
     stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict["Hits"]
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
+    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), path='test_keyspace/0')
     stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1, "This shouldn't have hit the cache")
 
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
+    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), path='test_keyspace/0')
     stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Hits'] - hits, 1, "This should have hit the cache")
 
@@ -198,7 +198,7 @@ class RowCacheInvalidator(unittest.TestCase):
     self.assertEqual(cache_counters['PurgeCache'] - purge_cache_counter, 1, "Check that the cache has been purged")
 
     misses = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']['Misses']
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
+    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), path='test_keyspace/0')
     stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1, "This shouldn't have hit the cache")
 
@@ -210,11 +210,11 @@ class RowCacheInvalidator(unittest.TestCase):
     stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']
     misses = stats_dict['Misses']
     hits = stats_dict["Hits"]
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
+    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), path='test_keyspace/0')
     stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']
     self.assertEqual(stats_dict['Misses'] - misses, 1, "This shouldn't have hit the cache")
 
-    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), dbname='vt_test_keyspace')
+    replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), path='test_keyspace/0')
     hits2 = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']['Hits']
     self.assertEqual(hits2 - hits, 1, "This should have hit the cache")
 
