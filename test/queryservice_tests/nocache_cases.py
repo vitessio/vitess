@@ -689,10 +689,10 @@ cases = [
          result=[(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648L, 4294967295L, -9223372036854775808L, 18446744073709551615L, 2012)],
          rewritten=[
            "select * from vtocc_ints where 1 != 1",
-           "select tiny, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vtocc_ints where tiny = -128"]),
+           "select * from vtocc_ints where tiny = -128 limit 10001"]),
        Case(sql="select * from vtocc_ints where tiny = -128",
          result=[(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648L, 4294967295L, -9223372036854775808L, 18446744073709551615L, 2012)],
-         rewritten=[]),
+         rewritten=["select * from vtocc_ints where tiny = -128 limit 10001"]),
        'begin',
        Case(sql="insert into vtocc_ints select 2, tinyu, small, smallu, medium, mediumu, normal, normalu, big, bigu, y from vtocc_ints",
          rewritten=[
@@ -714,10 +714,10 @@ cases = [
          result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002, 4.9900000000000002)],
          rewritten=[
            "select * from vtocc_fracts where 1 != 1",
-           "select id, deci, num, f, d from vtocc_fracts where id = 1"]),
+           "select * from vtocc_fracts where id = 1 limit 10001"]),
        Case(sql="select * from vtocc_fracts where id = 1",
          result=[(1L, Decimal('1.99'), Decimal('2.99'), 3.9900000000000002, 4.9900000000000002)],
-         rewritten=[]),
+         rewritten=["select * from vtocc_fracts where id = 1 limit 10001"]),
        'begin',
        Case(sql="insert into vtocc_fracts select 2, deci, num, f, d from vtocc_fracts",
          rewritten=[
@@ -739,10 +739,10 @@ cases = [
          result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h', 'a', 'a,b')],
          rewritten=[
            "select * from vtocc_strings where 1 != 1",
-           "select vb, c, vc, b, tb, bl, ttx, tx, en, s from vtocc_strings where vb = 'a'"]),
+           "select * from vtocc_strings where vb = 'a' limit 10001"]),
        Case(sql="select * from vtocc_strings where vb = 'a'",
          result=[('a', 'b', 'c', 'd\x00\x00\x00', 'e', 'f', 'g', 'h', 'a', 'a,b')],
-         rewritten=[]),
+         rewritten=["select * from vtocc_strings where vb = 'a' limit 10001"]),
        'begin',
        Case(sql="insert into vtocc_strings select 'b', c, vc, b, tb, bl, ttx, tx, en, s from vtocc_strings",
          rewritten=[
@@ -764,10 +764,10 @@ cases = [
          result=[(1L, '\x01', datetime.date(2012, 1, 1), datetime.datetime(2012, 1, 1, 15, 45, 45), datetime.timedelta(0, 56745))],
          rewritten=[
            "select * from vtocc_misc where 1 != 1",
-           "select id, b, d, dt, t from vtocc_misc where id = 1"]),
+           "select * from vtocc_misc where id = 1 limit 10001"]),
        Case(sql="select * from vtocc_misc where id = 1",
          result=[(1L, '\x01', datetime.date(2012, 1, 1), datetime.datetime(2012, 1, 1, 15, 45, 45), datetime.timedelta(0, 56745))],
-         rewritten=[]),
+         rewritten=["select * from vtocc_misc where id = 1 limit 10001"]),
        'begin',
        Case(sql="insert into vtocc_misc select 2, b, d, dt, t from vtocc_misc",
          rewritten=[
