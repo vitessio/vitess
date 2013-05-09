@@ -18,7 +18,7 @@ type SqlQuery interface {
 	// FIXME(sugu) Note the client will support both returning an
 	// int64 or a structure. Using the structure will be rolled
 	// out after the client is rolled out.
-	Begin(context *rpcproto.Context, session *Session, transactionId *int64) error
+	Begin(context *rpcproto.Context, session *Session, txInfo *TransactionInfo) error
 	Commit(context *rpcproto.Context, session *Session, noOutput *string) error
 	Rollback(context *rpcproto.Context, session *Session, noOutput *string) error
 

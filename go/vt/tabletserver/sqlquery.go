@@ -237,13 +237,13 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return nil
 }
 
-func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, transactionId *int64) (err error) {
+func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", context)
 	logStats.OriginalSql = "begin"
 	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, false)
 
-	*transactionId = sq.qe.Begin(logStats, session.ConnectionId)
+	txInfo.TransactionId = sq.qe.Begin(logStats, session.ConnectionId)
 	return nil
 }
 
@@ -358,9 +358,11 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 			if session.TransactionId != 0 {
 				panic(NewTabletError(FAIL, "Nested transactions disallowed"))
 			}
-			if err = sq.Begin(context, &session, &session.TransactionId); err != nil {
+			var txInfo proto.TransactionInfo
+			if err = sq.Begin(context, &session, &txInfo); err != nil {
 				return err
 			}
+			session.TransactionId = txInfo.TransactionId
 			begin_called = true
 			reply.List = append(reply.List, mproto.QueryResult{})
 		case "commit":

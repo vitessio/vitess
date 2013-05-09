@@ -46,6 +46,10 @@ type ConnectionInfo struct {
 	ConnectionId int64
 }
 
+type TransactionInfo struct {
+	TransactionId int64
+}
+
 type DmlType struct {
 	Table string
 	Keys  []interface{}
