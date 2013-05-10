@@ -44,79 +44,12 @@ func SlowFailFactory() (Resource, error) {
 	return nil, errors.New("Failed")
 }
 
-func TestClosed(t *testing.T) {
-	p := NewResourcePool(4, time.Second)
-	stats := p.StatsJSON()
-	expected := `{"Size": 0, "Capacity": 4, "Available": 0, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
-	if stats != expected {
-		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-	}
-
-	// Get returns error when closed
-	_, err := p.Get()
-	if err == nil {
-		t.Errorf("expecting error")
-	}
-
-	// TryGet returns error when closed
-	_, err = p.TryGet()
-	if err == nil {
-		t.Errorf("expecting error")
-	}
-
-	// Put panics when closed
-	func() {
-		defer func() {
-			if x := recover(); x == nil {
-				t.Errorf("expecting panic")
-			}
-		}()
-		p.Put(nil)
-	}()
-
-	// SetCapacity is allowed when closed
-	p.SetCapacity(5)
-	stats = p.StatsJSON()
-	expected = `{"Size": 0, "Capacity": 5, "Available": 0, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
-	if stats != expected {
-		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-	}
-
-	// Close is allowed when closed
-	func() {
-		defer func() {
-			if x := recover(); x != nil {
-				t.Errorf("expecting no panic, got %v", x)
-			}
-		}()
-		p.Close()
-	}()
-
-	// Open is allowed when closed
-	p.Open(PoolFactory)
-	stats = p.StatsJSON()
-	expected = `{"Size": 0, "Capacity": 5, "Available": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
-	if stats != expected {
-		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
-	}
-}
-
 func TestOpen(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(5, time.Second)
-	p.Open(PoolFactory)
+	p := NewResourcePool(PoolFactory, 6, time.Second)
+	p.SetCapacity(5)
 	var resources [10]Resource
-
-	// Open is not allowed when OPEN
-	func() {
-		defer func() {
-			if x := recover(); x == nil {
-				t.Errorf("expecting panic")
-			}
-		}()
-		p.Open(PoolFactory)
-	}()
 
 	// Test Get
 	for i := 0; i < 5; i++ {
@@ -125,7 +58,7 @@ func TestOpen(t *testing.T) {
 		if err != nil {
 			t.Errorf("Unexpected error %v", err)
 		}
-		_, _, available, waitCount, waitTime, _ := p.Stats()
+		_, available, _, waitCount, waitTime, _ := p.Stats()
 		if available != int64(5-i-1) {
 			t.Errorf("expecting %d, received %d", 5-i-1, available)
 		}
@@ -153,7 +86,7 @@ func TestOpen(t *testing.T) {
 	}
 	for i := 0; i < 5; i++ {
 		p.Put(resources[i])
-		_, _, available, _, _, _ := p.Stats()
+		_, available, _, _, _, _ := p.Stats()
 		if available != int64(i+1) {
 			t.Errorf("expecting %d, received %d", 5-i-1, available)
 		}
@@ -213,11 +146,7 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Unexpected error %v", err)
 	}
 	r.Close()
-	p.Put(r)
-	size, _, _, _, _, _ := p.Stats()
-	if size != 4 {
-		t.Errorf("Expecting 4, received %d", size)
-	}
+	p.Put(nil)
 	if count.Get() != 4 {
 		t.Errorf("Expecting 4, received %d", count.Get())
 	}
@@ -230,10 +159,6 @@ func TestOpen(t *testing.T) {
 	}
 	for i := 0; i < 5; i++ {
 		p.Put(resources[i])
-	}
-	size, _, _, _, _, _ = p.Stats()
-	if size != 5 {
-		t.Errorf("Expecting 5, received %d", size)
 	}
 	if count.Get() != 5 {
 		t.Errorf("Expecting 5, received %d", count.Get())
@@ -250,10 +175,7 @@ func TestOpen(t *testing.T) {
 	if lastId.Get() != 6 {
 		t.Errorf("Expecting 6, received %d", lastId.Get())
 	}
-	size, capacity, available, _, _, _ := p.Stats()
-	if size != 3 {
-		t.Errorf("Expecting 3, received %d", size)
-	}
+	capacity, available, _, _, _, _ := p.Stats()
 	if capacity != 3 {
 		t.Errorf("Expecting 3, received %d", capacity)
 	}
@@ -261,10 +183,7 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Expecting 3, received %d", available)
 	}
 	p.SetCapacity(6)
-	size, capacity, available, _, _, _ = p.Stats()
-	if size != 3 {
-		t.Errorf("Expecting 3, received %d", size)
-	}
+	capacity, available, _, _, _, _ = p.Stats()
 	if capacity != 6 {
 		t.Errorf("Expecting 6, received %d", capacity)
 	}
@@ -290,12 +209,9 @@ func TestOpen(t *testing.T) {
 
 	// Close
 	p.Close()
-	size, capacity, available, _, _, _ = p.Stats()
-	if size != 0 {
-		t.Errorf("Expecting 0, received %d", size)
-	}
-	if capacity != 6 {
-		t.Errorf("Expecting 6, received %d", capacity)
+	capacity, available, _, _, _, _ = p.Stats()
+	if capacity != 0 {
+		t.Errorf("Expecting 0, received %d", capacity)
 	}
 	if available != 0 {
 		t.Errorf("Expecting 0, received %d", available)
@@ -308,8 +224,7 @@ func TestOpen(t *testing.T) {
 func TestShrinking(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(5, time.Second)
-	p.Open(PoolFactory)
+	p := NewResourcePool(PoolFactory, 5, time.Second)
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
@@ -322,7 +237,7 @@ func TestShrinking(t *testing.T) {
 	go p.SetCapacity(3)
 	time.Sleep(10 * time.Nanosecond)
 	stats := p.StatsJSON()
-	expected := `{"Size": 4, "Capacity": 5, "Available": 0, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
+	expected := `{"Capacity": 3, "Available": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
 	if stats != expected {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
 	}
@@ -354,20 +269,106 @@ func TestShrinking(t *testing.T) {
 	// Wait for Get test to complete
 	<-getdone
 	stats = p.StatsJSON()
-	expected = `{"Size": 3, "Capacity": 3, "Available": 3, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
+	expected = `{"Capacity": 3, "Available": 3, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
 	if stats != expected {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
 	}
 	if count.Get() != 3 {
 		t.Errorf("Expecting 3, received %d", count.Get())
 	}
+
+	// Ensure no deadlock if SetCapacity is called after we start
+	// waiting for a resource
+	for i := 0; i < 3; i++ {
+		resources[i], err = p.Get()
+		if err != nil {
+			t.Errorf("Unexpected error %v", err)
+		}
+	}
+	// This will wait because pool is empty
+	go func() {
+		r, err := p.Get()
+		if err != nil {
+			t.Errorf("Unexpected error %v", err)
+		}
+		p.Put(r)
+		getdone <- true
+	}()
+	time.Sleep(10 * time.Nanosecond)
+
+	// This will wait till we Put
+	go p.SetCapacity(2)
+	time.Sleep(10 * time.Nanosecond)
+
+	// This should not hang
+	for i := 0; i < 3; i++ {
+		p.Put(resources[i])
+	}
+	<-getdone
+	capacity, available, _, _, _, _ := p.Stats()
+	if capacity != 2 {
+		t.Errorf("Expecting 2, received %d", capacity)
+	}
+	if available != 2 {
+		t.Errorf("Expecting 2, received %d", available)
+	}
+	if count.Get() != 2 {
+		t.Errorf("Expecting 2, received %d", count.Get())
+	}
+
+	// Test race condition of SetCapacity with itself
+	p.SetCapacity(3)
+	for i := 0; i < 3; i++ {
+		resources[i], err = p.Get()
+		if err != nil {
+			t.Errorf("Unexpected error %v", err)
+		}
+	}
+	// This will wait because pool is empty
+	go func() {
+		r, err := p.Get()
+		if err != nil {
+			t.Errorf("Unexpected error %v", err)
+		}
+		p.Put(r)
+		getdone <- true
+	}()
+	time.Sleep(10 * time.Nanosecond)
+
+	// This will wait till we Put
+	go p.SetCapacity(2)
+	time.Sleep(10 * time.Nanosecond)
+	go p.SetCapacity(4)
+	time.Sleep(10 * time.Nanosecond)
+
+	// This should not hang
+	for i := 0; i < 3; i++ {
+		p.Put(resources[i])
+	}
+	<-getdone
+
+	err = p.SetCapacity(-1)
+	if err == nil {
+		t.Errorf("Expecting error")
+	}
+	err = p.SetCapacity(255555)
+	if err == nil {
+		t.Errorf("Expecting error")
+	}
+
+	capacity, available, _, _, _, _ = p.Stats()
+	if capacity != 4 {
+		t.Errorf("Expecting 4, received %d", capacity)
+	}
+	if available != 4 {
+		t.Errorf("Expecting 4, received %d", available)
+	}
 }
 
 func TestClosing(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(5, time.Second)
-	p.Open(PoolFactory)
+	p := NewResourcePool(PoolFactory, 5, time.Second)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		r, err := p.Get()
@@ -385,7 +386,7 @@ func TestClosing(t *testing.T) {
 	// Wait for goroutine to call Close
 	time.Sleep(10 * time.Nanosecond)
 	stats := p.StatsJSON()
-	expected := `{"Size": 5, "Capacity": 5, "Available": 0, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
+	expected := `{"Capacity": 0, "Available": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
 	if stats != expected {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
 	}
@@ -409,8 +410,15 @@ func TestClosing(t *testing.T) {
 
 	// Wait for Close to return
 	<-ch
+
+	// SetCapacity must be ignored after Close
+	err = p.SetCapacity(1)
+	if err == nil {
+		t.Errorf("expecting error")
+	}
+
 	stats = p.StatsJSON()
-	expected = `{"Size": 0, "Capacity": 5, "Available": 0, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
+	expected = `{"Capacity": 0, "Available": 0, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
 	if stats != expected {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
 	}
@@ -425,8 +433,7 @@ func TestClosing(t *testing.T) {
 func TestIdleTimeout(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(1, 10*time.Nanosecond)
-	p.Open(PoolFactory)
+	p := NewResourcePool(PoolFactory, 1, 10*time.Nanosecond)
 	defer p.Close()
 
 	r, err := p.Get()
@@ -457,14 +464,13 @@ func TestIdleTimeout(t *testing.T) {
 func TestCreateFail(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(5, time.Second)
-	p.Open(FailFactory)
+	p := NewResourcePool(FailFactory, 5, time.Second)
 	defer p.Close()
 	if _, err := p.Get(); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %c", err)
 	}
 	stats := p.StatsJSON()
-	expected := `{"Size": 0, "Capacity": 5, "Available": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
+	expected := `{"Capacity": 5, "Available": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
 	if stats != expected {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
 	}
@@ -473,8 +479,7 @@ func TestCreateFail(t *testing.T) {
 func TestSlowCreateFail(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(2, time.Second)
-	p.Open(SlowFailFactory)
+	p := NewResourcePool(SlowFailFactory, 2, time.Second)
 	defer p.Close()
 	ch := make(chan bool)
 	// The third Get should not wait indefinitely
@@ -487,10 +492,7 @@ func TestSlowCreateFail(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		<-ch
 	}
-	size, _, available, _, _, _ := p.Stats()
-	if size != 0 {
-		t.Errorf("Expecting 2, received %d", size)
-	}
+	_, available, _, _, _, _ := p.Stats()
 	if available != 2 {
 		t.Errorf("Expecting 2, received %d", available)
 	}

@@ -23,6 +23,10 @@ func (i *AtomicInt32) Get() int32 {
 	return atomic.LoadInt32((*int32)(i))
 }
 
+func (i *AtomicInt32) CompareAndSwap(oldval, newval int32) (swapped bool) {
+	return atomic.CompareAndSwapInt32((*int32)(i), oldval, newval)
+}
+
 type AtomicUint32 uint32
 
 func (i *AtomicUint32) Add(n uint32) uint32 {
@@ -35,6 +39,10 @@ func (i *AtomicUint32) Set(n uint32) {
 
 func (i *AtomicUint32) Get() uint32 {
 	return atomic.LoadUint32((*uint32)(i))
+}
+
+func (i *AtomicUint32) CompareAndSwap(oldval, newval uint32) (swapped bool) {
+	return atomic.CompareAndSwapUint32((*uint32)(i), oldval, newval)
 }
 
 type AtomicInt64 int64
@@ -51,6 +59,10 @@ func (i *AtomicInt64) Get() int64 {
 	return atomic.LoadInt64((*int64)(i))
 }
 
+func (i *AtomicInt64) CompareAndSwap(oldval, newval int64) (swapped bool) {
+	return atomic.CompareAndSwapInt64((*int64)(i), oldval, newval)
+}
+
 type AtomicDuration int64
 
 func (d *AtomicDuration) Add(duration time.Duration) time.Duration {
@@ -63,4 +75,8 @@ func (d *AtomicDuration) Set(duration time.Duration) {
 
 func (d *AtomicDuration) Get() time.Duration {
 	return time.Duration(atomic.LoadInt64((*int64)(d)))
+}
+
+func (d *AtomicDuration) CompareAndSwap(oldval, newval time.Duration) (swapped bool) {
+	return atomic.CompareAndSwapInt64((*int64)(d), int64(oldval), int64(newval))
 }
