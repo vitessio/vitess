@@ -59,7 +59,7 @@ func (blr *BinlogReader) binLogPathForId(fileId int) string {
 }
 
 func NewBinlogReader(binLogPrefix string) *BinlogReader {
-	return &BinlogReader{binLogPrefix: binLogPrefix, BinlogBlockSize: BINLOG_BLOCK_SIZE, MaxWaitTimeout: 300.0, LogWaitTimeout: 5.0}
+	return &BinlogReader{binLogPrefix: binLogPrefix, BinlogBlockSize: BINLOG_BLOCK_SIZE, MaxWaitTimeout: 30.0, LogWaitTimeout: 5.0}
 }
 
 /*
