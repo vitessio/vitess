@@ -137,7 +137,7 @@ type DBClient struct {
 }
 
 func (dc *DBClient) handleError(err error) {
-	relog.Error("in DBClient handleError %v", err.(error))
+	//relog.Error("in DBClient handleError %v", err.(error))
 	if sqlErr, ok := err.(*mysql.SqlError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dc.Close()
@@ -760,8 +760,10 @@ func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 	lookupDone := false
 	defer func() {
 		if x := recover(); x != nil {
+			relog.Info("caught panic during handleTxn")
 			if sqlErr, ok := x.(*mysql.SqlError); ok {
 				//Deadlock found when trying to get lock
+				relog.Info("sqlErr.Number() %v lookupDone %v", sqlErr.Number(), lookupDone)
 				if sqlErr.Number() == 1213 && !lookupDone { // mysql connection errors
 					*retryTxn = true
 					return
@@ -770,6 +772,10 @@ func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 			panic(x)
 		}
 	}()
+
+	if *retryTxn {
+		relog.Info("retryTxn %v len txnBuffer %v", retryTxn, len(blp.txnBuffer))
+	}
 
 	indexUpdates := make([]string, 0, len(blp.txnBuffer))
 	dmlMatch := 0
@@ -817,6 +823,7 @@ func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 				for _, sql := range dmlEvent.Sql {
 					queryStartTime = time.Now()
 					if _, err = blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
+						relog.Error("ExecuteFetch failed w/ err: '%v' on sql '%v'", err, sql)
 						panic(fmt.Errorf("Error %v in executing sql '%v'", err, sql))
 					}
 					blp.txnTime.Record("QueryTime", queryStartTime)
