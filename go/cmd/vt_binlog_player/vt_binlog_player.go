@@ -582,7 +582,16 @@ func handleError(err *error, blp *BinlogPlayer) {
 }
 
 func (blp *BinlogPlayer) flushTxnBatch() {
-	blp.handleTxn()
+	retryTxn := false
+	for {
+		blp.handleTxn(&retryTxn)
+		if !retryTxn {
+			break
+		} else {
+			time.Sleep(1)
+			retryTxn = false
+		}
+	}
 	blp.inTxn = false
 	blp.txnBuffer = blp.txnBuffer[:0]
 	blp.txnIndex = 0
@@ -746,8 +755,22 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 // blp.TxnBuffer contains 'n' complete txns, we
 // send one begin at the start and then ignore blp.txnIndex - 1 "Commit" events
 // and commit the entire batch at the last commit. Lookup txn is flushed before that.
-func (blp *BinlogPlayer) handleTxn() {
+func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 	var err error
+	lookupDone := false
+	defer func() {
+		if x := recover(); x != nil {
+			if sqlErr, ok := x.(*mysql.SqlError); ok {
+				//Deadlock found when trying to get lock
+				if sqlErr.Number() == 1213 && !lookupDone { // mysql connection errors
+					*retryTxn = true
+					return
+				}
+			}
+			panic(x)
+		}
+	}()
+
 	indexUpdates := make([]string, 0, len(blp.txnBuffer))
 	dmlMatch := 0
 	txnCount := 0
@@ -765,6 +788,7 @@ func (blp *BinlogPlayer) handleTxn() {
 			}
 			lookupStartTime = time.Now()
 			blp.handleLookupWrites(indexUpdates)
+			lookupDone = true
 			blp.txnTime.Record("LookupTxn", lookupStartTime)
 			blp.WriteRecoveryPosition(&dmlEvent.Position)
 			if err = blp.dbClient.Commit(); err != nil {
@@ -796,9 +820,6 @@ func (blp *BinlogPlayer) handleTxn() {
 						panic(fmt.Errorf("Error %v in executing sql '%v'", err, sql))
 					}
 					blp.txnTime.Record("QueryTime", queryStartTime)
-					//if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
-					//	relog.Info("SLOW QUERY '%v'", sql)
-					//}
 				}
 				queryCount += int64(len(dmlEvent.Sql))
 			}
