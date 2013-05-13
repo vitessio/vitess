@@ -823,8 +823,7 @@ func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 				for _, sql := range dmlEvent.Sql {
 					queryStartTime = time.Now()
 					if _, err = blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
-						relog.Error("ExecuteFetch failed w/ err: '%v' on sql '%v'", err, sql)
-						panic(fmt.Errorf("Error %v in executing sql '%v'", err, sql))
+						panic(err)
 					}
 					blp.txnTime.Record("QueryTime", queryStartTime)
 				}
