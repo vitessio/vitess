@@ -109,6 +109,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 		if err != nil {
 			if !zookeeper.IsError(err, zookeeper.ZNONODE) {
 				relog.Warning("unable to list existing db types: %v", err)
+				return err
 			}
 		} else {
 			for _, child := range children {
@@ -272,6 +273,23 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 	for _, alias := range aliases {
 		zkLocalKeyspace := naming.ZkPathForVtKeyspace(alias.Cell, keyspace)
 		if _, ok := srvKeyspaceByPath[zkLocalKeyspace]; !ok {
+			// before adding zkLocalKeyspace to the map of
+			// of KeyspaceByPath, we check this is a
+			// serving tablet. No serving tablet in shard
+			// 0 means we're not rebuilding the serving
+			// graph in that cell.  This is somewhat
+			// expensive, but we only do it on all the
+			// non-serving tablets in a shard before we
+			// find a serving tablet.
+			zkTabletPath := tm.TabletPathForAlias(alias)
+			ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+			if err != nil {
+				return err
+			}
+			if !ti.IsServingType() {
+				continue
+			}
+
 			srvKeyspaceByPath[zkLocalKeyspace] = &naming.SrvKeyspace{Shards: make([]naming.SrvShard, 0, 16)}
 		}
 	}

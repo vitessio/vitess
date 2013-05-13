@@ -73,7 +73,6 @@ def _check_db_addr(db_addr, expected_addr):
   if stdout != expected_addr:
     raise utils.TestError('wrong zk address', db_addr, stdout, expected_addr)
 
-
 @utils.test_case
 def run_test_sanity():
   # Start up a master mysql and vttablet
@@ -121,6 +120,18 @@ def run_test_sanity():
   tablet_62344.init_tablet('idle')
   utils.run_vtctl('ScrapTablet -force ' + tablet_62344.zk_tablet_path)
 
+@utils.test_case
+def run_test_rebuild():
+  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  tablet_62344.init_tablet('master', 'test_keyspace', '0')
+  tablet_62044.init_tablet('replica', 'test_keyspace', '0')
+  tablet_31981.init_tablet('experimental', 'test_keyspace', '0') # in ny by default
+
+  utils.pause('AAAAAAAAAA')
+
+  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+
+  utils.pause('BBBBBBBBBB')
 
 @utils.test_case
 def run_test_scrap():
@@ -1121,6 +1132,7 @@ def run_test_sigterm():
 def run_all():
   run_test_sanity()
   run_test_sanity() # run twice to check behavior with existing znode data
+  run_test_rebuild()
   run_test_scrap()
   run_test_restart_during_action()
 
