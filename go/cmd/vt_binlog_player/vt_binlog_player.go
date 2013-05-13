@@ -582,14 +582,13 @@ func handleError(err *error, blp *BinlogPlayer) {
 }
 
 func (blp *BinlogPlayer) flushTxnBatch() {
-	retryTxn := false
 	for {
-		blp.handleTxn(&retryTxn)
-		if !retryTxn {
+		txnOk := blp.handleTxn()
+		if txnOk {
 			break
 		} else {
+			relog.Info("Retrying txn")
 			time.Sleep(1)
-			retryTxn = false
 		}
 	}
 	blp.inTxn = false
@@ -755,27 +754,8 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 // blp.TxnBuffer contains 'n' complete txns, we
 // send one begin at the start and then ignore blp.txnIndex - 1 "Commit" events
 // and commit the entire batch at the last commit. Lookup txn is flushed before that.
-func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
+func (blp *BinlogPlayer) handleTxn() bool {
 	var err error
-	lookupDone := false
-	defer func() {
-		if x := recover(); x != nil {
-			relog.Info("caught panic during handleTxn")
-			if sqlErr, ok := x.(*mysql.SqlError); ok {
-				//Deadlock found when trying to get lock
-				relog.Info("sqlErr.Number() %v lookupDone %v", sqlErr.Number(), lookupDone)
-				if sqlErr.Number() == 1213 && !lookupDone { // mysql connection errors
-					*retryTxn = true
-					return
-				}
-			}
-			panic(x)
-		}
-	}()
-
-	if *retryTxn {
-		relog.Info("retryTxn %v len txnBuffer %v", retryTxn, len(blp.txnBuffer))
-	}
 
 	indexUpdates := make([]string, 0, len(blp.txnBuffer))
 	dmlMatch := 0
@@ -794,7 +774,6 @@ func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 			}
 			lookupStartTime = time.Now()
 			blp.handleLookupWrites(indexUpdates)
-			lookupDone = true
 			blp.txnTime.Record("LookupTxn", lookupStartTime)
 			blp.WriteRecoveryPosition(&dmlEvent.Position)
 			if err = blp.dbClient.Commit(); err != nil {
@@ -823,6 +802,15 @@ func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 				for _, sql := range dmlEvent.Sql {
 					queryStartTime = time.Now()
 					if _, err = blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
+						if sqlErr, ok := err.(*mysql.SqlError); ok {
+							// Deadlock found when trying to get lock
+							// Rollback this transaction and exit.
+							if sqlErr.Number() == 1213 {
+								relog.Info("Detected deadlock, returning")
+								_ = blp.dbClient.Rollback()
+								return false
+							}
+						}
 						panic(err)
 					}
 					blp.txnTime.Record("QueryTime", queryStartTime)
@@ -833,6 +821,7 @@ func (blp *BinlogPlayer) handleTxn(retryTxn *bool) {
 			panic(fmt.Errorf("Invalid SqlType %v", dmlEvent.SqlType))
 		}
 	}
+	return true
 }
 
 func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint64) (indexSql string, err error) {
