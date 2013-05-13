@@ -47,7 +47,7 @@ func SlowFailFactory() (Resource, error) {
 func TestOpen(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 6, time.Second)
+	p := NewResourcePool(PoolFactory, 6, 6, time.Second)
 	p.SetCapacity(5)
 	var resources [10]Resource
 
@@ -224,7 +224,7 @@ func TestOpen(t *testing.T) {
 func TestShrinking(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, time.Second)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second)
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
@@ -368,7 +368,7 @@ func TestShrinking(t *testing.T) {
 func TestClosing(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, time.Second)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		r, err := p.Get()
@@ -391,18 +391,6 @@ func TestClosing(t *testing.T) {
 		t.Errorf(`expecting '%s', received '%s'`, expected, stats)
 	}
 
-	// TryGet is not allowed when closing
-	_, err := p.TryGet()
-	if err == nil {
-		t.Errorf("expecting error")
-	}
-
-	// Get is not allowed when closing
-	_, err = p.Get()
-	if err == nil {
-		t.Errorf("expecting error")
-	}
-
 	// Put is allowed when closing
 	for i := 0; i < 5; i++ {
 		p.Put(resources[i])
@@ -412,7 +400,7 @@ func TestClosing(t *testing.T) {
 	<-ch
 
 	// SetCapacity must be ignored after Close
-	err = p.SetCapacity(1)
+	err := p.SetCapacity(1)
 	if err == nil {
 		t.Errorf("expecting error")
 	}
@@ -433,7 +421,7 @@ func TestClosing(t *testing.T) {
 func TestIdleTimeout(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 10*time.Nanosecond)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Nanosecond)
 	defer p.Close()
 
 	r, err := p.Get()
@@ -464,7 +452,7 @@ func TestIdleTimeout(t *testing.T) {
 func TestCreateFail(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(FailFactory, 5, time.Second)
+	p := NewResourcePool(FailFactory, 5, 5, time.Second)
 	defer p.Close()
 	if _, err := p.Get(); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %c", err)
@@ -479,7 +467,7 @@ func TestCreateFail(t *testing.T) {
 func TestSlowCreateFail(t *testing.T) {
 	lastId.Set(0)
 	count.Set(0)
-	p := NewResourcePool(SlowFailFactory, 2, time.Second)
+	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second)
 	defer p.Close()
 	ch := make(chan bool)
 	// The third Get should not wait indefinitely

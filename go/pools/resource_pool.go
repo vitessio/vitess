@@ -46,12 +46,16 @@ type resourceWrapper struct {
 }
 
 // NewResourcePool creates a new ResourcePool pool.
-// capacity is the maximum number of resources ResourcePool will maintain.
+// capacity is the initial capacity of the pool.
+// maxCap is the maximum capacity.
 // If a resource is unused beyond idleTimeout, it's discarded.
 // An idleTimeout of 0 means that there is no timeout.
-func NewResourcePool(factory Factory, capacity int, idleTimeout time.Duration) *ResourcePool {
+func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration) *ResourcePool {
+	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
+		panic(fmt.Errorf("Invalid/out of range capacity"))
+	}
 	rp := &ResourcePool{
-		resources:   make(chan resourceWrapper, capacity),
+		resources:   make(chan resourceWrapper, maxCap),
 		factory:     factory,
 		capacity:    sync2.AtomicInt64(capacity),
 		idleTimeout: sync2.AtomicDuration(idleTimeout),
@@ -89,10 +93,6 @@ func (rp *ResourcePool) TryGet() (resource Resource, err error) {
 }
 
 func (rp *ResourcePool) get(wait bool) (resource Resource, err error) {
-	if rp.IsClosed() {
-		return nil, CLOSED_ERR
-	}
-
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
@@ -137,13 +137,13 @@ func (rp *ResourcePool) Put(resource Resource) {
 	select {
 	case rp.resources <- wrapper:
 	default:
-		panic(CLOSED_ERR)
+		panic(fmt.Errorf("Attempt to Put into a full ResourcePool"))
 	}
 }
 
 // SetCapacity changes the capacity of the pool.
 // You can use it to shrink or expand, but not beyond
-// the original capacity. If the change requires the pool
+// the max capacity. If the change requires the pool
 // to be shrunk, SetCapacity waits till the necessary
 // number of resources are returned to the pool.
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
