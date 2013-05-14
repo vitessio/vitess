@@ -29,7 +29,14 @@
 <pre>{{.}}</pre>
 {{end}}
 
-
+{{if .NodeType}}
+<h2>{{.NodeType}} Actions</h2>
+<ul>
+  {{range $name, $href := .Actions}}
+  <li><a href="{{$href}}">{{$name}}</a></li>
+  {{end}}
+</ul>
+{{end}}
 
 {{end}}
 </body>

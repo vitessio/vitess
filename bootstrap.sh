@@ -30,6 +30,7 @@ ln -snf $VTTOP/go/cmd/normalizer/normalizer $VTROOT/bin/normalizer
 ln -snf $VTTOP/go/cmd/vtaction/vtaction $VTROOT/bin/vtaction
 ln -snf $VTTOP/go/cmd/vtclient2/vtclient2 $VTROOT/bin/vtclient2
 ln -snf $VTTOP/go/cmd/vtctl/vtctl $VTROOT/bin/vtctl
+ln -snf $VTTOP/go/cmd/vtctld/vtctld $VTROOT/bin/vtctld
 ln -snf $VTTOP/go/cmd/vtocc/vtocc $VTROOT/bin/vtocc
 ln -snf $VTTOP/go/cmd/vttablet/vttablet $VTROOT/bin/vttablet
 ln -snf $VTTOP/go/cmd/zk/zk $VTROOT/bin/zk

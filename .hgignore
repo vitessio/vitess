@@ -19,6 +19,7 @@ _testmain.go$
 ^go/cmd/vtaction/vtaction$
 ^go/cmd/vtclient2/vtclient2$
 ^go/cmd/vtctl/vtctl$
+^go/cmd/vtctld/vtctld$
 ^go/cmd/vtocc/vtocc$
 ^go/cmd/vttablet/vttablet$
 ^go/cmd/zk/zk$

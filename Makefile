@@ -14,6 +14,7 @@ build:
 	cd go/cmd/vtaction; go build
 	cd go/cmd/vtclient2; go build
 	cd go/cmd/vtctl; go build
+	cd go/cmd/vtctld; go build
 	cd go/cmd/vtocc; go build
 	cd go/cmd/vttablet; go build
 	cd go/cmd/zk; go build

@@ -12,10 +12,6 @@ import tablet
 import utils
 
 
-vttop = os.environ['VTTOP']
-vtroot = os.environ['VTROOT']
-hostname = socket.gethostname()
-
 # range "" - 80
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
@@ -43,8 +39,8 @@ class Vtctld(object):
 
   def start(self):
     utils.prog_compile(['vtctld'])
-    args = [os.path.join(vtroot, 'bin', 'vtctld'), '-debug', '-templates', '/usr/local/google/home/szopa/src/code.google.com/p/vitess/go/cmd/vtctld/templates']
-    stderr_fd = open(os.path.join(vtroot, "vtctld.stderr"), "w")
+    args = [os.path.join(utils.vtroot, 'bin', 'vtctld'), '-debug', '-templates', utils.vttop + '/go/cmd/vtctld/templates']
+    stderr_fd = open(os.path.join(utils.vtroot, "vtctld.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     return self.proc
 

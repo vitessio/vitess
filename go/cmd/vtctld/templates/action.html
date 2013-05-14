@@ -1,0 +1,22 @@
+<html>
+<head>
+<title>Action Results</title>
+<style>
+  html {font-family: sans-serif;}
+</style>
+</head>
+
+<body>
+
+<h1>{{.Name}}</h1>
+{{if .Parameters}}
+  <p><b>Parameters:</b> {{.Parameters}}</p>
+{{end}}
+{{if .Error}}
+  <h1>Error</h1>
+{{end}}
+
+<pre>{{.Output}}</pre>
+
+</body>
+</html>

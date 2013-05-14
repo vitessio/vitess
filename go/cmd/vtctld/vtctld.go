@@ -103,9 +103,9 @@ var funcMap = template.FuncMap{
 		}
 		b := new(bytes.Buffer)
 		for i, part := range parts[1 : len(parts)-1] {
-			fmt.Fprintf(b, "/ <a href=\"%v\">%v</a>&nbsp;", paths[i+1], part)
+			fmt.Fprintf(b, "/<a href=\"%v\">%v</a>", paths[i+1], part)
 		}
-		fmt.Fprintf(b, "/ "+parts[len(parts)-1])
+		fmt.Fprintf(b, "/"+parts[len(parts)-1])
 		return template.HTML(b.String())
 	},
 }
@@ -213,6 +213,101 @@ func httpError(w http.ResponseWriter, format string, err error) {
 	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
 }
 
+type ActionResult struct {
+	Name       string
+	Parameters string
+	Output     string
+	Error      bool
+}
+
+func (ar *ActionResult) error(text string) {
+	ar.Error = true
+	ar.Output = text
+}
+
+func actionValidateKeyspace(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
+	keyspaces, ok := req.Form["keyspace"]
+	if !ok {
+		result.error("No keyspace specified")
+	} else {
+		result.Parameters = keyspaces[0]
+		if err := wr.ValidateKeyspace(keyspaces[0], false); err != nil {
+			result.error(err.Error())
+		} else {
+			result.Output = "Success"
+		}
+	}
+}
+
+func actionValidateSchemaKeyspace(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
+	keyspaces, ok := req.Form["keyspace"]
+	if !ok {
+		result.error("No keyspace specified")
+	} else {
+		result.Parameters = keyspaces[0]
+		if err := wr.ValidateSchemaKeyspace(keyspaces[0], true); err != nil {
+			result.error(err.Error())
+		} else {
+			result.Output = "Success"
+		}
+	}
+}
+
+func actionValidateShard(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
+	shards, ok := req.Form["shard"]
+	if !ok {
+		result.error("No shard specified")
+	} else {
+		result.Parameters = shards[0]
+		if err := wr.ValidateShard(shards[0], false); err != nil {
+			result.error(err.Error())
+		} else {
+			result.Output = "Success"
+		}
+	}
+}
+
+func actionValidateSchemaShard(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
+	shards, ok := req.Form["shard"]
+	if !ok {
+		result.error("No shard specified")
+	} else {
+		result.Parameters = shards[0]
+		if err := wr.ValidateSchemaShard(shards[0], true); err != nil {
+			result.error(err.Error())
+		} else {
+			result.Output = "Success"
+		}
+	}
+}
+
+func actionRpcPing(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
+	tablets, ok := req.Form["tablet"]
+	if !ok {
+		result.error("No tablet specified")
+	} else {
+		result.Parameters = tablets[0]
+		if err := wr.ActionInitiator().RpcPing(tablets[0], 10*time.Second); err != nil {
+			result.error(err.Error())
+		} else {
+			result.Output = "Success"
+		}
+	}
+}
+
+type action struct {
+	name   string
+	method func(wr *wrangler.Wrangler, r *http.Request, result *ActionResult)
+}
+
+var actions = []action{
+	action{"ValidateKeyspace", actionValidateKeyspace},
+	action{"ValidateSchemaKeyspace", actionValidateSchemaKeyspace},
+	action{"ValidateShard", actionValidateShard},
+	action{"ValidateSchemaShard", actionValidateSchemaShard},
+	action{"RpcPing", actionRpcPing},
+}
+
 type DbTopologyResult struct {
 	Topology *wrangler.Topology
 	Error    string
@@ -222,7 +317,35 @@ type ZkResult struct {
 	Path     string
 	Data     string
 	Children []string
+	NodeType string
+	Actions  map[string]string
 	Error    string
+}
+
+type knownPath struct {
+	pattern  string
+	nodeType string
+	method   func(zkPath string, result *ZkResult)
+}
+
+func keyspaceKnownPath(zkPath string, result *ZkResult) {
+	result.Actions["ValidateKeyspace"] = "/action/ValidateKeyspace?keyspace=" + zkPath
+	result.Actions["ValidateSchemaKeyspace"] = "/action/ValidateSchemaKeyspace?keyspace=" + zkPath
+}
+
+func shardKnownPath(zkPath string, result *ZkResult) {
+	result.Actions["ValidateShard"] = "/action/ValidateShard?shard=" + zkPath
+	result.Actions["ValidateSchemaShard"] = "/action/ValidateSchemaShard?shard=" + zkPath
+}
+
+func tabletKnownPath(zkPath string, result *ZkResult) {
+	result.Actions["RpcPing"] = "/action/RpcPing?tablet=" + zkPath
+}
+
+var knownPaths = []knownPath{
+	knownPath{"/zk/global/vt/keyspaces/*", "Keyspace", keyspaceKnownPath},
+	knownPath{"/zk/global/vt/keyspaces/*/shards/*", "Shard", shardKnownPath},
+	knownPath{"/zk/*/vt/tablets/*", "Tablet", tabletKnownPath},
 }
 
 func main() {
@@ -243,6 +366,28 @@ func main() {
 			httpError(w, "error executing template", err)
 		}
 
+	})
+	http.HandleFunc("/action/", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		action := r.URL.Path[strings.Index(r.URL.Path, "/action/")+8:]
+
+		result := ActionResult{Name: action}
+		found := false
+		for _, a := range actions {
+			if a.name == action {
+				a.method(wr, r, &result)
+				found = true
+				break
+			}
+		}
+		if !found {
+			result.error(fmt.Sprintf("Unknown action: %v", action))
+		}
+
+		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
 	http.HandleFunc("/dbtopo", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -297,10 +442,17 @@ func main() {
 					result.Error = err.Error()
 				} else {
 					result.Children = children
+
+					for _, k := range knownPaths {
+						if m, _ := path.Match(k.pattern, zkPath); m {
+							result.NodeType = k.nodeType
+							result.Actions = make(map[string]string)
+							k.method(zkPath, &result)
+							break
+						}
+					}
 				}
-
 			}
-
 		}
 		templateLoader.ServeTemplate("zk.html", result, w, r)
 	})
