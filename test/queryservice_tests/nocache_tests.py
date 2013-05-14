@@ -36,7 +36,6 @@ class TestNocache(framework.TestCase):
     self.assertEqual(cu.rowcount, 2)
     self.assertEqual(vstart.mget("Queries.TotalCount", 0)+1, vend.Queries.TotalCount)
     self.assertEqual(vstart.mget("Queries.Histograms.PASS_SELECT.Count", 0)+1, vend.Queries.Histograms.PASS_SELECT.Count)
-    self.assertNotEqual(vend.Voltron.ConnPool.Size, 0)
 
   def test_commit(self):
     vstart = self.env.debug_vars()
@@ -58,7 +57,6 @@ class TestNocache(framework.TestCase):
     self.assertEqual(cu.rowcount, 3)
     vend = self.env.debug_vars()
     # We should have at least one connection
-    self.assertNotEqual(vend.Voltron.TxPool.Size, 0)
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+2, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Completed.Count", 0)+2, vend.Transactions.Histograms.Completed.Count)
     self.assertEqual(vstart.mget("Queries.TotalCount", 0)+4, vend.Queries.TotalCount)
@@ -95,7 +93,6 @@ class TestNocache(framework.TestCase):
     cu = self.env.execute("select * from vtocc_test")
     self.assertEqual(cu.rowcount, 3)
     vend = self.env.debug_vars()
-    self.assertNotEqual(vend.Voltron.TxPool.Size, 0)
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+1, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Aborted.Count", 0)+1, vend.Transactions.Histograms.Aborted.Count)
 

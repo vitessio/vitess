@@ -25,7 +25,6 @@ type Factory func() (Resource, error)
 // is the responsibility the caller.
 type Resource interface {
 	Close()
-	IsClosed() bool
 }
 
 // ResourcePool allows you to use a pool of resources.

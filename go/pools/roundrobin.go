@@ -147,17 +147,18 @@ func (rr *RoundRobin) waitForCreate() (resource Resource, err error) {
 }
 
 // Put will return a resource to the pool. You MUST return every resource to the pool,
-// even if it's closed. If a resource is closed, Put will discard it. Thread synchronization
-// between Close() and IsClosed() is the caller's responsibility.
+// even if it's closed. If a resource is closed, you should call Put(nil).
 func (rr *RoundRobin) Put(resource Resource) {
 	rr.mu.Lock()
 	defer rr.available.Signal()
 	defer rr.mu.Unlock()
 
 	if rr.size > int64(cap(rr.resources)) {
-		go resource.Close()
+		if resource != nil {
+			go resource.Close()
+		}
 		rr.size--
-	} else if resource.IsClosed() {
+	} else if resource == nil {
 		rr.size--
 	} else {
 		if len(rr.resources) == cap(rr.resources) {
@@ -169,7 +170,7 @@ func (rr *RoundRobin) Put(resource Resource) {
 
 // Set capacity changes the capacity of the pool.
 // You can use it to expand or shrink.
-func (rr *RoundRobin) SetCapacity(capacity int) {
+func (rr *RoundRobin) SetCapacity(capacity int) error {
 	rr.mu.Lock()
 	defer rr.available.Broadcast()
 	defer rr.mu.Unlock()
@@ -193,6 +194,7 @@ func (rr *RoundRobin) SetCapacity(capacity int) {
 		break
 	}
 	rr.resources = nr
+	return nil
 }
 
 func (rr *RoundRobin) SetIdleTimeout(idleTimeout time.Duration) {

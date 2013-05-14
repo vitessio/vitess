@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/memcache"
@@ -18,9 +19,12 @@ const statsURL = "/debug/memcache/"
 
 type CreateCacheFunc func() (*memcache.Connection, error)
 
-// CachePool re-exposes RoundRobin as a pool of Memcache connection objects
+// CachePool re-exposes ResourcePool as a pool of Memcache connection objects
 type CachePool struct {
-	*pools.RoundRobin
+	pool         *pools.ResourcePool
+	mu           sync.Mutex
+	capacity     int
+	idleTimeout  time.Duration
 	DeleteExpiry uint64
 }
 
@@ -31,7 +35,7 @@ func NewCachePool(capacity int, queryTimeout time.Duration, idleTimeout time.Dur
 	if seconds != 0 {
 		seconds += 15
 	}
-	cachePool := &CachePool{pools.NewRoundRobin(capacity, idleTimeout), seconds}
+	cachePool := &CachePool{capacity: capacity, idleTimeout: idleTimeout, DeleteExpiry: seconds}
 	http.Handle(statsURL, cachePool)
 	return cachePool
 }
@@ -47,16 +51,54 @@ func (cp *CachePool) Open(connFactory CreateCacheFunc) {
 		}
 		return &Cache{c, cp}, nil
 	}
-	cp.RoundRobin.Open(f)
+	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
+}
+
+func (cp *CachePool) Close() {
+	cp.pool.Close()
+	cp.pool = nil
+}
+
+func (cp *CachePool) IsClosed() bool {
+	return cp.pool == nil
 }
 
 // You must call Recycle on the *Cache once done.
 func (cp *CachePool) Get() *Cache {
-	r, err := cp.RoundRobin.Get()
+	r, err := cp.pool.Get()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
 	return r.(*Cache)
+}
+
+func (cp *CachePool) Put(conn *Cache) {
+	cp.pool.Put(conn)
+}
+
+func (cp *CachePool) SetCapacity(capacity int) (err error) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	err = cp.pool.SetCapacity(capacity)
+	if err != nil {
+		return err
+	}
+	cp.capacity = capacity
+	return nil
+}
+
+func (cp *CachePool) SetIdleTimeout(idleTimeout time.Duration) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	cp.pool.SetIdleTimeout(idleTimeout)
+	cp.idleTimeout = idleTimeout
+}
+
+func (cp *CachePool) StatsJSON() string {
+	if cp.pool == nil {
+		return "{}"
+	}
+	return cp.pool.StatsJSON()
 }
 
 func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -66,6 +108,10 @@ func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Reque
 		}
 	}()
 	response.Header().Set("Content-Type", "text/plain")
+	if cp.pool == nil {
+		response.Write(([]byte)("closed"))
+		return
+	}
 	command := request.URL.Path[len(statsURL):]
 	if command == "stats" {
 		command = ""
@@ -87,7 +133,11 @@ type Cache struct {
 }
 
 func (cache *Cache) Recycle() {
-	cache.pool.Put(cache)
+	if cache.IsClosed() {
+		cache.pool.Put(nil)
+	} else {
+		cache.pool.Put(cache)
+	}
 }
 
 func CacheCreator(dbconfig dbconfigs.DBConfig) CreateCacheFunc {

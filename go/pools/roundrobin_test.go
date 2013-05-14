@@ -56,7 +56,8 @@ func TestPool(t *testing.T) {
 	}
 	// all = [1-5], p is empty
 	all[0].(*TestResource).Close()
-	for i := 0; i < 5; i++ {
+	p.Put(nil)
+	for i := 1; i < 5; i++ {
 		p.Put(all[i])
 	}
 	// p = [2-5]

@@ -5,18 +5,22 @@
 package tabletserver
 
 import (
+	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/pools"
 )
 
-// ConnectionPool re-exposes RoundRobin as a pool of DBConnection objects
+// ConnectionPool re-exposes ResourcePool as a pool of DBConnection objects
 type ConnectionPool struct {
-	*pools.RoundRobin
+	pool        *pools.ResourcePool
+	mu          sync.Mutex
+	capacity    int
+	idleTimeout time.Duration
 }
 
 func NewConnectionPool(capacity int, idleTimeout time.Duration) *ConnectionPool {
-	return &ConnectionPool{pools.NewRoundRobin(capacity, idleTimeout)}
+	return &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
 }
 
 func (cp *ConnectionPool) Open(connFactory CreateConnectionFunc) {
@@ -27,12 +31,17 @@ func (cp *ConnectionPool) Open(connFactory CreateConnectionFunc) {
 		}
 		return &pooledConnection{c, cp}, nil
 	}
-	cp.RoundRobin.Open(f)
+	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
+}
+
+func (cp *ConnectionPool) Close() {
+	cp.pool.Close()
+	cp.pool = nil
 }
 
 // You must call Recycle on the PoolConnection once done.
 func (cp *ConnectionPool) Get() PoolConnection {
-	r, err := cp.RoundRobin.Get()
+	r, err := cp.pool.Get()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -41,7 +50,7 @@ func (cp *ConnectionPool) Get() PoolConnection {
 
 // You must call Recycle on the PoolConnection once done.
 func (cp *ConnectionPool) SafeGet() (PoolConnection, error) {
-	r, err := cp.RoundRobin.Get()
+	r, err := cp.pool.Get()
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +59,7 @@ func (cp *ConnectionPool) SafeGet() (PoolConnection, error) {
 
 // You must call Recycle on the PoolConnection once done.
 func (cp *ConnectionPool) TryGet() PoolConnection {
-	r, err := cp.RoundRobin.TryGet()
+	r, err := cp.pool.TryGet()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -60,6 +69,35 @@ func (cp *ConnectionPool) TryGet() PoolConnection {
 	return r.(*pooledConnection)
 }
 
+func (cp *ConnectionPool) Put(conn PoolConnection) {
+	cp.pool.Put(conn)
+}
+
+func (cp *ConnectionPool) SetCapacity(capacity int) (err error) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	err = cp.pool.SetCapacity(capacity)
+	if err != nil {
+		return err
+	}
+	cp.capacity = capacity
+	return nil
+}
+
+func (cp *ConnectionPool) SetIdleTimeout(idleTimeout time.Duration) {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	cp.pool.SetIdleTimeout(idleTimeout)
+	cp.idleTimeout = idleTimeout
+}
+
+func (cp *ConnectionPool) StatsJSON() string {
+	if cp.pool == nil {
+		return "{}"
+	}
+	return cp.pool.StatsJSON()
+}
+
 // pooledConnection re-exposes DBConnection as a PoolConnection
 type pooledConnection struct {
 	*DBConnection
@@ -67,5 +105,9 @@ type pooledConnection struct {
 }
 
 func (pc *pooledConnection) Recycle() {
-	pc.pool.Put(pc)
+	if pc.IsClosed() {
+		pc.pool.Put(nil)
+	} else {
+		pc.pool.Put(pc)
+	}
 }
