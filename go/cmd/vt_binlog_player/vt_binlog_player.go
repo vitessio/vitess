@@ -14,11 +14,12 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"code.google.com/p/vitess/go/mysql"
@@ -26,12 +27,14 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcplus"
 	"code.google.com/p/vitess/go/stats"
+	"code.google.com/p/vitess/go/umgmt"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/servenv"
 )
 
 var stdout *bufio.Writer
+var interrupted = make(chan struct{})
 
 const (
 	TXN_BATCH        = 10
@@ -328,14 +331,22 @@ func main() {
 		blp.startPosition.Position)
 
 	if *port != 0 {
+		umgmt.AddStartupCallback(func() {
+			umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
+		})
+	}
+	umgmt.AddStartupCallback(func() {
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, syscall.SIGTERM)
 		go func() {
-			serverAddr := fmt.Sprintf("localhost:%v", *port)
-			err = http.ListenAndServe(serverAddr, nil)
-			if err != nil {
-				relog.Fatal("Error starting http server %v", err)
+			for sig := range c {
+				umgmt.SigTermHandler(sig)
 			}
 		}()
-	}
+	})
+	umgmt.AddCloseCallback(func() {
+		close(interrupted)
+	})
 
 	//Make a request to the server and start processing the events.
 	stdout = bufio.NewWriterSize(os.Stdout, 16*1024)
@@ -894,10 +905,19 @@ func (blp *BinlogPlayer) applyBinlogEvents() error {
 		KeyspaceEnd:   blp.startPosition.KeyrangeEnd}
 	resp := blp.rpcClient.StreamGo("BinlogServer.ServeBinlog", blServeRequest, responseChan)
 
-	for response := range responseChan {
-		err = blp.processBinlogEvent(response)
-		if err != nil {
-			return fmt.Errorf("Error in processing binlog event %v", err)
+processLoop:
+	for {
+		select {
+		case response, ok := <-responseChan:
+			if !ok {
+				break processLoop
+			}
+			err = blp.processBinlogEvent(response)
+			if err != nil {
+				return fmt.Errorf("Error in processing binlog event %v", err)
+			}
+		case <-interrupted:
+			return nil
 		}
 	}
 	if resp.Error != nil {
