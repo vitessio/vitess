@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"reflect"
 	"strings"
@@ -225,87 +226,67 @@ func (ar *ActionResult) error(text string) {
 	ar.Output = text
 }
 
-func actionValidateKeyspace(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
-	keyspaces, ok := req.Form["keyspace"]
+// actionMethod is a function that performs some action on a Zookeeper
+// node. It should return a message for the user or an empty string in
+// case there's nothing interesting to be communicated.
+type actionMethod func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (output string, err error)
+
+// ActionRepository is a repository of actions that can be performed
+// on a Zookeeper node.
+type ActionRepository struct {
+	actions        map[string]actionMethod
+	actionsForPath map[string]map[string]actionMethod
+	wrangler       *wrangler.Wrangler
+}
+
+func NewActionRepository(wr *wrangler.Wrangler) *ActionRepository {
+	return &ActionRepository{
+		actions:        make(map[string]actionMethod),
+		actionsForPath: make(map[string]map[string]actionMethod),
+		wrangler:       wr}
+
+}
+
+// Register registers a named action that will be possible to apply on
+// Zookeeper nodes whose path matches matchingPath.
+func (ar *ActionRepository) Register(matchingPath string, name string, method actionMethod) {
+	ar.actions[name] = method
+	_, ok := ar.actionsForPath[matchingPath]
 	if !ok {
-		result.error("No keyspace specified")
-	} else {
-		result.Parameters = keyspaces[0]
-		if err := wr.ValidateKeyspace(keyspaces[0], false); err != nil {
-			result.error(err.Error())
-		} else {
-			result.Output = "Success"
+		ar.actionsForPath[matchingPath] = make(map[string]actionMethod)
+	}
+	ar.actionsForPath[matchingPath][name] = method
+}
+
+func (ar *ActionRepository) Apply(actionName string, zkPath string, r *http.Request) *ActionResult {
+	result := &ActionResult{Name: actionName, Parameters: zkPath}
+
+	action, ok := ar.actions[actionName]
+	if !ok {
+		result.error("Unknown action")
+		return result
+	}
+	output, err := action(ar.wrangler, zkPath, r)
+	if err != nil {
+		result.error(err.Error())
+	}
+	result.Output = output
+	return result
+}
+
+// PopulateAvailableActions populates result with actions that can be
+// performed on its node.
+func (ar ActionRepository) PopulateAvailableActions(result *ZkResult) {
+	for matchingPath, actions := range ar.actionsForPath {
+		if m, _ := path.Match(matchingPath, result.Path); m {
+			for name, _ := range actions {
+				values := url.Values{}
+				values.Set("action", name)
+				values.Set("zkpath", result.Path)
+				result.Actions[name] = template.URL("/actions?" + values.Encode())
+			}
 		}
 	}
-}
-
-func actionValidateSchemaKeyspace(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
-	keyspaces, ok := req.Form["keyspace"]
-	if !ok {
-		result.error("No keyspace specified")
-	} else {
-		result.Parameters = keyspaces[0]
-		if err := wr.ValidateSchemaKeyspace(keyspaces[0], true); err != nil {
-			result.error(err.Error())
-		} else {
-			result.Output = "Success"
-		}
-	}
-}
-
-func actionValidateShard(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
-	shards, ok := req.Form["shard"]
-	if !ok {
-		result.error("No shard specified")
-	} else {
-		result.Parameters = shards[0]
-		if err := wr.ValidateShard(shards[0], false); err != nil {
-			result.error(err.Error())
-		} else {
-			result.Output = "Success"
-		}
-	}
-}
-
-func actionValidateSchemaShard(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
-	shards, ok := req.Form["shard"]
-	if !ok {
-		result.error("No shard specified")
-	} else {
-		result.Parameters = shards[0]
-		if err := wr.ValidateSchemaShard(shards[0], true); err != nil {
-			result.error(err.Error())
-		} else {
-			result.Output = "Success"
-		}
-	}
-}
-
-func actionRpcPing(wr *wrangler.Wrangler, req *http.Request, result *ActionResult) {
-	tablets, ok := req.Form["tablet"]
-	if !ok {
-		result.error("No tablet specified")
-	} else {
-		result.Parameters = tablets[0]
-		if err := wr.ActionInitiator().RpcPing(tablets[0], 10*time.Second); err != nil {
-			result.error(err.Error())
-		} else {
-			result.Output = "Success"
-		}
-	}
-}
-
-type action struct {
-	name   string
-	method func(wr *wrangler.Wrangler, r *http.Request, result *ActionResult)
-}
-
-var actions = []action{
-	action{"ValidateKeyspace", actionValidateKeyspace},
-	action{"ValidateSchemaKeyspace", actionValidateSchemaKeyspace},
-	action{"ValidateShard", actionValidateShard},
-	action{"ValidateSchemaShard", actionValidateSchemaShard},
-	action{"RpcPing", actionRpcPing},
 }
 
 type DbTopologyResult struct {
@@ -317,35 +298,12 @@ type ZkResult struct {
 	Path     string
 	Data     string
 	Children []string
-	NodeType string
-	Actions  map[string]string
+	Actions  map[string]template.URL
 	Error    string
 }
 
-type knownPath struct {
-	pattern  string
-	nodeType string
-	method   func(zkPath string, result *ZkResult)
-}
-
-func keyspaceKnownPath(zkPath string, result *ZkResult) {
-	result.Actions["ValidateKeyspace"] = "/action/ValidateKeyspace?keyspace=" + zkPath
-	result.Actions["ValidateSchemaKeyspace"] = "/action/ValidateSchemaKeyspace?keyspace=" + zkPath
-}
-
-func shardKnownPath(zkPath string, result *ZkResult) {
-	result.Actions["ValidateShard"] = "/action/ValidateShard?shard=" + zkPath
-	result.Actions["ValidateSchemaShard"] = "/action/ValidateSchemaShard?shard=" + zkPath
-}
-
-func tabletKnownPath(zkPath string, result *ZkResult) {
-	result.Actions["RpcPing"] = "/action/RpcPing?tablet=" + zkPath
-}
-
-var knownPaths = []knownPath{
-	knownPath{"/zk/global/vt/keyspaces/*", "Keyspace", keyspaceKnownPath},
-	knownPath{"/zk/global/vt/keyspaces/*/shards/*", "Shard", shardKnownPath},
-	knownPath{"/zk/*/vt/tablets/*", "Tablet", tabletKnownPath},
+func NewZkResult(zkPath string) *ZkResult {
+	return &ZkResult{Actions: make(map[string]template.URL), Path: zkPath}
 }
 
 func main() {
@@ -354,7 +312,41 @@ func main() {
 	templateLoader := NewTemplateLoader(*templateDir, dummyTemplate, *debug)
 	zconn := zk.NewMetaConn(false)
 	defer zconn.Close()
+
 	wr := wrangler.NewWrangler(zconn, 30*time.Second, 30*time.Second)
+
+	actionRepo := NewActionRepository(wr)
+
+	const (
+		keyspacePath = "/zk/global/vt/keyspaces/*"
+		shardPath    = "/zk/global/vt/keyspaces/*/shards/*"
+		tabletPath   = "/zk/*/vt/tablets/*"
+	)
+
+	actionRepo.Register(keyspacePath, "ValidateKeyspace",
+		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
+			return "", wr.ValidateKeyspace(zkPath, false)
+		})
+
+	actionRepo.Register(keyspacePath, "ValidateSchemaKeyspace",
+		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
+			return "", wr.ValidateSchemaKeyspace(zkPath, false)
+		})
+
+	actionRepo.Register(shardPath, "ValidateShard",
+		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
+			return "", wr.ValidateShard(zkPath, false)
+		})
+
+	actionRepo.Register(shardPath, "ValidateSchemaShard",
+		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
+			return "", wr.ValidateSchemaShard(zkPath, false)
+		})
+
+	actionRepo.Register(tabletPath, "RpcPing",
+		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
+			return "", wr.ActionInitiator().RpcPing(zkPath, 10*time.Second)
+		})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		tmpl, err := templateLoader.Lookup("index.html")
@@ -367,25 +359,23 @@ func main() {
 		}
 
 	})
-	http.HandleFunc("/action/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
 			return
 		}
-		action := r.URL.Path[strings.Index(r.URL.Path, "/action/")+8:]
+		action := r.FormValue("action")
+		if action == "" {
+			http.Error(w, "no action provided", http.StatusBadRequest)
+			return
+		}
 
-		result := ActionResult{Name: action}
-		found := false
-		for _, a := range actions {
-			if a.name == action {
-				a.method(wr, r, &result)
-				found = true
-				break
-			}
+		zkPath := r.FormValue("zkpath")
+		if zkPath == "" {
+			http.Error(w, "no zookeeper path provided", http.StatusBadRequest)
+			return
 		}
-		if !found {
-			result.error(fmt.Sprintf("Unknown action: %v", action))
-		}
+		result := actionRepo.Apply(action, zkPath, r)
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
@@ -420,7 +410,7 @@ func main() {
 			zkPath = zkPath[:len(zkPath)-1]
 		}
 
-		result := ZkResult{Path: zkPath}
+		result := NewZkResult(zkPath)
 
 		if zkPath == "/zk" {
 			cells, err := zk.ResolveWildcards(zconn, []string{"/zk/*"})
@@ -437,20 +427,12 @@ func main() {
 			if data, _, err := zconn.Get(zkPath); err != nil {
 				result.Error = err.Error()
 			} else {
+				actionRepo.PopulateAvailableActions(result)
 				result.Data = data
 				if children, _, err := zconn.Children(zkPath); err != nil {
 					result.Error = err.Error()
 				} else {
 					result.Children = children
-
-					for _, k := range knownPaths {
-						if m, _ := path.Match(k.pattern, zkPath); m {
-							result.NodeType = k.nodeType
-							result.Actions = make(map[string]string)
-							k.method(zkPath, &result)
-							break
-						}
-					}
 				}
 			}
 		}

@@ -13,9 +13,10 @@
   <p><b>Parameters:</b> {{.Parameters}}</p>
 {{end}}
 {{if .Error}}
-  <h1>Error</h1>
+  <h2>Error</h2>
+{{else}}
+  <h2>Success</h2>
 {{end}}
-
 <pre>{{.Output}}</pre>
 
 </body>
