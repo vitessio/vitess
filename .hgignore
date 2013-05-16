@@ -25,5 +25,6 @@ _testmain.go$
 ^go/cmd/zk/zk$
 ^go/cmd/zkclient2/zkclient2$
 ^go/cmd/zkctl/zkctl$
+^go/cmd/zkns2pdns/zkns2pdns$
 ^go/cmd/zkocc/zkocc$
 ^test/goloadgen/goloadgen$

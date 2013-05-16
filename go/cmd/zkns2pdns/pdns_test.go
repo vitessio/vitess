@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/zk/zkocc/proto"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -122,7 +121,7 @@ func (conn *TestZkConn) Get(path string) (data string, stat zk.Stat, err error) 
 		err = &zookeeper.Error{Op: "TestZkConn: node doesn't exist", Code: zookeeper.ZNONODE, Path: path}
 		return
 	}
-	s := &proto.ZkStat{}
+	s := &zk.ZkStat{}
 	return data, s, nil
 }
 
@@ -141,7 +140,7 @@ func (conn *TestZkConn) ChildrenW(path string) (children []string, stat zk.Stat,
 func (conn *TestZkConn) Exists(path string) (stat zk.Stat, err error) {
 	_, ok := conn.data[path]
 	if ok {
-		return &proto.ZkStat{}, nil
+		return &zk.ZkStat{}, nil
 	}
 	return nil, nil
 }
