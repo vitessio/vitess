@@ -269,6 +269,7 @@ func (ar *ActionRepository) Apply(actionName string, zkPath string, r *http.Requ
 	output, err := action(ar.wrangler, zkPath, r)
 	if err != nil {
 		result.error(err.Error())
+		return result
 	}
 	result.Output = output
 	return result
