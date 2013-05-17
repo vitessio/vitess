@@ -56,10 +56,10 @@ var queries = []string{
 }
 
 var results = []string{
-	"OK\tzkns2pdns\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test1\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test2\nDATA\t_http.srv.zkns.test.zk\tIN\tSOA\t1\t1\twolverine hostmaster@wolverine 0 1800 600 3600 300\nEND\n",
-	"OK\tzkns2pdns\nDATA\ta.zkns.test.zk\tIN\tA\t1\t1\t0.0.0.1\nDATA\ta.zkns.test.zk\tIN\tSOA\t1\t1\twolverine hostmaster@wolverine 0 1800 600 3600 300\nDATA\ta.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
-	"OK\tzkns2pdns\nDATA\tcname.zkns.test.zk\tIN\tSOA\t1\t1\twolverine hostmaster@wolverine 0 1800 600 3600 300\nDATA\tcname.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
-	"OK\tzkns2pdns\nDATA\tempty.zkns.test.zk\tIN\tSOA\t1\t1\twolverine hostmaster@wolverine 0 1800 600 3600 300\nEND\n",
+	"OK\tzkns2pdns\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test1\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test2\nDATA\t_http.srv.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nEND\n",
+	"OK\tzkns2pdns\nDATA\ta.zkns.test.zk\tIN\tA\t1\t1\t0.0.0.1\nDATA\ta.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nDATA\ta.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
+	"OK\tzkns2pdns\nDATA\tcname.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nDATA\tcname.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
+	"OK\tzkns2pdns\nDATA\tempty.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nEND\n",
 	"OK\tzkns2pdns\nFAIL\n",
 }
 
