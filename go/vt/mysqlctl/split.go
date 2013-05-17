@@ -108,8 +108,8 @@ const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
 
-	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, relay_filename, relay_position, keyrange_start, keyrange_end, txn_timestamp, time_updated)
-	                          values (%v, '%v', %v, '%v', %v, '%v', %v, '%v', '%v', unix_timestamp(), %v)`
+	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, relay_filename, relay_position, group_id, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
+	                          values (%v, '%v', %v, '%v', %v, '%v', %v, %v, '%v', '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -1235,7 +1235,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 				port,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
-				"", 0,
+				"", 0, 0,
 				keyRange.Start.Hex(),
 				keyRange.End.Hex(),
 				time.Now().Unix())

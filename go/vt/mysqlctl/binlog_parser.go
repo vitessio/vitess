@@ -58,6 +58,7 @@ var (
 	BINLOG_SET_INSERT      = []byte("SET INSERT_ID=")
 	BINLOG_END_LOG_POS     = []byte("end_log_pos ")
 	BINLOG_XID             = []byte("Xid = ")
+	BINLOG_GROUP_ID        = []byte("group_id ")
 	BINLOG_START           = []byte("Start: binlog")
 	BINLOG_DB_CHANGE       = []byte(USE)
 	POS                    = []byte(" pos: ")
@@ -196,6 +197,7 @@ type SendUpdateStreamResponse func(response interface{}) error
 //Main entry function for reading and parsing the binlog.
 func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) {
 	var binlogReader io.Reader
+	var readErr error
 	defer func() {
 		reqIdentifier := fmt.Sprintf("%v:%v", blp.currentPosition.coordinates.MasterFilename, blp.currentPosition.coordinates.MasterPosition)
 		if x := recover(); x != nil {
@@ -205,6 +207,9 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 				//panic(x)
 			}
 			err := *serr
+			if readErr != nil {
+				err = BinlogParseError{Msg: fmt.Sprintf("%v, readErr: %v", err, readErr)}
+			}
 			relog.Error("StreamBinlog error @ %v, error: %v", reqIdentifier, err)
 			SendError(sendReply, reqIdentifier, err, blp.currentPosition)
 		}
@@ -220,14 +225,25 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 		panic(NewBinlogParseError(pipeErr.Error()))
 	}
 	defer blrWriter.Close()
+	defer blrReader.Close()
 
-	go blp.getBinlogStream(blrWriter, blr)
+	readErrChan := make(chan error, 1)
+	//This reads the binlogs - read end of data pipeline.
+	go blp.getBinlogStream(blrWriter, blr, readErrChan)
 	binlogDecoder := new(BinlogDecoder)
 	binlogReader, err = binlogDecoder.DecodeMysqlBinlog(blrReader)
 	if err != nil {
 		panic(NewBinlogParseError(err.Error()))
 	}
-	defer binlogDecoder.Kill()
+	//This function monitors the exit of read data pipeline.
+	go func(readErr *error, readErrChan chan error, binlogDecoder *BinlogDecoder) {
+		*readErr = <-readErrChan
+		//relog.Info("Read data-pipeline returned readErr: '%v'", *readErr)
+		if *readErr != nil {
+			binlogDecoder.Kill()
+		}
+	}(&readErr, readErrChan, binlogDecoder)
+
 	blp.parseBinlogEvents(sendReply, binlogReader)
 }
 
@@ -535,10 +551,11 @@ func (blp *Blp) readBlpLine(lineReader *bufio.Reader) (line []byte, err error) {
 }
 
 //This function streams the raw binlog.
-func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader) {
+func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader, readErrChan chan error) {
 	defer func() {
 		if err := recover(); err != nil {
 			relog.Error("getBinlogStream failed: %v", err)
+			readErrChan <- err.(error)
 		}
 	}()
 	if blp.globalState.usingRelayLogs {
@@ -549,6 +566,7 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader) {
 	} else {
 		blr.ServeData(writer, blp.startPosition.MasterFilename, int64(blp.startPosition.MasterPosition))
 	}
+	readErrChan <- nil
 }
 
 //This function determines whether streaming is behind replication as it should be.

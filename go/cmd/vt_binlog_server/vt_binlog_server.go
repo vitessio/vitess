@@ -75,9 +75,8 @@ func NewBlpStats() *blpStats {
 }
 
 type BinlogServer struct {
-	clients []*Blp
-	dbname  string
-	mycnf   *mysqlctl.Mycnf
+	dbname string
+	mycnf  *mysqlctl.Mycnf
 	*blpStats
 }
 
@@ -361,6 +360,12 @@ func (blp *Blp) parsePositionData(line []byte) {
 	if bytes.Index(line, mysqlctl.BINLOG_XID) != -1 {
 		blp.parseXid(line)
 	}
+	// FIXME(shrutip): group_id is most relevant for commit events
+	// check how group_id is set for ddls and possibly move this block
+	// in parseXid
+	if bytes.Index(line, mysqlctl.BINLOG_GROUP_ID) != -1 {
+		blp.parseGroupId(line)
+	}
 }
 
 func (blp *Blp) parseEventData(sendReply mysqlctl.SendUpdateStreamResponse, event *eventBuffer) {
@@ -422,6 +427,15 @@ func (blp *Blp) parseXid(line []byte) {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting Xid position %v, sql %v", err, string(line))))
 	}
 	blp.currentPosition.Xid = xid
+}
+
+func (blp *Blp) parseGroupId(line []byte) {
+	rem := bytes.SplitN(line, mysqlctl.BINLOG_GROUP_ID, 2)
+	groupId, err := strconv.ParseUint(string(rem[1]), 10, 64)
+	if err != nil {
+		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting group_id %v, sql %v", err, string(line))))
+	}
+	blp.currentPosition.GroupId = groupId
 }
 
 func (blp *Blp) extractEventTimestamp(event *eventBuffer) {
@@ -525,6 +539,7 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 	}
 
 	commitEvent.BlPosition.Xid = blp.currentPosition.Xid
+	commitEvent.BlPosition.GroupId = blp.currentPosition.GroupId
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	//txn block for DMLs, parse it and send events for a txn
 	var dmlCount int64
@@ -799,7 +814,6 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	blp.logMetadata = mysqlctl.NewSlaveMetadata(logsDir, blServer.mycnf.RelayLogInfoPath)
 
 	relog.Info("usingRelayLogs %v blp.binlogPrefix %v logsDir %v", blp.usingRelayLogs, blp.binlogPrefix, logsDir)
-	blServer.clients = append(blServer.clients, blp)
 	blp.streamBinlog(sendReply)
 	return nil
 }
