@@ -54,6 +54,14 @@ func (wr *Wrangler) ActionInitiator() *tm.ActionInitiator {
 	return wr.ai
 }
 
+// ResetActionTimeout should be used before every action on a wrangler
+// object that is going to be re-used:
+// - vtctl will not call this, as it does one action
+// - vtctld will call this, as it re-uses the same wrangler for actions
+func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
+	wr.deadline = time.Now().Add(actionTimeout)
+}
+
 // Change the type of tablet and recompute all necessary derived paths in the
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and

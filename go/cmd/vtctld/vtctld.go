@@ -266,6 +266,7 @@ func (ar *ActionRepository) Apply(actionName string, zkPath string, r *http.Requ
 		result.error("Unknown action")
 		return result
 	}
+	ar.wrangler.ResetActionTimeout(wrangler.DefaultActionTimeout)
 	output, err := action(ar.wrangler, zkPath, r)
 	if err != nil {
 		result.error(err.Error())
