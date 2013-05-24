@@ -868,7 +868,8 @@ func cmdZip(args []string) {
 		log.Fatalf("zip: error %v", err)
 	}
 
-	pathList := make([]string, 0, 256)
+	wg := sync.WaitGroup{}
+	items := make(chan *zkItem, 64)
 	for _, arg := range args {
 		zkPath := fixZkPath(arg)
 		children, err := zk.ChildrenRecursive(zconn, zkPath)
@@ -876,19 +877,17 @@ func cmdZip(args []string) {
 			log.Fatalf("zip: error %v", err)
 		}
 		for _, child := range children {
-			pathList = append(pathList, path.Join(zkPath, child))
+			toAdd := path.Join(zkPath, child)
+			wg.Add(1)
+			go func() {
+				data, stat, err := zconn.Get(toAdd)
+				items <- &zkItem{toAdd, data, stat, err}
+				wg.Done()
+			}()
 		}
 	}
-
-	items := make(chan *zkItem, 16)
-	f := func(i int) {
-		data, stat, err := zconn.Get(pathList[i])
-		items <- &zkItem{pathList[i], data, stat, err}
-	}
 	go func() {
-		// FIXME(msolomon) don't love the fmap pattern here - mixing
-		// bounded and unbounded structures, hence this extra closure.
-		fmap(f, len(pathList), defaultConcurrency)
+		wg.Wait()
 		close(items)
 	}()
 
@@ -961,27 +960,4 @@ func cmdUnzip(args []string) {
 		}
 		rc.Close()
 	}
-}
-
-const defaultConcurrency = 16
-
-func fmap(f func(i int), xrange, concurrency int) {
-	wg := sync.WaitGroup{}
-	work := make(chan int, 1)
-	for j := 0; j < concurrency; j++ {
-		wg.Add(1)
-		go func() {
-			for i := range work {
-				f(i)
-			}
-			wg.Done()
-		}()
-	}
-
-	for x := 0; x < xrange; x++ {
-		work <- x
-	}
-	close(work)
-
-	wg.Wait()
 }
