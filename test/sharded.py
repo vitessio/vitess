@@ -202,6 +202,10 @@ def run_test_sharding():
       "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE" not in err:
         raise utils.TestError('wrong ValidateSchemaKeyspace output: ' + err)
 
+  # validate versions
+  utils.run_vtctl('ValidateVersionShard /zk/global/vt/keyspaces/test_keyspace/shards/-80', auto_log=True)
+  utils.run_vtctl('ValidateVersionKeyspace /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+
   # and create zkns on this complex keyspace, make sure a few files are created
   utils.run_vtctl('ExportZknsForKeyspace /zk/global/vt/keyspaces/test_keyspace')
   out, err = utils.run(utils.vtroot+'/bin/zk ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)

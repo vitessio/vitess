@@ -35,7 +35,7 @@ func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMaster
 	masterSchema.DiffSchema(zkMasterTabletPath, zkTabletPath, slaveSchema, result)
 }
 
-func channelToError(stream chan string) error {
+func channelToError(channelType string, stream chan string) error {
 	result := ""
 	for text := range stream {
 		if result != "" {
@@ -47,7 +47,7 @@ func channelToError(stream chan string) error {
 		return nil
 	}
 
-	return fmt.Errorf("Schema diffs:\n%v", result)
+	return fmt.Errorf("%v diffs:\n%v", channelType, result)
 }
 
 func (wr *Wrangler) ValidateSchemaShard(zkShardPath string, includeViews bool) error {
@@ -83,7 +83,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string, includeViews bool) e
 		wg.Wait()
 		close(result)
 	}()
-	return channelToError(result)
+	return channelToError("Schema", result)
 }
 
 func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string, includeViews bool) error {
@@ -165,7 +165,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string, includeViews b
 		wg.Wait()
 		close(result)
 	}()
-	return channelToError(result)
+	return channelToError("Schema", result)
 }
 
 func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
