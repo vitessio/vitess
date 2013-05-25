@@ -141,7 +141,6 @@ func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *Sche
 		}
 		rightIndex++
 	}
-	return
 }
 
 func (left *SchemaDefinition) DiffSchemaToArray(leftName, rightName string, right *SchemaDefinition) (result []string) {
@@ -165,14 +164,14 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 	sd := &SchemaDefinition{}
 
 	// get the database creation command
-	rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE DATABASE " + dbName)
+	qr, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE DATABASE " + dbName)
 	if fetchErr != nil {
 		return nil, fetchErr
 	}
-	if len(rows) == 0 {
+	if len(qr.Rows) == 0 {
 		return nil, fmt.Errorf("empty create database statement for %v", dbName)
 	}
-	sd.DatabaseSchema = strings.Replace(rows[0][1].String(), "`"+dbName+"`", "`{{.DatabaseName}}`", 1)
+	sd.DatabaseSchema = strings.Replace(qr.Rows[0][1].String(), "`"+dbName+"`", "`{{.DatabaseName}}`", 1)
 
 	// get the list of tables we're interested in
 	sql := "SELECT table_name, table_type, data_length FROM information_schema.tables WHERE table_schema = '" + dbName + "'"
@@ -182,16 +181,16 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 	if !includeViews {
 		sql += " AND table_type = '" + TABLE_BASE_TABLE + "'"
 	}
-	rows, err := mysqld.fetchSuperQuery(sql)
+	qr, err := mysqld.fetchSuperQuery(sql)
 	if err != nil {
 		return nil, err
 	}
-	if len(rows) == 0 {
+	if len(qr.Rows) == 0 {
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]TableDefinition, len(rows))
-	for i, row := range rows {
+	sd.TableDefinitions = make([]TableDefinition, len(qr.Rows))
+	for i, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
 		var dataLength uint64
@@ -203,18 +202,18 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 			}
 		}
 
-		rows, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
+		qr, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE TABLE " + dbName + "." + tableName)
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
-		if len(rows) == 0 {
+		if len(qr.Rows) == 0 {
 			return nil, fmt.Errorf("empty create table statement for %v", tableName)
 		}
 
 		// Normalize & remove auto_increment because it changes on every insert
 		// FIXME(alainjobart) find a way to share this with
 		// vt/tabletserver/table_info.go:162
-		norm := rows[0][1].String()
+		norm := qr.Rows[0][1].String()
 		norm = autoIncr.ReplaceAllLiteralString(norm, "")
 		if tableType == TABLE_VIEW {
 			// Views will have the dbname in there, replace it

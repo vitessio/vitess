@@ -20,8 +20,8 @@ import (
 	"text/template"
 	"time"
 
+	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/sqltypes"
 	"code.google.com/p/vitess/go/vt/key"
 )
 
@@ -171,14 +171,14 @@ func (mysqld *Mysqld) GetMasterAddr() (string, error) {
 }
 
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
-	rows, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
+	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {
 		return true, err
 	}
-	if len(rows) != 1 {
+	if len(qr.Rows) != 1 {
 		return true, errors.New("no read_only variable in mysql")
 	}
-	if rows[0][1].String() == "ON" {
+	if qr.Rows[0][1].String() == "ON" {
 		return true, nil
 	}
 	return false, nil
@@ -200,16 +200,16 @@ var (
 )
 
 func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
-	rows, err := mysqld.fetchSuperQuery("SHOW SLAVE STATUS")
+	qr, err := mysqld.fetchSuperQuery("SHOW SLAVE STATUS")
 	if err != nil {
 		return nil, err
 	}
-	if len(rows) != 1 {
+	if len(qr.Rows) != 1 {
 		return nil, ErrNotSlave
 	}
 
 	rowMap := make(map[string]string)
-	for i, column := range rows[0] {
+	for i, column := range qr.Rows[0] {
 		if i >= len(showSlaveStatusColumnNames) {
 			break
 		}
@@ -221,33 +221,33 @@ func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 // Return a replication state that will reparent a slave to the
 // correct master for a specified position.
 func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *ReplicationState, waitPosition *ReplicationPosition, reparentTime int64, err error) {
-	rows, err := mysqld.fetchSuperQuery(fmt.Sprintf("SELECT time_created_ns, new_addr, new_position, wait_position FROM _vt.reparent_log WHERE last_position = '%v'", slavePosition.MapKey()))
+	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SELECT time_created_ns, new_addr, new_position, wait_position FROM _vt.reparent_log WHERE last_position = '%v'", slavePosition.MapKey()))
 	if err != nil {
 		return
 	}
-	if len(rows) != 1 {
+	if len(qr.Rows) != 1 {
 		err = fmt.Errorf("no reparent for position: %v", slavePosition.MapKey())
 		return
 	}
 
-	reparentTime, err = strconv.ParseInt(rows[0][0].String(), 10, 64)
+	reparentTime, err = strconv.ParseInt(qr.Rows[0][0].String(), 10, 64)
 	if err != nil {
-		err = fmt.Errorf("bad reparent time: %v %v %v", slavePosition.MapKey(), rows[0][0], err)
+		err = fmt.Errorf("bad reparent time: %v %v %v", slavePosition.MapKey(), qr.Rows[0][0], err)
 		return
 	}
 
-	file, pos, err := parseReplicationPosition(rows[0][2].String())
+	file, pos, err := parseReplicationPosition(qr.Rows[0][2].String())
 	if err != nil {
 		return
 	}
-	rs, err = NewReplicationState(rows[0][1].String())
+	rs, err = NewReplicationState(qr.Rows[0][1].String())
 	if err != nil {
 		return
 	}
 	rs.ReplicationPosition.MasterLogFile = file
 	rs.ReplicationPosition.MasterLogPosition = uint(pos)
 
-	file, pos, err = parseReplicationPosition(rows[0][3].String())
+	file, pos, err = parseReplicationPosition(qr.Rows[0][3].String())
 	if err != nil {
 		return
 	}
@@ -274,16 +274,16 @@ func parseReplicationPosition(rpos string) (filename string, pos uint, err error
 func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout int) error {
 	cmd := fmt.Sprintf("SELECT MASTER_POS_WAIT('%v', %v, %v)",
 		rp.MasterLogFile, rp.MasterLogPosition, waitTimeout)
-	rows, err := mysqld.fetchSuperQuery(cmd)
+	qr, err := mysqld.fetchSuperQuery(cmd)
 	if err != nil {
 		return err
 	}
-	if len(rows) != 1 {
-		return fmt.Errorf("WaitMasterPos returned unexpected row count: %v", len(rows))
+	if len(qr.Rows) != 1 {
+		return fmt.Errorf("WaitMasterPos returned unexpected row count: %v", len(qr.Rows))
 	}
-	if rows[0][0].IsNull() {
+	if qr.Rows[0][0].IsNull() {
 		return fmt.Errorf("WaitMasterPos failed: replication stopped")
-	} else if rows[0][0].String() == "-1" {
+	} else if qr.Rows[0][0].String() == "-1" {
 		return fmt.Errorf("WaitMasterPos failed: timed out")
 	}
 	return nil
@@ -322,16 +322,16 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
  Binlog_Ignore_DB:
 */
 func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
-	rows, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
+	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
 	if err != nil {
 		return
 	}
-	if len(rows) != 1 {
+	if len(qr.Rows) != 1 {
 		return nil, ErrNotMaster
 	}
 	rp = &ReplicationPosition{}
-	rp.MasterLogFile = rows[0][0].String()
-	temp, err := strconv.ParseUint(rows[0][1].String(), 10, 0)
+	rp.MasterLogFile = qr.Rows[0][0].String()
+	temp, err := strconv.ParseUint(qr.Rows[0][1].String(), 10, 0)
 	rp.MasterLogPosition = uint(temp)
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
@@ -463,18 +463,18 @@ func (mysqld *Mysqld) executeSuperQuery(query string) error {
 
 // FIXME(msolomon) should there be a query lock so we only
 // run one admin action at a time?
-func (mysqld *Mysqld) fetchSuperQuery(query string) ([][]sqltypes.Value, error) {
+func (mysqld *Mysqld) fetchSuperQuery(query string) (*proto.QueryResult, error) {
 	conn, connErr := mysqld.createConnection()
 	if connErr != nil {
 		return nil, connErr
 	}
 	defer conn.Close()
 	relog.Info("fetch %v", query)
-	qr, err := conn.ExecuteFetch(query, 10000, false)
+	qr, err := conn.ExecuteFetch(query, 10000, true)
 	if err != nil {
 		return nil, err
 	}
-	return qr.Rows, nil
+	return qr, nil
 }
 
 func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
@@ -559,12 +559,12 @@ const (
 // Get IP addresses for all currently connected slaves.
 // FIXME(msolomon) use command instead of user to find "rogue" slaves?
 func (mysqld *Mysqld) FindSlaves() ([]string, error) {
-	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
+	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return nil, err
 	}
 	addrs := make([]string, 0, 32)
-	for _, row := range rows {
+	for _, row := range qr.Rows {
 		if row[colUsername].String() == mysqld.replParams.Uname {
 			host, _, err := net.SplitHostPort(row[colClientAddr].String())
 			if err != nil {

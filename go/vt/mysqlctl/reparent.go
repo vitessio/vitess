@@ -126,12 +126,12 @@ func (mysqld *Mysqld) CheckReplication(timeCheck int64) error {
 	relog.Info("Check replication restarted")
 	checkQuery := fmt.Sprintf("SELECT * FROM _vt.replication_log WHERE time_created_ns = %v",
 		timeCheck)
-	rows, err := mysqld.fetchSuperQuery(checkQuery)
+	qr, err := mysqld.fetchSuperQuery(checkQuery)
 	if err != nil {
 		return err
 	}
-	if len(rows) != 1 {
-		return fmt.Errorf("replication failed - unexpected row count %v", len(rows))
+	if len(qr.Rows) != 1 {
+		return fmt.Errorf("replication failed - unexpected row count %v", len(qr.Rows))
 	}
 	return nil
 }

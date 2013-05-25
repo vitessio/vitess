@@ -184,12 +184,12 @@ var loadDataInfile = `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.Table
 
 func (mysqld *Mysqld) validateSplitReplicaTarget() error {
 	// check activity
-	rows, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
+	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
 		return err
 	}
-	if len(rows) > 4 {
-		return fmt.Errorf("too many active db processes (%v > 4)", len(rows))
+	if len(qr.Rows) > 4 {
+		return fmt.Errorf("too many active db processes (%v > 4)", len(qr.Rows))
 	}
 
 	// make sure we can write locally

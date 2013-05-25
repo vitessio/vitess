@@ -218,7 +218,7 @@ var commands = []commandGroup{
 		},
 	},
 	commandGroup{
-		"Schema, Version", []command{
+		"Schema, Version, Permissions", []command{
 			command{"GetSchema", commandGetSchema,
 				"[-tables=<table1>,<table2>,...] [-include-views] <zk tablet path>",
 				"Display the full schema for a tablet, or just the schema for the provided tables."},
@@ -240,12 +240,23 @@ var commands = []commandGroup{
 			command{"ApplySchemaKeyspace", commandApplySchemaKeyspace,
 				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] <zk keyspace path>",
 				"Apply the schema change to the specified keyspace. If simple is specified, we just apply on the live masters. Otherwise we will need to do the shell game on each shard. So we will apply the schema change to every single slave (running in parallel on all shards, but on one host at a time in a given shard). We will not reparent at the end, so the masters won't be touched at all. Using the force flag will cause a bunch of checks to be ignored, use with care."},
+
 			command{"ValidateVersionShard", commandValidateVersionShard,
 				"<zk shard path>",
 				"Validate the master version matches all the slaves."},
 			command{"ValidateVersionKeyspace", commandValidateVersionKeyspace,
 				"<zk keyspace path>",
 				"Validate the master version from shard 0 matches all the other tablets in the keyspace."},
+
+			command{"GetPermissions", commandGetPermissions,
+				"<zk tablet path>",
+				"Display the permissions for a tablet."},
+			command{"ValidatePermissionsShard", commandValidatePermissionsShard,
+				"<zk shard path>",
+				"Validate the master permissions match all the slaves."},
+			command{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
+				"<zk keyspace path>",
+				"Validate the master permissions from shard 0 match all the other tablets in the keyspace."},
 		},
 	},
 }
@@ -1232,7 +1243,7 @@ func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []stri
 
 	sd, err := wrangler.GetSchema(subFlags.Arg(0), tableArray, *includeViews)
 	if err == nil {
-		relog.Info(sd.String())
+		relog.Info("%v", sd.String()) // they can contain %
 	}
 	return "", err
 }
@@ -1368,6 +1379,36 @@ func commandValidateVersionKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSe
 	}
 
 	return "", wrangler.ValidateVersionKeyspace(subFlags.Arg(0))
+}
+
+func commandGetPermissions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		relog.Fatal("action GetPermissions requires <zk tablet path>")
+	}
+	p, err := wrangler.GetPermissions(subFlags.Arg(0))
+	if err == nil {
+		relog.Info("%v", p.String()) // they can contain '%'
+	}
+	return "", err
+}
+
+func commandValidatePermissionsShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		relog.Fatal("action ValidatePermissionsShard requires <zk shard path>")
+	}
+
+	return "", wrangler.ValidatePermissionsShard(subFlags.Arg(0))
+}
+
+func commandValidatePermissionsKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		relog.Fatal("action ValidatePermissionsKeyspace requires <zk keyspace path>")
+	}
+
+	return "", wrangler.ValidatePermissionsKeyspace(subFlags.Arg(0))
 }
 
 // signal handling, centralized here

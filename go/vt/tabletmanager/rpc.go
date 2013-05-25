@@ -60,6 +60,14 @@ func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArg
 	return tm.wrapErr(context, TABLET_ACTION_GET_SCHEMA, args, reply, err)
 }
 
+func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.Permissions) error {
+	p, err := tm.mysqld.GetPermissions()
+	if err == nil {
+		*reply = *p
+	}
+	return tm.wrapErr(context, TABLET_ACTION_GET_PERMISSIONS, args, reply, err)
+}
+
 func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) error {
 	position, err := tm.mysqld.SlaveStatus()
 	if err == nil {

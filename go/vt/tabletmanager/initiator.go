@@ -343,6 +343,14 @@ func (ai *ActionInitiator) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaC
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, args: sc})
 }
 
+func (ai *ActionInitiator) RpcGetPermissions(zkTabletPath string, waitTime time.Duration) (*mysqlctl.Permissions, error) {
+	var p mysqlctl.Permissions
+	if err := ai.rpcCall(zkTabletPath, TABLET_ACTION_GET_PERMISSIONS, "", &p, waitTime); err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
 func (ai *ActionInitiator) ExecuteHook(zkTabletPath string, _hook *hook.Hook) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, args: _hook})
 }

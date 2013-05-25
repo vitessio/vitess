@@ -340,6 +340,11 @@ func main() {
 			return "", wr.ValidateVersionKeyspace(zkPath)
 		})
 
+	actionRepo.Register(keyspacePath, "ValidatePermissionsKeyspace",
+		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
+			return "", wr.ValidatePermissionsKeyspace(zkPath)
+		})
+
 	actionRepo.Register(shardPath, "ValidateShard",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
 			return "", wr.ValidateShard(zkPath, false)
@@ -353,6 +358,11 @@ func main() {
 	actionRepo.Register(shardPath, "ValidateVersionShard",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
 			return "", wr.ValidateVersionShard(zkPath)
+		})
+
+	actionRepo.Register(shardPath, "ValidatePermissionsShard",
+		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
+			return "", wr.ValidatePermissionsShard(zkPath)
 		})
 
 	actionRepo.Register(tabletPath, "RpcPing",
