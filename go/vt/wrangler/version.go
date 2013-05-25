@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path"
 	"sort"
+	"strings"
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
@@ -46,8 +47,16 @@ func (wr *Wrangler) GetVersion(zkTabletPath string) (string, error) {
 		return "", err
 	}
 
-	relog.Info("Tablet %v is running version '%v'", zkTabletPath, vars.Version)
-	return vars.Version, nil
+	// split the version into date and md5
+	parts := strings.Split(vars.Version, " ")
+	if len(parts) != 2 {
+		// can't understand this, oh well
+		return vars.Version, nil
+	}
+	version := parts[1]
+
+	relog.Info("Tablet %v is running version '%v'", zkTabletPath, version)
+	return version, nil
 }
 
 // helper method to asynchronously get and diff a version
