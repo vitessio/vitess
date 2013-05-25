@@ -10,7 +10,7 @@ import (
 
 func testDiff(t *testing.T, left, right *SchemaDefinition, leftName, rightName string, expected []string) {
 
-	actual := left.DiffSchemaToArray(leftName, rightName, right)
+	actual := DiffSchemaToArray(leftName, left, rightName, right)
 
 	equal := false
 	if len(actual) == len(expected) {

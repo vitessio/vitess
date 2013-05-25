@@ -89,7 +89,7 @@ func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool
 
 // generates a report on what's different between two SchemaDefinition
 // for now, we skip the VIEW entirely.
-func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *SchemaDefinition, result chan string) {
+func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, result chan string) {
 	if left.DatabaseSchema != right.DatabaseSchema {
 		result <- leftName + " and " + rightName + " don't agree on database creation command:\n" + left.DatabaseSchema + "\n differs from:\n" + right.DatabaseSchema
 	}
@@ -143,10 +143,10 @@ func (left *SchemaDefinition) DiffSchema(leftName, rightName string, right *Sche
 	}
 }
 
-func (left *SchemaDefinition) DiffSchemaToArray(leftName, rightName string, right *SchemaDefinition) (result []string) {
+func DiffSchemaToArray(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition) (result []string) {
 	schemaDiffs := make(chan string, 10)
 	go func() {
-		left.DiffSchema(leftName, rightName, right, schemaDiffs)
+		DiffSchema(leftName, left, rightName, right, schemaDiffs)
 		close(schemaDiffs)
 	}()
 	result = make([]string, 0, 10)
@@ -325,7 +325,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 		return nil, err
 	}
 	if change.BeforeSchema != nil {
-		schemaDiffs := beforeSchema.DiffSchemaToArray("actual", "expected", change.BeforeSchema)
+		schemaDiffs := DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				relog.Warning("BeforeSchema differs: %v", msg)
@@ -333,7 +333,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 
 			// let's see if the schema was already applied
 			if change.AfterSchema != nil {
-				schemaDiffs = beforeSchema.DiffSchemaToArray("actual", "expected", change.AfterSchema)
+				schemaDiffs = DiffSchemaToArray("actual", beforeSchema, "expected", change.AfterSchema)
 				if len(schemaDiffs) == 0 {
 					// no diff between the schema we expect
 					// after the change and the current
@@ -372,7 +372,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 
 	// compare to the provided AfterSchema
 	if change.AfterSchema != nil {
-		schemaDiffs := afterSchema.DiffSchemaToArray("actual", "expected", change.AfterSchema)
+		schemaDiffs := DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				relog.Warning("AfterSchema differs: %v", msg)

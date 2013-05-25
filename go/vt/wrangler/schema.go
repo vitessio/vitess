@@ -32,7 +32,7 @@ func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMaster
 	}
 
 	relog.Info("Diffing schema for %v", zkTabletPath)
-	masterSchema.DiffSchema(zkMasterTabletPath, zkTabletPath, slaveSchema, result)
+	mysqlctl.DiffSchema(zkMasterTabletPath, masterSchema, zkTabletPath, slaveSchema, result)
 }
 
 func channelToError(channelType string, stream chan string) error {
@@ -346,7 +346,7 @@ func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, prefligh
 	// BeforeSchema. If not, we shouldn't proceed
 	relog.Info("Checking schema on all tablets")
 	for _, status := range statusArray {
-		diffs := preflight.BeforeSchema.DiffSchemaToArray("master", status.zkTabletPath, status.beforeSchema)
+		diffs := mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.zkTabletPath, status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.zkTabletPath, strings.Join(diffs, "\n"))
@@ -366,14 +366,14 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 	// apply the schema change to all replica / slave tablets
 	for _, status := range statusArray {
 		// if already applied, we skip this guy
-		diffs := preflight.AfterSchema.DiffSchemaToArray("after", status.zkTabletPath, status.beforeSchema)
+		diffs := mysqlctl.DiffSchemaToArray("after", preflight.AfterSchema, status.zkTabletPath, status.beforeSchema)
 		if len(diffs) == 0 {
 			relog.Info("Tablet %v already has the AfterSchema, skipping", status.zkTabletPath)
 			continue
 		}
 
 		// make sure the before schema matches
-		diffs = preflight.BeforeSchema.DiffSchemaToArray("master", status.zkTabletPath, status.beforeSchema)
+		diffs = mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.zkTabletPath, status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.zkTabletPath, strings.Join(diffs, "\n"))
@@ -541,7 +541,7 @@ func (wr *Wrangler) applySchemaKeyspace(zkKeyspacePath string, change string, si
 		if i == 0 {
 			continue
 		}
-		diffs := beforeSchemas[0].DiffSchemaToArray("shard 0", fmt.Sprintf("shard %v", i), beforeSchema)
+		diffs := mysqlctl.DiffSchemaToArray("shard 0", beforeSchemas[0], fmt.Sprintf("shard %v", i), beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				relog.Warning("Shard %v has inconsistent schema, ignoring: %v", i, strings.Join(diffs, "\n"))
