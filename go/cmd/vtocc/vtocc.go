@@ -43,7 +43,7 @@ var (
 )
 
 var config = ts.Config{
-	CachePoolCap:       1000,
+	CachePoolCap:       400,
 	PoolSize:           16,
 	StreamPoolSize:     750,
 	TransactionCap:     20,

@@ -66,7 +66,7 @@ var (
 // great.  (the overhead makes the final packets on the wire about
 // twice bigger than this).
 var qsConfig = ts.Config{
-	CachePoolCap:       1000,
+	CachePoolCap:       400,
 	PoolSize:           16,
 	StreamPoolSize:     750,
 	TransactionCap:     20,
@@ -155,7 +155,7 @@ func main() {
 	})
 
 	relog.Info("started vttablet %v", *port)
-	umgmtSocket := fmt.Sprintf("/tmp/vttablet-%08x-umgmt.sock", *port)
+	umgmtSocket := path.Join(vtenv.VtDataRoot(), fmt.Sprintf("vttablet-%08x-umgmt.sock", *port))
 	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
 		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
 	}
