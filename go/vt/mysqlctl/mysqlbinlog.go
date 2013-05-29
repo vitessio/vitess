@@ -4,11 +4,14 @@
 
 package mysqlctl
 
-/* quick hack to diff two string by running diff externally. probably linux only. */
 import (
-	"code.google.com/p/vitess/go/relog"
+	"fmt"
 	"io"
 	"os"
+	"path"
+
+	"code.google.com/p/vitess/go/relog"
+	vtenv "code.google.com/p/vitess/go/vt/env"
 )
 
 /*
@@ -61,9 +64,40 @@ type BinlogDecoder struct {
 	process *os.Process
 }
 
+// findVtMysqlbinlogDir finds the directory that contains vt_mysqlbinlog:
+// could be with the mysql distribution, or with the vt distribution
+func findVtMysqlbinlogDir() (string, error) {
+	// first look in VtRoot
+	dir, err := vtenv.VtRoot()
+	if err == nil {
+		if _, err = os.Stat(path.Join(dir, "bin/vt_mysqlbinlog")); err == nil {
+			return dir, nil
+		}
+	}
+
+	// then look in VtMysqlRoot
+	dir, err = vtenv.VtMysqlRoot()
+	if err == nil {
+		if _, err = os.Stat(path.Join(dir, "bin/vt_mysqlbinlog")); err == nil {
+			return dir, nil
+		}
+	}
+
+	// then try current directory + bin/vt_mysqlbinlog
+	if _, err = os.Stat("bin/vt_mysqlbinlog"); err == nil {
+		return "", nil
+	}
+
+	return "", fmt.Errorf("Cannot find vt_mysqlbinlog binary")
+}
+
 // return a Reader from which the decoded binlog can be read
 func (decoder *BinlogDecoder) DecodeMysqlBinlog(binlog *os.File) (io.Reader, error) {
-	dir := os.ExpandEnv("$VT_MYSQL_ROOT/bin")
+	dir, err := findVtMysqlbinlogDir()
+	if err != nil {
+		return nil, err
+	}
+	dir = path.Join(dir, "bin")
 	name := "vt_mysqlbinlog"
 	arg := []string{"vt_mysqlbinlog", "-"}
 

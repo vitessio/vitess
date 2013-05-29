@@ -88,9 +88,11 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		relog.Info("No mysqld_start hook, running mysqld_safe directly")
-		// FIXME(szopa): add VtMysqlRoot to env.
-		dir := os.ExpandEnv("$VT_MYSQL_ROOT")
-		name = dir + "/bin/mysqld_safe"
+		dir, err := vtenv.VtMysqlRoot()
+		if err != nil {
+			return err
+		}
+		name = path.Join(dir, "bin/mysqld_safe")
 		arg := []string{
 			"--defaults-file=" + mt.config.path}
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
@@ -99,7 +101,7 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 		cmd.Dir = dir
 		cmd.Env = env
 		relog.Info("mysqlctl.Start mysqlWaitTime:%v %#v", mysqlWaitTime, cmd)
-		_, err := cmd.StderrPipe()
+		_, err = cmd.StderrPipe()
 		if err != nil {
 			return nil
 		}
@@ -157,15 +159,18 @@ func Shutdown(mt *Mysqld, waitForMysqld bool, mysqlWaitTime time.Duration) error
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, try mysqladmin
 		relog.Info("No mysqld_shutdown hook, running mysqladmin directly")
-		dir := os.ExpandEnv("$VT_MYSQL_ROOT")
-		name := dir + "/bin/mysqladmin"
+		dir, err := vtenv.VtMysqlRoot()
+		if err != nil {
+			return err
+		}
+		name := path.Join(dir, "bin/mysqladmin")
 		arg := []string{
 			"-u", "vt_dba", "-S", mt.config.SocketFile,
 			"shutdown"}
 		env := []string{
 			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
 		}
-		_, err := execCmd(name, arg, env, dir)
+		_, err = execCmd(name, arg, env, dir)
 		if err != nil {
 			return err
 		}
@@ -384,15 +389,18 @@ func (mysqld *Mysqld) Addr() string {
 
 // executes some SQL commands using a mysql command line interface process
 func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
-	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
-	name := dir + "/bin/mysql"
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return err
+	}
+	name := path.Join(dir, "bin/mysql")
 	arg := []string{
 		"-u", "vt_dba", "-S", mysqld.config.SocketFile,
 		"-e", sql}
 	env := []string{
-		os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
+		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
 	}
-	_, err := execCmd(name, arg, env, dir)
+	_, err = execCmd(name, arg, env, dir)
 	if err != nil {
 		return err
 	}

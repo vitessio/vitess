@@ -13,6 +13,8 @@ const (
 )
 
 // VtRoot returns $VTROOT or tries to guess its value if it's not set.
+// This is the root for the 'vt' distribution, which contains bin/vtaction
+// for instance.
 func VtRoot() (root string, err error) {
 	if root = os.Getenv("VTROOT"); root != "" {
 		return root, nil
@@ -39,4 +41,20 @@ func VtDataRoot() string {
 	}
 
 	return DefaultVtDataRoot
+}
+
+// VtMysqlRoot returns the root for the mysql distribution, which
+// contains bin/mysql CLI for instance.
+func VtMysqlRoot() (string, error) {
+	// if the environment variable is set, use that
+	if root := os.Getenv("VT_MYSQL_ROOT"); root != "" {
+		return root, nil
+	}
+
+	// otherwise let's use VTROOT
+	root, err := VtRoot()
+	if err != nil {
+		return "", errors.New("VT_MYSQL_ROOT is not set and could not be guessed from the executable location. Please set $VT_MYSQL_ROOT.")
+	}
+	return root, nil
 }
