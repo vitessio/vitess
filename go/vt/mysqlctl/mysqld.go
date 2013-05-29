@@ -76,28 +76,44 @@ func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
 }
 
 func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
-	// FIXME(szopa): add VtMysqlRoot to env.
-	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
-	name := dir + "/bin/mysqld_safe"
-	arg := []string{
-		"--defaults-file=" + mt.config.path}
-	env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
+	var name string
 
-	cmd := exec.Command(name, arg...)
-	cmd.Dir = dir
-	cmd.Env = env
-	relog.Info("mysqlctl.Start mysqlWaitTime:%v %#v", mysqlWaitTime, cmd)
-	_, err := cmd.StderrPipe()
-	if err != nil {
-		return nil
-	}
-	err = cmd.Start()
-	if err != nil {
-		return nil
-	}
+	// try the mysqld start hook, if any
+	h := hook.NewSimpleHook("mysqld_start")
+	hr := h.Execute()
+	switch hr.ExitStatus {
+	case hook.HOOK_SUCCESS:
+		// hook exists and worked, we can keep going
+		name = "mysqld_start hook"
+	case hook.HOOK_DOES_NOT_EXIST:
+		// hook doesn't exist, run mysqld_safe ourselves
+		relog.Info("No mysqld_start hook, running mysqld_safe directly")
+		// FIXME(szopa): add VtMysqlRoot to env.
+		dir := os.ExpandEnv("$VT_MYSQL_ROOT")
+		name = dir + "/bin/mysqld_safe"
+		arg := []string{
+			"--defaults-file=" + mt.config.path}
+		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
-	// wait so we don't get a bunch of defunct processes
-	go cmd.Wait()
+		cmd := exec.Command(name, arg...)
+		cmd.Dir = dir
+		cmd.Env = env
+		relog.Info("mysqlctl.Start mysqlWaitTime:%v %#v", mysqlWaitTime, cmd)
+		_, err := cmd.StderrPipe()
+		if err != nil {
+			return nil
+		}
+		err = cmd.Start()
+		if err != nil {
+			return nil
+		}
+
+		// wait so we don't get a bunch of defunct processes
+		go cmd.Wait()
+	default:
+		// hook failed, we report error
+		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
+	}
 
 	// give it some time to succeed - usually by the time the socket emerges
 	// we are in good shape
@@ -132,17 +148,30 @@ func Shutdown(mt *Mysqld, waitForMysqld bool, mysqlWaitTime time.Duration) error
 		return nil
 	}
 
-	dir := os.ExpandEnv("$VT_MYSQL_ROOT")
-	name := dir + "/bin/mysqladmin"
-	arg := []string{
-		"-u", "vt_dba", "-S", mt.config.SocketFile,
-		"shutdown"}
-	env := []string{
-		os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
-	}
-	_, err := execCmd(name, arg, env, dir)
-	if err != nil {
-		return err
+	// try the mysqld shutdown hook, if any
+	h := hook.NewSimpleHook("mysqld_shutdown")
+	hr := h.Execute()
+	switch hr.ExitStatus {
+	case hook.HOOK_SUCCESS:
+		// hook exists and worked, we can keep going
+	case hook.HOOK_DOES_NOT_EXIST:
+		// hook doesn't exist, try mysqladmin
+		relog.Info("No mysqld_shutdown hook, running mysqladmin directly")
+		dir := os.ExpandEnv("$VT_MYSQL_ROOT")
+		name := dir + "/bin/mysqladmin"
+		arg := []string{
+			"-u", "vt_dba", "-S", mt.config.SocketFile,
+			"shutdown"}
+		env := []string{
+			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
+		}
+		_, err := execCmd(name, arg, env, dir)
+		if err != nil {
+			return err
+		}
+	default:
+		// hook failed, we report error
+		return fmt.Errorf("mysqld_shutdown hook failed: %v", hr.String())
 	}
 
 	// wait for mysqld to really stop. use the sock file as a proxy for that since

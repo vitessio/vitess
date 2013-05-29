@@ -25,14 +25,14 @@ type Hook struct {
 }
 
 type HookResult struct {
-	ExitStatus int // 0 if it succeeded
+	ExitStatus int // HOOK_SUCCESS if it succeeded
 	Stdout     string
 	Stderr     string
 }
 
 // the hook will return a value between 0 and 255. 0 if it succeeds.
 // so we have these additional values here for more information.
-var (
+const (
 	HOOK_SUCCESS                = 0
 	HOOK_DOES_NOT_EXIST         = -1
 	HOOK_STAT_FAILED            = -2
@@ -106,7 +106,7 @@ func (hook *Hook) Execute() (result *HookResult) {
 	result.Stdout = stdout.String()
 	result.Stderr = stderr.String()
 	if err == nil {
-		result.ExitStatus = 0
+		result.ExitStatus = HOOK_SUCCESS
 	} else {
 		if cmd.ProcessState != nil && cmd.ProcessState.Sys() != nil {
 			result.ExitStatus = cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
