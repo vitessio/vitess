@@ -130,7 +130,7 @@ func (ai *ActionInitiator) rpcCall(zkTabletPath, name string, args, reply interf
 	timer := time.After(waitTime)
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr, waitTime)
 	if err != nil {
-		return err
+		return fmt.Errorf("RPC error for %v: %v", zkTabletPath, err.Error())
 	}
 	defer rpcClient.Close()
 
@@ -138,9 +138,13 @@ func (ai *ActionInitiator) rpcCall(zkTabletPath, name string, args, reply interf
 	call := rpcClient.Go("TabletManager."+name, args, reply, nil)
 	select {
 	case <-timer:
-		return fmt.Errorf("Timeout waiting for TabletManager." + name)
+		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, zkTabletPath)
 	case <-call.Done:
-		return call.Error
+		if call.Error != nil {
+			return fmt.Errorf("Remote error for %v: %v", zkTabletPath, call.Error.Error())
+		} else {
+			return nil
+		}
 	}
 }
 
