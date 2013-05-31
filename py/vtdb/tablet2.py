@@ -53,11 +53,7 @@ class TabletConnection(object):
     req = self._make_req()
     try:
       response = self.client.call('SqlQuery.Begin', req)
-      # FIXME(sougou): Temp hack for backward compatibility
-      if type(response.reply) == dict:
-        self.transaction_id = response.reply['TransactionId']
-      else:
-        self.transaction_id = response.reply
+      self.transaction_id = response.reply['TransactionId']
     except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
 
