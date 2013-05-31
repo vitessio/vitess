@@ -8,6 +8,7 @@
 # hijacks the socket. The client is synchronous, but implements deadlines.
 
 import errno
+import select
 import socket
 import time
 import urlparse
@@ -18,6 +19,11 @@ class GoRpcError(Exception):
   pass
 
 class TimeoutError(GoRpcError):
+  pass
+
+# The programmer has misused an API, but the underlying
+# connection is still salvagable.
+class ProgrammingError(GoRpcError):
   pass
 
 # Error field from response raised as an exception
@@ -68,6 +74,7 @@ class _GoRpcConn(object):
     self.conn = None
     # NOTE(msolomon) since the deadlines are approximate in the code, set
     # timeout to oversample to minimize waiting in the extreme failure mode.
+    # FIXME(msolomon) reimplement using deadlines
     self.socket_timeout = timeout / 10.0
     self.buf = []
 
@@ -103,7 +110,7 @@ class _GoRpcConn(object):
       data = self.conn.recv(size)
       if not data:
         # We only read when we expect data - if we get nothing this probably
-        # indicates that the server hung up. This exception ensure the client
+        # indicates that the server hung up. This exception ensures the client
         # tears down properly.
         raise socket.error(errno.EPIPE, 'unexpected EOF in read')
     except socket.timeout:
@@ -117,6 +124,21 @@ class _GoRpcConn(object):
       raise
 
     return data
+
+  def is_closed():
+    if self.conn is None:
+      return True
+
+    # make sure the socket hasn't gone away
+    fileno = self.conn.fileno()
+    poll = select.poll()
+    poll.register(fileno)
+    ready = poll.poll(0)
+    if ready:
+      fd, event = ready[0]
+      if event & select.POLLIN:
+        return True
+    return False
 
 class GoRpcClient(object):
   def __init__(self, uri, timeout):
@@ -134,6 +156,8 @@ class GoRpcClient(object):
     conn = _GoRpcConn(self.timeout)
     try:
       conn.dial(self.uri)
+    except socket.timeout as e:
+      raise TimeoutError(e, self.timeout, 'dial', self.uri)
     except socket.error as e:
       raise GoRpcError(e)
     self.conn = conn
@@ -143,6 +167,14 @@ class GoRpcClient(object):
       self.conn.close()
       self.conn = None
     self.start_time = None
+
+  def is_closed():
+    if self.conn:
+      if self.conn.is_closed():
+        return True
+      else:
+        return False
+    return True
 
   __del__ = close
 
@@ -166,9 +198,9 @@ class GoRpcClient(object):
     return False
 
   # logic to read the next response off the wire
-  def read_response(self, response, timeout):
+  def _read_response(self, response, timeout):
     if self.start_time is None:
-      raise GoRpcError('no request pending')
+      raise ProgrammingError('no request pending')
     if not self.conn:
       raise GoRpcError('closed client')
 
@@ -214,7 +246,7 @@ class GoRpcClient(object):
       self.conn.write_request(self.encode_request(req))
       if response is None:
         response = GoRpcResponse()
-      self.read_response(response, self.timeout)
+      self._read_response(response, self.timeout)
       self.start_time = None
     except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
@@ -263,7 +295,7 @@ class GoRpcClient(object):
   def stream_next(self):
     try:
       response = GoRpcResponse()
-      self.read_response(response, self.timeout * 10)
+      self._read_response(response, self.timeout * 10)
     except socket.timeout as e:
       # tear down - can't guarantee a clean conversation
       self.close()
@@ -280,11 +312,11 @@ class GoRpcClient(object):
                        self.req)
 
     if response.error:
+      self.start_time = None
       if response.error == _lastStreamResponseError:
         return None
       else:
         raise AppError(response.error)
-      self.start_time = None
     else:
       self.start_time = time.time()
 

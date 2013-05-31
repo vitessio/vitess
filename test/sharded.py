@@ -6,7 +6,7 @@ import socket
 import utils
 import tablet
 
-from vtdb import tablet2
+from vtdb import tablet3 as tablet2
 
 # range "" - 80
 shard_0_master = tablet.Tablet()

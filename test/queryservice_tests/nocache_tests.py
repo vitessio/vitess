@@ -1,5 +1,6 @@
 import time
 
+from vtdb import dbexceptions
 from vtdb import vt_occ2
 
 import framework
@@ -15,19 +16,19 @@ class TestNocache(framework.TestCase):
     self.assertEqual(cu.fetchone(), (2, None, '', None))
 
   def test_binary(self):
-    self.env.execute("begin")
+    self.env.conn.begin()
     binary_data = '\x00\'\"\b\n\r\t\x1a\\\x00\x0f\xf0\xff'
     self.env.execute("insert into vtocc_test values(4, null, null, '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\\x00\x0f\xf0\xff')")
     bvar = {'bindata': binary_data}
     self.env.execute("insert into vtocc_test values(5, null, null, %(bindata)s)", bvar)
-    self.env.execute("commit")
+    self.env.conn.commit()
     cu = self.env.execute("select * from vtocc_test where intval=4")
     self.assertEqual(cu.fetchone()[3], binary_data)
     cu = self.env.execute("select * from vtocc_test where intval=5")
     self.assertEqual(cu.fetchone()[3], binary_data)
-    self.env.execute("begin")
+    self.env.conn.begin()
     self.env.execute("delete from vtocc_test where intval in (4,5)")
-    self.env.execute("commit")
+    self.env.conn.commit()
 
   def test_simple_read(self):
     vstart = self.env.debug_vars()
@@ -40,19 +41,19 @@ class TestNocache(framework.TestCase):
   def test_commit(self):
     vstart = self.env.debug_vars()
     self.env.txlog.reset()
-    self.env.execute("begin")
+    self.env.conn.begin()
     self.assertNotEqual(self.env.conn.transaction_id, 0)
     self.env.execute("insert into vtocc_test (intval, floatval, charval, binval) values(4, null, null, null)")
-    self.env.execute("commit")
+    self.env.conn.commit()
     time.sleep(0.1)
     txlog = self.env.txlog.read().split('\t')
     self.assertEqual(txlog[4], "commit")
     self.assertEqual(txlog[5], "insert into vtocc_test (intval, floatval, charval, binval) values(4, null, null, null)")
     cu = self.env.execute("select * from vtocc_test")
     self.assertEqual(cu.rowcount, 4)
-    self.env.execute("begin")
+    self.env.conn.begin()
     self.env.execute("delete from vtocc_test where intval=4")
-    self.env.execute("commit")
+    self.env.conn.commit()
     cu = self.env.execute("select * from vtocc_test")
     self.assertEqual(cu.rowcount, 3)
     vend = self.env.debug_vars()
@@ -66,26 +67,25 @@ class TestNocache(framework.TestCase):
 
   def test_integrity_error(self):
     vstart = self.env.debug_vars()
-    self.env.execute("begin")
+    self.env.conn.begin()
     try:
       self.env.execute("insert into vtocc_test values(1, null, null, null)")
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertEqual(e[0], 1062)
-      self.assertContains(e[1], "error: Duplicate")
+    except dbexceptions.IntegrityError as e:
+      self.assertContains(str(e), "error: Duplicate")
     else:
       self.fail("Did not receive exception")
     finally:
-      self.env.execute("rollback")
+      self.env.conn.rollback()
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Errors.DupKey", 0)+1, vend.Errors.DupKey)
 
   def test_rollback(self):
     vstart = self.env.debug_vars()
     self.env.txlog.reset()
-    self.env.execute("begin")
+    self.env.conn.begin()
     self.assertNotEqual(self.env.conn.transaction_id, 0)
     self.env.execute("insert into vtocc_test values(4, null, null, null)")
-    self.env.execute("rollback")
+    self.env.conn.rollback()
     time.sleep(0.1)
     txlog = self.env.txlog.read().split('\t')
     self.assertEqual(txlog[4], "rollback")
@@ -100,8 +100,8 @@ class TestNocache(framework.TestCase):
     vstart = self.env.debug_vars()
     try:
       self.env.execute("insert into vtocc_test values(4, null, null, null)")
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: DMLs")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: DMLs")
     else:
       self.fail("Did not receive exception")
     vend = self.env.debug_vars()
@@ -125,22 +125,22 @@ class TestNocache(framework.TestCase):
   def test_for_update(self):
     try:
       self.env.execute("select * from vtocc_test where intval=2 for update")
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Disallowed")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Disallowed")
     else:
       self.fail("Did not receive exception")
 
     # If these throw no exceptions, we're good
-    self.env.execute("begin")
+    self.env.conn.begin()
     self.env.execute("select * from vtocc_test where intval=2 for update")
-    self.env.execute("commit")
+    self.env.conn.commit()
     # Make sure the row is not locked for read
     self.env.execute("select * from vtocc_test where intval=2")
 
   def test_pool_size(self):
     vstart = self.env.debug_vars()
     self.env.execute("set vt_pool_size=1")
-    self.assertRaises(vt_occ2.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
+    self.assertRaises(dbexceptions.DatabaseError, self.env.execute, "select sleep(3) from dual")
     self.env.execute("select 1 from dual")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 1)
@@ -153,18 +153,18 @@ class TestNocache(framework.TestCase):
     self.env.execute("set vt_transaction_cap=1")
     vstart = self.env.debug_vars()
     co2 = self.env.connect()
-    self.env.execute("begin")
+    self.env.conn.begin()
     try:
       cu2 = co2.cursor()
-      cu2.execute("begin", {})
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "connection limit")
+      co2.begin()
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "connection limit")
     else:
       self.fail("Did not receive exception")
     finally:
       cu2.close()
       co2.close()
-    self.env.execute("commit")
+    self.env.conn.commit()
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 1)
     self.env.execute("set vt_transaction_cap=20")
@@ -178,12 +178,12 @@ class TestNocache(framework.TestCase):
     time.sleep(0.3)
     vstart = self.env.debug_vars()
     self.env.txlog.reset()
-    self.env.execute("begin")
+    self.env.conn.begin()
     time.sleep(0.3)
     try:
-      self.env.execute("commit")
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Transaction")
+      self.env.conn.commit()
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Transaction")
     else:
       self.fail("Did not receive exception")
     time.sleep(0.1)
@@ -230,8 +230,8 @@ class TestNocache(framework.TestCase):
       for i in range(10):
         try:
           self.env.execute("select * from vtocc_temp")
-        except vt_occ2.MySQLErrors.DatabaseError, e:
-          self.assertContains(e[1], "not found in schema")
+        except dbexceptions.DatabaseError as e:
+          self.assertContains(str(e), "not found in schema")
           time.sleep(1)
         else:
           break
@@ -247,8 +247,8 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.MaxResultSize, 2)
     try:
       self.env.execute("select * from vtocc_test")
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Row")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Row")
     else:
       self.fail("Did not receive exception")
     self.env.execute("set vt_max_result_size=10000")
@@ -261,18 +261,18 @@ class TestNocache(framework.TestCase):
     cu = conn.cursor()
     self.env.execute("set vt_query_timeout=0.25")
     try:
-      cu.execute("begin", {})
+      conn.begin()
       cu.execute("select sleep(0.5) from vtocc_test", {})
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      if "error: Query" not in e[1] and "error: Lost connection" not in e[1]:
+    except dbexceptions.DatabaseError as e:
+      if "error: Query" not in str(e) and "error: Lost connection" not in str(e):
         self.fail("Query not killed as expected")
     else:
       self.fail("Did not receive exception")
 
     try:
       cu.execute("select 1 from dual", {})
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Transaction")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Transaction")
     else:
       self.fail("Did not receive exception")
 
@@ -301,12 +301,12 @@ class TestNocache(framework.TestCase):
   def test_consolidation(self):
     vstart = self.env.debug_vars()
     # The first call always does a full fetch for field info
-    self.assertRaises(vt_occ2.MySQLErrors.DatabaseError, self.env.execute, "select sleep(3) from dual")
+    self.assertRaises(dbexceptions.DatabaseError, self.env.execute, "select sleep(3) from dual")
     time.sleep(2)
     for i in range(2):
       try:
         self.env.execute("select sleep(3) from dual")
-      except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError):
+      except dbexceptions.OperationalError:
         pass
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Waits.TotalCount", 0)+1, vend.Waits.TotalCount)
@@ -337,28 +337,28 @@ class TestNocache(framework.TestCase):
     self._verify_error("insert into vtocc_ints(tiny) values(-129)", None, "error: Out of range")
 
     try:
-      self.env.execute("begin")
+      self.env.conn.begin()
       self.env.execute("insert into vtocc_ints(tiny, medium) values(1, -129)")
       self.env.execute("insert into vtocc_fracts(id, num) values(1, 1)")
       self.env.execute("insert into vtocc_strings(vb) values('a')")
-      self.env.execute("commit")
+      self.env.conn.commit()
       self._verify_mismatch("insert into vtocc_strings(vb) select tiny from vtocc_ints")
       self._verify_mismatch("insert into vtocc_ints(tiny) select num from vtocc_fracts")
       self._verify_mismatch("insert into vtocc_ints(tiny) select vb from vtocc_strings")
       self._verify_error("insert into vtocc_ints(tiny) select medium from vtocc_ints", None, "error: Out of range")
     finally:
-      self.env.execute("begin")
+      self.env.conn.begin()
       self.env.execute("delete from vtocc_ints")
       self.env.execute("delete from vtocc_fracts")
       self.env.execute("delete from vtocc_strings")
-      self.env.execute("commit")
+      self.env.conn.commit()
 
   def test_customrules(self):
     bv = {'asdfg': 1}
     try:
       self.env.execute("select * from vtocc_test where intval=%(asdfg)s", bv)
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Query disallowed")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Query disallowed")
 
   def test_health(self):
     self.assertEqual(self.env.health(), "ok")
@@ -369,7 +369,7 @@ class TestNocache(framework.TestCase):
     self._verify_query_stats(self.env.query_stats(), "select eid as query_stats from vtocc_a where eid = :eid", "vtocc_a", "PASS_SELECT", 1, 2, 0)
     try:
       self.env.execute("select eid as query_stats from vtocc_a where dontexist(eid) = %(eid)s", bv)
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
+    except dbexceptions.DatabaseError:
       pass
     else:
       self.fail("Did not receive exception: " + query)
@@ -379,15 +379,15 @@ class TestNocache(framework.TestCase):
     self._verify_error(query, bindvars, "error: Type mismatch")
 
   def _verify_error(self, query, bindvars, err):
-    self.env.execute("begin")
+    self.env.conn.begin()
     try:
       self.env.execute(query, bindvars)
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], err)
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), err)
     else:
       self.fail("Did not receive exception: " + query)
     finally:
-      self.env.execute("rollback")
+      self.env.conn.rollback()
 
   def _verify_query_stats(self, query_stats, query, table, plan, count, rows, errors):
     for stat in query_stats:

@@ -158,7 +158,10 @@ class Case(object):
       querylog.reset()
     if self.is_testing_cache:
       tstart = self.table_stats()
-    cursor.execute(self.sql, self.bindings)
+    if self.sql in ('begin', 'commit', 'rollback'):
+      getattr(cursor.connection, self.sql)()
+    else:
+      cursor.execute(self.sql, self.bindings)
     if self.result is not None:
       result = list(cursor)
       if self.result != result:
@@ -207,7 +210,10 @@ class MultiCase(object):
     failures = []
     for case in self.sqls_and_cases:
       if isinstance(case, basestring):
-        cursor.execute(case)
+        if case in ('begin', 'commit', 'rollback'):
+          getattr(cursor.connection, case)()
+        else:
+          cursor.execute(case)
         continue
       failures += case.run(cursor, querylog)
     return failures

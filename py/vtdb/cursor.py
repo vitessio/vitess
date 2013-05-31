@@ -28,17 +28,6 @@ class BaseCursor(object):
     self.description = None
     self.lastrowid = None
 
-    sql_check = sql.strip().lower()
-    if sql_check == 'begin':
-      self.connection.begin()
-      return
-    elif sql_check == 'commit':
-      self.connection.commit()
-      return
-    elif sql_check == 'rollback':
-      self.connection.rollback()
-      return
-
     self.results, self.rowcount, self.lastrowid, self.description = self.connection._execute(sql, bind_variables, **kargs)
     self.index = 0
     return self.rowcount
@@ -103,20 +92,6 @@ class TabletCursor(BaseCursor):
     return self._execute(sql, bind_variables)
 
 
-# Standard cursor when connecting to a sharded backend.
-class Cursor(BaseCursor):
-  def execute(self, sql, bind_variables=None, key=None, keys=None):
-    return self._execute(sql, bind_variables, key=key, keys=keys)
-
-class KeyedCursor(BaseCursor):
-  def __init__(self, connection, key=None, keys=None):
-    self.key = key
-    self.keys = keys
-    BaseCursor.__init__(self, connection)
-
-  def execute(self, sql, bind_variables):
-    return self._execute(sql, bind_variables, key=self.key, keys=self.keys)
-
 class BatchCursor(BaseCursor):
   def __init__(self, connection):
     self.exec_list = []
@@ -141,8 +116,6 @@ class BatchQueryItem(object):
 class StreamCursor(object):
   arraysize = 1
   conversions = None
-  query_result = None
-  query_index = 0
   connection = None
   description = None
   index = None
@@ -157,31 +130,16 @@ class StreamCursor(object):
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self.description = None
-
-    # these special queries will all fail on the server side,
-    # as we don't support transactions with streaming
-    sql_check = sql.strip().lower()
-    if sql_check == 'begin':
-      self.connection.begin()
-      return
-    elif sql_check == 'commit':
-      self.connection.commit()
-      return
-    elif sql_check == 'rollback':
-      self.connection.rollback()
-      return
-
-    self.description, self.conversions, self.query_result, self.query_index = self.connection._stream_execute(sql, bind_variables, **kargs)
+    _, _, _, self.description = self.connection._stream_execute(sql, bind_variables, **kargs)
     self.index = 0
     return 0
 
   def fetchone(self):
-    if self.conversions is None:
+    if self.description is None:
       raise dbexceptions.ProgrammingError('fetch called before execute')
 
     self.index += 1
-    result, self.query_result, self.query_index = self.connection._stream_next(self.conversions, self.query_result, self.query_index)
-    return result
+    return self.connection._stream_next()
 
   # fetchmany can be called until it returns no rows. Returning less rows
   # than what we asked for is also an indication we ran out. But the cursor

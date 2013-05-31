@@ -38,7 +38,7 @@ class TestEnv(object):
     curs = self.conn.cursor(cursorclass=cursorclass)
     try:
       curs.execute(query, binds)
-    except mysql.OperationalError:
+    except dbexceptions.OperationalError:
       self.conn = self.connect()
       raise
     return curs

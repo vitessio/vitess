@@ -3,13 +3,13 @@ import exceptions
 class Error(exceptions.StandardError):
   pass
 
+class DatabaseError(exceptions.StandardError):
+  pass
+
 class Warning(exceptions.StandardError):
   pass
 
 class InterfaceError(Error):
-  pass
-
-class DatabaseError(Error):
   pass
 
 class InternalError(DatabaseError):
@@ -21,11 +21,11 @@ class OperationalError(DatabaseError):
 class ProgrammingError(DatabaseError):
   pass
 
+class NotSupportedError(ProgrammingError):
+  pass
+
 class IntegrityError(DatabaseError):
   pass
 
-class DataError(DatabaseError):
-  pass
-
-class NotSupportedError(DatabaseError):
+class PartialCommitError(IntegrityError):
   pass

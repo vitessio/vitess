@@ -1,3 +1,4 @@
+from vtdb import dbexceptions
 from vtdb import vt_occ2
 
 import framework
@@ -28,8 +29,8 @@ class TestCache(framework.TestCase):
   def test_num_str(self):
     try:
       self.env.execute("select bid, eid from vtocc_cached where eid = 1 and bid = 1")
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Type")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Type")
     else:
       self.fail("Did not receive exception")
 
@@ -96,14 +97,14 @@ class TestCache(framework.TestCase):
 
   def test_nopass(self):
     try:
-      self.env.execute("begin")
+      self.env.conn.begin()
       self.env.execute("insert into vtocc_cached(eid, bid, name, foo) values(unix_time(), 'foo', 'bar', 'bar')")
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: DML too complex")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: DML too complex")
     else:
       self.fail("Did not receive exception")
     finally:
-      self.env.execute("rollback")
+      self.env.conn.rollback()
 
   def test_types(self):
     self._verify_mismatch("select * from vtocc_cached where eid = 'str' and bid = 'str'")
@@ -116,8 +117,8 @@ class TestCache(framework.TestCase):
   def _verify_mismatch(self, query, bindvars=None):
     try:
       self.env.execute(query, bindvars)
-    except (vt_occ2.MySQLErrors.DatabaseError, vt_occ2.dbexceptions.OperationalError), e:
-      self.assertContains(e[1], "error: Type mismatch")
+    except dbexceptions.DatabaseError as e:
+      self.assertContains(str(e), "error: Type mismatch")
     else:
       self.fail("Did not receive exception")
 

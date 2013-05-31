@@ -255,10 +255,10 @@ def _exec_vt_txn(host, query_list=None):
     return
   vtdb_conn = _vtdb_conn(host)
   vtdb_cursor = vtdb_conn.cursor()
-  vtdb_cursor.execute('begin', {})
+  vtdb_conn.begin()
   for q in query_list:
     vtdb_cursor.execute(q, {})
-  vtdb_cursor.execute('commit', {})
+  vtdb_conn.commit()
 
 #The function below checks the parity of streams received
 #from master and replica for the same writes. Also tests

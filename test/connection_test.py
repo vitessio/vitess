@@ -11,7 +11,6 @@ import sys
 import time
 import unittest
 
-import MySQLdb
 from net import gorpc
 from net import bsonrpc
 from vtdb import vt_occ2
@@ -207,8 +206,8 @@ class TestConnection(BaseTest):
     cursor.execute("select 1 from connection_test")
     try:
       cursor.execute("select sleep(1) from connection_test")
-    except MySQLdb.DatabaseError as e:
-      if "deadline exceeded" not in e.args[1]:
+    except dbexceptions.DatabaseError as e:
+      if "deadline exceeded" not in str(e):
         raise
     else:
       self.fail("Expected timeout error not raised")
@@ -222,7 +221,7 @@ class TestConnection(BaseTest):
     cursor = self.connection.cursor()
     BaseTest.kill_vtocc()
     try:
-      self.assertRaises(MySQLdb.OperationalError, cursor.execute, "select 1 from dual")
+      self.assertRaises(dbexceptions.OperationalError, cursor.execute, "select 1 from dual")
     finally:
       BaseTest.start_vtocc()
 
