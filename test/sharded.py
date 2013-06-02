@@ -7,6 +7,8 @@ import utils
 import tablet
 
 from vtdb import tablet3 as tablet2
+from vtdb import topology
+from zk import zkocc
 
 # range "" - 80
 shard_0_master = tablet.Tablet()
@@ -127,7 +129,7 @@ def run_test_sharding():
                    shard_0_replica.zk_tablet_path])
 
   # start zkocc, we'll use it later
-  zkocc = utils.zkocc_start()
+  zkocc_server = utils.zkocc_start()
 
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/-80 ' + shard_0_master.zk_tablet_path, auto_log=True)
   utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/80- ' + shard_1_master.zk_tablet_path, auto_log=True)
@@ -224,9 +226,18 @@ def run_test_sharding():
 
   # now try to connect using the python client and shard-aware connection
   # to both shards
-  # FIXME(alainjobart) get key_range from the topology
-  # when emd_topology.py is exported to this depot
-  conn = tablet2.TabletConnection("localhost:%u" % shard_0_master.port,
+  # first get the topology and check it
+  zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+                                       "test_nj", 30.0)
+  topology.read_keyspaces(zkocc_client)
+
+  shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.-80.master:_vtocc")
+  if len(shard_0_master_addrs) != 1:
+    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.-80.master:_vtocc", got: %s' % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
+  utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
+
+  # connect to shard -80
+  conn = tablet2.TabletConnection("%s:%u" % shard_0_master_addrs[0],
                                   "test_keyspace", "-80", 10.0)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
@@ -235,7 +246,9 @@ def run_test_sharding():
         results[1][0] != 2):
     print "conn._execute returned:", results
     raise utils.TestError('wrong conn._execute output')
-  conn = tablet2.TabletConnection("localhost:%u" % shard_1_master.port,
+
+  # connect to shard 80-
+  conn = tablet2.TabletConnection("%s:%u" % topology.get_host_port_by_name(zkocc_client, "test_keyspace.80-.master:_vtocc")[0],
                                   "test_keyspace", "80-", 10.0)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
@@ -254,7 +267,7 @@ def run_test_sharding():
     if "fatal: Shard mismatch, expecting -80, received -90" not in str(e):
       raise utils.TestError('unexpected exception: ' + str(e))
 
-  utils.kill_sub_process(zkocc)
+  utils.kill_sub_process(zkocc_server)
   shard_0_master.kill_vttablet()
   shard_0_replica.kill_vttablet()
   shard_1_master.kill_vttablet()

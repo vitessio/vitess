@@ -13,11 +13,12 @@ from zk import zkns_query
 from zk import zkocc
 
 # zkocc_addrs - bootstrap addresses for resolving other endpoints
-# zk_keyspace_path - usually /zk/local/vt/ns/<keyspace>
+# local_cell - name of the local cell
+# keyspace_name - as in /zk/local/vt/ns/<keyspace_name>
 # db_type - master/replica/rdonly
-def connect(zkocc_addrs, local_cell, keyspace_path, db_type, use_streaming, timeout, user, password, dbname):
+def connect(zkocc_addrs, local_cell, keyspace_name, db_type, use_streaming, timeout, user, password, dbname):
   zk_client = zkocc.ZkOccConnection(zkocc_addrs, local_cell, timeout)
-  return ShardedClient(zk_client, keyspace_path, db_type, use_streaming, timeout, user, password, dbname)
+  return ShardedClient(zk_client, keyspace_name, db_type, use_streaming, timeout, user, password, dbname)
 
 # Track the connections and statement issues with a transaction context.
 # This is fundamentally a misnomer since we do not support transactions between shards.
@@ -28,7 +29,7 @@ class Txn(object):
 
 class ShardedClient(object):
   zkocc_client = None
-  zk_keyspace_path = ''
+  keyspace_name = ''
   keyspace = None
   db_type = ''
   db_name = ''
@@ -41,9 +42,9 @@ class ShardedClient(object):
 
   cursorclass = cursor.ShardedCursor
 
-  def __init__(self, zkocc_client, keyspace_path, db_type, use_streaming, timeout, user, password, dbname):
+  def __init__(self, zkocc_client, keyspace_name, db_type, use_streaming, timeout, user, password, dbname):
     self.zkocc_client = zkocc_client
-    self.zk_keyspace_path = keyspace_path
+    self.keyspace_name = keyspace_name
     self.db_type = db_type
     self.use_streaming = use_streaming
     self.timeout = timeout
@@ -51,19 +52,16 @@ class ShardedClient(object):
     self.password = password
     self.dbname = dbname
     self.txn = None
-    self.keyspace = keyspace.read_keyspace(self.zkocc_client, keyspace_path)
+    self.keyspace = keyspace.read_keyspace(self.zkocc_client, keyspace_name)
     self.conns = [None] * keyspace.shard_count
     self._streaming_shard_list = [] # shards with active streams
 
   def _dial_shard(self, shard_idx):
-    name_path = os.path.join(self.zk_keyspace_path, shard_name, self.db_type)
+    shard_name = self.keyspace.shard_names[shard_idx]
+    name_path = os.path.join(keyspace.ZK_KEYSPACE_PATH, self.keyspace_name, shard_name, self.db_type)
     addrs = zkns_query.lookup_name(zkocc_client, name_path)
-    if shard_idx == 0:
-      key_range = tablet3.KeyRange('', self.shard_max_keys[shard_idx])
-    else:
-      key_range = tablet3.KeyRange(self.shard_max_keys[shard_idx - 1], self.shard_max_keys[shard_idx])
     for addr in addrs:
-      tablet_conn = tablet3.TabletConnection(addr, self.dbname, self.timeout, self.user, self.password, key_range)
+      tablet_conn = tablet3.TabletConnection(addr, self.keyspace_name, shard_name, self.timeout, self.user, self.password)
       try:
         tablet_conn.dial()
         self.conns[shard_idx] = tablet_conn
@@ -175,7 +173,7 @@ class ShardedClient(object):
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
           time.sleep(self.reconnect_delay)
-    raise dbexceptions.OperationalError('tablets unreachable', self.zk_keyspace_path, shard_idx, self.db_type)
+    raise dbexceptions.OperationalError('tablets unreachable', self.keyspace_name, shard_idx, self.db_type)
 
   def _execute_on_shard(self, query, bind_vars, shard_idx):
     query, bind_vars = dbapi.prepare_query_bind_vars(query, bind_vars)
@@ -205,7 +203,7 @@ class ShardedClient(object):
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
           time.sleep(self.reconnect_delay)
-    raise dbexceptions.OperationalError('tablets unreachable', self.zk_keyspace_path, shard_idx, self.db_type)
+    raise dbexceptions.OperationalError('tablets unreachable', self.keyspace_name, shard_idx, self.db_type)
 
 
   def _execute_batch(self, query_list, bind_vars_list, shard_idx):
@@ -237,7 +235,7 @@ class ShardedClient(object):
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
           time.sleep(self.reconnect_delay)
-    raise dbexceptions.OperationalError('tablets unreachable', self.zk_keyspace_path, shard_idx, self.db_type)
+    raise dbexceptions.OperationalError('tablets unreachable', self.keyspace_name, shard_idx, self.db_type)
 
 
   def _stream_execute_on_shard(self, query, bind_vars, shard_idx):
@@ -261,7 +259,7 @@ class ShardedClient(object):
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
           time.sleep(self.reconnect_delay)
-    raise dbexceptions.OperationalError('tablets unreachable', self.zk_keyspace_path, shard_idx, self.db_type)
+    raise dbexceptions.OperationalError('tablets unreachable', self.keyspace_name, shard_idx, self.db_type)
 
   def _stream_next_on_shard(self, shard_idx):
     # NOTE(msolomon) This action cannot be retried.
