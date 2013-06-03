@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/concurrency"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -60,18 +61,18 @@ func (wr *Wrangler) GetVersion(zkTabletPath string) (string, error) {
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(masterVersion string, zkMasterTabletPath string, alias tm.TabletAlias, wg *sync.WaitGroup, result chan string) {
+func (wr *Wrangler) diffVersion(masterVersion string, zkMasterTabletPath string, alias tm.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering version for %v", zkTabletPath)
 	slaveVersion, err := wr.GetVersion(zkTabletPath)
 	if err != nil {
-		result <- err.Error()
+		er.RecordError(err)
 		return
 	}
 
 	if masterVersion != slaveVersion {
-		result <- fmt.Sprintf("Master %v version %v is different than slave %v version %v", zkMasterTabletPath, masterVersion, zkTabletPath, slaveVersion)
+		er.RecordError(fmt.Errorf("Master %v version %v is different than slave %v version %v", zkMasterTabletPath, masterVersion, zkTabletPath, slaveVersion))
 	}
 }
 
@@ -92,23 +93,29 @@ func (wr *Wrangler) ValidateVersionShard(zkShardPath string) error {
 		return err
 	}
 
+	// read all the aliases in the shard, that is all tablets that are
+	// replicating from the master
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	if err != nil {
+		return err
+	}
+
 	// then diff with all slaves
-	result := make(chan string, 10)
-	wg := &sync.WaitGroup{}
-	go func() {
-		for _, alias := range si.ReplicaAliases {
-			wg.Add(1)
-			go wr.diffVersion(masterVersion, zkMasterTabletPath, alias, wg, result)
-		}
-		for _, alias := range si.RdonlyAliases {
-			wg.Add(1)
-			go wr.diffVersion(masterVersion, zkMasterTabletPath, alias, wg, result)
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for _, alias := range aliases {
+		if alias == si.MasterAlias {
+			continue
 		}
 
-		wg.Wait()
-		close(result)
-	}()
-	return channelToError("Version", result)
+		wg.Add(1)
+		go wr.diffVersion(masterVersion, zkMasterTabletPath, alias, &wg, &er)
+	}
+	wg.Wait()
+	if er.HasErrors() {
+		return fmt.Errorf("Version diffs:\n%v", er.Error().Error())
+	}
+	return nil
 }
 
 func (wr *Wrangler) ValidateVersionKeyspace(zkKeyspacePath string) error {
@@ -144,50 +151,29 @@ func (wr *Wrangler) ValidateVersionKeyspace(zkKeyspacePath string) error {
 		return err
 	}
 
-	// then diff with all slaves
-	result := make(chan string, 10)
-	wg := &sync.WaitGroup{}
-
-	go func() {
-		// first diff the slaves in the reference shard 0
-		for _, alias := range si.ReplicaAliases {
-			wg.Add(1)
-			go wr.diffVersion(referenceVersion, zkReferenceTabletPath, alias, wg, result)
-		}
-		for _, alias := range si.RdonlyAliases {
-			wg.Add(1)
-			go wr.diffVersion(referenceVersion, zkReferenceTabletPath, alias, wg, result)
+	// then diff with all tablets but master 0
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for _, shard := range shards {
+		shardPath := path.Join(zkShardsPath, shard)
+		aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardPath)
+		if err != nil {
+			er.RecordError(err)
+			continue
 		}
 
-		// then diffs the masters in the other shards, along with
-		// their slaves
-		for _, shard := range shards[1:] {
-			shardPath := path.Join(zkShardsPath, shard)
-			si, err := tm.ReadShard(wr.zconn, shardPath)
-			if err != nil {
-				result <- err.Error()
-				continue
-			}
-
-			if si.MasterAlias.Uid == tm.NO_TABLET {
-				result <- "No master in shard " + shardPath
+		for _, alias := range aliases {
+			if alias == si.MasterAlias {
 				continue
 			}
 
 			wg.Add(1)
-			go wr.diffVersion(referenceVersion, zkReferenceTabletPath, si.MasterAlias, wg, result)
-			for _, alias := range si.ReplicaAliases {
-				wg.Add(1)
-				go wr.diffVersion(referenceVersion, zkReferenceTabletPath, alias, wg, result)
-			}
-			for _, alias := range si.RdonlyAliases {
-				wg.Add(1)
-				go wr.diffVersion(referenceVersion, zkReferenceTabletPath, alias, wg, result)
-			}
+			go wr.diffVersion(referenceVersion, zkReferenceTabletPath, alias, &wg, &er)
 		}
-
-		wg.Wait()
-		close(result)
-	}()
-	return channelToError("Version", result)
+	}
+	wg.Wait()
+	if er.HasErrors() {
+		return fmt.Errorf("Version diffs:\n%v", er.Error().Error())
+	}
+	return nil
 }

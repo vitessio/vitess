@@ -52,21 +52,24 @@ func (wr *Wrangler) ValidatePermissionsShard(zkShardPath string) error {
 		return err
 	}
 
-	// then diff with all slaves
+	// read all the aliases in the shard, that is all tablets that are
+	// replicating from the master
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	if err != nil {
+		return err
+	}
+
+	// then diff all of them, except master
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
-	go func() {
-		for _, alias := range si.ReplicaAliases {
-			wg.Add(1)
-			go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, &wg, &er)
+	for _, alias := range aliases {
+		if alias == si.MasterAlias {
+			continue
 		}
-		for _, alias := range si.RdonlyAliases {
-			wg.Add(1)
-			go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, &wg, &er)
-		}
-
-		wg.Wait()
-	}()
+		wg.Add(1)
+		go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, &wg, &er)
+	}
+	wg.Wait()
 	if er.HasErrors() {
 		return fmt.Errorf("Permissions diffs:\n%v", er.Error().Error())
 	}
@@ -106,50 +109,27 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(zkKeyspacePath string) error {
 		return err
 	}
 
-	//
-	// then diff with all slaves
+	// then diff with all tablets but master 0
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
-	go func() {
-		// first diff the slaves in the reference shard 0
-		for _, alias := range si.ReplicaAliases {
-			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
-		}
-		for _, alias := range si.RdonlyAliases {
-			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
+	for _, shard := range shards {
+		shardPath := path.Join(zkShardsPath, shard)
+		aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardPath)
+		if err != nil {
+			er.RecordError(err)
+			continue
 		}
 
-		// then diffs the masters in the other shards, along with
-		// their slaves
-		for _, shard := range shards[1:] {
-			shardPath := path.Join(zkShardsPath, shard)
-			si, err := tm.ReadShard(wr.zconn, shardPath)
-			if err != nil {
-				er.RecordError(err)
-				continue
-			}
-
-			if si.MasterAlias.Uid == tm.NO_TABLET {
-				er.RecordError(fmt.Errorf("No master in shard %v", shardPath))
+		for _, alias := range aliases {
+			if alias == si.MasterAlias {
 				continue
 			}
 
 			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, si.MasterAlias, &wg, &er)
-			for _, alias := range si.ReplicaAliases {
-				wg.Add(1)
-				go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
-			}
-			for _, alias := range si.RdonlyAliases {
-				wg.Add(1)
-				go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
-			}
+			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
 		}
-
-		wg.Wait()
-	}()
+	}
+	wg.Wait()
 	if er.HasErrors() {
 		return fmt.Errorf("Permissions diffs:\n%v", er.Error().Error())
 	}
