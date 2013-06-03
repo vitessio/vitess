@@ -11,6 +11,7 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
@@ -238,28 +239,20 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 
 	// Rebuild all shards in parallel.
 	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	var rebuildErr error
+	er := concurrency.FirstErrorRecorder{}
 	for _, shardName := range shardNames {
 		zkShardPath := tm.ShardPath(vtRoot, keyspace, shardName)
 		wg.Add(1)
 		go func() {
 			if err := wr.RebuildShardGraph(zkShardPath); err != nil {
-				relog.Error("RebuildShardGraph failed: %v %v", zkShardPath, err)
-				mu.Lock()
-				rebuildErr = fmt.Errorf("RebuildShardGraph failed on some shards")
-				mu.Unlock()
+				er.RecordError(fmt.Errorf("RebuildShardGraph failed: %v %v", zkShardPath, err))
 			}
 			wg.Done()
 		}()
 	}
 	wg.Wait()
-	mu.Lock()
-	err = rebuildErr
-	mu.Unlock()
-
-	if err != nil {
-		return err
+	if er.HasErrors() {
+		return er.Error()
 	}
 
 	// Scan the first shard to discover which cells need local serving data.

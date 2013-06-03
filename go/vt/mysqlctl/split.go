@@ -93,13 +93,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/bufio2"
 	"code.google.com/p/vitess/go/cgzip"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sync2"
+	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl/csvsplitter"
 )
@@ -221,7 +221,7 @@ startKey, endKey - the row range to prepare
 sourceAddr - the ip addr of the machine running the export
 allowHierarchicalReplication - allow replication from a slave
 */
-func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, concurrency int, hookExtraEnv map[string]string) (snapshotManifestFilename string, err error) {
+func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, hookExtraEnv map[string]string) (snapshotManifestFilename string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -266,7 +266,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 	}()
 
 	var ssmFile string
-	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd, concurrency)
+	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd, snapshotConcurrency)
 	if snapshotErr != nil {
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 		return "", snapshotErr
@@ -292,7 +292,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 
 // createSplitSnapshotManifest exports each table to a CSV-like file
 // and compresses the results.
-func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition, concurrency int) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition, snapshotConcurrency int) ([]SnapshotFile, error) {
 	n := len(sd.TableDefinitions)
 	errors := make(chan error)
 	work := make(chan int, n)
@@ -309,7 +309,7 @@ func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startK
 
 	dataFiles := make([]SnapshotFile, n)
 
-	for i := 0; i < concurrency; i++ {
+	for i := 0; i < snapshotConcurrency; i++ {
 		go func() {
 			for i := range work {
 				td := sd.TableDefinitions[i]
@@ -658,7 +658,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoO
 	return snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, concurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -732,7 +732,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		datafiles[i] = snapshotFiles
 		return nil
 	}
-	if err = ConcurrentMap(concurrency, len(sd.TableDefinitions), dumpTableWorker); err != nil {
+	if err = ConcurrentMap(snapshotConcurrency, len(sd.TableDefinitions), dumpTableWorker); err != nil {
 		return
 	}
 
@@ -785,126 +785,6 @@ func (lsf localSnapshotFile) url() string {
 
 func (lsf localSnapshotFile) tableName() string {
 	return lsf.file.TableName
-}
-
-// Keeps track of the first error it sees, just logs the rest
-type ErrorRecorder struct {
-	errorCount sync2.AtomicInt32
-	firstError error
-}
-
-// Record a possible error:
-// - does nothing if err is nil
-// - only records the first error reported
-// - the rest is just logged
-func (er *ErrorRecorder) RecordError(err error) {
-	if err == nil {
-		return
-	}
-	c := er.errorCount.Add(1)
-	if c == 1 {
-		// this is the first error we see, we record it
-		er.firstError = err
-	} else {
-		// next errors we just log
-		relog.Error("ResourceConstraint: error[%v]: %v", c, err)
-	}
-}
-
-func (er *ErrorRecorder) HasErrors() bool {
-	return er.errorCount.Get() != 0
-}
-
-// Combines 3 different features:
-// - a WaitGroup to wait for all tasks to be done
-// - a Semaphore to control concurrency
-// - an ErrorRecorder
-type ResourceConstraint struct {
-	semaphore sync2.Semaphore
-	wg        sync.WaitGroup
-	ErrorRecorder
-}
-
-func NewResourceConstraint(concurrency int) *ResourceConstraint {
-	return &ResourceConstraint{semaphore: sync2.NewSemaphore(concurrency)}
-}
-
-func (rc *ResourceConstraint) Add(n int) {
-	rc.wg.Add(n)
-}
-
-func (rc *ResourceConstraint) Done() {
-	rc.wg.Done()
-}
-
-// Returns the firstError we encountered, or nil
-func (rc *ResourceConstraint) Wait() error {
-	rc.wg.Wait()
-	return rc.firstError
-}
-
-// Acquire will wait until we have a resource to use
-func (rc *ResourceConstraint) Acquire() {
-	rc.semaphore.Acquire()
-}
-
-func (rc *ResourceConstraint) Release() {
-	rc.semaphore.Release()
-}
-
-func (rc *ResourceConstraint) ReleaseAndDone() {
-	rc.Release()
-	rc.Done()
-}
-
-// Combines 3 different features:
-// - a WaitGroup to wait for all tasks to be done
-// - a Semaphore map to control multiple concurrencies
-// - an ErrorRecorder
-type MultiResourceConstraint struct {
-	semaphoreMap map[string]sync2.Semaphore
-	wg           sync.WaitGroup
-	ErrorRecorder
-}
-
-func NewMultiResourceConstraint(semaphoreMap map[string]sync2.Semaphore) *MultiResourceConstraint {
-	return &MultiResourceConstraint{semaphoreMap: semaphoreMap}
-}
-
-func (mrc *MultiResourceConstraint) Add(n int) {
-	mrc.wg.Add(n)
-}
-
-func (mrc *MultiResourceConstraint) Done() {
-	mrc.wg.Done()
-}
-
-// Returns the firstError we encountered, or nil
-func (mrc *MultiResourceConstraint) Wait() error {
-	mrc.wg.Wait()
-	return mrc.firstError
-}
-
-// Acquire will wait until we have a resource to use
-func (mrc *MultiResourceConstraint) Acquire(name string) {
-	s, ok := mrc.semaphoreMap[name]
-	if !ok {
-		panic(fmt.Errorf("MultiResourceConstraint: No resource named %v in semaphore map", name))
-	}
-	s.Acquire()
-}
-
-func (mrc *MultiResourceConstraint) Release(name string) {
-	s, ok := mrc.semaphoreMap[name]
-	if !ok {
-		panic(fmt.Errorf("MultiResourceConstraint: No resource named %v in semaphore map", name))
-	}
-	s.Release()
-}
-
-func (mrc *MultiResourceConstraint) ReleaseAndDone(name string) {
-	mrc.Release(name)
-	mrc.Done()
 }
 
 // makeCreateTableSql returns a table creation statement
@@ -988,11 +868,11 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 //   also write to the binary logs.
 // - If the strategy contains the command 'populateBlpRecovery(NNN)' then we
 //   will populate the blp_checkpoint table with master positions to start from
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, uids []uint32, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, uids []uint32, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
-	rc := NewResourceConstraint(fetchConcurrency)
+	rc := concurrency.NewResourceConstraint(fetchConcurrency)
 	for i, sourceAddr := range sourceAddrs {
 		rc.Add(1)
 		go func(sourceAddr *url.URL, i int) {
@@ -1043,10 +923,10 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	// - fetchConcurrency tasks for network
 	// - insertTableConcurrency for table inserts from a file
 	//   into an innodb table
-	// - concurrency tasks for table inserts / modify tables
+	// - snapshotConcurrency tasks for table inserts / modify tables
 	sems := make(map[string]sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+3)
 	sems["net"] = sync2.NewSemaphore(fetchConcurrency)
-	sems["db"] = sync2.NewSemaphore(concurrency)
+	sems["db"] = sync2.NewSemaphore(snapshotConcurrency)
 
 	// Store the alter table statements for after restore,
 	// and how many jobs we're running on each table
@@ -1116,7 +996,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	// fetch all the csv files, and apply them one at a time. Note
 	// this might start many go routines, and they'll all be
 	// waiting on the resource semaphores.
-	mrc := NewMultiResourceConstraint(sems)
+	mrc := concurrency.NewMultiResourceConstraint(sems)
 	for manifestIndex, manifest := range manifests {
 		if err = os.Mkdir(path.Join(tempStoragePath, manifest.Source.Addr), 0775); err != nil {
 			return err

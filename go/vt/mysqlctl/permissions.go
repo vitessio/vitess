@@ -11,6 +11,7 @@ import (
 
 	"code.google.com/p/vitess/go/mysql/proto"
 	"code.google.com/p/vitess/go/sqltypes"
+	"code.google.com/p/vitess/go/vt/concurrency"
 )
 
 var (
@@ -232,7 +233,7 @@ func (permissions *Permissions) String() string {
 		printPermissions("Host", permissions.HostPermissions)
 }
 
-func diffPermissions(name, leftName string, left PermissionList, rightName string, right PermissionList, result chan string) {
+func diffPermissions(name, leftName string, left PermissionList, rightName string, right PermissionList, er concurrency.ErrorRecorder) {
 
 	leftIndex := 0
 	rightIndex := 0
@@ -242,50 +243,47 @@ func diffPermissions(name, leftName string, left PermissionList, rightName strin
 
 		// extra value on the left side
 		if l.PrimaryKey() < r.PrimaryKey() {
-			result <- leftName + " has an extra " + name + " " + l.PrimaryKey()
+			er.RecordError(fmt.Errorf("%v has an extra %v %v", leftName, name, l.PrimaryKey()))
 			leftIndex++
 			continue
 		}
 
 		// extra value on the right side
 		if l.PrimaryKey() > r.PrimaryKey() {
-			result <- rightName + " has an extra " + name + " " + r.PrimaryKey()
+			er.RecordError(fmt.Errorf("%v has an extra %v %v", rightName, name, r.PrimaryKey()))
 			rightIndex++
 			continue
 		}
 
 		// same name, let's see content
 		if l.String() != r.String() {
-			result <- leftName + " and " + rightName + " disagree on " + name + " " + l.PrimaryKey() + ":\n" + l.String() + "\n differs from:\n" + r.String()
+			er.RecordError(fmt.Errorf("%v and %v disagree on %v %v:\n%v\n differs from:\n%v", leftName, rightName, name, l.PrimaryKey(), l.String(), r.String()))
 		}
 		leftIndex++
 		rightIndex++
 	}
 	for leftIndex < left.Len() {
-		result <- leftName + " has an extra " + name + " " + left.Get(leftIndex).PrimaryKey()
+		er.RecordError(fmt.Errorf("%v has an extra %v %v", leftName, name, left.Get(leftIndex).PrimaryKey()))
 		leftIndex++
 	}
 	for rightIndex < right.Len() {
-		result <- rightName + " has an extra " + name + " " + right.Get(rightIndex).PrimaryKey()
+		er.RecordError(fmt.Errorf("%v has an extra %v %v", rightName, name, right.Get(rightIndex).PrimaryKey()))
 		rightIndex++
 	}
 }
 
-func DiffPermissions(leftName string, left *Permissions, rightName string, right *Permissions, result chan string) {
-	diffPermissions("user", leftName, left.UserPermissions, rightName, right.UserPermissions, result)
-	diffPermissions("db", leftName, left.DbPermissions, rightName, right.DbPermissions, result)
-	diffPermissions("host", leftName, left.HostPermissions, rightName, right.HostPermissions, result)
+func DiffPermissions(leftName string, left *Permissions, rightName string, right *Permissions, er concurrency.ErrorRecorder) {
+	diffPermissions("user", leftName, left.UserPermissions, rightName, right.UserPermissions, er)
+	diffPermissions("db", leftName, left.DbPermissions, rightName, right.DbPermissions, er)
+	diffPermissions("host", leftName, left.HostPermissions, rightName, right.HostPermissions, er)
 }
 
 func DiffPermissionsToArray(leftName string, left *Permissions, rightName string, right *Permissions) (result []string) {
-	permissionsDiffs := make(chan string, 10)
-	go func() {
-		DiffPermissions(leftName, left, rightName, right, permissionsDiffs)
-		close(permissionsDiffs)
-	}()
-	result = make([]string, 0, 10)
-	for msg := range permissionsDiffs {
-		result = append(result, msg)
+	er := concurrency.AllErrorRecorder{}
+	DiffPermissions(leftName, left, rightName, right, &er)
+	if er.HasErrors() {
+		return er.Errors
+	} else {
+		return nil
 	}
-	return result
 }

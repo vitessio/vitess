@@ -9,13 +9,14 @@ import (
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/concurrency"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, concurrency int, serverMode bool) (manifest, parent string, slaveStartRequired, readOnly bool, originalType tm.TabletType, err error) {
+func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest, parent string, slaveStartRequired, readOnly bool, originalType tm.TabletType, err error) {
 	var ti *tm.TabletInfo
 	ti, err = tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {
@@ -41,7 +42,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, conc
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.Snapshot(zkTabletPath, &tm.SnapshotArgs{concurrency, serverMode})
+	actionPath, err = wr.ai.Snapshot(zkTabletPath, &tm.SnapshotArgs{snapshotConcurrency, serverMode})
 	if err != nil {
 		return
 	}
@@ -188,7 +189,7 @@ func (wr *Wrangler) UnreserveForRestoreMulti(zkDstTabletPaths []string) {
 	}
 }
 
-func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
+func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
 	// make sure the destination can be restored into (otherwise
 	// there is no point in taking the snapshot in the first place),
 	// and reserve it.
@@ -204,7 +205,7 @@ func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, for
 	}
 
 	// take the snapshot, or put the server in SnapshotSource mode
-	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, concurrency, serverMode)
+	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, snapshotConcurrency, serverMode)
 	if err != nil {
 		// The snapshot failed so un-reserve the destinations
 		wr.UnreserveForRestoreMulti(reserved)
@@ -213,24 +214,17 @@ func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, for
 		// In serverMode, and in the case where we're replicating from
 		// the master, we can't wait for replication, as the master is down.
 		wg := sync.WaitGroup{}
-		mu := sync.Mutex{} // to protect err
+		er := concurrency.FirstErrorRecorder{}
 		for _, zkDstTabletPath := range zkDstTabletPaths {
 			wg.Add(1)
 			go func(zkDstTabletPath string) {
 				e := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == tm.TYPE_MASTER)
-				if e != nil {
-					mu.Lock()
-					if err != nil {
-						relog.Error("Multiple errors while running Restore: %v", err)
-					} else {
-						err = e
-					}
-					mu.Unlock()
-				}
+				er.RecordError(e)
 				wg.Done()
 			}(zkDstTabletPath)
 		}
 		wg.Wait()
+		err = er.Error()
 	}
 
 	// in any case, fix the server

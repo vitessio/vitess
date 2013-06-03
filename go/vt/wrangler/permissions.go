@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
@@ -20,18 +21,18 @@ func (wr *Wrangler) GetPermissions(zkTabletPath string) (*mysqlctl.Permissions, 
 }
 
 // helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, zkMasterTabletPath string, alias tm.TabletAlias, wg *sync.WaitGroup, result chan string) {
+func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, zkMasterTabletPath string, alias tm.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering permissions for %v", zkTabletPath)
 	slavePermissions, err := wr.GetPermissions(zkTabletPath)
 	if err != nil {
-		result <- err.Error()
+		er.RecordError(err)
 		return
 	}
 
 	relog.Info("Diffing permissions for %v", zkTabletPath)
-	mysqlctl.DiffPermissions(zkMasterTabletPath, masterPermissions, zkTabletPath, slavePermissions, result)
+	mysqlctl.DiffPermissions(zkMasterTabletPath, masterPermissions, zkTabletPath, slavePermissions, er)
 }
 
 func (wr *Wrangler) ValidatePermissionsShard(zkShardPath string) error {
@@ -52,22 +53,24 @@ func (wr *Wrangler) ValidatePermissionsShard(zkShardPath string) error {
 	}
 
 	// then diff with all slaves
-	result := make(chan string, 10)
-	wg := &sync.WaitGroup{}
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
 	go func() {
 		for _, alias := range si.ReplicaAliases {
 			wg.Add(1)
-			go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, wg, result)
+			go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, &wg, &er)
 		}
 		for _, alias := range si.RdonlyAliases {
 			wg.Add(1)
-			go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, wg, result)
+			go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, &wg, &er)
 		}
 
 		wg.Wait()
-		close(result)
 	}()
-	return channelToError("Permissions", result)
+	if er.HasErrors() {
+		return fmt.Errorf("Permissions diffs:\n%v", er.Error().Error())
+	}
+	return nil
 }
 
 func (wr *Wrangler) ValidatePermissionsKeyspace(zkKeyspacePath string) error {
@@ -105,18 +108,17 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(zkKeyspacePath string) error {
 
 	//
 	// then diff with all slaves
-	result := make(chan string, 10)
-	wg := &sync.WaitGroup{}
-
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
 	go func() {
 		// first diff the slaves in the reference shard 0
 		for _, alias := range si.ReplicaAliases {
 			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, wg, result)
+			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
 		}
 		for _, alias := range si.RdonlyAliases {
 			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, wg, result)
+			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
 		}
 
 		// then diffs the masters in the other shards, along with
@@ -125,29 +127,31 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(zkKeyspacePath string) error {
 			shardPath := path.Join(zkShardsPath, shard)
 			si, err := tm.ReadShard(wr.zconn, shardPath)
 			if err != nil {
-				result <- err.Error()
+				er.RecordError(err)
 				continue
 			}
 
 			if si.MasterAlias.Uid == tm.NO_TABLET {
-				result <- "No master in shard " + shardPath
+				er.RecordError(fmt.Errorf("No master in shard %v", shardPath))
 				continue
 			}
 
 			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, si.MasterAlias, wg, result)
+			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, si.MasterAlias, &wg, &er)
 			for _, alias := range si.ReplicaAliases {
 				wg.Add(1)
-				go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, wg, result)
+				go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
 			}
 			for _, alias := range si.RdonlyAliases {
 				wg.Add(1)
-				go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, wg, result)
+				go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
 			}
 		}
 
 		wg.Wait()
-		close(result)
 	}()
-	return channelToError("Permissions", result)
+	if er.HasErrors() {
+		return fmt.Errorf("Permissions diffs:\n%v", er.Error().Error())
+	}
+	return nil
 }
