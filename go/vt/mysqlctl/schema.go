@@ -14,6 +14,7 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/concurrency"
 )
 
 const (
@@ -89,9 +90,9 @@ func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool
 
 // generates a report on what's different between two SchemaDefinition
 // for now, we skip the VIEW entirely.
-func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, result chan string) {
+func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, er concurrency.ErrorRecorder) {
 	if left.DatabaseSchema != right.DatabaseSchema {
-		result <- leftName + " and " + rightName + " don't agree on database creation command:\n" + left.DatabaseSchema + "\n differs from:\n" + right.DatabaseSchema
+		er.RecordError(fmt.Errorf("%v and %v don't agree on database creation command:\n%v\n differs from:\n%v", leftName, rightName, left.DatabaseSchema, right.DatabaseSchema))
 	}
 
 	leftIndex := 0
@@ -109,21 +110,21 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 
 		// extra table on the left side
 		if left.TableDefinitions[leftIndex].Name < right.TableDefinitions[rightIndex].Name {
-			result <- leftName + " has an extra table named " + left.TableDefinitions[leftIndex].Name
+			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
 			leftIndex++
 			continue
 		}
 
 		// extra table on the right side
 		if left.TableDefinitions[leftIndex].Name > right.TableDefinitions[rightIndex].Name {
-			result <- rightName + " has an extra table named " + right.TableDefinitions[rightIndex].Name
+			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
 			rightIndex++
 			continue
 		}
 
 		// same name, let's see content
 		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
-			result <- leftName + " and " + rightName + " disagree on schema for table " + left.TableDefinitions[leftIndex].Name + ":\n" + left.TableDefinitions[leftIndex].Schema + "\n differs from:\n" + right.TableDefinitions[rightIndex].Schema
+			er.RecordError(fmt.Errorf("%v and %v disagree on schema for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Schema, right.TableDefinitions[rightIndex].Schema))
 		}
 		leftIndex++
 		rightIndex++
@@ -131,29 +132,26 @@ func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right
 
 	for leftIndex < len(left.TableDefinitions) {
 		if left.TableDefinitions[leftIndex].Type == TABLE_BASE_TABLE {
-			result <- leftName + " has an extra table named " + left.TableDefinitions[leftIndex].Name
+			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
 		}
 		leftIndex++
 	}
 	for rightIndex < len(right.TableDefinitions) {
 		if right.TableDefinitions[rightIndex].Type == TABLE_BASE_TABLE {
-			result <- rightName + " has an extra table named " + right.TableDefinitions[rightIndex].Name
+			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
 		}
 		rightIndex++
 	}
 }
 
 func DiffSchemaToArray(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition) (result []string) {
-	schemaDiffs := make(chan string, 10)
-	go func() {
-		DiffSchema(leftName, left, rightName, right, schemaDiffs)
-		close(schemaDiffs)
-	}()
-	result = make([]string, 0, 10)
-	for msg := range schemaDiffs {
-		result = append(result, msg)
+	er := concurrency.AllErrorRecorder{}
+	DiffSchema(leftName, left, rightName, right, &er)
+	if er.HasErrors() {
+		return er.Errors
+	} else {
+		return nil
 	}
-	return result
 }
 
 var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")

@@ -12,6 +12,7 @@ import (
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
@@ -21,33 +22,18 @@ func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string, includeViews
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMasterTabletPath string, alias tm.TabletAlias, includeViews bool, wg *sync.WaitGroup, result chan string) {
+func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMasterTabletPath string, alias tm.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering schema for %v", zkTabletPath)
 	slaveSchema, err := wr.GetSchema(zkTabletPath, nil, includeViews)
 	if err != nil {
-		result <- err.Error()
+		er.RecordError(err)
 		return
 	}
 
 	relog.Info("Diffing schema for %v", zkTabletPath)
-	mysqlctl.DiffSchema(zkMasterTabletPath, masterSchema, zkTabletPath, slaveSchema, result)
-}
-
-func channelToError(channelType string, stream chan string) error {
-	result := ""
-	for text := range stream {
-		if result != "" {
-			result += "\n"
-		}
-		result += text
-	}
-	if result == "" {
-		return nil
-	}
-
-	return fmt.Errorf("%v diffs:\n%v", channelType, result)
+	mysqlctl.DiffSchema(zkMasterTabletPath, masterSchema, zkTabletPath, slaveSchema, er)
 }
 
 func (wr *Wrangler) ValidateSchemaShard(zkShardPath string, includeViews bool) error {
@@ -67,23 +53,29 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string, includeViews bool) e
 		return err
 	}
 
+	// read all the aliases in the shard, that is all tablets that are
+	// replicating from the master
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	if err != nil {
+		return err
+	}
+
 	// then diff with all slaves
-	result := make(chan string, 10)
-	wg := &sync.WaitGroup{}
-	go func() {
-		for _, alias := range si.ReplicaAliases {
-			wg.Add(1)
-			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, includeViews, wg, result)
-		}
-		for _, alias := range si.RdonlyAliases {
-			wg.Add(1)
-			go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, includeViews, wg, result)
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for _, alias := range aliases {
+		if alias == si.MasterAlias {
+			continue
 		}
 
-		wg.Wait()
-		close(result)
-	}()
-	return channelToError("Schema", result)
+		wg.Add(1)
+		go wr.diffSchema(masterSchema, zkMasterTabletPath, alias, includeViews, &wg, &er)
+	}
+	wg.Wait()
+	if er.HasErrors() {
+		return fmt.Errorf("Schema diffs:\n%v", er.Error().Error())
+	}
+	return nil
 }
 
 func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string, includeViews bool) error {
@@ -119,53 +111,55 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string, includeViews b
 		return err
 	}
 
-	//
-	// then diff with all slaves
-	result := make(chan string, 10)
-	wg := &sync.WaitGroup{}
+	// then diff with all other tablets everywhere
+	er := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
 
-	go func() {
-		// first diff the slaves in the reference shard 0
-		for _, alias := range si.ReplicaAliases {
-			wg.Add(1)
-			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
-		}
-		for _, alias := range si.RdonlyAliases {
-			wg.Add(1)
-			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
-		}
+	// first diff the slaves in the reference shard 0
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	if err != nil {
+		return err
+	}
 
-		// then diffs the masters in the other shards, along with
-		// their slaves
-		for _, shard := range shards[1:] {
-			shardPath := path.Join(zkShardsPath, shard)
-			si, err := tm.ReadShard(wr.zconn, shardPath)
-			if err != nil {
-				result <- err.Error()
-				continue
-			}
-
-			if si.MasterAlias.Uid == tm.NO_TABLET {
-				result <- "No master in shard " + shardPath
-				continue
-			}
-
-			wg.Add(1)
-			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, si.MasterAlias, includeViews, wg, result)
-			for _, alias := range si.ReplicaAliases {
-				wg.Add(1)
-				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
-			}
-			for _, alias := range si.RdonlyAliases {
-				wg.Add(1)
-				go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, wg, result)
-			}
+	for _, alias := range aliases {
+		if alias == si.MasterAlias {
+			continue
 		}
 
-		wg.Wait()
-		close(result)
-	}()
-	return channelToError("Schema", result)
+		wg.Add(1)
+		go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, &wg, &er)
+	}
+
+	// then diffs all tablets in the other shards
+	for _, shard := range shards[1:] {
+		shardPath := path.Join(zkShardsPath, shard)
+		si, err := tm.ReadShard(wr.zconn, shardPath)
+		if err != nil {
+			er.RecordError(err)
+			continue
+		}
+
+		if si.MasterAlias.Uid == tm.NO_TABLET {
+			er.RecordError(fmt.Errorf("No master in shard %v", shardPath))
+			continue
+		}
+
+		aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+		if err != nil {
+			er.RecordError(err)
+			continue
+		}
+
+		for _, alias := range aliases {
+			wg.Add(1)
+			go wr.diffSchema(referenceSchema, zkReferenceTabletPath, alias, includeViews, &wg, &er)
+		}
+	}
+	wg.Wait()
+	if er.HasErrors() {
+		return fmt.Errorf("Schema diffs:\n%v", er.Error().Error())
+	}
+	return nil
 }
 
 func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
