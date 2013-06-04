@@ -47,7 +47,7 @@ func initTables() {
 	a.Indexes = append(a.Indexes, &schema.Index{"b_name", []string{"name"}, []uint64{3}, a.Indexes[0].Columns})
 	a.Indexes = append(a.Indexes, &schema.Index{"c_name", []string{"name"}, []uint64{2}, a.Indexes[0].Columns})
 	a.PKColumns = append(a.PKColumns, 0, 1)
-	a.CacheType = 1
+	a.CacheType = schema.CACHE_RW
 	schem["a"] = a
 
 	b := schema.NewTable("b")
@@ -56,13 +56,13 @@ func initTables() {
 	bcolumns := []string{"eid", "id"}
 	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, bcolumns})
 	b.PKColumns = append(a.PKColumns, 0, 1)
-	b.CacheType = 0
+	b.CacheType = schema.CACHE_NONE
 	schem["b"] = b
 
 	c := schema.NewTable("c")
 	c.AddColumn("eid", "int", SQLZERO, "")
 	c.AddColumn("id", "int", SQLZERO, "")
-	c.CacheType = 0
+	c.CacheType = schema.CACHE_NONE
 	schem["c"] = c
 
 	d := schema.NewTable("d")
@@ -71,8 +71,17 @@ func initTables() {
 	dcolumns := []string{"name"}
 	d.Indexes = append(d.Indexes, &schema.Index{"PRIMARY", []string{"name"}, []uint64{1}, dcolumns})
 	d.PKColumns = append(d.PKColumns, 0)
-	d.CacheType = 1
+	d.CacheType = schema.CACHE_RW
 	schem["d"] = d
+
+	e := schema.NewTable("e")
+	e.AddColumn("eid", "int", SQLZERO, "")
+	e.AddColumn("id", "int", SQLZERO, "")
+	ecolumns := []string{"eid", "id"}
+	e.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, ecolumns})
+	e.PKColumns = append(a.PKColumns, 0, 1)
+	e.CacheType = schema.CACHE_W
+	schem["e"] = e
 }
 
 func tableGetter(name string) (*schema.Table, bool) {

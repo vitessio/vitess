@@ -15,6 +15,7 @@ import (
 	"code.google.com/p/vitess/go/stats"
 	"code.google.com/p/vitess/go/sync2"
 	"code.google.com/p/vitess/go/vt/dbconfigs"
+	"code.google.com/p/vitess/go/vt/schema"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"code.google.com/p/vitess/go/vt/tabletserver/proto"
 )
@@ -90,7 +91,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	return qe
 }
 
-func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, qrs *QueryRules) {
+func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
 	// Wait for Close, in case it's running
 	qe.mu.Lock()
 	defer qe.mu.Unlock()
@@ -100,7 +101,7 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, qrs *QueryRules) {
 
 	start := time.Now().UnixNano()
 	qe.cachePool.Open(cacheFactory)
-	qe.schemaInfo.Open(connFactory, qe.cachePool, qrs)
+	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
 	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
@@ -232,12 +233,12 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		defer conn.Recycle()
 		conn.RecordQuery(plan.Query)
 		var invalidator CacheInvalidator
-		if plan.TableInfo != nil && plan.TableInfo.CacheType != 0 {
+		if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
 			invalidator = conn.DirtyKeys(plan.TableName)
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			if plan.TableInfo != nil && plan.TableInfo.CacheType != 0 {
+			if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
 				panic(NewTabletError(FAIL, "DML too complex for cached table"))
 			}
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
@@ -345,7 +346,7 @@ func (qe *QueryEngine) Invalidate(cacheInvalidate *proto.CacheInvalidate) {
 		if tableInfo == nil {
 			panic(NewTabletError(FAIL, "Table %s not found", dml.Table))
 		}
-		if tableInfo.CacheType == 0 {
+		if tableInfo.CacheType == schema.CACHE_NONE {
 			break
 		}
 		for _, val := range dml.Keys {

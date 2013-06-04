@@ -233,7 +233,7 @@ class Tablet(object):
   def logfile(self):
     return os.path.join(self.tablet_dir, "vttablet.log")
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None, schema_override=None):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -256,6 +256,9 @@ class Tablet(object):
 
     if customrules:
       args.extend(['-customrules', customrules])
+
+    if schema_override:
+      args.extend(['-schema-override', schema_override])
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)

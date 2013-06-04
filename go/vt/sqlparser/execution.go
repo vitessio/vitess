@@ -266,7 +266,7 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// Further improvements possible only if table is row-cached
-	if tableInfo.CacheType == 0 {
+	if tableInfo.CacheType == schema.CACHE_NONE || tableInfo.CacheType == schema.CACHE_W {
 		plan.Reason = REASON_NOCACHE
 		return plan
 	}

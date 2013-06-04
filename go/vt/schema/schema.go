@@ -20,6 +20,13 @@ const (
 	CAT_VARBINARY
 )
 
+// Cache types
+const (
+	CACHE_NONE = 0
+	CACHE_RW   = 1
+	CACHE_W    = 2
+)
+
 type TableColumn struct {
 	Name     string
 	Category int

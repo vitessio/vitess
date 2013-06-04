@@ -58,6 +58,27 @@ func (ti *TableInfo) fetchColumns(conn PoolConnection) bool {
 	return true
 }
 
+func (ti *TableInfo) SetPK(colnames []string) error {
+	pkIndex := schema.NewIndex("PRIMARY")
+	colnums := make([]int, len(colnames))
+	for i, colname := range colnames {
+		colnums[i] = ti.FindColumn(colname)
+		if colnums[i] == -1 {
+			return fmt.Errorf("column %s not found", colname)
+		}
+		pkIndex.AddColumn(colname, 1)
+	}
+	for _, col := range ti.Columns {
+		pkIndex.DataColumns = append(pkIndex.DataColumns, col.Name)
+	}
+	if len(ti.Indexes) == 0 {
+		ti.Indexes = make([]*schema.Index, 1)
+	}
+	ti.Indexes[0] = pkIndex
+	ti.PKColumns = colnums
+	return nil
+}
+
 func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
 	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from %s", ti.Name), 10000, false)
 	if err != nil {
@@ -134,7 +155,7 @@ func (ti *TableInfo) initRowCache(conn PoolConnection, tableType string, createT
 		return
 	}
 
-	ti.CacheType = 1
+	ti.CacheType = schema.CACHE_RW
 	ti.Cache = NewRowCache(ti, thash, cachePool)
 }
 

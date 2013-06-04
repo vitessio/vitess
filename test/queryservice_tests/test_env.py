@@ -86,6 +86,31 @@ class TestEnv(object):
         }]
       }]""")
 
+  def create_schema_override(self, filename):
+    with open(filename, "w") as f:
+      f.write("""[{
+        "Name": "vtocc_view",
+        "PKColumns": ["key2"],
+        "Cache": {
+          "Type": "RW",
+          "Prefix": "view1"
+        }
+      }, {
+        "Name": "vtocc_part1",
+        "PKColumns": ["key2"],
+        "Cache": {
+          "Type": "W",
+          "Table": "vtocc_view"
+        }
+      }, {
+        "Name": "vtocc_part2",
+        "PKColumns": ["key3"],
+        "Cache": {
+          "Type": "W",
+          "Table": "vtocc_view"
+        }
+      }]""")
+
   def run_cases(self, cases):
     cursor = self.conn.cursor()
     error_count = 0
@@ -154,10 +179,12 @@ class VttabletTestEnv(TestEnv):
 
     customrules = '/tmp/customrules.json'
     self.create_customrules(customrules)
+    schema_override = '/tmp/schema_override.json'
+    self.create_schema_override(schema_override)
     if utils.options.memcache:
-      self.tablet.start_vttablet(memcache=True, customrules=customrules)
+      self.tablet.start_vttablet(memcache=True, customrules=customrules, schema_override=schema_override)
     else:
-      self.tablet.start_vttablet(customrules=customrules)
+      self.tablet.start_vttablet(customrules=customrules, schema_override=schema_override)
 
     # FIXME(szopa): This is necessary here only because of a bug that
     # makes the qs reload its config only after an action.
@@ -277,6 +304,8 @@ class VtoccTestEnv(TestEnv):
 
     customrules = '/tmp/customrules.json'
     self.create_customrules(customrules)
+    schema_override = '/tmp/schema_override.json'
+    self.create_schema_override(schema_override)
 
     if utils.options.memcache:
       self.memcached = subprocess.Popen(["memcached", "-s", memcache])
@@ -287,6 +316,7 @@ class VtoccTestEnv(TestEnv):
       "-logfile", self.logfile,
       "-querylog", self.querylogfile,
       "-customrules", customrules,
+      "-schema-override", schema_override,
     ]
     self.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
     self.vtocc = subprocess.Popen(occ_args, stderr=self.vtstderr)

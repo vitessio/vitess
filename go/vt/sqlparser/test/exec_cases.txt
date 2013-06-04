@@ -155,6 +155,25 @@ select * from b
   "SetValue": null
 }
 
+# table not cached
+select * from e
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "NOCACHE",
+  "TableName": "e",
+  "FieldQuery": "select * from e where 1 != 1",
+  "FullQuery": "select * from e limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # bind in select list
 select :bv from a
 {

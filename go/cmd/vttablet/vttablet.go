@@ -6,6 +6,7 @@
 package main
 
 import (
+	"encoding/json"
 	"expvar"
 	"flag"
 	"fmt"
@@ -55,6 +56,7 @@ var (
 	authConfig     = flag.String("auth-credentials", "", "name of file containing auth credentials")
 	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 	customrules    = flag.String("customrules", "", "custom query rules file")
+	overridesFile  = flag.String("schema-override", "", "schema overrides file")
 )
 
 // Default values for the config
@@ -79,6 +81,8 @@ var qsConfig = ts.Config{
 	StreamBufferSize:   32 * 1024,
 }
 
+var schemaOverrides []ts.SchemaOverride
+
 func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
@@ -97,6 +101,13 @@ func main() {
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
 		relog.Warning("%s", err)
+	}
+
+	if err := jscfg.ReadJson(*overridesFile, &schemaOverrides); err != nil {
+		relog.Warning("%s", err)
+	} else {
+		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
+		relog.Info("schemaOverrides: %s\n", data)
 	}
 
 	initQueryService(dbcfgs)
@@ -225,7 +236,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 					qrs.Add(qr)
 				}
 			}
-			ts.AllowQueries(dbcfgs.App, qrs)
+			ts.AllowQueries(dbcfgs.App, schemaOverrides, qrs)
 			mysqlctl.EnableUpdateStreamService(string(newTablet.Type), dbcfgs)
 			if newTablet.Type != tm.TYPE_MASTER {
 				ts.StartRowCacheInvalidation()

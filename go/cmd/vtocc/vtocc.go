@@ -40,6 +40,7 @@ var (
 	dbConfigFile   = flag.String("dbconfig", "", "db config file name")
 	queryLog       = flag.String("querylog", "", "for testing: log all queries to this file")
 	customrules    = flag.String("customrules", "", "custom query rules file")
+	overridesFile  = flag.String("schema-override", "", "schema overrides file")
 )
 
 var config = ts.Config{
@@ -61,6 +62,8 @@ var dbconfig = dbconfigs.DBConfig{
 	Uname:   "vt_app",
 	Charset: "utf8",
 }
+
+var schemaOverrides []ts.SchemaOverride
 
 func serveAuthRPC() {
 	bsonrpc.ServeAuthRPC()
@@ -95,9 +98,13 @@ func main() {
 	unmarshalFile(*dbConfigFile, &dbconfig)
 	relog.Info("dbconfig: %s\n", dbconfig)
 
+	unmarshalFile(*overridesFile, &schemaOverrides)
+	data, _ = json.MarshalIndent(schemaOverrides, "", "  ")
+	relog.Info("schemaOverrides: %s\n", data)
+
 	ts.RegisterQueryService(config)
 	qrs := loadCustomRules()
-	ts.AllowQueries(dbconfig, qrs)
+	ts.AllowQueries(dbconfig, schemaOverrides, qrs)
 
 	rpc.HandleHTTP()
 

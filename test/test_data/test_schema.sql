@@ -37,6 +37,19 @@ create table vtocc_fracts(id int, deci decimal(5,2), num numeric(5,2), f float, 
 create table vtocc_strings(vb varbinary(16), c char(16), vc varchar(16), b binary(4), tb tinyblob, bl blob, ttx tinytext, tx text, en enum('a','b'), s set('a','b'), primary key(vb)) comment 'vtocc_nocache'
 create table vtocc_misc(id int, b bit(8), d date, dt datetime, t time, primary key(id)) comment 'vtocc_nocache'
 
+create table vtocc_part1(key1 bigint, key2 bigint, data1 int, primary key(key1, key2))
+create unique index vtocc_key2 on vtocc_part1(key2)
+create table vtocc_part2(key3 bigint, data2 int, primary key(key3))
+create view vtocc_view as select key2, key1, data1, data2 from vtocc_part1, vtocc_part2 where key2=key3
+begin
+delete from vtocc_part1
+delete from vtocc_part2
+insert into vtocc_part1 values(10, 1, 1)
+insert into vtocc_part1 values(10, 2, 2)
+insert into vtocc_part2 values(1, 3)
+insert into vtocc_part2 values(2, 4)
+commit
+
 # clean
 drop table vtocc_test
 drop table vtocc_a
@@ -53,3 +66,6 @@ drop table vtocc_ints
 drop table vtocc_fracts
 drop table vtocc_strings
 drop table vtocc_misc
+drop view vtocc_view
+drop table vtocc_part1
+drop table vtocc_part2

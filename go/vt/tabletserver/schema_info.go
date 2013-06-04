@@ -61,6 +61,16 @@ func (ep *ExecPlan) Stats() (queryCount int64, duration time.Duration, rowCount,
 	return
 }
 
+type SchemaOverride struct {
+	Name      string
+	PKColumns []string
+	Cache     *struct {
+		Type   string
+		Prefix string
+		Table  string
+	}
+}
+
 type SchemaInfo struct {
 	mu             sync.Mutex
 	tables         map[string]*TableInfo
@@ -90,7 +100,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	return si
 }
 
-func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePool, qrs *QueryRules) {
+func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []SchemaOverride, cachePool *CachePool, qrs *QueryRules) {
 	si.connPool.Open(connFactory)
 	conn := si.connPool.Get()
 	defer conn.Recycle()
@@ -125,6 +135,9 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, cachePool *CachePoo
 		}
 		si.tables[tableName] = tableInfo
 	}
+	if schemaOverrides != nil {
+		si.override(schemaOverrides)
+	}
 	// Clear is not really needed. Doing it for good measure.
 	si.queries.Clear()
 	si.rules = qrs.Copy()
@@ -142,6 +155,51 @@ func (si *SchemaInfo) updateLastChange(createTime sqltypes.Value) {
 	}
 	if si.lastChange.Unix() < t {
 		si.lastChange = time.Unix(t, 0)
+	}
+}
+
+func (si *SchemaInfo) override(schemaOverrides []SchemaOverride) {
+	for _, override := range schemaOverrides {
+		table, ok := si.tables[override.Name]
+		if !ok {
+			relog.Warning("Table not found for override: %v", override)
+			continue
+		}
+		if override.PKColumns != nil {
+			if err := table.SetPK(override.PKColumns); err != nil {
+				relog.Warning("%v: %v", err, override)
+				continue
+			}
+		}
+		if si.cachePool == nil || override.Cache == nil {
+			continue
+		}
+		switch override.Cache.Type {
+		case "RW":
+			table.CacheType = schema.CACHE_RW
+		case "W":
+			table.CacheType = schema.CACHE_W
+		default:
+			relog.Warning("Ignoring cache override: %v", override)
+			continue
+		}
+		if override.Cache.Prefix != "" {
+			table.Cache = NewRowCache(table, override.Cache.Prefix, si.cachePool)
+		} else if override.Cache.Table != "" {
+			totable, ok := si.tables[override.Cache.Table]
+			if !ok {
+				relog.Warning("Table not found: %v", override)
+				continue
+			}
+			if totable.Cache == nil {
+				relog.Warning("Table has no cache: %v", override)
+				continue
+			}
+			table.Cache = totable.Cache
+		} else {
+			relog.Warning("Incomplete cache specs: %v", override)
+			continue
+		}
 	}
 }
 
@@ -211,10 +269,10 @@ func (si *SchemaInfo) createTable(conn PoolConnection, tableName string) {
 	if tableInfo == nil {
 		panic(NewTabletError(FATAL, "Could not read table info: %s", tableName))
 	}
-	if tableInfo.CacheType != 0 {
-		relog.Info("Initialized cached table: %s", tableInfo.Cache.prefix)
-	} else {
+	if tableInfo.CacheType == schema.CACHE_NONE {
 		relog.Info("Initialized table: %s", tableName)
+	} else {
+		relog.Info("Initialized cached table: %s", tableInfo.Cache.prefix)
 	}
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -377,7 +435,7 @@ func (si *SchemaInfo) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		tstats := make(map[string]struct{ hits, absent, misses, invalidations int64 })
 		var temp, totals struct{ hits, absent, misses, invalidations int64 }
 		for k, v := range si.tables {
-			if v.CacheType != 0 {
+			if v.CacheType != schema.CACHE_NONE {
 				temp.hits, temp.absent, temp.misses, temp.invalidations = v.Stats()
 				tstats[k] = temp
 				totals.hits += temp.hits
