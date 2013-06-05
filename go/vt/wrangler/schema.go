@@ -18,7 +18,16 @@ import (
 )
 
 func (wr *Wrangler) GetSchema(zkTabletPath string, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
-	return wr.ai.RpcGetSchema(zkTabletPath, tables, includeViews, wr.actionTimeout())
+	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return wr.GetSchemaTablet(ti, tables, includeViews)
+}
+
+func (wr *Wrangler) GetSchemaTablet(tablet *tm.TabletInfo, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
+	return wr.ai.RpcGetSchemaTablet(tablet, tables, includeViews, wr.actionTimeout())
 }
 
 // helper method to asynchronously diff a schema
@@ -184,8 +193,8 @@ func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) 
 	}
 	actionPath, err := wr.ai.ApplySchema(zkTabletPath, sc)
 
-	// FIXME(alainjobart) the timeout value is wrong here, we need
-	// a longer one
+	// the timeout is for the entire action, so it might be too big
+	// for an individual tablet
 	results, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	if err != nil {
 		return nil, err
@@ -263,7 +272,7 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 
 // local structure used to keep track of what we're doing
 type TabletStatus struct {
-	zkTabletPath string
+	ti           *tm.TabletInfo
 	lastError    error
 	beforeSchema *mysqlctl.SchemaDefinition
 }
@@ -301,20 +310,16 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 			continue
 		}
 
-		statusArray = append(statusArray, &TabletStatus{zkTabletPath: tabletPath})
+		statusArray = append(statusArray, &TabletStatus{ti: ti})
 	}
 
-	// get schema on all tablets. This is an action, so returning
-	// from this guarantees all tablets are ready for an action.
-	// In particular, if we had interrupted a schema change
-	// before, and some tablets are still applying it, this would
-	// wait until they're done.
+	// get schema on all tablets.
 	relog.Info("Getting schema on all tablets for shard %v", shardInfo.ShardPath())
 	wg := &sync.WaitGroup{}
 	for _, status := range statusArray {
 		wg.Add(1)
 		go func(status *TabletStatus) {
-			status.beforeSchema, status.lastError = wr.GetSchema(status.zkTabletPath, nil, false)
+			status.beforeSchema, status.lastError = wr.GetSchemaTablet(status.ti, nil, false)
 			wg.Done()
 		}(status)
 	}
@@ -323,7 +328,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 	// quick check for errors
 	for _, status := range statusArray {
 		if status.lastError != nil {
-			return nil, fmt.Errorf("Error getting schema on tablet %v: %v", status.zkTabletPath, status.lastError)
+			return nil, fmt.Errorf("Error getting schema on tablet %v: %v", status.ti.Path(), status.lastError)
 		}
 	}
 
@@ -340,12 +345,12 @@ func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, prefligh
 	// BeforeSchema. If not, we shouldn't proceed
 	relog.Info("Checking schema on all tablets")
 	for _, status := range statusArray {
-		diffs := mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.zkTabletPath, status.beforeSchema)
+		diffs := mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Path(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.zkTabletPath, strings.Join(diffs, "\n"))
+				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Path(), strings.Join(diffs, "\n"))
 			} else {
-				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.zkTabletPath, strings.Join(diffs, "\n"))
+				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Path(), strings.Join(diffs, "\n"))
 			}
 		}
 	}
@@ -360,24 +365,24 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 	// apply the schema change to all replica / slave tablets
 	for _, status := range statusArray {
 		// if already applied, we skip this guy
-		diffs := mysqlctl.DiffSchemaToArray("after", preflight.AfterSchema, status.zkTabletPath, status.beforeSchema)
+		diffs := mysqlctl.DiffSchemaToArray("after", preflight.AfterSchema, status.ti.Path(), status.beforeSchema)
 		if len(diffs) == 0 {
-			relog.Info("Tablet %v already has the AfterSchema, skipping", status.zkTabletPath)
+			relog.Info("Tablet %v already has the AfterSchema, skipping", status.ti.Path())
 			continue
 		}
 
 		// make sure the before schema matches
-		diffs = mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.zkTabletPath, status.beforeSchema)
+		diffs = mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Path(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.zkTabletPath, strings.Join(diffs, "\n"))
+				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Path(), strings.Join(diffs, "\n"))
 			} else {
-				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.zkTabletPath, strings.Join(diffs, "\n"))
+				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Path(), strings.Join(diffs, "\n"))
 			}
 		}
 
 		// take this guy out of the serving graph if necessary
-		ti, err := tm.ReadTablet(wr.zconn, status.zkTabletPath)
+		ti, err := tm.ReadTablet(wr.zconn, status.ti.Path())
 		if err != nil {
 			return nil, err
 		}
@@ -391,9 +396,9 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		}
 
 		// apply the schema change
-		relog.Info("Applying schema change to slave %v in complex mode", status.zkTabletPath)
+		relog.Info("Applying schema change to slave %v in complex mode", status.ti.Path())
 		sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
-		_, err = wr.ApplySchema(status.zkTabletPath, sc)
+		_, err = wr.ApplySchema(status.ti.Path(), sc)
 		if err != nil {
 			return nil, err
 		}
