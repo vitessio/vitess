@@ -128,7 +128,7 @@ class _GoRpcConn(object):
 
     return data
 
-  def is_closed():
+  def is_closed(self):
     if self.conn is None:
       return True
 
@@ -173,7 +173,7 @@ class GoRpcClient(object):
       self.conn = None
     self.start_time = None
 
-  def is_closed():
+  def is_closed(self):
     if self.conn:
       if self.conn.is_closed():
         return True
