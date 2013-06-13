@@ -175,7 +175,7 @@ func main() {
 	})
 
 	relog.Info("started vttablet %v", *port)
-	umgmtSocket := path.Join(vtenv.VtDataRoot(), fmt.Sprintf("vttablet-%08x-umgmt.sock", *port))
+	umgmtSocket := fmt.Sprintf("/tmp/vttablet-%08x-umgmt.sock", *port)
 	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
 		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
 	}
