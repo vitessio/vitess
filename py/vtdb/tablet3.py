@@ -72,12 +72,12 @@ class TabletConnection(object):
   _stream_result = None
   _stream_result_index = None
 
-  def __init__(self, addr, keyspace, shard, timeout, user=None, password=None):
+  def __init__(self, addr, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
     self.keyspace = keyspace
     self.shard = shard
     self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
+    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def __str__(self):
     return '<TabletConnection %s %s/%s>' % (self.addr, self.keyspace, self.shard)

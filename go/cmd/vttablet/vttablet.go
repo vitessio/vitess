@@ -57,6 +57,11 @@ var (
 	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 	customrules    = flag.String("customrules", "", "custom query rules file")
 	overridesFile  = flag.String("schema-override", "", "schema overrides file")
+
+	securePort = flag.Int("secure-port", 0, "port for the secure server")
+	cert       = flag.String("cert", "", "cert file")
+	key        = flag.String("key", "", "key file")
+	caCert     = flag.String("ca-cert", "", "ca-cert file")
 )
 
 // Default values for the config
@@ -154,6 +159,10 @@ func main() {
 	umgmt.SetRebindDelay(float32(*rebindDelay))
 	umgmt.AddStartupCallback(func() {
 		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
+		if *securePort != 0 {
+			relog.Info("listening on secure port %v", *securePort)
+			umgmt.StartHttpsServer(fmt.Sprintf(":%v", *securePort), *cert, *key, *caCert)
+		}
 	})
 	umgmt.AddStartupCallback(func() {
 		c := make(chan os.Signal, 1)
@@ -204,6 +213,10 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 	})
 
 	bindAddr := fmt.Sprintf(":%v", *port)
+	secureAddr := ""
+	if *securePort != 0 {
+		secureAddr = fmt.Sprintf(":%v", *securePort)
+	}
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
@@ -251,7 +264,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 	})
 
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
-	if err := agent.Start(bindAddr, mysqld.Addr()); err != nil {
+	if err := agent.Start(bindAddr, secureAddr, mysqld.Addr()); err != nil {
 		return err
 	}
 	umgmt.AddCloseCallback(func() {

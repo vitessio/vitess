@@ -9,6 +9,7 @@
 
 import errno
 import select
+import ssl
 import socket
 import time
 import urlparse
@@ -78,7 +79,7 @@ class _GoRpcConn(object):
     self.socket_timeout = timeout / 10.0
     self.buf = []
 
-  def dial(self, uri):
+  def dial(self, uri, keyfile=None, certfile=None):
     parts = urlparse.urlparse(uri)
     conhost, conport = parts.netloc.split(':')
     try:
@@ -86,6 +87,8 @@ class _GoRpcConn(object):
     except NameError:
       conip = socket.getaddrinfo(conhost, None)[0][4][0]
     self.conn = socket.create_connection((conip, int(conport)), self.socket_timeout)
+    if parts.scheme == 'https':
+      self.conn = ssl.wrap_socket(self.conn, keyfile=keyfile, certfile=certfile)
     self.conn.sendall('CONNECT %s HTTP/1.0\n\n' % parts.path)
     while True:
       data = self.conn.recv(1024)
@@ -141,7 +144,7 @@ class _GoRpcConn(object):
     return False
 
 class GoRpcClient(object):
-  def __init__(self, uri, timeout):
+  def __init__(self, uri, timeout, certfile=None, keyfile=None):
     self.uri = uri
     self.timeout = timeout
     self.start_time = None
@@ -149,13 +152,15 @@ class GoRpcClient(object):
     self.seq = 0
     self.conn = None
     self.data = None
+    self.certfile = certfile
+    self.keyfile = keyfile
 
   def dial(self):
     if self.conn:
       self.close()
     conn = _GoRpcConn(self.timeout)
     try:
-      conn.dial(self.uri)
+      conn.dial(self.uri, self.certfile, self.keyfile)
     except socket.timeout as e:
       raise TimeoutError(e, self.timeout, 'dial', self.uri)
     except socket.error as e:

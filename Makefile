@@ -69,6 +69,7 @@ integration_test:
 	cd test ; echo "connection test"; time ./connection_test.py
 	cd test ; echo "updatestream test"; time ./update_stream.py
 	cd test ; echo "rowcache_invalidator test"; time ./rowcache_invalidator.py
+	cd test ; echo "secure test"; time ./secure.py $$VT_TEST_FLAGS
 
 clean:
 	cd go/cmd/mysqlctl; go clean

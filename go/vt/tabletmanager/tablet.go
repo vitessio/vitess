@@ -192,6 +192,7 @@ type Tablet struct {
 	Uid         uint32      // the server id for this instance
 	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
 	Addr        string      // host:port for queryserver
+	SecureAddr  string      // host:port for queryserver using encrypted connection
 	MysqlAddr   string      // host:port for the mysql instance
 	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns
 
@@ -349,9 +350,10 @@ func NewTablet(cell string, uid uint32, parent TabletAlias, vtAddr, mysqlAddr, k
 		return nil, err
 	}
 
-	// This value will get resolved on tablet server startup.
+	// These value will get resolved on tablet server startup.
+	secureAddr := ""
 	mysqlIpAddr := ""
-	return &Tablet{cell, uid, parent, vtAddr, mysqlAddr, mysqlIpAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}, nil
+	return &Tablet{cell, uid, parent, vtAddr, secureAddr, mysqlAddr, mysqlIpAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}, nil
 }
 
 func tabletFromJson(data string) (*Tablet, error) {

@@ -57,7 +57,6 @@ type ActionAgent struct {
 	done    chan struct{} // closed when we are done.
 }
 
-// bindAddr: the address for the query service advertised by this agent
 func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
 	actionPath, err := TabletActionPath(zkTabletPath)
 	if err != nil {
@@ -293,8 +292,12 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 			if entry.Uid == agent.Tablet().Uid {
 				foundTablet = true
 				vtAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_vtocc"])
+				secureAddr := ""
+				if port, ok := entry.NamedPortMap["_vtocc"]; ok {
+					secureAddr = fmt.Sprintf("%v:%v", entry.Host, port)
+				}
 				mysqlAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_mysql"])
-				if vtAddr != agent.Tablet().Addr || mysqlAddr != agent.Tablet().MysqlAddr {
+				if vtAddr != agent.Tablet().Addr || mysqlAddr != agent.Tablet().MysqlAddr || secureAddr != agent.Tablet().SecureAddr {
 					// update needed
 					host, port, err := splitHostPort(agent.Tablet().Addr)
 					if err != nil {
@@ -302,6 +305,13 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 					}
 					entry.Host = host
 					entry.NamedPortMap["_vtocc"] = port
+					if agent.Tablet().SecureAddr != "" {
+						_, port, err := splitHostPort(agent.Tablet().SecureAddr)
+						if err != nil {
+							return "", err
+						}
+						entry.NamedPortMap["_svt"] = port
+					}
 					host, port, err = splitHostPort(agent.Tablet().MysqlAddr)
 					if err != nil {
 						return "", err
@@ -396,7 +406,8 @@ func VtnsAddrForTablet(tablet *Tablet) (*naming.VtnsAddr, error) {
 	return entry, nil
 }
 
-func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) error {
+// bindAddr: the address for the query service advertised by this agent
+func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 	var err error
 	if err = agent.readTablet(); err != nil {
 		return err
@@ -409,6 +420,12 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) error {
 	bindAddr, err = resolveAddr(bindAddr)
 	if err != nil {
 		return err
+	}
+	if secureAddr != "" {
+		secureAddr, err = resolveAddr(secureAddr)
+		if err != nil {
+			return err
+		}
 	}
 	mysqlAddr, err = resolveAddr(mysqlAddr)
 	if err != nil {
@@ -430,6 +447,7 @@ func (agent *ActionAgent) Start(bindAddr, mysqlAddr string) error {
 			return "", err
 		}
 		tablet.Addr = bindAddr
+		tablet.SecureAddr = secureAddr
 		tablet.MysqlAddr = mysqlAddr
 		tablet.MysqlIpAddr = mysqlIpAddr
 		return jscfg.ToJson(tablet), nil

@@ -290,9 +290,6 @@ def main():
     pass
   except utils.Break:
     utils.options.skip_teardown = True
-  except utils.TestError as e:
-    for arg in e.args:
-      print arg
   finally:
     teardown()
 

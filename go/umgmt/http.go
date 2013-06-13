@@ -5,12 +5,16 @@
 package umgmt
 
 import (
-	"code.google.com/p/vitess/go/relog"
+	"crypto/tls"
+	"crypto/x509"
 	"expvar"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
+
+	"code.google.com/p/vitess/go/relog"
 )
 
 var connectionCount = expvar.NewInt("connection-count")
@@ -78,6 +82,20 @@ func (l *connCountListener) Accept() (c net.Conn, err error) {
 	return
 }
 
+func asyncListener(listener net.Listener) {
+	httpListener := newHttpListener(listener)
+	AddListener(httpListener)
+	httpErr := http.Serve(httpListener, nil)
+	httpListener.Close()
+	if httpErr != nil {
+		// This is net.errClosing, which is conveniently non-public.
+		// Squelch this expected case.
+		if !strings.Contains(httpErr.Error(), "use of closed network connection") {
+			relog.Error("StartHttpServer error: %v", httpErr)
+		}
+	}
+}
+
 // this is a callback to bind and startup an http server.
 // usually it is called like:
 //   umgmt.AddStartupCallback(func () { umgmt.StartHttpServer(addr) })
@@ -86,17 +104,52 @@ func StartHttpServer(addr string) {
 	if httpErr != nil {
 		relog.Fatal("StartHttpServer failed: %v", httpErr)
 	}
-	go func() {
-		httpListener = newHttpListener(httpListener)
-		AddListener(httpListener)
-		httpErr = http.Serve(httpListener, nil)
-		httpListener.Close()
-		if httpErr != nil {
-			// This is net.errClosing, which is conveniently non-public.
-			// Squelch this expected case.
-			if !strings.Contains(httpErr.Error(), "use of closed network connection") {
-				relog.Error("StartHttpServer error: %v", httpErr)
-			}
+	go asyncListener(httpListener)
+}
+
+// starts an https server connection
+func StartHttpsServer(addr string, certFile, keyFile, caFile string) {
+	config := tls.Config{}
+
+	// load the server cert / key
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		relog.Fatal("StartHttpsServer.LoadX509KeyPair failed: %v", err)
+	}
+	config.Certificates = []tls.Certificate{cert}
+
+	// load the ca if necessary
+	// FIXME(alainjobart) this doesn't quite work yet, have
+	// to investigate
+	if caFile != "" {
+		config.ClientCAs = x509.NewCertPool()
+
+		ca, err := os.Open(caFile)
+		if err != nil {
+			relog.Fatal("StartHttpsServer failed to open caFile %v: %v", caFile, err)
 		}
-	}()
+		defer ca.Close()
+
+		fi, err := ca.Stat()
+		if err != nil {
+			relog.Fatal("StartHttpsServer failed to stat caFile %v: %v", caFile, err)
+		}
+
+		pemCerts := make([]byte, fi.Size())
+		if _, err = ca.Read(pemCerts); err != nil {
+			relog.Fatal("StartHttpsServer failed to read caFile %v: %v", caFile, err)
+		}
+
+		if !config.ClientCAs.AppendCertsFromPEM(pemCerts) {
+			relog.Fatal("StartHttpsServer failed to parse caFile %v", caFile)
+		}
+
+		config.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+
+	httpsListener, httpsErr := tls.Listen("tcp", addr, &config)
+	if httpsErr != nil {
+		relog.Fatal("StartHttpsServer failed: %v", httpsErr)
+	}
+	go asyncListener(httpsListener)
 }

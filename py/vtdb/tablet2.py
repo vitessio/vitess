@@ -19,12 +19,12 @@ class TabletConnection(object):
   session_id = 0
   cursorclass = cursor.TabletCursor
 
-  def __init__(self, addr, keyspace, shard, timeout, user=None, password=None):
+  def __init__(self, addr, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
     self.keyspace = keyspace
     self.shard = shard
     self.timeout = timeout
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
+    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def dial(self):
     try:
