@@ -93,6 +93,22 @@ func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) ([]st
 	if err != nil {
 		return nil, err
 	}
+	if mysqld.replParams.SslEnabled() {
+		cmc += ",\n  MASTER_SSL = 1"
+	}
+	if mysqld.replParams.SslCa != "" {
+		cmc += ",\n  MASTER_SSL_CA = '" + mysqld.replParams.SslCa + "'"
+	}
+	if mysqld.replParams.SslCaPath != "" {
+		cmc += ",\n  MASTER_SSL_CAPATH = '" + mysqld.replParams.SslCaPath + "'"
+	}
+	if mysqld.replParams.SslCert != "" {
+		cmc += ",\n  MASTER_SSL_CERT = '" + mysqld.replParams.SslCert + "'"
+	}
+	if mysqld.replParams.SslKey != "" {
+		cmc += ",\n  MASTER_SSL_KEY = '" + mysqld.replParams.SslKey + "'"
+	}
+
 	return []string{
 		"STOP SLAVE",
 		"RESET SLAVE",

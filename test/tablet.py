@@ -61,18 +61,24 @@ class Tablet(object):
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
-  def mysqlctl(self, cmd, quiet=False):
+  def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None):
     utils.prog_compile(['mysqlctl'])
 
     logLevel = ''
     if utils.options.verbose and not quiet:
       logLevel = ' -log.level=INFO'
 
-    return utils.run_bg(os.path.join(utils.vtroot, 'bin', 'mysqlctl') +
-                        logLevel + ' -tablet-uid %u ' % self.tablet_uid + cmd)
+    env = None
+    if extra_my_cnf:
+      env = os.environ.copy()
+      env['EXTRA_MY_CNF'] = extra_my_cnf
 
-  def init_mysql(self):
-    return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port), quiet=True)
+    return utils.run_bg(os.path.join(utils.vtroot, 'bin', 'mysqlctl') +
+                        logLevel + ' -tablet-uid %u ' % self.tablet_uid + cmd,
+                        env=env)
+
+  def init_mysql(self, extra_my_cnf=None):
+    return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port), quiet=True, extra_my_cnf=extra_my_cnf)
 
   def start_mysql(self):
     return self.mysqlctl('-port %u -mysql-port %u start' % (self.port, self.mysql_port), quiet=True)
@@ -233,7 +239,7 @@ class Tablet(object):
   def logfile(self):
     return os.path.join(self.tablet_dir, "vttablet.log")
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
@@ -249,7 +255,7 @@ class Tablet(object):
             '-tablet-path', self.zk_tablet_path,
             '-logfile', self.logfile,
             '-log.level', 'INFO',
-            '-db-configs-file', self._write_db_configs_file(),
+            '-db-configs-file', self._write_db_configs_file(repl_extra_flags),
             '-debug-querylog-file', self.querylog_file]
     if auth:
       args.extend(['-auth-credentials', os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')])
@@ -301,12 +307,13 @@ class Tablet(object):
       if timeout <= 0:
         raise utils.TestError("timeout waiting for state %s" % expected)
 
-  def _write_db_configs_file(self):
+  def _write_db_configs_file(self, repl_extra_flags={}):
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = self.dbname
       config['dba']['dbname'] = self.dbname
       config['repl']['dbname'] = self.dbname
+    config['repl'].update(repl_extra_flags)
     path = os.path.join(self.tablet_dir, 'db-configs.json')
 
     if self.memcached:

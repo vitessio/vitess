@@ -32,12 +32,6 @@ def openssl(cmd):
 def setup():
   utils.zk_setup()
 
-  setup_procs = [
-      shard_0_master.init_mysql(),
-      shard_0_slave.init_mysql(),
-      ]
-  utils.wait_procs(setup_procs)
-
   utils.debug("Creating certificates")
   os.makedirs(cert_dir)
 
@@ -45,7 +39,29 @@ def setup():
   ca_key = cert_dir + "/ca-key.pem"
   ca_cert = cert_dir + "/ca-cert.pem"
   openssl(["genrsa", "-out", cert_dir + "/ca-key.pem"])
+  ca_config = cert_dir + "/ca.config"
+  with open(ca_config, 'w') as fd:
+    fd.write("""
+[ req ]
+ default_bits           = 1024
+ default_keyfile        = keyfile.pem
+ distinguished_name     = req_distinguished_name
+ attributes             = req_attributes
+ prompt                 = no
+ output_password        = mypass
+[ req_distinguished_name ]
+ C                      = US
+ ST                     = California
+ L                      = Mountain View
+ O                      = Google
+ OU                     = Vitess
+ CN                     = Mysql CA
+ emailAddress           = test@email.address
+[ req_attributes ]
+ challengePassword      = A challenge password
+""")
   openssl(["req", "-new", "-x509", "-nodes", "-days", "3600", "-batch",
+           "-config", ca_config,
            "-key", ca_key,
            "-out", ca_cert])
 
@@ -53,7 +69,29 @@ def setup():
   server_key = cert_dir + "/server-key.pem"
   server_cert = cert_dir + "/server-cert.pem"
   server_req = cert_dir + "/server-req.pem"
+  server_config = cert_dir + "/server.config"
+  with open(server_config, 'w') as fd:
+    fd.write("""
+[ req ]
+ default_bits           = 1024
+ default_keyfile        = keyfile.pem
+ distinguished_name     = req_distinguished_name
+ attributes             = req_attributes
+ prompt                 = no
+ output_password        = mypass
+[ req_distinguished_name ]
+ C                      = US
+ ST                     = California
+ L                      = Mountain View
+ O                      = Google
+ OU                     = Vitess
+ CN                     = Mysql Server
+ emailAddress           = test@email.address
+[ req_attributes ]
+ challengePassword      = A challenge password
+""")
   openssl(["req", "-newkey", "rsa:2048", "-days", "3600", "-nodes", "-batch",
+           "-config", server_config,
            "-keyout", server_key, "-out", server_req])
   openssl(["rsa", "-in", server_key, "-out", server_key])
   openssl(["x509", "-req",
@@ -68,7 +106,29 @@ def setup():
   client_key = cert_dir + "/client-key.pem"
   client_cert = cert_dir + "/client-cert.pem"
   client_req = cert_dir + "/client-req.pem"
+  client_config = cert_dir + "/client.config"
+  with open(client_config, 'w') as fd:
+    fd.write("""
+[ req ]
+ default_bits           = 1024
+ default_keyfile        = keyfile.pem
+ distinguished_name     = req_distinguished_name
+ attributes             = req_attributes
+ prompt                 = no
+ output_password        = mypass
+[ req_distinguished_name ]
+ C                      = US
+ ST                     = California
+ L                      = Mountain View
+ O                      = Google
+ OU                     = Vitess
+ CN                     = Mysql Client
+ emailAddress           = test@email.address
+[ req_attributes ]
+ challengePassword      = A challenge password
+""")
   openssl(["req", "-newkey", "rsa:2048", "-days", "3600", "-nodes", "-batch",
+           "-config", client_config,
            "-keyout", client_key, "-out", client_req])
   openssl(["rsa", "-in", client_key, "-out", client_key])
   openssl(["x509", "-req",
@@ -76,7 +136,7 @@ def setup():
            "-days", "3600",
            "-CA", ca_cert,
            "-CAkey", ca_key,
-           "-set_serial", "01",
+           "-set_serial", "02",
            "-out", client_cert])
 
   # Create vt server certificate, remove passphrase, and sign it
@@ -91,8 +151,21 @@ def setup():
            "-days", "3600",
            "-CA", ca_cert,
            "-CAkey", ca_key,
-           "-set_serial", "01",
+           "-set_serial", "03",
            "-out", vt_server_cert])
+
+  extra_my_cnf = cert_dir + "/secure.cnf"
+  fd = open(extra_my_cnf, "w")
+  fd.write("ssl-ca=" + ca_cert + "\n")
+  fd.write("ssl-cert=" + server_cert + "\n")
+  fd.write("ssl-key=" + server_key + "\n")
+  fd.close()
+
+  setup_procs = [
+      shard_0_master.init_mysql(extra_my_cnf=extra_my_cnf),
+      shard_0_slave.init_mysql(extra_my_cnf=extra_my_cnf),
+      ]
+  utils.wait_procs(setup_procs)
 
 def teardown():
   if utils.options.skip_teardown:
@@ -131,16 +204,25 @@ def run_test_secure():
   shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
                                 key=cert_dir + "/vt-server-key.pem")
   shard_0_slave.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
-                               key=cert_dir + "/vt-server-key.pem")
+                               key=cert_dir + "/vt-server-key.pem",
+                               repl_extra_flags={
+      'flags': 2048,
+      'ssl_ca': cert_dir + "/ca-cert.pem",
+      'ssl_cert': cert_dir + "/client-cert.pem",
+      'ssl_key': cert_dir + "/client-key.pem",
+      })
 
-  # first get the topology and check it
+  # Reparent using SSL
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
+
+  # then get the topology and check it
   zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
                                        "test_nj", 30.0)
   topology.read_keyspaces(zkocc_client)
 
-  shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_svt")
+  shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vts")
   if len(shard_0_master_addrs) != 1:
-    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_svt", got: %s' % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
+    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
   utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
 
   # try to connect with regular client

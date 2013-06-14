@@ -293,7 +293,7 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 				foundTablet = true
 				vtAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_vtocc"])
 				secureAddr := ""
-				if port, ok := entry.NamedPortMap["_vtocc"]; ok {
+				if port, ok := entry.NamedPortMap["_vts"]; ok {
 					secureAddr = fmt.Sprintf("%v:%v", entry.Host, port)
 				}
 				mysqlAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_mysql"])
@@ -310,7 +310,7 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 						if err != nil {
 							return "", err
 						}
-						entry.NamedPortMap["_svt"] = port
+						entry.NamedPortMap["_vts"] = port
 					}
 					host, port, err = splitHostPort(agent.Tablet().MysqlAddr)
 					if err != nil {
@@ -398,6 +398,13 @@ func VtnsAddrForTablet(tablet *Tablet) (*naming.VtnsAddr, error) {
 	}
 	entry := naming.NewAddr(tablet.Uid, host, 0)
 	entry.NamedPortMap["_vtocc"] = port
+	if tablet.SecureAddr != "" {
+		host, port, err = splitHostPort(tablet.SecureAddr)
+		if err != nil {
+			return nil, err
+		}
+		entry.NamedPortMap["_vts"] = port
+	}
 	host, port, err = splitHostPort(tablet.MysqlAddr)
 	if err != nil {
 		return nil, err

@@ -232,6 +232,12 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 			path.Join(root, "config/mycnf/master.cnf"),
 			path.Join(root, "config/mycnf/replica.cnf"),
 		}
+
+		if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
+			parts := strings.Split(extraCnf, ":")
+			cnfTemplatePaths = append(cnfTemplatePaths, parts...)
+		}
+
 		configData, err = MakeMycnf(mt.config, cnfTemplatePaths)
 	} else if hr.ExitStatus == hook.HOOK_SUCCESS {
 		configData, err = fillMycnfTemplate(mt.config, hr.Stdout)

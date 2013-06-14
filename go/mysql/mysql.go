@@ -69,10 +69,21 @@ type ConnectionParams struct {
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
 	Flags      uint64 `json:"flags"`
+
+	// the following flags are only used for 'Change Master' command
+	// for now (along with flags |= 2048 for CLIENT_SSL)
+	SslCa     string `json:"ssl_ca"`
+	SslCaPath string `json:"ssl_ca_path"`
+	SslCert   string `json:"ssl_cert"`
+	SslKey    string `json:"ssl_key"`
 }
 
 func (c *ConnectionParams) EnableMultiStatements() {
 	c.Flags |= C.CLIENT_MULTI_STATEMENTS
+}
+
+func (c *ConnectionParams) SslEnabled() bool {
+	return (c.Flags & C.CLIENT_SSL) != 0
 }
 
 func (c ConnectionParams) Redacted() interface{} {
