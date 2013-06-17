@@ -60,13 +60,16 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   return db_keys, fqdb_keys
 
 # db_key is <keyspace>.<shard_name>.<db_type>[:<service>]
-# returns a list of entries to try
-def get_host_port_by_name(zkocc_client, db_key):
+# returns a list of entries to try, which is an array of tuples
+# (host, port, encrypted)
+def get_host_port_by_name(zkocc_client, db_key, encrypted=False):
   parts = db_key.split(':')
   if len(parts) == 2:
     service = parts[1]
   else:
     service = '_mysql'
+  if service == '_vtocc' and encrypted:
+    encrypted_service = '_vts'
   db_key = parts[0]
   zk_path = '/zk/local/vt/ns/' + db_key.replace('.', '/') # no protocol here
   try:
@@ -80,9 +83,18 @@ def get_host_port_by_name(zkocc_client, db_key):
                     data)
     return []
   host_port_list = []
+  encrypted_host_port_list = []
   for entry in data['entries']:
     if service in entry['named_port_map']:
-      host_port = (entry['host'], entry['named_port_map'][service])
+      host_port = (entry['host'], entry['named_port_map'][service],
+                   service == '_vts')
       host_port_list.append(host_port)
+    if encrypted and encrypted_service in entry['named_port_map']:
+      host_port = (entry['host'], entry['named_port_map'][encrypted_service],
+                   True)
+      encrypted_host_port_list.append(host_port)
+  if encrypted and len(encrypted_host_port_list) > 0:
+    random.shuffle(encrypted_host_port_list)
+    return encrypted_host_port_list
   random.shuffle(host_port_list)
   return host_port_list

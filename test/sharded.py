@@ -230,11 +230,12 @@ def run_test_sharding():
 
   shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.-80.master:_vtocc")
   if len(shard_0_master_addrs) != 1:
-    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.-80.master:_vtocc", got: %s' % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
-  utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
+    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.-80.master:_vtocc", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+  utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
   # connect to shard -80
-  conn = tablet2.TabletConnection("%s:%u" % shard_0_master_addrs[0],
+  conn = tablet2.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0],
+                                             shard_0_master_addrs[0][1]),
                                   "test_keyspace", "-80", 10.0)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
@@ -245,7 +246,9 @@ def run_test_sharding():
     raise utils.TestError('wrong conn._execute output')
 
   # connect to shard 80-
-  conn = tablet2.TabletConnection("%s:%u" % topology.get_host_port_by_name(zkocc_client, "test_keyspace.80-.master:_vtocc")[0],
+  shard_1_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.80-.master:_vtocc")
+  conn = tablet2.TabletConnection("%s:%u" % (shard_1_master_addrs[0][0],
+                                             shard_1_master_addrs[0][1]),
                                   "test_keyspace", "80-", 10.0)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})

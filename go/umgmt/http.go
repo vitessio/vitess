@@ -96,7 +96,7 @@ func asyncListener(listener net.Listener) {
 	}
 }
 
-// this is a callback to bind and startup an http server.
+// StartHttpServer binds and starts an http server.
 // usually it is called like:
 //   umgmt.AddStartupCallback(func () { umgmt.StartHttpServer(addr) })
 func StartHttpServer(addr string) {
@@ -107,7 +107,7 @@ func StartHttpServer(addr string) {
 	go asyncListener(httpListener)
 }
 
-// starts an https server connection
+// StartHttpsServer binds and starts an https server.
 func StartHttpsServer(addr string, certFile, keyFile, caFile string) {
 	config := tls.Config{}
 
@@ -147,9 +147,9 @@ func StartHttpsServer(addr string, certFile, keyFile, caFile string) {
 		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
-	httpsListener, httpsErr := tls.Listen("tcp", addr, &config)
-	if httpsErr != nil {
-		relog.Fatal("StartHttpsServer failed: %v", httpsErr)
+	httpsListener, err := tls.Listen("tcp", addr, &config)
+	if err != nil {
+		relog.Fatal("StartHttpsServer failed: %v", err)
 	}
 	go asyncListener(httpsListener)
 }

@@ -222,12 +222,19 @@ def run_test_secure():
 
   shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vts")
   if len(shard_0_master_addrs) != 1:
-    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
-  utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u" % (h, p) for (h, p) in shard_0_master_addrs]))
+    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+  if shard_0_master_addrs[0][2] != True:
+    raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts" is not encrypted')
+  utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+
+  # make sure asking for optionally secure connections works too
+  auto_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vtocc", encrypted=True)
+  if auto_addrs != shard_0_master_addrs:
+    raise utils.TestError('topology.get_host_port_by_name doesn\'t resolve encrypted addresses properly: %s != %s' % (str(shard_0_master_addrs), str(auto_addrs)))
 
   # try to connect with regular client
   try:
-    conn = tablet3.TabletConnection("%s:%u" % shard_0_master_addrs[0],
+    conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
                                     "test_keyspace", "0", 10.0)
     conn.dial()
     raise utils.TestError("No exception raised to secure port")
@@ -236,7 +243,7 @@ def run_test_secure():
       raise utils.TestError("Unexpected exception: %s" % str(e))
 
   # connect to encrypted port
-  conn = tablet3.TabletConnection("%s:%u" % shard_0_master_addrs[0],
+  conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
                                   "test_keyspace", "0", 10.0, encrypted=True)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})
