@@ -320,7 +320,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 		}
 		for i, _ := range srvKeyspace.Shards[0 : len(srvKeyspace.Shards)-1] {
 			if srvKeyspace.Shards[i].KeyRange.End != srvKeyspace.Shards[i+1].KeyRange.Start {
-				return fmt.Errorf("Non-contiguous KeyRange values at shard %v to %v: %v != %v", i, i+1, srvKeyspace.Shards[i].KeyRange.End, srvKeyspace.Shards[i+1].KeyRange.Start)
+				return fmt.Errorf("Non-contiguous KeyRange values at shard %v to %v: %v != %v", i, i+1, srvKeyspace.Shards[i].KeyRange.End.Hex(), srvKeyspace.Shards[i+1].KeyRange.Start.Hex())
 			}
 		}
 	}
