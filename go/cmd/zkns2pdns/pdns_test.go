@@ -69,13 +69,12 @@ func testQuery(t *testing.T, query, result string) {
 		panic(err)
 	}
 	defer inpr.Close()
-	defer inpw.Close()
 	outpr, outpw, err := os.Pipe()
 	if err != nil {
+		inpw.Close()
 		panic(err)
 	}
 	defer outpr.Close()
-	defer outpw.Close()
 
 	zr1 := newZknsResolver(zconn, fqdn(), ".zkns.test.zk", "/zk/test/zkns")
 	pd := &pdns{zr1}
@@ -86,10 +85,12 @@ func testQuery(t *testing.T, query, result string) {
 
 	_, err = io.WriteString(inpw, "HELO\t2\n")
 	if err != nil {
+		inpw.Close()
 		t.Fatalf("write failed: %v", err)
 	}
 	_, err = io.WriteString(inpw, query)
 	if err != nil {
+		inpw.Close()
 		t.Fatalf("write failed: %v", err)
 	}
 
