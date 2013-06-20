@@ -182,8 +182,14 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def scrap(self):
-    utils.run_vtctl(['ScrapTablet', self.zk_tablet_path])
+  def scrap(self, force=False, skip_rebuild=False):
+    args = ['ScrapTablet']
+    if force:
+      args.append("-force")
+    if skip_rebuild:
+      args.append("-skip-rebuild")
+    args.append(self.zk_tablet_path)
+    utils.run_vtctl(args)
 
   def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, start=False, auth=False, dbname=None):
     self.keyspace = keyspace
@@ -218,7 +224,6 @@ class Tablet(object):
     args.append(tablet_type)
     if zk_parent_alias:
       args.append(zk_parent_alias)
-
     utils.run_vtctl(args)
     if start:
       if tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
