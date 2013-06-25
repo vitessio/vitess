@@ -31,7 +31,9 @@ const (
 
 	TABLET_ACTION_DEMOTE_MASTER       = "DemoteMaster"
 	TABLET_ACTION_PROMOTE_SLAVE       = "PromoteSlave"
+	TABLET_ACTION_SLAVE_WAS_PROMOTED  = "SlaveWasPromoted"
 	TABLET_ACTION_RESTART_SLAVE       = "RestartSlave"
+	TABLET_ACTION_SLAVE_WAS_RESTARTED = "SlaveWasRestarted"
 	TABLET_ACTION_STOP_SLAVE          = "StopSlave"
 	TABLET_ACTION_BREAK_SLAVES        = "BreakSlaves"
 	TABLET_ACTION_MASTER_POSITION     = "MasterPosition"
@@ -56,7 +58,8 @@ const (
 	TABLET_ACTION_MULTI_RESTORE       = "MultiRestore"
 
 	// Shard actions - involve all tablets in a shard
-	SHARD_ACTION_REPARENT = "ReparentShard"
+	SHARD_ACTION_REPARENT              = "ReparentShard"
+	SHARD_ACTION_EXTERNALLY_REPARENTED = "ShardExternallyReparented"
 	// Recompute derived shard-wise data
 	SHARD_ACTION_REBUILD = "RebuildShard"
 	// Generic read lock for inexpensive shard-wide actions.
@@ -113,8 +116,11 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_DEMOTE_MASTER:
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		node.reply = &RestartSlaveData{}
+	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
 	case TABLET_ACTION_RESTART_SLAVE:
 		node.args = &RestartSlaveData{}
+	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
+		node.args = &SlaveWasRestartedData{}
 	case TABLET_ACTION_STOP_SLAVE:
 	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_MASTER_POSITION:
@@ -165,6 +171,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 
 	case SHARD_ACTION_REPARENT:
 		node.args = new(string)
+	case SHARD_ACTION_EXTERNALLY_REPARENTED:
 	case SHARD_ACTION_REBUILD:
 	case SHARD_ACTION_CHECK:
 	case SHARD_ACTION_APPLY_SCHEMA:

@@ -331,6 +331,19 @@ func (wr *Wrangler) promoteSlave(ti *tm.TabletInfo) (rsd *tm.RestartSlaveData, e
 	return
 }
 
+func (wr *Wrangler) slaveWasPromoted(ti *tm.TabletInfo) error {
+	relog.Info("slave was promoted %v", ti.Path())
+	actionPath, err := wr.ai.SlaveWasPromoted(ti.Path())
+	if err != nil {
+		return err
+	}
+	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (wr *Wrangler) restartSlaves(slaveTabletMap map[string]*tm.TabletInfo, rsd *tm.RestartSlaveData) (majorityRestart bool, err error) {
 	wg := new(sync.WaitGroup)
 	slaves := CopyMapValues(slaveTabletMap, []*tm.TabletInfo{}).([]*tm.TabletInfo)

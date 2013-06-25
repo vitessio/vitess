@@ -959,6 +959,77 @@ def run_test_reparent_slave_offline(shard_id='0'):
   tablet_41983.kill_vttablet()
 
 
+# assume a different entity is doing the reparent, and telling us it was done
+@utils.test_case
+def run_test_reparent_from_outside():
+  utils.zk_wipe()
+
+  utils.run_vtctl('CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+
+  # create the database so vttablets start, as they are serving
+  tablet_62344.create_db('vt_test_keyspace')
+  tablet_62044.create_db('vt_test_keyspace')
+  tablet_41983.create_db('vt_test_keyspace')
+  tablet_31981.create_db('vt_test_keyspace')
+
+  # Start up a master mysql and vttablet
+  tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
+
+  # Create a few slaves for testing reparenting.
+  tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True)
+  tablet_41983.init_tablet('replica', 'test_keyspace', '0', start=True)
+  tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True)
+
+  # Reparent as a starting point
+  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 %s' % tablet_62344.zk_tablet_path)
+
+  # now manually reparent 1 out of 2 tablets
+  # 62044 will be the new master
+  # 31981 won't be re-parented, so it w2ill be busted
+  tablet_62044.mquery('', [
+      "RESET MASTER",
+      "STOP SLAVE",
+      "RESET SLAVE",
+      "CHANGE MASTER TO MASTER_HOST = ''",
+      ])
+  new_pos = tablet_62044.mquery('', 'show master status')
+  utils.debug("New master position: %s" % str(new_pos))
+
+  # 62344 will now be a slave of 62044
+  tablet_62344.mquery('', [
+      "RESET MASTER",
+      "RESET SLAVE",
+      "change master to master_host='%s', master_port=%u, master_log_file='%s', master_log_pos=%u" % (utils.hostname, tablet_62044.mysql_port, new_pos[0][0], new_pos[0][1]),
+      'start slave'
+      ])
+
+  # 41983 will be a slave of 62044
+  tablet_41983.mquery('', [
+      'stop slave',
+      "change master to master_port=%u, master_log_file='%s', master_log_pos=%u" % (tablet_62044.mysql_port, new_pos[0][0], new_pos[0][1]),
+      'start slave'
+      ])
+
+  # update zk with the new graph
+  utils.run_vtctl('ShardExternallyReparented -scrap-stragglers /zk/global/vt/keyspaces/test_keyspace/shards/0 %s' % tablet_62044.zk_tablet_path, auto_log=True)
+
+  # make sure the replication graph is fine
+  shard_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.debug('shard_files: %s' % " ".join(shard_files))
+  if shard_files != ['action', 'actionlog', 'test_nj-0000062044']:
+    raise utils.TestError('unexpected zk content: %s' % " ".join(shard_files))
+
+  slave_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-0000062044')
+  utils.debug('slave_files: %s' % " ".join(slave_files))
+  if slave_files != ['test_nj-0000041983', 'test_nj-0000062344']:
+    raise utils.TestError('unexpected zk content: %s' % " ".join(slave_files))
+
+  tablet_31981.kill_vttablet()
+  tablet_62344.kill_vttablet()
+  tablet_62044.kill_vttablet()
+  tablet_41983.kill_vttablet()
+
+
 # See if a lag slave can be safely reparent.
 @utils.test_case
 def run_test_reparent_lag_slave(shard_id='0'):
@@ -1157,6 +1228,7 @@ def run_all():
   run_test_reparent_graceful_range_based()
   run_test_reparent_down_master()
   run_test_vttablet_authenticated()
+  run_test_reparent_from_outside()
   run_test_reparent_lag_slave()
   run_test_hook()
   run_test_sigterm()

@@ -243,6 +243,10 @@ def zk_check(ping_tablets=False):
   else:
     run_vtctl('Validate -ping-tablets=false /zk/global/vt/keyspaces')
 
+def zk_ls(path):
+  out, err = run(vtroot+'/bin/zk ls '+path, trap_output=True)
+  return sorted(out.splitlines())
+
 # vars helpers
 def get_vars(port):
   """

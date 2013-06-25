@@ -222,8 +222,7 @@ def run_test_complex_schema():
   check_tables(shard_1_replica1, 4)
 
   # now test action log pruning
-  out, err = utils.run(utils.vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
-  oldLines = out.splitlines()
+  oldLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
   oldCount = len(oldLines)
   if utils.options.verbose:
     print "I have %u actionlog before" % oldCount
@@ -232,8 +231,7 @@ def run_test_complex_schema():
 
   utils.run_vtctl('PruneActionLogs -keep-count=5 /zk/*/vt/tablets/*/actionlog', auto_log=True)
 
-  out, err = utils.run(utils.vtroot+'/bin/zk ls '+shard_0_replica1.zk_tablet_path+'/actionlog', trap_output=True)
-  newLines = out.splitlines()
+  newLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
   newCount = len(newLines)
   if utils.options.verbose:
     print "I have %u actionlog after" % newCount

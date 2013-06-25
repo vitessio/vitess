@@ -267,8 +267,22 @@ func (ai *ActionInitiator) PromoteSlave(zkTabletPath string) (actionPath string,
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE})
 }
 
+func (ai *ActionInitiator) SlaveWasPromoted(zkTabletPath string) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_PROMOTED})
+}
+
 func (ai *ActionInitiator) RestartSlave(zkTabletPath string, args *RestartSlaveData) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, args: args})
+}
+
+type SlaveWasRestartedData struct {
+	Parent             TabletAlias
+	ExpectedMasterAddr string
+	ScrapStragglers    bool
+}
+
+func (ai *ActionInitiator) SlaveWasRestarted(zkTabletPath string, args *SlaveWasRestartedData) (actionPath string, err error) {
+	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_RESTARTED, args: args})
 }
 
 func (ai *ActionInitiator) ReparentPosition(zkTabletPath string, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
@@ -377,6 +391,13 @@ func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (acti
 		return "", err
 	}
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REPARENT, args: &zkTabletPath})
+}
+
+func (ai *ActionInitiator) ShardExternallyReparented(zkShardPath, zkTabletPath string) (actionPath string, err error) {
+	if err := IsTabletPath(zkTabletPath); err != nil {
+		return "", err
+	}
+	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_EXTERNALLY_REPARENTED, args: &zkTabletPath})
 }
 
 func (ai *ActionInitiator) RebuildShard(zkShardPath string) (actionPath string, err error) {

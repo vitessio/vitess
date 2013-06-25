@@ -143,6 +143,9 @@ var commands = []commandGroup{
 			command{"ReparentShard", commandReparentShard,
 				"[-force] [-leave-master-read-only] <zk shard path> <zk tablet path>",
 				"Specify which shard to reparent and which tablet should be the new master."},
+			command{"ShardExternallyReparented", commandShardExternallyReparented,
+				"[-scrap-stragglers] <zk shard path> <zk tablet path>",
+				"Changes metadata to acknowledge a shard master change performed by an external tool."},
 			command{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Validate all nodes reachable from this shard are consistent."},
@@ -915,6 +918,15 @@ func commandReparentShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 		relog.Fatal("action ReparentShard requires <zk shard path> <zk tablet path>")
 	}
 	return "", wrangler.ReparentShard(subFlags.Arg(0), subFlags.Arg(1), *leaveMasterReadOnly, *force)
+}
+
+func commandShardExternallyReparented(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	scrapStragglers := subFlags.Bool("scrap-stragglers", false, "will scrap the hosts that haven't been reparented")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		relog.Fatal("action ShardExternallyReparented requires <zk shard path> <zk tablet path>")
+	}
+	return "", wrangler.ShardExternallyReparented(subFlags.Arg(0), subFlags.Arg(1), *scrapStragglers)
 }
 
 func commandValidateShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -200,8 +200,12 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = nil
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode)
+	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
+		err = ta.slaveWasPromoted(actionNode)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
+	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
+		err = ta.slaveWasRestarted(actionNode)
 	case TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case TABLET_ACTION_RESTORE:
@@ -330,6 +334,19 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	relog.Info("PromoteSlave %v", rsd.String())
 	actionNode.reply = rsd
 
+	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
+}
+
+func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
+}
+
+func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != NO_TABLET {
 		oldReplicationPath, err := tablet.ReplicationPath()
@@ -346,7 +363,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	tablet.Type = TYPE_MASTER
 	tablet.Parent.Cell = ""
 	tablet.Parent.Uid = NO_TABLET
-	err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 	if err != nil {
 		return err
 	}
@@ -482,6 +499,63 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 		if replicationPos.SecondsBehindMaster == mysqlctl.InvalidLagSeconds {
 			return fmt.Errorf("replication not running for slave")
 		}
+	}
+
+	// Insert the new tablet location in the replication graph now that
+	// we've updated the tablet.
+	newReplicationPath, err := tablet.ReplicationPath()
+	if err != nil {
+		return err
+	}
+	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+		return err
+	}
+
+	return nil
+}
+
+func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
+	swrd := actionNode.args.(*SlaveWasRestartedData)
+
+	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	if err != nil {
+		return err
+	}
+
+	// Remove tablet from the replication graph.
+	oldReplicationPath, err := tablet.ReplicationPath()
+	if err != nil {
+		return err
+	}
+	err = ta.zconn.Delete(oldReplicationPath, -1)
+	if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		return err
+	}
+
+	// now we can check the reparent actually worked
+	masterAddr, err := ta.mysqld.GetMasterAddr()
+	if err != nil {
+		return err
+	}
+	if masterAddr != swrd.ExpectedMasterAddr {
+		relog.Error("slaveWasRestarted found unexpected master %v for %v (was expecting %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr)
+		if swrd.ScrapStragglers {
+			return Scrap(ta.zconn, ta.zkTabletPath, false)
+		} else {
+			return fmt.Errorf("Unexpected master %v for %v (was expecting %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr)
+		}
+	}
+
+	// Once this action completes, update authoritive tablet node first.
+	tablet.Parent = swrd.Parent
+	if tablet.Type == TYPE_MASTER {
+		tablet.Type = TYPE_SPARE
+		tablet.State = STATE_READ_ONLY
+	}
+	err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	if err != nil {
+		return err
 	}
 
 	// Insert the new tablet location in the replication graph now that

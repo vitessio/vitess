@@ -67,8 +67,12 @@ type AllErrorRecorder struct {
 	Errors []string
 }
 
-// RecordError records an error
+// RecordError records a possible error:
+// - does nothing if err is nil
 func (aer *AllErrorRecorder) RecordError(err error) {
+	if err == nil {
+		return
+	}
 	aer.mu.Lock()
 	aer.Errors = append(aer.Errors, err.Error())
 	aer.mu.Unlock()
