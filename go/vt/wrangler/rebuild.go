@@ -35,7 +35,7 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) error {
 		return err
 	}
 
-	rebuildErr := wr.rebuildShard(zkShardPath, false)
+	rebuildErr := wr.rebuildShard(zkShardPath)
 	err = wr.handleActionError(actionPath, rebuildErr, false)
 	if rebuildErr != nil {
 		if err != nil {
@@ -51,9 +51,10 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) error {
 //
 // Re-read from zk to make sure we are using the side effects of all actions.
 //
-// This function should only be used with an action lock on the shard - otherwise the
-// consistency of the serving graph data can't be guaranteed.
-func (wr *Wrangler) rebuildShard(zkShardPath string, replicationGraphOnly bool) error {
+// This function should only be used with an action lock on the shard
+// - otherwise the consistency of the serving graph data can't be
+// guaranteed.
+func (wr *Wrangler) rebuildShard(zkShardPath string) error {
 	relog.Info("rebuildShard %v", zkShardPath)
 	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
 	shardInfo, err := tm.NewShardInfo(zkShardPath, "{}")
@@ -88,34 +89,50 @@ func (wr *Wrangler) rebuildShard(zkShardPath string, replicationGraphOnly bool) 
 	if err = tm.UpdateShard(wr.zconn, shardInfo); err != nil {
 		return err
 	}
-	if !replicationGraphOnly {
-		return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets)
-	}
-	return nil
+	return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets)
 }
 
-// Write to zkns files?
 // Write serving graph data to /zk/local/vt/ns/...
 func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo) error {
 	relog.Info("rebuildShardSrvGraph %v", zkShardPath)
-	// Get all existing db types so they can be removed if nothing had been editted.
-	// This applies to all cells, which can't be determined until you walk through all the tablets.
+
+	// Get all existing db types so they can be removed if nothing
+	// had been editted.  This applies to all cells, which can't
+	// be determined until you walk through all the tablets.
+	//
+	// existingDbTypePaths is a map:
+	//   key: /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
+	//   value: true
 	existingDbTypePaths := make(map[string]bool)
 
 	// Update db type addresses in the serving graph
+	//
+	// pathAddrsMap is a map:
+	//   key: /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
+	//   value: naming.VtnsAddrs (list of server records)
 	pathAddrsMap := make(map[string]*naming.VtnsAddrs)
+
+	// we keep track of the existingDbTypePaths we've already looked at
+	knownSgShardPaths := make(map[string]bool)
+
 	for _, tablet := range tablets {
+		// this is /zk/<cell>/vt/ns/<keyspace>/<shard>
+		// we'll get the children to find the existing types
 		zkSgShardPath := naming.ZkPathForVtShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
-		children, _, err := wr.zconn.Children(zkSgShardPath)
-		if err != nil {
-			if !zookeeper.IsError(err, zookeeper.ZNONODE) {
-				relog.Warning("unable to list existing db types: %v", err)
-				return err
+		// only need to do this once per cell
+		if !knownSgShardPaths[zkSgShardPath] {
+			children, _, err := wr.zconn.Children(zkSgShardPath)
+			if err != nil {
+				if !zookeeper.IsError(err, zookeeper.ZNONODE) {
+					relog.Warning("unable to list existing db types: %v", err)
+					return err
+				}
+			} else {
+				for _, child := range children {
+					existingDbTypePaths[path.Join(zkSgShardPath, child)] = true
+				}
 			}
-		} else {
-			for _, child := range children {
-				existingDbTypePaths[path.Join(zkSgShardPath, child)] = true
-			}
+			knownSgShardPaths[zkSgShardPath] = true
 		}
 
 		// Check IsServingType after we have populated existingDbTypePaths
@@ -140,6 +157,30 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 		addrs.Entries = append(addrs.Entries, *entry)
 	}
 
+	// if there is a master in one cell, put it in all of them
+	var masterRecord *naming.VtnsAddrs
+	for zkSgShardPath, _ := range knownSgShardPaths {
+		if addrs, ok := pathAddrsMap[path.Join(zkSgShardPath, "master")]; ok {
+			if masterRecord != nil {
+				relog.Warning("Multiple master records in %v", zkSgShardPath)
+			} else {
+				relog.Info("Found master record in %v", zkSgShardPath)
+				masterRecord = addrs
+			}
+		}
+	}
+	if masterRecord != nil {
+		for zkSgShardPath, _ := range knownSgShardPaths {
+			zkPath := path.Join(zkSgShardPath, "master")
+			if _, ok := pathAddrsMap[zkPath]; !ok {
+				relog.Info("Adding remote master record in %v", zkPath)
+				pathAddrsMap[zkPath] = masterRecord
+			}
+		}
+	}
+
+	// write all the /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
+	// nodes everywhere
 	for zkPath, addrs := range pathAddrsMap {
 		data := jscfg.ToJson(addrs)
 		_, err := zk.CreateRecursive(wr.zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -159,6 +200,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 	}
 
 	// Delete any pre-existing paths that were not updated by this process.
+	// That's the existingDbTypePaths - pathAddrsMap
 	for zkDbTypePath, _ := range existingDbTypePaths {
 		if _, ok := pathAddrsMap[zkDbTypePath]; !ok {
 			relog.Info("removing stale db type from serving graph: %v", zkDbTypePath)
@@ -169,6 +211,11 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 	}
 
 	// Update per-shard information per cell-specific serving path.
+	//
+	// srvShardByPath is a map:
+	//   key: shard path /zk/<cell>/vt/ns/<keyspace>/<shard>
+	//   value: naming.SrvShard
+	// this will fill in the AddrsByType part for each shard
 	srvShardByPath := make(map[string]*naming.SrvShard)
 	for zkPath, addrs := range pathAddrsMap {
 		// zkPath will be /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
@@ -183,6 +230,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 		srvShard.AddrsByType[string(tabletType)] = *addrs
 	}
 
+	// Save the shard entries
 	for srvPath, srvShard := range srvShardByPath {
 		data := jscfg.ToJson(srvShard)
 		// Stomp away - presume this update will be guarded by a lock node.
@@ -220,8 +268,9 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) error {
 	return err
 }
 
-// This function should only be used with an action lock on the shard - otherwise the
-// consistency of the serving graph data can't be guaranteed.
+// This function should only be used with an action lock on the keyspace
+// - otherwise the consistency of the serving graph data can't be
+// guaranteed.
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
@@ -262,6 +311,9 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 		return err
 	}
 
+	// srvKeyspaceByPath is a map:
+	//   key: local keyspace path /zk/<cell>/vt/ns/<keyspace>
+	//   value: naming.SrvKeyspace object being built
 	srvKeyspaceByPath := make(map[string]*naming.SrvKeyspace)
 	for _, alias := range aliases {
 		zkLocalKeyspace := naming.ZkPathForVtKeyspace(alias.Cell, keyspace)
@@ -287,6 +339,12 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 		}
 	}
 
+	// for each entry in the srvKeyspaceByPath map, we do the following:
+	// - read the ShardInfo structures for each shard
+	//    - prune the AddrsByType field, result would be too big
+	// - compute the union of the db types (replica, master, ...)
+	// - sort the shards in the list by range
+	// - check the ranges are compatible (no hole, covers everything
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
 		keyspaceDbTypes := make(map[string]bool)
 		for _, shardName := range shardNames {
@@ -325,6 +383,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 		}
 	}
 
+	// and then finally save the keyspace objects
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
 		data := jscfg.ToJson(srvKeyspace)
 		// Stomp away - presume this update will be guarded by a lock node.

@@ -127,11 +127,13 @@ def run_test_rebuild():
   tablet_62044.init_tablet('replica', 'test_keyspace', '0')
   tablet_31981.init_tablet('experimental', 'test_keyspace', '0') # in ny by default
 
-  utils.pause('AAAAAAAAAA')
-
   utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
 
-  utils.pause('BBBBBBBBBB')
+  real_master = utils.zk_cat('/zk/test_nj/vt/ns/test_keyspace/0/master')
+  master_alias = utils.zk_cat('/zk/test_ny/vt/ns/test_keyspace/0/master')
+  if real_master != master_alias:
+    raise utils.TestError('master serving graph in all cells failed:\n%s!=\n%s'
+                          % (real_master, master_alias))
 
 @utils.test_case
 def run_test_scrap():
@@ -672,8 +674,7 @@ def _run_test_vtctl_partial_clone(create, populate,
 
   # grab the new tablet definition from zk, make sure the start and
   # end keys are set properly
-  out, err = utils.run(utils.vtroot+'/bin/zk cat ' + tablet_62044.zk_tablet_path,
-                       trap_output=True)
+  out = utils.zk_cat(tablet_62044.zk_tablet_path)
   if '"Start": "%s"' % start not in out or '"End": "%s"' % end not in out:
     print "Tablet output:"
     print "out"

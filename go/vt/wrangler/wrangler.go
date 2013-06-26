@@ -145,7 +145,7 @@ func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType tm.TabletType
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.ShardPath(), false)
+		err = wr.rebuildShard(ti.ShardPath())
 		if err != nil {
 			return err
 		}

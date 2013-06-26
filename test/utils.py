@@ -247,6 +247,10 @@ def zk_ls(path):
   out, err = run(vtroot+'/bin/zk ls '+path, trap_output=True)
   return sorted(out.splitlines())
 
+def zk_cat(path):
+  out, err = run(vtroot+'/bin/zk cat '+path, trap_output=True)
+  return out
+
 # vars helpers
 def get_vars(port):
   """

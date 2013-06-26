@@ -97,7 +97,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[string]*tm.TabletIn
 
 	// and rebuild the shard graph
 	relog.Info("rebuilding shard serving graph data in zk")
-	return wr.rebuildShard(masterElectTablet.ShardPath(), false)
+	return wr.rebuildShard(masterElectTablet.ShardPath())
 }
 
 func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[string]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {
