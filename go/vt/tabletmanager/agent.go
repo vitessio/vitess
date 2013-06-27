@@ -299,24 +299,11 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 				mysqlAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_mysql"])
 				if vtAddr != agent.Tablet().Addr || mysqlAddr != agent.Tablet().MysqlAddr || secureAddr != agent.Tablet().SecureAddr {
 					// update needed
-					host, port, err := splitHostPort(agent.Tablet().Addr)
+					newEntry, err := VtnsAddrForTablet(agent.Tablet().Tablet)
 					if err != nil {
 						return "", err
 					}
-					entry.Host = host
-					entry.NamedPortMap["_vtocc"] = port
-					if agent.Tablet().SecureAddr != "" {
-						_, port, err := splitHostPort(agent.Tablet().SecureAddr)
-						if err != nil {
-							return "", err
-						}
-						entry.NamedPortMap["_vts"] = port
-					}
-					host, port, err = splitHostPort(agent.Tablet().MysqlAddr)
-					if err != nil {
-						return "", err
-					}
-					entry.NamedPortMap["_mysql"] = port
+					entry = *newEntry
 				}
 				break
 			}
