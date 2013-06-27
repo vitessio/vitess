@@ -244,13 +244,20 @@ def run_test_secure():
 
   # connect to encrypted port
   conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
-                                  "test_keyspace", "0", 10.0, encrypted=True)
+                                  "test_keyspace", "0", 5.0, encrypted=True)
   conn.dial()
   (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})
   if (len(results) != 1 or \
         results[0][0] != 1):
     print "conn._execute returned:", results
     raise utils.TestError('wrong conn._execute output')
+
+  # trigger a time out on a secure connection, see what exception we get
+  try:
+    conn._execute("select sleep(100) from dual", {})
+    raise utils.TestError("No timeout exception")
+  except tablet3.TimeoutError as e:
+    utils.debug("Got the right exception for SSL timeout: %s" % str(e))
 
   # kill everything
   utils.kill_sub_process(zkocc_server)

@@ -120,6 +120,11 @@ class _GoRpcConn(object):
       # catch the timeout and return empty data for now - this breaks the call
       # and lets the deadline get caught with reasonable precision.
       return None
+    except ssl.SSLError as e:
+      # another possible timeout condition with SSL wrapper
+      if 'timed out' in str(e):
+        return None
+      raise
     except socket.error as e:
       if e.args[0] == errno.EINTR:
         # We were interrupted, let the caller retry.
@@ -163,6 +168,11 @@ class GoRpcClient(object):
       conn.dial(self.uri, self.certfile, self.keyfile)
     except socket.timeout as e:
       raise TimeoutError(e, self.timeout, 'dial', self.uri)
+    except ssl.SSLError as e:
+      # another possible timeout condition with SSL wrapper
+      if 'timed out' in str(e):
+        raise TimeoutError(e, self.timeout, 'dial', self.uri)
+      raise GoRpcError(e)
     except socket.error as e:
       raise GoRpcError(e)
     self.conn = conn
@@ -200,7 +210,6 @@ class GoRpcClient(object):
   def _check_deadline_exceeded(self, timeout):
     if (time.time() - self.start_time) > timeout:
       raise socket.timeout('deadline exceeded')
-    return False
 
   # logic to read the next response off the wire
   def _read_response(self, response, timeout):
@@ -261,6 +270,12 @@ class GoRpcClient(object):
       # tear down - better chance of recovery by reconnecting
       self.close()
       raise GoRpcError(e, method)
+    except ssl.SSLError as e:
+      # tear down - better chance of recovery by reconnecting
+      self.close()
+      if 'timed out' in str(e):
+        raise TimeoutError(e, self.timeout, method)
+      raise GoRpcError(e, method)
 
     if response.error:
       raise AppError(response.error, method)
@@ -290,6 +305,12 @@ class GoRpcClient(object):
       # tear down - better chance of recovery by reconnecting
       self.close()
       raise GoRpcError(e, method)
+    except ssl.SSLError as e:
+      # tear down - better chance of recovery by reconnecting
+      self.close()
+      if 'timed out' in str(e):
+        raise TimeoutError(e, self.timeout, method)
+      raise GoRpcError(e, method)
 
   # Returns the next value, or None if we're done.
   # Note the timeout is longer as we don't mind for streaming queries
@@ -308,6 +329,12 @@ class GoRpcClient(object):
     except socket.error as e:
       # tear down - better chance of recovery by reconnecting
       self.close()
+      raise GoRpcError(e)
+    except ssl.SSLError as e:
+      # tear down - better chance of recovery by reconnecting
+      self.close()
+      if 'timed out' in str(e):
+        raise TimeoutError(e, self.timeout)
       raise GoRpcError(e)
 
     if response.sequence_id != self.seq:
