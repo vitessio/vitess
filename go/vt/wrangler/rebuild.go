@@ -19,9 +19,21 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
+func inCellList(cell string, cells []string) bool {
+	if len(cells) == 0 {
+		return true
+	}
+	for _, c := range cells {
+		if c == cell {
+			return true
+		}
+	}
+	return false
+}
+
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
-func (wr *Wrangler) RebuildShardGraph(zkShardPath string) error {
+func (wr *Wrangler) RebuildShardGraph(zkShardPath string, cells []string) error {
 	if err := tm.IsShardPath(zkShardPath); err != nil {
 		return err
 	}
@@ -35,7 +47,7 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) error {
 		return err
 	}
 
-	rebuildErr := wr.rebuildShard(zkShardPath)
+	rebuildErr := wr.rebuildShard(zkShardPath, cells)
 	err = wr.handleActionError(actionPath, rebuildErr, false)
 	if rebuildErr != nil {
 		if err != nil {
@@ -54,7 +66,7 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string) error {
 // This function should only be used with an action lock on the shard
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
-func (wr *Wrangler) rebuildShard(zkShardPath string) error {
+func (wr *Wrangler) rebuildShard(zkShardPath string, cells []string) error {
 	relog.Info("rebuildShard %v", zkShardPath)
 	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
 	shardInfo, err := tm.NewShardInfo(zkShardPath, "{}")
@@ -89,11 +101,11 @@ func (wr *Wrangler) rebuildShard(zkShardPath string) error {
 	if err = tm.UpdateShard(wr.zconn, shardInfo); err != nil {
 		return err
 	}
-	return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets)
+	return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets, cells)
 }
 
 // Write serving graph data to /zk/local/vt/ns/...
-func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo) error {
+func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo, cells []string) error {
 	relog.Info("rebuildShardSrvGraph %v", zkShardPath)
 
 	// Get all existing db types so they can be removed if nothing
@@ -116,6 +128,13 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 	knownSgShardPaths := make(map[string]bool)
 
 	for _, tablet := range tablets {
+		// only look at tablets in the cells we want to rebuild
+		// we also include masters from everywhere, so we can
+		// write the right aliases
+		if !inCellList(tablet.Tablet.Cell, cells) && tablet.Type != tm.TYPE_MASTER {
+			continue
+		}
+
 		// this is /zk/<cell>/vt/ns/<keyspace>/<shard>
 		// we'll get the children to find the existing types
 		zkSgShardPath := naming.ZkPathForVtShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
@@ -180,10 +199,18 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 	}
 
 	// write all the /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
-	// nodes everywhere
+	// nodes everywhere we want them
 	for zkPath, addrs := range pathAddrsMap {
+		cell, err := zk.ZkCellFromZkPath(zkPath)
+		if err != nil {
+			return err
+		}
+		if !inCellList(cell, cells) {
+			continue
+		}
+
 		data := jscfg.ToJson(addrs)
-		_, err := zk.CreateRecursive(wr.zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err = zk.CreateRecursive(wr.zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				// Node already exists - just stomp away. Multiple writers shouldn't be here.
@@ -203,6 +230,14 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 	// That's the existingDbTypePaths - pathAddrsMap
 	for zkDbTypePath, _ := range existingDbTypePaths {
 		if _, ok := pathAddrsMap[zkDbTypePath]; !ok {
+			cell, err := zk.ZkCellFromZkPath(zkDbTypePath)
+			if err != nil {
+				return err
+			}
+			if !inCellList(cell, cells) {
+				continue
+			}
+
 			relog.Info("removing stale db type from serving graph: %v", zkDbTypePath)
 			if err := wr.zconn.Delete(zkDbTypePath, -1); err != nil {
 				relog.Warning("unable to remove stale db type from serving graph: %v", err)
@@ -243,7 +278,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 }
 
 // Rebuild the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) error {
+func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string, cells []string) error {
 	if err := tm.IsKeyspacePath(zkKeyspacePath); err != nil {
 		return err
 	}
@@ -257,7 +292,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) error {
 		return err
 	}
 
-	rebuildErr := wr.rebuildKeyspace(zkKeyspacePath)
+	rebuildErr := wr.rebuildKeyspace(zkKeyspacePath, cells)
 	err = wr.handleActionError(actionPath, rebuildErr, false)
 	if rebuildErr != nil {
 		if err != nil {
@@ -274,7 +309,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string) error {
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
+func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error {
 	relog.Info("rebuildKeyspace %v", zkKeyspacePath)
 	vtRoot, err := tm.VtRootFromKeyspacePath(zkKeyspacePath)
 	if err != nil {
@@ -293,7 +328,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 		zkShardPath := tm.ShardPath(vtRoot, keyspace, shardName)
 		wg.Add(1)
 		go func() {
-			if err := wr.RebuildShardGraph(zkShardPath); err != nil {
+			if err := wr.RebuildShardGraph(zkShardPath, cells); err != nil {
 				er.RecordError(fmt.Errorf("RebuildShardGraph failed: %v %v", zkShardPath, err))
 			}
 			wg.Done()
@@ -344,7 +379,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string) error {
 	//    - prune the AddrsByType field, result would be too big
 	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
-	// - check the ranges are compatible (no hole, covers everything
+	// - check the ranges are compatible (no hole, covers everything)
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
 		keyspaceDbTypes := make(map[string]bool)
 		for _, shardName := range shardNames {
@@ -462,7 +497,7 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 		wg.Add(1)
 		go func(keyspacePath string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(keyspacePath); err != nil {
+			if err := wr.RebuildKeyspaceGraph(keyspacePath, nil); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()

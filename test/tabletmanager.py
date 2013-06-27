@@ -127,7 +127,10 @@ def run_test_rebuild():
   tablet_62044.init_tablet('replica', 'test_keyspace', '0')
   tablet_31981.init_tablet('experimental', 'test_keyspace', '0') # in ny by default
 
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('RebuildKeyspaceGraph -cells=test_nj /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_fail(utils.vtroot+'/bin/zk cat /zk/test_ny/vt/ns/test_keyspace/0/master')
+
+  utils.run_vtctl('RebuildKeyspaceGraph -cells=test_ny /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
 
   real_master = utils.zk_cat('/zk/test_nj/vt/ns/test_keyspace/0/master')
   master_alias = utils.zk_cat('/zk/test_ny/vt/ns/test_keyspace/0/master')

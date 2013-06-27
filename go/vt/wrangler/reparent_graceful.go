@@ -87,7 +87,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[string]*tm.TabletIn
 		relog.Warning("scrap demoted master failed: %v", scrapErr)
 	}
 
-	err = wr.finishReparent(masterElectTablet, majorityRestart, leaveMasterReadOnly)
+	err = wr.finishReparent(masterTablet, masterElectTablet, majorityRestart, leaveMasterReadOnly)
 	if err != nil {
 		return err
 	}

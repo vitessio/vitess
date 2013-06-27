@@ -138,7 +138,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Shards", []command{
 			command{"RebuildShardGraph", commandRebuildShardGraph,
-				"<zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
+				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
 			command{"ReparentShard", commandReparentShard,
 				"[-force] [-leave-master-read-only] <zk shard path> <zk tablet path>",
@@ -166,7 +166,7 @@ var commands = []commandGroup{
 				"[-force] <zk keyspaces path>/<name>",
 				"e.g. CreateKeyspace /zk/global/vt/keyspaces/my_keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"<zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
+				"[-cells=a,b] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
 			command{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <zk keyspace path> (/zk/global/vt/keyspaces/<keyspace>)",
@@ -888,9 +888,15 @@ func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 }
 
 func commandRebuildShardGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	cells := subFlags.String("cells", "", "comma separated list of cells to update")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action RebuildShardGraph requires at least one <zk shard path>")
+	}
+
+	var cellArray []string
+	if *cells != "" {
+		cellArray = strings.Split(*cells, ",")
 	}
 
 	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
@@ -902,7 +908,7 @@ func commandRebuildShardGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, arg
 	}
 
 	for _, zkPath := range zkPaths {
-		if err := wrangler.RebuildShardGraph(zkPath); err != nil {
+		if err := wrangler.RebuildShardGraph(zkPath, cellArray); err != nil {
 			return "", err
 		}
 	}
@@ -992,9 +998,15 @@ func commandCreateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 }
 
 func commandRebuildKeyspaceGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	cells := subFlags.String("cells", "", "comma separated list of cells to update")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action RebuildKeyspaceGraph requires at least one <zk keyspace path>")
+	}
+
+	var cellArray []string
+	if *cells != "" {
+		cellArray = strings.Split(*cells, ",")
 	}
 
 	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
@@ -1006,7 +1018,7 @@ func commandRebuildKeyspaceGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, 
 	}
 
 	for _, zkPath := range zkPaths {
-		if err := wrangler.RebuildKeyspaceGraph(zkPath); err != nil {
+		if err := wrangler.RebuildKeyspaceGraph(zkPath, cellArray); err != nil {
 			return "", err
 		}
 	}

@@ -96,8 +96,10 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 
 	// we rebuild if the tablet was serving, or if it is now
 	var shardToRebuild string
+	var cellToRebuild string
 	if rebuildRequired {
 		shardToRebuild = ti.ShardPath()
+		cellToRebuild = ti.Cell
 	} else {
 		// re-read the tablet, see if we become serving
 		ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
@@ -107,11 +109,12 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 		if ti.Tablet.IsServingType() {
 			rebuildRequired = true
 			shardToRebuild = ti.ShardPath()
+			cellToRebuild = ti.Cell
 		}
 	}
 
 	if rebuildRequired {
-		if err := wr.RebuildShardGraph(shardToRebuild); err != nil {
+		if err := wr.RebuildShardGraph(shardToRebuild, []string{cellToRebuild}); err != nil {
 			return err
 		}
 	}
@@ -145,7 +148,7 @@ func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType tm.TabletType
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.ShardPath())
+		err = wr.rebuildShard(ti.ShardPath(), []string{ti.Cell})
 		if err != nil {
 			return err
 		}
@@ -391,5 +394,5 @@ func (wr *Wrangler) Scrap(zkTabletPath string, force, skipRebuild bool) (actionP
 	}
 
 	// and rebuild the original shard / keyspace
-	return "", wr.RebuildShardGraph(ti.ShardPath())
+	return "", wr.RebuildShardGraph(ti.ShardPath(), []string{ti.Cell})
 }

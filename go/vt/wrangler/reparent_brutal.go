@@ -65,7 +65,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[string]*tm.TabletInfo
 		}
 	}
 
-	err = wr.finishReparent(masterElectTablet, majorityRestart, leaveMasterReadOnly)
+	err = wr.finishReparent(failedMaster, masterElectTablet, majorityRestart, leaveMasterReadOnly)
 	if err != nil {
 		return err
 	}

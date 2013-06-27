@@ -407,7 +407,7 @@ func (wr *Wrangler) checkMasterElect(ti *tm.TabletInfo) error {
 	return wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("preflight_serving_type"))
 }
 
-func (wr *Wrangler) finishReparent(masterElect *tm.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {
+func (wr *Wrangler) finishReparent(oldMaster, masterElect *tm.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {
 	// If the majority of slaves restarted, move ahead.
 	if majorityRestart {
 		if leaveMasterReadOnly {
@@ -427,7 +427,7 @@ func (wr *Wrangler) finishReparent(masterElect *tm.TabletInfo, majorityRestart, 
 	}
 
 	relog.Info("rebuilding shard serving graph data in zk")
-	return wr.rebuildShard(masterElect.ShardPath())
+	return wr.rebuildShard(masterElect.ShardPath(), []string{oldMaster.Cell, masterElect.Cell})
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[string]*tm.TabletInfo, masterElect *tm.TabletInfo) error {
