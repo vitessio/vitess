@@ -22,10 +22,12 @@ class GoRpcError(Exception):
 class TimeoutError(GoRpcError):
   pass
 
+
 # The programmer has misused an API, but the underlying
 # connection is still salvagable.
 class ProgrammingError(GoRpcError):
   pass
+
 
 # Error field from response raised as an exception
 class AppError(GoRpcError):
@@ -143,10 +145,11 @@ class _GoRpcConn(object):
     poll.register(fileno)
     ready = poll.poll(0)
     if ready:
-      fd, event = ready[0]
+      _, event = ready[0]
       if event & select.POLLIN:
         return True
     return False
+
 
 class GoRpcClient(object):
   def __init__(self, uri, timeout, certfile=None, keyfile=None):
