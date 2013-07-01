@@ -288,7 +288,7 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 		}
 
 		foundTablet := false
-		for _, entry := range addrs.Entries {
+		for i, entry := range addrs.Entries {
 			if entry.Uid == agent.Tablet().Uid {
 				foundTablet = true
 				vtAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_vtocc"])
@@ -303,7 +303,7 @@ func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.St
 					if err != nil {
 						return "", err
 					}
-					entry = *newEntry
+					addrs.Entries[i] = *newEntry
 				}
 				break
 			}
