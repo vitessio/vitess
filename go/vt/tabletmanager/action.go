@@ -18,6 +18,7 @@ import (
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 )
 
 const (
@@ -111,7 +112,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_SET_RDONLY:
 	case TABLET_ACTION_SET_RDWR:
 	case TABLET_ACTION_CHANGE_TYPE:
-		node.args = new(TabletType)
+		node.args = new(naming.TabletType)
 
 	case TABLET_ACTION_DEMOTE_MASTER:
 	case TABLET_ACTION_PROMOTE_SLAVE:

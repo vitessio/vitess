@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -21,7 +22,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[string]*tm.TabletInfo
 	// has not been forced.
 	if !force {
 		// Make sure all tablets have the right parent and reasonable positions.
-		if err := wr.checkSlaveReplication(slaveTabletMap, tm.NO_TABLET); err != nil {
+		if err := wr.checkSlaveReplication(slaveTabletMap, naming.NO_TABLET); err != nil {
 			return err
 		}
 

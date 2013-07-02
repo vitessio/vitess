@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -93,7 +94,7 @@ func (ks KeyspaceNodes) ShardNodes() []*ShardNodes {
 // contains.
 func (ks KeyspaceNodes) TabletTypes() []string {
 	contained := make([]string, 0)
-	for _, t := range tm.AllTabletTypes {
+	for _, t := range naming.AllTabletTypes {
 		name := string(t)
 		if ks.HasType(name) {
 			contained = append(contained, name)
@@ -145,9 +146,9 @@ func (wr *Wrangler) DbTopology() (*Topology, error) {
 	for _, ti := range tabletInfos {
 		tablet := &TabletNode{TabletInfo: ti}
 		switch tablet.Type {
-		case tm.TYPE_IDLE:
+		case naming.TYPE_IDLE:
 			topology.Idle = append(topology.Idle, tablet)
-		case tm.TYPE_SCRAP:
+		case naming.TYPE_SCRAP:
 			topology.Scrap = append(topology.Scrap, tablet)
 		default:
 			if _, ok := topology.Assigned[tablet.Keyspace]; !ok {

@@ -69,6 +69,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -234,7 +235,7 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 	}
 
 	// Basic sanity checking.
-	if masterTi.Type != tm.TYPE_MASTER {
+	if masterTi.Type != naming.TYPE_MASTER {
 		return fmt.Errorf("zk has inconsistent state for shard master %v", masterPath)
 	}
 	if masterTi.Keyspace != ti.Keyspace || masterTi.Shard != ti.Shard {
@@ -267,7 +268,7 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 	relog.Info("master tablet position: %v %v %v", masterPath, masterTi.MysqlAddr, rsd.ReplicationState.ReplicationPosition.MapKey())
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
-	rsd.Force = ti.Type == tm.TYPE_LAG_ORPHAN
+	rsd.Force = ti.Type == naming.TYPE_LAG_ORPHAN
 	actionPath, err = wr.ai.RestartSlave(zkTabletPath, rsd)
 	if err != nil {
 		return err

@@ -27,6 +27,7 @@ import (
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -173,7 +174,7 @@ func (ai *ActionInitiator) Sleep(zkTabletPath string, duration time.Duration) (a
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLEEP, args: &duration})
 }
 
-func (ai *ActionInitiator) ChangeType(zkTabletPath string, dbType TabletType) (actionPath string, err error) {
+func (ai *ActionInitiator) ChangeType(zkTabletPath string, dbType naming.TabletType) (actionPath string, err error) {
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, args: &dbType})
 }
 
@@ -276,7 +277,7 @@ func (ai *ActionInitiator) RestartSlave(zkTabletPath string, args *RestartSlaveD
 }
 
 type SlaveWasRestartedData struct {
-	Parent               TabletAlias
+	Parent               naming.TabletAlias
 	ExpectedMasterAddr   string
 	ExpectedMasterIpAddr string
 	ScrapStragglers      bool

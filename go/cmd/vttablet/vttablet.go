@@ -34,6 +34,7 @@ import (
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	vtenv "code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/servenv"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
@@ -235,7 +236,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 			// Transitioning from replica to master, first disconnect
 			// existing connections. "false" indicateds that clients must
 			// re-resolve their endpoint before reconnecting.
-			if newTablet.Type == tm.TYPE_MASTER && oldTablet.Type != tm.TYPE_MASTER {
+			if newTablet.Type == naming.TYPE_MASTER && oldTablet.Type != naming.TYPE_MASTER {
 				ts.DisallowQueries(false)
 			}
 			qrs := loadCustomRules()
@@ -251,13 +252,13 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 			}
 			ts.AllowQueries(dbcfgs.App, schemaOverrides, qrs)
 			mysqlctl.EnableUpdateStreamService(string(newTablet.Type), dbcfgs)
-			if newTablet.Type != tm.TYPE_MASTER {
+			if newTablet.Type != naming.TYPE_MASTER {
 				ts.StartRowCacheInvalidation()
 			}
 		} else {
 			ts.DisallowQueries(false)
 			mysqlctl.DisableUpdateStreamService()
-			if newTablet.Type != tm.TYPE_MASTER {
+			if newTablet.Type != naming.TYPE_MASTER {
 				ts.StopRowCacheInvalidation()
 			}
 		}

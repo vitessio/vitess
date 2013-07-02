@@ -10,6 +10,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -41,12 +42,12 @@ func (wr *Wrangler) getMasterPosition(ti *tm.TabletInfo) (*mysqlctl.ReplicationP
 // will have a problem, and suggest a fix for them.
 func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, masterTabletUid uint32) error {
 	relog.Info("Checking all replication positions will allow the transition:")
-	masterIsDead := masterTabletUid == tm.NO_TABLET
+	masterIsDead := masterTabletUid == naming.NO_TABLET
 
 	// Check everybody has the right master. If there is no master
 	// (crash) just check that everyone has the same parent.
 	for _, tablet := range tabletMap {
-		if masterTabletUid == tm.NO_TABLET {
+		if masterTabletUid == naming.NO_TABLET {
 			masterTabletUid = tablet.Parent.Uid
 		}
 		if tablet.Parent.Uid != masterTabletUid {
@@ -66,7 +67,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, m
 		go func(tablet *tm.TabletInfo) {
 			defer wg.Done()
 
-			if tablet.Type == tm.TYPE_LAG {
+			if tablet.Type == naming.TYPE_LAG {
 				relog.Info("  skipping slave position check for %v tablet %v", tablet.Type, tablet.Path())
 				return
 			}
@@ -84,7 +85,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, m
 				mutex.Lock()
 				lastError = err
 				mutex.Unlock()
-				if tablet.Type == tm.TYPE_BACKUP {
+				if tablet.Type == naming.TYPE_BACKUP {
 					relog.Warning("  failed to get slave position from backup tablet %v, either wait for backup to finish or scrap tablet (%v)", tablet.Path(), err)
 				} else {
 					relog.Warning("  failed to get slave position from %v: %v", tablet.Path(), err)
@@ -256,7 +257,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*tm.TabletInfo) ([]*mys
 		calls[idx] = ctx
 
 		var actionPath string
-		if ti.Type == tm.TYPE_MASTER {
+		if ti.Type == naming.TYPE_MASTER {
 			actionPath, ctx.err = wr.ai.MasterPosition(ti.Path())
 		} else if ti.IsSlaveType() {
 			actionPath, ctx.err = wr.ai.SlavePosition(ti.Path())
@@ -276,7 +277,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*tm.TabletInfo) ([]*mys
 	for i, tablet := range tablets {
 		// Don't scan tablets that won't return something useful. Otherwise, you'll
 		// end up waiting for a timeout.
-		if tablet.Type == tm.TYPE_MASTER || tablet.IsSlaveType() {
+		if tablet.Type == naming.TYPE_MASTER || tablet.IsSlaveType() {
 			wg.Add(1)
 			go f(i)
 		} else {
@@ -401,7 +402,7 @@ func (wr *Wrangler) restartSlave(ti *tm.TabletInfo, rsd *tm.RestartSlaveData) (e
 func (wr *Wrangler) checkMasterElect(ti *tm.TabletInfo) error {
 	// Check the master-elect is fit for duty - call out for hardware checks.
 	// if the server was already serving live traffic, it's probably good
-	if tm.IsServingType(ti.Type) {
+	if ti.IsServingType() {
 		return nil
 	}
 	return wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("preflight_serving_type"))
@@ -457,7 +458,7 @@ func restartableTabletMap(slaves map[string]*tm.TabletInfo) map[uint32]*tm.Table
 	// position as the sql thread on a normal slave.
 	tabletMap := make(map[uint32]*tm.TabletInfo)
 	for _, ti := range slaves {
-		if ti.Type != tm.TYPE_LAG {
+		if ti.Type != naming.TYPE_LAG {
 			tabletMap[ti.Uid] = ti
 		} else {
 			relog.Info("skipping reparent action for tablet %v %v", ti.Type, ti.Path())
@@ -469,9 +470,9 @@ func restartableTabletMap(slaves map[string]*tm.TabletInfo) map[uint32]*tm.Table
 func slaveTabletMap(tabletMap map[string]*tm.TabletInfo) (slaveMap map[string]*tm.TabletInfo, master *tm.TabletInfo, err error) {
 	slaveMap = make(map[string]*tm.TabletInfo)
 	for zkPath, ti := range tabletMap {
-		if ti.Type != tm.TYPE_MASTER && ti.Type != tm.TYPE_SCRAP {
+		if ti.Type != naming.TYPE_MASTER && ti.Type != naming.TYPE_SCRAP {
 			slaveMap[zkPath] = ti
-		} else if ti.Parent.Uid == tm.NO_TABLET {
+		} else if ti.Parent.Uid == naming.NO_TABLET {
 			if master != nil {
 				return nil, nil, fmt.Errorf("master tablet conflict in shard %v: %v, %v", master.ShardPath(), master.Path(), ti.Path())
 			}

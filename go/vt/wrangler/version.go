@@ -16,6 +16,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -61,7 +62,7 @@ func (wr *Wrangler) GetVersion(zkTabletPath string) (string, error) {
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(masterVersion string, zkMasterTabletPath string, alias tm.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffVersion(masterVersion string, zkMasterTabletPath string, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering version for %v", zkTabletPath)
@@ -83,7 +84,7 @@ func (wr *Wrangler) ValidateVersionShard(zkShardPath string) error {
 	}
 
 	// get version from the master, or error
-	if si.MasterAlias.Uid == tm.NO_TABLET {
+	if si.MasterAlias.Uid == naming.NO_TABLET {
 		return fmt.Errorf("No master in shard " + zkShardPath)
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
@@ -141,7 +142,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(zkKeyspacePath string) error {
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == tm.NO_TABLET {
+	if si.MasterAlias.Uid == naming.NO_TABLET {
 		return fmt.Errorf("No master in shard " + referenceShardPath)
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)

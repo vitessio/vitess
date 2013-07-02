@@ -12,6 +12,7 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 )
 
@@ -24,27 +25,27 @@ import (
 // of every management action.
 type Shard struct {
 	// There can be only at most one master, but there may be none. (0)
-	MasterAlias TabletAlias
+	MasterAlias naming.TabletAlias
 	// Uids by type - could be a generic map.
-	ReplicaAliases []TabletAlias
-	RdonlyAliases  []TabletAlias
+	ReplicaAliases []naming.TabletAlias
+	RdonlyAliases  []naming.TabletAlias
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
 	KeyRange key.KeyRange
 }
 
 func (shard *Shard) Contains(tablet *Tablet) bool {
-	alias := TabletAlias{tablet.Cell, tablet.Uid}
+	alias := naming.TabletAlias{tablet.Cell, tablet.Uid}
 	switch tablet.Type {
-	case TYPE_MASTER:
+	case naming.TYPE_MASTER:
 		return shard.MasterAlias == alias
-	case TYPE_REPLICA:
+	case naming.TYPE_REPLICA:
 		for _, replicaAlias := range shard.ReplicaAliases {
 			if replicaAlias == alias {
 				return true
 			}
 		}
-	case TYPE_RDONLY:
+	case naming.TYPE_RDONLY:
 		for _, rdonlyAlias := range shard.RdonlyAliases {
 			if rdonlyAlias == alias {
 				return true
@@ -59,8 +60,8 @@ func (shard *Shard) Json() string {
 }
 
 func newShard() *Shard {
-	return &Shard{ReplicaAliases: make([]TabletAlias, 0, 16),
-		RdonlyAliases: make([]TabletAlias, 0, 16)}
+	return &Shard{ReplicaAliases: make([]naming.TabletAlias, 0, 16),
+		RdonlyAliases: make([]naming.TabletAlias, 0, 16)}
 }
 
 func zkShardFromJson(data string) (*Shard, error) {
@@ -99,13 +100,13 @@ func (si *ShardInfo) ShardPath() string {
 	return ShardPath(si.zkVtRoot, si.keyspace, si.shardName)
 }
 
-func (si *ShardInfo) TabletPath(alias TabletAlias) string {
+func (si *ShardInfo) TabletPath(alias naming.TabletAlias) string {
 	zkRoot := fmt.Sprintf("/zk/%v/vt", alias.Cell)
 	return TabletPath(zkRoot, alias.Uid)
 }
 
 func (si *ShardInfo) MasterTabletPath() (string, error) {
-	if si.Shard.MasterAlias.Uid == NO_TABLET {
+	if si.Shard.MasterAlias.Uid == naming.NO_TABLET {
 		return "", fmt.Errorf("no master tablet for shard %v", si.ShardPath())
 	}
 
@@ -117,13 +118,13 @@ func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 	for i, ti := range shardTablets {
 		tablet := ti.Tablet
 		cell := tablet.Cell
-		alias := TabletAlias{cell, tablet.Uid}
+		alias := naming.TabletAlias{cell, tablet.Uid}
 		switch tablet.Type {
-		case TYPE_MASTER:
+		case naming.TYPE_MASTER:
 			tmp.MasterAlias = alias
-		case TYPE_REPLICA:
+		case naming.TYPE_REPLICA:
 			tmp.ReplicaAliases = append(tmp.ReplicaAliases, alias)
-		case TYPE_RDONLY:
+		case naming.TYPE_RDONLY:
 			tmp.RdonlyAliases = append(tmp.RdonlyAliases, alias)
 		}
 
@@ -186,13 +187,13 @@ func UpdateShard(zconn zk.Conn, si *ShardInfo) error {
 	return err
 }
 
-func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]TabletAlias, error) {
+func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]naming.TabletAlias, error) {
 	children, err := zk.ChildrenRecursive(zconn, zkShardPath)
 	if err != nil {
 		return nil, err
 	}
 
-	aliases := make([]TabletAlias, 0, len(children))
+	aliases := make([]naming.TabletAlias, 0, len(children))
 	for _, child := range children {
 		alias := path.Base(child)
 		if strings.HasPrefix(alias, "action") {
@@ -203,7 +204,7 @@ func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]TabletAli
 		if err != nil {
 			continue
 		}
-		aliases = append(aliases, TabletAlias{cell, uid})
+		aliases = append(aliases, naming.TabletAlias{cell, uid})
 	}
 
 	return aliases, nil

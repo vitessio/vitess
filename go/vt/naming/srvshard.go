@@ -13,7 +13,8 @@ import (
 	"code.google.com/p/vitess/go/zk"
 )
 
-// /zk/local/vt/ns/<keyspace>/<shard>
+// SrvShard contains a roll-up of the shard in the local namespace.
+// In zk, it in under /zk/local/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
 	KeyRange key.KeyRange
 
@@ -29,12 +30,12 @@ type SrvShard struct {
 // A distilled serving copy of keyspace detail stored in the local
 // zk cell for fast access. Derived from the global keyspace and
 // local details.
-// /zk/local/vt/ns/<keyspace>
+// In zk, it is in /zk/local/vt/ns/<keyspace>
 type SrvKeyspace struct {
 	// List of non-overlapping shards sorted by range.
 	Shards []SrvShard
 	// List of available tablet types for this keyspace in this cell.
-	TabletTypes []string // TabletType causes import cycle
+	TabletTypes []TabletType
 	version     int
 }
 
@@ -83,27 +84,3 @@ func ReadSrvKeyspace(zconn zk.Conn, zkPath string) (*SrvKeyspace, error) {
 	srv.version = stat.Version()
 	return srv, nil
 }
-
-// These functions deal with keeping data in the shard graph up to date.
-//
-// The shard graph is the client-side view of the cluster and is derived
-// from canonical data sources in zk.
-//
-// Some of this could be implemented by watching zk nodes, but there are
-// enough cases where automatic updating is undersirable. Instead, these
-// functions are called where appropriate.
-//
-// A given tablet should only appear in once in the serving graph.  A
-// given tablet can change address, but if it changes db type, so all
-// db typenodes need to be scanned and updated as appropriate. That is
-// handled by UpdateServingGraphForShard.  If no entry is found for
-// this tablet an error is returned.
-// func UpdateServingGraphForTablet(zconn zk.Conn, tablet *Tablet) error {
-// 	return nil
-// }
-
-// Recompute all nodes in the serving graph for a list of tablets in
-// the shard.  This will overwrite existing data.
-// func UpdateServingGraphForShard(zconn zk.Conn, tablet *[]Tablet) error {
-// 	return nil
-// }

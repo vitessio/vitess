@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -151,7 +152,7 @@ func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, wg *sync
 
 	tabletMap, _ := GetTabletMap(wr.zconn, shardTablets)
 
-	var masterAlias tm.TabletAlias
+	var masterAlias naming.TabletAlias
 	for _, alias := range aliases {
 		zkTabletPath := tm.TabletPathForAlias(alias)
 		tabletInfo, ok := tabletMap[zkTabletPath]
@@ -159,7 +160,7 @@ func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, wg *sync
 			results <- vresult{zkTabletPath, fmt.Errorf("tablet not found in map: %v", zkTabletPath)}
 			continue
 		}
-		if tabletInfo.Parent.Uid == tm.NO_TABLET {
+		if tabletInfo.Parent.Uid == naming.NO_TABLET {
 			if masterAlias.Cell != "" {
 				results <- vresult{zkTabletPath, fmt.Errorf("%v: already has a master %v", zkTabletPath, masterAlias)}
 			} else {

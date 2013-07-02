@@ -14,6 +14,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -31,7 +32,7 @@ func (wr *Wrangler) GetSchemaTablet(tablet *tm.TabletInfo, tables []string, incl
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMasterTabletPath string, alias tm.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, zkMasterTabletPath string, alias naming.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering schema for %v", zkTabletPath)
@@ -52,7 +53,7 @@ func (wr *Wrangler) ValidateSchemaShard(zkShardPath string, includeViews bool) e
 	}
 
 	// get schema from the master, or error
-	if si.MasterAlias.Uid == tm.NO_TABLET {
+	if si.MasterAlias.Uid == naming.NO_TABLET {
 		return fmt.Errorf("No master in shard " + zkShardPath)
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
@@ -110,7 +111,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string, includeViews b
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == tm.NO_TABLET {
+	if si.MasterAlias.Uid == naming.NO_TABLET {
 		return fmt.Errorf("No master in shard " + referenceShardPath)
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
@@ -148,7 +149,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(zkKeyspacePath string, includeViews b
 			continue
 		}
 
-		if si.MasterAlias.Uid == tm.NO_TABLET {
+		if si.MasterAlias.Uid == naming.NO_TABLET {
 			er.RecordError(fmt.Errorf("No master in shard %v", shardPath))
 			continue
 		}
@@ -298,7 +299,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 		if err != nil {
 			return nil, err
 		}
-		if ti.Type == tm.TYPE_LAG {
+		if ti.Type == naming.TYPE_LAG {
 			// lag tablets are usually behind, not replicating,
 			// and a general pain. So let's just skip them
 			// all together.
@@ -389,7 +390,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		typeChangeRequired := ti.Tablet.IsServingType()
 		if typeChangeRequired {
 			// note we want to update the serving graph there
-			err = wr.changeTypeInternal(ti.Path(), tm.TYPE_SCHEMA_UPGRADE)
+			err = wr.changeTypeInternal(ti.Path(), naming.TYPE_SCHEMA_UPGRADE)
 			if err != nil {
 				return nil, err
 			}

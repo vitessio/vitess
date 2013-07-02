@@ -12,6 +12,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -66,7 +67,7 @@ func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and
 // do not run the remote hooks
-func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force bool) error {
+func (wr *Wrangler) ChangeType(zkTabletPath string, dbType naming.TabletType, force bool) error {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
@@ -129,7 +130,7 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType tm.TabletType, force 
 // Mike says: Updating the shard should be good enough. I'm debating dropping the entire
 // keyspace rollup, since I think that is adding complexity and feels like it might
 // be a premature optimization.
-func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType tm.TabletType) error {
+func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType naming.TabletType) error {
 	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
 	if err != nil {
 		return err
@@ -296,8 +297,8 @@ func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shar
 		shardId = strings.ToUpper(shardId)
 	}
 
-	parent := tm.TabletAlias{}
-	if parentAlias == "" && tm.TabletType(tabletType) != tm.TYPE_MASTER && tm.TabletType(tabletType) != tm.TYPE_IDLE {
+	parent := naming.TabletAlias{}
+	if parentAlias == "" && naming.TabletType(tabletType) != naming.TYPE_MASTER && naming.TabletType(tabletType) != naming.TYPE_IDLE {
 		vtSubStree, err := tm.VtSubtree(zkPath)
 		if err != nil {
 			return err
@@ -315,7 +316,7 @@ func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shar
 		}
 	}
 
-	tablet, err := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tm.TabletType(tabletType))
+	tablet, err := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, naming.TabletType(tabletType))
 	if err != nil {
 		return err
 	}

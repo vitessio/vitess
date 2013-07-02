@@ -22,6 +22,7 @@ import (
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -45,7 +46,7 @@ type RestartSlaveData struct {
 	ReplicationState *mysqlctl.ReplicationState
 	WaitPosition     *mysqlctl.ReplicationPosition
 	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent           TabletAlias
+	Parent           naming.TabletAlias
 	Force            bool
 }
 
@@ -289,15 +290,15 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 		return err
 	}
 	if rdonly {
-		tablet.State = STATE_READ_ONLY
+		tablet.State = naming.STATE_READ_ONLY
 	} else {
-		tablet.State = STATE_READ_WRITE
+		tablet.State = naming.STATE_READ_WRITE
 	}
 	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 }
 
 func (ta *TabletActor) changeType(actionNode *ActionNode) error {
-	dbType := actionNode.args.(*TabletType)
+	dbType := actionNode.args.(*naming.TabletType)
 	return ChangeType(ta.zconn, ta.zkTabletPath, *dbType, true)
 }
 
@@ -311,7 +312,7 @@ func (ta *TabletActor) demoteMaster() error {
 	if err != nil {
 		return err
 	}
-	tablet.State = STATE_READ_ONLY
+	tablet.State = naming.STATE_READ_ONLY
 	// NOTE(msolomon) there is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will succeed. It will be
 	// less noisy to simply leave the entry until well promote the master.
@@ -325,8 +326,8 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	}
 
 	// Perform the action.
-	alias := TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
-	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == NO_TABLET)}
+	alias := naming.TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
+	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == naming.NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false)
 	if err != nil {
 		return err
@@ -348,7 +349,7 @@ func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
 
 func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
-	if tablet.Parent.Uid != NO_TABLET {
+	if tablet.Parent.Uid != naming.NO_TABLET {
 		oldReplicationPath, err := tablet.ReplicationPath()
 		if err != nil {
 			return err
@@ -359,10 +360,10 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo
 		}
 	}
 	// Update tablet regardless - trend towards consistency.
-	tablet.State = STATE_READ_WRITE
-	tablet.Type = TYPE_MASTER
+	tablet.State = naming.STATE_READ_WRITE
+	tablet.Type = naming.TYPE_MASTER
 	tablet.Parent.Cell = ""
-	tablet.Parent.Uid = NO_TABLET
+	tablet.Parent.Uid = naming.NO_TABLET
 	err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 	if err != nil {
 		return err
@@ -421,7 +422,7 @@ func (ta *TabletActor) reparentPosition(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	rsd.Parent = TabletAlias{parts[2], uid}
+	rsd.Parent = naming.TabletAlias{parts[2], uid}
 	relog.Debug("reparentPosition %v", rsd.String())
 	actionNode.reply = rsd
 	return nil
@@ -462,8 +463,8 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 
 		// Move a lag slave into the orphan lag type so we can safely ignore
 		// this reparenting until replication catches up.
-		if tablet.Type == TYPE_LAG {
-			tablet.Type = TYPE_LAG_ORPHAN
+		if tablet.Type == naming.TYPE_LAG {
+			tablet.Type = naming.TYPE_LAG_ORPHAN
 		} else {
 			err = ta.mysqld.RestartSlave(rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted)
 			if err != nil {
@@ -482,8 +483,8 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 			return err
 		}
 		// Complete the special orphan accounting.
-		if tablet.Type == TYPE_LAG_ORPHAN {
-			tablet.Type = TYPE_LAG
+		if tablet.Type == naming.TYPE_LAG_ORPHAN {
+			tablet.Type = naming.TYPE_LAG
 			err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 			if err != nil {
 				return err
@@ -549,9 +550,9 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Once this action completes, update authoritive tablet node first.
 	tablet.Parent = swrd.Parent
-	if tablet.Type == TYPE_MASTER {
-		tablet.Type = TYPE_SPARE
-		tablet.State = STATE_READ_ONLY
+	if tablet.Type == naming.TYPE_MASTER {
+		tablet.Type = naming.TYPE_SPARE
+		tablet.State = naming.STATE_READ_ONLY
 	}
 	err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 	if err != nil {
@@ -665,7 +666,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != TYPE_BACKUP {
+	if tablet.Type != naming.TYPE_BACKUP {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
@@ -675,7 +676,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	}
 
 	sr := &SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
-	if tablet.Parent.Uid == NO_TABLET {
+	if tablet.Parent.Uid == naming.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		sr.ZkParentPath = tablet.Path()
@@ -694,7 +695,7 @@ func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != TYPE_SNAPSHOT_SOURCE {
+	if tablet.Type != naming.TYPE_SNAPSHOT_SOURCE {
 		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
@@ -728,7 +729,7 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 //   a successful ReserveForRestore but a failed Snapshot)
 // - to SCRAP if something in the process on the target host fails
 // - to SPARE if the clone works
-func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, parentAlias TabletAlias, keyRange key.KeyRange) error {
+func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, parentAlias naming.TabletAlias, keyRange key.KeyRange) error {
 	// run the optional preflight_assigned hook
 	hk := hook.NewSimpleHook("preflight_assigned")
 	configureTabletHook(hk, ta.zkTabletPath)
@@ -740,7 +741,7 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, par
 	tablet.Parent = parentAlias
 	tablet.Keyspace = sourceTablet.Keyspace
 	tablet.Shard = sourceTablet.Shard
-	tablet.Type = TYPE_RESTORE
+	tablet.Type = naming.TYPE_RESTORE
 	tablet.KeyRange = keyRange
 	tablet.DbNameOverride = sourceTablet.DbNameOverride
 	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
@@ -765,7 +766,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != TYPE_IDLE {
+	if tablet.Type != naming.TYPE_IDLE {
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
@@ -776,8 +777,8 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	}
 
 	// find the parent tablet alias we will be using
-	var parentAlias TabletAlias
-	if sourceTablet.Parent.Uid == NO_TABLET {
+	var parentAlias naming.TabletAlias
+	if sourceTablet.Parent.Uid == naming.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		parentAlias = sourceTablet.Alias()
@@ -803,11 +804,11 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 		return err
 	}
 	if args.WasReserved {
-		if tablet.Type != TYPE_RESTORE {
+		if tablet.Type != naming.TYPE_RESTORE {
 			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
 		}
 	} else {
-		if tablet.Type != TYPE_IDLE {
+		if tablet.Type != naming.TYPE_IDLE {
 			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
 		}
 	}
@@ -826,7 +827,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if parentTablet.Type != TYPE_MASTER && parentTablet.Type != TYPE_SNAPSHOT_SOURCE {
+	if parentTablet.Type != naming.TYPE_MASTER && parentTablet.Type != naming.TYPE_SNAPSHOT_SOURCE {
 		return fmt.Errorf("restore expected master or snapshot_source parent: %v %v", parentTablet.Type, args.ZkParentPath)
 	}
 
@@ -853,7 +854,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_SPARE, true)
+	return ChangeType(ta.zconn, ta.zkTabletPath, naming.TYPE_SPARE, true)
 }
 
 // Operate on a backup tablet. Halt mysqld (read-only, lock tables)
@@ -866,7 +867,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != TYPE_BACKUP {
+	if tablet.Type != naming.TYPE_BACKUP {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
@@ -876,7 +877,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	}
 
 	sr := &SnapshotReply{ManifestPath: filename}
-	if tablet.Parent.Uid == NO_TABLET {
+	if tablet.Parent.Uid == naming.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
 		sr.ZkParentPath = tablet.Path()
@@ -895,7 +896,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != TYPE_BACKUP {
+	if tablet.Type != naming.TYPE_BACKUP {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
@@ -905,7 +906,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	}
 
 	sr := &MultiSnapshotReply{ManifestPaths: filenames}
-	if tablet.Parent.Uid == NO_TABLET {
+	if tablet.Parent.Uid == naming.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
 		sr.ZkParentPath = tablet.Path()
@@ -925,7 +926,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != TYPE_MASTER && tablet.Type != TYPE_SPARE && tablet.Type != TYPE_REPLICA && tablet.Type != TYPE_RDONLY {
+	if tablet.Type != naming.TYPE_MASTER && tablet.Type != naming.TYPE_SPARE && tablet.Type != naming.TYPE_REPLICA && tablet.Type != naming.TYPE_RDONLY {
 		return fmt.Errorf("expected master, spare replica or rdonly type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
@@ -943,7 +944,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// change type to restore, no change to replication graph
 	originalType := tablet.Type
-	tablet.Type = TYPE_RESTORE
+	tablet.Type = naming.TYPE_RESTORE
 	err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
 	if err != nil {
 		return err
@@ -979,7 +980,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != TYPE_IDLE {
+	if tablet.Type != naming.TYPE_IDLE {
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
@@ -994,7 +995,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if parentTablet.Type != TYPE_MASTER {
+	if parentTablet.Type != naming.TYPE_MASTER {
 		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, args.ZkParentPath)
 	}
 
@@ -1019,7 +1020,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_MASTER, we're done!
-	return ChangeType(ta.zconn, ta.zkTabletPath, TYPE_MASTER, true)
+	return ChangeType(ta.zconn, ta.zkTabletPath, naming.TYPE_MASTER, true)
 }
 
 // Make this external, since in needs to be forced from time to time.
@@ -1040,8 +1041,8 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 		}
 	}
 
-	tablet.Type = TYPE_SCRAP
-	tablet.Parent = TabletAlias{}
+	tablet.Type = naming.TYPE_SCRAP
+	tablet.Parent = naming.TabletAlias{}
 	// Update the tablet first, since that is canonical.
 	err = UpdateTablet(zconn, zkTabletPath, tablet)
 	if err != nil {
@@ -1076,7 +1077,7 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 				// If the node was not empty, we can't do anything about it - the replication
 				// graph needs to be fixed by reparenting. If the action was forced, assume
 				// the user knows best and squelch the error.
-				if tablet.Parent.Uid == NO_TABLET && force {
+				if tablet.Parent.Uid == naming.NO_TABLET && force {
 					err = nil
 				}
 			}
@@ -1102,20 +1103,20 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 }
 
 // Make this external, since these transitions need to be forced from time to time.
-func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks bool) error {
+func ChangeType(zconn zk.Conn, zkTabletPath string, newType naming.TabletType, runHooks bool) error {
 	tablet, err := ReadTablet(zconn, zkTabletPath)
 	if err != nil {
 		return err
 	}
 
-	if !IsTrivialTypeChange(tablet.Type, newType) || !IsValidTypeChange(tablet.Type, newType) {
+	if !naming.IsTrivialTypeChange(tablet.Type, newType) || !naming.IsValidTypeChange(tablet.Type, newType) {
 		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, zkTabletPath)
 	}
 
 	if runHooks {
 		// Only run the preflight_serving_type hook when
 		// transitioning from non-serving to serving.
-		if !IsServingType(tablet.Type) && IsServingType(newType) {
+		if !naming.IsServingType(tablet.Type) && naming.IsServingType(newType) {
 			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
 				return err
 			}
@@ -1123,8 +1124,8 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks
 	}
 
 	tablet.Type = newType
-	if newType == TYPE_IDLE {
-		if tablet.Parent.Uid == NO_TABLET {
+	if newType == naming.TYPE_IDLE {
+		if tablet.Parent.Uid == naming.NO_TABLET {
 			// With a master the node cannot be set to idle unless we have already removed all of
 			// the derived paths. The global replication path is a good indication that this has
 			// been resolved.
@@ -1140,7 +1141,7 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType TabletType, runHooks
 				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, zkTabletPath)
 			}
 		}
-		tablet.Parent = TabletAlias{}
+		tablet.Parent = naming.TabletAlias{}
 		tablet.Keyspace = ""
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}

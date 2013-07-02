@@ -9,6 +9,7 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -66,16 +67,16 @@ func (wr *Wrangler) prepareToSnapshot(zkTabletPath string, forceMasterSnapshot b
 
 	originalType := ti.Tablet.Type
 
-	if ti.Tablet.Type == tm.TYPE_MASTER && forceMasterSnapshot {
+	if ti.Tablet.Type == naming.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
 		relog.Info("force change type master -> backup: %v", zkTabletPath)
 		// There is a legitimate reason to force in the case of a single
 		// master.
-		ti.Tablet.Type = tm.TYPE_BACKUP
+		ti.Tablet.Type = naming.TYPE_BACKUP
 		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 	} else {
-		err = wr.ChangeType(zkTabletPath, tm.TYPE_BACKUP, false)
+		err = wr.ChangeType(zkTabletPath, naming.TYPE_BACKUP, false)
 	}
 
 	if err != nil {
@@ -85,9 +86,9 @@ func (wr *Wrangler) prepareToSnapshot(zkTabletPath string, forceMasterSnapshot b
 	restoreAfterSnapshot = func() (err error) {
 		relog.Info("change type after snapshot: %v %v", zkTabletPath, originalType)
 
-		if ti.Tablet.Parent.Uid == tm.NO_TABLET && forceMasterSnapshot {
+		if ti.Tablet.Parent.Uid == naming.NO_TABLET && forceMasterSnapshot {
 			relog.Info("force change type backup -> master: %v", zkTabletPath)
-			ti.Tablet.Type = tm.TYPE_MASTER
+			ti.Tablet.Type = naming.TYPE_MASTER
 			return tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 		}
 
@@ -144,7 +145,7 @@ func (wr *Wrangler) PartialRestore(zkSrcTabletPath, srcFilePath, zkDstTabletPath
 	if err != nil {
 		return err
 	}
-	if tablet.Type != tm.TYPE_IDLE {
+	if tablet.Type != naming.TYPE_IDLE {
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, zkDstTabletPath)
 	}
 

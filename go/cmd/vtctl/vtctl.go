@@ -80,7 +80,7 @@ var commands = []commandGroup{
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
 					"NOTE: This will automatically update the serving graph.\n" +
 					"Valid <db type>:\n" +
-					"  " + strings.Join(tm.SlaveTabletTypeStrings, " ") + "\n"},
+					"  " + strings.Join(naming.SlaveTabletTypeStrings, " ") + "\n"},
 			command{"ChangeType", commandChangeSlaveType,
 				"[-force] <zk tablet path> <db type>",
 				"DEPRECATED (use ChangeSlaveType instead).\n" +
@@ -343,7 +343,7 @@ func fmtTabletAwkable(ti *tm.TabletInfo) string {
 	return fmt.Sprintf("%v %v %v %v %v %v", ti.Path(), keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr)
 }
 
-func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType tm.TabletType) error {
+func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType naming.TabletType) error {
 	tablets, err := wr.GetAllTablets(zconn, zkVtPath)
 	if err != nil {
 		return err
@@ -476,7 +476,7 @@ func listTabletsByAliases(zconn zk.Conn, tabletAliases []string) error {
 	for i, tabletAlias := range tabletAliases {
 		aliasParts := strings.Split(tabletAlias, "-")
 		uid, _ := strconv.ParseUint(aliasParts[1], 10, 32)
-		alias := tm.TabletAlias{aliasParts[0], uint32(uid)}
+		alias := naming.TabletAlias{aliasParts[0], uint32(uid)}
 		tabletPaths[i] = tm.TabletPathForAlias(alias)
 	}
 	return dumpTablets(zconn, tabletPaths)
@@ -655,13 +655,13 @@ func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	}
 
 	zkTabletPath := subFlags.Arg(0)
-	newType := tm.TabletType(subFlags.Arg(1))
+	newType := naming.TabletType(subFlags.Arg(1))
 	if *dryRun {
 		ti, err := tm.ReadTablet(wrangler.ZkConn(), zkTabletPath)
 		if err != nil {
 			relog.Fatal("failed reading tablet %v: %v", zkTabletPath, err)
 		}
-		if !tm.IsTrivialTypeChange(ti.Type, newType) || !tm.IsValidTypeChange(ti.Type, newType) {
+		if !naming.IsTrivialTypeChange(ti.Type, newType) || !naming.IsValidTypeChange(ti.Type, newType) {
 			relog.Fatal("invalid type transition %v: %v -> %v", zkTabletPath, ti.Type, newType)
 		}
 		fmt.Printf("- %v\n", fmtTabletAwkable(ti))
@@ -720,7 +720,7 @@ func commandSnapshotSourceEnd(wrangler *wr.Wrangler, subFlags *flag.FlagSet, arg
 		relog.Fatal("action SnapshotSourceEnd requires <zk tablet path> <original server type>")
 	}
 
-	return "", wrangler.SnapshotSourceEnd(subFlags.Arg(0), *slaveStartRequired, !(*readWrite), tm.TabletType(subFlags.Arg(1)))
+	return "", wrangler.SnapshotSourceEnd(subFlags.Arg(0), *slaveStartRequired, !(*readWrite), naming.TabletType(subFlags.Arg(1)))
 }
 
 func commandSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1216,7 +1216,7 @@ func commandListIdle(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action ListIdle requires <zk vt path>")
 	}
-	return "", listTabletsByType(wrangler.ZkConn(), subFlags.Arg(0), tm.TYPE_IDLE)
+	return "", listTabletsByType(wrangler.ZkConn(), subFlags.Arg(0), naming.TYPE_IDLE)
 }
 
 func commandListScrap(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1224,7 +1224,7 @@ func commandListScrap(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []stri
 	if subFlags.NArg() != 1 {
 		relog.Fatal("action ListScrap requires <zk vt path>")
 	}
-	return "", listTabletsByType(wrangler.ZkConn(), subFlags.Arg(0), tm.TYPE_SCRAP)
+	return "", listTabletsByType(wrangler.ZkConn(), subFlags.Arg(0), naming.TYPE_SCRAP)
 }
 
 func commandListAllTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1562,10 +1562,10 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	var lTypeMaster, rTypeMaster int
-	if l.Type == tm.TYPE_MASTER {
+	if l.Type == naming.TYPE_MASTER {
 		lTypeMaster = 1
 	}
-	if r.Type == tm.TYPE_MASTER {
+	if r.Type == naming.TYPE_MASTER {
 		rTypeMaster = 1
 	}
 	if lTypeMaster < rTypeMaster {

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 )
 
@@ -227,7 +228,7 @@ func fmtAlias(cell string, uid uint32) string {
 }
 
 // FIXME(msolomon) This method doesn't take into account the vt subtree.
-func TabletPathForAlias(alias TabletAlias) string {
+func TabletPathForAlias(alias naming.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, tabletUidStr(alias.Uid))
 }
 

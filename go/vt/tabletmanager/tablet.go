@@ -8,179 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-	"sort"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
-
-type TabletType string
-
-const (
-	// idle -  no keyspace, shard or type assigned
-	TYPE_IDLE = TabletType("idle")
-
-	// primary copy of data
-	TYPE_MASTER = TabletType("master")
-
-	// a slaved copy of the data ready to be promoted to master
-	TYPE_REPLICA = TabletType("replica")
-
-	// a slaved copy of the data for olap load patterns.
-	// too many aliases for olap - need to pick one
-	TYPE_RDONLY = TabletType("rdonly")
-	TYPE_BATCH  = TabletType("batch")
-
-	// a slaved copy of the data ready, but not serving query traffic
-	// could be a potential master.
-	TYPE_SPARE = TabletType("spare")
-
-	// a slaved copy of the data ready, but not serving query traffic
-	// implies something abnormal about the setup - don't consider it
-	// a potential master and don't worry about lag when reparenting.
-	TYPE_EXPERIMENTAL = TabletType("experimental")
-
-	// a slaved copy of the data intentionally lagged for pseudo backup
-	TYPE_LAG = TabletType("lag")
-	// when a reparent occurs, the tablet goes into lag_orphan state until
-	// it can be reparented properly
-	TYPE_LAG_ORPHAN = TabletType("lag_orphan")
-
-	// a slaved copy of the data that was serving but is now applying
-	// a schema change. Will go bak to its serving type after the
-	// upgrade
-	TYPE_SCHEMA_UPGRADE = TabletType("schema_apply")
-
-	// a slaved copy of the data, but offline to queries other than backup
-	// replication sql thread may be stopped
-	TYPE_BACKUP = TabletType("backup")
-
-	// a slaved copy of the data, where mysqld is *not* running,
-	// and we are serving our data files to clone slaves
-	// use 'vtctl Snapshot -server-mode ...' to get in this mode
-	// use 'vtctl SnapshotSourceEnd ...' to get out of this mode
-	TYPE_SNAPSHOT_SOURCE = TabletType("snapshot_source")
-
-	// A tablet that has not been in the replication graph and is restoring
-	// from a snapshot.  idle -> restore -> spare
-	TYPE_RESTORE = TabletType("restore")
-
-	// a machine with data that needs to be wiped
-	TYPE_SCRAP = TabletType("scrap")
-)
-
-var AllTabletTypes = []TabletType{TYPE_IDLE,
-	TYPE_MASTER,
-	TYPE_REPLICA,
-	TYPE_RDONLY,
-	TYPE_BATCH,
-	TYPE_SPARE,
-	TYPE_EXPERIMENTAL,
-	TYPE_LAG,
-	TYPE_LAG_ORPHAN,
-	TYPE_SCHEMA_UPGRADE,
-	TYPE_BACKUP,
-	TYPE_SNAPSHOT_SOURCE,
-	TYPE_RESTORE,
-	TYPE_SCRAP,
-}
-
-var SlaveTabletTypes = []TabletType{
-	TYPE_REPLICA,
-	TYPE_RDONLY,
-	TYPE_BATCH,
-	TYPE_SPARE,
-	TYPE_EXPERIMENTAL,
-	TYPE_LAG,
-	TYPE_LAG_ORPHAN,
-	TYPE_SCHEMA_UPGRADE,
-	TYPE_BACKUP,
-	TYPE_SNAPSHOT_SOURCE,
-	TYPE_RESTORE,
-}
-
-var AllTabletTypeStrings []string
-var SlaveTabletTypeStrings []string
-
-func makeTypeList(types []TabletType) []string {
-	strs := make([]string, len(types))
-	for i, t := range types {
-		strs[i] = string(t)
-	}
-	sort.Strings(strs)
-	return strs
-}
-
-func init() {
-	AllTabletTypeStrings = makeTypeList(AllTabletTypes)
-	SlaveTabletTypeStrings = makeTypeList(SlaveTabletTypes)
-}
-
-// Can this db type be trivially reassigned without changes to the replication graph?
-func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
-	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
-		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
-			return true
-		}
-	case TYPE_SCRAP:
-		return newTabletType == TYPE_IDLE
-	case TYPE_RESTORE:
-		switch newTabletType {
-		case TYPE_SPARE, TYPE_IDLE:
-			return true
-		}
-	}
-	return false
-}
-
-// Should we allow this transition at all?  Most transitions are
-// allowed, but some don't make sense under any circumstances. If a
-// transistion could be forced, don't disallow it here.
-func IsValidTypeChange(oldTabletType, newTabletType TabletType) bool {
-	switch oldTabletType {
-	case TYPE_SNAPSHOT_SOURCE:
-		switch newTabletType {
-		case TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE:
-			return false
-		}
-	}
-
-	return true
-}
-
-const (
-	// According to docs, the tablet uid / (mysql server id) is uint32.
-	// However, zero appears to be a sufficiently degenerate value to use
-	// as a marker for not having a parent server id.
-	// http://dev.mysql.com/doc/refman/5.1/en/replication-options.html
-	NO_TABLET = 0
-)
-
-type TabletState string
-
-const (
-	// The normal state for a master
-	STATE_READ_WRITE = TabletState("ReadWrite")
-	// The normal state for a slave, or temporarily a master. Not to be confused with type, which implies a workload.
-	STATE_READ_ONLY = TabletState("ReadOnly")
-)
-
-// Tablets are really globally unique, but crawling every cell to find out where
-// it lives is time consuming and expensive. This is only needed during complex operations.
-// Tablet cell assignments don't change that often, thus using a TabletAlias is efficient.
-type TabletAlias struct {
-	Cell string
-	Uid  uint32
-}
-
-func (ta *TabletAlias) String() string {
-	return fmtAlias(ta.Cell, ta.Uid)
-}
 
 const (
 	vtDbPrefix = "vt_" // Default name for databases create"
@@ -188,19 +23,19 @@ const (
 
 // A pure data struct for information serialized into json and stored in zookeeper.
 type Tablet struct {
-	Cell        string      // the zk cell this tablet is assigned to (doesn't change)
-	Uid         uint32      // the server id for this instance
-	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
-	Addr        string      // host:port for queryserver
-	SecureAddr  string      // host:port for queryserver using encrypted connection
-	MysqlAddr   string      // host:port for the mysql instance
-	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns
+	Cell        string             // the zk cell this tablet is assigned to (doesn't change)
+	Uid         uint32             // the server id for this instance
+	Parent      naming.TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
+	Addr        string             // host:port for queryserver
+	SecureAddr  string             // host:port for queryserver using encrypted connection
+	MysqlAddr   string             // host:port for the mysql instance
+	MysqlIpAddr string             // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns
 
 	Keyspace string
 	Shard    string
-	Type     TabletType
+	Type     naming.TabletType
 
-	State TabletState
+	State naming.TabletState
 
 	// Normally the database name is implied by "vt_" + keyspace. I
 	// really want to remove this but there are some databases that are
@@ -209,8 +44,8 @@ type Tablet struct {
 	KeyRange       key.KeyRange
 }
 
-// DbName is implied by keyspace. Having the shard information in the database name
-// complicates mysql replication.
+// DbName is usually implied by keyspace. Having the shard information in the
+// database name complicates mysql replication.
 func (tablet *Tablet) DbName() string {
 	if tablet.DbNameOverride != "" {
 		return tablet.DbNameOverride
@@ -221,45 +56,21 @@ func (tablet *Tablet) DbName() string {
 	return vtDbPrefix + tablet.Keyspace
 }
 
-func (tablet *Tablet) Alias() TabletAlias {
-	return TabletAlias{tablet.Cell, tablet.Uid}
-}
-
-func IsServingType(tt TabletType) bool {
-	switch tt {
-	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH:
-		return true
-	}
-	return false
+// export per-tablet functions (mirrors the naming functions)
+func (tablet *Tablet) Alias() naming.TabletAlias {
+	return naming.TabletAlias{tablet.Cell, tablet.Uid}
 }
 
 func (tablet *Tablet) IsServingType() bool {
-	return IsServingType(tablet.Type)
+	return naming.IsServingType(tablet.Type)
 }
 
-// Should this tablet appear in the replication graph?
-// Only IDLE and SCRAP are not in the replication graph.
-// The other non-obvious types are BACKUP, SNAPSHOT_SOURCE, RESTORE
-// and LAG_ORPHAN: these have had a master at some point (or were the
-// master), so they are in the graph.
 func (tablet *Tablet) IsInReplicationGraph() bool {
-	switch tablet.Type {
-	case TYPE_IDLE, TYPE_SCRAP:
-		return false
-	}
-	return true
+	return naming.IsInReplicationGraph(tablet.Type)
 }
 
-// Should this type be connected to a master db and actively replicating?
-// MASTER is not obviously (only support one level replication graph)
-// IDLE and SCRAP are not either
-// BACKUP, RESTORE, LAG_ORPHAN may or may not be, but we don't know for sure
 func (tablet *Tablet) IsSlaveType() bool {
-	switch tablet.Type {
-	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN:
-		return false
-	}
-	return true
+	return naming.IsSlaveType(tablet.Type)
 }
 
 // Was this tablet ever assigned data? A "scrap" node will show up as assigned
@@ -321,7 +132,7 @@ func TabletReplicationPath(zkVtRoot string, tablet *Tablet) (string, error) {
 	if cell == "local" || cell == "global" {
 		return "", fmt.Errorf("invalid cell name for replication path: %v", cell)
 	}
-	if tablet.Parent.Uid == NO_TABLET {
+	if tablet.Parent.Uid == naming.NO_TABLET {
 		zkPath = path.Join(zkPath, fmtAlias(tablet.Cell, tablet.Uid))
 	} else {
 		// FIXME(msolomon) assumes one level of replication hierarchy
@@ -331,11 +142,11 @@ func TabletReplicationPath(zkVtRoot string, tablet *Tablet) (string, error) {
 	return zkPath, nil
 }
 
-func NewTablet(cell string, uid uint32, parent TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType TabletType) (*Tablet, error) {
-	state := STATE_READ_ONLY
-	if tabletType == TYPE_MASTER {
-		state = STATE_READ_WRITE
-		if parent.Uid != NO_TABLET {
+func NewTablet(cell string, uid uint32, parent naming.TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType naming.TabletType) (*Tablet, error) {
+	state := naming.STATE_READ_ONLY
+	if tabletType == naming.TYPE_MASTER {
+		state = naming.STATE_READ_WRITE
+		if parent.Uid != naming.NO_TABLET {
 			return nil, fmt.Errorf("master cannot have parent: %v", parent.Uid)
 		}
 	}

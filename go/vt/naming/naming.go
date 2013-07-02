@@ -1,3 +1,7 @@
+// Copyright 2012, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package naming
 
 /*
@@ -11,7 +15,7 @@ The common query is "resolve keyspace.shard.db_type" and return a list
 of host:port tuples that export our default server (vtocc).  You can
 get all shards with "keyspace.*.db_type".
 
-/zk/local/vt/ns/<keyspace>/<shard>/<db type>
+In zk, this is in /zk/local/vt/ns/<keyspace>/<shard>/<db type>
 */
 
 import (
@@ -101,11 +105,6 @@ func SrvEntries(addrs *VtnsAddrs, namedPort string) (srvs []*net.SRV, err error)
 
 func SrvAddr(srv *net.SRV) string {
 	return fmt.Sprintf("%s:%d", srv.Target, srv.Port)
-}
-
-// zkPath: a node where children represent individual endpoints for a service.
-func writeZknsProcEntry(zconn zk.Conn, zkPath string) error {
-	panic("not implemented")
 }
 
 func ReadAddrs(zconn zk.Conn, zkPath string) (*VtnsAddrs, error) {

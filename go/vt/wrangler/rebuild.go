@@ -87,7 +87,7 @@ func (wr *Wrangler) rebuildShard(zkShardPath string, cells []string) error {
 		if !ti.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
-			if ti.Parent.Uid != tm.NO_TABLET {
+			if ti.Parent.Uid != naming.NO_TABLET {
 				relog.Warning("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Path())
 			}
 		}
@@ -131,7 +131,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 		// only look at tablets in the cells we want to rebuild
 		// we also include masters from everywhere, so we can
 		// write the right aliases
-		if !inCellList(tablet.Tablet.Cell, cells) && tablet.Type != tm.TYPE_MASTER {
+		if !inCellList(tablet.Tablet.Cell, cells) && tablet.Type != naming.TYPE_MASTER {
 			continue
 		}
 
@@ -255,7 +255,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 	for zkPath, addrs := range pathAddrsMap {
 		// zkPath will be /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
 		srvShardPath := path.Dir(zkPath)
-		tabletType := tm.TabletType(path.Base(zkPath))
+		tabletType := naming.TabletType(path.Base(zkPath))
 
 		srvShard, ok := srvShardByPath[srvShardPath]
 		if !ok {
@@ -381,21 +381,21 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
-		keyspaceDbTypes := make(map[string]bool)
+		keyspaceDbTypes := make(map[naming.TabletType]bool)
 		for _, shardName := range shardNames {
 			srvShard, err := naming.ReadSrvShard(wr.zconn, path.Join(srvPath, shardName))
 			if err != nil {
 				return err
 			}
 			for dbType, _ := range srvShard.AddrsByType {
-				keyspaceDbTypes[dbType] = true
+				keyspaceDbTypes[naming.TabletType(dbType)] = true
 			}
 			// Prune addrs, this is unnecessarily expensive right now. It is easier to
 			// load on-demand since we have to do that anyway on a reconnect.
 			srvShard.AddrsByType = nil
 			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
 		}
-		tabletTypes := make([]string, 0, len(keyspaceDbTypes))
+		tabletTypes := make([]naming.TabletType, 0, len(keyspaceDbTypes))
 		for dbType, _ := range keyspaceDbTypes {
 			tabletTypes = append(tabletTypes, dbType)
 		}
