@@ -33,10 +33,11 @@ import (
 // - whatever error is returned by the underlying reader
 // - io.EOF if Close was called
 type reader struct {
-	r    io.Reader
-	in   []byte
-	strm C.z_stream
-	err  error
+	r      io.Reader
+	in     []byte
+	strm   C.z_stream
+	err    error
+	skipIn bool
 }
 
 func NewReader(r io.Reader) (io.ReadCloser, error) {
@@ -64,17 +65,21 @@ func (z *reader) Read(p []byte) (int, error) {
 	// read and deflate until the output buffer is full
 	z.strm.next_out = (*C.Bytef)(unsafe.Pointer(&p[0]))
 	z.strm.avail_out = (C.uInt)(len(p))
+
 	for {
 		// if we have no data to inflate, read more
-		if z.strm.avail_in == 0 {
+		if !z.skipIn && z.strm.avail_in == 0 {
 			var n int
 			n, z.err = z.r.Read(z.in)
-			if z.err != nil {
+			if (z.err != nil && z.err != io.EOF) || (n == 0 && z.err == io.EOF) {
 				C.inflateEnd(&z.strm)
 				return 0, z.err
 			}
+
 			z.strm.next_in = (*C.Bytef)(unsafe.Pointer(&z.in[0]))
 			z.strm.avail_in = (C.uInt)(n)
+		} else {
+			z.skipIn = false
 		}
 
 		// inflate some
@@ -92,7 +97,8 @@ func (z *reader) Read(p []byte) (int, error) {
 		// if we read something, we're good
 		have := len(p) - int(z.strm.avail_out)
 		if have > 0 {
-			return have, nil
+			z.skipIn = ret == Z_OK && z.strm.avail_out == 0
+			return have, z.err
 		}
 	}
 	panic("Unreachable")
@@ -101,7 +107,10 @@ func (z *reader) Read(p []byte) (int, error) {
 // Close closes the Reader. It does not close the underlying io.Reader.
 func (z *reader) Close() error {
 	if z.err != nil {
-		return z.err
+		if z.err != io.EOF {
+			return z.err
+		}
+		return nil
 	}
 	C.inflateEnd(&z.strm)
 	z.err = io.EOF
