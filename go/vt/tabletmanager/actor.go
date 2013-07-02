@@ -538,12 +538,12 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if masterAddr != swrd.ExpectedMasterAddr {
-		relog.Error("slaveWasRestarted found unexpected master %v for %v (was expecting %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr)
+	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
+		relog.Error("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
 			return Scrap(ta.zconn, ta.zkTabletPath, false)
 		} else {
-			return fmt.Errorf("Unexpected master %v for %v (was expecting %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr)
+			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		}
 	}
 

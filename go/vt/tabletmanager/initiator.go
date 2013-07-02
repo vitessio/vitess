@@ -276,9 +276,10 @@ func (ai *ActionInitiator) RestartSlave(zkTabletPath string, args *RestartSlaveD
 }
 
 type SlaveWasRestartedData struct {
-	Parent             TabletAlias
-	ExpectedMasterAddr string
-	ScrapStragglers    bool
+	Parent               TabletAlias
+	ExpectedMasterAddr   string
+	ExpectedMasterIpAddr string
+	ScrapStragglers      bool
 }
 
 func (ai *ActionInitiator) SlaveWasRestarted(zkTabletPath string, args *SlaveWasRestartedData) (actionPath string, err error) {
