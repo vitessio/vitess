@@ -166,7 +166,7 @@ func (conn *TestZkConn) Close() error {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zookeeper.ChangeFunc) error {
+func (conn *TestZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
 	panic("Should not be used")
 }
 

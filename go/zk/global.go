@@ -96,7 +96,7 @@ func (gzc *GlobalConn) Get(path string) (data string, stat Stat, err error) {
 	return
 }
 
-func (gzc *GlobalConn) Children(path string) (children []string, stat *zookeeper.Stat, err error) {
+func (gzc *GlobalConn) Children(path string) (children []string, stat Stat, err error) {
 	childrens := make([][]string, len(gzc.zconns))
 	for i, zconn := range gzc.zconns {
 		children, stat, err = zconn.Children(path)

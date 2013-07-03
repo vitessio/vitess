@@ -215,7 +215,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				// Node already exists - just stomp away. Multiple writers shouldn't be here.
 				// We use RetryChange here because it won't update the node unnecessarily.
-				f := func(oldValue string, oldStat *zookeeper.Stat) (string, error) {
+				f := func(oldValue string, oldStat zk.Stat) (string, error) {
 					return data, nil
 				}
 				err = wr.zconn.RetryChange(zkPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)

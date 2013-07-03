@@ -262,7 +262,7 @@ func (agent *ActionAgent) verifyZkServingAddrs() error {
 	zkPathName := naming.ZkPathForVtName(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace,
 		agent.Tablet().Shard, string(agent.Tablet().Type))
 
-	f := func(oldValue string, oldStat *zookeeper.Stat) (string, error) {
+	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		return agent.updateEndpoints(oldValue, oldStat)
 	}
 	err = agent.zconn.RetryChange(zkPathName, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
@@ -277,7 +277,7 @@ var skipUpdateErr = fmt.Errorf("skip update")
 
 // A function conforming to the RetryChange protocl. If the data returned
 // is identical, no update is performed.
-func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat *zookeeper.Stat) (newValue string, err error) {
+func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat zk.Stat) (newValue string, err error) {
 	if oldStat == nil {
 		// The incoming object doesn't exist - we haven't been placed in the serving
 		// graph yet, so don't update. Assume the next process that rebuilds the graph
@@ -436,7 +436,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 	}
 
 	// Update bind addr for mysql and query service in the tablet node.
-	f := func(oldValue string, oldStat *zookeeper.Stat) (string, error) {
+	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		if oldValue == "" {
 			return "", fmt.Errorf("no data for tablet addr update: %v", agent.zkTabletPath)
 		}

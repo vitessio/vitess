@@ -50,11 +50,13 @@ type Conn interface {
 
 	Close() error
 
-	RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zookeeper.ChangeFunc) error
+	RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error
 
 	ACL(path string) ([]zookeeper.ACL, Stat, error)
 	SetACL(path string, aclv []zookeeper.ACL, version int) error
 }
+
+type ChangeFunc func(oldValue string, oldStat Stat) (newValue string, err error)
 
 // Smooth API to talk to any zk path in the global system.  Emulates
 // "/zk/local" paths by guessing and substituting the correct cell for
@@ -223,7 +225,7 @@ func (conn *MetaConn) Close() error {
 	return conn.connCache.Close()
 }
 
-func (conn *MetaConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zookeeper.ChangeFunc) error {
+func (conn *MetaConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
 	zconn, err := conn.connCache.ConnForPath(path)
 	if err != nil {
 		return err

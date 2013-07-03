@@ -106,7 +106,7 @@ func (conn *ZkoccConn) Close() error {
 	return conn.rpcClient.Close()
 }
 
-func (conn *ZkoccConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zookeeper.ChangeFunc) error {
+func (conn *ZkoccConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
 	panic(ZkoccUnimplementedError("RetryChange"))
 }
 

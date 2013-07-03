@@ -217,10 +217,12 @@ func (conn *ZkConn) Close() error {
 	return conn.conn.Close()
 }
 
-func (conn *ZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zookeeper.ChangeFunc) error {
+func (conn *ZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
 	sem.Acquire()
 	defer sem.Release()
-	return conn.conn.RetryChange(path, flags, acl, changeFunc)
+	return conn.conn.RetryChange(path, flags, acl, func(oldValue string, oldStat *zookeeper.Stat) (newValue string, err error) {
+		return changeFunc(oldValue, oldStat)
+	})
 }
 
 func (conn *ZkConn) ACL(path string) (acls []zookeeper.ACL, stat Stat, err error) {
