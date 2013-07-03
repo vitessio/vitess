@@ -59,14 +59,14 @@ type TabletActor struct {
 	mysqld       *mysqlctl.Mysqld
 	ts           naming.TopologyServer
 	zconn        zk.Conn // FIXME(alainjobart) will be removed eventually
-	zkTabletPath string
-	zkVtRoot     string
+	zkTabletPath string  // FIXME(alainjobart) will be removed eventually
+	tabletAlias  naming.TabletAlias
 }
 
 func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer naming.TopologyServer) *TabletActor {
 	// FIXME(alainjobart) violates encapsulation until conversion is done
 	zconn := topoServer.(*zktopo.ZkTopologyServer).Zconn
-	return &TabletActor{mysqld, topoServer, zconn, "", ""}
+	return &TabletActor{mysqld, topoServer, zconn, "", naming.TabletAlias{}}
 }
 
 // This function should be protected from unforseen panics, as
@@ -74,11 +74,7 @@ func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer naming.TopologyServer) *
 // function should not panic.
 func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, forceRerun bool) error {
 	var err error
-	ta.zkTabletPath, err = TabletPathFromActionPath(actionPath)
-	if err != nil {
-		return err
-	}
-	ta.zkVtRoot, err = VtRootFromTabletPath(ta.zkTabletPath)
+	ta.zkTabletPath, ta.tabletAlias, err = TabletPathFromActionPath(actionPath)
 	if err != nil {
 		return err
 	}

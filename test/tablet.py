@@ -55,9 +55,9 @@ class Tablet(object):
     # filled in during init_tablet
     self.keyspace = None
     self.shard = None
-    self.zk_tablet_alias = None
 
     # utility variables
+    self.tablet_alias = 'test_%s-%010d' % (self.cell, self.tablet_uid)
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
@@ -193,10 +193,6 @@ class Tablet(object):
   def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, start=False, auth=False, dbname=None):
     self.keyspace = keyspace
     self.shard = shard
-    if keyspace:
-      self.zk_tablet_alias = "/zk/global/vt/keyspaces/%s/shards/%s/test_%s-%010d" % (self.keyspace, self.shard, self.cell, self.tablet_uid)
-    else:
-      self.zk_tablet_alias = ""
 
     if dbname is None:
       self.dbname = "vt_" + (self.keyspace or "database")

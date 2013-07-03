@@ -69,7 +69,7 @@ def check_tables(tablet, expectedCount):
   tables = tablet.mquery('vt_test_keyspace', 'show tables')
   if len(tables) != expectedCount:
     raise utils.TestError('Unexpected table count on %s (not %u): %s' %
-                          (tablet.zk_tablet_alias, expectedCount, str(tables)))
+                          (tablet.tablet_alias, expectedCount, str(tables)))
 
 @utils.test_case
 def run_test_complex_schema():

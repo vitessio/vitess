@@ -174,7 +174,8 @@ func (ai *ActionInitiator) Sleep(zkTabletPath string, duration time.Duration) (a
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLEEP, args: &duration})
 }
 
-func (ai *ActionInitiator) ChangeType(zkTabletPath string, dbType naming.TabletType) (actionPath string, err error) {
+func (ai *ActionInitiator) ChangeType(tabletAlias naming.TabletAlias, dbType naming.TabletType) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, args: &dbType})
 }
 

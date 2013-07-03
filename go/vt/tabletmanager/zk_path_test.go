@@ -140,13 +140,17 @@ func TestTabletPathFromReplicationPath(t *testing.T) {
 }
 
 func TestTabletPathFromActionPath(t *testing.T) {
-	path, err := TabletPathFromActionPath("/zk/test/vt/tablets/0000062344/action/0000000001")
+	path, alias, err := TabletPathFromActionPath("/zk/test/vt/tablets/0000062344/action/0000000001")
 	if err != nil {
 		t.Error(err)
 	}
 	expectedPath := "/zk/test/vt/tablets/0000062344"
 	if path != expectedPath {
 		t.Errorf("%v not expected path %v", path, expectedPath)
+	}
+	expectedAlias := "test-0000062344"
+	if alias.String() != expectedAlias {
+		t.Errorf("%v not expected alias %v", alias, expectedAlias)
 	}
 }
 

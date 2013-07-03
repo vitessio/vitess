@@ -76,7 +76,7 @@ func (wr *Wrangler) prepareToSnapshot(zkTabletPath string, forceMasterSnapshot b
 		ti.Tablet.Type = naming.TYPE_BACKUP
 		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 	} else {
-		err = wr.ChangeType(zkTabletPath, naming.TYPE_BACKUP, false)
+		err = wr.ChangeType(ti.Alias(), naming.TYPE_BACKUP, false)
 	}
 
 	if err != nil {
@@ -92,7 +92,7 @@ func (wr *Wrangler) prepareToSnapshot(zkTabletPath string, forceMasterSnapshot b
 			return tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 		}
 
-		return wr.ChangeType(zkTabletPath, originalType, false)
+		return wr.ChangeType(ti.Alias(), originalType, false)
 	}
 
 	return

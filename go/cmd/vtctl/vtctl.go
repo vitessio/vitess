@@ -673,22 +673,22 @@ func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		relog.Fatal("action ChangeSlaveType requires <zk tablet path> <db type>")
 	}
 
-	zkTabletPath := subFlags.Arg(0)
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	newType := naming.TabletType(subFlags.Arg(1))
 	if *dryRun {
-		ti, err := tm.ReadTablet(wrangler.ZkConn(), zkTabletPath)
+		ti, err := tm.ReadTabletTs(wrangler.TopologyServer(), tabletAlias)
 		if err != nil {
-			relog.Fatal("failed reading tablet %v: %v", zkTabletPath, err)
+			relog.Fatal("failed reading tablet %v: %v", tabletAlias, err)
 		}
 		if !naming.IsTrivialTypeChange(ti.Type, newType) || !naming.IsValidTypeChange(ti.Type, newType) {
-			relog.Fatal("invalid type transition %v: %v -> %v", zkTabletPath, ti.Type, newType)
+			relog.Fatal("invalid type transition %v: %v -> %v", tabletAlias, ti.Type, newType)
 		}
 		fmt.Printf("- %v\n", fmtTabletAwkable(ti))
 		ti.Type = newType
 		fmt.Printf("+ %v\n", fmtTabletAwkable(ti))
 		return "", nil
 	}
-	return "", wrangler.ChangeType(zkTabletPath, newType, *force)
+	return "", wrangler.ChangeType(tabletAlias, newType, *force)
 }
 
 func commandPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

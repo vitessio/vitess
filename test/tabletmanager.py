@@ -817,7 +817,7 @@ def run_test_reparent_down_master():
   utils.run_vtctl('ScrapTablet -force ' + tablet_62344.zk_tablet_path, auto_log=True)
 
   utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING ChangeSlaveType -force %s idle' %
-                 tablet_62344.zk_tablet_path)
+                 tablet_62344.tablet_alias)
 
   # Remove pending locks (make this the force option to ReparentShard?)
   utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
@@ -829,7 +829,7 @@ def run_test_reparent_down_master():
   expected_addr = utils.hostname + ':' + str(tablet_62044.port)
   _check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
-  utils.run_vtctl('ChangeSlaveType -force %s idle' % tablet_62344.zk_tablet_path)
+  utils.run_vtctl('ChangeSlaveType -force %s idle' % tablet_62344.tablet_alias)
 
   idle_tablets, _ = utils.run_vtctl('ListIdle /zk/test_nj/vt', trap_output=True)
   if '0000062344' not in idle_tablets:
@@ -886,8 +886,8 @@ def _run_test_reparent_graceful(shard_id):
 
   # Convert two replica to spare. That should leave only one node serving traffic,
   # but still needs to appear in the replication graph.
-  utils.run_vtctl('ChangeSlaveType ' + tablet_41983.zk_tablet_path + ' spare')
-  utils.run_vtctl('ChangeSlaveType ' + tablet_31981.zk_tablet_path + ' spare')
+  utils.run_vtctl('ChangeSlaveType ' + tablet_41983.tablet_alias + ' spare')
+  utils.run_vtctl('ChangeSlaveType ' + tablet_31981.tablet_alias + ' spare')
   utils.zk_check()
   expected_addr = utils.hostname + ':' + str(tablet_62044.port)
   _check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)

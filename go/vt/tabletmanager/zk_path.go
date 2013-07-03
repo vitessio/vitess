@@ -245,14 +245,19 @@ func TabletPathFromReplicationPath(zkReplicationPath string) (string, error) {
 }
 
 // zkActionPath is /zk/test/vt/tablets/<uid>/action/0000000001
-func TabletPathFromActionPath(zkActionPath string) (string, error) {
+// we return both tablet path and TabletAlias
+func TabletPathFromActionPath(zkActionPath string) (string, naming.TabletAlias, error) {
 	zkPathParts := strings.Split(zkActionPath, "/")
 	if len(zkPathParts) < 2 || zkPathParts[len(zkPathParts)-2] != "action" {
-		return "", fmt.Errorf("invalid action path: %v", zkActionPath)
+		return "", naming.TabletAlias{}, fmt.Errorf("invalid action path: %v", zkActionPath)
 	}
 	tabletPath := strings.Join(zkPathParts[:len(zkPathParts)-2], "/")
 	if err := IsTabletPath(tabletPath); err != nil {
-		return "", err
+		return "", naming.TabletAlias{}, err
 	}
-	return tabletPath, nil
+	tabletAlias, err := naming.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
+	if err != nil {
+		return "", naming.TabletAlias{}, err
+	}
+	return tabletPath, tabletAlias, nil
 }

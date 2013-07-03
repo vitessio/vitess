@@ -14,7 +14,7 @@ import (
 )
 
 // SrvShard contains a roll-up of the shard in the local namespace.
-// In zk, it in under /zk/local/vt/ns/<keyspace>/<shard>
+// In zk, it is under /zk/local/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
 	KeyRange key.KeyRange
 

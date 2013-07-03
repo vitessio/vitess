@@ -35,7 +35,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 		ti.Tablet.Type = naming.TYPE_BACKUP
 		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 	} else {
-		err = wr.ChangeType(zkTabletPath, naming.TYPE_BACKUP, false)
+		err = wr.ChangeType(ti.Alias(), naming.TYPE_BACKUP, false)
 	}
 
 	if err != nil {
@@ -70,7 +70,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 		ti.Tablet.Type = naming.TYPE_MASTER
 		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 	} else {
-		err = wr.ChangeType(zkTabletPath, newType, false)
+		err = wr.ChangeType(ti.Alias(), newType, false)
 	}
 	if err != nil {
 		// failure in changing the zk type is probably worse,
@@ -104,7 +104,7 @@ func (wr *Wrangler) SnapshotSourceEnd(zkTabletPath string, slaveStartRequired, r
 		ti.Tablet.Type = naming.TYPE_MASTER
 		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
 	} else {
-		err = wr.ChangeType(zkTabletPath, originalType, false)
+		err = wr.ChangeType(ti.Alias(), originalType, false)
 	}
 
 	return err
@@ -140,7 +140,7 @@ func (wr *Wrangler) UnreserveForRestore(zkDstTabletPath string) (err error) {
 		return err
 	}
 
-	return wr.ChangeType(zkDstTabletPath, naming.TYPE_IDLE, false)
+	return wr.ChangeType(tablet.Alias(), naming.TYPE_IDLE, false)
 }
 
 func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {

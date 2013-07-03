@@ -75,11 +75,11 @@ func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and
 // do not run the remote hooks
-func (wr *Wrangler) ChangeType(zkTabletPath string, dbType naming.TabletType, force bool) error {
+func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.TabletType, force bool) error {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -87,11 +87,11 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType naming.TabletType, fo
 
 	if force {
 		// with --force, we do not run any hook
-		err = tm.ChangeType(wr.zconn, zkTabletPath, dbType, false)
+		err = tm.ChangeType(wr.zconn, ti.Path(), dbType, false)
 	} else {
 		// the remote action will run the hooks
 		var actionPath string
-		actionPath, err = wr.ai.ChangeType(zkTabletPath, dbType)
+		actionPath, err = wr.ai.ChangeType(ti.Alias(), dbType)
 		// You don't have a choice - you must wait for
 		// completion before rebuilding.
 		if err == nil {
@@ -111,7 +111,7 @@ func (wr *Wrangler) ChangeType(zkTabletPath string, dbType naming.TabletType, fo
 		cellToRebuild = ti.Cell
 	} else {
 		// re-read the tablet, see if we become serving
-		ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+		ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
 		if err != nil {
 			return err
 		}
@@ -146,7 +146,7 @@ func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType naming.Tablet
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	// change the type
-	actionPath, err := wr.ai.ChangeType(ti.Path(), dbType)
+	actionPath, err := wr.ai.ChangeType(ti.Alias(), dbType)
 	if err != nil {
 		return err
 	}
