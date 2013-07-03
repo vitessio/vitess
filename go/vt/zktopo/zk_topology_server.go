@@ -5,6 +5,8 @@
 package zktopo
 
 import (
+	"expvar"
+
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 )
@@ -21,5 +23,6 @@ func (zkts *ZkTopologyServer) Close() {
 
 func init() {
 	zconn := zk.NewMetaConn(false)
+	expvar.Publish("ZkMetaConn", zconn)
 	naming.RegisterTopologyServer("zookeeper", &ZkTopologyServer{Zconn: zconn})
 }

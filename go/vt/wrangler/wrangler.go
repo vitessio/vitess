@@ -14,6 +14,7 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -24,7 +25,8 @@ const (
 )
 
 type Wrangler struct {
-	zconn       zk.Conn
+	ts          naming.TopologyServer
+	zconn       zk.Conn // FIXME(alainjobart) will be removed eventually
 	ai          *tm.ActionInitiator
 	deadline    time.Time
 	lockTimeout time.Duration
@@ -35,8 +37,10 @@ type Wrangler struct {
 //   This is distinct from actionTimeout because most of the time, we want to immediately
 //   know that out action will fail. However, automated action will need some time to
 //   arbitrate the locks.
-func NewWrangler(zconn zk.Conn, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{zconn, tm.NewActionInitiator(zconn), time.Now().Add(actionTimeout), lockTimeout}
+func NewWrangler(topoServer naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
+	// FIXME(alainjobart) violates encapsulation until conversion is done
+	zconn := topoServer.(*zktopo.ZkTopologyServer).Zconn
+	return &Wrangler{topoServer, zconn, tm.NewActionInitiator(zconn), time.Now().Add(actionTimeout), lockTimeout}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {
@@ -49,6 +53,10 @@ func (wr *Wrangler) readTablet(zkTabletPath string) (*tm.TabletInfo, error) {
 
 func (wr *Wrangler) ZkConn() zk.Conn {
 	return wr.zconn
+}
+
+func (wr *Wrangler) TopologyServer() naming.TopologyServer {
+	return wr.ts
 }
 
 func (wr *Wrangler) ActionInitiator() *tm.ActionInitiator {
@@ -299,12 +307,7 @@ func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shar
 
 	parent := naming.TabletAlias{}
 	if parentAlias == "" && naming.TabletType(tabletType) != naming.TYPE_MASTER && naming.TabletType(tabletType) != naming.TYPE_IDLE {
-		vtSubStree, err := tm.VtSubtree(zkPath)
-		if err != nil {
-			return err
-		}
-		vtRoot := path.Join("/zk/global", vtSubStree)
-		parentAlias, err = getMasterAlias(wr.zconn, tm.ShardPath(vtRoot, keyspace, shardId))
+		parentAlias, err = getMasterAlias(wr.zconn, tm.ShardPath(keyspace, shardId))
 		if err != nil {
 			return err
 		}

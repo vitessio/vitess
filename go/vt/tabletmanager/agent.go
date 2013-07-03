@@ -32,6 +32,7 @@ import (
 	"code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/tabletserver"
+	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -42,8 +43,9 @@ import (
 type TabletChangeCallback func(oldTablet, newTablet Tablet)
 
 type ActionAgent struct {
-	zconn             zk.Conn
-	zkTabletPath      string // FIXME(msolomon) use tabletInfo
+	ts                naming.TopologyServer
+	zconn             zk.Conn // FIXME(alainjobart) will be removed eventually
+	zkTabletPath      string  // FIXME(msolomon) use tabletInfo
 	zkActionPath      string
 	vtActionBinFile   string // path to vtaction binary
 	MycnfFile         string // my.cnf file
@@ -57,12 +59,15 @@ type ActionAgent struct {
 	done    chan struct{} // closed when we are done.
 }
 
-func NewActionAgent(zconn zk.Conn, zkTabletPath, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
+func NewActionAgent(topoServer naming.TopologyServer, zkTabletPath, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
 	actionPath, err := TabletActionPath(zkTabletPath)
 	if err != nil {
 		return nil, err
 	}
+	// FIXME(alainjobart) violates encapsulation until conversion is done
+	zconn := topoServer.(*zktopo.ZkTopologyServer).Zconn
 	return &ActionAgent{
+		ts:                topoServer,
 		zconn:             zconn,
 		zkTabletPath:      zkTabletPath,
 		zkActionPath:      actionPath,

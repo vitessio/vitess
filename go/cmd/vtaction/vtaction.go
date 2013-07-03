@@ -18,10 +18,10 @@ import (
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
 	_ "code.google.com/p/vitess/go/snitch"
-	"code.google.com/p/vitess/go/zk"
 
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
@@ -80,9 +80,10 @@ func main() {
 	}
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
-	zconn := zk.NewMetaConn(false)
-	defer zconn.Close()
-	actor := tabletmanager.NewTabletActor(mysqld, zconn)
+	topoServer := naming.GetTopologyServer()
+	defer naming.CloseTopologyServers()
+
+	actor := tabletmanager.NewTabletActor(mysqld, topoServer)
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.

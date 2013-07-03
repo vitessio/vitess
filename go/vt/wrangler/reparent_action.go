@@ -307,7 +307,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*tm.TabletInfo) ([]*mys
 
 func (wr *Wrangler) demoteMaster(ti *tm.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
 	relog.Info("demote master %v", ti.Path())
-	actionPath, err := wr.ai.DemoteMaster(ti.Path())
+	actionPath, err := wr.ai.DemoteMaster(ti.Alias())
 	if err != nil {
 		return nil, err
 	}

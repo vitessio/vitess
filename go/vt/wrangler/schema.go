@@ -295,7 +295,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 			continue
 		}
 
-		ti, err := tm.ReadTablet(wr.zconn, tabletPath)
+		ti, err := tm.ReadTabletTs(wr.ts, alias)
 		if err != nil {
 			return nil, err
 		}

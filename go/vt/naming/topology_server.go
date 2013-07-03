@@ -19,6 +19,9 @@ import (
 //
 // Inside Google, we use Chubby.
 type TopologyServer interface {
+	// TopologyServer management interface
+	Close()
+
 	// Tablet management, per cell.
 	// The tablet string is json-encoded.
 	// The version is used for atomic updates (use -1 to overwrite
@@ -70,4 +73,12 @@ func GetTopologyServer() TopologyServer {
 	}
 	relog.Info("Using TopologyServer: %v", name)
 	return result
+}
+
+// Close all registered TopologyServer
+func CloseTopologyServers() {
+	for name, ts := range topologyServerImpls {
+		relog.Info("Closing TopologyServer: %v", name)
+		ts.Close()
+	}
 }

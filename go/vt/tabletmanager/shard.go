@@ -97,7 +97,7 @@ func (si *ShardInfo) Json() string {
 }
 
 func (si *ShardInfo) ShardPath() string {
-	return ShardPath(si.zkVtRoot, si.keyspace, si.shardName)
+	return ShardPath(si.keyspace, si.shardName)
 }
 
 func (si *ShardInfo) TabletPath(alias naming.TabletAlias) string {

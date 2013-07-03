@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/wrangler"
+	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
 	"code.google.com/p/vitess/go/zk"
 )
 
@@ -312,10 +314,11 @@ func main() {
 	flag.Parse()
 
 	templateLoader := NewTemplateLoader(*templateDir, dummyTemplate, *debug)
-	zconn := zk.NewMetaConn(false)
-	defer zconn.Close()
 
-	wr := wrangler.NewWrangler(zconn, 30*time.Second, 30*time.Second)
+	ts := naming.GetTopologyServer()
+	defer naming.CloseTopologyServers()
+
+	wr := wrangler.NewWrangler(ts, 30*time.Second, 30*time.Second)
 
 	actionRepo := NewActionRepository(wr)
 
@@ -416,6 +419,13 @@ func main() {
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
 	http.HandleFunc("/zk/", func(w http.ResponseWriter, r *http.Request) {
+		zkTopoServ := naming.GetTopologyServerByName("zookeeper")
+		if zkTopoServ == nil {
+			http.Error(w, "can only look at zk with ZkTopologyServer", http.StatusInternalServerError)
+			return
+		}
+		zconn := zkTopoServ.(*zktopo.ZkTopologyServer).Zconn
+
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
 			return

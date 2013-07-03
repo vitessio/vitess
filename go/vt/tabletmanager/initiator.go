@@ -186,7 +186,8 @@ func (ai *ActionInitiator) SetReadWrite(zkTabletPath string) (actionPath string,
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SET_RDWR})
 }
 
-func (ai *ActionInitiator) DemoteMaster(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) DemoteMaster(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_DEMOTE_MASTER})
 }
 

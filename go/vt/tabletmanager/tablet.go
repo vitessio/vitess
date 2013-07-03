@@ -96,42 +96,43 @@ func (tablet *Tablet) Hostname() string {
 }
 
 type TabletInfo struct {
-	zkVtRoot string // zk path to vt subtree - /zk/test/vt for instance
-	version  int    // zk node version - used to prevent stomping concurrent writes
+	version int // zk node version - used to prevent stomping concurrent writes
 	*Tablet
 }
 
+// FIXME(alainjobart) when switch to TopologyServer this will become useless
 func (ti *TabletInfo) Path() string {
-	return TabletPath(ti.zkVtRoot, ti.Uid)
+	return TabletPath(ti.ZkVtRoot(), ti.Uid)
 }
 
+// FIXME(alainjobart) when switch to TopologyServer this will become useless
 func (ti *TabletInfo) PidPath() string {
-	return path.Join(TabletPath(ti.zkVtRoot, ti.Uid), "pid")
+	return path.Join(TabletPath(ti.ZkVtRoot(), ti.Uid), "pid")
 }
 
+// FIXME(alainjobart) when switch to TopologyServer this will become useless
 func (ti *TabletInfo) ShardPath() string {
-	return ShardPath(ti.zkVtRoot, ti.Keyspace, ti.Shard)
+	return ShardPath(ti.Keyspace, ti.Shard)
 }
 
+// FIXME(alainjobart) when switch to TopologyServer this will become useless
 func (ti *TabletInfo) KeyspacePath() string {
-	return KeyspacePath(ti.zkVtRoot, ti.Keyspace)
+	return KeyspacePath(ti.Keyspace)
+}
+
+// FIXME(alainjobart) when switch to TopologyServer this will become useless
+func (ti *TabletInfo) ZkVtRoot() string {
+	return fmt.Sprintf("/zk/%v/vt", ti.Cell)
 }
 
 // This is the path that indicates the tablet's position in the shard replication graph.
 // This is too complicated for zk_path, so it's on this struct.
-func (ti *TabletInfo) ReplicationPath() (string, error) {
-	return TabletReplicationPath(ti.zkVtRoot, ti.Tablet)
+func (ti *TabletInfo) ReplicationPath() string {
+	return TabletReplicationPath(ti.Tablet)
 }
 
-func TabletReplicationPath(zkVtRoot string, tablet *Tablet) (string, error) {
-	zkPath := ShardPath(zkVtRoot, tablet.Keyspace, tablet.Shard)
-	cell, err := zk.ZkCellFromZkPath(zkVtRoot)
-	if err != nil {
-		return "", err
-	}
-	if cell == "local" || cell == "global" {
-		return "", fmt.Errorf("invalid cell name for replication path: %v", cell)
-	}
+func TabletReplicationPath(tablet *Tablet) string {
+	zkPath := ShardPath(tablet.Keyspace, tablet.Shard)
 	if tablet.Parent.Uid == naming.NO_TABLET {
 		zkPath = path.Join(zkPath, fmtAlias(tablet.Cell, tablet.Uid))
 	} else {
@@ -139,7 +140,7 @@ func TabletReplicationPath(zkVtRoot string, tablet *Tablet) (string, error) {
 		zkPath = path.Join(zkPath, fmtAlias(tablet.Parent.Cell, tablet.Parent.Uid),
 			fmtAlias(tablet.Cell, tablet.Uid))
 	}
-	return zkPath, nil
+	return zkPath
 }
 
 func NewTablet(cell string, uid uint32, parent naming.TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType naming.TabletType) (*Tablet, error) {
@@ -176,6 +177,7 @@ func tabletFromJson(data string) (*Tablet, error) {
 	return t, nil
 }
 
+// Deprecated, use ReadTabletTs
 func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
 	if err := IsTabletPath(zkTabletPath); err != nil {
 		return nil, err
@@ -188,11 +190,19 @@ func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	zkVtRoot, err := VtRootFromTabletPath(zkTabletPath)
+	return &TabletInfo{stat.Version(), tablet}, nil
+}
+
+func ReadTabletTs(ts naming.TopologyServer, alias naming.TabletAlias) (*TabletInfo, error) {
+	data, version, err := ts.GetTablet(alias)
 	if err != nil {
 		return nil, err
 	}
-	return &TabletInfo{zkVtRoot, stat.Version(), tablet}, nil
+	tablet, err := tabletFromJson(data)
+	if err != nil {
+		return nil, err
+	}
+	return &TabletInfo{version, tablet}, nil
 }
 
 // Update tablet data only - not associated paths.
@@ -242,10 +252,7 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 			return err
 		}
 		zkPaths = append(zkPaths, sap)
-		rp, err := tablet.ReplicationPath()
-		if err != nil {
-			return err
-		}
+		rp := tablet.ReplicationPath()
 		if zkTabletReplicationPath != "" && zkTabletReplicationPath != rp {
 			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
 				rp, zkTabletReplicationPath)
@@ -258,10 +265,7 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 		// a replication graph doesn't leave a node behind.
 		// However, while an action is running, there is some
 		// time where this might be inconsistent.
-		rp, err := tablet.ReplicationPath()
-		if err != nil {
-			return err
-		}
+		rp := tablet.ReplicationPath()
 		_, _, err = zconn.Get(rp)
 		if !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return fmt.Errorf("unexpected replication path found(possible pending action?): %v (%v)",
@@ -324,14 +328,9 @@ func CreateTabletReplicationPaths(zconn zk.Conn, zkTabletPath string, tablet *Ta
 		return err
 	}
 
-	zkVtRootPath, err := VtRootFromTabletPath(zkTabletPath)
-	if err != nil {
-		return err
-	}
-
-	shardPath := ShardPath(zkVtRootPath, tablet.Keyspace, tablet.Shard)
+	shardPath := ShardPath(tablet.Keyspace, tablet.Shard)
 	// Create /vt/keyspaces/<keyspace>/shards/<shard id>
-	_, err = zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err := zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
 	}
@@ -356,10 +355,7 @@ func CreateTabletReplicationPaths(zconn zk.Conn, zkTabletPath string, tablet *Ta
 		return err
 	}
 
-	trp, err := TabletReplicationPath(zkVtRootPath, tablet)
-	if err != nil {
-		return err
-	}
+	trp := TabletReplicationPath(tablet)
 	_, err = zk.CreateRecursive(zconn, trp, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err

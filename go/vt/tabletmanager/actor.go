@@ -23,6 +23,7 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -56,13 +57,16 @@ func (rsd *RestartSlaveData) String() string {
 
 type TabletActor struct {
 	mysqld       *mysqlctl.Mysqld
-	zconn        zk.Conn
+	ts           naming.TopologyServer
+	zconn        zk.Conn // FIXME(alainjobart) will be removed eventually
 	zkTabletPath string
 	zkVtRoot     string
 }
 
-func NewTabletActor(mysqld *mysqlctl.Mysqld, zconn zk.Conn) *TabletActor {
-	return &TabletActor{mysqld, zconn, "", ""}
+func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer naming.TopologyServer) *TabletActor {
+	// FIXME(alainjobart) violates encapsulation until conversion is done
+	zconn := topoServer.(*zktopo.ZkTopologyServer).Zconn
+	return &TabletActor{mysqld, topoServer, zconn, "", ""}
 }
 
 // This function should be protected from unforseen panics, as
@@ -350,11 +354,8 @@ func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
 func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != naming.NO_TABLET {
-		oldReplicationPath, err := tablet.ReplicationPath()
-		if err != nil {
-			return err
-		}
-		err = ta.zconn.Delete(oldReplicationPath, -1)
+		oldReplicationPath := tablet.ReplicationPath()
+		err := ta.zconn.Delete(oldReplicationPath, -1)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return err
 		}
@@ -374,10 +375,7 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath, err := tablet.ReplicationPath()
-	if err != nil {
-		return err
-	}
+	newReplicationPath := tablet.ReplicationPath()
 	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
@@ -452,10 +450,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	if tablet.Parent != rsd.Parent {
 		relog.Debug("restart with new parent")
 		// Remove tablet from the replication graph.
-		oldReplicationPath, err := tablet.ReplicationPath()
-		if err != nil {
-			return err
-		}
+		oldReplicationPath := tablet.ReplicationPath()
 		err = ta.zconn.Delete(oldReplicationPath, -1)
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 			return err
@@ -504,10 +499,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath, err := tablet.ReplicationPath()
-	if err != nil {
-		return err
-	}
+	newReplicationPath := tablet.ReplicationPath()
 	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
@@ -525,10 +517,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	}
 
 	// Remove tablet from the replication graph.
-	oldReplicationPath, err := tablet.ReplicationPath()
-	if err != nil {
-		return err
-	}
+	oldReplicationPath := tablet.ReplicationPath()
 	err = ta.zconn.Delete(oldReplicationPath, -1)
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
 		return err
@@ -561,10 +550,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath, err := tablet.ReplicationPath()
-	if err != nil {
-		return err
-	}
+	newReplicationPath := tablet.ReplicationPath()
 	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 		return err
@@ -1035,10 +1021,7 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	wasAssigned := tablet.IsAssigned()
 	replicationPath := ""
 	if wasAssigned {
-		replicationPath, err = tablet.ReplicationPath()
-		if err != nil {
-			return err
-		}
+		replicationPath = tablet.ReplicationPath()
 	}
 
 	tablet.Type = naming.TYPE_SCRAP
@@ -1129,10 +1112,7 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType naming.TabletType, r
 			// With a master the node cannot be set to idle unless we have already removed all of
 			// the derived paths. The global replication path is a good indication that this has
 			// been resolved.
-			rp, err := tablet.ReplicationPath()
-			if err != nil {
-				return err
-			}
+			rp := tablet.ReplicationPath()
 			stat, err := zconn.Exists(rp)
 			if err != nil {
 				return err

@@ -112,8 +112,7 @@ func IsShardPath(zkShardPath string) error {
 	return err
 }
 
-// zkVtRoot: /zk/XX/vt
-func ShardPath(zkVtRoot, keyspace, shard string) string {
+func ShardPath(keyspace, shard string) string {
 	shardPath := path.Join("/zk/global/vt", "keyspaces", keyspace, "shards", shard)
 	if err := IsShardPath(shardPath); err != nil {
 		panic(err) // this should never happen
@@ -138,7 +137,7 @@ func ShardActionLogPath(zkShardPath string) (string, error) {
 }
 
 // zkVtRoot: /zk/XX/vt
-func KeyspacePath(zkVtRoot, keyspace string) string {
+func KeyspacePath(keyspace string) string {
 	keyspacePath := path.Join("/zk/global/vt", "keyspaces", keyspace)
 	if err := IsKeyspacePath(keyspacePath); err != nil {
 		panic(err) // this should never happen

@@ -135,11 +135,7 @@ func (wr *Wrangler) UnreserveForRestore(zkDstTabletPath string) (err error) {
 	if err != nil {
 		return err
 	}
-	rp, err := tablet.ReplicationPath()
-	if err != nil {
-		return err
-	}
-	err = wr.zconn.Delete(rp, -1)
+	err = wr.zconn.Delete(tablet.ReplicationPath(), -1)
 	if err != nil {
 		return err
 	}

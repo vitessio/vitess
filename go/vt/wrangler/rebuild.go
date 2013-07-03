@@ -311,10 +311,6 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string, cells []string) 
 // copies in each cell.
 func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error {
 	relog.Info("rebuildKeyspace %v", zkKeyspacePath)
-	vtRoot, err := tm.VtRootFromKeyspacePath(zkKeyspacePath)
-	if err != nil {
-		return err
-	}
 	keyspace := path.Base(zkKeyspacePath)
 	shardNames, _, err := wr.zconn.Children(path.Join(zkKeyspacePath, "shards"))
 	if err != nil {
@@ -325,7 +321,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 	wg := sync.WaitGroup{}
 	er := concurrency.FirstErrorRecorder{}
 	for _, shardName := range shardNames {
-		zkShardPath := tm.ShardPath(vtRoot, keyspace, shardName)
+		zkShardPath := tm.ShardPath(keyspace, shardName)
 		wg.Add(1)
 		go func() {
 			if err := wr.RebuildShardGraph(zkShardPath, cells); err != nil {
@@ -340,7 +336,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	zkShardPath := tm.ShardPath(vtRoot, keyspace, shardNames[0])
+	zkShardPath := tm.ShardPath(keyspace, shardNames[0])
 	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
 	if err != nil {
 		return err
@@ -452,9 +448,8 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 		allTablets = append(allTablets, tablets...)
 	}
 
-	vtRoot := zkVtPaths[0]
 	for _, keyspace := range keyspaces {
-		shardsPath, err := tm.KeyspaceShardsPath(tm.KeyspacePath(vtRoot, keyspace))
+		shardsPath, err := tm.KeyspaceShardsPath(tm.KeyspacePath(keyspace))
 		if err != nil {
 			return err
 		}

@@ -49,10 +49,6 @@ func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
 
 // Export addresses from the VT serving graph to a legacy zkns server.
 func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
-	vtRoot, err := tm.VtRootFromKeyspacePath(zkKeyspacePath)
-	if err != nil {
-		return err
-	}
 	keyspace := path.Base(zkKeyspacePath)
 	shardNames, _, err := wr.zconn.Children(path.Join(zkKeyspacePath, "shards"))
 	if err != nil {
@@ -60,7 +56,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	zkShardPath := tm.ShardPath(vtRoot, keyspace, shardNames[0])
+	zkShardPath := tm.ShardPath(keyspace, shardNames[0])
 	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
 	if err != nil {
 		return err

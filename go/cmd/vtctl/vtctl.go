@@ -73,7 +73,7 @@ var commands = []commandGroup{
 				"[<zk tablet path> | <zk shard/tablet path>]",
 				"Sets the tablet or shard as ReadWrite."},
 			command{"DemoteMaster", commandDemoteMaster,
-				"<zk tablet path>",
+				"<tablet alias|zk tablet path>",
 				"Demotes a master tablet."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
 				"[-force] [-dry-run] <zk tablet path> <db type>",
@@ -584,6 +584,24 @@ func getFileParam(flag, flagFile, name string) string {
 	return string(data)
 }
 
+// convertTabletZkPath takes either an old style ZK tablet path or a
+// new style tablet alias as a string, and returns a TabletAlias.
+func tabletParamToTabletAlias(param string) naming.TabletAlias {
+	if param[0] == '/' {
+		// old zookeeper path, convert to new-style string tablet alias
+		zkPathParts := strings.Split(param, "/")
+		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
+			relog.Fatal("Invalid tablet path: %v", param)
+		}
+		param = zkPathParts[2] + "-" + zkPathParts[5]
+	}
+	result, err := naming.ParseTabletAliasString(param)
+	if err != nil {
+		relog.Fatal("Invalid tablet alias %v: %v", param, err)
+	}
+	return result
+}
+
 func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
@@ -640,9 +658,10 @@ func commandSetReadWrite(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 func commandDemoteMaster(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action DemoteMaster requires <zk tablet path>")
+		relog.Fatal("action DemoteMaster requires <tablet alias|zk tablet path>")
 	}
-	return wrangler.ActionInitiator().DemoteMaster(subFlags.Arg(0))
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return wrangler.ActionInitiator().DemoteMaster(tabletAlias)
 }
 
 func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1492,10 +1511,10 @@ func main() {
 		relog.Warning("cannot connect to syslog: %v", err)
 	}
 
-	zconn := zk.NewMetaConn(false)
-	defer zconn.Close()
+	topoServer := naming.GetTopologyServer()
+	defer naming.CloseTopologyServers()
 
-	wrangler := wr.NewWrangler(zconn, *waitTime, *lockWaitTimeout)
+	wrangler := wr.NewWrangler(topoServer, *waitTime, *lockWaitTimeout)
 	var actionPath string
 
 	found := false
