@@ -8,7 +8,7 @@
 
 EXIT_CODE=0
 
-echo "ZK_TABLET_PATH:" $ZK_TABLET_PATH
+echo "TABLET_ALIAS:" $TABLET_ALIAS
 
 for arg in $@ ; do
   echo "PARAM:" $arg

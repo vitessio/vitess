@@ -11,14 +11,15 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	hk "code.google.com/p/vitess/go/vt/hook"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) ExecuteHook(zkTabletPath string, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
+func (wr *Wrangler) ExecuteHook(tabletAlias naming.TabletAlias, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 	if strings.Contains(hook.Name, "/") {
 		return nil, fmt.Errorf("hook name cannot have a '/' in it")
 	}
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +28,7 @@ func (wr *Wrangler) ExecuteHook(zkTabletPath string, hook *hk.Hook) (hookResult 
 
 func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 
-	actionPath, err := wr.ai.ExecuteHook(ti.Path(), hook)
+	actionPath, err := wr.ai.ExecuteHook(ti.Alias(), hook)
 	if err != nil {
 		return nil, err
 	}

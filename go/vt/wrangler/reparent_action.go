@@ -27,7 +27,7 @@ type rpcContext struct {
 // centralize debug information in zk when a failure occurs.
 
 func (wr *Wrangler) getMasterPosition(ti *tm.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
-	actionPath, err := wr.ai.MasterPosition(ti.Path())
+	actionPath, err := wr.ai.MasterPosition(ti.Alias())
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +72,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, m
 				return
 			}
 
-			actionPath, err := wr.ai.SlavePosition(tablet.Path())
+			actionPath, err := wr.ai.SlavePosition(tablet.Alias())
 			if err != nil {
 				mutex.Lock()
 				lastError = err
@@ -134,7 +134,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 		} else {
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
-			actionPath, err := wr.ai.SlavePosition(ti.Path())
+			actionPath, err := wr.ai.SlavePosition(ti.Alias())
 			if err != nil {
 				ctx.err = err
 				return
@@ -151,7 +151,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 		}
 
 		// This option waits for the SQL thread to apply all changes to this instance.
-		actionPath, err := wr.ai.WaitSlavePosition(ti.Path(), args)
+		actionPath, err := wr.ai.WaitSlavePosition(ti.Alias(), args)
 		if err != nil {
 			ctx.err = err
 			return
@@ -217,7 +217,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 func (wr *Wrangler) stopSlaves(tabletMap map[string]*tm.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *tm.TabletInfo) {
-		actionPath, err := wr.ai.StopSlave(ti.Path())
+		actionPath, err := wr.ai.StopSlave(ti.Alias())
 		if err == nil {
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 		}
@@ -258,9 +258,9 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*tm.TabletInfo) ([]*mys
 
 		var actionPath string
 		if ti.Type == naming.TYPE_MASTER {
-			actionPath, ctx.err = wr.ai.MasterPosition(ti.Path())
+			actionPath, ctx.err = wr.ai.MasterPosition(ti.Alias())
 		} else if ti.IsSlaveType() {
-			actionPath, ctx.err = wr.ai.SlavePosition(ti.Path())
+			actionPath, ctx.err = wr.ai.SlavePosition(ti.Alias())
 		}
 
 		if ctx.err != nil {
@@ -319,8 +319,8 @@ func (wr *Wrangler) demoteMaster(ti *tm.TabletInfo) (*mysqlctl.ReplicationPositi
 }
 
 func (wr *Wrangler) promoteSlave(ti *tm.TabletInfo) (rsd *tm.RestartSlaveData, err error) {
-	relog.Info("promote slave %v", ti.Path())
-	actionPath, err := wr.ai.PromoteSlave(ti.Path())
+	relog.Info("promote slave %v", ti.Alias())
+	actionPath, err := wr.ai.PromoteSlave(ti.Alias())
 	if err != nil {
 		return
 	}
@@ -334,7 +334,7 @@ func (wr *Wrangler) promoteSlave(ti *tm.TabletInfo) (rsd *tm.RestartSlaveData, e
 
 func (wr *Wrangler) slaveWasPromoted(ti *tm.TabletInfo) error {
 	relog.Info("slave was promoted %v", ti.Path())
-	actionPath, err := wr.ai.SlaveWasPromoted(ti.Path())
+	actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias())
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[string]*tm.TabletInfo, rsd 
 
 func (wr *Wrangler) restartSlave(ti *tm.TabletInfo, rsd *tm.RestartSlaveData) (err error) {
 	relog.Info("restart slave %v", ti.Path())
-	actionPath, err := wr.ai.RestartSlave(ti.Path(), rsd)
+	actionPath, err := wr.ai.RestartSlave(ti.Alias(), rsd)
 	if err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *tm.TabletInfo, majori
 			relog.Warning("leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Path())
 		} else {
 			relog.Info("marking master-elect read-write %v", masterElect.Path())
-			actionPath, err := wr.ai.SetReadWrite(masterElect.Path())
+			actionPath, err := wr.ai.SetReadWrite(masterElect.Alias())
 			if err == nil {
 				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			}
@@ -443,7 +443,7 @@ func (wr *Wrangler) breakReplication(slaveMap map[string]*tm.TabletInfo, masterE
 	// Force slaves to break, just in case they were not advertised in
 	// the replication graph.
 	relog.Info("break slaves %v", masterElect.Path())
-	actionPath, err := wr.ai.BreakSlaves(masterElect.Path())
+	actionPath, err := wr.ai.BreakSlaves(masterElect.Alias())
 	if err == nil {
 		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	}

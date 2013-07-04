@@ -118,7 +118,7 @@ def run_test_sanity():
   tablet_62344.kill_vttablet()
 
   tablet_62344.init_tablet('idle')
-  utils.run_vtctl('ScrapTablet -force ' + tablet_62344.zk_tablet_path)
+  tablet_62344.scrap(force=True)
 
 @utils.test_case
 def run_test_rebuild():
@@ -148,7 +148,7 @@ def run_test_scrap():
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
-  utils.run_vtctl('ScrapTablet -force ' + tablet_62044.zk_tablet_path)
+  tablet_62044.scrap(force=True)
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
 
@@ -814,7 +814,7 @@ def run_test_reparent_down_master():
     raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Force the scrap action in zk even though tablet is not accessible.
-  utils.run_vtctl('ScrapTablet -force ' + tablet_62344.zk_tablet_path, auto_log=True)
+  tablet_62344.scrap(force=True)
 
   utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING ChangeSlaveType -force %s idle' %
                  tablet_62344.tablet_alias)
@@ -1143,8 +1143,8 @@ def run_test_hook():
   # test a regular program works
   _run_hook("test.sh flag1 param1=hello", [
       '"ExitStatus": 0',
-      ['"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --flag1\\nPARAM: --param1=hello\\n"',
-       '"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --param1=hello\\nPARAM: --flag1\\n"',
+      ['"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --flag1\\nPARAM: --param1=hello\\n"',
+       '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --param1=hello\\nPARAM: --flag1\\n"',
        ],
       '"Stderr": ""',
       ])
@@ -1152,14 +1152,14 @@ def run_test_hook():
   # test stderr output
   _run_hook("test.sh to-stderr", [
       '"ExitStatus": 0',
-      '"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --to-stderr\\n"',
+      '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --to-stderr\\n"',
       '"Stderr": "ERR: --to-stderr\\n"',
       ])
 
   # test commands that fail
   _run_hook("test.sh exit-error", [
       '"ExitStatus": 1',
-      '"Stdout": "ZK_TABLET_PATH: /zk/test_nj/vt/tablets/0000062344\\nPARAM: --exit-error\\n"',
+      '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --exit-error\\n"',
       '"Stderr": "ERROR: exit status 1\\n"',
       ])
 

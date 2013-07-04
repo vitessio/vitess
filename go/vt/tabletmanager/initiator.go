@@ -179,11 +179,13 @@ func (ai *ActionInitiator) ChangeType(tabletAlias naming.TabletAlias, dbType nam
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, args: &dbType})
 }
 
-func (ai *ActionInitiator) SetReadOnly(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) SetReadOnly(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SET_RDONLY})
 }
 
-func (ai *ActionInitiator) SetReadWrite(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) SetReadWrite(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SET_RDWR})
 }
 
@@ -262,19 +264,23 @@ func (ai *ActionInitiator) RestoreFromMultiSnapshot(zkTabletPath string, args *M
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MULTI_RESTORE, args: args})
 }
 
-func (ai *ActionInitiator) BreakSlaves(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) BreakSlaves(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_BREAK_SLAVES})
 }
 
-func (ai *ActionInitiator) PromoteSlave(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) PromoteSlave(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE})
 }
 
-func (ai *ActionInitiator) SlaveWasPromoted(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) SlaveWasPromoted(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_PROMOTED})
 }
 
-func (ai *ActionInitiator) RestartSlave(zkTabletPath string, args *RestartSlaveData) (actionPath string, err error) {
+func (ai *ActionInitiator) RestartSlave(tabletAlias naming.TabletAlias, args *RestartSlaveData) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, args: args})
 }
 
@@ -285,19 +291,23 @@ type SlaveWasRestartedData struct {
 	ScrapStragglers      bool
 }
 
-func (ai *ActionInitiator) SlaveWasRestarted(zkTabletPath string, args *SlaveWasRestartedData) (actionPath string, err error) {
+func (ai *ActionInitiator) SlaveWasRestarted(tabletAlias naming.TabletAlias, args *SlaveWasRestartedData) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_RESTARTED, args: args})
 }
 
-func (ai *ActionInitiator) ReparentPosition(zkTabletPath string, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
+func (ai *ActionInitiator) ReparentPosition(tabletAlias naming.TabletAlias, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, args: slavePos})
 }
 
-func (ai *ActionInitiator) MasterPosition(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) MasterPosition(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MASTER_POSITION})
 }
 
-func (ai *ActionInitiator) SlavePosition(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) SlavePosition(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLAVE_POSITION})
 }
 
@@ -306,11 +316,13 @@ type SlavePositionReq struct {
 	WaitTimeout         int // seconds, zero to wait indefinitely
 }
 
-func (ai *ActionInitiator) WaitSlavePosition(zkTabletPath string, args *SlavePositionReq) (actionPath string, err error) {
+func (ai *ActionInitiator) WaitSlavePosition(tabletAlias naming.TabletAlias, args *SlavePositionReq) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, args: args})
 }
 
-func (ai *ActionInitiator) StopSlave(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) StopSlave(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
 }
 
@@ -341,7 +353,8 @@ func (ai *ActionInitiator) PartialRestore(zkDstTabletPath string, args *RestoreA
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_RESTORE, args: args})
 }
 
-func (ai *ActionInitiator) Scrap(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) Scrap(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SCRAP})
 }
 
@@ -378,7 +391,8 @@ func (ai *ActionInitiator) RpcGetPermissions(zkTabletPath string, waitTime time.
 	return &p, nil
 }
 
-func (ai *ActionInitiator) ExecuteHook(zkTabletPath string, _hook *hook.Hook) (actionPath string, err error) {
+func (ai *ActionInitiator) ExecuteHook(tabletAlias naming.TabletAlias, _hook *hook.Hook) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, args: _hook})
 }
 
@@ -386,7 +400,8 @@ type SlaveList struct {
 	Addrs []string
 }
 
-func (ai *ActionInitiator) GetSlaves(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) GetSlaves(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SLAVES})
 }
 

@@ -214,7 +214,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 		return
 	}
 
-	actionPath, err := wr.ai.GetSlaves(masterTabletPath)
+	actionPath, err := wr.ai.GetSlaves(shardInfo.MasterAlias)
 	if err != nil {
 		results <- vresult{masterTabletPath, err}
 		return

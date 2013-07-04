@@ -57,21 +57,21 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]",
+				"[-force] [-db-name-override=<db name>] <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]",
 				"Initializes a tablet in zookeeper."},
 			command{"UpdateTablet", commandUpdateTablet,
 				"[-force] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
 				"DEPRECATED (use ChangeSlaveType or other operations instead).\n" +
 					"Updates a tablet in zookeeper."},
 			command{"ScrapTablet", commandScrapTablet,
-				"[-force] [-skip-rebuild] <zk tablet path>",
+				"[-force] [-skip-rebuild] <tablet alias|zk tablet path>",
 				"Scraps a tablet."},
 			command{"SetReadOnly", commandSetReadOnly,
-				"[<zk tablet path> | <zk shard/tablet path>]",
-				"Sets the tablet or shard as ReadOnly."},
+				"[<tablet alias|zk tablet path>]",
+				"Sets the tablet as ReadOnly."},
 			command{"SetReadWrite", commandSetReadWrite,
-				"[<zk tablet path> | <zk shard/tablet path>]",
-				"Sets the tablet or shard as ReadWrite."},
+				"[<tablet alias|zk tablet path>]",
+				"Sets the tablet as ReadWrite."},
 			command{"DemoteMaster", commandDemoteMaster,
 				"<tablet alias|zk tablet path>",
 				"Demotes a master tablet."},
@@ -131,7 +131,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>",
 				"This performs PartialSnapshot and then PartialRestore.  The advantage of having separate actions is that one partial snapshot can be used for many restores."},
 			command{"ExecuteHook", commandExecuteHook,
-				"<zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
+				"<tablet alias|zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
 				"This runs the specified hook on the given tablet."},
 		},
 	},
@@ -584,7 +584,7 @@ func getFileParam(flag, flagFile, name string) string {
 	return string(data)
 }
 
-// convertTabletZkPath takes either an old style ZK tablet path or a
+// tabletParamToTabletAlias takes either an old style ZK tablet path or a
 // new style tablet alias as a string, and returns a TabletAlias.
 func tabletParamToTabletAlias(param string) naming.TabletAlias {
 	if param[0] == '/' {
@@ -602,19 +602,41 @@ func tabletParamToTabletAlias(param string) naming.TabletAlias {
 	return result
 }
 
+// convertTabletZkPath takes either an old style ZK tablet replication
+// path or a new style tablet alias as a string, and returns a
+// TabletAlias.
+func tabletRepParamToTabletAlias(param string) naming.TabletAlias {
+	if param[0] == '/' {
+		// old zookeeper replication path, e.g.
+		// /zk/global/vt/keyspaces/ruser/shards/10-20/nyc-0000200278
+		// convert to new-style string tablet alias
+		zkPathParts := strings.Split(param, "/")
+		if len(zkPathParts) != 9 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[2] != "global" || zkPathParts[3] != "vt" || zkPathParts[4] != "keyspaces" || zkPathParts[6] != "shards" {
+			relog.Fatal("Invalid tablet replication path: %v", param)
+		}
+		param = zkPathParts[8]
+	}
+	result, err := naming.ParseTabletAliasString(param)
+	if err != nil {
+		relog.Fatal("Invalid tablet alias %v: %v", param, err)
+	}
+	return result
+}
+
 func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 7 && subFlags.NArg() != 8 {
-		relog.Fatal("action InitTablet requires <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<zk parent alias>]")
+		relog.Fatal("action InitTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]")
 	}
 
-	parentAlias := ""
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	parentAlias := naming.TabletAlias{}
 	if subFlags.NArg() == 8 {
-		parentAlias = subFlags.Arg(7)
+		parentAlias = tabletRepParamToTabletAlias(subFlags.Arg(7))
 	}
-	return "", wrangler.InitTablet(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, false)
+	return "", wrangler.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, false)
 }
 
 func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -622,10 +644,12 @@ func commandUpdateTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 8 {
-		relog.Fatal("action UpdateTablet requires <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>")
+		relog.Fatal("action UpdateTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <parent alias|zk parent alias>")
 	}
 
-	return "", wrangler.InitTablet(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), subFlags.Arg(7), *dbNameOverride, *force, true)
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	parentAlias := tabletRepParamToTabletAlias(subFlags.Arg(7))
+	return "", wrangler.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, true)
 }
 
 func commandScrapTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -633,26 +657,31 @@ func commandScrapTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 	skipRebuild := subFlags.Bool("skip-rebuild", false, "do not rebuild the shard and keyspace graph after scrapping")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ScrapTablet requires <zk tablet path>")
+		relog.Fatal("action ScrapTablet requires <tablet alias|zk tablet path>")
 	}
 
-	return wrangler.Scrap(subFlags.Arg(0), *force, *skipRebuild)
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return wrangler.Scrap(tabletAlias, *force, *skipRebuild)
 }
 
 func commandSetReadOnly(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action SetReadOnly requires args")
+		relog.Fatal("action SetReadOnly requires <tablet alias|zk tablet path>")
 	}
-	return wrangler.ActionInitiator().SetReadOnly(subFlags.Arg(0))
+
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return wrangler.ActionInitiator().SetReadOnly(tabletAlias)
 }
 
 func commandSetReadWrite(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action SetReadWrite requires args")
+		relog.Fatal("action SetReadWrite requires <tablet alias|zk tablet path>")
 	}
-	return wrangler.ActionInitiator().SetReadWrite(subFlags.Arg(0))
+
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return wrangler.ActionInitiator().SetReadWrite(tabletAlias)
 }
 
 func commandDemoteMaster(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -895,11 +924,12 @@ func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() < 2 {
-		relog.Fatal("action ExecuteHook requires <zk tablet path> <hook name>")
+		relog.Fatal("action ExecuteHook requires <tablet alias|zk tablet path> <hook name>")
 	}
 
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: parseParams(subFlags.Args()[2:])}
-	hr, err := wrangler.ExecuteHook(subFlags.Arg(0), hook)
+	hr, err := wrangler.ExecuteHook(tabletAlias, hook)
 	if err == nil {
 		relog.Info(hr.String())
 	}

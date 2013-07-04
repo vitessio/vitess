@@ -127,8 +127,8 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[string]*tm.TabletIn
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *tm.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
-	relog.Info("slaveWasRestarted(%v)", ti.Path())
-	actionPath, err := wr.ai.SlaveWasRestarted(ti.Path(), swrd)
+	relog.Info("slaveWasRestarted(%v)", ti.Alias())
+	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias(), swrd)
 	if err != nil {
 		return err
 	}

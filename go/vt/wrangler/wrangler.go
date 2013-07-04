@@ -16,7 +16,6 @@ import (
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
 	"code.google.com/p/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 const (
@@ -87,11 +86,11 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 
 	if force {
 		// with --force, we do not run any hook
-		err = tm.ChangeType(wr.zconn, ti.Path(), dbType, false)
+		err = tm.ChangeType(wr.ts, wr.zconn, tabletAlias, dbType, false)
 	} else {
 		// the remote action will run the hooks
 		var actionPath string
-		actionPath, err = wr.ai.ChangeType(ti.Alias(), dbType)
+		actionPath, err = wr.ai.ChangeType(tabletAlias, dbType)
 		// You don't have a choice - you must wait for
 		// completion before rebuilding.
 		if err == nil {
@@ -249,11 +248,11 @@ func (wr *Wrangler) handleActionError(actionPath string, actionErr error, blockQ
 	return nil
 }
 
-func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
-	// FIXME(msolomon) just read the shard node data instead - that is tearing resistant.
+func getMasterAlias(zconn zk.Conn, zkShardPath string) (naming.TabletAlias, error) {
+	// FIXME(alainjobart) just read the shard node data instead - that is tearing resistant.
 	children, _, err := zconn.Children(zkShardPath)
 	if err != nil {
-		return "", err
+		return naming.TabletAlias{}, err
 	}
 	result := ""
 	for _, child := range children {
@@ -261,31 +260,26 @@ func getMasterAlias(zconn zk.Conn, zkShardPath string) (string, error) {
 			continue
 		}
 		if result != "" {
-			return "", fmt.Errorf("master search failed: %v", zkShardPath)
+			return naming.TabletAlias{}, fmt.Errorf("master search failed: %v", zkShardPath)
 		}
-		result = path.Join(zkShardPath, child)
+		result = child
 	}
 
-	return result, nil
+	if result == "" {
+		return naming.TabletAlias{}, nil
+	}
+
+	return naming.ParseTabletAliasString(result)
 }
 
-func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shardId, tabletType, parentAlias, dbNameOverride string, force, update bool) error {
-	if err := tm.IsTabletPath(zkPath); err != nil {
-		return err
-	}
-	cell, err := zk.ZkCellFromZkPath(zkPath)
-	if err != nil {
-		return err
-	}
-	pathParts := strings.Split(zkPath, "/")
-	uid, err := tm.ParseUid(pathParts[len(pathParts)-1])
-	if err != nil {
-		return err
-	}
-
+// InitTablet will create or update a tablet. If not parent is
+// specified, and the tablet created is a slave type, we will find the
+// appropriate parent.
+func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPort, port, keyspace, shardId, tabletType string, parentAlias naming.TabletAlias, dbNameOverride string, force, update bool) error {
 	// if shardId contains a '-', we assume it's a range-based shard,
 	// so we try to extract the KeyRange.
 	var keyRange key.KeyRange
+	var err error
 	if strings.Contains(shardId, "-") {
 		parts := strings.Split(shardId, "-")
 		if len(parts) != 2 {
@@ -305,40 +299,34 @@ func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shar
 		shardId = strings.ToUpper(shardId)
 	}
 
-	parent := naming.TabletAlias{}
-	if parentAlias == "" && naming.TabletType(tabletType) != naming.TYPE_MASTER && naming.TabletType(tabletType) != naming.TYPE_IDLE {
+	if parentAlias == (naming.TabletAlias{}) && naming.TabletType(tabletType) != naming.TYPE_MASTER && naming.TabletType(tabletType) != naming.TYPE_IDLE {
 		parentAlias, err = getMasterAlias(wr.zconn, tm.ShardPath(keyspace, shardId))
 		if err != nil {
 			return err
 		}
 	}
-	if parentAlias != "" {
-		parent.Cell, parent.Uid, err = tm.ParseTabletReplicationPath(parentAlias)
-		if err != nil {
-			return err
-		}
-	}
 
-	tablet, err := tm.NewTablet(cell, uid, parent, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, naming.TabletType(tabletType))
+	tablet, err := tm.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, naming.TabletType(tabletType))
 	if err != nil {
 		return err
 	}
 	tablet.DbNameOverride = dbNameOverride
 	tablet.KeyRange = keyRange
 
-	err = tm.CreateTablet(wr.zconn, zkPath, tablet)
-	if err != nil && zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	zkPath := tm.TabletPathForAlias(tabletAlias) // remove soon
+	err = tm.CreateTablet(wr.ts, wr.zconn, tabletAlias, tablet)
+	if err != nil && err == naming.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update {
-			oldTablet, err := tm.ReadTablet(wr.zconn, zkPath)
+			oldTablet, err := tm.ReadTabletTs(wr.ts, tabletAlias)
 			if err != nil {
-				relog.Warning("failed reading tablet %v: %v", zkPath, err)
+				relog.Warning("failed reading tablet %v: %v", tabletAlias, err)
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
-					err := tm.UpdateTablet(wr.zconn, zkPath, oldTablet)
+					err := tm.UpdateTablet(wr.ts, oldTablet)
 					if err != nil {
-						relog.Warning("failed updating tablet %v: %v", zkPath, err)
+						relog.Warning("failed updating tablet %v: %v", tabletAlias, err)
 					} else {
 						return nil
 					}
@@ -346,16 +334,16 @@ func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shar
 			}
 		}
 		if force {
-			_, err = wr.Scrap(zkPath, force, false)
+			_, err = wr.Scrap(tabletAlias, force, false)
 			if err != nil {
 				relog.Error("failed scrapping tablet %v: %v", zkPath, err)
 				return err
 			}
 			err = zk.DeleteRecursive(wr.zconn, zkPath, -1)
 			if err != nil {
-				relog.Error("failed deleting tablet %v: %v", zkPath, err)
+				relog.Error("failed deleting tablet %v: %v", tabletAlias, err)
 			}
-			err = tm.CreateTablet(wr.zconn, zkPath, tablet)
+			err = tm.CreateTablet(wr.ts, wr.zconn, tabletAlias, tablet)
 		}
 	}
 	return err
@@ -363,18 +351,18 @@ func (wr *Wrangler) InitTablet(zkPath, hostname, mysqlPort, port, keyspace, shar
 
 // Scrap a tablet. If force is used, we write to ZK directly and don't
 // remote-execute the command.
-func (wr *Wrangler) Scrap(zkTabletPath string, force, skipRebuild bool) (actionPath string, err error) {
+func (wr *Wrangler) Scrap(tabletAlias naming.TabletAlias, force, skipRebuild bool) (actionPath string, err error) {
 	// load the tablet, see if we'll need to rebuild
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
 	if err != nil {
 		return "", err
 	}
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	if force {
-		err = tm.Scrap(wr.zconn, zkTabletPath, force)
+		err = tm.Scrap(wr.ts, wr.zconn, ti.Alias(), force)
 	} else {
-		actionPath, err = wr.ai.Scrap(zkTabletPath)
+		actionPath, err = wr.ai.Scrap(ti.Alias())
 	}
 	if err != nil {
 		return "", err

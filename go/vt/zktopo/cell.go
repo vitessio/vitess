@@ -6,9 +6,12 @@ package zktopo
 
 import (
 	"fmt"
+	"path"
 	"sort"
 
 	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/zk"
+	"launchpad.net/gozk/zookeeper"
 )
 
 /*
@@ -23,7 +26,36 @@ func tabletDirectoryForCell(cell string) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets", cell)
 }
 
-func (zkts *ZkTopologyServer) CreateOrUpdateTablet(alias naming.TabletAlias, contents string, existingVersion int) (int, error) {
+func (zkts *ZkTopologyServer) CreateTablet(alias naming.TabletAlias, contents string) error {
+	zkTabletPath := tabletPathForAlias(alias)
+
+	// Create /vt/tablets/<uid>
+	_, err := zk.CreateRecursive(zkts.Zconn, zkTabletPath, contents, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+			return naming.ErrNodeExists
+		}
+		return err
+	}
+
+	// Create /vt/tablets/<uid>/action
+	tap := path.Join(zkTabletPath, "action")
+	_, err = zkts.Zconn.Create(tap, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		return err
+	}
+
+	// Create /vt/tablets/<uid>/actionlog
+	talp := path.Join(zkTabletPath, "actionlog")
+	_, err = zkts.Zconn.Create(talp, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (zkts *ZkTopologyServer) UpdateTablet(alias naming.TabletAlias, contents string, existingVersion int) (int, error) {
 	zkTabletPath := tabletPathForAlias(alias)
 	stat, err := zkts.Zconn.Set(zkTabletPath, contents, existingVersion)
 	if err != nil {

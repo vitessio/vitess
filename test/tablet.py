@@ -187,10 +187,10 @@ class Tablet(object):
       args.append("-force")
     if skip_rebuild:
       args.append("-skip-rebuild")
-    args.append(self.zk_tablet_path)
-    utils.run_vtctl(args)
+    args.append(self.tablet_alias)
+    utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, zk_parent_alias=None, start=False, auth=False, dbname=None):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, auth=False, dbname=None):
     self.keyspace = keyspace
     self.shard = shard
 
@@ -204,7 +204,7 @@ class Tablet(object):
       args.append('-force')
     if dbname:
       args.append('-db-name-override='+dbname)
-    args.extend([self.zk_tablet_path,
+    args.extend([self.tablet_alias,
                  'localhost',
                  str(self.mysql_port),
                  str(self.port)])
@@ -217,8 +217,6 @@ class Tablet(object):
     else:
       args.append('')
     args.append(tablet_type)
-    if zk_parent_alias:
-      args.append(zk_parent_alias)
     utils.run_vtctl(args)
     if start:
       if tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':

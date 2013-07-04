@@ -285,7 +285,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 		return err
 	}
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -294,12 +294,12 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 	} else {
 		tablet.State = naming.STATE_READ_WRITE
 	}
-	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	return UpdateTablet(ta.ts, tablet)
 }
 
 func (ta *TabletActor) changeType(actionNode *ActionNode) error {
 	dbType := actionNode.args.(*naming.TabletType)
-	return ChangeType(ta.zconn, ta.zkTabletPath, *dbType, true)
+	return ChangeType(ta.ts, ta.zconn, ta.tabletAlias, *dbType, true)
 }
 
 func (ta *TabletActor) demoteMaster() error {
@@ -308,7 +308,7 @@ func (ta *TabletActor) demoteMaster() error {
 		return err
 	}
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -316,11 +316,11 @@ func (ta *TabletActor) demoteMaster() error {
 	// NOTE(msolomon) there is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will succeed. It will be
 	// less noisy to simply leave the entry until well promote the master.
-	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	return UpdateTablet(ta.ts, tablet)
 }
 
 func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -339,7 +339,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 }
 
 func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -361,7 +361,7 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo
 	tablet.Type = naming.TYPE_MASTER
 	tablet.Parent.Cell = ""
 	tablet.Parent.Uid = naming.NO_TABLET
-	err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	err := UpdateTablet(ta.ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -435,7 +435,7 @@ func (ta *TabletActor) waitSlavePosition(actionNode *ActionNode) error {
 func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	rsd := actionNode.args.(*RestartSlaveData)
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -464,7 +464,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 		}
 		// Once this action completes, update authoritive tablet node first.
 		tablet.Parent = rsd.Parent
-		err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+		err = UpdateTablet(ta.ts, tablet)
 		if err != nil {
 			return err
 		}
@@ -476,7 +476,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 		// Complete the special orphan accounting.
 		if tablet.Type == naming.TYPE_LAG_ORPHAN {
 			tablet.Type = naming.TYPE_LAG
-			err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+			err = UpdateTablet(ta.ts, tablet)
 			if err != nil {
 				return err
 			}
@@ -507,7 +507,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	swrd := actionNode.args.(*SlaveWasRestartedData)
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -525,11 +525,11 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 		return err
 	}
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
-		relog.Error("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
+		relog.Error("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
-			return Scrap(ta.zconn, ta.zkTabletPath, false)
+			return Scrap(ta.ts, ta.zconn, tablet.Alias(), false)
 		} else {
-			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.zkTabletPath, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
+			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		}
 	}
 
@@ -539,7 +539,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 		tablet.Type = naming.TYPE_SPARE
 		tablet.State = naming.STATE_READ_ONLY
 	}
-	err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	err = UpdateTablet(ta.ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -556,14 +556,14 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 }
 
 func (ta *TabletActor) scrap() error {
-	return Scrap(ta.zconn, ta.zkTabletPath, false)
+	return Scrap(ta.ts, ta.zconn, ta.tabletAlias, false)
 }
 
 func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
 	gsa := actionNode.args.(*GetSchemaArgs)
 
 	// read the tablet to get the dbname
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -581,7 +581,7 @@ func (ta *TabletActor) preflightSchema(actionNode *ActionNode) error {
 	change := actionNode.args.(*string)
 
 	// read the tablet to get the dbname
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -599,7 +599,7 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 	sc := actionNode.args.(*mysqlctl.SchemaChange)
 
 	// read the tablet to get the dbname
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -613,18 +613,18 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 	return nil
 }
 
-// add ZK_TABLET_PATH to environment
-func configureTabletHook(hk *hook.Hook, zkTabletPath string) {
+// add TABLET_ALIAS to environment
+func configureTabletHook(hk *hook.Hook, tabletAlias naming.TabletAlias) {
 	if hk.ExtraEnv == nil {
 		hk.ExtraEnv = make(map[string]string, 1)
 	}
-	hk.ExtraEnv["ZK_TABLET_PATH"] = zkTabletPath
+	hk.ExtraEnv["TABLET_ALIAS"] = tabletAlias.String()
 }
 
 func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
 	// FIXME(msolomon) should't the reply get distilled into an error?
 	h := actionNode.args.(*hook.Hook)
-	configureTabletHook(h, ta.zkTabletPath)
+	configureTabletHook(h, ta.tabletAlias)
 	actionNode.reply = h.Execute()
 	return nil
 }
@@ -643,7 +643,7 @@ func (ta *TabletActor) getSlaves(actionNode *ActionNode) (err error) {
 func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*SnapshotArgs)
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -652,7 +652,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath})
+	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
 	if err != nil {
 		return err
 	}
@@ -672,7 +672,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 	args := actionNode.args.(*SnapshotSourceEndArgs)
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -714,7 +714,7 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, parentAlias naming.TabletAlias, keyRange key.KeyRange) error {
 	// run the optional preflight_assigned hook
 	hk := hook.NewSimpleHook("preflight_assigned")
-	configureTabletHook(hk, ta.zkTabletPath)
+	configureTabletHook(hk, ta.tabletAlias)
 	if err := hk.ExecuteOptional(); err != nil {
 		return err
 	}
@@ -726,7 +726,7 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, par
 	tablet.Type = naming.TYPE_RESTORE
 	tablet.KeyRange = keyRange
 	tablet.DbNameOverride = sourceTablet.DbNameOverride
-	if err := UpdateTablet(ta.zconn, ta.zkTabletPath, tablet); err != nil {
+	if err := UpdateTablet(ta.ts, tablet); err != nil {
 		return err
 	}
 
@@ -738,13 +738,13 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, par
 // Can be called remotely
 func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	// first check mysql, no need to go further if we can't restore
-	if err := ta.mysqld.ValidateCloneTarget(map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath}); err != nil {
+	if err := ta.mysqld.ValidateCloneTarget(map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}); err != nil {
 		return err
 	}
 	args := actionNode.args.(*ReserveForRestoreArgs)
 
 	// read our current tablet, verify its state
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -781,7 +781,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	args := actionNode.args.(*RestoreArgs)
 
 	// read our current tablet, verify its state
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -826,9 +826,9 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// do the work
-	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath}); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}); err != nil {
 		relog.Error("RestoreFromSnapshot failed (%v), scrapping", err)
-		if err := Scrap(ta.zconn, ta.zkTabletPath, false); err != nil {
+		if err := Scrap(ta.ts, ta.zconn, ta.tabletAlias, false); err != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
 		}
 
@@ -836,7 +836,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.zconn, ta.zkTabletPath, naming.TYPE_SPARE, true)
+	return ChangeType(ta.ts, ta.zconn, ta.tabletAlias, naming.TYPE_SPARE, true)
 }
 
 // Operate on a backup tablet. Halt mysqld (read-only, lock tables)
@@ -844,7 +844,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*PartialSnapshotArgs)
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -853,7 +853,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.Concurrency, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath})
+	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.Concurrency, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
 	if err != nil {
 		return err
 	}
@@ -873,7 +873,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*MultiSnapshotArgs)
 
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -882,7 +882,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"ZK_TABLET_PATH": ta.zkTabletPath})
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
 	if err != nil {
 		return err
 	}
@@ -904,7 +904,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// read our current tablet, verify its state
 	// we only support restoring to the master or spare replicas
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -927,14 +927,14 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	// change type to restore, no change to replication graph
 	originalType := tablet.Type
 	tablet.Type = naming.TYPE_RESTORE
-	err = UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	err = UpdateTablet(ta.ts, tablet)
 	if err != nil {
 		return err
 	}
 
 	// run the action, scrap if it fails
 	if err := ta.mysqld.RestoreFromMultiSnapshot(tablet.DbName(), tablet.KeyRange, sourceAddrs, uids, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
-		if e := Scrap(ta.zconn, ta.zkTabletPath, false); e != nil {
+		if e := Scrap(ta.ts, ta.zconn, ta.tabletAlias, false); e != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
@@ -942,7 +942,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// restore type back
 	tablet.Type = originalType
-	return UpdateTablet(ta.zconn, ta.zkTabletPath, tablet)
+	return UpdateTablet(ta.ts, tablet)
 }
 
 // Operate on restore tablet.
@@ -958,7 +958,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	args := actionNode.args.(*RestoreArgs)
 
 	// read our current tablet, verify its state
-	tablet, err := ReadTablet(ta.zconn, ta.zkTabletPath)
+	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -995,19 +995,19 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	// do the work
 	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
-		if err := Scrap(ta.zconn, ta.zkTabletPath, false); err != nil {
+		if err := Scrap(ta.ts, ta.zconn, ta.tabletAlias, false); err != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromPartialSnapshot: %v", err)
 		}
 		return err
 	}
 
 	// change to TYPE_MASTER, we're done!
-	return ChangeType(ta.zconn, ta.zkTabletPath, naming.TYPE_MASTER, true)
+	return ChangeType(ta.ts, ta.zconn, ta.tabletAlias, naming.TYPE_MASTER, true)
 }
 
 // Make this external, since in needs to be forced from time to time.
-func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
-	tablet, err := ReadTablet(zconn, zkTabletPath)
+func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAlias, force bool) error {
+	tablet, err := ReadTabletTs(ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -1023,7 +1023,7 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	tablet.Type = naming.TYPE_SCRAP
 	tablet.Parent = naming.TabletAlias{}
 	// Update the tablet first, since that is canonical.
-	err = UpdateTablet(zconn, zkTabletPath, tablet)
+	err = UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -1031,9 +1031,9 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	// Remove any pending actions. Presumably forcing a scrap means you don't
 	// want the agent doing anything and the machine requires manual attention.
 	if force {
-		actionPath, err := TabletActionPath(zkTabletPath)
+		actionPath, err := TabletActionPath(tablet.Path())
 		if err != nil {
-			relog.Warning("TabletActionPath(%v) failed: %v", zkTabletPath, err)
+			relog.Warning("TabletActionPath(%v) failed: %v", tablet.Path(), err)
 		} else {
 			err = PurgeActions(zconn, actionPath)
 			if err != nil {
@@ -1070,7 +1070,7 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 	// (force mode executes on the vtctl side, not on the vttablet side)
 	if !force {
 		hk := hook.NewSimpleHook("postflight_scrap")
-		configureTabletHook(hk, zkTabletPath)
+		configureTabletHook(hk, tablet.Alias())
 		if hookErr := hk.ExecuteOptional(); hookErr != nil {
 			// we don't want to return an error, the server
 			// is already in bad shape probably.
@@ -1082,14 +1082,14 @@ func Scrap(zconn zk.Conn, zkTabletPath string, force bool) error {
 }
 
 // Make this external, since these transitions need to be forced from time to time.
-func ChangeType(zconn zk.Conn, zkTabletPath string, newType naming.TabletType, runHooks bool) error {
-	tablet, err := ReadTablet(zconn, zkTabletPath)
+func ChangeType(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAlias, newType naming.TabletType, runHooks bool) error {
+	tablet, err := ReadTabletTs(ts, tabletAlias)
 	if err != nil {
 		return err
 	}
 
 	if !naming.IsTrivialTypeChange(tablet.Type, newType) || !naming.IsValidTypeChange(tablet.Type, newType) {
-		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, zkTabletPath)
+		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
 	}
 
 	if runHooks {
@@ -1114,7 +1114,7 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType naming.TabletType, r
 				return err
 			}
 			if stat != nil && stat.NumChildren() != 0 {
-				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, zkTabletPath)
+				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, tabletAlias)
 			}
 		}
 		tablet.Parent = naming.TabletAlias{}
@@ -1122,5 +1122,5 @@ func ChangeType(zconn zk.Conn, zkTabletPath string, newType naming.TabletType, r
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}
 	}
-	return UpdateTablet(zconn, zkTabletPath, tablet)
+	return UpdateTablet(ts, tablet)
 }

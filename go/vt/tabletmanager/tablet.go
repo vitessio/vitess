@@ -193,8 +193,8 @@ func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
 	return &TabletInfo{stat.Version(), tablet}, nil
 }
 
-func ReadTabletTs(ts naming.TopologyServer, alias naming.TabletAlias) (*TabletInfo, error) {
-	data, version, err := ts.GetTablet(alias)
+func ReadTabletTs(ts naming.TopologyServer, tabletAlias naming.TabletAlias) (*TabletInfo, error) {
+	data, version, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -205,19 +205,16 @@ func ReadTabletTs(ts naming.TopologyServer, alias naming.TabletAlias) (*TabletIn
 	return &TabletInfo{version, tablet}, nil
 }
 
-// Update tablet data only - not associated paths.
-func UpdateTablet(zconn zk.Conn, zkTabletPath string, tablet *TabletInfo) error {
-	if err := IsTabletPath(zkTabletPath); err != nil {
-		return err
-	}
+// UpdateTablet updates the tablet data only - not associated replication paths.
+func UpdateTablet(ts naming.TopologyServer, tablet *TabletInfo) error {
 	version := -1
 	if tablet.version != 0 {
 		version = tablet.version
 	}
 
-	stat, err := zconn.Set(zkTabletPath, tablet.Json(), version)
+	newVersion, err := ts.UpdateTablet(tablet.Alias(), tablet.Json(), version)
 	if err == nil {
-		tablet.version = stat.Version()
+		tablet.version = newVersion
 	}
 	return err
 }
@@ -283,34 +280,11 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 	return nil
 }
 
-// Create a new tablet and all associated global zk paths for the replication graph.
-func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
-	if err := IsTabletPath(zkTabletPath); err != nil {
-		return err
-	}
-
-	// Create /vt/tablets/<uid>
-	_, err := zk.CreateRecursive(zconn, zkTabletPath, tablet.Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		return err
-	}
-
-	// Create /vt/tablets/<uid>/action
-	tap, err := TabletActionPath(zkTabletPath)
-	if err != nil {
-		return err
-	}
-	_, err = zconn.Create(tap, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
-		return err
-	}
-
-	// Create /vt/tablets/<uid>/actionlog
-	talp, err := TabletActionLogPath(zkTabletPath)
-	if err != nil {
-		return err
-	}
-	_, err = zconn.Create(talp, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+// CreateTablet creates a new tablet and all associated paths for the
+// replication graph.
+func CreateTablet(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAlias, tablet *Tablet) error {
+	// Have the TopologyServer create the tablet
+	err := ts.CreateTablet(tabletAlias, tablet.Json())
 	if err != nil {
 		return err
 	}
@@ -319,6 +293,7 @@ func CreateTablet(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
 		return nil
 	}
 
+	zkTabletPath := TabletPathForAlias(tabletAlias) // remove soon
 	return CreateTabletReplicationPaths(zconn, zkTabletPath, tablet)
 }
 

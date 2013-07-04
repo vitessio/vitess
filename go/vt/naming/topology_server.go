@@ -5,10 +5,17 @@
 package naming
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
 	"code.google.com/p/vitess/go/relog"
+)
+
+var (
+	// This error is returned by function to specify the
+	// requested resource already exists.
+	ErrNodeExists = errors.New("Node already exists")
 )
 
 // TopologyServer is the interface used to talk to a persistent
@@ -24,10 +31,19 @@ type TopologyServer interface {
 
 	// Tablet management, per cell.
 	// The tablet string is json-encoded.
-	// The version is used for atomic updates (use -1 to overwrite
-	// any version)
-	CreateOrUpdateTablet(alias TabletAlias, contents string, existingVersion int) (newVersion int, err error)
+
+	// CreateTablet creates the given tablet, assuming it doesn't exist
+	// yet. Can return ErrNodeExists if it already exists.
+	CreateTablet(alias TabletAlias, contents string) error
+
+	// UpdateTablet updates a given tablet. The version is used
+	// for atomic updates (use -1 to overwrite any version)
+	UpdateTablet(alias TabletAlias, contents string, existingVersion int) (newVersion int, err error)
+
+	// GetTablet returns the tablet contents, and the current version
 	GetTablet(alias TabletAlias) (contents string, version int, err error)
+
+	// GetTabletsByCell returns all the tablets in the given cell
 	GetTabletsByCell(cell string) ([]TabletAlias, error)
 }
 

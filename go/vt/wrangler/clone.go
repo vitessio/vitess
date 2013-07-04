@@ -33,7 +33,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = naming.TYPE_BACKUP
-		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
+		err = tm.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), naming.TYPE_BACKUP, false)
 	}
@@ -68,7 +68,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 	if ti.Tablet.Parent.Uid == naming.NO_TABLET && forceMasterSnapshot && newType != naming.TYPE_SNAPSHOT_SOURCE {
 		relog.Info("force change type backup -> master: %v", zkTabletPath)
 		ti.Tablet.Type = naming.TYPE_MASTER
-		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
+		err = tm.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), newType, false)
 	}
@@ -102,7 +102,7 @@ func (wr *Wrangler) SnapshotSourceEnd(zkTabletPath string, slaveStartRequired, r
 
 	if ti.Tablet.Parent.Uid == naming.NO_TABLET {
 		ti.Tablet.Type = naming.TYPE_MASTER
-		err = tm.UpdateTablet(wr.zconn, zkTabletPath, ti)
+		err = tm.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), originalType, false)
 	}
