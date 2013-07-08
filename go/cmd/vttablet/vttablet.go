@@ -52,6 +52,7 @@ var (
 	tabletPath     = flag.String("tablet-path", "", "path to zk node representing the tablet")
 	qsConfigFile   = flag.String("queryserver-config-file", "", "config file name for the query service")
 	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
+	rowcache       = flag.String("rowcache", "", "rowcache connection, host:port or /path/to/socket")
 	authConfig     = flag.String("auth-credentials", "", "name of file containing auth credentials")
 	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 	customrules    = flag.String("customrules", "", "custom query rules file")
@@ -106,6 +107,7 @@ func main() {
 	if err != nil {
 		relog.Warning("%s", err)
 	}
+	dbcfgs.App.Memcache = *rowcache
 
 	if err := jscfg.ReadJson(*overridesFile, &schemaOverrides); err != nil {
 		relog.Warning("%s", err)

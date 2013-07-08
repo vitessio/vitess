@@ -245,8 +245,6 @@ class Tablet(object):
     utils.prog_compile(['vtaction',
                         'vttablet',
                         ])
-    if memcache:
-      self.start_memcache()
 
     args = [os.path.join(utils.vtroot, 'bin', 'vttablet'),
             '-port', '%s' % (port or self.port),
@@ -255,6 +253,11 @@ class Tablet(object):
             '-log.level', 'INFO',
             '-db-configs-file', self._write_db_configs_file(repl_extra_flags),
             '-debug-querylog-file', self.querylog_file]
+
+    if memcache:
+      self.start_memcache()
+      args.extend(['-rowcache', self.memcache_path])
+
     if auth:
       args.extend(['-auth-credentials', os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')])
 
@@ -313,12 +316,6 @@ class Tablet(object):
       config['repl']['dbname'] = self.dbname
     config['repl'].update(repl_extra_flags)
     path = os.path.join(self.tablet_dir, 'db-configs.json')
-
-    if self.memcached:
-      for d in config.values():
-        d['memcache'] = self.memcache_path
-
-      config['memcache'] = self.memcache_path
 
     with open(path, 'w') as fi:
       json.dump(config, fi)

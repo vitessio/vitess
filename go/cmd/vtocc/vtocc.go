@@ -38,6 +38,7 @@ var (
 	authConfig     = flag.String("auth-credentials", "", "name of file containing auth credentials")
 	configFile     = flag.String("config", "", "config file name")
 	dbConfigFile   = flag.String("dbconfig", "", "db config file name")
+	rowcache       = flag.String("rowcache", "", "rowcache connection, host:port or /path/to/socket")
 	queryLog       = flag.String("querylog", "", "for testing: log all queries to this file")
 	customrules    = flag.String("customrules", "", "custom query rules file")
 	overridesFile  = flag.String("schema-override", "", "schema overrides file")
@@ -96,6 +97,7 @@ func main() {
 	relog.Info("config: %s\n", data)
 
 	unmarshalFile(*dbConfigFile, &dbconfig)
+	dbconfig.Memcache = *rowcache
 	relog.Info("dbconfig: %s\n", dbconfig)
 
 	unmarshalFile(*overridesFile, &schemaOverrides)

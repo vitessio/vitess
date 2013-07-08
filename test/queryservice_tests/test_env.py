@@ -264,8 +264,6 @@ class VtoccTestEnv(TestEnv):
     if res != 0:
       raise Exception("Cannot create vt_test_keyspace database")
     dbconfig = self.mysqldir+"/dbconf.json"
-    if utils.options.memcache:
-      memcache = self.mysqldir+"/memcache.sock"
     with open(dbconfig, 'w') as f:
       conf = {
           'charset': 'utf8',
@@ -276,8 +274,6 @@ class VtoccTestEnv(TestEnv):
           'keyspace': 'test_keyspace',
           'shard' : '0',
           }
-      if utils.options.memcache:
-        conf['memcache'] = memcache
       json.dump(conf, f)
 
     self.mysql_conn = self.mysql_connect()
@@ -307,8 +303,6 @@ class VtoccTestEnv(TestEnv):
     schema_override = '/tmp/schema_override.json'
     self.create_schema_override(schema_override)
 
-    if utils.options.memcache:
-      self.memcached = subprocess.Popen(["memcached", "-s", memcache])
     occ_args = [
       self.vtroot+"/bin/vtocc",
       "-port", "9461",
@@ -318,6 +312,11 @@ class VtoccTestEnv(TestEnv):
       "-customrules", customrules,
       "-schema-override", schema_override,
     ]
+    if utils.options.memcache:
+      memcache = self.mysqldir+"/memcache.sock"
+      self.memcached = subprocess.Popen(["memcached", "-s", memcache])
+      occ_args.extend(["-rowcache", memcache])
+
     self.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
     self.vtocc = subprocess.Popen(occ_args, stderr=self.vtstderr)
     for i in range(30):
