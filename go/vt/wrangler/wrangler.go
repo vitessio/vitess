@@ -94,7 +94,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 		// You don't have a choice - you must wait for
 		// completion before rebuilding.
 		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, DefaultActionTimeout)
+			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 		}
 	}
 
