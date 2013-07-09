@@ -63,7 +63,7 @@ func TestShardInfo(t *testing.T) {
 	}()
 	zkPath := "/zk/global/vt/keyspaces/test_keyspace/shards/shard0"
 	// intentionally degenerate data to bypass empty data check
-	si, err := NewShardInfo(zkPath, "{}")
+	si, err := NewShardInfo("test_keyspace", "shard0", "{}")
 	if err != nil {
 		t.Error("newShardErr: %v", err)
 	}

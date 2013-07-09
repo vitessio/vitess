@@ -428,7 +428,7 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *tm.TabletInfo, majori
 	}
 
 	relog.Info("rebuilding shard serving graph data in zk")
-	return wr.rebuildShard(masterElect.ShardPath(), []string{oldMaster.Cell, masterElect.Cell})
+	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, []string{oldMaster.Cell, masterElect.Cell})
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[string]*tm.TabletInfo, masterElect *tm.TabletInfo) error {

@@ -85,7 +85,8 @@ const (
 //   though all the other necessary updates have been made.
 // forceReparentToCurrentMaster: mostly for test setups, this can
 //   cause data loss.
-func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+func (wr *Wrangler) ReparentShard(keyspace, shard, zkMasterElectTabletPath string, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	if err := tm.IsShardPath(zkShardPath); err != nil {
 		return err
 	}
@@ -93,7 +94,7 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 		return err
 	}
 
-	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
+	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 		return fmt.Errorf("master-elect tablet not found in replication graph %v %v", zkMasterElectTabletPath, zkShardPath, mapKeys(tabletMap))
 	}
 
-	actionPath, err := wr.ai.ReparentShard(zkShardPath, zkMasterElectTabletPath)
+	actionPath, err := wr.ai.ReparentShard(keyspace, shard, zkMasterElectTabletPath)
 	if err != nil {
 		return err
 	}
@@ -158,12 +159,9 @@ func (wr *Wrangler) ReparentShard(zkShardPath, zkMasterElectTabletPath string, l
 	return err
 }
 
-func (wr *Wrangler) ShardReplicationPositions(zkShardPath string) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
-	if err := tm.IsShardPath(zkShardPath); err != nil {
-		return nil, nil, err
-	}
-
-	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
+func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
+	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -220,7 +218,7 @@ func (wr *Wrangler) ReparentTablet(zkTabletPath string) error {
 		return err
 	}
 
-	shardInfo, err := tm.ReadShard(wr.zconn, ti.ShardPath())
+	shardInfo, err := tm.ReadShard(wr.ts, ti.Keyspace, ti.Shard)
 	if err != nil {
 		return err
 	}

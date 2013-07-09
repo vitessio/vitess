@@ -17,16 +17,16 @@ import (
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) GetPermissions(zkTabletPath string) (*mysqlctl.Permissions, error) {
-	return wr.ai.RpcGetPermissions(zkTabletPath, wr.actionTimeout())
+func (wr *Wrangler) GetPermissions(tabletAlias naming.TabletAlias) (*mysqlctl.Permissions, error) {
+	return wr.ai.RpcGetPermissions(tabletAlias, wr.actionTimeout())
 }
 
 // helper method to asynchronously diff a permissions
 func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, zkMasterTabletPath string, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	zkTabletPath := tm.TabletPathForAlias(alias)
-	relog.Info("Gathering permissions for %v", zkTabletPath)
-	slavePermissions, err := wr.GetPermissions(zkTabletPath)
+	relog.Info("Gathering permissions for %v", alias)
+	slavePermissions, err := wr.GetPermissions(alias)
 	if err != nil {
 		er.RecordError(err)
 		return
@@ -36,19 +36,19 @@ func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, zkM
 	mysqlctl.DiffPermissions(zkMasterTabletPath, masterPermissions, zkTabletPath, slavePermissions, er)
 }
 
-func (wr *Wrangler) ValidatePermissionsShard(zkShardPath string) error {
-	si, err := tm.ReadShard(wr.zconn, zkShardPath)
+func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
+	si, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
 
 	// get permissions from the master, or error
 	if si.MasterAlias.Uid == naming.NO_TABLET {
-		return fmt.Errorf("No master in shard " + zkShardPath)
+		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
-	relog.Info("Gathering permissions for master %v", zkMasterTabletPath)
-	masterPermissions, err := wr.GetPermissions(zkMasterTabletPath)
+	relog.Info("Gathering permissions for master %v", si.MasterAlias)
+	masterPermissions, err := wr.GetPermissions(si.MasterAlias)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,9 @@ func (wr *Wrangler) ValidatePermissionsShard(zkShardPath string) error {
 	return nil
 }
 
-func (wr *Wrangler) ValidatePermissionsKeyspace(zkKeyspacePath string) error {
+func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
+	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
+
 	// find all the shards
 	zkShardsPath := path.Join(zkKeyspacePath, "shards")
 	shards, _, err := wr.zconn.Children(zkShardsPath)
@@ -90,22 +92,21 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(zkKeyspacePath string) error {
 		return fmt.Errorf("No shards in keyspace " + zkKeyspacePath)
 	}
 	sort.Strings(shards)
-	referenceShardPath := path.Join(zkShardsPath, shards[0])
 	if len(shards) == 1 {
-		return wr.ValidatePermissionsShard(referenceShardPath)
+		return wr.ValidatePermissionsShard(keyspace, shards[0])
 	}
 
 	// find the reference permissions using the first shard's master
-	si, err := tm.ReadShard(wr.zconn, referenceShardPath)
+	si, err := tm.ReadShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
 	if si.MasterAlias.Uid == naming.NO_TABLET {
-		return fmt.Errorf("No master in shard " + referenceShardPath)
+		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
-	relog.Info("Gathering permissions for reference master %v", zkReferenceTabletPath)
-	referencePermissions, err := wr.GetPermissions(zkReferenceTabletPath)
+	relog.Info("Gathering permissions for reference master %v", si.MasterAlias)
+	referencePermissions, err := wr.GetPermissions(si.MasterAlias)
 	if err != nil {
 		return err
 	}

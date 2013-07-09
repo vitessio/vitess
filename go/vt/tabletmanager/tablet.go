@@ -14,7 +14,6 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 const (
@@ -143,6 +142,20 @@ func TabletReplicationPath(tablet *Tablet) string {
 	return zkPath
 }
 
+// TODO(alainjobart) remove old absolute implementation, rename this one
+// from RelativeReplicationPath back to ReplicationPath
+func (ti *TabletInfo) RelativeReplicationPath() string {
+	return TabletRelativeReplicationPath(ti.Tablet)
+}
+
+func TabletRelativeReplicationPath(tablet *Tablet) string {
+	if tablet.Parent.Uid == naming.NO_TABLET {
+		return fmtAlias(tablet.Cell, tablet.Uid)
+	}
+	// FIXME(alainjobart) assumes one level of replication hierarchy
+	return path.Join(fmtAlias(tablet.Parent.Cell, tablet.Parent.Uid), fmtAlias(tablet.Cell, tablet.Uid))
+}
+
 func NewTablet(cell string, uid uint32, parent naming.TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType naming.TabletType) (*Tablet, error) {
 	state := naming.STATE_READ_ONLY
 	if tabletType == naming.TYPE_MASTER {
@@ -219,19 +232,15 @@ func UpdateTablet(ts naming.TopologyServer, tablet *TabletInfo) error {
 	return err
 }
 
-func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string) error {
-	if err := IsTabletPath(zkTabletPath); err != nil {
-		return err
-	}
-
-	tablet, err := ReadTablet(zconn, zkTabletPath)
+func Validate(ts naming.TopologyServer, tabletAlias naming.TabletAlias, tabletReplicationPath string) error {
+	// read the tablet record, make sure it parses
+	tablet, err := ReadTabletTs(ts, tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	zkPaths := make([]string, 1, 2)
-	zkPaths[0], err = TabletActionPath(zkTabletPath)
-	if err != nil {
+	// make sure the TopologyServer is good for this tablet
+	if err = ts.ValidateTablet(tabletAlias); err != nil {
 		return err
 	}
 
@@ -244,18 +253,20 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
 	if tablet.IsInReplicationGraph() {
-		sap, err := ShardActionPath(tablet.ShardPath())
+		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
+			return err
+		}
+		rp := tablet.RelativeReplicationPath()
+		if tabletReplicationPath != "" && tabletReplicationPath != rp {
+			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
+				rp, tabletReplicationPath)
+		}
+
+		// Check we are in the replication graph
+		_, err = ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, rp)
 		if err != nil {
 			return err
 		}
-		zkPaths = append(zkPaths, sap)
-		rp := tablet.ReplicationPath()
-		if zkTabletReplicationPath != "" && zkTabletReplicationPath != rp {
-			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
-				rp, zkTabletReplicationPath)
-		}
-		// Unless we are scrapped or idle, check we are in the replication graph
-		zkPaths = append(zkPaths, rp)
 
 	} else if tablet.IsAssigned() {
 		// this case is to make sure a scrap node that used to be in
@@ -263,17 +274,10 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 		// However, while an action is running, there is some
 		// time where this might be inconsistent.
 		rp := tablet.ReplicationPath()
-		_, _, err = zconn.Get(rp)
-		if !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		_, err = ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, rp)
+		if err != naming.ErrNoNode {
 			return fmt.Errorf("unexpected replication path found(possible pending action?): %v (%v)",
 				rp, tablet.Type)
-		}
-	}
-
-	for _, zkPath := range zkPaths {
-		_, _, err := zconn.Get(zkPath)
-		if err != nil {
-			return err
 		}
 	}
 
@@ -282,9 +286,9 @@ func Validate(zconn zk.Conn, zkTabletPath string, zkTabletReplicationPath string
 
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
-func CreateTablet(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAlias, tablet *Tablet) error {
+func CreateTablet(ts naming.TopologyServer, tablet *Tablet) error {
 	// Have the TopologyServer create the tablet
-	err := ts.CreateTablet(tabletAlias, tablet.Json())
+	err := ts.CreateTablet(tablet.Alias(), tablet.Json())
 	if err != nil {
 		return err
 	}
@@ -293,46 +297,18 @@ func CreateTablet(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.Ta
 		return nil
 	}
 
-	zkTabletPath := TabletPathForAlias(tabletAlias) // remove soon
-	return CreateTabletReplicationPaths(zconn, zkTabletPath, tablet)
+	return CreateTabletReplicationPaths(ts, tablet)
 }
 
-func CreateTabletReplicationPaths(zconn zk.Conn, zkTabletPath string, tablet *Tablet) error {
-	relog.Debug("CreateTabletReplicationPaths %v", zkTabletPath)
-	if err := IsTabletPath(zkTabletPath); err != nil {
+func CreateTabletReplicationPaths(ts naming.TopologyServer, tablet *Tablet) error {
+	relog.Debug("CreateTabletReplicationPaths %v", tablet.Alias())
+	if err := ts.CreateShard(tablet.Keyspace, tablet.Shard, newShard().Json()); err != nil && err != naming.ErrNodeExists {
 		return err
 	}
 
-	shardPath := ShardPath(tablet.Keyspace, tablet.Shard)
-	// Create /vt/keyspaces/<keyspace>/shards/<shard id>
-	_, err := zk.CreateRecursive(zconn, shardPath, newShard().Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-		return err
-	}
-
-	shardActionPath, err := ShardActionPath(shardPath)
-	if err != nil {
-		return err
-	}
-	// Create /vt/keyspaces/<keyspace>/shards/<shard id>/action
-	_, err = zk.CreateRecursive(zconn, shardActionPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-		return err
-	}
-
-	shardActionLogPath, err := ShardActionLogPath(shardPath)
-	if err != nil {
-		return err
-	}
-	// Create /vt/keyspaces/<keyspace>/shards/<shard id>/actionlog
-	_, err = zk.CreateRecursive(zconn, shardActionLogPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-		return err
-	}
-
-	trp := TabletReplicationPath(tablet)
-	_, err = zk.CreateRecursive(zconn, trp, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	trrp := TabletRelativeReplicationPath(tablet)
+	err := ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, trrp)
+	if err != nil && err != naming.ErrNodeExists {
 		return err
 	}
 

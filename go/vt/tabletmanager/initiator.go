@@ -56,11 +56,12 @@ func (e InitiatorError) Error() string {
 }
 
 type ActionInitiator struct {
+	ts    naming.TopologyServer
 	zconn zk.Conn
 }
 
-func NewActionInitiator(zconn zk.Conn) *ActionInitiator {
-	return &ActionInitiator{zconn}
+func NewActionInitiator(ts naming.TopologyServer, zconn zk.Conn) *ActionInitiator {
+	return &ActionInitiator{ts, zconn}
 }
 
 func actionGuid() string {
@@ -118,9 +119,9 @@ func (ai *ActionInitiator) writeKeyspaceAction(zkKeyspacePath string, node *Acti
 	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
-func (ai *ActionInitiator) rpcCall(zkTabletPath, name string, args, reply interface{}, waitTime time.Duration) error {
+func (ai *ActionInitiator) rpcCall(tabletAlias naming.TabletAlias, name string, args, reply interface{}, waitTime time.Duration) error {
 	// read the tablet from ZK to get the address to connect to
-	tablet, err := ReadTablet(ai.zconn, zkTabletPath)
+	tablet, err := ReadTabletTs(ai.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -158,9 +159,9 @@ func (ai *ActionInitiator) Ping(zkTabletPath string) (actionPath string, err err
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PING})
 }
 
-func (ai *ActionInitiator) RpcPing(zkTabletPath string, waitTime time.Duration) error {
+func (ai *ActionInitiator) RpcPing(tabletAlias naming.TabletAlias, waitTime time.Duration) error {
 	var result string
-	err := ai.rpcCall(zkTabletPath, TABLET_ACTION_PING, "payload", &result, waitTime)
+	err := ai.rpcCall(tabletAlias, TABLET_ACTION_PING, "payload", &result, waitTime)
 	if err != nil {
 		return err
 	}
@@ -383,9 +384,9 @@ func (ai *ActionInitiator) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaC
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, args: sc})
 }
 
-func (ai *ActionInitiator) RpcGetPermissions(zkTabletPath string, waitTime time.Duration) (*mysqlctl.Permissions, error) {
+func (ai *ActionInitiator) RpcGetPermissions(tabletAlias naming.TabletAlias, waitTime time.Duration) (*mysqlctl.Permissions, error) {
 	var p mysqlctl.Permissions
-	if err := ai.rpcCall(zkTabletPath, TABLET_ACTION_GET_PERMISSIONS, "", &p, waitTime); err != nil {
+	if err := ai.rpcCall(tabletAlias, TABLET_ACTION_GET_PERMISSIONS, "", &p, waitTime); err != nil {
 		return nil, err
 	}
 	return &p, nil
@@ -405,24 +406,18 @@ func (ai *ActionInitiator) GetSlaves(tabletAlias naming.TabletAlias) (actionPath
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SLAVES})
 }
 
-func (ai *ActionInitiator) ReparentShard(zkShardPath, zkTabletPath string) (actionPath string, err error) {
-	if err := IsTabletPath(zkTabletPath); err != nil {
-		return "", err
-	}
+func (ai *ActionInitiator) ReparentShard(keyspace, shard, zkTabletPath string) (actionPath string, err error) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REPARENT, args: &zkTabletPath})
 }
 
-func (ai *ActionInitiator) ShardExternallyReparented(zkShardPath, zkTabletPath string) (actionPath string, err error) {
-	if err := IsTabletPath(zkTabletPath); err != nil {
-		return "", err
-	}
+func (ai *ActionInitiator) ShardExternallyReparented(keyspace, shard, zkTabletPath string) (actionPath string, err error) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_EXTERNALLY_REPARENTED, args: &zkTabletPath})
 }
 
-func (ai *ActionInitiator) RebuildShard(zkShardPath string) (actionPath string, err error) {
-	if err := IsShardPath(zkShardPath); err != nil {
-		return "", err
-	}
+func (ai *ActionInitiator) RebuildShard(keyspace, shard string) (actionPath string, err error) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REBUILD})
 }
 
@@ -437,7 +432,8 @@ type ApplySchemaShardArgs struct {
 	Simple             bool
 }
 
-func (ai *ActionInitiator) ApplySchemaShard(zkShardPath, zkMasterTabletPath, change string, simple bool) (actionPath string, err error) {
+func (ai *ActionInitiator) ApplySchemaShard(keyspace, shard, zkMasterTabletPath, change string, simple bool) (actionPath string, err error) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_APPLY_SCHEMA, args: &ApplySchemaShardArgs{ZkMasterTabletPath: zkMasterTabletPath, Change: change, Simple: simple}})
 }
 
@@ -455,10 +451,8 @@ type ApplySchemaKeyspaceArgs struct {
 	Simple bool
 }
 
-func (ai *ActionInitiator) ApplySchemaKeyspace(zkKeyspacePath, change string, simple bool) (actionPath string, err error) {
-	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
-		return "", err
-	}
+func (ai *ActionInitiator) ApplySchemaKeyspace(keyspace, change string, simple bool) (actionPath string, err error) {
+	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
 	return ai.writeKeyspaceAction(zkKeyspacePath, &ActionNode{Action: KEYSPACE_ACTION_APPLY_SCHEMA, args: &ApplySchemaKeyspaceArgs{Change: change, Simple: simple}})
 }
 

@@ -30,7 +30,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[string]*tm.TabletIn
 		return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Alias(), masterTablet.ShardPath(), mapKeys(slaveTabletMap))
 	}
 
-	if err := wr.ValidateShard(masterTablet.ShardPath(), true); err != nil {
+	if err := wr.ValidateShard(masterTablet.Keyspace, masterTablet.Shard, true); err != nil {
 		return fmt.Errorf("ValidateShard verification failed: %v, if the master is dead, run: vtctl ScrapTablet -force %v", err, masterTablet.Alias())
 	}
 

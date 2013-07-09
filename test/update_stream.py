@@ -107,7 +107,7 @@ def teardown():
 def setup_tablets():
   # Start up a master mysql and vttablet
   utils.debug("Setting up tablets")
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
   utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace')

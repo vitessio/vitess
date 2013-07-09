@@ -33,11 +33,8 @@ func inCellList(cell string, cells []string) bool {
 
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
-func (wr *Wrangler) RebuildShardGraph(zkShardPath string, cells []string) error {
-	if err := tm.IsShardPath(zkShardPath); err != nil {
-		return err
-	}
-	actionPath, err := wr.ai.RebuildShard(zkShardPath)
+func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
+	actionPath, err := wr.ai.RebuildShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -47,7 +44,7 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string, cells []string) error 
 		return err
 	}
 
-	rebuildErr := wr.rebuildShard(zkShardPath, cells)
+	rebuildErr := wr.rebuildShard(keyspace, shard, cells)
 	err = wr.handleActionError(actionPath, rebuildErr, false)
 	if rebuildErr != nil {
 		if err != nil {
@@ -59,17 +56,19 @@ func (wr *Wrangler) RebuildShardGraph(zkShardPath string, cells []string) error 
 }
 
 // Update shard file with new master, replicas, etc.
-//   /zk/global/vt/keyspaces/<keyspace>/shards/<shard uid>
 //
-// Re-read from zk to make sure we are using the side effects of all actions.
+// Re-read from TopologyServer to make sure we are using the side
+// effects of all actions.
 //
 // This function should only be used with an action lock on the shard
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
-func (wr *Wrangler) rebuildShard(zkShardPath string, cells []string) error {
-	relog.Info("rebuildShard %v", zkShardPath)
+func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
+
+	relog.Info("rebuildShard %v/%v", keyspace, shard)
 	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
-	shardInfo, err := tm.NewShardInfo(zkShardPath, "{}")
+	shardInfo, err := tm.NewShardInfo(keyspace, shard, "{}")
 	if err != nil {
 		return err
 	}
@@ -82,7 +81,7 @@ func (wr *Wrangler) rebuildShard(zkShardPath string, cells []string) error {
 	tablets := make([]*tm.TabletInfo, 0, len(tabletMap))
 	for _, ti := range tabletMap {
 		if ti.Keyspace != shardInfo.Keyspace() || ti.Shard != shardInfo.ShardName() {
-			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v but belongs to shard %v:%v (maybe remove its replication path in shard %v)", ti.Path(), zkShardPath, ti.Keyspace, ti.Shard, zkShardPath)
+			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.Path(), keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
 		}
 		if !ti.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
@@ -98,7 +97,7 @@ func (wr *Wrangler) rebuildShard(zkShardPath string, cells []string) error {
 	if err = shardInfo.Rebuild(tablets); err != nil {
 		return err
 	}
-	if err = tm.UpdateShard(wr.zconn, shardInfo); err != nil {
+	if err = tm.UpdateShard(wr.ts, shardInfo); err != nil {
 		return err
 	}
 	return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets, cells)
@@ -278,10 +277,8 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 }
 
 // Rebuild the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string, cells []string) error {
-	if err := tm.IsKeyspacePath(zkKeyspacePath); err != nil {
-		return err
-	}
+func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
+	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
 	actionPath, err := wr.ai.RebuildKeyspace(zkKeyspacePath)
 	if err != nil {
 		return err
@@ -312,7 +309,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(zkKeyspacePath string, cells []string) 
 func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error {
 	relog.Info("rebuildKeyspace %v", zkKeyspacePath)
 	keyspace := path.Base(zkKeyspacePath)
-	shardNames, _, err := wr.zconn.Children(path.Join(zkKeyspacePath, "shards"))
+	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
 	}
@@ -320,15 +317,14 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 	// Rebuild all shards in parallel.
 	wg := sync.WaitGroup{}
 	er := concurrency.FirstErrorRecorder{}
-	for _, shardName := range shardNames {
-		zkShardPath := tm.ShardPath(keyspace, shardName)
+	for _, shard := range shards {
 		wg.Add(1)
-		go func() {
-			if err := wr.RebuildShardGraph(zkShardPath, cells); err != nil {
-				er.RecordError(fmt.Errorf("RebuildShardGraph failed: %v %v", zkShardPath, err))
+		go func(shard string) {
+			if err := wr.RebuildShardGraph(keyspace, shard, cells); err != nil {
+				er.RecordError(fmt.Errorf("RebuildShardGraph failed: %v/%v %v", keyspace, shard, err))
 			}
 			wg.Done()
-		}()
+		}(shard)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -336,7 +332,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	zkShardPath := tm.ShardPath(keyspace, shardNames[0])
+	zkShardPath := tm.ShardPath(keyspace, shards[0])
 	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
 	if err != nil {
 		return err
@@ -378,8 +374,8 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 	// - check the ranges are compatible (no hole, covers everything)
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
 		keyspaceDbTypes := make(map[naming.TabletType]bool)
-		for _, shardName := range shardNames {
-			srvShard, err := naming.ReadSrvShard(wr.zconn, path.Join(srvPath, shardName))
+		for _, shard := range shards {
+			srvShard, err := naming.ReadSrvShard(wr.zconn, path.Join(srvPath, shard))
 			if err != nil {
 				return err
 			}
@@ -460,7 +456,7 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 		}
 	}
 
-	keyspacePaths := make(map[string]bool)
+	keyspacesToRebuild := make(map[string]bool)
 	hasErr := false
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
@@ -475,9 +471,9 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 				return
 			}
 			mu.Lock()
-			keyspacePaths[ti.KeyspacePath()] = true
+			keyspacesToRebuild[ti.Keyspace] = true
 			mu.Unlock()
-			err := tm.CreateTabletReplicationPaths(wr.zconn, ti.Path(), ti.Tablet)
+			err := tm.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true
@@ -488,22 +484,20 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 	}
 	wg.Wait()
 
-	for keyspacePath, _ := range keyspacePaths {
+	for keyspace, _ := range keyspacesToRebuild {
 		wg.Add(1)
-		go func(keyspacePath string) {
+		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(keyspacePath, nil); err != nil {
+			if err := wr.RebuildKeyspaceGraph(keyspace, nil); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
-				relog.Warning("RebuildKeyspace failed: %v %v", keyspacePath, err)
+				relog.Warning("RebuildKeyspaceGraph(%v) failed: %v", keyspace, err)
 				return
 			}
-		}(keyspacePath)
+		}(keyspace)
 	}
 	wg.Wait()
-	mu.Lock()
-	defer mu.Unlock()
 
 	if hasErr {
 		return fmt.Errorf("some errors occurred rebuilding replication graph, consult log")

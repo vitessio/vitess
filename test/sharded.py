@@ -87,7 +87,7 @@ def check_rows_schema_diff(driver):
 @utils.test_case
 def run_test_sharding():
 
-  utils.run_vtctl('CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace test_keyspace')
 
   shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
   shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
@@ -128,14 +128,14 @@ def run_test_sharding():
   # start zkocc, we'll use it later
   zkocc_server = utils.zkocc_start()
 
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/-80 ' + shard_0_master.zk_tablet_path, auto_log=True)
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/80- ' + shard_1_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.zk_tablet_path, auto_log=True)
 
   # apply the schema on the second shard using a simple schema upgrade
   utils.run_vtctl(['ApplySchemaShard',
                    '-simple',
                    '-sql=' + create_vt_select_test_reverse.replace("\n", ""),
-                   '/zk/global/vt/keyspaces/test_keyspace/shards/80-'])
+                   'test_keyspace/80-'])
 
   # insert some values directly (db is RO after minority reparent)
   # FIXME(alainjobart) these values don't match the shard map
@@ -194,21 +194,22 @@ def run_test_sharding():
 
   # throw in some schema validation step
   # we created the schema differently, so it should show
-  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/-80')
-  utils.run_vtctl('ValidateSchemaShard /zk/global/vt/keyspaces/test_keyspace/shards/80-')
-  out, err = utils.run_vtctl('ValidateSchemaKeyspace /zk/global/vt/keyspaces/test_keyspace', trap_output=True, raise_on_error=False)
-  if "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062346 disagree on schema for table vt_select_test:\nCREATE TABLE" not in err or \
-      "/zk/test_nj/vt/tablets/0000062344 and /zk/test_nj/vt/tablets/0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE" not in err:
+  utils.run_vtctl('ValidateSchemaShard test_keyspace/-80')
+  utils.run_vtctl('ValidateSchemaShard test_keyspace/80-')
+  out, err = utils.run_vtctl('ValidateSchemaKeyspace test_keyspace',
+                             trap_output=True, raise_on_error=False)
+  if "test_nj-0000062344 and test_nj-0000062346 disagree on schema for table vt_select_test:\nCREATE TABLE" not in err or \
+       "test_nj-0000062344 and test_nj-0000062347 disagree on schema for table vt_select_test:\nCREATE TABLE" not in err:
         raise utils.TestError('wrong ValidateSchemaKeyspace output: ' + err)
 
   # validate versions
-  utils.run_vtctl('ValidateVersionShard /zk/global/vt/keyspaces/test_keyspace/shards/-80', auto_log=True)
-  utils.run_vtctl('ValidateVersionKeyspace /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('ValidateVersionShard test_keyspace/-80', auto_log=True)
+  utils.run_vtctl('ValidateVersionKeyspace test_keyspace', auto_log=True)
 
   # show and validate permissions
   utils.run_vtctl('GetPermissions /zk/test_nj/vt/tablets/0000062344', auto_log=True)
-  utils.run_vtctl('ValidatePermissionsShard /zk/global/vt/keyspaces/test_keyspace/shards/-80', auto_log=True)
-  utils.run_vtctl('ValidatePermissionsKeyspace /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('ValidatePermissionsShard test_keyspace/-80', auto_log=True)
+  utils.run_vtctl('ValidatePermissionsKeyspace test_keyspace', auto_log=True)
 
   # and create zkns on this complex keyspace, make sure a few files are created
   utils.run_vtctl('ExportZknsForKeyspace /zk/global/vt/keyspaces/test_keyspace')

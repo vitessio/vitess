@@ -13,9 +13,17 @@ import (
 )
 
 var (
-	// This error is returned by function to specify the
+	// This error is returned by functions to specify the
 	// requested resource already exists.
 	ErrNodeExists = errors.New("Node already exists")
+
+	// This error is returned by functions to specify the requested
+	// resource does not exist.
+	ErrNoNode = errors.New("Node doesn't exist")
+
+	// This error is returned by functions to specify a child of the
+	// resource is still present and prevents the action from completing
+	ErrNotEmpty = errors.New("Node not empty")
 )
 
 // TopologyServer is the interface used to talk to a persistent
@@ -29,8 +37,42 @@ type TopologyServer interface {
 	// TopologyServer management interface
 	Close()
 
+	//
+	// Keyspace management, global
+	//
+
+	// CreateKeyspace creates the given keyspace, assuming it doesn't exist
+	// yet. Can return ErrNodeExists if it already exists.
+	CreateKeyspace(keyspace string) error
+
+	// GetKeyspaces returns the known keyspaces
+	GetKeyspaces() ([]string, error)
+
+	//
+	// Shard management, global
+	//
+
+	// CreateShard creates the given shard, assuming it doesn't exist
+	// yet. Can return ErrNodeExists if it already exists.
+	CreateShard(keyspace, shard, contents string) error
+
+	// UpdateShard unconditionnally updates the shard information
+	// Can return ErrNoNode if the shard doesn't exist yet
+	UpdateShard(keyspace, shard, contents string) error
+
+	// ValidateShard performs routine checks on the shard
+	ValidateShard(keyspace, shard string) error
+
+	// GetShard reads a shard and returns it
+	GetShard(keyspace, shard string) (contents string, err error)
+
+	// GetShardNames returns the known shards in a keyspace
+	GetShardNames(keyspace string) ([]string, error)
+
+	//
 	// Tablet management, per cell.
 	// The tablet string is json-encoded.
+	//
 
 	// CreateTablet creates the given tablet, assuming it doesn't exist
 	// yet. Can return ErrNodeExists if it already exists.
@@ -40,11 +82,34 @@ type TopologyServer interface {
 	// for atomic updates (use -1 to overwrite any version)
 	UpdateTablet(alias TabletAlias, contents string, existingVersion int) (newVersion int, err error)
 
+	// ValidateTablet performs routine checks on the tablet
+	ValidateTablet(alias TabletAlias) error
+
 	// GetTablet returns the tablet contents, and the current version
 	GetTablet(alias TabletAlias) (contents string, version int, err error)
 
 	// GetTabletsByCell returns all the tablets in the given cell
 	GetTabletsByCell(cell string) ([]TabletAlias, error)
+
+	//
+	// Replication graph management, global
+	//
+	// Uses a path for replication, use "" to get the masters,
+	// /master to get the slaves
+	//
+
+	// GetReplicationPaths returns the replication paths for the parent path
+	// - get the master(s): GetReplicationPaths(..., "")
+	// - get the slaves: GetReplicationPaths(..., "/nyc-00020100")
+	GetReplicationPaths(keyspace, shard, repPath string) ([]TabletAlias, error)
+
+	// CreateReplicationPath creates a replication path
+	// Can return ErrNodeExists if it already exists.
+	CreateReplicationPath(keyspace, shard, repPath string) error
+
+	// DeleteReplicationPath removes a replication path
+	// Can returnErrNoNode if it doesn't exist
+	DeleteReplicationPath(keyspace, shard, repPath string) error
 }
 
 // Registry for TopologyServer implementations

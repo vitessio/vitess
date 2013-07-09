@@ -64,6 +64,22 @@ func (zkts *ZkTopologyServer) UpdateTablet(alias naming.TabletAlias, contents st
 	return stat.Version(), nil
 }
 
+func (zkts *ZkTopologyServer) ValidateTablet(alias naming.TabletAlias) error {
+	zkTabletPath := tabletPathForAlias(alias)
+	zkPaths := []string{
+		path.Join(zkTabletPath, "action"),
+		path.Join(zkTabletPath, "actionlog"),
+	}
+
+	for _, zkPath := range zkPaths {
+		_, _, err := zkts.Zconn.Get(zkPath)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (zkts *ZkTopologyServer) GetTablet(alias naming.TabletAlias) (string, int, error) {
 	zkTabletPath := tabletPathForAlias(alias)
 	data, stat, err := zkts.Zconn.Get(zkTabletPath)
@@ -83,11 +99,11 @@ func (zkts *ZkTopologyServer) GetTabletsByCell(cell string) ([]naming.TabletAlia
 	sort.Strings(children)
 	result := make([]naming.TabletAlias, len(children))
 	for i, child := range children {
-		alias, err := naming.ParseTabletAliasString(child)
+		result[i].Cell = cell
+		result[i].Uid, err = naming.ParseUid(child)
 		if err != nil {
 			return nil, err
 		}
-		result[i] = alias
 	}
 	return result, nil
 }

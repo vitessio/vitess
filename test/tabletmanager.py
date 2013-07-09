@@ -76,10 +76,10 @@ def _check_db_addr(db_addr, expected_addr):
 @utils.test_case
 def run_test_sanity():
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   # if these statements don't run before the tablet it will wedge waiting for the
@@ -110,10 +110,10 @@ def run_test_sanity():
   utils.wait_db_read_only(62344)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
-  utils.run_vtctl('ValidateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('ValidateKeyspace test_keyspace')
   # not pinging tablets, as it enables replication checks, and they
   # break because we only have a single master, no slaves
-  utils.run_vtctl('ValidateShard -ping-tablets=false /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('ValidateShard -ping-tablets=false test_keyspace/0')
 
   tablet_62344.kill_vttablet()
 
@@ -122,15 +122,17 @@ def run_test_sanity():
 
 @utils.test_case
 def run_test_rebuild():
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
   tablet_62044.init_tablet('replica', 'test_keyspace', '0')
   tablet_31981.init_tablet('experimental', 'test_keyspace', '0') # in ny by default
 
-  utils.run_vtctl('RebuildKeyspaceGraph -cells=test_nj /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('RebuildKeyspaceGraph -cells=test_nj test_keyspace',
+                  auto_log=True)
   utils.run_fail(utils.vtroot+'/bin/zk cat /zk/test_ny/vt/ns/test_keyspace/0/master')
 
-  utils.run_vtctl('RebuildKeyspaceGraph -cells=test_ny /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('RebuildKeyspaceGraph -cells=test_ny test_keyspace',
+                  auto_log=True)
 
   real_master = utils.zk_cat('/zk/test_nj/vt/ns/test_keyspace/0/master')
   master_alias = utils.zk_cat('/zk/test_ny/vt/ns/test_keyspace/0/master')
@@ -141,11 +143,11 @@ def run_test_rebuild():
 @utils.test_case
 def run_test_scrap():
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
   tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62044.scrap(force=True)
@@ -196,10 +198,10 @@ def _run_test_mysqlctl_clone(server_mode):
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/snapshot_test')
+  utils.run_vtctl('CreateKeyspace -force snapshot_test')
 
   tablet_62344.init_tablet('master', 'snapshot_test', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  utils.run_vtctl('RebuildShardGraph snapshot_test/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
@@ -248,10 +250,10 @@ def _run_test_vtctl_snapshot_restore(server_mode):
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/snapshot_test')
+  utils.run_vtctl('CreateKeyspace -force snapshot_test')
 
   tablet_62344.init_tablet('master', 'snapshot_test', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  utils.run_vtctl('RebuildShardGraph snapshot_test/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
@@ -322,10 +324,10 @@ def _run_test_vtctl_clone(server_mode):
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/snapshot_test')
+  utils.run_vtctl('CreateKeyspace -force snapshot_test')
 
   tablet_62344.init_tablet('master', 'snapshot_test', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  utils.run_vtctl('RebuildShardGraph snapshot_test/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_snapshot_test', create_vt_insert_test,
@@ -388,7 +390,7 @@ index by_msg (msg)
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # Start three tablets for three different shards. At this point the
   # sharding schema is not really important, as long as it is
@@ -397,7 +399,7 @@ index by_msg (msg)
   old_tablets = [tablet_62044, tablet_41983, tablet_31981]
   for i, tablet in enumerate(old_tablets):
     tablet.init_tablet('master', 'test_keyspace', str(i))
-    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/%s' % i)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/%s' % i)
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   for i, tablet in enumerate(old_tablets):
@@ -422,9 +424,9 @@ index by_msg (msg)
   if 'vt_insert_view' in err:
     raise utils.TestError('Unexpected GetSchema output: %s' % err)
 
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace_new')
   tablet_62344.init_tablet('master', 'test_keyspace_new', "0", dbname="not_vt_test_keyspace")
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace_new/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace_new/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
   tablet_62344.mquery('', 'DROP DATABASE IF EXISTS not_vt_test_keyspace')
   tablet_62344.start_vttablet(wait_for_state='CONNECTING') # db not created
@@ -469,7 +471,7 @@ primary key (id)
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # Start three tablets for three different shards. At this point the
   # sharding schema is not really important, as long as it is
@@ -478,7 +480,7 @@ primary key (id)
   old_tablets = [tablet_62044, tablet_41983, tablet_31981]
   for i, tablet in enumerate(old_tablets):
     tablet.init_tablet('master', 'test_keyspace', str(i))
-    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/%s' % i)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/%s' % i)
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   for i, tablet in enumerate(old_tablets):
@@ -489,9 +491,9 @@ primary key (id)
     tablet.start_vttablet()
     utils.run_vtctl('MultiSnapshot -force -maximum-file-size=1 -spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
 
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace_new')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace_new')
   tablet_62344.init_tablet('master', 'test_keyspace_new', '-0000000000000028', dbname='not_vt_test_keyspace')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace_new/shards/-0000000000000028')
+  utils.run_vtctl('RebuildShardGraph test_keyspace_new/-0000000000000028')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
   tablet_62344.mquery('', 'DROP DATABASE IF EXISTS not_vt_test_keyspace')
   tablet_62344.start_vttablet(wait_for_state='CONNECTING') # db not created
@@ -525,10 +527,10 @@ primary key (id)
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_test_keyspace', create,
@@ -561,10 +563,10 @@ primary key (id)
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_test_keyspace', create,
@@ -590,10 +592,10 @@ def run_test_mysqlctl_split():
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_test_keyspace', create_vt_insert_test,
@@ -649,10 +651,10 @@ def _run_test_vtctl_partial_clone(create, populate,
   utils.zk_wipe()
 
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/snapshot_test')
+  utils.run_vtctl('CreateKeyspace -force snapshot_test')
 
   tablet_62344.init_tablet('master', 'snapshot_test', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/snapshot_test/shards/0')
+  utils.run_vtctl('RebuildShardGraph snapshot_test/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_snapshot_test', create, populate)
@@ -707,10 +709,10 @@ def run_test_vtctl_partial_clone_varbinary():
 @utils.test_case
 def run_test_restart_during_action():
   # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
   tablet_62344.create_db('vt_test_keyspace')
   tablet_62344.start_vttablet()
@@ -758,7 +760,7 @@ def run_test_restart_during_action():
 def run_test_reparent_down_master():
   utils.zk_wipe()
 
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # create the database so vttablets start, as they are serving
   tablet_62344.create_db('vt_test_keyspace')
@@ -775,11 +777,11 @@ def run_test_reparent_down_master():
   tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True)
 
   # Recompute the shard layout node - until you do that, it might not be valid.
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62344.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + tablet_62344.zk_tablet_path, auto_log=True)
   utils.zk_check()
 
   # Make the master agent and database unavailable.
@@ -791,7 +793,7 @@ def run_test_reparent_down_master():
 
   # Perform a reparent operation - the Validate part will try to ping
   # the master and fail somewhat quickly
-  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path)
+  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.zk_tablet_path)
   utils.debug("Failed ReparentShard output:\n" + stderr)
   if 'ValidateShard verification failed: timed out during validate' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
@@ -823,7 +825,7 @@ def run_test_reparent_down_master():
   utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
 
   # Re-run reparent operation, this shoud now proceed unimpeded.
-  utils.run_vtctl('-wait-time 1m ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + tablet_62044.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('-wait-time 1m ReparentShard test_keyspace/0 ' + tablet_62044.zk_tablet_path, auto_log=True)
 
   utils.zk_check()
   expected_addr = utils.hostname + ':' + str(tablet_62044.port)
@@ -856,7 +858,7 @@ def run_test_reparent_graceful():
 def _run_test_reparent_graceful(shard_id):
   utils.zk_wipe()
 
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # create the database so vttablets start, as they are serving
   tablet_62344.create_db('vt_test_keyspace')
@@ -873,12 +875,12 @@ def _run_test_reparent_graceful(shard_id):
   tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
 
   # Recompute the shard layout node - until you do that, it might not be valid.
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+  utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
   utils.pause("force ReparentShard?")
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
   utils.zk_check(ping_tablets=True)
 
   expected_addr = utils.hostname + ':' + str(tablet_62344.port)
@@ -893,11 +895,11 @@ def _run_test_reparent_graceful(shard_id):
   _check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
 
   # Run this to make sure it succeeds.
-  utils.run_vtctl('ShardReplicationPositions /zk/global/vt/keyspaces/test_keyspace/shards/%s' % shard_id, stdout=devnull)
+  utils.run_vtctl('ShardReplicationPositions test_keyspace/%s' % shard_id, stdout=devnull)
 
   # Perform a graceful reparent operation.
   utils.pause("graceful ReparentShard?")
-  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path), auto_log=True)
+  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.zk_tablet_path), auto_log=True)
   utils.zk_check()
 
   expected_addr = utils.hostname + ':' + str(tablet_62044.port)
@@ -925,7 +927,7 @@ def _run_test_reparent_graceful(shard_id):
 def run_test_reparent_slave_offline(shard_id='0'):
   utils.zk_wipe()
 
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # create the database so vttablets start, as they are serving
   tablet_62344.create_db('vt_test_keyspace')
@@ -942,11 +944,11 @@ def run_test_reparent_slave_offline(shard_id='0'):
   tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
 
   # Recompute the shard layout node - until you do that, it might not be valid.
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+  utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
   utils.zk_check(ping_tablets=True)
 
   expected_addr = utils.hostname + ':' + str(tablet_62344.port)
@@ -956,7 +958,7 @@ def run_test_reparent_slave_offline(shard_id='0'):
   tablet_31981.kill_vttablet()
 
   # Perform a graceful reparent operation.
-  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
 
   tablet_62344.kill_vttablet()
   tablet_62044.kill_vttablet()
@@ -968,7 +970,7 @@ def run_test_reparent_slave_offline(shard_id='0'):
 def run_test_reparent_from_outside():
   utils.zk_wipe()
 
-  utils.run_vtctl('CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace test_keyspace')
 
   # create the database so vttablets start, as they are serving
   tablet_62344.create_db('vt_test_keyspace')
@@ -985,7 +987,7 @@ def run_test_reparent_from_outside():
   tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True)
 
   # Reparent as a starting point
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 %s' % tablet_62344.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 %s' % tablet_62344.zk_tablet_path)
 
   # now manually reparent 1 out of 2 tablets
   # 62044 will be the new master
@@ -1015,7 +1017,7 @@ def run_test_reparent_from_outside():
       ])
 
   # update zk with the new graph
-  utils.run_vtctl('ShardExternallyReparented -scrap-stragglers /zk/global/vt/keyspaces/test_keyspace/shards/0 %s' % tablet_62044.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.zk_tablet_path, auto_log=True)
 
   # make sure the replication graph is fine
   shard_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0')
@@ -1039,7 +1041,7 @@ def run_test_reparent_from_outside():
 def run_test_reparent_lag_slave(shard_id='0'):
   utils.zk_wipe()
 
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # create the database so vttablets start, as they are serving
   tablet_62344.create_db('vt_test_keyspace')
@@ -1056,11 +1058,11 @@ def run_test_reparent_lag_slave(shard_id='0'):
   tablet_41983.init_tablet('lag', 'test_keyspace', shard_id, start=True)
 
   # Recompute the shard layout node - until you do that, it might not be valid.
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+  utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
   utils.zk_check(ping_tablets=True)
 
   tablet_62344.create_db('vt_test_keyspace')
@@ -1071,7 +1073,7 @@ def run_test_reparent_lag_slave(shard_id='0'):
     tablet_62344.mquery('vt_test_keyspace', q, write=True)
 
   # Perform a graceful reparent operation.
-  utils.run_vtctl('ReparentShard /zk/global/vt/keyspaces/test_keyspace/shards/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
 
   tablet_41983.mquery('', 'start slave')
   time.sleep(1)
@@ -1096,9 +1098,9 @@ def run_test_reparent_lag_slave(shard_id='0'):
 @utils.test_case
 def run_test_vttablet_authenticated():
   utils.zk_wipe()
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
   tablet_62344.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   tablet_62344.populate('vt_test_keyspace', create_vt_select_test,
@@ -1133,7 +1135,7 @@ def _run_hook(params, expectedStrings):
 @utils.test_case
 def run_test_hook():
   utils.zk_wipe()
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # create the database so vttablets start, as it is serving
   tablet_62344.create_db('vt_test_keyspace')
@@ -1180,7 +1182,7 @@ def run_test_hook():
 @utils.test_case
 def run_test_sigterm():
   utils.zk_wipe()
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
 
   # create the database so vttablets start, as it is serving
   tablet_62344.create_db('vt_test_keyspace')

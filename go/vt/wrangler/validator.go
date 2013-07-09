@@ -26,8 +26,8 @@ import (
 // This may eventually move into a separate package.
 
 type vresult struct {
-	zkPath string
-	err    error
+	name string
+	err  error
 }
 
 func (wr *Wrangler) waitForResults(wg *sync.WaitGroup, results chan vresult) error {
@@ -43,10 +43,10 @@ wait:
 	for {
 		select {
 		case vd := <-results:
-			relog.Info("checking %v", vd.zkPath)
+			relog.Info("checking %v", vd.name)
 			if vd.err != nil {
 				err = fmt.Errorf("some validation errors - see log")
-				relog.Error("%v: %v", vd.zkPath, vd.err)
+				relog.Error("%v: %v", vd.name, vd.err)
 			}
 		case <-timer.C:
 			err = fmt.Errorf("timed out during validate")
@@ -57,10 +57,10 @@ wait:
 			for {
 				select {
 				case vd := <-results:
-					relog.Info("checking %v", vd.zkPath)
+					relog.Info("checking %v", vd.name)
 					if vd.err != nil {
 						err = fmt.Errorf("some validation errors - see log")
-						relog.Error("%v: %v", vd.zkPath, vd.err)
+						relog.Error("%v: %v", vd.name, vd.err)
 					}
 				default:
 					break wait
@@ -90,59 +90,50 @@ func (wr *Wrangler) validateAllTablets(zkKeyspacesPath string, wg *sync.WaitGrou
 		}
 	}
 
-	vtSubTree, err := tm.VtSubtree(zkKeyspacesPath)
-	if err != nil {
-		results <- vresult{zkKeyspacesPath, err}
-		return
-	}
-
 	for cell, _ := range cellSet {
-		zkTabletsPath := path.Join("/zk", cell, vtSubTree, "tablets")
-		tabletUids, _, err := wr.zconn.Children(zkTabletsPath)
+		aliases, err := wr.ts.GetTabletsByCell(cell)
 		if err != nil {
-			results <- vresult{zkTabletsPath, err}
+			results <- vresult{"GetTabletsByCell(" + cell + ")", err}
 		} else {
-			for _, tabletUid := range tabletUids {
-				tabletPath := path.Join(zkTabletsPath, tabletUid)
+			for _, alias := range aliases {
 				wg.Add(1)
-				go func() {
-					results <- vresult{tabletPath, tm.Validate(wr.zconn, tabletPath, "")}
+				go func(alias naming.TabletAlias) {
+					results <- vresult{alias.String(), tm.Validate(wr.ts, alias, "")}
 					wg.Done()
-				}()
+				}(alias)
 			}
 		}
 	}
 }
 
-func (wr *Wrangler) validateKeyspace(zkKeyspacePath string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
+func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
 	// Validate replication graph by traversing each shard.
-	zkShardsPath := path.Join(zkKeyspacePath, "shards")
-	shards, _, err := wr.zconn.Children(zkShardsPath)
+	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
-		results <- vresult{zkShardsPath, err}
+		results <- vresult{"TopologyServer.GetShardNames(" + keyspace + ")", err}
 	}
 	for _, shard := range shards {
-		zkShardPath := path.Join(zkShardsPath, shard)
 		wg.Add(1)
-		go func() {
-			wr.validateShard(zkShardPath, pingTablets, wg, results)
+		go func(shard string) {
+			wr.validateShard(keyspace, shard, pingTablets, wg, results)
 			wg.Done()
-		}()
+		}(shard)
 	}
 }
 
 // FIXME(msolomon) This validate presumes the master is up and running.
 // Even when that isn't true, there are validation processes that might be valuable.
-func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
-	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
+func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
+	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
-		results <- vresult{zkShardPath, err}
+		results <- vresult{keyspace + "/" + shard, err}
 		return
 	}
 
 	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
 	if err != nil {
-		results <- vresult{zkShardPath, err}
+		results <- vresult{keyspace + "/" + shard, err}
 	}
 
 	shardTablets := make([]string, 0, 16)
@@ -157,12 +148,12 @@ func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, wg *sync
 		zkTabletPath := tm.TabletPathForAlias(alias)
 		tabletInfo, ok := tabletMap[zkTabletPath]
 		if !ok {
-			results <- vresult{zkTabletPath, fmt.Errorf("tablet not found in map: %v", zkTabletPath)}
+			results <- vresult{alias.String(), fmt.Errorf("tablet not found in map")}
 			continue
 		}
 		if tabletInfo.Parent.Uid == naming.NO_TABLET {
 			if masterAlias.Cell != "" {
-				results <- vresult{zkTabletPath, fmt.Errorf("%v: already has a master %v", zkTabletPath, masterAlias)}
+				results <- vresult{alias.String(), fmt.Errorf("tablet already has a master %v", masterAlias)}
 			} else {
 				masterAlias = alias
 			}
@@ -170,22 +161,21 @@ func (wr *Wrangler) validateShard(zkShardPath string, pingTablets bool, wg *sync
 	}
 
 	if masterAlias.Cell == "" {
-		results <- vresult{zkShardPath, fmt.Errorf("no master for shard %v", zkShardPath)}
+		results <- vresult{keyspace + "/" + shard, fmt.Errorf("no master for shard")}
 	} else if shardInfo.MasterAlias != masterAlias {
-		results <- vresult{zkShardPath, fmt.Errorf("master mismatch for shard %v: found %v, expected %v", zkShardPath, masterAlias, shardInfo.MasterAlias)}
+		results <- vresult{keyspace + "/" + shard, fmt.Errorf("master mismatch for shard: found %v, expected %v", masterAlias, shardInfo.MasterAlias)}
 	}
 
 	for _, alias := range aliases {
-		zkTabletPath := tm.TabletPathForAlias(alias)
-		zkTabletReplicationPath := path.Join(zkShardPath, masterAlias.String())
+		tabletReplicationPath := masterAlias.String()
 		if alias != masterAlias {
-			zkTabletReplicationPath += "/" + alias.String()
+			tabletReplicationPath += "/" + alias.String()
 		}
 		wg.Add(1)
-		go func() {
-			results <- vresult{zkTabletReplicationPath, tm.Validate(wr.zconn, zkTabletPath, zkTabletReplicationPath)}
+		go func(alias naming.TabletAlias) {
+			results <- vresult{tabletReplicationPath, tm.Validate(wr.ts, alias, tabletReplicationPath)}
 			wg.Done()
-		}()
+		}(alias)
 	}
 
 	if pingTablets {
@@ -209,8 +199,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 	masterTabletPath := tm.TabletPathForAlias(shardInfo.MasterAlias)
 	_, ok := tabletMap[masterTabletPath]
 	if !ok {
-		err := fmt.Errorf("master not in tablet map: %v", masterTabletPath)
-		results <- vresult{masterTabletPath, err}
+		results <- vresult{masterTabletPath, fmt.Errorf("master not in tablet map: %v", masterTabletPath)}
 		return
 	}
 
@@ -237,10 +226,10 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 	}
 
 	tabletIpMap := make(map[string]*tm.Tablet)
-	for tabletPath, tablet := range tabletMap {
+	for _, tablet := range tabletMap {
 		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
-			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v %v", tablet.MysqlIpAddr, tabletPath, err)}
+			results <- vresult{tablet.Alias().String(), fmt.Errorf("bad mysql addr: %v %v", tablet.MysqlIpAddr, err)}
 			continue
 		}
 		tabletIpMap[ipAddr] = tablet.Tablet
@@ -254,16 +243,16 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 	}
 
 	// See if every entry in the replication graph is connected to the master.
-	for tabletPath, tablet := range tabletMap {
+	for _, tablet := range tabletMap {
 		if !tablet.IsSlaveType() {
 			continue
 		}
 
 		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
-			results <- vresult{tabletPath, fmt.Errorf("bad mysql addr: %v %v", tabletPath, err)}
+			results <- vresult{tablet.Alias().String(), fmt.Errorf("bad mysql addr: %v", err)}
 		} else if !strInList(slaveAddrs, ipAddr) {
-			results <- vresult{tabletPath, fmt.Errorf("slave not replicating: %v %v %q", tabletPath, ipAddr, slaveAddrs)}
+			results <- vresult{tablet.Alias().String(), fmt.Errorf("slave not replicating: %v %q", ipAddr, slaveAddrs)}
 		}
 	}
 }
@@ -310,39 +299,38 @@ func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
 	}()
 
 	// Validate replication graph by traversing each keyspace and then each shard.
-	keyspaces, _, err := wr.zconn.Children(zkKeyspacesPath)
+	keyspaces, err := wr.ts.GetKeyspaces()
 	if err != nil {
-		results <- vresult{zkKeyspacesPath, err}
+		results <- vresult{"TopologyServer.GetKeyspaces", err}
 	} else {
 		for _, keyspace := range keyspaces {
-			zkKeyspace := path.Join(zkKeyspacesPath, keyspace)
 			wg.Add(1)
-			go func() {
-				wr.validateKeyspace(zkKeyspace, pingTablets, wg, results)
+			go func(keyspace string) {
+				wr.validateKeyspace(keyspace, pingTablets, wg, results)
 				wg.Done()
-			}()
+			}(keyspace)
 		}
 	}
 	return wr.waitForResults(wg, results)
 }
 
-func (wr *Wrangler) ValidateKeyspace(zkKeyspacePath string, pingTablets bool) error {
+func (wr *Wrangler) ValidateKeyspace(keyspace string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
 	results := make(chan vresult, 16)
 	wg.Add(1)
 	go func() {
-		wr.validateKeyspace(zkKeyspacePath, pingTablets, wg, results)
+		wr.validateKeyspace(keyspace, pingTablets, wg, results)
 		wg.Done()
 	}()
 	return wr.waitForResults(wg, results)
 }
 
-func (wr *Wrangler) ValidateShard(zkShardPath string, pingTablets bool) error {
+func (wr *Wrangler) ValidateShard(keyspace, shard string, pingTablets bool) error {
 	wg := &sync.WaitGroup{}
 	results := make(chan vresult, 16)
 	wg.Add(1)
 	go func() {
-		wr.validateShard(zkShardPath, pingTablets, wg, results)
+		wr.validateShard(keyspace, shard, pingTablets, wg, results)
 		wg.Done()
 	}()
 	return wr.waitForResults(wg, results)

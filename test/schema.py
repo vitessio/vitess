@@ -74,7 +74,7 @@ def check_tables(tablet, expectedCount):
 @utils.test_case
 def run_test_complex_schema():
 
-  utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace test_keyspace')
 
   shard_0_master.init_tablet(  'master',  'test_keyspace', '0')
   shard_0_replica1.init_tablet('replica', 'test_keyspace', '0')
@@ -84,9 +84,8 @@ def run_test_complex_schema():
   shard_1_master.init_tablet(  'master',  'test_keyspace', '1')
   shard_1_replica1.init_tablet('replica', 'test_keyspace', '1')
 
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
-
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
   # run checks now before we start the tablets
   utils.zk_check()
@@ -113,15 +112,15 @@ def run_test_complex_schema():
   utils.zk_check(ping_tablets=True)
 
   # make sure all replication is good
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/1 ' + shard_1_master.zk_tablet_path, auto_log=True)
-  utils.run_vtctl('ValidateKeyspace -ping-tablets /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/1 ' + shard_1_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ValidateKeyspace -ping-tablets test_keyspace')
 
   # shard 0: apply the schema using a complex schema upgrade, no
   # reparenting yet
   utils.run_vtctl(['ApplySchemaShard',
                    '-sql='+create_vt_select_test[0],
-                   '/zk/global/vt/keyspaces/test_keyspace/shards/0'],
+                   'test_keyspace/0'],
                   auto_log=True)
 
   # check all expected hosts have the change:
@@ -147,7 +146,7 @@ def run_test_complex_schema():
   utils.run_vtctl(['ApplySchemaShard',
                    '-new-parent='+shard_0_replica1.zk_tablet_path,
                    '-sql='+create_vt_select_test[1],
-                   '/zk/global/vt/keyspaces/test_keyspace/shards/0'],
+                   'test_keyspace/0'],
                   auto_log=True)
   check_tables(shard_0_master, 1)
   check_tables(shard_0_replica1, 2)
@@ -166,7 +165,7 @@ def run_test_complex_schema():
   # as the preflight would be different in both shards
   out, err = utils.run_vtctl(['ApplySchemaKeyspace',
                               '-sql='+create_vt_select_test[2],
-                              '/zk/global/vt/keyspaces/test_keyspace'],
+                              'test_keyspace'],
                              log_level='INFO', trap_output=True,
                              raise_on_error=False)
   if err.find('ApplySchemaKeyspace Shard 1 has inconsistent schema') == -1:
@@ -178,12 +177,12 @@ def run_test_complex_schema():
   utils.run_vtctl(['ApplySchemaShard',
                    '-simple',
                    '-sql='+create_vt_select_test[0],
-                   '/zk/global/vt/keyspaces/test_keyspace/shards/1'],
+                   'test_keyspace/1'],
                   auto_log=True)
   utils.run_vtctl(['ApplySchemaShard',
                    '-simple',
                    '-sql='+create_vt_select_test[1],
-                   '/zk/global/vt/keyspaces/test_keyspace/shards/1'],
+                   'test_keyspace/1'],
                   auto_log=True)
   check_tables(shard_1_master, 2)
   check_tables(shard_1_replica1, 2)
@@ -192,7 +191,7 @@ def run_test_complex_schema():
   utils.run_vtctl(['ApplySchemaKeyspace',
                    '-simple',
                    '-sql='+create_vt_select_test[2],
-                   '/zk/global/vt/keyspaces/test_keyspace'],
+                   'test_keyspace'],
                   auto_log=True)
 
   # check all expected hosts have the change
@@ -207,7 +206,7 @@ def run_test_complex_schema():
   # keyspace: apply a keyspace-wide complex schema change, should work too
   utils.run_vtctl(['ApplySchemaKeyspace',
                    '-sql='+create_vt_select_test[3],
-                   '/zk/global/vt/keyspaces/test_keyspace'],
+                   'test_keyspace'],
                   auto_log=True)
 
   # check all expected hosts have the change:

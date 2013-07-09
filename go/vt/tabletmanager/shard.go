@@ -143,7 +143,8 @@ func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 }
 
 // shardData: JSON blob
-func NewShardInfo(zkShardPath, shardData string) (shardInfo *ShardInfo, err error) {
+func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err error) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	if shardData == "" {
 		return nil, fmt.Errorf("empty shard data: %v", zkShardPath)
 	}
@@ -152,39 +153,32 @@ func NewShardInfo(zkShardPath, shardData string) (shardInfo *ShardInfo, err erro
 	if err != nil {
 		return nil, err
 	}
-	pathParts := strings.Split(zkShardPath, "/")
-	keyspace := pathParts[len(pathParts)-3]
-	shardName := pathParts[len(pathParts)-1]
 
-	var shard *Shard
+	var s *Shard
 	if shardData != "" {
-		shard, err = zkShardFromJson(shardData)
+		s, err = zkShardFromJson(shardData)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return &ShardInfo{zkVtRoot, keyspace, shardName, shard}, nil
+	return &ShardInfo{zkVtRoot, keyspace, shard, s}, nil
 }
 
-func ReadShard(zconn zk.Conn, zkShardPath string) (*ShardInfo, error) {
-	if err := IsShardPath(zkShardPath); err != nil {
-		return nil, err
-	}
-	data, _, err := zconn.Get(zkShardPath)
+func ReadShard(ts naming.TopologyServer, keyspace, shard string) (*ShardInfo, error) {
+	data, err := ts.GetShard(keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
-	shardInfo, err := NewShardInfo(zkShardPath, data)
+	shardInfo, err := NewShardInfo(keyspace, shard, data)
 	if err != nil {
 		return nil, err
 	}
 	return shardInfo, nil
 }
 
-func UpdateShard(zconn zk.Conn, si *ShardInfo) error {
-	_, err := zconn.Set(si.ShardPath(), si.Json(), -1)
-	return err
+func UpdateShard(ts naming.TopologyServer, si *ShardInfo) error {
+	return ts.UpdateShard(si.keyspace, si.shardName, si.Json())
 }
 
 func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]naming.TabletAlias, error) {

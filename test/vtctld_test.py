@@ -77,7 +77,7 @@ class TestDbTopo(unittest.TestCase):
 
   @classmethod
   def setUpClass(klass):
-    utils.run_vtctl('CreateKeyspace -force /zk/global/vt/keyspaces/test_keyspace')
+    utils.run_vtctl('CreateKeyspace test_keyspace')
 
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')

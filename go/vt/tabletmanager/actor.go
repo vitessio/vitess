@@ -299,7 +299,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 
 func (ta *TabletActor) changeType(actionNode *ActionNode) error {
 	dbType := actionNode.args.(*naming.TabletType)
-	return ChangeType(ta.ts, ta.zconn, ta.tabletAlias, *dbType, true)
+	return ChangeType(ta.ts, ta.tabletAlias, *dbType, true)
 }
 
 func (ta *TabletActor) demoteMaster() error {
@@ -350,9 +350,8 @@ func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
 func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != naming.NO_TABLET {
-		oldReplicationPath := tablet.ReplicationPath()
-		err := ta.zconn.Delete(oldReplicationPath, -1)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		err := ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+		if err != nil && err != naming.ErrNoNode {
 			return err
 		}
 	}
@@ -371,9 +370,8 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath := tablet.ReplicationPath()
-	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	if err != nil && err != naming.ErrNodeExists {
 		return err
 	}
 
@@ -440,15 +438,15 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 		return err
 	}
 
-	// If this check fails, we seem reparented. The only part that could have failed
-	// is the insert in the replication graph. Do NOT try to reparent
-	// again. That will either wedge replication or corrupt data.
+	// If this check fails, we seem reparented. The only part that
+	// could have failed is the insert in the replication
+	// graph. Do NOT try to reparent again. That will either wedge
+	// replication or corrupt data.
 	if tablet.Parent != rsd.Parent {
 		relog.Debug("restart with new parent")
 		// Remove tablet from the replication graph.
-		oldReplicationPath := tablet.ReplicationPath()
-		err = ta.zconn.Delete(oldReplicationPath, -1)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+		if err != nil && err != naming.ErrNoNode {
 			return err
 		}
 
@@ -495,9 +493,8 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath := tablet.ReplicationPath()
-	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	if err != nil && err != naming.ErrNodeExists {
 		return err
 	}
 
@@ -513,9 +510,8 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	}
 
 	// Remove tablet from the replication graph.
-	oldReplicationPath := tablet.ReplicationPath()
-	err = ta.zconn.Delete(oldReplicationPath, -1)
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+	err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	if err != nil && err != naming.ErrNoNode {
 		return err
 	}
 
@@ -546,9 +542,8 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	newReplicationPath := tablet.ReplicationPath()
-	_, err = ta.zconn.Create(newReplicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	if err != nil && err != naming.ErrNodeExists {
 		return err
 	}
 
@@ -731,7 +726,7 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, par
 	}
 
 	// and create the replication graph items
-	return CreateTabletReplicationPaths(ta.zconn, ta.zkTabletPath, tablet.Tablet)
+	return CreateTabletReplicationPaths(ta.ts, tablet.Tablet)
 }
 
 // Reserve a tablet for restore.
@@ -836,7 +831,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.ts, ta.zconn, ta.tabletAlias, naming.TYPE_SPARE, true)
+	return ChangeType(ta.ts, ta.tabletAlias, naming.TYPE_SPARE, true)
 }
 
 // Operate on a backup tablet. Halt mysqld (read-only, lock tables)
@@ -1002,7 +997,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_MASTER, we're done!
-	return ChangeType(ta.ts, ta.zconn, ta.tabletAlias, naming.TYPE_MASTER, true)
+	return ChangeType(ta.ts, ta.tabletAlias, naming.TYPE_MASTER, true)
 }
 
 // Make this external, since in needs to be forced from time to time.
@@ -1017,7 +1012,7 @@ func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAli
 	wasAssigned := tablet.IsAssigned()
 	replicationPath := ""
 	if wasAssigned {
-		replicationPath = tablet.ReplicationPath()
+		replicationPath = tablet.RelativeReplicationPath()
 	}
 
 	tablet.Type = naming.TYPE_SCRAP
@@ -1043,13 +1038,13 @@ func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAli
 	}
 
 	if wasAssigned {
-		err = zconn.Delete(replicationPath, -1)
+		err = ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, replicationPath)
 		if err != nil {
-			switch err.(*zookeeper.Error).Code {
-			case zookeeper.ZNONODE:
+			switch err {
+			case naming.ErrNoNode:
 				relog.Debug("no replication path: %v", replicationPath)
 				err = nil
-			case zookeeper.ZNOTEMPTY:
+			case naming.ErrNotEmpty:
 				// If you are forcing the scrapping of a master, you can't update the
 				// replication graph yet, since other nodes are still under the impression
 				// they are slaved to this tablet.
@@ -1082,7 +1077,7 @@ func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAli
 }
 
 // Make this external, since these transitions need to be forced from time to time.
-func ChangeType(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAlias, newType naming.TabletType, runHooks bool) error {
+func ChangeType(ts naming.TopologyServer, tabletAlias naming.TabletAlias, newType naming.TabletType, runHooks bool) error {
 	tablet, err := ReadTabletTs(ts, tabletAlias)
 	if err != nil {
 		return err
@@ -1108,12 +1103,11 @@ func ChangeType(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.Tabl
 			// With a master the node cannot be set to idle unless we have already removed all of
 			// the derived paths. The global replication path is a good indication that this has
 			// been resolved.
-			rp := tablet.ReplicationPath()
-			stat, err := zconn.Exists(rp)
-			if err != nil {
+			children, err := ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+			if err != nil && err != naming.ErrNoNode {
 				return err
 			}
-			if stat != nil && stat.NumChildren() != 0 {
+			if err == nil && len(children) > 0 {
 				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, tabletAlias)
 			}
 		}

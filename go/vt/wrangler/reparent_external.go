@@ -13,15 +13,13 @@ import (
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) ShardExternallyReparented(zkShardPath, zkMasterElectTabletPath string, scrapStragglers bool) error {
-	if err := tm.IsShardPath(zkShardPath); err != nil {
-		return err
-	}
+func (wr *Wrangler) ShardExternallyReparented(keyspace, shard, zkMasterElectTabletPath string, scrapStragglers bool) error {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	if err := tm.IsTabletPath(zkMasterElectTabletPath); err != nil {
 		return err
 	}
 
-	shardInfo, err := tm.ReadShard(wr.zconn, zkShardPath)
+	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -50,7 +48,7 @@ func (wr *Wrangler) ShardExternallyReparented(zkShardPath, zkMasterElectTabletPa
 	}
 
 	// grab the shard lock
-	actionPath, err := wr.ai.ShardExternallyReparented(zkShardPath, zkMasterElectTabletPath)
+	actionPath, err := wr.ai.ShardExternallyReparented(keyspace, shard, zkMasterElectTabletPath)
 	if err != nil {
 		return err
 	}
@@ -97,7 +95,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[string]*tm.TabletIn
 
 	// and rebuild the shard graph
 	relog.Info("rebuilding shard serving graph data in zk")
-	return wr.rebuildShard(masterElectTablet.ShardPath(), []string{masterTablet.Cell, masterElectTablet.Cell})
+	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, []string{masterTablet.Cell, masterElectTablet.Cell})
 }
 
 func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[string]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {

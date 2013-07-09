@@ -330,47 +330,56 @@ func main() {
 
 	actionRepo.Register(keyspacePath, "ValidateKeyspace",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateKeyspace(zkPath, false)
+			return "", wr.ValidateKeyspace(path.Base(zkPath), false)
 		})
 
 	actionRepo.Register(keyspacePath, "ValidateSchemaKeyspace",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaKeyspace(zkPath, false)
+			return "", wr.ValidateSchemaKeyspace(path.Base(zkPath), false)
 		})
 
 	actionRepo.Register(keyspacePath, "ValidateVersionKeyspace",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateVersionKeyspace(zkPath)
+			return "", wr.ValidateVersionKeyspace(path.Base(zkPath))
 		})
 
 	actionRepo.Register(keyspacePath, "ValidatePermissionsKeyspace",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidatePermissionsKeyspace(zkPath)
+			return "", wr.ValidatePermissionsKeyspace(path.Base(zkPath))
 		})
 
 	actionRepo.Register(shardPath, "ValidateShard",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateShard(zkPath, false)
+			zkPathParts := strings.Split(zkPath, "/")
+			return "", wr.ValidateShard(zkPathParts[5], zkPathParts[7], false)
 		})
 
 	actionRepo.Register(shardPath, "ValidateSchemaShard",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaShard(zkPath, false)
+			zkPathParts := strings.Split(zkPath, "/")
+			return "", wr.ValidateSchemaShard(zkPathParts[5], zkPathParts[7], false)
 		})
 
 	actionRepo.Register(shardPath, "ValidateVersionShard",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateVersionShard(zkPath)
+			zkPathParts := strings.Split(zkPath, "/")
+			return "", wr.ValidateVersionShard(zkPathParts[5], zkPathParts[7])
 		})
 
 	actionRepo.Register(shardPath, "ValidatePermissionsShard",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidatePermissionsShard(zkPath)
+			zkPathParts := strings.Split(zkPath, "/")
+			return "", wr.ValidatePermissionsShard(zkPathParts[5], zkPathParts[7])
 		})
 
 	actionRepo.Register(tabletPath, "RpcPing",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ActionInitiator().RpcPing(zkPath, 10*time.Second)
+			zkPathParts := strings.Split(zkPath, "/")
+			alias, err := naming.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
+			if err != nil {
+				return "", err
+			}
+			return "", wr.ActionInitiator().RpcPing(alias, 10*time.Second)
 		})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

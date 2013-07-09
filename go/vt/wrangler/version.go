@@ -77,8 +77,9 @@ func (wr *Wrangler) diffVersion(masterVersion string, zkMasterTabletPath string,
 	}
 }
 
-func (wr *Wrangler) ValidateVersionShard(zkShardPath string) error {
-	si, err := tm.ReadShard(wr.zconn, zkShardPath)
+func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
+	si, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,9 @@ func (wr *Wrangler) ValidateVersionShard(zkShardPath string) error {
 	return nil
 }
 
-func (wr *Wrangler) ValidateVersionKeyspace(zkKeyspacePath string) error {
+func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
+	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
+
 	// find all the shards
 	zkShardsPath := path.Join(zkKeyspacePath, "shards")
 	shards, _, err := wr.zconn.Children(zkShardsPath)
@@ -132,18 +135,17 @@ func (wr *Wrangler) ValidateVersionKeyspace(zkKeyspacePath string) error {
 		return fmt.Errorf("No shards in keyspace " + zkKeyspacePath)
 	}
 	sort.Strings(shards)
-	referenceShardPath := path.Join(zkShardsPath, shards[0])
 	if len(shards) == 1 {
-		return wr.ValidateVersionShard(referenceShardPath)
+		return wr.ValidateVersionShard(keyspace, shards[0])
 	}
 
 	// find the reference version using the first shard's master
-	si, err := tm.ReadShard(wr.zconn, referenceShardPath)
+	si, err := tm.ReadShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
 	if si.MasterAlias.Uid == naming.NO_TABLET {
-		return fmt.Errorf("No master in shard " + referenceShardPath)
+		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering version for reference master %v", zkReferenceTabletPath)

@@ -185,14 +185,14 @@ def teardown():
   shard_0_slave.remove_tree()
 
 def run_test_secure():
-  utils.run_vtctl('CreateKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('CreateKeyspace test_keyspace')
 
   shard_0_master.init_tablet('master',  'test_keyspace', '0')
   shard_0_slave.init_tablet('replica',  'test_keyspace', '0')
 
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0', auto_log=True)
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
 
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
   zkocc_server = utils.zkocc_start()
 
@@ -213,7 +213,7 @@ def run_test_secure():
       })
 
   # Reparent using SSL
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
 
   # then get the topology and check it
   zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,

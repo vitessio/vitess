@@ -45,7 +45,8 @@ type TabletChangeCallback func(oldTablet, newTablet Tablet)
 type ActionAgent struct {
 	ts                naming.TopologyServer
 	zconn             zk.Conn // FIXME(alainjobart) will be removed eventually
-	zkTabletPath      string  // FIXME(msolomon) use tabletInfo
+	zkTabletPath      string  // FIXME(alainjobart) will be removed eventually
+	tabletAlias       naming.TabletAlias
 	zkActionPath      string
 	vtActionBinFile   string // path to vtaction binary
 	MycnfFile         string // my.cnf file
@@ -59,7 +60,8 @@ type ActionAgent struct {
 	done    chan struct{} // closed when we are done.
 }
 
-func NewActionAgent(topoServer naming.TopologyServer, zkTabletPath, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
+func NewActionAgent(topoServer naming.TopologyServer, tabletAlias naming.TabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	actionPath, err := TabletActionPath(zkTabletPath)
 	if err != nil {
 		return nil, err
@@ -70,6 +72,7 @@ func NewActionAgent(topoServer naming.TopologyServer, zkTabletPath, mycnfFile, d
 		ts:                topoServer,
 		zconn:             zconn,
 		zkTabletPath:      zkTabletPath,
+		tabletAlias:       tabletAlias,
 		zkActionPath:      actionPath,
 		MycnfFile:         mycnfFile,
 		DbConfigsFile:     dbConfigsFile,
@@ -97,7 +100,7 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *Tablet, context string) 
 }
 
 func (agent *ActionAgent) readTablet() error {
-	tablet, err := ReadTablet(agent.zconn, agent.zkTabletPath)
+	tablet, err := ReadTabletTs(agent.ts, agent.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -229,9 +232,9 @@ func (agent *ActionAgent) verifyZkPaths() error {
 		return fmt.Errorf("agent._tablet is nil")
 	}
 
-	if err := Validate(agent.zconn, agent.zkTabletPath, ""); err != nil {
+	if err := Validate(agent.ts, agent.tabletAlias, ""); err != nil {
 		// Don't stop, it's not serious enough, this is likely transient.
-		relog.Warning("tablet validate failed: %v", agent.zkTabletPath)
+		relog.Warning("tablet validate failed: %v", agent.tabletAlias)
 	}
 
 	// Ensure that the action node is there. There is no conflict creating
@@ -250,7 +253,7 @@ func (agent *ActionAgent) verifyZkServingAddrs() error {
 	// Load the shard and see if we are supposed to be serving. We might be a serving type,
 	// but we might be in a transitional state. Only once the shard info is updated do we
 	// put ourselves in the client serving graph.
-	shardInfo, err := ReadShard(agent.zconn, agent.Tablet().ShardPath())
+	shardInfo, err := ReadShard(agent.ts, agent.Tablet().Keyspace, agent.Tablet().Shard)
 	if err != nil {
 		return err
 	}
@@ -438,7 +441,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		if oldValue == "" {
-			return "", fmt.Errorf("no data for tablet addr update: %v", agent.zkTabletPath)
+			return "", fmt.Errorf("no data for tablet addr update: %v", agent.tabletAlias)
 		}
 
 		tablet, err := tabletFromJson(oldValue)

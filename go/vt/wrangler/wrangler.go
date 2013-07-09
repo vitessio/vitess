@@ -36,10 +36,10 @@ type Wrangler struct {
 //   This is distinct from actionTimeout because most of the time, we want to immediately
 //   know that out action will fail. However, automated action will need some time to
 //   arbitrate the locks.
-func NewWrangler(topoServer naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
+func NewWrangler(ts naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
 	// FIXME(alainjobart) violates encapsulation until conversion is done
-	zconn := topoServer.(*zktopo.ZkTopologyServer).Zconn
-	return &Wrangler{topoServer, zconn, tm.NewActionInitiator(zconn), time.Now().Add(actionTimeout), lockTimeout}
+	zconn := ts.(*zktopo.ZkTopologyServer).Zconn
+	return &Wrangler{ts, zconn, tm.NewActionInitiator(ts, zconn), time.Now().Add(actionTimeout), lockTimeout}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {
@@ -86,7 +86,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 
 	if force {
 		// with --force, we do not run any hook
-		err = tm.ChangeType(wr.ts, wr.zconn, tabletAlias, dbType, false)
+		err = tm.ChangeType(wr.ts, tabletAlias, dbType, false)
 	} else {
 		// the remote action will run the hooks
 		var actionPath string
@@ -103,10 +103,12 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 	}
 
 	// we rebuild if the tablet was serving, or if it is now
+	var keyspaceToRebuild string
 	var shardToRebuild string
 	var cellToRebuild string
 	if rebuildRequired {
-		shardToRebuild = ti.ShardPath()
+		keyspaceToRebuild = ti.Keyspace
+		shardToRebuild = ti.Shard
 		cellToRebuild = ti.Cell
 	} else {
 		// re-read the tablet, see if we become serving
@@ -116,13 +118,14 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 		}
 		if ti.Tablet.IsServingType() {
 			rebuildRequired = true
-			shardToRebuild = ti.ShardPath()
+			keyspaceToRebuild = ti.Keyspace
+			shardToRebuild = ti.Shard
 			cellToRebuild = ti.Cell
 		}
 	}
 
 	if rebuildRequired {
-		if err := wr.RebuildShardGraph(shardToRebuild, []string{cellToRebuild}); err != nil {
+		if err := wr.RebuildShardGraph(keyspaceToRebuild, shardToRebuild, []string{cellToRebuild}); err != nil {
 			return err
 		}
 	}
@@ -137,8 +140,8 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 // Mike says: Updating the shard should be good enough. I'm debating dropping the entire
 // keyspace rollup, since I think that is adding complexity and feels like it might
 // be a premature optimization.
-func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType naming.TabletType) error {
-	ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+func (wr *Wrangler) changeTypeInternal(tabletAlias naming.TabletAlias, dbType naming.TabletType) error {
+	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -156,7 +159,7 @@ func (wr *Wrangler) changeTypeInternal(zkTabletPath string, dbType naming.Tablet
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.ShardPath(), []string{ti.Cell})
+		err = wr.rebuildShard(ti.Keyspace, ti.Shard, []string{ti.Cell})
 		if err != nil {
 			return err
 		}
@@ -314,7 +317,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 	tablet.KeyRange = keyRange
 
 	zkPath := tm.TabletPathForAlias(tabletAlias) // remove soon
-	err = tm.CreateTablet(wr.ts, wr.zconn, tabletAlias, tablet)
+	err = tm.CreateTablet(wr.ts, tablet)
 	if err != nil && err == naming.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update {
@@ -343,7 +346,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 			if err != nil {
 				relog.Error("failed deleting tablet %v: %v", tabletAlias, err)
 			}
-			err = tm.CreateTablet(wr.ts, wr.zconn, tabletAlias, tablet)
+			err = tm.CreateTablet(wr.ts, tablet)
 		}
 	}
 	return err
@@ -386,5 +389,5 @@ func (wr *Wrangler) Scrap(tabletAlias naming.TabletAlias, force, skipRebuild boo
 	}
 
 	// and rebuild the original shard / keyspace
-	return "", wr.RebuildShardGraph(ti.ShardPath(), []string{ti.Cell})
+	return "", wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Cell})
 }

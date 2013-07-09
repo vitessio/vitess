@@ -30,11 +30,11 @@ type TabletAlias struct {
 	Uid  uint32
 }
 
-func (ta *TabletAlias) String() string {
+func (ta TabletAlias) String() string {
 	return fmtAlias(ta.Cell, ta.Uid)
 }
 
-func (ta *TabletAlias) TabletUidStr() string {
+func (ta TabletAlias) TabletUidStr() string {
 	return tabletUidStr(ta.Uid)
 }
 
@@ -45,7 +45,7 @@ func ParseTabletAliasString(aliasStr string) (result TabletAlias, err error) {
 		return
 	}
 	result.Cell = nameParts[0]
-	result.Uid, err = parseUid(nameParts[1])
+	result.Uid, err = ParseUid(nameParts[1])
 	if err != nil {
 		err = fmt.Errorf("invalid tablet uid %v: %v", aliasStr, err)
 		return
@@ -57,7 +57,7 @@ func tabletUidStr(uid uint32) string {
 	return fmt.Sprintf("%010d", uid)
 }
 
-func parseUid(value string) (uint32, error) {
+func ParseUid(value string) (uint32, error) {
 	uid, err := strconv.ParseUint(value, 10, 32)
 	if err != nil {
 		return 0, fmt.Errorf("bad tablet uid %v", err)

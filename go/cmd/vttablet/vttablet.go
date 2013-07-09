@@ -49,7 +49,7 @@ var (
 	port           = flag.Int("port", 6509, "port for the server")
 	lameDuckPeriod = flag.Float64("lame-duck-period", DefaultLameDuckPeriod, "how long to give in-flight transactions to finish")
 	rebindDelay    = flag.Float64("rebind-delay", DefaultRebindDelay, "artificial delay before rebinding a hijacked listener")
-	tabletPath     = flag.String("tablet-path", "", "path to zk node representing the tablet")
+	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
 	qsConfigFile   = flag.String("queryserver-config-file", "", "config file name for the query service")
 	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
 	rowcache       = flag.String("rowcache", "", "rowcache connection, host:port or /path/to/socket")
@@ -88,6 +88,24 @@ var qsConfig = ts.Config{
 
 var schemaOverrides []ts.SchemaOverride
 
+// tabletParamToTabletAlias takes either an old style ZK tablet path or a
+// new style tablet alias as a string, and returns a TabletAlias.
+func tabletParamToTabletAlias(param string) naming.TabletAlias {
+	if param[0] == '/' {
+		// old zookeeper path, convert to new-style string tablet alias
+		zkPathParts := strings.Split(param, "/")
+		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
+			relog.Fatal("Invalid tablet path: %v", param)
+		}
+		param = zkPathParts[2] + "-" + zkPathParts[5]
+	}
+	result, err := naming.ParseTabletAliasString(param)
+	if err != nil {
+		relog.Fatal("Invalid tablet alias %v: %v", param, err)
+	}
+	return result
+}
+
 func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
@@ -96,13 +114,9 @@ func main() {
 		relog.Fatal("Error in servenv.Init: %s", err)
 	}
 
-	_, tabletidStr := path.Split(*tabletPath)
-	tabletId, err := tm.ParseUid(tabletidStr)
-	if err != nil {
-		relog.Fatal("%s", err)
-	}
+	tabletAlias := tabletParamToTabletAlias(*tabletPath)
 
-	mycnf := readMycnf(tabletId)
+	mycnf := readMycnf(tabletAlias.Uid)
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
 		relog.Warning("%s", err)
@@ -118,8 +132,8 @@ func main() {
 
 	initQueryService(dbcfgs)
 	initUpdateStreamService(mycnf)
-	ts.RegisterCacheInvalidator()                                      // depends on both query and updateStream
-	err = initAgent(dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
+	ts.RegisterCacheInvalidator()                                                   // depends on both query and updateStream
+	err = initAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile) // depends on both query and updateStream
 	if err != nil {
 		relog.Fatal("%s", err)
 	}
@@ -139,10 +153,10 @@ func main() {
 
 	// make a list of paths we can serve HTTP traffic from.
 	// we don't resolve them here to real paths, as they might not exits yet
-	snapshotDir := mysqlctl.SnapshotDir(uint32(tabletId))
+	snapshotDir := mysqlctl.SnapshotDir(tabletAlias.Uid)
 	allowedPaths := []string{
 		path.Join(vtenv.VtDataRoot(), "data"),
-		mysqlctl.TabletDir(uint32(tabletId)),
+		mysqlctl.TabletDir(tabletAlias.Uid),
 		snapshotDir,
 		mycnf.DataDir,
 		mycnf.InnodbDataHomeDir,
@@ -206,7 +220,7 @@ func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 	return mycnf
 }
 
-func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) error {
+func initAgent(tabletAlias naming.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) error {
 	topoServer := naming.GetTopologyServer()
 	umgmt.AddCloseCallback(func() {
 		naming.CloseTopologyServers()
@@ -220,7 +234,7 @@ func initAgent(dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile,
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
-	agent, err := tm.NewActionAgent(topoServer, *tabletPath, *mycnfFile, dbConfigsFile, dbCredentialsFile)
+	agent, err := tm.NewActionAgent(topoServer, tabletAlias, *mycnfFile, dbConfigsFile, dbCredentialsFile)
 	if err != nil {
 		return err
 	}
