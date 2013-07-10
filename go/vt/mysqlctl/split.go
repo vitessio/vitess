@@ -271,7 +271,7 @@ func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endK
 		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
 		return "", snapshotErr
 	} else {
-		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.Addr(),
+		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.IpAddr(),
 			masterAddr, dbName, dataFiles, replicationPosition,
 			myMasterPosition, startKey, endKey, sd)
 		if err != nil {
@@ -407,11 +407,11 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 		if err != nil {
 			return
 		}
-		masterAddr = mysqld.Addr()
+		masterAddr = mysqld.IpAddr()
 	} else {
 		// we are a slave, check our replication strategy
 		if allowHierarchicalReplication {
-			masterAddr = mysqld.Addr()
+			masterAddr = mysqld.IpAddr()
 		} else {
 			masterAddr, err = mysqld.GetMasterAddr()
 			if err != nil {
@@ -746,7 +746,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		for _, m := range datafiles {
 			krDatafiles = append(krDatafiles, m[kr]...)
 		}
-		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.Addr(),
+		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.IpAddr(),
 			masterAddr, dbName, krDatafiles, replicationPosition,
 			myMasterPosition, kr.Start.Hex(), kr.End.Hex(), sd)
 		if err != nil {

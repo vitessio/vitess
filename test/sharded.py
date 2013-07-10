@@ -207,12 +207,12 @@ def run_test_sharding():
   utils.run_vtctl('ValidateVersionKeyspace test_keyspace', auto_log=True)
 
   # show and validate permissions
-  utils.run_vtctl('GetPermissions /zk/test_nj/vt/tablets/0000062344', auto_log=True)
+  utils.run_vtctl('GetPermissions test_nj-0000062344', auto_log=True)
   utils.run_vtctl('ValidatePermissionsShard test_keyspace/-80', auto_log=True)
   utils.run_vtctl('ValidatePermissionsKeyspace test_keyspace', auto_log=True)
 
   # and create zkns on this complex keyspace, make sure a few files are created
-  utils.run_vtctl('ExportZknsForKeyspace /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('ExportZknsForKeyspace test_keyspace')
   out, err = utils.run(utils.vtroot+'/bin/zk ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
   lines = out.splitlines()
   for base in ['-80', '80-']:

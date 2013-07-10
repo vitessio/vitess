@@ -161,8 +161,9 @@ class Tablet(object):
   def create_db(self, name):
     self.mquery('', 'drop database if exists %s' % name)
     while self.has_db(name):
-      utils.debug("sleeping while waiting for database drop")
+      utils.debug("%s sleeping while waiting for database drop: %s" % (self.tablet_alias, name))
       time.sleep(0.3)
+      self.mquery('', 'drop database if exists %s' % name)
     self.mquery('', 'create database %s' % name)
 
   def wait_check_db_var(self, name, value):
@@ -254,7 +255,7 @@ class Tablet(object):
 
     args = [os.path.join(utils.vtroot, 'bin', 'vttablet'),
             '-port', '%s' % (port or self.port),
-            '-tablet-path', self.zk_tablet_path,
+            '-tablet-path', self.tablet_alias,
             '-logfile', self.logfile,
             '-log.level', 'INFO',
             '-db-configs-file', self._write_db_configs_file(repl_extra_flags),
@@ -329,7 +330,7 @@ class Tablet(object):
     return path
 
   def kill_vttablet(self):
-    utils.debug("killing vttablet: " + self.zk_tablet_path)
+    utils.debug("killing vttablet: " + self.tablet_alias)
     if self.proc is not None:
       utils.kill_sub_process(self.proc)
     if self.memcached:

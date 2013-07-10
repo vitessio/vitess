@@ -57,7 +57,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 	if err != nil {
 		return
 	}
-	mysqldAddr := mysqld.Addr()
+	mysqldAddr := mysqld.IpAddr()
 	replicationState, err = NewReplicationState(mysqldAddr)
 	if err != nil {
 		return

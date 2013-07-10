@@ -393,6 +393,19 @@ func (mysqld *Mysqld) Addr() string {
 	return fmt.Sprintf("%v:%v", hostname, mysqld.config.MysqlPort)
 }
 
+func (mysqld *Mysqld) IpAddr() string {
+	addr := mysqld.Addr()
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	ipAddrs, err := net.LookupHost(host)
+	if err != nil {
+		panic(err) // should never happen
+	}
+	return net.JoinHostPort(ipAddrs[0], port)
+}
+
 // executes some SQL commands using a mysql command line interface process
 func (mysqld *Mysqld) ExecuteMysqlCommand(sql string) error {
 	dir, err := vtenv.VtMysqlRoot()
