@@ -34,25 +34,14 @@ func inCellList(cell string, cells []string) bool {
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
-	actionPath, err := wr.ai.RebuildShard(keyspace, shard)
+	actionNode := wr.ai.RebuildShard()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
 
-	// Make sure two of these don't get scheduled at the same time.
-	if err = wr.obtainActionLock(actionPath); err != nil {
-		return err
-	}
-
-	rebuildErr := wr.rebuildShard(keyspace, shard, cells)
-	err = wr.handleActionError(actionPath, rebuildErr, false)
-	if rebuildErr != nil {
-		if err != nil {
-			relog.Warning("handleActionError failed: %v", err)
-		}
-		return rebuildErr
-	}
-	return err
+	err = wr.rebuildShard(keyspace, shard, cells)
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
 // Update shard file with new master, replicas, etc.
@@ -276,25 +265,14 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.
 
 // Rebuild the serving graph data while locking out other changes.
 func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
-	actionPath, err := wr.ai.RebuildKeyspace(keyspace)
+	actionNode := wr.ai.RebuildKeyspace()
+	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	// Make sure two of these don't get scheduled at the same time.
-	if err = wr.obtainActionLock(actionPath); err != nil {
-		return err
-	}
-
-	rebuildErr := wr.rebuildKeyspace(keyspace, cells)
-	err = wr.handleActionError(actionPath, rebuildErr, false)
-	if rebuildErr != nil {
-		if err != nil {
-			relog.Warning("handleActionError failed: %v", err)
-		}
-		return rebuildErr
-	}
-	return err
+	err = wr.rebuildKeyspace(keyspace, cells)
+	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
 // This function should only be used with an action lock on the keyspace
@@ -431,7 +409,7 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 
 	allTablets := make([]*tm.TabletInfo, 0, 1024)
 	for _, zkVtPath := range zkVtPaths {
-		tablets, err := GetAllTablets(wr.ts, wr.zconn, zkVtPath)
+		tablets, err := GetAllTablets(wr.ts, zkVtPath)
 		if err != nil {
 			return err
 		}

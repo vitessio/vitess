@@ -222,31 +222,14 @@ func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTa
 
 func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, keyspace, shard string, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// get a shard lock
-	actionPath, err := wr.ai.ApplySchemaShard(keyspace, shard, newParentTabletAlias, change, simple)
+	actionNode := wr.ai.ApplySchemaShard(masterTabletAlias, change, simple)
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make sure two of these don't get scheduled at the same time.
-	if err = wr.obtainActionLock(actionPath); err != nil {
-		return nil, err
-	}
-
-	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, simple, force)
-	relog.Info("applySchemaShard finished on %v/%v error=%v", keyspace, shard, schemaErr)
-
-	err = wr.handleActionError(actionPath, schemaErr, false)
-	if err != nil {
-		relog.Warning("handleActionError failed: %v", err)
-	}
-	// schemaErr has higher priority
-	if schemaErr != nil {
-		return nil, schemaErr
-	}
-	if err != nil {
-		return nil, err
-	}
-	return scr, nil
+	scr, err := wr.applySchemaShard(shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, simple, force)
+	return scr, wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
 // local structure used to keep track of what we're doing
@@ -431,26 +414,14 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 // if simple, we just do it on all masters.
 // if complex, we do the shell game in parallel on all shards
 func (wr *Wrangler) ApplySchemaKeyspace(keyspace string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
-	relog.Info("Reading keyspace and getting lock")
-	actionPath, err := wr.ai.ApplySchemaKeyspace(keyspace, change, simple)
+	actionNode := wr.ai.ApplySchemaKeyspace(change, simple)
+	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return nil, err
 	}
 
-	// Make sure two of these don't get scheduled at the same time.
-	if err = wr.obtainActionLock(actionPath); err != nil {
-		return nil, err
-	}
-
-	scr, schemaErr := wr.applySchemaKeyspace(keyspace, change, simple, force)
-	err = wr.handleActionError(actionPath, schemaErr, false)
-	if schemaErr != nil {
-		if err != nil {
-			relog.Warning("handleActionError failed: %v", err)
-		}
-		return nil, schemaErr
-	}
-	return scr, err
+	scr, err := wr.applySchemaKeyspace(keyspace, change, simple, force)
+	return scr, wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
 func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {

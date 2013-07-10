@@ -6,7 +6,6 @@ package wrangler
 
 import (
 	"fmt"
-	"path"
 	"strings"
 	"time"
 
@@ -38,7 +37,7 @@ type Wrangler struct {
 //   arbitrate the locks.
 func NewWrangler(ts naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
 	// FIXME(alainjobart) violates encapsulation until conversion is done
-	zconn := ts.(*zktopo.ZkTopologyServer).Zconn
+	zconn := ts.(*zktopo.ZkTopologyServer).GetZConn()
 	return &Wrangler{ts, zconn, tm.NewActionInitiator(ts, zconn), time.Now().Add(actionTimeout), lockTimeout}
 }
 
@@ -177,74 +176,58 @@ func SignalInterrupt() {
 	close(interrupted)
 }
 
-// Wait for the queue lock, displays a nice error message if we cant get it
-func (wr *Wrangler) obtainActionLock(actionPath string) error {
-	err := zk.ObtainQueueLock(wr.zconn, actionPath, wr.lockTimeout, interrupted)
-	if err != nil {
-		errToReturn := fmt.Errorf("failed to obtain action lock: %v", actionPath)
-
-		// Regardless of the reason, try to cleanup.
-		relog.Warning("Failed to obtain action lock: %v", err)
-		wr.zconn.Delete(actionPath, -1)
-
-		// Show the other actions in the directory
-		dir := path.Dir(actionPath)
-		children, _, err := wr.zconn.Children(dir)
-		if err != nil {
-			relog.Warning("Failed to get children of %v: %v", dir, err)
-			return errToReturn
-		}
-
-		if len(children) == 0 {
-			relog.Warning("No other action running, you may just try again now.")
-			return errToReturn
-		}
-
-		childPath := path.Join(dir, children[0])
-		data, _, err := wr.zconn.Get(childPath)
-		if err != nil {
-			relog.Warning("Failed to get first action node %v (may have just ended): %v", childPath, err)
-			return errToReturn
-		}
-
-		actionNode, err := tm.ActionNodeFromJson(data, childPath)
-		if err != nil {
-			relog.Warning("Failed to parse ActionNode %v: %v\n%v", childPath, err, data)
-			return errToReturn
-		}
-
-		relog.Warning("------ Most likely blocking action: %v %v from %v", actionNode.Action, childPath, actionNode.ActionGuid)
-		return errToReturn
-	}
-
-	return nil
+func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *tm.ActionNode) (lockPath string, err error) {
+	relog.Info("Locking keyspace %v for action %v", keyspace, actionNode.Action)
+	return wr.ts.LockKeyspaceForAction(keyspace, tm.ActionNodeToJson(actionNode), wr.lockTimeout, interrupted)
 }
 
-// Cleanup an action node and write back status/error to zk.
-// Only returns an error if something went wrong with zk.
-func (wr *Wrangler) handleActionError(actionPath string, actionErr error, blockQueueOnError bool) error {
-	// re-read the action node
-	data, _, err := wr.zconn.Get(actionPath)
-	if err != nil {
-		return err
+func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *tm.ActionNode, lockPath string, actionError error) error {
+	// first update the actionNode
+	if actionError != nil {
+		relog.Info("Unlocking keyspace %v for action %v with error %v", keyspace, actionNode.Action, actionError)
+		actionNode.Error = actionError.Error()
+		actionNode.State = tm.ACTION_STATE_FAILED
+	} else {
+		relog.Info("Unlocking keyspace %v for successful action %v", keyspace, actionNode.Action)
+		actionNode.Error = ""
+		actionNode.State = tm.ACTION_STATE_DONE
 	}
-	var actionNode *tm.ActionNode
-	actionNode, err = tm.ActionNodeFromJson(data, actionPath)
-	if err != nil {
-		return err
+	err := wr.ts.UnlockKeyspaceForAction(keyspace, lockPath, tm.ActionNodeToJson(actionNode))
+	if actionError != nil {
+		if err != nil {
+			// this will be masked
+			relog.Warning("UnlockKeyspaceForAction failed: %v", err)
+		}
+		return actionError
 	}
+	return err
+}
 
-	// write what happened to the action log
-	err = tm.StoreActionResponse(wr.zconn, actionNode, actionPath, actionErr)
-	if err != nil {
-		return err
-	}
+func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *tm.ActionNode) (lockPath string, err error) {
+	relog.Info("Locking shard %v/%v for action %v", keyspace, shard, actionNode.Action)
+	return wr.ts.LockShardForAction(keyspace, shard, tm.ActionNodeToJson(actionNode), wr.lockTimeout, interrupted)
+}
 
-	// no error, we can unblock the action queue
-	if actionErr == nil || !blockQueueOnError {
-		return zk.DeleteRecursive(wr.zconn, actionPath, -1)
+func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNode, lockPath string, actionError error) error {
+	// first update the actionNode
+	if actionError != nil {
+		relog.Info("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, actionNode.Action, actionError)
+		actionNode.Error = actionError.Error()
+		actionNode.State = tm.ACTION_STATE_FAILED
+	} else {
+		relog.Info("Unlocking keyspace %v/%v for successful action %v", keyspace, shard, actionNode.Action)
+		actionNode.Error = ""
+		actionNode.State = tm.ACTION_STATE_DONE
 	}
-	return nil
+	err := wr.ts.UnlockShardForAction(keyspace, shard, lockPath, tm.ActionNodeToJson(actionNode))
+	if actionError != nil {
+		if err != nil {
+			// this will be masked
+			relog.Warning("UnlockShardForAction failed: %v", err)
+		}
+		return actionError
+	}
+	return err
 }
 
 func getMasterAlias(zconn zk.Conn, zkShardPath string) (naming.TabletAlias, error) {
@@ -312,7 +295,6 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 	tablet.DbNameOverride = dbNameOverride
 	tablet.KeyRange = keyRange
 
-	zkPath := tm.TabletPathForAlias(tabletAlias) // remove soon
 	err = tm.CreateTablet(wr.ts, tablet)
 	if err != nil && err == naming.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
@@ -335,9 +317,10 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 		if force {
 			_, err = wr.Scrap(tabletAlias, force, false)
 			if err != nil {
-				relog.Error("failed scrapping tablet %v: %v", zkPath, err)
+				relog.Error("failed scrapping tablet %v: %v", tabletAlias, err)
 				return err
 			}
+			zkPath := tm.TabletPathForAlias(tabletAlias) // remove soon
 			err = zk.DeleteRecursive(wr.zconn, zkPath, -1)
 			if err != nil {
 				relog.Error("failed deleting tablet %v: %v", tabletAlias, err)
@@ -348,8 +331,8 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 	return err
 }
 
-// Scrap a tablet. If force is used, we write to ZK directly and don't
-// remote-execute the command.
+// Scrap a tablet. If force is used, we write to TopologyServer
+// directly and don't remote-execute the command.
 func (wr *Wrangler) Scrap(tabletAlias naming.TabletAlias, force, skipRebuild bool) (actionPath string, err error) {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)

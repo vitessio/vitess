@@ -12,17 +12,20 @@ import (
 )
 
 // ZkTopologyServer is the zookeeper TopologyServer implementation.
-// For now Zconn is public, until we finish the transition to TopologyServer
 type ZkTopologyServer struct {
-	Zconn zk.Conn
+	zconn zk.Conn
 }
 
 func (zkts *ZkTopologyServer) Close() {
-	zkts.Zconn.Close()
+	zkts.zconn.Close()
+}
+
+func (zkts *ZkTopologyServer) GetZConn() zk.Conn {
+	return zkts.zconn
 }
 
 func init() {
 	zconn := zk.NewMetaConn(false)
 	expvar.Publish("ZkMetaConn", zconn)
-	naming.RegisterTopologyServer("zookeeper", &ZkTopologyServer{Zconn: zconn})
+	naming.RegisterTopologyServer("zookeeper", &ZkTopologyServer{zconn: zconn})
 }

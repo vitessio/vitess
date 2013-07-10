@@ -171,8 +171,9 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &MultiRestoreArgs{}
 
 	case SHARD_ACTION_REPARENT:
-		node.args = new(string)
+		node.args = &naming.TabletAlias{}
 	case SHARD_ACTION_EXTERNALLY_REPARENTED:
+		node.args = &naming.TabletAlias{}
 	case SHARD_ACTION_REBUILD:
 	case SHARD_ACTION_CHECK:
 	case SHARD_ACTION_APPLY_SCHEMA:

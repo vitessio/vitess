@@ -150,13 +150,19 @@ class Tablet(object):
       for q in insert_sqls:
         self.mquery(dbname, q, write=True)
 
-  def create_db(self, name):
-    self.mquery('', 'drop database if exists %s' % name)
+  def has_db(self, name):
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
       if dbname == name:
-        raise utils.TestError("drop database didn't work???")
+        return True
+    return False
+
+  def create_db(self, name):
+    self.mquery('', 'drop database if exists %s' % name)
+    while self.has_db(name):
+      utils.debug("sleeping while waiting for database drop")
+      time.sleep(0.3)
     self.mquery('', 'create database %s' % name)
 
   def wait_check_db_var(self, name, value):

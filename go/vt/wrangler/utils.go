@@ -57,7 +57,7 @@ func GetTabletMapForShard(ts naming.TopologyServer, keyspace, shard string) (map
 }
 
 // Return a sorted list of tablets.
-func GetAllTablets(ts naming.TopologyServer, zconn zk.Conn, cell string) ([]*tm.TabletInfo, error) {
+func GetAllTablets(ts naming.TopologyServer, cell string) ([]*tm.TabletInfo, error) {
 	aliases, err := ts.GetTabletsByCell(cell)
 	if err != nil {
 		return nil, err
@@ -95,7 +95,7 @@ func GetAllTabletsAccrossCells(ts naming.TopologyServer, zconn zk.Conn) ([]*tm.T
 	for _, cell := range cells {
 		go func(cell string) {
 			parts := strings.Split(cell, "/")
-			tablets, err := GetAllTablets(ts, zconn, parts[2])
+			tablets, err := GetAllTablets(ts, parts[2])
 			if err != nil {
 				errors <- err
 				return

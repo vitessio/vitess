@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"code.google.com/p/vitess/go/relog"
 )
@@ -110,6 +111,30 @@ type TopologyServer interface {
 	// DeleteReplicationPath removes a replication path
 	// Can returnErrNoNode if it doesn't exist
 	DeleteReplicationPath(keyspace, shard, repPath string) error
+
+	//
+	// Keyspace and Shard locks for actions, global
+	//
+
+	// LockKeyspaceForAction locks the keyspace in order to
+	// perform the action described by contents. It will wait for
+	// the lock for at most duration. The wait can be interrupted
+	// if the interrupted channel is closed. It returns the lock
+	// path.
+	LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+
+	// UnlockKeyspaceForAction unlocks a keyspace.
+	UnlockKeyspaceForAction(keyspace, lockPath, results string) error
+
+	// LockShardForAction locks the shard in order to
+	// perform the action described by contents. It will wait for
+	// the lock for at most duration. The wait can be interrupted
+	// if the interrupted channel is closed. It returns the lock
+	// path.
+	LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
+
+	// UnlockShardForAction unlocks a shard.
+	UnlockShardForAction(keyspace, shard, lockPath, results string) error
 }
 
 // Registry for TopologyServer implementations

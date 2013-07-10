@@ -65,7 +65,7 @@ type TabletActor struct {
 
 func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer naming.TopologyServer) *TabletActor {
 	// FIXME(alainjobart) violates encapsulation until conversion is done
-	zconn := topoServer.(*zktopo.ZkTopologyServer).Zconn
+	zconn := topoServer.(*zktopo.ZkTopologyServer).GetZConn()
 	return &TabletActor{mysqld, topoServer, zconn, "", naming.TabletAlias{}}
 }
 

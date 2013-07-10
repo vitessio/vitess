@@ -117,37 +117,23 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
 	}
 
-	actionPath, err := wr.ai.ReparentShard(keyspace, shard, masterElectTabletAlias)
+	// lock the shard
+	actionNode := wr.ai.ReparentShard(masterElectTabletAlias)
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
 
-	// Make sure two of these don't get scheduled at the same time.
-	if err = wr.obtainActionLock(actionPath); err != nil {
-		return err
-	}
-
-	relog.Info("reparentShard starting masterElect:%v action:%v", masterElectTablet, actionPath)
-
-	var reparentErr error
 	if currentMasterTabletAlias != (naming.TabletAlias{}) && !forceReparentToCurrentMaster {
-		reparentErr = wr.reparentShardGraceful(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly)
+		err = wr.reparentShardGraceful(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly)
 	} else {
-		reparentErr = wr.reparentShardBrutal(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
+		err = wr.reparentShardBrutal(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
 	}
-	if reparentErr == nil {
+	if err == nil {
 		// only log if it works, if it fails we'll show the error
 		relog.Info("reparentShard finished")
 	}
-
-	err = wr.handleActionError(actionPath, reparentErr, false)
-	if reparentErr != nil {
-		if err != nil {
-			relog.Warning("handleActionError failed: %v", err)
-		}
-		return reparentErr
-	}
-	return err
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
 func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
@@ -156,27 +142,15 @@ func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*tm.Tab
 		return nil, nil, err
 	}
 
-	actionPath, err := wr.ai.CheckShard(keyspace, shard)
+	// lock the shard
+	actionNode := wr.ai.CheckShard()
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Make sure two of these don't get scheduled at the same time.
-	if err = wr.obtainActionLock(actionPath); err != nil {
-		return nil, nil, err
-	}
-
-	tabletMap, posMap, slaveErr := wr.shardReplicationPositions(shardInfo)
-
-	// regardless of error, just clean up
-	err = wr.handleActionError(actionPath, nil, false)
-	if slaveErr != nil {
-		if err != nil {
-			relog.Warning("handleActionError failed: %v", err)
-		}
-		return tabletMap, posMap, slaveErr
-	}
-	return tabletMap, posMap, err
+	tabletMap, posMap, err := wr.shardReplicationPositions(shardInfo)
+	return tabletMap, posMap, wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
 func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {

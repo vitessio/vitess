@@ -433,7 +433,7 @@ func main() {
 			http.Error(w, "can only look at zk with ZkTopologyServer", http.StatusInternalServerError)
 			return
 		}
-		zconn := zkTopoServ.(*zktopo.ZkTopologyServer).Zconn
+		zconn := zkTopoServ.(*zktopo.ZkTopologyServer).GetZConn()
 
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)

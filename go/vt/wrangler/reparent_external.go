@@ -44,31 +44,18 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 	}
 
 	// grab the shard lock
-	actionPath, err := wr.ai.ShardExternallyReparented(keyspace, shard, masterElectTabletAlias)
+	actionNode := wr.ai.ShardExternallyReparented(masterElectTabletAlias)
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
-	if err = wr.obtainActionLock(actionPath); err != nil {
-		return err
-	}
 
-	relog.Info("reparentShard starting ShardExternallyReparented:%v action:%v", masterElectTablet, actionPath)
-
-	reparentErr := wr.reparentShardExternal(slaveTabletMap, foundMaster, masterElectTablet, scrapStragglers)
-	if reparentErr == nil {
+	err = wr.reparentShardExternal(slaveTabletMap, foundMaster, masterElectTablet, scrapStragglers)
+	if err == nil {
 		// only log if it works, if it fails we'll show the error
 		relog.Info("reparentShardExternal finished")
 	}
-
-	err = wr.handleActionError(actionPath, reparentErr, false)
-	if reparentErr != nil {
-		if err != nil {
-			relog.Warning("handleActionError failed: %v", err)
-		}
-		return reparentErr
-	}
-
-	return nil
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
 func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {

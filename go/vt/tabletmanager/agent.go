@@ -67,7 +67,7 @@ func NewActionAgent(topoServer naming.TopologyServer, tabletAlias naming.TabletA
 		return nil, err
 	}
 	// FIXME(alainjobart) violates encapsulation until conversion is done
-	zconn := topoServer.(*zktopo.ZkTopologyServer).Zconn
+	zconn := topoServer.(*zktopo.ZkTopologyServer).GetZConn()
 	return &ActionAgent{
 		ts:                topoServer,
 		zconn:             zconn,

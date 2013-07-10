@@ -9,17 +9,25 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/zktopo"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkns"
 	"launchpad.net/gozk/zookeeper"
 )
 
 // Export addresses from the VT serving graph to a legacy zkns server.
+// Note these functions only work with a zktopo.
 func (wr *Wrangler) ExportZkns(cell string) error {
+	zkTopo, ok := wr.ts.(*zktopo.ZkTopologyServer)
+	if !ok {
+		return fmt.Errorf("ExportZkns only works with zktopo")
+	}
+	zconn := zkTopo.GetZConn()
+
 	vtNsPath := fmt.Sprintf("/zk/%v/vt/ns", cell)
 	zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt", cell)
 
-	children, err := zk.ChildrenRecursive(wr.zconn, vtNsPath)
+	children, err := zk.ChildrenRecursive(zconn, vtNsPath)
 	if err != nil {
 		return err
 	}
@@ -27,7 +35,7 @@ func (wr *Wrangler) ExportZkns(cell string) error {
 	for _, child := range children {
 		addrPath := path.Join(vtNsPath, child)
 		zknsAddrPath := path.Join(zknsRootPath, child)
-		_, stat, err := wr.zconn.Get(addrPath)
+		_, stat, err := zconn.Get(addrPath)
 		if err != nil {
 			return err
 		}
@@ -36,7 +44,7 @@ func (wr *Wrangler) ExportZkns(cell string) error {
 			continue
 		}
 
-		if _, err = wr.exportVtnsToZkns(addrPath, zknsAddrPath); err != nil {
+		if _, err = wr.exportVtnsToZkns(zconn, addrPath, zknsAddrPath); err != nil {
 			return err
 		}
 	}
@@ -45,6 +53,12 @@ func (wr *Wrangler) ExportZkns(cell string) error {
 
 // Export addresses from the VT serving graph to a legacy zkns server.
 func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
+	zkTopo, ok := wr.ts.(*zktopo.ZkTopologyServer)
+	if !ok {
+		return fmt.Errorf("ExportZknsForKeyspace only works with zktopo")
+	}
+	zconn := zkTopo.GetZConn()
+
 	shardNames, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
@@ -67,7 +81,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 
 		// Get the existing list of zkns children. If they don't get rewritten,
 		// delete them as stale entries.
-		zknsChildren, err := zk.ChildrenRecursive(wr.zconn, zknsRootPath)
+		zknsChildren, err := zk.ChildrenRecursive(zconn, zknsRootPath)
 		if err != nil {
 			if zookeeper.IsError(err, zookeeper.ZNONODE) {
 				zknsChildren = make([]string, 0)
@@ -80,7 +94,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 			staleZknsPaths[path.Join(zknsRootPath, child)] = true
 		}
 
-		vtnsChildren, err := zk.ChildrenRecursive(wr.zconn, vtnsRootPath)
+		vtnsChildren, err := zk.ChildrenRecursive(zconn, vtnsRootPath)
 		if err != nil {
 			if zookeeper.IsError(err, zookeeper.ZNONODE) {
 				vtnsChildren = make([]string, 0)
@@ -92,7 +106,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 			vtnsAddrPath := path.Join(vtnsRootPath, child)
 			zknsAddrPath := path.Join(zknsRootPath, child)
 
-			_, stat, err := wr.zconn.Get(vtnsAddrPath)
+			_, stat, err := zconn.Get(vtnsAddrPath)
 			if err != nil {
 				return err
 			}
@@ -100,7 +114,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 			if stat.NumChildren() > 0 {
 				continue
 			}
-			zknsPathsWritten, err := wr.exportVtnsToZkns(vtnsAddrPath, zknsAddrPath)
+			zknsPathsWritten, err := wr.exportVtnsToZkns(zconn, vtnsAddrPath, zknsAddrPath)
 			if err != nil {
 				return err
 			}
@@ -118,7 +132,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 		// Prune paths in reverse order so we remove children first
 		for i := len(prunePaths) - 1; i >= 0; i-- {
 			relog.Info("prune stale zkns path %v", prunePaths[i])
-			if err := wr.zconn.Delete(prunePaths[i], -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
+			if err := zconn.Delete(prunePaths[i], -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
 				return err
 			}
 		}
@@ -126,9 +140,9 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 	return nil
 }
 
-func (wr *Wrangler) exportVtnsToZkns(vtnsAddrPath, zknsAddrPath string) ([]string, error) {
+func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath string) ([]string, error) {
 	zknsPaths := make([]string, 0, 32)
-	addrs, err := naming.ReadAddrs(wr.zconn, vtnsAddrPath)
+	addrs, err := naming.ReadAddrs(zconn, vtnsAddrPath)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +154,7 @@ func (wr *Wrangler) exportVtnsToZkns(vtnsAddrPath, zknsAddrPath string) ([]strin
 		zknsAddrPath := fmt.Sprintf("%v/%v", zknsAddrPath, i)
 		zknsPaths = append(zknsPaths, zknsAddrPath)
 		zknsAddr := zkns.ZknsAddr{Host: entry.Host, Port: entry.NamedPortMap["_mysql"], NamedPortMap: entry.NamedPortMap}
-		err := WriteAddr(wr.zconn, zknsAddrPath, &zknsAddr)
+		err := WriteAddr(zconn, zknsAddrPath, &zknsAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -156,7 +170,7 @@ func (wr *Wrangler) exportVtnsToZkns(vtnsAddrPath, zknsAddrPath string) ([]strin
 		// A "delete" is a write of sorts - just communicate up that nothing
 		// needs to be done to this node.
 		zknsPaths = append(zknsPaths, zknsStaleAddrPath)
-		err := wr.zconn.Delete(zknsStaleAddrPath, -1)
+		err := zconn.Delete(zknsStaleAddrPath, -1)
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			break
 		}
@@ -169,13 +183,13 @@ func (wr *Wrangler) exportVtnsToZkns(vtnsAddrPath, zknsAddrPath string) ([]strin
 	// Write the VDNS entries for both vtocc and mysql
 	vtoccVdnsPath := fmt.Sprintf("%v/_vtocc.vdns", zknsAddrPath)
 	zknsPaths = append(zknsPaths, vtoccVdnsPath)
-	if err = WriteAddrs(wr.zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
+	if err = WriteAddrs(zconn, vtoccVdnsPath, &vtoccAddrs); err != nil {
 		return nil, err
 	}
 
 	defaultVdnsPath := fmt.Sprintf("%v.vdns", zknsAddrPath)
 	zknsPaths = append(zknsPaths, defaultVdnsPath)
-	if err = WriteAddrs(wr.zconn, defaultVdnsPath, &defaultAddrs); err != nil {
+	if err = WriteAddrs(zconn, defaultVdnsPath, &defaultAddrs); err != nil {
 		return nil, err
 	}
 	return zknsPaths, nil

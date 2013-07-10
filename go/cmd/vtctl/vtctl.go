@@ -194,12 +194,13 @@ var commands = []commandGroup{
 				"[-ping-tablets] <zk keyspaces path> (/zk/global/vt/keyspaces)",
 				"Validate all nodes reachable from global replication graph and all tablets in all discoverable cells are consistent."},
 			command{"ExportZkns", commandExportZkns,
-				"<cell name|zk local vt path>  (/zk/<cell>/vt)",
-				"DEPRECATED\n" +
-					"Export the serving graph entries to the legacy zkns format."},
+				"<cell name|zk local vt path>",
+				"(requires Zookeeper TopologyServer)\n" +
+					"Export the serving graph entries to the zkns format."},
 			command{"ExportZknsForKeyspace", commandExportZknsForKeyspace,
 				"<keyspace|zk global keyspace path>",
-				"Export the serving graph entries to the legacy zkns format."},
+				"(requires Zookeeper TopologyServer)\n" +
+					"Export the serving graph entries to the zkns format."},
 			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
 				"zk-vt-paths=<zk local vt path>,... keyspaces=<keyspace>,...",
 				"This takes the Thor's hammer approach of recovery and should only be used in emergencies.  /zk/cell/vt/tablets/... are the canonical source of data for the system. This function use that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
@@ -307,8 +308,8 @@ func fmtTabletAwkable(ti *tm.TabletInfo) string {
 	return fmt.Sprintf("%v %v %v %v %v %v", ti.Path(), keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr)
 }
 
-func listTabletsByType(ts naming.TopologyServer, zconn zk.Conn, cell string, dbType naming.TabletType) error {
-	tablets, err := wr.GetAllTablets(ts, zconn, cell)
+func listTabletsByType(ts naming.TopologyServer, cell string, dbType naming.TabletType) error {
+	tablets, err := wr.GetAllTablets(ts, cell)
 	if err != nil {
 		return err
 	}
@@ -437,8 +438,8 @@ func listTabletsByShard(ts naming.TopologyServer, keyspace, shard string) error 
 	return dumpTablets(ts, tabletAliases)
 }
 
-func dumpAllTablets(ts naming.TopologyServer, zconn zk.Conn, zkVtPath string) error {
-	tablets, err := wr.GetAllTablets(ts, zconn, zkVtPath)
+func dumpAllTablets(ts naming.TopologyServer, zkVtPath string) error {
+	tablets, err := wr.GetAllTablets(ts, zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -1292,7 +1293,7 @@ func commandListIdle(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 		relog.Fatal("action ListIdle requires <cell name|zk vt path>")
 	}
 	cell := vtPathToCell(subFlags.Arg(0))
-	return "", listTabletsByType(wrangler.TopologyServer(), wrangler.ZkConn(), cell, naming.TYPE_IDLE)
+	return "", listTabletsByType(wrangler.TopologyServer(), cell, naming.TYPE_IDLE)
 }
 
 func commandListScrap(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1301,7 +1302,7 @@ func commandListScrap(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []stri
 		relog.Fatal("action ListScrap requires <cell name|zk vt path>")
 	}
 	cell := vtPathToCell(subFlags.Arg(0))
-	return "", listTabletsByType(wrangler.TopologyServer(), wrangler.ZkConn(), cell, naming.TYPE_SCRAP)
+	return "", listTabletsByType(wrangler.TopologyServer(), cell, naming.TYPE_SCRAP)
 }
 
 func commandListAllTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1311,7 +1312,7 @@ func commandListAllTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 	}
 
 	cell := vtPathToCell(subFlags.Arg(0))
-	return "", dumpAllTablets(wrangler.TopologyServer(), wrangler.ZkConn(), cell)
+	return "", dumpAllTablets(wrangler.TopologyServer(), cell)
 }
 
 func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
