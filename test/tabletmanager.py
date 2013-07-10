@@ -266,15 +266,15 @@ def _run_test_vtctl_snapshot_restore(server_mode):
   # Need to force snapshot since this is a master db.
   out, err = utils.run_vtctl('Snapshot -force %s %s ' % (snapshot_flags, tablet_62344.tablet_alias), log_level='INFO', trap_output=True)
   results = {}
-  for name in ['Manifest', 'ParentPath', 'SlaveStartRequired', 'ReadOnly', 'OriginalType']:
+  for name in ['Manifest', 'ParentAlias', 'SlaveStartRequired', 'ReadOnly', 'OriginalType']:
     sepPos = err.find(name + ": ")
     if sepPos != -1:
       results[name] = err[sepPos+len(name)+2:].splitlines()[0]
   if "Manifest" not in results:
     raise utils.TestError("Snapshot didn't echo Manifest file", err)
-  if "ParentPath" not in results:
-    raise utils.TestError("Snapshot didn't echo ParentPath", err)
-  utils.pause("snapshot finished: " + results['Manifest'] + " " + results['ParentPath'])
+  if "ParentAlias" not in results:
+    raise utils.TestError("Snapshot didn't echo ParentAlias", err)
+  utils.pause("snapshot finished: " + results['Manifest'] + " " + results['ParentAlias'])
   if server_mode:
     if "SlaveStartRequired" not in results:
       raise utils.TestError("Snapshot didn't echo SlaveStartRequired", err)
@@ -292,7 +292,7 @@ def _run_test_vtctl_snapshot_restore(server_mode):
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s default %s %s' %
                   (restore_flags, tablet_62344.tablet_alias,
-                   tablet_62044.tablet_alias, results['ParentPath']), auto_log=True)
+                   tablet_62044.tablet_alias, results['ParentAlias']), auto_log=True)
   utils.pause("restore finished")
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)

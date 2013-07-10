@@ -656,9 +656,11 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == naming.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		sr.ZkParentPath = tablet.Path()
+		sr.ParentAlias = tablet.Alias()
+		sr.ZkParentPath = tablet.Path() // XXX
 	} else {
-		sr.ZkParentPath = TabletPathForAlias(tablet.Parent)
+		sr.ParentAlias = tablet.Parent
+		sr.ZkParentPath = TabletPathForAlias(tablet.Parent) // XXX
 	}
 	actionNode.reply = sr
 	return nil
@@ -729,6 +731,22 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *TabletInfo, par
 	return CreateTabletReplicationPaths(ta.ts, tablet.Tablet)
 }
 
+// FIXME(alainjobart) remove after migration
+func BackfillAlias(zkPath string, alias *naming.TabletAlias) error {
+	if *alias == (naming.TabletAlias{}) && zkPath != "" {
+		zkPathParts := strings.Split(zkPath, "/")
+		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
+			return fmt.Errorf("Invalid tablet path: %v", zkPath)
+		}
+		a, err := naming.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
+		if err != nil {
+			return err
+		}
+		*alias = a
+	}
+	return nil
+}
+
 // Reserve a tablet for restore.
 // Can be called remotely
 func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
@@ -737,6 +755,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 		return err
 	}
 	args := actionNode.args.(*ReserveForRestoreArgs)
+	BackfillAlias(args.ZkSrcTabletPath, &args.SrcTabletAlias)
 
 	// read our current tablet, verify its state
 	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
@@ -857,9 +876,11 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == naming.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
-		sr.ZkParentPath = tablet.Path()
+		sr.ParentAlias = tablet.Alias()
+		sr.ZkParentPath = tablet.Path() // XXX
 	} else {
-		sr.ZkParentPath = TabletPathForAlias(tablet.Parent)
+		sr.ParentAlias = tablet.Parent
+		sr.ZkParentPath = TabletPathForAlias(tablet.Parent) // XXX
 	}
 	actionNode.reply = sr
 	return nil
@@ -886,9 +907,9 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == naming.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
-		sr.ZkParentPath = tablet.Path()
+		sr.ParentAlias = tablet.Alias()
 	} else {
-		sr.ZkParentPath = TabletPathForAlias(tablet.Parent)
+		sr.ParentAlias = tablet.Parent
 	}
 	actionNode.reply = sr
 	return nil
@@ -908,10 +929,10 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	}
 
 	// get source tablets addresses
-	sourceAddrs := make([]*url.URL, len(args.ZkSrcTabletPaths))
-	uids := make([]uint32, len(args.ZkSrcTabletPaths))
-	for i, path := range args.ZkSrcTabletPaths {
-		t, e := ReadTablet(ta.zconn, path)
+	sourceAddrs := make([]*url.URL, len(args.SrcTabletAliases))
+	uids := make([]uint32, len(args.SrcTabletAliases))
+	for i, alias := range args.SrcTabletAliases {
+		t, e := ReadTabletTs(ta.ts, alias)
 		if e != nil {
 			return e
 		}

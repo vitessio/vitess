@@ -51,8 +51,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	zkShardPath := tm.ShardPath(keyspace, shardNames[0])
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shardNames[0])
 	if err != nil {
 		return err
 	}

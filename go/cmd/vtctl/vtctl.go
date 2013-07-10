@@ -388,7 +388,7 @@ func listActionsByShard(ts naming.TopologyServer, zconn zk.Conn, keyspace, shard
 		mu.Unlock()
 	}
 
-	tabletAliases, err := tm.FindAllTabletAliasesInShardTs(ts, keyspace, shard)
+	tabletAliases, err := tm.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -430,7 +430,7 @@ func fmtAction(action *tm.ActionNode) string {
 }
 
 func listTabletsByShard(ts naming.TopologyServer, keyspace, shard string) error {
-	tabletAliases, err := tm.FindAllTabletAliasesInShardTs(ts, keyspace, shard)
+	tabletAliases, err := tm.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -770,10 +770,10 @@ func commandSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	filename, zkParentPath, slaveStartRequired, readOnly, originalType, err := wrangler.Snapshot(tabletAlias, *force, *concurrency, *serverMode)
+	filename, parentAlias, slaveStartRequired, readOnly, originalType, err := wrangler.Snapshot(tabletAlias, *force, *concurrency, *serverMode)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
-		relog.Info("ParentPath: %v", zkParentPath)
+		relog.Info("ParentAlias: %v", parentAlias)
 		if *serverMode {
 			relog.Info("SlaveStartRequired: %v", slaveStartRequired)
 			relog.Info("ReadOnly: %v", readOnly)
@@ -793,11 +793,11 @@ func commandRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string
 	}
 	srcTabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	dstTabletAlias := tabletParamToTabletAlias(subFlags.Arg(2))
-	zkParentPath := subFlags.Arg(0)
+	parentAlias := srcTabletAlias
 	if subFlags.NArg() == 4 {
-		zkParentPath = subFlags.Arg(3)
+		parentAlias = tabletParamToTabletAlias(subFlags.Arg(3))
 	}
-	return "", wrangler.Restore(srcTabletAlias, subFlags.Arg(1), dstTabletAlias, zkParentPath, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
+	return "", wrangler.Restore(srcTabletAlias, subFlags.Arg(1), dstTabletAlias, parentAlias, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
 }
 
 func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -837,10 +837,10 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	filename, zkParentPath, err := wrangler.PartialSnapshot(tabletAlias, subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *concurrency)
+	filename, parentAlias, err := wrangler.PartialSnapshot(tabletAlias, subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *concurrency)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
-		relog.Info("ParentPath: %v", zkParentPath)
+		relog.Info("ParentAlias: %v", parentAlias)
 	}
 	return "", err
 }
@@ -857,8 +857,10 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("MultiRestore requires <dst tablet alias|destination zk path> <source zk path>... %v", args)
 	}
 	destination := tabletParamToTabletAlias(subFlags.Arg(0))
-	sources := subFlags.Args()[1:]
-
+	sources := make([]naming.TabletAlias, subFlags.NArg()-1)
+	for i := 1; i < subFlags.NArg(); i++ {
+		sources[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
+	}
 	err = wrangler.RestoreFromMultiSnapshot(destination, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
 	return
 }
@@ -885,11 +887,11 @@ func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 	}
 
 	source := tabletParamToTabletAlias(subFlags.Arg(0))
-	filenames, zkParentPath, err := wrangler.MultiSnapshot(shards, source, subFlags.Arg(1), *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
+	filenames, parentAlias, err := wrangler.MultiSnapshot(shards, source, subFlags.Arg(1), *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
 
 	if err == nil {
 		relog.Info("manifest locations: %v", filenames)
-		relog.Info("ParentPath: %v", zkParentPath)
+		relog.Info("ParentAlias: %v", parentAlias)
 	}
 	return "", err
 }
@@ -901,13 +903,13 @@ func commandPartialRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
 		relog.Fatal("action PartialRestore requires <src tablet alias|zk src tablet path> <src manifest path> <dst tablet alias|zk dst tablet path> [<zk new master path>]")
 	}
-	zkParentPath := subFlags.Arg(0)
-	if subFlags.NArg() == 4 {
-		zkParentPath = subFlags.Arg(3)
-	}
 	source := tabletParamToTabletAlias(subFlags.Arg(0))
 	destination := tabletParamToTabletAlias(subFlags.Arg(2))
-	return "", wrangler.PartialRestore(source, subFlags.Arg(1), destination, zkParentPath, *fetchConcurrency, *fetchRetryCount)
+	parentAlias := source
+	if subFlags.NArg() == 4 {
+		parentAlias = tabletParamToTabletAlias(subFlags.Arg(3))
+	}
+	return "", wrangler.PartialRestore(source, subFlags.Arg(1), destination, parentAlias, *fetchConcurrency, *fetchRetryCount)
 }
 
 func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

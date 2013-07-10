@@ -204,7 +204,8 @@ type SnapshotArgs struct {
 
 // used by both Snapshot and PartialSnapshot
 type SnapshotReply struct {
-	ZkParentPath string
+	ZkParentPath string // XXX
+	ParentAlias  naming.TabletAlias
 	ManifestPath string
 
 	// these two are only used for ServerMode=true full snapshot
@@ -213,7 +214,7 @@ type SnapshotReply struct {
 }
 
 type MultiSnapshotReply struct {
-	ZkParentPath  string
+	ParentAlias   naming.TabletAlias
 	ManifestPaths []string
 }
 
@@ -249,7 +250,7 @@ type MultiSnapshotArgs struct {
 }
 
 type MultiRestoreArgs struct {
-	ZkSrcTabletPaths       []string
+	SrcTabletAliases       []naming.TabletAlias
 	Concurrency            int
 	FetchConcurrency       int
 	InsertTableConcurrency int
@@ -335,19 +336,23 @@ func (ai *ActionInitiator) StopSlave(tabletAlias naming.TabletAlias) (actionPath
 }
 
 type ReserveForRestoreArgs struct {
-	ZkSrcTabletPath string
+	ZkSrcTabletPath string // XXX
+	SrcTabletAlias  naming.TabletAlias
 }
 
 func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias naming.TabletAlias, args *ReserveForRestoreArgs) (actionPath string, err error) {
 	zkDstTabletPath := TabletPathForAlias(dstTabletAlias)
+	args.ZkSrcTabletPath = TabletPathForAlias(args.SrcTabletAlias) // XXX
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESERVE_FOR_RESTORE, args: args})
 }
 
 // used for both Restore and PartialRestore
 type RestoreArgs struct {
-	ZkSrcTabletPath       string
+	ZkSrcTabletPath       string // XXX
+	SrcTabletAlias        naming.TabletAlias
 	SrcFilePath           string
-	ZkParentPath          string
+	ZkParentPath          string // XXX
+	ParentAlias           naming.TabletAlias
 	FetchConcurrency      int
 	FetchRetryCount       int
 	WasReserved           bool
@@ -356,6 +361,8 @@ type RestoreArgs struct {
 
 func (ai *ActionInitiator) Restore(dstTabletAlias naming.TabletAlias, args *RestoreArgs) (actionPath string, err error) {
 	zkDstTabletPath := TabletPathForAlias(dstTabletAlias)
+	args.ZkSrcTabletPath = TabletPathForAlias(args.SrcTabletAlias) // XXX
+	args.ZkParentPath = TabletPathForAlias(args.ParentAlias)       // XXX
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, args: args})
 }
 
@@ -442,15 +449,14 @@ func (ai *ActionInitiator) CheckShard(keyspace, shard string) (actionPath string
 
 // parameters are stored for debug purposes
 type ApplySchemaShardArgs struct {
-	ZkMasterTabletPath string
-	Change             string
-	Simple             bool
+	MasterTabletAlias naming.TabletAlias
+	Change            string
+	Simple            bool
 }
 
 func (ai *ActionInitiator) ApplySchemaShard(keyspace, shard string, masterTabletAlias naming.TabletAlias, change string, simple bool) (actionPath string, err error) {
 	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
-	zkMasterTabletPath := TabletPathForAlias(masterTabletAlias)
-	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_APPLY_SCHEMA, args: &ApplySchemaShardArgs{ZkMasterTabletPath: zkMasterTabletPath, Change: change, Simple: simple}})
+	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_APPLY_SCHEMA, args: &ApplySchemaShardArgs{MasterTabletAlias: masterTabletAlias, Change: change, Simple: simple}})
 }
 
 func (ai *ActionInitiator) RebuildKeyspace(keyspace string) (actionPath string, err error) {

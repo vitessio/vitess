@@ -130,7 +130,7 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 		return
 	}
 
-	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		results <- vresult{keyspace + "/" + shard, err}
 	}

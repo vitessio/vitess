@@ -93,7 +93,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
+		aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue

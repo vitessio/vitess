@@ -48,7 +48,7 @@ func GetTabletMap(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) 
 
 // If error is not nil, the results in the dictionary are incomplete.
 func GetTabletMapForShard(ts naming.TopologyServer, keyspace, shard string) (map[naming.TabletAlias]*tm.TabletInfo, error) {
-	aliases, err := tm.FindAllTabletAliasesInShardTs(ts, keyspace, shard)
+	aliases, err := tm.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}

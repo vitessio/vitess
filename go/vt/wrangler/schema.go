@@ -62,7 +62,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews boo
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	wg := sync.WaitGroup{}
 
 	// first diff the slaves in the reference shard 0
-	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shards[0])
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 			continue
 		}
 
-		aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
+		aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -259,7 +259,7 @@ type TabletStatus struct {
 func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
-	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, err
 	}

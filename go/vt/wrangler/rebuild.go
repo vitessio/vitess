@@ -328,7 +328,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shards[0])
+	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}

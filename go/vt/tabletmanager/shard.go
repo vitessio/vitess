@@ -8,13 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
-	"strings"
 	"sync"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
-	"code.google.com/p/vitess/go/zk"
 )
 
 // Functions for dealing with shard representations in zookeeper.
@@ -182,29 +180,6 @@ func UpdateShard(ts naming.TopologyServer, si *ShardInfo) error {
 	return ts.UpdateShard(si.keyspace, si.shardName, si.Json())
 }
 
-func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]naming.TabletAlias, error) {
-	children, err := zk.ChildrenRecursive(zconn, zkShardPath)
-	if err != nil {
-		return nil, err
-	}
-
-	aliases := make([]naming.TabletAlias, 0, len(children))
-	for _, child := range children {
-		alias := path.Base(child)
-		if strings.HasPrefix(alias, "action") {
-			continue
-		}
-		zkTabletReplicationPath := path.Join(zkShardPath, child)
-		cell, uid, err := ParseTabletReplicationPath(zkTabletReplicationPath)
-		if err != nil {
-			continue
-		}
-		aliases = append(aliases, naming.TabletAlias{cell, uid})
-	}
-
-	return aliases, nil
-}
-
 func tabletAliasesRecursive(ts naming.TopologyServer, keyspace, shard, repPath string) ([]naming.TabletAlias, error) {
 	mutex := sync.Mutex{}
 	wg := sync.WaitGroup{}
@@ -247,6 +222,6 @@ func tabletAliasesRecursive(ts naming.TopologyServer, keyspace, shard, repPath s
 	return result, nil
 }
 
-func FindAllTabletAliasesInShardTs(ts naming.TopologyServer, keyspace, shard string) ([]naming.TabletAlias, error) {
+func FindAllTabletAliasesInShard(ts naming.TopologyServer, keyspace, shard string) ([]naming.TabletAlias, error) {
 	return tabletAliasesRecursive(ts, keyspace, shard, "")
 }
