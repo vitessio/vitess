@@ -112,8 +112,8 @@ def run_test_complex_schema():
   utils.zk_check(ping_tablets=True)
 
   # make sure all replication is good
-  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
-  utils.run_vtctl('ReparentShard -force test_keyspace/1 ' + shard_1_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/1 ' + shard_1_master.tablet_alias, auto_log=True)
   utils.run_vtctl('ValidateKeyspace -ping-tablets test_keyspace')
 
   # shard 0: apply the schema using a complex schema upgrade, no
@@ -138,7 +138,7 @@ def run_test_complex_schema():
   utils.run_vtctl(['ApplySchema',
                    '-stop-replication',
                    '-sql='+create_vt_select_test[0],
-                   shard_0_master.zk_tablet_path],
+                   shard_0_master.tablet_alias],
                   auto_log=True)
   check_tables(shard_0_master, 1)
 

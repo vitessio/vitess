@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"sync"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/vt/key"
@@ -202,4 +203,50 @@ func FindAllTabletAliasesInShard(zconn zk.Conn, zkShardPath string) ([]naming.Ta
 	}
 
 	return aliases, nil
+}
+
+func tabletAliasesRecursive(ts naming.TopologyServer, keyspace, shard, repPath string) ([]naming.TabletAlias, error) {
+	mutex := sync.Mutex{}
+	wg := sync.WaitGroup{}
+	result := make([]naming.TabletAlias, 0, 32)
+	children, err := ts.GetReplicationPaths(keyspace, shard, repPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, child := range children {
+		wg.Add(1)
+		go func(child naming.TabletAlias) {
+			childPath := path.Join(repPath, child.String())
+			rChildren, subErr := tabletAliasesRecursive(ts, keyspace, shard, childPath)
+			if subErr != nil {
+				// If other processes are deleting
+				// nodes, we need to ignore the
+				// missing nodes.
+				if subErr != naming.ErrNoNode {
+					mutex.Lock()
+					err = subErr
+					mutex.Unlock()
+				}
+			} else {
+				mutex.Lock()
+				result = append(result, child)
+				for _, rChild := range rChildren {
+					result = append(result, rChild)
+				}
+				mutex.Unlock()
+			}
+			wg.Done()
+		}(child)
+	}
+
+	wg.Wait()
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func FindAllTabletAliasesInShardTs(ts naming.TopologyServer, keyspace, shard string) ([]naming.TabletAlias, error) {
+	return tabletAliasesRecursive(ts, keyspace, shard, "")
 }

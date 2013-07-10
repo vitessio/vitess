@@ -5,89 +5,77 @@
 package wrangler
 
 import (
-	"path"
 	"reflect"
 	"sort"
+	"strings"
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 // If error is not nil, the results in the dictionary are incomplete.
-func GetTabletMap(zconn zk.Conn, tabletPaths []string) (map[string]*tm.TabletInfo, error) {
+func GetTabletMap(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) (map[naming.TabletAlias]*tm.TabletInfo, error) {
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 
-	tabletMap := make(map[string]*tm.TabletInfo)
+	tabletMap := make(map[naming.TabletAlias]*tm.TabletInfo)
 	var someError error
 
-	for _, path := range tabletPaths {
-		tabletPath := path
+	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)
-		go func() {
+		go func(tabletAlias naming.TabletAlias) {
 			defer wg.Done()
-			tabletInfo, err := tm.ReadTablet(zconn, tabletPath)
+			tabletInfo, err := tm.ReadTabletTs(ts, tabletAlias)
 			mutex.Lock()
 			if err != nil {
-				relog.Warning("%v: %v", tabletPath, err)
+				relog.Warning("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
-				if !zookeeper.IsError(err, zookeeper.ZNONODE) {
+				if err != naming.ErrNoNode {
 					someError = err
 				}
 			} else {
-				tabletMap[tabletPath] = tabletInfo
+				tabletMap[tabletAlias] = tabletInfo
 			}
 			mutex.Unlock()
-		}()
+		}(tabletAlias)
 	}
 	wg.Wait()
 	return tabletMap, someError
 }
 
 // If error is not nil, the results in the dictionary are incomplete.
-func GetTabletMapForShard(zconn zk.Conn, zkShardPath string) (map[string]*tm.TabletInfo, error) {
-	aliases, err := tm.FindAllTabletAliasesInShard(zconn, zkShardPath)
+func GetTabletMapForShard(ts naming.TopologyServer, keyspace, shard string) (map[naming.TabletAlias]*tm.TabletInfo, error) {
+	aliases, err := tm.FindAllTabletAliasesInShardTs(ts, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
 
-	shardTablets := make([]string, len(aliases))
-	for i, alias := range aliases {
-		shardTablets[i] = tm.TabletPathForAlias(alias)
-	}
-
-	return GetTabletMap(zconn, shardTablets)
+	return GetTabletMap(ts, aliases)
 }
 
 // Return a sorted list of tablets.
-func GetAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
-	zkTabletsPath := path.Join(zkVtPath, "tablets")
-	children, _, err := zconn.Children(zkTabletsPath)
+func GetAllTablets(ts naming.TopologyServer, zconn zk.Conn, cell string) ([]*tm.TabletInfo, error) {
+	aliases, err := ts.GetTabletsByCell(cell)
 	if err != nil {
 		return nil, err
 	}
+	sort.Sort(naming.TabletAliasList(aliases))
 
-	sort.Strings(children)
-	tabletPaths := make([]string, len(children))
-	for i, child := range children {
-		tabletPaths[i] = path.Join(zkTabletsPath, child)
-	}
-
-	tabletMap, err := GetTabletMap(zconn, tabletPaths)
+	tabletMap, err := GetTabletMap(ts, aliases)
 	if err != nil {
 		// we got another error than ZNONODE
 		return nil, err
 	}
-	tablets := make([]*tm.TabletInfo, 0, len(tabletPaths))
-	for _, tabletPath := range tabletPaths {
-		tabletInfo, ok := tabletMap[tabletPath]
+	tablets := make([]*tm.TabletInfo, 0, len(aliases))
+	for _, tabletAlias := range aliases {
+		tabletInfo, ok := tabletMap[tabletAlias]
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// ZNONODE), just echo a warning
-			relog.Warning("failed to load tablet %v", tabletPath)
+			relog.Warning("failed to load tablet %v", tabletAlias)
 		} else {
 			tablets = append(tablets, tabletInfo)
 		}
@@ -97,7 +85,7 @@ func GetAllTablets(zconn zk.Conn, zkVtPath string) ([]*tm.TabletInfo, error) {
 }
 
 // GetAllTabletsAccrossCells returns all tablets from known cells.
-func GetAllTabletsAccrossCells(zconn zk.Conn) ([]*tm.TabletInfo, error) {
+func GetAllTabletsAccrossCells(ts naming.TopologyServer, zconn zk.Conn) ([]*tm.TabletInfo, error) {
 	cells, err := zk.ResolveWildcards(zconn, []string{"/zk/*/vt/tablets"})
 	if err != nil {
 		return nil, err
@@ -106,7 +94,8 @@ func GetAllTabletsAccrossCells(zconn zk.Conn) ([]*tm.TabletInfo, error) {
 	errors := make(chan error)
 	for _, cell := range cells {
 		go func(cell string) {
-			tablets, err := GetAllTablets(zconn, path.Dir(cell))
+			parts := strings.Split(cell, "/")
+			tablets, err := GetAllTablets(ts, zconn, parts[2])
 			if err != nil {
 				errors <- err
 				return

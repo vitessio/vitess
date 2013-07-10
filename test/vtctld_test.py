@@ -99,8 +99,8 @@ class TestDbTopo(unittest.TestCase):
 
     scrap.scrap()
 
-    utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/-80 ' + shard_0_master.zk_tablet_path, auto_log=True)
-    utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/80- ' + shard_1_master.zk_tablet_path, auto_log=True)
+    utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
+    utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.tablet_alias, auto_log=True)
 
 
   # run checks now before we start the tablets

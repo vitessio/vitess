@@ -109,8 +109,8 @@ def setup_tablets():
   utils.debug("Setting up tablets")
   utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   setup_schema()
@@ -123,15 +123,15 @@ def setup_tablets():
   utils.run("mkdir -p " + snapshot_dir)
   utils.run("chmod +w " + snapshot_dir)
   utils.run_vtctl('Clone -force %s %s' %
-                  (master_tablet.zk_tablet_path, replica_tablet.zk_tablet_path))
+                  (master_tablet.tablet_alias, replica_tablet.tablet_alias))
 
 
-  utils.run_vtctl('Ping /zk/test_nj/vt/tablets/0000062344')
-  utils.run_vtctl('SetReadWrite ' + master_tablet.zk_tablet_path)
+  utils.run_vtctl('Ping test_nj-0000062344')
+  utils.run_vtctl('SetReadWrite ' + master_tablet.tablet_alias)
   utils.check_db_read_write(62344)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
-  utils.run_vtctl('Ping /zk/test_nj/vt/tablets/0000062345')
+  utils.run_vtctl('Ping test_nj-0000062345')
 
 
 def setup_schema():
@@ -164,7 +164,7 @@ def run_test_service_disabled():
   utils.debug("run_test_service_disabled starting @ %s" % start_position)
   _exec_vt_txn(master_host, populate_vt_insert_test)
   _exec_vt_txn(master_host, ['delete from vt_insert_test',])
-  utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
+  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
 #  time.sleep(20)
   replica_conn = _get_replica_stream_conn()
   replica_conn.dial()
@@ -190,7 +190,7 @@ def perform_writes(count):
 def run_test_service_enabled():
   start_position = _get_repl_current_position()
   utils.debug("run_test_service_enabled starting @ %s" % start_position)
-  utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
   utils.debug("sleeping a bit for the replica action to complete")
   time.sleep(1)
   thd = threading.Thread(target=perform_writes, name='write_thd', args=(400,))
@@ -228,7 +228,7 @@ def run_test_service_enabled():
   txn_count = 0
   try:
     binlog_pos, data, err = replica_conn.stream_start(start_position)
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
     utils.debug("Sleeping a bit for the spare action to complete")
 #    time.sleep(20)
     while(1):
@@ -379,7 +379,7 @@ def run_test_log_rotation():
 def run_all():
   run_test_service_switch()
   #The above test leaves the service in disabled state, hence enabling it.
-  utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
   utils.debug("Sleeping a bit for the action to complete")
 #  time.sleep(20)
   run_test_ddl()

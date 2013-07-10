@@ -96,8 +96,8 @@ def run_test_resharding():
   shard_1_replica.start_vttablet()
 
   # reparent to make the tablets work
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/-80 ' + shard_0_master.zk_tablet_path, auto_log=True)
-  utils.run_vtctl('ReparentShard -force /zk/global/vt/keyspaces/test_keyspace/shards/80- ' + shard_1_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.tablet_alias, auto_log=True)
 
   # create the split shards
   shard_2_master.init_tablet( 'master',  'test_keyspace', '80-C0')

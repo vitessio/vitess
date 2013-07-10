@@ -11,11 +11,11 @@ import (
 // Assume the master is dead and not coming back. Just push your way
 // forward.  Force means we are reparenting to the same master
 // (assuming the data has been externally synched).
-func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[string]*tm.TabletInfo, failedMaster, masterElectTablet *tm.TabletInfo, leaveMasterReadOnly, force bool) error {
+func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, failedMaster, masterElectTablet *tm.TabletInfo, leaveMasterReadOnly, force bool) error {
 	relog.Info("Skipping ValidateShard - not a graceful situation")
 
-	if _, ok := slaveTabletMap[masterElectTablet.Path()]; !ok && !force {
-		return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Path(), failedMaster.ShardPath(), mapKeys(slaveTabletMap))
+	if _, ok := slaveTabletMap[masterElectTablet.Alias()]; !ok && !force {
+		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias(), failedMaster.Keyspace, failedMaster.Shard, mapKeys(slaveTabletMap))
 	}
 
 	// Check the master-elect and slaves are in good shape when the action
@@ -53,7 +53,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[string]*tm.TabletInfo
 	}
 
 	// Once the slave is promoted, remove it from our map
-	delete(slaveTabletMap, masterElectTablet.Path())
+	delete(slaveTabletMap, masterElectTablet.Alias())
 
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 

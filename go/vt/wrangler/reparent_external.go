@@ -10,21 +10,17 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
+	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) ShardExternallyReparented(keyspace, shard, zkMasterElectTabletPath string, scrapStragglers bool) error {
-	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
-	if err := tm.IsTabletPath(zkMasterElectTabletPath); err != nil {
-		return err
-	}
-
+func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias naming.TabletAlias, scrapStragglers bool) error {
 	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShard(wr.zconn, zkShardPath)
+	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -34,21 +30,21 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard, zkMasterElectTabl
 		return err
 	}
 
-	currentMasterTabletPath, err := shardInfo.MasterTabletPath()
-	if err != nil {
-		return err
+	currentMasterTabletAlias := shardInfo.MasterAlias
+	if currentMasterTabletAlias == (naming.TabletAlias{}) {
+		return fmt.Errorf("no master tablet for shard %v/%v", keyspace, shard)
 	}
-	if currentMasterTabletPath == zkMasterElectTabletPath {
-		return fmt.Errorf("master-elect tablet %v is already master", zkMasterElectTabletPath)
+	if currentMasterTabletAlias == masterElectTabletAlias {
+		return fmt.Errorf("master-elect tablet %v is already master", masterElectTabletAlias)
 	}
 
-	masterElectTablet, ok := tabletMap[zkMasterElectTabletPath]
+	masterElectTablet, ok := tabletMap[masterElectTabletAlias]
 	if !ok {
-		return fmt.Errorf("master-elect tablet not found in replication graph %v %v", zkMasterElectTabletPath, zkShardPath, mapKeys(tabletMap))
+		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
 	}
 
 	// grab the shard lock
-	actionPath, err := wr.ai.ShardExternallyReparented(keyspace, shard, zkMasterElectTabletPath)
+	actionPath, err := wr.ai.ShardExternallyReparented(keyspace, shard, masterElectTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -75,7 +71,7 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard, zkMasterElectTabl
 	return nil
 }
 
-func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[string]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {
+func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {
 
 	// we fix the new master in the replication graph
 	err := wr.slaveWasPromoted(masterElectTablet)
@@ -85,7 +81,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[string]*tm.TabletIn
 	}
 
 	// Once the slave is promoted, remove it from our map
-	delete(slaveTabletMap, masterElectTablet.Path())
+	delete(slaveTabletMap, masterElectTablet.Alias())
 
 	// then fix all the slaves, including the old master
 	err = wr.restartSlavesExternal(slaveTabletMap, masterTablet, masterElectTablet, scrapStragglers)
@@ -98,7 +94,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[string]*tm.TabletIn
 	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, []string{masterTablet.Cell, masterElectTablet.Cell})
 }
 
-func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[string]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {
+func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {
 	recorder := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 

@@ -24,7 +24,7 @@ type rpcContext struct {
 // These functions reimplement a few actions that were originally
 // implemented as direct RPCs.  This gives a consistent, if not slower
 // mechanism for performing critical actions. It also leaves more
-// centralize debug information in zk when a failure occurs.
+// centralized debug information in TopologyServer when a failure occurs.
 
 func (wr *Wrangler) getMasterPosition(ti *tm.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
 	actionPath, err := wr.ai.MasterPosition(ti.Alias())
@@ -40,7 +40,7 @@ func (wr *Wrangler) getMasterPosition(ti *tm.TabletInfo) (*mysqlctl.ReplicationP
 
 // Check all the tablets replication positions to find if some
 // will have a problem, and suggest a fix for them.
-func (wr *Wrangler) checkSlaveReplication(tabletMap map[string]*tm.TabletInfo, masterTabletUid uint32) error {
+func (wr *Wrangler) checkSlaveReplication(tabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTabletUid uint32) error {
 	relog.Info("Checking all replication positions will allow the transition:")
 	masterIsDead := masterTabletUid == naming.NO_TABLET
 
@@ -214,7 +214,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 }
 
 // Shut off all replication.
-func (wr *Wrangler) stopSlaves(tabletMap map[string]*tm.TabletInfo) error {
+func (wr *Wrangler) stopSlaves(tabletMap map[naming.TabletAlias]*tm.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *tm.TabletInfo) {
 		actionPath, err := wr.ai.StopSlave(ti.Alias())
@@ -345,7 +345,7 @@ func (wr *Wrangler) slaveWasPromoted(ti *tm.TabletInfo) error {
 	return nil
 }
 
-func (wr *Wrangler) restartSlaves(slaveTabletMap map[string]*tm.TabletInfo, rsd *tm.RestartSlaveData) (majorityRestart bool, err error) {
+func (wr *Wrangler) restartSlaves(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, rsd *tm.RestartSlaveData) (majorityRestart bool, err error) {
 	wg := new(sync.WaitGroup)
 	slaves := CopyMapValues(slaveTabletMap, []*tm.TabletInfo{}).([]*tm.TabletInfo)
 	errs := make([]error, len(slaveTabletMap))
@@ -431,10 +431,10 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *tm.TabletInfo, majori
 	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, []string{oldMaster.Cell, masterElect.Cell})
 }
 
-func (wr *Wrangler) breakReplication(slaveMap map[string]*tm.TabletInfo, masterElect *tm.TabletInfo) error {
+func (wr *Wrangler) breakReplication(slaveMap map[naming.TabletAlias]*tm.TabletInfo, masterElect *tm.TabletInfo) error {
 	// We are forcing a reparenting. Make sure that all slaves stop so
 	// no data is accidentally replicated through before we call RestartSlave.
-	relog.Info("stop slaves %v", masterElect.Path())
+	relog.Info("stop slaves %v", masterElect.Alias())
 	err := wr.stopSlaves(slaveMap)
 	if err != nil {
 		return err
@@ -442,7 +442,7 @@ func (wr *Wrangler) breakReplication(slaveMap map[string]*tm.TabletInfo, masterE
 
 	// Force slaves to break, just in case they were not advertised in
 	// the replication graph.
-	relog.Info("break slaves %v", masterElect.Path())
+	relog.Info("break slaves %v", masterElect.Alias())
 	actionPath, err := wr.ai.BreakSlaves(masterElect.Alias())
 	if err == nil {
 		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
@@ -450,7 +450,7 @@ func (wr *Wrangler) breakReplication(slaveMap map[string]*tm.TabletInfo, masterE
 	return err
 }
 
-func restartableTabletMap(slaves map[string]*tm.TabletInfo) map[uint32]*tm.TabletInfo {
+func restartableTabletMap(slaves map[naming.TabletAlias]*tm.TabletInfo) map[uint32]*tm.TabletInfo {
 	// Under normal circumstances, prune out lag as not restartable.
 	// These types are explicitly excluded from reparenting since you
 	// will just wait forever for them to catch up.  A possible
@@ -467,14 +467,14 @@ func restartableTabletMap(slaves map[string]*tm.TabletInfo) map[uint32]*tm.Table
 	return tabletMap
 }
 
-func slaveTabletMap(tabletMap map[string]*tm.TabletInfo) (slaveMap map[string]*tm.TabletInfo, master *tm.TabletInfo, err error) {
-	slaveMap = make(map[string]*tm.TabletInfo)
-	for zkPath, ti := range tabletMap {
+func slaveTabletMap(tabletMap map[naming.TabletAlias]*tm.TabletInfo) (slaveMap map[naming.TabletAlias]*tm.TabletInfo, master *tm.TabletInfo, err error) {
+	slaveMap = make(map[naming.TabletAlias]*tm.TabletInfo)
+	for alias, ti := range tabletMap {
 		if ti.Type != naming.TYPE_MASTER && ti.Type != naming.TYPE_SCRAP {
-			slaveMap[zkPath] = ti
+			slaveMap[alias] = ti
 		} else if ti.Parent.Uid == naming.NO_TABLET {
 			if master != nil {
-				return nil, nil, fmt.Errorf("master tablet conflict in shard %v: %v, %v", master.ShardPath(), master.Path(), ti.Path())
+				return nil, nil, fmt.Errorf("master tablet conflict in shard %v/%v: %v, %v", master.Keyspace, master.Shard, master.Alias(), ti.Alias())
 			}
 			master = ti
 		}

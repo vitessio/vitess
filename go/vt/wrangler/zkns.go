@@ -15,13 +15,9 @@ import (
 )
 
 // Export addresses from the VT serving graph to a legacy zkns server.
-func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
-	vtNsPath := path.Join(zkVtRoot, "ns")
-	zkCell, err := zk.ZkCellFromZkPath(zkVtRoot)
-	if err != nil {
-		return err
-	}
-	zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt", zkCell)
+func (wr *Wrangler) ExportZkns(cell string) error {
+	vtNsPath := fmt.Sprintf("/zk/%v/vt/ns", cell)
+	zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt", cell)
 
 	children, err := zk.ChildrenRecursive(wr.zconn, vtNsPath)
 	if err != nil {
@@ -48,9 +44,8 @@ func (wr *Wrangler) ExportZkns(zkVtRoot string) error {
 }
 
 // Export addresses from the VT serving graph to a legacy zkns server.
-func (wr *Wrangler) ExportZknsForKeyspace(zkKeyspacePath string) error {
-	keyspace := path.Base(zkKeyspacePath)
-	shardNames, _, err := wr.zconn.Children(path.Join(zkKeyspacePath, "shards"))
+func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
+	shardNames, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
 	}

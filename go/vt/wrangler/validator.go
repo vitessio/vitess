@@ -124,14 +124,13 @@ func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync
 // FIXME(msolomon) This validate presumes the master is up and running.
 // Even when that isn't true, there are validation processes that might be valuable.
 func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
-	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		results <- vresult{keyspace + "/" + shard, err}
 		return
 	}
 
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
+	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
 	if err != nil {
 		results <- vresult{keyspace + "/" + shard, err}
 	}
@@ -141,12 +140,11 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 		shardTablets = append(shardTablets, tm.TabletPathForAlias(alias))
 	}
 
-	tabletMap, _ := GetTabletMap(wr.zconn, shardTablets)
+	tabletMap, _ := GetTabletMap(wr.ts, aliases)
 
 	var masterAlias naming.TabletAlias
 	for _, alias := range aliases {
-		zkTabletPath := tm.TabletPathForAlias(alias)
-		tabletInfo, ok := tabletMap[zkTabletPath]
+		tabletInfo, ok := tabletMap[alias]
 		if !ok {
 			results <- vresult{alias.String(), fmt.Errorf("tablet not found in map")}
 			continue
@@ -195,9 +193,9 @@ func strInList(sl []string, s string) bool {
 	return false
 }
 
-func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[string]*tm.TabletInfo, results chan<- vresult) {
+func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[naming.TabletAlias]*tm.TabletInfo, results chan<- vresult) {
 	masterTabletPath := tm.TabletPathForAlias(shardInfo.MasterAlias)
-	_, ok := tabletMap[masterTabletPath]
+	_, ok := tabletMap[shardInfo.MasterAlias]
 	if !ok {
 		results <- vresult{masterTabletPath, fmt.Errorf("master not in tablet map: %v", masterTabletPath)}
 		return
@@ -257,30 +255,30 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[s
 	}
 }
 
-func (wr *Wrangler) pingTablets(tabletMap map[string]*tm.TabletInfo, wg *sync.WaitGroup, results chan<- vresult) {
-	for zkTabletPath, tabletInfo := range tabletMap {
+func (wr *Wrangler) pingTablets(tabletMap map[naming.TabletAlias]*tm.TabletInfo, wg *sync.WaitGroup, results chan<- vresult) {
+	for tabletAlias, tabletInfo := range tabletMap {
 		wg.Add(1)
-		go func(zkTabletPath string, tabletInfo *tm.TabletInfo) {
+		go func(tabletAlias naming.TabletAlias, tabletInfo *tm.TabletInfo) {
 			defer wg.Done()
 
 			zkTabletPid := path.Join(tabletInfo.Path(), "pid")
 			_, _, err := wr.zconn.Get(zkTabletPid)
 			if err != nil {
-				results <- vresult{zkTabletPath, fmt.Errorf("no pid node %v: %v %v", zkTabletPid, err, tabletInfo.Hostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node %v: %v %v", zkTabletPid, err, tabletInfo.Hostname())}
 				return
 			}
 
-			actionPath, err := wr.ai.Ping(zkTabletPath)
+			actionPath, err := wr.ai.Ping(tabletAlias)
 			if err != nil {
-				results <- vresult{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
 				return
 			}
 
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
-				results <- vresult{zkTabletPath, fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
 			}
-		}(zkTabletPath, tabletInfo)
+		}(tabletAlias, tabletInfo)
 	}
 }
 

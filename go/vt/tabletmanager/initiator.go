@@ -155,7 +155,8 @@ func (ai *ActionInitiator) rpcCallTablet(tablet *TabletInfo, name string, args, 
 	}
 }
 
-func (ai *ActionInitiator) Ping(zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) Ping(tabletAlias naming.TabletAlias) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PING})
 }
 
@@ -171,7 +172,8 @@ func (ai *ActionInitiator) RpcPing(tabletAlias naming.TabletAlias, waitTime time
 	return nil
 }
 
-func (ai *ActionInitiator) Sleep(zkTabletPath string, duration time.Duration) (actionPath string, err error) {
+func (ai *ActionInitiator) Sleep(tabletAlias naming.TabletAlias, duration time.Duration) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SLEEP, args: &duration})
 }
 
@@ -215,7 +217,8 @@ type MultiSnapshotReply struct {
 	ManifestPaths []string
 }
 
-func (ai *ActionInitiator) Snapshot(zkTabletPath string, args *SnapshotArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) Snapshot(tabletAlias naming.TabletAlias, args *SnapshotArgs) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT, args: args})
 }
 
@@ -224,7 +227,8 @@ type SnapshotSourceEndArgs struct {
 	ReadOnly           bool
 }
 
-func (ai *ActionInitiator) SnapshotSourceEnd(zkTabletPath string, args *SnapshotSourceEndArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias naming.TabletAlias, args *SnapshotSourceEndArgs) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_SNAPSHOT_SOURCE_END, args: args})
 }
 
@@ -253,15 +257,18 @@ type MultiRestoreArgs struct {
 	Strategy               string
 }
 
-func (ai *ActionInitiator) PartialSnapshot(zkTabletPath string, args *PartialSnapshotArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) PartialSnapshot(tabletAlias naming.TabletAlias, args *PartialSnapshotArgs) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, args: args})
 }
 
-func (ai *ActionInitiator) MultiSnapshot(zkTabletPath string, args *MultiSnapshotArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) MultiSnapshot(tabletAlias naming.TabletAlias, args *MultiSnapshotArgs) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MULTI_SNAPSHOT, args: args})
 }
 
-func (ai *ActionInitiator) RestoreFromMultiSnapshot(zkTabletPath string, args *MultiRestoreArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) RestoreFromMultiSnapshot(tabletAlias naming.TabletAlias, args *MultiRestoreArgs) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_MULTI_RESTORE, args: args})
 }
 
@@ -331,7 +338,8 @@ type ReserveForRestoreArgs struct {
 	ZkSrcTabletPath string
 }
 
-func (ai *ActionInitiator) ReserveForRestore(zkDstTabletPath string, args *ReserveForRestoreArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias naming.TabletAlias, args *ReserveForRestoreArgs) (actionPath string, err error) {
+	zkDstTabletPath := TabletPathForAlias(dstTabletAlias)
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESERVE_FOR_RESTORE, args: args})
 }
 
@@ -346,11 +354,13 @@ type RestoreArgs struct {
 	DontWaitForSlaveStart bool
 }
 
-func (ai *ActionInitiator) Restore(zkDstTabletPath string, args *RestoreArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) Restore(dstTabletAlias naming.TabletAlias, args *RestoreArgs) (actionPath string, err error) {
+	zkDstTabletPath := TabletPathForAlias(dstTabletAlias)
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_RESTORE, args: args})
 }
 
-func (ai *ActionInitiator) PartialRestore(zkDstTabletPath string, args *RestoreArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) PartialRestore(dstTabletAlias naming.TabletAlias, args *RestoreArgs) (actionPath string, err error) {
+	zkDstTabletPath := TabletPathForAlias(dstTabletAlias)
 	return ai.writeTabletAction(zkDstTabletPath, &ActionNode{Action: TABLET_ACTION_PARTIAL_RESTORE, args: args})
 }
 
@@ -376,11 +386,13 @@ func (ai *ActionInitiator) RpcGetSchemaTablet(tablet *TabletInfo, tables []strin
 	return &sd, nil
 }
 
-func (ai *ActionInitiator) PreflightSchema(zkTabletPath, change string) (actionPath string, err error) {
+func (ai *ActionInitiator) PreflightSchema(tabletAlias naming.TabletAlias, change string) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_PREFLIGHT_SCHEMA, args: &change})
 }
 
-func (ai *ActionInitiator) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
+func (ai *ActionInitiator) ApplySchema(tabletAlias naming.TabletAlias, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, args: sc})
 }
 
@@ -406,13 +418,15 @@ func (ai *ActionInitiator) GetSlaves(tabletAlias naming.TabletAlias) (actionPath
 	return ai.writeTabletAction(zkTabletPath, &ActionNode{Action: TABLET_ACTION_GET_SLAVES})
 }
 
-func (ai *ActionInitiator) ReparentShard(keyspace, shard, zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) ReparentShard(keyspace, shard string, tabletAlias naming.TabletAlias) (actionPath string, err error) {
 	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REPARENT, args: &zkTabletPath})
 }
 
-func (ai *ActionInitiator) ShardExternallyReparented(keyspace, shard, zkTabletPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) ShardExternallyReparented(keyspace, shard string, tabletAlias naming.TabletAlias) (actionPath string, err error) {
 	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
+	zkTabletPath := TabletPathForAlias(tabletAlias)
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_EXTERNALLY_REPARENTED, args: &zkTabletPath})
 }
 
@@ -421,7 +435,8 @@ func (ai *ActionInitiator) RebuildShard(keyspace, shard string) (actionPath stri
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_REBUILD})
 }
 
-func (ai *ActionInitiator) CheckShard(zkShardPath string) (actionPath string, err error) {
+func (ai *ActionInitiator) CheckShard(keyspace, shard string) (actionPath string, err error) {
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_CHECK})
 }
 
@@ -432,12 +447,14 @@ type ApplySchemaShardArgs struct {
 	Simple             bool
 }
 
-func (ai *ActionInitiator) ApplySchemaShard(keyspace, shard, zkMasterTabletPath, change string, simple bool) (actionPath string, err error) {
+func (ai *ActionInitiator) ApplySchemaShard(keyspace, shard string, masterTabletAlias naming.TabletAlias, change string, simple bool) (actionPath string, err error) {
 	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
+	zkMasterTabletPath := TabletPathForAlias(masterTabletAlias)
 	return ai.writeShardAction(zkShardPath, &ActionNode{Action: SHARD_ACTION_APPLY_SCHEMA, args: &ApplySchemaShardArgs{ZkMasterTabletPath: zkMasterTabletPath, Change: change, Simple: simple}})
 }
 
-func (ai *ActionInitiator) RebuildKeyspace(zkKeyspacePath string) (actionPath string, err error) {
+func (ai *ActionInitiator) RebuildKeyspace(keyspace string) (actionPath string, err error) {
+	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
 	if err := IsKeyspacePath(zkKeyspacePath); err != nil {
 		return "", err
 	}

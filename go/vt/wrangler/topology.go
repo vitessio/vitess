@@ -137,7 +137,7 @@ func NewTopology() *Topology {
 }
 
 func (wr *Wrangler) DbTopology() (*Topology, error) {
-	tabletInfos, err := GetAllTabletsAccrossCells(wr.zconn)
+	tabletInfos, err := GetAllTabletsAccrossCells(wr.ts, wr.zconn)
 	if err != nil {
 		return nil, err
 	}

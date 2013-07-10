@@ -96,17 +96,17 @@ def run_test_sanity():
     raise utils.TestError("expected 5 rows in vt_select_test", rows, result)
 
   # check Pings
-  utils.run_vtctl('Ping ' + tablet_62344.zk_tablet_path)
-  utils.run_vtctl('RpcPing ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('Ping ' + tablet_62344.tablet_alias)
+  utils.run_vtctl('RpcPing ' + tablet_62344.tablet_alias)
 
   # Quickly check basic actions.
-  utils.run_vtctl('SetReadOnly ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('SetReadOnly ' + tablet_62344.tablet_alias)
   utils.wait_db_read_only(62344)
 
-  utils.run_vtctl('SetReadWrite ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
   utils.check_db_read_write(62344)
 
-  utils.run_vtctl('DemoteMaster ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('DemoteMaster ' + tablet_62344.tablet_alias)
   utils.wait_db_read_only(62344)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
@@ -264,7 +264,7 @@ def _run_test_vtctl_snapshot_restore(server_mode):
   tablet_62344.start_vttablet()
 
   # Need to force snapshot since this is a master db.
-  out, err = utils.run_vtctl('Snapshot -force %s %s ' % (snapshot_flags, tablet_62344.zk_tablet_path), log_level='INFO', trap_output=True)
+  out, err = utils.run_vtctl('Snapshot -force %s %s ' % (snapshot_flags, tablet_62344.tablet_alias), log_level='INFO', trap_output=True)
   results = {}
   for name in ['Manifest', 'ParentPath', 'SlaveStartRequired', 'ReadOnly', 'OriginalType']:
     sepPos = err.find(name + ": ")
@@ -291,8 +291,8 @@ def _run_test_vtctl_snapshot_restore(server_mode):
   # do not specify a MANIFEST, see if 'default' works
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s default %s %s' %
-                  (restore_flags, tablet_62344.zk_tablet_path,
-                   tablet_62044.zk_tablet_path, results['ParentPath']), auto_log=True)
+                  (restore_flags, tablet_62344.tablet_alias,
+                   tablet_62044.tablet_alias, results['ParentPath']), auto_log=True)
   utils.pause("restore finished")
 
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
@@ -301,7 +301,7 @@ def _run_test_vtctl_snapshot_restore(server_mode):
 
   # in server_mode, get the server out of it and check it
   if server_mode:
-    utils.run_vtctl('SnapshotSourceEnd %s %s' % (tablet_62344.zk_tablet_path, results['OriginalType']), auto_log=True)
+    utils.run_vtctl('SnapshotSourceEnd %s %s' % (tablet_62344.tablet_alias, results['OriginalType']), auto_log=True)
     tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
     utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
@@ -343,20 +343,20 @@ def _run_test_vtctl_clone(server_mode):
   utils.run("mkdir -p %s" % snapshot_dir)
   utils.run("chmod -w %s" % snapshot_dir)
   out, err = utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s %s' %
-                       (clone_flags, tablet_62344.zk_tablet_path,
-                        tablet_62044.zk_tablet_path),
+                       (clone_flags, tablet_62344.tablet_alias,
+                        tablet_62044.tablet_alias),
                        trap_output=True, raise_on_error=False)
   if "Cannot validate snapshot directory" not in err:
     raise utils.TestError("expected validation error", err)
-  if "Un-reserved /zk/test_nj/vt/tablets/0000062044" not in err:
+  if "Un-reserved test_nj-0000062044" not in err:
     raise utils.TestError("expected Un-reserved", err)
   utils.debug("Failed Clone output: " + err)
   utils.run("chmod +w %s" % snapshot_dir)
 
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Clone -force %s %s %s' %
-                  (clone_flags, tablet_62344.zk_tablet_path,
-                   tablet_62044.zk_tablet_path))
+                  (clone_flags, tablet_62344.tablet_alias,
+                   tablet_62044.tablet_alias))
 
   utils.pause("look at logs!")
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
@@ -408,18 +408,18 @@ index by_msg (msg)
       [create_template % table for table in tables] + [create_view],
       sum([[insert_template % (table, 10*j + i, 10*j + i) for j in range(1, 8)] for table in tables], []))
     tablet.start_vttablet()
-    utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
+    utils.run_vtctl('MultiSnapshot --force  --spec=%s %s id' % (new_spec, tablet.tablet_alias), trap_output=True)
 
   utils.pause("After snapshot")
 
   # try to get the schema on the source, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
-                             tablet_62044.zk_tablet_path,
+                             tablet_62044.tablet_alias,
                              log_level='INFO', trap_output=True)
   if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output: %s' % err)
   out, err = utils.run_vtctl('GetSchema ' +
-                             tablet_62044.zk_tablet_path,
+                             tablet_62044.tablet_alias,
                              log_level='INFO', trap_output=True)
   if 'vt_insert_view' in err:
     raise utils.TestError('Unexpected GetSchema output: %s' % err)
@@ -450,7 +450,7 @@ index by_msg (msg)
 
   # try to get the schema on multi-restored guy, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
-                             tablet_62344.zk_tablet_path,
+                             tablet_62344.tablet_alias,
                              log_level='INFO', trap_output=True)
   if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output after multirestore: %s' % err)
@@ -489,7 +489,7 @@ primary key (id)
       [create_template % table for table in tables],
       sum([[insert_template % (table, 10*j + i, 10*j + i) for j in range(1, 8)] for table in tables], []))
     tablet.start_vttablet()
-    utils.run_vtctl('MultiSnapshot -force -maximum-file-size=1 -spec=%s %s id' % (new_spec, tablet.zk_tablet_path), trap_output=True)
+    utils.run_vtctl('MultiSnapshot -force -maximum-file-size=1 -spec=%s %s id' % (new_spec, tablet.tablet_alias), trap_output=True)
 
   utils.run_vtctl('CreateKeyspace -force test_keyspace_new')
   tablet_62344.init_tablet('master', 'test_keyspace_new', '-0000000000000028', dbname='not_vt_test_keyspace')
@@ -500,7 +500,7 @@ primary key (id)
 
   # 0x28 = 40
   source_zk_paths = ' '.join(t.zk_tablet_path for t in old_tablets)
-  utils.run_vtctl('MultiRestore %s %s' % (tablet_62344.zk_tablet_path, source_zk_paths), auto_log=True, raise_on_error=True)
+  utils.run_vtctl('MultiRestore %s %s' % (tablet_62344.tablet_alias, source_zk_paths), auto_log=True, raise_on_error=True)
   time.sleep(1)
   for table in tables:
     rows = tablet_62344.mquery('not_vt_test_keyspace', 'select id from %s' % table)
@@ -574,7 +574,7 @@ primary key (id)
 
   tablet_62344.start_vttablet()
 
-  utils.run_vtctl('MultiSnapshot --force --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- %s id' % tablet_62344.zk_tablet_path)
+  utils.run_vtctl('MultiSnapshot --force --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- %s id' % tablet_62344.tablet_alias)
 
   # if err != 0:
   #   raise utils.TestError('mysqlctl multisnapshot failed')
@@ -621,7 +621,7 @@ def run_test_mysqlctl_split():
 
   # change/add two values on the master, one in range, one out of range, make
   # sure the right one propagate and not the other
-  utils.run_vtctl('SetReadWrite ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
   tablet_62344.mquery('vt_test_keyspace', "insert into vt_insert_test (id, msg) values (5, 'test should not propagate')", write=True)
   tablet_62344.mquery('vt_test_keyspace', "update vt_insert_test set msg='test should propagate' where id=2", write=True)
 
@@ -672,7 +672,7 @@ def _run_test_vtctl_partial_clone(create, populate,
   tablet_62044.create_db('vt_snapshot_test')
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('PartialClone -force %s %s id %s %s' %
-                  (tablet_62344.zk_tablet_path, tablet_62044.zk_tablet_path,
+                  (tablet_62344.tablet_alias, tablet_62044.tablet_alias,
                    start, end))
 
   utils.pause("after PartialClone")
@@ -717,12 +717,12 @@ def run_test_restart_during_action():
   tablet_62344.create_db('vt_test_keyspace')
   tablet_62344.start_vttablet()
 
-  utils.run_vtctl('Ping ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('Ping ' + tablet_62344.tablet_alias)
 
   # schedule long action
-  utils.run_vtctl('-no-wait Sleep %s 15s' % tablet_62344.zk_tablet_path, stdout=devnull)
+  utils.run_vtctl('-no-wait Sleep %s 15s' % tablet_62344.tablet_alias, stdout=devnull)
   # ping blocks until the sleep finishes unless we have a schedule race
-  action_path, _ = utils.run_vtctl('-no-wait Ping ' + tablet_62344.zk_tablet_path, trap_output=True)
+  action_path, _ = utils.run_vtctl('-no-wait Ping ' + tablet_62344.tablet_alias, trap_output=True)
 
   # kill agent leaving vtaction running
   tablet_62344.kill_vttablet()
@@ -781,7 +781,7 @@ def run_test_reparent_down_master():
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + tablet_62344.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + tablet_62344.tablet_alias, auto_log=True)
   utils.zk_check()
 
   # Make the master agent and database unavailable.
@@ -793,19 +793,19 @@ def run_test_reparent_down_master():
 
   # Perform a reparent operation - the Validate part will try to ping
   # the master and fail somewhat quickly
-  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.zk_tablet_path)
+  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias)
   utils.debug("Failed ReparentShard output:\n" + stderr)
   if 'ValidateShard verification failed: timed out during validate' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
   # Should timeout and fail
-  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.zk_tablet_path)
+  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias)
   utils.debug("Failed ScrapTablet output:\n" + stderr)
   if 'deadline exceeded' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Should interrupt and fail
-  sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log.level=INFO -wait-time 10s ScrapTablet ' + tablet_62344.zk_tablet_path, stdout=PIPE, stderr=PIPE)
+  sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log.level=INFO -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
   # Need time for the process to start before killing it.
   time.sleep(0.1)
   os.kill(sp.pid, signal.SIGINT)
@@ -825,7 +825,7 @@ def run_test_reparent_down_master():
   utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
 
   # Re-run reparent operation, this shoud now proceed unimpeded.
-  utils.run_vtctl('-wait-time 1m ReparentShard test_keyspace/0 ' + tablet_62044.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('-wait-time 1m ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, auto_log=True)
 
   utils.zk_check()
   expected_addr = utils.hostname + ':' + str(tablet_62044.port)
@@ -833,7 +833,7 @@ def run_test_reparent_down_master():
 
   utils.run_vtctl('ChangeSlaveType -force %s idle' % tablet_62344.tablet_alias)
 
-  idle_tablets, _ = utils.run_vtctl('ListIdle /zk/test_nj/vt', trap_output=True)
+  idle_tablets, _ = utils.run_vtctl('ListIdle test_nj', trap_output=True)
   if '0000062344' not in idle_tablets:
     raise utils.TestError('idle tablet not found', idle_tablets)
 
@@ -880,7 +880,7 @@ def _run_test_reparent_graceful(shard_id):
 
   # Force the slaves to reparent assuming that all the datasets are identical.
   utils.pause("force ReparentShard?")
-  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
   utils.zk_check(ping_tablets=True)
 
   expected_addr = utils.hostname + ':' + str(tablet_62344.port)
@@ -899,7 +899,7 @@ def _run_test_reparent_graceful(shard_id):
 
   # Perform a graceful reparent operation.
   utils.pause("graceful ReparentShard?")
-  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.zk_tablet_path), auto_log=True)
+  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias), auto_log=True)
   utils.zk_check()
 
   expected_addr = utils.hostname + ':' + str(tablet_62044.port)
@@ -948,7 +948,7 @@ def run_test_reparent_slave_offline(shard_id='0'):
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
   utils.zk_check(ping_tablets=True)
 
   expected_addr = utils.hostname + ':' + str(tablet_62344.port)
@@ -958,7 +958,7 @@ def run_test_reparent_slave_offline(shard_id='0'):
   tablet_31981.kill_vttablet()
 
   # Perform a graceful reparent operation.
-  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias))
 
   tablet_62344.kill_vttablet()
   tablet_62044.kill_vttablet()
@@ -987,7 +987,7 @@ def run_test_reparent_from_outside():
   tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True)
 
   # Reparent as a starting point
-  utils.run_vtctl('ReparentShard -force test_keyspace/0 %s' % tablet_62344.zk_tablet_path)
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 %s' % tablet_62344.tablet_alias)
 
   # now manually reparent 1 out of 2 tablets
   # 62044 will be the new master
@@ -1017,7 +1017,7 @@ def run_test_reparent_from_outside():
       ])
 
   # update zk with the new graph
-  utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)
 
   # make sure the replication graph is fine
   shard_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0')
@@ -1062,7 +1062,7 @@ def run_test_reparent_lag_slave(shard_id='0'):
   utils.zk_check()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
-  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.zk_tablet_path))
+  utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
   utils.zk_check(ping_tablets=True)
 
   tablet_62344.create_db('vt_test_keyspace')
@@ -1073,14 +1073,14 @@ def run_test_reparent_lag_slave(shard_id='0'):
     tablet_62344.mquery('vt_test_keyspace', q, write=True)
 
   # Perform a graceful reparent operation.
-  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.zk_tablet_path))
+  utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias))
 
   tablet_41983.mquery('', 'start slave')
   time.sleep(1)
 
   utils.pause("check orphan")
 
-  utils.run_vtctl('ReparentTablet %s' % tablet_41983.zk_tablet_path)
+  utils.run_vtctl('ReparentTablet %s' % tablet_41983.tablet_alias)
 
   result = tablet_41983.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
   if len(result) != 1:
@@ -1106,7 +1106,7 @@ def run_test_vttablet_authenticated():
   tablet_62344.populate('vt_test_keyspace', create_vt_select_test,
                         populate_vt_select_test)
   agent = tablet_62344.start_vttablet(auth=True)
-  utils.run_vtctl('SetReadWrite ' + tablet_62344.zk_tablet_path)
+  utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
 
   err, out = tablet_62344.vquery('select * from vt_select_test', path='test_keyspace/0', user='ala', password=r'ma kota')
   utils.debug("Got rows: " + out)
@@ -1128,7 +1128,7 @@ def _check_string_in_hook_result(text, expected):
   raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
 def _run_hook(params, expectedStrings):
-  out, err = utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO ExecuteHook %s %s' % (tablet_62344.zk_tablet_path, params), trap_output=True, raise_on_error=False)
+  out, err = utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
   for expected in expectedStrings:
     _check_string_in_hook_result(err, expected)
 
@@ -1191,7 +1191,7 @@ def run_test_sigterm():
 
   # start a 'vtctl Sleep' command in the background
   sp = utils.run_bg(utils.vtroot+'/bin/vtctl -logfile=/dev/null Sleep %s 60s' %
-                    tablet_62344.zk_tablet_path,
+                    tablet_62344.tablet_alias,
                     stdout=PIPE, stderr=PIPE)
 
   # wait for it to start, and let's kill it

@@ -46,10 +46,6 @@ func (wr *Wrangler) actionTimeout() time.Duration {
 	return wr.deadline.Sub(time.Now())
 }
 
-func (wr *Wrangler) readTablet(zkTabletPath string) (*tm.TabletInfo, error) {
-	return tm.ReadTablet(wr.zconn, zkTabletPath)
-}
-
 func (wr *Wrangler) ZkConn() zk.Conn {
 	return wr.zconn
 }
@@ -166,7 +162,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias naming.TabletAlias, dbType na
 		// FIXME(alainjobart) We already have the lock on one shard, so this is not
 		// possible. But maybe it's not necessary anyway.
 		// We could pass in a shard path we already have the lock on, and skip it?
-		//		err = wr.rebuildKeyspace(ti.KeyspacePath())
+		//		err = wr.rebuildKeyspace(ti.Keyspace)
 		//		if err != nil {
 		//			return err
 		//		}

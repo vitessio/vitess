@@ -12,7 +12,7 @@ import (
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[string]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, leaveMasterReadOnly bool) error {
+func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, leaveMasterReadOnly bool) error {
 	// Validate a bunch of assumptions we make about the replication graph.
 	if masterTablet.Parent.Uid != naming.NO_TABLET {
 		return fmt.Errorf("master tablet should not have a ParentUid: %v %v", masterTablet.Parent.Uid, masterTablet.Alias())
@@ -26,7 +26,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[string]*tm.TabletIn
 		return fmt.Errorf("master tablet should not match master elect - this must be forced: %v", masterTablet.Alias())
 	}
 
-	if _, ok := slaveTabletMap[masterElectTablet.Path()]; !ok {
+	if _, ok := slaveTabletMap[masterElectTablet.Alias()]; !ok {
 		return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Alias(), masterTablet.ShardPath(), mapKeys(slaveTabletMap))
 	}
 
@@ -69,7 +69,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[string]*tm.TabletIn
 	}
 
 	// Once the slave is promoted, remove it from our map
-	delete(slaveTabletMap, masterElectTablet.Path())
+	delete(slaveTabletMap, masterElectTablet.Alias())
 
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 

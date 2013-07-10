@@ -62,7 +62,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews boo
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	wg := sync.WaitGroup{}
 
 	// first diff the slaves in the reference shard 0
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 			continue
 		}
 
-		aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+		aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -166,11 +166,8 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	return nil
 }
 
-func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlctl.SchemaChangeResult, error) {
-	if err := tm.IsTabletPath(zkTabletPath); err != nil {
-		return nil, err
-	}
-	actionPath, err := wr.ai.PreflightSchema(zkTabletPath, change)
+func (wr *Wrangler) PreflightSchema(tabletAlias naming.TabletAlias, change string) (*mysqlctl.SchemaChangeResult, error) {
+	actionPath, err := wr.ai.PreflightSchema(tabletAlias, change)
 	if err != nil {
 		return nil, err
 	}
@@ -182,11 +179,8 @@ func (wr *Wrangler) PreflightSchema(zkTabletPath string, change string) (*mysqlc
 	return result.(*mysqlctl.SchemaChangeResult), nil
 }
 
-func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
-	if err := tm.IsTabletPath(zkTabletPath); err != nil {
-		return nil, err
-	}
-	actionPath, err := wr.ai.ApplySchema(zkTabletPath, sc)
+func (wr *Wrangler) ApplySchema(tabletAlias naming.TabletAlias, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
+	actionPath, err := wr.ai.ApplySchema(tabletAlias, sc)
 
 	// the timeout is for the entire action, so it might be too big
 	// for an individual tablet
@@ -202,14 +196,8 @@ func (wr *Wrangler) ApplySchema(zkTabletPath string, sc *mysqlctl.SchemaChange) 
 // recover if interrupted in the middle, because it knows which server
 // has the schema change already applied, and will just pass through them
 // very quickly.
-func (wr *Wrangler) ApplySchemaShard(keyspace, shard string, change, zkNewParentTabletPath string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
-	if zkNewParentTabletPath != "" {
-		if err := tm.IsTabletPath(zkNewParentTabletPath); err != nil {
-			return nil, err
-		}
-	}
-
-	// read the shard from zk
+func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+	// read the shard
 	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return nil, err
@@ -220,22 +208,21 @@ func (wr *Wrangler) ApplySchemaShard(keyspace, shard string, change, zkNewParent
 	// If the master does, and some slaves don't, may have to
 	// fix them manually one at a time, or re-clone them.
 	// we do this outside of the shard lock because we can.
-	relog.Info("Running Preflight on Master")
-	zkMasterTabletPath, err := shardInfo.MasterTabletPath()
+	relog.Info("Running Preflight on Master %v", shardInfo.MasterAlias)
 	if err != nil {
 		return nil, err
 	}
-	preflight, err := wr.PreflightSchema(zkMasterTabletPath, change)
+	preflight, err := wr.PreflightSchema(shardInfo.MasterAlias, change)
 	if err != nil {
 		return nil, err
 	}
 
-	return wr.lockAndApplySchemaShard(shardInfo, preflight, keyspace, shard, zkMasterTabletPath, change, zkNewParentTabletPath, simple, force)
+	return wr.lockAndApplySchemaShard(shardInfo, preflight, keyspace, shard, shardInfo.MasterAlias, change, newParentTabletAlias, simple, force)
 }
 
-func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, keyspace, shard, zkMasterTabletPath, change, zkNewParentTabletPath string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, keyspace, shard string, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// get a shard lock
-	actionPath, err := wr.ai.ApplySchemaShard(keyspace, shard, zkNewParentTabletPath, change, simple)
+	actionPath, err := wr.ai.ApplySchemaShard(keyspace, shard, newParentTabletAlias, change, simple)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +232,7 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 		return nil, err
 	}
 
-	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, zkMasterTabletPath, change, zkNewParentTabletPath, simple, force)
+	scr, schemaErr := wr.applySchemaShard(shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, simple, force)
 	relog.Info("applySchemaShard finished on %v/%v error=%v", keyspace, shard, schemaErr)
 
 	err = wr.handleActionError(actionPath, schemaErr, false)
@@ -269,10 +256,10 @@ type TabletStatus struct {
 	beforeSchema *mysqlctl.SchemaDefinition
 }
 
-func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, zkMasterTabletPath, change, zkNewParentTabletPath string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardInfo.ShardPath())
+	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, err
 	}
@@ -280,8 +267,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 	// build the array of TabletStatus we're going to use
 	statusArray := make([]*TabletStatus, 0, len(aliases)-1)
 	for _, alias := range aliases {
-		tabletPath := tm.TabletPathForAlias(alias)
-		if tabletPath == zkMasterTabletPath {
+		if alias == masterTabletAlias {
 			// we skip the master
 			continue
 		}
@@ -326,13 +312,13 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 
 	// simple or complex?
 	if simple {
-		return wr.applySchemaShardSimple(statusArray, preflight, zkMasterTabletPath, change, force)
+		return wr.applySchemaShardSimple(statusArray, preflight, masterTabletAlias, change, force)
 	}
 
-	return wr.applySchemaShardComplex(statusArray, shardInfo, preflight, zkMasterTabletPath, change, zkNewParentTabletPath, force)
+	return wr.applySchemaShardComplex(statusArray, shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, force)
 }
 
-func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, preflight *mysqlctl.SchemaChangeResult, zkMasterTabletPath, change string, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// check all tablets have the same schema as the master's
 	// BeforeSchema. If not, we shouldn't proceed
 	relog.Info("Checking schema on all tablets")
@@ -350,10 +336,10 @@ func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, prefligh
 	// we're good, just send to the master
 	relog.Info("Applying schema change to master in simple mode")
 	sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: true, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
-	return wr.ApplySchema(zkMasterTabletPath, sc)
+	return wr.ApplySchema(masterTabletAlias, sc)
 }
 
-func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, zkMasterTabletPath, change, zkNewParentTabletPath string, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// apply the schema change to all replica / slave tablets
 	for _, status := range statusArray {
 		// if already applied, we skip this guy
@@ -374,7 +360,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		}
 
 		// take this guy out of the serving graph if necessary
-		ti, err := tm.ReadTablet(wr.zconn, status.ti.Path())
+		ti, err := tm.ReadTabletTs(wr.ts, status.ti.Alias())
 		if err != nil {
 			return nil, err
 		}
@@ -390,7 +376,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		// apply the schema change
 		relog.Info("Applying schema change to slave %v in complex mode", status.ti.Path())
 		sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
-		_, err = wr.ApplySchema(status.ti.Path(), sc)
+		_, err = wr.ApplySchema(status.ti.Alias(), sc)
 		if err != nil {
 			return nil, err
 		}
@@ -404,10 +390,10 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		}
 	}
 
-	// if zkNewParentTabletPath is passed in, use that as the new master
-	if zkNewParentTabletPath != "" {
-		relog.Info("Reparenting with new master set to %v", zkNewParentTabletPath)
-		tabletMap, err := GetTabletMapForShard(wr.zconn, shardInfo.ShardPath())
+	// if newParentTabletAlias is passed in, use that as the new master
+	if newParentTabletAlias != (naming.TabletAlias{}) {
+		relog.Info("Reparenting with new master set to %v", newParentTabletAlias)
+		tabletMap, err := GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 		if err != nil {
 			return nil, err
 		}
@@ -417,7 +403,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		newMasterTablet, err := wr.readTablet(zkNewParentTabletPath)
+		newMasterTablet, err := tm.ReadTabletTs(wr.ts, newParentTabletAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -433,7 +419,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		// original master in a different state (like replica
 		// or rdonly), then we should apply the schema there
 		// too.
-		relog.Info("Skipping schema change on old master %v in complex mode, it's been Scrapped", zkMasterTabletPath)
+		relog.Info("Skipping schema change on old master %v in complex mode, it's been Scrapped", masterTabletAlias)
 	}
 	return &mysqlctl.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }
@@ -479,13 +465,12 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 	}
 	if len(shards) == 1 {
 		relog.Info("Only one shard in keyspace %v, using ApplySchemaShard", keyspace)
-		return wr.ApplySchemaShard(keyspace, shards[0], change, "", simple, force)
+		return wr.ApplySchemaShard(keyspace, shards[0], change, naming.TabletAlias{}, simple, force)
 	}
 
 	// Get schema on all shard masters in parallel
 	relog.Info("Getting schema on all shards")
 	beforeSchemas := make([]*mysqlctl.SchemaDefinition, len(shards))
-	zkMasterTabletPaths := make([]string, len(shards))
 	shardInfos := make([]*tm.ShardInfo, len(shards))
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
@@ -504,11 +489,6 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 			}()
 
 			shardInfos[i], err = tm.ReadShard(wr.ts, keyspace, shard)
-			if err != nil {
-				return
-			}
-
-			zkMasterTabletPaths[i], err = shardInfos[i].MasterTabletPath()
 			if err != nil {
 				return
 			}
@@ -541,7 +521,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 	// this assumes shard 0 master doesn't have the schema upgrade applied
 	// if it does, we'll have to fix the slaves and other shards manually.
 	relog.Info("Running Preflight on Shard 0 Master")
-	preflight, err := wr.PreflightSchema(zkMasterTabletPaths[0], change)
+	preflight, err := wr.PreflightSchema(shardInfos[0].MasterAlias, change)
 	if err != nil {
 		return nil, err
 	}
@@ -554,7 +534,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 		go func(i int, shard string) {
 			defer wg.Done()
 
-			_, err := wr.lockAndApplySchemaShard(shardInfos[i], preflight, keyspace, shard, zkMasterTabletPaths[i], change, "", simple, force)
+			_, err := wr.lockAndApplySchemaShard(shardInfos[i], preflight, keyspace, shard, shardInfos[i].MasterAlias, change, naming.TabletAlias{}, simple, force)
 			if err != nil {
 				mu.Lock()
 				applyErr = err

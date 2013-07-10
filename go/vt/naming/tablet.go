@@ -69,6 +69,26 @@ func fmtAlias(cell string, uid uint32) string {
 	return fmt.Sprintf("%v-%v", cell, tabletUidStr(uid))
 }
 
+// TabletAliasList is used mainly for sorting
+type TabletAliasList []TabletAlias
+
+func (tal TabletAliasList) Len() int {
+	return len(tal)
+}
+
+func (tal TabletAliasList) Less(i, j int) bool {
+	if tal[i].Cell < tal[j].Cell {
+		return true
+	} else if tal[i].Cell > tal[j].Cell {
+		return false
+	}
+	return tal[i].Uid < tal[j].Uid
+}
+
+func (tal TabletAliasList) Swap(i, j int) {
+	tal[i], tal[j] = tal[j], tal[i]
+}
+
 // TabletType is the main type for a tablet. It has an implication on:
 // - the replication graph
 // - the services run by vttablet on a tablet

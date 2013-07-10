@@ -119,17 +119,17 @@ def run_test_sharding():
   utils.run_vtctl(['ApplySchema',
                    '-stop-replication',
                    '-sql=' + create_vt_select_test.replace("\n", ""),
-                   shard_0_master.zk_tablet_path])
+                   shard_0_master.tablet_alias])
   utils.run_vtctl(['ApplySchema',
                    '-stop-replication',
                    '-sql=' + create_vt_select_test.replace("\n", ""),
-                   shard_0_replica.zk_tablet_path])
+                   shard_0_replica.tablet_alias])
 
   # start zkocc, we'll use it later
   zkocc_server = utils.zkocc_start()
 
-  utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.zk_tablet_path, auto_log=True)
-  utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.tablet_alias, auto_log=True)
 
   # apply the schema on the second shard using a simple schema upgrade
   utils.run_vtctl(['ApplySchemaShard',

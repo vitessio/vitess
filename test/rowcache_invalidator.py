@@ -113,8 +113,8 @@ def setup_tablets():
   # Start up a master mysql and vttablet
   utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0')
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace')
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
 
   setup_schema()
@@ -126,15 +126,15 @@ def setup_tablets():
   utils.run("mkdir -p %s/snapshot" % utils.vtdataroot)
   utils.run("chmod +w %s/snapshot" % utils.vtdataroot)
   utils.run_vtctl('Clone -force %s %s' %
-                  (master_tablet.zk_tablet_path, replica_tablet.zk_tablet_path))
+                  (master_tablet.tablet_alias, replica_tablet.tablet_alias))
 
-  utils.run_vtctl('Ping /zk/test_nj/vt/tablets/0000062344')
-  utils.run_vtctl('SetReadWrite ' + master_tablet.zk_tablet_path)
+  utils.run_vtctl('Ping test_nj-0000062344')
+  utils.run_vtctl('SetReadWrite ' + master_tablet.tablet_alias)
   utils.check_db_read_write(62344)
 
   utils.run_vtctl('Validate /zk/global/vt/keyspaces')
-  utils.run_vtctl('Ping /zk/test_nj/vt/tablets/0000062345')
-  utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+  utils.run_vtctl('Ping test_nj-0000062345')
+  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
 
 def setup_schema():
   master_tablet.create_db('vt_test_keyspace')
@@ -183,14 +183,14 @@ class RowCacheInvalidator(unittest.TestCase):
     self.assertEqual(stats_dict['Hits'] - hits, 1, "This should have hit the cache")
 
     purge_cache_counter = framework.MultiDict(utils.get_vars(replica_tablet.port))['CacheCounters']['PurgeCache']
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
     #Flush logs will make sure that the InvalidationPosition saved in the cache will become invalid.
     #which should cause purge cache.
     replica_tablet.mquery('vt_test_keyspace', "flush logs")
     replica_tablet.mquery('vt_test_keyspace', "flush logs")
     replica_tablet.mquery('vt_test_keyspace', "flush logs")
 
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
     #The sleep is needed here, so the invalidator can catch and the number can be tested.
     time.sleep(5)
 
@@ -221,7 +221,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def test_service_disabled(self):
     utils.debug("===========test_service_disabled=========")
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
     invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     utils.debug("test_service_disabled invalidations %d" % invalidations)
     self.assertEqual(invalidations, 0, "Row-cache invalidator should be disabled, no invalidations")

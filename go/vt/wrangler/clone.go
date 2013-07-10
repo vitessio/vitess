@@ -17,9 +17,9 @@ import (
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest, parent string, slaveStartRequired, readOnly bool, originalType naming.TabletType, err error) {
+func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest, parent string, slaveStartRequired, readOnly bool, originalType naming.TabletType, err error) {
 	var ti *tm.TabletInfo
-	ti, err = tm.ReadTablet(wr.zconn, zkTabletPath)
+	ti, err = tm.ReadTabletTs(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
@@ -29,7 +29,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 	if ti.Tablet.Type == naming.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
-		relog.Info("force change type master -> backup: %v", zkTabletPath)
+		relog.Info("force change type master -> backup: %v", tabletAlias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = naming.TYPE_BACKUP
@@ -43,7 +43,7 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.Snapshot(zkTabletPath, &tm.SnapshotArgs{snapshotConcurrency, serverMode})
+	actionPath, err = wr.ai.Snapshot(tabletAlias, &tm.SnapshotArgs{snapshotConcurrency, serverMode})
 	if err != nil {
 		return
 	}
@@ -64,9 +64,9 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 	}
 
 	// Go back to original type, or go to SNAPSHOT_SOURCE
-	relog.Info("change type after snapshot: %v %v", zkTabletPath, newType)
+	relog.Info("change type after snapshot: %v %v", tabletAlias, newType)
 	if ti.Tablet.Parent.Uid == naming.NO_TABLET && forceMasterSnapshot && newType != naming.TYPE_SNAPSHOT_SOURCE {
-		relog.Info("force change type backup -> master: %v", zkTabletPath)
+		relog.Info("force change type backup -> master: %v", tabletAlias)
 		ti.Tablet.Type = naming.TYPE_MASTER
 		err = tm.UpdateTablet(wr.ts, ti)
 	} else {
@@ -80,15 +80,15 @@ func (wr *Wrangler) Snapshot(zkTabletPath string, forceMasterSnapshot bool, snap
 	return reply.ManifestPath, reply.ZkParentPath, reply.SlaveStartRequired, reply.ReadOnly, originalType, actionErr
 }
 
-func (wr *Wrangler) SnapshotSourceEnd(zkTabletPath string, slaveStartRequired, readWrite bool, originalType naming.TabletType) (err error) {
+func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStartRequired, readWrite bool, originalType naming.TabletType) (err error) {
 	var ti *tm.TabletInfo
-	ti, err = tm.ReadTablet(wr.zconn, zkTabletPath)
+	ti, err = tm.ReadTabletTs(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.SnapshotSourceEnd(zkTabletPath, &tm.SnapshotSourceEndArgs{slaveStartRequired, !readWrite})
+	actionPath, err = wr.ai.SnapshotSourceEnd(tabletAlias, &tm.SnapshotSourceEndArgs{slaveStartRequired, !readWrite})
 	if err != nil {
 		return
 	}
@@ -110,19 +110,20 @@ func (wr *Wrangler) SnapshotSourceEnd(zkTabletPath string, slaveStartRequired, r
 	return err
 }
 
-func (wr *Wrangler) ReserveForRestore(zkSrcTabletPath, zkDstTabletPath string) (err error) {
+func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias naming.TabletAlias) (err error) {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTablet(wr.zconn, zkDstTabletPath)
+	tablet, err := tm.ReadTabletTs(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}
 	if tablet.Type != naming.TYPE_IDLE {
-		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, zkDstTabletPath)
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, dstTabletAlias)
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.ReserveForRestore(zkDstTabletPath, &tm.ReserveForRestoreArgs{zkSrcTabletPath})
+	zkSrcTabletPath := tm.TabletPathForAlias(srcTabletAlias)
+	actionPath, err = wr.ai.ReserveForRestore(dstTabletAlias, &tm.ReserveForRestoreArgs{zkSrcTabletPath})
 	if err != nil {
 		return
 	}
@@ -130,8 +131,8 @@ func (wr *Wrangler) ReserveForRestore(zkSrcTabletPath, zkDstTabletPath string) (
 	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
-func (wr *Wrangler) UnreserveForRestore(zkDstTabletPath string) (err error) {
-	tablet, err := tm.ReadTablet(wr.zconn, zkDstTabletPath)
+func (wr *Wrangler) UnreserveForRestore(dstTabletAlias naming.TabletAlias) (err error) {
+	tablet, err := tm.ReadTabletTs(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -143,25 +144,26 @@ func (wr *Wrangler) UnreserveForRestore(zkDstTabletPath string) (err error) {
 	return wr.ChangeType(tablet.Alias(), naming.TYPE_IDLE, false)
 }
 
-func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath string, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
+func (wr *Wrangler) Restore(srcTabletAlias naming.TabletAlias, srcFilePath string, dstTabletAlias naming.TabletAlias, zkParentPath string, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTablet(wr.zconn, zkDstTabletPath)
+	tablet, err := tm.ReadTabletTs(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}
 	if wasReserved {
 		if tablet.Type != naming.TYPE_RESTORE {
-			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, zkDstTabletPath)
+			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, dstTabletAlias)
 		}
 	} else {
 		if tablet.Type != naming.TYPE_IDLE {
-			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, zkDstTabletPath)
+			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, dstTabletAlias)
 		}
 	}
 
 	// do the work
-	actionPath, err := wr.ai.Restore(zkDstTabletPath, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, wasReserved, dontWaitForSlaveStart})
+	zkSrcTabletPath := tm.TabletPathForAlias(srcTabletAlias)
+	actionPath, err := wr.ai.Restore(dstTabletAlias, &tm.RestoreArgs{zkSrcTabletPath, srcFilePath, zkParentPath, fetchConcurrency, fetchRetryCount, wasReserved, dontWaitForSlaveStart})
 	if err != nil {
 		return err
 	}
@@ -175,34 +177,34 @@ func (wr *Wrangler) Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkPar
 	return nil
 }
 
-func (wr *Wrangler) UnreserveForRestoreMulti(zkDstTabletPaths []string) {
-	for _, zkDstTabletPath := range zkDstTabletPaths {
-		ufrErr := wr.UnreserveForRestore(zkDstTabletPath)
+func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []naming.TabletAlias) {
+	for _, dstTabletAlias := range dstTabletAliases {
+		ufrErr := wr.UnreserveForRestore(dstTabletAlias)
 		if ufrErr != nil {
 			relog.Error("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
 		} else {
-			relog.Info("Un-reserved %v", zkDstTabletPath)
+			relog.Info("Un-reserved %v", dstTabletAlias)
 		}
 	}
 }
 
-func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
+func (wr *Wrangler) Clone(srcTabletAlias naming.TabletAlias, dstTabletAliases []naming.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
 	// make sure the destination can be restored into (otherwise
 	// there is no point in taking the snapshot in the first place),
 	// and reserve it.
-	reserved := make([]string, 0, len(zkDstTabletPaths))
-	for _, zkDstTabletPath := range zkDstTabletPaths {
-		err := wr.ReserveForRestore(zkSrcTabletPath, zkDstTabletPath)
+	reserved := make([]naming.TabletAlias, 0, len(dstTabletAliases))
+	for _, dstTabletAlias := range dstTabletAliases {
+		err := wr.ReserveForRestore(srcTabletAlias, dstTabletAlias)
 		if err != nil {
 			wr.UnreserveForRestoreMulti(reserved)
 			return err
 		}
-		reserved = append(reserved, zkDstTabletPath)
-		relog.Info("Successfully reserved %v for restore", zkDstTabletPath)
+		reserved = append(reserved, dstTabletAlias)
+		relog.Info("Successfully reserved %v for restore", dstTabletAlias)
 	}
 
 	// take the snapshot, or put the server in SnapshotSource mode
-	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(zkSrcTabletPath, forceMasterSnapshot, snapshotConcurrency, serverMode)
+	srcFilePath, zkParentPath, slaveStartRequired, readWrite, originalType, err := wr.Snapshot(srcTabletAlias, forceMasterSnapshot, snapshotConcurrency, serverMode)
 	if err != nil {
 		// The snapshot failed so un-reserve the destinations
 		wr.UnreserveForRestoreMulti(reserved)
@@ -212,13 +214,13 @@ func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, for
 		// the master, we can't wait for replication, as the master is down.
 		wg := sync.WaitGroup{}
 		er := concurrency.FirstErrorRecorder{}
-		for _, zkDstTabletPath := range zkDstTabletPaths {
+		for _, dstTabletAlias := range dstTabletAliases {
 			wg.Add(1)
-			go func(zkDstTabletPath string) {
-				e := wr.Restore(zkSrcTabletPath, srcFilePath, zkDstTabletPath, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == naming.TYPE_MASTER)
+			go func(dstTabletAlias naming.TabletAlias) {
+				e := wr.Restore(srcTabletAlias, srcFilePath, dstTabletAlias, zkParentPath, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == naming.TYPE_MASTER)
 				er.RecordError(e)
 				wg.Done()
-			}(zkDstTabletPath)
+			}(dstTabletAlias)
 		}
 		wg.Wait()
 		err = er.Error()
@@ -226,7 +228,7 @@ func (wr *Wrangler) Clone(zkSrcTabletPath string, zkDstTabletPaths []string, for
 
 	// in any case, fix the server
 	if serverMode {
-		resetErr := wr.SnapshotSourceEnd(zkSrcTabletPath, slaveStartRequired, readWrite, originalType)
+		resetErr := wr.SnapshotSourceEnd(srcTabletAlias, slaveStartRequired, readWrite, originalType)
 		if resetErr != nil {
 			if err == nil {
 				// If there is no other error, this matters.

@@ -15,7 +15,6 @@ import (
 	"os/signal"
 	"path"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -76,18 +75,18 @@ var commands = []commandGroup{
 				"<tablet alias|zk tablet path>",
 				"Demotes a master tablet."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
-				"[-force] [-dry-run] <zk tablet path> <db type>",
+				"[-force] [-dry-run] <tablet alias|zk tablet path> <db type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
 					"NOTE: This will automatically update the serving graph.\n" +
 					"Valid <db type>:\n" +
 					"  " + strings.Join(naming.SlaveTabletTypeStrings, " ") + "\n"},
 			command{"ChangeType", commandChangeSlaveType,
-				"[-force] <zk tablet path> <db type>",
+				"[-force] <tablet alias|zk tablet path> <db type>",
 				"DEPRECATED (use ChangeSlaveType instead).\n" +
 					"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
 					"NOTE: This will automatically update the serving graph."},
 			command{"Ping", commandPing,
-				"<zk tablet path>",
+				"<tablet alias|zk tablet path>",
 				"Check that the agent is awake and responding - can be blocked by other in-flight operations."},
 			command{"RpcPing", commandRpcPing,
 				"<tablet alias|zk tablet path>",
@@ -96,39 +95,39 @@ var commands = []commandGroup{
 				"<zk tablet path> [<user> <password>] <query>",
 				"Send a SQL query to a tablet."},
 			command{"Sleep", commandSleep,
-				"<zk tablet path> <duration>",
+				"<tablet alias|zk tablet path> <duration>",
 				"Block the action queue for the specified duration (mostly for testing)."},
 			command{"Snapshot", commandSnapshot,
-				"[-force] [-server-mode] [-concurrency=4] <zk tablet path>",
+				"[-force] [-server-mode] [-concurrency=4] <tablet alias|zk tablet path>",
 				"Stop mysqld and copy compressed data aside."},
 			command{"SnapshotSourceEnd", commandSnapshotSourceEnd,
-				"[-slave-start] [-read-write] <zk tablet path> <original tablet type>",
+				"[-slave-start] [-read-write] <tablet alias|zk tablet path> <original tablet type>",
 				"Restarts Mysql and restore original server type."},
 			command{"Restore", commandRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
+				"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <src tablet alias|zk src tablet path> <src manifest file> <dst tablet alias|zk dst tablet path> [<zk new master path>]",
 				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"Clone", commandClone,
-				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <zk src tablet path> <zk dst tablet path> ...",
+				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...",
 				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
 			command{"ReparentTablet", commandReparentTablet,
-				"<zk tablet path>",
+				"<tablet alias|zk tablet path>",
 				"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."},
 			command{"PartialSnapshot", commandPartialSnapshot,
-				"[-force] [-concurrency=4] <zk tablet path> <key name> <start key> <end key>",
+				"[-force] [-concurrency=4] <tablet alias|zk tablet path> <key name> <start key> <end key>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <zk tablet path> <key name>",
+				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <destination zk path> <source zk path>...",
+				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <dst tablet alias|destination zk path> <source zk path>...",
 				"Restores a snapshot from multiple hosts."},
 			command{"PartialRestore", commandPartialRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <src manifest file> <zk dst tablet path> [<zk new master path>]",
+				"[-fetch-concurrency=3] [-fetch-retry-count=3] <src tablet alias|zk src tablet path> <src manifest file> <dst tablet alias|zk dst tablet path> [<zk new master path>]",
 				"Copy the given partial snaphot from the source tablet and starts partial replication to the new master path (or uses the src tablet path if not specified).\n" +
 					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
 			command{"PartialClone", commandPartialClone,
-				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>",
+				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> <key name> <start key> <end key>",
 				"This performs PartialSnapshot and then PartialRestore.  The advantage of having separate actions is that one partial snapshot can be used for many restores."},
 			command{"ExecuteHook", commandExecuteHook,
 				"<tablet alias|zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
@@ -141,10 +140,10 @@ var commands = []commandGroup{
 				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
 			command{"ReparentShard", commandReparentShard,
-				"[-force] [-leave-master-read-only] <keyspace/shard|zk shard path> <zk tablet path>",
+				"[-force] [-leave-master-read-only] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
 				"Specify which shard to reparent and which tablet should be the new master."},
 			command{"ShardExternallyReparented", commandShardExternallyReparented,
-				"[-scrap-stragglers] <keyspace/shard|zk shard path> <zk tablet path>",
+				"[-scrap-stragglers] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
 				"Changes metadata to acknowledge a shard master change performed by an external tool."},
 			command{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard|zk shard path>",
@@ -153,10 +152,10 @@ var commands = []commandGroup{
 				"<keyspace/shard|zk shard path>",
 				"Show slave status on all machines in the shard graph."},
 			command{"ListShardTablets", commandListShardTablets,
-				"<zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
+				"<keyspace/shard|zk shard path>)",
 				"List all tablets in a given shard."},
 			command{"ListShardActions", commandListShardActions,
-				"<zk shard path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
+				"<keyspace/shard|zk shard path>",
 				"List all active actions in a given shard."},
 		},
 	},
@@ -195,28 +194,28 @@ var commands = []commandGroup{
 				"[-ping-tablets] <zk keyspaces path> (/zk/global/vt/keyspaces)",
 				"Validate all nodes reachable from global replication graph and all tablets in all discoverable cells are consistent."},
 			command{"ExportZkns", commandExportZkns,
-				"<zk local vt path>  (/zk/<cell>/vt)",
+				"<cell name|zk local vt path>  (/zk/<cell>/vt)",
 				"DEPRECATED\n" +
 					"Export the serving graph entries to the legacy zkns format."},
 			command{"ExportZknsForKeyspace", commandExportZknsForKeyspace,
-				"<zk global keyspace path> (/zk/global/vt/keyspaces/<keyspace>)",
+				"<keyspace|zk global keyspace path>",
 				"Export the serving graph entries to the legacy zkns format."},
 			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
 				"zk-vt-paths=<zk local vt path>,... keyspaces=<keyspace>,...",
 				"This takes the Thor's hammer approach of recovery and should only be used in emergencies.  /zk/cell/vt/tablets/... are the canonical source of data for the system. This function use that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
 			command{"ListIdle", commandListIdle,
-				"<zk local vt path> (/zk/<cell>/vt)",
+				"<cell name|zk local vt path> (/zk/<cell>/vt)",
 				"DEPRECATED (use ListAllTablets + awk)\n" +
 					"List all idle tablet paths."},
 			command{"ListScrap", commandListScrap,
-				"<zk local vt path>  (/zk/<cell>/vt)",
+				"<cell name|zk local vt path>  (/zk/<cell>/vt)",
 				"DEPRECATED (use ListAllTablets + awk)\n" +
 					"List all scrap tablet paths."},
 			command{"ListAllTablets", commandListAllTablets,
-				"<zk local vt path>  (/zk/<cell>/vt)",
+				"<cell name|zk local vt path>",
 				"List all tablets in an awk-friendly way."},
 			command{"ListTablets", commandListTablets,
-				"<zk tablet path> ...  (/zk/<cell>/vt/tablets/<tablet uid> ...)",
+				"<tablet alias|zk tablet path> ...",
 				"List specified tablets in an awk-friendly way."},
 		},
 	},
@@ -232,10 +231,10 @@ var commands = []commandGroup{
 				"[-include-views] <keyspace name|zk keyspace path>",
 				"Validate the master schema from shard 0 matches all the other tablets in the keyspace."},
 			command{"PreflightSchema", commandPreflightSchema,
-				"{-sql=<sql> || -sql-file=<filename>} <zk tablet path>",
+				"{-sql=<sql> || -sql-file=<filename>} <tablet alias|zk tablet path>",
 				"Apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file."},
 			command{"ApplySchema", commandApplySchema,
-				"[-force] {-sql=<sql> || -sql-file=<filename>} [-skip-preflight] [-stop-replication] <zk tablet path>",
+				"[-force] {-sql=<sql> || -sql-file=<filename>} [-skip-preflight] [-stop-replication] <tablet alias|zk tablet path>",
 				"Apply the schema change to the specified tablet (allowing replication by default). The sql can be inlined or read from a file. Note this doesn't change any tablet state (doesn't go into 'schema' type)."},
 			command{"ApplySchemaShard", commandApplySchemaShard,
 				"[-force] {-sql=<sql> || -sql-file=<filename>} [-simple] [-new-parent=<zk tablet path>] <keyspace/shard|zk shard path>",
@@ -308,8 +307,8 @@ func fmtTabletAwkable(ti *tm.TabletInfo) string {
 	return fmt.Sprintf("%v %v %v %v %v %v", ti.Path(), keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr)
 }
 
-func listTabletsByType(zconn zk.Conn, zkVtPath string, dbType naming.TabletType) error {
-	tablets, err := wr.GetAllTablets(zconn, zkVtPath)
+func listTabletsByType(ts naming.TopologyServer, zconn zk.Conn, cell string, dbType naming.TabletType) error {
+	tablets, err := wr.GetAllTablets(ts, zconn, cell)
 	if err != nil {
 		return err
 	}
@@ -355,8 +354,9 @@ func getActions(zconn zk.Conn, actionPath string) ([]*tm.ActionNode, error) {
 	return nodes, nil
 }
 
-func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
+func listActionsByShard(ts naming.TopologyServer, zconn zk.Conn, keyspace, shard string) error {
 	// print the shard action nodes
+	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	shardActionPath, err := tm.ShardActionPath(zkShardPath)
 	if err != nil {
 		return err
@@ -388,11 +388,12 @@ func listActionsByShard(zconn zk.Conn, zkShardPath string) error {
 		mu.Unlock()
 	}
 
-	tabletPaths, err := tabletPathsForShard(zconn, zkShardPath)
+	tabletAliases, err := tm.FindAllTabletAliasesInShardTs(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
-	for _, tabletPath := range tabletPaths {
+	for _, tabletAlias := range tabletAliases {
+		tabletPath := tm.TabletPathForAlias(tabletAlias)
 		actionPath, err := tm.TabletActionPath(tabletPath)
 		if err != nil {
 			relog.Warning("listActionsByShard %v", err)
@@ -428,39 +429,16 @@ func fmtAction(action *tm.ActionNode) string {
 	return fmt.Sprintf("%v %v %v %v %v", action.Path(), action.Action, state, action.ActionGuid, action.Error)
 }
 
-func listTabletsByShard(zconn zk.Conn, zkShardPath string) error {
-	tabletPaths, err := tabletPathsForShard(zconn, zkShardPath)
+func listTabletsByShard(ts naming.TopologyServer, keyspace, shard string) error {
+	tabletAliases, err := tm.FindAllTabletAliasesInShardTs(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
-	return dumpTablets(zconn, tabletPaths)
+	return dumpTablets(ts, tabletAliases)
 }
 
-func listTabletsByAliases(zconn zk.Conn, tabletAliases []string) error {
-	tabletPaths := make([]string, len(tabletAliases))
-	for i, tabletAlias := range tabletAliases {
-		aliasParts := strings.Split(tabletAlias, "-")
-		uid, _ := strconv.ParseUint(aliasParts[1], 10, 32)
-		alias := naming.TabletAlias{aliasParts[0], uint32(uid)}
-		tabletPaths[i] = tm.TabletPathForAlias(alias)
-	}
-	return dumpTablets(zconn, tabletPaths)
-}
-
-func tabletPathsForShard(zconn zk.Conn, zkShardPath string) ([]string, error) {
-	tabletAliases, err := tm.FindAllTabletAliasesInShard(zconn, zkShardPath)
-	if err != nil {
-		return nil, err
-	}
-	tabletPaths := make([]string, len(tabletAliases))
-	for i, alias := range tabletAliases {
-		tabletPaths[i] = tm.TabletPathForAlias(alias)
-	}
-	return tabletPaths, nil
-}
-
-func dumpAllTablets(zconn zk.Conn, zkVtPath string) error {
-	tablets, err := wr.GetAllTablets(zconn, zkVtPath)
+func dumpAllTablets(ts naming.TopologyServer, zconn zk.Conn, zkVtPath string) error {
+	tablets, err := wr.GetAllTablets(ts, zconn, zkVtPath)
 	if err != nil {
 		return err
 	}
@@ -470,15 +448,15 @@ func dumpAllTablets(zconn zk.Conn, zkVtPath string) error {
 	return nil
 }
 
-func dumpTablets(zconn zk.Conn, zkTabletPaths []string) error {
-	tabletMap, err := wr.GetTabletMap(zconn, zkTabletPaths)
+func dumpTablets(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) error {
+	tabletMap, err := wr.GetTabletMap(ts, tabletAliases)
 	if err != nil {
 		return err
 	}
-	for _, tabletPath := range zkTabletPaths {
-		ti, ok := tabletMap[tabletPath]
+	for _, tabletAlias := range tabletAliases {
+		ti, ok := tabletMap[tabletAlias]
 		if !ok {
-			relog.Warning("failed to load tablet %v", tabletPath)
+			relog.Warning("failed to load tablet %v", tabletAlias)
 		} else {
 			fmt.Println(fmtTabletAwkable(ti))
 		}
@@ -595,7 +573,7 @@ func tabletParamToTabletAlias(param string) naming.TabletAlias {
 	return result
 }
 
-// convertTabletZkPath takes either an old style ZK tablet replication
+// tabletRepParamToTabletAlias takes either an old style ZK tablet replication
 // path or a new style tablet alias as a string, and returns a
 // TabletAlias.
 func tabletRepParamToTabletAlias(param string) naming.TabletAlias {
@@ -614,6 +592,20 @@ func tabletRepParamToTabletAlias(param string) naming.TabletAlias {
 		relog.Fatal("Invalid tablet alias %v: %v", param, err)
 	}
 	return result
+}
+
+// vtPathToCell takes either an old style ZK vt path /zk/<cell>/vt or
+// a new style cell and returns the cell name
+func vtPathToCell(param string) string {
+	if param[0] == '/' {
+		// old zookeeper replication path like /zk/<cell>/vt
+		zkPathParts := strings.Split(param, "/")
+		if len(zkPathParts) != 4 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" {
+			relog.Fatal("Invalid vt path: %v", param)
+		}
+		return zkPathParts[2]
+	}
+	return param
 }
 
 func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -716,9 +708,10 @@ func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 func commandPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action Ping requires <zk tablet path>")
+		relog.Fatal("action Ping requires <tablet alias|zk tablet path>")
 	}
-	return wrangler.ActionInitiator().Ping(subFlags.Arg(0))
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return wrangler.ActionInitiator().Ping(tabletAlias)
 }
 
 func commandRpcPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -745,13 +738,14 @@ func commandQuery(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) 
 func commandSleep(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		relog.Fatal("action Sleep requires 2 args")
+		relog.Fatal("action Sleep requires <tablet alias|zk tablet path> <duration>")
 	}
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	duration, err := time.ParseDuration(subFlags.Arg(1))
 	if err != nil {
 		return "", err
 	}
-	return wrangler.ActionInitiator().Sleep(subFlags.Arg(0), duration)
+	return wrangler.ActionInitiator().Sleep(tabletAlias, duration)
 }
 
 func commandSnapshotSourceEnd(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -759,10 +753,11 @@ func commandSnapshotSourceEnd(wrangler *wr.Wrangler, subFlags *flag.FlagSet, arg
 	readWrite := subFlags.Bool("read-write", false, "will make the server read-write")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		relog.Fatal("action SnapshotSourceEnd requires <zk tablet path> <original server type>")
+		relog.Fatal("action SnapshotSourceEnd requires <tablet alias|zk tablet path> <original server type>")
 	}
 
-	return "", wrangler.SnapshotSourceEnd(subFlags.Arg(0), *slaveStartRequired, !(*readWrite), naming.TabletType(subFlags.Arg(1)))
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return "", wrangler.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), naming.TabletType(subFlags.Arg(1)))
 }
 
 func commandSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -771,10 +766,11 @@ func commandSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 	concurrency := subFlags.Int("concurrency", 4, "how many compression/checksum jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action Snapshot requires <zk src tablet path>")
+		relog.Fatal("action Snapshot requires <tablet alias|zk src tablet path>")
 	}
 
-	filename, zkParentPath, slaveStartRequired, readOnly, originalType, err := wrangler.Snapshot(subFlags.Arg(0), *force, *concurrency, *serverMode)
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	filename, zkParentPath, slaveStartRequired, readOnly, originalType, err := wrangler.Snapshot(tabletAlias, *force, *concurrency, *serverMode)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
 		relog.Info("ParentPath: %v", zkParentPath)
@@ -793,13 +789,15 @@ func commandRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
-		relog.Fatal("action Restore requires <zk src tablet path> <src manifest path> <zk dst tablet path> [<zk new master path>]")
+		relog.Fatal("action Restore requires <src tablet alias|zk src tablet path> <src manifest path> <dst tablet alias|zk dst tablet path> [<zk new master path>]")
 	}
+	srcTabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	dstTabletAlias := tabletParamToTabletAlias(subFlags.Arg(2))
 	zkParentPath := subFlags.Arg(0)
 	if subFlags.NArg() == 4 {
 		zkParentPath = subFlags.Arg(3)
 	}
-	return "", wrangler.Restore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
+	return "", wrangler.Restore(srcTabletAlias, subFlags.Arg(1), dstTabletAlias, zkParentPath, *fetchConcurrency, *fetchRetryCount, false, *dontWaitForSlaveStart)
 }
 
 func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -810,18 +808,24 @@ func commandClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) 
 	serverMode := subFlags.Bool("server-mode", false, "will keep the snapshot server offline to serve DB files directly")
 	subFlags.Parse(args)
 	if subFlags.NArg() < 2 {
-		relog.Fatal("action Clone requires <zk src tablet path> <zk dst tablet path> ...")
+		relog.Fatal("action Clone requires <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...")
 	}
 
-	return "", wrangler.Clone(subFlags.Arg(0), subFlags.Args()[1:], *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
+	srcTabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	dstTabletAliases := make([]naming.TabletAlias, subFlags.NArg()-1)
+	for i := 1; i < subFlags.NArg(); i++ {
+		dstTabletAliases[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
+	}
+	return "", wrangler.Clone(srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
 func commandReparentTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ReparentTablet requires <zk tablet path>")
+		relog.Fatal("action ReparentTablet requires <tablet alias|zk tablet path>")
 	}
-	return "", wrangler.ReparentTablet(subFlags.Arg(0))
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return "", wrangler.ReparentTablet(tabletAlias)
 }
 
 func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -829,10 +833,11 @@ func commandPartialSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 4 {
-		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name> <start key> <end key>")
+		relog.Fatal("action PartialSnapshot requires <src tablet alias|zk src tablet path> <key name> <start key> <end key>")
 	}
 
-	filename, zkParentPath, err := wrangler.PartialSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *concurrency)
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	filename, zkParentPath, err := wrangler.PartialSnapshot(tabletAlias, subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *concurrency)
 	if err == nil {
 		relog.Info("Manifest: %v", filename)
 		relog.Info("ParentPath: %v", zkParentPath)
@@ -849,9 +854,9 @@ func commandMultiRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	subFlags.Parse(args)
 
 	if subFlags.NArg() < 2 {
-		relog.Fatal("MultiRestore requires <destination zk path> <source zk path>... %v", args)
+		relog.Fatal("MultiRestore requires <dst tablet alias|destination zk path> <source zk path>... %v", args)
 	}
-	destination := subFlags.Arg(0)
+	destination := tabletParamToTabletAlias(subFlags.Arg(0))
 	sources := subFlags.Args()[1:]
 
 	err = wrangler.RestoreFromMultiSnapshot(destination, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
@@ -867,7 +872,7 @@ func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		relog.Fatal("action PartialSnapshot requires <zk src tablet path> <key name>")
+		relog.Fatal("action PartialSnapshot requires <src tablet alias|zk src tablet path> <key name>")
 	}
 
 	shards, err := key.ParseShardingSpec(*spec)
@@ -879,7 +884,8 @@ func commandMultiSnapshot(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 		tables = strings.Split(*tablesString, ",")
 	}
 
-	filenames, zkParentPath, err := wrangler.MultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
+	source := tabletParamToTabletAlias(subFlags.Arg(0))
+	filenames, zkParentPath, err := wrangler.MultiSnapshot(shards, source, subFlags.Arg(1), *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
 
 	if err == nil {
 		relog.Info("manifest locations: %v", filenames)
@@ -893,13 +899,15 @@ func commandPartialRestore(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args [
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
-		relog.Fatal("action PartialRestore requires <zk src tablet path> <src manifest path> <zk dst tablet path> [<zk new master path>]")
+		relog.Fatal("action PartialRestore requires <src tablet alias|zk src tablet path> <src manifest path> <dst tablet alias|zk dst tablet path> [<zk new master path>]")
 	}
 	zkParentPath := subFlags.Arg(0)
 	if subFlags.NArg() == 4 {
 		zkParentPath = subFlags.Arg(3)
 	}
-	return "", wrangler.PartialRestore(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), zkParentPath, *fetchConcurrency, *fetchRetryCount)
+	source := tabletParamToTabletAlias(subFlags.Arg(0))
+	destination := tabletParamToTabletAlias(subFlags.Arg(2))
+	return "", wrangler.PartialRestore(source, subFlags.Arg(1), destination, zkParentPath, *fetchConcurrency, *fetchRetryCount)
 }
 
 func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -909,10 +917,12 @@ func commandPartialClone(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 5 {
-		relog.Fatal("action PartialClone requires <zk src tablet path> <zk dst tablet path> <key name> <start key> <end key>")
+		relog.Fatal("action PartialClone requires <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> <key name> <start key> <end key>")
 	}
 
-	return "", wrangler.PartialClone(subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *concurrency, *fetchConcurrency, *fetchRetryCount)
+	source := tabletParamToTabletAlias(subFlags.Arg(0))
+	destination := tabletParamToTabletAlias(subFlags.Arg(1))
+	return "", wrangler.PartialClone(source, destination, subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *concurrency, *fetchConcurrency, *fetchRetryCount)
 }
 
 func commandExecuteHook(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -964,22 +974,24 @@ func commandReparentShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []
 	force := subFlags.Bool("force", false, "will force the reparent even if the master is already correct")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		relog.Fatal("action ReparentShard requires <keyspace/shard|zk shard path> <zk tablet path>")
+		relog.Fatal("action ReparentShard requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
 	}
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return "", wrangler.ReparentShard(keyspace, shard, subFlags.Arg(1), *leaveMasterReadOnly, *force)
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
+	return "", wrangler.ReparentShard(keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force)
 }
 
 func commandShardExternallyReparented(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	scrapStragglers := subFlags.Bool("scrap-stragglers", false, "will scrap the hosts that haven't been reparented")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		relog.Fatal("action ShardExternallyReparented requires <keyspace/shard|zk shard path> <zk tablet path>")
+		relog.Fatal("action ShardExternallyReparented requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
 	}
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return "", wrangler.ShardExternallyReparented(keyspace, shard, subFlags.Arg(1), *scrapStragglers)
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
+	return "", wrangler.ShardExternallyReparented(keyspace, shard, tabletAlias, *scrapStragglers)
 }
 
 func commandValidateShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1023,17 +1035,19 @@ func commandShardReplicationPositions(wrangler *wr.Wrangler, subFlags *flag.Flag
 func commandListShardTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ListShardTablets requires <zk shard path>")
+		relog.Fatal("action ListShardTablets requires <keyspace/shard|zk shard path>")
 	}
-	return "", listTabletsByShard(wrangler.ZkConn(), subFlags.Arg(0))
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	return "", listTabletsByShard(wrangler.TopologyServer(), keyspace, shard)
 }
 
 func commandListShardActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ListShardActions requires <zk shard path>")
+		relog.Fatal("action ListShardActions requires <keyspace/shard|zk shard path>")
 	}
-	return "", listActionsByShard(wrangler.ZkConn(), subFlags.Arg(0))
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	return "", listActionsByShard(wrangler.TopologyServer(), wrangler.ZkConn(), keyspace, shard)
 }
 
 func commandCreateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1232,17 +1246,19 @@ func commandValidate(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 func commandExportZkns(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ExportZkns requires <zk vt root path>")
+		relog.Fatal("action ExportZkns requires <cell name|zk vt root path>")
 	}
-	return "", wrangler.ExportZkns(subFlags.Arg(0))
+	cell := vtPathToCell(subFlags.Arg(0))
+	return "", wrangler.ExportZkns(cell)
 }
 
 func commandExportZknsForKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ExportZknsForKeyspace requires <zk vt root path>")
+		relog.Fatal("action ExportZknsForKeyspace requires <keyspace|zk global keyspace path>")
 	}
-	return "", wrangler.ExportZknsForKeyspace(subFlags.Arg(0))
+	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
+	return "", wrangler.ExportZknsForKeyspace(keyspace)
 }
 
 func commandRebuildReplicationGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1271,43 +1287,46 @@ func commandRebuildReplicationGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSe
 func commandListIdle(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ListIdle requires <zk vt path>")
+		relog.Fatal("action ListIdle requires <cell name|zk vt path>")
 	}
-	return "", listTabletsByType(wrangler.ZkConn(), subFlags.Arg(0), naming.TYPE_IDLE)
+	cell := vtPathToCell(subFlags.Arg(0))
+	return "", listTabletsByType(wrangler.TopologyServer(), wrangler.ZkConn(), cell, naming.TYPE_IDLE)
 }
 
 func commandListScrap(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ListScrap requires <zk vt path>")
+		relog.Fatal("action ListScrap requires <cell name|zk vt path>")
 	}
-	return "", listTabletsByType(wrangler.ZkConn(), subFlags.Arg(0), naming.TYPE_SCRAP)
+	cell := vtPathToCell(subFlags.Arg(0))
+	return "", listTabletsByType(wrangler.TopologyServer(), wrangler.ZkConn(), cell, naming.TYPE_SCRAP)
 }
 
 func commandListAllTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ListAllTablets requires <zk vt path>")
+		relog.Fatal("action ListAllTablets requires <cell name|zk vt path>")
 	}
 
-	return "", dumpAllTablets(wrangler.ZkConn(), subFlags.Arg(0))
+	cell := vtPathToCell(subFlags.Arg(0))
+	return "", dumpAllTablets(wrangler.TopologyServer(), wrangler.ZkConn(), cell)
 }
 
 func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
-		relog.Fatal("action ListTablets requires <zk tablet path> ...")
+		relog.Fatal("action ListTablets requires <tablet alias|zk tablet path> ...")
 	}
 
-	// If these are not zk paths, assume they are tablet aliases.
-	if strings.HasPrefix(subFlags.Arg(0), "/zk") {
-		return "", dumpTablets(wrangler.ZkConn(), subFlags.Args())
-	}
 	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
 	if err != nil {
 		return "", err
 	}
-	return "", listTabletsByAliases(wrangler.ZkConn(), zkPaths)
+	aliases := make([]naming.TabletAlias, len(zkPaths))
+	for i, zkPath := range zkPaths {
+		aliases[i] = tabletParamToTabletAlias(zkPath)
+	}
+	return "", dumpTablets(wrangler.TopologyServer(), aliases)
 }
 
 func commandGetSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1358,10 +1377,11 @@ func commandPreflightSchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	subFlags.Parse(args)
 
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action PreflightSchema requires <zk tablet path>")
+		relog.Fatal("action PreflightSchema requires <tablet alias|zk tablet path>")
 	}
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	change := getFileParam(*sql, *sqlFile, "sql")
-	scr, err := wrangler.PreflightSchema(subFlags.Arg(0), change)
+	scr, err := wrangler.PreflightSchema(tabletAlias, change)
 	if err == nil {
 		relog.Info(scr.String())
 	}
@@ -1377,8 +1397,9 @@ func commandApplySchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 	subFlags.Parse(args)
 
 	if subFlags.NArg() != 1 {
-		relog.Fatal("action ApplySchema requires <zk tablet path>")
+		relog.Fatal("action ApplySchema requires <tablet alias|zk tablet path>")
 	}
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	change := getFileParam(*sql, *sqlFile, "sql")
 
 	sc := &mysqlctl.SchemaChange{}
@@ -1387,7 +1408,7 @@ func commandApplySchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 
 	// do the preflight to get before and after schema
 	if !(*skipPreflight) {
-		scr, err := wrangler.PreflightSchema(subFlags.Arg(0), sc.Sql)
+		scr, err := wrangler.PreflightSchema(tabletAlias, sc.Sql)
 		if err != nil {
 			relog.Fatal("preflight failed: %v", err)
 		}
@@ -1397,7 +1418,7 @@ func commandApplySchema(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 		sc.Force = *force
 	}
 
-	scr, err := wrangler.ApplySchema(subFlags.Arg(0), sc)
+	scr, err := wrangler.ApplySchema(tabletAlias, sc)
 	if err == nil {
 		relog.Info(scr.String())
 	}
@@ -1417,12 +1438,16 @@ func commandApplySchemaShard(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	change := getFileParam(*sql, *sqlFile, "sql")
+	var newParentAlias naming.TabletAlias
+	if *newParent != "" {
+		newParentAlias = tabletParamToTabletAlias(*newParent)
+	}
 
 	if (*simple) && (*newParent != "") {
 		relog.Fatal("new_parent for action ApplySchemaShard can only be specified for complex schema upgrades")
 	}
 
-	scr, err := wrangler.ApplySchemaShard(keyspace, shard, change, *newParent, *simple, *force)
+	scr, err := wrangler.ApplySchemaShard(keyspace, shard, change, newParentAlias, *simple, *force)
 	if err == nil {
 		relog.Info(scr.String())
 	}

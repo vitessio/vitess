@@ -213,7 +213,7 @@ def run_test_secure():
       })
 
   # Reparent using SSL
-  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.zk_tablet_path, auto_log=True)
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
 
   # then get the topology and check it
   zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,

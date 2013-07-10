@@ -6,7 +6,6 @@ package wrangler
 
 import (
 	"fmt"
-	"path"
 	"sort"
 	"sync"
 
@@ -22,9 +21,8 @@ func (wr *Wrangler) GetPermissions(tabletAlias naming.TabletAlias) (*mysqlctl.Pe
 }
 
 // helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, zkMasterTabletPath string, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, masterAlias naming.TabletAlias, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	zkTabletPath := tm.TabletPathForAlias(alias)
 	relog.Info("Gathering permissions for %v", alias)
 	slavePermissions, err := wr.GetPermissions(alias)
 	if err != nil {
@@ -32,8 +30,8 @@ func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, zkM
 		return
 	}
 
-	relog.Info("Diffing permissions for %v", zkTabletPath)
-	mysqlctl.DiffPermissions(zkMasterTabletPath, masterPermissions, zkTabletPath, slavePermissions, er)
+	relog.Info("Diffing permissions for %v", alias)
+	mysqlctl.DiffPermissions(masterAlias.String(), masterPermissions, alias.String(), slavePermissions, er)
 }
 
 func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
@@ -46,7 +44,6 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 	if si.MasterAlias.Uid == naming.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
-	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
 	relog.Info("Gathering permissions for master %v", si.MasterAlias)
 	masterPermissions, err := wr.GetPermissions(si.MasterAlias)
 	if err != nil {
@@ -55,7 +52,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -68,7 +65,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 			continue
 		}
 		wg.Add(1)
-		go wr.diffPermissions(masterPermissions, zkMasterTabletPath, alias, &wg, &er)
+		go wr.diffPermissions(masterPermissions, si.MasterAlias, alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -78,18 +75,15 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 }
 
 func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
-	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
-
 	// find all the shards
-	zkShardsPath := path.Join(zkKeyspacePath, "shards")
-	shards, _, err := wr.zconn.Children(zkShardsPath)
+	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
 	}
 
 	// corner cases
 	if len(shards) == 0 {
-		return fmt.Errorf("No shards in keyspace " + zkKeyspacePath)
+		return fmt.Errorf("No shards in keyspace %v", keyspace)
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
@@ -104,8 +98,8 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	if si.MasterAlias.Uid == naming.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
-	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
-	relog.Info("Gathering permissions for reference master %v", si.MasterAlias)
+	referenceAlias := si.MasterAlias
+	relog.Info("Gathering permissions for reference master %v", referenceAlias)
 	referencePermissions, err := wr.GetPermissions(si.MasterAlias)
 	if err != nil {
 		return err
@@ -115,8 +109,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		shardPath := path.Join(zkShardsPath, shard)
-		aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardPath)
+		aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -128,7 +121,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 			}
 
 			wg.Add(1)
-			go wr.diffPermissions(referencePermissions, zkReferenceTabletPath, alias, &wg, &er)
+			go wr.diffPermissions(referencePermissions, referenceAlias, alias, &wg, &er)
 		}
 	}
 	wg.Wait()

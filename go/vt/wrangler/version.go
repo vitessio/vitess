@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -24,9 +23,9 @@ type debugVars struct {
 	Version string
 }
 
-func (wr *Wrangler) GetVersion(zkTabletPath string) (string, error) {
-	// read the tablet from ZK to get the address to connect to
-	tablet, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+func (wr *Wrangler) GetVersion(tabletAlias naming.TabletAlias) (string, error) {
+	// read the tablet from TopologyServer to get the address to connect to
+	tablet, err := tm.ReadTabletTs(wr.ts, tabletAlias)
 	if err != nil {
 		return "", err
 	}
@@ -57,28 +56,26 @@ func (wr *Wrangler) GetVersion(zkTabletPath string) (string, error) {
 	}
 	version := parts[1]
 
-	relog.Info("Tablet %v is running version '%v'", zkTabletPath, version)
+	relog.Info("Tablet %v is running version '%v'", tabletAlias, version)
 	return version, nil
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(masterVersion string, zkMasterTabletPath string, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffVersion(masterVersion string, masterAlias naming.TabletAlias, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	zkTabletPath := tm.TabletPathForAlias(alias)
-	relog.Info("Gathering version for %v", zkTabletPath)
-	slaveVersion, err := wr.GetVersion(zkTabletPath)
+	relog.Info("Gathering version for %v", alias)
+	slaveVersion, err := wr.GetVersion(alias)
 	if err != nil {
 		er.RecordError(err)
 		return
 	}
 
 	if masterVersion != slaveVersion {
-		er.RecordError(fmt.Errorf("Master %v version %v is different than slave %v version %v", zkMasterTabletPath, masterVersion, zkTabletPath, slaveVersion))
+		er.RecordError(fmt.Errorf("Master %v version %v is different than slave %v version %v", masterAlias, masterVersion, alias, slaveVersion))
 	}
 }
 
 func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
-	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	si, err := tm.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
@@ -86,18 +83,17 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 
 	// get version from the master, or error
 	if si.MasterAlias.Uid == naming.NO_TABLET {
-		return fmt.Errorf("No master in shard " + zkShardPath)
+		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
-	zkMasterTabletPath := tm.TabletPathForAlias(si.MasterAlias)
-	relog.Info("Gathering version for master %v", zkMasterTabletPath)
-	masterVersion, err := wr.GetVersion(zkMasterTabletPath)
+	relog.Info("Gathering version for master %v", si.MasterAlias)
+	masterVersion, err := wr.GetVersion(si.MasterAlias)
 	if err != nil {
 		return err
 	}
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, si.ShardPath())
+	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -111,7 +107,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 		}
 
 		wg.Add(1)
-		go wr.diffVersion(masterVersion, zkMasterTabletPath, alias, &wg, &er)
+		go wr.diffVersion(masterVersion, si.MasterAlias, alias, &wg, &er)
 	}
 	wg.Wait()
 	if er.HasErrors() {
@@ -121,18 +117,15 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 }
 
 func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
-	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
-
 	// find all the shards
-	zkShardsPath := path.Join(zkKeyspacePath, "shards")
-	shards, _, err := wr.zconn.Children(zkShardsPath)
+	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
 	}
 
 	// corner cases
 	if len(shards) == 0 {
-		return fmt.Errorf("No shards in keyspace " + zkKeyspacePath)
+		return fmt.Errorf("No shards in keyspace %v", keyspace)
 	}
 	sort.Strings(shards)
 	if len(shards) == 1 {
@@ -147,9 +140,9 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	if si.MasterAlias.Uid == naming.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
-	zkReferenceTabletPath := tm.TabletPathForAlias(si.MasterAlias)
-	relog.Info("Gathering version for reference master %v", zkReferenceTabletPath)
-	referenceVersion, err := wr.GetVersion(zkReferenceTabletPath)
+	referenceAlias := si.MasterAlias
+	relog.Info("Gathering version for reference master %v", referenceAlias)
+	referenceVersion, err := wr.GetVersion(referenceAlias)
 	if err != nil {
 		return err
 	}
@@ -158,8 +151,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		shardPath := path.Join(zkShardsPath, shard)
-		aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, shardPath)
+		aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -171,7 +163,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 			}
 
 			wg.Add(1)
-			go wr.diffVersion(referenceVersion, zkReferenceTabletPath, alias, &wg, &er)
+			go wr.diffVersion(referenceVersion, referenceAlias, alias, &wg, &er)
 		}
 	}
 	wg.Wait()

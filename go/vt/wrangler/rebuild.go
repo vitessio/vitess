@@ -64,8 +64,6 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
 func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
-	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
-
 	relog.Info("rebuildShard %v/%v", keyspace, shard)
 	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
 	shardInfo, err := tm.NewShardInfo(keyspace, shard, "{}")
@@ -73,7 +71,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShard(wr.zconn, zkShardPath)
+	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -100,12 +98,12 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	if err = tm.UpdateShard(wr.ts, shardInfo); err != nil {
 		return err
 	}
-	return wr.rebuildShardSrvGraph(zkShardPath, shardInfo, tablets, cells)
+	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
 }
 
 // Write serving graph data to /zk/local/vt/ns/...
-func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo, cells []string) error {
-	relog.Info("rebuildShardSrvGraph %v", zkShardPath)
+func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo, cells []string) error {
+	relog.Info("rebuildShardSrvGraph %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 
 	// Get all existing db types so they can be removed if nothing
 	// had been editted.  This applies to all cells, which can't
@@ -278,8 +276,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(zkShardPath string, shardInfo *tm.Shard
 
 // Rebuild the serving graph data while locking out other changes.
 func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
-	zkKeyspacePath := "/zk/global/vt/keyspaces/" + keyspace
-	actionPath, err := wr.ai.RebuildKeyspace(zkKeyspacePath)
+	actionPath, err := wr.ai.RebuildKeyspace(keyspace)
 	if err != nil {
 		return err
 	}
@@ -289,7 +286,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error 
 		return err
 	}
 
-	rebuildErr := wr.rebuildKeyspace(zkKeyspacePath, cells)
+	rebuildErr := wr.rebuildKeyspace(keyspace, cells)
 	err = wr.handleActionError(actionPath, rebuildErr, false)
 	if rebuildErr != nil {
 		if err != nil {
@@ -306,9 +303,8 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error 
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error {
-	relog.Info("rebuildKeyspace %v", zkKeyspacePath)
-	keyspace := path.Base(zkKeyspacePath)
+func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
+	relog.Info("rebuildKeyspace %v", keyspace)
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
@@ -332,8 +328,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	zkShardPath := tm.ShardPath(keyspace, shards[0])
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.zconn, zkShardPath)
+	aliases, err := tm.FindAllTabletAliasesInShardTs(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -353,8 +348,7 @@ func (wr *Wrangler) rebuildKeyspace(zkKeyspacePath string, cells []string) error
 			// expensive, but we only do it on all the
 			// non-serving tablets in a shard before we
 			// find a serving tablet.
-			zkTabletPath := tm.TabletPathForAlias(alias)
-			ti, err := tm.ReadTablet(wr.zconn, zkTabletPath)
+			ti, err := tm.ReadTabletTs(wr.ts, alias)
 			if err != nil {
 				return err
 			}
@@ -437,7 +431,7 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 
 	allTablets := make([]*tm.TabletInfo, 0, 1024)
 	for _, zkVtPath := range zkVtPaths {
-		tablets, err := GetAllTablets(wr.zconn, zkVtPath)
+		tablets, err := GetAllTablets(wr.ts, wr.zconn, zkVtPath)
 		if err != nil {
 			return err
 		}

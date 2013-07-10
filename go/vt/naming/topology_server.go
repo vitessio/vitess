@@ -139,7 +139,7 @@ func GetTopologyServerByName(name string) TopologyServer {
 func GetTopologyServer() TopologyServer {
 	if len(topologyServerImpls) == 1 {
 		for name, ts := range topologyServerImpls {
-			relog.Info("Using only TopologyServer: %v", name)
+			relog.Debug("Using only TopologyServer: %v", name)
 			return ts
 		}
 	}
@@ -152,14 +152,14 @@ func GetTopologyServer() TopologyServer {
 	if result == nil {
 		panic(fmt.Errorf("No TopologyServer named %v", name))
 	}
-	relog.Info("Using TopologyServer: %v", name)
+	relog.Debug("Using TopologyServer: %v", name)
 	return result
 }
 
 // Close all registered TopologyServer
 func CloseTopologyServers() {
 	for name, ts := range topologyServerImpls {
-		relog.Info("Closing TopologyServer: %v", name)
+		relog.Debug("Closing TopologyServer: %v", name)
 		ts.Close()
 	}
 }
