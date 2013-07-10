@@ -24,8 +24,15 @@ func (zkts *ZkTopologyServer) GetZConn() zk.Conn {
 	return zkts.zconn
 }
 
+// NewZkTopologyServer can be used to create a custom ZkTopologyServer
+// (for tests for instance) but it cannot change the globally
+// registered one.
+func NewZkTopologyServer(zconn zk.Conn) *ZkTopologyServer {
+	return &ZkTopologyServer{zconn: zconn}
+}
+
 func init() {
 	zconn := zk.NewMetaConn(false)
 	expvar.Publish("ZkMetaConn", zconn)
-	naming.RegisterTopologyServer("zookeeper", &ZkTopologyServer{zconn: zconn})
+	naming.RegisterTopologyServer("zookeeper", NewZkTopologyServer(zconn))
 }
