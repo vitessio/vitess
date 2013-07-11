@@ -167,7 +167,7 @@ def run_test_service_enabled():
   utils.debug("run_test_service_enabled starting @ %s" % start_position)
   utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
   utils.debug("sleeping a bit for the replica action to complete")
-  time.sleep(1)
+  time.sleep(10)
   thd = threading.Thread(target=perform_writes, name='write_thd', args=(400,))
   thd.daemon = True
   thd.start()
