@@ -767,7 +767,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	}
 
 	// read the source tablet
-	sourceTablet, err := ReadTablet(ta.zconn, args.ZkSrcTabletPath)
+	sourceTablet, err := ReadTabletTs(ta.ts, args.SrcTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -793,6 +793,8 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 // Put tablet into the replication graph as a spare.
 func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	args := actionNode.args.(*RestoreArgs)
+	BackfillAlias(args.ZkSrcTabletPath, &args.SrcTabletAlias)
+	BackfillAlias(args.ZkParentPath, &args.ParentAlias)
 
 	// read our current tablet, verify its state
 	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
@@ -810,7 +812,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// read the source tablet, compute args.SrcFilePath if default
-	sourceTablet, err := ReadTablet(ta.zconn, args.ZkSrcTabletPath)
+	sourceTablet, err := ReadTabletTs(ta.ts, args.SrcTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -819,12 +821,12 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// read the parent tablet, verify its state
-	parentTablet, err := ReadTablet(ta.zconn, args.ZkParentPath)
+	parentTablet, err := ReadTabletTs(ta.ts, args.ParentAlias)
 	if err != nil {
 		return err
 	}
 	if parentTablet.Type != naming.TYPE_MASTER && parentTablet.Type != naming.TYPE_SNAPSHOT_SOURCE {
-		return fmt.Errorf("restore expected master or snapshot_source parent: %v %v", parentTablet.Type, args.ZkParentPath)
+		return fmt.Errorf("restore expected master or snapshot_source parent: %v %v", parentTablet.Type, args.ParentAlias)
 	}
 
 	// read & unpack the manifest
@@ -972,6 +974,8 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 // Put tablet into the replication graph as a spare.
 func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	args := actionNode.args.(*RestoreArgs)
+	BackfillAlias(args.ZkSrcTabletPath, &args.SrcTabletAlias)
+	BackfillAlias(args.ZkParentPath, &args.ParentAlias)
 
 	// read our current tablet, verify its state
 	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
@@ -983,18 +987,18 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// read the source tablet
-	sourceTablet, err := ReadTablet(ta.zconn, args.ZkSrcTabletPath)
+	sourceTablet, err := ReadTabletTs(ta.ts, args.SrcTabletAlias)
 	if err != nil {
 		return err
 	}
 
 	// read the parent tablet, verify its state
-	parentTablet, err := ReadTablet(ta.zconn, args.ZkParentPath)
+	parentTablet, err := ReadTabletTs(ta.ts, args.ParentAlias)
 	if err != nil {
 		return err
 	}
 	if parentTablet.Type != naming.TYPE_MASTER {
-		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, args.ZkParentPath)
+		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, args.ParentAlias)
 	}
 
 	// read & unpack the manifest

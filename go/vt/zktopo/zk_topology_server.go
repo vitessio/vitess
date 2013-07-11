@@ -36,3 +36,11 @@ func init() {
 	expvar.Publish("ZkMetaConn", zconn)
 	naming.RegisterTopologyServer("zookeeper", NewZkTopologyServer(zconn))
 }
+
+//
+// These helper methods are for ZK specific things
+//
+
+func (zkts *ZkTopologyServer) ShardActionPath(keyspace, shard string) string {
+	return "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard + "/action"
+}

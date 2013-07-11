@@ -77,7 +77,6 @@ A meta struct that contains paths to give the zk data more context and convenien
 This is the main way we interact with a shard.
 */
 type ShardInfo struct {
-	zkVtRoot  string // root path in zk for all vt nodes
 	keyspace  string
 	shardName string
 	*Shard
@@ -102,14 +101,6 @@ func (si *ShardInfo) ShardPath() string {
 func (si *ShardInfo) TabletPath(alias naming.TabletAlias) string {
 	zkRoot := fmt.Sprintf("/zk/%v/vt", alias.Cell)
 	return TabletPath(zkRoot, alias.Uid)
-}
-
-func (si *ShardInfo) MasterTabletPath() (string, error) {
-	if si.Shard.MasterAlias.Uid == naming.NO_TABLET {
-		return "", fmt.Errorf("no master tablet for shard %v", si.ShardPath())
-	}
-
-	return si.TabletPath(si.Shard.MasterAlias), nil
 }
 
 func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
@@ -148,11 +139,6 @@ func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err 
 		return nil, fmt.Errorf("empty shard data: %v", zkShardPath)
 	}
 
-	zkVtRoot, err := VtRootFromShardPath(zkShardPath)
-	if err != nil {
-		return nil, err
-	}
-
 	var s *Shard
 	if shardData != "" {
 		s, err = zkShardFromJson(shardData)
@@ -161,7 +147,7 @@ func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err 
 		}
 	}
 
-	return &ShardInfo{zkVtRoot, keyspace, shard, s}, nil
+	return &ShardInfo{keyspace, shard, s}, nil
 }
 
 func ReadShard(ts naming.TopologyServer, keyspace, shard string) (*ShardInfo, error) {

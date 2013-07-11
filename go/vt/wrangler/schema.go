@@ -275,7 +275,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 	}
 
 	// get schema on all tablets.
-	relog.Info("Getting schema on all tablets for shard %v", shardInfo.ShardPath())
+	relog.Info("Getting schema on all tablets for shard %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 	wg := &sync.WaitGroup{}
 	for _, status := range statusArray {
 		wg.Add(1)

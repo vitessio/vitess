@@ -6,17 +6,13 @@ package wrangler
 
 import (
 	"fmt"
-	"path"
 	"sync"
 
-	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 func inCellList(cell string, cells []string) bool {
@@ -90,7 +86,27 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
 }
 
-// Write serving graph data to /zk/local/vt/ns/...
+// the following types are used as locations in the serving graph
+
+type cellKeyspace struct {
+	cell     string
+	keyspace string
+}
+
+type cellKeyspaceShard struct {
+	cell     string
+	keyspace string
+	shard    string
+}
+
+type cellKeyspaceShardType struct {
+	cell       string
+	keyspace   string
+	shard      string
+	tabletType naming.TabletType
+}
+
+// Write serving graph data to the cells
 func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo, cells []string) error {
 	relog.Info("rebuildShardSrvGraph %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 
@@ -98,20 +114,20 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.
 	// had been editted.  This applies to all cells, which can't
 	// be determined until you walk through all the tablets.
 	//
-	// existingDbTypePaths is a map:
-	//   key: /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
+	// existingDbTypeLocations is a map:
+	//   key: {cell,keyspace,shard,tabletType}
 	//   value: true
-	existingDbTypePaths := make(map[string]bool)
+	existingDbTypeLocations := make(map[cellKeyspaceShardType]bool)
 
 	// Update db type addresses in the serving graph
 	//
-	// pathAddrsMap is a map:
-	//   key: /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
+	// locationAddrsMap is a map:
+	//   key: {cell,keyspace,shard,tabletType}
 	//   value: naming.VtnsAddrs (list of server records)
-	pathAddrsMap := make(map[string]*naming.VtnsAddrs)
+	locationAddrsMap := make(map[cellKeyspaceShardType]*naming.VtnsAddrs)
 
-	// we keep track of the existingDbTypePaths we've already looked at
-	knownSgShardPaths := make(map[string]bool)
+	// we keep track of the existingDbTypeLocations we've already looked at
+	knownShardLocations := make(map[cellKeyspaceShard]bool)
 
 	for _, tablet := range tablets {
 		// only look at tablets in the cells we want to rebuild
@@ -121,37 +137,34 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.
 			continue
 		}
 
-		// this is /zk/<cell>/vt/ns/<keyspace>/<shard>
+		// this is {cell,keyspace,shard}
 		// we'll get the children to find the existing types
-		zkSgShardPath := naming.ZkPathForVtShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
+		shardLocation := cellKeyspaceShard{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard}
 		// only need to do this once per cell
-		if !knownSgShardPaths[zkSgShardPath] {
-			children, _, err := wr.zconn.Children(zkSgShardPath)
+		if !knownShardLocations[shardLocation] {
+			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			if err != nil {
-				if !zookeeper.IsError(err, zookeeper.ZNONODE) {
-					relog.Warning("unable to list existing db types: %v", err)
-					return err
-				}
+				return err
 			} else {
-				for _, child := range children {
-					existingDbTypePaths[path.Join(zkSgShardPath, child)] = true
+				for _, tabletType := range tabletTypes {
+					existingDbTypeLocations[cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard, tabletType}] = true
 				}
 			}
-			knownSgShardPaths[zkSgShardPath] = true
+			knownShardLocations[shardLocation] = true
 		}
 
-		// Check IsServingType after we have populated existingDbTypePaths
+		// Check IsServingType after we have populated existingDbTypeLocations
 		// so we properly prune data if the definition of serving type
 		// changes.
 		if !tablet.IsServingType() {
 			continue
 		}
 
-		zkPath := naming.ZkPathForVtName(tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, string(tablet.Type))
-		addrs, ok := pathAddrsMap[zkPath]
+		location := cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
+		addrs, ok := locationAddrsMap[location]
 		if !ok {
 			addrs = naming.NewAddrs()
-			pathAddrsMap[zkPath] = addrs
+			locationAddrsMap[location] = addrs
 		}
 
 		entry, err := tm.VtnsAddrForTablet(tablet.Tablet)
@@ -164,68 +177,51 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.
 
 	// if there is a master in one cell, put it in all of them
 	var masterRecord *naming.VtnsAddrs
-	for zkSgShardPath, _ := range knownSgShardPaths {
-		if addrs, ok := pathAddrsMap[path.Join(zkSgShardPath, "master")]; ok {
+	for shardLocation, _ := range knownShardLocations {
+		loc := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, naming.TYPE_MASTER}
+		if addrs, ok := locationAddrsMap[loc]; ok {
 			if masterRecord != nil {
-				relog.Warning("Multiple master records in %v", zkSgShardPath)
+				relog.Warning("Multiple master records in %v", shardLocation)
 			} else {
-				relog.Info("Found master record in %v", zkSgShardPath)
+				relog.Info("Found master record in %v", shardLocation)
 				masterRecord = addrs
 			}
 		}
 	}
 	if masterRecord != nil {
-		for zkSgShardPath, _ := range knownSgShardPaths {
-			zkPath := path.Join(zkSgShardPath, "master")
-			if _, ok := pathAddrsMap[zkPath]; !ok {
-				relog.Info("Adding remote master record in %v", zkPath)
-				pathAddrsMap[zkPath] = masterRecord
+		for shardLocation, _ := range knownShardLocations {
+			location := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, naming.TYPE_MASTER}
+			if _, ok := locationAddrsMap[location]; !ok {
+				relog.Info("Adding remote master record in %v", location)
+				locationAddrsMap[location] = masterRecord
 			}
 		}
 	}
 
-	// write all the /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
+	// write all the {cell,keyspace,shard,type}
 	// nodes everywhere we want them
-	for zkPath, addrs := range pathAddrsMap {
-		cell, err := zk.ZkCellFromZkPath(zkPath)
-		if err != nil {
-			return err
-		}
+	for location, addrs := range locationAddrsMap {
+		cell := location.cell
 		if !inCellList(cell, cells) {
 			continue
 		}
 
-		data := jscfg.ToJson(addrs)
-		_, err = zk.CreateRecursive(wr.zconn, zkPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-		if err != nil {
-			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-				// Node already exists - just stomp away. Multiple writers shouldn't be here.
-				// We use RetryChange here because it won't update the node unnecessarily.
-				f := func(oldValue string, oldStat zk.Stat) (string, error) {
-					return data, nil
-				}
-				err = wr.zconn.RetryChange(zkPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-			}
-		}
-		if err != nil {
+		if err := wr.ts.UpdateSrvTabletType(location.cell, location.keyspace, location.shard, location.tabletType, addrs); err != nil {
 			return fmt.Errorf("writing endpoints failed: %v", err)
 		}
 	}
 
 	// Delete any pre-existing paths that were not updated by this process.
-	// That's the existingDbTypePaths - pathAddrsMap
-	for zkDbTypePath, _ := range existingDbTypePaths {
-		if _, ok := pathAddrsMap[zkDbTypePath]; !ok {
-			cell, err := zk.ZkCellFromZkPath(zkDbTypePath)
-			if err != nil {
-				return err
-			}
+	// That's the existingDbTypeLocations - locationAddrsMap
+	for dbTypeLocation, _ := range existingDbTypeLocations {
+		if _, ok := locationAddrsMap[dbTypeLocation]; !ok {
+			cell := dbTypeLocation.cell
 			if !inCellList(cell, cells) {
 				continue
 			}
 
-			relog.Info("removing stale db type from serving graph: %v", zkDbTypePath)
-			if err := wr.zconn.Delete(zkDbTypePath, -1); err != nil {
+			relog.Info("removing stale db type from serving graph: %v", dbTypeLocation)
+			if err := wr.ts.DeleteSrvTabletType(dbTypeLocation.cell, dbTypeLocation.keyspace, dbTypeLocation.shard, dbTypeLocation.tabletType); err != nil {
 				relog.Warning("unable to remove stale db type from serving graph: %v", err)
 			}
 		}
@@ -234,14 +230,14 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.
 	// Update per-shard information per cell-specific serving path.
 	//
 	// srvShardByPath is a map:
-	//   key: shard path /zk/<cell>/vt/ns/<keyspace>/<shard>
+	//   key: {cell,keyspace,shard}
 	//   value: naming.SrvShard
 	// this will fill in the AddrsByType part for each shard
-	srvShardByPath := make(map[string]*naming.SrvShard)
-	for zkPath, addrs := range pathAddrsMap {
-		// zkPath will be /zk/<cell>/vt/ns/<keyspace>/<shard>/<type>
-		srvShardPath := path.Dir(zkPath)
-		tabletType := naming.TabletType(path.Base(zkPath))
+	srvShardByPath := make(map[cellKeyspaceShard]*naming.SrvShard)
+	for location, addrs := range locationAddrsMap {
+		// location will be {cell,keyspace,shard,type}
+		srvShardPath := cellKeyspaceShard{location.cell, location.keyspace, location.shard}
+		tabletType := location.tabletType
 
 		srvShard, ok := srvShardByPath[srvShardPath]
 		if !ok {
@@ -253,10 +249,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.
 
 	// Save the shard entries
 	for srvPath, srvShard := range srvShardByPath {
-		data := jscfg.ToJson(srvShard)
-		// Stomp away - presume this update will be guarded by a lock node.
-		_, err := wr.zconn.Set(srvPath, data, -1)
-		if err != nil {
+		if err := wr.ts.UpdateSrvShard(srvPath.cell, srvPath.keyspace, srvPath.shard, srvShard); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}
@@ -312,13 +305,13 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	}
 
 	// srvKeyspaceByPath is a map:
-	//   key: local keyspace path /zk/<cell>/vt/ns/<keyspace>
+	//   key: local keyspace {cell,keyspace}
 	//   value: naming.SrvKeyspace object being built
-	srvKeyspaceByPath := make(map[string]*naming.SrvKeyspace)
+	srvKeyspaceByPath := make(map[cellKeyspace]*naming.SrvKeyspace)
 	for _, alias := range aliases {
-		zkLocalKeyspace := naming.ZkPathForVtKeyspace(alias.Cell, keyspace)
-		if _, ok := srvKeyspaceByPath[zkLocalKeyspace]; !ok {
-			// before adding zkLocalKeyspace to the map of
+		keyspaceLocation := cellKeyspace{alias.Cell, keyspace}
+		if _, ok := srvKeyspaceByPath[keyspaceLocation]; !ok {
+			// before adding keyspaceLocation to the map of
 			// of KeyspaceByPath, we check this is a
 			// serving tablet. No serving tablet in shard
 			// 0 means we're not rebuilding the serving
@@ -334,7 +327,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 				continue
 			}
 
-			srvKeyspaceByPath[zkLocalKeyspace] = &naming.SrvKeyspace{Shards: make([]naming.SrvShard, 0, 16)}
+			srvKeyspaceByPath[keyspaceLocation] = &naming.SrvKeyspace{Shards: make([]naming.SrvShard, 0, 16)}
 		}
 	}
 
@@ -347,7 +340,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
 		keyspaceDbTypes := make(map[naming.TabletType]bool)
 		for _, shard := range shards {
-			srvShard, err := naming.ReadSrvShard(wr.zconn, path.Join(srvPath, shard))
+			srvShard, err := wr.ts.GetSrvShard(srvPath.cell, srvPath.keyspace, shard)
 			if err != nil {
 				return err
 			}
@@ -384,32 +377,29 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 
 	// and then finally save the keyspace objects
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
-		data := jscfg.ToJson(srvKeyspace)
-		// Stomp away - presume this update will be guarded by a lock node.
-		_, err = wr.zconn.Set(srvPath, data, -1)
-		if err != nil {
+		if err := wr.ts.UpdateSrvKeyspace(srvPath.cell, srvPath.keyspace, srvKeyspace); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}
 	return nil
 }
 
-// This is a quick and dirty tool to resurrect the zk data from the
+// This is a quick and dirty tool to resurrect the TopologyServer data from the
 // canonical data stored in the tablet nodes.
 //
-// zkVtPaths: local vt paths to scan for all tablets
+// cells: local vt cells to scan for all tablets
 // keyspaces: list of keyspaces to rebuild
-func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []string) error {
-	if zkVtPaths == nil || len(zkVtPaths) == 0 {
-		return fmt.Errorf("must specify zkVtPaths to rebuild replication graph")
+func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) error {
+	if cells == nil || len(cells) == 0 {
+		return fmt.Errorf("must specify cells to rebuild replication graph")
 	}
 	if keyspaces == nil || len(keyspaces) == 0 {
 		return fmt.Errorf("must specify keyspaces to rebuild replication graph")
 	}
 
 	allTablets := make([]*tm.TabletInfo, 0, 1024)
-	for _, zkVtPath := range zkVtPaths {
-		tablets, err := GetAllTablets(wr.ts, zkVtPath)
+	for _, cell := range cells {
+		tablets, err := GetAllTablets(wr.ts, cell)
 		if err != nil {
 			return err
 		}
@@ -417,13 +407,8 @@ func (wr *Wrangler) RebuildReplicationGraph(zkVtPaths []string, keyspaces []stri
 	}
 
 	for _, keyspace := range keyspaces {
-		shardsPath, err := tm.KeyspaceShardsPath(tm.KeyspacePath(keyspace))
-		if err != nil {
-			return err
-		}
-		relog.Debug("delete keyspace shards: %v", shardsPath)
-		err = zk.DeleteRecursive(wr.zconn, shardsPath, -1)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		relog.Debug("delete keyspace shards: %v", keyspace)
+		if err := wr.ts.DeleteKeyspaceShards(keyspace); err != nil {
 			return err
 		}
 	}

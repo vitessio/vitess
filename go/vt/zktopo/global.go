@@ -64,6 +64,14 @@ func (zkts *ZkTopologyServer) GetKeyspaces() ([]string, error) {
 	return children, nil
 }
 
+func (zkts *ZkTopologyServer) DeleteKeyspaceShards(keyspace string) error {
+	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
+	if err := zk.DeleteRecursive(zkts.zconn, shardsPath, -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
+		return err
+	}
+	return nil
+}
+
 //
 // Shard Management
 //

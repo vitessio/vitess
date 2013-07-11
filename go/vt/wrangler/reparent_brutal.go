@@ -31,7 +31,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*t
 			return err
 		}
 
-		relog.Info("check slaves %v", masterElectTablet.ShardPath())
+		relog.Info("check slaves %v/%v", masterElectTablet.Keyspace, masterElectTablet.Shard)
 		restartableSlaveTabletMap := restartableTabletMap(slaveTabletMap)
 		err := wr.checkSlaveConsistency(restartableSlaveTabletMap, nil)
 		if err != nil {

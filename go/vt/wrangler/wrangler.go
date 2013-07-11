@@ -230,28 +230,15 @@ func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNod
 	return err
 }
 
-func getMasterAlias(zconn zk.Conn, zkShardPath string) (naming.TabletAlias, error) {
-	// FIXME(alainjobart) just read the shard node data instead - that is tearing resistant.
-	children, _, err := zconn.Children(zkShardPath)
+func (wr *Wrangler) getMasterAlias(keyspace, shard string) (naming.TabletAlias, error) {
+	aliases, err := wr.ts.GetReplicationPaths(keyspace, shard, "")
 	if err != nil {
 		return naming.TabletAlias{}, err
 	}
-	result := ""
-	for _, child := range children {
-		if child == "action" || child == "actionlog" {
-			continue
-		}
-		if result != "" {
-			return naming.TabletAlias{}, fmt.Errorf("master search failed: %v", zkShardPath)
-		}
-		result = child
+	if len(aliases) != 1 {
+		return naming.TabletAlias{}, fmt.Errorf("More than one master in shard %v/%v: %v", keyspace, shard, aliases)
 	}
-
-	if result == "" {
-		return naming.TabletAlias{}, nil
-	}
-
-	return naming.ParseTabletAliasString(result)
+	return aliases[0], nil
 }
 
 // InitTablet will create or update a tablet. If not parent is
@@ -282,7 +269,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 	}
 
 	if parentAlias == (naming.TabletAlias{}) && naming.TabletType(tabletType) != naming.TYPE_MASTER && naming.TabletType(tabletType) != naming.TYPE_IDLE {
-		parentAlias, err = getMasterAlias(wr.zconn, tm.ShardPath(keyspace, shardId))
+		parentAlias, err = wr.getMasterAlias(keyspace, shardId)
 		if err != nil {
 			return err
 		}
@@ -315,14 +302,12 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 			}
 		}
 		if force {
-			_, err = wr.Scrap(tabletAlias, force, false)
-			if err != nil {
+			if _, err = wr.Scrap(tabletAlias, force, false); err != nil {
 				relog.Error("failed scrapping tablet %v: %v", tabletAlias, err)
 				return err
 			}
-			zkPath := tm.TabletPathForAlias(tabletAlias) // remove soon
-			err = zk.DeleteRecursive(wr.zconn, zkPath, -1)
-			if err != nil {
+			if err = wr.ts.DeleteTablet(tabletAlias); err != nil {
+				// we ignore this
 				relog.Error("failed deleting tablet %v: %v", tabletAlias, err)
 			}
 			err = tm.CreateTablet(wr.ts, tablet)

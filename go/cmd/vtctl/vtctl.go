@@ -30,6 +30,7 @@ import (
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	wr "code.google.com/p/vitess/go/vt/wrangler"
+	"code.google.com/p/vitess/go/vt/zktopo"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -202,8 +203,8 @@ var commands = []commandGroup{
 				"(requires Zookeeper TopologyServer)\n" +
 					"Export the serving graph entries to the zkns format."},
 			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
-				"zk-vt-paths=<zk local vt path>,... keyspaces=<keyspace>,...",
-				"This takes the Thor's hammer approach of recovery and should only be used in emergencies.  /zk/cell/vt/tablets/... are the canonical source of data for the system. This function use that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
+				"<cell1|zk local vt path1>,<cell2|zk local vt path2>... <keyspace1>,<keyspace2>,...",
+				"This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
 			command{"ListIdle", commandListIdle,
 				"<cell name|zk local vt path> (/zk/<cell>/vt)",
 				"DEPRECATED (use ListAllTablets + awk)\n" +
@@ -355,14 +356,16 @@ func getActions(zconn zk.Conn, actionPath string) ([]*tm.ActionNode, error) {
 	return nodes, nil
 }
 
-func listActionsByShard(ts naming.TopologyServer, zconn zk.Conn, keyspace, shard string) error {
-	// print the shard action nodes
-	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
-	shardActionPath, err := tm.ShardActionPath(zkShardPath)
-	if err != nil {
-		return err
+func listActionsByShard(ts naming.TopologyServer, keyspace, shard string) error {
+	// only works with ZkTopologyServer
+	zkts, ok := ts.(*zktopo.ZkTopologyServer)
+	if !ok {
+		return fmt.Errorf("listActionsByShard only works with ZkTopologyServer")
 	}
-	shardActionNodes, err := getActions(zconn, shardActionPath)
+
+	// print the shard action nodes
+	shardActionPath := zkts.ShardActionPath(keyspace, shard)
+	shardActionNodes, err := getActions(zkts.GetZConn(), shardActionPath)
 	if err != nil {
 		return err
 	}
@@ -377,7 +380,7 @@ func listActionsByShard(ts naming.TopologyServer, zconn zk.Conn, keyspace, shard
 
 	f := func(actionPath string) {
 		defer wg.Done()
-		actionNodes, err := getActions(zconn, actionPath)
+		actionNodes, err := getActions(zkts.GetZConn(), actionPath)
 		if err != nil {
 			relog.Warning("listActionsByShard %v", err)
 			return
@@ -1050,7 +1053,7 @@ func commandListShardActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args
 		relog.Fatal("action ListShardActions requires <keyspace/shard|zk shard path>")
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return "", listActionsByShard(wrangler.TopologyServer(), wrangler.ZkConn(), keyspace, shard)
+	return "", listActionsByShard(wrangler.TopologyServer(), keyspace, shard)
 }
 
 func commandCreateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1268,23 +1271,30 @@ func commandRebuildReplicationGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSe
 	// This is sort of a nuclear option.
 	subFlags.Parse(args)
 	if subFlags.NArg() < 2 {
-		relog.Fatal("action RebuildReplicationGraph requires zk-vt-paths=<zk vt path>,... keyspaces=<keyspace>,...")
+		relog.Fatal("action RebuildReplicationGraph requires <cell1>,<cell2>,... <keyspace1>,<keyspace2>...")
 	}
 
-	params := parseParams(args)
-	var keyspaces, zkVtPaths []string
-	if _, ok := params["zk-vt-paths"]; ok {
-		var err error
-		zkVtPaths, err = zk.ResolveWildcards(wrangler.ZkConn(), strings.Split(params["zk-vt-paths"], ","))
-		if err != nil {
-			return "", err
-		}
+	cellParams := strings.Split(subFlags.Arg(0), ",")
+	resolvedCells, err := zk.ResolveWildcards(wrangler.ZkConn(), cellParams)
+	if err != nil {
+		return "", err
 	}
-	if _, ok := params["keyspaces"]; ok {
-		keyspaces = strings.Split(params["keyspaces"], ",")
+	cells := make([]string, 0, len(cellParams))
+	for _, cell := range resolvedCells {
+		cells = append(cells, vtPathToCell(cell))
 	}
-	// RebuildReplicationGraph zk-vt-paths=/zk/test_nj/vt,/zk/test_ny/vt keyspaces=test_keyspace
-	return "", wrangler.RebuildReplicationGraph(zkVtPaths, keyspaces)
+
+	keyspaceParams := strings.Split(subFlags.Arg(1), ",")
+	resolvedKeyspaces, err := zk.ResolveWildcards(wrangler.ZkConn(), keyspaceParams)
+	if err != nil {
+		return "", err
+	}
+	keyspaces := make([]string, 0, len(keyspaceParams))
+	for _, keyspace := range resolvedKeyspaces {
+		keyspaces = append(keyspaces, keyspaceParamToKeyspace(keyspace))
+	}
+
+	return "", wrangler.RebuildReplicationGraph(cells, keyspaces)
 }
 
 func commandListIdle(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

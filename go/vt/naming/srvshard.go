@@ -53,20 +53,23 @@ func (sa SrvShardArray) Swap(i, j int) {
 
 func (sa SrvShardArray) Sort() { sort.Sort(sa) }
 
+func NewSrvShard(data string, version int) (*SrvShard, error) {
+	srv := new(SrvShard)
+	if len(data) > 0 {
+		if err := json.Unmarshal([]byte(data), srv); err != nil {
+			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v", data, err)
+		}
+	}
+	srv.version = version
+	return srv, nil
+}
+
 func ReadSrvShard(zconn zk.Conn, zkPath string) (*SrvShard, error) {
 	data, stat, err := zconn.Get(zkPath)
 	if err != nil {
 		return nil, err
 	}
-	srv := new(SrvShard)
-	if len(data) > 0 {
-		err = json.Unmarshal([]byte(data), srv)
-		if err != nil {
-			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v %v", zkPath, data, err)
-		}
-	}
-	srv.version = stat.Version()
-	return srv, nil
+	return NewSrvShard(data, stat.Version())
 }
 
 func ReadSrvKeyspace(zconn zk.Conn, zkPath string) (*SrvKeyspace, error) {

@@ -115,11 +115,6 @@ func (ti *TabletInfo) ShardPath() string {
 }
 
 // FIXME(alainjobart) when switch to TopologyServer this will become useless
-func (ti *TabletInfo) KeyspacePath() string {
-	return KeyspacePath(ti.Keyspace)
-}
-
-// FIXME(alainjobart) when switch to TopologyServer this will become useless
 func (ti *TabletInfo) ZkVtRoot() string {
 	return fmt.Sprintf("/zk/%v/vt", ti.Cell)
 }

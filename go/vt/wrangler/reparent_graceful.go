@@ -27,7 +27,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[naming.TabletAlias]
 	}
 
 	if _, ok := slaveTabletMap[masterElectTablet.Alias()]; !ok {
-		return fmt.Errorf("master elect tablet not in replication graph %v %v %v", masterElectTablet.Alias(), masterTablet.ShardPath(), mapKeys(slaveTabletMap))
+		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias(), masterTablet.Keyspace, masterTablet.Shard, mapKeys(slaveTabletMap))
 	}
 
 	if err := wr.ValidateShard(masterTablet.Keyspace, masterTablet.Shard, true); err != nil {
@@ -54,7 +54,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[naming.TabletAlias]
 		return fmt.Errorf("demote master failed: %v, if the master is dead, run: vtctl -force ScrapTablet %v", err, masterTablet.Alias())
 	}
 
-	relog.Info("check slaves %v", masterTablet.ShardPath())
+	relog.Info("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
 	restartableSlaveTabletMap := restartableTabletMap(slaveTabletMap)
 	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
 	if err != nil {

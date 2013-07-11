@@ -236,7 +236,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[n
 	// See if every slave is in the replication graph.
 	for _, slaveAddr := range slaveAddrs {
 		if tabletIpMap[slaveAddr] == nil {
-			results <- vresult{shardInfo.ShardPath(), fmt.Errorf("slave not in replication graph: %v (mysql instance without vttablet?)", slaveAddr)}
+			results <- vresult{shardInfo.Keyspace() + "/" + shardInfo.ShardName(), fmt.Errorf("slave not in replication graph: %v (mysql instance without vttablet?)", slaveAddr)}
 		}
 	}
 

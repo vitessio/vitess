@@ -49,6 +49,10 @@ type TopologyServer interface {
 	// GetKeyspaces returns the known keyspaces
 	GetKeyspaces() ([]string, error)
 
+	// DeleteKeyspaceShards deletes all the shards in a keyspace.
+	// Use with caution.
+	DeleteKeyspaceShards(keyspace string) error
+
 	//
 	// Shard management, global
 	//
@@ -83,6 +87,11 @@ type TopologyServer interface {
 	// for atomic updates (use -1 to overwrite any version)
 	UpdateTablet(alias TabletAlias, contents string, existingVersion int) (newVersion int, err error)
 
+	// DeleteTablet removes a tablet from the system.
+	// We assume no RPC is currently running to it.
+	// TODO(alainjobart) verify this assumption, link with RPC code
+	DeleteTablet(alias TabletAlias) error
+
 	// ValidateTablet performs routine checks on the tablet
 	ValidateTablet(alias TabletAlias) error
 
@@ -111,6 +120,32 @@ type TopologyServer interface {
 	// DeleteReplicationPath removes a replication path
 	// Can returnErrNoNode if it doesn't exist
 	DeleteReplicationPath(keyspace, shard, repPath string) error
+
+	//
+	// Serving Graph management, per cell
+	//
+
+	// GetSrvTabletTypesPerShard returns the existing serving types
+	// for a shard
+	GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]TabletType, error)
+
+	// UpdateSrvTabletType updates the serving records for a cell,
+	// keyspace, shard, tabletType
+	UpdateSrvTabletType(cell, keyspace, shard string, tabletType TabletType, addrs *VtnsAddrs) error
+
+	// DeleteSrvTabletType deletes the serving records for a cell,
+	// keyspace, shard, tabletType
+	DeleteSrvTabletType(cell, keyspace, shard string, tabletType TabletType) error
+
+	// UpdateSrvShard updates the serving records for a cell,
+	// keyspace, shard
+	UpdateSrvShard(cell, keyspace, shard string, srvShard *SrvShard) error
+
+	// GetSrvShard reads a SrvShard record
+	GetSrvShard(cell, keyspace, shard string) (*SrvShard, error)
+
+	// UpdateSrvKeyspace updates the serving records for a cell, keyspace
+	UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *SrvKeyspace) error
 
 	//
 	// Keyspace and Shard locks for actions, global
