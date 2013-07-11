@@ -7,21 +7,14 @@ warnings.simplefilter("ignore")
 
 import json
 import os
-import shlex
-import shutil
-import signal
-import socket
-from subprocess import check_call, Popen, CalledProcessError, PIPE
 import sys
-import tablet
 import time
 import traceback
 import threading
-
 import MySQLdb
 
+import tablet
 import utils
-
 from vtdb import update_stream_service
 from vtdb import vt_occ2
 
@@ -33,28 +26,10 @@ master_host = "localhost:%u" % master_tablet.port
 replica_host = "localhost:%u" % replica_tablet.port
 GLOBAL_MASTER_START_POSITION = None
 
-class Position(object):
-  RelayFilename = ""
-  RelayPosition = 0
-  MasterFilename = ""
-  MasterPosition = 0
-
-  def __init__(self, **kargs):
-    for k, v in kargs.iteritems():
-      self.__dict__[k] = v
-
-  def encode_json(self):
-    return json.dumps(self.__dict__)
-
-  def decode_json(self, position):
-    self.__dict__ = json.loads(position)
-    return self
-
-
 def _get_master_current_position():
   res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
-  start_position = Position(MasterFilename=res[0][0], MasterPosition=res[0][1]).encode_json()
-  return start_position
+  start_position = update_stream_service.BinlogPosition(res[0][0], res[0][1])
+  return start_position.__dict__
 
 
 def _get_repl_current_position():
@@ -62,15 +37,13 @@ def _get_repl_current_position():
                          unix_socket=os.path.join(utils.vtdataroot, 'vt_%010d/mysql.sock' % 62345),
                          db='vt_test_keyspace')
   cursor = MySQLdb.cursors.DictCursor(conn)
-  cursor.execute('show slave status')
+  cursor.execute('show master status')
   res = cursor.fetchall()
   slave_dict = res[0]
-  master_log = slave_dict['Relay_Master_Log_File']
-  master_pos = slave_dict['Exec_Master_Log_Pos']
-  relay_log = slave_dict['Relay_Log_File']
-  relay_pos = slave_dict['Relay_Log_Pos']
-  start_position = Position(MasterFilename=master_log, MasterPosition=master_pos, RelayFilename=relay_log, RelayPosition=relay_pos).encode_json()
-  return start_position
+  master_log = slave_dict['File']
+  master_pos = slave_dict['Position']
+  start_position = update_stream_service.BinlogPosition(master_log, master_pos)
+  return start_position.__dict__
 
 
 def setup():
@@ -167,10 +140,12 @@ def run_test_service_disabled():
   utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
 #  time.sleep(20)
   replica_conn = _get_replica_stream_conn()
+  utils.debug("dialing replica update stream service")
   replica_conn.dial()
   try:
     binlog_pos, data, err = replica_conn.stream_start(start_position)
   except Exception, e:
+    utils.debug(str(e))
     if str(e) == "Update stream service is not enabled yet":
       utils.debug("Test Service Disabled: Pass")
     else:
@@ -202,19 +177,16 @@ def run_test_service_enabled():
   try:
     binlog_pos, data, err = replica_conn.stream_start(start_position)
     if err:
-      print "Test Service Enabled: Fail"
-      return
+      raise utils.TestError("Update stream returned error '%s'", err)
     for i in xrange(10):
       binlog_pos, data, err = replica_conn.stream_next()
       if err:
-        print "Test Service Enabled: Fail"
-        return
+        raise utils.TestError("Update stream returned error '%s'", err)
       if data['SqlType'] == 'COMMIT' and utils.options.verbose:
-        print "Test Service Enabled: Pass"
+        utils.debug("Test Service Enabled: Pass")
         break
   except Exception, e:
-    print "Exception: %s" % str(e)
-    print traceback.print_exc()
+    raise utils.TestError("Exception in getting stream from replica: %s\n Traceback %s",str(e), traceback.print_exc())
   thd.join(timeout=30)
 
   v = utils.get_vars(replica_tablet.port)
@@ -229,8 +201,8 @@ def run_test_service_enabled():
   try:
     binlog_pos, data, err = replica_conn.stream_start(start_position)
     utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
-    utils.debug("Sleeping a bit for the spare action to complete")
-#    time.sleep(20)
+    #utils.debug("Sleeping a bit for the spare action to complete")
+    #time.sleep(20)
     while(1):
       binlog_pos, data, err = replica_conn.stream_next()
       if err != None and err == "Disconnecting because the Update Stream service has been disabled":
@@ -279,14 +251,12 @@ def run_test_stream_parity():
   master_tuples = []
   binlog_pos, data, err = master_conn.stream_start(master_start_position)
   if err:
-    print "Test Failed %s" % err
-    return
+    raise utils.TestError("Update stream returned error '%s'", err)
   master_tuples.append((binlog_pos, data))
   for i in xrange(21):
     binlog_pos, data, err = master_conn.stream_next()
     if err:
-      print "Test Failed %s" % err
-      return
+      raise utils.TestError("Update stream returned error '%s'", err)
     master_tuples.append((binlog_pos, data))
     if data['SqlType'] == 'COMMIT':
       master_txn_count +=1
@@ -296,29 +266,24 @@ def run_test_stream_parity():
   replica_conn.dial()
   binlog_pos, data, err = replica_conn.stream_start(replica_start_position)
   if err:
-    print "Test Failed, err: %s" % err
-    return
+    raise utils.TestError("Update stream returned error '%s'", err)
   replica_tuples.append((binlog_pos, data))
   for i in xrange(21):
     binlog_pos, data, err = replica_conn.stream_next()
     if err:
-      print "Test Failed, err %s" % err
-      return
+      raise utils.TestError("Update stream returned error '%s'", err)
     replica_tuples.append((binlog_pos, data))
     if data['SqlType'] == 'COMMIT':
       replica_txn_count +=1
       break
   if len(master_tuples) != len(replica_tuples):
-    print "Test Failed - # of records from master doesn't match replica"
+    utils.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_tuples, replica_tuples))
     print len(master_tuples), len(replica_tuples)
-  for i, val in enumerate(master_tuples):
-    decoded_replica_pos = Position().decode_json(val[0]['Position'])
-    decoded_master_pos = Position().decode_json(val[0]['Position'])
-    if decoded_replica_pos.MasterFilename != decoded_master_pos.MasterFilename or \
-      decoded_replica_pos.MasterPosition != decoded_master_pos.MasterPosition:
-      print "Test Failed, master data: %s replica data: %s" % (val[1], replica_tuples[i][1])
-    if val[1] != replica_tuples[i][1]:
-      print "Test Failed, master data: %s replica data: %s" % (val[1], replica_tuples[i][1])
+  for master_val, replica_val in zip(master_tuples, replica_tuples):
+    master_data = master_val[1]
+    replica_data = replica_val[1]
+    if master_data != replica_data:
+      raise utils.TestError("Test failed, data mismatch - master '%s' and replica position '%s'" % (master_data, replica_data))
   utils.debug("Test Writes: PASS")
 
 
@@ -331,17 +296,10 @@ def run_test_ddl():
   master_conn.dial()
   binlog_pos, data, err = master_conn.stream_start(start_position)
   if err:
-    print "Test Failed, err: %s" % err
-    return
+    raise utils.TestError("Update stream returned error '%s'", err)
 
-  decoded_start_pos = Position().decode_json(start_position)
-  decoded_binlog_pos = Position().decode_json(binlog_pos['Position'])
-  if decoded_start_pos.MasterFilename != decoded_binlog_pos.MasterFilename and decoded_start_pos.MasterPosition != decoded_start_pos.MasterPosition:
-    print "Test Failed: Received position %s doesn't match the start position %s" % (pos, start_position)
-    return
   if data['Sql'] != create_vt_insert_test.replace('\n', ''):
-    print "Test Failed: DDL %s didn't match the original %s" % (data['Sql'], create_vt_insert_test)
-    return
+    raise utils.TestError("Test Failed: DDL %s didn't match the original %s" % (data['Sql'], create_vt_insert_test))
   utils.debug("Test DDL: PASS")
 
 #This tests the service switch from disable -> enable -> disable
@@ -352,7 +310,6 @@ def run_test_service_switch():
 @utils.test_case
 def run_test_log_rotation():
   start_position = _get_master_current_position()
-  decoded_start_position = Position().decode_json(start_position)
   master_tablet.mquery('vt_test_keyspace', "flush logs")
   _exec_vt_txn(master_host, populate_vt_a(15))
   _exec_vt_txn(master_host, ['delete from vt_a',])
@@ -360,28 +317,31 @@ def run_test_log_rotation():
   master_conn.dial()
   binlog_pos, data, err = master_conn.stream_start(start_position)
   if err:
-    print "Encountered error in fetching stream: %s" % err
-    return
+    raise utils.TestError("Update stream returned error '%s'", err)
   master_txn_count = 0
+  logs_correct = False
   while master_txn_count <=2:
     binlog_pos, data, err = master_conn.stream_next()
     if err:
-      print "Encountered error in fetching stream: %s" % err
-      return
-    decoded_pos = Position().decode_json(binlog_pos['Position'])
-    if decoded_start_position.MasterFilename < decoded_pos.MasterFilename:
+      raise utils.TestError("Update stream returned error '%s'", err)
+    if start_position['Position']['MasterFilename'] < binlog_pos['Position']['MasterFilename']:
+      logs_correct = True
       utils.debug("Log rotation correctly interpreted")
       break
     if data['SqlType'] == 'COMMIT':
       master_txn_count +=1
+  if not logs_correct:
+    raise utils.TestError("Flush logs didn't get properly interpreted")
 
+
+@utils.test_case
 
 def run_all():
   run_test_service_switch()
   #The above test leaves the service in disabled state, hence enabling it.
   utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
-  utils.debug("Sleeping a bit for the action to complete")
-#  time.sleep(20)
+  #utils.debug("Sleeping a bit for the action to complete")
+  #time.sleep(20)
   run_test_ddl()
   run_test_stream_parity()
   run_test_log_rotation()

@@ -69,7 +69,7 @@ func IsCachePoolAvailable() bool {
 	return !SqlQueryRpcService.qe.cachePool.IsClosed()
 }
 
-func GetCurrentInvalidationPosition() (invalidationPosition string, err error) {
+func GetCurrentInvalidationPosition() (invalidationPosition []byte, err error) {
 	return SqlQueryRpcService.qe.getCurrentInvalidationPosition()
 }
 

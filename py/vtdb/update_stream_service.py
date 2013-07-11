@@ -7,6 +7,27 @@ from net import gorpc
 from net import bsonrpc
 from vtdb import dbexceptions
 
+class ReplPosition(object):
+  MasterFilename = None
+  MasterPosition = None
+  RelayFilename = None
+  RelayPosition = None
+
+  def __init__(self, master_filename, master_position):
+    self.MasterFilename = master_filename
+    self.MasterPosition = master_position
+
+class BinlogPosition(object):
+  Position = None
+  Timestamp = None
+  Xid = None
+  GroupId = None
+  
+  def __init__(self, master_filename, master_position, group_id=0): 
+    self.Position = ReplPosition(master_filename, master_position).__dict__
+    self.GroupId = group_id
+  
+
 class EventData(object):
   SqlType = None
   TableName = None
@@ -47,8 +68,8 @@ class UpdateStreamResponse(object):
     self.EventData = EventData(self.raw_response['EventData']).__dict__
 
 class UpdateStreamConnection(object):
-  def __init__(self, addr, timeout, user=None, password=None):
-    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password)
+  def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+    self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted, keyfile, certfile)
 
   def dial(self):
     self.client.dial()

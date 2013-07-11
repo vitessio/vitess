@@ -321,12 +321,12 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	qe.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
-func (qe *QueryEngine) getCurrentInvalidationPosition() (invalidationPosition string, err error) {
+func (qe *QueryEngine) getCurrentInvalidationPosition() (invalidationPosition []byte, err error) {
 	value, _, _, err := qe.adminCache.Gets(ROWCACHE_INVALIDATION_POSITION)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(value), nil
+	return value, nil
 }
 
 func (qe *QueryEngine) purgeRowCache() {

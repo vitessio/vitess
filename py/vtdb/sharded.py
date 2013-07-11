@@ -53,7 +53,7 @@ class ShardedClient(object):
     self.dbname = dbname
     self.txn = None
     self.keyspace = keyspace.read_keyspace(self.zkocc_client, keyspace_name)
-    self.conns = [None] * keyspace.shard_count
+    self.conns = [None] * self.keyspace.shard_count
     self._streaming_shard_list = [] # shards with active streams
 
   def _dial_shard(self, shard_idx):

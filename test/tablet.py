@@ -197,7 +197,7 @@ class Tablet(object):
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, auth=False, dbname=None):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, auth=False, dbname=None, memcache=False):
     self.keyspace = keyspace
     self.shard = shard
 
@@ -230,7 +230,7 @@ class Tablet(object):
         expected_state = "OPEN"
       else:
         expected_state = "NOT_SERVING"
-      self.start_vttablet(wait_for_state=expected_state, auth=auth)
+      self.start_vttablet(wait_for_state=expected_state, auth=auth, memcache=True)
 
   @property
   def tablet_dir(self):
