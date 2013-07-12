@@ -29,10 +29,10 @@ const (
 // Error types for rowcache invalidator.
 const (
 	// Fatal Errors
-	FATAL_ERROR = "Fatal Error"
+	FATAL_ERROR = "InvalidatorFatal"
 
 	// Skippable errors, recorded and skipped.
-	INVALID_EVENT = "Invalid Event"
+	INVALID_EVENT = "InvalidatorEvent"
 )
 
 type InvalidationError struct {
@@ -62,7 +62,6 @@ type InvalidationProcessor struct {
 	inTxn           bool
 	dmlBuffer       []*proto.DmlType
 	receiveEvent    mysqlctl.SendUpdateStreamResponse
-	errCounters     map[string]uint
 	encBuf          []byte
 }
 
@@ -75,7 +74,6 @@ func NewInvalidationProcessor() *InvalidationProcessor {
 	invalidator.receiveEvent = func(response interface{}) error {
 		return invalidator.invalidateEvent(response)
 	}
-	invalidator.errCounters = make(map[string]uint)
 	gob.Register(mysqlctl.BinlogPosition{})
 	invalidator.encBuf = make([]byte, 0, 100)
 	return invalidator
@@ -154,24 +152,9 @@ func (rowCache *InvalidationProcessor) statsJSON() string {
 	}
 	return fmt.Sprintf("{"+
 		"\n \"States\": %v,"+
-		"\n \"Checkpoint\": \"%v\","+
-		"\n \"ErrorCounters\": %v"+
+		"\n \"Checkpoint\": \"%v"+
 		"\n"+
-		"}", rowCache.states.String(), currentPosition, rowCache.getErrCountersJSON())
-}
-
-func (rowCache *InvalidationProcessor) getErrCountersJSON() string {
-	errString := "{"
-	index := 0
-	for err, counter := range rowCache.errCounters {
-		if index != 0 {
-			errString += ","
-		}
-		errString += fmt.Sprintf("\n \"%v\": %v", err, counter)
-		index += 1
-	}
-	errString += "\n }"
-	return errString
+		"}", rowCache.states.String(), currentPosition)
 }
 
 func (rowCache *InvalidationProcessor) isServiceEnabled() bool {
@@ -180,11 +163,11 @@ func (rowCache *InvalidationProcessor) isServiceEnabled() bool {
 
 func (rowCache *InvalidationProcessor) updateErrCounters(err *InvalidationError) {
 	relog.Error(err.Error())
-	counter, ok := rowCache.errCounters[err.errType]
-	if !ok {
-		counter = 0
+	if errorStats == nil {
+		relog.Warning("errorStats is not initialized")
+		return
 	}
-	rowCache.errCounters[err.errType] = counter + 1
+	errorStats.Add(err.errType, 1)
 }
 
 func (rowCache *InvalidationProcessor) invalidateEvent(response interface{}) error {
@@ -408,7 +391,7 @@ func (rowCache *InvalidationProcessor) handleTxn(commitEvent *mysqlctl.UpdateRes
 	}
 	rowCache.encBuf = rowCache.encBuf[:0]
 	cacheInvalidate := new(proto.CacheInvalidate)
-	rowCache.encBuf, err = bson.Marshal(commitEvent.BinlogPosition)
+	rowCache.encBuf, err = bson.Marshal(&commitEvent.BinlogPosition)
 	if err != nil {
 		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), commitEvent.BinlogPosition.String())
 	}
@@ -440,7 +423,7 @@ func (rowCache *InvalidationProcessor) handleDdlEvent(ddlEvent *mysqlctl.UpdateR
 	}
 	rowCache.encBuf = rowCache.encBuf[:0]
 	ddlInvalidate := new(proto.DDLInvalidate)
-	rowCache.encBuf, err = bson.Marshal(ddlEvent.BinlogPosition)
+	rowCache.encBuf, err = bson.Marshal(&ddlEvent.BinlogPosition)
 	if err != nil {
 		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), ddlEvent.BinlogPosition.String())
 	}

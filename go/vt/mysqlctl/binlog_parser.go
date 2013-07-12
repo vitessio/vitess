@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"code.google.com/p/vitess/go/bson"
+	"code.google.com/p/vitess/go/bytes2"
 	"code.google.com/p/vitess/go/relog"
 	parser "code.google.com/p/vitess/go/vt/sqlparser"
 )
@@ -87,6 +89,87 @@ func (pos *BinlogPosition) Valid() bool {
 		return false
 	}
 	return true
+}
+
+func (pos *BinlogPosition) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	bson.EncodePrefix(buf, bson.Object, "Position")
+	pos.encodeReplCoordinates(buf)
+
+	bson.EncodePrefix(buf, bson.Long, "Timestamp")
+	bson.EncodeUint64(buf, uint64(pos.Timestamp))
+
+	bson.EncodePrefix(buf, bson.Ulong, "Xid")
+	bson.EncodeUint64(buf, pos.Xid)
+
+	bson.EncodePrefix(buf, bson.Ulong, "GroupId")
+	bson.EncodeUint64(buf, pos.GroupId)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (pos *BinlogPosition) encodeReplCoordinates(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	bson.EncodePrefix(buf, bson.Binary, "RelayFilename")
+	bson.EncodeString(buf, pos.Position.RelayFilename)
+
+	bson.EncodePrefix(buf, bson.Ulong, "RelayPosition")
+	bson.EncodeUint64(buf, pos.Position.RelayPosition)
+
+	bson.EncodePrefix(buf, bson.Binary, "MasterFilename")
+	bson.EncodeString(buf, pos.Position.MasterFilename)
+
+	bson.EncodePrefix(buf, bson.Ulong, "MasterPosition")
+	bson.EncodeUint64(buf, pos.Position.MasterPosition)
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (pos *BinlogPosition) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "Position":
+			pos.decodeReplCoordBson(buf, kind)
+		case "Timestamp":
+			pos.Timestamp = bson.DecodeInt64(buf, kind)
+		case "Xid":
+			pos.Xid = bson.DecodeUint64(buf, kind)
+		case "GroupId":
+			pos.GroupId = bson.DecodeUint64(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+
+func (pos *BinlogPosition) decodeReplCoordBson(buf *bytes.Buffer, kind byte) {
+	pos.Position = ReplicationCoordinates{}
+	bson.Next(buf, 4)
+	kind = bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "RelayFilename":
+			pos.Position.RelayFilename = bson.DecodeString(buf, kind)
+		case "RelayPosition":
+			pos.Position.RelayPosition = bson.DecodeUint64(buf, kind)
+		case "MasterFilename":
+			pos.Position.MasterFilename = bson.DecodeString(buf, kind)
+		case "MasterPosition":
+			pos.Position.MasterPosition = bson.DecodeUint64(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
 }
 
 //Api Interface
