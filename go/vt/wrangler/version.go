@@ -25,7 +25,7 @@ type debugVars struct {
 
 func (wr *Wrangler) GetVersion(tabletAlias naming.TabletAlias) (string, error) {
 	// read the tablet from TopologyServer to get the address to connect to
-	tablet, err := tm.ReadTabletTs(wr.ts, tabletAlias)
+	tablet, err := tm.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return "", err
 	}

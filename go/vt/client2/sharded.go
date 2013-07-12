@@ -21,6 +21,7 @@ import (
 	"code.google.com/p/vitess/go/vt/naming"
 	// FIXME(msolomon) seems like a subpackage
 	"code.google.com/p/vitess/go/vt/sqlparser"
+	"code.google.com/p/vitess/go/vt/zktopo"
 	"code.google.com/p/vitess/go/zk"
 )
 
@@ -64,13 +65,13 @@ func (err VtClientError) Partial() bool {
 
 // Not thread safe, as per sql package.
 type ShardedConn struct {
-	zconn          zk.Conn
-	zkKeyspacePath string
-	dbType         string
-	keyspace       string
-	stream         bool   // Use streaming RPC
-	user           string // "" if not using auth
-	password       string // "" iff userName is ""
+	ts         naming.TopologyServer
+	cell       string
+	keyspace   string
+	tabletType naming.TabletType
+	stream     bool   // Use streaming RPC
+	user       string // "" if not using auth
+	password   string // "" iff userName is ""
 
 	srvKeyspace *naming.SrvKeyspace
 	// Keep a map per shard mapping tabletType to a real connection.
@@ -91,16 +92,15 @@ type ShardedConn struct {
 // that this is necessary.  You have to deal with transient failures
 // anyway, so the whole system degenerates to managing connections on
 // demand.
-// zkKeyspaceSrvPath: /zk/local/vt/ns/<keyspace>
-func Dial(zconn zk.Conn, zkKeyspaceSrvPath, dbType string, stream bool, timeout time.Duration, user, password string) (*ShardedConn, error) {
+func Dial(ts naming.TopologyServer, cell, keyspace string, tabletType naming.TabletType, stream bool, timeout time.Duration, user, password string) (*ShardedConn, error) {
 	sc := &ShardedConn{
-		zconn:          zconn,
-		zkKeyspacePath: zkKeyspaceSrvPath,
-		dbType:         dbType,
-		keyspace:       path.Base(zkKeyspaceSrvPath),
-		stream:         stream,
-		user:           user,
-		password:       password,
+		ts:         ts,
+		cell:       cell,
+		keyspace:   keyspace,
+		tabletType: tabletType,
+		stream:     stream,
+		user:       user,
+		password:   password,
 	}
 	err := sc.readKeyspace()
 	if err != nil {
@@ -131,9 +131,9 @@ func (sc *ShardedConn) Close() error {
 func (sc *ShardedConn) readKeyspace() error {
 	sc.Close()
 	var err error
-	sc.srvKeyspace, err = naming.ReadSrvKeyspace(sc.zconn, sc.zkKeyspacePath)
+	sc.srvKeyspace, err = sc.ts.GetSrvKeyspace(sc.cell, sc.keyspace)
 	if err != nil {
-		return err
+		return fmt.Errorf("vt: GetSrvKeyspace failed %v", err)
 	}
 
 	sc.conns = make([]*tablet.VtConn, len(sc.srvKeyspace.Shards))
@@ -539,25 +539,24 @@ func (sc *ShardedConn) ExecuteBatch(queryList []ClientQuery, keyVal interface{})
 
 func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 	srvShard := &(sc.srvKeyspace.Shards[shardIdx])
-	zkShardName := fmt.Sprintf("%v-%v", srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
+	shard := fmt.Sprintf("%v-%v", srvShard.KeyRange.Start.Hex(), srvShard.KeyRange.End.Hex())
 	// Hack to handle non-range based shards.
 	if !srvShard.KeyRange.IsPartial() {
-		zkShardName = fmt.Sprintf("%v", shardIdx)
+		shard = fmt.Sprintf("%v", shardIdx)
 	}
-	realSrvShard, err := naming.ReadSrvShard(sc.zconn, sc.zkKeyspacePath+"/"+zkShardName)
+	addrs, err := sc.ts.GetSrvTabletType(sc.cell, sc.keyspace, shard, sc.tabletType)
 	if err != nil {
-		return nil, fmt.Errorf("vt: ReadSrvShard failed %v", err)
+		return nil, fmt.Errorf("vt: GetSrvTabletType failed %v", err)
 	}
 
-	addrs := realSrvShard.AddrsByType[sc.dbType]
-	srvs, err := naming.SrvEntries(&addrs, DefaultPortName)
+	srvs, err := naming.SrvEntries(addrs, DefaultPortName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Try to connect to any address.
 	for _, srv := range srvs {
-		name := naming.SrvAddr(srv) + "/" + sc.keyspace + "/" + zkShardName
+		name := naming.SrvAddr(srv) + "/" + sc.keyspace + "/" + shard
 		if sc.user != "" {
 			name = sc.user + ":" + sc.password + "@" + name
 		}
@@ -571,11 +570,11 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 }
 
 type sDriver struct {
-	zconn  zk.Conn
+	ts     naming.TopologyServer
 	stream bool
 }
 
-// for direct zk connection: vtzk://host:port/zkpath/dbType
+// for direct zk connection: vtzk://host:port/cell/keyspace/tabletType
 // we always use a MetaConn, host and port are ignored.
 // the driver name dictates if we use zk or zkocc, and streaming or not
 //
@@ -591,8 +590,12 @@ func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 		return nil, err
 	}
 
-	dbi, dbType := path.Split(u.Path)
-	dbi = strings.TrimRight(dbi, "/")
+	dbi, tabletType := path.Split(u.Path)
+	dbi = strings.Trim(dbi, "/")
+	tabletType = strings.Trim(tabletType, "/")
+	cell, keyspace := path.Split(dbi)
+	cell = strings.Trim(cell, "/")
+	keyspace = strings.Trim(keyspace, "/")
 	var user, password string
 	if u.User != nil {
 		user = u.User.Username()
@@ -602,15 +605,17 @@ func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 			return nil, fmt.Errorf("vt: need a password if a user is specified")
 		}
 	}
-	return Dial(driver.zconn, dbi, dbType, driver.stream, tablet.DefaultTimeout, user, password)
+	return Dial(driver.ts, cell, keyspace, naming.TabletType(tabletType), driver.stream, tablet.DefaultTimeout, user, password)
 }
 
 func init() {
 	zconn := zk.NewMetaConn(false)
+	zkts := zktopo.NewZkTopologyServer(zconn)
 	zkoccconn := zk.NewMetaConn(true)
-	db.Register("vtdb", &sDriver{zconn, false})
-	db.Register("vtdb-zkocc", &sDriver{zkoccconn, false})
-	db.Register("vtdb-streaming", &sDriver{zconn, true})
-	db.Register("vtdb-zkocc-streaming", &sDriver{zkoccconn, true})
-	db.Register("vtdb-streaming-zkocc", &sDriver{zkoccconn, true})
+	zktsro := zktopo.NewZkTopologyServer(zkoccconn)
+	db.Register("vtdb", &sDriver{zkts, false})
+	db.Register("vtdb-zkocc", &sDriver{zktsro, false})
+	db.Register("vtdb-streaming", &sDriver{zkts, true})
+	db.Register("vtdb-zkocc-streaming", &sDriver{zktsro, true})
+	db.Register("vtdb-streaming-zkocc", &sDriver{zktsro, true})
 }

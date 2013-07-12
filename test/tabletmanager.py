@@ -90,7 +90,7 @@ def run_test_sanity():
   tablet_62344.start_vttablet()
 
   # make sure the query service is started right away
-  result, _ = utils.run_vtctl('Query /zk/test_nj/vt/ns/test_keyspace "select * from vt_select_test"', trap_output=True)
+  result, _ = utils.run_vtctl('Query test_nj test_keyspace "select * from vt_select_test"', trap_output=True)
   rows = result.splitlines()
   if len(rows) != 5:
     raise utils.TestError("expected 5 rows in vt_select_test", rows, result)

@@ -13,7 +13,6 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
-	"code.google.com/p/vitess/go/zk"
 )
 
 const (
@@ -106,12 +105,7 @@ func (ti *TabletInfo) Path() string {
 
 // FIXME(alainjobart) when switch to TopologyServer this will become useless
 func (ti *TabletInfo) PidPath() string {
-	return path.Join(TabletPath(ti.ZkVtRoot(), ti.Uid), "pid")
-}
-
-// FIXME(alainjobart) when switch to TopologyServer this will become useless
-func (ti *TabletInfo) ShardPath() string {
-	return ShardPath(ti.Keyspace, ti.Shard)
+	return path.Join(ti.Path(), "pid")
 }
 
 // FIXME(alainjobart) when switch to TopologyServer this will become useless
@@ -119,31 +113,11 @@ func (ti *TabletInfo) ZkVtRoot() string {
 	return fmt.Sprintf("/zk/%v/vt", ti.Cell)
 }
 
-// This is the path that indicates the tablet's position in the shard replication graph.
-// This is too complicated for zk_path, so it's on this struct.
 func (ti *TabletInfo) ReplicationPath() string {
-	return TabletReplicationPath(ti.Tablet)
+	return tabletReplicationPath(ti.Tablet)
 }
 
-func TabletReplicationPath(tablet *Tablet) string {
-	zkPath := ShardPath(tablet.Keyspace, tablet.Shard)
-	if tablet.Parent.Uid == naming.NO_TABLET {
-		zkPath = path.Join(zkPath, fmtAlias(tablet.Cell, tablet.Uid))
-	} else {
-		// FIXME(msolomon) assumes one level of replication hierarchy
-		zkPath = path.Join(zkPath, fmtAlias(tablet.Parent.Cell, tablet.Parent.Uid),
-			fmtAlias(tablet.Cell, tablet.Uid))
-	}
-	return zkPath
-}
-
-// TODO(alainjobart) remove old absolute implementation, rename this one
-// from RelativeReplicationPath back to ReplicationPath
-func (ti *TabletInfo) RelativeReplicationPath() string {
-	return TabletRelativeReplicationPath(ti.Tablet)
-}
-
-func TabletRelativeReplicationPath(tablet *Tablet) string {
+func tabletReplicationPath(tablet *Tablet) string {
 	if tablet.Parent.Uid == naming.NO_TABLET {
 		return fmtAlias(tablet.Cell, tablet.Uid)
 	}
@@ -185,23 +159,7 @@ func tabletFromJson(data string) (*Tablet, error) {
 	return t, nil
 }
 
-// Deprecated, use ReadTabletTs
-func ReadTablet(zconn zk.Conn, zkTabletPath string) (*TabletInfo, error) {
-	if err := IsTabletPath(zkTabletPath); err != nil {
-		return nil, err
-	}
-	data, stat, err := zconn.Get(zkTabletPath)
-	if err != nil {
-		return nil, err
-	}
-	tablet, err := tabletFromJson(data)
-	if err != nil {
-		return nil, err
-	}
-	return &TabletInfo{stat.Version(), tablet}, nil
-}
-
-func ReadTabletTs(ts naming.TopologyServer, tabletAlias naming.TabletAlias) (*TabletInfo, error) {
+func ReadTablet(ts naming.TopologyServer, tabletAlias naming.TabletAlias) (*TabletInfo, error) {
 	data, version, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -229,7 +187,7 @@ func UpdateTablet(ts naming.TopologyServer, tablet *TabletInfo) error {
 
 func Validate(ts naming.TopologyServer, tabletAlias naming.TabletAlias, tabletReplicationPath string) error {
 	// read the tablet record, make sure it parses
-	tablet, err := ReadTabletTs(ts, tabletAlias)
+	tablet, err := ReadTablet(ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -251,7 +209,7 @@ func Validate(ts naming.TopologyServer, tabletAlias naming.TabletAlias, tabletRe
 		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
 			return err
 		}
-		rp := tablet.RelativeReplicationPath()
+		rp := tablet.ReplicationPath()
 		if tabletReplicationPath != "" && tabletReplicationPath != rp {
 			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
 				rp, tabletReplicationPath)
@@ -301,7 +259,7 @@ func CreateTabletReplicationPaths(ts naming.TopologyServer, tablet *Tablet) erro
 		return err
 	}
 
-	trrp := TabletRelativeReplicationPath(tablet)
+	trrp := tabletReplicationPath(tablet)
 	err := ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, trrp)
 	if err != nil && err != naming.ErrNodeExists {
 		return err

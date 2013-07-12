@@ -19,7 +19,7 @@ import (
 // instance the initial clone of a new master.
 func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest string, parent naming.TabletAlias, slaveStartRequired, readOnly bool, originalType naming.TabletType, err error) {
 	var ti *tm.TabletInfo
-	ti, err = tm.ReadTabletTs(wr.ts, tabletAlias)
+	ti, err = tm.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
@@ -83,7 +83,7 @@ func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot
 
 func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStartRequired, readWrite bool, originalType naming.TabletType) (err error) {
 	var ti *tm.TabletInfo
-	ti, err = tm.ReadTabletTs(wr.ts, tabletAlias)
+	ti, err = tm.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
@@ -114,7 +114,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStart
 func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias naming.TabletAlias) (err error) {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTabletTs(wr.ts, dstTabletAlias)
+	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -132,11 +132,11 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias naming.Tabl
 }
 
 func (wr *Wrangler) UnreserveForRestore(dstTabletAlias naming.TabletAlias) (err error) {
-	tablet, err := tm.ReadTabletTs(wr.ts, dstTabletAlias)
+	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}
-	err = wr.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	err = wr.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (wr *Wrangler) UnreserveForRestore(dstTabletAlias naming.TabletAlias) (err 
 func (wr *Wrangler) Restore(srcTabletAlias naming.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias naming.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTabletTs(wr.ts, dstTabletAlias)
+	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}

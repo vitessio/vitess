@@ -66,11 +66,6 @@ func ActionToActionLogPath(zkTabletActionPath string) string {
 	return strings.Replace(zkTabletActionPath, "/action/", "/actionlog/", 1)
 }
 
-func ShardPath(keyspace, shard string) string {
-	shardPath := path.Join("/zk/global/vt", "keyspaces", keyspace, "shards", shard)
-	return shardPath
-}
-
 // Tablet aliases are the nodes that point into /vt/tablets/<uid> from the keyspace
 // Note that these are *global*
 func IsTabletReplicationPath(zkReplicationPath string) bool {

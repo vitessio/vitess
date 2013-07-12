@@ -38,7 +38,7 @@ func (zkts *ZkTopologyServer) CreateTablet(alias naming.TabletAlias, contents st
 	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, contents, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			return naming.ErrNodeExists
+			err = naming.ErrNodeExists
 		}
 		return err
 	}
@@ -138,7 +138,7 @@ func (zkts *ZkTopologyServer) GetSrvTabletTypesPerShard(cell, keyspace, shard st
 	children, _, err := zkts.zconn.Children(zkSgShardPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = nil
+			err = naming.ErrNoNode
 		}
 		return nil, err
 	}
@@ -166,6 +166,18 @@ func (zkts *ZkTopologyServer) UpdateSrvTabletType(cell, keyspace, shard string, 
 	return err
 }
 
+func (zkts *ZkTopologyServer) GetSrvTabletType(cell, keyspace, shard string, tabletType naming.TabletType) (*naming.VtnsAddrs, error) {
+	path := zkPathForVtName(cell, keyspace, shard, tabletType)
+	data, stat, err := zkts.zconn.Get(path)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = naming.ErrNoNode
+		}
+		return nil, err
+	}
+	return naming.NewVtnsAddrs(data, stat.Version())
+}
+
 func (zkts *ZkTopologyServer) DeleteSrvTabletType(cell, keyspace, shard string, tabletType naming.TabletType) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	return zkts.zconn.Delete(path, -1)
@@ -182,6 +194,9 @@ func (zkts *ZkTopologyServer) GetSrvShard(cell, keyspace, shard string) (*naming
 	path := zkPathForVtShard(cell, keyspace, shard)
 	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = naming.ErrNoNode
+		}
 		return nil, err
 	}
 	return naming.NewSrvShard(data, stat.Version())
@@ -191,5 +206,67 @@ func (zkts *ZkTopologyServer) UpdateSrvKeyspace(cell, keyspace string, srvKeyspa
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data := jscfg.ToJson(srvKeyspace)
 	_, err := zkts.zconn.Set(path, data, -1)
+	return err
+}
+
+func (zkts *ZkTopologyServer) GetSrvKeyspace(cell, keyspace string) (*naming.SrvKeyspace, error) {
+	path := zkPathForVtKeyspace(cell, keyspace)
+	data, stat, err := zkts.zconn.Get(path)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = naming.ErrNoNode
+		}
+		return nil, err
+	}
+	return naming.NewSrvKeyspace(data, stat.Version())
+}
+
+var skipUpdateErr = fmt.Errorf("skip update")
+
+func (zkts *ZkTopologyServer) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *naming.VtnsAddr) (newValue string, err error) {
+	if oldStat == nil {
+		// The incoming object doesn't exist - we haven't been placed in the serving
+		// graph yet, so don't update. Assume the next process that rebuilds the graph
+		// will get the updated tablet location.
+		return "", skipUpdateErr
+	}
+
+	var addrs *naming.VtnsAddrs
+	if oldValue != "" {
+		addrs, err = naming.NewVtnsAddrs(oldValue, oldStat.Version())
+		if err != nil {
+			return
+		}
+
+		foundTablet := false
+		for i, entry := range addrs.Entries {
+			if entry.Uid == addr.Uid {
+				foundTablet = true
+				if !naming.VtnsAddrEquality(&entry, addr) {
+					addrs.Entries[i] = *addr
+				}
+				break
+			}
+		}
+
+		if !foundTablet {
+			addrs.Entries = append(addrs.Entries, *addr)
+		}
+	} else {
+		addrs = naming.NewAddrs()
+		addrs.Entries = append(addrs.Entries, *addr)
+	}
+	return jscfg.ToJson(addrs), nil
+}
+
+func (zkts *ZkTopologyServer) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType naming.TabletType, addr *naming.VtnsAddr) error {
+	path := zkPathForVtName(cell, keyspace, shard, tabletType)
+	f := func(oldValue string, oldStat zk.Stat) (string, error) {
+		return zkts.updateTabletEndpoint(oldValue, oldStat, addr)
+	}
+	err := zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
+	if err == skipUpdateErr {
+		err = nil
+	}
 	return err
 }

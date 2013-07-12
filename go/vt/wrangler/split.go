@@ -61,7 +61,7 @@ func (wr *Wrangler) PartialSnapshot(tabletAlias naming.TabletAlias, keyName stri
 // forceMasterSnapshot is true). It returns a function that will
 // restore the original state.
 func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot bool) (restoreAfterSnapshot func() error, err error) {
-	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
+	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
@@ -142,7 +142,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias naming.T
 func (wr *Wrangler) PartialRestore(srcTabletAlias naming.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias naming.TabletAlias, fetchConcurrency, fetchRetryCount int) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTabletTs(wr.ts, dstTabletAlias)
+	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}

@@ -285,7 +285,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 		return err
 	}
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -308,7 +308,7 @@ func (ta *TabletActor) demoteMaster() error {
 		return err
 	}
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -320,7 +320,7 @@ func (ta *TabletActor) demoteMaster() error {
 }
 
 func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -339,7 +339,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 }
 
 func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -350,7 +350,7 @@ func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
 func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != naming.NO_TABLET {
-		err := ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+		err := ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 		if err != nil && err != naming.ErrNoNode {
 			return err
 		}
@@ -370,7 +370,7 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *TabletInfo
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 	if err != nil && err != naming.ErrNodeExists {
 		return err
 	}
@@ -433,7 +433,7 @@ func (ta *TabletActor) waitSlavePosition(actionNode *ActionNode) error {
 func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	rsd := actionNode.args.(*RestartSlaveData)
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -445,7 +445,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	if tablet.Parent != rsd.Parent {
 		relog.Debug("restart with new parent")
 		// Remove tablet from the replication graph.
-		err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+		err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 		if err != nil && err != naming.ErrNoNode {
 			return err
 		}
@@ -493,7 +493,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 	if err != nil && err != naming.ErrNodeExists {
 		return err
 	}
@@ -504,13 +504,13 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	swrd := actionNode.args.(*SlaveWasRestartedData)
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
 
 	// Remove tablet from the replication graph.
-	err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 	if err != nil && err != naming.ErrNoNode {
 		return err
 	}
@@ -542,7 +542,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 	if err != nil && err != naming.ErrNodeExists {
 		return err
 	}
@@ -558,7 +558,7 @@ func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
 	gsa := actionNode.args.(*GetSchemaArgs)
 
 	// read the tablet to get the dbname
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -576,7 +576,7 @@ func (ta *TabletActor) preflightSchema(actionNode *ActionNode) error {
 	change := actionNode.args.(*string)
 
 	// read the tablet to get the dbname
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -594,7 +594,7 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 	sc := actionNode.args.(*mysqlctl.SchemaChange)
 
 	// read the tablet to get the dbname
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -638,7 +638,7 @@ func (ta *TabletActor) getSlaves(actionNode *ActionNode) (err error) {
 func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*SnapshotArgs)
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -669,7 +669,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 	args := actionNode.args.(*SnapshotSourceEndArgs)
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -758,7 +758,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	BackfillAlias(args.ZkSrcTabletPath, &args.SrcTabletAlias)
 
 	// read our current tablet, verify its state
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -767,7 +767,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	}
 
 	// read the source tablet
-	sourceTablet, err := ReadTabletTs(ta.ts, args.SrcTabletAlias)
+	sourceTablet, err := ReadTablet(ta.ts, args.SrcTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -797,7 +797,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	BackfillAlias(args.ZkParentPath, &args.ParentAlias)
 
 	// read our current tablet, verify its state
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -812,7 +812,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// read the source tablet, compute args.SrcFilePath if default
-	sourceTablet, err := ReadTabletTs(ta.ts, args.SrcTabletAlias)
+	sourceTablet, err := ReadTablet(ta.ts, args.SrcTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -821,7 +821,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// read the parent tablet, verify its state
-	parentTablet, err := ReadTabletTs(ta.ts, args.ParentAlias)
+	parentTablet, err := ReadTablet(ta.ts, args.ParentAlias)
 	if err != nil {
 		return err
 	}
@@ -860,7 +860,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*PartialSnapshotArgs)
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -891,7 +891,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*MultiSnapshotArgs)
 
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -922,7 +922,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// read our current tablet, verify its state
 	// we only support restoring to the master or spare replicas
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -934,7 +934,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	sourceAddrs := make([]*url.URL, len(args.SrcTabletAliases))
 	uids := make([]uint32, len(args.SrcTabletAliases))
 	for i, alias := range args.SrcTabletAliases {
-		t, e := ReadTabletTs(ta.ts, alias)
+		t, e := ReadTablet(ta.ts, alias)
 		if e != nil {
 			return e
 		}
@@ -978,7 +978,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	BackfillAlias(args.ZkParentPath, &args.ParentAlias)
 
 	// read our current tablet, verify its state
-	tablet, err := ReadTabletTs(ta.ts, ta.tabletAlias)
+	tablet, err := ReadTablet(ta.ts, ta.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -987,13 +987,13 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// read the source tablet
-	sourceTablet, err := ReadTabletTs(ta.ts, args.SrcTabletAlias)
+	sourceTablet, err := ReadTablet(ta.ts, args.SrcTabletAlias)
 	if err != nil {
 		return err
 	}
 
 	// read the parent tablet, verify its state
-	parentTablet, err := ReadTabletTs(ta.ts, args.ParentAlias)
+	parentTablet, err := ReadTablet(ta.ts, args.ParentAlias)
 	if err != nil {
 		return err
 	}
@@ -1027,7 +1027,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 
 // Make this external, since in needs to be forced from time to time.
 func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAlias, force bool) error {
-	tablet, err := ReadTabletTs(ts, tabletAlias)
+	tablet, err := ReadTablet(ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -1037,7 +1037,7 @@ func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAli
 	wasAssigned := tablet.IsAssigned()
 	replicationPath := ""
 	if wasAssigned {
-		replicationPath = tablet.RelativeReplicationPath()
+		replicationPath = tablet.ReplicationPath()
 	}
 
 	tablet.Type = naming.TYPE_SCRAP
@@ -1103,7 +1103,7 @@ func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAli
 
 // Make this external, since these transitions need to be forced from time to time.
 func ChangeType(ts naming.TopologyServer, tabletAlias naming.TabletAlias, newType naming.TabletType, runHooks bool) error {
-	tablet, err := ReadTabletTs(ts, tabletAlias)
+	tablet, err := ReadTablet(ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -1128,7 +1128,7 @@ func ChangeType(ts naming.TopologyServer, tabletAlias naming.TabletAlias, newTyp
 			// With a master the node cannot be set to idle unless we have already removed all of
 			// the derived paths. The global replication path is a good indication that this has
 			// been resolved.
-			children, err := ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, tablet.RelativeReplicationPath())
+			children, err := ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 			if err != nil && err != naming.ErrNoNode {
 				return err
 			}

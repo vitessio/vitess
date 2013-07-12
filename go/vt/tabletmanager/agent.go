@@ -14,7 +14,6 @@ due to external circumstances.
 package tabletmanager
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
@@ -100,7 +99,7 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *Tablet, context string) 
 }
 
 func (agent *ActionAgent) readTablet() error {
-	tablet, err := ReadTabletTs(agent.ts, agent.tabletAlias)
+	tablet, err := ReadTablet(agent.ts, agent.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -250,6 +249,7 @@ func (agent *ActionAgent) verifyZkServingAddrs() error {
 	if !agent.Tablet().IsServingType() {
 		return nil
 	}
+
 	// Load the shard and see if we are supposed to be serving. We might be a serving type,
 	// but we might be in a transitional state. Only once the shard info is updated do we
 	// put ourselves in the client serving graph.
@@ -261,77 +261,13 @@ func (agent *ActionAgent) verifyZkServingAddrs() error {
 	if !shardInfo.Contains(agent.Tablet().Tablet) {
 		return nil
 	}
+
 	// Check to see our address is registered in the right place.
-	zkPathName := naming.ZkPathForVtName(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace,
-		agent.Tablet().Shard, string(agent.Tablet().Type))
-
-	f := func(oldValue string, oldStat zk.Stat) (string, error) {
-		return agent.updateEndpoints(oldValue, oldStat)
+	addr, err := VtnsAddrForTablet(agent.Tablet().Tablet)
+	if err != nil {
+		return err
 	}
-	err = agent.zconn.RetryChange(zkPathName, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-	if err == skipUpdateErr {
-		err = nil
-		relog.Warning("skipped serving graph update")
-	}
-	return err
-}
-
-var skipUpdateErr = fmt.Errorf("skip update")
-
-// A function conforming to the RetryChange protocl. If the data returned
-// is identical, no update is performed.
-func (agent *ActionAgent) updateEndpoints(oldValue string, oldStat zk.Stat) (newValue string, err error) {
-	if oldStat == nil {
-		// The incoming object doesn't exist - we haven't been placed in the serving
-		// graph yet, so don't update. Assume the next process that rebuilds the graph
-		// will get the updated tablet location.
-		return "", skipUpdateErr
-	}
-
-	addrs := naming.NewAddrs()
-	if oldValue != "" {
-		err = json.Unmarshal([]byte(oldValue), addrs)
-		if err != nil {
-			return
-		}
-
-		foundTablet := false
-		for i, entry := range addrs.Entries {
-			if entry.Uid == agent.Tablet().Uid {
-				foundTablet = true
-				vtAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_vtocc"])
-				secureAddr := ""
-				if port, ok := entry.NamedPortMap["_vts"]; ok {
-					secureAddr = fmt.Sprintf("%v:%v", entry.Host, port)
-				}
-				mysqlAddr := fmt.Sprintf("%v:%v", entry.Host, entry.NamedPortMap["_mysql"])
-				if vtAddr != agent.Tablet().Addr || mysqlAddr != agent.Tablet().MysqlAddr || secureAddr != agent.Tablet().SecureAddr {
-					// update needed
-					newEntry, err := VtnsAddrForTablet(agent.Tablet().Tablet)
-					if err != nil {
-						return "", err
-					}
-					addrs.Entries[i] = *newEntry
-				}
-				break
-			}
-		}
-
-		if !foundTablet {
-			v, err := VtnsAddrForTablet(agent.Tablet().Tablet)
-			if err != nil {
-				return "", err
-			}
-			addrs.Entries = append(addrs.Entries, *v)
-		}
-	} else {
-		v, err := VtnsAddrForTablet(agent.Tablet().Tablet)
-		if err != nil {
-			return "", err
-		}
-		addrs.Entries = append(addrs.Entries, *v)
-	}
-	return jscfg.ToJson(addrs), nil
+	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
 func splitHostPort(addr string) (string, int, error) {

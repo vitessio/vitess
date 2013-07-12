@@ -144,7 +144,9 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.
 		if !knownShardLocations[shardLocation] {
 			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			if err != nil {
-				return err
+				if err != naming.ErrNoNode {
+					return err
+				}
 			} else {
 				for _, tabletType := range tabletTypes {
 					existingDbTypeLocations[cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard, tabletType}] = true
@@ -319,7 +321,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 			// expensive, but we only do it on all the
 			// non-serving tablets in a shard before we
 			// find a serving tablet.
-			ti, err := tm.ReadTabletTs(wr.ts, alias)
+			ti, err := tm.ReadTablet(wr.ts, alias)
 			if err != nil {
 				return err
 			}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strings"
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
@@ -142,7 +143,15 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 
 func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath string) ([]string, error) {
 	zknsPaths := make([]string, 0, 32)
-	addrs, err := naming.ReadAddrs(zconn, vtnsAddrPath)
+	parts := strings.Split(vtnsAddrPath, "/")
+	if len(parts) != 8 {
+		return nil, fmt.Errorf("Invalid leaf zk path: %v", vtnsAddrPath)
+	}
+	cell := parts[2]
+	keyspace := parts[5]
+	shard := parts[6]
+	tabletType := naming.TabletType(parts[7])
+	addrs, err := wr.ts.GetSrvTabletType(cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, err
 	}

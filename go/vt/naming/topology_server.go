@@ -23,7 +23,7 @@ var (
 	ErrNoNode = errors.New("Node doesn't exist")
 
 	// This error is returned by functions to specify a child of the
-	// resource is still present and prevents the action from completing
+	// resource is still present and prevents the action from completing.
 	ErrNotEmpty = errors.New("Node not empty")
 )
 
@@ -35,18 +35,18 @@ var (
 //
 // Inside Google, we use Chubby.
 type TopologyServer interface {
-	// TopologyServer management interface
+	// TopologyServer management interface.
 	Close()
 
 	//
-	// Keyspace management, global
+	// Keyspace management, global.
 	//
 
 	// CreateKeyspace creates the given keyspace, assuming it doesn't exist
 	// yet. Can return ErrNodeExists if it already exists.
 	CreateKeyspace(keyspace string) error
 
-	// GetKeyspaces returns the known keyspaces
+	// GetKeyspaces returns the known keyspaces.
 	GetKeyspaces() ([]string, error)
 
 	// DeleteKeyspaceShards deletes all the shards in a keyspace.
@@ -54,7 +54,7 @@ type TopologyServer interface {
 	DeleteKeyspaceShards(keyspace string) error
 
 	//
-	// Shard management, global
+	// Shard management, global.
 	//
 
 	// CreateShard creates the given shard, assuming it doesn't exist
@@ -62,16 +62,16 @@ type TopologyServer interface {
 	CreateShard(keyspace, shard, contents string) error
 
 	// UpdateShard unconditionnally updates the shard information
-	// Can return ErrNoNode if the shard doesn't exist yet
+	// Can return ErrNoNode if the shard doesn't exist yet.
 	UpdateShard(keyspace, shard, contents string) error
 
-	// ValidateShard performs routine checks on the shard
+	// ValidateShard performs routine checks on the shard.
 	ValidateShard(keyspace, shard string) error
 
-	// GetShard reads a shard and returns it
+	// GetShard reads a shard and returns it.
 	GetShard(keyspace, shard string) (contents string, err error)
 
-	// GetShardNames returns the known shards in a keyspace
+	// GetShardNames returns the known shards in a keyspace.
 	GetShardNames(keyspace string) ([]string, error)
 
 	//
@@ -84,28 +84,28 @@ type TopologyServer interface {
 	CreateTablet(alias TabletAlias, contents string) error
 
 	// UpdateTablet updates a given tablet. The version is used
-	// for atomic updates (use -1 to overwrite any version)
+	// for atomic updates (use -1 to overwrite any version).
 	UpdateTablet(alias TabletAlias, contents string, existingVersion int) (newVersion int, err error)
 
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
-	// TODO(alainjobart) verify this assumption, link with RPC code
+	// TODO(alainjobart) verify this assumption, link with RPC code.
 	DeleteTablet(alias TabletAlias) error
 
-	// ValidateTablet performs routine checks on the tablet
+	// ValidateTablet performs routine checks on the tablet.
 	ValidateTablet(alias TabletAlias) error
 
-	// GetTablet returns the tablet contents, and the current version
+	// GetTablet returns the tablet contents, and the current version.
 	GetTablet(alias TabletAlias) (contents string, version int, err error)
 
-	// GetTabletsByCell returns all the tablets in the given cell
+	// GetTabletsByCell returns all the tablets in the given cell.
 	GetTabletsByCell(cell string) ([]TabletAlias, error)
 
 	//
-	// Replication graph management, global
+	// Replication graph management, global.
 	//
 	// Uses a path for replication, use "" to get the masters,
-	// /master to get the slaves
+	// /master to get the slaves.
 	//
 
 	// GetReplicationPaths returns the replication paths for the parent path
@@ -113,42 +113,58 @@ type TopologyServer interface {
 	// - get the slaves: GetReplicationPaths(..., "/nyc-00020100")
 	GetReplicationPaths(keyspace, shard, repPath string) ([]TabletAlias, error)
 
-	// CreateReplicationPath creates a replication path
+	// CreateReplicationPath creates a replication path.
 	// Can return ErrNodeExists if it already exists.
 	CreateReplicationPath(keyspace, shard, repPath string) error
 
-	// DeleteReplicationPath removes a replication path
-	// Can returnErrNoNode if it doesn't exist
+	// DeleteReplicationPath removes a replication path.
+	// Can returnErrNoNode if it doesn't exist.
 	DeleteReplicationPath(keyspace, shard, repPath string) error
 
 	//
-	// Serving Graph management, per cell
+	// Serving Graph management, per cell.
 	//
 
 	// GetSrvTabletTypesPerShard returns the existing serving types
-	// for a shard
+	// for a shard.
+	// Can return ErrNoNode.
 	GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]TabletType, error)
 
 	// UpdateSrvTabletType updates the serving records for a cell,
-	// keyspace, shard, tabletType
+	// keyspace, shard, tabletType.
 	UpdateSrvTabletType(cell, keyspace, shard string, tabletType TabletType, addrs *VtnsAddrs) error
 
+	// GetSrvTabletType returns the VtnsAddrs list of serving addresses
+	// for a TabletType inside a shard.
+	// Can return ErrNoNode.
+	GetSrvTabletType(cell, keyspace, shard string, tabletType TabletType) (*VtnsAddrs, error)
+
 	// DeleteSrvTabletType deletes the serving records for a cell,
-	// keyspace, shard, tabletType
+	// keyspace, shard, tabletType.
 	DeleteSrvTabletType(cell, keyspace, shard string, tabletType TabletType) error
 
 	// UpdateSrvShard updates the serving records for a cell,
-	// keyspace, shard
+	// keyspace, shard.
 	UpdateSrvShard(cell, keyspace, shard string, srvShard *SrvShard) error
 
-	// GetSrvShard reads a SrvShard record
+	// GetSrvShard reads a SrvShard record.
+	// Can return ErrNoNode.
 	GetSrvShard(cell, keyspace, shard string) (*SrvShard, error)
 
-	// UpdateSrvKeyspace updates the serving records for a cell, keyspace
+	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
 	UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *SrvKeyspace) error
 
+	// GetSrvKeyspace reads a SrvKeyspace record.
+	// Can return ErrNoNode.
+	GetSrvKeyspace(cell, keyspace string) (*SrvKeyspace, error)
+
+	// UpdateTabletEndpoint updates a single tablet record in the
+	// already computed serving graph. The update has to be somewhat
+	// atomic, so it requires TopologyServer intrisic knowledge.
+	UpdateTabletEndpoint(cell, keyspace, shard string, tabletType TabletType, addr *VtnsAddr) error
+
 	//
-	// Keyspace and Shard locks for actions, global
+	// Keyspace and Shard locks for actions, global.
 	//
 
 	// LockKeyspaceForAction locks the keyspace in order to
@@ -172,7 +188,7 @@ type TopologyServer interface {
 	UnlockShardForAction(keyspace, shard, lockPath, results string) error
 }
 
-// Registry for TopologyServer implementations
+// Registry for TopologyServer implementations.
 var topologyServerImpls map[string]TopologyServer = make(map[string]TopologyServer)
 
 // RegisterTopologyServer adds an implementation for a TopologyServer.
@@ -185,7 +201,7 @@ func RegisterTopologyServer(name string, ts TopologyServer) {
 	topologyServerImpls[name] = ts
 }
 
-// Returns a specific TopologyServer by name, or nil
+// Returns a specific TopologyServer by name, or nil.
 func GetTopologyServerByName(name string) TopologyServer {
 	return topologyServerImpls[name]
 }
@@ -216,7 +232,7 @@ func GetTopologyServer() TopologyServer {
 	return result
 }
 
-// Close all registered TopologyServer
+// Close all registered TopologyServer.
 func CloseTopologyServers() {
 	for name, ts := range topologyServerImpls {
 		relog.Debug("Closing TopologyServer: %v", name)

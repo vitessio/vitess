@@ -91,7 +91,7 @@ func (ai *ActionInitiator) writeTabletAction(tabletAlias naming.TabletAlias, nod
 
 func (ai *ActionInitiator) rpcCall(tabletAlias naming.TabletAlias, name string, args, reply interface{}, waitTime time.Duration) error {
 	// read the tablet from ZK to get the address to connect to
-	tablet, err := ReadTabletTs(ai.ts, tabletAlias)
+	tablet, err := ReadTablet(ai.ts, tabletAlias)
 	if err != nil {
 		return err
 	}

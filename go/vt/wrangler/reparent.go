@@ -174,7 +174,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
 	// Get reparent position from master for the given slave position.
 	// Issue a restart slave on the specified tablet.
 
-	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
+	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
 		return fmt.Errorf("no master tablet for shard %v/%v", ti.Keyspace, ti.Shard)
 	}
 
-	masterTi, err := tm.ReadTabletTs(wr.ts, shardInfo.MasterAlias)
+	masterTi, err := tm.ReadTablet(wr.ts, shardInfo.MasterAlias)
 	if err != nil {
 		return err
 	}

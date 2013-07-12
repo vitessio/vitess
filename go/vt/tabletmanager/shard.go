@@ -94,10 +94,6 @@ func (si *ShardInfo) Json() string {
 	return si.Shard.Json()
 }
 
-func (si *ShardInfo) ShardPath() string {
-	return ShardPath(si.keyspace, si.shardName)
-}
-
 func (si *ShardInfo) TabletPath(alias naming.TabletAlias) string {
 	zkRoot := fmt.Sprintf("/zk/%v/vt", alias.Cell)
 	return TabletPath(zkRoot, alias.Uid)

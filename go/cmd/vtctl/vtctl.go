@@ -93,7 +93,7 @@ var commands = []commandGroup{
 				"<tablet alias|zk tablet path>",
 				"Check that the agent is awake and responding to RPCs."},
 			command{"Query", commandQuery,
-				"<zk tablet path> [<user> <password>] <query>",
+				"<cell> <keyspace> [<user> <password>] <query>",
 				"Send a SQL query to a tablet."},
 			command{"Sleep", commandSleep,
 				"<tablet alias|zk tablet path> <duration>",
@@ -157,7 +157,8 @@ var commands = []commandGroup{
 				"List all tablets in a given shard."},
 			command{"ListShardActions", commandListShardActions,
 				"<keyspace/shard|zk shard path>",
-				"List all active actions in a given shard."},
+				"(requires Zookeeper TopologyServer)\n" +
+					"List all active actions in a given shard."},
 		},
 	},
 	commandGroup{
@@ -177,13 +178,16 @@ var commands = []commandGroup{
 		"Generic", []command{
 			command{"PurgeActions", commandPurgeActions,
 				"<zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
-				"Remove all actions - be careful, this is powerful cleanup magic."},
+				"(requires Zookeeper TopologyServer)\n" +
+					"Remove all actions - be careful, this is powerful cleanup magic."},
 			command{"StaleActions", commandStaleActions,
 				"[-max-staleness=<duration> -purge] <zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
-				"List any queued actions that are considered stale."},
+				"(requires Zookeeper TopologyServer)\n" +
+					"List any queued actions that are considered stale."},
 			command{"PruneActionLogs", commandPruneActionLogs,
 				"[-keep-count=<count to keep>] <zk actionlog path> ...",
-				"e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog\n" +
+				"(requires Zookeeper TopologyServer)\n" +
+					"e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog\n" +
 					"Removes older actionlog entries until at most <count to keep> are left."},
 			command{"WaitForAction", commandWaitForAction,
 				"<zk action path> (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action/<action id>)",
@@ -468,8 +472,8 @@ func dumpTablets(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) e
 	return nil
 }
 
-func kquery(zconn zk.Conn, zkKeyspacePath, user, password, query string) error {
-	sconn, err := client2.Dial(zconn, zkKeyspacePath, "master", false, 5*time.Second, user, password)
+func kquery(ts naming.TopologyServer, cell, keyspace, user, password, query string) error {
+	sconn, err := client2.Dial(ts, cell, keyspace, "master", false, 5*time.Second, user, password)
 	if err != nil {
 		return err
 	}
@@ -612,6 +616,14 @@ func vtPathToCell(param string) string {
 	return param
 }
 
+func resolveWildcards(wrangler *wr.Wrangler, args []string) ([]string, error) {
+	zkts, ok := wrangler.TopologyServer().(*zktopo.ZkTopologyServer)
+	if !ok {
+		return args, nil
+	}
+	return zk.ResolveWildcards(zkts.GetZConn(), args)
+}
+
 func commandInitTablet(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
@@ -694,7 +706,7 @@ func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	newType := naming.TabletType(subFlags.Arg(1))
 	if *dryRun {
-		ti, err := tm.ReadTabletTs(wrangler.TopologyServer(), tabletAlias)
+		ti, err := tm.ReadTablet(wrangler.TopologyServer(), tabletAlias)
 		if err != nil {
 			relog.Fatal("failed reading tablet %v: %v", tabletAlias, err)
 		}
@@ -729,14 +741,14 @@ func commandRpcPing(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string
 
 func commandQuery(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
-	if subFlags.NArg() != 2 && subFlags.NArg() != 4 {
-		relog.Fatal("action Query requires 2 or 4 args")
+	if subFlags.NArg() != 3 && subFlags.NArg() != 5 {
+		relog.Fatal("action Query requires 3 or 5 args")
 	}
-	if subFlags.NArg() == 2 {
-		return "", kquery(wrangler.ZkConn(), subFlags.Arg(0), "", "", subFlags.Arg(1))
+	if subFlags.NArg() == 3 {
+		return "", kquery(wrangler.TopologyServer(), subFlags.Arg(0), subFlags.Arg(1), "", "", subFlags.Arg(2))
 	}
 
-	return "", kquery(wrangler.ZkConn(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3))
+	return "", kquery(wrangler.TopologyServer(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4))
 }
 
 func commandSleep(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -958,7 +970,7 @@ func commandRebuildShardGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, arg
 		cellArray = strings.Split(*cells, ",")
 	}
 
-	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	zkPaths, err := resolveWildcards(wrangler, subFlags.Args())
 	if err != nil {
 		return "", err
 	}
@@ -1084,7 +1096,7 @@ func commandRebuildKeyspaceGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSet, 
 		cellArray = strings.Split(*cells, ",")
 	}
 
-	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	zkPaths, err := resolveWildcards(wrangler, subFlags.Args())
 	if err != nil {
 		return "", err
 	}
@@ -1115,10 +1127,18 @@ func commandValidateKeyspace(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args
 func commandPurgeActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
-		relog.Fatal("action PurgeActions requires <zk action path>")
+		relog.Fatal("action PurgeActions requires <zk action path> ...")
 	}
-	for _, zkActionPath := range subFlags.Args() {
-		err := tm.PurgeActions(wrangler.ZkConn(), zkActionPath)
+	zkts, ok := wrangler.TopologyServer().(*zktopo.ZkTopologyServer)
+	if !ok {
+		return "", fmt.Errorf("PurgeActions requires a ZkTopologyServer")
+	}
+	zkActionPaths, err := resolveWildcards(wrangler, subFlags.Args())
+	if err != nil {
+		return "", err
+	}
+	for _, zkActionPath := range zkActionPaths {
+		err := tm.PurgeActions(zkts.GetZConn(), zkActionPath)
 		if err != nil {
 			return "", err
 		}
@@ -1133,8 +1153,11 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action StaleActions requires <zk action path>")
 	}
-
-	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	zkts, ok := wrangler.TopologyServer().(*zktopo.ZkTopologyServer)
+	if !ok {
+		return "", fmt.Errorf("StaleActions requires a ZkTopologyServer")
+	}
+	zkPaths, err := resolveWildcards(wrangler, subFlags.Args())
 	if err != nil {
 		return "", err
 	}
@@ -1144,7 +1167,7 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		wg.Add(1)
 		go func(zkActionPath string) {
 			defer wg.Done()
-			staleActions, err := tm.StaleActions(wrangler.ZkConn(), zkActionPath, *maxStaleness)
+			staleActions, err := tm.StaleActions(zkts.GetZConn(), zkActionPath, *maxStaleness)
 			if err != nil {
 				errCount.Add(1)
 				relog.Error("can't check stale actions: %v %v", zkActionPath, err)
@@ -1154,7 +1177,7 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 				fmt.Println(fmtAction(action))
 			}
 			if *purge && len(staleActions) > 0 {
-				err := tm.PurgeActions(wrangler.ZkConn(), zkActionPath)
+				err := tm.PurgeActions(zkts.GetZConn(), zkActionPath)
 				if err != nil {
 					errCount.Add(1)
 					relog.Error("can't purge stale actions: %v %v", zkActionPath, err)
@@ -1178,9 +1201,14 @@ func commandPruneActionLogs(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		relog.Fatal("action PruneActionLogs requires <zk action log path> ...")
 	}
 
-	paths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	paths, err := resolveWildcards(wrangler, subFlags.Args())
 	if err != nil {
 		return "", err
+	}
+
+	zkts, ok := wrangler.TopologyServer().(*zktopo.ZkTopologyServer)
+	if !ok {
+		return "", fmt.Errorf("PruneActionLogs requires a ZkTopologyServer")
 	}
 
 	var errCount sync2.AtomicInt32
@@ -1189,7 +1217,7 @@ func commandPruneActionLogs(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		wg.Add(1)
 		go func(zkActionLogPath string) {
 			defer wg.Done()
-			purgedCount, err := tm.PruneActionLogs(wrangler.ZkConn(), zkActionLogPath, *keepCount)
+			purgedCount, err := tm.PruneActionLogs(zkts.GetZConn(), zkActionLogPath, *keepCount)
 			if err == nil {
 				relog.Debug("%v pruned %v", zkActionLogPath, purgedCount)
 			} else {
@@ -1229,7 +1257,7 @@ func commandResolve(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string
 		relog.Fatal("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
 	}
 
-	addrs, err := naming.LookupVtName(wrangler.ZkConn(), "", parts[0], parts[1], parts[2], namedPort)
+	addrs, err := naming.LookupVtName(wrangler.TopologyServer(), "local", parts[0], parts[1], naming.TabletType(parts[2]), namedPort)
 	if err != nil {
 		return "", err
 	}
@@ -1275,7 +1303,7 @@ func commandRebuildReplicationGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSe
 	}
 
 	cellParams := strings.Split(subFlags.Arg(0), ",")
-	resolvedCells, err := zk.ResolveWildcards(wrangler.ZkConn(), cellParams)
+	resolvedCells, err := resolveWildcards(wrangler, cellParams)
 	if err != nil {
 		return "", err
 	}
@@ -1285,7 +1313,7 @@ func commandRebuildReplicationGraph(wrangler *wr.Wrangler, subFlags *flag.FlagSe
 	}
 
 	keyspaceParams := strings.Split(subFlags.Arg(1), ",")
-	resolvedKeyspaces, err := zk.ResolveWildcards(wrangler.ZkConn(), keyspaceParams)
+	resolvedKeyspaces, err := resolveWildcards(wrangler, keyspaceParams)
 	if err != nil {
 		return "", err
 	}
@@ -1331,7 +1359,7 @@ func commandListTablets(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []st
 		relog.Fatal("action ListTablets requires <tablet alias|zk tablet path> ...")
 	}
 
-	zkPaths, err := zk.ResolveWildcards(wrangler.ZkConn(), subFlags.Args())
+	zkPaths, err := resolveWildcards(wrangler, subFlags.Args())
 	if err != nil {
 		return "", err
 	}

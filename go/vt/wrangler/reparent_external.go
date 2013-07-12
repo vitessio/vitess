@@ -77,7 +77,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[naming.TabletAlias]
 	}
 
 	// and rebuild the shard graph
-	relog.Info("rebuilding shard serving graph data in zk")
+	relog.Info("rebuilding shard serving graph data")
 	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, []string{masterTablet.Cell, masterElectTablet.Cell})
 }
 

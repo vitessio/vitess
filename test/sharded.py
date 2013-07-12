@@ -62,7 +62,7 @@ primary key (id)
 ) Engine=InnoDB'''
 
 def check_rows(to_look_for, driver="vtdb"):
-  out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
+  out, err = utils.vtclient2(0, "/test_nj/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
   for pattern in to_look_for:
     if pattern not in err:
       print "vtclient2 returned:"
@@ -73,7 +73,7 @@ def check_rows(to_look_for, driver="vtdb"):
     print out, err
 
 def check_rows_schema_diff(driver):
-  out, err = utils.vtclient2(0, "/zk/test_nj/vt/ns/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
+  out, err = utils.vtclient2(0, "/test_nj/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
   if "column[0] name mismatch: id != msg" not in err and \
       "column[0] name mismatch: msg != id" not in err:
     print "vtclient2 returned:"
@@ -155,7 +155,7 @@ def run_test_sharding():
               "10\ttest 10"])
 
   # write a value, re-read them all
-  utils.vtclient2(3803, "/zk/test_nj/vt/ns/test_keyspace/master", "insert into vt_select_test (id, msg) values (:keyspace_id, 'test 2')", bindvars='{"keyspace_id": 2}', driver="vtdb", verbose=True)
+  utils.vtclient2(3803, "/test_nj/test_keyspace/master", "insert into vt_select_test (id, msg) values (:keyspace_id, 'test 2')", bindvars='{"keyspace_id": 2}', driver="vtdb", verbose=True)
   check_rows(["Index\tid\tmsg",
               "1\ttest 1",
               "2\ttest 2",

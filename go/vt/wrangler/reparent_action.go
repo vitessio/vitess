@@ -427,7 +427,7 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *tm.TabletInfo, majori
 		relog.Warning("minority reparent, manual fixes are needed, leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias())
 	}
 
-	relog.Info("rebuilding shard serving graph data in zk")
+	relog.Info("rebuilding shard serving graph data")
 	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, []string{oldMaster.Cell, masterElect.Cell})
 }
 

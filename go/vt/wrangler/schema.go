@@ -18,7 +18,7 @@ import (
 )
 
 func (wr *Wrangler) GetSchema(tabletAlias naming.TabletAlias, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
-	ti, err := tm.ReadTabletTs(wr.ts, tabletAlias)
+	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +255,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 			continue
 		}
 
-		ti, err := tm.ReadTabletTs(wr.ts, alias)
+		ti, err := tm.ReadTablet(wr.ts, alias)
 		if err != nil {
 			return nil, err
 		}
@@ -343,7 +343,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		}
 
 		// take this guy out of the serving graph if necessary
-		ti, err := tm.ReadTabletTs(wr.ts, status.ti.Alias())
+		ti, err := tm.ReadTablet(wr.ts, status.ti.Alias())
 		if err != nil {
 			return nil, err
 		}
@@ -386,7 +386,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		newMasterTablet, err := tm.ReadTabletTs(wr.ts, newParentTabletAlias)
+		newMasterTablet, err := tm.ReadTablet(wr.ts, newParentTabletAlias)
 		if err != nil {
 			return nil, err
 		}
