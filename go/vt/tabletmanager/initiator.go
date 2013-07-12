@@ -14,22 +14,17 @@ package tabletmanager
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"os/user"
-	"path"
-	"sort"
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 // The actor applies individual commands to execute an action read from a node
@@ -80,13 +75,7 @@ func actionGuid() string {
 func (ai *ActionInitiator) writeTabletAction(tabletAlias naming.TabletAlias, node *ActionNode) (actionPath string, err error) {
 	node.ActionGuid = actionGuid()
 	data := ActionNodeToJson(node)
-	actionPath, err = TabletActionPath(TabletPathForAlias(tabletAlias))
-	if err != nil {
-		return
-	}
-	// Action paths end in a trailing slash to that when we create
-	// sequential nodes, they are created as children, not siblings.
-	return ai.zconn.Create(actionPath+"/", data, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return ai.ts.WriteTabletAction(tabletAlias, data)
 }
 
 func (ai *ActionInitiator) rpcCall(tabletAlias naming.TabletAlias, name string, args, reply interface{}, waitTime time.Duration) error {
@@ -440,178 +429,32 @@ func (ai *ActionInitiator) ApplySchemaKeyspace(change string, simple bool) *Acti
 }
 
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
-	_, err := WaitForCompletion(ai.zconn, actionPath, waitTime)
+	_, err := WaitForCompletion(ai.ts, actionPath, waitTime)
 	return err
 }
 
 func (ai *ActionInitiator) WaitForCompletionReply(actionPath string, waitTime time.Duration) (interface{}, error) {
-	return WaitForCompletion(ai.zconn, actionPath, waitTime)
+	return WaitForCompletion(ai.ts, actionPath, waitTime)
 }
 
-func WaitForCompletion(zconn zk.Conn, actionPath string, waitTime time.Duration) (interface{}, error) {
+func WaitForCompletion(ts naming.TopologyServer, actionPath string, waitTime time.Duration) (interface{}, error) {
 	// If there is no duration specified, block for a sufficiently long time.
 	if waitTime <= 0 {
 		waitTime = 24 * time.Hour
 	}
-	timer := time.NewTimer(waitTime)
-	defer timer.Stop()
 
-	// see if the file exists or sets a watch
-	// the loop is to resist zk disconnects while we're waiting
-	actionLogPath := ActionToActionLogPath(actionPath)
-wait:
-	for {
-		var retryDelay <-chan time.Time
-		stat, watch, err := zconn.ExistsW(actionLogPath)
-		if err != nil {
-			delay := 5*time.Second + time.Duration(rand.Int63n(55e9))
-			relog.Warning("unexpected zk error, delay retry %v: %v", delay, err)
-			// No one likes a thundering herd.
-			retryDelay = time.After(delay)
-		} else if stat != nil {
-			// file exists, go on
-			break wait
-		}
-
-		// if the file doesn't exist yet, wait for creation event.
-		// On any other event we'll retry the ExistsW
-		select {
-		case actionEvent := <-watch:
-			if actionEvent.Type == zookeeper.EVENT_CREATED {
-				break wait
-			} else {
-				// Log unexpected events. Reconnects are
-				// handled by zk.Conn, so calling ExistsW again
-				// will handle a disconnect.
-				relog.Warning("unexpected zk event: %v", actionEvent)
-			}
-		case <-retryDelay:
-			continue wait
-		case <-timer.C:
-			return nil, fmt.Errorf("action err: %v deadline exceeded %v", actionLogPath, waitTime)
-		case <-interrupted:
-			return nil, fmt.Errorf("action err: %v interrupted by signal", actionLogPath)
-		}
-	}
-
-	// the node exists, read it
-	data, _, err := zconn.Get(actionLogPath)
+	data, err := ts.WaitForTabletAction(actionPath, waitTime, interrupted)
 	if err != nil {
-		return nil, fmt.Errorf("action err: %v %v", actionLogPath, err)
+		return nil, err
 	}
 
 	// parse it
-	actionNode, dataErr := ActionNodeFromJson(data, actionLogPath)
+	actionNode, dataErr := ActionNodeFromJson(data, "")
 	if dataErr != nil {
-		return nil, fmt.Errorf("action data error: %v %v %#v", actionLogPath, dataErr, data)
+		return nil, fmt.Errorf("action data error: %v %v %#v", actionPath, dataErr, data)
 	} else if actionNode.Error != "" {
 		return nil, fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
 	}
 
 	return actionNode.reply, nil
-}
-
-// Remove all queued actions, leaving the action node itself in place.
-//
-// This inherently breaks the locking mechanism of the action queue,
-// so this is a rare cleaup action, not a normal part of the flow.
-func PurgeActions(zconn zk.Conn, zkActionPath string) error {
-	if path.Base(zkActionPath) != "action" {
-		return fmt.Errorf("not action path: %v", zkActionPath)
-	}
-
-	children, _, err := zconn.Children(zkActionPath)
-	if err != nil {
-		return err
-	}
-
-	sort.Strings(children)
-	// Purge newer items first so the action queues don't try to process something.
-	for i := len(children) - 1; i >= 0; i-- {
-		actionPath := path.Join(zkActionPath, children[i])
-		data, _, err := zconn.Get(actionPath)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return fmt.Errorf("purge action err: %v", err)
-		}
-		actionNode, err := ActionNodeFromJson(data, actionPath)
-		if err != nil {
-			relog.Warning("bad action data: %v %v %#v", actionPath, err, data)
-		} else if actionNode.State == ACTION_STATE_RUNNING {
-			relog.Info("cannot remove running action: %v %v %v", actionPath, actionNode.Action, actionNode.ActionGuid)
-			continue
-		}
-
-		err = zk.DeleteRecursive(zconn, actionPath, -1)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return fmt.Errorf("purge action err: %v", err)
-		}
-	}
-	return nil
-}
-
-// Return a list of queued actions that have been sitting for more
-// than some amount of time.
-func StaleActions(zconn zk.Conn, zkActionPath string, maxStaleness time.Duration) ([]*ActionNode, error) {
-	if path.Base(zkActionPath) != "action" {
-		return nil, fmt.Errorf("not action path: %v", zkActionPath)
-	}
-
-	children, _, err := zconn.Children(zkActionPath)
-	if err != nil {
-		return nil, err
-	}
-
-	staleActions := make([]*ActionNode, 0, 16)
-	// Purge newer items first so the action queues don't try to process something.
-	sort.Strings(children)
-	for i := 0; i < len(children); i++ {
-		actionPath := path.Join(zkActionPath, children[i])
-		data, stat, err := zconn.Get(actionPath)
-		if err != nil && !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return nil, fmt.Errorf("stale action err: %v", err)
-		}
-		if stat == nil || time.Since(stat.MTime()) <= maxStaleness {
-			continue
-		}
-		actionNode, err := ActionNodeFromJson(data, actionPath)
-		if err != nil {
-			relog.Warning("bad action data: %v %v %#v", actionPath, err, data)
-		} else if actionNode.State != ACTION_STATE_RUNNING {
-			staleActions = append(staleActions, actionNode)
-		}
-	}
-	return staleActions, nil
-}
-
-// Prune old actionlog entries. Returns how many entries were purged
-// (even if there was an error)
-//
-// There is a chance some processes might still be waiting for action
-// results, but it is very very small.
-func PruneActionLogs(zconn zk.Conn, zkActionLogPath string, keepCount int) (prunedCount int, err error) {
-	if path.Base(zkActionLogPath) != "actionlog" {
-		return 0, fmt.Errorf("not actionlog path: %v", zkActionLogPath)
-	}
-
-	// get sorted list of children
-	children, _, err := zconn.Children(zkActionLogPath)
-	if err != nil {
-		return 0, err
-	}
-	sort.Strings(children)
-
-	// see if nothing to do
-	if len(children) <= keepCount {
-		return 0, nil
-	}
-
-	for i := 0; i < len(children)-keepCount; i++ {
-		actionPath := path.Join(zkActionLogPath, children[i])
-		err = zk.DeleteRecursive(zconn, actionPath, -1)
-		if err != nil {
-			return prunedCount, fmt.Errorf("purge action err: %v", err)
-		}
-		prunedCount++
-	}
-	return prunedCount, nil
 }

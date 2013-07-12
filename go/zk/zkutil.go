@@ -5,6 +5,7 @@
 package zk
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math/rand"
@@ -16,6 +17,16 @@ import (
 	"time"
 
 	"launchpad.net/gozk/zookeeper"
+)
+
+var (
+	// This error is returned by functions that wait for a result
+	// when they are interrupted.
+	ErrInterrupted = errors.New("zkutil: obtaining lock was interrupted")
+
+	// This error is returned by functions that wait for a result
+	// when the timeout value is reached.
+	ErrTimeout = errors.New("zkutil: obtaining lock timed out")
 )
 
 func init() {
@@ -359,13 +370,13 @@ trylock:
 			case <-timer.C:
 				break
 			case <-interrupted:
-				return fmt.Errorf("zkutil: obtaining lock was interrupted %v", zkPath)
+				return ErrInterrupted
 			case <-watch:
 				// The precise event doesn't matter - try to read again regardless.
 				goto trylock
 			}
 		}
-		return fmt.Errorf("zkutil: obtaining lock timed out %v", zkPath)
+		return ErrTimeout
 	}
 	return fmt.Errorf("zkutil: empty queue node: %v", queueNode)
 }

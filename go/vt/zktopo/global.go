@@ -225,7 +225,15 @@ func (zkts *ZkTopologyServer) lockForAction(actionDir, contents string, timeout 
 
 	err = zk.ObtainQueueLock(zkts.zconn, actionPath, timeout, interrupted)
 	if err != nil {
-		errToReturn := fmt.Errorf("failed to obtain action lock: %v", actionPath)
+		var errToReturn error
+		switch err {
+		case zk.ErrInterrupted:
+			errToReturn = naming.ErrInterrupted
+		case zk.ErrTimeout:
+			errToReturn = naming.ErrTimeout
+		default:
+			errToReturn = fmt.Errorf("failed to obtain action lock: %v %v", actionPath, err)
+		}
 
 		// Regardless of the reason, try to cleanup.
 		relog.Warning("Failed to obtain action lock: %v", err)

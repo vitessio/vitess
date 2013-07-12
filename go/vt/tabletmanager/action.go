@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/jscfg"
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
@@ -234,4 +235,29 @@ func ActionNodeToJson(n *ActionNode) string {
 		result += jscfg.ToJson(n.reply) + "\n"
 	}
 	return result
+}
+
+func ActionNodeCanBePurged(data string) bool {
+	actionNode, err := ActionNodeFromJson(data, "")
+	if err != nil {
+		relog.Warning("bad action data: %v %#v", err, data)
+		return true
+	}
+
+	if actionNode.State == ACTION_STATE_RUNNING {
+		relog.Info("cannot remove running action: %v %v", actionNode.Action, actionNode.ActionGuid)
+		return false
+	}
+
+	return true
+}
+
+func ActionNodeIsStale(data string) bool {
+	actionNode, err := ActionNodeFromJson(data, "")
+	if err != nil {
+		relog.Warning("bad action data: %v %#v", err, data)
+		return false
+	}
+
+	return actionNode.State != ACTION_STATE_RUNNING
 }

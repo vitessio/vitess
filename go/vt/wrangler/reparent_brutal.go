@@ -61,7 +61,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*t
 		relog.Info("scrap dead master %v", failedMaster.Path())
 		// The master is dead so execute the action locally instead of
 		// enqueing the scrap action for an arbitrary amount of time.
-		if scrapErr := tm.Scrap(wr.ts, wr.zconn, failedMaster.Alias(), false); scrapErr != nil {
+		if scrapErr := tm.Scrap(wr.ts, failedMaster.Alias(), false); scrapErr != nil {
 			relog.Warning("scrapping failed master failed: %v", scrapErr)
 		}
 	}

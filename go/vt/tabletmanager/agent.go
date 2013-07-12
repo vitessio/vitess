@@ -233,7 +233,7 @@ func (agent *ActionAgent) verifyZkPaths() error {
 
 	if err := Validate(agent.ts, agent.tabletAlias, ""); err != nil {
 		// Don't stop, it's not serious enough, this is likely transient.
-		relog.Warning("tablet validate failed: %v", agent.tabletAlias)
+		relog.Warning("tablet validate failed: %v %v", agent.tabletAlias, err)
 	}
 
 	// Ensure that the action node is there. There is no conflict creating
@@ -245,7 +245,7 @@ func (agent *ActionAgent) verifyZkPaths() error {
 	return nil
 }
 
-func (agent *ActionAgent) verifyZkServingAddrs() error {
+func (agent *ActionAgent) verifyServingAddrs() error {
 	if !agent.Tablet().IsServingType() {
 		return nil
 	}
@@ -408,7 +408,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	if err = agent.verifyZkServingAddrs(); err != nil {
+	if err = agent.verifyServingAddrs(); err != nil {
 		return err
 	}
 

@@ -1138,12 +1138,32 @@ func commandPurgeActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		return "", err
 	}
 	for _, zkActionPath := range zkActionPaths {
-		err := tm.PurgeActions(zkts.GetZConn(), zkActionPath)
+		err := zkts.PurgeActions(zkActionPath, tm.ActionNodeCanBePurged)
 		if err != nil {
 			return "", err
 		}
 	}
 	return "", nil
+}
+
+func staleActions(zkts *zktopo.ZkTopologyServer, zkActionPath string, maxStaleness time.Duration) ([]*tm.ActionNode, error) {
+	// get the stale strings
+	actionNodes, err := zkts.StaleActions(zkActionPath, maxStaleness, tm.ActionNodeIsStale)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert to ActionNode
+	staleActions := make([]*tm.ActionNode, len(actionNodes))
+	for i, actionNodeStr := range actionNodes {
+		actionNode, err := tm.ActionNodeFromJson(actionNodeStr, "")
+		if err != nil {
+			return nil, err
+		}
+		staleActions[i] = actionNode
+	}
+
+	return staleActions, nil
 }
 
 func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1167,7 +1187,7 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 		wg.Add(1)
 		go func(zkActionPath string) {
 			defer wg.Done()
-			staleActions, err := tm.StaleActions(zkts.GetZConn(), zkActionPath, *maxStaleness)
+			staleActions, err := staleActions(zkts, zkActionPath, *maxStaleness)
 			if err != nil {
 				errCount.Add(1)
 				relog.Error("can't check stale actions: %v %v", zkActionPath, err)
@@ -1177,7 +1197,7 @@ func commandStaleActions(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []s
 				fmt.Println(fmtAction(action))
 			}
 			if *purge && len(staleActions) > 0 {
-				err := tm.PurgeActions(zkts.GetZConn(), zkActionPath)
+				err := zkts.PurgeActions(zkActionPath, tm.ActionNodeCanBePurged)
 				if err != nil {
 					errCount.Add(1)
 					relog.Error("can't purge stale actions: %v %v", zkActionPath, err)
@@ -1217,7 +1237,7 @@ func commandPruneActionLogs(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 		wg.Add(1)
 		go func(zkActionLogPath string) {
 			defer wg.Done()
-			purgedCount, err := tm.PruneActionLogs(zkts.GetZConn(), zkActionLogPath, *keepCount)
+			purgedCount, err := zkts.PruneActionLogs(zkActionLogPath, *keepCount)
 			if err == nil {
 				relog.Debug("%v pruned %v", zkActionLogPath, purgedCount)
 			} else {

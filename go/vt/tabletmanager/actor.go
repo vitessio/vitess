@@ -106,7 +106,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			}
 		} else {
 			relog.Warning("HandleAction waiting for running action: %v", actionPath)
-			_, err := WaitForCompletion(ta.zconn, actionPath, 0)
+			_, err := WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		}
 	case ACTION_STATE_FAILED:
@@ -129,7 +129,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			// The action is schedule by another actor. Most likely
 			// the tablet restarted during an action. Just wait for completion.
 			relog.Warning("HandleAction waiting for scheduled action: %v", actionPath)
-			_, err := WaitForCompletion(ta.zconn, actionPath, 0)
+			_, err := WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		} else {
 			return zkErr
@@ -523,7 +523,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
 		relog.Error("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
-			return Scrap(ta.ts, ta.zconn, tablet.Alias(), false)
+			return Scrap(ta.ts, tablet.Alias(), false)
 		} else {
 			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		}
@@ -551,7 +551,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 }
 
 func (ta *TabletActor) scrap() error {
-	return Scrap(ta.ts, ta.zconn, ta.tabletAlias, false)
+	return Scrap(ta.ts, ta.tabletAlias, false)
 }
 
 func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
@@ -844,7 +844,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	// do the work
 	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}); err != nil {
 		relog.Error("RestoreFromSnapshot failed (%v), scrapping", err)
-		if err := Scrap(ta.ts, ta.zconn, ta.tabletAlias, false); err != nil {
+		if err := Scrap(ta.ts, ta.tabletAlias, false); err != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
 		}
 
@@ -952,7 +952,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// run the action, scrap if it fails
 	if err := ta.mysqld.RestoreFromMultiSnapshot(tablet.DbName(), tablet.KeyRange, sourceAddrs, uids, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
-		if e := Scrap(ta.ts, ta.zconn, ta.tabletAlias, false); e != nil {
+		if e := Scrap(ta.ts, ta.tabletAlias, false); e != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
@@ -1015,7 +1015,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	// do the work
 	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
 		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
-		if err := Scrap(ta.ts, ta.zconn, ta.tabletAlias, false); err != nil {
+		if err := Scrap(ta.ts, ta.tabletAlias, false); err != nil {
 			relog.Error("Failed to Scrap after failed RestoreFromPartialSnapshot: %v", err)
 		}
 		return err
@@ -1026,7 +1026,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 }
 
 // Make this external, since in needs to be forced from time to time.
-func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAlias, force bool) error {
+func Scrap(ts naming.TopologyServer, tabletAlias naming.TabletAlias, force bool) error {
 	tablet, err := ReadTablet(ts, tabletAlias)
 	if err != nil {
 		return err
@@ -1051,14 +1051,9 @@ func Scrap(ts naming.TopologyServer, zconn zk.Conn, tabletAlias naming.TabletAli
 	// Remove any pending actions. Presumably forcing a scrap means you don't
 	// want the agent doing anything and the machine requires manual attention.
 	if force {
-		actionPath, err := TabletActionPath(tablet.Path())
+		err := ts.PurgeTabletActions(tabletAlias, ActionNodeCanBePurged)
 		if err != nil {
-			relog.Warning("TabletActionPath(%v) failed: %v", tablet.Path(), err)
-		} else {
-			err = PurgeActions(zconn, actionPath)
-			if err != nil {
-				relog.Warning("purge actions failed: %v %v", actionPath, err)
-			}
+			relog.Warning("purge actions failed: %v", err)
 		}
 	}
 

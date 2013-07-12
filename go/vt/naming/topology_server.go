@@ -16,15 +16,23 @@ import (
 var (
 	// This error is returned by functions to specify the
 	// requested resource already exists.
-	ErrNodeExists = errors.New("Node already exists")
+	ErrNodeExists = errors.New("node already exists")
 
 	// This error is returned by functions to specify the requested
 	// resource does not exist.
-	ErrNoNode = errors.New("Node doesn't exist")
+	ErrNoNode = errors.New("node doesn't exist")
 
 	// This error is returned by functions to specify a child of the
 	// resource is still present and prevents the action from completing.
-	ErrNotEmpty = errors.New("Node not empty")
+	ErrNotEmpty = errors.New("node not empty")
+
+	// This error is returned by functions that wait for a result
+	// when the timeout value is reached.
+	ErrTimeout = errors.New("deadline exceeded")
+
+	// This error is returned by functions that wait for a result
+	// when they are interrupted.
+	ErrInterrupted = errors.New("interrupted")
 )
 
 // TopologyServer is the interface used to talk to a persistent
@@ -172,6 +180,7 @@ type TopologyServer interface {
 	// the lock for at most duration. The wait can be interrupted
 	// if the interrupted channel is closed. It returns the lock
 	// path.
+	// Can return ErrTimeout or ErrInterrupted
 	LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
 
 	// UnlockKeyspaceForAction unlocks a keyspace.
@@ -182,10 +191,31 @@ type TopologyServer interface {
 	// the lock for at most duration. The wait can be interrupted
 	// if the interrupted channel is closed. It returns the lock
 	// path.
+	// Can return ErrTimeout or ErrInterrupted
 	LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error)
 
 	// UnlockShardForAction unlocks a shard.
 	UnlockShardForAction(keyspace, shard, lockPath, results string) error
+
+	//
+	// Remote Tablet Actions, local cell.
+	//
+
+	// WriteTabletAction initiates a remote action on the tablet.
+	// Actions are queued up, and executed sequentially.  An
+	// action is identified by the returned string, actionPath.
+	WriteTabletAction(tabletAlias TabletAlias, contents string) (string, error)
+
+	// WaitForTabletAction waits for a tablet action to complete. It
+	// will wait for the result for at most duration. The wait can
+	// be interrupted if the interrupted channel is closed.
+	// Can return ErrTimeout or ErrInterrupted
+	WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error)
+
+	// PurgeTabletActions removes all queued actions for a tablet.
+	// This might break the locking mechanism of the remote action
+	// queue, used with caution.
+	PurgeTabletActions(tabletAlias TabletAlias, canBePurged func(data string) bool) error
 }
 
 // Registry for TopologyServer implementations.

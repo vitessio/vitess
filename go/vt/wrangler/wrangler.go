@@ -323,7 +323,7 @@ func (wr *Wrangler) Scrap(tabletAlias naming.TabletAlias, force, skipRebuild boo
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	if force {
-		err = tm.Scrap(wr.ts, wr.zconn, ti.Alias(), force)
+		err = tm.Scrap(wr.ts, ti.Alias(), force)
 	} else {
 		actionPath, err = wr.ai.Scrap(ti.Alias())
 	}

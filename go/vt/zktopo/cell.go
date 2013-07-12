@@ -6,10 +6,14 @@ package zktopo
 
 import (
 	"fmt"
+	"math/rand"
 	"path"
 	"sort"
+	"strings"
+	"time"
 
 	"code.google.com/p/vitess/go/jscfg"
+	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -21,6 +25,10 @@ This file contains the per-cell methods of ZkTopologyServer
 
 func tabletPathForAlias(alias naming.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, alias.TabletUidStr())
+}
+
+func tabletActionPathForAlias(alias naming.TabletAlias) string {
+	return fmt.Sprintf("/zk/%v/vt/tablets/%v/action", alias.Cell, alias.TabletUidStr())
 }
 
 func tabletDirectoryForCell(cell string) string {
@@ -269,4 +277,71 @@ func (zkts *ZkTopologyServer) UpdateTabletEndpoint(cell, keyspace, shard string,
 		err = nil
 	}
 	return err
+}
+
+//
+// Remote Tablet Actions
+//
+
+func (zkts *ZkTopologyServer) WriteTabletAction(tabletAlias naming.TabletAlias, contents string) (string, error) {
+	// Action paths end in a trailing slash to that when we create
+	// sequential nodes, they are created as children, not siblings.
+	actionPath := tabletActionPathForAlias(tabletAlias) + "/"
+	return zkts.zconn.Create(actionPath, contents, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
+}
+
+func (zkts *ZkTopologyServer) WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error) {
+	timer := time.NewTimer(waitTime)
+	defer timer.Stop()
+
+	// see if the file exists or sets a watch
+	// the loop is to resist zk disconnects while we're waiting
+	actionLogPath := strings.Replace(actionPath, "/action/", "/actionlog/", 1)
+wait:
+	for {
+		var retryDelay <-chan time.Time
+		stat, watch, err := zkts.zconn.ExistsW(actionLogPath)
+		if err != nil {
+			delay := 5*time.Second + time.Duration(rand.Int63n(55e9))
+			relog.Warning("unexpected zk error, delay retry %v: %v", delay, err)
+			// No one likes a thundering herd.
+			retryDelay = time.After(delay)
+		} else if stat != nil {
+			// file exists, go on
+			break wait
+		}
+
+		// if the file doesn't exist yet, wait for creation event.
+		// On any other event we'll retry the ExistsW
+		select {
+		case actionEvent := <-watch:
+			if actionEvent.Type == zookeeper.EVENT_CREATED {
+				break wait
+			} else {
+				// Log unexpected events. Reconnects are
+				// handled by zk.Conn, so calling ExistsW again
+				// will handle a disconnect.
+				relog.Warning("unexpected zk event: %v", actionEvent)
+			}
+		case <-retryDelay:
+			continue wait
+		case <-timer.C:
+			return "", naming.ErrTimeout
+		case <-interrupted:
+			return "", naming.ErrInterrupted
+		}
+	}
+
+	// the node exists, read it
+	data, _, err := zkts.zconn.Get(actionLogPath)
+	if err != nil {
+		return "", fmt.Errorf("action err: %v %v", actionLogPath, err)
+	}
+
+	return data, nil
+}
+
+func (zkts *ZkTopologyServer) PurgeTabletActions(tabletAlias naming.TabletAlias, canBePurged func(data string) bool) error {
+	actionPath := tabletActionPathForAlias(tabletAlias)
+	return zkts.PurgeActions(actionPath, canBePurged)
 }
