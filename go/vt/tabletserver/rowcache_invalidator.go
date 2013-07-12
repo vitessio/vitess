@@ -280,6 +280,7 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 	if err != nil {
 		rErr, ok := err.(*InvalidationError)
 		if ok && rErr.isFatal() {
+			relog.Error("Fatal Error: '%v'", rErr)
 			rowCache.updateErrCounters(rErr)
 		}
 		rowCache.stopCache(fmt.Sprintf("Unexpected or fatal error, '%v'", err.Error()))
@@ -303,9 +304,10 @@ func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateRespon
 		position = event.BinlogPosition.String()
 	}
 	if event.Error != "" {
-		relog.Error("Update stream returned error %v", event.Error)
+		relog.Error("Update stream returned error '%v'", event.Error)
 		// Check if update stream error is fatal, else record it and move on.
 		if strings.HasPrefix(event.Error, mysqlctl.FATAL) {
+			relog.Info("Returning Service Error")
 			return NewInvalidationError(SERVICE_ERROR, event.Error, position)
 		}
 		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, event.Error, position))
