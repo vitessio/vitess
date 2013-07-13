@@ -216,6 +216,30 @@ type TopologyServer interface {
 	// This might break the locking mechanism of the remote action
 	// queue, used with caution.
 	PurgeTabletActions(tabletAlias TabletAlias, canBePurged func(data string) bool) error
+
+	//
+	// Supporting the local agent process, local cell.
+	//
+
+	// ValidateTabletActions checks a tablet can execute remote
+	// actions.
+	ValidateTabletActions(tabletAlias TabletAlias) error
+
+	// CreateTabletPidNode will keep a PID node up to date with
+	// this tablet's current PID, until 'done' is closed.
+	CreateTabletPidNode(tabletAlias TabletAlias, done chan struct{}) error
+
+	// GetSubprocessFlags returns the flags required to run a
+	// subprocess tha uses the same TopologyServer parameters as
+	// this process.
+	GetSubprocessFlags() []string
+
+	// ActionEventLoop is the main loop for the action processing engine.
+	// It will feed events to the dispatchAction callback.
+	// If dispatchAction returns an error, we'll wait a bit before trying
+	// again.
+	// If 'done' is closed, the loop returns.
+	ActionEventLoop(tabletAlias TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{})
 }
 
 // Registry for TopologyServer implementations.
