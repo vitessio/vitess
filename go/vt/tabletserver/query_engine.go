@@ -440,7 +440,7 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 	for i, pk := range pkRows {
 		rcresult := rcresults[keys[i]]
 		if rcresult.Row != nil {
-			/*if dbrow := qe.compareRow(logStatsplan, rcresult.Row, pk); dbrow != nil {
+			/*if dbrow := qe.compareRow(logStats, plan, rcresult.Row, pk); dbrow != nil {
 				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
 			}*/
 			rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
@@ -478,22 +478,51 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 }
 
 func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, cacheRow []sqltypes.Value, pk []sqltypes.Value) (dbrow []sqltypes.Value) {
+	rowsAreEquql := func(row1, row2 []sqltypes.Value) bool {
+		if len(row1) != len(row2) {
+			return false
+		}
+		for i := 0; i < len(row1); i++ {
+			if row1[i].IsNull() && row2[i].IsNull() {
+				continue
+			}
+			if (row1[i].IsNull() && !row2[i].IsNull()) || (!row1[i].IsNull() && row2[i].IsNull()) || row1[i].String() != row2[i].String() {
+				return false
+			}
+		}
+		return true
+	}
+	reloadFromCache := func(pk []sqltypes.Value) (newRow []sqltypes.Value) {
+		keys := make([]string, 1)
+		keys[0] = buildKey(pk)
+		rcresults := plan.TableInfo.Cache.Get(keys)
+		if len(rcresults) == 0 {
+			return nil
+		}
+		return rcresults[keys[0]].Row
+	}
+
 	resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
-	if len(resultFromdb.Rows) != 1 {
-		relog.Warning("unexpected number of rows for %v: %d", pk, len(resultFromdb.Rows))
+	if len(resultFromdb.Rows) == 0 {
+		// Reload from cache for verification
+		if reloadFromCache(pk) == nil {
+			return nil
+		}
+		relog.Warning("unexpected number of rows for %v", pk)
 		errorStats.Add("Mismatch", 1)
 		return nil
 	}
 	dbrow = resultFromdb.Rows[0]
-	for i := 0; i < len(cacheRow); i++ {
-		if cacheRow[i].IsNull() && dbrow[i].IsNull() {
-			continue
+	if !rowsAreEquql(cacheRow, dbrow) {
+		// Reload from cache for verification
+		newRow := reloadFromCache(pk)
+		if newRow == nil {
+			return
 		}
-		if (cacheRow[i].IsNull() && !dbrow[i].IsNull()) || (!cacheRow[i].IsNull() && dbrow[i].IsNull()) || cacheRow[i].String() != dbrow[i].String() {
+		if !rowsAreEquql(newRow, dbrow) {
 			relog.Warning("query: %v", plan.FullQuery)
-			relog.Warning("mismatch for: %v, column: %v cache: %s, db: %s", pk, i, cacheRow[i], dbrow[i])
+			relog.Warning("mismatch for: %v, cache: %v, db: %v", pk, newRow, dbrow)
 			errorStats.Add("Mismatch", 1)
-			return dbrow
 		}
 	}
 	return dbrow
