@@ -28,39 +28,48 @@ type RowCache struct {
 	cachePool *CachePool
 }
 
+type RCResult struct {
+	Row []sqltypes.Value
+	Cas uint64
+}
+
 func NewRowCache(tableInfo *TableInfo, hash string, cachePool *CachePool) *RowCache {
 	prefix := hash + "."
 	return &RowCache{tableInfo, prefix, cachePool}
 }
 
-func (rc *RowCache) Get(key string) (row []sqltypes.Value, cas uint64) {
-	if key == "" {
-		return nil, 0
+func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
+	mkeys := make([]string, len(keys))
+	for i, key := range keys {
+		mkeys[i] = rc.prefix + key
 	}
-	mkey := rc.prefix + key
+	prefixlen := len(rc.prefix)
 	conn := rc.cachePool.Get()
 	defer conn.Recycle()
 
 	defer cacheStats.Record("Exec", time.Now())
-	b, f, cas, err := conn.Gets(mkey)
+	mcresults, err := conn.Gets(mkeys...)
 	if err != nil {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
 	}
-	if b == nil {
-		return nil, 0
+	results = make(map[string]RCResult, len(keys))
+	for _, mcresult := range mcresults {
+		if mcresult.Flags == RC_DELETED {
+			// The row was recently invalidated.
+			// If the caller reads the row from db, they can update it
+			// back as long as it's not updated again.
+			results[mcresult.Key[prefixlen:]] = RCResult{Cas: mcresult.Cas}
+			continue
+		}
+		row := rc.decodeRow(mcresult.Value)
+		if row == nil {
+			panic(NewTabletError(FAIL, "Corrupt data for %s", mcresult.Key))
+		}
+		// No cas. If you've read the row, we don't expect you to update it back.
+		results[mcresult.Key[prefixlen:]] = RCResult{Row: row}
 	}
-	if f == RC_DELETED {
-		// The row was recently invalidated.
-		// If the caller reads the row from db, they can update it
-		// back as long as it's not updated again.
-		return nil, cas
-	}
-	if row = rc.decodeRow(b); row == nil {
-		panic(NewTabletError(FAIL, "Corrupt data for %s", key))
-	}
-	// No cas. If you've read the row, we don't expect you to update it back.
-	return row, 0
+	return
 }
 
 func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
@@ -163,7 +172,7 @@ func NewGenericCache(cachePool *CachePool) *GenericCache {
 	return &GenericCache{cachePool}
 }
 
-func (gc *GenericCache) Gets(key string) (value []byte, flags uint16, cas uint64, err error) {
+func (gc *GenericCache) Get(key string) (value []byte, err error) {
 	if gc.cachePool.IsClosed() {
 		return
 	}
@@ -176,10 +185,13 @@ func (gc *GenericCache) Gets(key string) (value []byte, flags uint16, cas uint64
 	defer conn.Recycle()
 
 	defer cacheStats.Record("Exec", time.Now())
-	value, flags, cas, err = conn.Gets(key)
+	results, err := conn.Get(key)
 	if err != nil {
 		conn.Close()
-		panic(NewTabletError(FATAL, "%s", err))
+		return
+	}
+	if len(results) != 0 {
+		value = results[0].Value
 	}
 	return
 }

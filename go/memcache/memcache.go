@@ -18,6 +18,13 @@ type Connection struct {
 	buffered bufio.ReadWriter
 }
 
+type Result struct {
+	Key   string
+	Value []byte
+	Flags uint16
+	Cas   uint64
+}
+
 func Connect(address string) (conn *Connection, err error) {
 	var network string
 	if strings.Contains(address, "/") {
@@ -52,15 +59,15 @@ func (mc *Connection) IsClosed() bool {
 	return mc.conn == nil
 }
 
-func (mc *Connection) Get(key string) (value []byte, flags uint16, err error) {
+func (mc *Connection) Get(keys ...string) (results []Result, err error) {
 	defer handleError(&err)
-	value, flags, _ = mc.get("get", key)
+	results = mc.get("get", keys)
 	return
 }
 
-func (mc *Connection) Gets(key string) (value []byte, flags uint16, cas uint64, err error) {
+func (mc *Connection) Gets(keys ...string) (results []Result, err error) {
 	defer handleError(&err)
-	value, flags, cas = mc.get("gets", key)
+	results = mc.get("gets", keys)
 	return
 }
 
@@ -139,39 +146,47 @@ func (mc *Connection) Stats(argument string) (result []byte, err error) {
 	return result, err
 }
 
-func (mc *Connection) get(command, key string) (value []byte, flags uint16, cas uint64) {
+func (mc *Connection) get(command string, keys []string) (results []Result) {
+	results = make([]Result, 0, len(keys))
 	// get(s) <key>*\r\n
-	mc.writestrings(command, " ", key, "\r\n")
+	mc.writestrings(command)
+	for _, key := range keys {
+		mc.writestrings(" ", key)
+	}
+	mc.writestrings("\r\n")
 	header := mc.readline()
-	if strings.HasPrefix(header, "VALUE") {
+	var result Result
+	for strings.HasPrefix(header, "VALUE") {
 		// VALUE <key> <flags> <bytes> [<cas unique>]\r\n
 		chunks := strings.Split(header, " ")
 		if len(chunks) < 4 {
 			panic(NewMemcacheError("Malformed response: %s", string(header)))
 		}
+		result.Key = chunks[1]
 		flags64, err := strconv.ParseUint(chunks[2], 10, 16)
 		if err != nil {
 			panic(NewMemcacheError("%v", err))
 		}
-		flags = uint16(flags64)
+		result.Flags = uint16(flags64)
 		size, err := strconv.ParseUint(chunks[3], 10, 64)
 		if err != nil {
 			panic(NewMemcacheError("%v", err))
 		}
 		if len(chunks) == 5 {
-			cas, err = strconv.ParseUint(chunks[4], 10, 64)
+			result.Cas, err = strconv.ParseUint(chunks[4], 10, 64)
 			if err != nil {
 				panic(NewMemcacheError("%v", err))
 			}
 		}
 		// <data block>\r\n
-		value = mc.read(int(size) + 2)[:size]
+		result.Value = mc.read(int(size) + 2)[:size]
+		results = append(results, result)
 		header = mc.readline()
 	}
 	if !strings.HasPrefix(header, "END") {
 		panic(NewMemcacheError("Malformed response: %s", string(header)))
 	}
-	return value, flags, cas
+	return
 }
 
 func (mc *Connection) store(command, key string, flags uint16, timeout uint64, value []byte, cas uint64) (stored bool) {

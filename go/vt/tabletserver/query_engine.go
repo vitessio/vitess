@@ -322,11 +322,7 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 }
 
 func (qe *QueryEngine) getCurrentInvalidationPosition() (invalidationPosition []byte, err error) {
-	value, _, _, err := qe.adminCache.Gets(ROWCACHE_INVALIDATION_POSITION)
-	if err != nil {
-		return nil, err
-	}
-	return value, nil
+	return qe.adminCache.Get(ROWCACHE_INVALIDATION_POSITION)
 }
 
 func (qe *QueryEngine) purgeRowCache() {
@@ -430,16 +426,24 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 	if plan.Fields == nil {
 		panic("unexpected")
 	}
+
+	// Fetch from cache first
+	keys := make([]string, len(pkRows))
+	for i, pk := range pkRows {
+		keys[i] = buildKey(pk)
+	}
+	rcresults := tableInfo.Cache.Get(keys)
+
 	result.Fields = plan.Fields
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
-	for _, pk := range pkRows {
-		key := buildKey(pk)
-		if cacheRow, cas := tableInfo.Cache.Get(key); cacheRow != nil {
-			/*if dbrow := qe.compareRow(plan, cacheRow, pk); dbrow != nil {
+	for i, pk := range pkRows {
+		rcresult := rcresults[keys[i]]
+		if rcresult.Row != nil {
+			/*if dbrow := qe.compareRow(logStatsplan, rcresult.Row, pk); dbrow != nil {
 				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
 			}*/
-			rows = append(rows, applyFilter(plan.ColumnNumbers, cacheRow))
+			rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
 			hits++
 		} else {
 			resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
@@ -450,10 +454,10 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 			row := resultFromdb.Rows[0]
 			pkRow := applyFilter(tableInfo.PKColumns, row)
 			newKey := buildKey(pkRow)
-			if newKey != key {
-				relog.Warning("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, key, newKey)
+			if newKey != keys[i] {
+				relog.Warning("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, keys[i], newKey)
 			}
-			tableInfo.Cache.Set(newKey, row, cas)
+			tableInfo.Cache.Set(newKey, row, rcresult.Cas)
 			rows = append(rows, applyFilter(plan.ColumnNumbers, row))
 			misses++
 		}
@@ -477,6 +481,7 @@ func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, c
 	resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
 	if len(resultFromdb.Rows) != 1 {
 		relog.Warning("unexpected number of rows for %v: %d", pk, len(resultFromdb.Rows))
+		errorStats.Add("Mismatch", 1)
 		return nil
 	}
 	dbrow = resultFromdb.Rows[0]
@@ -487,6 +492,7 @@ func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, c
 		if (cacheRow[i].IsNull() && !dbrow[i].IsNull()) || (!cacheRow[i].IsNull() && dbrow[i].IsNull()) || cacheRow[i].String() != dbrow[i].String() {
 			relog.Warning("query: %v", plan.FullQuery)
 			relog.Warning("mismatch for: %v, column: %v cache: %s, db: %s", pk, i, cacheRow[i], dbrow[i])
+			errorStats.Add("Mismatch", 1)
 			return dbrow
 		}
 	}

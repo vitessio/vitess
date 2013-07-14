@@ -32,7 +32,7 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Hello", "world")
 
@@ -42,7 +42,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Add: %v", err)
 	}
 	if stored {
-		t.Errorf("Expecting false, received %v", stored)
+		t.Errorf("want false, got %v", stored)
 	}
 	expect(t, c, "Hello", "world")
 
@@ -52,7 +52,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Replace: %v", err)
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Hello", "World")
 
@@ -62,7 +62,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Append: %v", err)
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Hello", "World!")
 
@@ -72,7 +72,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Prepend: %v", err)
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Hello", "Hello, World!")
 
@@ -82,7 +82,7 @@ func TestMemcache(t *testing.T) {
 		t.Errorf("Delete: %v", err)
 	}
 	if !deleted {
-		t.Errorf("Expecting true, received %v", deleted)
+		t.Errorf("want true, got %v", deleted)
 	}
 	expect(t, c, "Hello", "")
 
@@ -93,18 +93,18 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
-	b, f, err := c.Get("Hello")
+	results, err := c.Get("Hello")
 	if err != nil {
 		t.Errorf("Get: %v", err)
 		return
 	}
-	if f != 0xFFFF {
-		t.Errorf("Expecting 0xFFFF, Received %x", f)
+	if results[0].Flags != 0xFFFF {
+		t.Errorf("want 0xFFFF, got %x", results[0].Flags)
 	}
-	if string(b) != "world" {
-		t.Errorf("Expecting world, Received %s", b)
+	if string(results[0].Value) != "world" {
+		t.Errorf("want world, got %s", results[0].Value)
 	}
 
 	// timeout
@@ -114,7 +114,7 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Lost", "World")
 	time.Sleep(2 * time.Second)
@@ -127,16 +127,17 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Data", "Set")
-	b, f, cas, err := c.Gets("Data")
+	results, err = c.Gets("Data")
 	if err != nil {
 		t.Errorf("Gets: %v", err)
 		return
 	}
+	cas := results[0].Cas
 	if cas == 0 {
-		t.Errorf("Expecting non-zero for cas")
+		t.Errorf("want non-zero for cas")
 	}
 	stored, err = c.Cas("Data", 0, 0, []byte("not set"), 12345)
 	if err != nil {
@@ -144,7 +145,7 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 	if stored {
-		t.Errorf("Expecting false, received %v", stored)
+		t.Errorf("want false, got %v", stored)
 	}
 	expect(t, c, "Data", "Set")
 	stored, err = c.Cas("Data", 0, 0, []byte("Changed"), cas)
@@ -159,7 +160,7 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 	if !stored {
-		t.Errorf("Expecting true, received %v", stored)
+		t.Errorf("want true, got %v", stored)
 	}
 	expect(t, c, "Data", "Overwritten")
 
@@ -176,7 +177,7 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 
-	//FlushAll
+	// FlushAll
 	// Set
 	stored, err = c.Set("Flush", 0, 0, []byte("Test"))
 	if err != nil {
@@ -190,24 +191,66 @@ func TestMemcache(t *testing.T) {
 		return
 	}
 
-	b, f, err = c.Get("Flush")
+	results, err = c.Get("Flush")
 	if err != nil {
 		t.Errorf("Get: %v", err)
 		return
 	}
-	if string(b) != "" {
+	if len(results) != 0 {
 		t.Errorf("FlushAll failed")
 		return
+	}
+
+	// Multi
+	stored, _ = c.Set("key1", 0, 0, []byte("val1"))
+	stored, _ = c.Set("key2", 0, 0, []byte("val2"))
+
+	results, _ = c.Get("key1", "key2")
+	if len(results) != 2 {
+		t.Fatalf("want 2, gto %d", len(results))
+	}
+	if results[0].Key != "key1" {
+		t.Errorf("want key1, got %s", results[0].Key)
+	}
+	if string(results[0].Value) != "val1" {
+		t.Errorf("want val1, got %s", string(results[0].Value))
+	}
+	if results[1].Key != "key2" {
+		t.Errorf("want key2, got %s", results[0].Key)
+	}
+	if string(results[1].Value) != "val2" {
+		t.Errorf("want val2, got %s", string(results[1].Value))
+	}
+
+	results, _ = c.Gets("key1", "key3", "key2")
+	if len(results) != 2 {
+		t.Fatalf("want 2, gto %d", len(results))
+	}
+	if results[0].Key != "key1" {
+		t.Errorf("want key1, got %s", results[0].Key)
+	}
+	if string(results[0].Value) != "val1" {
+		t.Errorf("want val1, got %s", string(results[0].Value))
+	}
+	if results[1].Key != "key2" {
+		t.Errorf("want key2, got %s", results[0].Key)
+	}
+	if string(results[1].Value) != "val2" {
+		t.Errorf("want val2, got %s", string(results[1].Value))
 	}
 }
 
 func expect(t *testing.T, c *Connection, key, value string) {
-	b, _, err := c.Get(key)
+	results, err := c.Get(key)
 	if err != nil {
 		t.Errorf("Get: %v", err)
 		return
 	}
-	if string(b) != value {
-		t.Errorf("Expecting %s, Received %s", value, b)
+	var got string
+	if len(results) != 0 {
+		got = string(results[0].Value)
+	}
+	if got != value {
+		t.Errorf("want %s, got %s", value, results[0].Value)
 	}
 }

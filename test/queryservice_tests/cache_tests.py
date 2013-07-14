@@ -85,7 +85,7 @@ class TestCache(framework.TestCase):
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
     finally:
       # alter table so there's no hash collision when renamed
-      self.env.execute("alter table vtocc_cached2 comment 'renmaed'")
+      self.env.execute("alter table vtocc_cached2 comment 'renamed'")
       self.env.execute("rename table vtocc_cached2 to vtocc_cached")
 
     # Verify row cache is working again
@@ -164,6 +164,26 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
 
+  def test_bigdata(self):
+    self.env.conn.begin()
+    rowcount = 10
+    # uncomment this line to do the actual big data test
+    # rowcount = 10000
+    for i in range(rowcount):
+      self.env.execute("insert into vtocc_cached(eid, bid, name, foo) values(5, %(bid)s, 'bar', 'bar')", {"bid": "%d" % i})
+    self.env.conn.commit()
+
+    # prime the cache
+    cu = self.env.execute("select * from vtocc_cached where eid = 5 and name = 'bar' limit 2000")
+    cu = self.env.execute("select * from vtocc_cached where eid = 5 and name = 'bar' limit 4000")
+    cu = self.env.execute("select * from vtocc_cached where eid = 5 and name = 'bar' limit 6000")
+    cu = self.env.execute("select * from vtocc_cached where eid = 5 and name = 'bar' limit 8000")
+    cu = self.env.execute("select * from vtocc_cached where eid = 5 and name = 'bar'")
+
+    tstart = self.env.table_stats()["vtocc_cached"]
+    cu = self.env.execute("select * from vtocc_cached where eid = 5 and name = 'bar'")
+    tend = self.env.table_stats()["vtocc_cached"]
+    self.assertEqual(tstart["Hits"]+rowcount, tend["Hits"])
 
   def test_types(self):
     self._verify_mismatch("select * from vtocc_cached where eid = 'str' and bid = 'str'")
