@@ -16,56 +16,6 @@ import (
 
 // Functions for extracting and deriving zk paths.
 
-func VtRootFromTabletPath(zkTabletPath string) (string, error) {
-	pathParts := strings.Split(zkTabletPath, "/")
-	if len(pathParts) < 2 || pathParts[len(pathParts)-2] != "tablets" {
-		return "", fmt.Errorf("invalid tablet path: %v", zkTabletPath)
-	}
-
-	return strings.Join(pathParts[:len(pathParts)-2], "/"), nil
-}
-
-// In most cases the substree is just "vt" - i.e. /zk/global/vt/keyspaces.
-func VtSubtree(zkPath string) (string, error) {
-	pathParts := strings.Split(zkPath, "/")
-	for i, part := range pathParts {
-		if i >= 3 && (part == "keyspaces" || part == "tablets") {
-			return strings.Join(pathParts[3:i], "/"), nil
-		}
-	}
-	return "", fmt.Errorf("invalid path: %v", zkPath)
-}
-
-// /zk/<cell>/vt/tablets/<tablet uid>
-func IsTabletPath(zkTabletPath string) error {
-	_, err := VtRootFromTabletPath(zkTabletPath)
-	return err
-}
-
-// This is the path that indicates the authoritive table node.
-func TabletPath(zkVtRoot string, tabletUid uint32) string {
-	tabletPath := path.Join(zkVtRoot, "tablets", tabletUidStr(tabletUid))
-	if err := IsTabletPath(tabletPath); err != nil {
-		panic(err) // this should never happen
-	}
-	return tabletPath
-}
-
-// /zk/<cell>/vt/tablets/<tablet uid>/action
-func TabletActionPath(zkTabletPath string) (string, error) {
-	if err := IsTabletPath(zkTabletPath); err != nil {
-		return "", err
-	}
-	return path.Join(zkTabletPath, "action"), nil
-}
-
-// From an action path and a filename, returns the actionlog path, e.g from
-// /zk/<cell>/vt/tablets/<tablet uid>/action/0000001 it will return:
-// /zk/<cell>/vt/tablets/<tablet uid>/actionlog/0000001
-func ActionToActionLogPath(zkTabletActionPath string) string {
-	return strings.Replace(zkTabletActionPath, "/action/", "/actionlog/", 1)
-}
-
 // Tablet aliases are the nodes that point into /vt/tablets/<uid> from the keyspace
 // Note that these are *global*
 func IsTabletReplicationPath(zkReplicationPath string) bool {
@@ -126,22 +76,4 @@ func fmtAlias(cell string, uid uint32) string {
 // FIXME(msolomon) This method doesn't take into account the vt subtree.
 func TabletPathForAlias(alias naming.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, tabletUidStr(alias.Uid))
-}
-
-// zkActionPath is /zk/test/vt/tablets/<uid>/action/0000000001
-// we return both tablet path and TabletAlias
-func TabletPathFromActionPath(zkActionPath string) (string, naming.TabletAlias, error) {
-	zkPathParts := strings.Split(zkActionPath, "/")
-	if len(zkPathParts) < 2 || zkPathParts[len(zkPathParts)-2] != "action" {
-		return "", naming.TabletAlias{}, fmt.Errorf("invalid action path: %v", zkActionPath)
-	}
-	tabletPath := strings.Join(zkPathParts[:len(zkPathParts)-2], "/")
-	if err := IsTabletPath(tabletPath); err != nil {
-		return "", naming.TabletAlias{}, err
-	}
-	tabletAlias, err := naming.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
-	if err != nil {
-		return "", naming.TabletAlias{}, err
-	}
-	return tabletPath, tabletAlias, nil
 }

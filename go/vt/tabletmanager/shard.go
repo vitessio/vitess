@@ -94,11 +94,6 @@ func (si *ShardInfo) Json() string {
 	return si.Shard.Json()
 }
 
-func (si *ShardInfo) TabletPath(alias naming.TabletAlias) string {
-	zkRoot := fmt.Sprintf("/zk/%v/vt", alias.Cell)
-	return TabletPath(zkRoot, alias.Uid)
-}
-
 func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 	tmp := newShard()
 	for i, ti := range shardTablets {

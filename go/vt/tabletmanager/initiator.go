@@ -96,7 +96,7 @@ func (ai *ActionInitiator) rpcCallTablet(tablet *TabletInfo, name string, args, 
 	timer := time.After(waitTime)
 	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr, waitTime)
 	if err != nil {
-		return fmt.Errorf("RPC error for %v: %v", tablet.Path(), err.Error())
+		return fmt.Errorf("RPC error for %v: %v", tablet.Alias(), err.Error())
 	}
 	defer rpcClient.Close()
 
@@ -104,10 +104,10 @@ func (ai *ActionInitiator) rpcCallTablet(tablet *TabletInfo, name string, args, 
 	call := rpcClient.Go("TabletManager."+name, args, reply, nil)
 	select {
 	case <-timer:
-		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.Path())
+		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.Alias())
 	case <-call.Done:
 		if call.Error != nil {
-			return fmt.Errorf("Remote error for %v: %v", tablet.Path(), call.Error.Error())
+			return fmt.Errorf("Remote error for %v: %v", tablet.Alias(), call.Error.Error())
 		} else {
 			return nil
 		}

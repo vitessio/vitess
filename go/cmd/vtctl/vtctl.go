@@ -401,8 +401,7 @@ func listActionsByShard(ts naming.TopologyServer, keyspace, shard string) error 
 		return err
 	}
 	for _, tabletAlias := range tabletAliases {
-		tabletPath := tm.TabletPathForAlias(tabletAlias)
-		actionPath, err := tm.TabletActionPath(tabletPath)
+		actionPath := zktopo.TabletActionPathForAlias(tabletAlias)
 		if err != nil {
 			relog.Warning("listActionsByShard %v", err)
 		} else {

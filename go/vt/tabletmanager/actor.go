@@ -23,9 +23,6 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
-	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
-	"code.google.com/p/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 // The actor applies individual commands to execute an action read
@@ -35,7 +32,7 @@ import (
 // The actor signals completion by removing the action node from zookeeper.
 //
 // Errors are written to the action node and must (currently) be resolved
-// by hand using zk tools.
+// by hand using TopologyServer tools.
 
 type TabletActorError string
 
@@ -56,35 +53,21 @@ func (rsd *RestartSlaveData) String() string {
 }
 
 type TabletActor struct {
-	mysqld       *mysqlctl.Mysqld
-	ts           naming.TopologyServer
-	zconn        zk.Conn // FIXME(alainjobart) will be removed eventually
-	zkTabletPath string  // FIXME(alainjobart) will be removed eventually
-	tabletAlias  naming.TabletAlias
+	mysqld      *mysqlctl.Mysqld
+	ts          naming.TopologyServer
+	tabletAlias naming.TabletAlias
 }
 
 func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer naming.TopologyServer) *TabletActor {
-	// FIXME(alainjobart) violates encapsulation until conversion is done
-	zconn := topoServer.(*zktopo.ZkTopologyServer).GetZConn()
-	return &TabletActor{mysqld, topoServer, zconn, "", naming.TabletAlias{}}
+	return &TabletActor{mysqld, topoServer, naming.TabletAlias{}}
 }
 
 // This function should be protected from unforseen panics, as
 // dispatchAction will catch everything. The rest of the code in this
 // function should not panic.
 func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, forceRerun bool) error {
-	var err error
-	ta.zkTabletPath, ta.tabletAlias, err = TabletPathFromActionPath(actionPath)
-	if err != nil {
-		return err
-	}
-
-	data, stat, zkErr := ta.zconn.Get(actionPath)
-	if zkErr != nil {
-		relog.Error("HandleAction failed: %v", zkErr)
-		return zkErr
-	}
-
+	tabletAlias, data, version, err := ta.ts.ReadTabletActionPath(actionPath)
+	ta.tabletAlias = tabletAlias
 	actionNode, err := ActionNodeFromJson(data, actionPath)
 	if err != nil {
 		relog.Error("HandleAction failed unmarshaling %v: %v", actionPath, err)
@@ -99,7 +82,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			// process is dead, either clean up or re-run
 			if !forceRerun {
 				actionErr := fmt.Errorf("Previous vtaction process died")
-				if err := StoreActionResponse(ta.zconn, actionNode, actionPath, actionErr); err != nil {
+				if err := StoreActionResponse(ta.ts, actionNode, actionPath, actionErr); err != nil {
 					relog.Error("Dead process detector failed to update actionNode: %v", err)
 				}
 				return actionErr
@@ -123,16 +106,17 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	actionNode.State = ACTION_STATE_RUNNING
 	actionNode.Pid = os.Getpid()
 	newData := ActionNodeToJson(actionNode)
-	_, zkErr = ta.zconn.Set(actionPath, newData, stat.Version())
-	if zkErr != nil {
-		if zookeeper.IsError(zkErr, zookeeper.ZBADVERSION) {
-			// The action is schedule by another actor. Most likely
-			// the tablet restarted during an action. Just wait for completion.
+	err = ta.ts.UpdateTabletAction(actionPath, newData, version)
+	if err != nil {
+		if err == naming.ErrBadVersion {
+			// The action is schedule by another
+			// actor. Most likely the tablet restarted
+			// during an action. Just wait for completion.
 			relog.Warning("HandleAction waiting for scheduled action: %v", actionPath)
-			_, err := WaitForCompletion(ta.ts, actionPath, 0)
+			_, err = WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		} else {
-			return zkErr
+			return err
 		}
 	}
 
@@ -141,7 +125,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	signal.Notify(c, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		for sig := range c {
-			err := StoreActionResponse(ta.zconn, actionNode, actionPath, fmt.Errorf("vtaction interrupted by signal: %v", sig))
+			err := StoreActionResponse(ta.ts, actionNode, actionPath, fmt.Errorf("vtaction interrupted by signal: %v", sig))
 			if err != nil {
 				relog.Error("Signal handler failed to update actionNode: %v", err)
 				os.Exit(-2)
@@ -151,23 +135,21 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	}()
 
 	relog.Info("HandleAction: %v %v", actionPath, data)
-	// validate actions, but don't write this back into zk
+	// validate actions, but don't write this back into TopologyServer
 	if actionNode.Action != action || actionNode.ActionGuid != actionGuid {
 		relog.Error("HandleAction validation failed %v: (%v,%v) (%v,%v)",
 			actionPath, actionNode.Action, action, actionNode.ActionGuid, actionGuid)
 		return TabletActorError("invalid action initiation: " + action + " " + actionGuid)
 	}
 	actionErr := ta.dispatchAction(actionNode)
-	err = StoreActionResponse(ta.zconn, actionNode, actionPath, actionErr)
-	if err != nil {
+	if err := StoreActionResponse(ta.ts, actionNode, actionPath, actionErr); err != nil {
 		return err
 	}
 
-	// remove from zk on completion
-	zkErr = ta.zconn.Delete(actionPath, -1)
-	if zkErr != nil {
-		relog.Error("HandleAction failed deleting: %v", zkErr)
-		return zkErr
+	// unblock in TopologyServer on completion
+	if err := ta.ts.UnblockTabletAction(actionPath); err != nil {
+		relog.Error("HandleAction failed unblocking: %v", err)
+		return err
 	}
 	return actionErr
 }
@@ -249,7 +231,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 }
 
 // Write the result of an action into zookeeper
-func StoreActionResponse(zconn zk.Conn, actionNode *ActionNode, actionPath string, actionErr error) error {
+func StoreActionResponse(ts naming.TopologyServer, actionNode *ActionNode, actionPath string, actionErr error) error {
 	// change our state
 	if actionErr != nil {
 		// on failure, set an error field on the node
@@ -264,13 +246,7 @@ func StoreActionResponse(zconn zk.Conn, actionNode *ActionNode, actionPath strin
 	// Write the data first to our action node, then to the log.
 	// In the error case, this node will be left behind to debug.
 	data := ActionNodeToJson(actionNode)
-	_, err := zconn.Set(actionPath, data, -1)
-	if err != nil {
-		return err
-	}
-	actionLogPath := ActionToActionLogPath(actionPath)
-	_, err = zk.CreateRecursive(zconn, actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	return err
+	return ts.StoreTabletActionResponse(actionPath, data)
 }
 
 func (ta *TabletActor) sleep(actionNode *ActionNode) error {
@@ -409,12 +385,7 @@ func (ta *TabletActor) reparentPosition(actionNode *ActionNode) error {
 	rsd.ReplicationState = replicationState
 	rsd.TimePromoted = timePromoted
 	rsd.WaitPosition = waitPosition
-	parts := strings.Split(ta.zkTabletPath, "/")
-	uid, err := ParseUid(parts[len(parts)-1])
-	if err != nil {
-		return err
-	}
-	rsd.Parent = naming.TabletAlias{parts[2], uid}
+	rsd.Parent = ta.tabletAlias
 	relog.Debug("reparentPosition %v", rsd.String())
 	actionNode.reply = rsd
 	return nil
@@ -644,7 +615,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	}
 
 	if tablet.Type != naming.TYPE_BACKUP {
-		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
@@ -675,7 +646,7 @@ func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 	}
 
 	if tablet.Type != naming.TYPE_SNAPSHOT_SOURCE {
-		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true)
@@ -763,7 +734,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 		return err
 	}
 	if tablet.Type != naming.TYPE_IDLE {
-		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	// read the source tablet
@@ -803,11 +774,11 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 	if args.WasReserved {
 		if tablet.Type != naming.TYPE_RESTORE {
-			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.zkTabletPath)
+			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.tabletAlias)
 		}
 	} else {
 		if tablet.Type != naming.TYPE_IDLE {
-			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
+			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
 		}
 	}
 
@@ -866,7 +837,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	}
 
 	if tablet.Type != naming.TYPE_BACKUP {
-		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.Concurrency, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
@@ -897,7 +868,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	}
 
 	if tablet.Type != naming.TYPE_BACKUP {
-		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
@@ -927,7 +898,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 		return err
 	}
 	if tablet.Type != naming.TYPE_MASTER && tablet.Type != naming.TYPE_SPARE && tablet.Type != naming.TYPE_REPLICA && tablet.Type != naming.TYPE_RDONLY {
-		return fmt.Errorf("expected master, spare replica or rdonly type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected master, spare replica or rdonly type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	// get source tablets addresses
@@ -983,7 +954,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 		return err
 	}
 	if tablet.Type != naming.TYPE_IDLE {
-		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.zkTabletPath)
+		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
 	// read the source tablet

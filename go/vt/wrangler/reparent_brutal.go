@@ -38,7 +38,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*t
 			return err
 		}
 	} else {
-		relog.Info("forcing reparent to same master %v", masterElectTablet.Path())
+		relog.Info("forcing reparent to same master %v", masterElectTablet.Alias())
 		err := wr.breakReplication(slaveTabletMap, masterElectTablet)
 		if err != nil {
 			return err
@@ -49,7 +49,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*t
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master-elect is dead.
 		// We need to classify certain errors as temporary and retry.
-		return fmt.Errorf("promote slave failed: %v %v", err, masterElectTablet.Path())
+		return fmt.Errorf("promote slave failed: %v %v", err, masterElectTablet.Alias())
 	}
 
 	// Once the slave is promoted, remove it from our map
@@ -58,7 +58,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*t
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 
 	if !force {
-		relog.Info("scrap dead master %v", failedMaster.Path())
+		relog.Info("scrap dead master %v", failedMaster.Alias())
 		// The master is dead so execute the action locally instead of
 		// enqueing the scrap action for an arbitrary amount of time.
 		if scrapErr := tm.Scrap(wr.ts, failedMaster.Alias(), false); scrapErr != nil {

@@ -8,28 +8,6 @@ import (
 	"testing"
 )
 
-func testExpectedTabletPanic(t *testing.T, path string) {
-	if err := IsTabletPath(path); err == nil {
-		t.Errorf("expected tablet error: %v", path)
-	}
-}
-
-func TestValidTablet(t *testing.T) {
-	if err := IsTabletPath("/vt/tablets/0"); err != nil {
-		t.Error(err)
-	}
-}
-
-func TestValidTabletWithTrailingSlash(t *testing.T) {
-	testExpectedTabletPanic(t, "/vt/tablets/0/")
-}
-
-func TestRealPath(t *testing.T) {
-	if err := IsTabletPath("/zk/test/vt/tablets/0000062344"); err != nil {
-		t.Error(err)
-	}
-}
-
 func TestShardInfo(t *testing.T) {
 	defer func() {
 		if x := recover(); x != nil {
@@ -46,32 +24,6 @@ func TestShardInfo(t *testing.T) {
 	}
 	if si.shardName != "shard0" {
 		t.Errorf("bad shard: %v", si.shardName)
-	}
-}
-
-func TestVtRootFromTabletPath(t *testing.T) {
-	path, err := VtRootFromTabletPath("/zk/test/vt/tablets/0000062344")
-	if err != nil {
-		t.Error(err)
-	}
-	expectedPath := "/zk/test/vt"
-	if path != expectedPath {
-		t.Errorf("%v not expected path %v", path, expectedPath)
-	}
-}
-
-func TestTabletPathFromActionPath(t *testing.T) {
-	path, alias, err := TabletPathFromActionPath("/zk/test/vt/tablets/0000062344/action/0000000001")
-	if err != nil {
-		t.Error(err)
-	}
-	expectedPath := "/zk/test/vt/tablets/0000062344"
-	if path != expectedPath {
-		t.Errorf("%v not expected path %v", path, expectedPath)
-	}
-	expectedAlias := "test-0000062344"
-	if alias.String() != expectedAlias {
-		t.Errorf("%v not expected alias %v", alias, expectedAlias)
 	}
 }
 

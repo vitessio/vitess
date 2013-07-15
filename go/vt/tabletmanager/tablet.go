@@ -101,12 +101,7 @@ type TabletInfo struct {
 
 // FIXME(alainjobart) when switch to TopologyServer this will become useless
 func (ti *TabletInfo) Path() string {
-	return TabletPath(ti.ZkVtRoot(), ti.Uid)
-}
-
-// FIXME(alainjobart) when switch to TopologyServer this will become useless
-func (ti *TabletInfo) PidPath() string {
-	return path.Join(ti.Path(), "pid")
+	return fmt.Sprintf("/zk/%v/vt/tablets/%010d", ti.Cell, ti.Uid)
 }
 
 // FIXME(alainjobart) when switch to TopologyServer this will become useless

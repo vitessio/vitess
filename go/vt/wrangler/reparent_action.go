@@ -203,7 +203,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*tm.TabletInfo, m
 		for slaveMapKey, uids := range positionMap {
 			tabletPaths := make([]string, len(uids))
 			for i, uid := range uids {
-				tabletPaths[i] = tabletMap[uid].Path()
+				tabletPaths[i] = tabletMap[uid].Alias().String()
 			}
 			items = append(items, fmt.Sprintf("  %v\n    %v", slaveMapKey, strings.Join(tabletPaths, "\n    ")))
 		}
@@ -377,7 +377,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[naming.TabletAlias]*tm.Tabl
 	for i, err := range errs {
 		if err != nil {
 			errCount++
-			badTablets = append(badTablets, slaves[i].Path())
+			badTablets = append(badTablets, slaves[i].Alias().String())
 		}
 	}
 	// Phrase the question with multiplication so we don't get caught by int

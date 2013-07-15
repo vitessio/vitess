@@ -28,7 +28,7 @@ func tabletPathForAlias(alias naming.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, alias.TabletUidStr())
 }
 
-func tabletActionPathForAlias(alias naming.TabletAlias) string {
+func TabletActionPathForAlias(alias naming.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v/action", alias.Cell, alias.TabletUidStr())
 }
 
@@ -287,7 +287,7 @@ func (zkts *ZkTopologyServer) UpdateTabletEndpoint(cell, keyspace, shard string,
 func (zkts *ZkTopologyServer) WriteTabletAction(tabletAlias naming.TabletAlias, contents string) (string, error) {
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
-	actionPath := tabletActionPathForAlias(tabletAlias) + "/"
+	actionPath := TabletActionPathForAlias(tabletAlias) + "/"
 	return zkts.zconn.Create(actionPath, contents, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
@@ -343,7 +343,7 @@ wait:
 }
 
 func (zkts *ZkTopologyServer) PurgeTabletActions(tabletAlias naming.TabletAlias, canBePurged func(data string) bool) error {
-	actionPath := tabletActionPathForAlias(tabletAlias)
+	actionPath := TabletActionPathForAlias(tabletAlias)
 	return zkts.PurgeActions(actionPath, canBePurged)
 }
 
@@ -352,7 +352,7 @@ func (zkts *ZkTopologyServer) PurgeTabletActions(tabletAlias naming.TabletAlias,
 //
 
 func (zkts *ZkTopologyServer) ValidateTabletActions(tabletAlias naming.TabletAlias) error {
-	actionPath := tabletActionPathForAlias(tabletAlias)
+	actionPath := TabletActionPathForAlias(tabletAlias)
 
 	// Ensure that the action node is there. There is no conflict creating
 	// this node.
@@ -374,7 +374,7 @@ func (zkts *ZkTopologyServer) GetSubprocessFlags() []string {
 }
 
 func (zkts *ZkTopologyServer) handleActionQueue(tabletAlias naming.TabletAlias, dispatchAction func(actionPath, data string) error) (<-chan zookeeper.Event, error) {
-	zkActionPath := tabletActionPathForAlias(tabletAlias)
+	zkActionPath := TabletActionPathForAlias(tabletAlias)
 
 	// This read may seem a bit pedantic, but it makes it easier
 	// for the system to trend towards consistency if an action
@@ -437,4 +437,55 @@ func (zkts *ZkTopologyServer) ActionEventLoop(tabletAlias naming.TabletAlias, di
 			return
 		}
 	}
+}
+
+// actionPathToTabletAlias parses an actionPath back
+// zkActionPath is /zk/<cell>/vt/tablets/<uid>/action/<number>
+func actionPathToTabletAlias(actionPath string) (naming.TabletAlias, error) {
+	pathParts := strings.Split(actionPath, "/")
+	if len(pathParts) != 8 || pathParts[0] != "" || pathParts[1] != "zk" || pathParts[3] != "vt" || pathParts[4] != "tablets" || pathParts[6] != "action" {
+		return naming.TabletAlias{}, fmt.Errorf("invalid action path: %v", actionPath)
+	}
+	return naming.ParseTabletAliasString(pathParts[2] + "-" + pathParts[5])
+}
+
+func (zkts *ZkTopologyServer) ReadTabletActionPath(actionPath string) (naming.TabletAlias, string, int, error) {
+	tabletAlias, err := actionPathToTabletAlias(actionPath)
+	if err != nil {
+		return naming.TabletAlias{}, "", 0, err
+	}
+
+	data, stat, err := zkts.zconn.Get(actionPath)
+	if err != nil {
+		return naming.TabletAlias{}, "", 0, err
+	}
+
+	return tabletAlias, data, stat.Version(), nil
+}
+
+func (zkts *ZkTopologyServer) UpdateTabletAction(actionPath, data string, version int) error {
+	_, err := zkts.zconn.Set(actionPath, data, version)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
+			err = naming.ErrBadVersion
+		}
+		return err
+	}
+	return nil
+}
+
+// StoreTabletActionResponse stores the data both in action and actionlog
+func (zkts *ZkTopologyServer) StoreTabletActionResponse(actionPath, data string) error {
+	_, err := zkts.zconn.Set(actionPath, data, -1)
+	if err != nil {
+		return err
+	}
+
+	actionLogPath := strings.Replace(actionPath, "/action/", "/actionlog/", 1)
+	_, err = zk.CreateRecursive(zkts.zconn, actionLogPath, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	return err
+}
+
+func (zkts *ZkTopologyServer) UnblockTabletAction(actionPath string) error {
+	return zkts.zconn.Delete(actionPath, -1)
 }

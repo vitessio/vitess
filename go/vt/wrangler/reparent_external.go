@@ -64,7 +64,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[naming.TabletAlias]
 	err := wr.slaveWasPromoted(masterElectTablet)
 	if err != nil {
 		// This suggests that the master-elect is dead. This is bad.
-		return fmt.Errorf("slaveWasPromoted failed: %v", err, masterTablet.Path())
+		return fmt.Errorf("slaveWasPromoted failed: %v", err, masterTablet.Alias())
 	}
 
 	// Once the slave is promoted, remove it from our map

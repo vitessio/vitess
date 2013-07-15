@@ -14,25 +14,29 @@ import (
 )
 
 var (
-	// This error is returned by functions to specify the
+	// ErrNodeExists is returned by functions to specify the
 	// requested resource already exists.
 	ErrNodeExists = errors.New("node already exists")
 
-	// This error is returned by functions to specify the requested
+	// ErrNoNode is returned by functions to specify the requested
 	// resource does not exist.
 	ErrNoNode = errors.New("node doesn't exist")
 
-	// This error is returned by functions to specify a child of the
+	// ErrNotEmpty is returned by functions to specify a child of the
 	// resource is still present and prevents the action from completing.
 	ErrNotEmpty = errors.New("node not empty")
 
-	// This error is returned by functions that wait for a result
+	// ErrTimeout is returned by functions that wait for a result
 	// when the timeout value is reached.
 	ErrTimeout = errors.New("deadline exceeded")
 
-	// This error is returned by functions that wait for a result
+	// ErrInterrupted is returned by functions that wait for a result
 	// when they are interrupted.
 	ErrInterrupted = errors.New("interrupted")
+
+	// ErrBadVersion is returned by an update function that
+	// failed to update the data because the version was different
+	ErrBadVersion = errors.New("bad node version")
 )
 
 // TopologyServer is the interface used to talk to a persistent
@@ -240,6 +244,25 @@ type TopologyServer interface {
 	// again.
 	// If 'done' is closed, the loop returns.
 	ActionEventLoop(tabletAlias TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{})
+
+	// ReadTabletActionPath reads the actionPath and returns the
+	// associated TabletAlias, the data (originally written by
+	// WriteTabletAction), and its version
+	ReadTabletActionPath(actionPath string) (TabletAlias, string, int, error)
+
+	// UpdateTabletAction updates the actionPath with the new data.
+	// version is the current version we're expecting. Use -1 to set
+	// any version.
+	// Can return ErrBadVersion.
+	UpdateTabletAction(actionPath, data string, version int) error
+
+	// StoreTabletActionResponse stores the data for the response.
+	// This will not unblock the caller yet.
+	StoreTabletActionResponse(actionPath, data string) error
+
+	// UnblockTabletAction will let the client continue.
+	// StoreTabletActionResponse must have been called already.
+	UnblockTabletAction(actionPath string) error
 }
 
 // Registry for TopologyServer implementations.

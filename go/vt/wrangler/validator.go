@@ -135,11 +135,6 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 		results <- vresult{keyspace + "/" + shard, err}
 	}
 
-	shardTablets := make([]string, 0, 16)
-	for _, alias := range aliases {
-		shardTablets = append(shardTablets, tm.TabletPathForAlias(alias))
-	}
-
 	tabletMap, _ := GetTabletMap(wr.ts, aliases)
 
 	var masterAlias naming.TabletAlias
@@ -194,32 +189,31 @@ func strInList(sl []string, s string) bool {
 }
 
 func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[naming.TabletAlias]*tm.TabletInfo, results chan<- vresult) {
-	masterTabletPath := tm.TabletPathForAlias(shardInfo.MasterAlias)
 	_, ok := tabletMap[shardInfo.MasterAlias]
 	if !ok {
-		results <- vresult{masterTabletPath, fmt.Errorf("master not in tablet map: %v", masterTabletPath)}
+		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("master not in tablet map")}
 		return
 	}
 
 	actionPath, err := wr.ai.GetSlaves(shardInfo.MasterAlias)
 	if err != nil {
-		results <- vresult{masterTabletPath, err}
+		results <- vresult{shardInfo.MasterAlias.String(), err}
 		return
 	}
 	sa, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	if err != nil {
-		results <- vresult{masterTabletPath, err}
+		results <- vresult{shardInfo.MasterAlias.String(), err}
 		return
 	}
 	slaveAddrs := sa.(*tm.SlaveList).Addrs
 	if len(slaveAddrs) == 0 {
-		results <- vresult{masterTabletPath, fmt.Errorf("no slaves found: %v", masterTabletPath)}
+		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("no slaves found: %v")}
 		return
 	}
 
 	// Some addresses don't resolve in all locations, just use IP address
 	if err != nil {
-		results <- vresult{masterTabletPath, fmt.Errorf("resolve slaves failed: %v", err)}
+		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("resolve slaves failed: %v", err)}
 		return
 	}
 
