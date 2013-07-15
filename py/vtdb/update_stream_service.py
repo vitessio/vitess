@@ -60,7 +60,6 @@ class UpdateStreamResponse(object):
     self.format()
 
   def format(self):
-    print "AAAAAAAAAAAAAAAAAAAAAAAA", self.raw_response
     if self.raw_response['Error'] == "":
       self.Error = None
     else:
@@ -88,8 +87,8 @@ class UpdateStreamConnection(object):
 
     except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
-    except Exception as e:
-      logging.exception('gorpc low-level error: %s', str(e))
+    except:
+      logging.exception('gorpc low-level error')
       raise
     return update_stream_response.BinlogPosition, update_stream_response.EventData, update_stream_response.Error
 
