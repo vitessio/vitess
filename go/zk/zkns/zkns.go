@@ -7,11 +7,10 @@ package zkns
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net"
-	"sort"
 	"strings"
 
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/zk"
 )
 
@@ -71,62 +70,6 @@ func ReadAddrs(zconn zk.Conn, zkPath string) (*ZknsAddrs, error) {
 	return addrs, nil
 }
 
-// byPriorityWeight sorts records by ascending priority and weight.
-type byPriorityWeight []*net.SRV
-
-func (s byPriorityWeight) Len() int { return len(s) }
-
-func (s byPriorityWeight) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
-func (s byPriorityWeight) Less(i, j int) bool {
-	return s[i].Priority < s[j].Priority ||
-		(s[i].Priority == s[j].Priority && s[i].Weight < s[j].Weight)
-}
-
-// shuffleByWeight shuffles SRV records by weight using the algorithm
-// described in RFC 2782.
-func (addrs byPriorityWeight) shuffleByWeight() {
-	sum := 0
-	for _, addr := range addrs {
-		sum += int(addr.Weight)
-	}
-	for sum > 0 && len(addrs) > 1 {
-		s := 0
-		n := rand.Intn(sum + 1)
-		for i := range addrs {
-			s += int(addrs[i].Weight)
-			if s >= n {
-				if i > 0 {
-					t := addrs[i]
-					copy(addrs[1:i+1], addrs[0:i])
-					addrs[0] = t
-				}
-				break
-			}
-		}
-		sum -= int(addrs[0].Weight)
-		addrs = addrs[1:]
-	}
-}
-
-// sort reorders SRV records as specified in RFC 2782.
-func (addrs byPriorityWeight) sort() {
-	sort.Sort(addrs)
-	i := 0
-	for j := 1; j < len(addrs); j++ {
-		if addrs[i].Priority != addrs[j].Priority {
-			addrs[i:j].shuffleByWeight()
-			i = j
-		}
-	}
-	addrs[i:].shuffleByWeight()
-}
-
-// sort reorders SRV records as specified in RFC 2782.
-func Sort(srvs []*net.SRV) {
-	byPriorityWeight(srvs).sort()
-}
-
 // zkPath is the path to a json file in zk. It can also reference a
 // named port: /zk/cell/zkns/path:_named_port
 func LookupName(zconn zk.Conn, zkPath string) ([]*net.SRV, error) {
@@ -153,6 +96,6 @@ func LookupName(zconn zk.Conn, zkPath string) ([]*net.SRV, error) {
 		}
 		srvs = append(srvs, srv)
 	}
-	Sort(srvs)
+	netutil.SortRfc2782(srvs)
 	return srvs, nil
 }

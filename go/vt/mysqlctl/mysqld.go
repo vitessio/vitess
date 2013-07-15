@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -24,6 +23,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/mysql"
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/relog"
 	vtenv "code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/hook"
@@ -378,32 +378,16 @@ func deleteTopDir(dir string) (removalErr error) {
 }
 
 func (mysqld *Mysqld) Addr() string {
-	// build the hostname
-	hostname, err := os.Hostname()
-	if err != nil {
-		panic(err) // should never happen
-	}
-	hostname, err = net.LookupCNAME(hostname)
-	if err != nil {
-		panic(err) // should never happen
-	}
-	hostname = strings.TrimRight(hostname, ".")
-
-	// and add the port
+	hostname := netutil.FullyQualifiedHostnameOrPanic()
 	return fmt.Sprintf("%v:%v", hostname, mysqld.config.MysqlPort)
 }
 
 func (mysqld *Mysqld) IpAddr() string {
-	addr := mysqld.Addr()
-	host, port, err := net.SplitHostPort(addr)
+	addr, err := netutil.ResolveIpAddr(mysqld.Addr())
 	if err != nil {
 		panic(err) // should never happen
 	}
-	ipAddrs, err := net.LookupHost(host)
-	if err != nil {
-		panic(err) // should never happen
-	}
-	return net.JoinHostPort(ipAddrs[0], port)
+	return addr
 }
 
 // executes some SQL commands using a mysql command line interface process

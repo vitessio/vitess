@@ -10,6 +10,7 @@ import (
 	"path"
 
 	"code.google.com/p/vitess/go/jscfg"
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
@@ -86,7 +87,7 @@ func (tablet *Tablet) Json() string {
 }
 
 func (tablet *Tablet) Hostname() string {
-	host, _, err := splitHostPort(tablet.Addr)
+	host, _, err := netutil.SplitHostPort(tablet.Addr)
 	if err != nil {
 		panic(err) // should not happen, Addr was checked at creation
 	}
@@ -135,11 +136,11 @@ func NewTablet(cell string, uid uint32, parent naming.TabletAlias, vtAddr, mysql
 	}
 
 	// check the values for vtAddr and mysqlAddr are correct
-	_, _, err := splitHostPort(vtAddr)
+	_, _, err := netutil.SplitHostPort(vtAddr)
 	if err != nil {
 		return nil, err
 	}
-	_, _, err = splitHostPort(mysqlAddr)
+	_, _, err = netutil.SplitHostPort(mysqlAddr)
 	if err != nil {
 		return nil, err
 	}

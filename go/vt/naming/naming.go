@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"net"
 
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/zk/zkns"
 )
 
 type VtnsAddr struct {
@@ -102,7 +102,7 @@ func SrvEntries(addrs *VtnsAddrs, namedPort string) (srvs []*net.SRV, err error)
 		}
 		srvs = append(srvs, &net.SRV{Target: host, Port: uint16(port)})
 	}
-	zkns.Sort(srvs)
+	netutil.SortRfc2782(srvs)
 	if srvErr != nil && len(srvs) == 0 {
 		return nil, fmt.Errorf("SrvEntries failed: no valid endpoints found")
 	}

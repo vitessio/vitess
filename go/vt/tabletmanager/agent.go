@@ -16,15 +16,14 @@ package tabletmanager
 import (
 	"flag"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 
 	"code.google.com/p/vitess/go/jscfg"
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/naming"
@@ -219,73 +218,21 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
-func splitHostPort(addr string) (string, int, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", 0, err
-	}
-	p, err := strconv.ParseInt(port, 10, 16)
-	if err != nil {
-		return "", 0, err
-	}
-	return host, int(p), nil
-}
-
-func fqdn() (string, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-
-	cname, err := net.LookupCNAME(hostname)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimRight(cname, "."), nil
-}
-
-// Resolve an address where the host has been left blank, like ":3306"
-func resolveAddr(addr string) (string, error) {
-	host, port, err := splitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-	if host == "" {
-		host, err = fqdn()
-		if err != nil {
-			return "", err
-		}
-	}
-	return fmt.Sprintf("%v:%v", host, port), nil
-}
-
-func resolveIpAddr(addr string) (string, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "", err
-	}
-	ipAddrs, err := net.LookupHost(host)
-	if err != nil {
-		return "", err
-	}
-	return net.JoinHostPort(ipAddrs[0], port), nil
-}
-
 func VtnsAddrForTablet(tablet *Tablet) (*naming.VtnsAddr, error) {
-	host, port, err := splitHostPort(tablet.Addr)
+	host, port, err := netutil.SplitHostPort(tablet.Addr)
 	if err != nil {
 		return nil, err
 	}
 	entry := naming.NewAddr(tablet.Uid, host, 0)
 	entry.NamedPortMap["_vtocc"] = port
 	if tablet.SecureAddr != "" {
-		host, port, err = splitHostPort(tablet.SecureAddr)
+		host, port, err = netutil.SplitHostPort(tablet.SecureAddr)
 		if err != nil {
 			return nil, err
 		}
 		entry.NamedPortMap["_vts"] = port
 	}
-	host, port, err = splitHostPort(tablet.MysqlAddr)
+	host, port, err = netutil.SplitHostPort(tablet.MysqlAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -304,21 +251,21 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	bindAddr, err = resolveAddr(bindAddr)
+	bindAddr, err = netutil.ResolveAddr(bindAddr)
 	if err != nil {
 		return err
 	}
 	if secureAddr != "" {
-		secureAddr, err = resolveAddr(secureAddr)
+		secureAddr, err = netutil.ResolveAddr(secureAddr)
 		if err != nil {
 			return err
 		}
 	}
-	mysqlAddr, err = resolveAddr(mysqlAddr)
+	mysqlAddr, err = netutil.ResolveAddr(mysqlAddr)
 	if err != nil {
 		return err
 	}
-	mysqlIpAddr, err := resolveIpAddr(mysqlAddr)
+	mysqlIpAddr, err := netutil.ResolveIpAddr(mysqlAddr)
 	if err != nil {
 		return err
 	}

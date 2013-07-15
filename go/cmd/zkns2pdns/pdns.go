@@ -17,12 +17,12 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path"
 	"strings"
 
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkns"
@@ -333,19 +333,6 @@ func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 	}
 }
 
-func fqdn() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		panic(err)
-	}
-
-	cname, err := net.LookupCNAME(hostname)
-	if err != nil {
-		panic(err)
-	}
-	return strings.TrimRight(cname, ".")
-}
-
 func main() {
 	zknsDomain := flag.String("zkns-domain", "", "The naming hierarchy portion to serve")
 	zknsRoot := flag.String("zkns-root", "", "The root path from which to resolve")
@@ -362,7 +349,8 @@ func main() {
 	}
 
 	zconn := zk.NewMetaConn(false)
-	zr1 := newZknsResolver(zconn, fqdn(), *zknsDomain, *zknsRoot)
+	fqdn := netutil.FullyQualifiedHostnameOrPanic()
+	zr1 := newZknsResolver(zconn, fqdn, *zknsDomain, *zknsRoot)
 	pd := &pdns{zr1}
 	pd.Serve(os.Stdin, os.Stdout)
 	os.Stdout.Close()

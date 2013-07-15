@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -41,6 +42,8 @@ const (
 ]}`
 )
 
+var fqdn = netutil.FullyQualifiedHostnameOrPanic()
+
 var zconn = &TestZkConn{map[string]string{
 	"/zk/test/zkns/srv":   fakeSRV,
 	"/zk/test/zkns/cname": fakeCNAME,
@@ -56,10 +59,10 @@ var queries = []string{
 }
 
 var results = []string{
-	"OK\tzkns2pdns\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test1\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test2\nDATA\t_http.srv.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nEND\n",
-	"OK\tzkns2pdns\nDATA\ta.zkns.test.zk\tIN\tA\t1\t1\t0.0.0.1\nDATA\ta.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nDATA\ta.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
-	"OK\tzkns2pdns\nDATA\tcname.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nDATA\tcname.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
-	"OK\tzkns2pdns\nDATA\tempty.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn() + " hostmaster@" + fqdn() + " 0 1800 600 3600 300\nEND\n",
+	"OK\tzkns2pdns\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test1\nDATA\t_http.srv.zkns.test.zk\tIN\tSRV\t1\t1\t0\t0 8080 test2\nDATA\t_http.srv.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn + " hostmaster@" + fqdn + " 0 1800 600 3600 300\nEND\n",
+	"OK\tzkns2pdns\nDATA\ta.zkns.test.zk\tIN\tA\t1\t1\t0.0.0.1\nDATA\ta.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn + " hostmaster@" + fqdn + " 0 1800 600 3600 300\nDATA\ta.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
+	"OK\tzkns2pdns\nDATA\tcname.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn + " hostmaster@" + fqdn + " 0 1800 600 3600 300\nDATA\tcname.zkns.test.zk\tIN\tCNAME\t1\t1\ttest1\nEND\n",
+	"OK\tzkns2pdns\nDATA\tempty.zkns.test.zk\tIN\tSOA\t1\t1\t" + fqdn + " hostmaster@" + fqdn + " 0 1800 600 3600 300\nEND\n",
 	"OK\tzkns2pdns\nFAIL\n",
 }
 
@@ -76,7 +79,7 @@ func testQuery(t *testing.T, query, result string) {
 	}
 	defer outpr.Close()
 
-	zr1 := newZknsResolver(zconn, fqdn(), ".zkns.test.zk", "/zk/test/zkns")
+	zr1 := newZknsResolver(zconn, fqdn, ".zkns.test.zk", "/zk/test/zkns")
 	pd := &pdns{zr1}
 	go func() {
 		pd.Serve(inpr, outpw)
@@ -166,7 +169,7 @@ func (conn *TestZkConn) Close() error {
 	panic("Should not be used")
 }
 
-func (conn *TestZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {
+func (conn *TestZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc zk.ChangeFunc) error {
 	panic("Should not be used")
 }
 

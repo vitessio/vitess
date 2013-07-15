@@ -12,13 +12,12 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
-	"net"
-	"os"
 	"path"
 	"strconv"
 	"strings"
 	"text/template"
 
+	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/vt/env"
 )
 
@@ -162,7 +161,7 @@ func MakeZkConfigFromString(cmdLine string, myId uint32) *ZkConfig {
 		}
 		zkConfig.Servers = append(zkConfig.Servers, zkServer)
 	}
-	hostname := fqdn()
+	hostname := netutil.FullyQualifiedHostnameOrPanic()
 	for _, zkServer := range zkConfig.Servers {
 		if (myId > 0 && myId == zkServer.ServerId) || (myId == 0 && zkServer.Hostname == hostname) {
 			zkConfig.ServerId = zkServer.ServerId
@@ -174,17 +173,4 @@ func MakeZkConfigFromString(cmdLine string, myId uint32) *ZkConfig {
 		panic(fmt.Errorf("no zk server found for host %v in config %v", hostname, cmdLine))
 	}
 	return zkConfig
-}
-
-func fqdn() string {
-	hostname, err := os.Hostname()
-	if err != nil {
-		panic(err)
-	}
-
-	cname, err := net.LookupCNAME(hostname)
-	if err != nil {
-		panic(err)
-	}
-	return strings.TrimRight(cname, ".")
 }
