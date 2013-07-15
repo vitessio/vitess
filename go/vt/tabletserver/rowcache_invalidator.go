@@ -152,7 +152,7 @@ func (rowCache *InvalidationProcessor) statsJSON() string {
 	}
 	return fmt.Sprintf("{"+
 		"\n \"States\": %v,"+
-		"\n \"Checkpoint\": \"%v"+
+		"\n \"Checkpoint\": \"%v\""+
 		"\n"+
 		"}", rowCache.states.String(), currentPosition)
 }
