@@ -23,6 +23,7 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/zktopo"
 )
 
 // The actor applies individual commands to execute an action read
@@ -631,7 +632,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		sr.ZkParentPath = tablet.Path() // XXX
 	} else {
 		sr.ParentAlias = tablet.Parent
-		sr.ZkParentPath = TabletPathForAlias(tablet.Parent) // XXX
+		sr.ZkParentPath = zktopo.TabletPathForAlias(tablet.Parent) // XXX
 	}
 	actionNode.reply = sr
 	return nil
@@ -853,7 +854,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 		sr.ZkParentPath = tablet.Path() // XXX
 	} else {
 		sr.ParentAlias = tablet.Parent
-		sr.ZkParentPath = TabletPathForAlias(tablet.Parent) // XXX
+		sr.ZkParentPath = zktopo.TabletPathForAlias(tablet.Parent) // XXX
 	}
 	actionNode.reply = sr
 	return nil

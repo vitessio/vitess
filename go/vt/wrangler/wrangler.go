@@ -13,8 +13,6 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
-	"code.google.com/p/vitess/go/zk"
 )
 
 const (
@@ -24,7 +22,6 @@ const (
 
 type Wrangler struct {
 	ts          naming.TopologyServer
-	zconn       zk.Conn // FIXME(alainjobart) will be removed eventually
 	ai          *tm.ActionInitiator
 	deadline    time.Time
 	lockTimeout time.Duration
@@ -36,9 +33,7 @@ type Wrangler struct {
 //   know that out action will fail. However, automated action will need some time to
 //   arbitrate the locks.
 func NewWrangler(ts naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	// FIXME(alainjobart) violates encapsulation until conversion is done
-	zconn := ts.(*zktopo.ZkTopologyServer).GetZConn()
-	return &Wrangler{ts, zconn, tm.NewActionInitiator(ts, zconn), time.Now().Add(actionTimeout), lockTimeout}
+	return &Wrangler{ts, tm.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {

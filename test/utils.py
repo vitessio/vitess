@@ -237,11 +237,11 @@ def zk_wipe():
   run(vtroot+'/bin/zk rm -f /zk/test_ny/vt')
   run(vtroot+'/bin/zk rm -f /zk/global/vt')
 
-def zk_check(ping_tablets=False):
+def validate_topology(ping_tablets=False):
   if ping_tablets:
-    run_vtctl('Validate /zk/global/vt/keyspaces')
+    run_vtctl('Validate -ping-tablets')
   else:
-    run_vtctl('Validate -ping-tablets=false /zk/global/vt/keyspaces')
+    run_vtctl('Validate')
 
 def zk_ls(path):
   out, err = run(vtroot+'/bin/zk ls '+path, trap_output=True)

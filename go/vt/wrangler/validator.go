@@ -7,14 +7,12 @@ package wrangler
 import (
 	"fmt"
 	"net"
-	"path"
 	"sync"
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
 )
 
 // As with all distributed systems, things can skew. These functions
@@ -74,19 +72,31 @@ wait:
 
 // Validate all tablets in all discoverable cells, even if they are
 // not in the replication graph.
-func (wr *Wrangler) validateAllTablets(zkKeyspacesPath string, wg *sync.WaitGroup, results chan<- vresult) {
-	replicationPaths, err := zk.ChildrenRecursive(wr.zconn, zkKeyspacesPath)
-	if err != nil {
-		results <- vresult{zkKeyspacesPath, err}
-		return
-	}
+func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresult) {
 
 	cellSet := make(map[string]bool, 16)
-	for _, p := range replicationPaths {
-		p := path.Join(zkKeyspacesPath, p)
-		if tm.IsTabletReplicationPath(p) {
-			cell, _, _ := tm.ParseTabletReplicationPath(p)
-			cellSet[cell] = true
+
+	keyspaces, err := wr.ts.GetKeyspaces()
+	if err != nil {
+		results <- vresult{"TopologyServer.GetKeyspaces", err}
+		return
+	}
+	for _, keyspace := range keyspaces {
+		shards, err := wr.ts.GetShardNames(keyspace)
+		if err != nil {
+			results <- vresult{"TopologyServer.GetShardNames(" + keyspace + ")", err}
+			return
+		}
+
+		for _, shard := range shards {
+			aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+			if err != nil {
+				results <- vresult{"TopologyServer.FindAllTabletAliasesInShard(" + keyspace + "," + shard + ")", err}
+				return
+			}
+			for _, alias := range aliases {
+				cellSet[alias.Cell] = true
+			}
 		}
 	}
 
@@ -207,7 +217,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[n
 	}
 	slaveAddrs := sa.(*tm.SlaveList).Addrs
 	if len(slaveAddrs) == 0 {
-		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("no slaves found: %v")}
+		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("no slaves found")}
 		return
 	}
 
@@ -255,10 +265,8 @@ func (wr *Wrangler) pingTablets(tabletMap map[naming.TabletAlias]*tm.TabletInfo,
 		go func(tabletAlias naming.TabletAlias, tabletInfo *tm.TabletInfo) {
 			defer wg.Done()
 
-			zkTabletPid := path.Join(tabletInfo.Path(), "pid")
-			_, _, err := wr.zconn.Get(zkTabletPid)
-			if err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node %v: %v %v", zkTabletPid, err, tabletInfo.Hostname())}
+			if err := wr.ts.ValidateTabletPidNode(tabletAlias); err != nil {
+				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.Hostname(), err)}
 				return
 			}
 
@@ -276,8 +284,8 @@ func (wr *Wrangler) pingTablets(tabletMap map[naming.TabletAlias]*tm.TabletInfo,
 	}
 }
 
-// Validate a whole zk tree
-func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
+// Validate a whole TopologyServer tree
+func (wr *Wrangler) Validate(pingTablets bool) error {
 	// Results from various actions feed here.
 	results := make(chan vresult, 16)
 	wg := &sync.WaitGroup{}
@@ -286,7 +294,7 @@ func (wr *Wrangler) Validate(zkKeyspacesPath string, pingTablets bool) error {
 	// by the replication graph.
 	wg.Add(1)
 	go func() {
-		wr.validateAllTablets(zkKeyspacesPath, wg, results)
+		wr.validateAllTablets(wg, results)
 		wg.Done()
 	}()
 

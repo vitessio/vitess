@@ -24,7 +24,7 @@ import (
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
-	"code.google.com/p/vitess/go/zk"
+	"code.google.com/p/vitess/go/vt/zktopo"
 )
 
 // The actor applies individual commands to execute an action read from a node
@@ -51,12 +51,11 @@ func (e InitiatorError) Error() string {
 }
 
 type ActionInitiator struct {
-	ts    naming.TopologyServer
-	zconn zk.Conn
+	ts naming.TopologyServer
 }
 
-func NewActionInitiator(ts naming.TopologyServer, zconn zk.Conn) *ActionInitiator {
-	return &ActionInitiator{ts, zconn}
+func NewActionInitiator(ts naming.TopologyServer) *ActionInitiator {
+	return &ActionInitiator{ts}
 }
 
 func actionGuid() string {
@@ -279,7 +278,7 @@ type ReserveForRestoreArgs struct {
 }
 
 func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias naming.TabletAlias, args *ReserveForRestoreArgs) (actionPath string, err error) {
-	args.ZkSrcTabletPath = TabletPathForAlias(args.SrcTabletAlias) // XXX
+	args.ZkSrcTabletPath = zktopo.TabletPathForAlias(args.SrcTabletAlias) // XXX
 	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESERVE_FOR_RESTORE, args: args})
 }
 
@@ -297,8 +296,8 @@ type RestoreArgs struct {
 }
 
 func (ai *ActionInitiator) Restore(dstTabletAlias naming.TabletAlias, args *RestoreArgs) (actionPath string, err error) {
-	args.ZkSrcTabletPath = TabletPathForAlias(args.SrcTabletAlias) // XXX
-	args.ZkParentPath = TabletPathForAlias(args.ParentAlias)       // XXX
+	args.ZkSrcTabletPath = zktopo.TabletPathForAlias(args.SrcTabletAlias) // XXX
+	args.ZkParentPath = zktopo.TabletPathForAlias(args.ParentAlias)       // XXX
 	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESTORE, args: args})
 }
 

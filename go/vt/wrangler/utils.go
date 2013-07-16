@@ -7,13 +7,11 @@ package wrangler
 import (
 	"reflect"
 	"sort"
-	"strings"
 	"sync"
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/zk"
 )
 
 // If error is not nil, the results in the dictionary are incomplete.
@@ -85,18 +83,18 @@ func GetAllTablets(ts naming.TopologyServer, cell string) ([]*tm.TabletInfo, err
 }
 
 // GetAllTabletsAccrossCells returns all tablets from known cells.
-func GetAllTabletsAccrossCells(ts naming.TopologyServer, zconn zk.Conn) ([]*tm.TabletInfo, error) {
-	cells, err := zk.ResolveWildcards(zconn, []string{"/zk/*/vt/tablets"})
+func GetAllTabletsAccrossCells(ts naming.TopologyServer) ([]*tm.TabletInfo, error) {
+	cells, err := ts.GetKnownCells()
 	if err != nil {
 		return nil, err
 	}
+
 	results := make(chan []*tm.TabletInfo)
 	errors := make(chan error)
 	for _, cell := range cells {
 		go func(cell string) {
-			parts := strings.Split(cell, "/")
-			tablets, err := GetAllTablets(ts, parts[2])
-			if err != nil {
+			tablets, err := GetAllTablets(ts, cell)
+			if err != nil && err != naming.ErrNoNode {
 				errors <- err
 				return
 			}

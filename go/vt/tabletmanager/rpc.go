@@ -14,7 +14,7 @@ import (
 	"code.google.com/p/vitess/go/vt/rpc"
 )
 
-// we keep track of the agent so we can use its zkconn, zkTabletPath, ...
+// we keep track of the agent so we can use its tabletAlias, ts, ...
 type TabletManager struct {
 	agent  *ActionAgent
 	mysqld *mysqlctl.Mysqld

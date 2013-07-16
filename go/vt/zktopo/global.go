@@ -25,6 +25,21 @@ const (
 )
 
 //
+// Cell management
+//
+
+func (zkts *ZkTopologyServer) GetKnownCells() ([]string, error) {
+	cellsWithGlobal := zk.ZkKnownCells(false)
+	cells := make([]string, 0, len(cellsWithGlobal))
+	for _, cell := range cellsWithGlobal {
+		if cell != "global" {
+			cells = append(cells, cell)
+		}
+	}
+	return cells, nil
+}
+
+//
 // Keyspace management
 //
 

@@ -99,7 +99,7 @@ def run_test_sharding():
   utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
 
   # run checks now before we start the tablets
-  utils.zk_check()
+  utils.validate_topology()
 
   # create databases
   shard_0_master.create_db('vt_test_keyspace')
@@ -144,7 +144,7 @@ def run_test_sharding():
   shard_0_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (1, 'test 1')", write=True)
   shard_1_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (10, 'test 10')", write=True)
 
-  utils.zk_check(ping_tablets=True)
+  utils.validate_topology(ping_tablets=True)
 
   utils.pause("Before the sql scatter query")
 

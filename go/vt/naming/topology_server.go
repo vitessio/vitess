@@ -51,6 +51,15 @@ type TopologyServer interface {
 	Close()
 
 	//
+	// Cell management, global
+	//
+
+	// GetKnownCells returns the list of known cells running our processes.
+	// It is possible to find all tablets in the entire system
+	// by then calling GetTabletsByCell on every cell, for instance.
+	GetKnownCells() ([]string, error)
+
+	//
 	// Keyspace management, global.
 	//
 
@@ -111,6 +120,7 @@ type TopologyServer interface {
 	GetTablet(alias TabletAlias) (contents string, version int, err error)
 
 	// GetTabletsByCell returns all the tablets in the given cell.
+	// Can return ErrNoNode if no tablet was ever created in that cell.
 	GetTabletsByCell(cell string) ([]TabletAlias, error)
 
 	//
@@ -232,6 +242,9 @@ type TopologyServer interface {
 	// CreateTabletPidNode will keep a PID node up to date with
 	// this tablet's current PID, until 'done' is closed.
 	CreateTabletPidNode(tabletAlias TabletAlias, done chan struct{}) error
+
+	// ValidateTabletPidNode makes sure a PID file exists for the tablet
+	ValidateTabletPidNode(tabletAlias TabletAlias) error
 
 	// GetSubprocessFlags returns the flags required to run a
 	// subprocess tha uses the same TopologyServer parameters as

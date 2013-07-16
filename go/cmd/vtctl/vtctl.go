@@ -196,7 +196,7 @@ var commands = []commandGroup{
 				"<keyspace>.<shard>.<db type>:<port name>",
 				"Read a list of addresses that can answer this query. The port name is usually _mysql or _vtocc."},
 			command{"Validate", commandValidate,
-				"[-ping-tablets] <zk keyspaces path> (/zk/global/vt/keyspaces)",
+				"[-ping-tablets]",
 				"Validate all nodes reachable from global replication graph and all tablets in all discoverable cells are consistent."},
 			command{"ExportZkns", commandExportZkns,
 				"<cell name|zk local vt path>",
@@ -1290,10 +1290,10 @@ func commandValidate(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []strin
 	pingTablets := subFlags.Bool("ping-tablets", false, "ping all tablets during validate")
 	subFlags.Parse(args)
 
-	if subFlags.NArg() != 1 {
-		relog.Fatal("action Validate requires <zk keyspaces path>")
+	if subFlags.NArg() != 0 {
+		relog.Warning("action Validate doesn't take any parameter any more")
 	}
-	return "", wrangler.Validate(subFlags.Arg(0), *pingTablets)
+	return "", wrangler.Validate(*pingTablets)
 }
 
 func commandExportZkns(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

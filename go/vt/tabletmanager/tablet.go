@@ -22,7 +22,7 @@ const (
 
 // A pure data struct for information serialized into json and stored in zookeeper.
 type Tablet struct {
-	Cell        string             // the zk cell this tablet is assigned to (doesn't change)
+	Cell        string             // the cell this tablet is assigned to (doesn't change)
 	Uid         uint32             // the server id for this instance
 	Parent      naming.TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
 	Addr        string             // host:port for queryserver
@@ -95,7 +95,7 @@ func (tablet *Tablet) Hostname() string {
 }
 
 type TabletInfo struct {
-	version int // zk node version - used to prevent stomping concurrent writes
+	version int // node version - used to prevent stomping concurrent writes
 	*Tablet
 }
 
@@ -104,21 +104,17 @@ func (ti *TabletInfo) Path() string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%010d", ti.Cell, ti.Uid)
 }
 
-// FIXME(alainjobart) when switch to TopologyServer this will become useless
-func (ti *TabletInfo) ZkVtRoot() string {
-	return fmt.Sprintf("/zk/%v/vt", ti.Cell)
-}
-
 func (ti *TabletInfo) ReplicationPath() string {
 	return tabletReplicationPath(ti.Tablet)
 }
 
 func tabletReplicationPath(tablet *Tablet) string {
+	leaf := naming.TabletAlias{tablet.Cell, tablet.Uid}.String()
 	if tablet.Parent.Uid == naming.NO_TABLET {
-		return fmtAlias(tablet.Cell, tablet.Uid)
+		return leaf
 	}
 	// FIXME(alainjobart) assumes one level of replication hierarchy
-	return path.Join(fmtAlias(tablet.Parent.Cell, tablet.Parent.Uid), fmtAlias(tablet.Cell, tablet.Uid))
+	return path.Join(tablet.Parent.String(), leaf)
 }
 
 func NewTablet(cell string, uid uint32, parent naming.TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType naming.TabletType) (*Tablet, error) {
@@ -195,7 +191,7 @@ func Validate(ts naming.TopologyServer, tabletAlias naming.TabletAlias, tabletRe
 
 	// Some tablets have no information to generate valid replication paths.
 	// We have two cases to handle:
-	// - we are in the replication graph, and should have a ZK path
+	// - we are in the replication graph, and should have a replication path
 	//   (first case below)
 	// - we are in scrap mode, but used to be assigned in the graph
 	//   somewhere (second case below)

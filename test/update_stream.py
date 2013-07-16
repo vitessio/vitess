@@ -84,7 +84,7 @@ def setup_tablets():
   master_tablet.init_tablet('master', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph test_keyspace/0')
   utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
-  utils.run_vtctl('Validate /zk/global/vt/keyspaces')
+  utils.validate_topology()
 
   setup_schema()
   replica_tablet.create_db('vt_test_keyspace')
@@ -103,7 +103,7 @@ def setup_tablets():
   utils.run_vtctl('SetReadWrite ' + master_tablet.tablet_alias)
   utils.check_db_read_write(62344)
 
-  utils.run_vtctl('Validate /zk/global/vt/keyspaces')
+  utils.validate_topology()
   utils.run_vtctl('Ping test_nj-0000062345')
 
 

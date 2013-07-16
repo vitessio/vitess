@@ -40,7 +40,7 @@ class Vtctld(object):
   def start(self):
     utils.prog_compile(['vtctld'])
     args = [os.path.join(utils.vtroot, 'bin', 'vtctld'), '-debug', '-templates', utils.vttop + '/go/cmd/vtctld/templates']
-    stderr_fd = open(os.path.join(utils.vtroot, "vtctld.stderr"), "w")
+    stderr_fd = open(os.path.join(utils.tmp_root, "vtctld.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     return self.proc
 
@@ -104,7 +104,7 @@ class TestDbTopo(unittest.TestCase):
 
 
   # run checks now before we start the tablets
-    utils.zk_check()
+    utils.validate_topology()
 
   def setUp(self):
     self.data = vtctld.dbtopo()

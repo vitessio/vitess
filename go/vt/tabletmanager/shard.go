@@ -63,7 +63,7 @@ func newShard() *Shard {
 		RdonlyAliases: make([]naming.TabletAlias, 0, 16)}
 }
 
-func zkShardFromJson(data string) (*Shard, error) {
+func shardFromJson(data string) (*Shard, error) {
 	shard := newShard()
 	err := json.Unmarshal([]byte(data), shard)
 	if err != nil {
@@ -73,7 +73,7 @@ func zkShardFromJson(data string) (*Shard, error) {
 }
 
 /*
-A meta struct that contains paths to give the zk data more context and convenience
+A meta struct that contains paths to give the data more context and convenience
 This is the main way we interact with a shard.
 */
 type ShardInfo struct {
@@ -125,14 +125,13 @@ func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 
 // shardData: JSON blob
 func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err error) {
-	zkShardPath := "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard
 	if shardData == "" {
-		return nil, fmt.Errorf("empty shard data: %v", zkShardPath)
+		return nil, fmt.Errorf("empty shard data for shard: %v/%v", keyspace, shard)
 	}
 
 	var s *Shard
 	if shardData != "" {
-		s, err = zkShardFromJson(shardData)
+		s, err = shardFromJson(shardData)
 		if err != nil {
 			return nil, err
 		}

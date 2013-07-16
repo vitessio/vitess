@@ -46,7 +46,6 @@ unit_test:
 	cd go/vt/dbconfigs; go test
 	cd go/vt/mysqlctl; go test
 	cd go/vt/sqlparser; go test
-	cd go/vt/tabletmanager; go test
 	cd go/vt/tabletserver; go test
 	cd go/zk; go test
 	cd go/zk/zkctl; go test
