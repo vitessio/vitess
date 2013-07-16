@@ -164,6 +164,11 @@ class TestCache(framework.TestCase):
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
 
+  def test_nodata(self):
+    # This should not fail
+    cu = self.env.execute("select * from vtocc_cached where eid = 6 and name = 'bar'")
+    self.assertEqual(cu.rowcount, 0)
+
   def test_bigdata(self):
     self.env.conn.begin()
     rowcount = 10
@@ -184,6 +189,10 @@ class TestCache(framework.TestCase):
     cu = self.env.execute("select * from vtocc_cached where eid = 5 and name = 'bar'")
     tend = self.env.table_stats()["vtocc_cached"]
     self.assertEqual(tstart["Hits"]+rowcount, tend["Hits"])
+
+    self.env.conn.begin()
+    self.env.execute("delete from vtocc_cached where eid = 5")
+    self.env.conn.commit()
 
   def test_types(self):
     self._verify_mismatch("select * from vtocc_cached where eid = 'str' and bid = 'str'")

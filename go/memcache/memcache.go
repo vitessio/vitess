@@ -148,6 +148,9 @@ func (mc *Connection) Stats(argument string) (result []byte, err error) {
 
 func (mc *Connection) get(command string, keys []string) (results []Result) {
 	results = make([]Result, 0, len(keys))
+	if len(keys) == 0 {
+		return
+	}
 	// get(s) <key>*\r\n
 	mc.writestrings(command)
 	for _, key := range keys {
