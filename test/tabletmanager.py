@@ -833,8 +833,8 @@ def run_test_reparent_down_master():
 
   utils.run_vtctl('ChangeSlaveType -force %s idle' % tablet_62344.tablet_alias)
 
-  idle_tablets, _ = utils.run_vtctl('ListIdle test_nj', trap_output=True)
-  if '0000062344' not in idle_tablets:
+  idle_tablets, _ = utils.run_vtctl('ListAllTablets test_nj', trap_output=True)
+  if '0000062344 <null> <null> idle' not in idle_tablets:
     raise utils.TestError('idle tablet not found', idle_tablets)
 
   tablet_62044.kill_vttablet()
