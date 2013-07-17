@@ -139,22 +139,6 @@ func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err 
 	return &ShardInfo{keyspace, shard, s}, nil
 }
 
-func ReadShard(ts TopologyServer, keyspace, shard string) (*ShardInfo, error) {
-	data, err := ts.GetShard(keyspace, shard)
-	if err != nil {
-		return nil, err
-	}
-	shardInfo, err := NewShardInfo(keyspace, shard, data)
-	if err != nil {
-		return nil, err
-	}
-	return shardInfo, nil
-}
-
-func UpdateShard(ts TopologyServer, si *ShardInfo) error {
-	return ts.UpdateShard(si.keyspace, si.shardName, si.Json())
-}
-
 func tabletAliasesRecursive(ts TopologyServer, keyspace, shard, repPath string) ([]TabletAlias, error) {
 	mutex := sync.Mutex{}
 	wg := sync.WaitGroup{}

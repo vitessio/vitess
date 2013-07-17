@@ -91,7 +91,7 @@ func (zkts *ZkTopologyServer) DeleteKeyspaceShards(keyspace string) error {
 // Shard Management
 //
 
-func (zkts *ZkTopologyServer) CreateShard(keyspace, shard, contents string) error {
+func (zkts *ZkTopologyServer) CreateShard(keyspace, shard string) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	pathList := []string{
 		shardPath,
@@ -103,7 +103,8 @@ func (zkts *ZkTopologyServer) CreateShard(keyspace, shard, contents string) erro
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = contents
+			s := naming.Shard{}
+			c = s.Json()
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -120,12 +121,12 @@ func (zkts *ZkTopologyServer) CreateShard(keyspace, shard, contents string) erro
 	return nil
 }
 
-func (zkts *ZkTopologyServer) UpdateShard(keyspace, shard, contents string) error {
-	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
-	_, err := zkts.zconn.Set(shardPath, contents, -1)
+func (zkts *ZkTopologyServer) UpdateShard(si *naming.ShardInfo) error {
+	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
+	_, err := zkts.zconn.Set(shardPath, si.Json(), -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return naming.ErrNoNode
+			err = naming.ErrNoNode
 		}
 	}
 	return err
@@ -146,17 +147,21 @@ func (zkts *ZkTopologyServer) ValidateShard(keyspace, shard string) error {
 	return nil
 }
 
-func (zkts *ZkTopologyServer) GetShard(keyspace, shard string) (string, error) {
+func (zkts *ZkTopologyServer) GetShard(keyspace, shard string) (*naming.ShardInfo, error) {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	data, _, err := zkts.zconn.Get(shardPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return "", naming.ErrNoNode
+			err = naming.ErrNoNode
 		}
-		return "", err
+		return nil, err
 	}
-	return data, nil
 
+	shardInfo, err := naming.NewShardInfo(keyspace, shard, data)
+	if err != nil {
+		return nil, err
+	}
+	return shardInfo, nil
 }
 
 func (zkts *ZkTopologyServer) GetShardNames(keyspace string) ([]string, error) {
@@ -179,7 +184,7 @@ func (zkts *ZkTopologyServer) GetReplicationPaths(keyspace, shard, repPath strin
 	children, _, err := zkts.zconn.Children(replicationPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return nil, naming.ErrNoNode
+			err = naming.ErrNoNode
 		}
 		return nil, err
 	}
@@ -204,7 +209,7 @@ func (zkts *ZkTopologyServer) CreateReplicationPath(keyspace, shard, repPath str
 	_, err := zk.CreateRecursive(zkts.zconn, replicationPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			return naming.ErrNodeExists
+			err = naming.ErrNodeExists
 		}
 		return err
 	}
@@ -216,9 +221,9 @@ func (zkts *ZkTopologyServer) DeleteReplicationPath(keyspace, shard, repPath str
 	err := zkts.zconn.Delete(replicationPath, -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			return naming.ErrNoNode
+			err = naming.ErrNoNode
 		} else if zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
-			return naming.ErrNotEmpty
+			err = naming.ErrNotEmpty
 		}
 		return err
 	}

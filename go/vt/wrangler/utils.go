@@ -25,7 +25,7 @@ func GetTabletMap(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) 
 		wg.Add(1)
 		go func(tabletAlias naming.TabletAlias) {
 			defer wg.Done()
-			tabletInfo, err := naming.ReadTablet(ts, tabletAlias)
+			tabletInfo, err := ts.GetTablet(tabletAlias)
 			mutex.Lock()
 			if err != nil {
 				relog.Warning("%v: %v", tabletAlias, err)

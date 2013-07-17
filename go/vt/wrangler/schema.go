@@ -17,7 +17,7 @@ import (
 )
 
 func (wr *Wrangler) GetSchema(tabletAlias naming.TabletAlias, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
-	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, masterTa
 }
 
 func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews bool) error {
-	si, err := naming.ReadShard(wr.ts, keyspace, shard)
+	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -101,7 +101,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	}
 
 	// find the reference schema using the first shard's master
-	si, err := naming.ReadShard(wr.ts, keyspace, shards[0])
+	si, err := wr.ts.GetShard(keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 
 	// then diffs all tablets in the other shards
 	for _, shard := range shards[1:] {
-		si, err := naming.ReadShard(wr.ts, keyspace, shard)
+		si, err := wr.ts.GetShard(keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -197,7 +197,7 @@ func (wr *Wrangler) ApplySchema(tabletAlias naming.TabletAlias, sc *mysqlctl.Sch
 // very quickly.
 func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// read the shard
-	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *naming.ShardInfo, preflight *mys
 			continue
 		}
 
-		ti, err := naming.ReadTablet(wr.ts, alias)
+		ti, err := wr.ts.GetTablet(alias)
 		if err != nil {
 			return nil, err
 		}
@@ -342,7 +342,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		}
 
 		// take this guy out of the serving graph if necessary
-		ti, err := naming.ReadTablet(wr.ts, status.ti.Alias())
+		ti, err := wr.ts.GetTablet(status.ti.Alias())
 		if err != nil {
 			return nil, err
 		}
@@ -385,7 +385,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		newMasterTablet, err := naming.ReadTablet(wr.ts, newParentTabletAlias)
+		newMasterTablet, err := wr.ts.GetTablet(newParentTabletAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -458,7 +458,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 				wg.Done()
 			}()
 
-			shardInfos[i], err = naming.ReadShard(wr.ts, keyspace, shard)
+			shardInfos[i], err = wr.ts.GetShard(keyspace, shard)
 			if err != nil {
 				return
 			}

@@ -34,7 +34,7 @@ func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, mas
 }
 
 func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
-	si, err := naming.ReadShard(wr.ts, keyspace, shard)
+	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	}
 
 	// find the reference permissions using the first shard's master
-	si, err := naming.ReadShard(wr.ts, keyspace, shards[0])
+	si, err := wr.ts.GetShard(keyspace, shards[0])
 	if err != nil {
 		return err
 	}

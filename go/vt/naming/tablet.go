@@ -420,11 +420,7 @@ func TabletFromJson(data string) (*Tablet, error) {
 	return t, nil
 }
 
-func ReadTablet(ts TopologyServer, tabletAlias TabletAlias) (*TabletInfo, error) {
-	data, version, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return nil, err
-	}
+func TabletInfoFromJson(data string, version int) (*TabletInfo, error) {
 	tablet, err := TabletFromJson(data)
 	if err != nil {
 		return nil, err
@@ -439,7 +435,7 @@ func UpdateTablet(ts TopologyServer, tablet *TabletInfo) error {
 		version = tablet.version
 	}
 
-	newVersion, err := ts.UpdateTablet(tablet.Alias(), tablet.Json(), version)
+	newVersion, err := ts.UpdateTablet(tablet, version)
 	if err == nil {
 		tablet.version = newVersion
 	}
@@ -448,7 +444,7 @@ func UpdateTablet(ts TopologyServer, tablet *TabletInfo) error {
 
 func Validate(ts TopologyServer, tabletAlias TabletAlias, tabletReplicationPath string) error {
 	// read the tablet record, make sure it parses
-	tablet, err := ReadTablet(ts, tabletAlias)
+	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -502,11 +498,12 @@ func Validate(ts TopologyServer, tabletAlias TabletAlias, tabletReplicationPath 
 // replication graph.
 func CreateTablet(ts TopologyServer, tablet *Tablet) error {
 	// Have the TopologyServer create the tablet
-	err := ts.CreateTablet(tablet.Alias(), tablet.Json())
+	err := ts.CreateTablet(tablet)
 	if err != nil {
 		return err
 	}
 
+	// Then add the tablet to the replication graphs
 	if !tablet.IsInReplicationGraph() {
 		return nil
 	}
@@ -516,7 +513,7 @@ func CreateTablet(ts TopologyServer, tablet *Tablet) error {
 
 func CreateTabletReplicationPaths(ts TopologyServer, tablet *Tablet) error {
 	relog.Debug("CreateTabletReplicationPaths %v", tablet.Alias())
-	if err := ts.CreateShard(tablet.Keyspace, tablet.Shard, newShard().Json()); err != nil && err != ErrNodeExists {
+	if err := ts.CreateShard(tablet.Keyspace, tablet.Shard); err != nil && err != ErrNodeExists {
 		return err
 	}
 

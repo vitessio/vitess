@@ -170,12 +170,12 @@ class RowCacheInvalidator(unittest.TestCase):
 
     perform_insert(100)
 
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
     # reset master to make checkpoint invalid.
     replica_tablet.mquery('vt_test_keyspace', "reset master")
     time.sleep(30)
 
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
     time.sleep(30)
 
     cache_counters = framework.MultiDict(utils.get_vars(replica_tablet.port))['CacheCounters']
@@ -188,7 +188,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def test_tablet_restart(self):
     utils.debug("===========test_tablet_restart=========")
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
     time.sleep(5)
     perform_insert(100)
     time.sleep(5)
@@ -203,10 +203,10 @@ class RowCacheInvalidator(unittest.TestCase):
     except KeyError, e:
       purge_cache_counter = 0
 
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 spare')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
     time.sleep(5)
 
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
     #The sleep is needed here, so the invalidator can catch and the number can be tested.
     time.sleep(5)
     perform_insert(100)
@@ -225,7 +225,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def test_stop_replication(self):
     utils.debug("===========test_stop_replication=========")
-    utils.run_vtctl('ChangeSlaveType /zk/test_nj/vt/tablets/0000062345 replica')
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
     time.sleep(10)
     perform_insert(100)
     master_position = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')

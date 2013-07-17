@@ -134,7 +134,7 @@ func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync
 // FIXME(msolomon) This validate presumes the master is up and running.
 // Even when that isn't true, there are validation processes that might be valuable.
 func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
-	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		results <- vresult{keyspace + "/" + shard, err}
 		return

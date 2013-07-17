@@ -11,7 +11,6 @@ import (
 	"code.google.com/p/vitess/go/rpcwrap"
 	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/rpc"
 )
 
@@ -48,7 +47,7 @@ func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) er
 
 func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArgs, reply *mysqlctl.SchemaDefinition) error {
 	// read the tablet to get the dbname
-	tablet, err := naming.ReadTablet(tm.agent.ts, tm.agent.tabletAlias)
+	tablet, err := tm.agent.ts.GetTablet(tm.agent.tabletAlias)
 	if err != nil {
 		return tm.wrapErr(context, TABLET_ACTION_GET_SCHEMA, args, reply, err)
 	}

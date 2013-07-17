@@ -24,7 +24,7 @@ type debugVars struct {
 
 func (wr *Wrangler) GetVersion(tabletAlias naming.TabletAlias) (string, error) {
 	// read the tablet from TopologyServer to get the address to connect to
-	tablet, err := naming.ReadTablet(wr.ts, tabletAlias)
+	tablet, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return "", err
 	}
@@ -75,7 +75,7 @@ func (wr *Wrangler) diffVersion(masterVersion string, masterAlias naming.TabletA
 }
 
 func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
-	si, err := naming.ReadShard(wr.ts, keyspace, shard)
+	si, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	}
 
 	// find the reference version using the first shard's master
-	si, err := naming.ReadShard(wr.ts, keyspace, shards[0])
+	si, err := wr.ts.GetShard(keyspace, shards[0])
 	if err != nil {
 		return err
 	}

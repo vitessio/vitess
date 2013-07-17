@@ -32,7 +32,7 @@ type Wrangler struct {
 //   This is distinct from actionTimeout because most of the time, we want to immediately
 //   know that out action will fail. However, automated action will need some time to
 //   arbitrate the locks.
-func NewWrangler(ts naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
+func New(ts naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
 	return &Wrangler{ts, tm.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout}
 }
 
@@ -64,7 +64,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
-	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 		cellToRebuild = ti.Cell
 	} else {
 		// re-read the tablet, see if we become serving
-		ti, err := naming.ReadTablet(wr.ts, tabletAlias)
+		ti, err := wr.ts.GetTablet(tabletAlias)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 // keyspace rollup, since I think that is adding complexity and feels like it might
 // be a premature optimization.
 func (wr *Wrangler) changeTypeInternal(tabletAlias naming.TabletAlias, dbType naming.TabletType) error {
-	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 	if err != nil && err == naming.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update {
-			oldTablet, err := naming.ReadTablet(wr.ts, tabletAlias)
+			oldTablet, err := wr.ts.GetTablet(tabletAlias)
 			if err != nil {
 				relog.Warning("failed reading tablet %v: %v", tabletAlias, err)
 			} else {
@@ -311,7 +311,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 // directly and don't remote-execute the command.
 func (wr *Wrangler) Scrap(tabletAlias naming.TabletAlias, force, skipRebuild bool) (actionPath string, err error) {
 	// load the tablet, see if we'll need to rebuild
-	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return "", err
 	}

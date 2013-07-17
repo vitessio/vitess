@@ -15,7 +15,7 @@ import (
 )
 
 func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias naming.TabletAlias, scrapStragglers bool) error {
-	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}

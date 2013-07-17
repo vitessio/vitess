@@ -18,7 +18,7 @@ func (wr *Wrangler) ExecuteHook(tabletAlias naming.TabletAlias, hook *hk.Hook) (
 	if strings.Contains(hook.Name, "/") {
 		return nil, fmt.Errorf("hook name cannot have a '/' in it")
 	}
-	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
+	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
 	}

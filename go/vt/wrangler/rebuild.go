@@ -80,7 +80,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	if err = shardInfo.Rebuild(tablets); err != nil {
 		return err
 	}
-	if err = naming.UpdateShard(wr.ts, shardInfo); err != nil {
+	if err = wr.ts.UpdateShard(shardInfo); err != nil {
 		return err
 	}
 	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
@@ -321,7 +321,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 			// expensive, but we only do it on all the
 			// non-serving tablets in a shard before we
 			// find a serving tablet.
-			ti, err := naming.ReadTablet(wr.ts, alias)
+			ti, err := wr.ts.GetTablet(alias)
 			if err != nil {
 				return err
 			}

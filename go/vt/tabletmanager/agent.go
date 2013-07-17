@@ -79,7 +79,7 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *naming.Tablet, context s
 }
 
 func (agent *ActionAgent) readTablet() error {
-	tablet, err := naming.ReadTablet(agent.ts, agent.tabletAlias)
+	tablet, err := agent.ts.GetTablet(agent.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	// Load the shard and see if we are supposed to be serving. We might be a serving type,
 	// but we might be in a transitional state. Only once the shard info is updated do we
 	// put ourselves in the client serving graph.
-	shardInfo, err := naming.ReadShard(agent.ts, agent.Tablet().Keyspace, agent.Tablet().Shard)
+	shardInfo, err := agent.ts.GetShard(agent.Tablet().Keyspace, agent.Tablet().Shard)
 	if err != nil {
 		return err
 	}

@@ -78,19 +78,21 @@ type TopologyServer interface {
 	// Shard management, global.
 	//
 
-	// CreateShard creates the given shard, assuming it doesn't exist
-	// yet. Can return ErrNodeExists if it already exists.
-	CreateShard(keyspace, shard, contents string) error
+	// CreateShard creates an empty shard, assuming it doesn't exist
+	// yet. The contents of the shard will be an empty Shard{} object.
+	// Can return ErrNodeExists if it already exists.
+	CreateShard(keyspace, shard string) error
 
 	// UpdateShard unconditionnally updates the shard information
+	// pointed at by si.keyspace / si.shard to the *si value.
 	// Can return ErrNoNode if the shard doesn't exist yet.
-	UpdateShard(keyspace, shard, contents string) error
+	UpdateShard(si *ShardInfo) error
 
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(keyspace, shard string) error
 
 	// GetShard reads a shard and returns it.
-	GetShard(keyspace, shard string) (contents string, err error)
+	GetShard(keyspace, shard string) (si *ShardInfo, err error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	GetShardNames(keyspace string) ([]string, error)
@@ -101,27 +103,33 @@ type TopologyServer interface {
 	//
 
 	// CreateTablet creates the given tablet, assuming it doesn't exist
-	// yet. Can return ErrNodeExists if it already exists.
-	CreateTablet(alias TabletAlias, contents string) error
+	// yet. It does *not* create the tablet replication paths.
+	// Can return ErrNodeExists if it already exists.
+	CreateTablet(tablet *Tablet) error
 
 	// UpdateTablet updates a given tablet. The version is used
 	// for atomic updates (use -1 to overwrite any version).
-	UpdateTablet(alias TabletAlias, contents string, existingVersion int) (newVersion int, err error)
+	// Can return ErrNoNode if the tablet doesn't exist.
+	// Can return ErrBadVersion if the version has changed.
+	UpdateTablet(tablet *TabletInfo, existingVersion int) (newVersion int, err error)
 
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version
+	// Can return ErrNoNode if the tablet doesn't exist.
 	UpdateTabletFields(tabletAlias TabletAlias, update func(*Tablet) error) error
 
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
 	// TODO(alainjobart) verify this assumption, link with RPC code.
+	// Can return ErrNoNode if the tablet doesn't exist.
 	DeleteTablet(alias TabletAlias) error
 
 	// ValidateTablet performs routine checks on the tablet.
 	ValidateTablet(alias TabletAlias) error
 
-	// GetTablet returns the tablet contents, and the current version.
-	GetTablet(alias TabletAlias) (contents string, version int, err error)
+	// GetTablet returns the tablet data (includes the current version).
+	// Can return ErrNoNode if the tablet doesn't exist.
+	GetTablet(alias TabletAlias) (*TabletInfo, error)
 
 	// GetTabletsByCell returns all the tablets in the given cell.
 	// Can return ErrNoNode if no tablet was ever created in that cell.

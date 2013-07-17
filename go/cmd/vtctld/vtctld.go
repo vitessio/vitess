@@ -318,7 +318,7 @@ func main() {
 	ts := naming.GetTopologyServer()
 	defer naming.CloseTopologyServers()
 
-	wr := wrangler.NewWrangler(ts, 30*time.Second, 30*time.Second)
+	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
 
 	actionRepo := NewActionRepository(wr)
 

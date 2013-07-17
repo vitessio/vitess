@@ -40,11 +40,11 @@ func tabletDirectoryForCell(cell string) string {
 // Tablet management
 //
 
-func (zkts *ZkTopologyServer) CreateTablet(alias naming.TabletAlias, contents string) error {
-	zkTabletPath := TabletPathForAlias(alias)
+func (zkts *ZkTopologyServer) CreateTablet(tablet *naming.Tablet) error {
+	zkTabletPath := TabletPathForAlias(tablet.Alias())
 
 	// Create /zk/<cell>/vt/tablets/<uid>
-	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, contents, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, tablet.Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = naming.ErrNodeExists
@@ -69,13 +69,16 @@ func (zkts *ZkTopologyServer) CreateTablet(alias naming.TabletAlias, contents st
 	return nil
 }
 
-func (zkts *ZkTopologyServer) UpdateTablet(alias naming.TabletAlias, contents string, existingVersion int) (int, error) {
-	zkTabletPath := TabletPathForAlias(alias)
-	stat, err := zkts.zconn.Set(zkTabletPath, contents, existingVersion)
+func (zkts *ZkTopologyServer) UpdateTablet(tablet *naming.TabletInfo, existingVersion int) (int, error) {
+	zkTabletPath := TabletPathForAlias(tablet.Alias())
+	stat, err := zkts.zconn.Set(zkTabletPath, tablet.Json(), existingVersion)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
 			err = naming.ErrBadVersion
+		} else if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = naming.ErrNoNode
 		}
+
 		return 0, err
 	}
 	return stat.Version(), nil
@@ -109,7 +112,13 @@ func (zkts *ZkTopologyServer) UpdateTabletFields(tabletAlias naming.TabletAlias,
 
 func (zkts *ZkTopologyServer) DeleteTablet(alias naming.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)
-	return zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1)
+	err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = naming.ErrNoNode
+		}
+	}
+	return err
 }
 
 func (zkts *ZkTopologyServer) ValidateTablet(alias naming.TabletAlias) error {
@@ -120,21 +129,23 @@ func (zkts *ZkTopologyServer) ValidateTablet(alias naming.TabletAlias) error {
 	}
 
 	for _, zkPath := range zkPaths {
-		_, _, err := zkts.zconn.Get(zkPath)
-		if err != nil {
+		if _, _, err := zkts.zconn.Get(zkPath); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (zkts *ZkTopologyServer) GetTablet(alias naming.TabletAlias) (string, int, error) {
+func (zkts *ZkTopologyServer) GetTablet(alias naming.TabletAlias) (*naming.TabletInfo, error) {
 	zkTabletPath := TabletPathForAlias(alias)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
 	if err != nil {
-		return "", 0, err
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = naming.ErrNoNode
+		}
+		return nil, err
 	}
-	return data, stat.Version(), nil
+	return naming.TabletInfoFromJson(data, stat.Version())
 }
 
 func (zkts *ZkTopologyServer) GetTabletsByCell(cell string) ([]naming.TabletAlias, error) {
