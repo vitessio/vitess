@@ -22,6 +22,31 @@ mkdir -p $VTROOT/bin
 mkdir -p $VTROOT/lib
 mkdir -p $VTROOT/vthook
 
+# install zookeeper
+zk_dist=$VTROOT/dist/vt-zookeeper-3.3.5
+if [ -d $zk_dist ]; then
+  echo "skipping zookeeper build"
+else
+  (cd $VTTOP/third_party/zookeeper && \
+    tar -xjf zookeeper-3.3.5.tbz && \
+    mkdir -p $zk_dist/lib && \
+    cp zookeeper-3.3.5/contrib/fatjar/zookeeper-3.3.5-fatjar.jar $zk_dist/lib && \
+    (cd zookeeper-3.3.5/src/c && \
+    ./configure --prefix=$zk_dist && \
+    make -j3 install) && rm -rf zookeeper-3.3.5)
+  if [ $? -ne 0 ]; then
+    echo "zookeeper build failed"
+    exit 1
+   fi
+fi
+
+ln -nfs $VTTOP/third_party/go/launchpad.net $VTROOT/src
+go install launchpad.net/gozk/zookeeper
+
+# FIXME(szopa): Get rid of this dependency.
+# install opts-go
+go get  code.google.com/p/opts-go
+
 ln -snf $VTTOP/config $VTROOT/config
 ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb
@@ -45,6 +70,7 @@ if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
   echo "cannot execute $VT_MYSQL_ROOT/bin/mysql_config, exiting" 1>&2
   exit 1
 fi
+
 cp $VTTOP/config/gomysql.pc.tmpl $VTROOT/lib/gomysql.pc
 echo "Version:" "$($VT_MYSQL_ROOT/bin/mysql_config --version)" >> $VTROOT/lib/gomysql.pc
 echo "Cflags:" "$($VT_MYSQL_ROOT/bin/mysql_config --cflags) -ggdb -fPIC" >> $VTROOT/lib/gomysql.pc
