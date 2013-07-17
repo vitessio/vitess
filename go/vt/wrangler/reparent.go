@@ -69,8 +69,8 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 const (
@@ -85,7 +85,7 @@ const (
 //   though all the other necessary updates have been made.
 // forceReparentToCurrentMaster: mostly for test setups, this can
 //   cause data loss.
-func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias naming.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -102,7 +102,7 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 	}
 
 	currentMasterTabletAlias := shardInfo.MasterAlias
-	if currentMasterTabletAlias == (naming.TabletAlias{}) {
+	if currentMasterTabletAlias == (topo.TabletAlias{}) {
 		// There is no master - either it has been scrapped or there is some other degenerate case.
 	} else if currentMasterTabletAlias != foundMaster.Alias() {
 		return fmt.Errorf("master tablet conflict in ShardInfo %v/%v: %v, %v", keyspace, shard, currentMasterTabletAlias, foundMaster)
@@ -124,7 +124,7 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 		return err
 	}
 
-	if currentMasterTabletAlias != (naming.TabletAlias{}) && !forceReparentToCurrentMaster {
+	if currentMasterTabletAlias != (topo.TabletAlias{}) && !forceReparentToCurrentMaster {
 		err = wr.reparentShardGraceful(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly)
 	} else {
 		err = wr.reparentShardBrutal(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
@@ -136,7 +136,7 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*naming.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return nil, nil, err
@@ -153,20 +153,20 @@ func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*naming
 	return tabletMap, posMap, wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardReplicationPositions(shardInfo *naming.ShardInfo) ([]*naming.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) shardReplicationPositions(shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
 	tabletMap, err := GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, nil, err
 	}
-	tablets := CopyMapValues(tabletMap, []*naming.TabletInfo{}).([]*naming.TabletInfo)
+	tablets := CopyMapValues(tabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
 	positions, err := wr.tabletReplicationPositions(tablets)
 	return tablets, positions, err
 }
 
 // Attempt to reparent this tablet to the current master, based on the current
 // replication position. If there is no match, it will fail.
-func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
+func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	// Get specified tablet.
 	// Get current shard master tablet.
 	// Sanity check they are in the same keyspace/shard.
@@ -183,7 +183,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	if shardInfo.MasterAlias == (naming.TabletAlias{}) {
+	if shardInfo.MasterAlias == (topo.TabletAlias{}) {
 		return fmt.Errorf("no master tablet for shard %v/%v", ti.Keyspace, ti.Shard)
 	}
 
@@ -193,7 +193,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
 	}
 
 	// Basic sanity checking.
-	if masterTi.Type != naming.TYPE_MASTER {
+	if masterTi.Type != topo.TYPE_MASTER {
 		return fmt.Errorf("TopologyServer has inconsistent state for shard master %v", shardInfo.MasterAlias)
 	}
 	if masterTi.Keyspace != ti.Keyspace || masterTi.Shard != ti.Shard {
@@ -226,7 +226,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
 	relog.Info("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr, rsd.ReplicationState.ReplicationPosition.MapKey())
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
-	rsd.Force = ti.Type == naming.TYPE_LAG_ORPHAN
+	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
 	actionPath, err = wr.ai.RestartSlave(ti.Alias(), rsd)
 	if err != nil {
 		return err

@@ -24,8 +24,8 @@ import (
 	hk "code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 	"code.google.com/p/vitess/go/vt/wrangler"
 )
 
@@ -74,7 +74,7 @@ var commands = []commandGroup{
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
 					"NOTE: This will automatically update the serving graph.\n" +
 					"Valid <db type>:\n" +
-					"  " + strings.Join(naming.SlaveTabletTypeStrings, " ") + "\n"},
+					"  " + strings.Join(topo.SlaveTabletTypeStrings, " ") + "\n"},
 			command{"Ping", commandPing,
 				"<tablet alias|zk tablet path>",
 				"Check that the agent is awake and responding - can be blocked by other in-flight operations."},
@@ -271,7 +271,7 @@ func confirm(prompt string, force bool) bool {
 	return strings.ToLower(strings.TrimSpace(line)) == "yes"
 }
 
-func fmtTabletAwkable(ti *naming.TabletInfo) string {
+func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	keyspace := ti.Keyspace
 	shard := ti.Shard
 	if keyspace == "" {
@@ -292,15 +292,15 @@ func fmtAction(action *tm.ActionNode) string {
 	return fmt.Sprintf("%v %v %v %v %v", action.Path(), action.Action, state, action.ActionGuid, action.Error)
 }
 
-func listTabletsByShard(ts naming.TopologyServer, keyspace, shard string) error {
-	tabletAliases, err := naming.FindAllTabletAliasesInShard(ts, keyspace, shard)
+func listTabletsByShard(ts topo.Server, keyspace, shard string) error {
+	tabletAliases, err := topo.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
 	return dumpTablets(ts, tabletAliases)
 }
 
-func dumpAllTablets(ts naming.TopologyServer, zkVtPath string) error {
+func dumpAllTablets(ts topo.Server, zkVtPath string) error {
 	tablets, err := wrangler.GetAllTablets(ts, zkVtPath)
 	if err != nil {
 		return err
@@ -311,7 +311,7 @@ func dumpAllTablets(ts naming.TopologyServer, zkVtPath string) error {
 	return nil
 }
 
-func dumpTablets(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) error {
+func dumpTablets(ts topo.Server, tabletAliases []topo.TabletAlias) error {
 	tabletMap, err := wrangler.GetTabletMap(ts, tabletAliases)
 	if err != nil {
 		return err
@@ -327,7 +327,7 @@ func dumpTablets(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) e
 	return nil
 }
 
-func kquery(ts naming.TopologyServer, cell, keyspace, user, password, query string) error {
+func kquery(ts topo.Server, cell, keyspace, user, password, query string) error {
 	sconn, err := client2.Dial(ts, cell, keyspace, "master", false, 5*time.Second, user, password)
 	if err != nil {
 		return err
@@ -420,7 +420,7 @@ func shardParamToKeyspaceShard(param string) (string, string) {
 
 // tabletParamToTabletAlias takes either an old style ZK tablet path or a
 // new style tablet alias as a string, and returns a TabletAlias.
-func tabletParamToTabletAlias(param string) naming.TabletAlias {
+func tabletParamToTabletAlias(param string) topo.TabletAlias {
 	if param[0] == '/' {
 		// old zookeeper path, convert to new-style string tablet alias
 		zkPathParts := strings.Split(param, "/")
@@ -429,7 +429,7 @@ func tabletParamToTabletAlias(param string) naming.TabletAlias {
 		}
 		param = zkPathParts[2] + "-" + zkPathParts[5]
 	}
-	result, err := naming.ParseTabletAliasString(param)
+	result, err := topo.ParseTabletAliasString(param)
 	if err != nil {
 		relog.Fatal("Invalid tablet alias %v: %v", param, err)
 	}
@@ -439,7 +439,7 @@ func tabletParamToTabletAlias(param string) naming.TabletAlias {
 // tabletRepParamToTabletAlias takes either an old style ZK tablet replication
 // path or a new style tablet alias as a string, and returns a
 // TabletAlias.
-func tabletRepParamToTabletAlias(param string) naming.TabletAlias {
+func tabletRepParamToTabletAlias(param string) topo.TabletAlias {
 	if param[0] == '/' {
 		// old zookeeper replication path, e.g.
 		// /zk/global/vt/keyspaces/ruser/shards/10-20/nyc-0000200278
@@ -450,7 +450,7 @@ func tabletRepParamToTabletAlias(param string) naming.TabletAlias {
 		}
 		param = zkPathParts[8]
 	}
-	result, err := naming.ParseTabletAliasString(param)
+	result, err := topo.ParseTabletAliasString(param)
 	if err != nil {
 		relog.Fatal("Invalid tablet alias %v: %v", param, err)
 	}
@@ -480,7 +480,7 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	parentAlias := naming.TabletAlias{}
+	parentAlias := topo.TabletAlias{}
 	if subFlags.NArg() == 8 {
 		parentAlias = tabletRepParamToTabletAlias(subFlags.Arg(7))
 	}
@@ -551,13 +551,13 @@ func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	newType := naming.TabletType(subFlags.Arg(1))
+	newType := topo.TabletType(subFlags.Arg(1))
 	if *dryRun {
-		ti, err := wr.TopologyServer().GetTablet(tabletAlias)
+		ti, err := wr.TopoServer().GetTablet(tabletAlias)
 		if err != nil {
 			relog.Fatal("failed reading tablet %v: %v", tabletAlias, err)
 		}
-		if !naming.IsTrivialTypeChange(ti.Type, newType) || !naming.IsValidTypeChange(ti.Type, newType) {
+		if !topo.IsTrivialTypeChange(ti.Type, newType) || !topo.IsValidTypeChange(ti.Type, newType) {
 			relog.Fatal("invalid type transition %v: %v -> %v", tabletAlias, ti.Type, newType)
 		}
 		fmt.Printf("- %v\n", fmtTabletAwkable(ti))
@@ -592,10 +592,10 @@ func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 		relog.Fatal("action Query requires 3 or 5 args")
 	}
 	if subFlags.NArg() == 3 {
-		return "", kquery(wr.TopologyServer(), subFlags.Arg(0), subFlags.Arg(1), "", "", subFlags.Arg(2))
+		return "", kquery(wr.TopoServer(), subFlags.Arg(0), subFlags.Arg(1), "", "", subFlags.Arg(2))
 	}
 
-	return "", kquery(wr.TopologyServer(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4))
+	return "", kquery(wr.TopoServer(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4))
 }
 
 func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -620,7 +620,7 @@ func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	return "", wr.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), naming.TabletType(subFlags.Arg(1)))
+	return "", wr.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), topo.TabletType(subFlags.Arg(1)))
 }
 
 func commandSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -675,7 +675,7 @@ func commandClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	}
 
 	srcTabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	dstTabletAliases := make([]naming.TabletAlias, subFlags.NArg()-1)
+	dstTabletAliases := make([]topo.TabletAlias, subFlags.NArg()-1)
 	for i := 1; i < subFlags.NArg(); i++ {
 		dstTabletAliases[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
 	}
@@ -720,7 +720,7 @@ func commandMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 		relog.Fatal("MultiRestore requires <dst tablet alias|destination zk path> <source zk path>... %v", args)
 	}
 	destination := tabletParamToTabletAlias(subFlags.Arg(0))
-	sources := make([]naming.TabletAlias, subFlags.NArg()-1)
+	sources := make([]topo.TabletAlias, subFlags.NArg()-1)
 	for i := 1; i < subFlags.NArg(); i++ {
 		sources[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
 	}
@@ -903,7 +903,7 @@ func commandListShardTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 		relog.Fatal("action ListShardTablets requires <keyspace/shard|zk shard path>")
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return "", listTabletsByShard(wr.TopologyServer(), keyspace, shard)
+	return "", listTabletsByShard(wr.TopoServer(), keyspace, shard)
 }
 
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -914,8 +914,8 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	}
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
-	err := wr.TopologyServer().CreateKeyspace(keyspace)
-	if *force && err == naming.ErrNodeExists {
+	err := wr.TopoServer().CreateKeyspace(keyspace)
+	if *force && err == topo.ErrNodeExists {
 		relog.Info("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
 	}
@@ -986,7 +986,7 @@ func commandResolve(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string
 		relog.Fatal("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
 	}
 
-	addrs, err := naming.LookupVtName(wr.TopologyServer(), "local", parts[0], parts[1], naming.TabletType(parts[2]), namedPort)
+	addrs, err := topo.LookupVtName(wr.TopoServer(), "local", parts[0], parts[1], topo.TabletType(parts[2]), namedPort)
 	if err != nil {
 		return "", err
 	}
@@ -1043,7 +1043,7 @@ func commandListAllTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	}
 
 	cell := vtPathToCell(subFlags.Arg(0))
-	return "", dumpAllTablets(wr.TopologyServer(), cell)
+	return "", dumpAllTablets(wr.TopoServer(), cell)
 }
 
 func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1056,11 +1056,11 @@ func commandListTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	if err != nil {
 		return "", err
 	}
-	aliases := make([]naming.TabletAlias, len(zkPaths))
+	aliases := make([]topo.TabletAlias, len(zkPaths))
 	for i, zkPath := range zkPaths {
 		aliases[i] = tabletParamToTabletAlias(zkPath)
 	}
-	return "", dumpTablets(wr.TopologyServer(), aliases)
+	return "", dumpTablets(wr.TopoServer(), aliases)
 }
 
 func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1172,7 +1172,7 @@ func commandApplySchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	change := getFileParam(*sql, *sqlFile, "sql")
-	var newParentAlias naming.TabletAlias
+	var newParentAlias topo.TabletAlias
 	if *newParent != "" {
 		newParentAlias = tabletParamToTabletAlias(*newParent)
 	}
@@ -1317,8 +1317,8 @@ func main() {
 		relog.Warning("cannot connect to syslog: %v", err)
 	}
 
-	topoServer := naming.GetTopologyServer()
-	defer naming.CloseTopologyServers()
+	topoServer := topo.GetServer()
+	defer topo.CloseServers()
 
 	wr := wrangler.New(topoServer, *waitTime, *lockWaitTimeout)
 	var actionPath string
@@ -1363,7 +1363,7 @@ func main() {
 }
 
 type rTablet struct {
-	*naming.TabletInfo
+	*topo.TabletInfo
 	*mysqlctl.ReplicationPosition
 }
 
@@ -1387,10 +1387,10 @@ func (rts rTablets) Less(i, j int) bool {
 		return false
 	}
 	var lTypeMaster, rTypeMaster int
-	if l.Type == naming.TYPE_MASTER {
+	if l.Type == topo.TYPE_MASTER {
 		lTypeMaster = 1
 	}
-	if r.Type == naming.TYPE_MASTER {
+	if r.Type == topo.TYPE_MASTER {
 		rTypeMaster = 1
 	}
 	if lTypeMaster < rTypeMaster {
@@ -1409,7 +1409,7 @@ func (rts rTablets) Less(i, j int) bool {
 	return false
 }
 
-func sortReplicatingTablets(tablets []*naming.TabletInfo, positions []*mysqlctl.ReplicationPosition) []*rTablet {
+func sortReplicatingTablets(tablets []*topo.TabletInfo, positions []*mysqlctl.ReplicationPosition) []*rTablet {
 	rtablets := make([]*rTablet, len(tablets))
 	for i, pos := range positions {
 		rtablets[i] = &rTablet{tablets[i], pos}

@@ -10,13 +10,13 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 // helper struct to queue up results
 type rpcContext struct {
-	tablet   *naming.TabletInfo
+	tablet   *topo.TabletInfo
 	position *mysqlctl.ReplicationPosition
 	err      error
 }
@@ -26,7 +26,7 @@ type rpcContext struct {
 // mechanism for performing critical actions. It also leaves more
 // centralized debug information in TopologyServer when a failure occurs.
 
-func (wr *Wrangler) getMasterPosition(ti *naming.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) getMasterPosition(ti *topo.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
 	actionPath, err := wr.ai.MasterPosition(ti.Alias())
 	if err != nil {
 		return nil, err
@@ -40,14 +40,14 @@ func (wr *Wrangler) getMasterPosition(ti *naming.TabletInfo) (*mysqlctl.Replicat
 
 // Check all the tablets replication positions to find if some
 // will have a problem, and suggest a fix for them.
-func (wr *Wrangler) checkSlaveReplication(tabletMap map[naming.TabletAlias]*naming.TabletInfo, masterTabletUid uint32) error {
+func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTabletUid uint32) error {
 	relog.Info("Checking all replication positions will allow the transition:")
-	masterIsDead := masterTabletUid == naming.NO_TABLET
+	masterIsDead := masterTabletUid == topo.NO_TABLET
 
 	// Check everybody has the right master. If there is no master
 	// (crash) just check that everyone has the same parent.
 	for _, tablet := range tabletMap {
-		if masterTabletUid == naming.NO_TABLET {
+		if masterTabletUid == topo.NO_TABLET {
 			masterTabletUid = tablet.Parent.Uid
 		}
 		if tablet.Parent.Uid != masterTabletUid {
@@ -64,10 +64,10 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[naming.TabletAlias]*nami
 	wg := sync.WaitGroup{}
 	for _, tablet := range tabletMap {
 		wg.Add(1)
-		go func(tablet *naming.TabletInfo) {
+		go func(tablet *topo.TabletInfo) {
 			defer wg.Done()
 
-			if tablet.Type == naming.TYPE_LAG {
+			if tablet.Type == topo.TYPE_LAG {
 				relog.Info("  skipping slave position check for %v tablet %v", tablet.Type, tablet.Alias())
 				return
 			}
@@ -85,7 +85,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[naming.TabletAlias]*nami
 				mutex.Lock()
 				lastError = err
 				mutex.Unlock()
-				if tablet.Type == naming.TYPE_BACKUP {
+				if tablet.Type == topo.TYPE_BACKUP {
 					relog.Warning("  failed to get slave position from backup tablet %v, either wait for backup to finish or scrap tablet (%v)", tablet.Alias(), err)
 				} else {
 					relog.Warning("  failed to get slave position from %v: %v", tablet.Alias(), err)
@@ -116,12 +116,12 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[naming.TabletAlias]*nami
 // Check all the tablets to see if we can proceed with reparenting.
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
-func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*naming.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
+func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
 	relog.Debug("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
 	calls := make(chan *rpcContext, len(tabletMap))
-	f := func(ti *naming.TabletInfo) {
+	f := func(ti *topo.TabletInfo) {
 		ctx := &rpcContext{tablet: ti}
 		defer func() {
 			calls <- ctx
@@ -214,9 +214,9 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*naming.TabletInf
 }
 
 // Shut off all replication.
-func (wr *Wrangler) stopSlaves(tabletMap map[naming.TabletAlias]*naming.TabletInfo) error {
+func (wr *Wrangler) stopSlaves(tabletMap map[topo.TabletAlias]*topo.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
-	f := func(ti *naming.TabletInfo) {
+	f := func(ti *topo.TabletInfo) {
 		actionPath, err := wr.ai.StopSlave(ti.Alias())
 		if err == nil {
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
@@ -245,7 +245,7 @@ func (wr *Wrangler) stopSlaves(tabletMap map[naming.TabletAlias]*naming.TabletIn
 // Return a list of corresponding replication positions.
 // Handles masters and slaves, but it's up to the caller to guarantee
 // all tablets are in the same shard.
-func (wr *Wrangler) tabletReplicationPositions(tablets []*naming.TabletInfo) ([]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*mysqlctl.ReplicationPosition, error) {
 	relog.Debug("tabletReplicationPositions %v", tablets)
 	calls := make([]*rpcContext, len(tablets))
 	wg := sync.WaitGroup{}
@@ -257,7 +257,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*naming.TabletInfo) ([]
 		calls[idx] = ctx
 
 		var actionPath string
-		if ti.Type == naming.TYPE_MASTER {
+		if ti.Type == topo.TYPE_MASTER {
 			actionPath, ctx.err = wr.ai.MasterPosition(ti.Alias())
 		} else if ti.IsSlaveType() {
 			actionPath, ctx.err = wr.ai.SlavePosition(ti.Alias())
@@ -277,7 +277,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*naming.TabletInfo) ([]
 	for i, tablet := range tablets {
 		// Don't scan tablets that won't return something useful. Otherwise, you'll
 		// end up waiting for a timeout.
-		if tablet.Type == naming.TYPE_MASTER || tablet.IsSlaveType() {
+		if tablet.Type == topo.TYPE_MASTER || tablet.IsSlaveType() {
 			wg.Add(1)
 			go f(i)
 		} else {
@@ -305,7 +305,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*naming.TabletInfo) ([]
 	return positions, nil
 }
 
-func (wr *Wrangler) demoteMaster(ti *naming.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
 	relog.Info("demote master %v", ti.Alias())
 	actionPath, err := wr.ai.DemoteMaster(ti.Alias())
 	if err != nil {
@@ -318,7 +318,7 @@ func (wr *Wrangler) demoteMaster(ti *naming.TabletInfo) (*mysqlctl.ReplicationPo
 	return wr.getMasterPosition(ti)
 }
 
-func (wr *Wrangler) promoteSlave(ti *naming.TabletInfo) (rsd *tm.RestartSlaveData, err error) {
+func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *tm.RestartSlaveData, err error) {
 	relog.Info("promote slave %v", ti.Alias())
 	actionPath, err := wr.ai.PromoteSlave(ti.Alias())
 	if err != nil {
@@ -332,7 +332,7 @@ func (wr *Wrangler) promoteSlave(ti *naming.TabletInfo) (rsd *tm.RestartSlaveDat
 	return
 }
 
-func (wr *Wrangler) slaveWasPromoted(ti *naming.TabletInfo) error {
+func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	relog.Info("slave was promoted %v", ti.Alias())
 	actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias())
 	if err != nil {
@@ -345,9 +345,9 @@ func (wr *Wrangler) slaveWasPromoted(ti *naming.TabletInfo) error {
 	return nil
 }
 
-func (wr *Wrangler) restartSlaves(slaveTabletMap map[naming.TabletAlias]*naming.TabletInfo, rsd *tm.RestartSlaveData) (majorityRestart bool, err error) {
+func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, rsd *tm.RestartSlaveData) (majorityRestart bool, err error) {
 	wg := new(sync.WaitGroup)
-	slaves := CopyMapValues(slaveTabletMap, []*naming.TabletInfo{}).([]*naming.TabletInfo)
+	slaves := CopyMapValues(slaveTabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
 	errs := make([]error, len(slaveTabletMap))
 
 	f := func(i int) {
@@ -390,7 +390,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[naming.TabletAlias]*naming.
 	return
 }
 
-func (wr *Wrangler) restartSlave(ti *naming.TabletInfo, rsd *tm.RestartSlaveData) (err error) {
+func (wr *Wrangler) restartSlave(ti *topo.TabletInfo, rsd *tm.RestartSlaveData) (err error) {
 	relog.Info("restart slave %v", ti.Alias())
 	actionPath, err := wr.ai.RestartSlave(ti.Alias(), rsd)
 	if err != nil {
@@ -399,7 +399,7 @@ func (wr *Wrangler) restartSlave(ti *naming.TabletInfo, rsd *tm.RestartSlaveData
 	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
-func (wr *Wrangler) checkMasterElect(ti *naming.TabletInfo) error {
+func (wr *Wrangler) checkMasterElect(ti *topo.TabletInfo) error {
 	// Check the master-elect is fit for duty - call out for hardware checks.
 	// if the server was already serving live traffic, it's probably good
 	if ti.IsServingType() {
@@ -408,7 +408,7 @@ func (wr *Wrangler) checkMasterElect(ti *naming.TabletInfo) error {
 	return wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("preflight_serving_type"))
 }
 
-func (wr *Wrangler) finishReparent(oldMaster, masterElect *naming.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {
+func (wr *Wrangler) finishReparent(oldMaster, masterElect *topo.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {
 	// If the majority of slaves restarted, move ahead.
 	if majorityRestart {
 		if leaveMasterReadOnly {
@@ -431,7 +431,7 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *naming.TabletInfo, ma
 	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, []string{oldMaster.Cell, masterElect.Cell})
 }
 
-func (wr *Wrangler) breakReplication(slaveMap map[naming.TabletAlias]*naming.TabletInfo, masterElect *naming.TabletInfo) error {
+func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletInfo, masterElect *topo.TabletInfo) error {
 	// We are forcing a reparenting. Make sure that all slaves stop so
 	// no data is accidentally replicated through before we call RestartSlave.
 	relog.Info("stop slaves %v", masterElect.Alias())
@@ -450,15 +450,15 @@ func (wr *Wrangler) breakReplication(slaveMap map[naming.TabletAlias]*naming.Tab
 	return err
 }
 
-func restartableTabletMap(slaves map[naming.TabletAlias]*naming.TabletInfo) map[uint32]*naming.TabletInfo {
+func restartableTabletMap(slaves map[topo.TabletAlias]*topo.TabletInfo) map[uint32]*topo.TabletInfo {
 	// Under normal circumstances, prune out lag as not restartable.
 	// These types are explicitly excluded from reparenting since you
 	// will just wait forever for them to catch up.  A possible
 	// improvement is waiting for the io thread to reach the same
 	// position as the sql thread on a normal slave.
-	tabletMap := make(map[uint32]*naming.TabletInfo)
+	tabletMap := make(map[uint32]*topo.TabletInfo)
 	for _, ti := range slaves {
-		if ti.Type != naming.TYPE_LAG {
+		if ti.Type != topo.TYPE_LAG {
 			tabletMap[ti.Uid] = ti
 		} else {
 			relog.Info("skipping reparent action for tablet %v %v", ti.Type, ti.Alias())
@@ -467,12 +467,12 @@ func restartableTabletMap(slaves map[naming.TabletAlias]*naming.TabletInfo) map[
 	return tabletMap
 }
 
-func slaveTabletMap(tabletMap map[naming.TabletAlias]*naming.TabletInfo) (slaveMap map[naming.TabletAlias]*naming.TabletInfo, master *naming.TabletInfo, err error) {
-	slaveMap = make(map[naming.TabletAlias]*naming.TabletInfo)
+func slaveTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (slaveMap map[topo.TabletAlias]*topo.TabletInfo, master *topo.TabletInfo, err error) {
+	slaveMap = make(map[topo.TabletAlias]*topo.TabletInfo)
 	for alias, ti := range tabletMap {
-		if ti.Type != naming.TYPE_MASTER && ti.Type != naming.TYPE_SCRAP {
+		if ti.Type != topo.TYPE_MASTER && ti.Type != topo.TYPE_SCRAP {
 			slaveMap[alias] = ti
-		} else if ti.Parent.Uid == naming.NO_TABLET {
+		} else if ti.Parent.Uid == topo.NO_TABLET {
 			if master != nil {
 				return nil, nil, fmt.Errorf("master tablet conflict in shard %v/%v: %v, %v", master.Keyspace, master.Shard, master.Alias(), ti.Alias())
 			}

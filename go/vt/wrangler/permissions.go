@@ -12,15 +12,15 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) GetPermissions(tabletAlias naming.TabletAlias) (*mysqlctl.Permissions, error) {
+func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*mysqlctl.Permissions, error) {
 	return wr.ai.RpcGetPermissions(tabletAlias, wr.actionTimeout())
 }
 
 // helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, masterAlias naming.TabletAlias, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	relog.Info("Gathering permissions for %v", alias)
 	slavePermissions, err := wr.GetPermissions(alias)
@@ -40,7 +40,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 	}
 
 	// get permissions from the master, or error
-	if si.MasterAlias.Uid == naming.NO_TABLET {
+	if si.MasterAlias.Uid == topo.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	relog.Info("Gathering permissions for master %v", si.MasterAlias)
@@ -51,7 +51,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == naming.NO_TABLET {
+	if si.MasterAlias.Uid == topo.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
@@ -108,7 +108,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue

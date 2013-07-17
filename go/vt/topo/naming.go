@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package naming
+package topo
 
 /*
 Handle logical name resolution - sort of like DNS but tailored to
@@ -72,7 +72,7 @@ func NewAddrs() *VtnsAddrs {
 	return &VtnsAddrs{Entries: make([]VtnsAddr, 0, 8), version: -1}
 }
 
-func LookupVtName(ts TopologyServer, cell, keyspace, shard string, tabletType TabletType, namedPort string) ([]*net.SRV, error) {
+func LookupVtName(ts Server, cell, keyspace, shard string, tabletType TabletType, namedPort string) ([]*net.SRV, error) {
 	addrs, err := ts.GetSrvTabletType(cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, fmt.Errorf("LookupVtName(%v,%v,%v,%v) failed: %v", cell, keyspace, shard, tabletType, err)

@@ -4,7 +4,7 @@
 
 package main
 
-// Imports and register the Zookeeper TopologyServer
+// Imports and register the Zookeeper topo.Server
 // Adds the Zookeeper specific commands
 
 import (
@@ -17,8 +17,8 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 	"code.google.com/p/vitess/go/vt/wrangler"
 	"code.google.com/p/vitess/go/vt/zktopo"
 	"code.google.com/p/vitess/go/zk"
@@ -30,46 +30,46 @@ func init() {
 		"PurgeActions",
 		commandPurgeActions,
 		"<zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
-		"(requires Zookeeper TopologyServer)\n" +
+		"(requires zktopo.Server)\n" +
 			"Remove all actions - be careful, this is powerful cleanup magic."})
 	addCommand("Generic", command{
 		"StaleActions",
 		commandStaleActions,
 		"[-max-staleness=<duration> -purge] <zk action path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>/action)",
-		"(requires Zookeeper TopologyServer)\n" +
+		"(requires zktopo.Server)\n" +
 			"List any queued actions that are considered stale."})
 	addCommand("Generic", command{
 		"PruneActionLogs",
 		commandPruneActionLogs,
 		"[-keep-count=<count to keep>] <zk actionlog path> ...",
-		"(requires Zookeeper TopologyServer)\n" +
+		"(requires zktopo.Server)\n" +
 			"e.g. PruneActionLogs -keep-count=10 /zk/global/vt/keyspaces/my_keyspace/shards/0/actionlog\n" +
 			"Removes older actionlog entries until at most <count to keep> are left."})
 	addCommand("Generic", command{
 		"ExportZkns",
 		commandExportZkns,
 		"<cell name|zk local vt path>",
-		"(requires Zookeeper TopologyServer)\n" +
+		"(requires zktopo.Server)\n" +
 			"Export the serving graph entries to the zkns format."})
 	addCommand("Generic", command{
 		"ExportZknsForKeyspace",
 		commandExportZknsForKeyspace,
 		"<keyspace|zk global keyspace path>",
-		"(requires Zookeeper TopologyServer)\n" +
+		"(requires zktopo.Server)\n" +
 			"Export the serving graph entries to the zkns format."})
 
 	addCommand("Shards", command{
 		"ListShardActions",
 		commandListShardActions,
 		"<keyspace/shard|zk shard path>",
-		"(requires Zookeeper TopologyServer)\n" +
+		"(requires zktopo.Server)\n" +
 			"List all active actions in a given shard."})
 
 	resolveWildcards = zkResolveWildcards
 }
 
 func zkResolveWildcards(wr *wrangler.Wrangler, args []string) ([]string, error) {
-	zkts, ok := wr.TopologyServer().(*zktopo.ZkTopologyServer)
+	zkts, ok := wr.TopoServer().(*zktopo.Server)
 	if !ok {
 		return args, nil
 	}
@@ -81,9 +81,9 @@ func commandPurgeActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action PurgeActions requires <zk action path> ...")
 	}
-	zkts, ok := wr.TopologyServer().(*zktopo.ZkTopologyServer)
+	zkts, ok := wr.TopoServer().(*zktopo.Server)
 	if !ok {
-		return "", fmt.Errorf("PurgeActions requires a ZkTopologyServer")
+		return "", fmt.Errorf("PurgeActions requires a zktopo.Server")
 	}
 	zkActionPaths, err := resolveWildcards(wr, subFlags.Args())
 	if err != nil {
@@ -98,7 +98,7 @@ func commandPurgeActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	return "", nil
 }
 
-func staleActions(zkts *zktopo.ZkTopologyServer, zkActionPath string, maxStaleness time.Duration) ([]*tm.ActionNode, error) {
+func staleActions(zkts *zktopo.Server, zkActionPath string, maxStaleness time.Duration) ([]*tm.ActionNode, error) {
 	// get the stale strings
 	actionNodes, err := zkts.StaleActions(zkActionPath, maxStaleness, tm.ActionNodeIsStale)
 	if err != nil {
@@ -125,9 +125,9 @@ func commandStaleActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action StaleActions requires <zk action path>")
 	}
-	zkts, ok := wr.TopologyServer().(*zktopo.ZkTopologyServer)
+	zkts, ok := wr.TopoServer().(*zktopo.Server)
 	if !ok {
-		return "", fmt.Errorf("StaleActions requires a ZkTopologyServer")
+		return "", fmt.Errorf("StaleActions requires a zktopo.Server")
 	}
 	zkPaths, err := resolveWildcards(wr, subFlags.Args())
 	if err != nil {
@@ -178,9 +178,9 @@ func commandPruneActionLogs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 		return "", err
 	}
 
-	zkts, ok := wr.TopologyServer().(*zktopo.ZkTopologyServer)
+	zkts, ok := wr.TopoServer().(*zktopo.Server)
 	if !ok {
-		return "", fmt.Errorf("PruneActionLogs requires a ZkTopologyServer")
+		return "", fmt.Errorf("PruneActionLogs requires a zktopo.Server")
 	}
 
 	var errCount sync2.AtomicInt32
@@ -257,11 +257,11 @@ func getActions(zconn zk.Conn, actionPath string) ([]*tm.ActionNode, error) {
 	return nodes, nil
 }
 
-func listActionsByShard(ts naming.TopologyServer, keyspace, shard string) error {
-	// only works with ZkTopologyServer
-	zkts, ok := ts.(*zktopo.ZkTopologyServer)
+func listActionsByShard(ts topo.Server, keyspace, shard string) error {
+	// only works with Server
+	zkts, ok := ts.(*zktopo.Server)
 	if !ok {
-		return fmt.Errorf("listActionsByShard only works with ZkTopologyServer")
+		return fmt.Errorf("listActionsByShard only works with zktopo.Server")
 	}
 
 	// print the shard action nodes
@@ -293,7 +293,7 @@ func listActionsByShard(ts naming.TopologyServer, keyspace, shard string) error 
 		mu.Unlock()
 	}
 
-	tabletAliases, err := naming.FindAllTabletAliasesInShard(ts, keyspace, shard)
+	tabletAliases, err := topo.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -330,5 +330,5 @@ func commandListShardActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 		relog.Fatal("action ListShardActions requires <keyspace/shard|zk shard path>")
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return "", listActionsByShard(wr.TopologyServer(), keyspace, shard)
+	return "", listActionsByShard(wr.TopoServer(), keyspace, shard)
 }

@@ -22,7 +22,7 @@ import (
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/key"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 	"code.google.com/p/vitess/go/vt/zktopo"
 )
 
@@ -33,7 +33,7 @@ import (
 // The actor signals completion by removing the action node from topology server.
 //
 // Errors are written to the action node and must (currently) be resolved
-// by hand using TopologyServer tools.
+// by hand using topo.Server tools.
 
 type TabletActorError string
 
@@ -45,7 +45,7 @@ type RestartSlaveData struct {
 	ReplicationState *mysqlctl.ReplicationState
 	WaitPosition     *mysqlctl.ReplicationPosition
 	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent           naming.TabletAlias
+	Parent           topo.TabletAlias
 	Force            bool
 }
 
@@ -55,12 +55,12 @@ func (rsd *RestartSlaveData) String() string {
 
 type TabletActor struct {
 	mysqld      *mysqlctl.Mysqld
-	ts          naming.TopologyServer
-	tabletAlias naming.TabletAlias
+	ts          topo.Server
+	tabletAlias topo.TabletAlias
 }
 
-func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer naming.TopologyServer) *TabletActor {
-	return &TabletActor{mysqld, topoServer, naming.TabletAlias{}}
+func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer topo.Server) *TabletActor {
+	return &TabletActor{mysqld, topoServer, topo.TabletAlias{}}
 }
 
 // This function should be protected from unforseen panics, as
@@ -109,7 +109,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	newData := ActionNodeToJson(actionNode)
 	err = ta.ts.UpdateTabletAction(actionPath, newData, version)
 	if err != nil {
-		if err == naming.ErrBadVersion {
+		if err == topo.ErrBadVersion {
 			// The action is schedule by another
 			// actor. Most likely the tablet restarted
 			// during an action. Just wait for completion.
@@ -136,7 +136,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	}()
 
 	relog.Info("HandleAction: %v %v", actionPath, data)
-	// validate actions, but don't write this back into TopologyServer
+	// validate actions, but don't write this back into topo.Server
 	if actionNode.Action != action || actionNode.ActionGuid != actionGuid {
 		relog.Error("HandleAction validation failed %v: (%v,%v) (%v,%v)",
 			actionPath, actionNode.Action, action, actionNode.ActionGuid, actionGuid)
@@ -147,7 +147,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 		return err
 	}
 
-	// unblock in TopologyServer on completion
+	// unblock in topo.Server on completion
 	if err := ta.ts.UnblockTabletAction(actionPath); err != nil {
 		relog.Error("HandleAction failed unblocking: %v", err)
 		return err
@@ -232,7 +232,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 }
 
 // Write the result of an action into topology server
-func StoreActionResponse(ts naming.TopologyServer, actionNode *ActionNode, actionPath string, actionErr error) error {
+func StoreActionResponse(ts topo.Server, actionNode *ActionNode, actionPath string, actionErr error) error {
 	// change our state
 	if actionErr != nil {
 		// on failure, set an error field on the node
@@ -267,15 +267,15 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 		return err
 	}
 	if rdonly {
-		tablet.State = naming.STATE_READ_ONLY
+		tablet.State = topo.STATE_READ_ONLY
 	} else {
-		tablet.State = naming.STATE_READ_WRITE
+		tablet.State = topo.STATE_READ_WRITE
 	}
-	return naming.UpdateTablet(ta.ts, tablet)
+	return topo.UpdateTablet(ta.ts, tablet)
 }
 
 func (ta *TabletActor) changeType(actionNode *ActionNode) error {
-	dbType := actionNode.args.(*naming.TabletType)
+	dbType := actionNode.args.(*topo.TabletType)
 	return ChangeType(ta.ts, ta.tabletAlias, *dbType, true)
 }
 
@@ -289,11 +289,11 @@ func (ta *TabletActor) demoteMaster() error {
 	if err != nil {
 		return err
 	}
-	tablet.State = naming.STATE_READ_ONLY
+	tablet.State = topo.STATE_READ_ONLY
 	// NOTE(msolomon) there is no serving graph update - the master tablet will
 	// be replaced. Even though writes may fail, reads will succeed. It will be
 	// less noisy to simply leave the entry until well promote the master.
-	return naming.UpdateTablet(ta.ts, tablet)
+	return topo.UpdateTablet(ta.ts, tablet)
 }
 
 func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
@@ -303,8 +303,8 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	}
 
 	// Perform the action.
-	alias := naming.TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
-	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == naming.NO_TABLET)}
+	alias := topo.TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
+	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false)
 	if err != nil {
 		return err
@@ -324,20 +324,20 @@ func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
 	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
 }
 
-func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *naming.TabletInfo, actionNode *ActionNode) error {
+func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *topo.TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
-	if tablet.Parent.Uid != naming.NO_TABLET {
+	if tablet.Parent.Uid != topo.NO_TABLET {
 		err := ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-		if err != nil && err != naming.ErrNoNode {
+		if err != nil && err != topo.ErrNoNode {
 			return err
 		}
 	}
 	// Update tablet regardless - trend towards consistency.
-	tablet.State = naming.STATE_READ_WRITE
-	tablet.Type = naming.TYPE_MASTER
+	tablet.State = topo.STATE_READ_WRITE
+	tablet.Type = topo.TYPE_MASTER
 	tablet.Parent.Cell = ""
-	tablet.Parent.Uid = naming.NO_TABLET
-	err := naming.UpdateTablet(ta.ts, tablet)
+	tablet.Parent.Uid = topo.NO_TABLET
+	err := topo.UpdateTablet(ta.ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -348,7 +348,7 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *naming.Tab
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
 	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-	if err != nil && err != naming.ErrNodeExists {
+	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
 
@@ -418,14 +418,14 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 		relog.Debug("restart with new parent")
 		// Remove tablet from the replication graph.
 		err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-		if err != nil && err != naming.ErrNoNode {
+		if err != nil && err != topo.ErrNoNode {
 			return err
 		}
 
 		// Move a lag slave into the orphan lag type so we can safely ignore
 		// this reparenting until replication catches up.
-		if tablet.Type == naming.TYPE_LAG {
-			tablet.Type = naming.TYPE_LAG_ORPHAN
+		if tablet.Type == topo.TYPE_LAG {
+			tablet.Type = topo.TYPE_LAG_ORPHAN
 		} else {
 			err = ta.mysqld.RestartSlave(rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted)
 			if err != nil {
@@ -434,7 +434,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 		}
 		// Once this action completes, update authoritive tablet node first.
 		tablet.Parent = rsd.Parent
-		err = naming.UpdateTablet(ta.ts, tablet)
+		err = topo.UpdateTablet(ta.ts, tablet)
 		if err != nil {
 			return err
 		}
@@ -444,9 +444,9 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 			return err
 		}
 		// Complete the special orphan accounting.
-		if tablet.Type == naming.TYPE_LAG_ORPHAN {
-			tablet.Type = naming.TYPE_LAG
-			err = naming.UpdateTablet(ta.ts, tablet)
+		if tablet.Type == topo.TYPE_LAG_ORPHAN {
+			tablet.Type = topo.TYPE_LAG
+			err = topo.UpdateTablet(ta.ts, tablet)
 			if err != nil {
 				return err
 			}
@@ -466,7 +466,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
 	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-	if err != nil && err != naming.ErrNodeExists {
+	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
 
@@ -483,7 +483,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Remove tablet from the replication graph.
 	err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-	if err != nil && err != naming.ErrNoNode {
+	if err != nil && err != topo.ErrNoNode {
 		return err
 	}
 
@@ -503,11 +503,11 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Once this action completes, update authoritive tablet node first.
 	tablet.Parent = swrd.Parent
-	if tablet.Type == naming.TYPE_MASTER {
-		tablet.Type = naming.TYPE_SPARE
-		tablet.State = naming.STATE_READ_ONLY
+	if tablet.Type == topo.TYPE_MASTER {
+		tablet.Type = topo.TYPE_SPARE
+		tablet.State = topo.STATE_READ_ONLY
 	}
-	err = naming.UpdateTablet(ta.ts, tablet)
+	err = topo.UpdateTablet(ta.ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -515,7 +515,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
 	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-	if err != nil && err != naming.ErrNodeExists {
+	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
 
@@ -581,7 +581,7 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 }
 
 // add TABLET_ALIAS to environment
-func configureTabletHook(hk *hook.Hook, tabletAlias naming.TabletAlias) {
+func configureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 	if hk.ExtraEnv == nil {
 		hk.ExtraEnv = make(map[string]string, 1)
 	}
@@ -615,7 +615,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != naming.TYPE_BACKUP {
+	if tablet.Type != topo.TYPE_BACKUP {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
@@ -625,7 +625,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	}
 
 	sr := &SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
-	if tablet.Parent.Uid == naming.NO_TABLET {
+	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		sr.ParentAlias = tablet.Alias()
@@ -646,7 +646,7 @@ func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != naming.TYPE_SNAPSHOT_SOURCE {
+	if tablet.Type != topo.TYPE_SNAPSHOT_SOURCE {
 		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
@@ -680,7 +680,7 @@ func fetchAndParseJsonFile(addr, filename string, result interface{}) error {
 //   a successful ReserveForRestore but a failed Snapshot)
 // - to SCRAP if something in the process on the target host fails
 // - to SPARE if the clone works
-func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *naming.TabletInfo, parentAlias naming.TabletAlias, keyRange key.KeyRange) error {
+func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo, parentAlias topo.TabletAlias, keyRange key.KeyRange) error {
 	// run the optional preflight_assigned hook
 	hk := hook.NewSimpleHook("preflight_assigned")
 	configureTabletHook(hk, ta.tabletAlias)
@@ -692,25 +692,25 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *naming.TabletIn
 	tablet.Parent = parentAlias
 	tablet.Keyspace = sourceTablet.Keyspace
 	tablet.Shard = sourceTablet.Shard
-	tablet.Type = naming.TYPE_RESTORE
+	tablet.Type = topo.TYPE_RESTORE
 	tablet.KeyRange = keyRange
 	tablet.DbNameOverride = sourceTablet.DbNameOverride
-	if err := naming.UpdateTablet(ta.ts, tablet); err != nil {
+	if err := topo.UpdateTablet(ta.ts, tablet); err != nil {
 		return err
 	}
 
 	// and create the replication graph items
-	return naming.CreateTabletReplicationPaths(ta.ts, tablet.Tablet)
+	return topo.CreateTabletReplicationPaths(ta.ts, tablet.Tablet)
 }
 
 // FIXME(alainjobart) remove after migration
-func BackfillAlias(zkPath string, alias *naming.TabletAlias) error {
-	if *alias == (naming.TabletAlias{}) && zkPath != "" {
+func BackfillAlias(zkPath string, alias *topo.TabletAlias) error {
+	if *alias == (topo.TabletAlias{}) && zkPath != "" {
 		zkPathParts := strings.Split(zkPath, "/")
 		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
 			return fmt.Errorf("Invalid tablet path: %v", zkPath)
 		}
-		a, err := naming.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
+		a, err := topo.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
 		if err != nil {
 			return err
 		}
@@ -734,7 +734,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != naming.TYPE_IDLE {
+	if tablet.Type != topo.TYPE_IDLE {
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
@@ -745,8 +745,8 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	}
 
 	// find the parent tablet alias we will be using
-	var parentAlias naming.TabletAlias
-	if sourceTablet.Parent.Uid == naming.NO_TABLET {
+	var parentAlias topo.TabletAlias
+	if sourceTablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		parentAlias = sourceTablet.Alias()
@@ -774,11 +774,11 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 		return err
 	}
 	if args.WasReserved {
-		if tablet.Type != naming.TYPE_RESTORE {
+		if tablet.Type != topo.TYPE_RESTORE {
 			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, ta.tabletAlias)
 		}
 	} else {
-		if tablet.Type != naming.TYPE_IDLE {
+		if tablet.Type != topo.TYPE_IDLE {
 			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
 		}
 	}
@@ -797,7 +797,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if parentTablet.Type != naming.TYPE_MASTER && parentTablet.Type != naming.TYPE_SNAPSHOT_SOURCE {
+	if parentTablet.Type != topo.TYPE_MASTER && parentTablet.Type != topo.TYPE_SNAPSHOT_SOURCE {
 		return fmt.Errorf("restore expected master or snapshot_source parent: %v %v", parentTablet.Type, args.ParentAlias)
 	}
 
@@ -824,7 +824,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_SPARE, we're done!
-	return ChangeType(ta.ts, ta.tabletAlias, naming.TYPE_SPARE, true)
+	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, true)
 }
 
 // Operate on a backup tablet. Halt mysqld (read-only, lock tables)
@@ -837,7 +837,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != naming.TYPE_BACKUP {
+	if tablet.Type != topo.TYPE_BACKUP {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
@@ -847,7 +847,7 @@ func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
 	}
 
 	sr := &SnapshotReply{ManifestPath: filename}
-	if tablet.Parent.Uid == naming.NO_TABLET {
+	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
 		sr.ParentAlias = tablet.Alias()
@@ -868,7 +868,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	if tablet.Type != naming.TYPE_BACKUP {
+	if tablet.Type != topo.TYPE_BACKUP {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
@@ -878,7 +878,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	}
 
 	sr := &MultiSnapshotReply{ManifestPaths: filenames}
-	if tablet.Parent.Uid == naming.NO_TABLET {
+	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
 		sr.ParentAlias = tablet.Alias()
@@ -898,7 +898,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != naming.TYPE_MASTER && tablet.Type != naming.TYPE_SPARE && tablet.Type != naming.TYPE_REPLICA && tablet.Type != naming.TYPE_RDONLY {
+	if tablet.Type != topo.TYPE_MASTER && tablet.Type != topo.TYPE_SPARE && tablet.Type != topo.TYPE_REPLICA && tablet.Type != topo.TYPE_RDONLY {
 		return fmt.Errorf("expected master, spare replica or rdonly type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
@@ -916,8 +916,8 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// change type to restore, no change to replication graph
 	originalType := tablet.Type
-	tablet.Type = naming.TYPE_RESTORE
-	err = naming.UpdateTablet(ta.ts, tablet)
+	tablet.Type = topo.TYPE_RESTORE
+	err = topo.UpdateTablet(ta.ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -932,7 +932,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// restore type back
 	tablet.Type = originalType
-	return naming.UpdateTablet(ta.ts, tablet)
+	return topo.UpdateTablet(ta.ts, tablet)
 }
 
 // Operate on restore tablet.
@@ -954,7 +954,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if tablet.Type != naming.TYPE_IDLE {
+	if tablet.Type != topo.TYPE_IDLE {
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
@@ -969,7 +969,7 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	if parentTablet.Type != naming.TYPE_MASTER {
+	if parentTablet.Type != topo.TYPE_MASTER {
 		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, args.ParentAlias)
 	}
 
@@ -994,11 +994,11 @@ func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
 	}
 
 	// change to TYPE_MASTER, we're done!
-	return ChangeType(ta.ts, ta.tabletAlias, naming.TYPE_MASTER, true)
+	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_MASTER, true)
 }
 
 // Make this external, since in needs to be forced from time to time.
-func Scrap(ts naming.TopologyServer, tabletAlias naming.TabletAlias, force bool) error {
+func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -1012,10 +1012,10 @@ func Scrap(ts naming.TopologyServer, tabletAlias naming.TabletAlias, force bool)
 		replicationPath = tablet.ReplicationPath()
 	}
 
-	tablet.Type = naming.TYPE_SCRAP
-	tablet.Parent = naming.TabletAlias{}
+	tablet.Type = topo.TYPE_SCRAP
+	tablet.Parent = topo.TabletAlias{}
 	// Update the tablet first, since that is canonical.
-	err = naming.UpdateTablet(ts, tablet)
+	err = topo.UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -1033,17 +1033,17 @@ func Scrap(ts naming.TopologyServer, tabletAlias naming.TabletAlias, force bool)
 		err = ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, replicationPath)
 		if err != nil {
 			switch err {
-			case naming.ErrNoNode:
+			case topo.ErrNoNode:
 				relog.Debug("no replication path: %v", replicationPath)
 				err = nil
-			case naming.ErrNotEmpty:
+			case topo.ErrNotEmpty:
 				// If you are forcing the scrapping of a master, you can't update the
 				// replication graph yet, since other nodes are still under the impression
 				// they are slaved to this tablet.
 				// If the node was not empty, we can't do anything about it - the replication
 				// graph needs to be fixed by reparenting. If the action was forced, assume
 				// the user knows best and squelch the error.
-				if tablet.Parent.Uid == naming.NO_TABLET && force {
+				if tablet.Parent.Uid == topo.NO_TABLET && force {
 					err = nil
 				}
 			}
@@ -1069,20 +1069,20 @@ func Scrap(ts naming.TopologyServer, tabletAlias naming.TabletAlias, force bool)
 }
 
 // Make this external, since these transitions need to be forced from time to time.
-func ChangeType(ts naming.TopologyServer, tabletAlias naming.TabletAlias, newType naming.TabletType, runHooks bool) error {
+func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.TabletType, runHooks bool) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	if !naming.IsTrivialTypeChange(tablet.Type, newType) || !naming.IsValidTypeChange(tablet.Type, newType) {
+	if !topo.IsTrivialTypeChange(tablet.Type, newType) || !topo.IsValidTypeChange(tablet.Type, newType) {
 		return fmt.Errorf("cannot change tablet type %v -> %v %v", tablet.Type, newType, tabletAlias)
 	}
 
 	if runHooks {
 		// Only run the preflight_serving_type hook when
 		// transitioning from non-serving to serving.
-		if !naming.IsServingType(tablet.Type) && naming.IsServingType(newType) {
+		if !topo.IsServingType(tablet.Type) && topo.IsServingType(newType) {
 			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
 				return err
 			}
@@ -1090,23 +1090,23 @@ func ChangeType(ts naming.TopologyServer, tabletAlias naming.TabletAlias, newTyp
 	}
 
 	tablet.Type = newType
-	if newType == naming.TYPE_IDLE {
-		if tablet.Parent.Uid == naming.NO_TABLET {
+	if newType == topo.TYPE_IDLE {
+		if tablet.Parent.Uid == topo.NO_TABLET {
 			// With a master the node cannot be set to idle unless we have already removed all of
 			// the derived paths. The global replication path is a good indication that this has
 			// been resolved.
 			children, err := ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-			if err != nil && err != naming.ErrNoNode {
+			if err != nil && err != topo.ErrNoNode {
 				return err
 			}
 			if err == nil && len(children) > 0 {
 				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, tabletAlias)
 			}
 		}
-		tablet.Parent = naming.TabletAlias{}
+		tablet.Parent = topo.TabletAlias{}
 		tablet.Keyspace = ""
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}
 	}
-	return naming.UpdateTablet(ts, tablet)
+	return topo.UpdateTablet(ts, tablet)
 }

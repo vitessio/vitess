@@ -19,7 +19,7 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 const (
@@ -113,7 +113,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_SET_RDONLY:
 	case TABLET_ACTION_SET_RDWR:
 	case TABLET_ACTION_CHANGE_TYPE:
-		node.args = new(naming.TabletType)
+		node.args = new(topo.TabletType)
 
 	case TABLET_ACTION_DEMOTE_MASTER:
 	case TABLET_ACTION_PROMOTE_SLAVE:
@@ -172,9 +172,9 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &MultiRestoreArgs{}
 
 	case SHARD_ACTION_REPARENT:
-		node.args = &naming.TabletAlias{}
+		node.args = &topo.TabletAlias{}
 	case SHARD_ACTION_EXTERNALLY_REPARENTED:
-		node.args = &naming.TabletAlias{}
+		node.args = &topo.TabletAlias{}
 	case SHARD_ACTION_REBUILD:
 	case SHARD_ACTION_CHECK:
 	case SHARD_ACTION_APPLY_SCHEMA:

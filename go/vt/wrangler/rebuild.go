@@ -11,8 +11,8 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 func inCellList(cell string, cells []string) bool {
@@ -51,7 +51,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	relog.Info("rebuildShard %v/%v", keyspace, shard)
 	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
-	shardInfo, err := naming.NewShardInfo(keyspace, shard, "{}")
+	shardInfo, err := topo.NewShardInfo(keyspace, shard, "{}")
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 		return err
 	}
 
-	tablets := make([]*naming.TabletInfo, 0, len(tabletMap))
+	tablets := make([]*topo.TabletInfo, 0, len(tabletMap))
 	for _, ti := range tabletMap {
 		if ti.Keyspace != shardInfo.Keyspace() || ti.Shard != shardInfo.ShardName() {
 			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.Alias(), keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
@@ -69,7 +69,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 		if !ti.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
-			if ti.Parent.Uid != naming.NO_TABLET {
+			if ti.Parent.Uid != topo.NO_TABLET {
 				relog.Warning("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Alias())
 			}
 		}
@@ -103,11 +103,11 @@ type cellKeyspaceShardType struct {
 	cell       string
 	keyspace   string
 	shard      string
-	tabletType naming.TabletType
+	tabletType topo.TabletType
 }
 
 // Write serving graph data to the cells
-func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []*naming.TabletInfo, cells []string) error {
+func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*topo.TabletInfo, cells []string) error {
 	relog.Info("rebuildShardSrvGraph %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 
 	// Get all existing db types so they can be removed if nothing
@@ -123,8 +123,8 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 	//
 	// locationAddrsMap is a map:
 	//   key: {cell,keyspace,shard,tabletType}
-	//   value: naming.VtnsAddrs (list of server records)
-	locationAddrsMap := make(map[cellKeyspaceShardType]*naming.VtnsAddrs)
+	//   value: topo.VtnsAddrs (list of server records)
+	locationAddrsMap := make(map[cellKeyspaceShardType]*topo.VtnsAddrs)
 
 	// we keep track of the existingDbTypeLocations we've already looked at
 	knownShardLocations := make(map[cellKeyspaceShard]bool)
@@ -133,7 +133,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 		// only look at tablets in the cells we want to rebuild
 		// we also include masters from everywhere, so we can
 		// write the right aliases
-		if !inCellList(tablet.Tablet.Cell, cells) && tablet.Type != naming.TYPE_MASTER {
+		if !inCellList(tablet.Tablet.Cell, cells) && tablet.Type != topo.TYPE_MASTER {
 			continue
 		}
 
@@ -144,7 +144,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 		if !knownShardLocations[shardLocation] {
 			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			if err != nil {
-				if err != naming.ErrNoNode {
+				if err != topo.ErrNoNode {
 					return err
 				}
 			} else {
@@ -165,7 +165,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 		location := cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
 		addrs, ok := locationAddrsMap[location]
 		if !ok {
-			addrs = naming.NewAddrs()
+			addrs = topo.NewAddrs()
 			locationAddrsMap[location] = addrs
 		}
 
@@ -178,9 +178,9 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 	}
 
 	// if there is a master in one cell, put it in all of them
-	var masterRecord *naming.VtnsAddrs
+	var masterRecord *topo.VtnsAddrs
 	for shardLocation, _ := range knownShardLocations {
-		loc := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, naming.TYPE_MASTER}
+		loc := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
 		if addrs, ok := locationAddrsMap[loc]; ok {
 			if masterRecord != nil {
 				relog.Warning("Multiple master records in %v", shardLocation)
@@ -192,7 +192,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 	}
 	if masterRecord != nil {
 		for shardLocation, _ := range knownShardLocations {
-			location := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, naming.TYPE_MASTER}
+			location := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
 			if _, ok := locationAddrsMap[location]; !ok {
 				relog.Info("Adding remote master record in %v", location)
 				locationAddrsMap[location] = masterRecord
@@ -233,9 +233,9 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 	//
 	// srvShardByPath is a map:
 	//   key: {cell,keyspace,shard}
-	//   value: naming.SrvShard
+	//   value: topo.SrvShard
 	// this will fill in the AddrsByType part for each shard
-	srvShardByPath := make(map[cellKeyspaceShard]*naming.SrvShard)
+	srvShardByPath := make(map[cellKeyspaceShard]*topo.SrvShard)
 	for location, addrs := range locationAddrsMap {
 		// location will be {cell,keyspace,shard,type}
 		srvShardPath := cellKeyspaceShard{location.cell, location.keyspace, location.shard}
@@ -243,7 +243,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []
 
 		srvShard, ok := srvShardByPath[srvShardPath]
 		if !ok {
-			srvShard = &naming.SrvShard{KeyRange: shardInfo.KeyRange, AddrsByType: make(map[string]naming.VtnsAddrs)}
+			srvShard = &topo.SrvShard{KeyRange: shardInfo.KeyRange, AddrsByType: make(map[string]topo.VtnsAddrs)}
 			srvShardByPath[srvShardPath] = srvShard
 		}
 		srvShard.AddrsByType[string(tabletType)] = *addrs
@@ -301,15 +301,15 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
 
 	// srvKeyspaceByPath is a map:
 	//   key: local keyspace {cell,keyspace}
-	//   value: naming.SrvKeyspace object being built
-	srvKeyspaceByPath := make(map[cellKeyspace]*naming.SrvKeyspace)
+	//   value: topo.SrvKeyspace object being built
+	srvKeyspaceByPath := make(map[cellKeyspace]*topo.SrvKeyspace)
 	for _, alias := range aliases {
 		keyspaceLocation := cellKeyspace{alias.Cell, keyspace}
 		if _, ok := srvKeyspaceByPath[keyspaceLocation]; !ok {
@@ -329,7 +329,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 				continue
 			}
 
-			srvKeyspaceByPath[keyspaceLocation] = &naming.SrvKeyspace{Shards: make([]naming.SrvShard, 0, 16)}
+			srvKeyspaceByPath[keyspaceLocation] = &topo.SrvKeyspace{Shards: make([]topo.SrvShard, 0, 16)}
 		}
 	}
 
@@ -340,27 +340,27 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
 	for srvPath, srvKeyspace := range srvKeyspaceByPath {
-		keyspaceDbTypes := make(map[naming.TabletType]bool)
+		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		for _, shard := range shards {
 			srvShard, err := wr.ts.GetSrvShard(srvPath.cell, srvPath.keyspace, shard)
 			if err != nil {
 				return err
 			}
 			for dbType, _ := range srvShard.AddrsByType {
-				keyspaceDbTypes[naming.TabletType(dbType)] = true
+				keyspaceDbTypes[topo.TabletType(dbType)] = true
 			}
 			// Prune addrs, this is unnecessarily expensive right now. It is easier to
 			// load on-demand since we have to do that anyway on a reconnect.
 			srvShard.AddrsByType = nil
 			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
 		}
-		tabletTypes := make([]naming.TabletType, 0, len(keyspaceDbTypes))
+		tabletTypes := make([]topo.TabletType, 0, len(keyspaceDbTypes))
 		for dbType, _ := range keyspaceDbTypes {
 			tabletTypes = append(tabletTypes, dbType)
 		}
 		srvKeyspace.TabletTypes = tabletTypes
 		// FIXME(msolomon) currently this only works when the shards are range-based
-		naming.SrvShardArray(srvKeyspace.Shards).Sort()
+		topo.SrvShardArray(srvKeyspace.Shards).Sort()
 
 		// check the first Start is MinKey, the last End is MaxKey,
 		// and the values in between match: End[i] == Start[i+1]
@@ -399,7 +399,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 		return fmt.Errorf("must specify keyspaces to rebuild replication graph")
 	}
 
-	allTablets := make([]*naming.TabletInfo, 0, 1024)
+	allTablets := make([]*topo.TabletInfo, 0, 1024)
 	for _, cell := range cells {
 		tablets, err := GetAllTablets(wr.ts, cell)
 		if err != nil {
@@ -421,7 +421,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 	wg := sync.WaitGroup{}
 	for _, ti := range allTablets {
 		wg.Add(1)
-		go func(ti *naming.TabletInfo) {
+		go func(ti *topo.TabletInfo) {
 			defer wg.Done()
 			if !ti.IsInReplicationGraph() {
 				return
@@ -432,7 +432,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 			mu.Lock()
 			keyspacesToRebuild[ti.Keyspace] = true
 			mu.Unlock()
-			err := naming.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
+			err := topo.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true

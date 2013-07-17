@@ -9,8 +9,8 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -29,7 +29,7 @@ func replaceError(original, recent error) error {
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) PartialSnapshot(tabletAlias naming.TabletAlias, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, concurrency int) (manifest string, parent naming.TabletAlias, err error) {
+func (wr *Wrangler) PartialSnapshot(tabletAlias topo.TabletAlias, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, concurrency int) (manifest string, parent topo.TabletAlias, err error) {
 	restoreAfterSnapshot, err := wr.prepareToSnapshot(tabletAlias, forceMasterSnapshot)
 	if err != nil {
 		return
@@ -60,7 +60,7 @@ func (wr *Wrangler) PartialSnapshot(tabletAlias naming.TabletAlias, keyName stri
 // the original type is master, it will proceed only if
 // forceMasterSnapshot is true). It returns a function that will
 // restore the original state.
-func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot bool) (restoreAfterSnapshot func() error, err error) {
+func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot bool) (restoreAfterSnapshot func() error, err error) {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return
@@ -68,16 +68,16 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMaste
 
 	originalType := ti.Tablet.Type
 
-	if ti.Tablet.Type == naming.TYPE_MASTER && forceMasterSnapshot {
+	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
 		relog.Info("force change type master -> backup: %v", tabletAlias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
-		ti.Tablet.Type = naming.TYPE_BACKUP
-		err = naming.UpdateTablet(wr.ts, ti)
+		ti.Tablet.Type = topo.TYPE_BACKUP
+		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
-		err = wr.ChangeType(ti.Alias(), naming.TYPE_BACKUP, false)
+		err = wr.ChangeType(ti.Alias(), topo.TYPE_BACKUP, false)
 	}
 
 	if err != nil {
@@ -87,10 +87,10 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMaste
 	restoreAfterSnapshot = func() (err error) {
 		relog.Info("change type after snapshot: %v %v", tabletAlias, originalType)
 
-		if ti.Tablet.Parent.Uid == naming.NO_TABLET && forceMasterSnapshot {
+		if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot {
 			relog.Info("force change type backup -> master: %v", tabletAlias)
-			ti.Tablet.Type = naming.TYPE_MASTER
-			return naming.UpdateTablet(wr.ts, ti)
+			ti.Tablet.Type = topo.TYPE_MASTER
+			return topo.UpdateTablet(wr.ts, ti)
 		}
 
 		return wr.ChangeType(ti.Alias(), originalType, false)
@@ -100,7 +100,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMaste
 
 }
 
-func (wr *Wrangler) RestoreFromMultiSnapshot(dstTabletAlias naming.TabletAlias, sources []naming.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+func (wr *Wrangler) RestoreFromMultiSnapshot(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
 	actionPath, err := wr.ai.RestoreFromMultiSnapshot(dstTabletAlias, &tm.MultiRestoreArgs{
 		SrcTabletAliases:       sources,
 		Concurrency:            concurrency,
@@ -115,7 +115,7 @@ func (wr *Wrangler) RestoreFromMultiSnapshot(dstTabletAlias naming.TabletAlias, 
 	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
-func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias naming.TabletAlias, keyName string, concurrency int, tables []string, forceMasterSnapshot, skipSlaveRestart bool, maximumFilesize uint64) (manifests []string, parent naming.TabletAlias, err error) {
+func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.TabletAlias, keyName string, concurrency int, tables []string, forceMasterSnapshot, skipSlaveRestart bool, maximumFilesize uint64) (manifests []string, parent topo.TabletAlias, err error) {
 	restoreAfterSnapshot, err := wr.prepareToSnapshot(tabletAlias, forceMasterSnapshot)
 	if err != nil {
 		return
@@ -139,14 +139,14 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias naming.T
 	return reply.ManifestPaths, reply.ParentAlias, nil
 }
 
-func (wr *Wrangler) PartialRestore(srcTabletAlias naming.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias naming.TabletAlias, fetchConcurrency, fetchRetryCount int) error {
+func (wr *Wrangler) PartialRestore(srcTabletAlias topo.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias topo.TabletAlias, fetchConcurrency, fetchRetryCount int) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
 	if err != nil {
 		return err
 	}
-	if tablet.Type != naming.TYPE_IDLE {
+	if tablet.Type != topo.TYPE_IDLE {
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, dstTabletAlias)
 	}
 
@@ -164,7 +164,7 @@ func (wr *Wrangler) PartialRestore(srcTabletAlias naming.TabletAlias, srcFilePat
 	return nil
 }
 
-func (wr *Wrangler) PartialClone(srcTabletAlias, dstTabletAlias naming.TabletAlias, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int) error {
+func (wr *Wrangler) PartialClone(srcTabletAlias, dstTabletAlias topo.TabletAlias, keyName string, startKey, endKey key.HexKeyspaceId, forceMasterSnapshot bool, concurrency, fetchConcurrency, fetchRetryCount int) error {
 	srcFilePath, parentAlias, err := wr.PartialSnapshot(srcTabletAlias, keyName, startKey, endKey, forceMasterSnapshot, concurrency)
 	if err != nil {
 		return err

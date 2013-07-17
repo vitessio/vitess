@@ -11,8 +11,8 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 )
 
 type Wrangler struct {
-	ts          naming.TopologyServer
+	ts          topo.Server
 	ai          *tm.ActionInitiator
 	deadline    time.Time
 	lockTimeout time.Duration
@@ -32,7 +32,7 @@ type Wrangler struct {
 //   This is distinct from actionTimeout because most of the time, we want to immediately
 //   know that out action will fail. However, automated action will need some time to
 //   arbitrate the locks.
-func New(ts naming.TopologyServer, actionTimeout, lockTimeout time.Duration) *Wrangler {
+func New(ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
 	return &Wrangler{ts, tm.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout}
 }
 
@@ -40,7 +40,7 @@ func (wr *Wrangler) actionTimeout() time.Duration {
 	return wr.deadline.Sub(time.Now())
 }
 
-func (wr *Wrangler) TopologyServer() naming.TopologyServer {
+func (wr *Wrangler) TopoServer() topo.Server {
 	return wr.ts
 }
 
@@ -60,7 +60,7 @@ func (wr *Wrangler) ResetActionTimeout(actionTimeout time.Duration) {
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and
 // do not run the remote hooks
-func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.TabletType, force bool) error {
+func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletType, force bool) error {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
@@ -126,7 +126,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 // Mike says: Updating the shard should be good enough. I'm debating dropping the entire
 // keyspace rollup, since I think that is adding complexity and feels like it might
 // be a premature optimization.
-func (wr *Wrangler) changeTypeInternal(tabletAlias naming.TabletAlias, dbType naming.TabletType) error {
+func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo.TabletType) error {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -221,13 +221,13 @@ func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNod
 	return err
 }
 
-func (wr *Wrangler) getMasterAlias(keyspace, shard string) (naming.TabletAlias, error) {
+func (wr *Wrangler) getMasterAlias(keyspace, shard string) (topo.TabletAlias, error) {
 	aliases, err := wr.ts.GetReplicationPaths(keyspace, shard, "")
 	if err != nil {
-		return naming.TabletAlias{}, err
+		return topo.TabletAlias{}, err
 	}
 	if len(aliases) != 1 {
-		return naming.TabletAlias{}, fmt.Errorf("More than one master in shard %v/%v: %v", keyspace, shard, aliases)
+		return topo.TabletAlias{}, fmt.Errorf("More than one master in shard %v/%v: %v", keyspace, shard, aliases)
 	}
 	return aliases[0], nil
 }
@@ -235,7 +235,7 @@ func (wr *Wrangler) getMasterAlias(keyspace, shard string) (naming.TabletAlias, 
 // InitTablet will create or update a tablet. If not parent is
 // specified, and the tablet created is a slave type, we will find the
 // appropriate parent.
-func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPort, port, keyspace, shardId, tabletType string, parentAlias naming.TabletAlias, dbNameOverride string, force, update bool) error {
+func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort, port, keyspace, shardId, tabletType string, parentAlias topo.TabletAlias, dbNameOverride string, force, update bool) error {
 	// if shardId contains a '-', we assume it's a range-based shard,
 	// so we try to extract the KeyRange.
 	var keyRange key.KeyRange
@@ -259,22 +259,22 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 		shardId = strings.ToUpper(shardId)
 	}
 
-	if parentAlias == (naming.TabletAlias{}) && naming.TabletType(tabletType) != naming.TYPE_MASTER && naming.TabletType(tabletType) != naming.TYPE_IDLE {
+	if parentAlias == (topo.TabletAlias{}) && topo.TabletType(tabletType) != topo.TYPE_MASTER && topo.TabletType(tabletType) != topo.TYPE_IDLE {
 		parentAlias, err = wr.getMasterAlias(keyspace, shardId)
 		if err != nil {
 			return err
 		}
 	}
 
-	tablet, err := naming.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, naming.TabletType(tabletType))
+	tablet, err := topo.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, topo.TabletType(tabletType))
 	if err != nil {
 		return err
 	}
 	tablet.DbNameOverride = dbNameOverride
 	tablet.KeyRange = keyRange
 
-	err = naming.CreateTablet(wr.ts, tablet)
-	if err != nil && err == naming.ErrNodeExists {
+	err = topo.CreateTablet(wr.ts, tablet)
+	if err != nil && err == topo.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update {
 			oldTablet, err := wr.ts.GetTablet(tabletAlias)
@@ -283,7 +283,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
-					err := naming.UpdateTablet(wr.ts, oldTablet)
+					err := topo.UpdateTablet(wr.ts, oldTablet)
 					if err != nil {
 						relog.Warning("failed updating tablet %v: %v", tabletAlias, err)
 					} else {
@@ -301,15 +301,15 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 				// we ignore this
 				relog.Error("failed deleting tablet %v: %v", tabletAlias, err)
 			}
-			err = naming.CreateTablet(wr.ts, tablet)
+			err = topo.CreateTablet(wr.ts, tablet)
 		}
 	}
 	return err
 }
 
-// Scrap a tablet. If force is used, we write to TopologyServer
+// Scrap a tablet. If force is used, we write to topo.Server
 // directly and don't remote-execute the command.
-func (wr *Wrangler) Scrap(tabletAlias naming.TabletAlias, force, skipRebuild bool) (actionPath string, err error) {
+func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool) (actionPath string, err error) {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {

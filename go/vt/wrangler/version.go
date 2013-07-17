@@ -15,14 +15,14 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 type debugVars struct {
 	Version string
 }
 
-func (wr *Wrangler) GetVersion(tabletAlias naming.TabletAlias) (string, error) {
+func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 	// read the tablet from TopologyServer to get the address to connect to
 	tablet, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -60,7 +60,7 @@ func (wr *Wrangler) GetVersion(tabletAlias naming.TabletAlias) (string, error) {
 }
 
 // helper method to asynchronously get and diff a version
-func (wr *Wrangler) diffVersion(masterVersion string, masterAlias naming.TabletAlias, alias naming.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffVersion(masterVersion string, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	relog.Info("Gathering version for %v", alias)
 	slaveVersion, err := wr.GetVersion(alias)
@@ -81,7 +81,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 	}
 
 	// get version from the master, or error
-	if si.MasterAlias.Uid == naming.NO_TABLET {
+	if si.MasterAlias.Uid == topo.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
 	relog.Info("Gathering version for master %v", si.MasterAlias)
@@ -92,7 +92,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -136,7 +136,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	if err != nil {
 		return err
 	}
-	if si.MasterAlias.Uid == naming.NO_TABLET {
+	if si.MasterAlias.Uid == topo.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
@@ -150,7 +150,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue

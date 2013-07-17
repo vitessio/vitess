@@ -18,7 +18,7 @@ import (
 	"code.google.com/p/vitess/go/vt/client2/tablet"
 	"code.google.com/p/vitess/go/vt/key"
 	// FIXME(msolomon) zk indirect dependency
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 	// FIXME(msolomon) seems like a subpackage
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	"code.google.com/p/vitess/go/vt/zktopo"
@@ -65,15 +65,15 @@ func (err VtClientError) Partial() bool {
 
 // Not thread safe, as per sql package.
 type ShardedConn struct {
-	ts         naming.TopologyServer
+	ts         topo.Server
 	cell       string
 	keyspace   string
-	tabletType naming.TabletType
+	tabletType topo.TabletType
 	stream     bool   // Use streaming RPC
 	user       string // "" if not using auth
 	password   string // "" iff userName is ""
 
-	srvKeyspace *naming.SrvKeyspace
+	srvKeyspace *topo.SrvKeyspace
 	// Keep a map per shard mapping tabletType to a real connection.
 	// connByType []map[string]*Conn
 
@@ -92,7 +92,7 @@ type ShardedConn struct {
 // that this is necessary.  You have to deal with transient failures
 // anyway, so the whole system degenerates to managing connections on
 // demand.
-func Dial(ts naming.TopologyServer, cell, keyspace string, tabletType naming.TabletType, stream bool, timeout time.Duration, user, password string) (*ShardedConn, error) {
+func Dial(ts topo.Server, cell, keyspace string, tabletType topo.TabletType, stream bool, timeout time.Duration, user, password string) (*ShardedConn, error) {
 	sc := &ShardedConn{
 		ts:         ts,
 		cell:       cell,
@@ -549,14 +549,14 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 		return nil, fmt.Errorf("vt: GetSrvTabletType failed %v", err)
 	}
 
-	srvs, err := naming.SrvEntries(addrs, DefaultPortName)
+	srvs, err := topo.SrvEntries(addrs, DefaultPortName)
 	if err != nil {
 		return nil, err
 	}
 
 	// Try to connect to any address.
 	for _, srv := range srvs {
-		name := naming.SrvAddr(srv) + "/" + sc.keyspace + "/" + shard
+		name := topo.SrvAddr(srv) + "/" + sc.keyspace + "/" + shard
 		if sc.user != "" {
 			name = sc.user + ":" + sc.password + "@" + name
 		}
@@ -570,7 +570,7 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 }
 
 type sDriver struct {
-	ts     naming.TopologyServer
+	ts     topo.Server
 	stream bool
 }
 
@@ -605,14 +605,14 @@ func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 			return nil, fmt.Errorf("vt: need a password if a user is specified")
 		}
 	}
-	return Dial(driver.ts, cell, keyspace, naming.TabletType(tabletType), driver.stream, tablet.DefaultTimeout, user, password)
+	return Dial(driver.ts, cell, keyspace, topo.TabletType(tabletType), driver.stream, tablet.DefaultTimeout, user, password)
 }
 
 func init() {
 	zconn := zk.NewMetaConn(false)
-	zkts := zktopo.NewZkTopologyServer(zconn)
+	zkts := zktopo.NewServer(zconn)
 	zkoccconn := zk.NewMetaConn(true)
-	zktsro := zktopo.NewZkTopologyServer(zkoccconn)
+	zktsro := zktopo.NewServer(zkoccconn)
 	db.Register("vtdb", &sDriver{zkts, false})
 	db.Register("vtdb-zkocc", &sDriver{zktsro, false})
 	db.Register("vtdb-streaming", &sDriver{zkts, true})

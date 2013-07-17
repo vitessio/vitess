@@ -11,42 +11,42 @@ import (
 	"sort"
 	"time"
 
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 
-// ZkTopologyServer is the zookeeper TopologyServer implementation.
-type ZkTopologyServer struct {
+// Server is the zookeeper topo.Server implementation.
+type Server struct {
 	zconn zk.Conn
 }
 
-func (zkts *ZkTopologyServer) Close() {
+func (zkts *Server) Close() {
 	zkts.zconn.Close()
 }
 
-func (zkts *ZkTopologyServer) GetZConn() zk.Conn {
+func (zkts *Server) GetZConn() zk.Conn {
 	return zkts.zconn
 }
 
-// NewZkTopologyServer can be used to create a custom ZkTopologyServer
+// NewServer can be used to create a custom Server
 // (for tests for instance) but it cannot change the globally
 // registered one.
-func NewZkTopologyServer(zconn zk.Conn) *ZkTopologyServer {
-	return &ZkTopologyServer{zconn: zconn}
+func NewServer(zconn zk.Conn) *Server {
+	return &Server{zconn: zconn}
 }
 
 func init() {
 	zconn := zk.NewMetaConn(false)
 	expvar.Publish("ZkMetaConn", zconn)
-	naming.RegisterTopologyServer("zookeeper", NewZkTopologyServer(zconn))
+	topo.RegisterServer("zookeeper", NewServer(zconn))
 }
 
 //
 // These helper methods are for ZK specific things
 //
 
-func (zkts *ZkTopologyServer) ShardActionPath(keyspace, shard string) string {
+func (zkts *Server) ShardActionPath(keyspace, shard string) string {
 	return "/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard + "/action"
 }
 
@@ -57,7 +57,7 @@ func (zkts *ZkTopologyServer) ShardActionPath(keyspace, shard string) string {
 // so this is a rare cleanup action, not a normal part of the flow.
 //
 // This can be used for tablets, shards and keyspaces.
-func (zkts *ZkTopologyServer) PurgeActions(zkActionPath string, canBePurged func(data string) bool) error {
+func (zkts *Server) PurgeActions(zkActionPath string, canBePurged func(data string) bool) error {
 	if path.Base(zkActionPath) != "action" {
 		return fmt.Errorf("not action path: %v", zkActionPath)
 	}
@@ -89,7 +89,7 @@ func (zkts *ZkTopologyServer) PurgeActions(zkActionPath string, canBePurged func
 
 // StaleActions returns a list of queued actions that have been
 // sitting for more than some amount of time.
-func (zkts *ZkTopologyServer) StaleActions(zkActionPath string, maxStaleness time.Duration, isStale func(data string) bool) ([]string, error) {
+func (zkts *Server) StaleActions(zkActionPath string, maxStaleness time.Duration, isStale func(data string) bool) ([]string, error) {
 	if path.Base(zkActionPath) != "action" {
 		return nil, fmt.Errorf("not action path: %v", zkActionPath)
 	}
@@ -123,7 +123,7 @@ func (zkts *ZkTopologyServer) StaleActions(zkActionPath string, maxStaleness tim
 //
 // There is a chance some processes might still be waiting for action
 // results, but it is very very small.
-func (zkts *ZkTopologyServer) PruneActionLogs(zkActionLogPath string, keepCount int) (prunedCount int, err error) {
+func (zkts *Server) PruneActionLogs(zkActionLogPath string, keepCount int) (prunedCount int, err error) {
 	if path.Base(zkActionLogPath) != "actionlog" {
 		return 0, fmt.Errorf("not actionlog path: %v", zkActionLogPath)
 	}

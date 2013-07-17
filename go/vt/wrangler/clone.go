@@ -10,15 +10,15 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 // forceMasterSnapshot: Normally a master is not a viable tablet to snapshot.
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
-func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest string, parent naming.TabletAlias, slaveStartRequired, readOnly bool, originalType naming.TabletType, err error) {
-	var ti *naming.TabletInfo
+func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest string, parent topo.TabletAlias, slaveStartRequired, readOnly bool, originalType topo.TabletType, err error) {
+	var ti *topo.TabletInfo
 	ti, err = wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return
@@ -26,16 +26,16 @@ func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot
 
 	originalType = ti.Tablet.Type
 
-	if ti.Tablet.Type == naming.TYPE_MASTER && forceMasterSnapshot {
+	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
 		relog.Info("force change type master -> backup: %v", tabletAlias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
-		ti.Tablet.Type = naming.TYPE_BACKUP
-		err = naming.UpdateTablet(wr.ts, ti)
+		ti.Tablet.Type = topo.TYPE_BACKUP
+		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
-		err = wr.ChangeType(ti.Alias(), naming.TYPE_BACKUP, false)
+		err = wr.ChangeType(ti.Alias(), topo.TYPE_BACKUP, false)
 	}
 
 	if err != nil {
@@ -60,16 +60,16 @@ func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot
 		tm.BackfillAlias(reply.ZkParentPath, &reply.ParentAlias)
 		if serverMode {
 			relog.Info("server mode specified, switching tablet to snapshot_source mode")
-			newType = naming.TYPE_SNAPSHOT_SOURCE
+			newType = topo.TYPE_SNAPSHOT_SOURCE
 		}
 	}
 
 	// Go back to original type, or go to SNAPSHOT_SOURCE
 	relog.Info("change type after snapshot: %v %v", tabletAlias, newType)
-	if ti.Tablet.Parent.Uid == naming.NO_TABLET && forceMasterSnapshot && newType != naming.TYPE_SNAPSHOT_SOURCE {
+	if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot && newType != topo.TYPE_SNAPSHOT_SOURCE {
 		relog.Info("force change type backup -> master: %v", tabletAlias)
-		ti.Tablet.Type = naming.TYPE_MASTER
-		err = naming.UpdateTablet(wr.ts, ti)
+		ti.Tablet.Type = topo.TYPE_MASTER
+		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), newType, false)
 	}
@@ -81,8 +81,8 @@ func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot
 	return reply.ManifestPath, reply.ParentAlias, reply.SlaveStartRequired, reply.ReadOnly, originalType, actionErr
 }
 
-func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStartRequired, readWrite bool, originalType naming.TabletType) (err error) {
-	var ti *naming.TabletInfo
+func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRequired, readWrite bool, originalType topo.TabletType) (err error) {
+	var ti *topo.TabletInfo
 	ti, err = wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return
@@ -101,9 +101,9 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStart
 		return
 	}
 
-	if ti.Tablet.Parent.Uid == naming.NO_TABLET {
-		ti.Tablet.Type = naming.TYPE_MASTER
-		err = naming.UpdateTablet(wr.ts, ti)
+	if ti.Tablet.Parent.Uid == topo.NO_TABLET {
+		ti.Tablet.Type = topo.TYPE_MASTER
+		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), originalType, false)
 	}
@@ -111,14 +111,14 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStart
 	return err
 }
 
-func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias naming.TabletAlias) (err error) {
+func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.TabletAlias) (err error) {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
 	if err != nil {
 		return err
 	}
-	if tablet.Type != naming.TYPE_IDLE {
+	if tablet.Type != topo.TYPE_IDLE {
 		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, dstTabletAlias)
 	}
 
@@ -131,7 +131,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias naming.Tabl
 	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }
 
-func (wr *Wrangler) UnreserveForRestore(dstTabletAlias naming.TabletAlias) (err error) {
+func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err error) {
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
 	if err != nil {
 		return err
@@ -141,10 +141,10 @@ func (wr *Wrangler) UnreserveForRestore(dstTabletAlias naming.TabletAlias) (err 
 		return err
 	}
 
-	return wr.ChangeType(tablet.Alias(), naming.TYPE_IDLE, false)
+	return wr.ChangeType(tablet.Alias(), topo.TYPE_IDLE, false)
 }
 
-func (wr *Wrangler) Restore(srcTabletAlias naming.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias naming.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
+func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias topo.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
 	tablet, err := wr.ts.GetTablet(dstTabletAlias)
@@ -152,11 +152,11 @@ func (wr *Wrangler) Restore(srcTabletAlias naming.TabletAlias, srcFilePath strin
 		return err
 	}
 	if wasReserved {
-		if tablet.Type != naming.TYPE_RESTORE {
+		if tablet.Type != topo.TYPE_RESTORE {
 			return fmt.Errorf("expected restore type, not %v: %v", tablet.Type, dstTabletAlias)
 		}
 	} else {
-		if tablet.Type != naming.TYPE_IDLE {
+		if tablet.Type != topo.TYPE_IDLE {
 			return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, dstTabletAlias)
 		}
 	}
@@ -176,7 +176,7 @@ func (wr *Wrangler) Restore(srcTabletAlias naming.TabletAlias, srcFilePath strin
 	return nil
 }
 
-func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []naming.TabletAlias) {
+func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []topo.TabletAlias) {
 	for _, dstTabletAlias := range dstTabletAliases {
 		ufrErr := wr.UnreserveForRestore(dstTabletAlias)
 		if ufrErr != nil {
@@ -187,11 +187,11 @@ func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []naming.TabletAli
 	}
 }
 
-func (wr *Wrangler) Clone(srcTabletAlias naming.TabletAlias, dstTabletAliases []naming.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
+func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []topo.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency, fetchConcurrency, fetchRetryCount int, serverMode bool) error {
 	// make sure the destination can be restored into (otherwise
 	// there is no point in taking the snapshot in the first place),
 	// and reserve it.
-	reserved := make([]naming.TabletAlias, 0, len(dstTabletAliases))
+	reserved := make([]topo.TabletAlias, 0, len(dstTabletAliases))
 	for _, dstTabletAlias := range dstTabletAliases {
 		err := wr.ReserveForRestore(srcTabletAlias, dstTabletAlias)
 		if err != nil {
@@ -215,8 +215,8 @@ func (wr *Wrangler) Clone(srcTabletAlias naming.TabletAlias, dstTabletAliases []
 		er := concurrency.FirstErrorRecorder{}
 		for _, dstTabletAlias := range dstTabletAliases {
 			wg.Add(1)
-			go func(dstTabletAlias naming.TabletAlias) {
-				e := wr.Restore(srcTabletAlias, srcFilePath, dstTabletAlias, parentAlias, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == naming.TYPE_MASTER)
+			go func(dstTabletAlias topo.TabletAlias) {
+				e := wr.Restore(srcTabletAlias, srcFilePath, dstTabletAlias, parentAlias, fetchConcurrency, fetchRetryCount, true, serverMode && originalType == topo.TYPE_MASTER)
 				er.RecordError(e)
 				wg.Done()
 			}(dstTabletAlias)

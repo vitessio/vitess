@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 	"code.google.com/p/vitess/go/vt/wrangler"
 	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
 	"code.google.com/p/vitess/go/zk"
@@ -315,8 +315,8 @@ func main() {
 
 	templateLoader := NewTemplateLoader(*templateDir, dummyTemplate, *debug)
 
-	ts := naming.GetTopologyServer()
-	defer naming.CloseTopologyServers()
+	ts := topo.GetServer()
+	defer topo.CloseServers()
 
 	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
 
@@ -375,7 +375,7 @@ func main() {
 	actionRepo.Register(tabletPath, "RpcPing",
 		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
 			zkPathParts := strings.Split(zkPath, "/")
-			alias, err := naming.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
+			alias, err := topo.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
 			if err != nil {
 				return "", err
 			}
@@ -428,12 +428,12 @@ func main() {
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
 	http.HandleFunc("/zk/", func(w http.ResponseWriter, r *http.Request) {
-		zkTopoServ := naming.GetTopologyServerByName("zookeeper")
+		zkTopoServ := topo.GetServerByName("zookeeper")
 		if zkTopoServ == nil {
-			http.Error(w, "can only look at zk with ZkTopologyServer", http.StatusInternalServerError)
+			http.Error(w, "can only look at zk with zktopo.Server", http.StatusInternalServerError)
 			return
 		}
-		zconn := zkTopoServ.(*zktopo.ZkTopologyServer).GetZConn()
+		zconn := zkTopoServ.(*zktopo.Server).GetZConn()
 
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)

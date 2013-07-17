@@ -8,7 +8,7 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 	"code.google.com/p/vitess/go/vt/zktopo"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkns"
@@ -18,7 +18,7 @@ import (
 // Export addresses from the VT serving graph to a legacy zkns server.
 // Note these functions only work with a zktopo.
 func (wr *Wrangler) ExportZkns(cell string) error {
-	zkTopo, ok := wr.ts.(*zktopo.ZkTopologyServer)
+	zkTopo, ok := wr.ts.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZkns only works with zktopo")
 	}
@@ -53,7 +53,7 @@ func (wr *Wrangler) ExportZkns(cell string) error {
 
 // Export addresses from the VT serving graph to a legacy zkns server.
 func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
-	zkTopo, ok := wr.ts.(*zktopo.ZkTopologyServer)
+	zkTopo, ok := wr.ts.(*zktopo.Server)
 	if !ok {
 		return fmt.Errorf("ExportZknsForKeyspace only works with zktopo")
 	}
@@ -65,7 +65,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shardNames[0])
+	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shardNames[0])
 	if err != nil {
 		return err
 	}
@@ -149,7 +149,7 @@ func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath s
 	cell := parts[2]
 	keyspace := parts[5]
 	shard := parts[6]
-	tabletType := naming.TabletType(parts[7])
+	tabletType := topo.TabletType(parts[7])
 	addrs, err := wr.ts.GetSrvTabletType(cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, err

@@ -4,14 +4,14 @@ import (
 	"fmt"
 
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/naming"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 // Assume the master is dead and not coming back. Just push your way
 // forward.  Force means we are reparenting to the same master
 // (assuming the data has been externally synched).
-func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*naming.TabletInfo, failedMaster, masterElectTablet *naming.TabletInfo, leaveMasterReadOnly, force bool) error {
+func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, failedMaster, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly, force bool) error {
 	relog.Info("Skipping ValidateShard - not a graceful situation")
 
 	if _, ok := slaveTabletMap[masterElectTablet.Alias()]; !ok && !force {
@@ -22,7 +22,7 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*n
 	// has not been forced.
 	if !force {
 		// Make sure all tablets have the right parent and reasonable positions.
-		if err := wr.checkSlaveReplication(slaveTabletMap, naming.NO_TABLET); err != nil {
+		if err := wr.checkSlaveReplication(slaveTabletMap, topo.NO_TABLET); err != nil {
 			return err
 		}
 

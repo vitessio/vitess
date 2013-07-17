@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package naming
+package topo
 
 import (
 	"encoding/json"
@@ -139,7 +139,7 @@ func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err 
 	return &ShardInfo{keyspace, shard, s}, nil
 }
 
-func tabletAliasesRecursive(ts TopologyServer, keyspace, shard, repPath string) ([]TabletAlias, error) {
+func tabletAliasesRecursive(ts Server, keyspace, shard, repPath string) ([]TabletAlias, error) {
 	mutex := sync.Mutex{}
 	wg := sync.WaitGroup{}
 	result := make([]TabletAlias, 0, 32)
@@ -181,6 +181,6 @@ func tabletAliasesRecursive(ts TopologyServer, keyspace, shard, repPath string) 
 	return result, nil
 }
 
-func FindAllTabletAliasesInShard(ts TopologyServer, keyspace, shard string) ([]TabletAlias, error) {
+func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAlias, error) {
 	return tabletAliasesRecursive(ts, keyspace, shard, "")
 }

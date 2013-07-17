@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package naming
+package topo
 
 import (
 	"encoding/json"
@@ -289,7 +289,7 @@ const (
 )
 
 // Tablet is a pure data struct for information serialized into json
-// and stored into TopologyServer
+// and stored into topo.Server
 type Tablet struct {
 	Cell        string      // the cell this tablet is assigned to (doesn't change)
 	Uid         uint32      // the server id for this instance
@@ -324,7 +324,7 @@ func (tablet *Tablet) DbName() string {
 	return vtDbPrefix + tablet.Keyspace
 }
 
-// export per-tablet functions (mirrors the naming functions)
+// export per-tablet functions
 func (tablet *Tablet) Alias() TabletAlias {
 	return TabletAlias{tablet.Cell, tablet.Uid}
 }
@@ -368,7 +368,7 @@ type TabletInfo struct {
 	*Tablet
 }
 
-// FIXME(alainjobart) when switch to TopologyServer this will become useless
+// FIXME(alainjobart) when switch to topo.Server this will become useless
 func (ti *TabletInfo) Path() string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%010d", ti.Cell, ti.Uid)
 }
@@ -429,7 +429,7 @@ func TabletInfoFromJson(data string, version int) (*TabletInfo, error) {
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
-func UpdateTablet(ts TopologyServer, tablet *TabletInfo) error {
+func UpdateTablet(ts Server, tablet *TabletInfo) error {
 	version := -1
 	if tablet.version != 0 {
 		version = tablet.version
@@ -442,14 +442,14 @@ func UpdateTablet(ts TopologyServer, tablet *TabletInfo) error {
 	return err
 }
 
-func Validate(ts TopologyServer, tabletAlias TabletAlias, tabletReplicationPath string) error {
+func Validate(ts Server, tabletAlias TabletAlias, tabletReplicationPath string) error {
 	// read the tablet record, make sure it parses
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	// make sure the TopologyServer is good for this tablet
+	// make sure the Server is good for this tablet
 	if err = ts.ValidateTablet(tabletAlias); err != nil {
 		return err
 	}
@@ -496,8 +496,8 @@ func Validate(ts TopologyServer, tabletAlias TabletAlias, tabletReplicationPath 
 
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
-func CreateTablet(ts TopologyServer, tablet *Tablet) error {
-	// Have the TopologyServer create the tablet
+func CreateTablet(ts Server, tablet *Tablet) error {
+	// Have the Server create the tablet
 	err := ts.CreateTablet(tablet)
 	if err != nil {
 		return err
@@ -511,7 +511,7 @@ func CreateTablet(ts TopologyServer, tablet *Tablet) error {
 	return CreateTabletReplicationPaths(ts, tablet)
 }
 
-func CreateTabletReplicationPaths(ts TopologyServer, tablet *Tablet) error {
+func CreateTabletReplicationPaths(ts Server, tablet *Tablet) error {
 	relog.Debug("CreateTabletReplicationPaths %v", tablet.Alias())
 	if err := ts.CreateShard(tablet.Keyspace, tablet.Shard); err != nil && err != ErrNodeExists {
 		return err

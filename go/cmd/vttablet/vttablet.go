@@ -33,11 +33,11 @@ import (
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	vtenv "code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/servenv"
 	"code.google.com/p/vitess/go/vt/sqlparser"
 	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	ts "code.google.com/p/vitess/go/vt/tabletserver"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 const (
@@ -90,7 +90,7 @@ var schemaOverrides []ts.SchemaOverride
 
 // tabletParamToTabletAlias takes either an old style ZK tablet path or a
 // new style tablet alias as a string, and returns a TabletAlias.
-func tabletParamToTabletAlias(param string) naming.TabletAlias {
+func tabletParamToTabletAlias(param string) topo.TabletAlias {
 	if param[0] == '/' {
 		// old zookeeper path, convert to new-style string tablet alias
 		zkPathParts := strings.Split(param, "/")
@@ -99,7 +99,7 @@ func tabletParamToTabletAlias(param string) naming.TabletAlias {
 		}
 		param = zkPathParts[2] + "-" + zkPathParts[5]
 	}
-	result, err := naming.ParseTabletAliasString(param)
+	result, err := topo.ParseTabletAliasString(param)
 	if err != nil {
 		relog.Fatal("Invalid tablet alias %v: %v", param, err)
 	}
@@ -220,10 +220,10 @@ func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 	return mycnf
 }
 
-func initAgent(tabletAlias naming.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) error {
-	topoServer := naming.GetTopologyServer()
+func initAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string) error {
+	topoServer := topo.GetServer()
 	umgmt.AddCloseCallback(func() {
-		naming.CloseTopologyServers()
+		topo.CloseServers()
 	})
 
 	bindAddr := fmt.Sprintf(":%v", *port)
@@ -238,7 +238,7 @@ func initAgent(tabletAlias naming.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf
 	if err != nil {
 		return err
 	}
-	agent.AddChangeCallback(func(oldTablet, newTablet naming.Tablet) {
+	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		if newTablet.IsServingType() {
 			if dbcfgs.App.Dbname == "" {
 				dbcfgs.App.Dbname = newTablet.DbName()
@@ -249,7 +249,7 @@ func initAgent(tabletAlias naming.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf
 			// Transitioning from replica to master, first disconnect
 			// existing connections. "false" indicateds that clients must
 			// re-resolve their endpoint before reconnecting.
-			if newTablet.Type == naming.TYPE_MASTER && oldTablet.Type != naming.TYPE_MASTER {
+			if newTablet.Type == topo.TYPE_MASTER && oldTablet.Type != topo.TYPE_MASTER {
 				ts.DisallowQueries(false)
 			}
 			qrs := loadCustomRules()
@@ -265,13 +265,13 @@ func initAgent(tabletAlias naming.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf
 			}
 			ts.AllowQueries(dbcfgs.App, schemaOverrides, qrs)
 			mysqlctl.EnableUpdateStreamService(string(newTablet.Type), dbcfgs)
-			if newTablet.Type != naming.TYPE_MASTER {
+			if newTablet.Type != topo.TYPE_MASTER {
 				ts.StartRowCacheInvalidation()
 			}
 		} else {
 			ts.DisallowQueries(false)
 			mysqlctl.DisableUpdateStreamService()
-			if newTablet.Type != naming.TYPE_MASTER {
+			if newTablet.Type != topo.TYPE_MASTER {
 				ts.StopRowCacheInvalidation()
 			}
 		}

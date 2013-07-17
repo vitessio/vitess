@@ -21,8 +21,8 @@ import (
 
 	"code.google.com/p/vitess/go/vt/dbconfigs"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/tabletmanager"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 var port = flag.Int("port", 0, "port for debug http server")
@@ -80,8 +80,8 @@ func main() {
 	}
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
-	topoServer := naming.GetTopologyServer()
-	defer naming.CloseTopologyServers()
+	topoServer := topo.GetServer()
+	defer topo.CloseServers()
 
 	actor := tabletmanager.NewTabletActor(mysqld, topoServer)
 

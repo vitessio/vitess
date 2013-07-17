@@ -15,20 +15,20 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 	"code.google.com/p/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 
 /*
-This file contains the per-cell methods of ZkTopologyServer
+This file contains the per-cell methods of zktopo.Server
 */
 
-func TabletPathForAlias(alias naming.TabletAlias) string {
+func TabletPathForAlias(alias topo.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v", alias.Cell, alias.TabletUidStr())
 }
 
-func TabletActionPathForAlias(alias naming.TabletAlias) string {
+func TabletActionPathForAlias(alias topo.TabletAlias) string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%v/action", alias.Cell, alias.TabletUidStr())
 }
 
@@ -40,14 +40,14 @@ func tabletDirectoryForCell(cell string) string {
 // Tablet management
 //
 
-func (zkts *ZkTopologyServer) CreateTablet(tablet *naming.Tablet) error {
+func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 	zkTabletPath := TabletPathForAlias(tablet.Alias())
 
 	// Create /zk/<cell>/vt/tablets/<uid>
 	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, tablet.Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			err = naming.ErrNodeExists
+			err = topo.ErrNodeExists
 		}
 		return err
 	}
@@ -69,14 +69,14 @@ func (zkts *ZkTopologyServer) CreateTablet(tablet *naming.Tablet) error {
 	return nil
 }
 
-func (zkts *ZkTopologyServer) UpdateTablet(tablet *naming.TabletInfo, existingVersion int) (int, error) {
+func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int) (int, error) {
 	zkTabletPath := TabletPathForAlias(tablet.Alias())
 	stat, err := zkts.zconn.Set(zkTabletPath, tablet.Json(), existingVersion)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
-			err = naming.ErrBadVersion
+			err = topo.ErrBadVersion
 		} else if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 
 		return 0, err
@@ -84,14 +84,14 @@ func (zkts *ZkTopologyServer) UpdateTablet(tablet *naming.TabletInfo, existingVe
 	return stat.Version(), nil
 }
 
-func (zkts *ZkTopologyServer) UpdateTabletFields(tabletAlias naming.TabletAlias, update func(*naming.Tablet) error) error {
+func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
 	zkTabletPath := TabletPathForAlias(tabletAlias)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		if oldValue == "" {
 			return "", fmt.Errorf("no data for tablet addr update: %v", tabletAlias)
 		}
 
-		tablet, err := naming.TabletFromJson(oldValue)
+		tablet, err := topo.TabletFromJson(oldValue)
 		if err != nil {
 			return "", err
 		}
@@ -103,25 +103,25 @@ func (zkts *ZkTopologyServer) UpdateTabletFields(tabletAlias naming.TabletAlias,
 	err := zkts.zconn.RetryChange(zkTabletPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 		return err
 	}
 	return nil
 }
 
-func (zkts *ZkTopologyServer) DeleteTablet(alias naming.TabletAlias) error {
+func (zkts *Server) DeleteTablet(alias topo.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)
 	err := zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 	}
 	return err
 }
 
-func (zkts *ZkTopologyServer) ValidateTablet(alias naming.TabletAlias) error {
+func (zkts *Server) ValidateTablet(alias topo.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)
 	zkPaths := []string{
 		path.Join(zkTabletPath, "action"),
@@ -136,33 +136,33 @@ func (zkts *ZkTopologyServer) ValidateTablet(alias naming.TabletAlias) error {
 	return nil
 }
 
-func (zkts *ZkTopologyServer) GetTablet(alias naming.TabletAlias) (*naming.TabletInfo, error) {
+func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
 	zkTabletPath := TabletPathForAlias(alias)
 	data, stat, err := zkts.zconn.Get(zkTabletPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	return naming.TabletInfoFromJson(data, stat.Version())
+	return topo.TabletInfoFromJson(data, stat.Version())
 }
 
-func (zkts *ZkTopologyServer) GetTabletsByCell(cell string) ([]naming.TabletAlias, error) {
+func (zkts *Server) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
 	zkTabletsPath := tabletDirectoryForCell(cell)
 	children, _, err := zkts.zconn.Children(zkTabletsPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
 
 	sort.Strings(children)
-	result := make([]naming.TabletAlias, len(children))
+	result := make([]topo.TabletAlias, len(children))
 	for i, child := range children {
 		result[i].Cell = cell
-		result[i].Uid, err = naming.ParseUid(child)
+		result[i].Uid, err = topo.ParseUid(child)
 		if err != nil {
 			return nil, err
 		}
@@ -181,27 +181,27 @@ func zkPathForVtShard(cell, keyspace, shard string) string {
 	return path.Join(zkPathForVtKeyspace(cell, keyspace), shard)
 }
 
-func zkPathForVtName(cell, keyspace, shard string, tabletType naming.TabletType) string {
+func zkPathForVtName(cell, keyspace, shard string, tabletType topo.TabletType) string {
 	return path.Join(zkPathForVtShard(cell, keyspace, shard), string(tabletType))
 }
 
-func (zkts *ZkTopologyServer) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]naming.TabletType, error) {
+func (zkts *Server) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.TabletType, error) {
 	zkSgShardPath := zkPathForVtShard(cell, keyspace, shard)
 	children, _, err := zkts.zconn.Children(zkSgShardPath)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	result := make([]naming.TabletType, len(children))
+	result := make([]topo.TabletType, len(children))
 	for i, tt := range children {
-		result[i] = naming.TabletType(tt)
+		result[i] = topo.TabletType(tt)
 	}
 	return result, nil
 }
 
-func (zkts *ZkTopologyServer) UpdateSrvTabletType(cell, keyspace, shard string, tabletType naming.TabletType, addrs *naming.VtnsAddrs) error {
+func (zkts *Server) UpdateSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.VtnsAddrs) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data := jscfg.ToJson(addrs)
 	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -218,64 +218,64 @@ func (zkts *ZkTopologyServer) UpdateSrvTabletType(cell, keyspace, shard string, 
 	return err
 }
 
-func (zkts *ZkTopologyServer) GetSrvTabletType(cell, keyspace, shard string, tabletType naming.TabletType) (*naming.VtnsAddrs, error) {
+func (zkts *Server) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	return naming.NewVtnsAddrs(data, stat.Version())
+	return topo.NewVtnsAddrs(data, stat.Version())
 }
 
-func (zkts *ZkTopologyServer) DeleteSrvTabletType(cell, keyspace, shard string, tabletType naming.TabletType) error {
+func (zkts *Server) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	return zkts.zconn.Delete(path, -1)
 }
 
-func (zkts *ZkTopologyServer) UpdateSrvShard(cell, keyspace, shard string, srvShard *naming.SrvShard) error {
+func (zkts *Server) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
 	path := zkPathForVtShard(cell, keyspace, shard)
 	data := jscfg.ToJson(srvShard)
 	_, err := zkts.zconn.Set(path, data, -1)
 	return err
 }
 
-func (zkts *ZkTopologyServer) GetSrvShard(cell, keyspace, shard string) (*naming.SrvShard, error) {
+func (zkts *Server) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
 	path := zkPathForVtShard(cell, keyspace, shard)
 	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	return naming.NewSrvShard(data, stat.Version())
+	return topo.NewSrvShard(data, stat.Version())
 }
 
-func (zkts *ZkTopologyServer) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *naming.SrvKeyspace) error {
+func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data := jscfg.ToJson(srvKeyspace)
 	_, err := zkts.zconn.Set(path, data, -1)
 	return err
 }
 
-func (zkts *ZkTopologyServer) GetSrvKeyspace(cell, keyspace string) (*naming.SrvKeyspace, error) {
+func (zkts *Server) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data, stat, err := zkts.zconn.Get(path)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = naming.ErrNoNode
+			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	return naming.NewSrvKeyspace(data, stat.Version())
+	return topo.NewSrvKeyspace(data, stat.Version())
 }
 
 var skipUpdateErr = fmt.Errorf("skip update")
 
-func (zkts *ZkTopologyServer) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *naming.VtnsAddr) (newValue string, err error) {
+func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *topo.VtnsAddr) (newValue string, err error) {
 	if oldStat == nil {
 		// The incoming object doesn't exist - we haven't been placed in the serving
 		// graph yet, so don't update. Assume the next process that rebuilds the graph
@@ -283,9 +283,9 @@ func (zkts *ZkTopologyServer) updateTabletEndpoint(oldValue string, oldStat zk.S
 		return "", skipUpdateErr
 	}
 
-	var addrs *naming.VtnsAddrs
+	var addrs *topo.VtnsAddrs
 	if oldValue != "" {
-		addrs, err = naming.NewVtnsAddrs(oldValue, oldStat.Version())
+		addrs, err = topo.NewVtnsAddrs(oldValue, oldStat.Version())
 		if err != nil {
 			return
 		}
@@ -294,7 +294,7 @@ func (zkts *ZkTopologyServer) updateTabletEndpoint(oldValue string, oldStat zk.S
 		for i, entry := range addrs.Entries {
 			if entry.Uid == addr.Uid {
 				foundTablet = true
-				if !naming.VtnsAddrEquality(&entry, addr) {
+				if !topo.VtnsAddrEquality(&entry, addr) {
 					addrs.Entries[i] = *addr
 				}
 				break
@@ -305,13 +305,13 @@ func (zkts *ZkTopologyServer) updateTabletEndpoint(oldValue string, oldStat zk.S
 			addrs.Entries = append(addrs.Entries, *addr)
 		}
 	} else {
-		addrs = naming.NewAddrs()
+		addrs = topo.NewAddrs()
 		addrs.Entries = append(addrs.Entries, *addr)
 	}
 	return jscfg.ToJson(addrs), nil
 }
 
-func (zkts *ZkTopologyServer) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType naming.TabletType, addr *naming.VtnsAddr) error {
+func (zkts *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.VtnsAddr) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		return zkts.updateTabletEndpoint(oldValue, oldStat, addr)
@@ -327,14 +327,14 @@ func (zkts *ZkTopologyServer) UpdateTabletEndpoint(cell, keyspace, shard string,
 // Remote Tablet Actions
 //
 
-func (zkts *ZkTopologyServer) WriteTabletAction(tabletAlias naming.TabletAlias, contents string) (string, error) {
+func (zkts *Server) WriteTabletAction(tabletAlias topo.TabletAlias, contents string) (string, error) {
 	// Action paths end in a trailing slash to that when we create
 	// sequential nodes, they are created as children, not siblings.
 	actionPath := TabletActionPathForAlias(tabletAlias) + "/"
 	return zkts.zconn.Create(actionPath, contents, zookeeper.SEQUENCE, zookeeper.WorldACL(zookeeper.PERM_ALL))
 }
 
-func (zkts *ZkTopologyServer) WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error) {
+func (zkts *Server) WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error) {
 	timer := time.NewTimer(waitTime)
 	defer timer.Stop()
 
@@ -370,9 +370,9 @@ wait:
 		case <-retryDelay:
 			continue wait
 		case <-timer.C:
-			return "", naming.ErrTimeout
+			return "", topo.ErrTimeout
 		case <-interrupted:
-			return "", naming.ErrInterrupted
+			return "", topo.ErrInterrupted
 		}
 	}
 
@@ -385,7 +385,7 @@ wait:
 	return data, nil
 }
 
-func (zkts *ZkTopologyServer) PurgeTabletActions(tabletAlias naming.TabletAlias, canBePurged func(data string) bool) error {
+func (zkts *Server) PurgeTabletActions(tabletAlias topo.TabletAlias, canBePurged func(data string) bool) error {
 	actionPath := TabletActionPathForAlias(tabletAlias)
 	return zkts.PurgeActions(actionPath, canBePurged)
 }
@@ -394,7 +394,7 @@ func (zkts *ZkTopologyServer) PurgeTabletActions(tabletAlias naming.TabletAlias,
 // Supporting the local agent process.
 //
 
-func (zkts *ZkTopologyServer) ValidateTabletActions(tabletAlias naming.TabletAlias) error {
+func (zkts *Server) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
 	actionPath := TabletActionPathForAlias(tabletAlias)
 
 	// Ensure that the action node is there. There is no conflict creating
@@ -406,24 +406,24 @@ func (zkts *ZkTopologyServer) ValidateTabletActions(tabletAlias naming.TabletAli
 	return nil
 }
 
-func (zkts *ZkTopologyServer) CreateTabletPidNode(tabletAlias naming.TabletAlias, done chan struct{}) error {
+func (zkts *Server) CreateTabletPidNode(tabletAlias topo.TabletAlias, done chan struct{}) error {
 	zkTabletPath := TabletPathForAlias(tabletAlias)
 	path := path.Join(zkTabletPath, "pid")
 	return zk.CreatePidNode(zkts.zconn, path, done)
 }
 
-func (zkts *ZkTopologyServer) ValidateTabletPidNode(tabletAlias naming.TabletAlias) error {
+func (zkts *Server) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(tabletAlias)
 	path := path.Join(zkTabletPath, "pid")
 	_, _, err := zkts.zconn.Get(path)
 	return err
 }
 
-func (zkts *ZkTopologyServer) GetSubprocessFlags() []string {
+func (zkts *Server) GetSubprocessFlags() []string {
 	return zk.GetZkSubprocessFlags()
 }
 
-func (zkts *ZkTopologyServer) handleActionQueue(tabletAlias naming.TabletAlias, dispatchAction func(actionPath, data string) error) (<-chan zookeeper.Event, error) {
+func (zkts *Server) handleActionQueue(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error) (<-chan zookeeper.Event, error) {
 	zkActionPath := TabletActionPathForAlias(tabletAlias)
 
 	// This read may seem a bit pedantic, but it makes it easier
@@ -461,7 +461,7 @@ func (zkts *ZkTopologyServer) handleActionQueue(tabletAlias naming.TabletAlias, 
 	return watch, nil
 }
 
-func (zkts *ZkTopologyServer) ActionEventLoop(tabletAlias naming.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
+func (zkts *Server) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
 	for {
 		// Process any pending actions when we startup, before we start listening
 		// for events.
@@ -491,33 +491,33 @@ func (zkts *ZkTopologyServer) ActionEventLoop(tabletAlias naming.TabletAlias, di
 
 // actionPathToTabletAlias parses an actionPath back
 // zkActionPath is /zk/<cell>/vt/tablets/<uid>/action/<number>
-func actionPathToTabletAlias(actionPath string) (naming.TabletAlias, error) {
+func actionPathToTabletAlias(actionPath string) (topo.TabletAlias, error) {
 	pathParts := strings.Split(actionPath, "/")
 	if len(pathParts) != 8 || pathParts[0] != "" || pathParts[1] != "zk" || pathParts[3] != "vt" || pathParts[4] != "tablets" || pathParts[6] != "action" {
-		return naming.TabletAlias{}, fmt.Errorf("invalid action path: %v", actionPath)
+		return topo.TabletAlias{}, fmt.Errorf("invalid action path: %v", actionPath)
 	}
-	return naming.ParseTabletAliasString(pathParts[2] + "-" + pathParts[5])
+	return topo.ParseTabletAliasString(pathParts[2] + "-" + pathParts[5])
 }
 
-func (zkts *ZkTopologyServer) ReadTabletActionPath(actionPath string) (naming.TabletAlias, string, int, error) {
+func (zkts *Server) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int, error) {
 	tabletAlias, err := actionPathToTabletAlias(actionPath)
 	if err != nil {
-		return naming.TabletAlias{}, "", 0, err
+		return topo.TabletAlias{}, "", 0, err
 	}
 
 	data, stat, err := zkts.zconn.Get(actionPath)
 	if err != nil {
-		return naming.TabletAlias{}, "", 0, err
+		return topo.TabletAlias{}, "", 0, err
 	}
 
 	return tabletAlias, data, stat.Version(), nil
 }
 
-func (zkts *ZkTopologyServer) UpdateTabletAction(actionPath, data string, version int) error {
+func (zkts *Server) UpdateTabletAction(actionPath, data string, version int) error {
 	_, err := zkts.zconn.Set(actionPath, data, version)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
-			err = naming.ErrBadVersion
+			err = topo.ErrBadVersion
 		}
 		return err
 	}
@@ -525,7 +525,7 @@ func (zkts *ZkTopologyServer) UpdateTabletAction(actionPath, data string, versio
 }
 
 // StoreTabletActionResponse stores the data both in action and actionlog
-func (zkts *ZkTopologyServer) StoreTabletActionResponse(actionPath, data string) error {
+func (zkts *Server) StoreTabletActionResponse(actionPath, data string) error {
 	_, err := zkts.zconn.Set(actionPath, data, -1)
 	if err != nil {
 		return err
@@ -536,6 +536,6 @@ func (zkts *ZkTopologyServer) StoreTabletActionResponse(actionPath, data string)
 	return err
 }
 
-func (zkts *ZkTopologyServer) UnblockTabletAction(actionPath string) error {
+func (zkts *Server) UnblockTabletAction(actionPath string) error {
 	return zkts.zconn.Delete(actionPath, -1)
 }

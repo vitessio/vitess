@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"code.google.com/p/vitess/go/vt/naming"
+	"code.google.com/p/vitess/go/vt/topo"
 )
 
 // TabletNodesByType maps tablet types to slices of tablet nodes.
@@ -93,7 +93,7 @@ func (ks KeyspaceNodes) ShardNodes() []*ShardNodes {
 // contains.
 func (ks KeyspaceNodes) TabletTypes() []string {
 	contained := make([]string, 0)
-	for _, t := range naming.AllTabletTypes {
+	for _, t := range topo.AllTabletTypes {
 		name := string(t)
 		if ks.HasType(name) {
 			contained = append(contained, name)
@@ -114,7 +114,7 @@ func (ks KeyspaceNodes) HasType(name string) bool {
 
 // TabletNode is the representation of a tablet in the db topology.
 type TabletNode struct {
-	*naming.TabletInfo
+	*topo.TabletInfo
 }
 
 func (t *TabletNode) ShortName() string {
@@ -145,9 +145,9 @@ func (wr *Wrangler) DbTopology() (*Topology, error) {
 	for _, ti := range tabletInfos {
 		tablet := &TabletNode{TabletInfo: ti}
 		switch tablet.Type {
-		case naming.TYPE_IDLE:
+		case topo.TYPE_IDLE:
 			topology.Idle = append(topology.Idle, tablet)
-		case naming.TYPE_SCRAP:
+		case topo.TYPE_SCRAP:
 			topology.Scrap = append(topology.Scrap, tablet)
 		default:
 			if _, ok := topology.Assigned[tablet.Keyspace]; !ok {

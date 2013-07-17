@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package naming
+package topo
 
 import (
 	"errors"
@@ -39,15 +39,15 @@ var (
 	ErrBadVersion = errors.New("bad node version")
 )
 
-// TopologyServer is the interface used to talk to a persistent
+// topo.Server is the interface used to talk to a persistent
 // backend storage server and locking service.
 //
 // Zookeeper is a good example of this, and zktopo contains the
 // implementation for this using zookeeper.
 //
 // Inside Google, we use Chubby.
-type TopologyServer interface {
-	// TopologyServer management interface.
+type Server interface {
+	// topo.Server management interface.
 	Close()
 
 	//
@@ -194,7 +194,7 @@ type TopologyServer interface {
 
 	// UpdateTabletEndpoint updates a single tablet record in the
 	// already computed serving graph. The update has to be somewhat
-	// atomic, so it requires TopologyServer intrisic knowledge.
+	// atomic, so it requires Server intrisic knowledge.
 	UpdateTabletEndpoint(cell, keyspace, shard string, tabletType TabletType, addr *VtnsAddr) error
 
 	//
@@ -259,7 +259,7 @@ type TopologyServer interface {
 	ValidateTabletPidNode(tabletAlias TabletAlias) error
 
 	// GetSubprocessFlags returns the flags required to run a
-	// subprocess tha uses the same TopologyServer parameters as
+	// subprocess that uses the same Server parameters as
 	// this process.
 	GetSubprocessFlags() []string
 
@@ -290,34 +290,34 @@ type TopologyServer interface {
 	UnblockTabletAction(actionPath string) error
 }
 
-// Registry for TopologyServer implementations.
-var topologyServerImpls map[string]TopologyServer = make(map[string]TopologyServer)
+// Registry for Server implementations.
+var serverImpls map[string]Server = make(map[string]Server)
 
-// RegisterTopologyServer adds an implementation for a TopologyServer.
+// RegisterServer adds an implementation for a Server.
 // If an implementation with that name already exists, panics.
 // Call this in the 'init' function in your module.
-func RegisterTopologyServer(name string, ts TopologyServer) {
-	if topologyServerImpls[name] != nil {
-		panic(fmt.Errorf("Duplicate TopologyServer registration for %v", name))
+func RegisterServer(name string, ts Server) {
+	if serverImpls[name] != nil {
+		panic(fmt.Errorf("Duplicate topo.Server registration for %v", name))
 	}
-	topologyServerImpls[name] = ts
+	serverImpls[name] = ts
 }
 
-// Returns a specific TopologyServer by name, or nil.
-func GetTopologyServerByName(name string) TopologyServer {
-	return topologyServerImpls[name]
+// Returns a specific Server by name, or nil.
+func GetServerByName(name string) Server {
+	return serverImpls[name]
 }
 
-// Returns 'our' TopologyServer:
+// Returns 'our' Server:
 // - If only one is registered, that's the one.
 // - If more than one are registered, use the 'VT_TOPOLOGY_SERVER'
 //   environment variable.
 // - Then defaults to 'zookeeper'.
 // - Then panics.
-func GetTopologyServer() TopologyServer {
-	if len(topologyServerImpls) == 1 {
-		for name, ts := range topologyServerImpls {
-			relog.Debug("Using only TopologyServer: %v", name)
+func GetServer() Server {
+	if len(serverImpls) == 1 {
+		for name, ts := range serverImpls {
+			relog.Debug("Using only topo.Server: %v", name)
 			return ts
 		}
 	}
@@ -326,18 +326,18 @@ func GetTopologyServer() TopologyServer {
 	if name == "" {
 		name = "zookeeper"
 	}
-	result := topologyServerImpls[name]
+	result := serverImpls[name]
 	if result == nil {
-		panic(fmt.Errorf("No TopologyServer named %v", name))
+		panic(fmt.Errorf("No topo.Server named %v", name))
 	}
-	relog.Debug("Using TopologyServer: %v", name)
+	relog.Debug("Using topo.Server: %v", name)
 	return result
 }
 
-// Close all registered TopologyServer.
-func CloseTopologyServers() {
-	for name, ts := range topologyServerImpls {
-		relog.Debug("Closing TopologyServer: %v", name)
+// Close all registered Server.
+func CloseServers() {
+	for name, ts := range serverImpls {
+		relog.Debug("Closing topo.Server: %v", name)
 		ts.Close()
 	}
 }
