@@ -61,7 +61,7 @@ func (wr *Wrangler) PartialSnapshot(tabletAlias naming.TabletAlias, keyName stri
 // forceMasterSnapshot is true). It returns a function that will
 // restore the original state.
 func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot bool) (restoreAfterSnapshot func() error, err error) {
-	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
@@ -75,7 +75,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMaste
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = naming.TYPE_BACKUP
-		err = tm.UpdateTablet(wr.ts, ti)
+		err = naming.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), naming.TYPE_BACKUP, false)
 	}
@@ -90,7 +90,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias naming.TabletAlias, forceMaste
 		if ti.Tablet.Parent.Uid == naming.NO_TABLET && forceMasterSnapshot {
 			relog.Info("force change type backup -> master: %v", tabletAlias)
 			ti.Tablet.Type = naming.TYPE_MASTER
-			return tm.UpdateTablet(wr.ts, ti)
+			return naming.UpdateTablet(wr.ts, ti)
 		}
 
 		return wr.ChangeType(ti.Alias(), originalType, false)
@@ -142,7 +142,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias naming.T
 func (wr *Wrangler) PartialRestore(srcTabletAlias naming.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias naming.TabletAlias, fetchConcurrency, fetchRetryCount int) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
+	tablet, err := naming.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}

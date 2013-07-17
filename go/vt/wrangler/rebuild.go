@@ -51,7 +51,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	relog.Info("rebuildShard %v/%v", keyspace, shard)
 	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
-	shardInfo, err := tm.NewShardInfo(keyspace, shard, "{}")
+	shardInfo, err := naming.NewShardInfo(keyspace, shard, "{}")
 	if err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 		return err
 	}
 
-	tablets := make([]*tm.TabletInfo, 0, len(tabletMap))
+	tablets := make([]*naming.TabletInfo, 0, len(tabletMap))
 	for _, ti := range tabletMap {
 		if ti.Keyspace != shardInfo.Keyspace() || ti.Shard != shardInfo.ShardName() {
 			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.Alias(), keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
@@ -80,7 +80,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	if err = shardInfo.Rebuild(tablets); err != nil {
 		return err
 	}
-	if err = tm.UpdateShard(wr.ts, shardInfo); err != nil {
+	if err = naming.UpdateShard(wr.ts, shardInfo); err != nil {
 		return err
 	}
 	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
@@ -107,7 +107,7 @@ type cellKeyspaceShardType struct {
 }
 
 // Write serving graph data to the cells
-func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *tm.ShardInfo, tablets []*tm.TabletInfo, cells []string) error {
+func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *naming.ShardInfo, tablets []*naming.TabletInfo, cells []string) error {
 	relog.Info("rebuildShardSrvGraph %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 
 	// Get all existing db types so they can be removed if nothing
@@ -301,7 +301,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -321,7 +321,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 			// expensive, but we only do it on all the
 			// non-serving tablets in a shard before we
 			// find a serving tablet.
-			ti, err := tm.ReadTablet(wr.ts, alias)
+			ti, err := naming.ReadTablet(wr.ts, alias)
 			if err != nil {
 				return err
 			}
@@ -399,7 +399,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 		return fmt.Errorf("must specify keyspaces to rebuild replication graph")
 	}
 
-	allTablets := make([]*tm.TabletInfo, 0, 1024)
+	allTablets := make([]*naming.TabletInfo, 0, 1024)
 	for _, cell := range cells {
 		tablets, err := GetAllTablets(wr.ts, cell)
 		if err != nil {
@@ -421,7 +421,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 	wg := sync.WaitGroup{}
 	for _, ti := range allTablets {
 		wg.Add(1)
-		go func(ti *tm.TabletInfo) {
+		go func(ti *naming.TabletInfo) {
 			defer wg.Done()
 			if !ti.IsInReplicationGraph() {
 				return
@@ -432,7 +432,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 			mu.Lock()
 			keyspacesToRebuild[ti.Keyspace] = true
 			mu.Unlock()
-			err := tm.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
+			err := naming.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true

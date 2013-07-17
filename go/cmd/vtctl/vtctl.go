@@ -271,7 +271,7 @@ func confirm(prompt string, force bool) bool {
 	return strings.ToLower(strings.TrimSpace(line)) == "yes"
 }
 
-func fmtTabletAwkable(ti *tm.TabletInfo) string {
+func fmtTabletAwkable(ti *naming.TabletInfo) string {
 	keyspace := ti.Keyspace
 	shard := ti.Shard
 	if keyspace == "" {
@@ -293,7 +293,7 @@ func fmtAction(action *tm.ActionNode) string {
 }
 
 func listTabletsByShard(ts naming.TopologyServer, keyspace, shard string) error {
-	tabletAliases, err := tm.FindAllTabletAliasesInShard(ts, keyspace, shard)
+	tabletAliases, err := naming.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -553,7 +553,7 @@ func commandChangeSlaveType(wrangler *wr.Wrangler, subFlags *flag.FlagSet, args 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	newType := naming.TabletType(subFlags.Arg(1))
 	if *dryRun {
-		ti, err := tm.ReadTablet(wrangler.TopologyServer(), tabletAlias)
+		ti, err := naming.ReadTablet(wrangler.TopologyServer(), tabletAlias)
 		if err != nil {
 			relog.Fatal("failed reading tablet %v: %v", tabletAlias, err)
 		}
@@ -1363,7 +1363,7 @@ func main() {
 }
 
 type rTablet struct {
-	*tm.TabletInfo
+	*naming.TabletInfo
 	*mysqlctl.ReplicationPosition
 }
 
@@ -1409,7 +1409,7 @@ func (rts rTablets) Less(i, j int) bool {
 	return false
 }
 
-func sortReplicatingTablets(tablets []*tm.TabletInfo, positions []*mysqlctl.ReplicationPosition) []*rTablet {
+func sortReplicatingTablets(tablets []*naming.TabletInfo, positions []*mysqlctl.ReplicationPosition) []*rTablet {
 	rtablets := make([]*rTablet, len(tablets))
 	for i, pos := range positions {
 		rtablets[i] = &rTablet{tablets[i], pos}

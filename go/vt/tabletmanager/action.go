@@ -4,7 +4,7 @@
 
 // Actions modify the state of a tablet, shard or keyspace.
 //
-// They are currenty managed through a series of queues stored in zookeeper.
+// They are currenty managed through a series of queues stored in topology server.
 
 package tabletmanager
 
@@ -89,7 +89,7 @@ type ActionNode struct {
 	Pid        int // only != 0 if State == ACTION_STATE_RUNNING
 
 	// do not serialize the next fields
-	path  string // path in zookeeper representing this action
+	path  string // path in topology server representing this action
 	args  interface{}
 	reply interface{}
 }

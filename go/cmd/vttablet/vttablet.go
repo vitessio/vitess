@@ -238,7 +238,7 @@ func initAgent(tabletAlias naming.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf
 	if err != nil {
 		return err
 	}
-	agent.AddChangeCallback(func(oldTablet, newTablet tm.Tablet) {
+	agent.AddChangeCallback(func(oldTablet, newTablet naming.Tablet) {
 		if newTablet.IsServingType() {
 			if dbcfgs.App.Dbname == "" {
 				dbcfgs.App.Dbname = newTablet.DbName()

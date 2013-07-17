@@ -4,7 +4,7 @@
 
 // Actions modify the state of a tablet, shard or keyspace.
 //
-// They are stored in zookeeper below "action" nodes and form a queue. Only the
+// They are stored in topology server and form a queue. Only the
 // lowest action id should be executing at any given time.
 //
 // The creation, deletion and modifaction of an action node may be used as
@@ -28,9 +28,9 @@ import (
 )
 
 // The actor applies individual commands to execute an action read from a node
-// in zookeeper.
+// in topology server.
 //
-// The actor signals completion by removing the action node from zookeeper.
+// The actor signals completion by removing the action node from the topology server.
 //
 // Errors are written to the action node and must (currently) be resolved by
 // hand using zk tools.
@@ -79,7 +79,7 @@ func (ai *ActionInitiator) writeTabletAction(tabletAlias naming.TabletAlias, nod
 
 func (ai *ActionInitiator) rpcCall(tabletAlias naming.TabletAlias, name string, args, reply interface{}, waitTime time.Duration) error {
 	// read the tablet from ZK to get the address to connect to
-	tablet, err := ReadTablet(ai.ts, tabletAlias)
+	tablet, err := naming.ReadTablet(ai.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (ai *ActionInitiator) rpcCall(tabletAlias naming.TabletAlias, name string, 
 }
 
 // TODO(alainjobart) keep a cache of rpcClient by tabletAlias
-func (ai *ActionInitiator) rpcCallTablet(tablet *TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
+func (ai *ActionInitiator) rpcCallTablet(tablet *naming.TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
 
 	// create the RPC client, using waitTime as the connect
 	// timeout, and starting the overall timeout as well
@@ -318,7 +318,7 @@ func (ai *ActionInitiator) GetSchema(tabletAlias naming.TabletAlias, tables []st
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, args: &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}})
 }
 
-func (ai *ActionInitiator) RpcGetSchemaTablet(tablet *TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
+func (ai *ActionInitiator) RpcGetSchemaTablet(tablet *naming.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
 	var sd mysqlctl.SchemaDefinition
 	if err := ai.rpcCallTablet(tablet, TABLET_ACTION_GET_SCHEMA, &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}, &sd, waitTime); err != nil {
 		return nil, err

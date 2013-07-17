@@ -16,7 +16,6 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 type debugVars struct {
@@ -25,7 +24,7 @@ type debugVars struct {
 
 func (wr *Wrangler) GetVersion(tabletAlias naming.TabletAlias) (string, error) {
 	// read the tablet from TopologyServer to get the address to connect to
-	tablet, err := tm.ReadTablet(wr.ts, tabletAlias)
+	tablet, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return "", err
 	}
@@ -76,7 +75,7 @@ func (wr *Wrangler) diffVersion(masterVersion string, masterAlias naming.TabletA
 }
 
 func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
-	si, err := tm.ReadShard(wr.ts, keyspace, shard)
+	si, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -93,7 +92,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -133,7 +132,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	}
 
 	// find the reference version using the first shard's master
-	si, err := tm.ReadShard(wr.ts, keyspace, shards[0])
+	si, err := naming.ReadShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -151,7 +150,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue

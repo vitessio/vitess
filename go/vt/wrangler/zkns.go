@@ -9,7 +9,6 @@ import (
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 	"code.google.com/p/vitess/go/vt/zktopo"
 	"code.google.com/p/vitess/go/zk"
 	"code.google.com/p/vitess/go/zk/zkns"
@@ -66,7 +65,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 	}
 
 	// Scan the first shard to discover which cells need local serving data.
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shardNames[0])
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shardNames[0])
 	if err != nil {
 		return err
 	}

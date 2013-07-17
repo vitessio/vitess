@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 // TabletNodesByType maps tablet types to slices of tablet nodes.
@@ -115,7 +114,7 @@ func (ks KeyspaceNodes) HasType(name string) bool {
 
 // TabletNode is the representation of a tablet in the db topology.
 type TabletNode struct {
-	*tm.TabletInfo
+	*naming.TabletInfo
 }
 
 func (t *TabletNode) ShortName() string {

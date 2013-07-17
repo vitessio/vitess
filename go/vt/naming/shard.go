@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletmanager
+package naming
 
 import (
 	"encoding/json"
@@ -12,39 +12,38 @@ import (
 
 	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/naming"
 )
 
-// Functions for dealing with shard representations in zookeeper.
+// Functions for dealing with shard representations in topology.
 
-// A pure data struct for information serialized into json and stored in zookeeper
+// A pure data struct for information serialized into json and stored in topology server
 // FIXME(msolomon) More will be required here, but for now I don't know the best way
 // to handle having ad-hoc db types beyond replica etc.
 // This node is used to present a controlled view of the shard, unaware
 // of every management action.
 type Shard struct {
 	// There can be only at most one master, but there may be none. (0)
-	MasterAlias naming.TabletAlias
+	MasterAlias TabletAlias
 	// Uids by type - could be a generic map.
-	ReplicaAliases []naming.TabletAlias
-	RdonlyAliases  []naming.TabletAlias
+	ReplicaAliases []TabletAlias
+	RdonlyAliases  []TabletAlias
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
 	KeyRange key.KeyRange
 }
 
 func (shard *Shard) Contains(tablet *Tablet) bool {
-	alias := naming.TabletAlias{tablet.Cell, tablet.Uid}
+	alias := TabletAlias{tablet.Cell, tablet.Uid}
 	switch tablet.Type {
-	case naming.TYPE_MASTER:
+	case TYPE_MASTER:
 		return shard.MasterAlias == alias
-	case naming.TYPE_REPLICA:
+	case TYPE_REPLICA:
 		for _, replicaAlias := range shard.ReplicaAliases {
 			if replicaAlias == alias {
 				return true
 			}
 		}
-	case naming.TYPE_RDONLY:
+	case TYPE_RDONLY:
 		for _, rdonlyAlias := range shard.RdonlyAliases {
 			if rdonlyAlias == alias {
 				return true
@@ -59,8 +58,8 @@ func (shard *Shard) Json() string {
 }
 
 func newShard() *Shard {
-	return &Shard{ReplicaAliases: make([]naming.TabletAlias, 0, 16),
-		RdonlyAliases: make([]naming.TabletAlias, 0, 16)}
+	return &Shard{ReplicaAliases: make([]TabletAlias, 0, 16),
+		RdonlyAliases: make([]TabletAlias, 0, 16)}
 }
 
 func shardFromJson(data string) (*Shard, error) {
@@ -99,13 +98,13 @@ func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 	for i, ti := range shardTablets {
 		tablet := ti.Tablet
 		cell := tablet.Cell
-		alias := naming.TabletAlias{cell, tablet.Uid}
+		alias := TabletAlias{cell, tablet.Uid}
 		switch tablet.Type {
-		case naming.TYPE_MASTER:
+		case TYPE_MASTER:
 			tmp.MasterAlias = alias
-		case naming.TYPE_REPLICA:
+		case TYPE_REPLICA:
 			tmp.ReplicaAliases = append(tmp.ReplicaAliases, alias)
-		case naming.TYPE_RDONLY:
+		case TYPE_RDONLY:
 			tmp.RdonlyAliases = append(tmp.RdonlyAliases, alias)
 		}
 
@@ -140,7 +139,7 @@ func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err 
 	return &ShardInfo{keyspace, shard, s}, nil
 }
 
-func ReadShard(ts naming.TopologyServer, keyspace, shard string) (*ShardInfo, error) {
+func ReadShard(ts TopologyServer, keyspace, shard string) (*ShardInfo, error) {
 	data, err := ts.GetShard(keyspace, shard)
 	if err != nil {
 		return nil, err
@@ -152,14 +151,14 @@ func ReadShard(ts naming.TopologyServer, keyspace, shard string) (*ShardInfo, er
 	return shardInfo, nil
 }
 
-func UpdateShard(ts naming.TopologyServer, si *ShardInfo) error {
+func UpdateShard(ts TopologyServer, si *ShardInfo) error {
 	return ts.UpdateShard(si.keyspace, si.shardName, si.Json())
 }
 
-func tabletAliasesRecursive(ts naming.TopologyServer, keyspace, shard, repPath string) ([]naming.TabletAlias, error) {
+func tabletAliasesRecursive(ts TopologyServer, keyspace, shard, repPath string) ([]TabletAlias, error) {
 	mutex := sync.Mutex{}
 	wg := sync.WaitGroup{}
-	result := make([]naming.TabletAlias, 0, 32)
+	result := make([]TabletAlias, 0, 32)
 	children, err := ts.GetReplicationPaths(keyspace, shard, repPath)
 	if err != nil {
 		return nil, err
@@ -167,14 +166,14 @@ func tabletAliasesRecursive(ts naming.TopologyServer, keyspace, shard, repPath s
 
 	for _, child := range children {
 		wg.Add(1)
-		go func(child naming.TabletAlias) {
+		go func(child TabletAlias) {
 			childPath := path.Join(repPath, child.String())
 			rChildren, subErr := tabletAliasesRecursive(ts, keyspace, shard, childPath)
 			if subErr != nil {
 				// If other processes are deleting
 				// nodes, we need to ignore the
 				// missing nodes.
-				if subErr != naming.ErrNoNode {
+				if subErr != ErrNoNode {
 					mutex.Lock()
 					err = subErr
 					mutex.Unlock()
@@ -198,6 +197,6 @@ func tabletAliasesRecursive(ts naming.TopologyServer, keyspace, shard, repPath s
 	return result, nil
 }
 
-func FindAllTabletAliasesInShard(ts naming.TopologyServer, keyspace, shard string) ([]naming.TabletAlias, error) {
+func FindAllTabletAliasesInShard(ts TopologyServer, keyspace, shard string) ([]TabletAlias, error) {
 	return tabletAliasesRecursive(ts, keyspace, shard, "")
 }

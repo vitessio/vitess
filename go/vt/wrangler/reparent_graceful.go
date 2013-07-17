@@ -9,10 +9,9 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
-func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, leaveMasterReadOnly bool) error {
+func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[naming.TabletAlias]*naming.TabletInfo, masterTablet, masterElectTablet *naming.TabletInfo, leaveMasterReadOnly bool) error {
 	// Validate a bunch of assumptions we make about the replication graph.
 	if masterTablet.Parent.Uid != naming.NO_TABLET {
 		return fmt.Errorf("master tablet should not have a ParentUid: %v %v", masterTablet.Parent.Uid, masterTablet.Alias())

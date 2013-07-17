@@ -139,8 +139,8 @@ def run_test_sharding():
 
   # insert some values directly (db is RO after minority reparent)
   # FIXME(alainjobart) these values don't match the shard map
-  utils.run_vtctl('SetReadWrite ' + shard_0_master.zk_tablet_path)
-  utils.run_vtctl('SetReadWrite ' + shard_1_master.zk_tablet_path)
+  utils.run_vtctl('SetReadWrite ' + shard_0_master.tablet_alias)
+  utils.run_vtctl('SetReadWrite ' + shard_1_master.tablet_alias)
   shard_0_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (1, 'test 1')", write=True)
   shard_1_master.mquery('vt_test_keyspace', "insert into vt_select_test (id, msg) values (10, 'test 10')", write=True)
 

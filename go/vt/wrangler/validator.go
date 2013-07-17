@@ -16,7 +16,7 @@ import (
 )
 
 // As with all distributed systems, things can skew. These functions
-// explore data in zookeeper and attempt to square that with reality.
+// explore data in topology server and attempt to square that with reality.
 //
 // Given the node counts are usually large, this work should be done
 // with as much parallelism as is viable.
@@ -89,7 +89,7 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresul
 		}
 
 		for _, shard := range shards {
-			aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+			aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 			if err != nil {
 				results <- vresult{"TopologyServer.FindAllTabletAliasesInShard(" + keyspace + "," + shard + ")", err}
 				return
@@ -108,7 +108,7 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresul
 			for _, alias := range aliases {
 				wg.Add(1)
 				go func(alias naming.TabletAlias) {
-					results <- vresult{alias.String(), tm.Validate(wr.ts, alias, "")}
+					results <- vresult{alias.String(), naming.Validate(wr.ts, alias, "")}
 					wg.Done()
 				}(alias)
 			}
@@ -134,13 +134,13 @@ func (wr *Wrangler) validateKeyspace(keyspace string, pingTablets bool, wg *sync
 // FIXME(msolomon) This validate presumes the master is up and running.
 // Even when that isn't true, there are validation processes that might be valuable.
 func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *sync.WaitGroup, results chan<- vresult) {
-	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
+	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		results <- vresult{keyspace + "/" + shard, err}
 		return
 	}
 
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		results <- vresult{keyspace + "/" + shard, err}
 	}
@@ -176,7 +176,7 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 		}
 		wg.Add(1)
 		go func(alias naming.TabletAlias) {
-			results <- vresult{tabletReplicationPath, tm.Validate(wr.ts, alias, tabletReplicationPath)}
+			results <- vresult{tabletReplicationPath, naming.Validate(wr.ts, alias, tabletReplicationPath)}
 			wg.Done()
 		}(alias)
 	}
@@ -198,7 +198,7 @@ func strInList(sl []string, s string) bool {
 	return false
 }
 
-func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[naming.TabletAlias]*tm.TabletInfo, results chan<- vresult) {
+func (wr *Wrangler) validateReplication(shardInfo *naming.ShardInfo, tabletMap map[naming.TabletAlias]*naming.TabletInfo, results chan<- vresult) {
 	_, ok := tabletMap[shardInfo.MasterAlias]
 	if !ok {
 		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("master not in tablet map")}
@@ -227,7 +227,7 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[n
 		return
 	}
 
-	tabletIpMap := make(map[string]*tm.Tablet)
+	tabletIpMap := make(map[string]*naming.Tablet)
 	for _, tablet := range tabletMap {
 		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
@@ -259,10 +259,10 @@ func (wr *Wrangler) validateReplication(shardInfo *tm.ShardInfo, tabletMap map[n
 	}
 }
 
-func (wr *Wrangler) pingTablets(tabletMap map[naming.TabletAlias]*tm.TabletInfo, wg *sync.WaitGroup, results chan<- vresult) {
+func (wr *Wrangler) pingTablets(tabletMap map[naming.TabletAlias]*naming.TabletInfo, wg *sync.WaitGroup, results chan<- vresult) {
 	for tabletAlias, tabletInfo := range tabletMap {
 		wg.Add(1)
-		go func(tabletAlias naming.TabletAlias, tabletInfo *tm.TabletInfo) {
+		go func(tabletAlias naming.TabletAlias, tabletInfo *naming.TabletInfo) {
 			defer wg.Done()
 
 			if err := wr.ts.ValidateTabletPidNode(tabletAlias); err != nil {

@@ -11,22 +11,21 @@ import (
 
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 // If error is not nil, the results in the dictionary are incomplete.
-func GetTabletMap(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) (map[naming.TabletAlias]*tm.TabletInfo, error) {
+func GetTabletMap(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) (map[naming.TabletAlias]*naming.TabletInfo, error) {
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
 
-	tabletMap := make(map[naming.TabletAlias]*tm.TabletInfo)
+	tabletMap := make(map[naming.TabletAlias]*naming.TabletInfo)
 	var someError error
 
 	for _, tabletAlias := range tabletAliases {
 		wg.Add(1)
 		go func(tabletAlias naming.TabletAlias) {
 			defer wg.Done()
-			tabletInfo, err := tm.ReadTablet(ts, tabletAlias)
+			tabletInfo, err := naming.ReadTablet(ts, tabletAlias)
 			mutex.Lock()
 			if err != nil {
 				relog.Warning("%v: %v", tabletAlias, err)
@@ -45,8 +44,8 @@ func GetTabletMap(ts naming.TopologyServer, tabletAliases []naming.TabletAlias) 
 }
 
 // If error is not nil, the results in the dictionary are incomplete.
-func GetTabletMapForShard(ts naming.TopologyServer, keyspace, shard string) (map[naming.TabletAlias]*tm.TabletInfo, error) {
-	aliases, err := tm.FindAllTabletAliasesInShard(ts, keyspace, shard)
+func GetTabletMapForShard(ts naming.TopologyServer, keyspace, shard string) (map[naming.TabletAlias]*naming.TabletInfo, error) {
+	aliases, err := naming.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +54,7 @@ func GetTabletMapForShard(ts naming.TopologyServer, keyspace, shard string) (map
 }
 
 // Return a sorted list of tablets.
-func GetAllTablets(ts naming.TopologyServer, cell string) ([]*tm.TabletInfo, error) {
+func GetAllTablets(ts naming.TopologyServer, cell string) ([]*naming.TabletInfo, error) {
 	aliases, err := ts.GetTabletsByCell(cell)
 	if err != nil {
 		return nil, err
@@ -67,7 +66,7 @@ func GetAllTablets(ts naming.TopologyServer, cell string) ([]*tm.TabletInfo, err
 		// we got another error than ZNONODE
 		return nil, err
 	}
-	tablets := make([]*tm.TabletInfo, 0, len(aliases))
+	tablets := make([]*naming.TabletInfo, 0, len(aliases))
 	for _, tabletAlias := range aliases {
 		tabletInfo, ok := tabletMap[tabletAlias]
 		if !ok {
@@ -83,13 +82,13 @@ func GetAllTablets(ts naming.TopologyServer, cell string) ([]*tm.TabletInfo, err
 }
 
 // GetAllTabletsAccrossCells returns all tablets from known cells.
-func GetAllTabletsAccrossCells(ts naming.TopologyServer) ([]*tm.TabletInfo, error) {
+func GetAllTabletsAccrossCells(ts naming.TopologyServer) ([]*naming.TabletInfo, error) {
 	cells, err := ts.GetKnownCells()
 	if err != nil {
 		return nil, err
 	}
 
-	results := make(chan []*tm.TabletInfo)
+	results := make(chan []*naming.TabletInfo)
 	errors := make(chan error)
 	for _, cell := range cells {
 		go func(cell string) {
@@ -102,7 +101,7 @@ func GetAllTabletsAccrossCells(ts naming.TopologyServer) ([]*tm.TabletInfo, erro
 		}(cell)
 	}
 
-	allTablets := make([]*tm.TabletInfo, 0)
+	allTablets := make([]*naming.TabletInfo, 0)
 	for _ = range cells {
 		select {
 		case tablets := <-results:

@@ -18,8 +18,8 @@ import (
 // However, there are degenerate cases where you need to override this, for
 // instance the initial clone of a new master.
 func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot bool, snapshotConcurrency int, serverMode bool) (manifest string, parent naming.TabletAlias, slaveStartRequired, readOnly bool, originalType naming.TabletType, err error) {
-	var ti *tm.TabletInfo
-	ti, err = tm.ReadTablet(wr.ts, tabletAlias)
+	var ti *naming.TabletInfo
+	ti, err = naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
@@ -33,7 +33,7 @@ func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = naming.TYPE_BACKUP
-		err = tm.UpdateTablet(wr.ts, ti)
+		err = naming.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), naming.TYPE_BACKUP, false)
 	}
@@ -69,7 +69,7 @@ func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot
 	if ti.Tablet.Parent.Uid == naming.NO_TABLET && forceMasterSnapshot && newType != naming.TYPE_SNAPSHOT_SOURCE {
 		relog.Info("force change type backup -> master: %v", tabletAlias)
 		ti.Tablet.Type = naming.TYPE_MASTER
-		err = tm.UpdateTablet(wr.ts, ti)
+		err = naming.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), newType, false)
 	}
@@ -82,8 +82,8 @@ func (wr *Wrangler) Snapshot(tabletAlias naming.TabletAlias, forceMasterSnapshot
 }
 
 func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStartRequired, readWrite bool, originalType naming.TabletType) (err error) {
-	var ti *tm.TabletInfo
-	ti, err = tm.ReadTablet(wr.ts, tabletAlias)
+	var ti *naming.TabletInfo
+	ti, err = naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return
 	}
@@ -103,7 +103,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStart
 
 	if ti.Tablet.Parent.Uid == naming.NO_TABLET {
 		ti.Tablet.Type = naming.TYPE_MASTER
-		err = tm.UpdateTablet(wr.ts, ti)
+		err = naming.UpdateTablet(wr.ts, ti)
 	} else {
 		err = wr.ChangeType(ti.Alias(), originalType, false)
 	}
@@ -114,7 +114,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias naming.TabletAlias, slaveStart
 func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias naming.TabletAlias) (err error) {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
+	tablet, err := naming.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -132,7 +132,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias naming.Tabl
 }
 
 func (wr *Wrangler) UnreserveForRestore(dstTabletAlias naming.TabletAlias) (err error) {
-	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
+	tablet, err := naming.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (wr *Wrangler) UnreserveForRestore(dstTabletAlias naming.TabletAlias) (err 
 func (wr *Wrangler) Restore(srcTabletAlias naming.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias naming.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {
 	// read our current tablet, verify its state before sending it
 	// to the tablet itself
-	tablet, err := tm.ReadTablet(wr.ts, dstTabletAlias)
+	tablet, err := naming.ReadTablet(wr.ts, dstTabletAlias)
 	if err != nil {
 		return err
 	}

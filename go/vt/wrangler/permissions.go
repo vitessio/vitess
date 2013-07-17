@@ -13,7 +13,6 @@ import (
 	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 func (wr *Wrangler) GetPermissions(tabletAlias naming.TabletAlias) (*mysqlctl.Permissions, error) {
@@ -35,7 +34,7 @@ func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, mas
 }
 
 func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
-	si, err := tm.ReadShard(wr.ts, keyspace, shard)
+	si, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -52,7 +51,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -91,7 +90,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	}
 
 	// find the reference permissions using the first shard's master
-	si, err := tm.ReadShard(wr.ts, keyspace, shards[0])
+	si, err := naming.ReadShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -109,7 +108,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 	er := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for _, shard := range shards {
-		aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue

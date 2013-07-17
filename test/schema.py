@@ -144,7 +144,7 @@ def run_test_complex_schema():
 
   # shard 0: apply new schema change, with reparenting
   utils.run_vtctl(['ApplySchemaShard',
-                   '-new-parent='+shard_0_replica1.zk_tablet_path,
+                   '-new-parent='+shard_0_replica1.tablet_alias,
                    '-sql='+create_vt_select_test[1],
                    'test_keyspace/0'],
                   auto_log=True)
@@ -156,7 +156,7 @@ def run_test_complex_schema():
 
   # verify GetSchema --tables works
   out, err = utils.run_vtctl('GetSchema --tables=vt_select_test0 ' +
-                             shard_0_replica1.zk_tablet_path,
+                             shard_0_replica1.tablet_alias,
                              log_level='INFO', trap_output=True)
   if not "vt_select_test0" in err or "vt_select_test1" in err:
     raise utils.TestError('Unexpected GetSchema --tables=vt_select_test0 output: %s' % err)

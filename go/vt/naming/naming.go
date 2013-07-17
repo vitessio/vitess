@@ -6,7 +6,7 @@ package naming
 
 /*
 Handle logical name resolution - sort of like DNS but tailored to
-vt and using zookeeper.
+vt and using the topology server.
 
 Naming is disconnected from the backend discovery and is used for
 front end clients.

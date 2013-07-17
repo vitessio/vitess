@@ -12,21 +12,20 @@ import (
 	"code.google.com/p/vitess/go/relog"
 	hk "code.google.com/p/vitess/go/vt/hook"
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 func (wr *Wrangler) ExecuteHook(tabletAlias naming.TabletAlias, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 	if strings.Contains(hook.Name, "/") {
 		return nil, fmt.Errorf("hook name cannot have a '/' in it")
 	}
-	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
 	return wr.ExecuteTabletInfoHook(ti, hook)
 }
 
-func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
+func (wr *Wrangler) ExecuteTabletInfoHook(ti *naming.TabletInfo, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 
 	actionPath, err := wr.ai.ExecuteHook(ti.Alias(), hook)
 	if err != nil {
@@ -42,7 +41,7 @@ func (wr *Wrangler) ExecuteTabletInfoHook(ti *tm.TabletInfo, hook *hk.Hook) (hoo
 
 // Execute a hook and returns an error only if the hook failed, not if
 // the hook doesn't exist.
-func (wr *Wrangler) ExecuteOptionalTabletInfoHook(ti *tm.TabletInfo, hook *hk.Hook) (err error) {
+func (wr *Wrangler) ExecuteOptionalTabletInfoHook(ti *naming.TabletInfo, hook *hk.Hook) (err error) {
 	hr, err := wr.ExecuteTabletInfoHook(ti, hook)
 	if err != nil {
 		return err

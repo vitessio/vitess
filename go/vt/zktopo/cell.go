@@ -81,6 +81,32 @@ func (zkts *ZkTopologyServer) UpdateTablet(alias naming.TabletAlias, contents st
 	return stat.Version(), nil
 }
 
+func (zkts *ZkTopologyServer) UpdateTabletFields(tabletAlias naming.TabletAlias, update func(*naming.Tablet) error) error {
+	zkTabletPath := TabletPathForAlias(tabletAlias)
+	f := func(oldValue string, oldStat zk.Stat) (string, error) {
+		if oldValue == "" {
+			return "", fmt.Errorf("no data for tablet addr update: %v", tabletAlias)
+		}
+
+		tablet, err := naming.TabletFromJson(oldValue)
+		if err != nil {
+			return "", err
+		}
+		if err := update(tablet); err != nil {
+			return "", err
+		}
+		return jscfg.ToJson(tablet), nil
+	}
+	err := zkts.zconn.RetryChange(zkTabletPath, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = naming.ErrNoNode
+		}
+		return err
+	}
+	return nil
+}
+
 func (zkts *ZkTopologyServer) DeleteTablet(alias naming.TabletAlias) error {
 	zkTabletPath := TabletPathForAlias(alias)
 	return zk.DeleteRecursive(zkts.zconn, zkTabletPath, -1)

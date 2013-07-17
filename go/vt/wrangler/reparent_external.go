@@ -15,7 +15,7 @@ import (
 )
 
 func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias naming.TabletAlias, scrapStragglers bool) error {
-	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
+	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {
+func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[naming.TabletAlias]*naming.TabletInfo, masterTablet, masterElectTablet *naming.TabletInfo, scrapStragglers bool) error {
 
 	// we fix the new master in the replication graph
 	err := wr.slaveWasPromoted(masterElectTablet)
@@ -81,7 +81,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[naming.TabletAlias]
 	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, []string{masterTablet.Cell, masterElectTablet.Cell})
 }
 
-func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, masterTablet, masterElectTablet *tm.TabletInfo, scrapStragglers bool) error {
+func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[naming.TabletAlias]*naming.TabletInfo, masterTablet, masterElectTablet *naming.TabletInfo, scrapStragglers bool) error {
 	recorder := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
@@ -95,7 +95,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[naming.TabletAlias]
 	// do all the slaves
 	for _, ti := range slaveTabletMap {
 		wg.Add(1)
-		go func(ti *tm.TabletInfo) {
+		go func(ti *naming.TabletInfo) {
 			recorder.RecordError(wr.slaveWasRestarted(ti, &swrd))
 			wg.Done()
 		}(ti)
@@ -107,7 +107,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[naming.TabletAlias]
 	return recorder.Error()
 }
 
-func (wr *Wrangler) slaveWasRestarted(ti *tm.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
+func (wr *Wrangler) slaveWasRestarted(ti *naming.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
 	relog.Info("slaveWasRestarted(%v)", ti.Alias())
 	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias(), swrd)
 	if err != nil {

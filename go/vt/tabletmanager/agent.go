@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-The agent listens on a zk node for new actions to perform.
+The agent listens on an action node for new actions to perform.
 
 It passes them off to a separate action process. Even though some
 actions could be completed inline very quickly, the external process
@@ -22,25 +22,20 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/vitess/go/jscfg"
 	"code.google.com/p/vitess/go/netutil"
 	"code.google.com/p/vitess/go/relog"
 	"code.google.com/p/vitess/go/vt/env"
 	"code.google.com/p/vitess/go/vt/naming"
 	"code.google.com/p/vitess/go/vt/tabletserver"
-	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
-	"code.google.com/p/vitess/go/zk"
-	"launchpad.net/gozk/zookeeper"
 )
 
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The
 // agent will execute these in a new goroutine each time a change is
 // triggered.
-type TabletChangeCallback func(oldTablet, newTablet Tablet)
+type TabletChangeCallback func(oldTablet, newTablet naming.Tablet)
 
 type ActionAgent struct {
 	ts                naming.TopologyServer
-	zconn             zk.Conn // FIXME(alainjobart) will be removed eventually
 	tabletAlias       naming.TabletAlias
 	vtActionBinFile   string // path to vtaction binary
 	MycnfFile         string // my.cnf file
@@ -50,16 +45,13 @@ type ActionAgent struct {
 	changeCallbacks []TabletChangeCallback
 
 	mutex   sync.Mutex
-	_tablet *TabletInfo   // must be accessed with lock - TabletInfo objects are not synchronized.
-	done    chan struct{} // closed when we are done.
+	_tablet *naming.TabletInfo // must be accessed with lock - TabletInfo objects are not synchronized.
+	done    chan struct{}      // closed when we are done.
 }
 
 func NewActionAgent(topoServer naming.TopologyServer, tabletAlias naming.TabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
-	// FIXME(alainjobart) violates encapsulation until conversion is done
-	zconn := topoServer.(*zktopo.ZkTopologyServer).GetZConn()
 	return &ActionAgent{
 		ts:                topoServer,
-		zconn:             zconn,
 		tabletAlias:       tabletAlias,
 		MycnfFile:         mycnfFile,
 		DbConfigsFile:     dbConfigsFile,
@@ -75,7 +67,7 @@ func (agent *ActionAgent) AddChangeCallback(f TabletChangeCallback) {
 	agent.mutex.Unlock()
 }
 
-func (agent *ActionAgent) runChangeCallbacks(oldTablet *Tablet, context string) {
+func (agent *ActionAgent) runChangeCallbacks(oldTablet *naming.Tablet, context string) {
 	agent.mutex.Lock()
 	// Access directly since we have the lock.
 	newTablet := agent._tablet.Tablet
@@ -87,7 +79,7 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *Tablet, context string) 
 }
 
 func (agent *ActionAgent) readTablet() error {
-	tablet, err := ReadTablet(agent.ts, agent.tabletAlias)
+	tablet, err := naming.ReadTablet(agent.ts, agent.tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -97,7 +89,7 @@ func (agent *ActionAgent) readTablet() error {
 	return nil
 }
 
-func (agent *ActionAgent) Tablet() *TabletInfo {
+func (agent *ActionAgent) Tablet() *naming.TabletInfo {
 	agent.mutex.Lock()
 	tablet := agent._tablet
 	agent.mutex.Unlock()
@@ -185,7 +177,7 @@ func (agent *ActionAgent) verifyTopology() error {
 		return fmt.Errorf("agent._tablet is nil")
 	}
 
-	if err := Validate(agent.ts, agent.tabletAlias, ""); err != nil {
+	if err := naming.Validate(agent.ts, agent.tabletAlias, ""); err != nil {
 		// Don't stop, it's not serious enough, this is likely transient.
 		relog.Warning("tablet validate failed: %v %v", agent.tabletAlias, err)
 	}
@@ -201,7 +193,7 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	// Load the shard and see if we are supposed to be serving. We might be a serving type,
 	// but we might be in a transitional state. Only once the shard info is updated do we
 	// put ourselves in the client serving graph.
-	shardInfo, err := ReadShard(agent.ts, agent.Tablet().Keyspace, agent.Tablet().Shard)
+	shardInfo, err := naming.ReadShard(agent.ts, agent.Tablet().Keyspace, agent.Tablet().Shard)
 	if err != nil {
 		return err
 	}
@@ -218,7 +210,7 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
-func VtnsAddrForTablet(tablet *Tablet) (*naming.VtnsAddr, error) {
+func VtnsAddrForTablet(tablet *naming.Tablet) (*naming.VtnsAddr, error) {
 	host, port, err := netutil.SplitHostPort(tablet.Addr)
 	if err != nil {
 		return nil, err
@@ -271,23 +263,14 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 	}
 
 	// Update bind addr for mysql and query service in the tablet node.
-	f := func(oldValue string, oldStat zk.Stat) (string, error) {
-		if oldValue == "" {
-			return "", fmt.Errorf("no data for tablet addr update: %v", agent.tabletAlias)
-		}
-
-		tablet, err := tabletFromJson(oldValue)
-		if err != nil {
-			return "", err
-		}
+	f := func(tablet *naming.Tablet) error {
 		tablet.Addr = bindAddr
 		tablet.SecureAddr = secureAddr
 		tablet.MysqlAddr = mysqlAddr
 		tablet.MysqlIpAddr = mysqlIpAddr
-		return jscfg.ToJson(tablet), nil
+		return nil
 	}
-	err = agent.zconn.RetryChange(agent.Tablet().Path(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-	if err != nil {
+	if err := agent.ts.UpdateTabletFields(agent.Tablet().Alias(), f); err != nil {
 		return err
 	}
 
@@ -308,7 +291,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	oldTablet := &Tablet{}
+	oldTablet := &naming.Tablet{}
 	agent.runChangeCallbacks(oldTablet, "Start")
 
 	go agent.actionEventLoop()

@@ -293,7 +293,7 @@ func listActionsByShard(ts naming.TopologyServer, keyspace, shard string) error 
 		mu.Unlock()
 	}
 
-	tabletAliases, err := tm.FindAllTabletAliasesInShard(ts, keyspace, shard)
+	tabletAliases, err := naming.FindAllTabletAliasesInShard(ts, keyspace, shard)
 	if err != nil {
 		return err
 	}

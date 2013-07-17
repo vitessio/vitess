@@ -64,7 +64,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
-	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 		cellToRebuild = ti.Cell
 	} else {
 		// re-read the tablet, see if we become serving
-		ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+		ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 		if err != nil {
 			return err
 		}
@@ -127,7 +127,7 @@ func (wr *Wrangler) ChangeType(tabletAlias naming.TabletAlias, dbType naming.Tab
 // keyspace rollup, since I think that is adding complexity and feels like it might
 // be a premature optimization.
 func (wr *Wrangler) changeTypeInternal(tabletAlias naming.TabletAlias, dbType naming.TabletType) error {
-	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
@@ -266,24 +266,24 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 		}
 	}
 
-	tablet, err := tm.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, naming.TabletType(tabletType))
+	tablet, err := naming.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, naming.TabletType(tabletType))
 	if err != nil {
 		return err
 	}
 	tablet.DbNameOverride = dbNameOverride
 	tablet.KeyRange = keyRange
 
-	err = tm.CreateTablet(wr.ts, tablet)
+	err = naming.CreateTablet(wr.ts, tablet)
 	if err != nil && err == naming.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update {
-			oldTablet, err := tm.ReadTablet(wr.ts, tabletAlias)
+			oldTablet, err := naming.ReadTablet(wr.ts, tabletAlias)
 			if err != nil {
 				relog.Warning("failed reading tablet %v: %v", tabletAlias, err)
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
-					err := tm.UpdateTablet(wr.ts, oldTablet)
+					err := naming.UpdateTablet(wr.ts, oldTablet)
 					if err != nil {
 						relog.Warning("failed updating tablet %v: %v", tabletAlias, err)
 					} else {
@@ -301,7 +301,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 				// we ignore this
 				relog.Error("failed deleting tablet %v: %v", tabletAlias, err)
 			}
-			err = tm.CreateTablet(wr.ts, tablet)
+			err = naming.CreateTablet(wr.ts, tablet)
 		}
 	}
 	return err
@@ -311,7 +311,7 @@ func (wr *Wrangler) InitTablet(tabletAlias naming.TabletAlias, hostname, mysqlPo
 // directly and don't remote-execute the command.
 func (wr *Wrangler) Scrap(tabletAlias naming.TabletAlias, force, skipRebuild bool) (actionPath string, err error) {
 	// load the tablet, see if we'll need to rebuild
-	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return "", err
 	}

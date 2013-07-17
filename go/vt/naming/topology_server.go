@@ -108,6 +108,10 @@ type TopologyServer interface {
 	// for atomic updates (use -1 to overwrite any version).
 	UpdateTablet(alias TabletAlias, contents string, existingVersion int) (newVersion int, err error)
 
+	// UpdateTabletFields updates the current tablet record
+	// with new values, independently of the version
+	UpdateTabletFields(tabletAlias TabletAlias, update func(*Tablet) error) error
+
 	// DeleteTablet removes a tablet from the system.
 	// We assume no RPC is currently running to it.
 	// TODO(alainjobart) verify this assumption, link with RPC code.

@@ -14,11 +14,10 @@ import (
 	"code.google.com/p/vitess/go/vt/concurrency"
 	"code.google.com/p/vitess/go/vt/mysqlctl"
 	"code.google.com/p/vitess/go/vt/naming"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
 )
 
 func (wr *Wrangler) GetSchema(tabletAlias naming.TabletAlias, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
-	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +25,7 @@ func (wr *Wrangler) GetSchema(tabletAlias naming.TabletAlias, tables []string, i
 	return wr.GetSchemaTablet(ti, tables, includeViews)
 }
 
-func (wr *Wrangler) GetSchemaTablet(tablet *tm.TabletInfo, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchemaTablet(tablet *naming.TabletInfo, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
 	return wr.ai.RpcGetSchemaTablet(tablet, tables, includeViews, wr.actionTimeout())
 }
 
@@ -45,7 +44,7 @@ func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, masterTa
 }
 
 func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews bool) error {
-	si, err := tm.ReadShard(wr.ts, keyspace, shard)
+	si, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -62,7 +61,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews boo
 
 	// read all the aliases in the shard, that is all tablets that are
 	// replicating from the master
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -102,7 +101,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	}
 
 	// find the reference schema using the first shard's master
-	si, err := tm.ReadShard(wr.ts, keyspace, shards[0])
+	si, err := naming.ReadShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -121,7 +120,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	wg := sync.WaitGroup{}
 
 	// first diff the slaves in the reference shard 0
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shards[0])
 	if err != nil {
 		return err
 	}
@@ -137,7 +136,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 
 	// then diffs all tablets in the other shards
 	for _, shard := range shards[1:] {
-		si, err := tm.ReadShard(wr.ts, keyspace, shard)
+		si, err := naming.ReadShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -148,7 +147,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 			continue
 		}
 
-		aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+		aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
 		if err != nil {
 			er.RecordError(err)
 			continue
@@ -198,7 +197,7 @@ func (wr *Wrangler) ApplySchema(tabletAlias naming.TabletAlias, sc *mysqlctl.Sch
 // very quickly.
 func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// read the shard
-	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
+	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +219,7 @@ func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTa
 	return wr.lockAndApplySchemaShard(shardInfo, preflight, keyspace, shard, shardInfo.MasterAlias, change, newParentTabletAlias, simple, force)
 }
 
-func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, keyspace, shard string, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *naming.ShardInfo, preflight *mysqlctl.SchemaChangeResult, keyspace, shard string, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// get a shard lock
 	actionNode := wr.ai.ApplySchemaShard(masterTabletAlias, change, simple)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
@@ -234,15 +233,15 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *tm.ShardInfo, preflight *
 
 // local structure used to keep track of what we're doing
 type TabletStatus struct {
-	ti           *tm.TabletInfo
+	ti           *naming.TabletInfo
 	lastError    error
 	beforeSchema *mysqlctl.SchemaDefinition
 }
 
-func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShard(shardInfo *naming.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
-	aliases, err := tm.FindAllTabletAliasesInShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
+	aliases, err := naming.FindAllTabletAliasesInShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +254,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *tm.ShardInfo, preflight *mysqlct
 			continue
 		}
 
-		ti, err := tm.ReadTablet(wr.ts, alias)
+		ti, err := naming.ReadTablet(wr.ts, alias)
 		if err != nil {
 			return nil, err
 		}
@@ -322,7 +321,7 @@ func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, prefligh
 	return wr.ApplySchema(masterTabletAlias, sc)
 }
 
-func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardInfo *tm.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardInfo *naming.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias naming.TabletAlias, change string, newParentTabletAlias naming.TabletAlias, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// apply the schema change to all replica / slave tablets
 	for _, status := range statusArray {
 		// if already applied, we skip this guy
@@ -343,7 +342,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		}
 
 		// take this guy out of the serving graph if necessary
-		ti, err := tm.ReadTablet(wr.ts, status.ti.Alias())
+		ti, err := naming.ReadTablet(wr.ts, status.ti.Alias())
 		if err != nil {
 			return nil, err
 		}
@@ -386,7 +385,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		newMasterTablet, err := tm.ReadTablet(wr.ts, newParentTabletAlias)
+		newMasterTablet, err := naming.ReadTablet(wr.ts, newParentTabletAlias)
 		if err != nil {
 			return nil, err
 		}
@@ -442,7 +441,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 	// Get schema on all shard masters in parallel
 	relog.Info("Getting schema on all shards")
 	beforeSchemas := make([]*mysqlctl.SchemaDefinition, len(shards))
-	shardInfos := make([]*tm.ShardInfo, len(shards))
+	shardInfos := make([]*naming.ShardInfo, len(shards))
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
 	getErrs := make([]string, 0, 5)
@@ -459,7 +458,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 				wg.Done()
 			}()
 
-			shardInfos[i], err = tm.ReadShard(wr.ts, keyspace, shard)
+			shardInfos[i], err = naming.ReadShard(wr.ts, keyspace, shard)
 			if err != nil {
 				return
 			}

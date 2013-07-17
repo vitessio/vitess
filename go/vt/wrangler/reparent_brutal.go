@@ -11,7 +11,7 @@ import (
 // Assume the master is dead and not coming back. Just push your way
 // forward.  Force means we are reparenting to the same master
 // (assuming the data has been externally synched).
-func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*tm.TabletInfo, failedMaster, masterElectTablet *tm.TabletInfo, leaveMasterReadOnly, force bool) error {
+func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[naming.TabletAlias]*naming.TabletInfo, failedMaster, masterElectTablet *naming.TabletInfo, leaveMasterReadOnly, force bool) error {
 	relog.Info("Skipping ValidateShard - not a graceful situation")
 
 	if _, ok := slaveTabletMap[masterElectTablet.Alias()]; !ok && !force {

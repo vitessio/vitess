@@ -86,7 +86,7 @@ const (
 // forceReparentToCurrentMaster: mostly for test setups, this can
 //   cause data loss.
 func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias naming.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
-	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
+	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -136,8 +136,8 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
-	shardInfo, err := tm.ReadShard(wr.ts, keyspace, shard)
+func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*naming.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
+	shardInfo, err := naming.ReadShard(wr.ts, keyspace, shard)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -153,13 +153,13 @@ func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*tm.Tab
 	return tabletMap, posMap, wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardReplicationPositions(shardInfo *tm.ShardInfo) ([]*tm.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) shardReplicationPositions(shardInfo *naming.ShardInfo) ([]*naming.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
 	tabletMap, err := GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {
 		return nil, nil, err
 	}
-	tablets := CopyMapValues(tabletMap, []*tm.TabletInfo{}).([]*tm.TabletInfo)
+	tablets := CopyMapValues(tabletMap, []*naming.TabletInfo{}).([]*naming.TabletInfo)
 	positions, err := wr.tabletReplicationPositions(tablets)
 	return tablets, positions, err
 }
@@ -174,12 +174,12 @@ func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
 	// Get reparent position from master for the given slave position.
 	// Issue a restart slave on the specified tablet.
 
-	ti, err := tm.ReadTablet(wr.ts, tabletAlias)
+	ti, err := naming.ReadTablet(wr.ts, tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	shardInfo, err := tm.ReadShard(wr.ts, ti.Keyspace, ti.Shard)
+	shardInfo, err := naming.ReadShard(wr.ts, ti.Keyspace, ti.Shard)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias naming.TabletAlias) error {
 		return fmt.Errorf("no master tablet for shard %v/%v", ti.Keyspace, ti.Shard)
 	}
 
-	masterTi, err := tm.ReadTablet(wr.ts, shardInfo.MasterAlias)
+	masterTi, err := naming.ReadTablet(wr.ts, shardInfo.MasterAlias)
 	if err != nil {
 		return err
 	}
