@@ -26,7 +26,7 @@ in the form of :v0, :v1, etc.
 
 var count = flag.Int("count", 1, "how many times to run the query")
 var bindvars = FlagMap("bindvars", "bind vars as a json dictionary")
-var server = flag.String("server", "localhost:6603/test", "vtocc server as [user:password@]hostname:port/dbname[#keyrangestart-keyrangeend]")
+var server = flag.String("server", "localhost:6603/test_keyspace/0", "vtocc server as [user:password@]hostname:port/keyspace/shard[#keyrangestart-keyrangeend]")
 var driver = flag.String("driver", "vttablet", "which driver to use (one of vttablet, vttablet-streaming, vtdb, vtdb-streaming)")
 var verbose = flag.Bool("verbose", false, "show results")
 
