@@ -48,6 +48,7 @@ unit_test:
 	cd go/vt/sqlparser; go test
 	cd go/vt/tabletserver; go test
 	cd go/zk; go test
+	cd go/zk/fakezk; go test
 	cd go/zk/zkctl; go test
 
 queryservice_test:
