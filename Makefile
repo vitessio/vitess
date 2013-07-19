@@ -9,6 +9,7 @@ all: build unit_test queryservice_test integration_test
 build:
 	cd go/cmd/mysqlctl; go build
 	cd go/cmd/normalizer; go build
+	cd go/cmd/topo2topo; go build
 	cd go/cmd/vt_binlog_player; go build
 	cd go/cmd/vt_binlog_server; go build
 	cd go/cmd/vtaction; go build
@@ -41,6 +42,7 @@ unit_test:
 	cd go/rpcwrap/auth; go test
 	cd go/stats; go test
 	cd go/timer; go test
+	cd go/topo2topo; go test
 	cd go/umgmt; go test
 	cd go/vt/client2; go test
 	cd go/vt/dbconfigs; go test
