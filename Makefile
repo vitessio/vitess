@@ -30,6 +30,7 @@ unit_test:
 	cd go/bytes2; go test
 	cd go/cache; go test
 	cd go/cgzip; go test
+	cd go/cmd/topo2topo; go test
 	cd go/cmd/zkns2pdns; go test
 	cd go/hack; go test
 #	cd go/logfile; go test
@@ -42,7 +43,6 @@ unit_test:
 	cd go/rpcwrap/auth; go test
 	cd go/stats; go test
 	cd go/timer; go test
-	cd go/topo2topo; go test
 	cd go/umgmt; go test
 	cd go/vt/client2; go test
 	cd go/vt/dbconfigs; go test
