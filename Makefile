@@ -30,7 +30,6 @@ unit_test:
 	cd go/bytes2; go test
 	cd go/cache; go test
 	cd go/cgzip; go test
-	cd go/cmd/topo2topo; go test
 	cd go/cmd/zkns2pdns; go test
 	cd go/hack; go test
 #	cd go/logfile; go test
@@ -49,6 +48,7 @@ unit_test:
 	cd go/vt/mysqlctl; go test
 	cd go/vt/sqlparser; go test
 	cd go/vt/tabletserver; go test
+	cd go/vt/topotools; go test
 	cd go/zk; go test
 	cd go/zk/fakezk; go test
 	cd go/zk/zkctl; go test
