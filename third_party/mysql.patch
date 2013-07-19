@@ -1,4 +1,4 @@
-diff --git a/client/vt_mysqlbinlog.cc b/vt_client/mysqlbinlog.cc
+diff --git a/client/vt_mysqlbinlog.cc b/client/vt_mysqlbinlog.cc
 index f85219a..862438b 100644
 --- a/client/vt_mysqlbinlog.cc
 +++ b/client/vt_mysqlbinlog.cc
