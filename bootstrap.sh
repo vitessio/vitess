@@ -103,7 +103,8 @@ if [ -d $bson_dist ]; then
   echo "skipping bson python build"
 else
   cd $VTTOP/third_party/py/bson-0.3.2 && \
-    python ./setup.py install --prefix=$bson_dist
+    python ./setup.py install --prefix=$bson_dist && \
+    rm -r build
 fi
 
 # install cbson
