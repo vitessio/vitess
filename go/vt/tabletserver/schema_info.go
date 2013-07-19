@@ -171,7 +171,7 @@ func (si *SchemaInfo) override(schemaOverrides []SchemaOverride) {
 				continue
 			}
 		}
-		if si.cachePool == nil || override.Cache == nil {
+		if si.cachePool.IsClosed() || override.Cache == nil {
 			continue
 		}
 		switch override.Cache.Type {
