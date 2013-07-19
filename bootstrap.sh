@@ -115,5 +115,7 @@ else
     python ./setup.py install --prefix=$cbson_dist
 fi
 
-
+# create pre-commit hooks
+echo "creating git pre-commit hooks"
+ln -sf $VTTOP/misc/git/pre-commit $VTTOP/.git/hooks/pre-commit
 echo "source dev.env in your shell to complete the setup."
