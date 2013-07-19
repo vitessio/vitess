@@ -8,9 +8,6 @@
 *.[568vq]
 [568vq].out
 
-build
-dist
-
 *.out
 *.output
 *.swp
