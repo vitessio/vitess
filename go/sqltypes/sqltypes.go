@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"code.google.com/p/vitess/go/hack"
+	"github.com/youtube/vitess/go/hack"
 )
 
 var (

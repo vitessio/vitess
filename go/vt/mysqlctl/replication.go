@@ -20,9 +20,9 @@ import (
 	"text/template"
 	"time"
 
-	"code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 const (

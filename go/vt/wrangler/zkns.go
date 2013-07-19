@@ -6,12 +6,12 @@ import (
 	"sort"
 	"strings"
 
-	"code.google.com/p/vitess/go/jscfg"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/topo"
-	"code.google.com/p/vitess/go/vt/zktopo"
-	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/zk/zkns"
+	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/zk"
+	"github.com/youtube/vitess/go/zk/zkns"
 	"launchpad.net/gozk/zookeeper"
 )
 

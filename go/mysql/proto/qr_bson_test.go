@@ -7,8 +7,8 @@ package proto
 import (
 	"testing"
 
-	"code.google.com/p/vitess/go/bson"
-	"code.google.com/p/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 type TestCase struct {

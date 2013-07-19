@@ -9,8 +9,8 @@ import (
 	"sort"
 	"sync"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // If error is not nil, the results in the dictionary are incomplete.

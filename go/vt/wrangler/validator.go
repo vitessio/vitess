@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/relog"
+	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // As with all distributed systems, things can skew. These functions

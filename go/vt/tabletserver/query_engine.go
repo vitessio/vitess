@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/hack"
-	mproto "code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/sqltypes"
-	"code.google.com/p/vitess/go/stats"
-	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/schema"
-	"code.google.com/p/vitess/go/vt/sqlparser"
-	"code.google.com/p/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/hack"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 const (

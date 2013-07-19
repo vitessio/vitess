@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
+	"github.com/youtube/vitess/go/relog"
 )
 
 // if the master is still alive, then we need to demote it gracefully

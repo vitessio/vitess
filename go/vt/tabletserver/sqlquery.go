@@ -13,15 +13,15 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/mysql"
-	mproto "code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
-	"code.google.com/p/vitess/go/stats"
-	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/tb"
-	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/mysql"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/relog"
+	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // exclusive transitions can be executed without a lock

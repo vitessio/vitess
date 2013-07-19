@@ -7,7 +7,7 @@ package umgmt
 import (
 	"testing"
 
-	"code.google.com/p/vitess/go/relog"
+	"github.com/youtube/vitess/go/relog"
 )
 
 var ready = make(chan bool)

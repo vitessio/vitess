@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"code.google.com/p/vitess/go/sync2"
+	"github.com/youtube/vitess/go/sync2"
 )
 
 // ResourceConstraint combines 3 different features:

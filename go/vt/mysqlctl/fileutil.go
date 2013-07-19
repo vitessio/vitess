@@ -22,9 +22,9 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/vitess/go/cgzip"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/cgzip"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 // Use this to simulate failures in tests

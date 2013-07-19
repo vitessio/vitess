@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/rpc"
 
-	"code.google.com/p/vitess/go/relog"
+	"github.com/youtube/vitess/go/relog"
 )
 
 type Client struct {

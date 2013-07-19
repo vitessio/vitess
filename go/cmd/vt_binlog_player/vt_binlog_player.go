@@ -22,15 +22,15 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/vitess/go/mysql"
-	"code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/stats"
-	"code.google.com/p/vitess/go/umgmt"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/umgmt"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/servenv"
 )
 
 var stdout *bufio.Writer

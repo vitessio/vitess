@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/stats"
+	"github.com/youtube/vitess/go/stats"
 	"launchpad.net/gozk/zookeeper"
 )
 

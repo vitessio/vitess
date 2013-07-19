@@ -5,8 +5,8 @@
 package proto
 
 import (
-	mproto "code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/vt/key"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 type SessionParams struct {

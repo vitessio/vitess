@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
-	hk "code.google.com/p/vitess/go/vt/hook"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/relog"
+	hk "github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func (wr *Wrangler) ExecuteHook(tabletAlias topo.TabletAlias, hook *hk.Hook) (hookResult *hk.HookResult, err error) {

@@ -7,8 +7,8 @@ package wrangler
 import (
 	"fmt"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) error {

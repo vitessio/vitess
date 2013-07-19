@@ -30,7 +30,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/sync2"
+	"github.com/youtube/vitess/go/sync2"
 )
 
 // Out-of-band messages

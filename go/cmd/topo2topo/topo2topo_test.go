@@ -8,12 +8,12 @@ import (
 	"os"
 	"testing"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/topo"
-	"code.google.com/p/vitess/go/vt/zktopo"
-	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/zk/fakezk"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/zk"
+	"github.com/youtube/vitess/go/zk/fakezk"
 	"launchpad.net/gozk/zookeeper"
 )
 

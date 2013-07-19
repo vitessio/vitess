@@ -1,7 +1,7 @@
 package mysqlctl
 
 import (
-	"code.google.com/p/vitess/go/relog"
+	"github.com/youtube/vitess/go/relog"
 )
 
 type MapFunc func(index int) error

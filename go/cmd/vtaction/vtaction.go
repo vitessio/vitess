@@ -12,17 +12,17 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"code.google.com/p/vitess/go/jscfg"
-	"code.google.com/p/vitess/go/relog"
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
-	_ "code.google.com/p/vitess/go/snitch"
+	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/relog"
+	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
+	_ "github.com/youtube/vitess/go/snitch"
 
-	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var port = flag.Int("port", 0, "port for debug http server")

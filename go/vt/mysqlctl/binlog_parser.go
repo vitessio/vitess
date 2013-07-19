@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/bson"
-	"code.google.com/p/vitess/go/bytes2"
-	"code.google.com/p/vitess/go/relog"
-	parser "code.google.com/p/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
+	"github.com/youtube/vitess/go/relog"
+	parser "github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 /*

@@ -10,10 +10,10 @@ import (
 	"encoding/json"
 	"flag"
 
-	"code.google.com/p/vitess/go/jscfg"
-	"code.google.com/p/vitess/go/mysql"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 // Offer a sample config - probably should load this when file isn't set.

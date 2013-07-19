@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"code.google.com/p/vitess/go/bson"
-	"code.google.com/p/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 type NormalizedQuery struct {

@@ -7,9 +7,9 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"code.google.com/p/vitess/go/relog"
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/relog"
+	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/proto"
 )
 
 // UnusedArgument is a type used to indicate an argument that is

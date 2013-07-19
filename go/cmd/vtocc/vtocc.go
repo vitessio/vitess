@@ -14,16 +14,16 @@ import (
 	"os/signal"
 	"syscall"
 
-	"code.google.com/p/vitess/go/relog"
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/auth"
-	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
-	_ "code.google.com/p/vitess/go/snitch"
-	"code.google.com/p/vitess/go/umgmt"
-	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/servenv"
-	ts "code.google.com/p/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/relog"
+	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/auth"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
+	_ "github.com/youtube/vitess/go/snitch"
+	"github.com/youtube/vitess/go/umgmt"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/servenv"
+	ts "github.com/youtube/vitess/go/vt/tabletserver"
 )
 
 const (

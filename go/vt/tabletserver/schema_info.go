@@ -12,13 +12,13 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/cache"
-	mproto "code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/sqltypes"
-	"code.google.com/p/vitess/go/timer"
-	"code.google.com/p/vitess/go/vt/schema"
-	"code.google.com/p/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/cache"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/timer"
+	"github.com/youtube/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
 const base_show_tables = "select table_name, table_type, unix_timestamp(create_time), table_comment from information_schema.tables where table_schema = database()"

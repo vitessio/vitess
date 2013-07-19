@@ -11,10 +11,10 @@ import (
 	"os"
 	"time"
 
-	"code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/zk"
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/zk"
 )
 
 var usage = `

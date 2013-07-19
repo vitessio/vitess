@@ -22,11 +22,11 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/vitess/go/netutil"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/env"
-	"code.google.com/p/vitess/go/vt/tabletserver"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/env"
+	"github.com/youtube/vitess/go/vt/tabletserver"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The

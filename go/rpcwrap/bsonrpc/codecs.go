@@ -8,10 +8,10 @@ import (
 	"io"
 	"time"
 
-	"code.google.com/p/vitess/go/bson"
-	"code.google.com/p/vitess/go/bytes2"
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap"
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
+	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap"
 )
 
 const (

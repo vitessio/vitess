@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/pools"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/stats"
-	"code.google.com/p/vitess/go/streamlog"
-	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/timer"
+	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/streamlog"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/timer"
 )
 
 /* Function naming convention:

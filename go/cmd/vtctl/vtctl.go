@@ -18,15 +18,15 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/tb"
-	"code.google.com/p/vitess/go/vt/client2"
-	hk "code.google.com/p/vitess/go/vt/hook"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	tm "code.google.com/p/vitess/go/vt/tabletmanager"
-	"code.google.com/p/vitess/go/vt/topo"
-	"code.google.com/p/vitess/go/vt/wrangler"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/client2"
+	hk "github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
 var noWaitForAction = flag.Bool("no-wait", false, "don't wait for action completion, detach")

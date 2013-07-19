@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/pools"
+	"github.com/youtube/vitess/go/pools"
 )
 
 // ConnectionPool re-exposes ResourcePool as a pool of DBConnection objects

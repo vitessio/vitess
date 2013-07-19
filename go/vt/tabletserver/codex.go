@@ -10,9 +10,9 @@ import (
 	"fmt"
 	"strings"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/sqltypes"
-	"code.google.com/p/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/schema"
 )
 
 // buildValueList builds the set of PK reference rows used to drive the next query.

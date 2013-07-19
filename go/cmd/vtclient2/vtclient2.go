@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/db"
-	_ "code.google.com/p/vitess/go/vt/client2"
-	_ "code.google.com/p/vitess/go/vt/client2/tablet"
+	"github.com/youtube/vitess/go/db"
+	_ "github.com/youtube/vitess/go/vt/client2"
+	_ "github.com/youtube/vitess/go/vt/client2/tablet"
 )
 
 var usage = `

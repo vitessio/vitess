@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"code.google.com/p/vitess/go/cache"
-	"code.google.com/p/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/cache"
+	"github.com/youtube/vitess/go/mysql/proto"
 )
 
 var (

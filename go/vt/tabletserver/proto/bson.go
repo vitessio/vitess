@@ -10,8 +10,8 @@ import (
 	"math"
 	"time"
 
-	"code.google.com/p/vitess/go/bson"
-	"code.google.com/p/vitess/go/bytes2"
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
 )
 
 func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {

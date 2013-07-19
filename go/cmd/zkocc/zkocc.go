@@ -10,15 +10,15 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"code.google.com/p/vitess/go/relog"
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	"code.google.com/p/vitess/go/rpcwrap/jsonrpc"
-	_ "code.google.com/p/vitess/go/snitch"
-	"code.google.com/p/vitess/go/umgmt"
-	"code.google.com/p/vitess/go/vt/servenv"
-	"code.google.com/p/vitess/go/zk"
-	"code.google.com/p/vitess/go/zk/zkocc"
+	"github.com/youtube/vitess/go/relog"
+	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
+	_ "github.com/youtube/vitess/go/snitch"
+	"github.com/youtube/vitess/go/umgmt"
+	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/zk"
+	"github.com/youtube/vitess/go/zk/zkocc"
 )
 
 const (

@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"net"
 
-	"code.google.com/p/vitess/go/netutil"
-	"code.google.com/p/vitess/go/relog"
+	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/relog"
 )
 
 type VtnsAddr struct {

@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/topo"
-	"code.google.com/p/vitess/go/vt/wrangler"
-	"code.google.com/p/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
-	"code.google.com/p/vitess/go/zk"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/wrangler"
+	"github.com/youtube/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
+	"github.com/youtube/vitess/go/zk"
 )
 
 var (

@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/vitess/go/zk"
+	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 

@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"code.google.com/p/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 type pair struct {

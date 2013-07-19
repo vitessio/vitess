@@ -20,16 +20,16 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap"
-	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	_ "code.google.com/p/vitess/go/snitch"
-	"code.google.com/p/vitess/go/stats"
-	"code.google.com/p/vitess/go/umgmt"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/relog"
+	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	_ "github.com/youtube/vitess/go/snitch"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/umgmt"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/servenv"
 )
 
 var (

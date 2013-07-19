@@ -12,8 +12,8 @@ import (
 	"os"
 	"strings"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/zk/zkctl"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/zk/zkctl"
 )
 
 var usage = `

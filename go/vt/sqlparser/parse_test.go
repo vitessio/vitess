@@ -15,9 +15,9 @@ import (
 	"strings"
 	"testing"
 
-	"code.google.com/p/vitess/go/sqltypes"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/schema"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/schema"
 )
 
 func TestGen(t *testing.T) {

@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/jscfg"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/topo"
-	"code.google.com/p/vitess/go/zk"
+	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
 

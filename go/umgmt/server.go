@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
+	"github.com/youtube/vitess/go/relog"
 )
 
 type Request struct{}

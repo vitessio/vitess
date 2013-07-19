@@ -17,13 +17,13 @@ import (
 	"syscall"
 	"time"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/tb"
-	"code.google.com/p/vitess/go/vt/hook"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/topo"
-	"code.google.com/p/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
 // The actor applies individual commands to execute an action read

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/stats"
-	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/zk"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/zk"
 )
 
 // zkocc

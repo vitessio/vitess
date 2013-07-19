@@ -7,7 +7,7 @@ package sqlparser
 import (
 	"strconv"
 
-	"code.google.com/p/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 const (

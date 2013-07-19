@@ -7,8 +7,8 @@ package tabletserver
 import (
 	"fmt"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/tb"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/tb"
 )
 
 const (

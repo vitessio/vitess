@@ -11,10 +11,10 @@ import (
 	"os"
 	"strings"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/dbconfigs"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 var port = flag.Int("port", 6612, "vtocc port")

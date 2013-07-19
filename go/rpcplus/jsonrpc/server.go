@@ -10,7 +10,7 @@ import (
 	"io"
 	"sync"
 
-	rpc "code.google.com/p/vitess/go/rpcplus"
+	rpc "github.com/youtube/vitess/go/rpcplus"
 )
 
 type serverCodec struct {

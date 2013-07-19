@@ -7,9 +7,9 @@ package jsonrpc
 import (
 	"time"
 
-	rpc "code.google.com/p/vitess/go/rpcplus"
-	oldjson "code.google.com/p/vitess/go/rpcplus/jsonrpc"
-	"code.google.com/p/vitess/go/rpcwrap"
+	rpc "github.com/youtube/vitess/go/rpcplus"
+	oldjson "github.com/youtube/vitess/go/rpcplus/jsonrpc"
+	"github.com/youtube/vitess/go/rpcwrap"
 )
 
 func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Client, error) {

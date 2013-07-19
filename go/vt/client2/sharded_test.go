@@ -10,7 +10,7 @@ package client2
 // 	"testing"
 // 	_ "time"
 
-// 	_ "code.google.com/p/vitess/go/zk"
+// 	_ "github.com/youtube/vitess/go/zk"
 // )
 
 // // This is more of an example code than a real test

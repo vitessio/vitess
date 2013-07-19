@@ -15,12 +15,12 @@ import (
 	"net/url"
 	"strings"
 
-	"code.google.com/p/vitess/go/db"
-	mproto "code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/rpcplus"
-	"code.google.com/p/vitess/go/rpcwrap/bsonrpc"
-	"code.google.com/p/vitess/go/sqltypes"
-	tproto "code.google.com/p/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/db"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/sqltypes"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 var (

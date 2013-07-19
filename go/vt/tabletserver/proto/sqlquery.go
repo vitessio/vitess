@@ -5,9 +5,9 @@
 package proto
 
 import (
-	mproto "code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/rpcwrap"
-	rpcproto "code.google.com/p/vitess/go/rpcwrap/proto"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/rpcwrap"
+	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 )
 
 // defines the RPC services

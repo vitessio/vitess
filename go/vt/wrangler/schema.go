@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/concurrency"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {

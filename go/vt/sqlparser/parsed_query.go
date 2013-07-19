@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"code.google.com/p/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 type BindLocation struct {

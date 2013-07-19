@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/jscfg"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/vt/hook"
-	"code.google.com/p/vitess/go/vt/mysqlctl"
-	"code.google.com/p/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 const (

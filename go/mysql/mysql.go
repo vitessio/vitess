@@ -15,10 +15,10 @@ import (
 	"fmt"
 	"unsafe"
 
-	"code.google.com/p/vitess/go/hack"
-	"code.google.com/p/vitess/go/mysql/proto"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/hack"
+	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 const (

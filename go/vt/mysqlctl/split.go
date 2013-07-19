@@ -95,13 +95,13 @@ import (
 	"strings"
 	"time"
 
-	"code.google.com/p/vitess/go/bufio2"
-	"code.google.com/p/vitess/go/cgzip"
-	"code.google.com/p/vitess/go/relog"
-	"code.google.com/p/vitess/go/sync2"
-	"code.google.com/p/vitess/go/vt/concurrency"
-	"code.google.com/p/vitess/go/vt/key"
-	"code.google.com/p/vitess/go/vt/mysqlctl/csvsplitter"
+	"github.com/youtube/vitess/go/bufio2"
+	"github.com/youtube/vitess/go/cgzip"
+	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl/csvsplitter"
 )
 
 const (

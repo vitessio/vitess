@@ -10,7 +10,7 @@ import (
 	"io"
 	"unicode"
 
-	"code.google.com/p/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sqltypes"
 )
 
 const EOFCHAR = 0x100
