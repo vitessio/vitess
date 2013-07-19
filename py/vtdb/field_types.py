@@ -3,7 +3,7 @@ import datetime
 from decimal import Decimal
 from vtdb import times
 
-# These numbers should exactly match values defined in dist/vt-mysql-5.1.52/include/mysql/mysql_com.h
+# These numbers should exactly match values defined in dist/mysql-5.1.52/include/mysql/mysql_com.h
 VT_DECIMAL = 0
 VT_TINY = 1
 VT_SHORT = 2

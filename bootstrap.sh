@@ -65,6 +65,33 @@ ln -snf $VTTOP/go/cmd/zkclient2/zkclient2 $VTROOT/bin/zkclient2
 ln -snf $VTTOP/go/zk/zkctl/zksrv.sh $VTROOT/bin/zksrv.sh
 ln -snf $VTTOP/test/vthook-test.sh $VTROOT/vthook/test.sh
 
+# install mysql
+if [ -d $VTROOT/dist/mysql ];
+then
+  echo "skipping MySQL build"
+else
+  git clone https://code.google.com/p/google-mysql/ third_party/mysql
+  pushd third_party/mysql
+  cp client/mysqlbinlog.cc client/vt_mysqlbinlog.cc
+  git apply ../mysql.patch
+  set -e
+  enable_minimal="--enable-minimal"
+  source google/env.inc
+  source ../mysql-compile.inc 2>&1 | tee log
+
+  VT_MYSQL_ROOT=$VTROOT/dist/mysql
+
+# Install
+  make -s install #DESTDIR=$VTROOT/dist/mysql
+  rm -rf $VTROOT/dist/mysql/mysql-test && \
+    rm -rf $VTROOT/dist/mysql/sql-bench
+  popd
+  rm -rf third_party/mysql
+  fi
+
+
+
+
 # generate pkg-config, so go can use mysql C client
 if [ ! -x $VT_MYSQL_ROOT/bin/mysql_config ]; then
   echo "cannot execute $VT_MYSQL_ROOT/bin/mysql_config, exiting" 1>&2

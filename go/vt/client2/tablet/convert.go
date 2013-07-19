@@ -8,7 +8,7 @@ import (
 	"strconv"
 )
 
-// These numbers should exactly match values defined in dist/vt-mysql-5.1.52/include/mysql/mysql_com.h
+// These numbers should exactly match values defined in dist/mysql-5.1.52/include/mysql/mysql_com.h
 const (
 	VT_DECIMAL     = 0
 	VT_TINY        = 1

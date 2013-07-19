@@ -1,0 +1,96 @@
+diff --git a/client/vt_mysqlbinlog.cc b/vt_client/mysqlbinlog.cc
+index f85219a..862438b 100644
+--- a/client/vt_mysqlbinlog.cc
++++ b/client/vt_mysqlbinlog.cc
+@@ -1798,8 +1798,17 @@ static Exit_status check_header(IO_CACHE* file,
+     return ERROR_STOP;
+   }
+ 
+-  pos= my_b_tell(file);
+-  my_b_seek(file, (my_off_t)0);
++  if (logname && strcmp(logname, "-") != 0)
++  {
++    pos= my_b_tell(file);
++    my_b_seek(file, (my_off_t)0);
++  }
++  else
++  {
++    // input is stdin - assume the offset is zero
++    pos= 0;
++  }
++
+   if (my_b_read(file, header, sizeof(header)))
+   {
+     error("Failed reading header; probably an empty file.");
+@@ -1987,7 +1996,7 @@ static Exit_status dump_local_log_entries(PRINT_EVENT_INFO *print_event_info,
+     }
+ #endif 
+     if (init_io_cache(file, fileno(stdin), 0, READ_CACHE, (my_off_t) 0,
+-		      0, MYF(MY_WME | MY_NABP | MY_DONT_CHECK_FILESIZE)))
++		      0, MYF(MY_WME | MY_NABP | MY_DONT_CHECK_FILESIZE | MY_FULL_IO)))
+     {
+       error("Failed to init IO cache.");
+       return ERROR_STOP;
+diff --git a/client/Makefile.am b/client/Makefile.am
+index 8158783..8b137c0 100644
+--- a/client/Makefile.am
++++ b/client/Makefile.am
+@@ -44,6 +44,7 @@ CLEANFILES =			$(BUILT_SOURCES)
+ bin_PROGRAMS =			mysql \
+ 				mysqladmin \
+ 				mysqlbinlog \
++				vt_mysqlbinlog \
+ 				mysqlcheck \
+ 				mysqldump \
+ 				mysqlimport \
+@@ -57,6 +58,7 @@ mysql_SOURCES =			mysql.cc readline.cc sql_string.cc \
+ mysql_LDADD =			@readline_link@ @TERMCAP_LIB@ @NCURSES_LIBS@ \
+ 				$(LDADD) $(CXXLDFLAGS)
+ mysqladmin_SOURCES =		mysqladmin.cc
++mysqlcheck_SOURCES = 		mysqlcheck.cc $(top_srcdir)/mysys/checksum.c
+ 
+ mysqlbinlog_SOURCES =		mysqlbinlog.cc \
+ 				$(top_srcdir)/mysys/checksum.c \
+@@ -68,6 +70,16 @@ mysqlbinlog_SOURCES =		mysqlbinlog.cc \
+ 				$(top_srcdir)/mysys/base64.c
+ mysqlbinlog_LDADD =		$(LDADD) $(CXXLDFLAGS)
+ 
++vt_mysqlbinlog_SOURCES =	mysqlbinlog.cc \
++				$(top_srcdir)/mysys/checksum.c \
++				$(top_srcdir)/mysys/mf_tempdir.c \
++				$(top_srcdir)/mysys/my_new.cc \
++				$(top_srcdir)/mysys/my_bit.c \
++				$(top_srcdir)/mysys/my_bitmap.c \
++				$(top_srcdir)/mysys/my_vle.c \
++				$(top_srcdir)/mysys/base64.c
++vt_mysqlbinlog_LDADD =		$(LDADD) $(CXXLDFLAGS)
++
+ mysqldump_SOURCES=              mysqldump.c \
+ 				my_user.c \
+ 	                        $(top_srcdir)/mysys/mf_getdate.c
+diff --git a/libmysql/Makefile.am b/libmysql/Makefile.am
+index 2453547..7e3d970 100644
+--- a/libmysql/Makefile.am
++++ b/libmysql/Makefile.am
+@@ -28,7 +28,7 @@ INCLUDES =	-I$(top_builddir)/include -I$(top_srcdir)/include \
+ 
+ include $(srcdir)/Makefile.shared
+ 
+-libmysqlclient_la_SOURCES = $(target_sources)
++libmysqlclient_la_SOURCES = $(target_sources) $(top_srcdir)/mysys/checksum.c
+ libmysqlclient_la_LIBADD = $(target_libadd) $(yassl_las)
+ libmysqlclient_la_LDFLAGS = $(target_ldflags)
+ EXTRA_DIST = Makefile.shared libmysql.def dll.c CMakeLists.txt
+diff --git a/libmysql_r/Makefile.am b/libmysql_r/Makefile.am
+index d4f0bea..77cf6c3 100644
+--- a/libmysql_r/Makefile.am
++++ b/libmysql_r/Makefile.am
+@@ -28,7 +28,7 @@ INCLUDES =	-I$(top_builddir)/include -I$(top_srcdir)/include \
+ ## automake barfs if you don't use $(srcdir) or $(top_srcdir) in include
+ include $(top_srcdir)/libmysql/Makefile.shared
+ 
+-nodist_libmysqlclient_r_la_SOURCES = $(target_sources)
++nodist_libmysqlclient_r_la_SOURCES = $(target_sources) $(top_srcdir)/mysys/checksum.c
+ libmysqlclient_r_la_LIBADD = $(target_libadd) $(yassl_las)
+ libmysqlclient_r_la_LDFLAGS = $(target_ldflags)
+ 

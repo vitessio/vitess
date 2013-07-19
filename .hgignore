@@ -12,6 +12,7 @@ _obj/
 _testmain.go$
 \.swp$
 .DS_Store$
+^third_party/mysql$
 ^go/cmd/mysqlctl/mysqlctl$
 ^go/cmd/normalizer/normalizer$
 ^go/cmd/vt_binlog_player/vt_binlog_player$
