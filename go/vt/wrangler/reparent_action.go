@@ -427,8 +427,10 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *topo.TabletInfo, majo
 		relog.Warning("minority reparent, manual fixes are needed, leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias())
 	}
 
+	// we can't be smart and just do the old and new master cells,
+	// as we export master record everywhere.
 	relog.Info("rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, []string{oldMaster.Cell, masterElect.Cell})
+	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil)
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletInfo, masterElect *topo.TabletInfo) error {
