@@ -5,8 +5,8 @@
 package snitch
 
 import (
-	"github.com/youtube/vitess/go/relog"
 	"fmt"
+	"github.com/youtube/vitess/go/relog"
 	"net/http"
 	"runtime"
 )
