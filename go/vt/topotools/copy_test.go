@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package topotools
 
 import (
 	"os"
@@ -17,7 +17,7 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-func TestBasic(t *testing.T) {
+func createSetup(t *testing.T) (topo.Server, topo.Server) {
 	fromConn := fakezk.NewConn()
 	fromTS := zktopo.NewServer(fromConn)
 
@@ -79,8 +79,15 @@ func TestBasic(t *testing.T) {
 	}
 	relog.Info("Cells: %v", cells)
 
+	return fromTS, toTS
+}
+
+func TestBasic(t *testing.T) {
+
+	fromTS, toTS := createSetup(t)
+
 	// check keyspace copy
-	copyKeyspaces(fromTS, toTS)
+	CopyKeyspaces(fromTS, toTS)
 	keyspaces, err := toTS.GetKeyspaces()
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces failed: %v", err)
@@ -88,10 +95,10 @@ func TestBasic(t *testing.T) {
 	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
 		t.Fatalf("unexpected keyspaces: %v", keyspaces)
 	}
-	copyKeyspaces(fromTS, toTS)
+	CopyKeyspaces(fromTS, toTS)
 
 	// check shard copy
-	copyShards(fromTS, toTS, true)
+	CopyShards(fromTS, toTS, true)
 	shards, err := toTS.GetShardNames("test_keyspace")
 	if err != nil {
 		t.Fatalf("toTS.GetShardNames failed: %v", err)
@@ -99,10 +106,10 @@ func TestBasic(t *testing.T) {
 	if len(shards) != 1 || shards[0] != "0" {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
-	copyShards(fromTS, toTS, false)
+	CopyShards(fromTS, toTS, false)
 
 	// check tablet copy
-	copyTablets(fromTS, toTS)
+	CopyTablets(fromTS, toTS)
 	tablets, err := toTS.GetTabletsByCell("test_cell")
 	if err != nil {
 		t.Fatalf("toTS.GetTabletsByCell failed: %v", err)
@@ -110,5 +117,5 @@ func TestBasic(t *testing.T) {
 	if len(tablets) != 2 || tablets[0].Uid != 123 || tablets[1].Uid != 234 {
 		t.Fatalf("unexpected tablets: %v", tablets)
 	}
-	copyTablets(fromTS, toTS)
+	CopyTablets(fromTS, toTS)
 }
