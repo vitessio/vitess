@@ -5,9 +5,9 @@
 package zk
 
 import (
+	"fmt"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"fmt"
 	"launchpad.net/gozk/zookeeper"
 	"log"
 	"math/rand"

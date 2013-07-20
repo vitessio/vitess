@@ -24,15 +24,15 @@ import (
 // - we lock primary/secondary if reverseLockOrder is False,
 // or secondary/primary if reverseLockOrder is True.
 type Tee struct {
-	primary          topo.Server
-	secondary        topo.Server
+	primary   topo.Server
+	secondary topo.Server
 
-	readFrom         topo.Server
-	lockFirst        topo.Server
-	lockSecond       topo.Server
+	readFrom   topo.Server
+	lockFirst  topo.Server
+	lockSecond topo.Server
 
 	keyspaceLockPaths map[string]string
-	shardLockPaths map[string]string
+	shardLockPaths    map[string]string
 }
 
 func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
@@ -151,7 +151,7 @@ func (tee *Tee) GetShard(keyspace, shard string) (si *topo.ShardInfo, err error)
 }
 
 func (tee *Tee) GetShardNames(keyspace string) ([]string, error) {
-	return tee.readFrom.GetShardNames(keyspace )
+	return tee.readFrom.GetShardNames(keyspace)
 }
 
 //
@@ -470,7 +470,7 @@ func (tee *Tee) GetSubprocessFlags() []string {
 	// propagate the VT_TOPOLOGY_SERVER environment too
 	name := os.Getenv("VT_TOPOLOGY_SERVER")
 	if name != "" {
-		p = append(p, "VT_TOPOLOGY_SERVER=" + name)
+		p = append(p, "VT_TOPOLOGY_SERVER="+name)
 	}
 
 	return p
