@@ -5,10 +5,10 @@
 package jsonrpc
 
 import (
-	"github.com/youtube/vitess/go/rpcplus"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/youtube/vitess/go/rpcplus"
 	"io"
 	"net"
 	"testing"
