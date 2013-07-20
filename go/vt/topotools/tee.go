@@ -6,6 +6,7 @@ package topotools
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/youtube/vitess/go/relog"
@@ -21,7 +22,7 @@ import (
 // - primary: we read everything from it, and write to it
 // - secondary: we write to it as well, but we usually don't fail.
 // - we lock primary/secondary if reverseLockOrder is False,
-// or secondary/primary is reverseLockOrder is True.
+// or secondary/primary if reverseLockOrder is True.
 type Tee struct {
 	primary          topo.Server
 	secondary        topo.Server
@@ -78,7 +79,7 @@ func (tee *Tee) CreateKeyspace(keyspace string) error {
 		return err
 	}
 
-	// this is critical enough we want to fail
+	// this is critical enough that we want to fail
 	if err := tee.secondary.CreateKeyspace(keyspace); err != nil {
 		return err
 	}
@@ -430,38 +431,34 @@ func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) 
 
 //
 // Remote Tablet Actions, local cell.
+// TODO(alainjobart) implement the split
 //
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) WriteTabletAction(tabletAlias topo.TabletAlias, contents string) (string, error) {
 	return tee.primary.WriteTabletAction(tabletAlias, contents)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error) {
 	return tee.primary.WaitForTabletAction(actionPath, waitTime, interrupted)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) PurgeTabletActions(tabletAlias topo.TabletAlias, canBePurged func(data string) bool) error {
 	return tee.primary.PurgeTabletActions(tabletAlias, canBePurged)
 }
 
 //
 // Supporting the local agent process, local cell.
+// TODO(alainjobart) implement the split
 //
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
 	return tee.primary.ValidateTabletActions(tabletAlias)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, done chan struct{}) error {
 	return tee.primary.CreateTabletPidNode(tabletAlias, done)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
 	return tee.primary.ValidateTabletPidNode(tabletAlias)
 }
@@ -469,30 +466,32 @@ func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
 func (tee *Tee) GetSubprocessFlags() []string {
 	p := tee.primary.GetSubprocessFlags()
 	p = append(p, tee.secondary.GetSubprocessFlags()...)
+
+	// propagate the VT_TOPOLOGY_SERVER environment too
+	name := os.Getenv("VT_TOPOLOGY_SERVER")
+	if name != "" {
+		p = append(p, "VT_TOPOLOGY_SERVER=" + name)
+	}
+
 	return p
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
 	tee.primary.ActionEventLoop(tabletAlias, dispatchAction, done)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int, error) {
 	return tee.primary.ReadTabletActionPath(actionPath)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) UpdateTabletAction(actionPath, data string, version int) error {
 	return tee.primary.UpdateTabletAction(actionPath, data, version)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) StoreTabletActionResponse(actionPath, data string) error {
 	return tee.primary.StoreTabletActionResponse(actionPath, data)
 }
 
-// TODO(alainjobart) implement the split
 func (tee *Tee) UnblockTabletAction(actionPath string) error {
 	return tee.primary.UnblockTabletAction(actionPath)
 }

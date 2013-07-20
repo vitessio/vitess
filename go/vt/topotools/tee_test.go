@@ -15,9 +15,6 @@ import (
 //	"launchpad.net/gozk/zookeeper"
 )
 
-func testConversion(topo.Server) {
-}
-
 func testStringArrays(t *testing.T, expected, value []string) {
 	if len(expected) != len(value) {
 		t.Fatalf("Different arrays:\n%v\n%v", expected, value)
@@ -39,7 +36,7 @@ func TestTee(t *testing.T) {
 
 	// create a tee and check it implements the interface
 	tee := NewTee(fromTS, toTS, true)
-	testConversion(tee)
+	var _ topo.Server = tee
 
 	// create a keyspace, make sure it is on both sides
 	if err := tee.CreateKeyspace("keyspace2"); err != nil {

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// topotools package contains a few utility classes to handle topo.Server
+// objects, and transitions.
 package topotools
 
 import (
@@ -20,23 +22,23 @@ func CopyKeyspaces(fromTS, toTS topo.Server) {
 	}
 
 	wg := sync.WaitGroup{}
-	er := concurrency.AllErrorRecorder{}
+	rec := concurrency.AllErrorRecorder{}
 	for _, keyspace := range keyspaces {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
 			if err := toTS.CreateKeyspace(keyspace); err != nil {
 				if err == topo.ErrNodeExists {
-					relog.Warning("Keyspace %v already exists", keyspace)
+					relog.Warning("keyspace %v already exists", keyspace)
 				} else {
-					er.RecordError(err)
+					rec.RecordError(err)
 				}
 			}
 		}(keyspace)
 	}
 	wg.Wait()
-	if er.HasErrors() {
-		relog.Fatal("copyKeyspaces failed: %v", err)
+	if rec.HasErrors() {
+		relog.Fatal("copyKeyspaces failed: %v", rec.Error())
 	}
 }
 
@@ -48,20 +50,20 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 	}
 
 	wg := sync.WaitGroup{}
-	er := concurrency.AllErrorRecorder{}
+	rec := concurrency.AllErrorRecorder{}
 	for _, keyspace := range keyspaces {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
 			shards, err := fromTS.GetShardNames(keyspace)
 			if err != nil {
-				er.RecordError(err)
+				rec.RecordError(err)
 				return
 			}
 
 			if deleteKeyspaceShards {
 				if err := toTS.DeleteKeyspaceShards(keyspace); err != nil {
-					er.RecordError(err)
+					rec.RecordError(err)
 					return
 				}
 			}
@@ -72,9 +74,9 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 					defer wg.Done()
 					if err := toTS.CreateShard(keyspace, shard); err != nil {
 						if err == topo.ErrNodeExists {
-							relog.Warning("Shard %v/%v already exists", keyspace, shard)
+							relog.Warning("shard %v/%v already exists", keyspace, shard)
 						} else {
-							er.RecordError(err)
+							rec.RecordError(err)
 						}
 					}
 				}(keyspace, shard)
@@ -82,8 +84,8 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 		}(keyspace)
 	}
 	wg.Wait()
-	if er.HasErrors() {
-		relog.Fatal("copyShards failed: %v", err)
+	if rec.HasErrors() {
+		relog.Fatal("copyShards failed: %v", rec.Error())
 	}
 }
 
@@ -95,14 +97,14 @@ func CopyTablets(fromTS, toTS topo.Server) {
 	}
 
 	wg := sync.WaitGroup{}
-	er := concurrency.AllErrorRecorder{}
+	rec := concurrency.AllErrorRecorder{}
 	for _, cell := range cells {
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
 			tabletAliases, err := fromTS.GetTabletsByCell(cell)
 			if err != nil {
-				er.RecordError(err)
+				rec.RecordError(err)
 			} else {
 				for _, tabletAlias := range tabletAliases {
 					wg.Add(1)
@@ -112,7 +114,7 @@ func CopyTablets(fromTS, toTS topo.Server) {
 						// read the source tablet
 						ti, err := fromTS.GetTablet(tabletAlias)
 						if err != nil {
-							er.RecordError(err)
+							rec.RecordError(err)
 							return
 						}
 
@@ -124,7 +126,7 @@ func CopyTablets(fromTS, toTS topo.Server) {
 
 						}
 						if err != nil {
-							er.RecordError(err)
+							rec.RecordError(err)
 							return
 						}
 
@@ -132,7 +134,7 @@ func CopyTablets(fromTS, toTS topo.Server) {
 						// for masters only here
 						if ti.Type == topo.TYPE_MASTER {
 							if err = toTS.CreateReplicationPath(ti.Keyspace, ti.Shard, ti.Alias().String()); err != nil && err != topo.ErrNodeExists {
-								er.RecordError(err)
+								rec.RecordError(err)
 							}
 						}
 					}(tabletAlias)
@@ -141,7 +143,7 @@ func CopyTablets(fromTS, toTS topo.Server) {
 		}(cell)
 	}
 	wg.Wait()
-	if er.HasErrors() {
-		relog.Fatal("copyTablets failed: %v", er.Error())
+	if rec.HasErrors() {
+		relog.Fatal("copyTablets failed: %v", rec.Error())
 	}
 }
