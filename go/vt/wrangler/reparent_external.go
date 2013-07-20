@@ -76,9 +76,11 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*t
 		return err
 	}
 
-	// and rebuild the shard graph
+	// and rebuild the shard graph.
+	// we can't be smart and just do the old and new master cells,
+	// as we export master record everywhere.
 	relog.Info("rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, []string{masterTablet.Cell, masterElectTablet.Cell})
+	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, nil)
 }
 
 func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, scrapStragglers bool) error {
