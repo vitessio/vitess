@@ -5,6 +5,7 @@
 package topotools
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/youtube/vitess/go/relog"
@@ -16,29 +17,61 @@ import (
 // changes to a secondary topo.Server. It also locks both topo servers
 // when needed.  It is meant to be used during transitions from one
 // topo.Server to another.
+//
+// - primary: we read everything from it, and write to it
+// - secondary: we write to it as well, but we usually don't fail.
+// - we lock primary/secondary if reverseLockOrder is False,
+// or secondary/primary is reverseLockOrder is True.
 type Tee struct {
-	primary   topo.Server
-	secondary topo.Server
+	primary          topo.Server
+	secondary        topo.Server
+
+	readFrom         topo.Server
+	lockFirst        topo.Server
+	lockSecond       topo.Server
+
+	keyspaceLockPaths map[string]string
+	shardLockPaths map[string]string
 }
 
-func NewTee(primary, secondary topo.Server) *Tee {
-	return &Tee{primary, secondary}
+func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
+	lockFirst := primary
+	lockSecond := secondary
+	if reverseLockOrder {
+		lockFirst = secondary
+		lockSecond = primary
+	}
+	return &Tee{
+		primary:           primary,
+		secondary:         secondary,
+		readFrom:          primary,
+		lockFirst:         lockFirst,
+		lockSecond:        lockSecond,
+		keyspaceLockPaths: make(map[string]string),
+		shardLockPaths:    make(map[string]string),
+	}
 }
 
+//
 // topo.Server management interface.
+//
 
 func (tee *Tee) Close() {
 	tee.primary.Close()
 	tee.secondary.Close()
 }
 
+//
 // Cell management, global
+//
 
 func (tee *Tee) GetKnownCells() ([]string, error) {
-	return tee.primary.GetKnownCells()
+	return tee.readFrom.GetKnownCells()
 }
 
+//
 // Keyspace management, global.
+//
 
 func (tee *Tee) CreateKeyspace(keyspace string) error {
 	if err := tee.primary.CreateKeyspace(keyspace); err != nil {
@@ -53,7 +86,7 @@ func (tee *Tee) CreateKeyspace(keyspace string) error {
 }
 
 func (tee *Tee) GetKeyspaces() ([]string, error) {
-	return tee.primary.GetKeyspaces()
+	return tee.readFrom.GetKeyspaces()
 }
 
 func (tee *Tee) DeleteKeyspaceShards(keyspace string) error {
@@ -68,7 +101,9 @@ func (tee *Tee) DeleteKeyspaceShards(keyspace string) error {
 	return nil
 }
 
+//
 // Shard management, global.
+//
 
 func (tee *Tee) CreateShard(keyspace, shard string) error {
 	err := tee.primary.CreateShard(keyspace, shard)
@@ -77,7 +112,7 @@ func (tee *Tee) CreateShard(keyspace, shard string) error {
 	}
 
 	serr := tee.secondary.CreateShard(keyspace, shard)
-	if serr != nil && err != topo.ErrNodeExists {
+	if serr != nil && serr != topo.ErrNodeExists {
 		// not critical enough to fail
 		relog.Warning("secondary.CreateShard(%v,%v) failed: %v", keyspace, shard, err)
 	}
@@ -85,169 +120,379 @@ func (tee *Tee) CreateShard(keyspace, shard string) error {
 }
 
 func (tee *Tee) UpdateShard(si *topo.ShardInfo) error {
-	return tee.primary.UpdateShard(si)
+	if err := tee.primary.UpdateShard(si); err != nil {
+		// failed on primary, not updating secondary
+		return err
+	}
+
+	if err := tee.secondary.UpdateShard(si); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.UpdateShard(%v,%v) failed: %v", si.Keyspace(), si.ShardName(), err)
+	}
+	return nil
 }
 
 func (tee *Tee) ValidateShard(keyspace, shard string) error {
-	return tee.primary.ValidateShard(keyspace, shard)
+	err := tee.primary.ValidateShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	if err := tee.secondary.ValidateShard(keyspace, shard); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.ValidateShard(%v,%v) failed: %v", keyspace, shard, err)
+	}
+	return nil
 }
 
 func (tee *Tee) GetShard(keyspace, shard string) (si *topo.ShardInfo, err error) {
-	return tee.primary.GetShard(keyspace, shard)
+	return tee.readFrom.GetShard(keyspace, shard)
 }
 
 func (tee *Tee) GetShardNames(keyspace string) ([]string, error) {
-	return tee.primary.GetShardNames(keyspace )
+	return tee.readFrom.GetShardNames(keyspace )
 }
 
+//
 // Tablet management, per cell.
+//
 
 func (tee *Tee) CreateTablet(tablet *topo.Tablet) error {
-	return tee.primary.CreateTablet(tablet)
+	err := tee.primary.CreateTablet(tablet)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	if err := tee.primary.CreateTablet(tablet); err != nil && err != topo.ErrNodeExists {
+		// not critical enough to fail
+		relog.Warning("secondary.CreateTablet(%v) failed: %v", tablet.Alias(), err)
+	}
+	return err
 }
 
 func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int) (newVersion int, err error) {
-	return tee.primary.UpdateTablet(tablet, existingVersion)
+	if newVersion, err = tee.primary.UpdateTablet(tablet, existingVersion); err != nil {
+		// failed on primary, not updating secondary
+		return
+	}
+
+	if _, err := tee.secondary.UpdateTablet(tablet, existingVersion); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.UpdateTablet(%v) failed: %v", tablet.Alias(), err)
+	}
+	return
 }
 
 func (tee *Tee) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
-	return tee.primary.UpdateTabletFields(tabletAlias, update)
+	if err := tee.primary.UpdateTabletFields(tabletAlias, update); err != nil {
+		// failed on primary, not updating secondary
+		return err
+	}
+
+	if err := tee.secondary.UpdateTabletFields(tabletAlias, update); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.UpdateTabletFields(%v) failed: %v", tabletAlias, err)
+	}
+	return nil
 }
 
 func (tee *Tee) DeleteTablet(alias topo.TabletAlias) error {
-	return tee.primary.DeleteTablet(alias)
+	if err := tee.primary.DeleteTablet(alias); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.DeleteTablet(alias); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.DeleteTablet(%v) failed: %v", alias, err)
+	}
+	return nil
 }
 
 func (tee *Tee) ValidateTablet(alias topo.TabletAlias) error {
-	return tee.primary.ValidateTablet(alias)
+	if err := tee.primary.ValidateTablet(alias); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.ValidateTablet(alias); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.ValidateTablet(%v) failed: %v", alias, err)
+	}
+	return nil
 }
 
 func (tee *Tee) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
-	return tee.primary.GetTablet(alias)
+	return tee.readFrom.GetTablet(alias)
 }
 
 func (tee *Tee) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
-	return tee.primary.GetTabletsByCell(cell)
+	return tee.readFrom.GetTabletsByCell(cell)
 }
 
+//
 // Replication graph management, global.
+//
 
 func (tee *Tee) GetReplicationPaths(keyspace, shard, repPath string) ([]topo.TabletAlias, error) {
-	return tee.primary.GetReplicationPaths(keyspace, shard, repPath)
+	return tee.readFrom.GetReplicationPaths(keyspace, shard, repPath)
 }
 
 func (tee *Tee) CreateReplicationPath(keyspace, shard, repPath string) error {
-	return tee.primary.CreateReplicationPath(keyspace, shard, repPath)
+	if err := tee.primary.CreateReplicationPath(keyspace, shard, repPath); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.CreateReplicationPath(keyspace, shard, repPath); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.CreateReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
+	}
+	return nil
 }
 
 func (tee *Tee) DeleteReplicationPath(keyspace, shard, repPath string) error {
-	return tee.primary.DeleteReplicationPath(keyspace, shard, repPath)
+	if err := tee.primary.DeleteReplicationPath(keyspace, shard, repPath); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.DeleteReplicationPath(keyspace, shard, repPath); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.DeleteReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
+	}
+	return nil
 }
 
+//
 // Serving Graph management, per cell.
+//
 
 func (tee *Tee) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.TabletType, error) {
-	return tee.primary.GetSrvTabletTypesPerShard(cell, keyspace, shard)
+	return tee.readFrom.GetSrvTabletTypesPerShard(cell, keyspace, shard)
 }
 
 func (tee *Tee) UpdateSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.VtnsAddrs) error {
-	return tee.primary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs)
+	if err := tee.primary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.UpdateSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+	}
+	return nil
 }
 
 func (tee *Tee) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
-	return tee.primary.GetSrvTabletType(cell, keyspace, shard, tabletType)
+	return tee.readFrom.GetSrvTabletType(cell, keyspace, shard, tabletType)
 }
 
 func (tee *Tee) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
-	return tee.primary.DeleteSrvTabletType(cell, keyspace, shard, tabletType)
+	if err := tee.primary.DeleteSrvTabletType(cell, keyspace, shard, tabletType); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.DeleteSrvTabletType(cell, keyspace, shard, tabletType); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.DeleteSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+	}
+	return nil
 }
 
 func (tee *Tee) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
-	return tee.primary.UpdateSrvShard(cell, keyspace, shard, srvShard)
+	if err := tee.primary.UpdateSrvShard(cell, keyspace, shard, srvShard); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.UpdateSrvShard(cell, keyspace, shard, srvShard); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.UpdateSrvShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return nil
 }
 
 func (tee *Tee) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
-	return tee.primary.GetSrvShard(cell, keyspace, shard)
+	return tee.readFrom.GetSrvShard(cell, keyspace, shard)
 }
 
 func (tee *Tee) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
-	return tee.primary.UpdateSrvKeyspace(cell, keyspace, srvKeyspace)
+	if err := tee.primary.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.UpdateSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
+	}
+	return nil
 }
 
 func (tee *Tee) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
-	return tee.primary.GetSrvKeyspace(cell, keyspace)
+	return tee.readFrom.GetSrvKeyspace(cell, keyspace)
 }
 
 func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.VtnsAddr) error {
-	return tee.primary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr)
+	if err := tee.primary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
+		// not critical enough to fail
+		relog.Warning("secondary.UpdateTabletEndpoint(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+	}
+	return nil
 }
 
+//
 // Keyspace and Shard locks for actions, global.
+//
 
 func (tee *Tee) LockKeyspaceForAction(keyspace, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
-	return tee.primary.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
+	// lock lockFirst
+	pLockPath, err := tee.lockFirst.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
+	if err != nil {
+		return "", err
+	}
+
+	// lock lockSecond
+	sLockPath, err := tee.lockSecond.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
+	if err != nil {
+		if err := tee.lockFirst.UnlockKeyspaceForAction(keyspace, pLockPath, "{}"); err != nil {
+			relog.Warning("Failed to unlock lockFirst keyspace after failed lockSecond lock for %v", keyspace)
+		}
+		return "", err
+	}
+
+	// remember both locks, keyed by lockFirst lock path
+	tee.keyspaceLockPaths[pLockPath] = sLockPath
+	return pLockPath, nil
 }
 
 func (tee *Tee) UnlockKeyspaceForAction(keyspace, lockPath, results string) error {
-	return tee.primary.UnlockKeyspaceForAction(keyspace, lockPath, results)
+	// get from map
+	sLockPath, ok := tee.keyspaceLockPaths[lockPath]
+	if !ok {
+		return fmt.Errorf("no lockPath %v in keyspaceLockPaths", lockPath)
+	}
+	delete(tee.keyspaceLockPaths, lockPath)
+
+	// unlock lockSecond, then lockFirst
+	serr := tee.lockSecond.UnlockKeyspaceForAction(keyspace, sLockPath, results)
+	perr := tee.lockFirst.UnlockKeyspaceForAction(keyspace, lockPath, results)
+
+	if serr != nil {
+		if perr != nil {
+			relog.Warning("Secondary UnlockKeyspaceForAction(%v, %v) failed: %v", keyspace, sLockPath, serr)
+		}
+		return serr
+	}
+	return perr
 }
 
 func (tee *Tee) LockShardForAction(keyspace, shard, contents string, timeout time.Duration, interrupted chan struct{}) (string, error) {
-	return tee.primary.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
+	// lock lockFirst
+	pLockPath, err := tee.lockFirst.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
+	if err != nil {
+		return "", err
+	}
+
+	// lock lockSecond
+	sLockPath, err := tee.lockSecond.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
+	if err != nil {
+		if err := tee.lockFirst.UnlockShardForAction(keyspace, shard, pLockPath, "{}"); err != nil {
+			relog.Warning("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v", keyspace, shard)
+		}
+		return "", err
+	}
+
+	// remember both locks, keyed by lockFirst lock path
+	tee.shardLockPaths[pLockPath] = sLockPath
+	return pLockPath, nil
 }
 
 func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) error {
-	return tee.primary.UnlockShardForAction(keyspace, shard, lockPath, results)
+	// get from map
+	sLockPath, ok := tee.shardLockPaths[lockPath]
+	if !ok {
+		return fmt.Errorf("no lockPath %v in shardLockPaths", lockPath)
+	}
+	delete(tee.shardLockPaths, lockPath)
+
+	// unlock lockSecond, then lockFirst
+	serr := tee.lockSecond.UnlockShardForAction(keyspace, shard, sLockPath, results)
+	perr := tee.lockFirst.UnlockShardForAction(keyspace, shard, lockPath, results)
+
+	if serr != nil {
+		if perr != nil {
+			relog.Warning("Secondary UnlockShardForAction(%v/%v, %v) failed: %v", keyspace, shard, sLockPath, serr)
+		}
+		return serr
+	}
+	return perr
 }
 
+//
 // Remote Tablet Actions, local cell.
+//
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) WriteTabletAction(tabletAlias topo.TabletAlias, contents string) (string, error) {
 	return tee.primary.WriteTabletAction(tabletAlias, contents)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) WaitForTabletAction(actionPath string, waitTime time.Duration, interrupted chan struct{}) (string, error) {
 	return tee.primary.WaitForTabletAction(actionPath, waitTime, interrupted)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) PurgeTabletActions(tabletAlias topo.TabletAlias, canBePurged func(data string) bool) error {
 	return tee.primary.PurgeTabletActions(tabletAlias, canBePurged)
 }
 
+//
 // Supporting the local agent process, local cell.
+//
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
 	return tee.primary.ValidateTabletActions(tabletAlias)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, done chan struct{}) error {
 	return tee.primary.CreateTabletPidNode(tabletAlias, done)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
 	return tee.primary.ValidateTabletPidNode(tabletAlias)
 }
 
 func (tee *Tee) GetSubprocessFlags() []string {
-	return tee.primary.GetSubprocessFlags()
+	p := tee.primary.GetSubprocessFlags()
+	p = append(p, tee.secondary.GetSubprocessFlags()...)
+	return p
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
 	tee.primary.ActionEventLoop(tabletAlias, dispatchAction, done)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int, error) {
 	return tee.primary.ReadTabletActionPath(actionPath)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) UpdateTabletAction(actionPath, data string, version int) error {
 	return tee.primary.UpdateTabletAction(actionPath, data, version)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) StoreTabletActionResponse(actionPath, data string) error {
 	return tee.primary.StoreTabletActionResponse(actionPath, data)
 }
 
+// TODO(alainjobart) implement the split
 func (tee *Tee) UnblockTabletAction(actionPath string) error {
 	return tee.primary.UnblockTabletAction(actionPath)
 }

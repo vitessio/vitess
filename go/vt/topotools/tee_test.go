@@ -38,7 +38,7 @@ func TestTee(t *testing.T) {
 	CopyTablets(fromTS, toTS)
 
 	// create a tee and check it implements the interface
-	tee := NewTee(fromTS, toTS)
+	tee := NewTee(fromTS, toTS, true)
 	testConversion(tee)
 
 	// create a keyspace, make sure it is on both sides
