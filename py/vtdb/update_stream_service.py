@@ -17,7 +17,7 @@ class ReplPosition(object):
     self.MasterFilename = master_filename
     self.MasterPosition = master_position
 
-class BinlogPosition(object):
+class Coord(object):
   Position = None
   Timestamp = None
   Xid = None
@@ -51,8 +51,8 @@ class EventData(object):
 
 
 class UpdateStreamResponse(object):
-  BinlogPosition = None
-  EventData = None
+  Coord = None
+  Data = None
   Error = None
 
   def __init__(self, response_dict):
@@ -64,8 +64,8 @@ class UpdateStreamResponse(object):
       self.Error = None
     else:
       self.Error = self.raw_response['Error']
-    self.BinlogPosition = self.raw_response['BinlogPosition']
-    self.EventData = EventData(self.raw_response['EventData']).__dict__
+    self.Coord = self.raw_response['Coord']
+    self.Data = EventData(self.raw_response['Data']).__dict__
 
 class UpdateStreamConnection(object):
   def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
@@ -90,7 +90,7 @@ class UpdateStreamConnection(object):
     except:
       logging.exception('gorpc low-level error')
       raise
-    return update_stream_response.BinlogPosition, update_stream_response.EventData, update_stream_response.Error
+    return update_stream_response.Coord, update_stream_response.Data, update_stream_response.Error
 
   def stream_next(self):
     try:
@@ -103,4 +103,4 @@ class UpdateStreamConnection(object):
     except:
       logging.exception('gorpc low-level error')
       raise
-    return update_stream_response.BinlogPosition, update_stream_response.EventData, update_stream_response.Error
+    return update_stream_response.Coord, update_stream_response.Data, update_stream_response.Error

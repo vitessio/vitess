@@ -175,8 +175,8 @@ func (pos *BinlogPosition) decodeReplCoordBson(buf *bytes.Buffer, kind byte) {
 //Api Interface
 type UpdateResponse struct {
 	Error string
-	BinlogPosition
-	EventData
+	Coord BinlogPosition
+	Data  EventData
 }
 
 type EventData struct {
@@ -189,7 +189,7 @@ type EventData struct {
 
 //Raw event buffer used to gather data during parsing.
 type eventBuffer struct {
-	BinlogPosition
+	Coord   BinlogPosition
 	LogLine []byte
 	firstKw string
 }
@@ -202,11 +202,11 @@ func NewEventBuffer(pos *BinlogPosition, line []byte) *eventBuffer {
 		relog.Warning("Logline not properly copied while creating new event written: %v len: %v", written, len(line))
 	}
 	//The RelayPosition is never used, so using the default value
-	buf.BinlogPosition.Position = ReplicationCoordinates{RelayFilename: pos.Position.RelayFilename,
+	buf.Coord.Position = ReplicationCoordinates{RelayFilename: pos.Position.RelayFilename,
 		MasterFilename: pos.Position.MasterFilename,
 		MasterPosition: pos.Position.MasterPosition,
 	}
-	buf.BinlogPosition.Timestamp = pos.Timestamp
+	buf.Coord.Timestamp = pos.Timestamp
 	return buf
 }
 
@@ -579,7 +579,7 @@ func (blp *Blp) extractEventTimestamp(event *eventBuffer) {
 		panic(NewBinlogParseError(CODE_ERROR, fmt.Sprintf("Error in extracting timestamp %v", err)))
 	}
 	blp.currentPosition.Timestamp = currentTimestamp
-	event.BinlogPosition.Timestamp = currentTimestamp
+	event.Coord.Timestamp = currentTimestamp
 }
 
 func (blp *Blp) parseRotateEvent(line []byte) {
@@ -649,7 +649,7 @@ func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEven
 			}
 		}
 	}
-	commitEvent.BinlogPosition.Xid = blp.currentPosition.Xid
+	commitEvent.Coord.Xid = blp.currentPosition.Xid
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	//txn block for DMLs, parse it and send events for a txn
 	var dmlCount uint
@@ -756,8 +756,8 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 		line = event.LogLine
 		if bytes.HasPrefix(line, BINLOG_BEGIN) {
 			streamBuf := new(UpdateResponse)
-			streamBuf.BinlogPosition = event.BinlogPosition
-			streamBuf.SqlType = BEGIN
+			streamBuf.Coord = event.Coord
+			streamBuf.Data.SqlType = BEGIN
 			txnResponseList = append(txnResponseList, streamBuf)
 			continue
 		}
@@ -792,7 +792,7 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 			streamComment := string(line[commentIndex+len(STREAM_COMMENT_START):])
 			eventNodeTree = parseStreamComment(streamComment, autoincId)
 			dmlType = GetDmlType(event.firstKw)
-			response := createUpdateResponse(eventNodeTree, dmlType, event.BinlogPosition)
+			response := createUpdateResponse(eventNodeTree, dmlType, event.Coord)
 			txnResponseList = append(txnResponseList, response)
 			autoincId = 0
 			dmlBuffer = dmlBuffer[:0]
@@ -900,11 +900,11 @@ func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos BinlogP
 	pkColLen := pkColNamesNode.Len()
 
 	response = new(UpdateResponse)
-	response.BinlogPosition = blpPos
-	response.SqlType = dmlType
-	response.TableName = tableName
-	response.PkColNames = pkColNames
-	response.PkValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))
+	response.Coord = blpPos
+	response.Data.SqlType = dmlType
+	response.Data.TableName = tableName
+	response.Data.PkColNames = pkColNames
+	response.Data.PkValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))
 
 	rowPk := make([]interface{}, pkColLen)
 	for _, node := range eventTree.Sub[2:] {
@@ -913,7 +913,7 @@ func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos BinlogP
 			panic(NewBinlogParseError(EVENT_ERROR, "Error in the stream comment, length of pk values doesn't match column names."))
 		}
 		rowPk = encodePkValues(node.Sub)
-		response.PkValues = append(response.PkValues, rowPk)
+		response.Data.PkValues = append(response.Data.PkValues, rowPk)
 	}
 	return response
 }
@@ -959,7 +959,7 @@ func SendError(sendReply SendUpdateStreamResponse, inputErr error, blpPos *Binlo
 	streamBuf := new(UpdateResponse)
 	streamBuf.Error = inputErr.Error()
 	if blpPos != nil {
-		streamBuf.BinlogPosition = *blpPos
+		streamBuf.Coord = *blpPos
 	}
 	buf := []*UpdateResponse{streamBuf}
 	_ = sendStream(sendReply, buf)
@@ -968,17 +968,17 @@ func SendError(sendReply SendUpdateStreamResponse, inputErr error, blpPos *Binlo
 //This creates the response for COMMIT event.
 func createCommitEvent(eventBuf *eventBuffer) (streamBuf *UpdateResponse) {
 	streamBuf = new(UpdateResponse)
-	streamBuf.BinlogPosition = eventBuf.BinlogPosition
-	streamBuf.SqlType = COMMIT
+	streamBuf.Coord = eventBuf.Coord
+	streamBuf.Data.SqlType = COMMIT
 	return
 }
 
 //This creates the response for DDL event.
 func createDdlStream(lineBuffer *eventBuffer) (ddlStream *UpdateResponse) {
 	ddlStream = new(UpdateResponse)
-	ddlStream.BinlogPosition = lineBuffer.BinlogPosition
-	ddlStream.SqlType = DDL
-	ddlStream.Sql = string(lineBuffer.LogLine)
+	ddlStream.Coord = lineBuffer.Coord
+	ddlStream.Data.SqlType = DDL
+	ddlStream.Data.Sql = string(lineBuffer.LogLine)
 	return ddlStream
 }
 

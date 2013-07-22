@@ -41,7 +41,7 @@ primary key (id)
 
 def _get_master_current_position():
   res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
-  start_position = update_stream_service.BinlogPosition(res[0][0], res[0][1])
+  start_position = update_stream_service.Coord(res[0][0], res[0][1])
   return start_position.__dict__
 
 
@@ -55,7 +55,7 @@ def _get_repl_current_position():
   slave_dict = res[0]
   master_log = slave_dict['File']
   master_pos = slave_dict['Position']
-  start_position = update_stream_service.BinlogPosition(master_log, master_pos)
+  start_position = update_stream_service.Coord(master_log, master_pos)
   return start_position.__dict__
 
 
