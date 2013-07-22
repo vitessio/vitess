@@ -204,10 +204,7 @@ class VttabletTestEnv(TestEnv):
         time.sleep(1)
 
   def tearDown(self):
-    try:
-      self.tablet.kill_vttablet()
-    except AttributeError:
-      print "Not killing vttablet - it wasn't running."
+    self.tablet.kill_vttablet()
     try:
       utils.wait_procs([self.tablet.teardown_mysql()])
     except:
@@ -219,9 +216,6 @@ class VttabletTestEnv(TestEnv):
     utils.kill_sub_processes()
     utils.remove_tmp_files()
     # self.tablet.remove_tree()
-    
-    if getattr(self, "memcached", None):
-      self.memcached.terminate()
 
   def mysql_connect(self, dbname=''):
     return self.tablet.connect()
@@ -314,8 +308,10 @@ class VtoccTestEnv(TestEnv):
     ]
     if utils.options.memcache:
       memcache = self.mysqldir+"/memcache.sock"
-      self.memcached = subprocess.Popen(["memcached", "-s", memcache])
-      occ_args.extend(["-rowcache", memcache])
+      config = self.mysqldir+"/config.json"
+      with open(config, 'w') as f:
+        json.dump({"RowCache": ["memcached", "-s", memcache]}, f)
+      occ_args.extend(["-config", config])
 
     self.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
     self.vtocc = subprocess.Popen(occ_args, stderr=self.vtstderr)
@@ -346,11 +342,9 @@ class VtoccTestEnv(TestEnv):
     if getattr(self, "txlogger", None):
       self.txlogger.terminate()
     if getattr(self, "vtocc", None):
-      self.vtocc.kill()
+      self.vtocc.terminate()
     if getattr(self, "vtstderr", None):
       self.vtstderr.close()
-    if getattr(self, "memcached", None):
-      self.memcached.terminate()
 
     # stop mysql, delete directory
     subprocess.call([

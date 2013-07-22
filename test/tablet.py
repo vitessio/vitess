@@ -49,8 +49,6 @@ class Tablet(object):
     else:
       self.cell = tablet_cell_map.get(tablet_uid, 'nj')
     self.proc = None
-    self.memcached = None
-    self.memcache_path = None
 
     # filled in during init_tablet
     self.keyspace = None
@@ -262,8 +260,11 @@ class Tablet(object):
             '-debug-querylog-file', self.querylog_file]
 
     if memcache:
-      self.start_memcache()
-      args.extend(['-rowcache', self.memcache_path])
+      memcache = "/tmp/memcache.sock"
+      config = "/tmp/config.json"
+      with open(config, 'w') as f:
+        json.dump({"RowCache": ["memcached", "-s", memcache]}, f)
+      args.extend(["-queryserver-config-file", config])
 
     if auth:
       args.extend(['-auth-credentials', os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')])
@@ -332,17 +333,5 @@ class Tablet(object):
   def kill_vttablet(self):
     utils.debug("killing vttablet: " + self.tablet_alias)
     if self.proc is not None:
-      utils.kill_sub_process(self.proc)
-    if self.memcached:
-      self.kill_memcache()
-
-  def start_memcache(self):
-      self.memcache_path = os.path.join(self.tablet_dir, "memcache.sock")
-      try:
-        self.memcached = utils.run_bg(' '.join(["memcached", "-s", self.memcache_path]), stdout=utils.devnull)
-      except Exception as e:
-        print "Error: memcached couldn't start"
-        raise
-
-  def kill_memcache(self):
-    utils.kill_sub_process(self.memcached)
+      self.proc.terminate()
+      self.proc = None
