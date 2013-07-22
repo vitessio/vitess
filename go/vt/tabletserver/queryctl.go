@@ -69,20 +69,12 @@ func IsCachePoolAvailable() bool {
 	return !SqlQueryRpcService.qe.cachePool.IsClosed()
 }
 
-func GetCurrentInvalidationPosition() (invalidationPosition []byte, err error) {
-	return SqlQueryRpcService.qe.getCurrentInvalidationPosition()
-}
-
-func PurgeRowCache() {
-	SqlQueryRpcService.qe.purgeRowCache()
-}
-
 func InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
-	SqlQueryRpcService.qe.Invalidate(cacheInvalidate)
+	SqlQueryRpcService.InvalidateForDml(cacheInvalidate)
 }
 
 func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	SqlQueryRpcService.qe.InvalidateForDDL(ddlInvalidate)
+	SqlQueryRpcService.InvalidateForDDL(ddlInvalidate)
 }
 
 func SetQueryRules(qrs *QueryRules) {

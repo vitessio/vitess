@@ -182,29 +182,6 @@ func (rowCache *InvalidationProcessor) invalidateEvent(response interface{}) err
 	return rowCache.processEvent(updateResponse)
 }
 
-func (rowCache *InvalidationProcessor) getCheckpoint() (*mysqlctl.BinlogPosition, bool) {
-	encPosition, err := GetCurrentInvalidationPosition()
-	if err != nil {
-		relog.Warning("Error in getting saved position, %v", err)
-		return nil, false
-	}
-	// At startup there will be no saved position
-	if encPosition == nil {
-		return nil, true
-	}
-	currentPosition := new(mysqlctl.BinlogPosition)
-	err = bson.Unmarshal(encPosition, currentPosition)
-	if err != nil {
-		relog.Warning("Error in decoding saved position, %v", err)
-		return nil, false
-	}
-	if currentPosition == nil {
-		relog.Warning("Error in getting saved position, %v", err)
-		return nil, false
-	}
-	return currentPosition, true
-}
-
 func (rowCache *InvalidationProcessor) stopCache(reason string) {
 	relog.Warning("Stopping rowcache invalidation, reason: '%v'", reason)
 	rowCache.stopRowCacheInvalidation()
@@ -216,8 +193,6 @@ func (rowCache *InvalidationProcessor) stopCache(reason string) {
 
 func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 	var err error
-	purgeCache := false
-	purgeReason := ""
 
 	replPos, err := mysqlctl.GetReplicationPosition()
 	if err != nil {
@@ -228,29 +203,6 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 	}
 
 	startPosition := &mysqlctl.BinlogPosition{Position: *replPos}
-	checkpoint, ok := rowCache.getCheckpoint()
-
-	// Cannot resume from last checkpoint position.
-	// Purging the cache.
-	if !ok {
-		purgeCache = true
-		purgeReason = "Error in locating invalidation checkpoint"
-	} else if checkpoint == nil {
-		//NOTE: not purging the cache here - since no checkpoint is found, assuming cache is empty.
-		relog.Info("No saved position found, invalidation starting at current replication position.")
-	} else if !isCheckpointValid(&checkpoint.Position, replPos) {
-		purgeCache = true
-		purgeReason = "Invalidation checkpoint too old"
-	} else {
-		relog.Info("Starting at saved checkpoint %v", checkpoint.String())
-		startPosition = checkpoint
-	}
-
-	if purgeCache {
-		PurgeRowCache()
-		startPosition = &mysqlctl.BinlogPosition{Position: *replPos}
-		relog.Warning("Purging cache because '%v'", purgeReason)
-	}
 
 	relog.Info("Starting @ %v", startPosition.String())
 	req := &mysqlctl.UpdateStreamRequest{StartPosition: *startPosition}
@@ -262,17 +214,6 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		}
 		rowCache.stopCache(fmt.Sprintf("Unexpected or fatal error, '%v'", err.Error()))
 	}
-}
-
-func isCheckpointValid(checkpoint, repl *mysqlctl.ReplicationCoordinates) bool {
-	if checkpoint.MasterFilename != repl.MasterFilename {
-		// FIXME(shrutip): should this be made more granular ?
-		// NOTE(shrutip): this could be made more sophisticated if needed
-		// later by allowing one consecutive filename, typical binlogs last > 2hrs
-		// so this is good for now.
-		return false
-	}
-	return true
 }
 
 func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateResponse) error {
