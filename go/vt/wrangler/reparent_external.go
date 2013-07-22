@@ -15,6 +15,13 @@ import (
 )
 
 func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool) error {
+	// grab the shard lock
+	actionNode := wr.ai.ShardExternallyReparented(masterElectTabletAlias)
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -41,13 +48,6 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 	masterElectTablet, ok := tabletMap[masterElectTabletAlias]
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
-	}
-
-	// grab the shard lock
-	actionNode := wr.ai.ShardExternallyReparented(masterElectTabletAlias)
-	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
-	if err != nil {
-		return err
 	}
 
 	err = wr.reparentShardExternal(slaveTabletMap, foundMaster, masterElectTablet, scrapStragglers)
