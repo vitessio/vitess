@@ -28,7 +28,7 @@ GLOBAL_MASTER_START_POSITION = None
 
 def _get_master_current_position():
   res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
-  start_position = update_stream_service.BinlogPosition(res[0][0], res[0][1])
+  start_position = update_stream_service.Coord(res[0][0], res[0][1])
   return start_position.__dict__
 
 
@@ -42,7 +42,7 @@ def _get_repl_current_position():
   slave_dict = res[0]
   master_log = slave_dict['File']
   master_pos = slave_dict['Position']
-  start_position = update_stream_service.BinlogPosition(master_log, master_pos)
+  start_position = update_stream_service.Coord(master_log, master_pos)
   return start_position.__dict__
 
 
@@ -205,10 +205,10 @@ def run_test_service_enabled():
     #time.sleep(20)
     while(1):
       binlog_pos, data, err = replica_conn.stream_next()
-      if err != None and err == "Disconnecting because the Update Stream service has been disabled":
+      if err is not None and err == "Fatal Service Error: Disconnecting because the Update Stream service has been disabled":
         disabled_err = True
         break
-      if data['SqlType'] == 'COMMIT':
+      if data is not None and data['SqlType'] == 'COMMIT':
         txn_count +=1
 
     if not disabled_err:
@@ -217,6 +217,7 @@ def run_test_service_enabled():
   except Exception, e:
     print "Exception: %s" % str(e)
     print traceback.print_exc()
+    raise utils.TestError("Update stream returned error '%s'", str(e))
   utils.debug("Streamed %d transactions before exiting" % txn_count)
 
 def _vtdb_conn(host):
@@ -278,7 +279,6 @@ def run_test_stream_parity():
       break
   if len(master_tuples) != len(replica_tuples):
     utils.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_tuples, replica_tuples))
-    print len(master_tuples), len(replica_tuples)
   for master_val, replica_val in zip(master_tuples, replica_tuples):
     master_data = master_val[1]
     replica_data = replica_val[1]

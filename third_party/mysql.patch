@@ -55,7 +55,7 @@ index 8158783..8b137c0 100644
  				$(top_srcdir)/mysys/base64.c
  mysqlbinlog_LDADD =		$(LDADD) $(CXXLDFLAGS)
  
-+vt_mysqlbinlog_SOURCES =	mysqlbinlog.cc \
++vt_mysqlbinlog_SOURCES =	vt_mysqlbinlog.cc \
 +				$(top_srcdir)/mysys/checksum.c \
 +				$(top_srcdir)/mysys/mf_tempdir.c \
 +				$(top_srcdir)/mysys/my_new.cc \

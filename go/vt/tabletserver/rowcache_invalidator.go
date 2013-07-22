@@ -178,7 +178,7 @@ func (rowCache *InvalidationProcessor) invalidateEvent(response interface{}) err
 	if !ok {
 		return NewInvalidationError(FATAL_ERROR, "Invalid Reponse type", "")
 	}
-	rowCache.currentPosition = &updateResponse.BinlogPosition
+	rowCache.currentPosition = &updateResponse.Coord
 	return rowCache.processEvent(updateResponse)
 }
 
@@ -277,8 +277,8 @@ func isCheckpointValid(checkpoint, repl *mysqlctl.ReplicationCoordinates) bool {
 
 func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateResponse) error {
 	position := ""
-	if event.BinlogPosition.Valid() {
-		position = event.BinlogPosition.String()
+	if event.Coord.Valid() {
+		position = event.Coord.String()
 	}
 	if event.Error != "" {
 		relog.Error("Update stream returned error '%v'", event.Error)
@@ -291,13 +291,13 @@ func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateRespon
 		return nil
 	}
 
-	if !event.BinlogPosition.Valid() {
+	if !event.Coord.Valid() {
 		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, "no error, position is not set", ""))
 		return nil
 	}
 
 	var err error
-	switch event.EventData.SqlType {
+	switch event.Data.SqlType {
 	case mysqlctl.DDL:
 		err = rowCache.handleDdlEvent(event)
 		if err != nil {
@@ -330,8 +330,8 @@ func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateRespon
 			rowCache.dmlBuffer = append(rowCache.dmlBuffer, dml)
 		}
 	default:
-		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Unknown SqlType, %v %v", event.EventData.SqlType, event.EventData.Sql), position))
-		//return NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Unknown SqlType, %v %v", event.EventData.SqlType, event.EventData.Sql))
+		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Unknown SqlType, %v %v", event.Data.SqlType, event.Data.Sql), position))
+		//return NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Unknown SqlType, %v %v", event.Data.SqlType, event.Data.Sql))
 	}
 	return nil
 }
@@ -345,15 +345,15 @@ func isDmlEvent(sqlType string) bool {
 }
 
 func (rowCache *InvalidationProcessor) buildDmlData(event *mysqlctl.UpdateResponse) (*proto.DmlType, error) {
-	if !isDmlEvent(event.SqlType) {
-		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Bad Dml type, '%v'", event.SqlType), event.BinlogPosition.String()))
+	if !isDmlEvent(event.Data.SqlType) {
+		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Bad Dml type, '%v'", event.Data.SqlType), event.Coord.String()))
 		return nil, nil
 	}
 	dml := new(proto.DmlType)
-	dml.Table = event.TableName
-	dml.Keys = make([]interface{}, 0, len(event.PkValues))
-	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PkColNames))
-	for _, pkTuple := range event.PkValues {
+	dml.Table = event.Data.TableName
+	dml.Keys = make([]interface{}, 0, len(event.Data.PkValues))
+	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.Data.PkColNames))
+	for _, pkTuple := range event.Data.PkValues {
 		sqlTypeKeys = sqlTypeKeys[:0]
 		if len(pkTuple) == 0 {
 			continue
@@ -361,7 +361,7 @@ func (rowCache *InvalidationProcessor) buildDmlData(event *mysqlctl.UpdateRespon
 		for _, pkVal := range pkTuple {
 			key, err := sqltypes.BuildValue(pkVal)
 			if err != nil {
-				rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Error building invalidation key '%v'", err), event.BinlogPosition.String()))
+				rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, fmt.Sprintf("Error building invalidation key '%v'", err), event.Coord.String()))
 				return nil, nil
 			}
 			sqlTypeKeys = append(sqlTypeKeys, key)
@@ -379,9 +379,9 @@ func (rowCache *InvalidationProcessor) handleTxn(commitEvent *mysqlctl.UpdateRes
 	defer func() {
 		if x := recover(); x != nil {
 			if terr, ok := x.(*TabletError); ok {
-				rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, terr.Error(), commitEvent.BinlogPosition.String()))
+				rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, terr.Error(), commitEvent.Coord.String()))
 			} else {
-				err = NewInvalidationError(FATAL_ERROR, "handleTxn failed", commitEvent.BinlogPosition.String())
+				err = NewInvalidationError(FATAL_ERROR, "handleTxn failed", commitEvent.Coord.String())
 			}
 		}
 	}()
@@ -391,9 +391,9 @@ func (rowCache *InvalidationProcessor) handleTxn(commitEvent *mysqlctl.UpdateRes
 	}
 	rowCache.encBuf = rowCache.encBuf[:0]
 	cacheInvalidate := new(proto.CacheInvalidate)
-	rowCache.encBuf, err = bson.Marshal(&commitEvent.BinlogPosition)
+	rowCache.encBuf, err = bson.Marshal(&commitEvent.Coord)
 	if err != nil {
-		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), commitEvent.BinlogPosition.String())
+		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), commitEvent.Coord.String())
 	}
 	cacheInvalidate.Position = rowCache.encBuf
 	cacheInvalidate.Dmls = make([]proto.DmlType, 0, len(rowCache.dmlBuffer))
@@ -409,26 +409,26 @@ func (rowCache *InvalidationProcessor) handleDdlEvent(ddlEvent *mysqlctl.UpdateR
 	defer func() {
 		if x := recover(); x != nil {
 			if terr, ok := x.(*TabletError); ok {
-				rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, terr.Error(), ddlEvent.BinlogPosition.String()))
+				rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, terr.Error(), ddlEvent.Coord.String()))
 			} else {
-				err = NewInvalidationError(FATAL_ERROR, "ddlEvent failed", ddlEvent.BinlogPosition.String())
+				err = NewInvalidationError(FATAL_ERROR, "ddlEvent failed", ddlEvent.Coord.String())
 			}
 		}
 	}()
 
-	if ddlEvent.Sql == "" {
-		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, "Empty ddl sql", ddlEvent.BinlogPosition.String()))
+	if ddlEvent.Data.Sql == "" {
+		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, "Empty ddl sql", ddlEvent.Coord.String()))
 		return nil
-		//return NewInvalidationError(INVALID_EVENT, "Empty ddl sql", ddlEvent.BinlogPosition.String())
+		//return NewInvalidationError(INVALID_EVENT, "Empty ddl sql", ddlEvent.Coord.String())
 	}
 	rowCache.encBuf = rowCache.encBuf[:0]
 	ddlInvalidate := new(proto.DDLInvalidate)
-	rowCache.encBuf, err = bson.Marshal(&ddlEvent.BinlogPosition)
+	rowCache.encBuf, err = bson.Marshal(&ddlEvent.Coord)
 	if err != nil {
-		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), ddlEvent.BinlogPosition.String())
+		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), ddlEvent.Coord.String())
 	}
 	ddlInvalidate.Position = rowCache.encBuf
-	ddlInvalidate.DDL = ddlEvent.Sql
+	ddlInvalidate.DDL = ddlEvent.Data.Sql
 	InvalidateForDDL(ddlInvalidate)
 	return nil
 }
