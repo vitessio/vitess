@@ -86,6 +86,13 @@ const (
 // forceReparentToCurrentMaster: mostly for test setups, this can
 //   cause data loss.
 func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
+	// lock the shard
+	actionNode := wr.ai.ReparentShard(masterElectTabletAlias)
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -115,13 +122,6 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 	masterElectTablet, ok := tabletMap[masterElectTabletAlias]
 	if !ok {
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
-	}
-
-	// lock the shard
-	actionNode := wr.ai.ReparentShard(masterElectTabletAlias)
-	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
-	if err != nil {
-		return err
 	}
 
 	if currentMasterTabletAlias != (topo.TabletAlias{}) && !forceReparentToCurrentMaster {
