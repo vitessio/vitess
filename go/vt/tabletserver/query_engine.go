@@ -70,7 +70,7 @@ type CacheInvalidator interface {
 
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.cachePool = NewCachePool(config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.adminCache = NewGenericCache(qe.cachePool)
 	qe.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
@@ -97,10 +97,9 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []Schem
 	defer qe.mu.Unlock()
 
 	connFactory := GenericConnectionCreator(dbconfig.MysqlParams())
-	cacheFactory := CacheCreator(dbconfig)
 
 	start := time.Now().UnixNano()
-	qe.cachePool.Open(cacheFactory)
+	qe.cachePool.Open()
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
 	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	qe.connPool.Open(connFactory)
@@ -124,6 +123,7 @@ func (qe *QueryEngine) Close(forRestart bool) {
 	qe.reservedPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
+	qe.cachePool.Close()
 }
 
 func (qe *QueryEngine) Begin(logStats *sqlQueryStats, connectionId int64) (transactionId int64) {
@@ -330,12 +330,12 @@ func (qe *QueryEngine) purgeRowCache() {
 }
 
 func (qe *QueryEngine) Invalidate(cacheInvalidate *proto.CacheInvalidate) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
 	if qe.cachePool.IsClosed() {
 		return
 	}
+	qe.mu.RLock()
+	defer qe.mu.RUnlock()
+
 	for _, dml := range cacheInvalidate.Dmls {
 		invalidations := int64(0)
 		tableInfo := qe.schemaInfo.GetTable(dml.Table)

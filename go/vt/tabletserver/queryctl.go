@@ -15,7 +15,6 @@ import (
 )
 
 type Config struct {
-	CachePoolCap       int
 	PoolSize           int
 	StreamPoolSize     int
 	TransactionCap     int
@@ -26,6 +25,7 @@ type Config struct {
 	SchemaReloadTime   float64
 	QueryTimeout       float64
 	IdleTimeout        float64
+	RowCache           []string
 }
 
 var SqlQueryRpcService *SqlQuery
