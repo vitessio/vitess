@@ -14,7 +14,6 @@ import (
 )
 
 var cacheStats = stats.NewTimings("Cache")
-var cacheCounters = stats.NewCounters("CacheCounters")
 
 var pack = binary.BigEndian
 
@@ -228,5 +227,4 @@ func (gc *GenericCache) PurgeCache() {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
 	}
-	cacheCounters.Add("PurgeCache", 1)
 }

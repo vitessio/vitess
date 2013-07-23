@@ -281,6 +281,20 @@ func (sq *SqlQuery) CloseReserved(session *proto.Session, noOutput *string) (err
 	return nil
 }
 
+func (sq *SqlQuery) InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
+	if sq.state.Get() != OPEN {
+		return
+	}
+	sq.qe.InvalidateForDml(cacheInvalidate)
+}
+
+func (sq *SqlQuery) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
+	if sq.state.Get() != OPEN {
+		return
+	}
+	sq.qe.InvalidateForDDL(ddlInvalidate)
+}
+
 func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 	if logStats != nil {
 		logStats.Send()
