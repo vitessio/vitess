@@ -197,7 +197,7 @@ class Tablet(object):
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, auth=False, dbname=None, memcache=False):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, auth=False, dbname=None, memcache=False, parent=True):
     self.keyspace = keyspace
     self.shard = shard
 
@@ -209,6 +209,8 @@ class Tablet(object):
     args = ['InitTablet']
     if force:
       args.append('-force')
+    if parent:
+      args.append('-parent')
     if dbname:
       args.append('-db-name-override='+dbname)
     args.extend([self.tablet_alias,

@@ -235,7 +235,7 @@ func (wr *Wrangler) getMasterAlias(keyspace, shard string) (topo.TabletAlias, er
 // InitTablet will create or update a tablet. If not parent is
 // specified, and the tablet created is a slave type, we will find the
 // appropriate parent.
-func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort, port, keyspace, shardId, tabletType string, parentAlias topo.TabletAlias, dbNameOverride string, force, update bool) error {
+func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort, port, keyspace, shardId, tabletType string, parentAlias topo.TabletAlias, dbNameOverride string, force, parent, update bool) error {
 	// if shardId contains a '-', we assume it's a range-based shard,
 	// so we try to extract the KeyRange.
 	var keyRange key.KeyRange
@@ -272,6 +272,22 @@ func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort
 	}
 	tablet.DbNameOverride = dbNameOverride
 	tablet.KeyRange = keyRange
+
+	if tablet.IsInReplicationGraph() {
+		if parent {
+			if err := wr.ts.CreateKeyspace(keyspace); err != nil && err != topo.ErrNodeExists {
+				return err
+			}
+
+			if err := wr.ts.CreateShard(keyspace, shardId); err != nil && err != topo.ErrNodeExists {
+				return err
+			}
+		} else {
+			if _, err := wr.ts.GetShard(keyspace, shardId); err != nil {
+				return fmt.Errorf("Missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
+			}
+		}
+	}
 
 	err = topo.CreateTablet(wr.ts, tablet)
 	if err != nil && err == topo.ErrNodeExists {
