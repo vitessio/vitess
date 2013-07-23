@@ -260,8 +260,8 @@ class Tablet(object):
             '-debug-querylog-file', self.querylog_file]
 
     if memcache:
-      memcache = "/tmp/memcache.sock"
-      config = "/tmp/config.json"
+      memcache = os.path.join(self.tablet_dir, "memcache.sock")
+      config = os.path.join(self.tablet_dir, "config.json")
       with open(config, 'w') as f:
         json.dump({"RowCache": ["memcached", "-s", memcache]}, f)
       args.extend(["-queryserver-config-file", config])
