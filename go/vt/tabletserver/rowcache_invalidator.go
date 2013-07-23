@@ -336,7 +336,6 @@ func (rowCache *InvalidationProcessor) handleTxn(commitEvent *mysqlctl.UpdateRes
 	if err != nil {
 		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), commitEvent.Coord.String())
 	}
-	cacheInvalidate.Position = rowCache.encBuf
 	cacheInvalidate.Dmls = make([]proto.DmlType, 0, len(rowCache.dmlBuffer))
 	for _, dml := range rowCache.dmlBuffer {
 		cacheInvalidate.Dmls = append(cacheInvalidate.Dmls, *dml)
@@ -368,7 +367,6 @@ func (rowCache *InvalidationProcessor) handleDdlEvent(ddlEvent *mysqlctl.UpdateR
 	if err != nil {
 		return NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Error in encoding position, %v", err), ddlEvent.Coord.String())
 	}
-	ddlInvalidate.Position = rowCache.encBuf
 	ddlInvalidate.DDL = ddlEvent.Data.Sql
 	InvalidateForDDL(ddlInvalidate)
 	return nil
