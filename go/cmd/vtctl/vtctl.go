@@ -51,10 +51,10 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-db-name-override=<db name>] <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]",
+				"[-force] [-parent] [-db-name-override=<db name>] <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]",
 				"Initializes a tablet in the topology."},
 			command{"UpdateTablet", commandUpdateTablet,
-				"[-force] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
+				"[-force] [-parent] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
 				"DEPRECATED (use ChangeSlaveType or other operations instead).\n" +
 					"Updates a tablet in the topology."},
 			command{"ScrapTablet", commandScrapTablet,
@@ -126,6 +126,9 @@ var commands = []commandGroup{
 	},
 	commandGroup{
 		"Shards", []command{
+			command{"CreateShard", commandCreateShard,
+				"[-force] [-parent] <keyspace/shard|zk shard path>",
+				"Creates the given shard"},
 			command{"RebuildShardGraph", commandRebuildShardGraph,
 				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
@@ -474,6 +477,7 @@ func vtPathToCell(param string) string {
 func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
+	parent := subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 7 && subFlags.NArg() != 8 {
 		relog.Fatal("action InitTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]")
@@ -484,12 +488,13 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	if subFlags.NArg() == 8 {
 		parentAlias = tabletRepParamToTabletAlias(subFlags.Arg(7))
 	}
-	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, false)
+	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, *parent, false)
 }
 
 func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
+	parent := subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 8 {
 		relog.Fatal("action UpdateTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <parent alias|zk parent alias>")
@@ -497,7 +502,7 @@ func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	parentAlias := tabletRepParamToTabletAlias(subFlags.Arg(7))
-	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, true)
+	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, *parent, true)
 }
 
 func commandScrapTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -801,6 +806,29 @@ func commandExecuteHook(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	hr, err := wr.ExecuteHook(tabletAlias, hook)
 	if err == nil {
 		relog.Info(hr.String())
+	}
+	return "", err
+}
+
+func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
+	parent := subFlags.Bool("parent", false, "creates the parent keyspace if it doesn't exist")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		relog.Fatal("action CreateShard requires <keyspace/shard|zk shard path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	if *parent {
+		if err := wr.TopoServer().CreateKeyspace(keyspace); err != nil && err != topo.ErrNodeExists {
+			return "", err
+		}
+	}
+
+	err := wr.TopoServer().CreateShard(keyspace, shard)
+	if *force && err == topo.ErrNodeExists {
+		relog.Info("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
+		err = nil
 	}
 	return "", err
 }

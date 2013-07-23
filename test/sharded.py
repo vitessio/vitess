@@ -87,8 +87,6 @@ def check_rows_schema_diff(driver):
 @utils.test_case
 def run_test_sharding():
 
-  utils.run_vtctl('CreateKeyspace test_keyspace')
-
   shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
   shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
   shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
