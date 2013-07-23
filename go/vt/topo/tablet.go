@@ -513,10 +513,6 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 
 func CreateTabletReplicationPaths(ts Server, tablet *Tablet) error {
 	relog.Debug("CreateTabletReplicationPaths %v", tablet.Alias())
-	if err := ts.CreateShard(tablet.Keyspace, tablet.Shard); err != nil && err != ErrNodeExists {
-		return err
-	}
-
 	trrp := tabletReplicationPath(tablet)
 	err := ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, trrp)
 	if err != nil && err != ErrNodeExists {
