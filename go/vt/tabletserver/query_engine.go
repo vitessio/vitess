@@ -32,8 +32,6 @@ type QueryEngine struct {
 	mu sync.RWMutex
 
 	cachePool *CachePool
-	//this is used to access administrative keys in row-cache using the same.
-	adminCache     *GenericCache
 	schemaInfo     *SchemaInfo
 	connPool       *ConnectionPool
 	streamConnPool *ConnectionPool
@@ -70,9 +68,8 @@ type CacheInvalidator interface {
 
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.cachePool = NewCachePool(config.CachePoolCap, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.cachePool = NewCachePool(config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
-	qe.adminCache = NewGenericCache(qe.cachePool)
 	qe.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool(config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.reservedPool = NewReservedPool()
@@ -97,10 +94,9 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []Schem
 	defer qe.mu.Unlock()
 
 	connFactory := GenericConnectionCreator(dbconfig.MysqlParams())
-	cacheFactory := CacheCreator(dbconfig)
 
 	start := time.Now().UnixNano()
-	qe.cachePool.Open(cacheFactory)
+	qe.cachePool.Open()
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
 	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	qe.connPool.Open(connFactory)
@@ -124,6 +120,7 @@ func (qe *QueryEngine) Close(forRestart bool) {
 	qe.reservedPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
+	qe.cachePool.Close()
 }
 
 func (qe *QueryEngine) Begin(logStats *sqlQueryStats, connectionId int64) (transactionId int64) {
@@ -321,21 +318,13 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	qe.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
-func (qe *QueryEngine) getCurrentInvalidationPosition() (invalidationPosition []byte, err error) {
-	return qe.adminCache.Get(ROWCACHE_INVALIDATION_POSITION)
-}
-
-func (qe *QueryEngine) purgeRowCache() {
-	qe.adminCache.PurgeCache()
-}
-
-func (qe *QueryEngine) Invalidate(cacheInvalidate *proto.CacheInvalidate) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
+func (qe *QueryEngine) InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
 	if qe.cachePool.IsClosed() {
 		return
 	}
+	qe.mu.RLock()
+	defer qe.mu.RUnlock()
+
 	for _, dml := range cacheInvalidate.Dmls {
 		invalidations := int64(0)
 		tableInfo := qe.schemaInfo.GetTable(dml.Table)
@@ -354,7 +343,6 @@ func (qe *QueryEngine) Invalidate(cacheInvalidate *proto.CacheInvalidate) {
 		}
 		tableInfo.invalidations.Add(invalidations)
 	}
-	qe.adminCache.Set(ROWCACHE_INVALIDATION_POSITION, 0, 0, []byte(cacheInvalidate.Position))
 }
 
 func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
@@ -369,7 +357,6 @@ func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	if ddlPlan.Action != sqlparser.DROP { // CREATE, ALTER, RENAME
 		qe.schemaInfo.CreateTable(ddlPlan.NewName)
 	}
-	qe.adminCache.Set(ROWCACHE_INVALIDATION_POSITION, 0, 0, []byte(ddlInvalidate.Position))
 }
 
 //-----------------------------------------------

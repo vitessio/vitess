@@ -56,11 +56,9 @@ type DmlType struct {
 }
 
 type CacheInvalidate struct {
-	Position []byte
-	Dmls     []DmlType
+	Dmls []DmlType
 }
 
 type DDLInvalidate struct {
-	Position []byte
-	DDL      string
+	DDL string
 }
