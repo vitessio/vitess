@@ -4,7 +4,7 @@
 set -e
 
 # This is necessary because the Emacs extensions don't set GIT_DIR.
-if [ -z "$GIT_DIR"]; then
+if [ -z "$GIT_DIR" ]; then
  GIT_DIR="$(pwd)/.git"
 fi
 for hook in $GIT_DIR/../misc/git/hooks/*; do
