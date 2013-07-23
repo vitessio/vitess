@@ -268,10 +268,10 @@ func initAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 			}
 		} else {
 			ts.DisallowQueries(false)
-			mysqlctl.DisableUpdateStreamService()
 			if newTablet.Type != topo.TYPE_MASTER {
 				ts.StopRowCacheInvalidation()
 			}
+			mysqlctl.DisableUpdateStreamService()
 		}
 	})
 
