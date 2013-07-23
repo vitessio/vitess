@@ -9,6 +9,7 @@ import (
 	"fmt"
 	_ "net/http/pprof"
 	"os"
+	"sort"
 
 	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
@@ -46,6 +47,24 @@ func init() {
 	}
 }
 
+const (
+	globalKeyspacesPath = "/zk/global/vt/keyspaces"
+)
+
+type TopoServReader struct {
+	zkr zk.ZkReader
+}
+
+func (to *TopoServReader) GetKeyspaces(req struct{}, reply *[]string) error {
+	zkrReply := &zk.ZkNode{}
+	if err := to.zkr.Children(&zk.ZkPath{Path: globalKeyspacesPath}, zkrReply); err != nil {
+		return err
+	}
+	*reply = zkrReply.Children
+	sort.Strings(*reply)
+	return nil
+}
+
 // zkocc: a proxy for zk
 func main() {
 	flag.Parse()
@@ -58,8 +77,10 @@ func main() {
 	jsonrpc.ServeRPC()
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
+	zkr := zkocc.NewZkReader(*resolveLocal, flag.Args())
+	zk.RegisterZkReader(zkr)
 
-	zk.RegisterZkReader(zkocc.NewZkReader(*resolveLocal, flag.Args()))
+	rpc.Register(&TopoServReader{zkr: zkr})
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.
