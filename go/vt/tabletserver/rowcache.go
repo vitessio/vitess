@@ -6,6 +6,7 @@ package tabletserver
 
 import (
 	"encoding/binary"
+	"strconv"
 	"time"
 
 	"github.com/youtube/vitess/go/sqltypes"
@@ -32,8 +33,8 @@ type RCResult struct {
 	Cas uint64
 }
 
-func NewRowCache(tableInfo *TableInfo, hash string, cachePool *CachePool) *RowCache {
-	prefix := hash + "."
+func NewRowCache(tableInfo *TableInfo, cachePool *CachePool) *RowCache {
+	prefix := strconv.FormatInt(cachePool.maxPrefix.Add(1), 36) + "."
 	return &RowCache{tableInfo, prefix, cachePool}
 }
 

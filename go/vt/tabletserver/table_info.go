@@ -5,11 +5,7 @@
 package tabletserver
 
 import (
-	"encoding/base64"
-	"encoding/binary"
 	"fmt"
-	"hash/fnv"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -26,12 +22,12 @@ type TableInfo struct {
 	hits, absent, misses, invalidations sync2.AtomicInt64
 }
 
-func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) (ti *TableInfo) {
+func NewTableInfo(conn PoolConnection, tableName string, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) (ti *TableInfo) {
 	if tableName == "dual" {
 		return &TableInfo{Table: schema.NewTable(tableName)}
 	}
 	ti = loadTableInfo(conn, tableName)
-	ti.initRowCache(conn, tableType, createTime, comment, cachePool, hashRegistry)
+	ti.initRowCache(conn, tableType, createTime, comment, cachePool)
 	return ti
 }
 
@@ -73,7 +69,10 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 	}
 	if len(ti.Indexes) == 0 {
 		ti.Indexes = make([]*schema.Index, 1)
-	}
+	} else if ti.Indexes[0].Name != "PRIMARY" {
+		ti.Indexes = append(ti.Indexes, nil)
+		copy(ti.Indexes[1:], ti.Indexes[:len(ti.Indexes)-1])
+	} // else we replace the currunt primary key
 	ti.Indexes[0] = pkIndex
 	ti.PKColumns = colnums
 	return nil
@@ -124,7 +123,7 @@ func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
 	return true
 }
 
-func (ti *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool, hashRegistry map[string]string) {
+func (ti *TableInfo) initRowCache(conn PoolConnection, tableType string, createTime sqltypes.Value, comment string, cachePool *CachePool) {
 	if cachePool.IsClosed() {
 		return
 	}
@@ -150,37 +149,8 @@ func (ti *TableInfo) initRowCache(conn PoolConnection, tableType string, createT
 		}
 	}
 
-	thash := ti.computePrefix(conn, createTime, hashRegistry)
-	if thash == "" {
-		return
-	}
-
 	ti.CacheType = schema.CACHE_RW
-	ti.Cache = NewRowCache(ti, thash, cachePool)
-}
-
-var autoIncr = regexp.MustCompile("auto_increment=\\d+")
-
-func (ti *TableInfo) computePrefix(conn PoolConnection, createTime sqltypes.Value, hashRegistry map[string]string) string {
-	if createTime.IsNull() {
-		relog.Warning("%s has no time stamp. Will not be cached.", ti.Name)
-		return ""
-	}
-	createTable, err := conn.ExecuteFetch(fmt.Sprintf("show create table %s", ti.Name), 10000, false)
-	if err != nil {
-		relog.Warning("Couldnt read table info: %v", err)
-		return ""
-	}
-	// Normalize & remove auto_increment because it changes on every insert
-	norm1 := strings.ToLower(createTable.Rows[0][1].String())
-	norm2 := autoIncr.ReplaceAllLiteralString(norm1, "")
-	thash := base64fnv(norm2 + createTime.String())
-	if _, ok := hashRegistry[thash]; ok {
-		relog.Warning("Hash collision for %s (schema revert?). Will not be cached", ti.Name)
-		return ""
-	}
-	hashRegistry[thash] = ti.Name
-	return thash
+	ti.Cache = NewRowCache(ti, cachePool)
 }
 
 func (ti *TableInfo) StatsJSON() string {
@@ -193,18 +163,4 @@ func (ti *TableInfo) StatsJSON() string {
 
 func (ti *TableInfo) Stats() (hits, absent, misses, invalidations int64) {
 	return ti.hits.Get(), ti.absent.Get(), ti.misses.Get(), ti.invalidations.Get()
-}
-
-func base64fnv(s string) string {
-	h := fnv.New32a()
-	h.Write(([]byte)(s))
-	v := h.Sum32()
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, v)
-	b64 := make([]byte, base64.StdEncoding.EncodedLen(len(b)))
-	base64.StdEncoding.Encode(b64, b)
-	for b64[len(b64)-1] == '=' {
-		b64 = b64[:len(b64)-1]
-	}
-	return string(b64)
 }
