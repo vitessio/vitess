@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log/syslog"
+	"net"
 	"os"
 	"os/signal"
 	"sort"
@@ -57,6 +58,9 @@ var commands = []commandGroup{
 				"[-force] [-parent] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
 				"DEPRECATED (use ChangeSlaveType or other operations instead).\n" +
 					"Updates a tablet in the topology."},
+			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
+				"<tablet alias|zk tablet path> [-addr <addr>] [-secure-addr <secure addr>] [-mysql-addr <mysql-addr>] [-mysql-ip-addr <mysql ip addr]",
+				"Updates the addresses of a tablet."},
 			command{"ScrapTablet", commandScrapTablet,
 				"[-force] [-skip-rebuild] <tablet alias|zk tablet path>",
 				"Scraps a tablet."},
@@ -503,6 +507,69 @@ func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	parentAlias := tabletRepParamToTabletAlias(subFlags.Arg(7))
 	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, *parent, true)
+}
+
+func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	addr := subFlags.String("addr", "", "tablet address (host:port)")
+	secureAddr := subFlags.String("secure-addr", "", "secure tablet address (host:port)")
+	mysqlAddr := subFlags.String("mysql-addr", "", "mysql address (host:port)")
+	mysqlIpAddr := subFlags.String("mysql-ip-addr", "", "tablet address (host:port)")
+
+	if len(args) < 1 {
+		relog.Fatal("action UpdateTabletAddrs requires <tablet alias|zk tablet path")
+	}
+
+	subFlags.Parse(args[1:])
+
+	ts := topo.GetServer()
+	defer topo.CloseServers()
+
+	if *addr != "" {
+		if _, _, err := net.SplitHostPort(*addr); err != nil {
+			return "", err
+		}
+	}
+	if *secureAddr != "" {
+		if _, _, err := net.SplitHostPort(*secureAddr); err != nil {
+			return "", err
+		}
+
+	}
+	if *mysqlAddr != "" {
+		if _, _, err := net.SplitHostPort(*mysqlAddr); err != nil {
+			return "", err
+		}
+	}
+
+	if *mysqlIpAddr != "" {
+		ip, _, err := net.SplitHostPort(*mysqlIpAddr)
+		if err != nil {
+			return "", fmt.Errorf("malformed ip address: %v", *mysqlIpAddr)
+		}
+		if net.ParseIP(ip) == nil {
+			return "", fmt.Errorf("malformed ip address: %v", *mysqlIpAddr)
+		}
+	}
+
+	tabletAlias := tabletParamToTabletAlias(args[0])
+	return "", ts.UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
+		if *addr != "" {
+			tablet.Addr = *addr
+		}
+		if *secureAddr != "" {
+			tablet.SecureAddr = *secureAddr
+
+		}
+		if *mysqlAddr != "" {
+			tablet.MysqlAddr = *mysqlAddr
+
+		}
+		if *mysqlIpAddr != "" {
+			tablet.MysqlIpAddr = *mysqlIpAddr
+		}
+		return nil
+	})
+
 }
 
 func commandScrapTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
