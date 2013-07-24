@@ -134,6 +134,9 @@ func (cp *CachePool) startMemcache() {
 }
 
 func (cp *CachePool) Close() {
+	if cp.pool == nil {
+		return
+	}
 	cp.pool.Close()
 	cp.cmd.Process.Kill()
 	cp.pool = nil
