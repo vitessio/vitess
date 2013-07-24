@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"path"
 	"reflect"
+	"sort"
 	"strings"
 	"time"
 
@@ -463,6 +464,7 @@ func main() {
 				cells[i] = cell[4:] // cut off "/zk/"
 			}
 			result.Children = cells
+			sort.Strings(result.Children)
 		} else {
 
 			if data, _, err := zconn.Get(zkPath); err != nil {
@@ -474,6 +476,7 @@ func main() {
 					result.Error = err.Error()
 				} else {
 					result.Children = children
+					sort.Strings(result.Children)
 				}
 			}
 		}
