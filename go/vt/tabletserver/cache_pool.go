@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/memcache"
 	"github.com/youtube/vitess/go/pools"
 	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/sync2"
 )
 
 const statsURL = "/debug/memcache/"
@@ -22,6 +23,7 @@ type CreateCacheFunc func() (*memcache.Connection, error)
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.
 type CachePool struct {
 	pool         *pools.ResourcePool
+	maxPrefix    sync2.AtomicInt64
 	cmd          *exec.Cmd
 	commandLine  []string
 	capacity     int

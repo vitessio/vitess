@@ -82,7 +82,6 @@ type SchemaInfo struct {
 	reloadTime     time.Duration
 	lastChange     time.Time
 	ticks          *timer.Timer
-	hashRegistry   map[string]string
 }
 
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
@@ -115,9 +114,8 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []S
 		panic(NewTabletError(FATAL, "Could not get table list: %v", err))
 	}
 
-	si.hashRegistry = make(map[string]string)
 	si.tables = make(map[string]*TableInfo, len(tables.Rows))
-	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", sqltypes.NULL, "", si.cachePool, si.hashRegistry)
+	si.tables["dual"] = NewTableInfo(conn, "dual", "VIEW", sqltypes.NULL, "", si.cachePool)
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])
@@ -128,7 +126,6 @@ func (si *SchemaInfo) Open(connFactory CreateConnectionFunc, schemaOverrides []S
 			row[2],          // create_time
 			row[3].String(), // table_comment
 			si.cachePool,
-			si.hashRegistry,
 		)
 		if tableInfo == nil {
 			continue
@@ -177,15 +174,13 @@ func (si *SchemaInfo) override(schemaOverrides []SchemaOverride) {
 		switch override.Cache.Type {
 		case "RW":
 			table.CacheType = schema.CACHE_RW
+			table.Cache = NewRowCache(table, si.cachePool)
 		case "W":
 			table.CacheType = schema.CACHE_W
-		default:
-			relog.Warning("Ignoring cache override: %v", override)
-			continue
-		}
-		if override.Cache.Prefix != "" {
-			table.Cache = NewRowCache(table, override.Cache.Prefix, si.cachePool)
-		} else if override.Cache.Table != "" {
+			if override.Cache.Table == "" {
+				relog.Warning("Incomplete cache specs: %v", override)
+				continue
+			}
 			totable, ok := si.tables[override.Cache.Table]
 			if !ok {
 				relog.Warning("Table not found: %v", override)
@@ -196,9 +191,8 @@ func (si *SchemaInfo) override(schemaOverrides []SchemaOverride) {
 				continue
 			}
 			table.Cache = totable.Cache
-		} else {
-			relog.Warning("Incomplete cache specs: %v", override)
-			continue
+		default:
+			relog.Warning("Ignoring cache override: %v", override)
 		}
 	}
 }
@@ -209,7 +203,6 @@ func (si *SchemaInfo) Close() {
 	si.tables = nil
 	si.queries.Clear()
 	si.rules = NewQueryRules()
-	si.hashRegistry = nil
 }
 
 func (si *SchemaInfo) Reload() {
@@ -264,7 +257,6 @@ func (si *SchemaInfo) createTable(conn PoolConnection, tableName string) {
 		tables.Rows[0][2],          // create_time
 		tables.Rows[0][3].String(), // table_comment
 		si.cachePool,
-		si.hashRegistry,
 	)
 	if tableInfo == nil {
 		panic(NewTabletError(FATAL, "Could not read table info: %s", tableName))
