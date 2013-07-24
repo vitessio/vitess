@@ -357,7 +357,7 @@ def _run_test_vtctl_clone(server_mode):
   call(["touch", "/tmp/vtSimulateFetchFailures"])
   utils.run_vtctl('Clone -force %s %s %s' %
                   (clone_flags, tablet_62344.tablet_alias,
-                   tablet_62044.tablet_alias))
+                   tablet_62044.tablet_alias), auto_log=True)
 
   utils.pause("look at logs!")
   tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
