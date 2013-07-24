@@ -52,11 +52,15 @@ var commands = []commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
 				"[-force] [-parent] [-db-name-override=<db name>] <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]",
-				"Initializes a tablet in the topology."},
+				"Initializes a tablet in the topology.\n" +
+					"Valid <tablet type>:\n" +
+					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
 			command{"UpdateTablet", commandUpdateTablet,
 				"[-force] [-parent] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
 				"DEPRECATED (use ChangeSlaveType or other operations instead).\n" +
-					"Updates a tablet in the topology."},
+					"Updates a tablet in the topology.\n" +
+					"Valid <tablet type>:\n" +
+					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
 			command{"ScrapTablet", commandScrapTablet,
 				"[-force] [-skip-rebuild] <tablet alias|zk tablet path>",
 				"Scraps a tablet."},
@@ -70,11 +74,11 @@ var commands = []commandGroup{
 				"<tablet alias|zk tablet path>",
 				"Demotes a master tablet."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
-				"[-force] [-dry-run] <tablet alias|zk tablet path> <db type>",
+				"[-force] [-dry-run] <tablet alias|zk tablet path> <tablet type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
 					"NOTE: This will automatically update the serving graph.\n" +
-					"Valid <db type>:\n" +
-					"  " + strings.Join(topo.SlaveTabletTypeStrings, " ") + "\n"},
+					"Valid <tablet type>:\n" +
+					"  " + strings.Join(topo.MakeStringTypeList(topo.SlaveTabletTypes), " ")},
 			command{"Ping", commandPing,
 				"<tablet alias|zk tablet path>",
 				"Check that the agent is awake and responding - can be blocked by other in-flight operations."},
@@ -92,7 +96,9 @@ var commands = []commandGroup{
 				"Stop mysqld and copy compressed data aside."},
 			command{"SnapshotSourceEnd", commandSnapshotSourceEnd,
 				"[-slave-start] [-read-write] <tablet alias|zk tablet path> <original tablet type>",
-				"Restarts Mysql and restore original server type."},
+				"Restarts Mysql and restore original server type." +
+					"Valid <tablet type>:\n" +
+					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
 			command{"Restore", commandRestore,
 				"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <src tablet alias|zk src tablet path> <src manifest file> <dst tablet alias|zk dst tablet path> [<zk new master path>]",
 				"Copy the given snaphot from the source tablet and restart replication to the new master path (or uses the <src tablet path> if not specified). If <src manifest file> is 'default', uses the default value.\n" +
@@ -484,11 +490,15 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletType := topo.TabletType(subFlags.Arg(6))
+	if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
+		relog.Fatal("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " "))
+	}
 	parentAlias := topo.TabletAlias{}
 	if subFlags.NArg() == 8 {
 		parentAlias = tabletRepParamToTabletAlias(subFlags.Arg(7))
 	}
-	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, *parent, false)
+	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), tabletType, parentAlias, *dbNameOverride, *force, *parent, false)
 }
 
 func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -501,8 +511,12 @@ func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletType := topo.TabletType(subFlags.Arg(6))
+	if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
+		relog.Fatal("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " "))
+	}
 	parentAlias := tabletRepParamToTabletAlias(subFlags.Arg(7))
-	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), subFlags.Arg(6), parentAlias, *dbNameOverride, *force, *parent, true)
+	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), tabletType, parentAlias, *dbNameOverride, *force, *parent, true)
 }
 
 func commandScrapTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -557,6 +571,9 @@ func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	newType := topo.TabletType(subFlags.Arg(1))
+	if !topo.IsTypeInList(newType, topo.SlaveTabletTypes) {
+		relog.Fatal("Type %v is not one of: %v", newType, strings.Join(topo.MakeStringTypeList(topo.SlaveTabletTypes), " "))
+	}
 	if *dryRun {
 		ti, err := wr.TopoServer().GetTablet(tabletAlias)
 		if err != nil {
@@ -625,7 +642,11 @@ func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	return "", wr.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), topo.TabletType(subFlags.Arg(1)))
+	tabletType := topo.TabletType(subFlags.Arg(1))
+	if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
+		relog.Fatal("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " "))
+	}
+	return "", wr.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), tabletType)
 }
 
 func commandSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
