@@ -22,6 +22,14 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 		return err
 	}
 
+	// do the work
+	err = wr.shardExternallyReparentedLocked(keyspace, shard, masterElectTabletAlias, scrapStragglers)
+
+	// release the lock in any case
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -55,7 +63,7 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 		// only log if it works, if it fails we'll show the error
 		relog.Info("reparentShardExternal finished")
 	}
-	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	return err
 }
 
 func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, scrapStragglers bool) error {

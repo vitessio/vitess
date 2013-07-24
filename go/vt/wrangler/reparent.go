@@ -93,6 +93,14 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 		return err
 	}
 
+	// do the work
+	err = wr.reparentShardLocked(keyspace, shard, masterElectTabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster)
+
+	// and unlock
+	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -133,7 +141,7 @@ func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias
 		// only log if it works, if it fails we'll show the error
 		relog.Info("reparentShard finished")
 	}
-	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+	return err
 }
 
 func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
