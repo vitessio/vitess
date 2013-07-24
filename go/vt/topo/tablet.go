@@ -192,11 +192,11 @@ var SlaveTabletTypes = []TabletType{
 // Use it with AllTabletType and SlaveTabletType for instance.
 func IsTypeInList(tabletType TabletType, types []TabletType) bool {
 	for _, t := range types {
-                if tabletType == t {
-                        return true
-                }
-        }
-        return false
+		if tabletType == t {
+			return true
+		}
+	}
+	return false
 }
 
 // MakeStringTypeList returns a list of strings that match the input list.
