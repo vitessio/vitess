@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool) error {
+func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool, acceptSuccessPercents int) error {
 	// grab the shard lock
 	actionNode := wr.ai.ShardExternallyReparented(masterElectTabletAlias)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
@@ -23,13 +23,13 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 	}
 
 	// do the work
-	err = wr.shardExternallyReparentedLocked(keyspace, shard, masterElectTabletAlias, scrapStragglers)
+	err = wr.shardExternallyReparentedLocked(keyspace, shard, masterElectTabletAlias, scrapStragglers, acceptSuccessPercents)
 
 	// release the lock in any case
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool) error {
+func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool, acceptSuccessPercents int) error {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
 	}
 
-	err = wr.reparentShardExternal(slaveTabletMap, foundMaster, masterElectTablet, scrapStragglers)
+	err = wr.reparentShardExternal(slaveTabletMap, foundMaster, masterElectTablet, scrapStragglers, acceptSuccessPercents)
 	if err == nil {
 		// only log if it works, if it fails we'll show the error
 		relog.Info("reparentShardExternal finished")
@@ -66,7 +66,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	return err
 }
 
-func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, scrapStragglers bool) error {
+func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, scrapStragglers bool, acceptSuccessPercents int) error {
 
 	// we fix the new master in the replication graph
 	err := wr.slaveWasPromoted(masterElectTablet)
@@ -79,7 +79,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*t
 	delete(slaveTabletMap, masterElectTablet.Alias())
 
 	// then fix all the slaves, including the old master
-	err = wr.restartSlavesExternal(slaveTabletMap, masterTablet, masterElectTablet, scrapStragglers)
+	err = wr.restartSlavesExternal(slaveTabletMap, masterTablet, masterElectTablet, scrapStragglers, acceptSuccessPercents)
 	if err != nil {
 		return err
 	}
@@ -91,7 +91,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*t
 	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, nil)
 }
 
-func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, scrapStragglers bool) error {
+func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, scrapStragglers bool, acceptSuccessPercents int) error {
 	recorder := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
@@ -114,6 +114,18 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 
 	// then do the master
 	recorder.RecordError(wr.slaveWasRestarted(masterTablet, &swrd))
+
+	if !recorder.HasErrors() {
+		return nil
+	}
+
+	// report errors only above a threshold
+	failurePercent := 100 * len(recorder.Errors) / (len(slaveTabletMap) + 1)
+	if failurePercent < 100-acceptSuccessPercents {
+		relog.Warning("Encountered %v%% failure, we keep going. Errors: %v", failurePercent, recorder.Error())
+		return nil
+	}
+
 	return recorder.Error()
 }
 
