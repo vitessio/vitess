@@ -40,6 +40,11 @@ type GetSrvKeyspaceArgs struct {
 	Keyspace string
 }
 
+// FIXME(ryszard): These methods are kinda copy-and-pasted from
+// zktopo.Server. In the long-term, the TopoReader should just take a
+// topo.Server, which would be backed by a caching ZooKeeper
+// connection.
+
 func (tr *TopoReader) GetSrvKeyspace(req GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
 	keyspacePath := zkPathForVtKeyspace(req.Cell, req.Keyspace)
 	zkrReply := &zk.ZkNode{}
