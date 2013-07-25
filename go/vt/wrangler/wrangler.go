@@ -5,6 +5,7 @@
 package wrangler
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -232,58 +233,119 @@ func (wr *Wrangler) getMasterAlias(keyspace, shard string) (topo.TabletAlias, er
 	return aliases[0], nil
 }
 
-// InitTablet will create or update a tablet. If not parent is
-// specified, and the tablet created is a slave type, we will find the
-// appropriate parent.
-func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort, port, keyspace, shardId string, tabletType topo.TabletType, parentAlias topo.TabletAlias, dbNameOverride string, force, parent, update bool) error {
-	// if shardId contains a '-', we assume it's a range-based shard,
+type InitTabletOptions struct {
+	// Hostname is the hostname that is going to be used to
+	// initialize the tablet.
+	Hostname string
+
+	// Port is the vttablet port.
+	Port int
+
+	// MySQLPort is the MySQLPort
+	MySQLPort int
+
+	// If ParentAlias is passed, the freshly initialized tablet a
+	// slave of this parent.
+	ParentAlias topo.TabletAlias
+
+	// Keyspace is the keyspace that is going to be used to
+	// initialize the tablet. Keyspace may be empty for an idle
+	// tablet.
+	Keyspace string
+
+	// Shard is the shard name. If it contains a dash ('-'), it
+	// will be assumed to be a range based shard name, and the key
+	// ranges will be derived from it.
+	Shard string
+
+	// If Force is true, and a tablet with the same ID already
+	// exists, it will be scrapped and deleted.
+	Force bool
+
+	// If CreateShardAndKeyspace is true and the parent keyspace
+	// or shard don't exist, create them.
+	CreateShardAndKeyspace bool
+
+	// If Update is true, and a tablet with the same ID exists,
+	// update it.
+	Update bool
+
+	// If DbNameOverride is not empty, it will be used as the
+	// database name instead of the default (based on the
+	// keyspace).
+	DbNameOverride string
+
+	keyRange key.KeyRange
+}
+
+// validate makes sure that the options are legal, normalizes the
+// shard name, and sets the keyRange basing on the shard name.
+func (options *InitTabletOptions) validate() error {
+	// if options.Shard contains a '-', we assume it's a range-based shard,
 	// so we try to extract the KeyRange.
-	var keyRange key.KeyRange
-	var err error
-	if strings.Contains(shardId, "-") {
-		parts := strings.Split(shardId, "-")
+	if strings.Contains(options.Shard, "-") {
+		parts := strings.Split(options.Shard, "-")
 		if len(parts) != 2 {
-			return fmt.Errorf("Invalid shardId, can only contains one '-': %v", shardId)
+			return fmt.Errorf("Invalid shardId, can only contain one '-': %v", options.Shard)
 		}
 
-		keyRange.Start, err = key.HexKeyspaceId(parts[0]).Unhex()
+		start, err := key.HexKeyspaceId(parts[0]).Unhex()
 		if err != nil {
 			return err
 		}
 
-		keyRange.End, err = key.HexKeyspaceId(parts[1]).Unhex()
+		end, err := key.HexKeyspaceId(parts[1]).Unhex()
 		if err != nil {
 			return err
 		}
+		options.keyRange = key.KeyRange{Start: start, End: end}
+		options.Shard = strings.ToUpper(options.Shard)
+	}
+	if options.Hostname == "" {
+		return errors.New("hostname cannot be empty")
+	}
+	if options.Port == 0 {
+		return errors.New("port cannot be empty")
+	}
+	if options.MySQLPort == 0 {
+		return errors.New("mysql port cannot be empty")
+	}
+	return nil
+}
 
-		shardId = strings.ToUpper(shardId)
+// InitTablet creates or updates a tablet. If no parent is specified,
+// and the tablet created is a slave type, we will find the
+// appropriate parent.
+func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, tabletType topo.TabletType, options InitTabletOptions) error {
+	if err := options.validate(); err != nil {
+		return err
+	}
+	if options.ParentAlias == (topo.TabletAlias{}) && tabletType != topo.TYPE_MASTER && tabletType != topo.TYPE_IDLE {
+		parentAlias, err := wr.getMasterAlias(options.Keyspace, options.Shard)
+		if err != nil {
+			return err
+		}
+		options.ParentAlias = parentAlias
 	}
 
-	if parentAlias == (topo.TabletAlias{}) && tabletType != topo.TYPE_MASTER && tabletType != topo.TYPE_IDLE {
-		parentAlias, err = wr.getMasterAlias(keyspace, shardId)
-		if err != nil {
-			return err
-		}
-	}
-
-	tablet, err := topo.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tabletType)
+	tablet, err := topo.NewTablet(tabletAlias.Cell, tabletAlias.Uid, options.ParentAlias, fmt.Sprintf("%v:%v", options.Hostname, options.Port), fmt.Sprintf("%v:%v", options.Hostname, options.MySQLPort), options.Keyspace, options.Shard, tabletType)
 	if err != nil {
 		return err
 	}
-	tablet.DbNameOverride = dbNameOverride
-	tablet.KeyRange = keyRange
+	tablet.DbNameOverride = options.DbNameOverride
+	tablet.KeyRange = options.keyRange
 
 	if tablet.IsInReplicationGraph() {
-		if parent {
-			if err := wr.ts.CreateKeyspace(keyspace); err != nil && err != topo.ErrNodeExists {
+		if options.CreateShardAndKeyspace {
+			if err := wr.ts.CreateKeyspace(options.Keyspace); err != nil && err != topo.ErrNodeExists {
 				return err
 			}
 
-			if err := wr.ts.CreateShard(keyspace, shardId); err != nil && err != topo.ErrNodeExists {
+			if err := wr.ts.CreateShard(options.Keyspace, options.Shard); err != nil && err != topo.ErrNodeExists {
 				return err
 			}
 		} else {
-			if _, err := wr.ts.GetShard(keyspace, shardId); err != nil {
+			if _, err := wr.ts.GetShard(options.Keyspace, options.Shard); err != nil {
 				return fmt.Errorf("Missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
 			}
 		}
@@ -292,7 +354,7 @@ func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort
 	err = topo.CreateTablet(wr.ts, tablet)
 	if err != nil && err == topo.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
-		if update {
+		if options.Update {
 			oldTablet, err := wr.ts.GetTablet(tabletAlias)
 			if err != nil {
 				relog.Warning("failed reading tablet %v: %v", tabletAlias, err)
@@ -308,16 +370,16 @@ func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort
 				}
 			}
 		}
-		if force {
-			if _, err = wr.Scrap(tabletAlias, force, false); err != nil {
+		if options.Force {
+			if _, err = wr.Scrap(tabletAlias, options.Force, false); err != nil {
 				relog.Error("failed scrapping tablet %v: %v", tabletAlias, err)
 				return err
 			}
-			if err = wr.ts.DeleteTablet(tabletAlias); err != nil {
+			if err := wr.ts.DeleteTablet(tabletAlias); err != nil {
 				// we ignore this
 				relog.Error("failed deleting tablet %v: %v", tabletAlias, err)
 			}
-			err = topo.CreateTablet(wr.ts, tablet)
+			return topo.CreateTablet(wr.ts, tablet)
 		}
 	}
 	return err

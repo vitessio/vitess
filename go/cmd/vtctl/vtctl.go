@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -509,7 +510,28 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	if subFlags.NArg() == 8 {
 		parentAlias = tabletRepParamToTabletAlias(subFlags.Arg(7))
 	}
-	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), tabletType, parentAlias, *dbNameOverride, *force, *parent, false)
+	port, err := strconv.Atoi(subFlags.Arg(3))
+	if err != nil {
+		relog.Fatal("malformed VT port %q: %v", subFlags.Arg(3), err)
+	}
+
+	mysqlPort, err := strconv.Atoi(subFlags.Arg(2))
+	if err != nil {
+		relog.Fatal("malformed MySQL port %q: %v", subFlags.Arg(2), err)
+	}
+
+	options := wrangler.InitTabletOptions{
+		Hostname:               subFlags.Arg(1),
+		MySQLPort:              mysqlPort,
+		Port:                   port,
+		Keyspace:               subFlags.Arg(4),
+		Shard:                  subFlags.Arg(5),
+		ParentAlias:            parentAlias,
+		CreateShardAndKeyspace: *parent,
+		DbNameOverride:         *dbNameOverride,
+		Force:                  *force,
+	}
+	return "", wr.InitTablet(tabletAlias, tabletType, options)
 }
 
 func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -524,7 +546,30 @@ func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	tabletType := parseTabletType(subFlags.Arg(6), topo.AllTabletTypes)
 	parentAlias := tabletRepParamToTabletAlias(subFlags.Arg(7))
-	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), tabletType, parentAlias, *dbNameOverride, *force, *parent, true)
+	port, err := strconv.Atoi(subFlags.Arg(3))
+	if err != nil {
+		relog.Fatal("malformed VT port %q: %v", subFlags.Arg(3), err)
+	}
+
+	mysqlPort, err := strconv.Atoi(subFlags.Arg(2))
+	if err != nil {
+		relog.Fatal("malformed MySQL port %q: %v", subFlags.Arg(2), err)
+	}
+
+	options := wrangler.InitTabletOptions{
+		Hostname:               subFlags.Arg(1),
+		MySQLPort:              mysqlPort,
+		Port:                   port,
+		Keyspace:               subFlags.Arg(4),
+		Shard:                  subFlags.Arg(5),
+		ParentAlias:            parentAlias,
+		CreateShardAndKeyspace: *parent,
+		DbNameOverride:         *dbNameOverride,
+		Force:                  *force,
+		Update:                 true,
+	}
+
+	return "", wr.InitTablet(tabletAlias, tabletType, options)
 }
 
 func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
