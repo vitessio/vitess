@@ -23,4 +23,4 @@ if [ "$(which upload.py)" == "" ]; then
 fi
 
 echo "Visit https://accounts.google.com/b/0/IssuedAuthSubTokens to generate an app specific password."
-upload.py --rev master -y -s codereview.appspot.com -e ${USER}@google.com -cc yt-vt-issues@google.com --send_mail $*
+upload.py --rev master -y -s codereview.appspot.com -e ${USER}@google.com --cc yt-vt-issues@google.com --send_mail $*
