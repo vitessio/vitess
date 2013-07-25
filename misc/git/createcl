@@ -1,0 +1,16 @@
+#!/bin/bash
+
+function _print_download()
+{
+  echo "To make this script work, you need to download upload.py from:"
+  echo "http://code.google.com/p/rietveld/wiki/UploadPyUsage"
+  echo "Copy the file to your path, and chmod to make it executable."
+  exit 1
+}
+
+if [ "$(which upload.py)" == "" ]; then
+  _print_download
+fi
+
+echo "Visit https://accounts.google.com/b/0/IssuedAuthSubTokens to generate an app specific password."
+upload.py --rev master -y -s codereview.appspot.com -e ${USER}@google.com --cc yt-vt-issues@google.com --send_mail $*
