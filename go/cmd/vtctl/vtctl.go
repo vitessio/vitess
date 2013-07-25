@@ -480,6 +480,16 @@ func vtPathToCell(param string) string {
 	return param
 }
 
+// parseTabletType parses the string tablet type and verifies
+// it is an accepted one
+func parseTabletType(param string, types []topo.TabletType) topo.TabletType {
+	tabletType := topo.TabletType(param)
+	if !topo.IsTypeInList(tabletType, types) {
+		relog.Fatal("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(types), " "))
+	}
+	return tabletType
+}
+
 func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
@@ -490,10 +500,7 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	tabletType := topo.TabletType(subFlags.Arg(6))
-	if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
-		relog.Fatal("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " "))
-	}
+	tabletType := parseTabletType(subFlags.Arg(6), topo.AllTabletTypes)
 	parentAlias := topo.TabletAlias{}
 	if subFlags.NArg() == 8 {
 		parentAlias = tabletRepParamToTabletAlias(subFlags.Arg(7))
@@ -511,10 +518,7 @@ func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	tabletType := topo.TabletType(subFlags.Arg(6))
-	if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
-		relog.Fatal("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " "))
-	}
+	tabletType := parseTabletType(subFlags.Arg(6), topo.AllTabletTypes)
 	parentAlias := tabletRepParamToTabletAlias(subFlags.Arg(7))
 	return "", wr.InitTablet(tabletAlias, subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4), subFlags.Arg(5), tabletType, parentAlias, *dbNameOverride, *force, *parent, true)
 }
@@ -570,10 +574,7 @@ func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args 
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	newType := topo.TabletType(subFlags.Arg(1))
-	if !topo.IsTypeInList(newType, topo.SlaveTabletTypes) {
-		relog.Fatal("Type %v is not one of: %v", newType, strings.Join(topo.MakeStringTypeList(topo.SlaveTabletTypes), " "))
-	}
+	newType := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
 	if *dryRun {
 		ti, err := wr.TopoServer().GetTablet(tabletAlias)
 		if err != nil {
@@ -642,10 +643,7 @@ func commandSnapshotSourceEnd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	tabletType := topo.TabletType(subFlags.Arg(1))
-	if !topo.IsTypeInList(tabletType, topo.AllTabletTypes) {
-		relog.Fatal("Type %v is not one of: %v", tabletType, strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " "))
-	}
+	tabletType := parseTabletType(subFlags.Arg(1), topo.AllTabletTypes)
 	return "", wr.SnapshotSourceEnd(tabletAlias, *slaveStartRequired, !(*readWrite), tabletType)
 }
 
@@ -1035,7 +1033,8 @@ func commandResolve(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string
 		relog.Fatal("action Resolve requires <keyspace>.<shard>.<db type>:<port name>")
 	}
 
-	addrs, err := topo.LookupVtName(wr.TopoServer(), "local", parts[0], parts[1], topo.TabletType(parts[2]), namedPort)
+	tabletType := parseTabletType(parts[2], topo.AllTabletTypes)
+	addrs, err := topo.LookupVtName(wr.TopoServer(), "local", parts[0], parts[1], tabletType, namedPort)
 	if err != nil {
 		return "", err
 	}

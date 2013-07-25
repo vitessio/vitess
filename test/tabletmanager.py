@@ -587,6 +587,7 @@ primary key (id)
       if len(f.readlines()) != 2:
         raise utils.TestError("Data looks wrong in %s" % path)
 
+  tablet_62344.kill_vttablet()
 
 @utils.test_case
 def run_test_mysqlctl_split():
@@ -808,7 +809,7 @@ def run_test_reparent_down_master():
   # Should interrupt and fail
   sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log.level=INFO -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
   # Need time for the process to start before killing it.
-  time.sleep(0.1)
+  time.sleep(3.0)
   os.kill(sp.pid, signal.SIGINT)
   stdout, stderr = sp.communicate()
 
