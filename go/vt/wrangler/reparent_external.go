@@ -45,11 +45,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		return err
 	}
 
-	currentMasterTabletAlias := shardInfo.MasterAlias
-	if currentMasterTabletAlias == (topo.TabletAlias{}) {
-		return fmt.Errorf("no master tablet for shard %v/%v", keyspace, shard)
-	}
-	if currentMasterTabletAlias == masterElectTabletAlias {
+	if shardInfo.MasterAlias == masterElectTabletAlias {
 		return fmt.Errorf("master-elect tablet %v is already master", masterElectTabletAlias)
 	}
 
@@ -72,7 +68,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*t
 	err := wr.slaveWasPromoted(masterElectTablet)
 	if err != nil {
 		// This suggests that the master-elect is dead. This is bad.
-		return fmt.Errorf("slaveWasPromoted failed: %v", err, masterTablet.Alias())
+		return fmt.Errorf("slaveWasPromoted(%v) failed: %v", masterElectTablet, err)
 	}
 
 	// Once the slave is promoted, remove it from our map
@@ -112,8 +108,10 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 	}
 	wg.Wait()
 
-	// then do the master
-	recorder.RecordError(wr.slaveWasRestarted(masterTablet, &swrd))
+	// then do the old master if it hadn't been scrapped
+	if masterTablet != nil {
+		recorder.RecordError(wr.slaveWasRestarted(masterTablet, &swrd))
+	}
 
 	if !recorder.HasErrors() {
 		return nil
