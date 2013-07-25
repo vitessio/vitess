@@ -17,6 +17,7 @@ import (
 	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkocc"
 )
@@ -58,8 +59,10 @@ func main() {
 	jsonrpc.ServeRPC()
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
+	zkr := zkocc.NewZkReader(*resolveLocal, flag.Args())
+	zk.RegisterZkReader(zkr)
 
-	zk.RegisterZkReader(zkocc.NewZkReader(*resolveLocal, flag.Args()))
+	topo.RegisterTopoReader(&TopoReader{zkr: zkr})
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.

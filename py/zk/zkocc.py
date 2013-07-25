@@ -72,6 +72,29 @@ class SimpleZkOccConnection(object):
     except gorpc.GoRpcError as e:
       raise ZkOccError('children failed', e)
 
+
+def camelcase(snake):
+  return ''.join(w.capitalize() for w in snake.split('_'))
+
+class TopoOccConnection(SimpleZkOccConnection):
+
+  def _call(self, method, **kwargs):
+    req = dict((camelcase(k), v) for k, v in kwargs.items())
+    try:
+      return self.client.call(method, req).reply
+    except gorpc.GoRpcError as e:
+      raise ZkOccError('%s failed'% method, e)
+
+  def get_keyspaces(self):
+    return self._call('TopoReader.GetKeyspaces')['Entries']
+
+  def get_srv_keyspace(self, cell, keyspace):
+    return self._call('TopoReader.GetSrvKeyspace', cell=cell, keyspace=keyspace)
+
+  def get_end_points(self, cell, keyspace, shard, tablet_type):
+    return self._call('TopoReader.GetEndPoints', cell=cell, keyspace=keyspace, shard=shard, tablet_type=tablet_type)
+
+
 # A meta-connection that can connect to multiple alternate servers, and will
 # retry a couple times. Calling dial before get/getv/children is optional,
 # and will only do anything at all if authentication is enabled.
