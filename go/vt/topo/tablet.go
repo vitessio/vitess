@@ -40,6 +40,10 @@ type TabletAlias struct {
 	Uid  uint32
 }
 
+func (ta TabletAlias) IsZero() bool {
+	return ta.Cell == "" && ta.Uid == 0
+}
+
 func (ta TabletAlias) String() string {
 	return fmtAlias(ta.Cell, ta.Uid)
 }
@@ -197,6 +201,10 @@ func IsTypeInList(tabletType TabletType, types []TabletType) bool {
 		}
 	}
 	return false
+}
+
+func (tt TabletType) IsSlaveType() bool {
+	return IsTypeInList(tt, SlaveTabletTypes)
 }
 
 // MakeStringTypeList returns a list of strings that match the input list.
@@ -390,29 +398,43 @@ func tabletReplicationPath(tablet *Tablet) string {
 	return path.Join(tablet.Parent.String(), leaf)
 }
 
-func NewTablet(cell string, uid uint32, parent TabletAlias, vtAddr, mysqlAddr, keyspace, shardId string, tabletType TabletType) (*Tablet, error) {
-	state := STATE_READ_ONLY
-	if tabletType == TYPE_MASTER {
-		state = STATE_READ_WRITE
-		if parent.Uid != NO_TABLET {
-			return nil, fmt.Errorf("master cannot have parent: %v", parent.Uid)
+// Complete validates and normalizes the tablet. If the shard name
+// contains a '-' it is going to try to infer the keyrange from it.
+func (tablet *Tablet) Complete() error {
+	switch tablet.Type {
+	case TYPE_MASTER:
+		tablet.State = STATE_READ_WRITE
+		if tablet.Parent.Uid != NO_TABLET {
+			return fmt.Errorf("master cannot have parent: %v", tablet.Parent.Uid)
 		}
+	case TYPE_IDLE:
+		if tablet.Parent.Uid != NO_TABLET {
+			return fmt.Errorf("idle cannot have parent: %v", tablet.Parent.Uid)
+		}
+		fallthrough
+	default:
+		tablet.State = STATE_READ_ONLY
 	}
 
-	// check the values for vtAddr and mysqlAddr are correct
-	_, _, err := netutil.SplitHostPort(vtAddr)
-	if err != nil {
-		return nil, err
-	}
-	_, _, err = netutil.SplitHostPort(mysqlAddr)
-	if err != nil {
-		return nil, err
-	}
+	if strings.Contains(tablet.Shard, "-") {
+		parts := strings.Split(tablet.Shard, "-")
+		if len(parts) != 2 {
+			return fmt.Errorf("Invalid shardId, can only contain one '-': %v", tablet.Shard)
+		}
 
-	// These value will get resolved on tablet server startup.
-	secureAddr := ""
-	mysqlIpAddr := ""
-	return &Tablet{cell, uid, parent, vtAddr, secureAddr, mysqlAddr, mysqlIpAddr, keyspace, shardId, tabletType, state, "", key.KeyRange{}}, nil
+		start, err := key.HexKeyspaceId(parts[0]).Unhex()
+		if err != nil {
+			return err
+		}
+
+		end, err := key.HexKeyspaceId(parts[1]).Unhex()
+		if err != nil {
+			return err
+		}
+		tablet.KeyRange = key.KeyRange{Start: start, End: end}
+		tablet.Shard = strings.ToUpper(tablet.Shard)
+	}
+	return nil
 }
 
 func TabletFromJson(data string) (*Tablet, error) {

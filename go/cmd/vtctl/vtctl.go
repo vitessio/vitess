@@ -53,14 +53,8 @@ var commands = []commandGroup{
 	commandGroup{
 		"Tablets", []command{
 			command{"InitTablet", commandInitTablet,
-				"[-force] [-parent] [-db-name-override=<db name>] <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]",
+				"[-force] [-parent] [-update] [-db-name-override=<db name>] <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]",
 				"Initializes a tablet in the topology.\n" +
-					"Valid <tablet type>:\n" +
-					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
-			command{"UpdateTablet", commandUpdateTablet,
-				"[-force] [-parent] [-db-name-override=<db name>] <zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <zk parent alias>",
-				"DEPRECATED (use ChangeSlaveType or other operations instead).\n" +
-					"Updates a tablet in the topology.\n" +
 					"Valid <tablet type>:\n" +
 					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
 			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
@@ -499,77 +493,48 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
 	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
 	parent := subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
+	update := subFlags.Bool("update", false, "perform update if a tablet with provided alias exists")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 7 && subFlags.NArg() != 8 {
 		relog.Fatal("action InitTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]")
 	}
 
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	tabletType := parseTabletType(subFlags.Arg(6), topo.AllTabletTypes)
-	parentAlias := topo.TabletAlias{}
+	// FIXME(ryszard): This will go away once the commands accepts
+	// named parameters.
+	alias, hostname := subFlags.Arg(0), subFlags.Arg(1)
+	mysqlPort, vtPort := subFlags.Arg(2), subFlags.Arg(3)
+	keyspace, shard := subFlags.Arg(4), subFlags.Arg(5)
+	tabletType := subFlags.Arg(6)
+
+	tabletAlias := tabletParamToTabletAlias(alias)
+
+	// Validate provided port arguments.
+	//
+	// FIXME(ryszard): This wouldn't be necessarry if these were
+	// flags.
+
+	if _, err := strconv.Atoi(mysqlPort); err != nil {
+		relog.Fatal("malformed MySQL port %q: %v", mysqlPort, err)
+	}
+	if _, err := strconv.Atoi(vtPort); err != nil {
+		relog.Fatal("malformed VT port %q: %v", vtPort, err)
+	}
+
+	tablet := &topo.Tablet{
+		Cell:           tabletAlias.Cell,
+		Uid:            tabletAlias.Uid,
+		Addr:           net.JoinHostPort(hostname, vtPort),
+		MysqlAddr:      net.JoinHostPort(hostname, mysqlPort),
+		Keyspace:       keyspace,
+		Shard:          shard,
+		Type:           parseTabletType(tabletType, topo.AllTabletTypes),
+		DbNameOverride: *dbNameOverride,
+	}
 	if subFlags.NArg() == 8 {
-		parentAlias = tabletRepParamToTabletAlias(subFlags.Arg(7))
-	}
-	port, err := strconv.Atoi(subFlags.Arg(3))
-	if err != nil {
-		relog.Fatal("malformed VT port %q: %v", subFlags.Arg(3), err)
+		tablet.Parent = tabletRepParamToTabletAlias(subFlags.Arg(7))
 	}
 
-	mysqlPort, err := strconv.Atoi(subFlags.Arg(2))
-	if err != nil {
-		relog.Fatal("malformed MySQL port %q: %v", subFlags.Arg(2), err)
-	}
-
-	options := wrangler.InitTabletOptions{
-		Hostname:               subFlags.Arg(1),
-		MySQLPort:              mysqlPort,
-		Port:                   port,
-		Keyspace:               subFlags.Arg(4),
-		Shard:                  subFlags.Arg(5),
-		ParentAlias:            parentAlias,
-		CreateShardAndKeyspace: *parent,
-		DbNameOverride:         *dbNameOverride,
-		Force:                  *force,
-	}
-	return "", wr.InitTablet(tabletAlias, tabletType, options)
-}
-
-func commandUpdateTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
-	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
-	parent := subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 8 {
-		relog.Fatal("action UpdateTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> <parent alias|zk parent alias>")
-	}
-
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	tabletType := parseTabletType(subFlags.Arg(6), topo.AllTabletTypes)
-	parentAlias := tabletRepParamToTabletAlias(subFlags.Arg(7))
-	port, err := strconv.Atoi(subFlags.Arg(3))
-	if err != nil {
-		relog.Fatal("malformed VT port %q: %v", subFlags.Arg(3), err)
-	}
-
-	mysqlPort, err := strconv.Atoi(subFlags.Arg(2))
-	if err != nil {
-		relog.Fatal("malformed MySQL port %q: %v", subFlags.Arg(2), err)
-	}
-
-	options := wrangler.InitTabletOptions{
-		Hostname:               subFlags.Arg(1),
-		MySQLPort:              mysqlPort,
-		Port:                   port,
-		Keyspace:               subFlags.Arg(4),
-		Shard:                  subFlags.Arg(5),
-		ParentAlias:            parentAlias,
-		CreateShardAndKeyspace: *parent,
-		DbNameOverride:         *dbNameOverride,
-		Force:                  *force,
-		Update:                 true,
-	}
-
-	return "", wr.InitTablet(tabletAlias, tabletType, options)
+	return "", wr.InitTablet(tablet, *force, *parent, *update)
 }
 
 func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
