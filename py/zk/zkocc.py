@@ -86,7 +86,7 @@ class TopoOccConnection(SimpleZkOccConnection):
       raise ZkOccError('%s failed'% method, e)
 
   def get_keyspaces(self):
-    return self._call('TopoReader.GetKeyspaces')
+    return self._call('TopoReader.GetKeyspaces')['Keyspaces']
 
   def get_srv_keyspace(self, cell, keyspace):
     return self._call('TopoReader.GetSrvKeyspace', cell=cell, keyspace=keyspace)

@@ -17,13 +17,17 @@ type TopoReader struct {
 	zkr zk.ZkReader
 }
 
-func (tr *TopoReader) GetKeyspaces(req struct{}, reply *[]string) error {
+type GetKeyspacesReply struct {
+	Keyspaces []string
+}
+
+func (tr *TopoReader) GetKeyspaces(req struct{}, reply *GetKeyspacesReply) error {
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Children(&zk.ZkPath{Path: globalKeyspacesPath}, zkrReply); err != nil {
 		return err
 	}
-	*reply = zkrReply.Children
-	sort.Strings(*reply)
+	reply.Keyspaces = zkrReply.Children
+	sort.Strings(reply.Keyspaces)
 	return nil
 }
 
