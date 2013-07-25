@@ -96,7 +96,7 @@ var commands = []commandGroup{
 				"Stop mysqld and copy compressed data aside."},
 			command{"SnapshotSourceEnd", commandSnapshotSourceEnd,
 				"[-slave-start] [-read-write] <tablet alias|zk tablet path> <original tablet type>",
-				"Restarts Mysql and restore original server type." +
+				"Restart Mysql and restore original server type." +
 					"Valid <tablet type>:\n" +
 					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
 			command{"Restore", commandRestore,
