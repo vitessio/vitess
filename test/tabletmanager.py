@@ -970,6 +970,13 @@ def run_test_reparent_slave_offline(shard_id='0'):
 # assume a different entity is doing the reparent, and telling us it was done
 @utils.test_case
 def run_test_reparent_from_outside():
+  _run_test_reparent_from_outside(False)
+
+@utils.test_case
+def run_test_reparent_from_outside_brutal():
+  _run_test_reparent_from_outside(True)
+
+def _run_test_reparent_from_outside(brutal=False):
   utils.zk_wipe()
 
   utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -1017,6 +1024,10 @@ def run_test_reparent_from_outside():
       "change master to master_port=%u, master_log_file='%s', master_log_pos=%u" % (tablet_62044.mysql_port, new_pos[0][0], new_pos[0][1]),
       'start slave'
       ])
+
+  # in brutal mode, we scrap the old master first
+  if brutal:
+    tablet_62344.scrap(force=True)
 
   # update zk with the new graph
   utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)
@@ -1237,6 +1248,7 @@ def run_all():
   run_test_reparent_down_master()
   run_test_vttablet_authenticated()
   run_test_reparent_from_outside()
+  run_test_reparent_from_outside_brutal()
   run_test_reparent_lag_slave()
   run_test_hook()
   run_test_sigterm()
