@@ -8,16 +8,6 @@ function _print_download()
   exit 1
 }
 
-function parse_git_branch {
-  branch=$(git branch --no-color 2> /dev/null |grep '*'|awk '{print $2}')
-  if [ ! -z $branch ]; then
-    echo " $branch"
-  else
-    echo "could not identify current branch"
-    exit 1
-  fi
-}
-
 if [ "$(which upload.py)" == "" ]; then
   _print_download
 fi
