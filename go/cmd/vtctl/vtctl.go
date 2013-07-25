@@ -142,7 +142,7 @@ var commands = []commandGroup{
 				"[-force] [-leave-master-read-only] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
 				"Specify which shard to reparent and which tablet should be the new master."},
 			command{"ShardExternallyReparented", commandShardExternallyReparented,
-				"[-scrap-stragglers] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
+				"[-scrap-stragglers] [-accept-success-percents=80] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
 				"Changes metadata to acknowledge a shard master change performed by an external tool."},
 			command{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard|zk shard path>",
@@ -896,6 +896,7 @@ func commandReparentShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 
 func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	scrapStragglers := subFlags.Bool("scrap-stragglers", false, "will scrap the hosts that haven't been reparented")
+	acceptSuccessPercents := subFlags.Int("accept-success-percents", 80, "will declare success if more than that many slaves can be reparented")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		relog.Fatal("action ShardExternallyReparented requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
@@ -903,7 +904,7 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
-	return "", wr.ShardExternallyReparented(keyspace, shard, tabletAlias, *scrapStragglers)
+	return "", wr.ShardExternallyReparented(keyspace, shard, tabletAlias, *scrapStragglers, *acceptSuccessPercents)
 }
 
 func commandValidateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
