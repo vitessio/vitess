@@ -188,21 +188,25 @@ var SlaveTabletTypes = []TabletType{
 	TYPE_RESTORE,
 }
 
-var AllTabletTypeStrings []string
-var SlaveTabletTypeStrings []string
+// IsTypeInList returns true if the given type is in the list.
+// Use it with AllTabletType and SlaveTabletType for instance.
+func IsTypeInList(tabletType TabletType, types []TabletType) bool {
+	for _, t := range types {
+		if tabletType == t {
+			return true
+		}
+	}
+	return false
+}
 
-func makeTypeList(types []TabletType) []string {
+// MakeStringTypeList returns a list of strings that match the input list.
+func MakeStringTypeList(types []TabletType) []string {
 	strs := make([]string, len(types))
 	for i, t := range types {
 		strs[i] = string(t)
 	}
 	sort.Strings(strs)
 	return strs
-}
-
-func init() {
-	AllTabletTypeStrings = makeTypeList(AllTabletTypes)
-	SlaveTabletTypeStrings = makeTypeList(SlaveTabletTypes)
 }
 
 // IsTrivialTypeChange returns if this db type be trivially reassigned

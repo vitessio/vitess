@@ -235,7 +235,7 @@ func (wr *Wrangler) getMasterAlias(keyspace, shard string) (topo.TabletAlias, er
 // InitTablet will create or update a tablet. If not parent is
 // specified, and the tablet created is a slave type, we will find the
 // appropriate parent.
-func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort, port, keyspace, shardId, tabletType string, parentAlias topo.TabletAlias, dbNameOverride string, force, parent, update bool) error {
+func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort, port, keyspace, shardId string, tabletType topo.TabletType, parentAlias topo.TabletAlias, dbNameOverride string, force, parent, update bool) error {
 	// if shardId contains a '-', we assume it's a range-based shard,
 	// so we try to extract the KeyRange.
 	var keyRange key.KeyRange
@@ -259,14 +259,14 @@ func (wr *Wrangler) InitTablet(tabletAlias topo.TabletAlias, hostname, mysqlPort
 		shardId = strings.ToUpper(shardId)
 	}
 
-	if parentAlias == (topo.TabletAlias{}) && topo.TabletType(tabletType) != topo.TYPE_MASTER && topo.TabletType(tabletType) != topo.TYPE_IDLE {
+	if parentAlias == (topo.TabletAlias{}) && tabletType != topo.TYPE_MASTER && tabletType != topo.TYPE_IDLE {
 		parentAlias, err = wr.getMasterAlias(keyspace, shardId)
 		if err != nil {
 			return err
 		}
 	}
 
-	tablet, err := topo.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, topo.TabletType(tabletType))
+	tablet, err := topo.NewTablet(tabletAlias.Cell, tabletAlias.Uid, parentAlias, fmt.Sprintf("%v:%v", hostname, port), fmt.Sprintf("%v:%v", hostname, mysqlPort), keyspace, shardId, tabletType)
 	if err != nil {
 		return err
 	}
