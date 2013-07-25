@@ -186,6 +186,24 @@ class Tablet(object):
     finally:
       conn.close()
 
+  def update_addrs(self, addr=None, secure_addr=None, mysql_addr=None, mysql_ip_addr=None):
+    args = ['UpdateTabletAddrs', self.zk_tablet_path]
+    if addr:
+      args.extend(['-addr', addr])
+
+    if secure_addr:
+      args.extend(['-secure-addr', secure_addr])
+
+    if mysql_addr:
+      args.extend(['-mysql-addr', mysql_addr])
+
+    if mysql_ip_addr:
+      args.extend(['-mysql-ip-addr', mysql_ip_addr])
+    if len(args) < 3:
+      return None, None
+
+    return utils.run_vtctl(args)
+
   def scrap(self, force=False, skip_rebuild=False):
     args = ['ScrapTablet']
     if force:
