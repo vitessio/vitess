@@ -17,17 +17,13 @@ type TopoReader struct {
 	zkr zk.ZkReader
 }
 
-type GetKeyspacesReply struct {
-	Keyspaces []string
-}
-
-func (tr *TopoReader) GetKeyspaces(req struct{}, reply *GetKeyspacesReply) error {
+func (tr *TopoReader) GetKeyspaces(req struct{}, reply *topo.Keyspaces) error {
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Children(&zk.ZkPath{Path: globalKeyspacesPath}, zkrReply); err != nil {
 		return err
 	}
-	reply.Keyspaces = zkrReply.Children
-	sort.Strings(reply.Keyspaces)
+	reply.Entries = zkrReply.Children
+	sort.Strings(reply.Entries)
 	return nil
 }
 
@@ -39,17 +35,12 @@ func zkPathForVtShard(cell, keyspace, shard string) string {
 	return path.Join(zkPathForVtKeyspace(cell, keyspace), shard)
 }
 
-type GetSrvKeyspaceArgs struct {
-	Cell     string
-	Keyspace string
-}
-
 // FIXME(ryszard): These methods are kinda copy-and-pasted from
 // zktopo.Server. In the long-term, the TopoReader should just take a
 // topo.Server, which would be backed by a caching ZooKeeper
 // connection.
 
-func (tr *TopoReader) GetSrvKeyspace(req GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
+func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.SrvKeyspace) (err error) {
 	keyspacePath := zkPathForVtKeyspace(req.Cell, req.Keyspace)
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Get(&zk.ZkPath{Path: keyspacePath}, zkrReply); err != nil {
@@ -61,14 +52,7 @@ func (tr *TopoReader) GetSrvKeyspace(req GetSrvKeyspaceArgs, reply *topo.SrvKeys
 	return
 }
 
-type GetEndPointsArgs struct {
-	Cell       string
-	Keyspace   string
-	Shard      string
-	TabletType string
-}
-
-func (tr *TopoReader) GetEndPoints(req GetEndPointsArgs, reply *topo.VtnsAddrs) (err error) {
+func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.VtnsAddrs) (err error) {
 	shardPath := zkPathForVtShard(req.Cell, req.Keyspace, req.Shard)
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Get(&zk.ZkPath{Path: shardPath}, zkrReply); err != nil {
