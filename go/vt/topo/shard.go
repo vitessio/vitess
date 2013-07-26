@@ -70,8 +70,8 @@ func shardFromJson(data string) (*Shard, error) {
 	return shard, nil
 }
 
-// ShardInfo is a meta struct that contains meta data to give the data
-// more context and convenience This is the main way we interact with a shard.
+// ShardInfo is a meta struct that contains metadata to give the data
+// more context and convenience. This is the main way we interact with a shard.
 type ShardInfo struct {
 	keyspace  string
 	shardName string
@@ -91,30 +91,28 @@ func (si *ShardInfo) Json() string {
 }
 
 func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
-	si.Shard.MasterAlias = TabletAlias{}
-	si.Shard.ReplicaAliases = make([]TabletAlias, 0, 16)
-	si.Shard.RdonlyAliases = make([]TabletAlias, 0, 16)
-	si.Shard.KeyRange = key.KeyRange{}
+	si.MasterAlias = TabletAlias{}
+	si.ReplicaAliases = make([]TabletAlias, 0, 16)
+	si.RdonlyAliases = make([]TabletAlias, 0, 16)
+	si.KeyRange = key.KeyRange{}
 
 	for i, ti := range shardTablets {
-		tablet := ti.Tablet
-		alias := ti.Alias()
-		switch tablet.Type {
+		switch ti.Type {
 		case TYPE_MASTER:
-			si.Shard.MasterAlias = alias
+			si.MasterAlias = ti.Alias()
 		case TYPE_REPLICA:
-			si.Shard.ReplicaAliases = append(si.Shard.ReplicaAliases, alias)
+			si.ReplicaAliases = append(si.ReplicaAliases, ti.Alias())
 		case TYPE_RDONLY:
-			si.Shard.RdonlyAliases = append(si.Shard.RdonlyAliases, alias)
+			si.RdonlyAliases = append(si.RdonlyAliases, ti.Alias())
 		}
 
 		if i == 0 {
 			// copy the first KeyRange
-			si.Shard.KeyRange = tablet.KeyRange
+			si.KeyRange = ti.KeyRange
 		} else {
 			// verify the subsequent ones
-			if si.Shard.KeyRange != tablet.KeyRange {
-				return fmt.Errorf("inconsistent KeyRange: %v != %v", si.Shard.KeyRange, tablet.KeyRange)
+			if si.KeyRange != ti.KeyRange {
+				return fmt.Errorf("inconsistent KeyRange: %v != %v", si.KeyRange, ti.KeyRange)
 			}
 		}
 	}
