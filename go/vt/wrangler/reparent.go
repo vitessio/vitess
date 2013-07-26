@@ -117,7 +117,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 	}
 
 	currentMasterTabletAlias := shardInfo.MasterAlias
-	if currentMasterTabletAlias == (topo.TabletAlias{}) {
+	if currentMasterTabletAlias.IsZero() {
 		// There is no master - either it has been scrapped or there is some other degenerate case.
 	} else if currentMasterTabletAlias != foundMaster.Alias() {
 		return fmt.Errorf("master tablet conflict in ShardInfo %v/%v: %v, %v", keyspace, shard, currentMasterTabletAlias, foundMaster)
@@ -132,7 +132,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
 	}
 
-	if currentMasterTabletAlias != (topo.TabletAlias{}) && !forceReparentToCurrentMaster {
+	if !currentMasterTabletAlias.IsZero() && !forceReparentToCurrentMaster {
 		err = wr.reparentShardGraceful(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly)
 	} else {
 		err = wr.reparentShardBrutal(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
@@ -191,7 +191,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	if shardInfo.MasterAlias == (topo.TabletAlias{}) {
+	if shardInfo.MasterAlias.IsZero() {
 		return fmt.Errorf("no master tablet for shard %v/%v", ti.Keyspace, ti.Shard)
 	}
 

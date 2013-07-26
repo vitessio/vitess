@@ -705,7 +705,7 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo
 
 // FIXME(alainjobart) remove after migration
 func BackfillAlias(zkPath string, alias *topo.TabletAlias) error {
-	if *alias == (topo.TabletAlias{}) && zkPath != "" {
+	if alias.IsZero() && zkPath != "" {
 		zkPathParts := strings.Split(zkPath, "/")
 		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
 			return fmt.Errorf("Invalid tablet path: %v", zkPath)

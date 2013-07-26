@@ -373,7 +373,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 	}
 
 	// if newParentTabletAlias is passed in, use that as the new master
-	if newParentTabletAlias != (topo.TabletAlias{}) {
+	if !newParentTabletAlias.IsZero() {
 		relog.Info("Reparenting with new master set to %v", newParentTabletAlias)
 		tabletMap, err := GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 		if err != nil {

@@ -50,8 +50,9 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 // guaranteed.
 func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	relog.Info("rebuildShard %v/%v", keyspace, shard)
-	// NOTE(msolomon) nasty hack - pass non-empty string to bypass data check
-	shardInfo, err := topo.NewShardInfo(keyspace, shard, "{}")
+
+	// read the existing shard info. It has to exist.
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return err
 	}

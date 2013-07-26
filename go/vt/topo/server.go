@@ -85,6 +85,7 @@ type Server interface {
 
 	// UpdateShard unconditionnally updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.
+	// We guarantee this will only be called with a lock on the shard.
 	// Can return ErrNoNode if the shard doesn't exist yet.
 	UpdateShard(si *ShardInfo) error
 
