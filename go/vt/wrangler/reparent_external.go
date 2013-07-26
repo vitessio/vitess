@@ -113,6 +113,33 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 		recorder.RecordError(wr.slaveWasRestarted(masterTablet, &swrd))
 	}
 
+	// check the toplevel replication paths only contains the new master,
+	// try to remove any old tablet aliases that don't make sense any more
+	toplevelAliases, err := wr.ts.GetReplicationPaths(masterElectTablet.Keyspace, masterElectTablet.Shard, "")
+	if err != nil {
+		relog.Warning("GetReplicationPaths() failed, cannot fix extra paths: %v", err)
+	} else {
+		for _, toplevelAlias := range toplevelAliases {
+			if toplevelAlias == masterElectTablet.Alias() {
+				continue
+			}
+
+			// if we can't read the tablet, or if it's not in the
+			// replication graph, we remove the entry
+			ti, err := wr.ts.GetTablet(toplevelAlias)
+			if err == nil {
+				if ti.Tablet.IsInReplicationGraph() {
+					continue
+				}
+			}
+
+			relog.Info("Removing stale replication path %v", toplevelAlias.String())
+			if err := wr.ts.DeleteReplicationPath(masterElectTablet.Keyspace, masterElectTablet.Shard, toplevelAlias.String()); err != nil {
+				relog.Warning("DeleteReplicationPath(%v) failed: %v", toplevelAlias.String(), err)
+			}
+		}
+	}
+
 	if !recorder.HasErrors() {
 		return nil
 	}

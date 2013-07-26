@@ -1000,7 +1000,7 @@ def _run_test_reparent_from_outside(brutal=False):
 
   # now manually reparent 1 out of 2 tablets
   # 62044 will be the new master
-  # 31981 won't be re-parented, so it w2ill be busted
+  # 31981 won't be re-parented, so it will be busted
   tablet_62044.mquery('', [
       "RESET MASTER",
       "STOP SLAVE",
@@ -1028,6 +1028,8 @@ def _run_test_reparent_from_outside(brutal=False):
   # in brutal mode, we scrap the old master first
   if brutal:
     tablet_62344.scrap(force=True)
+    # we have some automated tools that do this too, so it's good to simulate
+    utils.run(utils.vtroot+'/bin/zk rm -rf ' + tablet_62344.zk_tablet_path)
 
   # update zk with the new graph
   utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)
@@ -1040,8 +1042,13 @@ def _run_test_reparent_from_outside(brutal=False):
 
   slave_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-0000062044')
   utils.debug('slave_files: %s' % " ".join(slave_files))
-  if slave_files != ['test_nj-0000041983', 'test_nj-0000062344']:
-    raise utils.TestError('unexpected zk content: %s' % " ".join(slave_files))
+  expected_slave_files = ['test_nj-0000041983', 'test_nj-0000062344']
+  if brutal:
+    expected_slave_files = ['test_nj-0000041983']
+  if slave_files != expected_slave_files:
+    raise utils.TestError('unexpected zk content: %s instead of expected %s' %
+                          ("|".join(slave_files),
+                           "|".join(expected_slave_files_files)))
 
   tablet_31981.kill_vttablet()
   tablet_62344.kill_vttablet()
