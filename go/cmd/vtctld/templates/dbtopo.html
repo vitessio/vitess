@@ -48,12 +48,12 @@
   {{with .Topology}}
     <h1>Assigned</h1>
     {{range $keyspace, $shards := .Assigned}}
-      <h2><a href="/zk/global/vt/keyspaces/{{$keyspace}}">{{$keyspace}}</a></h2>
+      <h2>{{keyspace $keyspace}}</h2>
       <table class="keyspace">
 	<thead>
 	  {{ range $i, $shard := $shards.ShardNodes }}
 	  {{if intequal $i 0}}<td class="legend">type</td>{{end}}
-	  <td><a href="/zk/global/vt/keyspaces/{{$keyspace}}/shards/{{$shard.Name}}">{{$shard.Name}}</a></td>
+	  <td>{{shard $keyspace $shard.Name}}</td>
 	  {{end}}
 	</thead>
 	<tbody>
