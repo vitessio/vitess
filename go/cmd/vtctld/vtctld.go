@@ -11,15 +11,12 @@ import (
 	"net/url"
 	"path"
 	"reflect"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
-	"github.com/youtube/vitess/go/vt/zktopo" // FIXME(alainjobart) to be removed
-	"github.com/youtube/vitess/go/zk"
 )
 
 var (
@@ -87,6 +84,10 @@ func Htmlize(data interface{}) string {
 	return b.String()
 }
 
+// Plugins need to overwrite:
+//   keyspace(keyspace)
+//   shard(keyspace, shard)
+// if they want to create links on these guys
 var funcMap = template.FuncMap{
 	"htmlize": func(o interface{}) template.HTML {
 		return template.HTML(Htmlize(o))
@@ -95,8 +96,8 @@ var funcMap = template.FuncMap{
 	"intequal": func(left, right int) bool {
 		return left == right
 	},
-	"breadcrumbs": func(zkPath string) template.HTML {
-		parts := strings.Split(zkPath, "/")
+	"breadcrumbs": func(fullPath string) template.HTML {
+		parts := strings.Split(fullPath, "/")
 		paths := make([]string, len(parts))
 		for i, part := range parts {
 			if i == 0 {
@@ -111,6 +112,12 @@ var funcMap = template.FuncMap{
 		}
 		fmt.Fprintf(b, "/"+parts[len(parts)-1])
 		return template.HTML(b.String())
+	},
+	"keyspace": func(keyspace string) template.HTML {
+		return template.HTML(keyspace)
+	},
+	"shard": func(keyspace, shard string) template.HTML {
+		return template.HTML(shard)
 	},
 }
 
@@ -229,48 +236,56 @@ func (ar *ActionResult) error(text string) {
 	ar.Output = text
 }
 
-// actionMethod is a function that performs some action on a Zookeeper
-// node. It should return a message for the user or an empty string in
-// case there's nothing interesting to be communicated.
-type actionMethod func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (output string, err error)
+// action{Keyspace,Shard,Tablet}Method is a function that performs
+// some action on a Topology object. It should return a message for
+// the user or an empty string in case there's nothing interesting to
+// be communicated.
+type actionKeyspaceMethod func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (output string, err error)
+
+type actionShardMethod func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
+
+type actionTabletMethod func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (output string, err error)
 
 // ActionRepository is a repository of actions that can be performed
-// on a Zookeeper node.
+// on a {Keyspace,Shard,Tablet}.
 type ActionRepository struct {
-	actions        map[string]actionMethod
-	actionsForPath map[string]map[string]actionMethod
-	wrangler       *wrangler.Wrangler
+	keyspaceActions map[string]actionKeyspaceMethod
+	shardActions    map[string]actionShardMethod
+	tabletActions   map[string]actionTabletMethod
+	wr              *wrangler.Wrangler
 }
 
 func NewActionRepository(wr *wrangler.Wrangler) *ActionRepository {
 	return &ActionRepository{
-		actions:        make(map[string]actionMethod),
-		actionsForPath: make(map[string]map[string]actionMethod),
-		wrangler:       wr}
+		keyspaceActions: make(map[string]actionKeyspaceMethod),
+		shardActions:    make(map[string]actionShardMethod),
+		tabletActions:   make(map[string]actionTabletMethod),
+		wr:              wr}
 
 }
 
-// Register registers a named action that will be possible to apply on
-// Zookeeper nodes whose path matches matchingPath.
-func (ar *ActionRepository) Register(matchingPath string, name string, method actionMethod) {
-	ar.actions[name] = method
-	_, ok := ar.actionsForPath[matchingPath]
-	if !ok {
-		ar.actionsForPath[matchingPath] = make(map[string]actionMethod)
-	}
-	ar.actionsForPath[matchingPath][name] = method
+func (ar *ActionRepository) RegisterKeyspaceAction(name string, method actionKeyspaceMethod) {
+	ar.keyspaceActions[name] = method
 }
 
-func (ar *ActionRepository) Apply(actionName string, zkPath string, r *http.Request) *ActionResult {
-	result := &ActionResult{Name: actionName, Parameters: zkPath}
+func (ar *ActionRepository) RegisterShardAction(name string, method actionShardMethod) {
+	ar.shardActions[name] = method
+}
 
-	action, ok := ar.actions[actionName]
+func (ar *ActionRepository) RegisterTabletAction(name string, method actionTabletMethod) {
+	ar.tabletActions[name] = method
+}
+
+func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *http.Request) *ActionResult {
+	result := &ActionResult{Name: actionName, Parameters: keyspace}
+
+	action, ok := ar.keyspaceActions[actionName]
 	if !ok {
-		result.error("Unknown action")
+		result.error("Unknown keyspace action")
 		return result
 	}
-	ar.wrangler.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action(ar.wrangler, zkPath, r)
+	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
+	output, err := action(ar.wr, keyspace, r)
 	if err != nil {
 		result.error(err.Error())
 		return result
@@ -279,18 +294,69 @@ func (ar *ActionRepository) Apply(actionName string, zkPath string, r *http.Requ
 	return result
 }
 
-// PopulateAvailableActions populates result with actions that can be
-// performed on its node.
-func (ar ActionRepository) PopulateAvailableActions(result *ZkResult) {
-	for matchingPath, actions := range ar.actionsForPath {
-		if m, _ := path.Match(matchingPath, result.Path); m {
-			for name, _ := range actions {
-				values := url.Values{}
-				values.Set("action", name)
-				values.Set("zkpath", result.Path)
-				result.Actions[name] = template.URL("/actions?" + values.Encode())
-			}
-		}
+func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string, r *http.Request) *ActionResult {
+	result := &ActionResult{Name: actionName, Parameters: keyspace + "/" + shard}
+
+	action, ok := ar.shardActions[actionName]
+	if !ok {
+		result.error("Unknown shard action")
+		return result
+	}
+	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
+	output, err := action(ar.wr, keyspace, shard, r)
+	if err != nil {
+		result.error(err.Error())
+		return result
+	}
+	result.Output = output
+	return result
+}
+
+func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias topo.TabletAlias, r *http.Request) *ActionResult {
+	result := &ActionResult{Name: actionName, Parameters: tabletAlias.String()}
+
+	action, ok := ar.tabletActions[actionName]
+	if !ok {
+		result.error("Unknown tablet action")
+		return result
+	}
+	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
+	output, err := action(ar.wr, tabletAlias, r)
+	if err != nil {
+		result.error(err.Error())
+		return result
+	}
+	result.Output = output
+	return result
+}
+
+// Populate{Keyspace,Shard,Tablet}Actions populates result with
+// actions that can be performed on its node.
+func (ar ActionRepository) PopulateKeyspaceActions(actions map[string]template.URL, keyspace string) {
+	for name, _ := range ar.keyspaceActions {
+		values := url.Values{}
+		values.Set("action", name)
+		values.Set("keyspace", keyspace)
+		actions[name] = template.URL("/keyspace_actions?" + values.Encode())
+	}
+}
+
+func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL, keyspace, shard string) {
+	for name, _ := range ar.shardActions {
+		values := url.Values{}
+		values.Set("action", name)
+		values.Set("keyspace", keyspace)
+		values.Set("shard", shard)
+		actions[name] = template.URL("/shard_actions?" + values.Encode())
+	}
+}
+
+func (ar ActionRepository) PopulateTabletActions(actions map[string]template.URL, alias string) {
+	for name, _ := range ar.tabletActions {
+		values := url.Values{}
+		values.Set("action", name)
+		values.Set("alias", alias)
+		actions[name] = template.URL("/tablet_actions?" + values.Encode())
 	}
 }
 
@@ -299,102 +365,84 @@ type DbTopologyResult struct {
 	Error    string
 }
 
-type ZkResult struct {
-	Path     string
-	Data     string
-	Children []string
-	Actions  map[string]template.URL
-	Error    string
+type IndexContent struct {
+	// maps a name to a linked URL
+	ToplevelLinks map[string]string
 }
 
-func NewZkResult(zkPath string) *ZkResult {
-	return &ZkResult{Actions: make(map[string]template.URL), Path: zkPath}
+// used at runtime by plug-ins
+var templateLoader *TemplateLoader
+var actionRepo *ActionRepository
+var indexContent = IndexContent{
+	ToplevelLinks: map[string]string{
+		"DbTopology Tool": "/dbtopo",
+	},
 }
 
 func main() {
 	flag.Parse()
 
-	templateLoader := NewTemplateLoader(*templateDir, dummyTemplate, *debug)
+	templateLoader = NewTemplateLoader(*templateDir, dummyTemplate, *debug)
 
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
 	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
 
-	actionRepo := NewActionRepository(wr)
+	actionRepo = NewActionRepository(wr)
 
-	const (
-		keyspacePath = "/zk/global/vt/keyspaces/*"
-		shardPath    = "/zk/global/vt/keyspaces/*/shards/*"
-		tabletPath   = "/zk/*/vt/tablets/*"
-	)
-
-	actionRepo.Register(keyspacePath, "ValidateKeyspace",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateKeyspace(path.Base(zkPath), false)
+	// keyspace actions
+	actionRepo.RegisterKeyspaceAction("ValidateKeyspace",
+		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+			return "", wr.ValidateKeyspace(keyspace, false)
 		})
 
-	actionRepo.Register(keyspacePath, "ValidateSchemaKeyspace",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateSchemaKeyspace(path.Base(zkPath), false)
+	actionRepo.RegisterKeyspaceAction("ValidateSchemaKeyspace",
+		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+			return "", wr.ValidateSchemaKeyspace(keyspace, false)
 		})
 
-	actionRepo.Register(keyspacePath, "ValidateVersionKeyspace",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidateVersionKeyspace(path.Base(zkPath))
+	actionRepo.RegisterKeyspaceAction("ValidateVersionKeyspace",
+		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+			return "", wr.ValidateVersionKeyspace(keyspace)
 		})
 
-	actionRepo.Register(keyspacePath, "ValidatePermissionsKeyspace",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			return "", wr.ValidatePermissionsKeyspace(path.Base(zkPath))
+	actionRepo.RegisterKeyspaceAction("ValidatePermissionsKeyspace",
+		func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (string, error) {
+			return "", wr.ValidatePermissionsKeyspace(keyspace)
 		})
 
-	actionRepo.Register(shardPath, "ValidateShard",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			zkPathParts := strings.Split(zkPath, "/")
-			return "", wr.ValidateShard(zkPathParts[5], zkPathParts[7], false)
+	// shard actions
+	actionRepo.RegisterShardAction("ValidateShard",
+		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+			return "", wr.ValidateShard(keyspace, shard, false)
 		})
 
-	actionRepo.Register(shardPath, "ValidateSchemaShard",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			zkPathParts := strings.Split(zkPath, "/")
-			return "", wr.ValidateSchemaShard(zkPathParts[5], zkPathParts[7], false)
+	actionRepo.RegisterShardAction("ValidateSchemaShard",
+		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+			return "", wr.ValidateSchemaShard(keyspace, shard, false)
 		})
 
-	actionRepo.Register(shardPath, "ValidateVersionShard",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			zkPathParts := strings.Split(zkPath, "/")
-			return "", wr.ValidateVersionShard(zkPathParts[5], zkPathParts[7])
+	actionRepo.RegisterShardAction("ValidateVersionShard",
+		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+			return "", wr.ValidateVersionShard(keyspace, shard)
 		})
 
-	actionRepo.Register(shardPath, "ValidatePermissionsShard",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			zkPathParts := strings.Split(zkPath, "/")
-			return "", wr.ValidatePermissionsShard(zkPathParts[5], zkPathParts[7])
+	actionRepo.RegisterShardAction("ValidatePermissionsShard",
+		func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (string, error) {
+			return "", wr.ValidatePermissionsShard(keyspace, shard)
 		})
 
-	actionRepo.Register(tabletPath, "RpcPing",
-		func(wr *wrangler.Wrangler, zkPath string, r *http.Request) (string, error) {
-			zkPathParts := strings.Split(zkPath, "/")
-			alias, err := topo.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
-			if err != nil {
-				return "", err
-			}
-			return "", wr.ActionInitiator().RpcPing(alias, 10*time.Second)
+	// tablet actions
+	actionRepo.RegisterTabletAction("RpcPing",
+		func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (string, error) {
+			return "", wr.ActionInitiator().RpcPing(tabletAlias, 10*time.Second)
 		})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		tmpl, err := templateLoader.Lookup("index.html")
-		if err != nil {
-			httpError(w, "error in template loader: %v", err)
-			return
-		}
-		if err := tmpl.Execute(w, nil); err != nil {
-			httpError(w, "error executing template", err)
-		}
-
+		templateLoader.ServeTemplate("index.html", indexContent, w, r)
 	})
-	http.HandleFunc("/actions", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/keyspace_actions", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
 			return
@@ -405,12 +453,62 @@ func main() {
 			return
 		}
 
-		zkPath := r.FormValue("zkpath")
-		if zkPath == "" {
-			http.Error(w, "no zookeeper path provided", http.StatusBadRequest)
+		keyspace := r.FormValue("keyspace")
+		if keyspace == "" {
+			http.Error(w, "no keyspace provided", http.StatusBadRequest)
 			return
 		}
-		result := actionRepo.Apply(action, zkPath, r)
+		result := actionRepo.ApplyKeyspaceAction(action, keyspace, r)
+
+		templateLoader.ServeTemplate("action.html", result, w, r)
+	})
+	http.HandleFunc("/shard_actions", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		action := r.FormValue("action")
+		if action == "" {
+			http.Error(w, "no action provided", http.StatusBadRequest)
+			return
+		}
+
+		keyspace := r.FormValue("keyspace")
+		if keyspace == "" {
+			http.Error(w, "no keyspace provided", http.StatusBadRequest)
+			return
+		}
+		shard := r.FormValue("shard")
+		if shard == "" {
+			http.Error(w, "no shard provided", http.StatusBadRequest)
+			return
+		}
+		result := actionRepo.ApplyShardAction(action, keyspace, shard, r)
+
+		templateLoader.ServeTemplate("action.html", result, w, r)
+	})
+	http.HandleFunc("/tablet_actions", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		action := r.FormValue("action")
+		if action == "" {
+			http.Error(w, "no action provided", http.StatusBadRequest)
+			return
+		}
+
+		alias := r.FormValue("alias")
+		if alias == "" {
+			http.Error(w, "no alias provided", http.StatusBadRequest)
+			return
+		}
+		tabletAlias, err := topo.ParseTabletAliasString(alias)
+		if err != nil {
+			http.Error(w, "bad alias provided", http.StatusBadRequest)
+			return
+		}
+		result := actionRepo.ApplyTabletAction(action, tabletAlias, r)
 
 		templateLoader.ServeTemplate("action.html", result, w, r)
 	})
@@ -427,60 +525,6 @@ func main() {
 			result.Topology = topology
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
-	})
-	http.HandleFunc("/zk/", func(w http.ResponseWriter, r *http.Request) {
-		zkTopoServ := topo.GetServerByName("zookeeper")
-		if zkTopoServ == nil {
-			http.Error(w, "can only look at zk with zktopo.Server", http.StatusInternalServerError)
-			return
-		}
-		zconn := zkTopoServ.(*zktopo.Server).GetZConn()
-
-		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
-			return
-		}
-		zkPath := r.URL.Path[strings.Index(r.URL.Path, "/zk"):]
-
-		if cleanPath := path.Clean(zkPath); zkPath != cleanPath && zkPath != cleanPath+"/" {
-			relog.Info("redirecting to %v", cleanPath)
-			http.Redirect(w, r, cleanPath, http.StatusTemporaryRedirect)
-			return
-		}
-
-		if strings.HasSuffix(zkPath, "/") {
-			zkPath = zkPath[:len(zkPath)-1]
-		}
-
-		result := NewZkResult(zkPath)
-
-		if zkPath == "/zk" {
-			cells, err := zk.ResolveWildcards(zconn, []string{"/zk/*"})
-			if err != nil {
-				httpError(w, "zk error: %v", err)
-				return
-			}
-			for i, cell := range cells {
-				cells[i] = cell[4:] // cut off "/zk/"
-			}
-			result.Children = cells
-			sort.Strings(result.Children)
-		} else {
-
-			if data, _, err := zconn.Get(zkPath); err != nil {
-				result.Error = err.Error()
-			} else {
-				actionRepo.PopulateAvailableActions(result)
-				result.Data = data
-				if children, _, err := zconn.Children(zkPath); err != nil {
-					result.Error = err.Error()
-				} else {
-					result.Children = children
-					sort.Strings(result.Children)
-				}
-			}
-		}
-		templateLoader.ServeTemplate("zk.html", result, w, r)
 	})
 	relog.Fatal("%s", http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 }
