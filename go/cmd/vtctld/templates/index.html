@@ -9,9 +9,15 @@
 </style>
 </head>
 <body>
+
+{{with .ToplevelLinks}}
   <h1>vtctld</h1>
   <ul>
-    <li><a href="/dbtopo">DbTopology tool</a></li>
-    <li><a href="/zk">Zookeeper Explorer</a></li>
+    {{range $name, $href := .}}
+      <li><a href="{{$href}}">{{$name}}</a></li>
+    {{end}}
+  </ul>
+{{end}}
+
 </body>
 </html>
