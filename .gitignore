@@ -13,6 +13,7 @@
 *.swp
 tags
 .DS_Store
+**/build
 
 third_party/mysql
 go/cmd/mysqlctl/mysqlctl
@@ -32,3 +33,5 @@ go/cmd/zkctl/zkctl
 go/cmd/zkns2pdns/zkns2pdns
 go/cmd/zkocc/zkocc
 test/goloadgen/goloadgen
+
+go/logfile/tfile*
