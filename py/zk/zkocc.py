@@ -48,42 +48,25 @@ class SimpleZkOccConnection(object):
   def close(self):
     self.client.close()
 
-  # returns a ZkNode, see header
-  def get(self, path):
-    req = {'Path':path}
-    try:
-      return self.client.call('ZkReader.Get', req).reply
-    except gorpc.GoRpcError as e:
-      raise ZkOccError('get failed', e)
-
-  # returns an array of ZkNode, see header
-  def getv(self, paths):
-    req = {'Paths':paths}
-    try:
-      return self.client.call('ZkReader.GetV', req).reply
-    except gorpc.GoRpcError as e:
-      raise ZkOccError('getv failed', e)
-
-  # returns a ZkNode, see header
-  def children(self, path):
-    req = {'Path':path}
-    try:
-      return self.client.call('ZkReader.Children', req).reply
-    except gorpc.GoRpcError as e:
-      raise ZkOccError('children failed', e)
-
-
-def camelcase(snake):
-  return ''.join(w.capitalize() for w in snake.split('_'))
-
-class TopoOccConnection(SimpleZkOccConnection):
-
   def _call(self, method, **kwargs):
-    req = dict((camelcase(k), v) for k, v in kwargs.items())
+    req = dict((''.join(w.capitalize() for w in k.split('_')), v)
+               for k, v in kwargs.items())
     try:
       return self.client.call(method, req).reply
     except gorpc.GoRpcError as e:
       raise ZkOccError('%s failed'% method, e)
+
+  # returns a ZkNode, see header
+  def get(self, path):
+    return self._call('ZkReader.Get', path=path)
+
+  # returns an array of ZkNode, see header
+  def getv(self, paths):
+    return self._call('ZkReader.GetV', paths=paths)
+
+  # returns a ZkNode, see header
+  def children(self, path):
+    return self._call('ZkReader.Children', path=path)
 
   def get_keyspaces(self):
     return self._call('TopoReader.GetKeyspaces')['Entries']
@@ -115,7 +98,7 @@ class ZkOccConnection(object):
     self.user = user
     self.password = password
 
-    self.simpleConn = None
+    self.simple_conn = None
 
   def _resolve_path(self, zk_path):
     # Maps a 'meta-path' to a cell specific path.
@@ -132,83 +115,74 @@ class ZkOccConnection(object):
     return '/'.join(parts)
 
   def dial(self):
-    if self.simpleConn:
-      self.simpleConn.close()
+    if self.simple_conn:
+      self.simple_conn.close()
 
     # try to connect to each server once (this will always work
     # if no auth is used, as then no connection is really established here)
     for i in xrange(self.addr_count):
-      self.simpleConn = SimpleZkOccConnection(self.addrs.next(), self.timeout, self.user, self.password)
+      self.simple_conn = SimpleZkOccConnection(self.addrs.next(), self.timeout, self.user, self.password)
       try:
-        self.simpleConn.dial()
+        self.simple_conn.dial()
         return
       except:
         pass
 
-    self.simpleConn = None
+    self.simple_conn = None
     raise ZkOccError("Cannot dial to any server")
 
   def close(self):
-    if self.simpleConn:
-      self.simpleConn.close()
-      self.simpleConn = None
+    if self.simple_conn:
+      self.simple_conn.close()
+      self.simple_conn = None
+
+  def _call(self, client_method, *args, **kwargs):
+    if not self.simple_conn:
+      self.dial()
+
+    attempt = 0
+    while True:
+      try:
+        return getattr(self.simple_conn, client_method)(*args, **kwargs)
+      except Exception as e:
+        attempt += 1
+        if attempt >= self.max_attempts:
+          logging.warning('zkocc: %s command failed %u times: %s', client_method, attempt, e)
+          raise ZkOccError('zkocc %s command failed %u times: %s' % (client_method, attempt, e))
+
+        # try the next server if there is one
+        if self.addr_count > 1:
+          self.dial()
+
+  # New API.
+
+  def get_keyspaces(self):
+    return self._call('get_keyspaces')
+
+  def get_srv_keyspace(self, cell, keyspace):
+    if cell == 'local':
+      cell = self.local_cell
+    return self._call('get_srv_keyspace', cell=cell, keyspace=keyspace)
+
+  def get_end_points(self, cell, keyspace, shard, tablet_type):
+    if cell == 'local':
+      cell = self.local_cell
+    return self._call('get_end_points', cell=cell, keyspace=keyspace,
+                      shard=shard, tablet_type=tablet_type)
+
+  # Old, deprecated API.
 
   # returns a ZkNode, see header
   def get(self, path):
-    if not self.simpleConn:
-      self.dial()
-
-    attempt = 0
-    while True:
-      try:
-        return self.simpleConn.get(self._resolve_path(path))
-      except Exception as e:
-        attempt += 1
-        if attempt >= self.max_attempts:
-          logging.warning('zkocc: get command failed %u times: %s', attempt, e)
-          raise ZkOccError('zkocc get command failed %u times: %s' % (attempt, e))
-
-        # try the next server if there is one
-        if self.addr_count > 1:
-          self.dial()
+    return self._call('get', self._resolve_path(path))
 
   # returns an array of ZkNode, see header
   def getv(self, paths):
-    if not self.simpleConn:
-      self.dial()
-
-    attempt = 0
-    while True:
-      try:
-        return self.simpleConn.getv([self._resolve_path(p) for p in paths])
-      except Exception as e:
-        attempt += 1
-        if attempt >= self.max_attempts:
-          logging.warning('zkocc: getv command failed %u times: %s', attempt, e)
-          raise ZkOccError('zkocc getv command failed %u times: %s' % (attempt, e))
-
-        # try the next server if there is one
-        if self.addr_count > 1:
-          self.dial()
+    return self._call('getv', [self._resolve_path(p) for p in paths])
 
   # returns a ZkNode, see header
-  def children(self, path):
-    if not self.simpleConn:
-      self.dial()
-
-    attempt = 0
-    while True:
-      try:
-        return self.simpleConn.children(self._resolve_path(path))
-      except Exception as e:
-        attempt += 1
-        if attempt >= self.max_attempts:
-          logging.warning('zkocc: children command failed %u times: %s', attempt, e)
-          raise ZkOccError('zkocc children command failed %u times: %s' % (attempt, e))
-
-        # try the next server if there is one
-        if self.addr_count > 1:
-          self.dial()
+  def children(slef, path):
+    return self._call('children', self._resolve_path(path))
 
 # use this class for faking out a zkocc client. The startup config values
 # can be loaded from a json file. After that, they can be mass-altered
