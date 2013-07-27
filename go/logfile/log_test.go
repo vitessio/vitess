@@ -6,11 +6,16 @@ package logfile
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 )
 
 func TestLog(t *testing.T) {
+	if os.Getenv("RUN_MANUAL_TEST") == "" {
+		fmt.Println("skipping logfile test. Set RUN_MANUAL_TEST to something to run it")
+		t.SkipNow()
+	}
 	m, err := Open("tfile1", 0, 0, 0)
 	if err != nil {
 		t.Errorf("%v", err)

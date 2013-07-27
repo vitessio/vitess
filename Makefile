@@ -26,39 +26,7 @@ build:
 # alphabetically ordered unit tests
 # the ones that are commented out don't pass
 unit_test:
-	cd go/bson; go test
-	cd go/bufio2; go test
-	cd go/bytes2; go test
-	cd go/cache; go test
-	cd go/cgzip; go test
-	cd go/cmd/vtctld; go test
-	cd go/cmd/zkns2pdns; go test
-	cd go/hack; go test
-#	cd go/logfile; go test
-	if [ -e "/usr/bin/memcached" ]; then \
-		cd go/memcache; exec go test ; \
-	fi
-	cd go/mysql/proto; go test
-	cd go/pools; go test
-	cd go/relog; go test
-	cd go/rpcplus; go test
-	cd go/rpcplus/jsonrpc; go test
-	cd go/rpcwrap/auth; go test
-	cd go/sqltypes; go test
-	cd go/stats; go test
-	cd go/timer; go test
-	cd go/umgmt; go test
-	cd go/vt/client2; go test
-	cd go/vt/dbconfigs; go test
-	cd go/vt/env; go test
-	cd go/vt/key; go test
-	cd go/vt/mysqlctl; go test
-	cd go/vt/sqlparser; go test
-	cd go/vt/tabletserver; go test
-	cd go/vt/topotools; go test
-	cd go/zk; go test
-	cd go/zk/fakezk; go test
-	cd go/zk/zkctl; go test
+	go test ./go/...
 
 queryservice_test:
 	echo "queryservice test"
@@ -74,7 +42,7 @@ integration_test:
 	cd test ; echo "schema test"; time ./schema.py $$VT_TEST_FLAGS
 	cd test ; echo "sharded test"; time ./sharded.py $$VT_TEST_FLAGS
 	cd test ; echo "tabletmanager test"; time ./tabletmanager.py $$VT_TEST_FLAGS
-	cd test ; echo "zkocc test"; time ./zkocc.py $$VT_TEST_FLAGS
+	cd test ; echo "zkocc test"; time ./zkocc_test.py $$VT_TEST_FLAGS
 	cd test ; echo "connection test"; time ./connection_test.py
 	cd test ; echo "updatestream test"; time ./update_stream.py
 	cd test ; echo "rowcache_invalidator test"; time ./rowcache_invalidator.py

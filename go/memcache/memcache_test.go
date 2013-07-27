@@ -6,6 +6,7 @@ package memcache
 
 import (
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 )
@@ -13,23 +14,23 @@ import (
 func TestMemcache(t *testing.T) {
 	cmd := exec.Command("memcached", "-s", "/tmp/vtocc_cache.sock")
 	if err := cmd.Start(); err != nil {
-		t.Errorf("Memcache start: %v", err)
-		return
+		if strings.Contains(err.Error(), "executable file not found in $PATH") {
+			t.Skipf("skipping: %v", err)
+		}
+		t.Fatalf("Memcache start: %v", err)
 	}
 	defer cmd.Process.Kill()
 	time.Sleep(time.Second)
 
 	c, err := Connect("/tmp/vtocc_cache.sock")
 	if err != nil {
-		t.Errorf("Connect: %v", err)
-		return
+		t.Fatalf("Connect: %v", err)
 	}
 
 	// Set
 	stored, err := c.Set("Hello", 0, 0, []byte("world"))
 	if err != nil {
-		t.Errorf("Set: %v", err)
-		return
+		t.Fatalf("Set: %v", err)
 	}
 	if !stored {
 		t.Errorf("want true, got %v", stored)
@@ -89,16 +90,14 @@ func TestMemcache(t *testing.T) {
 	// Flags
 	stored, err = c.Set("Hello", 0xFFFF, 0, []byte("world"))
 	if err != nil {
-		t.Errorf("Set: %v", err)
-		return
+		t.Fatalf("Set: %v", err)
 	}
 	if !stored {
 		t.Errorf("want true, got %v", stored)
 	}
 	results, err := c.Get("Hello")
 	if err != nil {
-		t.Errorf("Get: %v", err)
-		return
+		t.Fatalf("Get: %v", err)
 	}
 	if results[0].Flags != 0xFFFF {
 		t.Errorf("want 0xFFFF, got %x", results[0].Flags)
@@ -110,8 +109,7 @@ func TestMemcache(t *testing.T) {
 	// timeout
 	stored, err = c.Set("Lost", 0, 1, []byte("World"))
 	if err != nil {
-		t.Errorf("Set: %v", err)
-		return
+		t.Fatalf("Set: %v", err)
 	}
 	if !stored {
 		t.Errorf("want true, got %v", stored)
@@ -123,8 +121,7 @@ func TestMemcache(t *testing.T) {
 	// cas
 	stored, err = c.Set("Data", 0, 0, []byte("Set"))
 	if err != nil {
-		t.Errorf("Set: %v", err)
-		return
+		t.Fatalf("Set: %v", err)
 	}
 	if !stored {
 		t.Errorf("want true, got %v", stored)
@@ -132,8 +129,7 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Data", "Set")
 	results, err = c.Gets("Data")
 	if err != nil {
-		t.Errorf("Gets: %v", err)
-		return
+		t.Fatalf("Gets: %v", err)
 	}
 	cas := results[0].Cas
 	if cas == 0 {
@@ -141,8 +137,7 @@ func TestMemcache(t *testing.T) {
 	}
 	stored, err = c.Cas("Data", 0, 0, []byte("not set"), 12345)
 	if err != nil {
-		t.Errorf("Set: %v", err)
-		return
+		t.Fatalf("Set: %v", err)
 	}
 	if stored {
 		t.Errorf("want false, got %v", stored)
@@ -150,14 +145,12 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Data", "Set")
 	stored, err = c.Cas("Data", 0, 0, []byte("Changed"), cas)
 	if err != nil {
-		t.Errorf("Set: %v", err)
-		return
+		t.Fatalf("Set: %v", err)
 	}
 	expect(t, c, "Data", "Changed")
 	stored, err = c.Set("Data", 0, 0, []byte("Overwritten"))
 	if err != nil {
-		t.Errorf("Set: %v", err)
-		return
+		t.Fatalf("Set: %v", err)
 	}
 	if !stored {
 		t.Errorf("want true, got %v", stored)
@@ -173,8 +166,7 @@ func TestMemcache(t *testing.T) {
 
 	_, err = c.Stats("slabs")
 	if err != nil {
-		t.Errorf("Stats: %v", err)
-		return
+		t.Fatalf("Stats: %v", err)
 	}
 
 	// FlushAll
@@ -187,18 +179,15 @@ func TestMemcache(t *testing.T) {
 
 	err = c.FlushAll()
 	if err != nil {
-		t.Errorf("FlushAll: err %v", err)
-		return
+		t.Fatalf("FlushAll: err %v", err)
 	}
 
 	results, err = c.Get("Flush")
 	if err != nil {
-		t.Errorf("Get: %v", err)
-		return
+		t.Fatalf("Get: %v", err)
 	}
 	if len(results) != 0 {
-		t.Errorf("FlushAll failed")
-		return
+		t.Fatalf("FlushAll failed")
 	}
 
 	// Multi
@@ -243,8 +232,7 @@ func TestMemcache(t *testing.T) {
 func expect(t *testing.T, c *Connection, key, value string) {
 	results, err := c.Get(key)
 	if err != nil {
-		t.Errorf("Get: %v", err)
-		return
+		t.Fatalf("Get: %v", err)
 	}
 	var got string
 	if len(results) != 0 {
