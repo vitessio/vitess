@@ -169,3 +169,47 @@ func TestContains(t *testing.T) {
 		}
 	}
 }
+
+func TestIntersect(t *testing.T) {
+	var table = []struct {
+		a          string
+		b          string
+		c          string
+		d          string
+		intersects bool
+	}{
+		{a: "40", b: "80", c: "c0", d: "d0", intersects: false},
+		{a: "", b: "80", c: "80", d: "", intersects: false},
+		{a: "", b: "80", c: "40", d: "80", intersects: true},
+		{a: "40", b: "80", c: "60", d: "A0", intersects: true},
+		{a: "40", b: "80", c: "50", d: "60", intersects: true},
+		{a: "40", b: "80", c: "10", d: "50", intersects: true},
+		{a: "40", b: "80", c: "40", d: "80", intersects: true},
+		{a: "40", b: "80", c: "20", d: "40", intersects: false},
+	}
+
+	for _, el := range table {
+		a, err := HexKeyspaceId(el.a).Unhex()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		b, err := HexKeyspaceId(el.b).Unhex()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		left := KeyRange{Start: a, End: b}
+		c, err := HexKeyspaceId(el.c).Unhex()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		d, err := HexKeyspaceId(el.d).Unhex()
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		right := KeyRange{Start: c, End: d}
+		if c := KeyRangesIntersect(left, right); c != el.intersects {
+			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
+		}
+
+	}
+}

@@ -431,6 +431,10 @@ func (tablet *Tablet) Complete() error {
 		if err != nil {
 			return err
 		}
+
+		if end != key.MaxKey && start >= end {
+			return fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", start, end)
+		}
 		tablet.KeyRange = key.KeyRange{Start: start, End: end}
 		tablet.Shard = strings.ToUpper(tablet.Shard)
 	}

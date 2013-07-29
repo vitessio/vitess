@@ -13,11 +13,32 @@ import (
 	"strings"
 )
 
+// MinKey is smaller than all KeyspaceId (the value really is).
 var MinKey = KeyspaceId("")
+
+// MaxKey is bigger than all KeyspaceId (by convention).
 var MaxKey = KeyspaceId("")
 
-// NOTE(msolomon) not sure about all these types - feels like it will create
-// hoops later.
+// KeyspaceId is the type we base sharding on.
+type KeyspaceId string
+
+// Hex prints a KeyspaceId in capital hex.
+func (kid KeyspaceId) Hex() HexKeyspaceId {
+	return HexKeyspaceId(strings.ToUpper(hex.EncodeToString([]byte(kid))))
+}
+
+// MarshalJSON turns a KeyspaceId into json (using hex encoding).
+func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + string(kid.Hex()) + "\""), nil
+}
+
+// UnmarshalJSON reads a KeyspaceId from json (hex decoding).
+func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
+	*kid, err = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
+	return err
+}
+
+// Uint64Key is a uint64 that can be converted into a KeyspaceId.
 type Uint64Key uint64
 
 func (i Uint64Key) String() string {
@@ -26,27 +47,15 @@ func (i Uint64Key) String() string {
 	return buf.String()
 }
 
+// KeyspaceId returns the KeyspaceId associated with a Uint64Key.
 func (i Uint64Key) KeyspaceId() KeyspaceId {
 	return KeyspaceId(i.String())
 }
 
-type KeyspaceId string
-
-func (kid KeyspaceId) Hex() HexKeyspaceId {
-	return HexKeyspaceId(strings.ToUpper(hex.EncodeToString([]byte(kid))))
-}
-
-func (kid KeyspaceId) MarshalJSON() ([]byte, error) {
-	return []byte("\"" + string(kid.Hex()) + "\""), nil
-}
-
-func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
-	*kid, err = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
-	return err
-}
-
+// HexKeyspaceId is the hex represention of a KeyspaceId.
 type HexKeyspaceId string
 
+// Unhex converts a HexKeyspaceId into a KeyspaceId (hex decoding).
 func (hkid HexKeyspaceId) Unhex() (KeyspaceId, error) {
 	b, err := hex.DecodeString(string(hkid))
 	if err != nil {
@@ -55,6 +64,8 @@ func (hkid HexKeyspaceId) Unhex() (KeyspaceId, error) {
 	return KeyspaceId(string(b)), nil
 }
 
+// KeyRange is an interval of KeyspaceId values. It contains Start,
+// but excludes End. In other words, it is: [Start, End[
 type KeyRange struct {
 	Start KeyspaceId
 	End   KeyspaceId
@@ -72,15 +83,23 @@ func (kr KeyRange) String() string {
 	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
+// Returns true if the KeyRange does not cover the entire space.
 func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
 }
 
-type KeyspaceRange struct {
-	Keyspace string
-	KeyRange
+// KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
+//
+// See: http://stackoverflow.com/questions/4879315/what-is-a-tidy-algorithm-to-find-overlapping-intervals
+// two segments defined as (a,b) and (c,d) (with a<b and c<d):
+// intersects = (b > c) && (a < d)
+// overlap = min(b, d) - max(c, a)
+func KeyRangesIntersect(first, second KeyRange) bool {
+	return (first.End == MaxKey || second.Start < first.End) &&
+		(second.End == MaxKey || first.Start < second.End)
 }
 
+// KeyspaceIdArray is an array of KeyspaceId that can be sorted
 type KeyspaceIdArray []KeyspaceId
 
 func (p KeyspaceIdArray) Len() int { return len(p) }
@@ -95,6 +114,7 @@ func (p KeyspaceIdArray) Swap(i, j int) {
 
 func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
 
+// KeyRangeArray is an array of KeyRange that can be sorted
 type KeyRangeArray []KeyRange
 
 func (p KeyRangeArray) Len() int { return len(p) }
