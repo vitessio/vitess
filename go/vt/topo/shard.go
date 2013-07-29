@@ -163,6 +163,17 @@ func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err 
 	return &ShardInfo{keyspace, shard, s}, nil
 }
 
+// CreateShard creates a new shard and tries to fill in the right information.
+func CreateShard(ts Server, keyspace, shard string) error {
+
+	name, keyRange, err := ValidateShardName(shard)
+	if err != nil {
+		return err
+	}
+	s := &Shard{KeyRange: keyRange}
+	return ts.CreateShard(keyspace, name, s)
+}
+
 func tabletAliasesRecursive(ts Server, keyspace, shard, repPath string) ([]TabletAlias, error) {
 	mutex := sync.Mutex{}
 	wg := sync.WaitGroup{}

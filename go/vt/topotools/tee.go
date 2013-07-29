@@ -106,13 +106,13 @@ func (tee *Tee) DeleteKeyspaceShards(keyspace string) error {
 // Shard management, global.
 //
 
-func (tee *Tee) CreateShard(keyspace, shard string) error {
-	err := tee.primary.CreateShard(keyspace, shard)
+func (tee *Tee) CreateShard(keyspace, shard string, value *topo.Shard) error {
+	err := tee.primary.CreateShard(keyspace, shard, value)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
 
-	serr := tee.secondary.CreateShard(keyspace, shard)
+	serr := tee.secondary.CreateShard(keyspace, shard, value)
 	if serr != nil && serr != topo.ErrNodeExists {
 		// not critical enough to fail
 		relog.Warning("secondary.CreateShard(%v,%v) failed: %v", keyspace, shard, err)

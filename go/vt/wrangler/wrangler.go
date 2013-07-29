@@ -256,7 +256,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 				return err
 			}
 
-			if err := wr.ts.CreateShard(tablet.Keyspace, tablet.Shard); err != nil && err != topo.ErrNodeExists {
+			if err := topo.CreateShard(wr.ts, tablet.Keyspace, tablet.Shard); err != nil && err != topo.ErrNodeExists {
 				return err
 			}
 		}

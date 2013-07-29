@@ -82,7 +82,7 @@ type Server interface {
 	// yet. The contents of the shard will be a new Shard{} object,
 	// with KeyRange populated by the result of ValidateShardName().
 	// Can return ErrNodeExists if it already exists.
-	CreateShard(keyspace, shard string) error
+	CreateShard(keyspace, shard string, value *Shard) error
 
 	// UpdateShard unconditionnally updates the shard information
 	// pointed at by si.keyspace / si.shard to the *si value.

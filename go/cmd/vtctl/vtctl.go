@@ -917,7 +917,7 @@ func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 		}
 	}
 
-	err := wr.TopoServer().CreateShard(keyspace, shard)
+	err := topo.CreateShard(wr.TopoServer(), keyspace, shard)
 	if *force && err == topo.ErrNodeExists {
 		relog.Info("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil

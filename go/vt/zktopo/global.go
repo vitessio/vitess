@@ -91,7 +91,7 @@ func (zkts *Server) DeleteKeyspaceShards(keyspace string) error {
 // Shard Management
 //
 
-func (zkts *Server) CreateShard(keyspace, shard string) error {
+func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error {
 	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
 	pathList := []string{
 		shardPath,
@@ -103,12 +103,7 @@ func (zkts *Server) CreateShard(keyspace, shard string) error {
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			_, keyRange, err := topo.ValidateShardName(shard)
-			if err != nil {
-				return err
-			}
-			s := topo.Shard{KeyRange: keyRange}
-			c = s.Json()
+			c = value.Json()
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
