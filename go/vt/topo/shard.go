@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"strings"
 	"sync"
 
 	"github.com/youtube/vitess/go/jscfg"
@@ -68,6 +69,35 @@ func shardFromJson(data string) (*Shard, error) {
 		return nil, fmt.Errorf("bad shard data %v", err)
 	}
 	return shard, nil
+}
+
+// ValidateShardName takes a shard name and sanitizes it, and also returns
+// the KeyRange.
+func ValidateShardName(shard string) (string, key.KeyRange, error) {
+	if !strings.Contains(shard, "-") {
+		return shard, key.KeyRange{}, nil
+	}
+
+	parts := strings.Split(shard, "-")
+	if len(parts) != 2 {
+		return "", key.KeyRange{}, fmt.Errorf("Invalid shardId, can only contain one '-': %v", shard)
+	}
+
+	start, err := key.HexKeyspaceId(parts[0]).Unhex()
+	if err != nil {
+		return "", key.KeyRange{}, err
+	}
+
+	end, err := key.HexKeyspaceId(parts[1]).Unhex()
+	if err != nil {
+		return "", key.KeyRange{}, err
+	}
+
+	if end != key.MaxKey && start >= end {
+		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", start, end)
+	}
+
+	return strings.ToUpper(shard), key.KeyRange{Start: start, End: end}, nil
 }
 
 // ShardInfo is a meta struct that contains metadata to give the data

@@ -79,7 +79,8 @@ type Server interface {
 	//
 
 	// CreateShard creates an empty shard, assuming it doesn't exist
-	// yet. The contents of the shard will be an empty Shard{} object.
+	// yet. The contents of the shard will be a new Shard{} object,
+	// with KeyRange populated by the result of ValidateShardName().
 	// Can return ErrNodeExists if it already exists.
 	CreateShard(keyspace, shard string) error
 

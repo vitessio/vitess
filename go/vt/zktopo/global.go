@@ -103,7 +103,11 @@ func (zkts *Server) CreateShard(keyspace, shard string) error {
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			s := topo.Shard{}
+			_, keyRange, err := topo.ValidateShardName(shard)
+			if err != nil {
+				return err
+			}
+			s := topo.Shard{KeyRange: keyRange}
 			c = s.Json()
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))

@@ -416,29 +416,9 @@ func (tablet *Tablet) Complete() error {
 		tablet.State = STATE_READ_ONLY
 	}
 
-	if strings.Contains(tablet.Shard, "-") {
-		parts := strings.Split(tablet.Shard, "-")
-		if len(parts) != 2 {
-			return fmt.Errorf("Invalid shardId, can only contain one '-': %v", tablet.Shard)
-		}
-
-		start, err := key.HexKeyspaceId(parts[0]).Unhex()
-		if err != nil {
-			return err
-		}
-
-		end, err := key.HexKeyspaceId(parts[1]).Unhex()
-		if err != nil {
-			return err
-		}
-
-		if end != key.MaxKey && start >= end {
-			return fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", start, end)
-		}
-		tablet.KeyRange = key.KeyRange{Start: start, End: end}
-		tablet.Shard = strings.ToUpper(tablet.Shard)
-	}
-	return nil
+	var err error
+	tablet.Shard, tablet.KeyRange, err = ValidateShardName(tablet.Shard)
+	return err
 }
 
 func TabletFromJson(data string) (*Tablet, error) {
