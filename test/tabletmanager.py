@@ -548,6 +548,7 @@ primary key (id)
     with gzip.open(path) as f:
       if len(f.readlines()) != 2:
         raise utils.TestError("Data looks wrong in %s" % path)
+  tablet_62344.kill_vttablet()
 
 
 @utils.test_case
