@@ -153,6 +153,7 @@ class TestZkocc(unittest.TestCase):
     logging.getLogger().setLevel(logging.WARNING)
 
     # get test
+    utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/zkocc1/data1' % utils.zkocc_port_base, trap_output=True)
     self.assertEqual(err, "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=false, Stale=false)\n")
 

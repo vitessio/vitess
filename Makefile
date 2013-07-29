@@ -19,6 +19,7 @@ build:
 	cd go/cmd/vtocc; go build
 	cd go/cmd/vttablet; go build
 	cd go/cmd/zk; go build
+	cd go/cmd/zkclient2; go build
 	cd go/cmd/zkctl; go build
 	cd go/cmd/zkns2pdns; go build
 	cd go/cmd/zkocc; go build
