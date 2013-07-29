@@ -210,7 +210,7 @@ def zk_setup():
   with open(config, 'w') as f:
     zk_cell_mapping = {'test_nj': 'localhost:%u'%(zk_port_base+2),
                        'test_ny': 'localhost:%u'%(zk_port_base+2),
-                       'test_ca': 'localhost:%u'%(zk_port_base+2),
+                       'test_ca': 'localhost:%u,does.not.exists:1234'%(zk_port_base+2),
                        'global': 'localhost:%u'%(zk_port_base+2),
                        'test_nj:_zkocc': 'localhost:%u,localhost:%u,localhost:%u'%(zkocc_port_base,zkocc_port_base+1,zkocc_port_base+2),
                        'test_ny:_zkocc': 'localhost:%u'%(zkocc_port_base),

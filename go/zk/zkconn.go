@@ -9,8 +9,10 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sync2"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -71,9 +73,14 @@ type ZkConn struct {
 // (after each timeout), and may *never* send an event if the TCP connections
 // always fail. Use DialZkTimeout to enforce a timeout for the initial connect.
 func DialZk(zkAddr string, baseTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
+	resolvedZkAddr, err := resolveZkAddr(zkAddr)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	sem.Acquire()
 	defer sem.Release()
-	zconn, session, err := zookeeper.Dial(zkAddr, baseTimeout)
+	zconn, session, err := zookeeper.Dial(resolvedZkAddr, baseTimeout)
 	if err == nil {
 		// Wait for connection, possibly forever
 		event := <-session
@@ -90,9 +97,14 @@ func DialZk(zkAddr string, baseTimeout time.Duration) (*ZkConn, <-chan zookeeper
 }
 
 func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time.Duration) (*ZkConn, <-chan zookeeper.Event, error) {
+	resolvedZkAddr, err := resolveZkAddr(zkAddr)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	sem.Acquire()
 	defer sem.Release()
-	zconn, session, err := zookeeper.Dial(zkAddr, baseTimeout)
+	zconn, session, err := zookeeper.Dial(resolvedZkAddr, baseTimeout)
 	if err == nil {
 		// Wait for connection, with a timeout
 		timer := time.NewTimer(connectTimeout)
@@ -112,6 +124,28 @@ func DialZkTimeout(zkAddr string, baseTimeout time.Duration, connectTimeout time
 		}
 	}
 	return nil, nil, err
+}
+
+// resolveZkAddr takes a comma-separated list of host:post addresses,
+// and resolves the host to replace it with the IP address.
+// If a resolution fails, the host is skipped.
+// If no host can be resolved, an error is returned.
+// This is different fromt he zookeeper C library, that insists on resolving
+// *all* hosts before it starts.
+func resolveZkAddr(zkAddr string) (string, error) {
+	parts := strings.Split(zkAddr, ",")
+	resolved := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if r, err := netutil.ResolveIpAddr(part); err != nil {
+			log.Printf("Cannot resolve %v, will not use it: %v", part, err)
+		} else {
+			resolved = append(resolved, r)
+		}
+	}
+	if len(resolved) == 0 {
+		return "", fmt.Errorf("no valid address found in %v", zkAddr)
+	}
+	return strings.Join(resolved, ","), nil
 }
 
 func (conn *ZkConn) Get(path string) (data string, stat Stat, err error) {
