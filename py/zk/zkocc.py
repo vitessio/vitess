@@ -181,7 +181,7 @@ class ZkOccConnection(object):
     return self._call('getv', [self._resolve_path(p) for p in paths])
 
   # returns a ZkNode, see header
-  def children(slef, path):
+  def children(self, path):
     return self._call('children', self._resolve_path(path))
 
 # use this class for faking out a zkocc client. The startup config values
