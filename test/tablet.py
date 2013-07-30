@@ -22,6 +22,7 @@ tablet_cell_map = {
 class Tablet(object):
   default_uid = 62344
   seq = 0
+  tablets_running = 0
   default_db_config = {
     "app": {
       "uname": "vt_dba", # it's vt_dba so that the tests can create
@@ -316,6 +317,7 @@ class Tablet(object):
     # wait for query service to be in the right state
     self.wait_for_vttablet_state(wait_for_state, port=port)
 
+    Tablet.tablets_running += 1
     return self.proc
 
   def wait_for_vttablet_state(self, expected, timeout=5.0, port=None):
@@ -356,5 +358,16 @@ class Tablet(object):
   def kill_vttablet(self):
     utils.debug("killing vttablet: " + self.tablet_alias)
     if self.proc is not None:
+      Tablet.tablets_running -= 1
       self.proc.terminate()
+      # FIXME(alainjobart) this wait() takes a long time. It shouldn't.
+      # We have to investigate why. In the meantime, commenting it out,
+      # as it breaks the timing of some tests.
+      # self.proc.wait()
       self.proc = None
+
+  @classmethod
+  def check_vttablet_count(klass):
+    if Tablet.tablets_running > 0:
+      raise utils.TestError("This test is not killing all its vttablets")
+    

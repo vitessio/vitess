@@ -14,6 +14,8 @@ import urllib
 
 import MySQLdb
 
+import tablet
+
 options = None
 devnull = open('/dev/null', 'w')
 vttop = os.environ['VTTOP']
@@ -57,6 +59,7 @@ def test_case(fn):
   def body():
     debug("========== " + fn.__name__ + " ==========")
     fn()
+    tablet.Tablet.check_vttablet_count()
   return body
 
 def remove_tmp_files():
@@ -103,6 +106,9 @@ def kill_sub_processes():
       except OSError as e:
         if options.verbose:
           print >> sys.stderr, e
+  # temporary hack until we figure it out
+  debug("===== killing any remaining vt_mysqlbinlog process just to be sure...")
+  os.system("killall vt_mysqlbinlog")
 
 def kill_sub_process(proc):
   pid = proc.pid

@@ -1126,7 +1126,7 @@ def run_test_vttablet_authenticated():
 
   tablet_62344.populate('vt_test_keyspace', create_vt_select_test,
                         populate_vt_select_test)
-  agent = tablet_62344.start_vttablet(auth=True)
+  tablet_62344.start_vttablet(auth=True)
   utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
 
   err, out = tablet_62344.vquery('select * from vt_select_test', path='test_keyspace/0', user='ala', password=r'ma kota')
@@ -1134,7 +1134,7 @@ def run_test_vttablet_authenticated():
   if 'Row count: ' not in out:
     raise utils.TestError("query didn't go through: %s, %s" % (err, out))
 
-  utils.kill_sub_process(agent)
+  tablet_62344.kill_vttablet()
   # TODO(szopa): Test that non-authenticated queries do not pass
   # through (when we get to that point).
 
