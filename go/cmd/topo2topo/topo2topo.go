@@ -23,8 +23,6 @@ var doTablets = flag.Bool("do-tablets", false, "copies the tablet information")
 
 var deleteKeyspaceShards = flag.Bool("delete-keyspace-shards", false, "when copying shards, first removes the destination shards (will nuke the replication graph)")
 
-var logLevel = flag.String("log.level", "INFO", "set log level")
-
 func main() {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
@@ -38,12 +36,7 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-
-	logLevel, err := relog.LogNameToLogLevel(*logLevel)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	relog.SetLevel(logLevel)
+	flag.Set("alsologtostderr", "true")
 
 	if *fromTopo == "" || *toTopo == "" {
 		log.Fatalf("Need both from and to topo")

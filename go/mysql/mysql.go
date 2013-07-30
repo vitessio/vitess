@@ -15,9 +15,9 @@ import (
 	"fmt"
 	"unsafe"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 

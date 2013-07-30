@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log/syslog"
 	"net"
@@ -34,8 +33,6 @@ import (
 var noWaitForAction = flag.Bool("no-wait", false, "don't wait for action completion, detach")
 var waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
 var lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
-var logLevel = flag.String("log.level", "INFO", "set log level")
-var logfile = flag.String("logfile", "/vt/logs/vtctl.log", "log file")
 
 type command struct {
 	name   string
@@ -1400,27 +1397,10 @@ func main() {
 	action := args[0]
 	installSignalHandlers()
 
-	logPrefix := "vtctl "
-	logLevel, err := relog.LogNameToLogLevel(*logLevel)
-	if err != nil {
-		log.Fatalf("%v", err)
-	}
-	relog.SetLevel(logLevel)
-
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
+	flag.Set("alsologtostderr", "true")
 
-	if log, err := os.OpenFile(*logfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		// Use a temp logger to keep a consistent trail of events in the log
-		// without polluting stderr in the averge case.
-		fileLogger := relog.New(log, logPrefix, logLevel)
-		fileLogger.Info(startMsg)
-		// Redefine the default logger to keep events in both places.
-		relog.SetOutput(io.MultiWriter(log, os.Stderr))
-	} else {
-		log.Warningf("cannot write to provided logfile: %v", err)
-	}
-
-	if syslogger, err := syslog.New(syslog.LOG_INFO, logPrefix); err == nil {
+	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
 		syslogger.Info(startMsg)
 	} else {
 		log.Warningf("cannot connect to syslog: %v", err)
@@ -1431,6 +1411,7 @@ func main() {
 
 	wr := wrangler.New(topoServer, *waitTime, *lockWaitTimeout)
 	var actionPath string
+	var err error
 
 	found := false
 	for _, group := range commands {
@@ -1442,7 +1423,6 @@ func main() {
 					fmt.Fprintf(os.Stderr, "%s\n\n", cmd.help)
 					subFlags.PrintDefaults()
 				}
-
 				actionPath, err = cmd.method(wr, subFlags, args[1:])
 				found = true
 			}

@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/key"
 )
 

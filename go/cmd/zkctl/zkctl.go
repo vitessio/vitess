@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -27,7 +26,6 @@ var zkCfg = flag.String("zk.cfg", "6@<hostname>:3801:3802:3803",
 var myId = flag.Uint("zk.myid", 0,
 	"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
 var force = flag.Bool("force", false, "force action, no promptin")
-var logLevel = flag.String("log.level", "WARNING", "set log level")
 var stdin *bufio.Reader
 
 func init() {
@@ -58,10 +56,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	relog.SetPrefix("zkctl ")
-	if err := relog.SetLevelByName(*logLevel); err != nil {
-		log.Fatal(err)
-	}
+	flag.Set("alsologtostderr", "true")
+
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myId))
 	zkd := zkctl.NewZkd(zkConfig)
 
