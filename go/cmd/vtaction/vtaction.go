@@ -31,8 +31,6 @@ var actionNode = flag.String("action-node", "",
 	"path to zk node representing the action")
 var actionGuid = flag.String("action-guid", "",
 	"a label to help track processes")
-var logLevel = flag.String("log.level", "debug", "set log level")
-var logFilename = flag.String("logfile", "/dev/stderr", "log path")
 var force = flag.Bool("force", false, "force an action to rerun")
 
 // FIXME(msolomon) temporary, until we are starting mysql ourselves
@@ -54,18 +52,10 @@ func main() {
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
 
-	logFile, err := os.OpenFile(*logFilename,
-		os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		log.Fatalf("Can't open log file: %v", err)
-	}
-	relog.SetOutput(logFile)
-	relog.SetPrefix(fmt.Sprintf("vtaction [%v] ", os.Getpid()))
-	if err := relog.SetLevelByName(*logLevel); err != nil {
-		log.Fatalf("%v", err)
-	}
-	relog.HijackLog(nil)
-	relog.HijackStdio(logFile, logFile)
+	// FIXME(ryszard): Bring this back when hijacking works with
+	// glog.
+	// relog.HijackLog(nil)
+	// relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
@@ -75,7 +65,7 @@ func main() {
 	log.V(6).Infof("mycnf: %v", jscfg.ToJson(mycnf))
 
 	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
-	if err != nil {
+	if cfErr != nil {
 		log.Fatalf("%s", cfErr)
 	}
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
