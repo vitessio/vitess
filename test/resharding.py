@@ -107,7 +107,7 @@ def run_test_resharding():
 
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
 
-  utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('RebuildKeyspaceGraph -use-served-types /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
 
 
 

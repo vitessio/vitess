@@ -68,6 +68,8 @@ const (
 	SHARD_ACTION_CHECK = "CheckShard"
 	// Apply a schema change on an entire shard
 	SHARD_ACTION_APPLY_SCHEMA = "ApplySchemaShard"
+	// Changes the ServedTypes inside a shard
+	SHARD_ACTION_SET_SERVED_TYPES = "SetShardServedTypes"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
@@ -179,6 +181,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case SHARD_ACTION_CHECK:
 	case SHARD_ACTION_APPLY_SCHEMA:
 		node.args = &ApplySchemaShardArgs{}
+	case SHARD_ACTION_SET_SERVED_TYPES:
+		node.args = &SetShardServedTypesArgs{}
 
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:

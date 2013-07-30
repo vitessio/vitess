@@ -152,6 +152,9 @@ var commands = []commandGroup{
 			command{"ListShardTablets", commandListShardTablets,
 				"<keyspace/shard|zk shard path>)",
 				"List all tablets in a given shard."},
+			command{"SetShardServedTypes", commandSetShardServedTypes,
+				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
+				"Sets a given shard's served types. Does not rebuild any serving graph."},
 		},
 	},
 	commandGroup{
@@ -1027,6 +1030,24 @@ func commandListShardTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 	return "", listTabletsByShard(wr.TopoServer(), keyspace, shard)
 }
 
+func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 && subFlags.NArg() != 2 {
+		relog.Fatal("action SetShardServedTypes requires <keyspace/shard|zk shard path> [<served type1>,<served type2>,...]")
+	}
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	var servedTypes []topo.TabletType
+	if subFlags.NArg() == 2 {
+		types := strings.Split(subFlags.Arg(1), ",")
+		servedTypes = make([]topo.TabletType, 0, len(types))
+		for _, t := range types {
+			servedTypes = append(servedTypes, parseTabletType(t, []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}))
+		}
+	}
+
+	return "", wr.SetShardServedTypes(keyspace, shard, servedTypes)
+}
+
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
 	subFlags.Parse(args)
@@ -1045,6 +1066,7 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	cells := subFlags.String("cells", "", "comma separated list of cells to update")
+	useServedTypes := subFlags.Bool("use-served-types", false, "supports overlapping shards for resharding (experimental, do not use yet)")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action RebuildKeyspaceGraph requires at least one <zk keyspace path>")
@@ -1065,7 +1087,7 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 
 	for _, zkPath := range zkPaths {
 		keyspace := keyspaceParamToKeyspace(zkPath)
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
+		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray, *useServedTypes); err != nil {
 			return "", err
 		}
 	}

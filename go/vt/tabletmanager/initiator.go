@@ -403,6 +403,21 @@ func (ai *ActionInitiator) ApplySchemaShard(masterTabletAlias topo.TabletAlias, 
 	}
 }
 
+// parameters are stored for debug purposes
+type SetShardServedTypesArgs struct {
+	ServedTypes []topo.TabletType
+}
+
+func (ai *ActionInitiator) SetShardServedTypesArgs(servedTypes []topo.TabletType) *ActionNode {
+	return &ActionNode{
+		Action:     SHARD_ACTION_SET_SERVED_TYPES,
+		ActionGuid: actionGuid(),
+		args: &SetShardServedTypesArgs{
+			ServedTypes: servedTypes,
+		},
+	}
+}
+
 func (ai *ActionInitiator) RebuildKeyspace() *ActionNode {
 	return &ActionNode{
 		Action:     KEYSPACE_ACTION_REBUILD,

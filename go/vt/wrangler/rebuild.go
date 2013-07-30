@@ -260,14 +260,14 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 }
 
 // Rebuild the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
+func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, useServedTypes bool) error {
 	actionNode := wr.ai.RebuildKeyspace()
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.rebuildKeyspace(keyspace, cells)
+	err = wr.rebuildKeyspace(keyspace, cells, useServedTypes)
 	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
@@ -277,7 +277,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error 
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
+func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTypes bool) error {
 	relog.Info("rebuildKeyspace %v", keyspace)
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
@@ -334,6 +334,66 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 		}
 	}
 
+	if useServedTypes {
+		// Use the new code. Only works in ServeTypes in
+		// Shard objects are populated and correct.
+		return wr.rebuildKeyspaceWithServedTypes(shards, srvKeyspaceByPath)
+	}
+
+	// for each entry in the srvKeyspaceByPath map, we do the following:
+	// - read the ShardInfo structures for each shard
+	//    - prune the AddrsByType field, result would be too big
+	// - compute the union of the db types (replica, master, ...)
+	// - sort the shards in the list by range
+	// - check the ranges are compatible (no hole, covers everything)
+	for srvPath, srvKeyspace := range srvKeyspaceByPath {
+		keyspaceDbTypes := make(map[topo.TabletType]bool)
+		for _, shard := range shards {
+			srvShard, err := wr.ts.GetSrvShard(srvPath.cell, srvPath.keyspace, shard)
+			if err != nil {
+				return err
+			}
+			for dbType, _ := range srvShard.AddrsByType {
+				keyspaceDbTypes[topo.TabletType(dbType)] = true
+			}
+			// Prune addrs, this is unnecessarily expensive right now. It is easier to
+			// load on-demand since we have to do that anyway on a reconnect.
+			srvShard.AddrsByType = nil
+			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
+		}
+		tabletTypes := make([]topo.TabletType, 0, len(keyspaceDbTypes))
+		for dbType, _ := range keyspaceDbTypes {
+			tabletTypes = append(tabletTypes, dbType)
+		}
+		srvKeyspace.TabletTypes = tabletTypes
+		// FIXME(msolomon) currently this only works when the shards are range-based
+		topo.SrvShardArray(srvKeyspace.Shards).Sort()
+
+		// check the first Start is MinKey, the last End is MaxKey,
+		// and the values in between match: End[i] == Start[i+1]
+		if srvKeyspace.Shards[0].KeyRange.Start != key.MinKey {
+			return fmt.Errorf("Keyspace does not start with %v", key.MinKey)
+		}
+		if srvKeyspace.Shards[len(srvKeyspace.Shards)-1].KeyRange.End != key.MaxKey {
+			return fmt.Errorf("Keyspace does not end with %v", key.MaxKey)
+		}
+		for i, _ := range srvKeyspace.Shards[0 : len(srvKeyspace.Shards)-1] {
+			if srvKeyspace.Shards[i].KeyRange.End != srvKeyspace.Shards[i+1].KeyRange.Start {
+				return fmt.Errorf("Non-contiguous KeyRange values at shard %v to %v: %v != %v", i, i+1, srvKeyspace.Shards[i].KeyRange.End.Hex(), srvKeyspace.Shards[i+1].KeyRange.Start.Hex())
+			}
+		}
+	}
+
+	// and then finally save the keyspace objects
+	for srvPath, srvKeyspace := range srvKeyspaceByPath {
+		if err := wr.ts.UpdateSrvKeyspace(srvPath.cell, srvPath.keyspace, srvKeyspace); err != nil {
+			return fmt.Errorf("writing serving data failed: %v", err)
+		}
+	}
+	return nil
+}
+
+func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceByPath map[cellKeyspace]*topo.SrvKeyspace) error {
 	// for each entry in the srvKeyspaceByPath map, we do the following:
 	// - read the ShardInfo structures for each shard
 	//    - prune the AddrsByType field, result would be too big
@@ -448,7 +508,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(keyspace, nil); err != nil {
+			if err := wr.RebuildKeyspaceGraph(keyspace, nil, false); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
