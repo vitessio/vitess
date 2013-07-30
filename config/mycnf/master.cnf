@@ -1,6 +1,5 @@
 # master.cnf parameters
 
 log-bin = {{.BinLogPath}}
-log-bin-index = {{.BinLogIndexPath}}
 log-slave-updates
 sync_binlog = 1
