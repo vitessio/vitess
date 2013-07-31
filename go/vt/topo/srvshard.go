@@ -15,7 +15,9 @@ import (
 // SrvShard contains a roll-up of the shard in the local namespace.
 // In zk, it is under /zk/local/vt/ns/<keyspace>/<shard>
 type SrvShard struct {
-	KeyRange key.KeyRange
+	// Copied from Shard
+	KeyRange    key.KeyRange
+	ServedTypes []TabletType
 
 	// This is really keyed by TabletType, but the json marshaller doesn't like
 	// that since it requires all keys to be "string" - not "string-ish".
@@ -51,16 +53,30 @@ func NewSrvShard(data string, version int) (*SrvShard, error) {
 	return srv, nil
 }
 
+// KeyspacePartition represents a continuous set of shards to
+// serve an entire data set.
+type KeyspacePartition struct {
+	// List of non-overlapping continuous shards sorted by range.
+	Shards []SrvShard
+}
+
 // A distilled serving copy of keyspace detail stored in the local
-// cell for fast access. Derived from the global keyspace and
+// cell for fast access. Derived from the global keyspace, shards and
 // local details.
 // In zk, it is in /zk/local/vt/ns/<keyspace>
 type SrvKeyspace struct {
+	// Shards to use per type, only contains complete partitions.
+	Partitions map[TabletType]*KeyspacePartition
+
+	// This list will be deprecated as soon as Partitions is used.
 	// List of non-overlapping shards sorted by range.
 	Shards []SrvShard
+
 	// List of available tablet types for this keyspace in this cell.
+	// May not have a server for every shard, but we have some.
 	TabletTypes []TabletType
-	version     int
+
+	version int
 }
 
 func NewSrvKeyspace(data string, version int) (*SrvKeyspace, error) {

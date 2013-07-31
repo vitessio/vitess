@@ -244,15 +244,19 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 		srvShard, ok := srvShardByPath[srvShardPath]
 		if !ok {
-			srvShard = &topo.SrvShard{KeyRange: shardInfo.KeyRange, AddrsByType: make(map[string]topo.VtnsAddrs)}
+			srvShard = &topo.SrvShard{
+				KeyRange:    shardInfo.KeyRange,
+				ServedTypes: shardInfo.ServedTypes,
+				AddrsByType: make(map[string]topo.VtnsAddrs),
+			}
 			srvShardByPath[srvShardPath] = srvShard
 		}
 		srvShard.AddrsByType[string(tabletType)] = *addrs
 	}
 
 	// Save the shard entries
-	for srvPath, srvShard := range srvShardByPath {
-		if err := wr.ts.UpdateSrvShard(srvPath.cell, srvPath.keyspace, srvPath.shard, srvShard); err != nil {
+	for cks, srvShard := range srvShardByPath {
+		if err := wr.ts.UpdateSrvShard(cks.cell, cks.keyspace, cks.shard, srvShard); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}
@@ -307,13 +311,13 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 		return err
 	}
 
-	// srvKeyspaceByPath is a map:
+	// srvKeyspaceMap is a map:
 	//   key: local keyspace {cell,keyspace}
 	//   value: topo.SrvKeyspace object being built
-	srvKeyspaceByPath := make(map[cellKeyspace]*topo.SrvKeyspace)
+	srvKeyspaceMap := make(map[cellKeyspace]*topo.SrvKeyspace)
 	for _, alias := range aliases {
 		keyspaceLocation := cellKeyspace{alias.Cell, keyspace}
-		if _, ok := srvKeyspaceByPath[keyspaceLocation]; !ok {
+		if _, ok := srvKeyspaceMap[keyspaceLocation]; !ok {
 			// before adding keyspaceLocation to the map of
 			// of KeyspaceByPath, we check this is a
 			// serving tablet. No serving tablet in shard
@@ -330,26 +334,28 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 				continue
 			}
 
-			srvKeyspaceByPath[keyspaceLocation] = &topo.SrvKeyspace{Shards: make([]topo.SrvShard, 0, 16)}
+			srvKeyspaceMap[keyspaceLocation] = &topo.SrvKeyspace{
+				Shards: make([]topo.SrvShard, 0, 16),
+			}
 		}
 	}
 
 	if useServedTypes {
 		// Use the new code. Only works in ServeTypes in
 		// Shard objects are populated and correct.
-		return wr.rebuildKeyspaceWithServedTypes(shards, srvKeyspaceByPath)
+		return wr.rebuildKeyspaceWithServedTypes(shards, srvKeyspaceMap)
 	}
 
-	// for each entry in the srvKeyspaceByPath map, we do the following:
+	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - read the ShardInfo structures for each shard
 	//    - prune the AddrsByType field, result would be too big
 	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
-	for srvPath, srvKeyspace := range srvKeyspaceByPath {
+	for ck, srvKeyspace := range srvKeyspaceMap {
 		keyspaceDbTypes := make(map[topo.TabletType]bool)
 		for _, shard := range shards {
-			srvShard, err := wr.ts.GetSrvShard(srvPath.cell, srvPath.keyspace, shard)
+			srvShard, err := wr.ts.GetSrvShard(ck.cell, ck.keyspace, shard)
 			if err != nil {
 				return err
 			}
@@ -385,62 +391,82 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 	}
 
 	// and then finally save the keyspace objects
-	for srvPath, srvKeyspace := range srvKeyspaceByPath {
-		if err := wr.ts.UpdateSrvKeyspace(srvPath.cell, srvPath.keyspace, srvKeyspace); err != nil {
+	for ck, srvKeyspace := range srvKeyspaceMap {
+		if err := wr.ts.UpdateSrvKeyspace(ck.cell, ck.keyspace, srvKeyspace); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}
 	return nil
 }
 
-func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceByPath map[cellKeyspace]*topo.SrvKeyspace) error {
-	// for each entry in the srvKeyspaceByPath map, we do the following:
+func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceMap map[cellKeyspace]*topo.SrvKeyspace) error {
+	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - read the ShardInfo structures for each shard
 	//    - prune the AddrsByType field, result would be too big
 	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
-	for srvPath, srvKeyspace := range srvKeyspaceByPath {
+	for ck, srvKeyspace := range srvKeyspaceMap {
 		keyspaceDbTypes := make(map[topo.TabletType]bool)
+		srvKeyspace.Partitions = make(map[topo.TabletType]*topo.KeyspacePartition)
 		for _, shard := range shards {
-			srvShard, err := wr.ts.GetSrvShard(srvPath.cell, srvPath.keyspace, shard)
+			srvShard, err := wr.ts.GetSrvShard(ck.cell, ck.keyspace, shard)
 			if err != nil {
 				return err
 			}
 			for dbType, _ := range srvShard.AddrsByType {
 				keyspaceDbTypes[topo.TabletType(dbType)] = true
 			}
-			// Prune addrs, this is unnecessarily expensive right now. It is easier to
-			// load on-demand since we have to do that anyway on a reconnect.
+			// Prune addrs, this is unnecessarily expensive right
+			// now. It is easier to load on-demand since we have
+			// to do that anyway on a reconnect.
 			srvShard.AddrsByType = nil
-			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
-		}
-		tabletTypes := make([]topo.TabletType, 0, len(keyspaceDbTypes))
-		for dbType, _ := range keyspaceDbTypes {
-			tabletTypes = append(tabletTypes, dbType)
-		}
-		srvKeyspace.TabletTypes = tabletTypes
-		// FIXME(msolomon) currently this only works when the shards are range-based
-		topo.SrvShardArray(srvKeyspace.Shards).Sort()
 
-		// check the first Start is MinKey, the last End is MaxKey,
-		// and the values in between match: End[i] == Start[i+1]
-		if srvKeyspace.Shards[0].KeyRange.Start != key.MinKey {
-			return fmt.Errorf("Keyspace does not start with %v", key.MinKey)
+			// for each type this shard is supposed to serve,
+			// add it to srvKeyspace.Partitions
+			for _, tabletType := range srvShard.ServedTypes {
+				if _, ok := srvKeyspace.Partitions[tabletType]; !ok {
+					srvKeyspace.Partitions[tabletType] = &topo.KeyspacePartition{
+						Shards: make([]topo.SrvShard, 0)}
+				}
+				srvKeyspace.Partitions[tabletType].Shards = append(srvKeyspace.Partitions[tabletType].Shards, *srvShard)
+			}
 		}
-		if srvKeyspace.Shards[len(srvKeyspace.Shards)-1].KeyRange.End != key.MaxKey {
-			return fmt.Errorf("Keyspace does not end with %v", key.MaxKey)
+
+		srvKeyspace.TabletTypes = make([]topo.TabletType, 0, len(keyspaceDbTypes))
+		for dbType, _ := range keyspaceDbTypes {
+			srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, dbType)
 		}
-		for i, _ := range srvKeyspace.Shards[0 : len(srvKeyspace.Shards)-1] {
-			if srvKeyspace.Shards[i].KeyRange.End != srvKeyspace.Shards[i+1].KeyRange.Start {
-				return fmt.Errorf("Non-contiguous KeyRange values at shard %v to %v: %v != %v", i, i+1, srvKeyspace.Shards[i].KeyRange.End.Hex(), srvKeyspace.Shards[i+1].KeyRange.Start.Hex())
+
+		first := true
+		for tabletType, partition := range srvKeyspace.Partitions {
+			topo.SrvShardArray(partition.Shards).Sort()
+
+			// check the first Start is MinKey, the last End is MaxKey,
+			// and the values in between match: End[i] == Start[i+1]
+			if partition.Shards[0].KeyRange.Start != key.MinKey {
+				return fmt.Errorf("Keyspace partition for %v does not start with %v", tabletType, key.MinKey)
+			}
+			if partition.Shards[len(partition.Shards)-1].KeyRange.End != key.MaxKey {
+				return fmt.Errorf("Keyspace partition for %v does not end with %v", tabletType, key.MaxKey)
+			}
+			for i, _ := range partition.Shards[0 : len(partition.Shards)-1] {
+				if partition.Shards[i].KeyRange.End != partition.Shards[i+1].KeyRange.Start {
+					return fmt.Errorf("Non-contiguous KeyRange values for %v at shard %v to %v: %v != %v", tabletType, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
+				}
+			}
+
+			// backfill Shards
+			if first {
+				first = false
+				srvKeyspace.Shards = partition.Shards
 			}
 		}
 	}
 
 	// and then finally save the keyspace objects
-	for srvPath, srvKeyspace := range srvKeyspaceByPath {
-		if err := wr.ts.UpdateSrvKeyspace(srvPath.cell, srvPath.keyspace, srvKeyspace); err != nil {
+	for ck, srvKeyspace := range srvKeyspaceMap {
+		if err := wr.ts.UpdateSrvKeyspace(ck.cell, ck.keyspace, srvKeyspace); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
 	}

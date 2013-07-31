@@ -257,6 +257,11 @@ def zk_cat(path):
   out, err = run(vtroot+'/bin/zk cat '+path, trap_output=True)
   return out
 
+def zk_cat_json(path):
+  data = zk_cat(path)
+  return json.loads(data)
+
+
 # vars helpers
 def get_vars(port):
   """

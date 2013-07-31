@@ -163,7 +163,7 @@ var commands = []commandGroup{
 				"[-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=a,b] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
+				"[-cells=a,b] [-use-served-types] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
 			command{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name|zk keyspace path>",

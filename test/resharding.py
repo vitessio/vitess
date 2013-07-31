@@ -107,15 +107,62 @@ def run_test_resharding():
 
   utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
 
-  utils.run_vtctl('RebuildKeyspaceGraph -use-served-types /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+  utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
+  check_srv_keyspace('test_nj', 'test_keyspace',
+                     'master: -80 80-\n' +
+                     'rdonly: -80 80-\n' +
+                     'replica: -80 80-\n')
 
+  # now serve rdonly from the split shards
+  utils.run_vtctl('SetShardServedTypes test_keyspace/80- master,replica')
+  utils.run_vtctl('SetShardServedTypes test_keyspace/80-C0 rdonly')
+  utils.run_vtctl('SetShardServedTypes test_keyspace/C0- rdonly')
+  utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
+  check_srv_keyspace('test_nj', 'test_keyspace',
+                     'master: -80 80-\n' +
+                     'rdonly: -80 80-C0 C0-\n' +
+                     'replica: -80 80-\n')
 
+  # then serve replica from the split shards
+  utils.run_vtctl('SetShardServedTypes test_keyspace/80- master')
+  utils.run_vtctl('SetShardServedTypes test_keyspace/80-C0 replica,rdonly')
+  utils.run_vtctl('SetShardServedTypes test_keyspace/C0- replica,rdonly')
+  utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
+  check_srv_keyspace('test_nj', 'test_keyspace',
+                     'master: -80 80-\n' +
+                     'rdonly: -80 80-C0 C0-\n' +
+                     'replica: -80 80-C0 C0-\n')
+
+  # then serve master from the split shards
+  utils.run_vtctl('SetShardServedTypes test_keyspace/80-')
+  utils.run_vtctl('SetShardServedTypes test_keyspace/80-C0 master,replica,rdonly')
+  utils.run_vtctl('SetShardServedTypes test_keyspace/C0- master,replica,rdonly')
+  utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
+  check_srv_keyspace('test_nj', 'test_keyspace',
+                     'master: -80 80-C0 C0-\n' +
+                     'rdonly: -80 80-C0 C0-\n' +
+                     'replica: -80 80-C0 C0-\n')
 
   # kill everything
   shard_0_master.kill_vttablet()
   shard_0_replica.kill_vttablet()
   shard_1_master.kill_vttablet()
   shard_1_replica.kill_vttablet()
+
+def check_srv_keyspace(cell, keyspace, expected):
+  ks = utils.zk_cat_json('/zk/%s/vt/ns/%s' % (cell, keyspace))
+  result = ""
+  for tablet_type in sorted(ks['Partitions'].keys()):
+    result += tablet_type + ":"
+    partition = ks['Partitions'][tablet_type]
+    for shard in partition['Shards']:
+      result = result + " %s-%s" % (shard['KeyRange']['Start'],
+                                    shard['KeyRange']['End'])
+    result += "\n"
+  utils.debug("Cell %s keyspace %s has data:\n%s" % (cell, keyspace, result))
+  if result != expected:
+    raise utils.TestError("expected srv keyspace:\n%s\nbut got:\n%s\n" %
+                          expected, result)
 
 def run_all():
   run_test_resharding()
