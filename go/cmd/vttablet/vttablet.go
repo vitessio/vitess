@@ -92,10 +92,7 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
-	if err := servenv.Init("vttablet"); err != nil {
-		log.Fatalf("Error in servenv.Init: %s", err)
-	}
-
+	servenv.Init()
 	tabletAlias := tabletParamToTabletAlias(*tabletPath)
 
 	mycnf := readMycnf(tabletAlias.Uid)

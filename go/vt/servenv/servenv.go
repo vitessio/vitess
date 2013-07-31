@@ -16,7 +16,6 @@ import (
 	"encoding/hex"
 	"expvar"
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -24,39 +23,20 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/logfile"
 )
 
 var (
-	logfileName  = flag.String("logfile", "/dev/stderr", "base log file name")
-	logFrequency = flag.Int64("logfile.frequency", 0,
-		"rotation frequency in seconds")
-	logMaxSize  = flag.Int64("logfile.maxsize", 0, "max file size in bytes")
-	logMaxFiles = flag.Int64("logfile.maxfiles", 0, "max number of log files")
-	logLevel    = flag.String("log.level", "WARNING", "set log level")
-
-	memProfileRate = flag.Int("mem-profile-rate", 512*1024,
-		"profile every n bytes allocated")
+	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
 )
 
-func Init(logPrefix string) error {
+func Init() {
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
-		return fmt.Errorf("running this as root makes no sense")
+		log.Fatalf("servenv.Init: running this as root makes no sense")
 	}
-	if logPrefix != "" {
-		logPrefix += " "
-	}
-	logPrefix += fmt.Sprintf("[%v] ", os.Getpid())
-	f, err := logfile.Open(*logfileName, *logFrequency, *logMaxSize, *logMaxFiles)
-	if err != nil {
-		return fmt.Errorf("unable to open logfile %s: %v", *logfileName, err)
-	}
-	relog.SetOutput(f)
-	relog.SetPrefix(logPrefix)
-	relog.SetLevel(relog.DEBUG)
-	relog.HijackLog(nil)
+	// FIXME(ryszard): Enable this when hijacking works with glog.
+	// relog.HijackLog(nil)
 	// FIXME(msolomon) Can't hijack with a logfile because the file descriptor
 	// changes after every rotation. Might need to make the logfile more posix
 	// friendly.
@@ -82,7 +62,9 @@ func Init(logPrefix string) error {
 		log.Infof("max-open-fds: %v", fdLimit.Cur)
 	}
 
-	return exportBinaryVersion()
+	if err := exportBinaryVersion(); err != nil {
+		log.Fatalf("servenv.Init: exportBinaryVersion: %v", err)
+	}
 }
 
 func exportBinaryVersion() error {

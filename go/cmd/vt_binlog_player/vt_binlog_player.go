@@ -60,7 +60,7 @@ func readDbConfig(dbConfigFile string) (*mysql.ConnectionParams, error) {
 
 func main() {
 	flag.Parse()
-	servenv.Init("vt_binlog_player")
+	servenv.Init()
 
 	if *dbConfigFile == "" {
 		log.Fatalf("Cannot start without db-config-file")
