@@ -273,7 +273,7 @@ func (scr *SchemaChangeResult) String() string {
 
 func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*SchemaChangeResult, error) {
 	// gather current schema on real database
-	beforeSchema, err := mysqld.GetSchema(dbName, nil, false)
+	beforeSchema, err := mysqld.GetSchema(dbName, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -301,7 +301,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*Sche
 	}
 
 	// get the result
-	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, false)
+	afterSchema, err := mysqld.GetSchema("_vt_preflight", nil, true)
 	if err != nil {
 		return nil, err
 	}
