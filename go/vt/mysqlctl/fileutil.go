@@ -344,7 +344,7 @@ func fetchSnapshotManifest(addr, dbName string, keyRange key.KeyRange) (*SplitSn
 
 	ssm := new(SplitSnapshotManifest)
 	if err = json.Unmarshal(data, ssm); err != nil {
-		return nil, fmt.Errorf("ReadSplitSnapshotManifest failed: %v %v", url, err)
+		return nil, fmt.Errorf("fetchSnapshotManifest failed: %v %v", url, err)
 	}
 	return ssm, nil
 }

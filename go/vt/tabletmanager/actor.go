@@ -171,10 +171,6 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.demoteMaster()
 	case TABLET_ACTION_MASTER_POSITION:
 		err = ta.masterPosition(actionNode)
-	case TABLET_ACTION_PARTIAL_RESTORE:
-		err = ta.partialRestore(actionNode)
-	case TABLET_ACTION_PARTIAL_SNAPSHOT:
-		err = ta.partialSnapshot(actionNode)
 	case TABLET_ACTION_MULTI_SNAPSHOT:
 		err = ta.multiSnapshot(actionNode)
 	case TABLET_ACTION_MULTI_RESTORE:
@@ -827,39 +823,6 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, true)
 }
 
-// Operate on a backup tablet. Halt mysqld (read-only, lock tables)
-// and dump the partial data files.
-func (ta *TabletActor) partialSnapshot(actionNode *ActionNode) error {
-	args := actionNode.args.(*PartialSnapshotArgs)
-
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	if tablet.Type != topo.TYPE_BACKUP {
-		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
-	}
-
-	filename, err := ta.mysqld.CreateSplitSnapshot(tablet.DbName(), args.KeyName, args.StartKey, args.EndKey, tablet.Addr, false, args.Concurrency, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
-	if err != nil {
-		return err
-	}
-
-	sr := &SnapshotReply{ManifestPath: filename}
-	if tablet.Parent.Uid == topo.NO_TABLET {
-		// If this is a master, this will be the new parent.
-		// FIXME(msolomon) this doens't work in hierarchical replication.
-		sr.ParentAlias = tablet.Alias()
-		sr.ZkParentPath = tablet.Path() // XXX
-	} else {
-		sr.ParentAlias = tablet.Parent
-		sr.ZkParentPath = zktopo.TabletPathForAlias(tablet.Parent) // XXX
-	}
-	actionNode.reply = sr
-	return nil
-}
-
 func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	args := actionNode.args.(*MultiSnapshotArgs)
 
@@ -933,68 +896,6 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	// restore type back
 	tablet.Type = originalType
 	return topo.UpdateTablet(ta.ts, tablet)
-}
-
-// Operate on restore tablet.
-// Check that the SnapshotManifest is valid and the master has not changed.
-// Put Mysql in read-only mode.
-// Load the snapshot from source tablet.
-// FIXME(alainjobart) which state should the tablet be in? it is a slave,
-//   but with a much smaller keyspace. For now, do the same as snapshot,
-//   but this is very dangerous, it cannot be used as a real slave
-//   or promoted to master in the same shard!
-// Put tablet into the replication graph as a spare.
-func (ta *TabletActor) partialRestore(actionNode *ActionNode) error {
-	args := actionNode.args.(*RestoreArgs)
-	BackfillAlias(args.ZkSrcTabletPath, &args.SrcTabletAlias)
-	BackfillAlias(args.ZkParentPath, &args.ParentAlias)
-
-	// read our current tablet, verify its state
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-	if tablet.Type != topo.TYPE_IDLE {
-		return fmt.Errorf("expected idle type, not %v: %v", tablet.Type, ta.tabletAlias)
-	}
-
-	// read the source tablet
-	sourceTablet, err := ta.ts.GetTablet(args.SrcTabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// read the parent tablet, verify its state
-	parentTablet, err := ta.ts.GetTablet(args.ParentAlias)
-	if err != nil {
-		return err
-	}
-	if parentTablet.Type != topo.TYPE_MASTER {
-		return fmt.Errorf("restore expected master parent: %v %v", parentTablet.Type, args.ParentAlias)
-	}
-
-	// read & unpack the manifest
-	ssm := new(mysqlctl.SplitSnapshotManifest)
-	if err := fetchAndParseJsonFile(sourceTablet.Addr, args.SrcFilePath, ssm); err != nil {
-		return err
-	}
-
-	// change our type to RESTORE and set all the other arguments.
-	if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.Alias(), ssm.KeyRange); err != nil {
-		return err
-	}
-
-	// do the work
-	if err := ta.mysqld.RestoreFromPartialSnapshot(ssm, args.FetchConcurrency, args.FetchRetryCount); err != nil {
-		relog.Error("RestoreFromPartialSnapshot failed: %v", err)
-		if err := Scrap(ta.ts, ta.tabletAlias, false); err != nil {
-			relog.Error("Failed to Scrap after failed RestoreFromPartialSnapshot: %v", err)
-		}
-		return err
-	}
-
-	// change to TYPE_MASTER, we're done!
-	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_MASTER, true)
 }
 
 // Make this external, since in needs to be forced from time to time.

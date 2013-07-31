@@ -591,125 +591,6 @@ primary key (id)
   tablet_62344.kill_vttablet()
 
 @utils.test_case
-def run_test_mysqlctl_split():
-  utils.zk_wipe()
-
-  # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force test_keyspace')
-
-  tablet_62344.init_tablet('master', 'test_keyspace', '0')
-  utils.run_vtctl('RebuildShardGraph test_keyspace/0')
-  utils.validate_topology()
-
-  tablet_62344.populate('vt_test_keyspace', create_vt_insert_test,
-                        populate_vt_insert_test)
-
-  tablet_62344.start_vttablet()
-
-  err = tablet_62344.mysqlctl('-port %u -mysql-port %u partialsnapshot -end=0000000000000003 vt_test_keyspace id' % (tablet_62344.port, tablet_62344.mysql_port)).wait()
-  if err != 0:
-    raise utils.TestError('mysqlctl partialsnapshot failed')
-
-
-  utils.pause("partialsnapshot finished")
-
-  tablet_62044.mquery('', 'stop slave')
-  tablet_62044.create_db('vt_test_keyspace')
-  call(["touch", "/tmp/vtSimulateFetchFailures"])
-  err = tablet_62044.mysqlctl('-port %u -mysql-port %u partialrestore %s/snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/partial_snapshot_manifest.json' % (tablet_62044.port, tablet_62044.mysql_port, utils.vtdataroot)).wait()
-  if err != 0:
-    raise utils.TestError('mysqlctl partialrestore failed')
-
-  tablet_62044.assert_table_count('vt_test_keyspace', 'vt_insert_test', 2)
-
-  # change/add two values on the master, one in range, one out of range, make
-  # sure the right one propagate and not the other
-  utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
-  tablet_62344.mquery('vt_test_keyspace', "insert into vt_insert_test (id, msg) values (5, 'test should not propagate')", write=True)
-  tablet_62344.mquery('vt_test_keyspace', "update vt_insert_test set msg='test should propagate' where id=2", write=True)
-
-  utils.pause("look at db now!")
-
-  # wait until value that should have been changed is here
-  timeout = 10
-  while timeout > 0:
-    result = tablet_62044.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=2')
-    if result[0][0] == "test should propagate":
-      break
-    timeout -= 1
-    time.sleep(1)
-  if timeout == 0:
-    raise utils.TestError("expected propagation to happen", result)
-
-  # test value that should not propagate
-  # this part is disabled now, as the replication pruning is only enabled
-  # for row-based replication, but the mysql server is statement based.
-  # will re-enable once we get statement-based pruning patch into mysql.
-#  tablet_62044.assert_table_count('vt_test_keyspace', 'vt_insert_test', 0, 'where id=5')
-
-  tablet_62344.kill_vttablet()
-
-def _run_test_vtctl_partial_clone(create, populate,
-                                  start, end):
-  utils.zk_wipe()
-
-  # Start up a master mysql and vttablet
-  utils.run_vtctl('CreateKeyspace -force snapshot_test')
-
-  tablet_62344.init_tablet('master', 'snapshot_test', '0')
-  utils.run_vtctl('RebuildShardGraph snapshot_test/0')
-  utils.validate_topology()
-
-  tablet_62344.populate('vt_snapshot_test', create, populate)
-
-  tablet_62344.start_vttablet()
-
-  tablet_62044.init_tablet('idle', start=True)
-
-  # FIXME(alainjobart): not sure where the right place for this is,
-  # but it doesn't seem it should right here. It should be either in
-  # InitTablet (running an action on the vttablet), or in PartialClone
-  # (instead of doing a 'USE dbname' it could do a 'CREATE DATABASE
-  # dbname').
-  tablet_62044.mquery('', 'stop slave')
-  tablet_62044.create_db('vt_snapshot_test')
-  call(["touch", "/tmp/vtSimulateFetchFailures"])
-  utils.run_vtctl('PartialClone -force %s %s id %s %s' %
-                  (tablet_62344.tablet_alias, tablet_62044.tablet_alias,
-                   start, end))
-
-  utils.pause("after PartialClone")
-
-  # grab the new tablet definition from zk, make sure the start and
-  # end keys are set properly
-  out = utils.zk_cat(tablet_62044.zk_tablet_path)
-  if '"Start": "%s"' % start not in out or '"End": "%s"' % end not in out:
-    print "Tablet output:"
-    print "out"
-    raise utils.TestError('wrong Start or End')
-
-  tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 2)
-
-  utils.validate_topology()
-
-  tablet_62344.kill_vttablet()
-  tablet_62044.kill_vttablet()
-
-@utils.test_case
-def run_test_vtctl_partial_clone():
-  _run_test_vtctl_partial_clone(create_vt_insert_test,
-                                populate_vt_insert_test,
-                                '0000000000000000',
-                                '0000000000000003')
-
-@utils.test_case
-def run_test_vtctl_partial_clone_varbinary():
-  _run_test_vtctl_partial_clone(create_vt_insert_test_varbinary,
-                                populate_vt_insert_test_varbinary,
-                                '00000000000000000000',
-                                '03000000000000000000')
-
-@utils.test_case
 def run_test_restart_during_action():
   # Start up a master mysql and vttablet
   utils.run_vtctl('CreateKeyspace -force test_keyspace')
@@ -1241,10 +1122,6 @@ def run_all():
   # run_test_vtctl_snapshot_restore_server()
   run_test_vtctl_clone()
   run_test_vtctl_clone_server()
-
-  # This test does not pass as it requires an experimental mysql patch.
-  #run_test_vtctl_partial_clone()
-  #run_test_vtctl_partial_clone_varbinary()
 
   test_multisnapshot_vtctl()
   test_multisnapshot_mysqlctl()

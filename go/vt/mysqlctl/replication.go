@@ -22,7 +22,6 @@ import (
 
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/relog"
-	"github.com/youtube/vitess/go/vt/key"
 )
 
 const (
@@ -111,23 +110,6 @@ func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) ([]st
 
 	return []string{
 		"STOP SLAVE",
-		"RESET SLAVE",
-		cmc,
-		"START SLAVE"}, nil
-}
-
-func StartSplitReplicationCommands(mysqld *Mysqld, replState *ReplicationState, keyRange key.KeyRange) ([]string, error) {
-	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
-	startKey := string(keyRange.Start.Hex())
-	endKey := string(keyRange.End.Hex())
-	cmc, err := fillStringTemplate(changeMasterCmd, nmd)
-	if err != nil {
-		return nil, err
-	}
-	return []string{
-		"SET GLOBAL vt_enable_binlog_splitter_rbr = 1",
-		"SET GLOBAL vt_shard_key_range_start = \"" + startKey + "\"",
-		"SET GLOBAL vt_shard_key_range_end = \"" + endKey + "\"",
 		"RESET SLAVE",
 		cmc,
 		"START SLAVE"}, nil
@@ -505,27 +487,6 @@ func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
 		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", query, err.Error())
 		}
-	}
-	return nil
-}
-
-func (mysqld *Mysqld) ConfigureKeyRange(startKey, endKey key.HexKeyspaceId) error {
-	replicationCmds := []string{
-		"SET GLOBAL vt_enable_binlog_splitter_rbr = 1",
-		"SET GLOBAL vt_shard_key_range_start = \"0x" + string(startKey) + "\"",
-		"SET GLOBAL vt_shard_key_range_end = \"0x" + string(endKey) + "\""}
-	if err := mysqld.executeSuperQueryList(replicationCmds); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (mysqld *Mysqld) ResetKeyRange() error {
-	replicationCmds := []string{
-		"SET GLOBAL vt_shard_key_range_start = \"\"",
-		"SET GLOBAL vt_shard_key_range_end = \"\""}
-	if err := mysqld.executeSuperQueryList(replicationCmds); err != nil {
-		return err
 	}
 	return nil
 }
