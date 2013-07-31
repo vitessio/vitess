@@ -296,7 +296,7 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 
 func main() {
 	flag.Parse()
-	servenv.Init("vt_binlog_player")
+	servenv.Init()
 
 	if *startPosFile == "" {
 		log.Fatalf("start-pos-file was not supplied.")

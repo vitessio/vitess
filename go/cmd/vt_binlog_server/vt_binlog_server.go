@@ -32,7 +32,7 @@ var (
 
 func main() {
 	flag.Parse()
-	servenv.Init("vt_binlog_server")
+	servenv.Init()
 
 	if *mycnfFile == "" {
 		log.Fatalf("Please specify the path for mycnf file.")
