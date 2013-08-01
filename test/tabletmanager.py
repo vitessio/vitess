@@ -665,6 +665,8 @@ def run_test_reparent_down_master():
   utils.validate_topology()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
+  for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    t.reset_replication()
   utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + tablet_62344.tablet_alias, auto_log=True)
   utils.validate_topology()
 
@@ -763,6 +765,8 @@ def _run_test_reparent_graceful(shard_id):
   utils.validate_topology()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
+  for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    t.reset_replication()
   utils.pause("force ReparentShard?")
   utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
   utils.validate_topology(ping_tablets=True)
@@ -832,6 +836,8 @@ def run_test_reparent_slave_offline(shard_id='0'):
   utils.validate_topology()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
+  for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    t.reset_replication()
   utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
   utils.validate_topology(ping_tablets=True)
 
@@ -864,10 +870,8 @@ def _run_test_reparent_from_outside(brutal=False):
   utils.run_vtctl('CreateKeyspace test_keyspace')
 
   # create the database so vttablets start, as they are serving
-  tablet_62344.create_db('vt_test_keyspace')
-  tablet_62044.create_db('vt_test_keyspace')
-  tablet_41983.create_db('vt_test_keyspace')
-  tablet_31981.create_db('vt_test_keyspace')
+  for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    t.create_db('vt_test_keyspace')
 
   # Start up a master mysql and vttablet
   tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
@@ -878,7 +882,9 @@ def _run_test_reparent_from_outside(brutal=False):
   tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True)
 
   # Reparent as a starting point
-  utils.run_vtctl('ReparentShard -force test_keyspace/0 %s' % tablet_62344.tablet_alias)
+  for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    t.reset_replication()
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 %s' % tablet_62344.tablet_alias, auto_log=True)
 
   # now manually reparent 1 out of 2 tablets
   # 62044 will be the new master
@@ -964,6 +970,8 @@ def run_test_reparent_lag_slave(shard_id='0'):
   utils.validate_topology()
 
   # Force the slaves to reparent assuming that all the datasets are identical.
+  for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    t.reset_replication()
   utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
   utils.validate_topology(ping_tablets=True)
 

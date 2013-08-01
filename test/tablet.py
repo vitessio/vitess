@@ -140,6 +140,14 @@ class Tablet(object):
     if result[0][0] != n:
       raise utils.TestError("expected %u rows in %s" % (n, table), result)
 
+  def reset_replication(self):
+    self.mquery('', [
+        'RESET MASTER',
+        'STOP SLAVE',
+        'RESET SLAVE',
+        'CHANGE MASTER TO MASTER_HOST = ""',
+        ])
+
   def populate(self, dbname, create_sql, insert_sqls=[]):
       self.create_db(dbname)
       if isinstance(create_sql, basestring):

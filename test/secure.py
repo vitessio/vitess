@@ -213,6 +213,8 @@ def run_test_secure():
       })
 
   # Reparent using SSL
+  for t in [shard_0_master, shard_0_slave]:
+    t.reset_replication()
   utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
 
   # then get the topology and check it

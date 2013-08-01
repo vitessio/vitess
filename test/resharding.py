@@ -4,9 +4,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-# FIXME(alainjobart) This test does not pass. It is a work in progress
-# for resharding.
-
 import utils
 import tablet
 
@@ -127,6 +124,8 @@ def run_test_resharding():
   shard_1_replica.start_vttablet()
 
   # reparent to make the tablets work
+  for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+    t.reset_replication()
   utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
   utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.tablet_alias, auto_log=True)
 
