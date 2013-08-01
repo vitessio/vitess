@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
@@ -112,8 +111,6 @@ type Blp struct {
 	keyspaceRange    key.KeyRange
 	keyrangeTag      string
 	globalState      *BinlogServer
-	logMetadata      *mysqlctl.SlaveMetadata
-	usingRelayLogs   bool
 	binlogPrefix     string
 	//FIXME: this is for debug, remove it.
 	currentLine string
@@ -126,7 +123,6 @@ func NewBlp(startCoordinates *mysqlctl.ReplicationCoordinates, blServer *BinlogS
 	blp.keyspaceRange = *keyRange
 	blp.currentPosition = &mysqlctl.BlPosition{}
 	blp.currentPosition.Position = *startCoordinates
-	blp.currentPosition.Position.RelayPosition = 0
 	blp.inTxn = false
 	blp.initialSeek = true
 	blp.txnLineBuffer = make([]*eventBuffer, 0, mysqlctl.MAX_TXN_BATCH)
@@ -217,14 +213,7 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *mysqlctl.BinlogReader, rea
 			readErrChan <- err.(error)
 		}
 	}()
-	if blp.usingRelayLogs {
-		//we use RelayPosition for initial seek in case the caller has precise coordinates. But the code
-		//is designed to primarily use RelayFilename, MasterFilename and MasterPosition to correctly start
-		//streaming the logs if relay logs are being used.
-		blr.ServeData(writer, path.Base(blp.startPosition.RelayFilename), int64(blp.startPosition.RelayPosition))
-	} else {
-		blr.ServeData(writer, blp.startPosition.MasterFilename, int64(blp.startPosition.MasterPosition))
-	}
+	blr.ServeData(writer, blp.startPosition.MasterFilename, int64(blp.startPosition.MasterPosition))
 	readErrChan <- nil
 }
 
@@ -262,11 +251,6 @@ func (blp *Blp) parseBinlogEvents(sendReply mysqlctl.SendUpdateStreamResponse, b
 			blp.parsePositionData(line)
 		} else {
 			//parse event data
-
-			//This is to accont for replicas where we seek to a point before the desired startPosition
-			if blp.initialSeek && blp.usingRelayLogs && blp.nextStmtPosition < blp.startPosition.MasterPosition {
-				continue
-			}
 
 			if readAhead {
 				event.LogLine = append(event.LogLine, line...)
@@ -459,29 +443,11 @@ func (blp *Blp) parseRotateEvent(line []byte) {
 		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting rotate pos %v from line %s", err, string(line))))
 	}
 
-	if !blp.usingRelayLogs {
-		//If the file being parsed is a binlog,
-		//then the rotate events only correspond to itself.
-		blp.currentPosition.Position.MasterFilename = rotateFilename
-		blp.currentPosition.Position.MasterPosition = rotatePos
-		blp.globalState.parseStats.Add("BinlogRotate."+blp.keyrangeTag, 1)
-	} else {
-		//For relay logs, the rotate events could be that of relay log or the binlog,
-		//the prefix of rotateFilename is used to test which case is it.
-		logsDir, relayFile := path.Split(blp.currentPosition.Position.RelayFilename)
-		currentPrefix := strings.Split(relayFile, ".")[0]
-		rotatePrefix := strings.Split(rotateFilename, ".")[0]
-		if currentPrefix == rotatePrefix {
-			//relay log rotated
-			blp.currentPosition.Position.RelayFilename = path.Join(logsDir, rotateFilename)
-			blp.globalState.parseStats.Add("RelayRotate."+blp.keyrangeTag, 1)
-		} else {
-			//master file rotated
-			blp.currentPosition.Position.MasterFilename = rotateFilename
-			blp.currentPosition.Position.MasterPosition = rotatePos
-			blp.globalState.parseStats.Add("BinlogRotate."+blp.keyrangeTag, 1)
-		}
-	}
+	//If the file being parsed is a binlog,
+	//then the rotate events only correspond to itself.
+	blp.currentPosition.Position.MasterFilename = rotateFilename
+	blp.currentPosition.Position.MasterPosition = rotatePos
+	blp.globalState.parseStats.Add("BinlogRotate."+blp.keyrangeTag, 1)
 }
 
 /*
@@ -529,13 +495,6 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 		return
 	}
 
-	if blp.usingRelayLogs {
-		for !blp.slavePosBehindReplication() {
-			relog.Info("[%v:%v] parsing is not behind replication, sleeping", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex())
-			time.Sleep(2 * time.Second)
-		}
-	}
-
 	commitEvent.BlPosition.Xid = blp.currentPosition.Xid
 	commitEvent.BlPosition.GroupId = blp.currentPosition.GroupId
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
@@ -555,36 +514,6 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 
 	blp.globalState.dmlCount.Add("DmlCount."+blp.keyrangeTag, dmlCount)
 	blp.globalState.txnCount.Add("TxnCount."+blp.keyrangeTag, 1)
-}
-
-//This function determines whether streaming is behind replication as it should be.
-func (blp *Blp) slavePosBehindReplication() bool {
-	repl, err := blp.logMetadata.GetCurrentReplicationPosition()
-	if err != nil {
-		relog.Error(err.Error())
-		panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
-	}
-	currentCoord := blp.currentPosition.Position
-	if repl.MasterFilename == currentCoord.MasterFilename {
-		if currentCoord.MasterPosition <= repl.MasterPosition {
-			return true
-		}
-	} else {
-		replExt, err := strconv.ParseUint(strings.Split(repl.MasterFilename, ".")[1], 10, 64)
-		if err != nil {
-			relog.Error(err.Error())
-			panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
-		}
-		parseExt, err := strconv.ParseUint(strings.Split(currentCoord.MasterFilename, ".")[1], 10, 64)
-		if err != nil {
-			relog.Error(err.Error())
-			panic(NewBinlogParseError(fmt.Sprintf("Error in obtaining current replication position %v", err)))
-		}
-		if replExt >= parseExt {
-			return true
-		}
-	}
-	return false
 }
 
 //This builds BinlogResponse for each transaction.
@@ -779,21 +708,10 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 		panic(NewBinlogParseError("Invalid request, cannot serve the stream"))
 	}
 
-	usingRelayLogs := false
-	var binlogPrefix, logsDir string
-	if req.StartPosition.RelayFilename != "" {
-		usingRelayLogs = true
-		binlogPrefix = blServer.mycnf.RelayLogPath
-		logsDir = path.Dir(binlogPrefix)
-		if !mysqlctl.IsRelayPositionValid(&req.StartPosition, logsDir) {
-			panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
-		}
-	} else {
-		binlogPrefix = blServer.mycnf.BinLogPath
-		logsDir = path.Dir(binlogPrefix)
-		if !mysqlctl.IsMasterPositionValid(&req.StartPosition) {
-			panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
-		}
+	binlogPrefix := blServer.mycnf.BinLogPath
+	logsDir := path.Dir(binlogPrefix)
+	if !mysqlctl.IsMasterPositionValid(&req.StartPosition) {
+		panic(NewBinlogParseError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
 	}
 
 	startKey, err := key.HexKeyspaceId(req.KeyspaceStart).Unhex()
@@ -807,11 +725,9 @@ func (blServer *BinlogServer) ServeBinlog(req *mysqlctl.BinlogServerRequest, sen
 	keyRange := &key.KeyRange{Start: startKey, End: endKey}
 
 	blp := NewBlp(&req.StartPosition, blServer, keyRange)
-	blp.usingRelayLogs = usingRelayLogs
 	blp.binlogPrefix = binlogPrefix
-	blp.logMetadata = mysqlctl.NewSlaveMetadata(logsDir, blServer.mycnf.RelayLogInfoPath)
 
-	relog.Info("usingRelayLogs %v blp.binlogPrefix %v logsDir %v", blp.usingRelayLogs, blp.binlogPrefix, logsDir)
+	relog.Info("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)
 	blp.streamBinlog(sendReply)
 	return nil
 }
