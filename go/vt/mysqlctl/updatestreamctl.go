@@ -203,7 +203,7 @@ func (updateStream *UpdateStream) getReplicationPosition() (*ReplicationCoordina
 	if err != nil {
 		return nil, err
 	}
-	return NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition)), nil
+	return NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition), rp.MasterLogGroupId), nil
 }
 
 func GetReplicationPosition() (*ReplicationCoordinates, error) {

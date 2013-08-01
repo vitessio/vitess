@@ -76,7 +76,6 @@ type BinlogPosition struct {
 	Position  ReplicationCoordinates
 	Timestamp int64
 	Xid       uint64
-	GroupId   string
 }
 
 func (pos *BinlogPosition) String() string {
@@ -102,9 +101,6 @@ func (pos *BinlogPosition) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Ulong, "Xid")
 	bson.EncodeUint64(buf, pos.Xid)
 
-	bson.EncodePrefix(buf, bson.Binary, "GroupId")
-	bson.EncodeString(buf, pos.GroupId)
-
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
@@ -117,6 +113,10 @@ func (pos *BinlogPosition) encodeReplCoordinates(buf *bytes2.ChunkedWriter) {
 
 	bson.EncodePrefix(buf, bson.Ulong, "MasterPosition")
 	bson.EncodeUint64(buf, pos.Position.MasterPosition)
+
+	bson.EncodePrefix(buf, bson.Binary, "GroupId")
+	bson.EncodeString(buf, pos.Position.GroupId)
+
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
@@ -134,8 +134,6 @@ func (pos *BinlogPosition) UnmarshalBson(buf *bytes.Buffer) {
 			pos.Timestamp = bson.DecodeInt64(buf, kind)
 		case "Xid":
 			pos.Xid = bson.DecodeUint64(buf, kind)
-		case "GroupId":
-			pos.GroupId = bson.DecodeString(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -154,6 +152,8 @@ func (pos *BinlogPosition) decodeReplCoordBson(buf *bytes.Buffer, kind byte) {
 			pos.Position.MasterFilename = bson.DecodeString(buf, kind)
 		case "MasterPosition":
 			pos.Position.MasterPosition = bson.DecodeUint64(buf, kind)
+		case "GroupId":
+			pos.Position.GroupId = bson.DecodeString(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -238,10 +238,7 @@ type Blp struct {
 func NewBlp(startCoordinates *ReplicationCoordinates, updateStream *UpdateStream) *Blp {
 	blp := &Blp{}
 	blp.startPosition = startCoordinates
-	currentCoord := NewReplicationCoordinates(
-		startCoordinates.MasterFilename,
-		startCoordinates.MasterPosition)
-	blp.currentPosition = &BinlogPosition{Position: *currentCoord}
+	blp.currentPosition = &BinlogPosition{Position: *startCoordinates}
 	blp.inTxn = false
 	blp.initialSeek = true
 	blp.txnLineBuffer = make([]*eventBuffer, 0, MAX_TXN_BATCH)
@@ -319,7 +316,7 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 				err = NewBinlogParseError(REPLICATION_ERROR, "EOF, but parse position behind replication")
 			} else {
 				time.Sleep(5.0 * time.Second)
-				blp.startPosition = NewReplicationCoordinates(blp.currentPosition.Position.MasterFilename, blp.currentPosition.Position.MasterPosition)
+				*blp.startPosition = blp.currentPosition.Position
 				continue
 			}
 		}

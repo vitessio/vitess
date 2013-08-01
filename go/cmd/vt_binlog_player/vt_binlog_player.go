@@ -274,12 +274,12 @@ func (blp *BinlogPlayer) updatePort(port int, uid uint32, useDb string) {
 	}
 }
 
-func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.ReplicationCoordinates, groupId string) {
+func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.ReplicationCoordinates) {
 	blp.recoveryState.Position = *currentPosition
 	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY,
 		currentPosition.MasterFilename,
 		currentPosition.MasterPosition,
-		groupId,
+		currentPosition.GroupId,
 		time.Now().Unix(),
 		blp.recoveryState.Uid)
 
@@ -633,7 +633,7 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 	if err = blp.dbClient.Begin(); err != nil {
 		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
 	}
-	blp.WriteRecoveryPosition(&ddlEvent.Position, ddlEvent.BlPosition.GroupId)
+	blp.WriteRecoveryPosition(&ddlEvent.Position)
 	if err = blp.dbClient.Commit(); err != nil {
 		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 	}
@@ -736,7 +736,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 			lookupStartTime = time.Now()
 			blp.handleLookupWrites(indexUpdates)
 			blp.txnTime.Record("LookupTxn", lookupStartTime)
-			blp.WriteRecoveryPosition(&dmlEvent.Position, dmlEvent.BlPosition.GroupId)
+			blp.WriteRecoveryPosition(&dmlEvent.Position)
 			if err = blp.dbClient.Commit(); err != nil {
 				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 			}

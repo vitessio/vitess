@@ -417,7 +417,7 @@ func (blp *Blp) parseGroupId(line []byte) {
 	rem := bytes.SplitN(line, mysqlctl.BINLOG_GROUP_ID, 2)
 	rem2 := bytes.SplitN(rem[1], mysqlctl.SPACE, 2)
 	groupId := strings.TrimSpace(string(rem2[0]))
-	blp.currentPosition.GroupId = groupId
+	blp.currentPosition.Position.GroupId = groupId
 }
 
 func (blp *Blp) extractEventTimestamp(event *eventBuffer) {
@@ -496,7 +496,7 @@ func (blp *Blp) handleCommitEvent(sendReply mysqlctl.SendUpdateStreamResponse, c
 	}
 
 	commitEvent.BlPosition.Xid = blp.currentPosition.Xid
-	commitEvent.BlPosition.GroupId = blp.currentPosition.GroupId
+	commitEvent.BlPosition.Position.GroupId = blp.currentPosition.Position.GroupId
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	//txn block for DMLs, parse it and send events for a txn
 	var dmlCount int64

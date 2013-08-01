@@ -7,25 +7,23 @@ from net import gorpc
 from net import bsonrpc
 from vtdb import dbexceptions
 
-class ReplPosition(object):
+class ReplicationCoordinates(object):
   MasterFilename = None
   MasterPosition = None
-  RelayFilename = None
-  RelayPosition = None
+  GroupId        = None
 
-  def __init__(self, master_filename, master_position):
+  def __init__(self, master_filename, master_position, group_id):
     self.MasterFilename = master_filename
     self.MasterPosition = master_position
+    self.GroupId = group_id
 
 class Coord(object):
   Position = None
   Timestamp = None
   Xid = None
-  GroupId = None
 
   def __init__(self, master_filename, master_position, group_id=None):
-    self.Position = ReplPosition(master_filename, master_position).__dict__
-    self.GroupId = group_id
+    self.Position = ReplicationCoordinates(master_filename, master_position, group_id).__dict__
 
 
 class EventData(object):
