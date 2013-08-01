@@ -22,11 +22,11 @@ class Coord(object):
   Timestamp = None
   Xid = None
   GroupId = None
-  
-  def __init__(self, master_filename, master_position, group_id=0): 
+
+  def __init__(self, master_filename, master_position, group_id=None):
     self.Position = ReplPosition(master_filename, master_position).__dict__
     self.GroupId = group_id
-  
+
 
 class EventData(object):
   SqlType = None

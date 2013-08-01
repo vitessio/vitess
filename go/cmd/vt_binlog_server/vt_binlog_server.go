@@ -432,11 +432,7 @@ func (blp *Blp) parseXid(line []byte) {
 func (blp *Blp) parseGroupId(line []byte) {
 	rem := bytes.SplitN(line, mysqlctl.BINLOG_GROUP_ID, 2)
 	rem2 := bytes.SplitN(rem[1], mysqlctl.SPACE, 2)
-	groupIdStr := strings.TrimSpace(string(rem2[0]))
-	groupId, err := strconv.ParseUint(groupIdStr, 10, 64)
-	if err != nil {
-		panic(NewBinlogParseError(fmt.Sprintf("Error in extracting group_id %v, sql %v", err, string(line))))
-	}
+	groupId := strings.TrimSpace(string(rem2[0]))
 	blp.currentPosition.GroupId = groupId
 }
 

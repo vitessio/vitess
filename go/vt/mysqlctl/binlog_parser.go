@@ -77,7 +77,7 @@ type BinlogPosition struct {
 	Position  ReplicationCoordinates
 	Timestamp int64
 	Xid       uint64
-	GroupId   uint64
+	GroupId   string
 }
 
 func (pos *BinlogPosition) String() string {
@@ -103,8 +103,8 @@ func (pos *BinlogPosition) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Ulong, "Xid")
 	bson.EncodeUint64(buf, pos.Xid)
 
-	bson.EncodePrefix(buf, bson.Ulong, "GroupId")
-	bson.EncodeUint64(buf, pos.GroupId)
+	bson.EncodePrefix(buf, bson.Binary, "GroupId")
+	bson.EncodeString(buf, pos.GroupId)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -142,7 +142,7 @@ func (pos *BinlogPosition) UnmarshalBson(buf *bytes.Buffer) {
 		case "Xid":
 			pos.Xid = bson.DecodeUint64(buf, kind)
 		case "GroupId":
-			pos.GroupId = bson.DecodeUint64(buf, kind)
+			pos.GroupId = bson.DecodeString(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}

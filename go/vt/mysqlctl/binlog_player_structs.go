@@ -8,7 +8,7 @@ type BlPosition struct {
 	Position  ReplicationCoordinates
 	Timestamp int64
 	Xid       uint64
-	GroupId   uint64
+	GroupId   string
 }
 
 type BinlogResponse struct {

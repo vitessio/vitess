@@ -20,7 +20,7 @@ CREATE TABLE _vt.blp_checkpoint (
   master_position bigint(20) unsigned NOT NULL,
   relay_filename varchar(255) default NULL,
   relay_position bigint(20) unsigned default 0,
-  group_id bigint(20) unsigned default 0,
+  group_id varchar(255) default NULL,
   keyrange_start varchar(32) NOT NULL,
   keyrange_end varchar(32) NOT NULL,
   txn_timestamp int(10) unsigned NOT NULL,
