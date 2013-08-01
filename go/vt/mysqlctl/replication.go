@@ -29,11 +29,32 @@ const (
 	InvalidLagSeconds  = 0xFFFFFFFF
 )
 
+// ReplicationPosition tracks the replication position on both a master
+// and a slave.
 type ReplicationPosition struct {
-	MasterLogFile       string
-	MasterLogPosition   uint
-	MasterLogFileIo     string // how much has been read, but not applied
+	// MasterLogFile, MasterLogPosition and MasterLogGroupId are
+	// the position on the logs for transactions that have been
+	// applied (SQL position):
+	// - on the master, it's File, Position and Group_ID from
+	//   'show master status'.
+	// - on the slave, it's Relay_Master_Log_File, Exec_Master_Log_Pos
+	//   and Exec_Master_Group_ID from 'show slave status'.
+	MasterLogFile     string
+	MasterLogPosition uint
+	MasterLogGroupId  uint64
+
+	// MasterLogFileIo and MasterLogPositionIo are the position on the logs
+	// that have been downloaded from the master (IO position),
+	// but not necessarely applied yet:
+	// - on the master, same as MasterLogFile and MasterLogPosition.
+	// - on the slave, it's Master_Log_File and Read_Master_Log_Pos
+	//   from 'show slave status'.
+	MasterLogFileIo     string
 	MasterLogPositionIo uint
+
+	// SecondsBehindMaster is how far behind we are in applying logs in
+	// replication. If equal to InvalidLagSeconds, it means replication
+	// is not running.
 	SecondsBehindMaster uint
 }
 
@@ -76,9 +97,6 @@ var changeMasterCmd = `CHANGE MASTER TO
   MASTER_LOG_POS = {{.ReplicationState.ReplicationPosition.MasterLogPosition}},
   MASTER_CONNECT_RETRY = {{.ReplicationState.MasterConnectRetry}}
 `
-
-//  RELAY_LOG_FILE = '{{.ReplicationPosition.RelayLogFile}}',
-//  RELAY_LOG_POS = {{.ReplicationPosition.RelayLogPosition}},
 
 type newMasterData struct {
 	ReplicationState *ReplicationState
@@ -300,6 +318,7 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPositionIo = uint(temp)
+	pos.MasterLogGroupId, _ = strconv.ParseUint(fields["Exec_Master_Group_ID"], 10, 0)
 
 	if fields["Slave_IO_Running"] == "Yes" && fields["Slave_SQL_Running"] == "Yes" {
 		temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
@@ -318,6 +337,7 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
  Position: 106
  Binlog_Do_DB:
  Binlog_Ignore_DB:
+ Group_ID:
 */
 func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
@@ -331,6 +351,9 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	rp.MasterLogFile = qr.Rows[0][0].String()
 	temp, err := strconv.ParseUint(qr.Rows[0][1].String(), 10, 0)
 	rp.MasterLogPosition = uint(temp)
+	if len(qr.Rows[0]) >= 5 {
+		rp.MasterLogGroupId, err = strconv.ParseUint(qr.Rows[0][4].String(), 10, 0)
+	}
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
 	rp.MasterLogFileIo = rp.MasterLogFile
@@ -413,6 +436,8 @@ func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
  Last_IO_Error:
  Last_SQL_Errno: 0
  Last_SQL_Error:
+ Exec_Master_Group_ID: 14
+ Connect_Using_Group_ID: No
 */
 var showSlaveStatusColumnNames = []string{
 	"Slave_IO_State",
@@ -453,6 +478,8 @@ var showSlaveStatusColumnNames = []string{
 	"Last_IO_Error",
 	"Last_SQL_Errno",
 	"Last_SQL_Error",
+	"Exec_Master_Group_ID",
+	"Connect_Using_Group_ID",
 }
 
 func (mysqld *Mysqld) executeSuperQuery(query string) error {
