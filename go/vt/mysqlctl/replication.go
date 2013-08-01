@@ -41,7 +41,7 @@ type ReplicationPosition struct {
 	//   and Exec_Master_Group_ID from 'show slave status'.
 	MasterLogFile     string
 	MasterLogPosition uint
-	MasterLogGroupId  uint64
+	MasterLogGroupId  string
 
 	// MasterLogFileIo and MasterLogPositionIo are the position on the logs
 	// that have been downloaded from the master (IO position),
@@ -318,7 +318,7 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPositionIo = uint(temp)
-	pos.MasterLogGroupId, _ = strconv.ParseUint(fields["Exec_Master_Group_ID"], 10, 0)
+	pos.MasterLogGroupId = fields["Exec_Master_Group_ID"]
 
 	if fields["Slave_IO_Running"] == "Yes" && fields["Slave_SQL_Running"] == "Yes" {
 		temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
@@ -352,7 +352,7 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	temp, err := strconv.ParseUint(qr.Rows[0][1].String(), 10, 0)
 	rp.MasterLogPosition = uint(temp)
 	if len(qr.Rows[0]) >= 5 {
-		rp.MasterLogGroupId, err = strconv.ParseUint(qr.Rows[0][4].String(), 10, 0)
+		rp.MasterLogGroupId = qr.Rows[0][4].String()
 	}
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
