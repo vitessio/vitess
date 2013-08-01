@@ -902,7 +902,8 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 				port,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
-				"", 0, 0,
+				"", 0,
+				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
 				keyRange.Start.Hex(),
 				keyRange.End.Hex(),
 				time.Now().Unix())
