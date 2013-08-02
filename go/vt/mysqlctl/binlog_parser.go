@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	parser "github.com/youtube/vitess/go/vt/sqlparser"
@@ -73,64 +71,10 @@ var (
 	SEMICOLON_BYTE         = []byte(";")
 )
 
-type BinlogPosition struct {
-	Position  proto.ReplicationCoordinates
-	Timestamp int64
-	Xid       uint64
-}
-
-func (pos *BinlogPosition) String() string {
-	return fmt.Sprintf("%v:%v", pos.Position.MasterFilename, pos.Position.MasterPosition)
-}
-
-func (pos *BinlogPosition) Valid() bool {
-	if pos.Position.MasterFilename == "" || pos.Position.MasterPosition == 0 {
-		return false
-	}
-	return true
-}
-
-func (pos *BinlogPosition) MarshalBson(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodePrefix(buf, bson.Object, "Position")
-	pos.Position.MarshalBson(buf)
-
-	bson.EncodePrefix(buf, bson.Long, "Timestamp")
-	bson.EncodeUint64(buf, uint64(pos.Timestamp))
-
-	bson.EncodePrefix(buf, bson.Ulong, "Xid")
-	bson.EncodeUint64(buf, pos.Xid)
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (pos *BinlogPosition) UnmarshalBson(buf *bytes.Buffer) {
-	bson.Next(buf, 4)
-
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Position":
-			pos.Position = proto.ReplicationCoordinates{}
-			pos.Position.UnmarshalBson(buf)
-		case "Timestamp":
-			pos.Timestamp = bson.DecodeInt64(buf, kind)
-		case "Xid":
-			pos.Xid = bson.DecodeUint64(buf, kind)
-		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 //Api Interface
 type UpdateResponse struct {
 	Error string
-	Coord BinlogPosition
+	Coord proto.BinlogPosition
 	Data  EventData
 }
 
@@ -144,12 +88,12 @@ type EventData struct {
 
 //Raw event buffer used to gather data during parsing.
 type eventBuffer struct {
-	Coord   BinlogPosition
+	Coord   proto.BinlogPosition
 	LogLine []byte
 	firstKw string
 }
 
-func NewEventBuffer(pos *BinlogPosition, line []byte) *eventBuffer {
+func NewEventBuffer(pos *proto.BinlogPosition, line []byte) *eventBuffer {
 	buf := &eventBuffer{}
 	buf.LogLine = make([]byte, len(line))
 	written := copy(buf.LogLine, line)
@@ -192,7 +136,7 @@ type Blp struct {
 	responseStream   []*UpdateResponse
 	initialSeek      bool
 	startPosition    *proto.ReplicationCoordinates
-	currentPosition  *BinlogPosition
+	currentPosition  *proto.BinlogPosition
 	globalState      *UpdateStream
 	dbmatch          bool
 	blpStats
@@ -201,7 +145,7 @@ type Blp struct {
 func NewBlp(startCoordinates *proto.ReplicationCoordinates, updateStream *UpdateStream) *Blp {
 	blp := &Blp{}
 	blp.startPosition = startCoordinates
-	blp.currentPosition = &BinlogPosition{Position: *startCoordinates}
+	blp.currentPosition = &proto.BinlogPosition{Position: *startCoordinates}
 	blp.inTxn = false
 	blp.initialSeek = true
 	blp.txnLineBuffer = make([]*eventBuffer, 0, MAX_TXN_BATCH)
@@ -760,7 +704,7 @@ func parseStreamComment(dmlComment string, autoincId uint64) (EventNode *parser.
 }
 
 //This builds UpdateResponse from the parsed tree, also handles a multi-row update.
-func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos BinlogPosition) (response *UpdateResponse) {
+func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos proto.BinlogPosition) (response *UpdateResponse) {
 	if eventTree.Len() < 3 {
 		panic(NewBinlogParseError(EVENT_ERROR, fmt.Sprintf("Invalid comment structure, len of tree %v", eventTree.Len())))
 	}
@@ -832,7 +776,7 @@ func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateRespons
 }
 
 //This sends the error to the client.
-func SendError(sendReply SendUpdateStreamResponse, inputErr error, blpPos *BinlogPosition) {
+func SendError(sendReply SendUpdateStreamResponse, inputErr error, blpPos *proto.BinlogPosition) {
 	streamBuf := new(UpdateResponse)
 	streamBuf.Error = inputErr.Error()
 	if blpPos != nil {

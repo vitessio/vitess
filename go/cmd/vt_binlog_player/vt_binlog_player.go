@@ -576,8 +576,8 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 				blp.flushTxnBatch()
 			}
 		}
-		if binlogResponse.BlPosition.Position.MasterFilename != "" {
-			panic(fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.BlPosition.Position.String(), binlogResponse.Error))
+		if binlogResponse.BinlogPosition.Position.MasterFilename != "" {
+			panic(fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.BinlogPosition.Position.String(), binlogResponse.Error))
 		} else {
 			panic(fmt.Errorf("Error encountered from server %v", binlogResponse.Error))
 		}

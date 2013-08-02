@@ -8,15 +8,9 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-type BlPosition struct {
-	Position  proto.ReplicationCoordinates
-	Timestamp int64
-	Xid       uint64
-}
-
 type BinlogResponse struct {
 	Error string
-	BlPosition
+	proto.BinlogPosition
 	BinlogData
 }
 
