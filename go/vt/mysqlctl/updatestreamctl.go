@@ -15,6 +15,7 @@ import (
 	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 /* API and config for UpdateStream Service */
@@ -198,19 +199,19 @@ func (updateStream *UpdateStream) clientDone() {
 	updateStream.stateWaitGroup.Done()
 }
 
-func (updateStream *UpdateStream) getReplicationPosition() (*ReplicationCoordinates, error) {
+func (updateStream *UpdateStream) getReplicationPosition() (*proto.ReplicationCoordinates, error) {
 	rp, err := updateStream.mysqld.MasterStatus()
 	if err != nil {
 		return nil, err
 	}
-	return NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition), rp.MasterLogGroupId), nil
+	return proto.NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition), rp.MasterLogGroupId), nil
 }
 
-func GetReplicationPosition() (*ReplicationCoordinates, error) {
+func GetReplicationPosition() (*proto.ReplicationCoordinates, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
-func IsMasterPositionValid(startCoordinates *ReplicationCoordinates) bool {
+func IsMasterPositionValid(startCoordinates *proto.ReplicationCoordinates) bool {
 	if startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
 		return false
 	}

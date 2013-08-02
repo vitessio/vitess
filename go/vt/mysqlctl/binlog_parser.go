@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	parser "github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -73,7 +74,7 @@ var (
 )
 
 type BinlogPosition struct {
-	Position  ReplicationCoordinates
+	Position  proto.ReplicationCoordinates
 	Timestamp int64
 	Xid       uint64
 }
@@ -93,29 +94,13 @@ func (pos *BinlogPosition) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodePrefix(buf, bson.Object, "Position")
-	pos.encodeReplCoordinates(buf)
+	pos.Position.MarshalBson(buf)
 
 	bson.EncodePrefix(buf, bson.Long, "Timestamp")
 	bson.EncodeUint64(buf, uint64(pos.Timestamp))
 
 	bson.EncodePrefix(buf, bson.Ulong, "Xid")
 	bson.EncodeUint64(buf, pos.Xid)
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (pos *BinlogPosition) encodeReplCoordinates(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodePrefix(buf, bson.Binary, "MasterFilename")
-	bson.EncodeString(buf, pos.Position.MasterFilename)
-
-	bson.EncodePrefix(buf, bson.Ulong, "MasterPosition")
-	bson.EncodeUint64(buf, pos.Position.MasterPosition)
-
-	bson.EncodePrefix(buf, bson.Binary, "GroupId")
-	bson.EncodeString(buf, pos.Position.GroupId)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -129,31 +114,12 @@ func (pos *BinlogPosition) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Position":
-			pos.decodeReplCoordBson(buf, kind)
+			pos.Position = proto.ReplicationCoordinates{}
+			pos.Position.UnmarshalBson(buf)
 		case "Timestamp":
 			pos.Timestamp = bson.DecodeInt64(buf, kind)
 		case "Xid":
 			pos.Xid = bson.DecodeUint64(buf, kind)
-		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
-func (pos *BinlogPosition) decodeReplCoordBson(buf *bytes.Buffer, kind byte) {
-	pos.Position = ReplicationCoordinates{}
-	bson.Next(buf, 4)
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "MasterFilename":
-			pos.Position.MasterFilename = bson.DecodeString(buf, kind)
-		case "MasterPosition":
-			pos.Position.MasterPosition = bson.DecodeUint64(buf, kind)
-		case "GroupId":
-			pos.Position.GroupId = bson.DecodeString(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -190,10 +156,7 @@ func NewEventBuffer(pos *BinlogPosition, line []byte) *eventBuffer {
 	if written < len(line) {
 		relog.Warning("Logline not properly copied while creating new event written: %v len: %v", written, len(line))
 	}
-	buf.Coord.Position = ReplicationCoordinates{
-		MasterFilename: pos.Position.MasterFilename,
-		MasterPosition: pos.Position.MasterPosition,
-	}
+	buf.Coord.Position = pos.Position
 	buf.Coord.Timestamp = pos.Timestamp
 	return buf
 }
@@ -228,14 +191,14 @@ type Blp struct {
 	txnLineBuffer    []*eventBuffer
 	responseStream   []*UpdateResponse
 	initialSeek      bool
-	startPosition    *ReplicationCoordinates
+	startPosition    *proto.ReplicationCoordinates
 	currentPosition  *BinlogPosition
 	globalState      *UpdateStream
 	dbmatch          bool
 	blpStats
 }
 
-func NewBlp(startCoordinates *ReplicationCoordinates, updateStream *UpdateStream) *Blp {
+func NewBlp(startCoordinates *proto.ReplicationCoordinates, updateStream *UpdateStream) *Blp {
 	blp := &Blp{}
 	blp.startPosition = startCoordinates
 	blp.currentPosition = &BinlogPosition{Position: *startCoordinates}

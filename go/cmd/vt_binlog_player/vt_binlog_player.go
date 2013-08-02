@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	cproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
@@ -90,7 +91,7 @@ type binlogRecoveryState struct {
 	Uid           uint32
 	Host          string
 	Port          int
-	Position      mysqlctl.ReplicationCoordinates
+	Position      cproto.ReplicationCoordinates
 	KeyrangeStart string //hex string
 	KeyrangeEnd   string //hex string
 }
@@ -274,7 +275,7 @@ func (blp *BinlogPlayer) updatePort(port int, uid uint32, useDb string) {
 	}
 }
 
-func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.ReplicationCoordinates) {
+func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.ReplicationCoordinates) {
 	blp.recoveryState.Position = *currentPosition
 	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY,
 		currentPosition.MasterFilename,
@@ -436,8 +437,8 @@ func createLookupClient(lookupConfigFile, dbCredFile string) (*DBClient, error) 
 	return lookupClient, nil
 }
 
-func getStartPosition(qr *proto.QueryResult) (*mysqlctl.ReplicationCoordinates, error) {
-	startPosition := &mysqlctl.ReplicationCoordinates{}
+func getStartPosition(qr *proto.QueryResult) (*cproto.ReplicationCoordinates, error) {
+	startPosition := &cproto.ReplicationCoordinates{}
 	row := qr.Rows[0]
 	for i, field := range qr.Fields {
 		switch strings.ToLower(field.Name) {
@@ -455,6 +456,11 @@ func getStartPosition(qr *proto.QueryResult) (*mysqlctl.ReplicationCoordinates, 
 					return nil, fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
 				}
 				startPosition.MasterPosition = masterPos
+			}
+		case "group_id":
+			val := row[i]
+			if !val.IsNull() {
+				startPosition.GroupId = val.String()
 			}
 		default:
 			continue
