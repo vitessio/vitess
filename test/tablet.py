@@ -378,4 +378,3 @@ class Tablet(object):
   def check_vttablet_count(klass):
     if Tablet.tablets_running > 0:
       raise utils.TestError("This test is not killing all its vttablets")
-    
