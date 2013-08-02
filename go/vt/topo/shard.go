@@ -208,7 +208,7 @@ func CreateShard(ts Server, keyspace, shard string) error {
 		TYPE_RDONLY:  true,
 	}
 	sis, err := FindAllShardsInKeyspace(ts, keyspace)
-	if err != nil {
+	if err != nil && err != ErrNoNode {
 		return err
 	}
 	for _, si := range sis {

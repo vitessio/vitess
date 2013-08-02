@@ -94,9 +94,12 @@ type Server interface {
 	ValidateShard(keyspace, shard string) error
 
 	// GetShard reads a shard and returns it.
+	// Can return ErrNoNode
 	GetShard(keyspace, shard string) (si *ShardInfo, err error)
 
 	// GetShardNames returns the known shards in a keyspace.
+	// Can return ErrNoNode if the keyspace wasn't created,
+	// or if DeleteKeyspaceShards was called.
 	GetShardNames(keyspace string) ([]string, error)
 
 	//
