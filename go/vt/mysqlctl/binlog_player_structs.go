@@ -4,8 +4,12 @@
 
 package mysqlctl
 
+import (
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+)
+
 type BlPosition struct {
-	Position  ReplicationCoordinates
+	Position  proto.ReplicationCoordinates
 	Timestamp int64
 	Xid       uint64
 }
@@ -17,7 +21,7 @@ type BinlogResponse struct {
 }
 
 type BinlogServerRequest struct {
-	StartPosition ReplicationCoordinates
+	StartPosition proto.ReplicationCoordinates
 	KeyspaceStart string
 	KeyspaceEnd   string
 }

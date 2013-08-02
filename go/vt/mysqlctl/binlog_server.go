@@ -18,6 +18,7 @@ import (
 	"github.com/youtube/vitess/go/relog"
 	gstats "github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 const (
@@ -88,7 +89,7 @@ type Bls struct {
 	txnLineBuffer    []*blsEventBuffer
 	responseStream   []*BinlogResponse
 	initialSeek      bool
-	startPosition    *ReplicationCoordinates
+	startPosition    *proto.ReplicationCoordinates
 	currentPosition  *BlPosition
 	dbmatch          bool
 	keyspaceRange    key.KeyRange
@@ -100,7 +101,7 @@ type Bls struct {
 	blsStats    *blsStats
 }
 
-func NewBls(startCoordinates *ReplicationCoordinates, blServer *BinlogServer, keyRange *key.KeyRange) *Bls {
+func NewBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServer, keyRange *key.KeyRange) *Bls {
 	blp := &Bls{}
 	blp.startPosition = startCoordinates
 	blp.keyspaceRange = *keyRange
