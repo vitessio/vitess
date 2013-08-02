@@ -87,7 +87,7 @@ type Bls struct {
 	nextStmtPosition uint64
 	inTxn            bool
 	txnLineBuffer    []*blsEventBuffer
-	responseStream   []*BinlogResponse
+	responseStream   []*proto.BinlogResponse
 	initialSeek      bool
 	startPosition    *proto.ReplicationCoordinates
 	currentPosition  *proto.BinlogPosition
@@ -110,7 +110,7 @@ func NewBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServ
 	blp.inTxn = false
 	blp.initialSeek = true
 	blp.txnLineBuffer = make([]*blsEventBuffer, 0, MAX_TXN_BATCH)
-	blp.responseStream = make([]*BinlogResponse, 0, MAX_TXN_BATCH)
+	blp.responseStream = make([]*proto.BinlogResponse, 0, MAX_TXN_BATCH)
 	blp.globalState = blServer
 	//by default assume that the db matches.
 	blp.dbmatch = true
@@ -133,7 +133,7 @@ func (err BinlogServerError) Error() string {
 	return err.Msg
 }
 
-func (blp *Bls) streamBinlog(sendReply SendUpdateStreamResponse) {
+func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse) {
 	var readErr error
 	defer func() {
 		reqIdentifier := fmt.Sprintf("%v, line: '%v'", blp.currentPosition.Position.String(), blp.currentLine)
@@ -202,7 +202,7 @@ func (blp *Bls) getBinlogStream(writer *os.File, blr *BinlogReader, readErrChan 
 }
 
 //Main parse loop
-func (blp *Bls) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogReader io.Reader) {
+func (blp *Bls) parseBinlogEvents(sendReply proto.SendBinlogResponse, binlogReader io.Reader) {
 	// read over the stream and buffer up the transactions
 	var err error
 	var line []byte
@@ -336,7 +336,7 @@ func (blp *Bls) parsePositionData(line []byte) {
 	}
 }
 
-func (blp *Bls) parseEventData(sendReply SendUpdateStreamResponse, event *blsEventBuffer) {
+func (blp *Bls) parseEventData(sendReply proto.SendBinlogResponse, event *blsEventBuffer) {
 	if bytes.HasPrefix(event.LogLine, BINLOG_SET_TIMESTAMP) {
 		blp.extractEventTimestamp(event)
 		blp.initialSeek = false
@@ -456,25 +456,25 @@ func (blp *Bls) handleBeginEvent(event *blsEventBuffer) {
 }
 
 //This creates the response for DDL event.
-func blsCreateDdlStream(lineBuffer *blsEventBuffer) (ddlStream *BinlogResponse) {
-	ddlStream = new(BinlogResponse)
-	ddlStream.BinlogPosition = lineBuffer.BinlogPosition
-	ddlStream.SqlType = DDL
-	ddlStream.Sql = make([]string, 0, 1)
-	ddlStream.Sql = append(ddlStream.Sql, string(lineBuffer.LogLine))
+func blsCreateDdlStream(lineBuffer *blsEventBuffer) (ddlStream *proto.BinlogResponse) {
+	ddlStream = new(proto.BinlogResponse)
+	ddlStream.Position = lineBuffer.BinlogPosition
+	ddlStream.Data.SqlType = DDL
+	ddlStream.Data.Sql = make([]string, 0, 1)
+	ddlStream.Data.Sql = append(ddlStream.Data.Sql, string(lineBuffer.LogLine))
 	return ddlStream
 }
 
-func (blp *Bls) handleDdlEvent(sendReply SendUpdateStreamResponse, event *blsEventBuffer) {
+func (blp *Bls) handleDdlEvent(sendReply proto.SendBinlogResponse, event *blsEventBuffer) {
 	ddlStream := blsCreateDdlStream(event)
-	buf := []*BinlogResponse{ddlStream}
+	buf := []*proto.BinlogResponse{ddlStream}
 	if err := blsSendStream(sendReply, buf); err != nil {
 		panic(NewBinlogServerError(fmt.Sprintf("Error in sending event to client %v", err)))
 	}
 	blp.globalState.blsStats.parseStats.Add("DdlCount."+blp.keyrangeTag, 1)
 }
 
-func (blp *Bls) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEvent *blsEventBuffer) {
+func (blp *Bls) handleCommitEvent(sendReply proto.SendBinlogResponse, commitEvent *blsEventBuffer) {
 	if !blp.dbmatch {
 		return
 	}
@@ -501,7 +501,7 @@ func (blp *Bls) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEven
 }
 
 //This builds BinlogResponse for each transaction.
-func (blp *Bls) buildTxnResponse() (txnResponseList []*BinlogResponse, dmlCount int64) {
+func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dmlCount int64) {
 	var line []byte
 	var keyspaceIdStr string
 	var keyspaceId key.KeyspaceId
@@ -511,9 +511,9 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*BinlogResponse, dmlCount 
 	for _, event := range blp.txnLineBuffer {
 		line = event.LogLine
 		if bytes.HasPrefix(line, BINLOG_BEGIN) {
-			streamBuf := new(BinlogResponse)
-			streamBuf.BinlogPosition = event.BinlogPosition
-			streamBuf.SqlType = BEGIN
+			streamBuf := new(proto.BinlogResponse)
+			streamBuf.Position = event.BinlogPosition
+			streamBuf.Data.SqlType = BEGIN
 			txnResponseList = append(txnResponseList, streamBuf)
 			continue
 		}
@@ -537,8 +537,8 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*BinlogResponse, dmlCount 
 			//extract index ids.
 			dmlBuffer = append(dmlBuffer, string(line))
 			dmlEvent := blp.createDmlEvent(event, keyspaceIdStr)
-			dmlEvent.Sql = make([]string, len(dmlBuffer))
-			dmlLines := copy(dmlEvent.Sql, dmlBuffer)
+			dmlEvent.Data.Sql = make([]string, len(dmlBuffer))
+			dmlLines := copy(dmlEvent.Data.Sql, dmlBuffer)
 			if dmlLines < len(dmlBuffer) {
 				relog.Warning("The entire dml buffer was not properly copied")
 			}
@@ -553,20 +553,20 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*BinlogResponse, dmlCount 
 	return txnResponseList, dmlCount
 }
 
-func (blp *Bls) createDmlEvent(eventBuf *blsEventBuffer, keyspaceId string) (dmlEvent *BinlogResponse) {
+func (blp *Bls) createDmlEvent(eventBuf *blsEventBuffer, keyspaceId string) (dmlEvent *proto.BinlogResponse) {
 	//parse keyspace id
 	//for inserts check for index comments
-	dmlEvent = new(BinlogResponse)
-	dmlEvent.BinlogPosition = eventBuf.BinlogPosition
-	dmlEvent.SqlType = GetDmlType(eventBuf.firstKw)
-	dmlEvent.KeyspaceId = keyspaceId
+	dmlEvent = new(proto.BinlogResponse)
+	dmlEvent.Position = eventBuf.BinlogPosition
+	dmlEvent.Data.SqlType = GetDmlType(eventBuf.firstKw)
+	dmlEvent.Data.KeyspaceId = keyspaceId
 	indexType, indexId, userId := parseIndex(eventBuf.LogLine)
 	if userId != 0 {
-		dmlEvent.UserId = userId
+		dmlEvent.Data.UserId = userId
 	}
 	if indexType != "" {
-		dmlEvent.IndexType = indexType
-		dmlEvent.IndexId = indexId
+		dmlEvent.Data.IndexType = indexType
+		dmlEvent.Data.IndexId = indexId
 	}
 	return dmlEvent
 }
@@ -631,14 +631,14 @@ func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint6
 }
 
 //This creates the response for COMMIT event.
-func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *BinlogResponse) {
-	streamBuf = new(BinlogResponse)
-	streamBuf.BinlogPosition = eventBuf.BinlogPosition
-	streamBuf.SqlType = COMMIT
+func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *proto.BinlogResponse) {
+	streamBuf = new(proto.BinlogResponse)
+	streamBuf.Position = eventBuf.BinlogPosition
+	streamBuf.Data.SqlType = COMMIT
 	return
 }
 
-func isRequestValid(req *BinlogServerRequest) bool {
+func isRequestValid(req *proto.BinlogServerRequest) bool {
 	if req.StartPosition.MasterFilename == "" || req.StartPosition.MasterPosition == 0 {
 		return false
 	}
@@ -649,7 +649,7 @@ func isRequestValid(req *BinlogServerRequest) bool {
 }
 
 //This sends the stream to the client.
-func blsSendStream(sendReply SendUpdateStreamResponse, responseBuf []*BinlogResponse) (err error) {
+func blsSendStream(sendReply proto.SendBinlogResponse, responseBuf []*proto.BinlogResponse) (err error) {
 	for _, event := range responseBuf {
 		err = sendReply(event)
 		if err != nil {
@@ -660,21 +660,21 @@ func blsSendStream(sendReply SendUpdateStreamResponse, responseBuf []*BinlogResp
 }
 
 //This sends the error to the client.
-func sendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputErr error, blpPos *proto.BinlogPosition) {
+func sendError(sendReply proto.SendBinlogResponse, reqIdentifier string, inputErr error, blpPos *proto.BinlogPosition) {
 	var err error
-	streamBuf := new(BinlogResponse)
+	streamBuf := new(proto.BinlogResponse)
 	streamBuf.Error = inputErr.Error()
 	if blpPos != nil {
-		streamBuf.BinlogPosition = *blpPos
+		streamBuf.Position = *blpPos
 	}
-	buf := []*BinlogResponse{streamBuf}
+	buf := []*proto.BinlogResponse{streamBuf}
 	err = blsSendStream(sendReply, buf)
 	if err != nil {
 		relog.Error("Error in communicating message %v with the client: %v", inputErr, err)
 	}
 }
 
-func (blServer *BinlogServer) ServeBinlog(req *BinlogServerRequest, sendReply SendUpdateStreamResponse) error {
+func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendReply proto.SendBinlogResponse) error {
 	defer func() {
 		if x := recover(); x != nil {
 			//Send the error to the client.

@@ -20,6 +20,7 @@ import (
 	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
@@ -43,7 +44,7 @@ func main() {
 
 	binlogServer := mysqlctl.NewBinlogServer(mycnf, *dbname)
 
-	rpc.Register(binlogServer)
+	proto.RegisterBinlogServer(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)
 	//bsonrpc.ServeAuthRPC()
 
