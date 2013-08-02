@@ -34,7 +34,6 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
-var stdout *bufio.Writer
 var interrupted = make(chan struct{})
 
 const (
@@ -105,22 +104,24 @@ type VtClient interface {
 	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error)
 }
 
-type dummyVtClient struct{}
+type dummyVtClient struct {
+	stdout *bufio.Writer
+}
 
 func (dc dummyVtClient) Connect() (*mysql.Connection, error) {
 	return nil, nil
 }
 
 func (dc dummyVtClient) Begin() error {
-	stdout.WriteString("BEGIN;\n")
+	dc.stdout.WriteString("BEGIN;\n")
 	return nil
 }
 func (dc dummyVtClient) Commit() error {
-	stdout.WriteString("COMMIT;\n")
+	dc.stdout.WriteString("COMMIT;\n")
 	return nil
 }
 func (dc dummyVtClient) Rollback() error {
-	stdout.WriteString("ROLLBACK;\n")
+	dc.stdout.WriteString("ROLLBACK;\n")
 	return nil
 }
 func (dc dummyVtClient) Close() {
@@ -128,7 +129,7 @@ func (dc dummyVtClient) Close() {
 }
 
 func (dc dummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
-	stdout.WriteString(string(query) + ";\n")
+	dc.stdout.WriteString(string(query) + ";\n")
 	return nil, nil
 }
 
@@ -197,7 +198,7 @@ func (dc DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*pr
 	return &qr, nil
 }
 
-type blpStats struct {
+type blplStats struct {
 	queryCount    *stats.Counters
 	txnCount      *stats.Counters
 	queriesPerSec *stats.Rates
@@ -207,8 +208,8 @@ type blpStats struct {
 	lookupTxn     *stats.Timings
 }
 
-func NewBlpStats() *blpStats {
-	bs := &blpStats{}
+func NewBlplStats() *blplStats {
+	bs := &blplStats{}
 	bs.txnCount = stats.NewCounters("TxnCount")
 	bs.queryCount = stats.NewCounters("QueryCount")
 	bs.queriesPerSec = stats.NewRates("QueriesPerSec", bs.queryCount, 15, 60e9)
@@ -236,7 +237,7 @@ type BinlogPlayer struct {
 	txnBatch       int
 	maxTxnInterval time.Duration
 	execDdl        bool
-	*blpStats
+	blplStats      *blplStats
 }
 
 func NewBinlogPlayer(startPosition *binlogRecoveryState, port int, krStart, krEnd key.KeyspaceId) *BinlogPlayer {
@@ -259,7 +260,7 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, port int, krStart, krEn
 	blp.inTxn = false
 	blp.txnBuffer = make([]*cproto.BinlogResponse, 0, mysqlctl.MAX_TXN_BATCH)
 	blp.debug = false
-	blp.blpStats = NewBlpStats()
+	blp.blplStats = NewBlplStats()
 	blp.batchStart = time.Now()
 	return blp
 }
@@ -288,7 +289,7 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
 		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
 	}
-	blp.txnTime.Record("QueryTime", queryStartTime)
+	blp.blplStats.txnTime.Record("QueryTime", queryStartTime)
 	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
 		relog.Info("SLOW QUERY '%v'", updateRecovery)
 	}
@@ -347,7 +348,6 @@ func main() {
 	})
 
 	//Make a request to the server and start processing the events.
-	stdout = bufio.NewWriterSize(os.Stdout, 16*1024)
 	err = blp.applyBinlogEvents()
 	if err != nil {
 		relog.Error("Error in applying binlog events, err %v", err)
@@ -515,9 +515,10 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 	binlogPlayer := NewBinlogPlayer(startPosition, port, krStart, krEnd)
 
 	if debug {
+		stdout := bufio.NewWriterSize(os.Stdout, 16*1024)
 		binlogPlayer.debug = true
-		binlogPlayer.dbClient = dummyVtClient{}
-		binlogPlayer.lookupClient = dummyVtClient{}
+		binlogPlayer.dbClient = dummyVtClient{stdout}
+		binlogPlayer.lookupClient = dummyVtClient{stdout}
 	} else {
 		binlogPlayer.dbClient = *dbClient
 
@@ -741,16 +742,16 @@ func (blp *BinlogPlayer) handleTxn() bool {
 			}
 			lookupStartTime = time.Now()
 			blp.handleLookupWrites(indexUpdates)
-			blp.txnTime.Record("LookupTxn", lookupStartTime)
+			blp.blplStats.txnTime.Record("LookupTxn", lookupStartTime)
 			blp.WriteRecoveryPosition(&dmlEvent.Position.Position)
 			if err = blp.dbClient.Commit(); err != nil {
 				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 			}
 			//added 1 for recovery dml
 			queryCount += 2
-			blp.queryCount.Add("QueryCount", queryCount)
-			blp.txnCount.Add("TxnCount", int64(blp.txnIndex))
-			blp.txnTime.Record("TxnTime", txnStartTime)
+			blp.blplStats.queryCount.Add("QueryCount", queryCount)
+			blp.blplStats.txnCount.Add("TxnCount", int64(blp.txnIndex))
+			blp.blplStats.txnTime.Record("TxnTime", txnStartTime)
 		case "update", "delete", "insert":
 			if blp.dmlTableMatch(dmlEvent.Data.Sql) {
 				dmlMatch += 1
@@ -780,7 +781,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 						}
 						panic(err)
 					}
-					blp.txnTime.Record("QueryTime", queryStartTime)
+					blp.blplStats.txnTime.Record("QueryTime", queryStartTime)
 				}
 				queryCount += int64(len(dmlEvent.Data.Sql))
 			}

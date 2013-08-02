@@ -56,7 +56,7 @@ type blsStats struct {
 	txnsPerSec    *estats.Rates
 }
 
-func NewBlsStats() *blsStats {
+func newBlsStats() *blsStats {
 	bs := &blsStats{}
 	bs.parseStats = estats.NewCounters("")
 	bs.txnCount = estats.NewCounters("")
@@ -99,7 +99,7 @@ type blsEventBuffer struct {
 	firstKw string
 }
 
-func NewBlsEventBuffer(pos *proto.BinlogPosition, line []byte) *blsEventBuffer {
+func newBlsEventBuffer(pos *proto.BinlogPosition, line []byte) *blsEventBuffer {
 	buf := &blsEventBuffer{}
 	buf.LogLine = make([]byte, len(line))
 	//buf.LogLine = append(buf.LogLine, line...)
@@ -130,7 +130,7 @@ type Bls struct {
 	blsStats    *blsStats
 }
 
-func NewBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServer, keyRange *key.KeyRange) *Bls {
+func newBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServer, keyRange *key.KeyRange) *Bls {
 	blp := &Bls{}
 	blp.startPosition = startCoordinates
 	blp.keyspaceRange = *keyRange
@@ -154,7 +154,7 @@ type BinlogServerError struct {
 	Msg string
 }
 
-func NewBinlogServerError(msg string) *BinlogServerError {
+func newBinlogServerError(msg string) *BinlogServerError {
 	return &BinlogServerError{Msg: msg}
 }
 
@@ -191,7 +191,7 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted cha
 
 	blrReader, blrWriter, pipeErr = os.Pipe()
 	if pipeErr != nil {
-		panic(NewBinlogServerError(pipeErr.Error()))
+		panic(newBinlogServerError(pipeErr.Error()))
 	}
 	defer blrWriter.Close()
 	defer blrReader.Close()
@@ -204,7 +204,7 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted cha
 	binlogDecoder := new(BinlogDecoder)
 	binlogReader, err = binlogDecoder.DecodeMysqlBinlog(blrReader)
 	if err != nil {
-		panic(NewBinlogServerError(err.Error()))
+		panic(newBinlogServerError(err.Error()))
 	}
 
 	//This function monitors the exit of read data pipeline.
@@ -254,9 +254,9 @@ func (blp *Bls) parseBinlogEvents(sendReply proto.SendBinlogResponse, binlogRead
 			if err == io.EOF {
 				//end of stream
 				blp.globalState.blsStats.parseStats.Add("EOFErrors."+blp.keyrangeTag, 1)
-				panic(NewBinlogServerError(fmt.Sprintf("EOF")))
+				panic(newBinlogServerError(fmt.Sprintf("EOF")))
 			}
-			panic(NewBinlogServerError(fmt.Sprintf("ReadLine err: , %v", err)))
+			panic(newBinlogServerError(fmt.Sprintf("ReadLine err: , %v", err)))
 		}
 		if len(line) == 0 {
 			continue
@@ -273,7 +273,7 @@ func (blp *Bls) parseBinlogEvents(sendReply proto.SendBinlogResponse, binlogRead
 			if readAhead {
 				event.LogLine = append(event.LogLine, line...)
 			} else {
-				event = NewBlsEventBuffer(blp.currentPosition, line)
+				event = newBlsEventBuffer(blp.currentPosition, line)
 			}
 
 			delimIndex = bytes.LastIndex(event.LogLine, BINLOG_DELIMITER)
@@ -398,7 +398,7 @@ func (blp *Bls) parseEventData(sendReply proto.SendBinlogResponse, event *blsEve
 				for _, dml := range blp.txnLineBuffer {
 					lineBuf = append(lineBuf, dml.LogLine)
 				}
-				panic(NewBinlogServerError(fmt.Sprintf("DML outside a txn - len %v, dml '%v', txn buffer '%v'", len(blp.txnLineBuffer), string(event.LogLine), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
+				panic(newBinlogServerError(fmt.Sprintf("DML outside a txn - len %v, dml '%v', txn buffer '%v'", len(blp.txnLineBuffer), string(event.LogLine), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
 			}
 			//Ignore these often occuring statement types.
 			if !IgnoredStatement(event.LogLine) {
@@ -418,7 +418,7 @@ func (blp *Bls) parseMasterPosition(line []byte) {
 	masterPosStr := string(bytes.SplitN(rem[1], SPACE, 2)[0])
 	blp.nextStmtPosition, err = strconv.ParseUint(masterPosStr, 10, 64)
 	if err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Error in extracting master position, %v, sql %v, pos string %v", err, string(line), masterPosStr)))
+		panic(newBinlogServerError(fmt.Sprintf("Error in extracting master position, %v, sql %v, pos string %v", err, string(line), masterPosStr)))
 	}
 }
 
@@ -426,7 +426,7 @@ func (blp *Bls) parseXid(line []byte) {
 	rem := bytes.SplitN(line, BINLOG_XID, 2)
 	xid, err := strconv.ParseUint(string(rem[1]), 10, 64)
 	if err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Error in extracting Xid position %v, sql %v", err, string(line))))
+		panic(newBinlogServerError(fmt.Sprintf("Error in extracting Xid position %v, sql %v", err, string(line))))
 	}
 	blp.currentPosition.Xid = xid
 }
@@ -442,11 +442,11 @@ func (blp *Bls) extractEventTimestamp(event *blsEventBuffer) {
 	line := event.LogLine
 	timestampStr := string(line[len(BINLOG_SET_TIMESTAMP):])
 	if timestampStr == "" {
-		panic(NewBinlogServerError(fmt.Sprintf("Invalid timestamp line %v", string(line))))
+		panic(newBinlogServerError(fmt.Sprintf("Invalid timestamp line %v", string(line))))
 	}
 	currentTimestamp, err := strconv.ParseInt(timestampStr, 10, 64)
 	if err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Error in extracting timestamp %v, sql %v", err, string(line))))
+		panic(newBinlogServerError(fmt.Sprintf("Error in extracting timestamp %v, sql %v", err, string(line))))
 	}
 	blp.currentPosition.Timestamp = currentTimestamp
 	event.BinlogPosition.Timestamp = currentTimestamp
@@ -458,7 +458,7 @@ func (blp *Bls) parseRotateEvent(line []byte) {
 	rotateFilename := strings.TrimSpace(string(rem2[0]))
 	rotatePos, err := strconv.ParseUint(string(rem2[1]), 10, 64)
 	if err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Error in extracting rotate pos %v from line %s", err, string(line))))
+		panic(newBinlogServerError(fmt.Sprintf("Error in extracting rotate pos %v from line %s", err, string(line))))
 	}
 
 	//If the file being parsed is a binlog,
@@ -479,7 +479,7 @@ func (blp *Bls) handleBeginEvent(event *blsEventBuffer) {
 			for _, event := range blp.txnLineBuffer {
 				lineBuf = append(lineBuf, event.LogLine)
 			}
-			panic(NewBinlogServerError(fmt.Sprintf("BEGIN encountered with non-empty trxn buffer, len: %d, buf %v", len(blp.txnLineBuffer), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
+			panic(newBinlogServerError(fmt.Sprintf("BEGIN encountered with non-empty trxn buffer, len: %d, buf %v", len(blp.txnLineBuffer), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
 		} else {
 			relog.Warning("Non-zero txn buffer, while inTxn false")
 		}
@@ -503,7 +503,7 @@ func (blp *Bls) handleDdlEvent(sendReply proto.SendBinlogResponse, event *blsEve
 	ddlStream := blsCreateDdlStream(event)
 	buf := []*proto.BinlogResponse{ddlStream}
 	if err := blsSendStream(sendReply, buf); err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Error in sending event to client %v", err)))
+		panic(newBinlogServerError(fmt.Sprintf("Error in sending event to client %v", err)))
 	}
 	blp.globalState.blsStats.parseStats.Add("DdlCount."+blp.keyrangeTag, 1)
 }
@@ -527,7 +527,7 @@ func (blp *Bls) handleCommitEvent(sendReply proto.SendBinlogResponse, commitEven
 	}
 
 	if err := blsSendStream(sendReply, blp.responseStream); err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Error in sending event to client %v", err)))
+		panic(newBinlogServerError(fmt.Sprintf("Error in sending event to client %v", err)))
 	}
 
 	blp.globalState.blsStats.dmlCount.Add("DmlCount."+blp.keyrangeTag, dmlCount)
@@ -620,17 +620,17 @@ func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspace
 			relog.Warning("Ignoring no keyspace id, control db stmt %v", string(sql))
 			return
 		}
-		panic(NewBinlogServerError(fmt.Sprintf("Invalid Sql, doesn't contain keyspace id, sql: %v", string(sql))))
+		panic(newBinlogServerError(fmt.Sprintf("Invalid Sql, doesn't contain keyspace id, sql: %v", string(sql))))
 	}
 	seekIndex := keyspaceIndex + len(KEYSPACE_ID_COMMENT)
 	keyspaceIdComment := sql[seekIndex:]
 	keyspaceIdStr = string(bytes.TrimSpace(bytes.SplitN(keyspaceIdComment, USER_ID, 2)[0]))
 	if keyspaceIdStr == "" {
-		panic(NewBinlogServerError(fmt.Sprintf("Invalid keyspace id, sql %v", string(sql))))
+		panic(newBinlogServerError(fmt.Sprintf("Invalid keyspace id, sql %v", string(sql))))
 	}
 	keyspaceIdUint, err := strconv.ParseUint(keyspaceIdStr, 10, 64)
 	if err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Invalid keyspaceid, error converting it, sql %v", string(sql))))
+		panic(newBinlogServerError(fmt.Sprintf("Invalid keyspaceid, error converting it, sql %v", string(sql))))
 	}
 	keyspaceId = key.Uint64Key(keyspaceIdUint).KeyspaceId()
 	return keyspaceIdStr, keyspaceId
@@ -640,7 +640,7 @@ func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint6
 	var err error
 	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
 	if keyspaceIndex == -1 {
-		panic(NewBinlogServerError(fmt.Sprintf("Error parsing index comment, doesn't contain keyspace id %v", string(sql))))
+		panic(newBinlogServerError(fmt.Sprintf("Error parsing index comment, doesn't contain keyspace id %v", string(sql))))
 	}
 	keyspaceIdComment := sql[keyspaceIndex+len(KEYSPACE_ID_COMMENT):]
 	indexCommentStart := bytes.Index(keyspaceIdComment, INDEX_COMMENT)
@@ -648,7 +648,7 @@ func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint6
 		indexCommentParts := bytes.SplitN(keyspaceIdComment[indexCommentStart:], COLON_BYTE, 2)
 		userId, err = strconv.ParseUint(string(bytes.SplitN(indexCommentParts[1], SPACE, 2)[0]), 10, 64)
 		if err != nil {
-			panic(NewBinlogServerError(fmt.Sprintf("Error converting user_id %v", string(sql))))
+			panic(newBinlogServerError(fmt.Sprintf("Error converting user_id %v", string(sql))))
 		}
 		indexNameId := bytes.Split(indexCommentParts[0], DOT_BYTE)
 		indexName = string(indexNameId[1])
@@ -657,7 +657,7 @@ func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint6
 		} else {
 			indexId, err = strconv.ParseUint(string(bytes.TrimRight(indexNameId[2], COLON)), 10, 64)
 			if err != nil {
-				panic(NewBinlogServerError(fmt.Sprintf("Error converting index id %v %v", string(bytes.TrimRight(indexNameId[2], COLON)), string(sql))))
+				panic(newBinlogServerError(fmt.Sprintf("Error converting index id %v %v", string(bytes.TrimRight(indexNameId[2], COLON)), string(sql))))
 			}
 		}
 	}
@@ -687,7 +687,7 @@ func blsSendStream(sendReply proto.SendBinlogResponse, responseBuf []*proto.Binl
 	for _, event := range responseBuf {
 		err = sendReply(event)
 		if err != nil {
-			return NewBinlogServerError(fmt.Sprintf("Error in sending reply to client, %v", err))
+			return newBinlogServerError(fmt.Sprintf("Error in sending reply to client, %v", err))
 		}
 	}
 	return nil
@@ -723,29 +723,29 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 
 	relog.Info("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
 	if !blServer.isServiceEnabled() {
-		panic(NewBinlogServerError("Binlog Server is disabled"))
+		panic(newBinlogServerError("Binlog Server is disabled"))
 	}
 	if !isRequestValid(req) {
-		panic(NewBinlogServerError("Invalid request, cannot serve the stream"))
+		panic(newBinlogServerError("Invalid request, cannot serve the stream"))
 	}
 
 	binlogPrefix := blServer.mycnf.BinLogPath
 	logsDir := path.Dir(binlogPrefix)
 	if !IsMasterPositionValid(&req.StartPosition) {
-		panic(NewBinlogServerError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
+		panic(newBinlogServerError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
 	}
 
 	startKey, err := key.HexKeyspaceId(req.KeyspaceStart).Unhex()
 	if err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceStart)))
+		panic(newBinlogServerError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceStart)))
 	}
 	endKey, err := key.HexKeyspaceId(req.KeyspaceEnd).Unhex()
 	if err != nil {
-		panic(NewBinlogServerError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceEnd)))
+		panic(newBinlogServerError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceEnd)))
 	}
 	keyRange := &key.KeyRange{Start: startKey, End: endKey}
 
-	blp := NewBls(&req.StartPosition, blServer, keyRange)
+	blp := newBls(&req.StartPosition, blServer, keyRange)
 	blp.binlogPrefix = binlogPrefix
 
 	relog.Info("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)
@@ -772,7 +772,7 @@ func (blServer *BinlogServer) statsJSON() string {
 func NewBinlogServer(mycnf *Mycnf) *BinlogServer {
 	binlogServer := new(BinlogServer)
 	binlogServer.mycnf = mycnf
-	binlogServer.blsStats = NewBlsStats()
+	binlogServer.blsStats = newBlsStats()
 	binlogServer.states = estats.NewStates("", []string{
 		"Disabled",
 		"Enabled",
@@ -806,6 +806,7 @@ func DisableBinlogServerService(blServer *BinlogServer) {
 		return
 	}
 	blServer.setState(BINLOG_SERVER_DISABLED)
+	close(blServer.interrupted)
 	relog.Info("Binlog Server Disabled")
 }
 
