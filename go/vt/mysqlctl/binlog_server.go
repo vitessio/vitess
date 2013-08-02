@@ -85,6 +85,11 @@ type BinlogServer struct {
 	blsStats *blsStats
 	state    sync2.AtomicInt32
 	states   *estats.States
+
+	// interrupted is used to stop the serving clients when the service
+	// gets interrupted. It is created when the service is enabled.
+	// It is closed when the service is disabled.
+	interrupted chan struct{}
 }
 
 //Raw event buffer used to gather data during parsing.
@@ -157,7 +162,7 @@ func (err BinlogServerError) Error() string {
 	return err.Msg
 }
 
-func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse) {
+func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted chan struct{}) {
 	var readErr error
 	defer func() {
 		reqIdentifier := fmt.Sprintf("%v, line: '%v'", blp.currentPosition.Position.String(), blp.currentLine)
@@ -204,9 +209,14 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse) {
 
 	//This function monitors the exit of read data pipeline.
 	go func(readErr *error, readErrChan chan error, binlogDecoder *BinlogDecoder) {
-		*readErr = <-readErrChan
-		//relog.Info("Read data-pipeline returned readErr: '%v'", *readErr)
-		if *readErr != nil {
+		select {
+		case *readErr = <-readErrChan:
+			//relog.Info("Read data-pipeline returned readErr: '%v'", *readErr)
+			if *readErr != nil {
+				binlogDecoder.Kill()
+			}
+		case <-interrupted:
+			*readErr = fmt.Errorf("BinlogServer service disabled")
 			binlogDecoder.Kill()
 		}
 	}(&readErr, readErrChan, binlogDecoder)
@@ -736,7 +746,7 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 	blp.binlogPrefix = binlogPrefix
 
 	relog.Info("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)
-	blp.streamBinlog(sendReply)
+	blp.streamBinlog(sendReply, blServer.interrupted)
 	return nil
 }
 
@@ -781,6 +791,7 @@ func EnableBinlogServerService(blServer *BinlogServer, dbname string) {
 	}
 
 	blServer.dbname = dbname
+	blServer.interrupted = make(chan struct{}, 1)
 	blServer.setState(BINLOG_SERVER_ENABLED)
 	relog.Info("Binlog Server enabled")
 }
