@@ -628,6 +628,7 @@ def run_test_restart_during_action():
   # make sure they're accounted for properly
   # first the query engine States
   v = utils.get_vars(tablet_62344.port)
+  utils.debug("vars: %s" % str(v))
   if v['Voltron']['States']['DurationOPEN'] < 10e9:
     raise utils.TestError('not enough time in Open state', v['Voltron']['States']['DurationOPEN'])
   # then the Zookeeper connections
@@ -637,6 +638,8 @@ def run_test_restart_during_action():
     raise utils.TestError('invalid zk global state: ', v['ZkMetaConn']['global']['Current'])
   if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
     raise utils.TestError('not enough time in Connected state', v['ZkMetaConn']['test_nj']['DurationConnected'])
+  if v['tablet-type'] != 'master':
+    raise utils.TestError('tablet-type not exported correctly')
 
   tablet_62344.kill_vttablet()
 

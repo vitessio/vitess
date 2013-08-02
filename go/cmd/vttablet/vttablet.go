@@ -7,6 +7,7 @@ package main
 
 import (
 	"encoding/json"
+	"expvar"
 	"flag"
 	"fmt"
 	"io"
@@ -230,6 +231,8 @@ func initAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 		secureAddr = fmt.Sprintf(":%v", *securePort)
 	}
 
+	exportedType := expvar.NewString("tablet-type")
+
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
 	agent, err := tm.NewActionAgent(topoServer, tabletAlias, *mycnfFile, dbConfigsFile, dbCredentialsFile)
@@ -268,11 +271,10 @@ func initAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 			}
 		} else {
 			ts.DisallowQueries(false)
-			if newTablet.Type != topo.TYPE_MASTER {
-				ts.StopRowCacheInvalidation()
-			}
+			ts.StopRowCacheInvalidation()
 			mysqlctl.DisableUpdateStreamService()
 		}
+		exportedType.Set(string(newTablet.Type))
 	})
 
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
