@@ -167,6 +167,9 @@ func (zkts *Server) GetShardNames(keyspace string) ([]string, error) {
 	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
 	children, _, err := zkts.zconn.Children(shardsPath)
 	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
 		return nil, err
 	}
 

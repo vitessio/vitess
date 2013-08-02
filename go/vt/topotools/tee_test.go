@@ -5,27 +5,11 @@
 package topotools
 
 import (
+	"reflect"
 	"testing"
 
-	//	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
-
-//	"github.com/youtube/vitess/go/vt/zktopo"
-//	"github.com/youtube/vitess/go/zk"
-//	"github.com/youtube/vitess/go/zk/fakezk"
-//	"launchpad.net/gozk/zookeeper"
 )
-
-func testStringArrays(t *testing.T, expected, value []string) {
-	if len(expected) != len(value) {
-		t.Fatalf("Different arrays:\n%v\n%v", expected, value)
-	}
-	for i, e := range expected {
-		if e != value[i] {
-			t.Fatalf("Different arrays:\n%v\n%v", expected, value)
-		}
-	}
-}
 
 func TestTee(t *testing.T) {
 
@@ -47,16 +31,24 @@ func TestTee(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tee.GetKeyspaces() failed: %v", err)
 	}
-	testStringArrays(t, []string{"keyspace2", "test_keyspace"}, teeKeyspaces)
+	expected := []string{"keyspace2", "test_keyspace"}
+	if !reflect.DeepEqual(expected, teeKeyspaces) {
+		t.Errorf("teeKeyspaces mismatch, got %+v, want %+v", teeKeyspaces, expected)
+	}
 	fromKeyspaces, err := fromTS.GetKeyspaces()
 	if err != nil {
 		t.Fatalf("fromTS.GetKeyspaces() failed: %v", err)
 	}
-	testStringArrays(t, []string{"keyspace2", "test_keyspace"}, fromKeyspaces)
+	expected = []string{"keyspace2", "test_keyspace"}
+	if !reflect.DeepEqual(expected, fromKeyspaces) {
+		t.Errorf("fromKeyspaces mismatch, got %+v, want %+v", fromKeyspaces, expected)
+	}
 	toKeyspaces, err := toTS.GetKeyspaces()
 	if err != nil {
 		t.Fatalf("toTS.GetKeyspaces() failed: %v", err)
 	}
-	testStringArrays(t, []string{"keyspace2", "test_keyspace"}, toKeyspaces)
-
+	expected = []string{"keyspace2", "test_keyspace"}
+	if !reflect.DeepEqual(expected, toKeyspaces) {
+		t.Errorf("toKeyspaces mismatch, got %+v, want %+v", toKeyspaces, expected)
+	}
 }
