@@ -18,6 +18,7 @@ import (
 	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	cproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -55,7 +56,7 @@ func (err *InvalidationError) isFatal() bool {
 }
 
 type InvalidationProcessor struct {
-	currentPosition *mysqlctl.BinlogPosition
+	currentPosition *cproto.BinlogPosition
 	state           sync2.AtomicUint32
 	states          *estats.States
 	stateLock       sync.Mutex
@@ -74,7 +75,7 @@ func NewInvalidationProcessor() *InvalidationProcessor {
 	invalidator.receiveEvent = func(response interface{}) error {
 		return invalidator.invalidateEvent(response)
 	}
-	gob.Register(mysqlctl.BinlogPosition{})
+	gob.Register(cproto.BinlogPosition{})
 	invalidator.encBuf = make([]byte, 0, 100)
 	return invalidator
 }
@@ -202,7 +203,7 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		return
 	}
 
-	startPosition := &mysqlctl.BinlogPosition{Position: *replPos}
+	startPosition := &cproto.BinlogPosition{Position: *replPos}
 
 	relog.Info("Starting @ %v", startPosition.String())
 	req := &mysqlctl.UpdateStreamRequest{StartPosition: *startPosition}

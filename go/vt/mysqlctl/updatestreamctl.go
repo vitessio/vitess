@@ -39,7 +39,7 @@ type UpdateStream struct {
 }
 
 type UpdateStreamRequest struct {
-	StartPosition BinlogPosition
+	StartPosition proto.BinlogPosition
 }
 
 var UpdateStreamRpcService *UpdateStream
@@ -218,7 +218,7 @@ func IsMasterPositionValid(startCoordinates *proto.ReplicationCoordinates) bool 
 	return true
 }
 
-func IsStartPositionValid(startPos *BinlogPosition) bool {
+func IsStartPositionValid(startPos *proto.BinlogPosition) bool {
 	startCoord := &startPos.Position
 	return IsMasterPositionValid(startCoord)
 }

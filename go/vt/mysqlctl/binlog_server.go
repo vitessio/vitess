@@ -65,12 +65,12 @@ type BinlogServer struct {
 
 //Raw event buffer used to gather data during parsing.
 type blsEventBuffer struct {
-	BlPosition
+	proto.BinlogPosition
 	LogLine []byte
 	firstKw string
 }
 
-func NewBlsEventBuffer(pos *BlPosition, line []byte) *blsEventBuffer {
+func NewBlsEventBuffer(pos *proto.BinlogPosition, line []byte) *blsEventBuffer {
 	buf := &blsEventBuffer{}
 	buf.LogLine = make([]byte, len(line))
 	//buf.LogLine = append(buf.LogLine, line...)
@@ -78,8 +78,8 @@ func NewBlsEventBuffer(pos *BlPosition, line []byte) *blsEventBuffer {
 	if written < len(line) {
 		relog.Warning("Problem in copying logline to new buffer, written %v, len %v", written, len(line))
 	}
-	buf.BlPosition = *pos
-	buf.BlPosition.Timestamp = pos.Timestamp
+	buf.BinlogPosition = *pos
+	buf.BinlogPosition.Timestamp = pos.Timestamp
 	return buf
 }
 
@@ -90,7 +90,7 @@ type Bls struct {
 	responseStream   []*BinlogResponse
 	initialSeek      bool
 	startPosition    *proto.ReplicationCoordinates
-	currentPosition  *BlPosition
+	currentPosition  *proto.BinlogPosition
 	dbmatch          bool
 	keyspaceRange    key.KeyRange
 	keyrangeTag      string
@@ -105,7 +105,7 @@ func NewBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServ
 	blp := &Bls{}
 	blp.startPosition = startCoordinates
 	blp.keyspaceRange = *keyRange
-	blp.currentPosition = &BlPosition{}
+	blp.currentPosition = &proto.BinlogPosition{}
 	blp.currentPosition.Position = *startCoordinates
 	blp.inTxn = false
 	blp.initialSeek = true
@@ -415,7 +415,7 @@ func (blp *Bls) extractEventTimestamp(event *blsEventBuffer) {
 		panic(NewBinlogServerError(fmt.Sprintf("Error in extracting timestamp %v, sql %v", err, string(line))))
 	}
 	blp.currentPosition.Timestamp = currentTimestamp
-	event.BlPosition.Timestamp = currentTimestamp
+	event.BinlogPosition.Timestamp = currentTimestamp
 }
 
 func (blp *Bls) parseRotateEvent(line []byte) {
@@ -458,7 +458,7 @@ func (blp *Bls) handleBeginEvent(event *blsEventBuffer) {
 //This creates the response for DDL event.
 func blsCreateDdlStream(lineBuffer *blsEventBuffer) (ddlStream *BinlogResponse) {
 	ddlStream = new(BinlogResponse)
-	ddlStream.BlPosition = lineBuffer.BlPosition
+	ddlStream.BinlogPosition = lineBuffer.BinlogPosition
 	ddlStream.SqlType = DDL
 	ddlStream.Sql = make([]string, 0, 1)
 	ddlStream.Sql = append(ddlStream.Sql, string(lineBuffer.LogLine))
@@ -479,8 +479,8 @@ func (blp *Bls) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEven
 		return
 	}
 
-	commitEvent.BlPosition.Xid = blp.currentPosition.Xid
-	commitEvent.BlPosition.Position.GroupId = blp.currentPosition.Position.GroupId
+	commitEvent.BinlogPosition.Xid = blp.currentPosition.Xid
+	commitEvent.BinlogPosition.Position.GroupId = blp.currentPosition.Position.GroupId
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	//txn block for DMLs, parse it and send events for a txn
 	var dmlCount int64
@@ -512,7 +512,7 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*BinlogResponse, dmlCount 
 		line = event.LogLine
 		if bytes.HasPrefix(line, BINLOG_BEGIN) {
 			streamBuf := new(BinlogResponse)
-			streamBuf.BlPosition = event.BlPosition
+			streamBuf.BinlogPosition = event.BinlogPosition
 			streamBuf.SqlType = BEGIN
 			txnResponseList = append(txnResponseList, streamBuf)
 			continue
@@ -557,7 +557,7 @@ func (blp *Bls) createDmlEvent(eventBuf *blsEventBuffer, keyspaceId string) (dml
 	//parse keyspace id
 	//for inserts check for index comments
 	dmlEvent = new(BinlogResponse)
-	dmlEvent.BlPosition = eventBuf.BlPosition
+	dmlEvent.BinlogPosition = eventBuf.BinlogPosition
 	dmlEvent.SqlType = GetDmlType(eventBuf.firstKw)
 	dmlEvent.KeyspaceId = keyspaceId
 	indexType, indexId, userId := parseIndex(eventBuf.LogLine)
@@ -633,7 +633,7 @@ func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint6
 //This creates the response for COMMIT event.
 func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *BinlogResponse) {
 	streamBuf = new(BinlogResponse)
-	streamBuf.BlPosition = eventBuf.BlPosition
+	streamBuf.BinlogPosition = eventBuf.BinlogPosition
 	streamBuf.SqlType = COMMIT
 	return
 }
@@ -660,12 +660,12 @@ func blsSendStream(sendReply SendUpdateStreamResponse, responseBuf []*BinlogResp
 }
 
 //This sends the error to the client.
-func sendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputErr error, blpPos *BlPosition) {
+func sendError(sendReply SendUpdateStreamResponse, reqIdentifier string, inputErr error, blpPos *proto.BinlogPosition) {
 	var err error
 	streamBuf := new(BinlogResponse)
 	streamBuf.Error = inputErr.Error()
 	if blpPos != nil {
-		streamBuf.BlPosition = *blpPos
+		streamBuf.BinlogPosition = *blpPos
 	}
 	buf := []*BinlogResponse{streamBuf}
 	err = blsSendStream(sendReply, buf)
