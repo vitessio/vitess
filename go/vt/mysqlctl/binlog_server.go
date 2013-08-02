@@ -8,15 +8,19 @@ package mysqlctl
 import (
 	"bufio"
 	"bytes"
+	"expvar"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/youtube/vitess/go/relog"
-	gstats "github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/rpcwrap"
+	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -25,6 +29,11 @@ const (
 	COLON   = ":"
 	DOT     = "."
 	MAX_KEY = "MAX_KEY"
+)
+
+const (
+	BINLOG_SERVER_DISABLED = iota
+	BINLOG_SERVER_ENABLED
 )
 
 var (
@@ -40,27 +49,42 @@ var (
 )
 
 type blsStats struct {
-	parseStats    *gstats.Counters
-	dmlCount      *gstats.Counters
-	txnCount      *gstats.Counters
-	queriesPerSec *gstats.Rates
-	txnsPerSec    *gstats.Rates
+	parseStats    *estats.Counters
+	dmlCount      *estats.Counters
+	txnCount      *estats.Counters
+	queriesPerSec *estats.Rates
+	txnsPerSec    *estats.Rates
 }
 
 func NewBlsStats() *blsStats {
 	bs := &blsStats{}
-	bs.parseStats = gstats.NewCounters("ParseEvent")
-	bs.txnCount = gstats.NewCounters("TxnCount")
-	bs.dmlCount = gstats.NewCounters("DmlCount")
-	bs.queriesPerSec = gstats.NewRates("QueriesPerSec", bs.dmlCount, 15, 60e9)
-	bs.txnsPerSec = gstats.NewRates("TxnPerSec", bs.txnCount, 15, 60e9)
+	bs.parseStats = estats.NewCounters("")
+	bs.txnCount = estats.NewCounters("")
+	bs.dmlCount = estats.NewCounters("")
+	bs.queriesPerSec = estats.NewRates("", bs.dmlCount, 15, 60e9)
+	bs.txnsPerSec = estats.NewRates("", bs.txnCount, 15, 60e9)
 	return bs
+}
+
+// String returns a json encoded version of stats
+func (bs *blsStats) String() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 128))
+	fmt.Fprintf(buf, "{")
+	fmt.Fprintf(buf, "\n \"DmlCount\": %v,", bs.dmlCount)
+	fmt.Fprintf(buf, "\n \"ParseEvent\": %v,", bs.parseStats)
+	fmt.Fprintf(buf, "\n \"QueriesPerSec\": %v,", bs.queriesPerSec)
+	fmt.Fprintf(buf, "\n \"TxnCount\": %v,", bs.txnCount)
+	fmt.Fprintf(buf, "\n \"TxnPerSec\": %v", bs.txnsPerSec)
+	fmt.Fprintf(buf, "\n}")
+	return buf.String()
 }
 
 type BinlogServer struct {
 	dbname   string
 	mycnf    *Mycnf
 	blsStats *blsStats
+	state    sync2.AtomicInt32
+	states   *estats.States
 }
 
 //Raw event buffer used to gather data during parsing.
@@ -716,10 +740,61 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 	return nil
 }
 
-func NewBinlogServer(mycnf *Mycnf, dbname string) *BinlogServer {
+func (blServer *BinlogServer) isServiceEnabled() bool {
+	return blServer.state.Get() == BINLOG_SERVER_ENABLED
+}
+
+func (blServer *BinlogServer) setState(state int32) {
+	blServer.state.Set(state)
+	blServer.states.SetState(int(state))
+}
+
+func (blServer *BinlogServer) statsJSON() string {
+	return fmt.Sprintf("{"+
+		"\"Stats\": %v,"+
+		"\"States\": %v"+
+		"}", blServer.blsStats.String(), blServer.states.String())
+}
+
+func NewBinlogServer(mycnf *Mycnf) *BinlogServer {
 	binlogServer := new(BinlogServer)
 	binlogServer.mycnf = mycnf
-	binlogServer.dbname = strings.ToLower(strings.TrimSpace(dbname))
 	binlogServer.blsStats = NewBlsStats()
+	binlogServer.states = estats.NewStates("", []string{
+		"Disabled",
+		"Enabled",
+	}, time.Now(), BINLOG_SERVER_DISABLED)
 	return binlogServer
+}
+
+// RegisterBinlogServerService registers the service for serving and stats.
+func RegisterBinlogServerService(blServer *BinlogServer) {
+	rpcwrap.RegisterAuthenticated(blServer)
+	expvar.Publish("BinlogServerRpcService", estats.StrFunc(func() string { return blServer.statsJSON() }))
+}
+
+// EnableBinlogServerService enabled the service for serving.
+func EnableBinlogServerService(blServer *BinlogServer, dbname string) {
+	if blServer.isServiceEnabled() {
+		relog.Warning("Binlog Server service is already enabled")
+		return
+	}
+
+	blServer.dbname = dbname
+	blServer.setState(BINLOG_SERVER_ENABLED)
+	relog.Info("Binlog Server enabled")
+}
+
+// DisableBinlogServerService disables the service for serving.
+func DisableBinlogServerService(blServer *BinlogServer) {
+	//If the service is already disabled, just return
+	if !blServer.isServiceEnabled() {
+		return
+	}
+	blServer.setState(BINLOG_SERVER_DISABLED)
+	relog.Info("Binlog Server Disabled")
+}
+
+func IsBinlogServerEnabled(blServer *BinlogServer) bool {
+	return blServer.isServiceEnabled()
 }

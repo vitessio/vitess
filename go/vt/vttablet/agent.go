@@ -64,6 +64,12 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 		topo.CloseServers()
 	})
 
+	binlogServer := mysqlctl.NewBinlogServer(mycnf)
+	mysqlctl.RegisterBinlogServerService(binlogServer)
+	umgmt.AddCloseCallback(func() {
+		mysqlctl.DisableBinlogServerService(binlogServer)
+	})
+
 	bindAddr := fmt.Sprintf(":%v", port)
 	secureAddr := ""
 	if securePort != 0 {
@@ -113,7 +119,19 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 			ts.StopRowCacheInvalidation()
 			mysqlctl.DisableUpdateStreamService()
 		}
+
 		exportedType.Set(string(newTablet.Type))
+
+		// BinlogServer is only enabled for replicas
+		if newTablet.Type == topo.TYPE_REPLICA {
+			if !mysqlctl.IsBinlogServerEnabled(binlogServer) {
+				mysqlctl.EnableBinlogServerService(binlogServer, dbcfgs.App.Dbname)
+			}
+		} else {
+			if mysqlctl.IsBinlogServerEnabled(binlogServer) {
+				mysqlctl.DisableBinlogServerService(binlogServer)
+			}
+		}
 	})
 
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
