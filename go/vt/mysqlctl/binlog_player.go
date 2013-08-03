@@ -6,9 +6,7 @@ package mysqlctl
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -44,6 +42,7 @@ type binlogRecoveryState struct {
 	Position      cproto.ReplicationCoordinates
 }
 
+// VtClient is a high level interface to the database
 type VtClient interface {
 	Connect() (*mysql.Connection, error)
 	Begin() error
@@ -53,38 +52,57 @@ type VtClient interface {
 	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error)
 }
 
-type dummyVtClient struct {
+// DummyVtClient is a VtClient that writes to a writer instead of executing
+// anything
+type DummyVtClient struct {
 	stdout *bufio.Writer
 }
 
-func (dc dummyVtClient) Connect() (*mysql.Connection, error) {
+func NewDummyVtClient() *DummyVtClient {
+	stdout := bufio.NewWriterSize(os.Stdout, 16*1024)
+	return &DummyVtClient{stdout}
+}
+
+func (dc DummyVtClient) Connect() (*mysql.Connection, error) {
 	return nil, nil
 }
 
-func (dc dummyVtClient) Begin() error {
+func (dc DummyVtClient) Begin() error {
 	dc.stdout.WriteString("BEGIN;\n")
 	return nil
 }
-func (dc dummyVtClient) Commit() error {
+func (dc DummyVtClient) Commit() error {
 	dc.stdout.WriteString("COMMIT;\n")
 	return nil
 }
-func (dc dummyVtClient) Rollback() error {
+func (dc DummyVtClient) Rollback() error {
 	dc.stdout.WriteString("ROLLBACK;\n")
 	return nil
 }
-func (dc dummyVtClient) Close() {
+func (dc DummyVtClient) Close() {
 	return
 }
 
-func (dc dummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+func (dc DummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	dc.stdout.WriteString(string(query) + ";\n")
 	return nil, nil
 }
 
+// DBClient is a real VtClient backed by a mysql connection
 type DBClient struct {
 	dbConfig *mysql.ConnectionParams
 	dbConn   *mysql.Connection
+}
+
+func NewDbClient(dbConfig *mysql.ConnectionParams) (*DBClient, error) {
+	dbClient := &DBClient{}
+	dbClient.dbConfig = dbConfig
+	var err error
+	dbClient.dbConn, err = dbClient.Connect()
+	if err != nil {
+		return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
+	}
+	return dbClient, nil
 }
 
 func (dc *DBClient) handleError(err error) {
@@ -147,6 +165,7 @@ func (dc DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*pr
 	return &qr, nil
 }
 
+// blplStats is the internal stats of this player
 type blplStats struct {
 	queryCount    *estats.Counters
 	txnCount      *estats.Counters
@@ -167,6 +186,7 @@ func NewBlplStats() *blplStats {
 	return bs
 }
 
+// BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
 	keyrange       key.KeyRange
 	recoveryState  binlogRecoveryState
@@ -181,10 +201,13 @@ type BinlogPlayer struct {
 	maxTxnInterval time.Duration
 	execDdl        bool
 	blplStats      *blplStats
-	interrupted    chan struct{}
 }
 
-func NewBinlogPlayer(startPosition *binlogRecoveryState) (*BinlogPlayer, error) {
+func NewBinlogPlayer(dbClient VtClient, startPosition *binlogRecoveryState, tables []string, txnBatch int, maxTxnInterval time.Duration, execDdl bool) (*BinlogPlayer, error) {
+	if !startPositionValid(startPosition) {
+		relog.Fatal("Invalid Start Position")
+	}
+
 	blp := new(BinlogPlayer)
 	blp.recoveryState = *startPosition
 
@@ -201,8 +224,13 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState) (*BinlogPlayer, error) 
 	blp.txnIndex = 0
 	blp.inTxn = false
 	blp.txnBuffer = make([]*cproto.BinlogResponse, 0, MAX_TXN_BATCH)
+	blp.dbClient = dbClient
+	blp.tables = tables
 	blp.blplStats = NewBlplStats()
 	blp.batchStart = time.Now()
+	blp.txnBatch = txnBatch
+	blp.maxTxnInterval = maxTxnInterval
+	blp.execDdl = execDdl
 	return blp, nil
 }
 
@@ -226,30 +254,6 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 	}
 }
 
-func RunBinlogPlayer(dbConfigFile, keyrangeStart, keyrangeEnd string, tables []string, txnBatch int, maxTxnInterval time.Duration, execDdl bool, debug bool, interrupted chan struct{}) {
-	blp, err := initBinlogPlayer(dbConfigFile, keyrangeStart, keyrangeEnd, debug)
-	if err != nil {
-		relog.Fatal("Error in initializing binlog player - '%v'", err)
-	}
-	blp.tables = tables
-	blp.txnBatch = txnBatch
-	blp.maxTxnInterval = maxTxnInterval
-	blp.execDdl = execDdl
-	blp.interrupted = interrupted
-
-	relog.Info("BinlogPlayer client for keyrange '%v:%v' starting @ '%v'",
-		blp.recoveryState.KeyrangeStart,
-		blp.recoveryState.KeyrangeEnd,
-		blp.recoveryState.Position)
-
-	//Make a request to the server and start processing the events.
-	err = blp.applyBinlogEvents()
-	if err != nil {
-		relog.Error("Error in applying binlog events, err %v", err)
-	}
-	relog.Info("vt_binlog_player done")
-}
-
 func startPositionValid(startPos *binlogRecoveryState) bool {
 	if startPos.Host == "" || startPos.Port == 0 {
 		relog.Error("Invalid connection params.")
@@ -267,28 +271,19 @@ func startPositionValid(startPos *binlogRecoveryState) bool {
 	return true
 }
 
-func createDbClient(dbConfigFile string) (*DBClient, error) {
-	dbConfigData, err := ioutil.ReadFile(dbConfigFile)
-	if err != nil {
-		return nil, fmt.Errorf("Error %s in reading db-config-file %s", err, dbConfigFile)
-	}
-	relog.Info("dbConfigData %v", string(dbConfigData))
+func ReadStartPosition(dbClient VtClient, keyrangeStart, keyrangeEnd string) (*binlogRecoveryState, error) {
+	brs := new(binlogRecoveryState)
+	brs.KeyrangeStart = keyrangeStart
+	brs.KeyrangeEnd = keyrangeEnd
 
-	dbClient := &DBClient{}
-	dbConfig := new(mysql.ConnectionParams)
-	err = json.Unmarshal(dbConfigData, dbConfig)
+	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, keyrangeStart, keyrangeEnd)
+	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
-		return nil, fmt.Errorf("error in unmarshaling dbconfig data, err '%v'", err)
+		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
-	dbClient.dbConfig = dbConfig
-	dbClient.dbConn, err = dbClient.Connect()
-	if err != nil {
-		return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
+	if qr.RowsAffected != 1 {
+		relog.Fatal("Checkpoint information not available in db")
 	}
-	return dbClient, nil
-}
-
-func getStartPosition(qr *proto.QueryResult, brs *binlogRecoveryState) error {
 	row := qr.Rows[0]
 	for i, field := range qr.Fields {
 		switch strings.ToLower(field.Name) {
@@ -303,7 +298,7 @@ func getStartPosition(qr *proto.QueryResult, brs *binlogRecoveryState) error {
 				strVal := val.String()
 				port, err := strconv.ParseUint(strVal, 0, 16)
 				if err != nil {
-					return fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
+					return nil, fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
 				}
 				brs.Port = int(port)
 			}
@@ -318,7 +313,7 @@ func getStartPosition(qr *proto.QueryResult, brs *binlogRecoveryState) error {
 				strVal := val.String()
 				masterPos, err := strconv.ParseUint(strVal, 0, 64)
 				if err != nil {
-					return fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
+					return nil, fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
 				}
 				brs.Position.MasterPosition = masterPos
 			}
@@ -331,47 +326,7 @@ func getStartPosition(qr *proto.QueryResult, brs *binlogRecoveryState) error {
 			continue
 		}
 	}
-	return nil
-}
-
-func initBinlogPlayer(dbConfigFile, keyrangeStart, keyrangeEnd string, debug bool) (*BinlogPlayer, error) {
-	dbClient, err := createDbClient(dbConfigFile)
-	if err != nil {
-		return nil, err
-	}
-
-	startPosition := new(binlogRecoveryState)
-	startPosition.KeyrangeStart = keyrangeStart
-	startPosition.KeyrangeEnd = keyrangeEnd
-
-	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.KeyrangeStart, startPosition.KeyrangeEnd)
-	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
-	if err != nil {
-		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
-	}
-	if qr.RowsAffected != 1 {
-		relog.Fatal("Checkpoint information not available in db")
-	}
-	if err := getStartPosition(qr, startPosition); err != nil {
-		relog.Fatal("Error in obtaining checkpoint information")
-	}
-	if !startPositionValid(startPosition) {
-		return nil, fmt.Errorf("Invalid Start Position")
-	}
-
-	binlogPlayer, err := NewBinlogPlayer(startPosition)
-	if err != nil {
-		return nil, err
-	}
-
-	if debug {
-		stdout := bufio.NewWriterSize(os.Stdout, 16*1024)
-		binlogPlayer.dbClient = dummyVtClient{stdout}
-	} else {
-		binlogPlayer.dbClient = *dbClient
-	}
-
-	return binlogPlayer, nil
+	return brs, nil
 }
 
 func handleError(err *error, blp *BinlogPlayer) {
@@ -582,9 +537,14 @@ func (blp *BinlogPlayer) handleTxn() bool {
 	return true
 }
 
-//This makes a bson rpc request to the vt_binlog_server
-//and processes the events.
-func (blp *BinlogPlayer) applyBinlogEvents() error {
+// ApplyBinlogEvents makes a bson rpc request to BinlogServer
+// and processes the events.
+func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
+	relog.Info("BinlogPlayer client for keyrange '%v:%v' starting @ '%v'",
+		blp.recoveryState.KeyrangeStart,
+		blp.recoveryState.KeyrangeEnd,
+		blp.recoveryState.Position)
+
 	var err error
 	connectionStr := fmt.Sprintf("%v:%v", blp.recoveryState.Host, blp.recoveryState.Port)
 	relog.Info("Dialing server @ %v", connectionStr)
@@ -614,7 +574,7 @@ processLoop:
 			if err != nil {
 				return fmt.Errorf("Error in processing binlog event %v", err)
 			}
-		case <-blp.interrupted:
+		case <-interrupted:
 			return nil
 		}
 	}
