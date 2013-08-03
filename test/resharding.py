@@ -187,10 +187,10 @@ def run_test_resharding():
   wait_for_binlog_server_state(shard_1_replica, "Enabled")
 
   # perform the restore. For now on all tablets individually.
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_2_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_2_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_3_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_3_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_2_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_2_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_3_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_3_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
 
   # now serve rdonly from the split shards
   utils.run_vtctl('SetShardServedTypes test_keyspace/80- master,replica')
