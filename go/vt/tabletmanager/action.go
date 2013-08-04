@@ -68,6 +68,8 @@ const (
 	SHARD_ACTION_APPLY_SCHEMA = "ApplySchemaShard"
 	// Changes the ServedTypes inside a shard
 	SHARD_ACTION_SET_SERVED_TYPES = "SetShardServedTypes"
+	// Multi-restore on all tablets of a shard in parallel
+	SHARD_ACTION_MULTI_RESTORE = "ShardMultiRestore"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
@@ -176,6 +178,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &ApplySchemaShardArgs{}
 	case SHARD_ACTION_SET_SERVED_TYPES:
 		node.args = &SetShardServedTypesArgs{}
+	case SHARD_ACTION_MULTI_RESTORE:
+		node.args = &MultiRestoreArgs{}
 
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:

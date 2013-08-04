@@ -145,6 +145,9 @@ var commands = []commandGroup{
 			command{"SetShardServedTypes", commandSetShardServedTypes,
 				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
 				"Sets a given shard's served types. Does not rebuild any serving graph."},
+			command{"ShardMultiRestore", commandShardMultiRestore,
+				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <keyspace/shard|zk shard path> <source zk path>...",
+				"Restore multi-snapshots on all the tablets of a shard."},
 		},
 	},
 	commandGroup{
@@ -785,12 +788,12 @@ func commandMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
-	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many myisam tables to load into a single destination table simultaneously")
+	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
 	subFlags.Parse(args)
 
 	if subFlags.NArg() < 2 {
-		relog.Fatal("MultiRestore requires <dst tablet alias|destination zk path> <source zk path>... %v", args)
+		relog.Fatal("MultiRestore requires <dst tablet alias|destination zk path> <source tablet alias|source zk path>... %v", args)
 	}
 	destination := tabletParamToTabletAlias(subFlags.Arg(0))
 	sources := make([]topo.TabletAlias, subFlags.NArg()-1)
@@ -988,6 +991,26 @@ func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	}
 
 	return "", wr.SetShardServedTypes(keyspace, shard, servedTypes)
+}
+
+func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
+	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
+	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
+	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
+	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
+	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
+	subFlags.Parse(args)
+
+	if subFlags.NArg() < 2 {
+		relog.Fatal("ShardMultiRestore requires <keyspace/shard|zk shard path> <source tablet alias|source zk path>... %v", args)
+	}
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	sources := make([]topo.TabletAlias, subFlags.NArg()-1)
+	for i := 1; i < subFlags.NArg(); i++ {
+		sources[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
+	}
+	err = wr.ShardMultiRestore(keyspace, shard, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
+	return
 }
 
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

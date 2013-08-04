@@ -401,6 +401,14 @@ func (ai *ActionInitiator) SetShardServedTypesArgs(servedTypes []topo.TabletType
 	}
 }
 
+func (ai *ActionInitiator) ShardMultiRestore(args *MultiRestoreArgs) *ActionNode {
+	return &ActionNode{
+		Action:     SHARD_ACTION_MULTI_RESTORE,
+		ActionGuid: actionGuid(),
+		args:       args,
+	}
+}
+
 func (ai *ActionInitiator) RebuildKeyspace() *ActionNode {
 	return &ActionNode{
 		Action:     KEYSPACE_ACTION_REBUILD,
