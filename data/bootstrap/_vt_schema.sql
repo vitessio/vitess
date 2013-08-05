@@ -13,15 +13,13 @@ CREATE TABLE _vt.reparent_log (
   index (last_position));
 
 CREATE TABLE _vt.blp_checkpoint (
-  uid int(10) unsigned NOT NULL,
+  keyrange_start varchar(32) NOT NULL,
+  keyrange_end varchar(32) NOT NULL,
   host varchar(32) NOT NULL,
   port int NOT NULL,
   master_filename varchar(255) NOT NULL,
   master_position bigint(20) unsigned NOT NULL,
   group_id varchar(255) default NULL,
-  keyrange_start varchar(32) NOT NULL,
-  keyrange_end varchar(32) NOT NULL,
   txn_timestamp int(10) unsigned NOT NULL,
   time_updated int(10) unsigned NOT NULL,
-  PRIMARY KEY (uid)
-);
+  PRIMARY KEY (keyrange_start, keyrange_end));

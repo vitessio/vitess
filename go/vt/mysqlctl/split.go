@@ -89,7 +89,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -106,8 +105,8 @@ const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
 
-	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, group_id, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
-	                          values (%v, '%v', %v, '%v', %v, '%v', '%v', '%v', unix_timestamp(), %v)`
+	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (keyrange_start, keyrange_end, host, port, master_filename, master_position, group_id, txn_timestamp, time_updated) 
+	                          values ('%v', '%v', '%v', %v, '%v', %v, '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -653,9 +652,9 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 // RestoreFromMultiSnapshot is the main entry point for multi restore.
 // - If the strategy contains the string 'writeBinLogs' then we will
 //   also write to the binary logs.
-// - If the strategy contains the command 'populateBlpRecovery(NNN)' then we
+// - If the strategy contains the command 'populateBlpRecovery' then we
 //   will populate the blp_checkpoint table with master positions to start from
-func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, uids []uint32, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
@@ -881,30 +880,22 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	}
 
 	// populate blp_checkpoint table if we want to
-	if start := strings.Index(strategy, "populateBlpRecovery("); start != -1 {
-		param := strategy[start+len("populateBlpRecovery("):]
-		param = param[:strings.Index(param, ")")]
-		port, err := strconv.ParseInt(param, 0, 32)
-		if err != nil {
-			return err
-		}
-
+	if strings.Index(strategy, "populateBlpRecovery") != -1 {
 		queries := make([]string, 0, 4)
 		queries = append(queries, "USE `_vt`")
 		if !writeBinLogs {
 			queries = append(queries, "SET sql_log_bin = OFF")
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
-		for manifestIndex, manifest := range manifests {
+		for _, manifest := range manifests {
 			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
-				uids[manifestIndex],
+				manifest.KeyRange.Start.Hex(),
+				manifest.KeyRange.End.Hex(),
 				manifest.Source.MasterState.MasterHost,
-				port,
+				manifest.Source.MasterState.MasterPort,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
-				keyRange.Start.Hex(),
-				keyRange.End.Hex(),
 				time.Now().Unix())
 			queries = append(queries, insertRecovery)
 		}

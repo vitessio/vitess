@@ -42,7 +42,11 @@ func main() {
 		relog.Fatal("Error reading mycnf file %v", *mycnfFile)
 	}
 
-	binlogServer := mysqlctl.NewBinlogServer(mycnf, *dbname)
+	binlogServer := mysqlctl.NewBinlogServer(mycnf)
+	mysqlctl.EnableBinlogServerService(binlogServer, *dbname)
+	umgmt.AddCloseCallback(func() {
+		mysqlctl.DisableBinlogServerService(binlogServer)
+	})
 
 	proto.RegisterBinlogServer(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)
