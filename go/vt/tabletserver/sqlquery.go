@@ -6,7 +6,6 @@ package tabletserver
 
 import (
 	"bytes"
-	"expvar"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -83,7 +82,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 		stateName[OPEN],
 		stateName[SHUTTING_DOWN],
 	}, time.Now(), NOT_SERVING)
-	expvar.Publish("Voltron", stats.StrFunc(func() string { return sq.statsJSON() }))
+	stats.PublishFunc("Voltron", func() string { return sq.statsJSON() })
 	return sq
 }
 

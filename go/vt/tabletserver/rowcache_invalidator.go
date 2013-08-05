@@ -6,7 +6,6 @@ package tabletserver
 
 import (
 	"encoding/gob"
-	"expvar"
 	"fmt"
 	"strings"
 	"sync"
@@ -89,7 +88,7 @@ func RegisterCacheInvalidator() {
 		"Disabled",
 		"Enabled",
 	}, time.Now(), DISABLED)
-	expvar.Publish("CacheInvalidationProcessor", estats.StrFunc(func() string { return CacheInvalidationProcessor.statsJSON() }))
+	estats.PublishFunc("CacheInvalidationProcessor", func() string { return CacheInvalidationProcessor.statsJSON() })
 }
 
 func StartRowCacheInvalidation() {
