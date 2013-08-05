@@ -48,11 +48,6 @@ def _get_repl_current_position():
 
 def setup():
   utils.zk_setup()
-  utils.prog_compile(['mysqlctl',
-                      'vtaction',
-                      'vtctl',
-                      'vttablet',
-                      ])
 
   # start mysql instance external to the test
   setup_procs = [master_tablet.init_mysql(),
@@ -70,10 +65,11 @@ def teardown():
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
   utils.zk_teardown()
-  utils.kill_sub_processes()
-  utils.remove_tmp_files()
+  tablet.Tablet.tablets_running = 2
   master_tablet.kill_vttablet()
   replica_tablet.kill_vttablet()
+  utils.kill_sub_processes()
+  utils.remove_tmp_files()
   master_tablet.remove_tree()
   replica_tablet.remove_tree()
 
@@ -106,6 +102,8 @@ def setup_tablets():
   utils.validate_topology()
   utils.run_vtctl('Ping test_nj-0000062345')
 
+  # reset counter so tests don't assert
+  tablet.Tablet.tablets_running = 0
 
 def setup_schema():
   master_tablet.create_db('vt_test_keyspace')
@@ -333,8 +331,6 @@ def run_test_log_rotation():
   if not logs_correct:
     raise utils.TestError("Flush logs didn't get properly interpreted")
 
-
-@utils.test_case
 
 def run_all():
   run_test_service_switch()

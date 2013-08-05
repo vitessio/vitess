@@ -108,22 +108,12 @@ var commands = []commandGroup{
 			command{"ReparentTablet", commandReparentTablet,
 				"<tablet alias|zk tablet path>",
 				"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."},
-			command{"PartialSnapshot", commandPartialSnapshot,
-				"[-force] [-concurrency=4] <tablet alias|zk tablet path> <key name> <start key> <end key>",
-				"Locks mysqld and copy compressed data aside."},
 			command{"MultiSnapshot", commandMultiSnapshot,
 				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <dst tablet alias|destination zk path> <source zk path>...",
 				"Restores a snapshot from multiple hosts."},
-			command{"PartialRestore", commandPartialRestore,
-				"[-fetch-concurrency=3] [-fetch-retry-count=3] <src tablet alias|zk src tablet path> <src manifest file> <dst tablet alias|zk dst tablet path> [<zk new master path>]",
-				"Copy the given partial snaphot from the source tablet and starts partial replication to the new master path (or uses the src tablet path if not specified).\n" +
-					"NOTE: This does not wait for replication to catch up. The destination tablet must be 'idle' to begin with. It will transition to 'spare' once the restore is complete."},
-			command{"PartialClone", commandPartialClone,
-				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> <key name> <start key> <end key>",
-				"This performs PartialSnapshot and then PartialRestore.  The advantage of having separate actions is that one partial snapshot can be used for many restores."},
 			command{"ExecuteHook", commandExecuteHook,
 				"<tablet alias|zk tablet path> <hook name> [<param1=value1> <param2=value2> ...]",
 				"This runs the specified hook on the given tablet."},
@@ -152,6 +142,9 @@ var commands = []commandGroup{
 			command{"ListShardTablets", commandListShardTablets,
 				"<keyspace/shard|zk shard path>)",
 				"List all tablets in a given shard."},
+			command{"SetShardServedTypes", commandSetShardServedTypes,
+				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
+				"Sets a given shard's served types. Does not rebuild any serving graph."},
 		},
 	},
 	commandGroup{
@@ -160,7 +153,7 @@ var commands = []commandGroup{
 				"[-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=a,b] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
+				"[-cells=a,b] [-use-served-types] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
 			command{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name|zk keyspace path>",
@@ -788,23 +781,6 @@ func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	return "", wr.ReparentTablet(tabletAlias)
 }
 
-func commandPartialSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 4 {
-		relog.Fatal("action PartialSnapshot requires <src tablet alias|zk src tablet path> <key name> <start key> <end key>")
-	}
-
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	filename, parentAlias, err := wr.PartialSnapshot(tabletAlias, subFlags.Arg(1), key.HexKeyspaceId(subFlags.Arg(2)), key.HexKeyspaceId(subFlags.Arg(3)), *force, *concurrency)
-	if err == nil {
-		relog.Info("Manifest: %v", filename)
-		relog.Info("ParentAlias: %v", parentAlias)
-	}
-	return "", err
-}
-
 func commandMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
@@ -834,7 +810,7 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		relog.Fatal("action PartialSnapshot requires <src tablet alias|zk src tablet path> <key name>")
+		relog.Fatal("action MultiSnapshot requires <src tablet alias|zk src tablet path> <key name>")
 	}
 
 	shards, err := key.ParseShardingSpec(*spec)
@@ -854,37 +830,6 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 		relog.Info("ParentAlias: %v", parentAlias)
 	}
 	return "", err
-}
-
-func commandPartialRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 3 && subFlags.NArg() != 4 {
-		relog.Fatal("action PartialRestore requires <src tablet alias|zk src tablet path> <src manifest path> <dst tablet alias|zk dst tablet path> [<zk new master path>]")
-	}
-	source := tabletParamToTabletAlias(subFlags.Arg(0))
-	destination := tabletParamToTabletAlias(subFlags.Arg(2))
-	parentAlias := source
-	if subFlags.NArg() == 4 {
-		parentAlias = tabletParamToTabletAlias(subFlags.Arg(3))
-	}
-	return "", wr.PartialRestore(source, subFlags.Arg(1), destination, parentAlias, *fetchConcurrency, *fetchRetryCount)
-}
-
-func commandPartialClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	force := subFlags.Bool("force", false, "will force the snapshot for a master, and turn it into a backup")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 5 {
-		relog.Fatal("action PartialClone requires <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> <key name> <start key> <end key>")
-	}
-
-	source := tabletParamToTabletAlias(subFlags.Arg(0))
-	destination := tabletParamToTabletAlias(subFlags.Arg(1))
-	return "", wr.PartialClone(source, destination, subFlags.Arg(2), key.HexKeyspaceId(subFlags.Arg(3)), key.HexKeyspaceId(subFlags.Arg(4)), *force, *concurrency, *fetchConcurrency, *fetchRetryCount)
 }
 
 func commandExecuteHook(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1027,6 +972,24 @@ func commandListShardTablets(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 	return "", listTabletsByShard(wr.TopoServer(), keyspace, shard)
 }
 
+func commandSetShardServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 && subFlags.NArg() != 2 {
+		relog.Fatal("action SetShardServedTypes requires <keyspace/shard|zk shard path> [<served type1>,<served type2>,...]")
+	}
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	var servedTypes []topo.TabletType
+	if subFlags.NArg() == 2 {
+		types := strings.Split(subFlags.Arg(1), ",")
+		servedTypes = make([]topo.TabletType, 0, len(types))
+		for _, t := range types {
+			servedTypes = append(servedTypes, parseTabletType(t, []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}))
+		}
+	}
+
+	return "", wr.SetShardServedTypes(keyspace, shard, servedTypes)
+}
+
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
 	subFlags.Parse(args)
@@ -1045,6 +1008,7 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	cells := subFlags.String("cells", "", "comma separated list of cells to update")
+	useServedTypes := subFlags.Bool("use-served-types", false, "supports overlapping shards for resharding (experimental, do not use yet)")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		relog.Fatal("action RebuildKeyspaceGraph requires at least one <zk keyspace path>")
@@ -1065,7 +1029,7 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 
 	for _, zkPath := range zkPaths {
 		keyspace := keyspaceParamToKeyspace(zkPath)
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
+		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray, *useServedTypes); err != nil {
 			return "", err
 		}
 	}

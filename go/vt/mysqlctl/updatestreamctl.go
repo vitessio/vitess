@@ -6,9 +6,7 @@ package mysqlctl
 import (
 	"expvar"
 	"fmt"
-	"os"
 	"path"
-	"strconv"
 	"sync"
 	"time"
 
@@ -17,6 +15,7 @@ import (
 	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 /* API and config for UpdateStream Service */
@@ -34,14 +33,13 @@ type UpdateStream struct {
 	actionLock     sync.Mutex
 	binlogPrefix   string
 	logsDir        string
-	usingRelayLogs bool
 	mysqld         *Mysqld
 	stateWaitGroup sync.WaitGroup
 	dbname         string
 }
 
 type UpdateStreamRequest struct {
-	StartPosition BinlogPosition
+	StartPosition proto.BinlogPosition
 }
 
 var UpdateStreamRpcService *UpdateStream
@@ -65,14 +63,6 @@ func logError() {
 	if x := recover(); x != nil {
 		relog.Error("%s", x.(error).Error())
 	}
-}
-
-func isReplicaType(tabletType string) bool {
-	switch tabletType {
-	case "replica", "rdonly", "batch":
-		return true
-	}
-	return false
 }
 
 func dbcfgsCorrect(tabletType string, dbcfgs dbconfigs.DBConfigs) bool {
@@ -99,6 +89,11 @@ func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 		return
 	}
 
+	if UpdateStreamRpcService.mycnf.BinLogPath == "" {
+		relog.Warning("Update stream service requires binlogs enabled")
+		return
+	}
+
 	if UpdateStreamRpcService.isServiceEnabled() {
 		relog.Warning("Update stream service is already enabled")
 		return
@@ -111,22 +106,10 @@ func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 	relog.Info("dbcfgs.App.Dbname %v DbName %v", dbcfgs.App.Dbname, UpdateStreamRpcService.dbname)
 	relog.Info("mycnf.BinLogPath %v mycnf.RelayLogPath %v", UpdateStreamRpcService.mycnf.BinLogPath, UpdateStreamRpcService.mycnf.RelayLogPath)
 	UpdateStreamRpcService.tabletType = tabletType
-	UpdateStreamRpcService.usingRelayLogs = false
-	if tabletType == "master" {
-		UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.BinLogPath
-	} else if isReplicaType(tabletType) {
-		// If the replica server has log-slave-updates turned on
-		// use binlogs, if not then use relay logs.
-		if UpdateStreamRpcService.mycnf.BinLogPath != "" {
-			UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.BinLogPath
-		} else {
-			UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.RelayLogPath
-			UpdateStreamRpcService.usingRelayLogs = true
-		}
-	}
+	UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.BinLogPath
 	UpdateStreamRpcService.logsDir = path.Dir(UpdateStreamRpcService.binlogPrefix)
 
-	relog.Info("Update Stream enabled, logsDir %v, usingRelayLogs: %v", UpdateStreamRpcService.logsDir, UpdateStreamRpcService.usingRelayLogs)
+	relog.Info("Update Stream enabled, logsDir %v", UpdateStreamRpcService.logsDir)
 }
 
 func DisableUpdateStreamService() {
@@ -142,10 +125,6 @@ func DisableUpdateStreamService() {
 
 func IsUpdateStreamEnabled() bool {
 	return UpdateStreamRpcService.isServiceEnabled()
-}
-
-func IsUpdateStreamUsingRelayLogs() bool {
-	return UpdateStreamRpcService.usingRelayLogs
 }
 
 func disableUpdateStreamService() {
@@ -203,14 +182,8 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 	blp := NewBlp(startCoordinates, updateStream)
 
 	//locate the relay filename and position based on the masterPosition map
-	if !updateStream.usingRelayLogs {
-		if !IsMasterPositionValid(startCoordinates) {
-			return fmt.Errorf("Invalid start position %v", req.StartPosition)
-		}
-	} else {
-		if !IsRelayPositionValid(startCoordinates, UpdateStreamRpcService.logsDir) {
-			return fmt.Errorf("Could not locate the start position %v", req.StartPosition)
-		}
+	if !IsMasterPositionValid(startCoordinates) {
+		return fmt.Errorf("Invalid start position %v", req.StartPosition)
 	}
 
 	updateStream.actionLock.Lock()
@@ -226,62 +199,26 @@ func (updateStream *UpdateStream) clientDone() {
 	updateStream.stateWaitGroup.Done()
 }
 
-func (updateStream *UpdateStream) getReplicationPosition() (rc *ReplicationCoordinates, err error) {
-	rc = new(ReplicationCoordinates)
-	if updateStream.usingRelayLogs {
-		rowMap, err := updateStream.mysqld.slaveStatus()
-		if err != nil {
-			return nil, err
-		}
-		rc.MasterFilename = rowMap["Relay_Master_Log_File"]
-		temp, _ := strconv.ParseUint(rowMap["Exec_Master_Log_Pos"], 10, 0)
-		rc.MasterPosition = uint64(temp)
-		rc.RelayFilename = rowMap["Relay_Log_File"]
-		temp, _ = strconv.ParseUint(rowMap["Relay_Log_Pos"], 10, 0)
-		rc.RelayPosition = uint64(temp)
-	} else {
-		rp, err := updateStream.mysqld.MasterStatus()
-		if err != nil {
-			return nil, err
-		}
-		rc.MasterFilename = rp.MasterLogFile
-		rc.MasterPosition = uint64(rp.MasterLogPosition)
+func (updateStream *UpdateStream) getReplicationPosition() (*proto.ReplicationCoordinates, error) {
+	rp, err := updateStream.mysqld.MasterStatus()
+	if err != nil {
+		return nil, err
 	}
-	return rc, err
+	return proto.NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition), rp.MasterLogGroupId), nil
 }
 
-func GetReplicationPosition() (rc *ReplicationCoordinates, err error) {
+func GetReplicationPosition() (*proto.ReplicationCoordinates, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
-func IsMasterPositionValid(startCoordinates *ReplicationCoordinates) bool {
+func IsMasterPositionValid(startCoordinates *proto.ReplicationCoordinates) bool {
 	if startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
 		return false
 	}
 	return true
 }
 
-//This verifies the correctness of the start position.
-//The seek for relay logs depends on the RelayFilename and correct MasterFilename and Position.
-func IsRelayPositionValid(startCoordinates *ReplicationCoordinates, logsDir string) bool {
-	if startCoordinates.RelayFilename == "" || startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
-		return false
-	}
-	var relayFile string
-	d, f := path.Split(startCoordinates.RelayFilename)
-	if d == "" {
-		relayFile = path.Join(logsDir, f)
-	} else {
-		relayFile = startCoordinates.RelayFilename
-	}
-	_, err := os.Open(relayFile)
-	if err != nil {
-		return false
-	}
-	return true
-}
-
-func IsStartPositionValid(startPos *BinlogPosition) bool {
+func IsStartPositionValid(startPos *proto.BinlogPosition) bool {
 	startCoord := &startPos.Position
 	return IsMasterPositionValid(startCoord)
 }

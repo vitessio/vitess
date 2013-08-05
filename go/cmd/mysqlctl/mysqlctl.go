@@ -33,40 +33,6 @@ func initCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	}
 }
 
-func partialRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	fetchConcurrency := subFlags.Int("fetch-concurrency", 3, "how many files to fetch simultaneously")
-	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		relog.Fatal("Command partialrestore requires <split snapshot manifest file>")
-	}
-
-	rs, err := mysqlctl.ReadSplitSnapshotManifest(subFlags.Arg(0))
-	if err == nil {
-		err = mysqld.RestoreFromPartialSnapshot(rs, *fetchConcurrency, *fetchRetryCount)
-	}
-	if err != nil {
-		relog.Fatal("partialrestore failed: %v", err)
-	}
-}
-
-func partialSnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	start := subFlags.String("start", "", "start of the key range")
-	end := subFlags.String("end", "", "end of the key range")
-	concurrency := subFlags.Int("concurrency", 4, "how many compression jobs to run simultaneously")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 2 {
-		relog.Fatal("action partialsnapshot requires <db name> <key name>")
-	}
-
-	filename, err := mysqld.CreateSplitSnapshot(subFlags.Arg(0), subFlags.Arg(1), key.HexKeyspaceId(*start), key.HexKeyspaceId(*end), tabletAddr, false, *concurrency, nil)
-	if err != nil {
-		relog.Fatal("partialsnapshot failed: %v", err)
-	} else {
-		relog.Info("manifest location: %v", filename)
-	}
-}
-
 func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
 	concurrency := subFlags.Int("concurrency", 8, "how many compression jobs to run simultaneously")
 	spec := subFlags.String("spec", "-", "shard specification")
@@ -75,7 +41,7 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		relog.Fatal("action partialsnapshot requires <db name> <key name>")
+		relog.Fatal("action multisnapshot requires <db name> <key name>")
 	}
 
 	shards, err := key.ParseShardingSpec(*spec)
@@ -262,12 +228,6 @@ var commands = []command{
 	command{"multirestore", multiRestoreCmd,
 		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
-	command{"partialsnapshot", partialSnapshotCmd,
-		"[-start=<start key>] [-end=<end key>] [-concurrency=4] <db name> <key name>",
-		"Takes a partial snapshot using 'select * into' commands"},
-	command{"partialrestore", partialRestoreCmd,
-		"[-fetch-concurrency=3] [-fetch-retry-count=3] <split snapshot manifest file>",
-		"Restores a database from a partial snapshot"},
 	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-skip-slave-restart] [-maximum-file-size=134217728] <db name> <key name>",
 		"Makes a complete snapshot using 'select * into' commands."},
 }

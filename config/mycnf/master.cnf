@@ -1,6 +1,9 @@
 # master.cnf parameters
 
 log-bin = {{.BinLogPath}}
-log-bin-index = {{.BinLogIndexPath}}
 log-slave-updates
 sync_binlog = 1
+
+# enable group_id for google mysql. group_id is used for binlog positions,
+# so we don't depend on the specific host.
+rpl-hierarchical

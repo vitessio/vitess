@@ -83,10 +83,8 @@ leave the 24 lag for 1 day
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/url"
 	"os"
 	"path"
@@ -108,8 +106,8 @@ const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
 
-	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, relay_filename, relay_position, group_id, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
-	                          values (%v, '%v', %v, '%v', %v, '%v', %v, %v, '%v', '%v', unix_timestamp(), %v)`
+	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, group_id, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
+	                          values (%v, '%v', %v, '%v', %v, '%v', '%v', '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -163,223 +161,13 @@ func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 	return nil
 }
 
-// In MySQL for both bigint and varbinary, 0x1234 is a valid value. For
-// varbinary, it is left justified and for bigint it is correctly
-// interpreted. So in all cases, we can use '0x' plus the hex version
-// of the values.
-// FIXME(alainjobart) use query format/bind vars
-var selectIntoOutfile = `SELECT * INTO OUTFILE "{{.TableOutputPath}}"
-  CHARACTER SET binary
-  FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\'
-  LINES TERMINATED BY '\n'
-  FROM {{.TableName}} WHERE
-   {{if .StartKey}}{{ .KeyspaceIdColumnName }} >= 0x{{.StartKey}} {{end}}
-   {{if and .StartKey .EndKey}} AND {{end}}
-   {{if .EndKey}} {{.KeyspaceIdColumnName}} < 0x{{.EndKey}} {{end}}`
-
-var loadDataInfile = `LOAD DATA INFILE '{{.TableInputPath}}' INTO TABLE {{.TableName}}
-  CHARACTER SET binary
-  FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\'
-  LINES TERMINATED BY '\n'`
-
-func (mysqld *Mysqld) validateSplitReplicaTarget() error {
-	// check activity
-	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
-	if err != nil {
-		return err
-	}
-	if len(qr.Rows) > 4 {
-		return fmt.Errorf("too many active db processes (%v > 4)", len(qr.Rows))
-	}
-
-	// make sure we can write locally
-	if err := mysqld.ValidateSnapshotPath(); err != nil {
-		return err
-	}
-
-	// NOTE: we expect that database was already created during tablet
-	// assignment, and we'll check that issuing a 'USE dbname' later
-	return nil
-}
-
-// this function runs on the machine acting as the source for the split
-//
-// Check master/slave status
-// Check paths for storing data
-// Create one file per table
-// Compress each file
-// Compute hash of each file
-// Place in /vt/snapshot they will be served by http server (not rpc)
-
-/*
-copied from replication.
-create a series of raw dump files the contain rows to be reinserted
-
-dbName - mysql db name
-keyName - name of the mysql column that is the leading edge of all primary keys
-startKey, endKey - the row range to prepare
-sourceAddr - the ip addr of the machine running the export
-allowHierarchicalReplication - allow replication from a slave
-*/
-func (mysqld *Mysqld) CreateSplitSnapshot(dbName, keyName string, startKey, endKey key.HexKeyspaceId, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, hookExtraEnv map[string]string) (snapshotManifestFilename string, err error) {
-	if dbName == "" {
-		err = fmt.Errorf("no database name provided")
-		return
-	}
-	// same logic applies here
-	relog.Info("validateCloneSource")
-	if err = mysqld.validateCloneSource(false, hookExtraEnv); err != nil {
-		return
-	}
-
-	// clean out and start fresh
-	relog.Info("removing previous snapshots: %v", mysqld.SnapshotDir)
-	if err = os.RemoveAll(mysqld.SnapshotDir); err != nil {
-		return
-	}
-
-	cloneSourcePath := path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+string(startKey)+","+string(endKey))
-	// clean out and start fresh
-	for _, _path := range []string{cloneSourcePath} {
-		if err = os.MkdirAll(_path, 0775); err != nil {
-			return
-		}
-	}
-
-	// get the schema for each table
-	sd, fetchErr := mysqld.GetSchema(dbName, nil, false)
-	if fetchErr != nil {
-		return "", fetchErr
-	}
-	if len(sd.TableDefinitions) == 0 {
-		return "", fmt.Errorf("empty table list for %v", dbName)
-	}
-	sd.SortByReverseDataLength()
-
-	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
-	if err != nil {
-		return
-	}
-
-	defer func() {
-		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly))
-	}()
-
-	var ssmFile string
-	dataFiles, snapshotErr := mysqld.createSplitSnapshotManifest(dbName, keyName, startKey, endKey, cloneSourcePath, sd, snapshotConcurrency)
-	if snapshotErr != nil {
-		relog.Error("CreateSplitSnapshotManifest failed: %v", snapshotErr)
-		return "", snapshotErr
-	} else {
-		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.IpAddr(),
-			masterAddr, dbName, dataFiles, replicationPosition,
-			myMasterPosition, startKey, endKey, sd)
-		if err != nil {
-			return "", err
-		}
-		ssmFile = path.Join(cloneSourcePath, partialSnapshotManifestFile)
-		if snapshotErr = writeJson(ssmFile, ssm); snapshotErr != nil {
-			return "", snapshotErr
-		}
-	}
-
-	relative, err := filepath.Rel(mysqld.SnapshotDir, ssmFile)
-	if err != nil {
-		return "", err
-	}
-	return path.Join(SnapshotURLPath, relative), nil
-}
-
-// createSplitSnapshotManifest exports each table to a CSV-like file
-// and compresses the results.
-func (mysqld *Mysqld) createSplitSnapshotManifest(dbName, keyName string, startKey, endKey key.HexKeyspaceId, cloneSourcePath string, sd *SchemaDefinition, snapshotConcurrency int) ([]SnapshotFile, error) {
-	n := len(sd.TableDefinitions)
-	errors := make(chan error)
-	work := make(chan int, n)
-
-	filenames := make([]string, n)
-	compressedFilenames := make([]string, n)
-	for i := 0; i < n; i++ {
-		td := sd.TableDefinitions[i]
-		filenames[i] = path.Join(cloneSourcePath, td.Name+".csv")
-		compressedFilenames[i] = filenames[i] + ".gz"
-		work <- i
-	}
-	close(work)
-
-	dataFiles := make([]SnapshotFile, n)
-
-	for i := 0; i < snapshotConcurrency; i++ {
-		go func() {
-			for i := range work {
-				td := sd.TableDefinitions[i]
-				relog.Info("Dump table %v...", td.Name)
-				filename := filenames[i]
-				compressedFilename := compressedFilenames[i]
-
-				// do the SQL query
-				queryParams := map[string]string{
-					"TableName":            dbName + "." + td.Name,
-					"KeyspaceIdColumnName": keyName,
-					// FIXME(alainjobart): move these to bind params
-					"TableOutputPath": filename,
-					"StartKey":        string(startKey),
-					"EndKey":          string(endKey),
-				}
-				sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
-				if err != nil {
-					errors <- err
-					continue
-				}
-				err = mysqld.executeSuperQuery(sio)
-				if err != nil {
-					errors <- err
-					continue
-				}
-
-				// compress the file
-				snapshotFile, err := newSnapshotFile(filename, compressedFilename, mysqld.SnapshotDir, true)
-				if err == nil {
-					dataFiles[i] = *snapshotFile
-				}
-
-				errors <- err
-			}
-		}()
-	}
-	var err error
-	for i := 0; i < n; i++ {
-		if dumpErr := <-errors; dumpErr != nil {
-			if err != nil {
-				relog.Error("Multiple errors, this one happened but won't be returned: %v", err)
-			}
-			err = dumpErr
-		}
-	}
-
-	if err != nil {
-		// clean up files if we had an error
-		// FIXME(alainjobart) it seems extreme to delete all files if
-		// the last one failed. Since we only move the file into
-		// its destination when it worked, we could assume if the file
-		// already exists it's good, and re-compute its hash.
-		relog.Info("Error happened, deleting all the files we already compressed")
-		for i := 0; i < n; i++ {
-			os.Remove(filenames[i])
-			os.Remove(compressedFilenames[i])
-		}
-		return nil, err
-	}
-
-	return dataFiles, nil
-}
-
 func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *ReplicationPosition, masterAddr string, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
 		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
 	}
-	// FIXME(szopa): is this necessary?
+
+	// For masters, set read-only so we don't write anything during snapshot
 	readOnly = true
 	if readOnly, err = mysqld.IsReadOnly(); err != nil {
 		return
@@ -589,8 +377,9 @@ func (nhw *namedHasherWriter) SnapshotFiles() ([]SnapshotFile, error) {
 	return nhw.snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, selectIntoOutfile, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
+	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
 		"TableName":            dbName + "." + td.Name,
 		"Columns":              strings.Join(td.Columns, ", "),
@@ -716,8 +505,6 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly))
 	}()
 
-	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
-
 	datafiles := make([]map[key.KeyRange][]SnapshotFile, len(sd.TableDefinitions))
 	dumpTableWorker := func(i int) (err error) {
 		table := sd.TableDefinitions[i]
@@ -725,7 +512,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			// we just skip views here
 			return nil
 		}
-		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, selectIntoOutfile, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
+		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
 		if err != nil {
 			return
 		}
@@ -1115,7 +902,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 				port,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
-				"", 0, 0,
+				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
 				keyRange.Start.Hex(),
 				keyRange.End.Hex(),
 				time.Now().Unix())
@@ -1126,111 +913,4 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 		}
 	}
 	return nil
-}
-
-/*
- This piece runs on the presumably empty machine acting as the target in the
- create replica action.
-
- validate target (self)
- shutdown_mysql()
- create temp data directory /vt/target/vt_<keyspace>
- copy compressed data files via HTTP
- verify hash of compressed files
- uncompress into /vt/vt_<target-uid>/data/vt_<keyspace>
- start_mysql()
- clean up compressed files
-*/
-func (mysqld *Mysqld) RestoreFromPartialSnapshot(snapshotManifest *SplitSnapshotManifest, fetchConcurrency, fetchRetryCount int) (err error) {
-	if err = mysqld.validateSplitReplicaTarget(); err != nil {
-		return
-	}
-
-	tempStoragePath := path.Join(mysqld.SnapshotDir, "partialrestore")
-	cleanDirs := []string{tempStoragePath}
-
-	// clean out and start fresh
-	// FIXME(msolomon) this might be changed to allow partial recovery
-	for _, dir := range cleanDirs {
-		if err = os.RemoveAll(dir); err != nil {
-			return
-		}
-		if err = os.MkdirAll(dir, 0775); err != nil {
-			return
-		}
-	}
-
-	if err = mysqld.SetReadOnly(true); err != nil {
-		return
-	}
-
-	// this will check that the database was properly created
-	createDbCmds := []string{
-		"USE " + snapshotManifest.Source.DbName}
-	for _, td := range snapshotManifest.SchemaDefinition.TableDefinitions {
-		createDbCmds = append(createDbCmds, td.Schema)
-	}
-
-	if err = mysqld.executeSuperQueryList(createDbCmds); err != nil {
-		return
-	}
-
-	if err = fetchFiles(snapshotManifest.Source, tempStoragePath, fetchConcurrency, fetchRetryCount); err != nil {
-		return
-	}
-
-	// FIXME(alainjobart) We recompute a lot of stuff that should be
-	// in fileutil.go
-	for _, fi := range snapshotManifest.Source.Files {
-		filename := fi.getLocalFilename(tempStoragePath)
-		tableName := strings.Replace(path.Base(filename), ".csv", "", -1)
-		queryParams := map[string]string{
-			"TableInputPath": filename,
-			"TableName":      snapshotManifest.Source.DbName + "." + tableName,
-		}
-		var query string
-		query, err = fillStringTemplate(loadDataInfile, queryParams)
-		if err != nil {
-			return
-		}
-		if err = mysqld.executeSuperQuery(query); err != nil {
-			// FIXME(msolomon) on abort, we should just tear down
-			// alternatively, we could just leave it and wait for the wrangler to
-			// notice and start cleaning up
-			return
-		}
-
-		relog.Info("%v ready", filename)
-	}
-
-	cmdList, err := StartSplitReplicationCommands(mysqld, snapshotManifest.Source.ReplicationState, snapshotManifest.KeyRange)
-	if err != nil {
-		return
-	}
-	if err = mysqld.executeSuperQueryList(cmdList); err != nil {
-		return
-	}
-
-	err = mysqld.WaitForSlaveStart(SlaveStartDeadline)
-	if err != nil {
-		return
-	}
-	// ok, now that replication is under way, wait for us to be caught up
-	if err = mysqld.WaitForSlave(5); err != nil {
-		return
-	}
-	// don't set readonly until the rest of the system is ready
-	return
-}
-
-func ReadSplitSnapshotManifest(filename string) (*SplitSnapshotManifest, error) {
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	ssm := new(SplitSnapshotManifest)
-	if err = json.Unmarshal(data, ssm); err != nil {
-		return nil, fmt.Errorf("ReadSplitSnapshotManifest failed: %v %v", filename, err)
-	}
-	return ssm, nil
 }

@@ -154,7 +154,6 @@ type SnapshotArgs struct {
 	ServerMode  bool
 }
 
-// used by both Snapshot and PartialSnapshot
 type SnapshotReply struct {
 	ZkParentPath string // XXX
 	ParentAlias  topo.TabletAlias
@@ -183,13 +182,6 @@ func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias topo.TabletAlias, args 
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SNAPSHOT_SOURCE_END, args: args})
 }
 
-type PartialSnapshotArgs struct {
-	KeyName     string
-	StartKey    key.HexKeyspaceId
-	EndKey      key.HexKeyspaceId
-	Concurrency int
-}
-
 type MultiSnapshotArgs struct {
 	KeyName          string
 	KeyRanges        []key.KeyRange
@@ -206,10 +198,6 @@ type MultiRestoreArgs struct {
 	InsertTableConcurrency int
 	FetchRetryCount        int
 	Strategy               string
-}
-
-func (ai *ActionInitiator) PartialSnapshot(tabletAlias topo.TabletAlias, args *PartialSnapshotArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_PARTIAL_SNAPSHOT, args: args})
 }
 
 func (ai *ActionInitiator) MultiSnapshot(tabletAlias topo.TabletAlias, args *MultiSnapshotArgs) (actionPath string, err error) {
@@ -282,7 +270,6 @@ func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias topo.TabletAlias, ar
 	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESERVE_FOR_RESTORE, args: args})
 }
 
-// used for both Restore and PartialRestore
 type RestoreArgs struct {
 	ZkSrcTabletPath       string // XXX
 	SrcTabletAlias        topo.TabletAlias
@@ -299,10 +286,6 @@ func (ai *ActionInitiator) Restore(dstTabletAlias topo.TabletAlias, args *Restor
 	args.ZkSrcTabletPath = zktopo.TabletPathForAlias(args.SrcTabletAlias) // XXX
 	args.ZkParentPath = zktopo.TabletPathForAlias(args.ParentAlias)       // XXX
 	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESTORE, args: args})
-}
-
-func (ai *ActionInitiator) PartialRestore(dstTabletAlias topo.TabletAlias, args *RestoreArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_PARTIAL_RESTORE, args: args})
 }
 
 func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath string, err error) {
@@ -399,6 +382,21 @@ func (ai *ActionInitiator) ApplySchemaShard(masterTabletAlias topo.TabletAlias, 
 			MasterTabletAlias: masterTabletAlias,
 			Change:            change,
 			Simple:            simple,
+		},
+	}
+}
+
+// parameters are stored for debug purposes
+type SetShardServedTypesArgs struct {
+	ServedTypes []topo.TabletType
+}
+
+func (ai *ActionInitiator) SetShardServedTypesArgs(servedTypes []topo.TabletType) *ActionNode {
+	return &ActionNode{
+		Action:     SHARD_ACTION_SET_SERVED_TYPES,
+		ActionGuid: actionGuid(),
+		args: &SetShardServedTypesArgs{
+			ServedTypes: servedTypes,
 		},
 	}
 }

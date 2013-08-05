@@ -33,7 +33,6 @@ type Mycnf struct {
 	RelayLogIndexPath     string
 	RelayLogInfoPath      string
 	BinLogPath            string
-	BinLogIndexPath       string
 	MasterInfoFile        string
 	PidFile               string
 	TmpDir                string
@@ -119,7 +118,6 @@ func ReadMycnf(cnfFile string) (mycnf *Mycnf, err error) {
 	mycnf.RelayLogIndexPath = mycnf.lookupAndCheck("relay-log-index")
 	mycnf.RelayLogInfoPath = mycnf.lookupAndCheck("relay-log-info-file")
 	mycnf.BinLogPath = mycnf.lookupAndCheck("log-bin")
-	mycnf.BinLogIndexPath = mycnf.lookupAndCheck("log-bin-index")
 	mycnf.MasterInfoFile = mycnf.lookupAndCheck("master-info-file")
 	mycnf.PidFile = mycnf.lookupAndCheck("pid-file")
 	//These values are currently not being set, hence not checking them.

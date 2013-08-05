@@ -30,6 +30,7 @@ import (
 	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	cproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
@@ -47,7 +48,6 @@ var (
 	txnBatch         = flag.Int("txn-batch", TXN_BATCH, "transaction batch size")
 	maxTxnInterval   = flag.Int("max-txn-interval", MAX_TXN_INTERVAL, "max txn interval")
 	startPosFile     = flag.String("start-pos-file", "", "server address and start coordinates")
-	useCheckpoint    = flag.Bool("use-checkpoint", false, "use the saved checkpoint to start")
 	dbConfigFile     = flag.String("db-config-file", "", "json file for db credentials")
 	lookupConfigFile = flag.String("lookup-config-file", "", "json file for lookup db credentials")
 	debug            = flag.Bool("debug", true, "run a debug version - prints the sql statements rather than executing them")
@@ -72,11 +72,9 @@ var (
 	SPACE                 = " "
 	USE_VT                = "use _vt"
 	USE_DB                = "use %v"
-	INSERT_INTO_RECOVERY  = `insert into _vt.blp_checkpoint (uid, host, port, master_filename, master_position, relay_filename, relay_position, group_id, keyrange_start, keyrange_end, txn_timestamp, time_updated) 
-	                          values (%v, '%v', %v, '%v', %v, '%v', %v, %v, '%v', '%v', unix_timestamp(), %v)`
-	UPDATE_RECOVERY      = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, relay_filename='%v', relay_position=%v, group_id=%v, txn_timestamp=unix_timestamp(), time_updated=%v where uid=%v"
-	UPDATE_PORT          = "update _vt.blp_checkpoint set port=%v where uid=%v"
-	SELECT_FROM_RECOVERY = "select * from _vt.blp_checkpoint where uid=%v"
+	UPDATE_RECOVERY       = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, group_id='%v', txn_timestamp=unix_timestamp(), time_updated=%v where uid=%v"
+	UPDATE_PORT           = "update _vt.blp_checkpoint set port=%v where uid=%v"
+	SELECT_FROM_RECOVERY  = "select * from _vt.blp_checkpoint where uid=%v"
 )
 
 /*
@@ -93,7 +91,7 @@ type binlogRecoveryState struct {
 	Uid           uint32
 	Host          string
 	Port          int
-	Position      mysqlctl.ReplicationCoordinates
+	Position      cproto.ReplicationCoordinates
 	KeyrangeStart string //hex string
 	KeyrangeEnd   string //hex string
 }
@@ -228,7 +226,7 @@ type BinlogPlayer struct {
 	startPosition  *binlogRecoveryState
 	rpcClient      *rpcplus.Client
 	inTxn          bool
-	txnBuffer      []*mysqlctl.BinlogResponse
+	txnBuffer      []*cproto.BinlogResponse
 	dbClient       VtClient
 	lookupClient   VtClient
 	debug          bool
@@ -259,7 +257,7 @@ func NewBinlogPlayer(startPosition *binlogRecoveryState, port int, krStart, krEn
 
 	blp.txnIndex = 0
 	blp.inTxn = false
-	blp.txnBuffer = make([]*mysqlctl.BinlogResponse, 0, mysqlctl.MAX_TXN_BATCH)
+	blp.txnBuffer = make([]*cproto.BinlogResponse, 0, mysqlctl.MAX_TXN_BATCH)
 	blp.debug = false
 	blp.blpStats = NewBlpStats()
 	blp.batchStart = time.Now()
@@ -277,13 +275,12 @@ func (blp *BinlogPlayer) updatePort(port int, uid uint32, useDb string) {
 	}
 }
 
-func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *mysqlctl.ReplicationCoordinates, groupId uint64) {
+func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.ReplicationCoordinates) {
 	blp.recoveryState.Position = *currentPosition
-	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY, currentPosition.MasterFilename,
+	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY,
+		currentPosition.MasterFilename,
 		currentPosition.MasterPosition,
-		currentPosition.RelayFilename,
-		currentPosition.RelayPosition,
-		groupId,
+		currentPosition.GroupId,
 		time.Now().Unix(),
 		blp.recoveryState.Uid)
 
@@ -309,7 +306,7 @@ func main() {
 		relog.Fatal("Cannot start without db-config-file")
 	}
 
-	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *useCheckpoint, *debug, *port)
+	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *debug, *port)
 	if err != nil {
 		relog.Fatal("Error in initializing binlog player - '%v'", err)
 	}
@@ -440,8 +437,8 @@ func createLookupClient(lookupConfigFile, dbCredFile string) (*DBClient, error) 
 	return lookupClient, nil
 }
 
-func getStartPosition(qr *proto.QueryResult) (*mysqlctl.ReplicationCoordinates, error) {
-	startPosition := &mysqlctl.ReplicationCoordinates{}
+func getStartPosition(qr *proto.QueryResult) (*cproto.ReplicationCoordinates, error) {
+	startPosition := &cproto.ReplicationCoordinates{}
 	row := qr.Rows[0]
 	for i, field := range qr.Fields {
 		switch strings.ToLower(field.Name) {
@@ -460,20 +457,10 @@ func getStartPosition(qr *proto.QueryResult) (*mysqlctl.ReplicationCoordinates, 
 				}
 				startPosition.MasterPosition = masterPos
 			}
-		case "relay_filename":
+		case "group_id":
 			val := row[i]
 			if !val.IsNull() {
-				startPosition.RelayFilename = val.String()
-			}
-		case "relay_position":
-			val := row[i]
-			if !val.IsNull() {
-				strVal := val.String()
-				relayPos, err := strconv.ParseUint(strVal, 0, 64)
-				if err != nil {
-					return nil, fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
-				}
-				startPosition.RelayPosition = relayPos
+				startPosition.GroupId = val.String()
 			}
 		default:
 			continue
@@ -482,7 +469,7 @@ func getStartPosition(qr *proto.QueryResult) (*mysqlctl.ReplicationCoordinates, 
 	return startPosition, nil
 }
 
-func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, useCheckpoint, debug bool, port int) (*BinlogPlayer, error) {
+func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile string, debug bool, port int) (*BinlogPlayer, error) {
 	startData, err := ioutil.ReadFile(startPosFile)
 	if err != nil {
 		return nil, fmt.Errorf("Error %s in reading start position file %s", err, startPosFile)
@@ -497,21 +484,20 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 	if err != nil {
 		return nil, err
 	}
-	if useCheckpoint {
-		selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
-		qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
-		if err != nil {
-			panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
-		}
-		if qr.RowsAffected != 1 {
-			relog.Fatal("Checkpoint information not available in db")
-		}
-		startCoord, err := getStartPosition(qr)
-		if err != nil {
-			relog.Fatal("Error in obtaining checkpoint information")
-		}
-		startPosition.Position = *startCoord
+
+	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
+	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
+	if err != nil {
+		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
+	if qr.RowsAffected != 1 {
+		relog.Fatal("Checkpoint information not available in db")
+	}
+	startCoord, err := getStartPosition(qr)
+	if err != nil {
+		relog.Fatal("Error in obtaining checkpoint information")
+	}
+	startPosition.Position = *startCoord
 
 	if !startPositionValid(startPosition) {
 		return nil, fmt.Errorf("Invalid Start Position")
@@ -541,43 +527,11 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		}
 		binlogPlayer.lookupClient = *lookupClient
 
-		if !useCheckpoint {
-			initialize_recovery_table(dbClient, startPosition, port)
-		}
-
 		useDb := fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
 		binlogPlayer.updatePort(port, startPosition.Uid, useDb)
 	}
 
 	return binlogPlayer, nil
-}
-
-func initialize_recovery_table(dbClient *DBClient, startPosition *binlogRecoveryState, port int) {
-	useDb := fmt.Sprintf(USE_DB, dbClient.dbConfig.Dbname)
-
-	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, startPosition.Uid)
-	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
-	if err != nil {
-		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
-	}
-	if qr.RowsAffected == 0 {
-		insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY, startPosition.Uid, startPosition.Host,
-			port,
-			startPosition.Position.MasterFilename,
-			startPosition.Position.MasterPosition,
-			startPosition.Position.RelayFilename,
-			startPosition.Position.RelayPosition,
-			0,
-			startPosition.KeyrangeStart,
-			startPosition.KeyrangeEnd,
-			time.Now().Unix())
-		recoveryDmls := []string{USE_VT, "begin", insertRecovery, "commit", useDb}
-		for _, sql := range recoveryDmls {
-			if _, err := dbClient.ExecuteFetch(sql, 0, false); err != nil {
-				panic(fmt.Errorf("Error %v in inserting into recovery table %v", err, sql))
-			}
-		}
-	}
 }
 
 func handleError(err *error, blp *BinlogPlayer) {
@@ -609,7 +563,7 @@ func (blp *BinlogPlayer) flushTxnBatch() {
 	blp.txnIndex = 0
 }
 
-func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogResponse) (err error) {
+func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogResponse) (err error) {
 	defer handleError(&err, blp)
 
 	//Read event
@@ -618,18 +572,18 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 		//maybe pending transactions in the buffer.
 		if strings.Contains(binlogResponse.Error, "EOF") {
 			relog.Info("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
-			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].SqlType == mysqlctl.COMMIT {
+			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].Data.SqlType == mysqlctl.COMMIT {
 				blp.flushTxnBatch()
 			}
 		}
-		if binlogResponse.BlPosition.Position.MasterFilename != "" {
-			panic(fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.BlPosition.Position.String(), binlogResponse.Error))
+		if binlogResponse.Position.Position.MasterFilename != "" {
+			panic(fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.Position.Position.String(), binlogResponse.Error))
 		} else {
 			panic(fmt.Errorf("Error encountered from server %v", binlogResponse.Error))
 		}
 	}
 
-	switch binlogResponse.SqlType {
+	switch binlogResponse.Data.SqlType {
 	case mysqlctl.DDL:
 		if blp.txnIndex > 0 {
 			relog.Info("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
@@ -665,15 +619,15 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *mysqlctl.BinlogRespo
 		}
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
 	default:
-		return fmt.Errorf("Unknown SqlType %v", binlogResponse.SqlType, binlogResponse.Sql)
+		return fmt.Errorf("Unknown SqlType %v", binlogResponse.Data.SqlType, binlogResponse.Data.Sql)
 	}
 
 	return nil
 }
 
 //DDL - apply the schema
-func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
-	for _, sql := range ddlEvent.Sql {
+func (blp *BinlogPlayer) handleDdl(ddlEvent *cproto.BinlogResponse) {
+	for _, sql := range ddlEvent.Data.Sql {
 		if sql == "" {
 			continue
 		}
@@ -685,7 +639,7 @@ func (blp *BinlogPlayer) handleDdl(ddlEvent *mysqlctl.BinlogResponse) {
 	if err = blp.dbClient.Begin(); err != nil {
 		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
 	}
-	blp.WriteRecoveryPosition(&ddlEvent.Position, ddlEvent.BlPosition.GroupId)
+	blp.WriteRecoveryPosition(&ddlEvent.Position.Position)
 	if err = blp.dbClient.Commit(); err != nil {
 		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 	}
@@ -712,21 +666,21 @@ func (blp *BinlogPlayer) handleLookupWrites(indexUpdates []string) {
 	}
 }
 
-func (blp *BinlogPlayer) createIndexUpdates(dmlEvent *mysqlctl.BinlogResponse) (indexSql string) {
-	keyspaceIdUint, err := strconv.ParseUint(dmlEvent.KeyspaceId, 10, 64)
+func (blp *BinlogPlayer) createIndexUpdates(dmlEvent *cproto.BinlogResponse) (indexSql string) {
+	keyspaceIdUint, err := strconv.ParseUint(dmlEvent.Data.KeyspaceId, 10, 64)
 	if err != nil {
-		panic(fmt.Errorf("Invalid keyspaceid '%v', error converting it, %v", dmlEvent.KeyspaceId, err))
+		panic(fmt.Errorf("Invalid keyspaceid '%v', error converting it, %v", dmlEvent.Data.KeyspaceId, err))
 	}
 	keyspaceId := key.Uint64Key(keyspaceIdUint).KeyspaceId()
 
 	if !blp.keyrange.Contains(keyspaceId) {
-		panic(fmt.Errorf("Invalid keyspace id %v for range %v-%v", dmlEvent.KeyspaceId, blp.startPosition.KeyrangeStart, blp.startPosition.KeyrangeEnd))
+		panic(fmt.Errorf("Invalid keyspace id %v for range %v-%v", dmlEvent.Data.KeyspaceId, blp.startPosition.KeyrangeStart, blp.startPosition.KeyrangeEnd))
 	}
 
-	if dmlEvent.IndexType != "" {
-		indexSql, err = createIndexSql(dmlEvent.SqlType, dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId)
+	if dmlEvent.Data.IndexType != "" {
+		indexSql, err = createIndexSql(dmlEvent.Data.SqlType, dmlEvent.Data.IndexType, dmlEvent.Data.IndexId, dmlEvent.Data.UserId)
 		if err != nil {
-			panic(fmt.Errorf("Error creating index update sql - IndexType %v, IndexId %v, UserId %v Sql '%v', err: '%v'", dmlEvent.IndexType, dmlEvent.IndexId, dmlEvent.UserId, dmlEvent.Sql, err))
+			panic(fmt.Errorf("Error creating index update sql - IndexType %v, IndexId %v, UserId %v Sql '%v', err: '%v'", dmlEvent.Data.IndexType, dmlEvent.Data.IndexId, dmlEvent.Data.UserId, dmlEvent.Data.Sql, err))
 		}
 	}
 	return
@@ -777,7 +731,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 	var txnStartTime, lookupStartTime, queryStartTime time.Time
 
 	for _, dmlEvent := range blp.txnBuffer {
-		switch dmlEvent.SqlType {
+		switch dmlEvent.Data.SqlType {
 		case mysqlctl.BEGIN:
 			continue
 		case mysqlctl.COMMIT:
@@ -788,7 +742,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 			lookupStartTime = time.Now()
 			blp.handleLookupWrites(indexUpdates)
 			blp.txnTime.Record("LookupTxn", lookupStartTime)
-			blp.WriteRecoveryPosition(&dmlEvent.Position, dmlEvent.BlPosition.GroupId)
+			blp.WriteRecoveryPosition(&dmlEvent.Position.Position)
 			if err = blp.dbClient.Commit(); err != nil {
 				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
 			}
@@ -798,7 +752,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 			blp.txnCount.Add("TxnCount", int64(blp.txnIndex))
 			blp.txnTime.Record("TxnTime", txnStartTime)
 		case "update", "delete", "insert":
-			if blp.dmlTableMatch(dmlEvent.Sql) {
+			if blp.dmlTableMatch(dmlEvent.Data.Sql) {
 				dmlMatch += 1
 				if dmlMatch == 1 {
 					if err = blp.dbClient.Begin(); err != nil {
@@ -812,7 +766,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 				if indexSql != "" {
 					indexUpdates = append(indexUpdates, indexSql)
 				}
-				for _, sql := range dmlEvent.Sql {
+				for _, sql := range dmlEvent.Data.Sql {
 					queryStartTime = time.Now()
 					if _, err = blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
 						if sqlErr, ok := err.(*mysql.SqlError); ok {
@@ -828,10 +782,10 @@ func (blp *BinlogPlayer) handleTxn() bool {
 					}
 					blp.txnTime.Record("QueryTime", queryStartTime)
 				}
-				queryCount += int64(len(dmlEvent.Sql))
+				queryCount += int64(len(dmlEvent.Data.Sql))
 			}
 		default:
-			panic(fmt.Errorf("Invalid SqlType %v", dmlEvent.SqlType))
+			panic(fmt.Errorf("Invalid SqlType %v", dmlEvent.Data.SqlType))
 		}
 	}
 	return true
@@ -900,9 +854,9 @@ func (blp *BinlogPlayer) applyBinlogEvents() error {
 		return fmt.Errorf("Error in dialing to vt_binlog_server, %v", err)
 	}
 
-	responseChan := make(chan *mysqlctl.BinlogResponse)
+	responseChan := make(chan *cproto.BinlogResponse)
 	relog.Info("making rpc request @ %v for keyrange %v:%v", blp.startPosition.Position, blp.startPosition.KeyrangeStart, blp.startPosition.KeyrangeEnd)
-	blServeRequest := &mysqlctl.BinlogServerRequest{StartPosition: blp.startPosition.Position,
+	blServeRequest := &cproto.BinlogServerRequest{StartPosition: blp.startPosition.Position,
 		KeyspaceStart: blp.startPosition.KeyrangeStart,
 		KeyspaceEnd:   blp.startPosition.KeyrangeEnd}
 	resp := blp.rpcClient.StreamGo("BinlogServer.ServeBinlog", blServeRequest, responseChan)

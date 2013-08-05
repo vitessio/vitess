@@ -54,9 +54,7 @@ const (
 	TABLET_ACTION_SNAPSHOT_SOURCE_END = "SnapshotSourceEnd"
 	TABLET_ACTION_RESERVE_FOR_RESTORE = "ReserveForRestore"
 	TABLET_ACTION_RESTORE             = "Restore"
-	TABLET_ACTION_PARTIAL_SNAPSHOT    = "PartialSnapshot"
 	TABLET_ACTION_MULTI_SNAPSHOT      = "MultiSnapshot"
-	TABLET_ACTION_PARTIAL_RESTORE     = "PartialRestore"
 	TABLET_ACTION_MULTI_RESTORE       = "MultiRestore"
 
 	// Shard actions - involve all tablets in a shard
@@ -68,6 +66,8 @@ const (
 	SHARD_ACTION_CHECK = "CheckShard"
 	// Apply a schema change on an entire shard
 	SHARD_ACTION_APPLY_SCHEMA = "ApplySchemaShard"
+	// Changes the ServedTypes inside a shard
+	SHARD_ACTION_SET_SERVED_TYPES = "SetShardServedTypes"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
@@ -160,14 +160,9 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &ReserveForRestoreArgs{}
 	case TABLET_ACTION_RESTORE:
 		node.args = &RestoreArgs{}
-	case TABLET_ACTION_PARTIAL_SNAPSHOT:
-		node.args = &PartialSnapshotArgs{}
-		node.reply = &SnapshotReply{}
 	case TABLET_ACTION_MULTI_SNAPSHOT:
 		node.args = &MultiSnapshotArgs{}
 		node.reply = &MultiSnapshotReply{}
-	case TABLET_ACTION_PARTIAL_RESTORE:
-		node.args = &RestoreArgs{}
 	case TABLET_ACTION_MULTI_RESTORE:
 		node.args = &MultiRestoreArgs{}
 
@@ -179,6 +174,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case SHARD_ACTION_CHECK:
 	case SHARD_ACTION_APPLY_SCHEMA:
 		node.args = &ApplySchemaShardArgs{}
+	case SHARD_ACTION_SET_SERVED_TYPES:
+		node.args = &SetShardServedTypesArgs{}
 
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:

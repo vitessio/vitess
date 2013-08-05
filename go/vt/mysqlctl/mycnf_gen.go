@@ -56,7 +56,6 @@ func NewMycnf(uid uint32, mysqlPort int, vtRepl VtReplParams) *Mycnf {
 	cnf.RelayLogInfoPath = path.Join(tabletDir, relayLogDir, "relay-log.info")
 	cnf.BinLogPath = path.Join(tabletDir, binLogDir,
 		fmt.Sprintf("vt-%010d-bin", cnf.ServerId))
-	cnf.BinLogIndexPath = cnf.BinLogPath + ".index"
 	cnf.MasterInfoFile = path.Join(tabletDir, "master.info")
 	cnf.PidFile = path.Join(tabletDir, "mysql.pid")
 	cnf.TmpDir = path.Join(tabletDir, "tmp")
