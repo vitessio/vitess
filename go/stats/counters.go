@@ -11,6 +11,9 @@ import (
 	"sync"
 )
 
+// Counters is similar to expvar.Map, except that
+// it doesn't allow floats. In addition, it provides
+// a Counts method which can be used for tracking rates.
 type Counters struct {
 	mu     sync.Mutex
 	counts map[string]int64
@@ -20,6 +23,7 @@ func NewCounters(name string) *Counters {
 	c := &Counters{counts: make(map[string]int64)}
 	if name != "" {
 		expvar.Publish(name, c)
+		callHook(name, c)
 	}
 	return c
 }

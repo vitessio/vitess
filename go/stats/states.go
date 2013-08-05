@@ -19,65 +19,72 @@ import (
 // - how many times we transitioned into a state (not counting initial state)
 type States struct {
 	// set at construction time
-	StateCount int
-	Labels     []string
+	labels []string
 
 	// the following variables can change, protected by mutex
-	mu                    sync.Mutex
-	CurrentState          int
-	CurrentStateStartTime time.Time // when we switched to our state
+	mu    sync.Mutex
+	state int
+	since time.Time // when we switched to our state
 
 	// historical data about the states
-	Durations   []time.Duration // how much time in each state
-	Transitions []int           // how many times we got into a state
+	durations   []time.Duration // how much time in each state
+	transitions []int           // how many times we got into a state
 }
 
+// NewStates creates a states tracker.
+// If name is empty, the variable is not published.
 func NewStates(name string, labels []string, startTime time.Time, initialState int) *States {
-	s := &States{StateCount: len(labels), Labels: labels, CurrentState: initialState, CurrentStateStartTime: startTime, Durations: make([]time.Duration, len(labels)), Transitions: make([]int, len(labels))}
-	if initialState < 0 || initialState >= s.StateCount {
-		panic(fmt.Errorf("initialState out of range 0-%v: %v", s.StateCount, initialState))
+	s := &States{labels: labels, state: initialState, since: startTime, durations: make([]time.Duration, len(labels)), transitions: make([]int, len(labels))}
+	if initialState < 0 || initialState >= len(s.labels) {
+		panic(fmt.Errorf("initialState out of range 0-%v: %v", len(s.labels), initialState))
 	}
 	if name != "" {
 		expvar.Publish(name, s)
+		callHook(name, s)
 	}
 	return s
 }
 
 func (s *States) SetState(state int) {
-	s.SetStateAt(state, time.Now())
+	s.setStateAt(state, time.Now())
 }
 
 // now has to be increasing, or we panic. Usually, only one execution
 // thread can change a state, and therefore just using time.now()
 // will be enough
-func (s *States) SetStateAt(state int, now time.Time) {
-	if state < 0 || state >= s.StateCount {
-		panic(fmt.Errorf("State out of range 0-%v: %v", s.StateCount, state))
+func (s *States) setStateAt(state int, now time.Time) {
+	if state < 0 || state >= len(s.labels) {
+		panic(fmt.Errorf("State out of range 0-%v: %v", len(s.labels), state))
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	// check we're going strictly forward in time
-	dur := now.Sub(s.CurrentStateStartTime)
+	dur := now.Sub(s.since)
 	if dur < 0 {
-		panic(fmt.Errorf("Time going backwards? %v < %v", now, s.CurrentStateStartTime))
+		panic(fmt.Errorf("Time going backwards? %v < %v", now, s.since))
 	}
 
 	// record the previous state duration, reset our state
-	s.Durations[s.CurrentState] += dur
-	s.Transitions[state] += 1
-	s.CurrentState = state
-	s.CurrentStateStartTime = now
+	s.durations[s.state] += dur
+	s.transitions[state] += 1
+	s.state = state
+	s.since = now
 }
 
-// expvar.Var interface
-// just call StringAt(now)
+// Get returns the current state and the time since.
+func (s *States) Get() (state int, since time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.state, s.since
+}
+
 func (s *States) String() string {
-	return s.StringAt(time.Now())
+	return s.stringAt(time.Now())
 }
 
-func (s *States) StringAt(now time.Time) string {
+func (s *States) stringAt(now time.Time) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -85,15 +92,15 @@ func (s *States) StringAt(now time.Time) string {
 	fmt.Fprintf(b, "{")
 
 	// report our current state
-	fmt.Fprintf(b, "\"Current\": \"%v\"", s.Labels[s.CurrentState])
+	fmt.Fprintf(b, "\"Current\": \"%v\"", s.labels[s.state])
 
 	// report the total durations
-	for i := 0; i < s.StateCount; i++ {
+	for i := 0; i < len(s.labels); i++ {
 
-		d := s.Durations[i]
-		t := s.Transitions[i]
-		if i == s.CurrentState {
-			dur := now.Sub(s.CurrentStateStartTime)
+		d := s.durations[i]
+		t := s.transitions[i]
+		if i == s.state {
+			dur := now.Sub(s.since)
 			if dur > 0 {
 				// we don't panic if now is not growing,
 				// as it can happen in some corner cases
@@ -104,8 +111,8 @@ func (s *States) StringAt(now time.Time) string {
 		}
 
 		fmt.Fprintf(b, ", ")
-		fmt.Fprintf(b, "\"Duration%v\": %v, ", s.Labels[i], int64(d))
-		fmt.Fprintf(b, "\"TransitionInto%v\": %v", s.Labels[i], t)
+		fmt.Fprintf(b, "\"Duration%v\": %v, ", s.labels[i], int64(d))
+		fmt.Fprintf(b, "\"TransitionInto%v\": %v", s.labels[i], t)
 	}
 
 	fmt.Fprintf(b, "}")
