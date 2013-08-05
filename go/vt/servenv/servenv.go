@@ -23,6 +23,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	_ "github.com/youtube/vitess/go/logutil"
 )
 
 var (
@@ -35,8 +36,6 @@ func Init() {
 	if uid := os.Getuid(); uid == 0 {
 		log.Fatalf("servenv.Init: running this as root makes no sense")
 	}
-	// FIXME(ryszard): Enable this when hijacking works with glog.
-	// relog.HijackLog(nil)
 	// FIXME(msolomon) Can't hijack with a logfile because the file descriptor
 	// changes after every rotation. Might need to make the logfile more posix
 	// friendly.
