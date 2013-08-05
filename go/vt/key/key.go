@@ -99,6 +99,22 @@ func KeyRangesIntersect(first, second KeyRange) bool {
 		(second.End == MaxKey || first.Start < second.End)
 }
 
+// KeyRangesOverlap returns the overlap between two KeyRanges.
+// They need to overlap, otherwise an error is returned.
+func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
+	if !KeyRangesIntersect(first, second) {
+		return KeyRange{}, fmt.Errorf("Keyranges %v and %v don't overlap", first, second)
+	}
+	result := first
+	if second.Start > first.Start {
+		result.Start = second.Start
+	}
+	if second.End != MaxKey && second.End < first.End {
+		result.End = second.End
+	}
+	return result, nil
+}
+
 // KeyspaceIdArray is an array of KeyspaceId that can be sorted
 type KeyspaceIdArray []KeyspaceId
 
