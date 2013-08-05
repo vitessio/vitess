@@ -132,15 +132,7 @@ func (logger *Logger) outputWithData(level, callLevel int, data interface{}, for
 		return nil
 	}
 	now := time.Now()
-	redactedArgs := make([]interface{}, len(args))
-	for i, arg := range args {
-		if redactor, ok := arg.(Redactor); ok {
-			redactedArgs[i] = redactor.Redacted()
-		} else {
-			redactedArgs[i] = arg
-		}
-	}
-	msg := fmt.Sprintf(format, redactedArgs...)
+	msg := fmt.Sprintf(format, args...)
 	logger.mu.Lock()
 	line := logger.fmtStandardFields(now, level, callLevel, msg, data)
 	_, err := io.WriteString(logger.out, line)
@@ -170,20 +162,6 @@ func (logger *Logger) SetLevel(level int) {
 	logger.mu.Lock()
 	logger.level = level
 	logger.mu.Unlock()
-}
-
-// Redactor is an interface for types that may contain sensitive
-// information (like passwords), which shouldn't be printed to the
-// log.
-type Redactor interface {
-	// Redacted returns a copy of the instance with sensitive
-	// information removed.
-	Redacted() interface{}
-}
-
-// Redact returns a string of * having the same length as s.
-func Redact(s string) string {
-	return strings.Repeat("*", len(s))
 }
 
 var std = New(os.Stderr, "", INFO)
