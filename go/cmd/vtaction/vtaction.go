@@ -14,11 +14,11 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
+	_ "github.com/youtube/vitess/go/logutil"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
 	_ "github.com/youtube/vitess/go/snitch"
-
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
@@ -54,7 +54,6 @@ func main() {
 
 	// FIXME(ryszard): Bring this back when hijacking works with
 	// glog.
-	// relog.HijackLog(nil)
 	// relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
