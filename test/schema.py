@@ -160,7 +160,7 @@ def run_test_complex_schema():
   # verify GetSchema --tables works
   out, err = utils.run_vtctl('GetSchema --tables=vt_select_test0 ' +
                              shard_0_replica1.tablet_alias,
-                             log_level='INFO', trap_output=True)
+                             trap_output=True)
   if not "vt_select_test0" in err or "vt_select_test1" in err:
     raise utils.TestError('Unexpected GetSchema --tables=vt_select_test0 output: %s' % err)
 
@@ -169,7 +169,7 @@ def run_test_complex_schema():
   out, err = utils.run_vtctl(['ApplySchemaKeyspace',
                               '-sql='+create_vt_select_test[2],
                               'test_keyspace'],
-                             log_level='INFO', trap_output=True,
+                             trap_output=True,
                              raise_on_error=False)
   if err.find('ApplySchemaKeyspace Shard 1 has inconsistent schema') == -1:
     raise utils.TestError('Unexpected ApplySchemaKeyspace output: %s' % err)

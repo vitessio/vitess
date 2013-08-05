@@ -14,12 +14,10 @@ due to external circumstances.
 package tabletmanager
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -118,17 +116,12 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 		return nil
 	}
 
-	logfile := flag.Lookup("logfile").Value.String()
-	if !strings.HasPrefix(logfile, "/dev") {
-		logfile = path.Join(path.Dir(logfile), "vtaction.log")
-	}
 	cmd := []string{
 		agent.vtActionBinFile,
 		"-action", actionNode.Action,
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
 		"-mycnf-file", agent.MycnfFile,
-		"-logfile", logfile,
 	}
 	cmd = append(cmd, agent.ts.GetSubprocessFlags()...)
 	if agent.DbConfigsFile != "" {

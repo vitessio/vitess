@@ -63,9 +63,6 @@ class Tablet(object):
   def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None):
     utils.prog_compile(['mysqlctl'])
 
-    logLevel = ''
-    if utils.options.verbose and not quiet:
-      logLevel = ' -log.level=INFO'
 
     env = None
     if extra_my_cnf:
@@ -73,7 +70,7 @@ class Tablet(object):
       env['EXTRA_MY_CNF'] = extra_my_cnf
 
     return utils.run_bg(os.path.join(utils.vtroot, 'bin', 'mysqlctl') +
-                        logLevel + ' -tablet-uid %u ' % self.tablet_uid + cmd,
+                        ' -tablet-uid %u ' % self.tablet_uid + cmd,
                         env=env)
 
   def init_mysql(self, extra_my_cnf=None):
@@ -270,10 +267,6 @@ class Tablet(object):
   def querylog_file(self):
     return os.path.join(self.tablet_dir, "vttablet.querylog")
 
-  @property
-  def logfile(self):
-    return os.path.join(self.tablet_dir, "vttablet.log")
-
   def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}):
     """
     Starts a vttablet process, and returns it.
@@ -286,8 +279,7 @@ class Tablet(object):
     args = [os.path.join(utils.vtroot, 'bin', 'vttablet'),
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
-            '-logfile', self.logfile,
-            '-log.level', 'INFO',
+            '-log_dir', self.tablet_dir,
             '-db-configs-file', self._write_db_configs_file(repl_extra_flags),
             '-debug-querylog-file', self.querylog_file]
 
