@@ -7,7 +7,6 @@ package zkocc
 import (
 	"bytes"
 	"errors"
-	"expvar"
 	"fmt"
 	"strings"
 	"sync"
@@ -51,8 +50,7 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 		zkr.localCell = zk.GuessLocalCell()
 	}
 
-	// register to expvar
-	expvar.Publish("ZkReader", stats.StrFunc(func() string { return zkr.statsJSON() }))
+	stats.PublishFunc("ZkReader", func() string { return zkr.statsJSON() })
 
 	// start some cells
 	for _, cellName := range preload {

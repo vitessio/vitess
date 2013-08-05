@@ -19,21 +19,21 @@ func TestOneState(t *testing.T) {
 
 	// get the value a bit later
 	now = time.Date(2012, 12, 12, 12, 0, 25, 0, location)
-	result := s.StringAt(now)
+	result := s.stringAt(now)
 	if result != "{\"Current\": \"Init\", \"DurationInit\": 25000000000, \"TransitionIntoInit\": 0, \"DurationOpen\": 0, \"TransitionIntoOpen\": 0, \"DurationClosed\": 0, \"TransitionIntoClosed\": 0}" {
 		t.Errorf("unexpected result: %v", result)
 	}
 
 	// get the value a bit later again
 	now = time.Date(2012, 12, 12, 12, 10, 0, 0, location)
-	result = s.StringAt(now)
+	result = s.stringAt(now)
 	if result != "{\"Current\": \"Init\", \"DurationInit\": 600000000000, \"TransitionIntoInit\": 0, \"DurationOpen\": 0, \"TransitionIntoOpen\": 0, \"DurationClosed\": 0, \"TransitionIntoClosed\": 0}" {
 		t.Errorf("unexpected result: %v", result)
 	}
 
 	// get the value a bit later again
 	now = time.Date(2012, 12, 12, 12, 11, 0, 0, location)
-	result = s.StringAt(now)
+	result = s.stringAt(now)
 	if result != "{\"Current\": \"Init\", \"DurationInit\": 660000000000, \"TransitionIntoInit\": 0, \"DurationOpen\": 0, \"TransitionIntoOpen\": 0, \"DurationClosed\": 0, \"TransitionIntoClosed\": 0}" {
 		t.Errorf("unexpected result: %v", result)
 	}
@@ -49,25 +49,25 @@ func TestTransitions(t *testing.T) {
 
 	// get the value a bit later
 	now = time.Date(2012, 12, 12, 12, 0, 25, 0, location)
-	result := s.StringAt(now)
+	result := s.stringAt(now)
 	if result != "{\"Current\": \"Init\", \"DurationInit\": 25000000000, \"TransitionIntoInit\": 0, \"DurationOpen\": 0, \"TransitionIntoOpen\": 0, \"DurationClosed\": 0, \"TransitionIntoClosed\": 0}" {
 		t.Errorf("unexpected result: %v", result)
 	}
 
 	// now transition to a new state
 	now = time.Date(2012, 12, 12, 12, 0, 30, 0, location)
-	s.SetStateAt(1, now)
+	s.setStateAt(1, now)
 
 	// and ask for current status a bit later
 	now = time.Date(2012, 12, 12, 12, 1, 0, 0, location)
-	result = s.StringAt(now)
+	result = s.stringAt(now)
 	if result != "{\"Current\": \"Open\", \"DurationInit\": 30000000000, \"TransitionIntoInit\": 0, \"DurationOpen\": 30000000000, \"TransitionIntoOpen\": 1, \"DurationClosed\": 0, \"TransitionIntoClosed\": 0}" {
 		t.Errorf("unexpected result: %v", result)
 	}
 
 	// and ask again for current status a bit later
 	now = time.Date(2012, 12, 12, 12, 2, 0, 0, location)
-	result = s.StringAt(now)
+	result = s.stringAt(now)
 	if result != "{\"Current\": \"Open\", \"DurationInit\": 30000000000, \"TransitionIntoInit\": 0, \"DurationOpen\": 90000000000, \"TransitionIntoOpen\": 1, \"DurationClosed\": 0, \"TransitionIntoClosed\": 0}" {
 		t.Errorf("unexpected result: %v", result)
 	}

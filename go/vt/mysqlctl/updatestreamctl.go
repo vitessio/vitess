@@ -4,7 +4,6 @@
 package mysqlctl
 
 import (
-	"expvar"
 	"fmt"
 	"path"
 	"sync"
@@ -56,7 +55,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 		"Enabled",
 	}, time.Now(), DISABLED)
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
-	expvar.Publish("UpdateStreamRpcService", estats.StrFunc(func() string { return UpdateStreamRpcService.statsJSON() }))
+	estats.PublishFunc("UpdateStreamRpcService", func() string { return UpdateStreamRpcService.statsJSON() })
 }
 
 func logError() {

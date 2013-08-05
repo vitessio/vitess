@@ -11,10 +11,15 @@ import (
 	"time"
 )
 
+// CountTracker defines the interface that needs to
+// be supported by a variable for being tracked by
+// Rates.
 type CountTracker interface {
 	Counts() map[string]int64
 }
 
+// Rates is capable of reporting the rate (typically QPS)
+// for any variable that satisfies the CountTracker interface.
 type Rates struct {
 	mu           sync.Mutex
 	timeStamps   *RingInt64
@@ -24,22 +29,29 @@ type Rates struct {
 	interval     time.Duration
 }
 
+// NewRates reports rolling rate information for countTracker. samples specifies
+// the number of samples to report, and interval specifies the time interval
+// between samples. The minimum interval is 1 second.
 func NewRates(name string, countTracker CountTracker, samples int, interval time.Duration) *Rates {
+	if interval < 1*time.Second {
+		panic("interval too small")
+	}
 	rt := &Rates{
-		timeStamps:   NewRingInt64(samples),
+		timeStamps:   NewRingInt64(samples + 1),
 		counts:       make(map[string]*RingInt64),
 		countTracker: countTracker,
-		samples:      samples,
+		samples:      samples + 1,
 		interval:     interval,
 	}
 	if name != "" {
 		expvar.Publish(name, rt)
+		callHook(name, rt)
 	}
-	go rt.Track()
+	go rt.track()
 	return rt
 }
 
-func (rt *Rates) Track() {
+func (rt *Rates) track() {
 	for {
 		rt.snapshot()
 		<-time.After(rt.interval)
@@ -62,15 +74,15 @@ func (rt *Rates) snapshot() {
 	}
 }
 
-func (rt *Rates) String() string {
+func (rt *Rates) Get() (rateMap map[string][]float64) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
+	rateMap = make(map[string][]float64)
 	timeStamps := rt.timeStamps.Values()
 	if len(timeStamps) <= 1 {
-		return "{}"
+		return
 	}
-	rateMap := make(map[string][]float64)
 	for k, v := range rt.counts {
 		rateMap[k] = make([]float64, len(timeStamps)-1)
 		values := v.Values()
@@ -85,7 +97,11 @@ func (rt *Rates) String() string {
 			valueIndex--
 		}
 	}
-	data, err := json.MarshalIndent(rateMap, "", "  ")
+	return
+}
+
+func (rt *Rates) String() string {
+	data, err := json.Marshal(rt.Get())
 	if err != nil {
 		data, _ = json.Marshal(err.Error())
 	}
