@@ -11,6 +11,9 @@ import (
 	"sync"
 )
 
+// Histogram tracks counts and totals while
+// splitting the counts under different buckets
+// using specified cutoffs.
 type Histogram struct {
 	cutoffs    []int64
 	labels     []string
@@ -23,6 +26,10 @@ type Histogram struct {
 	total   int64
 }
 
+// NewHistogram creates a histogram with auto-generated labels
+// based on the cutoffs. The buckets are categorized using the
+// following criterion: cutoff[i-1] < value <= cutoff[i]. Anything
+// higher than the highest cutoff is labeled as "Max".
 func NewHistogram(name string, cutoffs []int64) *Histogram {
 	labels := make([]string, len(cutoffs)+1)
 	for i, v := range cutoffs {
@@ -32,7 +39,14 @@ func NewHistogram(name string, cutoffs []int64) *Histogram {
 	return NewGenericHistogram(name, cutoffs, labels, "Count", "Total")
 }
 
+// NewGenericHistogram creates a histogram where all the labels are
+// supplied by the caller. The number of labels has to be one more than
+// the number of cutoffs because the last label captures everything that
+// exceeds the highest cutoff.
 func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLabel, totalLabel string) *Histogram {
+	if len(cutoffs) != len(labels)-1 {
+		panic("mismatched cutoff and label lengths")
+	}
 	h := &Histogram{
 		cutoffs:    cutoffs,
 		labels:     labels,
@@ -43,6 +57,7 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 	}
 	if name != "" {
 		expvar.Publish(name, h)
+		callHook(name, h)
 	}
 	return h
 }
@@ -81,6 +96,17 @@ func (h *Histogram) MarshalJSON() ([]byte, error) {
 	return b.Bytes(), nil
 }
 
+func (h *Histogram) Counts() map[string]int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	counts := make(map[string]int64, len(h.labels))
+	for i, label := range h.labels {
+		counts[label] = h.buckets[i]
+	}
+	return counts
+}
+
 func (h *Histogram) Count() (count int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -88,5 +114,11 @@ func (h *Histogram) Count() (count int64) {
 	for _, v := range h.buckets {
 		count += v
 	}
-	return count
+	return
+}
+
+func (h *Histogram) Total() (total int64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.total
 }
