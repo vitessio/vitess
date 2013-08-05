@@ -5,6 +5,9 @@
 package wrangler
 
 import (
+	"fmt"
+	"sync"
+
 	"github.com/youtube/vitess/go/relog"
 	cc "github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
@@ -122,7 +125,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 		return err
 	}
 
-	sourceTablets, mrErr := wr.shardMultiRestore(keyspace, shard, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
+	mrErr := wr.shardMultiRestore(keyspace, shard, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
 	err = wr.unlockShard(keyspace, shard, actionNode, lockPath, mrErr)
 	if err != nil {
 		return err
@@ -131,46 +134,60 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 		return mrErr
 	}
 
+	// find all tablets in the shard
+	destTablets, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
 	// now launch MultiRestore on all tablets we need to do
 	rec := cc.AllErrorRecorder{}
-	for tabletAlias, ti := range sourceTablets {
-		go func(tabletAlias topo.TabletAlias, ti *topo.TabletInfo) {
+	wg := sync.WaitGroup{}
+	for _, tabletAlias := range destTablets {
+		wg.Add(1)
+		go func(tabletAlias topo.TabletAlias) {
 			relog.Info("Starting multirestore on tablet %v", tabletAlias)
 			err := wr.RestoreFromMultiSnapshot(tabletAlias, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
 			relog.Info("Multirestore on tablet %v is done (err=%v)", tabletAlias, err)
 			rec.RecordError(err)
-		}(tabletAlias, ti)
+			wg.Done()
+		}(tabletAlias)
 	}
+	wg.Wait()
 
 	return rec.Error()
 }
 
-func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (map[topo.TabletAlias]*topo.TabletInfo, error) {
+func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// read the source tablets
 	sourceTablets, err := GetTabletMap(wr.TopoServer(), sources)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// insert their KeyRange / shard in the SourceShards array
 	shardInfo.SourceShards = make([]topo.SourceShard, 0, len(sourceTablets))
 	for _, ti := range sourceTablets {
+		overlap, err := key.KeyRangesOverlap(shardInfo.KeyRange, ti.KeyRange)
+		if err != nil {
+			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", ti.KeyRange, shardInfo.KeyRange)
+		}
 		ss := topo.SourceShard{
-			KeyRange: ti.KeyRange,
+			KeyRange: overlap,
 		}
 		shardInfo.SourceShards = append(shardInfo.SourceShards, ss)
 	}
 
 	// and write the shard
 	if err = wr.ts.UpdateShard(shardInfo); err != nil {
-		return nil, err
+		return err
 	}
 
-	return sourceTablets, nil
+	return nil
 }

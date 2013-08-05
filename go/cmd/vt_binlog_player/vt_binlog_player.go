@@ -88,7 +88,8 @@ func main() {
 	}()
 
 	var vtClient mysqlctl.VtClient
-	vtClient, err = mysqlctl.NewDbClient(dbConfig)
+	vtClient = mysqlctl.NewDbClient(dbConfig)
+	err = vtClient.Connect()
 	if err != nil {
 		relog.Fatal("error in initializing dbClient: %v", err)
 	}

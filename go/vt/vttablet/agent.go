@@ -64,12 +64,20 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 		topo.CloseServers()
 	})
 
+	// Start the binlog server service, disabled at start.
 	binlogServer := mysqlctl.NewBinlogServer(mycnf)
 	mysqlctl.RegisterBinlogServerService(binlogServer)
 	umgmt.AddCloseCallback(func() {
 		mysqlctl.DisableBinlogServerService(binlogServer)
 	})
 
+	// Start the binlog player services, not playing at start.
+	binlogPlayerMap := NewBinlogPlayerMap(topoServer, &dbcfgs.Dba)
+	umgmt.AddCloseCallback(func() {
+		binlogPlayerMap.StopAllPlayers()
+	})
+
+	// Compute the bind addresses
 	bindAddr := fmt.Sprintf(":%v", port)
 	secureAddr := ""
 	if securePort != 0 {
@@ -131,6 +139,11 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 			if mysqlctl.IsBinlogServerEnabled(binlogServer) {
 				mysqlctl.DisableBinlogServerService(binlogServer)
 			}
+		}
+
+		// See if we need to start or stop any binlog player
+		if newTablet.Type == topo.TYPE_MASTER {
+			binlogPlayerMap.RefreshMap(newTablet)
 		}
 	})
 

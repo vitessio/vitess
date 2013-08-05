@@ -191,6 +191,7 @@ def run_test_resharding():
   utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpRecovery', 'test_keyspace/C0-', shard_1_replica.tablet_alias], auto_log=True)
 
   # now filtered replication should just work, need to test it.
+  utils.pause("AAAAAAAAAAAA")
 
   # now serve rdonly from the split shards
   utils.run_vtctl('SetShardServedTypes test_keyspace/80- master,replica')

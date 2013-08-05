@@ -29,7 +29,7 @@ var (
 	BLPL_STREAM_COMMENT_START = "/* _stream "
 	BLPL_SPACE                = " "
 	UPDATE_RECOVERY           = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, group_id='%v', txn_timestamp=unix_timestamp(), time_updated=%v where keyrange_start='%v' and keyrange_end='%v'"
-	SELECT_FROM_RECOVERY      = "select * from _vt.blp_checkpoint where uid=keyrange_start='%v' and keyrange_end='%v'"
+	SELECT_FROM_RECOVERY      = "select * from _vt.blp_checkpoint where keyrange_start='%v' and keyrange_end='%v'"
 )
 
 // binlogRecoveryState is the checkpoint data we read / save into
@@ -44,7 +44,7 @@ type binlogRecoveryState struct {
 
 // VtClient is a high level interface to the database
 type VtClient interface {
-	Connect() (*mysql.Connection, error)
+	Connect() error
 	Begin() error
 	Commit() error
 	Rollback() error
@@ -63,8 +63,8 @@ func NewDummyVtClient() *DummyVtClient {
 	return &DummyVtClient{stdout}
 }
 
-func (dc DummyVtClient) Connect() (*mysql.Connection, error) {
-	return nil, nil
+func (dc DummyVtClient) Connect() error {
+	return nil
 }
 
 func (dc DummyVtClient) Begin() error {
@@ -94,15 +94,10 @@ type DBClient struct {
 	dbConn   *mysql.Connection
 }
 
-func NewDbClient(dbConfig *mysql.ConnectionParams) (*DBClient, error) {
+func NewDbClient(dbConfig *mysql.ConnectionParams) *DBClient {
 	dbClient := &DBClient{}
 	dbClient.dbConfig = dbConfig
-	var err error
-	dbClient.dbConn, err = dbClient.Connect()
-	if err != nil {
-		return nil, fmt.Errorf("error in connecting to mysql db, err %v", err)
-	}
-	return dbClient, nil
+	return dbClient
 }
 
 func (dc *DBClient) handleError(err error) {
@@ -117,11 +112,16 @@ func (dc *DBClient) handleError(err error) {
 	}
 }
 
-func (dc DBClient) Connect() (*mysql.Connection, error) {
-	return mysql.Connect(*dc.dbConfig)
+func (dc *DBClient) Connect() error {
+	var err error
+	dc.dbConn, err = mysql.Connect(*dc.dbConfig)
+	if err != nil {
+		return fmt.Errorf("error in connecting to mysql db, err %v", err)
+	}
+	return nil
 }
 
-func (dc DBClient) Begin() error {
+func (dc *DBClient) Begin() error {
 	_, err := dc.dbConn.ExecuteFetch(BLPL_BEGIN, 1, false)
 	if err != nil {
 		relog.Error("BEGIN failed w/ error %v", err)
@@ -130,7 +130,7 @@ func (dc DBClient) Begin() error {
 	return err
 }
 
-func (dc DBClient) Commit() error {
+func (dc *DBClient) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch(BLPL_COMMIT, 1, false)
 	if err != nil {
 		relog.Error("COMMIT failed w/ error %v", err)
@@ -139,7 +139,7 @@ func (dc DBClient) Commit() error {
 	return err
 }
 
-func (dc DBClient) Rollback() error {
+func (dc *DBClient) Rollback() error {
 	_, err := dc.dbConn.ExecuteFetch(ROLLBACK, 1, false)
 	if err != nil {
 		relog.Error("ROLLBACK failed w/ error %v", err)
@@ -148,13 +148,14 @@ func (dc DBClient) Rollback() error {
 	return err
 }
 
-func (dc DBClient) Close() {
+func (dc *DBClient) Close() {
 	if dc.dbConn != nil {
 		dc.dbConn.Close()
+		dc.dbConn = nil
 	}
 }
 
-func (dc DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		relog.Error("ExecuteFetch failed w/ error %v", err)
@@ -282,7 +283,7 @@ func ReadStartPosition(dbClient VtClient, keyrangeStart, keyrangeEnd string) (*b
 		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
 	if qr.RowsAffected != 1 {
-		relog.Fatal("Checkpoint information not available in db")
+		relog.Fatal("Checkpoint information not available in db for %v-%v", keyrangeStart, keyrangeEnd)
 	}
 	row := qr.Rows[0]
 	for i, field := range qr.Fields {

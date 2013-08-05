@@ -94,6 +94,7 @@ import (
 
 	"github.com/youtube/vitess/go/bufio2"
 	"github.com/youtube/vitess/go/cgzip"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -888,11 +889,18 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
 		for _, manifest := range manifests {
+			// The _vt.blp_recovery table gets the vttablet
+			// address.
+			host, port, err := netutil.SplitHostPort(manifest.Source.Addr)
+			if err != nil {
+				return err
+			}
+
 			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
 				manifest.KeyRange.Start.Hex(),
 				manifest.KeyRange.End.Hex(),
-				manifest.Source.MasterState.MasterHost,
-				manifest.Source.MasterState.MasterPort,
+				host,
+				port,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
