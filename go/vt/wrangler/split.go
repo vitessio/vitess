@@ -5,7 +5,7 @@
 package wrangler
 
 import (
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/key"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -19,7 +19,7 @@ func replaceError(original, recent error) error {
 		return original
 	}
 	if original != nil {
-		relog.Error("One of multiple error: %v", original)
+		log.Errorf("One of multiple error: %v", original)
 	}
 	return recent
 }
@@ -39,7 +39,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
-		relog.Info("force change type master -> backup: %v", tabletAlias)
+		log.Infof("force change type master -> backup: %v", tabletAlias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = topo.TYPE_BACKUP
@@ -53,10 +53,10 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	}
 
 	restoreAfterSnapshot = func() (err error) {
-		relog.Info("change type after snapshot: %v %v", tabletAlias, originalType)
+		log.Infof("change type after snapshot: %v %v", tabletAlias, originalType)
 
 		if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot {
-			relog.Info("force change type backup -> master: %v", tabletAlias)
+			log.Infof("force change type backup -> master: %v", tabletAlias)
 			ti.Tablet.Type = topo.TYPE_MASTER
 			return topo.UpdateTablet(wr.ts, ti)
 		}

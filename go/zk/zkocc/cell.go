@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/zk"
@@ -124,12 +124,12 @@ func (zcell *zkCell) connect() {
 		panic(fmt.Errorf("Unexpected state: %v", zcell.state))
 	}
 	if err == nil {
-		relog.Info("zk cell conn: cell %v connected", zcell.cellName)
+		log.Infof("zk cell conn: cell %v connected", zcell.cellName)
 		zcell.setState(CELL_CONNECTED)
 		zcell.lastErr = nil
 
 	} else {
-		relog.Info("zk cell conn: cell %v connection failed: %v", zcell.cellName, err)
+		log.Infof("zk cell conn: cell %v connection failed: %v", zcell.cellName, err)
 		zcell.setState(CELL_BACKOFF)
 		zcell.lastErr = err
 
@@ -171,7 +171,7 @@ func (zcell *zkCell) connect() {
 // (alainjobart: Note I've never seen a STATE_CLOSED message)
 func (zcell *zkCell) handleSessionEvents(session <-chan zookeeper.Event) {
 	for event := range session {
-		relog.Info("zk cell conn: cell %v received: %v", zcell.cellName, event)
+		log.Infof("zk cell conn: cell %v received: %v", zcell.cellName, event)
 		switch event.State {
 		case zookeeper.STATE_EXPIRED_SESSION, zookeeper.STATE_CONNECTING:
 			zcell.zconn.Close()
@@ -185,10 +185,10 @@ func (zcell *zkCell) handleSessionEvents(session <-chan zookeeper.Event) {
 			// if connect fails again, then we'll backoff
 			go zcell.connect()
 			zcell.mutex.Unlock()
-			relog.Warning("zk cell conn: session for cell %v ended: %v", zcell.cellName, event)
+			log.Warningf("zk cell conn: session for cell %v ended: %v", zcell.cellName, event)
 			return
 		default:
-			relog.Info("zk conn cache: session for cell %v event: %v", zcell.cellName, event)
+			log.Infof("zk conn cache: session for cell %v event: %v", zcell.cellName, event)
 		}
 	}
 }

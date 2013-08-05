@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -93,7 +93,7 @@ func (entry *zkCacheEntry) get(zcell *zkCell, path string, reply *zk.ZkNode) err
 		zconn, err := zcell.getConnection()
 		if err != nil {
 			entry.dataError = err
-			relog.Warning("ZK connection error for path %v: %v", path, err)
+			log.Warningf("ZK connection error for path %v: %v", path, err)
 			zcell.otherErrors.Add(1)
 			return err
 		}
@@ -105,7 +105,7 @@ func (entry *zkCacheEntry) get(zcell *zkCell, path string, reply *zk.ZkNode) err
 		entry.node.Data, stat, watch, err = zconn.GetW(path)
 		if err != nil {
 			entry.dataError = err
-			relog.Warning("ZK error for path %v: %v", path, err)
+			log.Warningf("ZK error for path %v: %v", path, err)
 			if zookeeper.IsError(err, zookeeper.ZNONODE) {
 				zcell.nodeNotFoundErrors.Add(1)
 			} else {
@@ -159,7 +159,7 @@ func (entry *zkCacheEntry) children(zcell *zkCell, path string, reply *zk.ZkNode
 		zconn, err := zcell.getConnection()
 		if err != nil {
 			entry.childrenError = err
-			relog.Warning("ZK connection error for path %v: %v", path, err)
+			log.Warningf("ZK connection error for path %v: %v", path, err)
 			zcell.otherErrors.Add(1)
 			return err
 		}
@@ -171,7 +171,7 @@ func (entry *zkCacheEntry) children(zcell *zkCell, path string, reply *zk.ZkNode
 		entry.node.Children, stat, watch, err = zconn.ChildrenW(path)
 		if err != nil {
 			entry.childrenError = err
-			relog.Warning("ZK error for path %v: %v", path, err)
+			log.Warningf("ZK error for path %v: %v", path, err)
 			if zookeeper.IsError(err, zookeeper.ZNONODE) {
 				zcell.nodeNotFoundErrors.Add(1)
 			} else {
@@ -356,11 +356,11 @@ func (zkc *ZkCache) refreshSomeValues(zconn zk.Conn, maxToRefresh int) {
 			entry.updateData(data, zkStat, watch)
 		} else if zookeeper.IsError(err, zookeeper.ZCLOSING) {
 			// connection is closing, no point in asking for more
-			relog.Warning("failed to refresh cache: %v (and stopping refresh)", err.Error())
+			log.Warningf("failed to refresh cache: %v (and stopping refresh)", err.Error())
 			return
 		} else {
 			// individual failure
-			relog.Warning("failed to refresh cache: %v", err.Error())
+			log.Warningf("failed to refresh cache: %v", err.Error())
 		}
 	}
 
@@ -372,11 +372,11 @@ func (zkc *ZkCache) refreshSomeValues(zconn zk.Conn, maxToRefresh int) {
 			entry.updateChildren(children, zkStat, watch)
 		} else if zookeeper.IsError(err, zookeeper.ZCLOSING) {
 			// connection is closing, no point in asking for more
-			relog.Warning("failed to refresh cache: %v (and stopping refresh)", err.Error())
+			log.Warningf("failed to refresh cache: %v (and stopping refresh)", err.Error())
 			return
 		} else {
 			// individual failure
-			relog.Warning("failed to refresh cache: %v", err.Error())
+			log.Warningf("failed to refresh cache: %v", err.Error())
 		}
 	}
 }

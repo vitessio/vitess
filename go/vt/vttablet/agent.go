@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -33,13 +33,13 @@ func loadCustomRules(customrules string) *ts.QueryRules {
 
 	data, err := ioutil.ReadFile(customrules)
 	if err != nil {
-		relog.Fatal("Error reading file %v: %v", customrules, err)
+		log.Fatalf("Error reading file %v: %v", customrules, err)
 	}
 
 	qrs := ts.NewQueryRules()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
-		relog.Fatal("Error unmarshaling query rules %v", err)
+		log.Fatalf("Error unmarshaling query rules %v", err)
 	}
 	return qrs
 }
@@ -47,10 +47,10 @@ func loadCustomRules(customrules string) *ts.QueryRules {
 func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 	var schemaOverrides []ts.SchemaOverride
 	if err := jscfg.ReadJson(overridesFile, &schemaOverrides); err != nil {
-		relog.Warning("can't read overridesFile %v: %v", overridesFile, err)
+		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
 	} else {
 		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
-		relog.Info("schemaOverrides: %s\n", data)
+		log.Infof("schemaOverrides: %s\n", data)
 	}
 	return schemaOverrides
 }
@@ -98,7 +98,7 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 				qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
 				err = qr.AddBindVarCond("keyspace_id", true, true, ts.QR_NOTIN, dbcfgs.App.KeyRange)
 				if err != nil {
-					relog.Warning("Unable to add keyspace rule: %v", err)
+					log.Warningf("Unable to add keyspace rule: %v", err)
 				} else {
 					qrs.Add(qr)
 				}

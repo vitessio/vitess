@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -87,7 +87,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 }
 
 func (sq *SqlQuery) setState(state int32) {
-	relog.Info("SqlQuery state: %v -> %v", stateName[sq.state.Get()], stateName[state])
+	log.Infof("SqlQuery state: %v -> %v", stateName[sq.state.Get()], stateName[state])
 	sq.state.Set(state)
 	sq.states.SetState(int(state))
 }
@@ -98,7 +98,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 	switch v {
 	case CONNECTING, ABORT, OPEN:
 		sq.statemu.Unlock()
-		relog.Info("Ignoring allowQueries request, current state: %v", v)
+		log.Infof("Ignoring allowQueries request, current state: %v", v)
 		return
 	case INITIALIZING, SHUTTING_DOWN:
 		panic("unreachable")
@@ -115,7 +115,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 			c.Close()
 			break
 		}
-		relog.Error("%v", err)
+		log.Errorf("%v", err)
 		time.Sleep(waitTime)
 		// Cap at 32 seconds
 		if waitTime < 30*time.Second {
@@ -124,7 +124,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 		if sq.state.Get() == ABORT {
 			// Exclusive transition. No need to lock statemu.
 			sq.setState(CLOSED)
-			relog.Info("allowQueries aborting")
+			log.Infof("allowQueries aborting")
 			return
 		}
 	}
@@ -134,14 +134,14 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 	defer sq.statemu.Unlock()
 	if sq.state.Get() == ABORT {
 		sq.setState(CLOSED)
-		relog.Info("allowQueries aborting")
+		log.Infof("allowQueries aborting")
 		return
 	}
 	sq.setState(INITIALIZING)
 
 	defer func() {
 		if x := recover(); x != nil {
-			relog.Error("%s", x.(*TabletError).Message)
+			log.Errorf("%s", x.(*TabletError).Message)
 			sq.setState(NOT_SERVING)
 			return
 		}
@@ -151,7 +151,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 	sq.qe.Open(dbconfig, schemaOverrides, qrs)
 	sq.dbconfig = dbconfig
 	sq.sessionId = Rand()
-	relog.Info("Session id: %d", sq.sessionId)
+	log.Infof("Session id: %d", sq.sessionId)
 }
 
 func (sq *SqlQuery) disallowQueries(forRestart bool) {
@@ -183,7 +183,7 @@ func (sq *SqlQuery) disallowQueries(forRestart bool) {
 		}
 	}()
 
-	relog.Info("Stopping query service: %d", sq.sessionId)
+	log.Infof("Stopping query service: %d", sq.sessionId)
 	sq.qe.Close(forRestart)
 	sq.sessionId = 0
 	sq.dbconfig = dbconfigs.DBConfig{}
@@ -301,7 +301,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
-			relog.Error("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
+			log.Errorf("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic for %v", x, query)
 			errorStats.Add("Panic", 1)
 			return
@@ -311,7 +311,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 		if terr.ErrorType == RETRY || terr.SqlError == DUPLICATE_KEY { // suppress these errors in logs
 			return
 		}
-		relog.Error("%s: %v", terr.Message, query)
+		log.Errorf("%s: %v", terr.Message, query)
 	}
 }
 

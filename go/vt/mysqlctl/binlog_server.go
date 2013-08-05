@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	gstats "github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -76,7 +76,7 @@ func NewBlsEventBuffer(pos *proto.BinlogPosition, line []byte) *blsEventBuffer {
 	//buf.LogLine = append(buf.LogLine, line...)
 	written := copy(buf.LogLine, line)
 	if written < len(line) {
-		relog.Warning("Problem in copying logline to new buffer, written %v, len %v", written, len(line))
+		log.Warningf("Problem in copying logline to new buffer, written %v, len %v", written, len(line))
 	}
 	buf.BinlogPosition = *pos
 	buf.BinlogPosition.Timestamp = pos.Timestamp
@@ -140,15 +140,15 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse) {
 		if x := recover(); x != nil {
 			serr, ok := x.(*BinlogServerError)
 			if !ok {
-				relog.Error("[%v:%v] Uncaught panic for stream @ %v, err: %v ", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, x)
+				log.Errorf("[%v:%v] Uncaught panic for stream @ %v, err: %v ", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, x)
 				panic(x)
 			}
 			err := *serr
 			if readErr != nil {
-				relog.Error("[%v:%v] StreamBinlog error @ %v, error: %v, readErr %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err, readErr)
+				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v, readErr %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err, readErr)
 				err = BinlogServerError{Msg: fmt.Sprintf("%v, readErr: %v", err, readErr)}
 			} else {
-				relog.Error("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err)
+				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err)
 			}
 			sendError(sendReply, reqIdentifier, err, blp.currentPosition)
 		}
@@ -181,7 +181,7 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse) {
 	//This function monitors the exit of read data pipeline.
 	go func(readErr *error, readErrChan chan error, binlogDecoder *BinlogDecoder) {
 		*readErr = <-readErrChan
-		//relog.Info("Read data-pipeline returned readErr: '%v'", *readErr)
+		//log.Infof("Read data-pipeline returned readErr: '%v'", *readErr)
 		if *readErr != nil {
 			binlogDecoder.Kill()
 		}
@@ -193,7 +193,7 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse) {
 func (blp *Bls) getBinlogStream(writer *os.File, blr *BinlogReader, readErrChan chan error) {
 	defer func() {
 		if err := recover(); err != nil {
-			relog.Error("getBinlogStream failed: %v", err)
+			log.Errorf("getBinlogStream failed: %v", err)
 			readErrChan <- err.(error)
 		}
 	}()
@@ -272,7 +272,7 @@ func (blp *Bls) readBlsLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 			blp.globalState.blsStats.parseStats.Add("BufferFullErrors."+blp.keyrangeTag, 1)
 			continue
 		} else if tempErr != nil {
-			relog.Error("[%v:%v] Error in reading %v, data read %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), tempErr, string(tempLine))
+			log.Errorf("[%v:%v] Error in reading %v, data read %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), tempErr, string(tempLine))
 			err = tempErr
 		} else if len(bigLine) > 0 {
 			if len(tempLine) > 0 {
@@ -294,7 +294,7 @@ func (blp *Bls) parseDbChange(event *blsEventBuffer) {
 		return
 	}
 	if blp.globalState.dbname == "" {
-		relog.Warning("Dbname is not set, will match all database names")
+		log.Warningf("Dbname is not set, will match all database names")
 		return
 	}
 	blp.globalState.blsStats.parseStats.Add("DBChange."+blp.keyrangeTag, 1)
@@ -368,7 +368,7 @@ func (blp *Bls) parseEventData(sendReply proto.SendBinlogResponse, event *blsEve
 			}
 			//Ignore these often occuring statement types.
 			if !IgnoredStatement(event.LogLine) {
-				relog.Warning("Unknown statement '%v'", string(event.LogLine))
+				log.Warningf("Unknown statement '%v'", string(event.LogLine))
 			}
 		}
 	}
@@ -447,7 +447,7 @@ func (blp *Bls) handleBeginEvent(event *blsEventBuffer) {
 			}
 			panic(NewBinlogServerError(fmt.Sprintf("BEGIN encountered with non-empty trxn buffer, len: %d, buf %v", len(blp.txnLineBuffer), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
 		} else {
-			relog.Warning("Non-zero txn buffer, while inTxn false")
+			log.Warningf("Non-zero txn buffer, while inTxn false")
 		}
 	}
 	blp.txnLineBuffer = blp.txnLineBuffer[:0]
@@ -540,7 +540,7 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 			dmlEvent.Data.Sql = make([]string, len(dmlBuffer))
 			dmlLines := copy(dmlEvent.Data.Sql, dmlBuffer)
 			if dmlLines < len(dmlBuffer) {
-				relog.Warning("The entire dml buffer was not properly copied")
+				log.Warningf("The entire dml buffer was not properly copied")
 			}
 			txnResponseList = append(txnResponseList, dmlEvent)
 			dmlBuffer = dmlBuffer[:0]
@@ -583,7 +583,7 @@ func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspace
 	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
 	if keyspaceIndex == -1 {
 		if controlDbStatement(sql, dmlType) {
-			relog.Warning("Ignoring no keyspace id, control db stmt %v", string(sql))
+			log.Warningf("Ignoring no keyspace id, control db stmt %v", string(sql))
 			return
 		}
 		panic(NewBinlogServerError(fmt.Sprintf("Invalid Sql, doesn't contain keyspace id, sql: %v", string(sql))))
@@ -670,7 +670,7 @@ func sendError(sendReply proto.SendBinlogResponse, reqIdentifier string, inputEr
 	buf := []*proto.BinlogResponse{streamBuf}
 	err = blsSendStream(sendReply, buf)
 	if err != nil {
-		relog.Error("Error in communicating message %v with the client: %v", inputErr, err)
+		log.Errorf("Error in communicating message %v with the client: %v", inputErr, err)
 	}
 }
 
@@ -680,14 +680,14 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 			//Send the error to the client.
 			_, ok := x.(*BinlogServerError)
 			if !ok {
-				relog.Error("Uncaught panic at top-most level: '%v'", x)
+				log.Errorf("Uncaught panic at top-most level: '%v'", x)
 				//panic(x)
 			}
 			sendError(sendReply, req.StartPosition.String(), x.(error), nil)
 		}
 	}()
 
-	relog.Info("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
+	log.Infof("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
 	if !isRequestValid(req) {
 		panic(NewBinlogServerError("Invalid request, cannot serve the stream"))
 	}
@@ -711,7 +711,7 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 	blp := NewBls(&req.StartPosition, blServer, keyRange)
 	blp.binlogPrefix = binlogPrefix
 
-	relog.Info("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)
+	log.Infof("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)
 	blp.streamBinlog(sendReply)
 	return nil
 }

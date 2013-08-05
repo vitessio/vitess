@@ -7,7 +7,7 @@ package tabletserver
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
 )
 
@@ -80,7 +80,7 @@ func handleError(err *error, logStats *sqlQueryStats) {
 	if x := recover(); x != nil {
 		terr, ok := x.(*TabletError)
 		if !ok {
-			relog.Error("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
+			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic", x)
 			errorStats.Add("Panic", 1)
 			return
@@ -90,12 +90,12 @@ func handleError(err *error, logStats *sqlQueryStats) {
 		if terr.ErrorType == RETRY { // Retry errors are too spammy
 			return
 		}
-		relog.Error("%s", terr.Message)
+		log.Errorf("%s", terr.Message)
 	}
 }
 
 func logError() {
 	if x := recover(); x != nil {
-		relog.Error("%s", x.(*TabletError).Message)
+		log.Errorf("%s", x.(*TabletError).Message)
 	}
 }

@@ -6,7 +6,7 @@ package snitch
 
 import (
 	"fmt"
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"net/http"
 	"runtime"
 )
@@ -47,9 +47,9 @@ func GcHandler(response http.ResponseWriter, request *http.Request) {
 	go func() {
 		// NOTE(msolomon) I'm not sure if this blocks or not - a cursory glance at the
 		// code didn't reveal enough and I'm being lazy
-		relog.Info("start forced garbage collection")
+		log.Infof("start forced garbage collection")
 		runtime.GC()
-		relog.Info("finished forced garbage collection")
+		log.Infof("finished forced garbage collection")
 	}()
 
 	data := "forced gc\n"

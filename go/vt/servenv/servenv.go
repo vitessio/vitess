@@ -23,8 +23,8 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/logfile"
-	"github.com/youtube/vitess/go/relog"
 )
 
 var (
@@ -67,7 +67,7 @@ func Init(logPrefix string) error {
 		gomaxprocs = "1"
 	}
 	// Could report this in an expvar instead.
-	relog.Info("GOMAXPROCS = %v", gomaxprocs)
+	log.Infof("GOMAXPROCS = %v", gomaxprocs)
 
 	// We used to set this limit directly, but you pretty much have to
 	// use a root account to allow increasing a limit reliably. Dropping
@@ -76,10 +76,10 @@ func Init(logPrefix string) error {
 	// the server.
 	fdLimit := &syscall.Rlimit{}
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
-		relog.Error("max-open-fds failed: %v", err)
+		log.Errorf("max-open-fds failed: %v", err)
 	} else {
 		// Could report this in an expvar instead.
-		relog.Info("max-open-fds: %v", fdLimit.Cur)
+		log.Infof("max-open-fds: %v", fdLimit.Cur)
 	}
 
 	return exportBinaryVersion()

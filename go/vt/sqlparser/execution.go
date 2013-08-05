@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
 )
@@ -167,7 +167,7 @@ func ExecParse(sql string, getTable TableGetter) (plan *ExecPlan, err error) {
 	}
 	plan = tree.execAnalyzeSql(getTable)
 	if plan.PlanId == PLAN_PASS_DML {
-		relog.Warning("PASS_DML: %s", sql)
+		log.Warningf("PASS_DML: %s", sql)
 	}
 	return plan, nil
 }
@@ -330,7 +330,7 @@ func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
-		relog.Warning("no primary key for table %s", tableName)
+		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = REASON_TABLE_NOINDEX
 		return plan
 	}
@@ -380,7 +380,7 @@ func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
-		relog.Warning("no primary key for table %s", tableName)
+		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = REASON_TABLE_NOINDEX
 		return plan
 	}
@@ -419,7 +419,7 @@ func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
-		relog.Warning("no primary key for table %s", tableName)
+		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = REASON_TABLE_NOINDEX
 		return plan
 	}
@@ -709,7 +709,7 @@ func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues 
 		}
 		value := node.At(i).At(1).execAnalyzeValue()
 		if value == nil {
-			relog.Warning("expression is too complex %v", node.At(i).At(0))
+			log.Warningf("expression is too complex %v", node.At(i).At(0))
 			return nil, false
 		}
 		if pkValues == nil {
@@ -788,7 +788,7 @@ func getInsertPKValues(pkColumnNumbers []int, rowList *Node, tableInfo *schema.T
 			node := rowList.At(j).At(0).At(columnNumber) // NODE_LIST->'('->NODE_LIST->Value
 			value := node.execAnalyzeValue()
 			if value == nil {
-				relog.Warning("insert is too complex %v", node)
+				log.Warningf("insert is too complex %v", node)
 				return nil
 			}
 			values[j] = asInterface(value)
@@ -863,7 +863,7 @@ func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
 
 func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interface{}) {
 	if pkIndex.Name != "PRIMARY" {
-		relog.Warning("Table has no primary key")
+		log.Warningf("Table has no primary key")
 		return nil
 	}
 	pkIndexScore := NewIndexScore(pkIndex)

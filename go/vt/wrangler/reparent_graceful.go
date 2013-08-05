@@ -7,7 +7,7 @@ package wrangler
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -53,7 +53,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[topo.TabletAlias]*t
 		return fmt.Errorf("demote master failed: %v, if the master is dead, run: vtctl -force ScrapTablet %v", err, masterTablet.Alias())
 	}
 
-	relog.Info("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
+	log.Infof("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
 	restartableSlaveTabletMap := restartableTabletMap(slaveTabletMap)
 	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
 	if err != nil {
@@ -77,14 +77,14 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[topo.TabletAlias]*t
 	//
 	// FIXME(msolomon) We could reintroduce it and reparent it and use
 	// it as new replica.
-	relog.Info("scrap demoted master %v", masterTablet.Alias())
+	log.Infof("scrap demoted master %v", masterTablet.Alias())
 	scrapActionPath, scrapErr := wr.ai.Scrap(masterTablet.Alias())
 	if scrapErr == nil {
 		scrapErr = wr.ai.WaitForCompletion(scrapActionPath, wr.actionTimeout())
 	}
 	if scrapErr != nil {
 		// The sub action is non-critical, so just warn.
-		relog.Warning("scrap demoted master failed: %v", scrapErr)
+		log.Warningf("scrap demoted master failed: %v", scrapErr)
 	}
 
 	err = wr.finishReparent(masterTablet, masterElectTablet, majorityRestart, leaveMasterReadOnly)

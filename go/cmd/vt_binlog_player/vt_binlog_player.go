@@ -22,9 +22,9 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/umgmt"
@@ -138,7 +138,7 @@ type DBClient struct {
 }
 
 func (dc *DBClient) handleError(err error) {
-	//relog.Error("in DBClient handleError %v", err.(error))
+	//log.Errorf("in DBClient handleError %v", err.(error))
 	if sqlErr, ok := err.(*mysql.SqlError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dc.Close()
@@ -156,7 +156,7 @@ func (dc DBClient) Connect() (*mysql.Connection, error) {
 func (dc DBClient) Begin() error {
 	_, err := dc.dbConn.ExecuteFetch(BEGIN, 1, false)
 	if err != nil {
-		relog.Error("BEGIN failed w/ error %v", err)
+		log.Errorf("BEGIN failed w/ error %v", err)
 		dc.handleError(err)
 	}
 	return err
@@ -165,7 +165,7 @@ func (dc DBClient) Begin() error {
 func (dc DBClient) Commit() error {
 	_, err := dc.dbConn.ExecuteFetch(COMMIT, 1, false)
 	if err != nil {
-		relog.Error("COMMIT failed w/ error %v", err)
+		log.Errorf("COMMIT failed w/ error %v", err)
 		dc.dbConn.Close()
 	}
 	return err
@@ -174,7 +174,7 @@ func (dc DBClient) Commit() error {
 func (dc DBClient) Rollback() error {
 	_, err := dc.dbConn.ExecuteFetch(ROLLBACK, 1, false)
 	if err != nil {
-		relog.Error("ROLLBACK failed w/ error %v", err)
+		log.Errorf("ROLLBACK failed w/ error %v", err)
 		dc.dbConn.Close()
 	}
 	return err
@@ -189,7 +189,7 @@ func (dc DBClient) Close() {
 func (dc DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
-		relog.Error("ExecuteFetch failed w/ error %v", err)
+		log.Errorf("ExecuteFetch failed w/ error %v", err)
 		dc.handleError(err)
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 	}
 	blp.txnTime.Record("QueryTime", queryStartTime)
 	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
-		relog.Info("SLOW QUERY '%v'", updateRecovery)
+		log.Infof("SLOW QUERY '%v'", updateRecovery)
 	}
 }
 
@@ -299,16 +299,16 @@ func main() {
 	servenv.Init("vt_binlog_player")
 
 	if *startPosFile == "" {
-		relog.Fatal("start-pos-file was not supplied.")
+		log.Fatalf("start-pos-file was not supplied.")
 	}
 
 	if *dbConfigFile == "" {
-		relog.Fatal("Cannot start without db-config-file")
+		log.Fatalf("Cannot start without db-config-file")
 	}
 
 	blp, err := initBinlogPlayer(*startPosFile, *dbConfigFile, *lookupConfigFile, *dbCredFile, *debug, *port)
 	if err != nil {
-		relog.Fatal("Error in initializing binlog player - '%v'", err)
+		log.Fatalf("Error in initializing binlog player - '%v'", err)
 	}
 	blp.txnBatch = *txnBatch
 	blp.maxTxnInterval = time.Duration(*maxTxnInterval) * time.Second
@@ -320,10 +320,10 @@ func main() {
 		for i, table := range tables {
 			blp.tables[i] = strings.TrimSpace(table)
 		}
-		relog.Info("len tables %v tables %v", len(blp.tables), blp.tables)
+		log.Infof("len tables %v tables %v", len(blp.tables), blp.tables)
 	}
 
-	relog.Info("BinlogPlayer client for keyrange '%v:%v' starting @ '%v'",
+	log.Infof("BinlogPlayer client for keyrange '%v:%v' starting @ '%v'",
 		blp.startPosition.KeyrangeStart,
 		blp.startPosition.KeyrangeEnd,
 		blp.startPosition.Position)
@@ -350,27 +350,27 @@ func main() {
 	stdout = bufio.NewWriterSize(os.Stdout, 16*1024)
 	err = blp.applyBinlogEvents()
 	if err != nil {
-		relog.Error("Error in applying binlog events, err %v", err)
+		log.Errorf("Error in applying binlog events, err %v", err)
 	}
-	relog.Info("vt_binlog_player done")
+	log.Infof("vt_binlog_player done")
 }
 
 func startPositionValid(startPos *binlogRecoveryState) bool {
 	if startPos.Uid == 0 {
-		relog.Error("Missing Uid")
+		log.Errorf("Missing Uid")
 		return false
 	}
 	if startPos.Host == "" || startPos.Port == 0 {
-		relog.Error("Invalid connection params.")
+		log.Errorf("Invalid connection params.")
 		return false
 	}
 	if startPos.Position.MasterFilename == "" || startPos.Position.MasterPosition == 0 {
-		relog.Error("Invalid start coordinates.")
+		log.Errorf("Invalid start coordinates.")
 		return false
 	}
 	//One of them can be empty for min or max key.
 	if startPos.KeyrangeStart == "" && startPos.KeyrangeEnd == "" {
-		relog.Error("Invalid keyrange endpoints.")
+		log.Errorf("Invalid keyrange endpoints.")
 		return false
 	}
 	return true
@@ -381,7 +381,7 @@ func createDbClient(dbConfigFile string) (*DBClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error %s in reading db-config-file %s", err, dbConfigFile)
 	}
-	relog.Info("dbConfigData %v", string(dbConfigData))
+	log.Infof("dbConfigData %v", string(dbConfigData))
 
 	dbClient := &DBClient{}
 	dbConfig := new(mysql.ConnectionParams)
@@ -427,7 +427,7 @@ func createLookupClient(lookupConfigFile, dbCredFile string) (*DBClient, error) 
 	}
 
 	lookupConfig.Pass = lookupPasswd
-	relog.Info("lookupConfig %v", lookupConfig)
+	log.Infof("lookupConfig %v", lookupConfig)
 	lookupClient.dbConfig = lookupConfig
 
 	lookupClient.dbConn, err = lookupClient.Connect()
@@ -491,11 +491,11 @@ func initBinlogPlayer(startPosFile, dbConfigFile, lookupConfigFile, dbCredFile s
 		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
 	if qr.RowsAffected != 1 {
-		relog.Fatal("Checkpoint information not available in db")
+		log.Fatalf("Checkpoint information not available in db")
 	}
 	startCoord, err := getStartPosition(qr)
 	if err != nil {
-		relog.Fatal("Error in obtaining checkpoint information")
+		log.Fatalf("Error in obtaining checkpoint information")
 	}
 	startPosition.Position = *startCoord
 
@@ -540,10 +540,10 @@ func handleError(err *error, blp *BinlogPlayer) {
 		serr, ok := x.(error)
 		if ok {
 			*err = serr
-			relog.Error("Last Txn Position '%v', error %v", lastTxnPosition, serr)
+			log.Errorf("Last Txn Position '%v', error %v", lastTxnPosition, serr)
 			return
 		}
-		relog.Error("uncaught panic %v", x)
+		log.Errorf("uncaught panic %v", x)
 		panic(x)
 	}
 }
@@ -554,7 +554,7 @@ func (blp *BinlogPlayer) flushTxnBatch() {
 		if txnOk {
 			break
 		} else {
-			relog.Info("Retrying txn")
+			log.Infof("Retrying txn")
 			time.Sleep(1)
 		}
 	}
@@ -571,7 +571,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		//This is to handle the terminal condition where the client is exiting but there
 		//maybe pending transactions in the buffer.
 		if strings.Contains(binlogResponse.Error, "EOF") {
-			relog.Info("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
+			log.Infof("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
 			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].Data.SqlType == mysqlctl.COMMIT {
 				blp.flushTxnBatch()
 			}
@@ -586,7 +586,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 	switch binlogResponse.Data.SqlType {
 	case mysqlctl.DDL:
 		if blp.txnIndex > 0 {
-			relog.Info("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
+			log.Infof("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
 			blp.flushTxnBatch()
 		}
 		if blp.execDdl {
@@ -610,7 +610,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
 
 		if time.Now().Sub(blp.batchStart) > blp.maxTxnInterval || blp.txnIndex == blp.txnBatch {
-			//relog.Info("Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
+			//log.Infof("Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
 			blp.flushTxnBatch()
 		}
 	case "insert", "update", "delete":
@@ -701,7 +701,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 		}
 		streamCommentIndex := strings.Index(sql, STREAM_COMMENT_START)
 		if streamCommentIndex == -1 {
-			//relog.Warning("sql doesn't have stream comment '%v'", sql)
+			//log.Warningf("sql doesn't have stream comment '%v'", sql)
 			//If sql doesn't have stream comment, don't match
 			return false
 		}
@@ -773,7 +773,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 							// Deadlock found when trying to get lock
 							// Rollback this transaction and exit.
 							if sqlErr.Number() == 1213 {
-								relog.Info("Detected deadlock, returning")
+								log.Infof("Detected deadlock, returning")
 								_ = blp.dbClient.Rollback()
 								return false
 							}
@@ -846,16 +846,16 @@ func createIndexSql(dmlType, indexType string, indexId interface{}, userId uint6
 func (blp *BinlogPlayer) applyBinlogEvents() error {
 	var err error
 	connectionStr := fmt.Sprintf("%v:%v", blp.startPosition.Host, SERVER_PORT)
-	relog.Info("Dialing server @ %v", connectionStr)
+	log.Infof("Dialing server @ %v", connectionStr)
 	blp.rpcClient, err = rpcplus.DialHTTP("tcp", connectionStr)
 	defer blp.rpcClient.Close()
 	if err != nil {
-		relog.Error("Error in dialing to vt_binlog_server, %v", err)
+		log.Errorf("Error in dialing to vt_binlog_server, %v", err)
 		return fmt.Errorf("Error in dialing to vt_binlog_server, %v", err)
 	}
 
 	responseChan := make(chan *cproto.BinlogResponse)
-	relog.Info("making rpc request @ %v for keyrange %v:%v", blp.startPosition.Position, blp.startPosition.KeyrangeStart, blp.startPosition.KeyrangeEnd)
+	log.Infof("making rpc request @ %v for keyrange %v:%v", blp.startPosition.Position, blp.startPosition.KeyrangeStart, blp.startPosition.KeyrangeEnd)
 	blServeRequest := &cproto.BinlogServerRequest{StartPosition: blp.startPosition.Position,
 		KeyspaceStart: blp.startPosition.KeyrangeStart,
 		KeyspaceEnd:   blp.startPosition.KeyrangeEnd}

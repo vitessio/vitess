@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/hack"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
@@ -31,7 +31,7 @@ type QueryEngine struct {
 	// Obtain write lock to start/stop query service
 	mu sync.RWMutex
 
-	cachePool *CachePool
+	cachePool      *CachePool
 	schemaInfo     *SchemaInfo
 	connPool       *ConnectionPool
 	streamConnPool *ConnectionPool
@@ -98,7 +98,7 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []Schem
 	start := time.Now().UnixNano()
 	qe.cachePool.Open()
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
-	relog.Info("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
+	log.Infof("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
 	qe.reservedPool.Open(connFactory)
@@ -442,7 +442,7 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 			pkRow := applyFilter(tableInfo.PKColumns, row)
 			newKey := buildKey(pkRow)
 			if newKey != keys[i] {
-				relog.Warning("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, keys[i], newKey)
+				log.Warningf("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, keys[i], newKey)
 			}
 			tableInfo.Cache.Set(newKey, row, rcresult.Cas)
 			rows = append(rows, applyFilter(plan.ColumnNumbers, row))
@@ -495,7 +495,7 @@ func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, c
 		if reloadFromCache(pk) == nil {
 			return nil
 		}
-		relog.Warning("unexpected number of rows for %v", pk)
+		log.Warningf("unexpected number of rows for %v", pk)
 		errorStats.Add("Mismatch", 1)
 		return nil
 	}
@@ -507,8 +507,8 @@ func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, c
 			return
 		}
 		if !rowsAreEquql(newRow, dbrow) {
-			relog.Warning("query: %v", plan.FullQuery)
-			relog.Warning("mismatch for: %v, cache: %v, db: %v", pk, newRow, dbrow)
+			log.Warningf("query: %v", plan.FullQuery)
+			log.Warningf("mismatch for: %v, cache: %v, db: %v", pk, newRow, dbrow)
 			errorStats.Add("Mismatch", 1)
 		}
 	}

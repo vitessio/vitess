@@ -9,7 +9,7 @@ package topotools
 import (
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -18,7 +18,7 @@ import (
 func CopyKeyspaces(fromTS, toTS topo.Server) {
 	keyspaces, err := fromTS.GetKeyspaces()
 	if err != nil {
-		relog.Fatal("fromTS.GetKeyspaces failed: %v", err)
+		log.Fatalf("fromTS.GetKeyspaces failed: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -29,7 +29,7 @@ func CopyKeyspaces(fromTS, toTS topo.Server) {
 			defer wg.Done()
 			if err := toTS.CreateKeyspace(keyspace); err != nil {
 				if err == topo.ErrNodeExists {
-					relog.Warning("keyspace %v already exists", keyspace)
+					log.Warningf("keyspace %v already exists", keyspace)
 				} else {
 					rec.RecordError(err)
 				}
@@ -38,7 +38,7 @@ func CopyKeyspaces(fromTS, toTS topo.Server) {
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		relog.Fatal("copyKeyspaces failed: %v", rec.Error())
+		log.Fatalf("copyKeyspaces failed: %v", rec.Error())
 	}
 }
 
@@ -46,7 +46,7 @@ func CopyKeyspaces(fromTS, toTS topo.Server) {
 func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 	keyspaces, err := fromTS.GetKeyspaces()
 	if err != nil {
-		relog.Fatal("fromTS.GetKeyspaces failed: %v", err)
+		log.Fatalf("fromTS.GetKeyspaces failed: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -74,7 +74,7 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 					defer wg.Done()
 					if err := topo.CreateShard(toTS, keyspace, shard); err != nil {
 						if err == topo.ErrNodeExists {
-							relog.Warning("shard %v/%v already exists", keyspace, shard)
+							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
 							rec.RecordError(err)
 						}
@@ -85,7 +85,7 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		relog.Fatal("copyShards failed: %v", rec.Error())
+		log.Fatalf("copyShards failed: %v", rec.Error())
 	}
 }
 
@@ -93,7 +93,7 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 func CopyTablets(fromTS, toTS topo.Server) {
 	cells, err := fromTS.GetKnownCells()
 	if err != nil {
-		relog.Fatal("fromTS.GetKnownCells failed: %v", err)
+		log.Fatalf("fromTS.GetKnownCells failed: %v", err)
 	}
 
 	wg := sync.WaitGroup{}
@@ -144,6 +144,6 @@ func CopyTablets(fromTS, toTS topo.Server) {
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		relog.Fatal("copyTablets failed: %v", rec.Error())
+		log.Fatalf("copyTablets failed: %v", rec.Error())
 	}
 }

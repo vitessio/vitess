@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -32,14 +32,14 @@ func (wr *Wrangler) GetSchemaTablet(tablet *topo.TabletInfo, tables []string, in
 // helper method to asynchronously diff a schema
 func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, masterTabletAlias, alias topo.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	relog.Info("Gathering schema for %v", alias)
+	log.Infof("Gathering schema for %v", alias)
 	slaveSchema, err := wr.GetSchema(alias, nil, includeViews)
 	if err != nil {
 		er.RecordError(err)
 		return
 	}
 
-	relog.Info("Diffing schema for %v", alias)
+	log.Infof("Diffing schema for %v", alias)
 	mysqlctl.DiffSchema(masterTabletAlias.String(), masterSchema, alias.String(), slaveSchema, er)
 }
 
@@ -53,7 +53,7 @@ func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews boo
 	if si.MasterAlias.Uid == topo.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
-	relog.Info("Gathering schema for master %v", si.MasterAlias)
+	log.Infof("Gathering schema for master %v", si.MasterAlias)
 	masterSchema, err := wr.GetSchema(si.MasterAlias, nil, includeViews)
 	if err != nil {
 		return err
@@ -109,7 +109,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
-	relog.Info("Gathering schema for reference master %v", referenceAlias)
+	log.Infof("Gathering schema for reference master %v", referenceAlias)
 	referenceSchema, err := wr.GetSchema(referenceAlias, nil, includeViews)
 	if err != nil {
 		return err
@@ -207,7 +207,7 @@ func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTa
 	// If the master does, and some slaves don't, may have to
 	// fix them manually one at a time, or re-clone them.
 	// we do this outside of the shard lock because we can.
-	relog.Info("Running Preflight on Master %v", shardInfo.MasterAlias)
+	log.Infof("Running Preflight on Master %v", shardInfo.MasterAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysql
 			// ValidateSchemaShard only does the serving types.
 			// We do everything in the replication graph
 			// but LAG. This seems fine for now.
-			relog.Info("Skipping tablet %v as it is LAG", ti.Alias())
+			log.Infof("Skipping tablet %v as it is LAG", ti.Alias())
 			continue
 		}
 
@@ -274,7 +274,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysql
 	}
 
 	// get schema on all tablets.
-	relog.Info("Getting schema on all tablets for shard %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
+	log.Infof("Getting schema on all tablets for shard %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 	wg := &sync.WaitGroup{}
 	for _, status := range statusArray {
 		wg.Add(1)
@@ -303,12 +303,12 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysql
 func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// check all tablets have the same schema as the master's
 	// BeforeSchema. If not, we shouldn't proceed
-	relog.Info("Checking schema on all tablets")
+	log.Infof("Checking schema on all tablets")
 	for _, status := range statusArray {
 		diffs := mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias().String(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias(), strings.Join(diffs, "\n"))
+				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias(), strings.Join(diffs, "\n"))
 			} else {
 				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Alias(), strings.Join(diffs, "\n"))
 			}
@@ -316,7 +316,7 @@ func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, prefligh
 	}
 
 	// we're good, just send to the master
-	relog.Info("Applying schema change to master in simple mode")
+	log.Infof("Applying schema change to master in simple mode")
 	sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: true, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
 	return wr.ApplySchema(masterTabletAlias, sc)
 }
@@ -327,7 +327,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		// if already applied, we skip this guy
 		diffs := mysqlctl.DiffSchemaToArray("after", preflight.AfterSchema, status.ti.Alias().String(), status.beforeSchema)
 		if len(diffs) == 0 {
-			relog.Info("Tablet %v already has the AfterSchema, skipping", status.ti.Alias())
+			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.Alias())
 			continue
 		}
 
@@ -335,7 +335,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		diffs = mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias().String(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				relog.Warning("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias(), strings.Join(diffs, "\n"))
+				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias(), strings.Join(diffs, "\n"))
 			} else {
 				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Alias(), strings.Join(diffs, "\n"))
 			}
@@ -356,7 +356,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		}
 
 		// apply the schema change
-		relog.Info("Applying schema change to slave %v in complex mode", status.ti.Alias())
+		log.Infof("Applying schema change to slave %v in complex mode", status.ti.Alias())
 		sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
 		_, err = wr.ApplySchema(status.ti.Alias(), sc)
 		if err != nil {
@@ -374,7 +374,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 
 	// if newParentTabletAlias is passed in, use that as the new master
 	if !newParentTabletAlias.IsZero() {
-		relog.Info("Reparenting with new master set to %v", newParentTabletAlias)
+		log.Infof("Reparenting with new master set to %v", newParentTabletAlias)
 		tabletMap, err := GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 		if err != nil {
 			return nil, err
@@ -401,7 +401,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		// original master in a different state (like replica
 		// or rdonly), then we should apply the schema there
 		// too.
-		relog.Info("Skipping schema change on old master %v in complex mode, it's been Scrapped", masterTabletAlias)
+		log.Infof("Skipping schema change on old master %v in complex mode, it's been Scrapped", masterTabletAlias)
 	}
 	return &mysqlctl.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }
@@ -434,12 +434,12 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 		return nil, fmt.Errorf("No shards in keyspace %v", keyspace)
 	}
 	if len(shards) == 1 {
-		relog.Info("Only one shard in keyspace %v, using ApplySchemaShard", keyspace)
+		log.Infof("Only one shard in keyspace %v, using ApplySchemaShard", keyspace)
 		return wr.ApplySchemaShard(keyspace, shards[0], change, topo.TabletAlias{}, simple, force)
 	}
 
 	// Get schema on all shard masters in parallel
-	relog.Info("Getting schema on all shards")
+	log.Infof("Getting schema on all shards")
 	beforeSchemas := make([]*mysqlctl.SchemaDefinition, len(shards))
 	shardInfos := make([]*topo.ShardInfo, len(shards))
 	wg := sync.WaitGroup{}
@@ -472,7 +472,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 	}
 
 	// check they all match, or use the force flag
-	relog.Info("Checking starting schemas match on all shards")
+	log.Infof("Checking starting schemas match on all shards")
 	for i, beforeSchema := range beforeSchemas {
 		if i == 0 {
 			continue
@@ -480,7 +480,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 		diffs := mysqlctl.DiffSchemaToArray("shard 0", beforeSchemas[0], fmt.Sprintf("shard %v", i), beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				relog.Warning("Shard %v has inconsistent schema, ignoring: %v", i, strings.Join(diffs, "\n"))
+				log.Warningf("Shard %v has inconsistent schema, ignoring: %v", i, strings.Join(diffs, "\n"))
 			} else {
 				return nil, fmt.Errorf("Shard %v has inconsistent schema: %v", i, strings.Join(diffs, "\n"))
 			}
@@ -490,14 +490,14 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 	// preflight on shard 0 master, to get baseline
 	// this assumes shard 0 master doesn't have the schema upgrade applied
 	// if it does, we'll have to fix the slaves and other shards manually.
-	relog.Info("Running Preflight on Shard 0 Master")
+	log.Infof("Running Preflight on Shard 0 Master")
 	preflight, err := wr.PreflightSchema(shardInfos[0].MasterAlias, change)
 	if err != nil {
 		return nil, err
 	}
 
 	// for each shard, apply the change
-	relog.Info("Applying change on all shards")
+	log.Infof("Applying change on all shards")
 	var applyErr error
 	for i, shard := range shards {
 		wg.Add(1)

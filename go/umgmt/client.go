@@ -9,7 +9,7 @@ import (
 	"net"
 	"net/rpc"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 type Client struct {
@@ -40,7 +40,7 @@ func (client *Client) Ping() (string, error) {
 	reply := new(Reply)
 	err := client.Call("UmgmtService.Ping", request, reply)
 	if err != nil {
-		relog.Error("rpc err: %v", err)
+		log.Errorf("rpc err: %v", err)
 		return "ERROR", err
 	}
 	return reply.Message, nil
@@ -51,7 +51,7 @@ func (client *Client) CloseListeners() error {
 	reply := new(Reply)
 	err := client.Call("UmgmtService.CloseListeners", request, reply)
 	if err != nil {
-		relog.Error("CloseListeners err: %v", err)
+		log.Errorf("CloseListeners err: %v", err)
 	}
 	return err
 }
@@ -61,7 +61,7 @@ func (client *Client) GracefulShutdown() error {
 	reply := new(Reply)
 	err := client.Call("UmgmtService.GracefulShutdown", request, reply)
 	if err != nil && err != io.ErrUnexpectedEOF {
-		relog.Error("GracefulShutdown err: %v", err)
+		log.Errorf("GracefulShutdown err: %v", err)
 	}
 	return err
 }

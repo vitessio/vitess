@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 const pidURL = "/debug/pid"
@@ -52,24 +52,24 @@ func killPredecessor(port string) {
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%s%s", port, pidURL))
 	if err != nil {
 		if !strings.Contains(err.Error(), "connection refused") {
-			relog.Error("unexpected error on port %v: %v, trying to start anyway", port, err)
+			log.Errorf("unexpected error on port %v: %v, trying to start anyway", port, err)
 		}
 		return
 	}
 	num, err := ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
-		relog.Error("could not read pid: %vd, trying to start anyway", err)
+		log.Errorf("could not read pid: %vd, trying to start anyway", err)
 		return
 	}
 	pid, err := strconv.Atoi(string(num))
 	if err != nil {
-		relog.Error("could not read pid: %vd, trying to start anyway", err)
+		log.Errorf("could not read pid: %vd, trying to start anyway", err)
 		return
 	}
 	err = syscall.Kill(pid, syscall.SIGUSR1)
 	if err != nil {
-		relog.Error("error killing %v: %v, trying to start anyway", pid, err)
+		log.Errorf("error killing %v: %v, trying to start anyway", pid, err)
 	}
 }
 

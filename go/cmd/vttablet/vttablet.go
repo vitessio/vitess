@@ -14,8 +14,8 @@ import (
 	"strings"
 	"syscall"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -82,13 +82,13 @@ func tabletParamToTabletAlias(param string) topo.TabletAlias {
 		// old zookeeper path, convert to new-style string tablet alias
 		zkPathParts := strings.Split(param, "/")
 		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
-			relog.Fatal("Invalid tablet path: %v", param)
+			log.Fatalf("Invalid tablet path: %v", param)
 		}
 		param = zkPathParts[2] + "-" + zkPathParts[5]
 	}
 	result, err := topo.ParseTabletAliasString(param)
 	if err != nil {
-		relog.Fatal("Invalid tablet alias %v: %v", param, err)
+		log.Fatalf("Invalid tablet alias %v: %v", param, err)
 	}
 	return result
 }
@@ -98,7 +98,7 @@ func main() {
 	flag.Parse()
 
 	if err := servenv.Init("vttablet"); err != nil {
-		relog.Fatal("Error in servenv.Init: %s", err)
+		log.Fatalf("Error in servenv.Init: %s", err)
 	}
 
 	tabletAlias := tabletParamToTabletAlias(*tabletPath)
@@ -106,7 +106,7 @@ func main() {
 	mycnf := readMycnf(tabletAlias.Uid)
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
-		relog.Warning("%s", err)
+		log.Warningf("%s", err)
 	}
 
 	initQueryService(dbcfgs)
@@ -114,7 +114,7 @@ func main() {
 	ts.RegisterCacheInvalidator()                                                                                                                          // depends on both query and updateStream
 	err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile) // depends on both query and updateStream
 	if err != nil {
-		relog.Fatal("%s", err)
+		log.Fatalf("%s", err)
 	}
 
 	rpc.HandleHTTP()
@@ -123,7 +123,7 @@ func main() {
 	// restart.
 	if *authConfig != "" {
 		if err := auth.LoadCredentials(*authConfig); err != nil {
-			relog.Error("could not load authentication credentials, not starting rpc servers: %v", err)
+			log.Errorf("could not load authentication credentials, not starting rpc servers: %v", err)
 		}
 		serveAuthRPC()
 	}
@@ -139,7 +139,7 @@ func main() {
 	umgmt.AddStartupCallback(func() {
 		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
 		if *securePort != 0 {
-			relog.Info("listening on secure port %v", *securePort)
+			log.Infof("listening on secure port %v", *securePort)
 			umgmt.StartHttpsServer(fmt.Sprintf(":%v", *securePort), *cert, *key, *caCert)
 		}
 	})
@@ -153,12 +153,12 @@ func main() {
 		}()
 	})
 
-	relog.Info("started vttablet %v", *port)
+	log.Infof("started vttablet %v", *port)
 	umgmtSocket := fmt.Sprintf("/tmp/vttablet-%08x-umgmt.sock", *port)
 	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
-		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
+		log.Errorf("umgmt.ListenAndServe err: %v", umgmtErr)
 	}
-	relog.Info("done")
+	log.Infof("done")
 }
 
 func serveAuthRPC() {
@@ -179,7 +179,7 @@ func readMycnf(tabletId uint32) *mysqlctl.Mycnf {
 	}
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
-		relog.Fatal("mycnf read failed: %v", mycnfErr)
+		log.Fatalf("mycnf read failed: %v", mycnfErr)
 	}
 	return mycnf
 }
@@ -189,19 +189,19 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	ts.TxLogger.ServeLogs("/debug/txlog")
 
 	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
-		relog.Warning("%s", err)
+		log.Warningf("%s", err)
 	}
 	ts.RegisterQueryService(qsConfig)
 	usefulLameDuckPeriod := float64(qsConfig.QueryTimeout + 1)
 	if usefulLameDuckPeriod > *lameDuckPeriod {
 		*lameDuckPeriod = usefulLameDuckPeriod
-		relog.Info("readjusted -lame-duck-period to %f", *lameDuckPeriod)
+		log.Infof("readjusted -lame-duck-period to %f", *lameDuckPeriod)
 	}
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
 			ts.QueryLogger = relog.New(f, "", relog.DEBUG)
 		} else {
-			relog.Fatal("Error opening file %v: %v", *queryLog, err)
+			log.Fatalf("Error opening file %v: %v", *queryLog, err)
 		}
 	}
 	umgmt.AddCloseCallback(func() {

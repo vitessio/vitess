@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
 	"github.com/youtube/vitess/go/sync2"
@@ -45,7 +45,7 @@ var UpdateStreamRpcService *UpdateStream
 
 func RegisterUpdateStreamService(mycnf *Mycnf) {
 	if UpdateStreamRpcService != nil {
-		//relog.Warning("Update Stream service already initialized")
+		//log.Warningf("Update Stream service already initialized")
 		return
 	}
 
@@ -60,7 +60,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 
 func logError() {
 	if x := recover(); x != nil {
-		relog.Error("%s", x.(error).Error())
+		log.Errorf("%s", x.(error).Error())
 	}
 }
 
@@ -84,17 +84,17 @@ func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 	defer UpdateStreamRpcService.actionLock.Unlock()
 
 	if !dbcfgsCorrect(tabletType, dbcfgs) {
-		relog.Warning("missing/incomplete db configs file, cannot enable update stream service")
+		log.Warningf("missing/incomplete db configs file, cannot enable update stream service")
 		return
 	}
 
 	if UpdateStreamRpcService.mycnf.BinLogPath == "" {
-		relog.Warning("Update stream service requires binlogs enabled")
+		log.Warningf("Update stream service requires binlogs enabled")
 		return
 	}
 
 	if UpdateStreamRpcService.isServiceEnabled() {
-		relog.Warning("Update stream service is already enabled")
+		log.Warningf("Update stream service is already enabled")
 		return
 	}
 
@@ -102,13 +102,13 @@ func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 
 	UpdateStreamRpcService.mysqld = NewMysqld(UpdateStreamRpcService.mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	UpdateStreamRpcService.dbname = dbcfgs.App.Dbname
-	relog.Info("dbcfgs.App.Dbname %v DbName %v", dbcfgs.App.Dbname, UpdateStreamRpcService.dbname)
-	relog.Info("mycnf.BinLogPath %v mycnf.RelayLogPath %v", UpdateStreamRpcService.mycnf.BinLogPath, UpdateStreamRpcService.mycnf.RelayLogPath)
+	log.Infof("dbcfgs.App.Dbname %v DbName %v", dbcfgs.App.Dbname, UpdateStreamRpcService.dbname)
+	log.Infof("mycnf.BinLogPath %v mycnf.RelayLogPath %v", UpdateStreamRpcService.mycnf.BinLogPath, UpdateStreamRpcService.mycnf.RelayLogPath)
 	UpdateStreamRpcService.tabletType = tabletType
 	UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.BinLogPath
 	UpdateStreamRpcService.logsDir = path.Dir(UpdateStreamRpcService.binlogPrefix)
 
-	relog.Info("Update Stream enabled, logsDir %v", UpdateStreamRpcService.logsDir)
+	log.Infof("Update Stream enabled, logsDir %v", UpdateStreamRpcService.logsDir)
 }
 
 func DisableUpdateStreamService() {
@@ -119,7 +119,7 @@ func DisableUpdateStreamService() {
 	UpdateStreamRpcService.actionLock.Lock()
 	defer UpdateStreamRpcService.actionLock.Unlock()
 	disableUpdateStreamService()
-	relog.Info("Update Stream Disabled")
+	log.Infof("Update Stream Disabled")
 }
 
 func IsUpdateStreamEnabled() bool {
@@ -168,14 +168,14 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 	}()
 
 	if !updateStream.isServiceEnabled() {
-		relog.Warning("Unable to serve client request: Update stream service is not enabled yet")
+		log.Warningf("Unable to serve client request: Update stream service is not enabled yet")
 		return fmt.Errorf("Update stream service is not enabled yet")
 	}
 
 	if !IsStartPositionValid(&req.StartPosition) {
 		return fmt.Errorf("Invalid start position, cannot serve the stream")
 	}
-	relog.Info("ServeUpdateStream starting @ %v", req.StartPosition.String())
+	log.Infof("ServeUpdateStream starting @ %v", req.StartPosition.String())
 
 	startCoordinates := &req.StartPosition.Position
 	blp := NewBlp(startCoordinates, updateStream)

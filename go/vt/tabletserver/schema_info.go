@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cache"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -147,7 +147,7 @@ func (si *SchemaInfo) updateLastChange(createTime sqltypes.Value) {
 	}
 	t, err := strconv.ParseInt(createTime.String(), 10, 64)
 	if err != nil {
-		relog.Warning("Could not parse time %s: %v", createTime.String(), err)
+		log.Warningf("Could not parse time %s: %v", createTime.String(), err)
 		return
 	}
 	if si.lastChange.Unix() < t {
@@ -159,12 +159,12 @@ func (si *SchemaInfo) override(schemaOverrides []SchemaOverride) {
 	for _, override := range schemaOverrides {
 		table, ok := si.tables[override.Name]
 		if !ok {
-			relog.Warning("Table not found for override: %v", override)
+			log.Warningf("Table not found for override: %v", override)
 			continue
 		}
 		if override.PKColumns != nil {
 			if err := table.SetPK(override.PKColumns); err != nil {
-				relog.Warning("%v: %v", err, override)
+				log.Warningf("%v: %v", err, override)
 				continue
 			}
 		}
@@ -178,21 +178,21 @@ func (si *SchemaInfo) override(schemaOverrides []SchemaOverride) {
 		case "W":
 			table.CacheType = schema.CACHE_W
 			if override.Cache.Table == "" {
-				relog.Warning("Incomplete cache specs: %v", override)
+				log.Warningf("Incomplete cache specs: %v", override)
 				continue
 			}
 			totable, ok := si.tables[override.Cache.Table]
 			if !ok {
-				relog.Warning("Table not found: %v", override)
+				log.Warningf("Table not found: %v", override)
 				continue
 			}
 			if totable.Cache == nil {
-				relog.Warning("Table has no cache: %v", override)
+				log.Warningf("Table has no cache: %v", override)
 				continue
 			}
 			table.Cache = totable.Cache
 		default:
-			relog.Warning("Ignoring cache override: %v", override)
+			log.Warningf("Ignoring cache override: %v", override)
 		}
 	}
 }
@@ -212,14 +212,14 @@ func (si *SchemaInfo) Reload() {
 	defer conn.Recycle()
 	tables, err := conn.ExecuteFetch(fmt.Sprintf("%s and unix_timestamp(create_time) > %v", base_show_tables, si.lastChange.Unix()), maxTableCount, false)
 	if err != nil {
-		relog.Warning("Could not get table list for reload: %v", err)
+		log.Warningf("Could not get table list for reload: %v", err)
 		return
 	}
-	relog.Info("Reloading schema")
+	log.Infof("Reloading schema")
 	for _, row := range tables.Rows {
 		tableName := row[0].String()
 		si.updateLastChange(row[2])
-		relog.Info("Reloading: %s", tableName)
+		log.Infof("Reloading: %s", tableName)
 		si.mu.Lock()
 		_, ok := si.tables[tableName]
 		si.mu.Unlock()
@@ -262,9 +262,9 @@ func (si *SchemaInfo) createTable(conn PoolConnection, tableName string) {
 		panic(NewTabletError(FATAL, "Could not read table info: %s", tableName))
 	}
 	if tableInfo.CacheType == schema.CACHE_NONE {
-		relog.Info("Initialized table: %s", tableName)
+		log.Infof("Initialized table: %s", tableName)
 	} else {
-		relog.Info("Initialized cached table: %s", tableInfo.Cache.prefix)
+		log.Infof("Initialized cached table: %s", tableInfo.Cache.prefix)
 	}
 	si.mu.Lock()
 	defer si.mu.Unlock()
@@ -279,7 +279,7 @@ func (si *SchemaInfo) DropTable(tableName string) {
 	defer si.mu.Unlock()
 	delete(si.tables, tableName)
 	si.queries.Clear()
-	relog.Info("Table %s forgotten", tableName)
+	log.Infof("Table %s forgotten", tableName)
 }
 
 func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPlan) {
@@ -305,7 +305,7 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId)
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
-			relog.Warning("Cannot cache field info: %s", sql)
+			log.Warningf("Cannot cache field info: %s", sql)
 		} else {
 			conn := si.connPool.Get()
 			defer conn.Recycle()

@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -118,12 +118,12 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 			if err != nil {
 				return err
 			}
-			relog.Debug("zknsPathsWritten: %v", zknsPathsWritten)
+			log.V(6).Infof("zknsPathsWritten: %v", zknsPathsWritten)
 			for _, zkPath := range zknsPathsWritten {
 				delete(staleZknsPaths, zkPath)
 			}
 		}
-		relog.Debug("staleZknsPaths: %v", staleZknsPaths)
+		log.V(6).Infof("staleZknsPaths: %v", staleZknsPaths)
 		prunePaths := make([]string, 0, len(staleZknsPaths))
 		for prunePath, _ := range staleZknsPaths {
 			prunePaths = append(prunePaths, prunePath)
@@ -131,7 +131,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 		sort.Strings(prunePaths)
 		// Prune paths in reverse order so we remove children first
 		for i := len(prunePaths) - 1; i >= 0; i-- {
-			relog.Info("prune stale zkns path %v", prunePaths[i])
+			log.Infof("prune stale zkns path %v", prunePaths[i])
 			if err := zconn.Delete(prunePaths[i], -1); err != nil && !zookeeper.IsError(err, zookeeper.ZNOTEMPTY) {
 				return err
 			}

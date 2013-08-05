@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -237,12 +237,12 @@ func ActionNodeToJson(n *ActionNode) string {
 func ActionNodeCanBePurged(data string) bool {
 	actionNode, err := ActionNodeFromJson(data, "")
 	if err != nil {
-		relog.Warning("bad action data: %v %#v", err, data)
+		log.Warningf("bad action data: %v %#v", err, data)
 		return true
 	}
 
 	if actionNode.State == ACTION_STATE_RUNNING {
-		relog.Info("cannot remove running action: %v %v", actionNode.Action, actionNode.ActionGuid)
+		log.Infof("cannot remove running action: %v %v", actionNode.Action, actionNode.ActionGuid)
 		return false
 	}
 
@@ -252,7 +252,7 @@ func ActionNodeCanBePurged(data string) bool {
 func ActionNodeIsStale(data string) bool {
 	actionNode, err := ActionNodeFromJson(data, "")
 	if err != nil {
-		relog.Warning("bad action data: %v %#v", err, data)
+		log.Warningf("bad action data: %v %#v", err, data)
 		return false
 	}
 

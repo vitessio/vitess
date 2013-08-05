@@ -8,7 +8,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/topotools"
@@ -28,7 +28,7 @@ var logLevel = flag.String("log.level", "INFO", "set log level")
 func main() {
 	defer func() {
 		if panicErr := recover(); panicErr != nil {
-			relog.Fatal("panic: %v", tb.Errorf("%v", panicErr))
+			log.Fatalf("panic: %v", tb.Errorf("%v", panicErr))
 		}
 	}()
 
@@ -41,12 +41,12 @@ func main() {
 
 	logLevel, err := relog.LogNameToLogLevel(*logLevel)
 	if err != nil {
-		relog.Fatal("%v", err)
+		log.Fatalf("%v", err)
 	}
 	relog.SetLevel(logLevel)
 
 	if *fromTopo == "" || *toTopo == "" {
-		relog.Fatal("Need both from and to topo")
+		log.Fatalf("Need both from and to topo")
 	}
 
 	fromTS := topo.GetServerByName(*fromTopo)

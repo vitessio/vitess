@@ -13,7 +13,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -35,11 +35,11 @@ func main() {
 	servenv.Init("vt_binlog_server")
 
 	if *mycnfFile == "" {
-		relog.Fatal("Please specify the path for mycnf file.")
+		log.Fatalf("Please specify the path for mycnf file.")
 	}
 	mycnf, err := mysqlctl.ReadMycnf(*mycnfFile)
 	if err != nil {
-		relog.Fatal("Error reading mycnf file %v", *mycnfFile)
+		log.Fatalf("Error reading mycnf file %v", *mycnfFile)
 	}
 
 	binlogServer := mysqlctl.NewBinlogServer(mycnf, *dbname)
@@ -67,10 +67,10 @@ func main() {
 		}()
 	})
 
-	relog.Info("vt_binlog_server registered at port %v", *port)
+	log.Infof("vt_binlog_server registered at port %v", *port)
 	umgmtSocket := fmt.Sprintf("/tmp/vt_binlog_server-%08x-umgmt.sock", *port)
 	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
-		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
+		log.Errorf("umgmt.ListenAndServe err: %v", umgmtErr)
 	}
-	relog.Info("done")
+	log.Infof("done")
 }

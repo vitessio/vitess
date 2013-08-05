@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -48,7 +48,7 @@ func (wr *Wrangler) ExecuteOptionalTabletInfoHook(ti *topo.TabletInfo, hook *hk.
 	}
 
 	if hr.ExitStatus == hk.HOOK_DOES_NOT_EXIST {
-		relog.Info("Hook %v doesn't exist on tablet %v", hook.Name, ti.Alias())
+		log.Infof("Hook %v doesn't exist on tablet %v", hook.Name, ti.Alias())
 		return nil
 	}
 

@@ -10,7 +10,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
@@ -51,7 +51,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if err := servenv.Init("zkocc"); err != nil {
-		relog.Fatal("Error in servenv.Init: %v", err)
+		log.Fatalf("Error in servenv.Init: %v", err)
 	}
 
 	rpc.HandleHTTP()
@@ -72,10 +72,10 @@ func main() {
 		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
 	})
 
-	relog.Info("started zkocc %v", *port)
+	log.Infof("started zkocc %v", *port)
 	umgmtSocket := fmt.Sprintf("/tmp/zkocc-%08x-umgmt.sock", *port)
 	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
-		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
+		log.Errorf("umgmt.ListenAndServe err: %v", umgmtErr)
 	}
-	relog.Info("done")
+	log.Infof("done")
 }

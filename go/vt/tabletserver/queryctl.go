@@ -7,8 +7,8 @@ package tabletserver
 import (
 	"net/http"
 
+	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -32,7 +32,7 @@ var SqlQueryRpcService *SqlQuery
 
 func RegisterQueryService(config Config) {
 	if SqlQueryRpcService != nil {
-		relog.Warning("RPC service already up %v", SqlQueryRpcService)
+		log.Warningf("RPC service already up %v", SqlQueryRpcService)
 		return
 	}
 	SqlQueryRpcService = NewSqlQuery(config)

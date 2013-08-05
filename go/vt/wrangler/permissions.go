@@ -9,7 +9,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -22,14 +22,14 @@ func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*mysqlctl.Perm
 // helper method to asynchronously diff a permissions
 func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	relog.Info("Gathering permissions for %v", alias)
+	log.Infof("Gathering permissions for %v", alias)
 	slavePermissions, err := wr.GetPermissions(alias)
 	if err != nil {
 		er.RecordError(err)
 		return
 	}
 
-	relog.Info("Diffing permissions for %v", alias)
+	log.Infof("Diffing permissions for %v", alias)
 	mysqlctl.DiffPermissions(masterAlias.String(), masterPermissions, alias.String(), slavePermissions, er)
 }
 
@@ -43,7 +43,7 @@ func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
 	if si.MasterAlias.Uid == topo.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
-	relog.Info("Gathering permissions for master %v", si.MasterAlias)
+	log.Infof("Gathering permissions for master %v", si.MasterAlias)
 	masterPermissions, err := wr.GetPermissions(si.MasterAlias)
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func (wr *Wrangler) ValidatePermissionsKeyspace(keyspace string) error {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
-	relog.Info("Gathering permissions for reference master %v", referenceAlias)
+	log.Infof("Gathering permissions for reference master %v", referenceAlias)
 	referencePermissions, err := wr.GetPermissions(si.MasterAlias)
 	if err != nil {
 		return err
