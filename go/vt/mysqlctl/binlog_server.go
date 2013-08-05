@@ -722,6 +722,9 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 	}()
 
 	relog.Info("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
+	if !blServer.isServiceEnabled() {
+		panic(NewBinlogServerError("Binlog Server is disabled"))
+	}
 	if !isRequestValid(req) {
 		panic(NewBinlogServerError("Invalid request, cannot serve the stream"))
 	}
