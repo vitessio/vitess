@@ -68,7 +68,7 @@ def teardown():
 
 def _check_db_addr(db_addr, expected_addr):
   # Run in the background to capture output.
-  proc = utils.run_bg(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
+  proc = utils.run_bg(utils.vtroot+'/bin/vtctl --alsologtostderr -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
   stdout = proc.communicate()[0].strip()
   if stdout != expected_addr:
     raise utils.TestError('wrong zk address', db_addr, stdout, expected_addr)
@@ -265,7 +265,7 @@ def _run_test_vtctl_snapshot_restore(server_mode):
   tablet_62344.start_vttablet()
 
   # Need to force snapshot since this is a master db.
-  out, err = utils.run_vtctl('Snapshot -force %s %s ' % (snapshot_flags, tablet_62344.tablet_alias), log_level='INFO', trap_output=True)
+  out, err = utils.run_vtctl('Snapshot -force %s %s ' % (snapshot_flags, tablet_62344.tablet_alias), trap_output=True)
   results = {}
   for name in ['Manifest', 'ParentAlias', 'SlaveStartRequired', 'ReadOnly', 'OriginalType']:
     sepPos = err.find(name + ": ")
@@ -343,7 +343,7 @@ def _run_test_vtctl_clone(server_mode):
   utils.run("rm -rf %s" % snapshot_dir)
   utils.run("mkdir -p %s" % snapshot_dir)
   utils.run("chmod -w %s" % snapshot_dir)
-  out, err = utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null Clone -force %s %s %s' %
+  out, err = utils.run(utils.vtroot+'/bin/vtctl --alsologtostderr Clone -force %s %s %s' %
                        (clone_flags, tablet_62344.tablet_alias,
                         tablet_62044.tablet_alias),
                        trap_output=True, raise_on_error=False)
@@ -416,12 +416,12 @@ index by_msg (msg)
   # try to get the schema on the source, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62044.tablet_alias,
-                             log_level='INFO', trap_output=True)
+                             trap_output=True)
   if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output: %s' % err)
   out, err = utils.run_vtctl('GetSchema ' +
                              tablet_62044.tablet_alias,
-                             log_level='INFO', trap_output=True)
+                             trap_output=True)
   if 'vt_insert_view' in err:
     raise utils.TestError('Unexpected GetSchema output: %s' % err)
 
@@ -449,7 +449,7 @@ index by_msg (msg)
   # try to get the schema on multi-restored guy, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62344.tablet_alias,
-                             log_level='INFO', trap_output=True)
+                             trap_output=True)
   if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output after multirestore: %s' % err)
 
@@ -613,13 +613,13 @@ def run_test_restart_during_action():
 
   # we expect this action with a short wait time to fail. this isn't the best
   # and has some potential for flakiness.
-  utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 2s WaitForAction ' + action_path)
+  utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 2s WaitForAction ' + action_path)
 
   # wait until the background sleep action is done, otherwise there will be
   # a leftover vtaction whose result may overwrite running actions
   # NOTE(alainjobart): Yes, I've seen it happen, it's a pain to debug:
   # the zombie Sleep clobbers the Clone command in the following tests
-  utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING -wait-time 20s WaitForAction ' + action_path)
+  utils.run(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 20s WaitForAction ' + action_path)
 
   # extra small test: we ran for a while, get the states we were in,
   # make sure they're accounted for properly
@@ -679,19 +679,19 @@ def run_test_reparent_down_master():
 
   # Perform a reparent operation - the Validate part will try to ping
   # the master and fail somewhat quickly
-  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias)
+  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias)
   utils.debug("Failed ReparentShard output:\n" + stderr)
   if 'ValidateShard verification failed: timed out during validate' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
   # Should timeout and fail
-  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO -wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias)
+  stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias)
   utils.debug("Failed ScrapTablet output:\n" + stderr)
   if 'deadline exceeded' not in stderr:
     raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
   # Should interrupt and fail
-  sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log.level=INFO -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
+  sp = utils.run_bg(utils.vtroot+'/bin/vtctl -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
   # Need time for the process to start before killing it.
   time.sleep(3.0)
   os.kill(sp.pid, signal.SIGINT)
@@ -704,7 +704,7 @@ def run_test_reparent_down_master():
   # Force the scrap action in zk even though tablet is not accessible.
   tablet_62344.scrap(force=True)
 
-  utils.run_fail(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=WARNING ChangeSlaveType -force %s idle' %
+  utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr ChangeSlaveType -force %s idle' %
                  tablet_62344.tablet_alias)
 
   # Remove pending locks (make this the force option to ReparentShard?)
@@ -1038,7 +1038,7 @@ def _check_string_in_hook_result(text, expected):
   raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
 def _run_hook(params, expectedStrings):
-  out, err = utils.run(utils.vtroot+'/bin/vtctl -logfile=/dev/null -log.level=INFO ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
+  out, err = utils.run(utils.vtroot+'/bin/vtctl --alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
   for expected in expectedStrings:
     _check_string_in_hook_result(err, expected)
 
@@ -1084,7 +1084,7 @@ def run_test_hook():
 
   # test hook with invalid name
   _run_hook("/bin/ls", [
-      "FATAL: action failed: ExecuteHook hook name cannot have a '/' in it",
+      "action failed: ExecuteHook hook name cannot have a '/' in it",
       ])
 
   tablet_62344.kill_vttablet()
@@ -1100,7 +1100,7 @@ def run_test_sigterm():
   tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
   # start a 'vtctl Sleep' command in the background
-  sp = utils.run_bg(utils.vtroot+'/bin/vtctl -logfile=/dev/null Sleep %s 60s' %
+  sp = utils.run_bg(utils.vtroot+'/bin/vtctl --alsologtostderr Sleep %s 60s' %
                     tablet_62344.tablet_alias,
                     stdout=PIPE, stderr=PIPE)
 

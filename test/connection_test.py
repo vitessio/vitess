@@ -16,7 +16,6 @@ from net import bsonrpc
 from vtdb import vt_occ2
 from vtdb import dbexceptions
 
-LOGFILE = "/tmp/vtocc.log"
 QUERYLOGFILE = "/tmp/vtocc_queries.log"
 
 # This is a VtOCCConnection that doesn't attempt to do authentication.
@@ -80,7 +79,6 @@ class BaseTest(unittest.TestCase):
                                      "-port", str(klass.vtocc_port),
                                      "-auth-credentials", klass.credentials_file,
                                      "-dbconfig", klass.dbconfig_file,
-                                     "-logfile", LOGFILE,
                                      "-querylog", QUERYLOGFILE],
                                     stderr=klass.vtstderr)
     time.sleep(1)
