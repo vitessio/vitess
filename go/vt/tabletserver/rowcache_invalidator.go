@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/bson"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sqltypes"
 	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
 	"github.com/youtube/vitess/go/sync2"
@@ -93,13 +93,13 @@ func RegisterCacheInvalidator() {
 
 func StartRowCacheInvalidation() {
 	if !shouldInvalidatorRun() {
-		relog.Warning("Row-cache invalidator not being enabled, criteria not met")
+		log.Warningf("Row-cache invalidator not being enabled, criteria not met")
 		CacheInvalidationProcessor.stopRowCacheInvalidation()
 		return
 	}
 
 	if CacheInvalidationProcessor.isServiceEnabled() {
-		relog.Warning("Row-cache invalidator service is already enabled")
+		log.Warningf("Row-cache invalidator service is already enabled")
 		return
 	}
 
@@ -112,18 +112,18 @@ func StartRowCacheInvalidation() {
 		CacheInvalidationProcessor.stateLock.Unlock()
 		return
 	}
-	relog.Info("Starting RowCacheInvalidation Service")
+	log.Infof("Starting RowCacheInvalidation Service")
 
 	CacheInvalidationProcessor.runInvalidationLoop()
 }
 
 func StopRowCacheInvalidation() {
 	if !CacheInvalidationProcessor.isServiceEnabled() {
-		relog.Info("Invalidator is already disabled - NOP")
+		log.Infof("Invalidator is already disabled - NOP")
 		return
 	}
 	CacheInvalidationProcessor.stopRowCacheInvalidation()
-	relog.Info("Rowcache invalidator stopped")
+	log.Infof("Rowcache invalidator stopped")
 }
 
 func ShouldInvalidatorRun() bool {
@@ -162,9 +162,9 @@ func (rowCache *InvalidationProcessor) isServiceEnabled() bool {
 }
 
 func (rowCache *InvalidationProcessor) updateErrCounters(err *InvalidationError) {
-	relog.Error(err.Error())
+	log.Errorf(err.Error())
 	if errorStats == nil {
-		relog.Warning("errorStats is not initialized")
+		log.Warningf("errorStats is not initialized")
 		return
 	}
 	errorStats.Add(err.errType, 1)
@@ -183,10 +183,10 @@ func (rowCache *InvalidationProcessor) invalidateEvent(response interface{}) err
 }
 
 func (rowCache *InvalidationProcessor) stopCache(reason string) {
-	relog.Warning("Stopping rowcache invalidation, reason: '%v'", reason)
+	log.Warningf("Stopping rowcache invalidation, reason: '%v'", reason)
 	rowCache.stopRowCacheInvalidation()
 	if IsCachePoolAvailable() {
-		relog.Warning("Disallowing Query Service as row-cache invalidator cannot run")
+		log.Warningf("Disallowing Query Service as row-cache invalidator cannot run")
 		DisallowQueries(false)
 	}
 }
@@ -204,11 +204,11 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 
 	startPosition := &cproto.BinlogPosition{Position: *replPos}
 
-	relog.Info("Starting @ %v", startPosition.String())
+	log.Infof("Starting @ %v", startPosition.String())
 	req := &mysqlctl.UpdateStreamRequest{StartPosition: *startPosition}
 	err = mysqlctl.ServeUpdateStream(req, rowCache.receiveEvent)
 	if err != nil {
-		relog.Error("mysqlctl.ServeUpdateStream returned err '%v'", err.Error())
+		log.Errorf("mysqlctl.ServeUpdateStream returned err '%v'", err.Error())
 		if rErr, ok := err.(*InvalidationError); ok {
 			rowCache.updateErrCounters(rErr)
 		}
@@ -222,10 +222,10 @@ func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateRespon
 		position = event.Coord.String()
 	}
 	if event.Error != "" {
-		relog.Error("Update stream returned error '%v'", event.Error)
+		log.Errorf("Update stream returned error '%v'", event.Error)
 		// Check if update stream error is fatal, else record it and move on.
 		if strings.HasPrefix(event.Error, mysqlctl.FATAL) {
-			relog.Info("Returning Service Error")
+			log.Infof("Returning Service Error")
 			return NewInvalidationError(FATAL_ERROR, event.Error, position)
 		}
 		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, event.Error, position))

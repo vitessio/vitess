@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/schema"
 )
@@ -192,7 +192,7 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 		if piece[0] == '\'' {
 			s, err := base64.StdEncoding.DecodeString(piece[1 : len(piece)-1])
 			if err != nil {
-				relog.Warning("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
+				log.Warningf("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
 				errorStats.Add("Mismatch", 1)
 				return
 			}
@@ -203,7 +203,7 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 		} else {
 			n, err := sqltypes.BuildNumeric(piece)
 			if err != nil {
-				relog.Warning("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
+				log.Warningf("Error decoding key %s for table %s: %v", key, tableInfo.Name, err)
 				errorStats.Add("Mismatch", 1)
 				return
 			}
@@ -211,7 +211,7 @@ func validateKey(tableInfo *TableInfo, key string) (newKey string) {
 		}
 	}
 	if newKey = buildKey(pkValues); newKey != key {
-		relog.Warning("Error: Key mismatch, received: %s, computed: %s", key, newKey)
+		log.Warningf("Error: Key mismatch, received: %s, computed: %s", key, newKey)
 		errorStats.Add("Mismatch", 1)
 	}
 	return newKey

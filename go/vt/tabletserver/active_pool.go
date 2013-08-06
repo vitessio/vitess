@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 )
@@ -50,12 +50,12 @@ func (ap *ActivePool) QueryKiller() {
 func (ap *ActivePool) kill(connid int64) {
 	ap.Remove(connid)
 	killStats.Add("Queries", 1)
-	relog.Info("killing query %d", connid)
+	log.Infof("killing query %d", connid)
 	killConn := ap.connPool.Get()
 	defer killConn.Recycle()
 	sql := fmt.Sprintf("kill %d", connid)
 	if _, err := killConn.ExecuteFetch(sql, 10000, false); err != nil {
-		relog.Error("Could not kill query %d: %v", connid, err)
+		log.Errorf("Could not kill query %d: %v", connid, err)
 	}
 }
 

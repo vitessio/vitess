@@ -7,7 +7,7 @@ package wrangler
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -15,18 +15,18 @@ import (
 // shard related methods for Wrangler
 
 func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *tm.ActionNode) (lockPath string, err error) {
-	relog.Info("Locking shard %v/%v for action %v", keyspace, shard, actionNode.Action)
+	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, actionNode.Action)
 	return wr.ts.LockShardForAction(keyspace, shard, tm.ActionNodeToJson(actionNode), wr.lockTimeout, interrupted)
 }
 
 func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNode, lockPath string, actionError error) error {
 	// first update the actionNode
 	if actionError != nil {
-		relog.Info("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, actionNode.Action, actionError)
+		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, actionNode.Action, actionError)
 		actionNode.Error = actionError.Error()
 		actionNode.State = tm.ACTION_STATE_FAILED
 	} else {
-		relog.Info("Unlocking keyspace %v/%v for successful action %v", keyspace, shard, actionNode.Action)
+		log.Infof("Unlocking keyspace %v/%v for successful action %v", keyspace, shard, actionNode.Action)
 		actionNode.Error = ""
 		actionNode.State = tm.ACTION_STATE_DONE
 	}
@@ -34,7 +34,7 @@ func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNod
 	if actionError != nil {
 		if err != nil {
 			// this will be masked
-			relog.Warning("UnlockShardForAction failed: %v", err)
+			log.Warningf("UnlockShardForAction failed: %v", err)
 		}
 		return actionError
 	}

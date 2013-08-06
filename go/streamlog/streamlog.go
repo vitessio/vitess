@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
 )
 
@@ -73,7 +73,7 @@ func New(name string, size int) *StreamLogger {
 // Handle makes logs sent to logger available throught HTTP at url.
 func (logger *StreamLogger) ServeLogs(url string) {
 	http.Handle(url, logger)
-	relog.Info("Streaming logs from %v at %v.", logger, url)
+	log.Infof("Streaming logs from %v at %v.", logger, url)
 }
 
 // stream sends messages sent to logger to all of its subscribed

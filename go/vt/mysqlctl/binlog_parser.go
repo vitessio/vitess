@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	parser "github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -98,7 +98,7 @@ func NewEventBuffer(pos *proto.BinlogPosition, line []byte) *eventBuffer {
 	buf.LogLine = make([]byte, len(line))
 	written := copy(buf.LogLine, line)
 	if written < len(line) {
-		relog.Warning("Logline not properly copied while creating new event written: %v len: %v", written, len(line))
+		log.Warningf("Logline not properly copied while creating new event written: %v len: %v", written, len(line))
 	}
 	buf.Coord.Position = pos.Position
 	buf.Coord.Timestamp = pos.Timestamp
@@ -215,7 +215,7 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 			// Double check the current parse position
 			// with replication position, if not so, it is an error
 			// otherwise it is a true EOF so retry.
-			relog.Info("EOF, retrying")
+			log.Infof("EOF, retrying")
 			ok, replErr := blp.isBehindReplication()
 			if replErr != nil {
 				err = replErr
@@ -227,7 +227,7 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 				continue
 			}
 		}
-		relog.Error("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
+		log.Errorf("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
 		SendError(sendReply, err, blp.currentPosition)
 		break
 	}
@@ -238,7 +238,7 @@ func (blp *Blp) handleError(err *error, readErr error) {
 	if x := recover(); x != nil {
 		serr, ok := x.(*BinlogParseError)
 		if !ok {
-			relog.Error("Uncaught panic for stream @ %v", reqIdentifier)
+			log.Errorf("Uncaught panic for stream @ %v", reqIdentifier)
 			panic(x)
 		}
 		*err = NewBinlogParseError(serr.errType, serr.msg)
@@ -354,7 +354,7 @@ func (blp *Blp) parseDbChange(event *eventBuffer) {
 		return
 	}
 	if blp.globalState.dbname == "" {
-		relog.Warning("Dbname is not set, will match all database names")
+		log.Warningf("Dbname is not set, will match all database names")
 		return
 	}
 
@@ -424,7 +424,7 @@ func (blp *Blp) parseEventData(sendReply SendUpdateStreamResponse, event *eventB
 			}
 			//Ignore these often occuring statement types.
 			if !IgnoredStatement(event.LogLine) {
-				relog.Warning("Unknown statement '%v'", string(event.LogLine))
+				log.Warningf("Unknown statement '%v'", string(event.LogLine))
 			}
 		}
 	}
@@ -556,7 +556,7 @@ func (blp *Blp) readBlpLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader, readErrChan chan error) {
 	defer func() {
 		if err := recover(); err != nil {
-			relog.Error("getBinlogStream failed: %v", err)
+			log.Errorf("getBinlogStream failed: %v", err)
 			readErrChan <- err.(error)
 		}
 	}()
@@ -602,7 +602,7 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 			//stream comment not found.
 			if commentIndex == -1 {
 				if event.firstKw != "insert" {
-					relog.Warning("Invalid DML - doesn't have a valid stream comment : %v", string(line))
+					log.Warningf("Invalid DML - doesn't have a valid stream comment : %v", string(line))
 				}
 				dmlBuffer = dmlBuffer[:0]
 				continue

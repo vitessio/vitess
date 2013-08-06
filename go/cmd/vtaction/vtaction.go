@@ -12,8 +12,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
@@ -46,7 +46,7 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
-	relog.Info("started vtaction %v", os.Args)
+	log.Infof("started vtaction %v", os.Args)
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()
@@ -57,26 +57,26 @@ func main() {
 	logFile, err := os.OpenFile(*logFilename,
 		os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		relog.Fatal("Can't open log file: %v", err)
+		log.Fatalf("Can't open log file: %v", err)
 	}
 	relog.SetOutput(logFile)
 	relog.SetPrefix(fmt.Sprintf("vtaction [%v] ", os.Getpid()))
 	if err := relog.SetLevelByName(*logLevel); err != nil {
-		relog.Fatal("%v", err)
+		log.Fatalf("%v", err)
 	}
 	relog.HijackLog(nil)
 	relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
-		relog.Fatal("mycnf read failed: %v", mycnfErr)
+		log.Fatalf("mycnf read failed: %v", mycnfErr)
 	}
 
-	relog.Debug("mycnf: %v", jscfg.ToJson(mycnf))
+	log.V(6).Infof("mycnf: %v", jscfg.ToJson(mycnf))
 
 	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
-		relog.Fatal("%s", cfErr)
+		log.Fatalf("%s", cfErr)
 	}
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
@@ -91,14 +91,14 @@ func main() {
 	httpServer := &http.Server{Addr: bindAddr}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil {
-			relog.Error("httpServer.ListenAndServe err: %v", err)
+			log.Errorf("httpServer.ListenAndServe err: %v", err)
 		}
 	}()
 
 	actionErr := actor.HandleAction(*actionNode, *action, *actionGuid, *force)
 	if actionErr != nil {
-		relog.Fatal("action error: %v", actionErr)
+		log.Fatalf("action error: %v", actionErr)
 	}
 
-	relog.Info("finished vtaction %v", os.Args)
+	log.Infof("finished vtaction %v", os.Args)
 }

@@ -1,7 +1,7 @@
 package mysqlctl
 
 import (
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 type MapFunc func(index int) error
@@ -32,7 +32,7 @@ func ConcurrentMap(concurrency, n int, fun MapFunc) error {
 	for i := 0; i < n; i++ {
 		if e := <-errors; e != nil {
 			if err != nil {
-				relog.Error("multiple errors, this one happened but it won't be returned: %v", err)
+				log.Errorf("multiple errors, this one happened but it won't be returned: %v", err)
 			}
 			err = e
 		}

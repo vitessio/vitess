@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -29,7 +29,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
-		relog.Info("force change type master -> backup: %v", tabletAlias)
+		log.Infof("force change type master -> backup: %v", tabletAlias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = topo.TYPE_BACKUP
@@ -53,21 +53,21 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 	var reply *tm.SnapshotReply
 	newType := originalType
 	if actionErr != nil {
-		relog.Error("snapshot failed, still restoring tablet type: %v", actionErr)
+		log.Errorf("snapshot failed, still restoring tablet type: %v", actionErr)
 		reply = &tm.SnapshotReply{}
 	} else {
 		reply = results.(*tm.SnapshotReply)
 		tm.BackfillAlias(reply.ZkParentPath, &reply.ParentAlias)
 		if serverMode {
-			relog.Info("server mode specified, switching tablet to snapshot_source mode")
+			log.Infof("server mode specified, switching tablet to snapshot_source mode")
 			newType = topo.TYPE_SNAPSHOT_SOURCE
 		}
 	}
 
 	// Go back to original type, or go to SNAPSHOT_SOURCE
-	relog.Info("change type after snapshot: %v %v", tabletAlias, newType)
+	log.Infof("change type after snapshot: %v %v", tabletAlias, newType)
 	if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot && newType != topo.TYPE_SNAPSHOT_SOURCE {
-		relog.Info("force change type backup -> master: %v", tabletAlias)
+		log.Infof("force change type backup -> master: %v", tabletAlias)
 		ti.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
@@ -97,7 +97,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 	// wait for completion, and save the error
 	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	if err != nil {
-		relog.Error("SnapshotSourceEnd failed (%v), leaving tablet type alone", err)
+		log.Errorf("SnapshotSourceEnd failed (%v), leaving tablet type alone", err)
 		return
 	}
 
@@ -180,9 +180,9 @@ func (wr *Wrangler) UnreserveForRestoreMulti(dstTabletAliases []topo.TabletAlias
 	for _, dstTabletAlias := range dstTabletAliases {
 		ufrErr := wr.UnreserveForRestore(dstTabletAlias)
 		if ufrErr != nil {
-			relog.Error("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
+			log.Errorf("Failed to UnreserveForRestore destination tablet after failed source snapshot: %v", ufrErr)
 		} else {
-			relog.Info("Un-reserved %v", dstTabletAlias)
+			log.Infof("Un-reserved %v", dstTabletAlias)
 		}
 	}
 }
@@ -199,7 +199,7 @@ func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []to
 			return err
 		}
 		reserved = append(reserved, dstTabletAlias)
-		relog.Info("Successfully reserved %v for restore", dstTabletAlias)
+		log.Infof("Successfully reserved %v for restore", dstTabletAlias)
 	}
 
 	// take the snapshot, or put the server in SnapshotSource mode
@@ -234,7 +234,7 @@ func (wr *Wrangler) Clone(srcTabletAlias topo.TabletAlias, dstTabletAliases []to
 				err = resetErr
 			} else {
 				// In the context of a larger failure, just log a note to cleanup.
-				relog.Error("Failed to reset snapshot source: %v - vtctl SnapshotSourceEnd is required", resetErr)
+				log.Errorf("Failed to reset snapshot source: %v - vtctl SnapshotSourceEnd is required", resetErr)
 			}
 		}
 	}

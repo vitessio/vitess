@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/zk/zkctl"
 )
 

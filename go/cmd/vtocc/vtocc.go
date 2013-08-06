@@ -14,8 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
-	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -73,27 +73,27 @@ func serveRPC() {
 func main() {
 	flag.Parse()
 	if err := servenv.Init("vtocc"); err != nil {
-		relog.Fatal("Error in servenv.Init: %v", err)
+		log.Fatalf("Error in servenv.Init: %v", err)
 	}
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
 			ts.QueryLogger = relog.New(f, "", relog.DEBUG)
 		} else {
-			relog.Fatal("Error opening file %v: %v", *queryLog, err)
+			log.Fatalf("Error opening file %v: %v", *queryLog, err)
 		}
 	}
 	ts.SqlQueryLogger.ServeLogs("/debug/querylog")
 	ts.TxLogger.ServeLogs("/debug/txlog")
 	unmarshalFile(*configFile, &config)
 	data, _ := json.MarshalIndent(config, "", "  ")
-	relog.Info("config: %s\n", data)
+	log.Infof("config: %s\n", data)
 
 	unmarshalFile(*dbConfigFile, &dbconfig)
-	relog.Info("dbconfig: %s\n", dbconfig)
+	log.Infof("dbconfig: %s\n", dbconfig)
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
 	data, _ = json.MarshalIndent(schemaOverrides, "", "  ")
-	relog.Info("schemaOverrides: %s\n", data)
+	log.Infof("schemaOverrides: %s\n", data)
 
 	ts.RegisterQueryService(config)
 	qrs := loadCustomRules()
@@ -105,13 +105,13 @@ func main() {
 	// restart.
 	if *authConfig != "" {
 		if err := auth.LoadCredentials(*authConfig); err != nil {
-			relog.Error("could not load authentication credentials, not starting rpc servers: %v", err)
+			log.Errorf("could not load authentication credentials, not starting rpc servers: %v", err)
 		}
 		serveAuthRPC()
 	}
 	serveRPC()
 
-	relog.Info("starting vtocc %v", *port)
+	log.Infof("starting vtocc %v", *port)
 	s := proc.ListenAndServe(fmt.Sprintf("%v", *port))
 
 	// A SIGUSR1 means that we're restarting
@@ -123,7 +123,7 @@ func main() {
 	} else {
 		ts.DisallowQueries(false)
 	}
-	relog.Info("done")
+	log.Infof("done")
 }
 
 func loadCustomRules() (qrs *ts.QueryRules) {
@@ -133,13 +133,13 @@ func loadCustomRules() (qrs *ts.QueryRules) {
 
 	data, err := ioutil.ReadFile(*customrules)
 	if err != nil {
-		relog.Fatal("Error reading file %v: %v", *customrules, err)
+		log.Fatalf("Error reading file %v: %v", *customrules, err)
 	}
 
 	qrs = ts.NewQueryRules()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
-		relog.Fatal("Error unmarshaling query rules %v", err)
+		log.Fatalf("Error unmarshaling query rules %v", err)
 	}
 	return qrs
 }
@@ -148,10 +148,10 @@ func unmarshalFile(name string, val interface{}) {
 	if name != "" {
 		data, err := ioutil.ReadFile(name)
 		if err != nil {
-			relog.Fatal("could not read %v: %v", val, err)
+			log.Fatalf("could not read %v: %v", val, err)
 		}
 		if err = json.Unmarshal(data, val); err != nil {
-			relog.Fatal("could not read %s: %v", val, err)
+			log.Fatalf("could not read %s: %v", val, err)
 		}
 	}
 }

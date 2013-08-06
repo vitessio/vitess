@@ -10,9 +10,9 @@ import (
 	"encoding/json"
 	"flag"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -139,6 +139,6 @@ func Init(socketFile, dbConfigsFile, dbCredentialsFile string) (dbcfgs DBConfigs
 	dbcfgs.App.UnixSocket = socketFile
 	dbcfgs.Dba.UnixSocket = socketFile
 	dbcfgs.Repl.UnixSocket = socketFile
-	relog.Info("%s: %s\n", dbConfigsFile, dbcfgs)
+	log.Infof("%s: %s\n", dbConfigsFile, dbcfgs)
 	return
 }

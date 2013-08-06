@@ -22,8 +22,8 @@ import (
 	"strings"
 	"sync"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cgzip"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -133,7 +133,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 	var hash string
 	var size int64
 	if compress {
-		relog.Info("newSnapshotFile: starting to compress %v into %v", srcPath, dstPath)
+		log.Infof("newSnapshotFile: starting to compress %v into %v", srcPath, dstPath)
 
 		// open the temporary destination file
 		dir, filePrefix := path.Split(dstPath)
@@ -190,7 +190,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		}
 		size = fi.Size()
 	} else {
-		relog.Info("newSnapshotFile: starting to hash and symlinking %v to %v", srcPath, dstPath)
+		log.Infof("newSnapshotFile: starting to hash and symlinking %v to %v", srcPath, dstPath)
 
 		// get the hash
 		hasher := newHasher()
@@ -214,7 +214,7 @@ func newSnapshotFile(srcPath, dstPath, root string, compress bool) (*SnapshotFil
 		size = fi.Size()
 	}
 
-	relog.Info("clone data ready %v:%v", dstPath, hash)
+	log.Infof("clone data ready %v:%v", dstPath, hash)
 	relativeDst, err := filepath.Rel(root, dstPath)
 	if err != nil {
 		return nil, err
@@ -266,7 +266,7 @@ func newSnapshotFiles(sources, destinations []string, root string, concurrency i
 	// its destination when it worked, we could assume if the file
 	// already exists it's good, and re-compute its hash.
 	if err != nil {
-		relog.Info("Error happened, deleting all the files we already compressed")
+		log.Infof("Error happened, deleting all the files we already compressed")
 		for _, dest := range destinations {
 			os.Remove(dest)
 		}
@@ -354,7 +354,7 @@ func fetchSnapshotManifest(addr, dbName string, keyRange key.KeyRange) (*SplitSn
 // a gunzip reader writing to a file.  It will compare the hash
 // checksum after the copy is done.
 func fetchFile(srcUrl, srcHash, dstFilename string) error {
-	relog.Info("fetchFile: starting to fetch %v from %v", dstFilename, srcUrl)
+	log.Infof("fetchFile: starting to fetch %v from %v", dstFilename, srcUrl)
 
 	// create destination directory
 	dir, _ := path.Split(dstFilename)
@@ -453,7 +453,7 @@ func fetchFile(srcUrl, srcHash, dstFilename string) error {
 	}
 
 	// we're good
-	relog.Info("fetched snapshot file: %v", dstFilename)
+	log.Infof("fetched snapshot file: %v", dstFilename)
 	dst.Flush()
 	dstFile.Close()
 
@@ -472,10 +472,10 @@ func fetchFileWithRetry(srcUrl, srcHash, dstFilename string, fetchRetryCount int
 		if err == nil {
 			return nil
 		}
-		relog.Warning("fetching snapshot file %v failed (try=%v): %v", dstFilename, i, err)
+		log.Warningf("fetching snapshot file %v failed (try=%v): %v", dstFilename, i, err)
 	}
 
-	relog.Error("fetching snapshot file %v failed too many times", dstFilename)
+	log.Errorf("fetching snapshot file %v failed too many times", dstFilename)
 	return err
 }
 
@@ -553,7 +553,7 @@ func fetchFiles(snapshotManifest *SnapshotManifest, destinationPath string, fetc
 	// the last one failed. Maybe we shouldn't, and if a file already
 	// exists, we hash it before retransmitting.
 	if err != nil {
-		relog.Info("Error happened, deleting all the files we already got")
+		log.Infof("Error happened, deleting all the files we already got")
 		for _, fi := range snapshotManifest.Files {
 			filename := fi.getLocalFilename(destinationPath)
 			os.Remove(filename)

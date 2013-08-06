@@ -7,7 +7,7 @@ package wrangler
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -61,13 +61,13 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		if update {
 			oldTablet, err := wr.ts.GetTablet(tablet.Alias())
 			if err != nil {
-				relog.Warning("failed reading tablet %v: %v", tablet.Alias(), err)
+				log.Warningf("failed reading tablet %v: %v", tablet.Alias(), err)
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
 					err := topo.UpdateTablet(wr.ts, oldTablet)
 					if err != nil {
-						relog.Warning("failed updating tablet %v: %v", tablet.Alias(), err)
+						log.Warningf("failed updating tablet %v: %v", tablet.Alias(), err)
 					} else {
 						return nil
 					}
@@ -76,12 +76,12 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		}
 		if force {
 			if _, err = wr.Scrap(tablet.Alias(), force, false); err != nil {
-				relog.Error("failed scrapping tablet %v: %v", tablet.Alias(), err)
+				log.Errorf("failed scrapping tablet %v: %v", tablet.Alias(), err)
 				return err
 			}
 			if err := wr.ts.DeleteTablet(tablet.Alias()); err != nil {
 				// we ignore this
-				relog.Error("failed deleting tablet %v: %v", tablet.Alias(), err)
+				log.Errorf("failed deleting tablet %v: %v", tablet.Alias(), err)
 			}
 			return topo.CreateTablet(wr.ts, tablet)
 		}
@@ -109,11 +109,11 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	}
 
 	if !rebuildRequired {
-		relog.Info("Rebuild not required")
+		log.Infof("Rebuild not required")
 		return
 	}
 	if skipRebuild {
-		relog.Warning("Rebuild required, but skipping it")
+		log.Warningf("Rebuild required, but skipping it")
 		return
 	}
 

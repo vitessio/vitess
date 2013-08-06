@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
 )
@@ -35,7 +35,7 @@ func (c *cramMD5Credentials) Load(filename string) error {
 	if err = json.Unmarshal(data, c); err != nil {
 		return err
 	}
-	relog.Info("Loaded credentials from %s.", filename)
+	log.Infof("Loaded credentials from %s.", filename)
 	return nil
 }
 
@@ -95,11 +95,11 @@ func (a *AuthenticatorCRAMMD5) Authenticate(context *proto.Context, req *Authent
 	username := strings.SplitN(req.Proof, " ", 2)[0]
 	secrets, ok := a.Credentials[username]
 	if !ok {
-		relog.Warning("failed authentication attempt: wrong user: %#v", username)
+		log.Warningf("failed authentication attempt: wrong user: %#v", username)
 		return AuthenticationFailed
 	}
 	if !req.state.challengeIssued {
-		relog.Warning("failed authentication attempt: challenge was not issued")
+		log.Warningf("failed authentication attempt: challenge was not issued")
 		return AuthenticationFailed
 	}
 	for _, secret := range secrets {
@@ -108,7 +108,7 @@ func (a *AuthenticatorCRAMMD5) Authenticate(context *proto.Context, req *Authent
 			return nil
 		}
 	}
-	relog.Warning("failed authentication attempt: wrong proof")
+	log.Warningf("failed authentication attempt: wrong proof")
 	return AuthenticationFailed
 }
 

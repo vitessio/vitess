@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -55,14 +55,14 @@ func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 	}
 	version := parts[1]
 
-	relog.Info("Tablet %v is running version '%v'", tabletAlias, version)
+	log.Infof("Tablet %v is running version '%v'", tabletAlias, version)
 	return version, nil
 }
 
 // helper method to asynchronously get and diff a version
 func (wr *Wrangler) diffVersion(masterVersion string, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
-	relog.Info("Gathering version for %v", alias)
+	log.Infof("Gathering version for %v", alias)
 	slaveVersion, err := wr.GetVersion(alias)
 	if err != nil {
 		er.RecordError(err)
@@ -84,7 +84,7 @@ func (wr *Wrangler) ValidateVersionShard(keyspace, shard string) error {
 	if si.MasterAlias.Uid == topo.NO_TABLET {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shard)
 	}
-	relog.Info("Gathering version for master %v", si.MasterAlias)
+	log.Infof("Gathering version for master %v", si.MasterAlias)
 	masterVersion, err := wr.GetVersion(si.MasterAlias)
 	if err != nil {
 		return err
@@ -140,7 +140,7 @@ func (wr *Wrangler) ValidateVersionKeyspace(keyspace string) error {
 		return fmt.Errorf("No master in shard %v/%v", keyspace, shards[0])
 	}
 	referenceAlias := si.MasterAlias
-	relog.Info("Gathering version for reference master %v", referenceAlias)
+	log.Infof("Gathering version for reference master %v", referenceAlias)
 	referenceVersion, err := wr.GetVersion(referenceAlias)
 	if err != nil {
 		return err

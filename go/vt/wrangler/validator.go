@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -41,10 +41,10 @@ wait:
 	for {
 		select {
 		case vd := <-results:
-			relog.Info("checking %v", vd.name)
+			log.Infof("checking %v", vd.name)
 			if vd.err != nil {
 				err = fmt.Errorf("some validation errors - see log")
-				relog.Error("%v: %v", vd.name, vd.err)
+				log.Errorf("%v: %v", vd.name, vd.err)
 			}
 		case <-timer.C:
 			err = fmt.Errorf("timed out during validate")
@@ -55,10 +55,10 @@ wait:
 			for {
 				select {
 				case vd := <-results:
-					relog.Info("checking %v", vd.name)
+					log.Infof("checking %v", vd.name)
 					if vd.err != nil {
 						err = fmt.Errorf("some validation errors - see log")
-						relog.Error("%v: %v", vd.name, vd.err)
+						log.Errorf("%v: %v", vd.name, vd.err)
 					}
 				default:
 					break wait

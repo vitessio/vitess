@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/memcache"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sync2"
 )
 
@@ -64,20 +64,20 @@ func NewCachePool(commandLine []string, queryTimeout time.Duration, idleTimeout 
 		case "-p", "-s":
 			i++
 			if i == len(commandLine) {
-				relog.Fatal("expecting value after -p")
+				log.Fatalf("expecting value after -p")
 			}
 			cp.port = commandLine[i]
 		case "-c":
 			i++
 			if i == len(commandLine) {
-				relog.Fatal("expecting value after -c")
+				log.Fatalf("expecting value after -c")
 			}
 			capacity, err := strconv.Atoi(commandLine[i])
 			if err != nil {
-				relog.Fatal("%V", err)
+				log.Fatalf("%V", err)
 			}
 			if capacity <= 50 {
-				relog.Fatal("insufficient capacity: %d", capacity)
+				log.Fatalf("insufficient capacity: %d", capacity)
 			}
 			cp.capacity = capacity - 50
 		}
@@ -94,11 +94,11 @@ func NewCachePool(commandLine []string, queryTimeout time.Duration, idleTimeout 
 
 func (cp *CachePool) Open() {
 	if len(cp.commandLine) == 0 {
-		relog.Info("rowcache not enabled")
+		log.Infof("rowcache not enabled")
 		return
 	}
 	cp.startMemcache()
-	relog.Info("rowcache is enabled")
+	log.Infof("rowcache is enabled")
 	f := func() (pools.Resource, error) {
 		c, err := memcache.Connect(cp.port)
 		if err != nil {

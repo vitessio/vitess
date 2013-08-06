@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -258,30 +258,30 @@ func (zkts *Server) lockForAction(actionDir, contents string, timeout time.Durat
 		}
 
 		// Regardless of the reason, try to cleanup.
-		relog.Warning("Failed to obtain action lock: %v", err)
+		log.Warningf("Failed to obtain action lock: %v", err)
 		zkts.zconn.Delete(actionPath, -1)
 
 		// Show the other actions in the directory
 		dir := path.Dir(actionPath)
 		children, _, err := zkts.zconn.Children(dir)
 		if err != nil {
-			relog.Warning("Failed to get children of %v: %v", dir, err)
+			log.Warningf("Failed to get children of %v: %v", dir, err)
 			return "", errToReturn
 		}
 
 		if len(children) == 0 {
-			relog.Warning("No other action running, you may just try again now.")
+			log.Warningf("No other action running, you may just try again now.")
 			return "", errToReturn
 		}
 
 		childPath := path.Join(dir, children[0])
 		data, _, err := zkts.zconn.Get(childPath)
 		if err != nil {
-			relog.Warning("Failed to get first action node %v (may have just ended): %v", childPath, err)
+			log.Warningf("Failed to get first action node %v (may have just ended): %v", childPath, err)
 			return "", errToReturn
 		}
 
-		relog.Warning("------ Most likely blocking action: %v\n%v", childPath, data)
+		log.Warningf("------ Most likely blocking action: %v\n%v", childPath, data)
 		return "", errToReturn
 	}
 

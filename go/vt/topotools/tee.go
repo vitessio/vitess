@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -97,7 +97,7 @@ func (tee *Tee) DeleteKeyspaceShards(keyspace string) error {
 
 	if err := tee.secondary.DeleteKeyspaceShards(keyspace); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.DeleteKeyspaceShards(%v) failed: %v", keyspace, err)
+		log.Warningf("secondary.DeleteKeyspaceShards(%v) failed: %v", keyspace, err)
 	}
 	return nil
 }
@@ -115,7 +115,7 @@ func (tee *Tee) CreateShard(keyspace, shard string, value *topo.Shard) error {
 	serr := tee.secondary.CreateShard(keyspace, shard, value)
 	if serr != nil && serr != topo.ErrNodeExists {
 		// not critical enough to fail
-		relog.Warning("secondary.CreateShard(%v,%v) failed: %v", keyspace, shard, err)
+		log.Warningf("secondary.CreateShard(%v,%v) failed: %v", keyspace, shard, err)
 	}
 	return err
 }
@@ -128,7 +128,7 @@ func (tee *Tee) UpdateShard(si *topo.ShardInfo) error {
 
 	if err := tee.secondary.UpdateShard(si); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.UpdateShard(%v,%v) failed: %v", si.Keyspace(), si.ShardName(), err)
+		log.Warningf("secondary.UpdateShard(%v,%v) failed: %v", si.Keyspace(), si.ShardName(), err)
 	}
 	return nil
 }
@@ -141,7 +141,7 @@ func (tee *Tee) ValidateShard(keyspace, shard string) error {
 
 	if err := tee.secondary.ValidateShard(keyspace, shard); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.ValidateShard(%v,%v) failed: %v", keyspace, shard, err)
+		log.Warningf("secondary.ValidateShard(%v,%v) failed: %v", keyspace, shard, err)
 	}
 	return nil
 }
@@ -166,7 +166,7 @@ func (tee *Tee) CreateTablet(tablet *topo.Tablet) error {
 
 	if err := tee.primary.CreateTablet(tablet); err != nil && err != topo.ErrNodeExists {
 		// not critical enough to fail
-		relog.Warning("secondary.CreateTablet(%v) failed: %v", tablet.Alias(), err)
+		log.Warningf("secondary.CreateTablet(%v) failed: %v", tablet.Alias(), err)
 	}
 	return err
 }
@@ -179,7 +179,7 @@ func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int) (newV
 
 	if _, err := tee.secondary.UpdateTablet(tablet, existingVersion); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.UpdateTablet(%v) failed: %v", tablet.Alias(), err)
+		log.Warningf("secondary.UpdateTablet(%v) failed: %v", tablet.Alias(), err)
 	}
 	return
 }
@@ -192,7 +192,7 @@ func (tee *Tee) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*to
 
 	if err := tee.secondary.UpdateTabletFields(tabletAlias, update); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.UpdateTabletFields(%v) failed: %v", tabletAlias, err)
+		log.Warningf("secondary.UpdateTabletFields(%v) failed: %v", tabletAlias, err)
 	}
 	return nil
 }
@@ -204,7 +204,7 @@ func (tee *Tee) DeleteTablet(alias topo.TabletAlias) error {
 
 	if err := tee.secondary.DeleteTablet(alias); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.DeleteTablet(%v) failed: %v", alias, err)
+		log.Warningf("secondary.DeleteTablet(%v) failed: %v", alias, err)
 	}
 	return nil
 }
@@ -216,7 +216,7 @@ func (tee *Tee) ValidateTablet(alias topo.TabletAlias) error {
 
 	if err := tee.secondary.ValidateTablet(alias); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.ValidateTablet(%v) failed: %v", alias, err)
+		log.Warningf("secondary.ValidateTablet(%v) failed: %v", alias, err)
 	}
 	return nil
 }
@@ -244,7 +244,7 @@ func (tee *Tee) CreateReplicationPath(keyspace, shard, repPath string) error {
 
 	if err := tee.secondary.CreateReplicationPath(keyspace, shard, repPath); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.CreateReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
+		log.Warningf("secondary.CreateReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
 	}
 	return nil
 }
@@ -256,7 +256,7 @@ func (tee *Tee) DeleteReplicationPath(keyspace, shard, repPath string) error {
 
 	if err := tee.secondary.DeleteReplicationPath(keyspace, shard, repPath); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.DeleteReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
+		log.Warningf("secondary.DeleteReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
 	}
 	return nil
 }
@@ -276,7 +276,7 @@ func (tee *Tee) UpdateSrvTabletType(cell, keyspace, shard string, tabletType top
 
 	if err := tee.secondary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.UpdateSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+		log.Warningf("secondary.UpdateSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
 	return nil
 }
@@ -292,7 +292,7 @@ func (tee *Tee) DeleteSrvTabletType(cell, keyspace, shard string, tabletType top
 
 	if err := tee.secondary.DeleteSrvTabletType(cell, keyspace, shard, tabletType); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.DeleteSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+		log.Warningf("secondary.DeleteSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
 	return nil
 }
@@ -304,7 +304,7 @@ func (tee *Tee) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvS
 
 	if err := tee.secondary.UpdateSrvShard(cell, keyspace, shard, srvShard); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.UpdateSrvShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+		log.Warningf("secondary.UpdateSrvShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
 	}
 	return nil
 }
@@ -320,7 +320,7 @@ func (tee *Tee) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKe
 
 	if err := tee.secondary.UpdateSrvKeyspace(cell, keyspace, srvKeyspace); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.UpdateSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
+		log.Warningf("secondary.UpdateSrvKeyspace(%v, %v) failed: %v", cell, keyspace, err)
 	}
 	return nil
 }
@@ -336,7 +336,7 @@ func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType to
 
 	if err := tee.secondary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
 		// not critical enough to fail
-		relog.Warning("secondary.UpdateTabletEndpoint(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+		log.Warningf("secondary.UpdateTabletEndpoint(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
 	return nil
 }
@@ -356,7 +356,7 @@ func (tee *Tee) LockKeyspaceForAction(keyspace, contents string, timeout time.Du
 	sLockPath, err := tee.lockSecond.LockKeyspaceForAction(keyspace, contents, timeout, interrupted)
 	if err != nil {
 		if err := tee.lockFirst.UnlockKeyspaceForAction(keyspace, pLockPath, "{}"); err != nil {
-			relog.Warning("Failed to unlock lockFirst keyspace after failed lockSecond lock for %v", keyspace)
+			log.Warningf("Failed to unlock lockFirst keyspace after failed lockSecond lock for %v", keyspace)
 		}
 		return "", err
 	}
@@ -380,7 +380,7 @@ func (tee *Tee) UnlockKeyspaceForAction(keyspace, lockPath, results string) erro
 
 	if serr != nil {
 		if perr != nil {
-			relog.Warning("Secondary UnlockKeyspaceForAction(%v, %v) failed: %v", keyspace, sLockPath, serr)
+			log.Warningf("Secondary UnlockKeyspaceForAction(%v, %v) failed: %v", keyspace, sLockPath, serr)
 		}
 		return serr
 	}
@@ -398,7 +398,7 @@ func (tee *Tee) LockShardForAction(keyspace, shard, contents string, timeout tim
 	sLockPath, err := tee.lockSecond.LockShardForAction(keyspace, shard, contents, timeout, interrupted)
 	if err != nil {
 		if err := tee.lockFirst.UnlockShardForAction(keyspace, shard, pLockPath, "{}"); err != nil {
-			relog.Warning("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v", keyspace, shard)
+			log.Warningf("Failed to unlock lockFirst shard after failed lockSecond lock for %v/%v", keyspace, shard)
 		}
 		return "", err
 	}
@@ -422,7 +422,7 @@ func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) 
 
 	if serr != nil {
 		if perr != nil {
-			relog.Warning("Secondary UnlockShardForAction(%v/%v, %v) failed: %v", keyspace, shard, sLockPath, serr)
+			log.Warningf("Secondary UnlockShardForAction(%v/%v, %v) failed: %v", keyspace, shard, sLockPath, serr)
 		}
 		return serr
 	}

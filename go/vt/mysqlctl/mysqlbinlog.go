@@ -10,7 +10,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 )
 
@@ -103,7 +103,7 @@ func (decoder *BinlogDecoder) DecodeMysqlBinlog(binlog *os.File) (io.Reader, err
 
 	dataRdFile, dataWrFile, pipeErr := os.Pipe()
 	if pipeErr != nil {
-		relog.Error("DecodeMysqlBinlog: error in creating pipe %v", pipeErr)
+		log.Errorf("DecodeMysqlBinlog: error in creating pipe %v", pipeErr)
 		return nil, pipeErr
 	}
 	// let the caller close the read file
@@ -119,7 +119,7 @@ func (decoder *BinlogDecoder) DecodeMysqlBinlog(binlog *os.File) (io.Reader, err
 
 	process, err := os.StartProcess(name, arg, attrs)
 	if err != nil {
-		relog.Error("DecodeMysqlBinlog: error in decoding binlog %v", err)
+		log.Errorf("DecodeMysqlBinlog: error in decoding binlog %v", err)
 		return nil, err
 	}
 	decoder.process = process
@@ -128,9 +128,9 @@ func (decoder *BinlogDecoder) DecodeMysqlBinlog(binlog *os.File) (io.Reader, err
 		// just make sure we don't spawn zombies
 		waitMsg, err := decoder.process.Wait()
 		if err != nil {
-			relog.Error("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
+			log.Errorf("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
 		} else {
-			relog.Info("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
+			log.Infof("vt_mysqlbinlog exited: %v err: %v", waitMsg, err)
 		}
 	}()
 
@@ -138,6 +138,6 @@ func (decoder *BinlogDecoder) DecodeMysqlBinlog(binlog *os.File) (io.Reader, err
 }
 
 func (decoder *BinlogDecoder) Kill() error {
-	//relog.Info("Killing vt_mysqlbinlog pid %v", decoder.process.Pid)
+	//log.Infof("Killing vt_mysqlbinlog pid %v", decoder.process.Pid)
 	return decoder.process.Kill()
 }

@@ -20,8 +20,8 @@ import (
 	"text/template"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 )
 
 const (
@@ -494,7 +494,7 @@ func (mysqld *Mysqld) fetchSuperQuery(query string) (*proto.QueryResult, error) 
 		return nil, connErr
 	}
 	defer conn.Close()
-	relog.Info("fetch %v", query)
+	log.Infof("fetch %v", query)
 	qr, err := conn.ExecuteFetch(query, 10000, true)
 	if err != nil {
 		return nil, err
@@ -510,7 +510,7 @@ func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
 	defer conn.Close()
 	for _, query := range queryList {
 		toLog := strings.Replace(query, mysqld.replParams.Pass, strings.Repeat("*", len(mysqld.replParams.Pass)), -1)
-		relog.Info("exec %v", toLog)
+		log.Infof("exec %v", toLog)
 		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", query, err.Error())
 		}

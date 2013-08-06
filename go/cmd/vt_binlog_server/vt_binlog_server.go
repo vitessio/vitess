@@ -10,8 +10,8 @@ import (
 	"fmt"
 	_ "net/http/pprof"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
-	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -32,11 +32,11 @@ func main() {
 	servenv.Init("vt_binlog_server")
 
 	if *mycnfFile == "" {
-		relog.Fatal("Please specify the path for mycnf file.")
+		log.Fatalf("Please specify the path for mycnf file.")
 	}
 	mycnf, err := mysqlctl.ReadMycnf(*mycnfFile)
 	if err != nil {
-		relog.Fatal("Error reading mycnf file %v", *mycnfFile)
+		log.Fatalf("Error reading mycnf file %v", *mycnfFile)
 	}
 
 	binlogServer := mysqlctl.NewBinlogServer(mycnf)

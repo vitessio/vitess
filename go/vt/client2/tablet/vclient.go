@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
-	"github.com/youtube/vitess/go/relog"
 )
 
 const (
@@ -74,7 +74,7 @@ func (vtc *VtConn) handleErr(err error) (int, error) {
 		time.Sleep(vtc.reconnectDelay)
 		vtc.Close()
 		dialErr := vtc.dial()
-		relog.Warning("vt: redial error %v", dialErr)
+		log.Warningf("vt: redial error %v", dialErr)
 	}
 
 	return errType, err
@@ -103,7 +103,7 @@ func (vtc *VtConn) Exec(query string, bindVars map[string]interface{}) (db.Resul
 			if err := vtc.dial(); err == nil {
 				break
 			}
-			relog.Warning("vt: error dialing on exec %v", vtc.Conn.dbi.Host)
+			log.Warningf("vt: error dialing on exec %v", vtc.Conn.dbi.Host)
 		}
 	}
 
@@ -133,7 +133,7 @@ func (vtc *VtConn) Begin() (db.Tx, error) {
 			if err := vtc.dial(); err == nil {
 				break
 			}
-			relog.Warning("vt: error dialing on begin %v", vtc.Conn.dbi.Host)
+			log.Warningf("vt: error dialing on begin %v", vtc.Conn.dbi.Host)
 		}
 	}
 	panic("unreachable")

@@ -10,8 +10,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
-	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
@@ -44,7 +44,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if err := servenv.Init("zkocc"); err != nil {
-		relog.Fatal("Error in servenv.Init: %v", err)
+		log.Fatalf("Error in servenv.Init: %v", err)
 	}
 
 	rpc.HandleHTTP()

@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 type Request struct{}
@@ -100,7 +100,7 @@ func (service *UmgmtService) addShutdownCallback(f UmgmtCallback) {
 }
 
 func (service *UmgmtService) Ping(request *Request, reply *Reply) error {
-	relog.Info("ping")
+	log.Infof("ping")
 	reply.Message = "pong"
 	return nil
 }
@@ -120,9 +120,9 @@ func (service *UmgmtService) closeListeners() (err error) {
 		if closeErr != nil {
 			err := fmt.Errorf("failed to close listener on %v err:%v", addr, closeErr)
 			// just return that at least one error happened, the log will reveal the rest
-			relog.Error("%s", err)
+			log.Errorf("%s", err)
 		}
-		relog.Info("closed listener %v", addr)
+		log.Infof("closed listener %v", addr)
 	}
 	for _, f := range service.closeCallbacks {
 		go f()
@@ -162,7 +162,7 @@ type UmgmtServer struct {
 func (server *UmgmtServer) Serve() error {
 	defer server.listener.Close()
 	var tempDelay time.Duration // how long to sleep on accept failure
-	relog.Info("started umgmt server: %v", server.listener.Addr())
+	log.Infof("started umgmt server: %v", server.listener.Addr())
 	for {
 		conn, err := server.listener.Accept()
 		if err != nil {
@@ -175,7 +175,7 @@ func (server *UmgmtServer) Serve() error {
 				if max := 1 * time.Second; tempDelay > max {
 					tempDelay = max
 				}
-				relog.Warning("umgmt: Accept error: %v; retrying in %v", err, tempDelay)
+				log.Warningf("umgmt: Accept error: %v; retrying in %v", err, tempDelay)
 				time.Sleep(tempDelay)
 				continue
 			}
@@ -240,7 +240,7 @@ func ListenAndServe(addr string) error {
 	server := &UmgmtServer{connMap: make(map[net.Conn]bool)}
 	defer func() {
 		if err := server.Close(); err != nil {
-			relog.Info("umgmt server closed: %v", err)
+			log.Infof("umgmt server closed: %v", err)
 		}
 	}()
 
@@ -259,19 +259,19 @@ func ListenAndServe(addr string) error {
 				if clientErr == nil {
 					closeErr := umgmtClient.CloseListeners()
 					if closeErr != nil {
-						relog.Error("umgmt CloseListeners err:%v", closeErr)
+						log.Errorf("umgmt CloseListeners err:%v", closeErr)
 					}
 					// wait for rpc to finish
 					rebindDelay := defaultService.rebindDelay()
 					if rebindDelay > 0.0 {
-						relog.Info("umgmt delaying rebind %v", rebindDelay)
+						log.Infof("umgmt delaying rebind %v", rebindDelay)
 						time.Sleep(rebindDelay)
 					}
 					continue
 				} else if checkError(clientErr, syscall.ECONNREFUSED) {
-					relog.Warning("umgmt forced socket removal: %v", addr)
+					log.Warningf("umgmt forced socket removal: %v", addr)
 					if rmErr := os.Remove(addr); rmErr != nil {
-						relog.Error("umgmt failed removing socket: %v", rmErr)
+						log.Errorf("umgmt failed removing socket: %v", rmErr)
 					}
 				} else {
 					return e
@@ -344,7 +344,7 @@ func SetRebindDelay(f float32) {
 }
 
 func SigTermHandler(signal os.Signal) {
-	relog.Info("SigTermHandler")
+	log.Infof("SigTermHandler")
 	defaultService.closeListeners()
 	time.Sleep(defaultService.lameDuckPeriod())
 	defaultService.gracefulShutdown()
@@ -353,7 +353,7 @@ func SigTermHandler(signal os.Signal) {
 // this is a temporary hack around a few different ways of wrapping
 // error codes coming out of the system libraries
 func checkError(err, testErr error) bool {
-	//relog.Error("checkError %T(%v) == %T(%v)", err, err, testErr, testErr)
+	//log.Errorf("checkError %T(%v) == %T(%v)", err, err, testErr, testErr)
 	if err == testErr {
 		return true
 	}

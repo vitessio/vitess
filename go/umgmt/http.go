@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 var connectionCount = expvar.NewInt("connection-count")
@@ -91,7 +91,7 @@ func asyncListener(listener net.Listener) {
 		// This is net.errClosing, which is conveniently non-public.
 		// Squelch this expected case.
 		if !strings.Contains(httpErr.Error(), "use of closed network connection") {
-			relog.Error("StartHttpServer error: %v", httpErr)
+			log.Errorf("StartHttpServer error: %v", httpErr)
 		}
 	}
 }
@@ -102,7 +102,7 @@ func asyncListener(listener net.Listener) {
 func StartHttpServer(addr string) {
 	httpListener, httpErr := net.Listen("tcp", addr)
 	if httpErr != nil {
-		relog.Fatal("StartHttpServer failed: %v", httpErr)
+		log.Fatalf("StartHttpServer failed: %v", httpErr)
 	}
 	go asyncListener(httpListener)
 }
@@ -114,7 +114,7 @@ func StartHttpsServer(addr string, certFile, keyFile, caFile string) {
 	// load the server cert / key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		relog.Fatal("StartHttpsServer.LoadX509KeyPair failed: %v", err)
+		log.Fatalf("StartHttpsServer.LoadX509KeyPair failed: %v", err)
 	}
 	config.Certificates = []tls.Certificate{cert}
 
@@ -126,22 +126,22 @@ func StartHttpsServer(addr string, certFile, keyFile, caFile string) {
 
 		ca, err := os.Open(caFile)
 		if err != nil {
-			relog.Fatal("StartHttpsServer failed to open caFile %v: %v", caFile, err)
+			log.Fatalf("StartHttpsServer failed to open caFile %v: %v", caFile, err)
 		}
 		defer ca.Close()
 
 		fi, err := ca.Stat()
 		if err != nil {
-			relog.Fatal("StartHttpsServer failed to stat caFile %v: %v", caFile, err)
+			log.Fatalf("StartHttpsServer failed to stat caFile %v: %v", caFile, err)
 		}
 
 		pemCerts := make([]byte, fi.Size())
 		if _, err = ca.Read(pemCerts); err != nil {
-			relog.Fatal("StartHttpsServer failed to read caFile %v: %v", caFile, err)
+			log.Fatalf("StartHttpsServer failed to read caFile %v: %v", caFile, err)
 		}
 
 		if !config.ClientCAs.AppendCertsFromPEM(pemCerts) {
-			relog.Fatal("StartHttpsServer failed to parse caFile %v", caFile)
+			log.Fatalf("StartHttpsServer failed to parse caFile %v", caFile)
 		}
 
 		config.ClientAuth = tls.RequireAndVerifyClientCert
@@ -149,7 +149,7 @@ func StartHttpsServer(addr string, certFile, keyFile, caFile string) {
 
 	httpsListener, err := tls.Listen("tcp", addr, &config)
 	if err != nil {
-		relog.Fatal("StartHttpsServer failed: %v", err)
+		log.Fatalf("StartHttpsServer failed: %v", err)
 	}
 	go asyncListener(httpsListener)
 }
