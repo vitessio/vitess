@@ -114,6 +114,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	if err := vtClient.Connect(); err != nil {
 		return fmt.Errorf("can't connect to database: %v", err)
 	}
+	defer vtClient.Close()
 
 	// Read the start position
 	startPosition, err := mysqlctl.ReadStartPosition(vtClient, string(bpc.source.KeyRange.Start.Hex()), string(bpc.source.KeyRange.End.Hex()))
