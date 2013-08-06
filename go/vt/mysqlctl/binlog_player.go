@@ -387,7 +387,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		}
 	}
 
-	switch binlogResponse.Data.SqlType {
+	switch strings.ToLower(binlogResponse.Data.SqlType) {
 	case DDL:
 		if blp.txnIndex > 0 {
 			relog.Info("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
@@ -423,7 +423,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		}
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
 	default:
-		return fmt.Errorf("Unknown SqlType %v", binlogResponse.Data.SqlType, binlogResponse.Data.Sql)
+		return fmt.Errorf("Unknown SqlType %v '%v'", binlogResponse.Data.SqlType, binlogResponse.Data.Sql)
 	}
 
 	return nil
@@ -493,7 +493,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 	var txnStartTime, queryStartTime time.Time
 
 	for _, dmlEvent := range blp.txnBuffer {
-		switch dmlEvent.Data.SqlType {
+		switch strings.ToLower(dmlEvent.Data.SqlType) {
 		case BLPL_BEGIN:
 			continue
 		case BLPL_COMMIT:

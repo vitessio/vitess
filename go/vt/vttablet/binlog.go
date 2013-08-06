@@ -94,7 +94,7 @@ func (bpc *BinlogPlayerController) Loop() {
 
 		// sleep for a bit before retrying to connect
 		bpc.states.SetState(BINLOG_PLAYER_SLEEPING)
-		time.Sleep(5)
+		time.Sleep(5 * time.Second)
 	}
 
 	relog.Info("Exited main binlog player loop for %v", bpc.source)
