@@ -24,7 +24,9 @@ import (
 
 var (
 	SLOW_TXN_THRESHOLD        = time.Duration(100 * time.Millisecond)
+	ROLLBACK                  = "rollback"
 	BLPL_STREAM_COMMENT_START = "/* _stream "
+	BLPL_SPACE                = " "
 	UPDATE_RECOVERY           = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, group_id='%v', txn_timestamp=unix_timestamp(), time_updated=%v where keyrange_start='%v' and keyrange_end='%v'"
 	SELECT_FROM_RECOVERY      = "select * from _vt.blp_checkpoint where keyrange_start='%v' and keyrange_end='%v'"
 )
@@ -136,7 +138,7 @@ func (dc *DBClient) Commit() error {
 }
 
 func (dc *DBClient) Rollback() error {
-	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
+	_, err := dc.dbConn.ExecuteFetch(ROLLBACK, 1, false)
 	if err != nil {
 		log.Errorf("ROLLBACK failed w/ error %v", err)
 		dc.dbConn.Close()
@@ -454,7 +456,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 	}
 	var firstKw string
 	for _, sql := range sqlSlice {
-		firstKw = strings.TrimSpace(strings.Split(sql, " ")[0])
+		firstKw = strings.TrimSpace(strings.Split(sql, BLPL_SPACE)[0])
 		if firstKw != "insert" && firstKw != "update" && firstKw != "delete" {
 			continue
 		}
@@ -464,7 +466,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 			//If sql doesn't have stream comment, don't match
 			return false
 		}
-		tableName := strings.TrimSpace(strings.Split(sql[(streamCommentIndex+len(BLPL_STREAM_COMMENT_START)):], " ")[0])
+		tableName := strings.TrimSpace(strings.Split(sql[(streamCommentIndex+len(BLPL_STREAM_COMMENT_START)):], BLPL_SPACE)[0])
 		for _, table := range blp.tables {
 			if tableName == table {
 				return true

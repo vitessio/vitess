@@ -311,7 +311,7 @@ func (blp *Bls) readBlsLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 
 //Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
 func (blp *Bls) parseDbChange(event *blsEventBuffer) {
-	if strings.ToLower(event.firstKw) != proto.USE {
+	if event.firstKw != proto.USE {
 		return
 	}
 	if blp.globalState.dbname == "" {

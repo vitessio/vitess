@@ -5,8 +5,6 @@
 package proto
 
 import (
-	"strings"
-
 	rpc "github.com/youtube/vitess/go/rpcplus"
 )
 
@@ -43,8 +41,9 @@ var sqlKwMap = map[string]string{
 
 // GetSqlType returns one of the possible values for SqlType, or
 // "" if it cannot be determined.
+// firstKeyword has to be normalized to lower case first.
 func GetSqlType(firstKeyword string) string {
-	return sqlKwMap[strings.ToLower(firstKeyword)]
+	return sqlKwMap[firstKeyword]
 }
 
 // BinlogServerRequest represents a request to the BinlogServer service.
