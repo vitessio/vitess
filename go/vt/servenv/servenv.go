@@ -23,7 +23,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	_ "github.com/youtube/vitess/go/logutil"
+	_ "github.com/youtube/vitess/go/vt/logutil"
 )
 
 var (
