@@ -129,7 +129,7 @@ func main() {
 	var secureListener net.Listener
 	if *securePort != 0 {
 		relog.Info("listening on secure port %v", *securePort)
-		vttablet.SecureServ(fmt.Sprintf(":%d", *securePort), *cert, *key, *caCert)
+		vttablet.SecureServe(fmt.Sprintf(":%d", *securePort), *cert, *key, *caCert)
 	}
 
 	relog.Info("starting vttablet %v", *port)

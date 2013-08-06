@@ -15,7 +15,7 @@ import (
 
 // SecureListen obtains a listener that accepts
 // secure connections
-func SecureServ(addr string, certFile, keyFile, caFile string) {
+func SecureServe(addr string, certFile, keyFile, caFile string) {
 	config := tls.Config{}
 
 	// load the server cert / key
