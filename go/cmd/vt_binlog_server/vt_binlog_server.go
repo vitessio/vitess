@@ -9,16 +9,13 @@ import (
 	"flag"
 	"fmt"
 	_ "net/http/pprof"
-	"os"
-	"os/signal"
-	"syscall"
 
+	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	_ "github.com/youtube/vitess/go/snitch"
-	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -46,31 +43,10 @@ func main() {
 
 	proto.RegisterBinlogServer(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)
-	//bsonrpc.ServeAuthRPC()
 
 	rpc.HandleHTTP()
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
 
-	umgmt.SetLameDuckPeriod(30.0)
-	umgmt.SetRebindDelay(0.01)
-	umgmt.AddStartupCallback(func() {
-		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
-	})
-	umgmt.AddStartupCallback(func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGTERM)
-		go func() {
-			for sig := range c {
-				umgmt.SigTermHandler(sig)
-			}
-		}()
-	})
-
-	relog.Info("vt_binlog_server registered at port %v", *port)
-	umgmtSocket := fmt.Sprintf("/tmp/vt_binlog_server-%08x-umgmt.sock", *port)
-	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
-		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
-	}
-	relog.Info("done")
+	proc.ListenAndServe(fmt.Sprintf("%v", *port))
 }

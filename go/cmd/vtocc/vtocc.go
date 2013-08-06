@@ -11,36 +11,29 @@ import (
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
-	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
 	_ "github.com/youtube/vitess/go/snitch"
-	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/servenv"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
 )
 
-const (
-	DefaultLameDuckPeriod = 30.0
-	DefaultRebindDelay    = 0.01
-)
-
 var (
-	port           = flag.Int("port", 6510, "tcp port to serve on")
-	lameDuckPeriod = flag.Float64("lame-duck-period", DefaultLameDuckPeriod, "how long to give in-flight transactions to finish")
-	rebindDelay    = flag.Float64("rebind-delay", DefaultRebindDelay, "artificial delay before rebinding a hijacked listener")
-	authConfig     = flag.String("auth-credentials", "", "name of file containing auth credentials")
-	configFile     = flag.String("config", "", "config file name")
-	dbConfigFile   = flag.String("dbconfig", "", "db config file name")
-	queryLog       = flag.String("querylog", "", "for testing: log all queries to this file")
-	customrules    = flag.String("customrules", "", "custom query rules file")
-	overridesFile  = flag.String("schema-override", "", "schema overrides file")
+	port          = flag.Int("port", 6510, "tcp port to serve on")
+	authConfig    = flag.String("auth-credentials", "", "name of file containing auth credentials")
+	configFile    = flag.String("config", "", "config file name")
+	dbConfigFile  = flag.String("dbconfig", "", "db config file name")
+	queryLog      = flag.String("querylog", "", "for testing: log all queries to this file")
+	customrules   = flag.String("customrules", "", "custom query rules file")
+	overridesFile = flag.String("schema-override", "", "schema overrides file")
 )
 
 var config = ts.Config{
@@ -118,36 +111,17 @@ func main() {
 	}
 	serveRPC()
 
-	relog.Info("started vtocc %v", *port)
+	relog.Info("starting vtocc %v", *port)
+	s := proc.ListenAndServe(fmt.Sprintf("%v", *port))
 
-	// we delegate out startup to the micromanagement server so these actions
-	// will occur after we have obtained our socket.
-	usefulLameDuckPeriod := float64(config.QueryTimeout + 1)
-	if usefulLameDuckPeriod > *lameDuckPeriod {
-		*lameDuckPeriod = usefulLameDuckPeriod
-		relog.Info("readjusted -lame-duck-period to %f", *lameDuckPeriod)
-	}
-	umgmt.SetLameDuckPeriod(float32(*lameDuckPeriod))
-	umgmt.SetRebindDelay(float32(*rebindDelay))
-	umgmt.AddStartupCallback(func() {
-		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
-	})
-	umgmt.AddStartupCallback(func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGTERM)
-		go func() {
-			for sig := range c {
-				umgmt.SigTermHandler(sig)
-			}
-		}()
-	})
-	umgmt.AddCloseCallback(func() {
+	// A SIGUSR1 means that we're restarting
+	if s == syscall.SIGUSR1 {
+		// Give some time for the other process
+		// to pick up the listeners
+		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries(true)
-	})
-
-	umgmtSocket := fmt.Sprintf("/tmp/vtocc-%08x-umgmt.sock", *port)
-	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
-		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
+	} else {
+		ts.DisallowQueries(false)
 	}
 	relog.Info("done")
 }

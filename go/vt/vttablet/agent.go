@@ -17,7 +17,6 @@ import (
 
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/relog"
-	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -56,13 +55,17 @@ func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 }
 
 // InitAgent initializes the agent within vttablet.
-func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string, port, securePort int, mycnfFile, customRules string, overridesFile string) error {
+func InitAgent(
+	tabletAlias topo.TabletAlias,
+	dbcfgs dbconfigs.DBConfigs,
+	mycnf *mysqlctl.Mycnf,
+	dbConfigsFile, dbCredentialsFile string,
+	port, securePort int,
+	mycnfFile, customRules string,
+	overridesFile string) (agent *tm.ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
-	umgmt.AddCloseCallback(func() {
-		topo.CloseServers()
-	})
 
 	bindAddr := fmt.Sprintf(":%v", port)
 	secureAddr := ""
@@ -74,9 +77,9 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
-	agent, err := tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile)
+	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		if newTablet.IsServingType() {
@@ -118,14 +121,11 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	if err := agent.Start(bindAddr, secureAddr, mysqld.Addr()); err != nil {
-		return err
+		return nil, err
 	}
-	umgmt.AddCloseCallback(func() {
-		agent.Stop()
-	})
 
 	// register the RPC services from the agent
 	agent.RegisterQueryService(mysqld)
 
-	return nil
+	return agent, nil
 }

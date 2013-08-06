@@ -8,20 +8,23 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
 	_ "github.com/youtube/vitess/go/snitch"
-	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -30,22 +33,15 @@ import (
 	"github.com/youtube/vitess/go/vt/vttablet"
 )
 
-const (
-	DefaultLameDuckPeriod = 30.0
-	DefaultRebindDelay    = 0.01
-)
-
 var (
-	port           = flag.Int("port", 6509, "port for the server")
-	lameDuckPeriod = flag.Float64("lame-duck-period", DefaultLameDuckPeriod, "how long to give in-flight transactions to finish")
-	rebindDelay    = flag.Float64("rebind-delay", DefaultRebindDelay, "artificial delay before rebinding a hijacked listener")
-	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
-	qsConfigFile   = flag.String("queryserver-config-file", "", "config file name for the query service")
-	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
-	authConfig     = flag.String("auth-credentials", "", "name of file containing auth credentials")
-	queryLog       = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
-	customrules    = flag.String("customrules", "", "custom query rules file")
-	overridesFile  = flag.String("schema-override", "", "schema overrides file")
+	port          = flag.Int("port", 6509, "port for the server")
+	tabletPath    = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
+	qsConfigFile  = flag.String("queryserver-config-file", "", "config file name for the query service")
+	mycnfFile     = flag.String("mycnf-file", "", "my.cnf file")
+	authConfig    = flag.String("auth-credentials", "", "name of file containing auth credentials")
+	queryLog      = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
+	customrules   = flag.String("customrules", "", "custom query rules file")
+	overridesFile = flag.String("schema-override", "", "schema overrides file")
 
 	securePort = flag.Int("secure-port", 0, "port for the secure server")
 	cert       = flag.String("cert", "", "cert file")
@@ -110,9 +106,9 @@ func main() {
 	}
 
 	initQueryService(dbcfgs)
-	initUpdateStreamService(mycnf)
-	ts.RegisterCacheInvalidator()                                                                                                                          // depends on both query and updateStream
-	err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile) // depends on both query and updateStream
+	mysqlctl.RegisterUpdateStreamService(mycnf)
+	ts.RegisterCacheInvalidator()                                                                                                                                  // depends on both query and updateStream
+	agent, err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile) // depends on both query and updateStream
 	if err != nil {
 		relog.Fatal("%s", err)
 	}
@@ -132,32 +128,34 @@ func main() {
 
 	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 
-	// we delegate out startup to the micromanagement server so these actions
-	// will occur after we have obtained our socket.
-	umgmt.SetLameDuckPeriod(float32(*lameDuckPeriod))
-	umgmt.SetRebindDelay(float32(*rebindDelay))
-	umgmt.AddStartupCallback(func() {
-		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
-		if *securePort != 0 {
-			relog.Info("listening on secure port %v", *securePort)
-			umgmt.StartHttpsServer(fmt.Sprintf(":%v", *securePort), *cert, *key, *caCert)
+	var secureListener net.Listener
+	if *securePort != 0 {
+		relog.Info("listening on secure port %v", *securePort)
+		secureListener, err = vttablet.SecureListen(strconv.Itoa(*securePort), *cert, *key, *caCert)
+		if err != nil {
+			relog.Fatal("%s", err)
 		}
-	})
-	umgmt.AddStartupCallback(func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGTERM)
-		go func() {
-			for sig := range c {
-				umgmt.SigTermHandler(sig)
-			}
-		}()
-	})
-
-	relog.Info("started vttablet %v", *port)
-	umgmtSocket := fmt.Sprintf("/tmp/vttablet-%08x-umgmt.sock", *port)
-	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
-		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
+		go http.Serve(secureListener, nil)
 	}
+
+	relog.Info("starting vttablet %v", *port)
+	s := proc.ListenAndServe(fmt.Sprintf("%v", *port))
+	if secureListener != nil {
+		secureListener.Close()
+	}
+
+	// A SIGUSR1 means that we're restarting
+	if s == syscall.SIGUSR1 {
+		// Give some time for the other process
+		// to pick up the listeners
+		time.Sleep(5 * time.Millisecond)
+		ts.DisallowQueries(true)
+	} else {
+		ts.DisallowQueries(false)
+	}
+	mysqlctl.DisableUpdateStreamService()
+	topo.CloseServers()
+	agent.Stop()
 	relog.Info("done")
 }
 
@@ -192,11 +190,6 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 		relog.Warning("%s", err)
 	}
 	ts.RegisterQueryService(qsConfig)
-	usefulLameDuckPeriod := float64(qsConfig.QueryTimeout + 1)
-	if usefulLameDuckPeriod > *lameDuckPeriod {
-		*lameDuckPeriod = usefulLameDuckPeriod
-		relog.Info("readjusted -lame-duck-period to %f", *lameDuckPeriod)
-	}
 	if *queryLog != "" {
 		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
 			ts.QueryLogger = relog.New(f, "", relog.DEBUG)
@@ -204,15 +197,4 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 			relog.Fatal("Error opening file %v: %v", *queryLog, err)
 		}
 	}
-	umgmt.AddCloseCallback(func() {
-		ts.DisallowQueries(true)
-	})
-}
-
-func initUpdateStreamService(mycnf *mysqlctl.Mycnf) {
-	mysqlctl.RegisterUpdateStreamService(mycnf)
-
-	umgmt.AddCloseCallback(func() {
-		mysqlctl.DisableUpdateStreamService()
-	})
 }

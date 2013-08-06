@@ -14,6 +14,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -27,7 +29,6 @@ import (
 	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	cproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -35,7 +36,6 @@ import (
 )
 
 var stdout *bufio.Writer
-var interrupted = make(chan struct{})
 
 const (
 	TXN_BATCH        = 10
@@ -329,22 +329,12 @@ func main() {
 		blp.startPosition.Position)
 
 	if *port != 0 {
-		umgmt.AddStartupCallback(func() {
-			umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
-		})
+		l, err := net.Listen("tcp", fmt.Sprintf(":%v", *port))
+		if err != nil {
+			relog.Fatal("%s", err)
+		}
+		go http.Serve(l, nil)
 	}
-	umgmt.AddStartupCallback(func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, syscall.SIGTERM)
-		go func() {
-			for sig := range c {
-				umgmt.SigTermHandler(sig)
-			}
-		}()
-	})
-	umgmt.AddCloseCallback(func() {
-		close(interrupted)
-	})
 
 	//Make a request to the server and start processing the events.
 	stdout = bufio.NewWriterSize(os.Stdout, 16*1024)
@@ -861,6 +851,8 @@ func (blp *BinlogPlayer) applyBinlogEvents() error {
 		KeyspaceEnd:   blp.startPosition.KeyrangeEnd}
 	resp := blp.rpcClient.StreamGo("BinlogServer.ServeBinlog", blServeRequest, responseChan)
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM)
 processLoop:
 	for {
 		select {
@@ -872,7 +864,7 @@ processLoop:
 			if err != nil {
 				return fmt.Errorf("Error in processing binlog event %v", err)
 			}
-		case <-interrupted:
+		case <-c:
 			return nil
 		}
 	}
