@@ -10,7 +10,6 @@ import (
 	_ "net/http/pprof"
 	"os"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"

@@ -194,7 +194,6 @@ class VttabletTestEnv(TestEnv):
       try:
         self.conn = self.connect()
         self.querylog = framework.Tailer(open(self.tablet.querylog_file, "r"))
-        self.log = framework.Tailer(open(self.tablet.logfile, "r"))
         self.txlogger = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/txlog'], stdout=open('/tmp/vtocc_txlog.log', 'w'))
         self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log', 'r'))
         return
@@ -301,7 +300,6 @@ class VtoccTestEnv(TestEnv):
       self.vtroot+"/bin/vtocc",
       "-port", "9461",
       "-dbconfig", dbconfig,
-      "-logfile", self.logfile,
       "-querylog", self.querylogfile,
       "-customrules", customrules,
       "-schema-override", schema_override,
@@ -319,7 +317,6 @@ class VtoccTestEnv(TestEnv):
       try:
         self.conn = self.connect()
         self.querylog = framework.Tailer(open(self.querylogfile, "r"))
-        self.log = framework.Tailer(open(self.logfile, "r"))
         self.txlogger = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/txlog'], stdout=open('/tmp/vtocc_txlog.log', 'w'))
         self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log', 'r'))
         return

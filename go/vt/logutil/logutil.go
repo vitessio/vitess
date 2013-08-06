@@ -2,7 +2,6 @@ package logutil
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"path"
 
@@ -13,8 +12,7 @@ import (
 type logShim struct{}
 
 func (shim *logShim) Write(buf []byte) (n int, err error) {
-	glog.Warning(string(buf))
-	fmt.Println(string(buf))
+	glog.Info(string(buf))
 	return len(buf), nil
 }
 
