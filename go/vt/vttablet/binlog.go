@@ -19,7 +19,7 @@ import (
 // BinlogPlayerController controls one player
 type BinlogPlayerController struct {
 	ts       topo.Server
-	vtClient mysqlctl.VtClient
+	dbConfig *mysql.ConnectionParams
 	keyspace string
 	source   topo.SourceShard
 
@@ -34,10 +34,10 @@ type BinlogPlayerController struct {
 	// TODO(alainjobart): figure out if we need a lock on structure (for stats)
 }
 
-func NewBinlogController(ts topo.Server, vtClient mysqlctl.VtClient, keyspace string, source topo.SourceShard) *BinlogPlayerController {
+func NewBinlogController(ts topo.Server, dbConfig *mysql.ConnectionParams, keyspace string, source topo.SourceShard) *BinlogPlayerController {
 	return &BinlogPlayerController{
 		ts:          ts,
-		vtClient:    vtClient,
+		dbConfig:    dbConfig,
 		keyspace:    keyspace,
 		source:      source,
 		interrupted: make(chan struct{}, 1),
@@ -56,8 +56,15 @@ func (bpc *BinlogPlayerController) Stop() {
 
 func (bpc *BinlogPlayerController) Loop() {
 	for {
+		// create the db connection, connect it
+		vtClient := mysqlctl.NewDbClient(bpc.dbConfig)
+		if err := vtClient.Connect(); err != nil {
+			relog.Error("BinlogPlayerMap: can't connect to database: %v", err)
+			continue
+		}
+
 		// Read the start position
-		startPosition, err := mysqlctl.ReadStartPosition(bpc.vtClient, string(bpc.source.KeyRange.Start.Hex()), string(bpc.source.KeyRange.End.Hex()))
+		startPosition, err := mysqlctl.ReadStartPosition(vtClient, string(bpc.source.KeyRange.Start.Hex()), string(bpc.source.KeyRange.End.Hex()))
 		if err != nil {
 			relog.Warning("BinlogPlayerController: can't read startPosition: %v", err)
 			time.Sleep(5)
@@ -70,7 +77,7 @@ func (bpc *BinlogPlayerController) Loop() {
 		// if not clear master file / pos and keep only group id)
 
 		// Create the player.
-		bpc.player, err = mysqlctl.NewBinlogPlayer(bpc.vtClient, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
+		bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
 		if err != nil {
 			relog.Warning("BinlogPlayerController: can't create player: %v", err)
 			time.Sleep(5)
@@ -114,14 +121,7 @@ func (blm *BinlogPlayerMap) AddPlayer(keyspace string, source topo.SourceShard) 
 		return
 	}
 
-	// create the db connection, connect it
-	vtClient := mysqlctl.NewDbClient(blm.dbConfig)
-	if err := vtClient.Connect(); err != nil {
-		relog.Error("BinlogPlayerMap: can't connect to database: %v", err)
-		return
-	}
-
-	bpc = NewBinlogController(blm.ts, vtClient, keyspace, source)
+	bpc = NewBinlogController(blm.ts, blm.dbConfig, keyspace, source)
 	blm.players[source] = bpc
 	bpc.Start()
 }
