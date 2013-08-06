@@ -27,7 +27,7 @@ tablet_41983 = tablet.Tablet(41983)
 tablet_31981 = tablet.Tablet(31981)
 
 def setup():
-  utils.zk_setup()
+  utils.zk_setup(add_bad_host=True)
 
   # start mysql instance external to the test
   setup_procs = [
