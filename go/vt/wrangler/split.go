@@ -72,8 +72,8 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 
 }
 
-func (wr *Wrangler) RestoreFromMultiSnapshot(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
-	actionPath, err := wr.ai.RestoreFromMultiSnapshot(dstTabletAlias, &tm.MultiRestoreArgs{
+func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+	actionPath, err := wr.ai.MultiRestore(dstTabletAlias, &tm.MultiRestoreArgs{
 		SrcTabletAliases:       sources,
 		Concurrency:            concurrency,
 		FetchConcurrency:       fetchConcurrency,
@@ -147,7 +147,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 		wg.Add(1)
 		go func(tabletAlias topo.TabletAlias) {
 			relog.Info("Starting multirestore on tablet %v", tabletAlias)
-			err := wr.RestoreFromMultiSnapshot(tabletAlias, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
+			err := wr.MultiRestore(tabletAlias, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
 			relog.Info("Multirestore on tablet %v is done (err=%v)", tabletAlias, err)
 			rec.RecordError(err)
 			wg.Done()

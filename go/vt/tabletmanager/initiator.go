@@ -204,7 +204,7 @@ func (ai *ActionInitiator) MultiSnapshot(tabletAlias topo.TabletAlias, args *Mul
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_MULTI_SNAPSHOT, args: args})
 }
 
-func (ai *ActionInitiator) RestoreFromMultiSnapshot(tabletAlias topo.TabletAlias, args *MultiRestoreArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) MultiRestore(tabletAlias topo.TabletAlias, args *MultiRestoreArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_MULTI_RESTORE, args: args})
 }
 
