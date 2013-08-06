@@ -652,7 +652,7 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 // RestoreFromMultiSnapshot is the main entry point for multi restore.
 // - If the strategy contains the string 'writeBinLogs' then we will
 //   also write to the binary logs.
-// - If the strategy contains the command 'populateBlpRecovery' then we
+// - If the strategy contains the command 'populateBlpCheckpoint' then we
 //   will populate the blp_checkpoint table with master positions to start from
 func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
@@ -880,7 +880,7 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 	}
 
 	// populate blp_checkpoint table if we want to
-	if strings.Index(strategy, "populateBlpRecovery") != -1 {
+	if strings.Index(strategy, "populateBlpCheckpoint") != -1 {
 		queries := make([]string, 0, 4)
 		queries = append(queries, "USE `_vt`")
 		if !writeBinLogs {

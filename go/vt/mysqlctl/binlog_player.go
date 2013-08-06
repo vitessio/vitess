@@ -30,7 +30,7 @@ var (
 )
 
 // binlogRecoveryState is the checkpoint data we read / save into
-// _vt.blp_recovery table
+// _vt.blp_checkpoint table
 type binlogRecoveryState struct {
 	KeyrangeStart string //hex string
 	KeyrangeEnd   string //hex string
