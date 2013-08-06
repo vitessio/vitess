@@ -48,6 +48,21 @@ func Wait() os.Signal {
 	return <-c
 }
 
+// ListenAndServe combines Listen and Wait to also run an http
+// server on the specified port. If it fails to obtain a listener,
+// the program is fatally terminated. The return value is the signal
+// received for termination
+func ListenAndServe(port string) os.Signal {
+	l, err := Listen(port)
+	if err != nil {
+		relog.Fatal("%s", err)
+	}
+	go http.Serve(l, nil)
+	s := Wait()
+	l.Close()
+	return s
+}
+
 func killPredecessor(port string) {
 	resp, err := http.Get(fmt.Sprintf("http://localhost:%s%s", port, pidURL))
 	if err != nil {

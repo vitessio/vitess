@@ -10,21 +10,16 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
 	_ "github.com/youtube/vitess/go/snitch"
-	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkocc"
-)
-
-const (
-	DefaultLameDuckPeriod = 30.0
-	DefaultRebindDelay    = 0.01
 )
 
 var usage = `Cache open zookeeper connections and allow cheap read requests
@@ -33,10 +28,8 @@ names to try to connect to at startup, versus waiting for the first
 request to connect.`
 
 var (
-	resolveLocal   = flag.Bool("resolve-local", false, "if specified, will try to resolve /zk/local/ paths. If not set, they will fail.")
-	port           = flag.Int("port", 14850, "port for the server")
-	lameDuckPeriod = flag.Float64("lame-duck-period", DefaultLameDuckPeriod, "how long to give in-flight transactions to finish")
-	rebindDelay    = flag.Float64("rebind-delay", DefaultRebindDelay, "artificial delay before rebinding a hijacked listener")
+	resolveLocal = flag.Bool("resolve-local", false, "if specified, will try to resolve /zk/local/ paths. If not set, they will fail.")
+	port         = flag.Int("port", 14850, "port for the server")
 )
 
 func init() {
@@ -64,18 +57,5 @@ func main() {
 
 	topo.RegisterTopoReader(&TopoReader{zkr: zkr})
 
-	// we delegate out startup to the micromanagement server so these actions
-	// will occur after we have obtained our socket.
-	umgmt.SetLameDuckPeriod(float32(*lameDuckPeriod))
-	umgmt.SetRebindDelay(float32(*rebindDelay))
-	umgmt.AddStartupCallback(func() {
-		umgmt.StartHttpServer(fmt.Sprintf(":%v", *port))
-	})
-
-	relog.Info("started zkocc %v", *port)
-	umgmtSocket := fmt.Sprintf("/tmp/zkocc-%08x-umgmt.sock", *port)
-	if umgmtErr := umgmt.ListenAndServe(umgmtSocket); umgmtErr != nil {
-		relog.Error("umgmt.ListenAndServe err: %v", umgmtErr)
-	}
-	relog.Info("done")
+	proc.ListenAndServe(fmt.Sprintf("%v", *port))
 }

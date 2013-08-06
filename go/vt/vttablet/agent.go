@@ -17,13 +17,18 @@ import (
 
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/relog"
-	"github.com/youtube/vitess/go/umgmt"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
+)
+
+var (
+	agent           *tm.ActionAgent
+	binlogServer    *mysqlctl.BinlogServer
+	binlogPlayerMap *BinlogPlayerMap
 )
 
 func loadCustomRules(customrules string) *ts.QueryRules {
@@ -56,27 +61,25 @@ func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 }
 
 // InitAgent initializes the agent within vttablet.
-func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *mysqlctl.Mycnf, dbConfigsFile, dbCredentialsFile string, port, securePort int, mycnfFile, customRules string, overridesFile string) error {
+func InitAgent(
+	tabletAlias topo.TabletAlias,
+	dbcfgs dbconfigs.DBConfigs,
+	mycnf *mysqlctl.Mycnf,
+	dbConfigsFile, dbCredentialsFile string,
+	port, securePort int,
+	mycnfFile, customRules string,
+	overridesFile string) (err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
-	umgmt.AddCloseCallback(func() {
-		topo.CloseServers()
-	})
 
 	// Start the binlog server service, disabled at start.
-	binlogServer := mysqlctl.NewBinlogServer(mycnf)
+	binlogServer = mysqlctl.NewBinlogServer(mycnf)
 	mysqlctl.RegisterBinlogServerService(binlogServer)
-	umgmt.AddCloseCallback(func() {
-		mysqlctl.DisableBinlogServerService(binlogServer)
-	})
 
 	// Start the binlog player services, not playing at start.
-	binlogPlayerMap := NewBinlogPlayerMap(topoServer, &dbcfgs.Dba)
+	binlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Dba)
 	RegisterBinlogPlayerMap(binlogPlayerMap)
-	umgmt.AddCloseCallback(func() {
-		binlogPlayerMap.StopAllPlayers()
-	})
 
 	// Compute the bind addresses
 	bindAddr := fmt.Sprintf(":%v", port)
@@ -89,7 +92,7 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
-	agent, err := tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile)
+	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile)
 	if err != nil {
 		return err
 	}
@@ -152,12 +155,21 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 	if err := agent.Start(bindAddr, secureAddr, mysqld.Addr()); err != nil {
 		return err
 	}
-	umgmt.AddCloseCallback(func() {
-		agent.Stop()
-	})
 
 	// register the RPC services from the agent
 	agent.RegisterQueryService(mysqld)
 
 	return nil
+}
+
+func CloseAgent() {
+	if agent != nil {
+		agent.Stop()
+	}
+	if binlogServer != nil {
+		mysqlctl.DisableBinlogServerService(binlogServer)
+	}
+	if binlogPlayerMap != nil {
+		binlogPlayerMap.StopAllPlayers()
+	}
 }
