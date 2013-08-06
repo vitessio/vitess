@@ -817,8 +817,11 @@ func GetDmlType(firstKw string) string {
 }
 
 func IgnoredStatement(line []byte) bool {
-	if bytes.HasPrefix(line, COMMENT) || bytes.HasPrefix(line, SET_SESSION_VAR) ||
-		bytes.HasPrefix(line, DELIMITER) || bytes.HasPrefix(line, BINLOG) || bytes.HasPrefix(line, BINLOG_DB_CHANGE) {
+	if bytes.HasPrefix(line, COMMENT) ||
+		bytes.HasPrefix(line, SET_SESSION_VAR) ||
+		bytes.HasPrefix(line, DELIMITER) ||
+		bytes.HasPrefix(line, BINLOG) ||
+		bytes.HasPrefix(line, BINLOG_DB_CHANGE) {
 		return true
 	}
 	return false
