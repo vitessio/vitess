@@ -9,10 +9,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -131,11 +129,7 @@ func main() {
 	var secureListener net.Listener
 	if *securePort != 0 {
 		relog.Info("listening on secure port %v", *securePort)
-		secureListener, err = vttablet.SecureListen(strconv.Itoa(*securePort), *cert, *key, *caCert)
-		if err != nil {
-			relog.Fatal("%s", err)
-		}
-		go http.Serve(secureListener, nil)
+		vttablet.SecureServ(fmt.Sprintf(":%d", *securePort), *cert, *key, *caCert)
 	}
 
 	relog.Info("starting vttablet %v", *port)

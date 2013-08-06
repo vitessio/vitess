@@ -7,20 +7,21 @@ package vttablet
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"io/ioutil"
-	"net"
+	"net/http"
+
+	"github.com/youtube/vitess/go/relog"
 )
 
 // SecureListen obtains a listener that accepts
 // secure connections
-func SecureListen(addr string, certFile, keyFile, caFile string) (l net.Listener, err error) {
+func SecureServ(addr string, certFile, keyFile, caFile string) {
 	config := tls.Config{}
 
 	// load the server cert / key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return nil, err
+		relog.Fatal("%s", err)
 	}
 	config.Certificates = []tls.Certificate{cert}
 
@@ -32,13 +33,17 @@ func SecureListen(addr string, certFile, keyFile, caFile string) (l net.Listener
 
 		pemCerts, err := ioutil.ReadFile(caFile)
 		if err != nil {
-			return nil, err
+			relog.Fatal("%s", err)
 		}
 		if !config.ClientCAs.AppendCertsFromPEM(pemCerts) {
-			return nil, fmt.Errorf("StartHttpsServer failed to parse caFile %v", caFile)
+			relog.Fatal("%s", err)
 		}
 
 		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
-	return tls.Listen("tcp", addr, &config)
+	l, err := tls.Listen("tcp", addr, &config)
+	if err != nil {
+		relog.Fatal("%s", err)
+	}
+	go http.Serve(l, nil)
 }
