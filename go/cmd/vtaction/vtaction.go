@@ -14,12 +14,12 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	_ "github.com/youtube/vitess/go/logutil"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
 	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"

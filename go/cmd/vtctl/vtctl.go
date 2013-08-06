@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
+	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -243,6 +244,13 @@ var resolveWildcards = func(wr *wrangler.Wrangler, args []string) ([]string, err
 }
 
 func init() {
+	// FIXME(ryszard): vtctl and friends should not use logging to
+	// communicate with the user.
+	alsoLogToStdErr := flag.Lookup("alsologtostderr")
+	if alsoLogToStdErr != nil {
+		alsoLogToStdErr.Value.Set("true")
+	}
+
 	// FIXME(msolomon) need to send all of this to stdout
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
