@@ -4,6 +4,8 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+import time
+
 import utils
 import tablet
 
@@ -99,6 +101,28 @@ index by_msg (msg)
   shard_1_master.mquery('vt_test_keyspace', 'insert into resharding1(id, msg, keyspace_id) values(2, "msg2", 0x9000000000000000)', write=True)
   shard_1_master.mquery('vt_test_keyspace', 'insert into resharding1(id, msg, keyspace_id) values(3, "msg3", 0xD000000000000000)', write=True)
 
+def wait_for_binlog_server_state(tablet, expected, timeout=5.0):
+    while True:
+      v = utils.get_vars(tablet.port)
+      if v == None:
+        utils.debug("  vttablet not answering at /debug/vars, waiting...")
+      else:
+        if 'BinlogServerRpcService' not in v:
+          utils.debug("  vttablet not exporting BinlogServerRpcService, waiting...")
+        else:
+          s = v['BinlogServerRpcService']['States']['Current']
+          if s != expected:
+            utils.debug("  vttablet's binlog server in state %s != %s" % (s, expected))
+          else:
+            break
+
+      utils.debug("sleeping a bit while we wait")
+      time.sleep(0.1)
+      timeout -= 0.1
+      if timeout <= 0:
+        raise utils.TestError("timeout waiting for binlog server state %s" % expected)
+    utils.debug("tablet %s binlog service is in state %s" % (tablet.tablet_alias, expected))
+
 def run_test_resharding():
   utils.run_vtctl('CreateKeyspace test_keyspace')
 
@@ -157,11 +181,16 @@ def run_test_resharding():
   # take the snapshot for the split
   utils.run_vtctl('MultiSnapshot --spec=80-C0- %s keyspace_id' % (shard_1_replica.tablet_alias), auto_log=True)
 
+  # wait for tablet's binlog server service to be enabled after snapshot,
+  # and check all the others while we're at it
+  wait_for_binlog_server_state(shard_1_master, "Disabled")
+  wait_for_binlog_server_state(shard_1_replica, "Enabled")
+
   # perform the restore. For now on all tablets individually.
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_2_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_2_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_3_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery(6614)', shard_3_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_2_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_2_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_3_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_3_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
 
   # now serve rdonly from the split shards
   utils.run_vtctl('SetShardServedTypes test_keyspace/80- master,replica')
