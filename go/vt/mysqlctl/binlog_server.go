@@ -25,10 +25,6 @@ import (
 )
 
 const (
-	MAX_KEY = "MAX_KEY"
-)
-
-const (
 	BINLOG_SERVER_DISABLED = iota
 	BINLOG_SERVER_ENABLED
 )
@@ -137,10 +133,7 @@ func newBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServ
 	blp.globalState = blServer
 	//by default assume that the db matches.
 	blp.dbmatch = true
-	blp.keyrangeTag = string(keyRange.End.Hex())
-	if blp.keyrangeTag == "" {
-		blp.keyrangeTag = MAX_KEY
-	}
+	blp.keyrangeTag = string(keyRange.Start.Hex()) + "-" + string(keyRange.End.Hex())
 	return blp
 }
 
