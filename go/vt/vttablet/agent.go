@@ -73,6 +73,7 @@ func InitAgent(tabletAlias topo.TabletAlias, dbcfgs dbconfigs.DBConfigs, mycnf *
 
 	// Start the binlog player services, not playing at start.
 	binlogPlayerMap := NewBinlogPlayerMap(topoServer, &dbcfgs.Dba)
+	RegisterBinlogPlayerMap(binlogPlayerMap)
 	umgmt.AddCloseCallback(func() {
 		binlogPlayerMap.StopAllPlayers()
 	})

@@ -187,8 +187,8 @@ func NewBlplStats() *blplStats {
 	return bs
 }
 
-// String returns a json encoded version of stats
-func (bs *blplStats) String() string {
+// statsJSON returns a json encoded version of stats
+func (bs *blplStats) statsJSON() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	fmt.Fprintf(buf, "{")
 	fmt.Fprintf(buf, "\n \"TxnCount\": %v,", bs.txnCount)
@@ -247,6 +247,10 @@ func NewBinlogPlayer(dbClient VtClient, startPosition *binlogRecoveryState, tabl
 	blp.maxTxnInterval = maxTxnInterval
 	blp.execDdl = execDdl
 	return blp, nil
+}
+
+func (blp *BinlogPlayer) StatsJSON() string {
+	return blp.blplStats.statsJSON()
 }
 
 func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.ReplicationCoordinates) {

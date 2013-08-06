@@ -8,10 +8,13 @@ package vttablet
 // replication
 
 import (
+	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/relog"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -42,6 +45,14 @@ func NewBinlogController(ts topo.Server, dbConfig *mysql.ConnectionParams, keysp
 		source:      source,
 		interrupted: make(chan struct{}, 1),
 	}
+}
+
+func (blc *BinlogPlayerController) statsJSON() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 128))
+	fmt.Fprintf(buf, "{")
+	fmt.Fprintf(buf, "\n \"Player\": %v", blc.player.StatsJSON())
+	fmt.Fprintf(buf, "\n}")
+	return buf.String()
 }
 
 func (bpc *BinlogPlayerController) Start() {
@@ -112,7 +123,20 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams) *Binlo
 	}
 }
 
-// TODO(alainjobart) add stats, register them
+func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
+	stats.PublishFunc("BinlogPlayerMap", func() string { return blm.statsJSON() })
+}
+
+func (blm *BinlogPlayerMap) statsJSON() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 128))
+	fmt.Fprintf(buf, "{")
+	for source, player := range blm.players {
+		fmt.Fprintf(buf, "\n \"%v-%v\": %v,", source.KeyRange.Start, source.KeyRange.End, player.statsJSON())
+	}
+	fmt.Fprintf(buf, "\n \"Enabled\": 1")
+	fmt.Fprintf(buf, "\n}")
+	return buf.String()
+}
 
 func (blm *BinlogPlayerMap) AddPlayer(keyspace string, source topo.SourceShard) {
 	bpc, ok := blm.players[source]
