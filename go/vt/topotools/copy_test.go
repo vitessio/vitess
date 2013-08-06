@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -77,7 +77,7 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 	if err != nil {
 		t.Fatalf("fromTS.GetKnownCells: %v", err)
 	}
-	relog.Info("Cells: %v", cells)
+	log.Infof("Cells: %v", cells)
 
 	return fromTS, toTS
 }

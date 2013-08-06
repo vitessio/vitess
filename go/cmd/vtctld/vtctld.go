@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -220,7 +220,7 @@ func (tl *TemplateLoader) ServeTemplate(templateName string, data interface{}, w
 }
 
 func httpError(w http.ResponseWriter, format string, err error) {
-	relog.Error(format, err)
+	log.Errorf(format, err)
 	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
 }
 
@@ -526,5 +526,5 @@ func main() {
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
-	relog.Fatal("%s", http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
+	log.Fatalf("%s", http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 }

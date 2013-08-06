@@ -7,7 +7,7 @@ package tabletmanager
 import (
 	"fmt"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -24,7 +24,7 @@ var TabletManagerRpcService *TabletManager
 
 func (agent *ActionAgent) RegisterQueryService(mysqld *mysqlctl.Mysqld) {
 	if TabletManagerRpcService != nil {
-		relog.Warning("RPC service already up %v", TabletManagerRpcService)
+		log.Warningf("RPC service already up %v", TabletManagerRpcService)
 		return
 	}
 	TabletManagerRpcService = &TabletManager{agent, mysqld}
@@ -33,10 +33,10 @@ func (agent *ActionAgent) RegisterQueryService(mysqld *mysqlctl.Mysqld) {
 
 func (tm *TabletManager) wrapErr(context *rpcproto.Context, name string, args interface{}, reply interface{}, err error) error {
 	if err != nil {
-		relog.Warning("TabletManager.%v(%v)(from %v) error: %v", name, args, context.RemoteAddr, err.Error())
+		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, context.RemoteAddr, err.Error())
 		return fmt.Errorf("%v (on %v)", err, tm.agent.tabletAlias)
 	}
-	relog.Info("TabletManager.%v(%v)(from %v): %v", name, args, context.RemoteAddr, reply)
+	log.Infof("TabletManager.%v(%v)(from %v): %v", name, args, context.RemoteAddr, reply)
 	return nil
 }
 

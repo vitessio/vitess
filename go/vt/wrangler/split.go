@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	cc "github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
@@ -23,7 +23,7 @@ func replaceError(original, recent error) error {
 		return original
 	}
 	if original != nil {
-		relog.Error("One of multiple error: %v", original)
+		log.Errorf("One of multiple error: %v", original)
 	}
 	return recent
 }
@@ -43,7 +43,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
-		relog.Info("force change type master -> backup: %v", tabletAlias)
+		log.Infof("force change type master -> backup: %v", tabletAlias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = topo.TYPE_BACKUP
@@ -57,10 +57,10 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	}
 
 	restoreAfterSnapshot = func() (err error) {
-		relog.Info("change type after snapshot: %v %v", tabletAlias, originalType)
+		log.Infof("change type after snapshot: %v %v", tabletAlias, originalType)
 
 		if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot {
-			relog.Info("force change type backup -> master: %v", tabletAlias)
+			log.Infof("force change type backup -> master: %v", tabletAlias)
 			ti.Tablet.Type = topo.TYPE_MASTER
 			return topo.UpdateTablet(wr.ts, ti)
 		}
@@ -146,9 +146,9 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 	for _, tabletAlias := range destTablets {
 		wg.Add(1)
 		go func(tabletAlias topo.TabletAlias) {
-			relog.Info("Starting multirestore on tablet %v", tabletAlias)
+			log.Infof("Starting multirestore on tablet %v", tabletAlias)
 			err := wr.MultiRestore(tabletAlias, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
-			relog.Info("Multirestore on tablet %v is done (err=%v)", tabletAlias, err)
+			log.Infof("Multirestore on tablet %v is done (err=%v)", tabletAlias, err)
 			rec.RecordError(err)
 			wg.Done()
 		}(tabletAlias)

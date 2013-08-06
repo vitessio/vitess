@@ -17,7 +17,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
@@ -71,7 +71,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	ta.tabletAlias = tabletAlias
 	actionNode, err := ActionNodeFromJson(data, actionPath)
 	if err != nil {
-		relog.Error("HandleAction failed unmarshaling %v: %v", actionPath, err)
+		log.Errorf("HandleAction failed unmarshaling %v: %v", actionPath, err)
 		return err
 	}
 
@@ -84,12 +84,12 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			if !forceRerun {
 				actionErr := fmt.Errorf("Previous vtaction process died")
 				if err := StoreActionResponse(ta.ts, actionNode, actionPath, actionErr); err != nil {
-					relog.Error("Dead process detector failed to update actionNode: %v", err)
+					log.Errorf("Dead process detector failed to update actionNode: %v", err)
 				}
 				return actionErr
 			}
 		} else {
-			relog.Warning("HandleAction waiting for running action: %v", actionPath)
+			log.Warningf("HandleAction waiting for running action: %v", actionPath)
 			_, err := WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		}
@@ -113,7 +113,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			// The action is schedule by another
 			// actor. Most likely the tablet restarted
 			// during an action. Just wait for completion.
-			relog.Warning("HandleAction waiting for scheduled action: %v", actionPath)
+			log.Warningf("HandleAction waiting for scheduled action: %v", actionPath)
 			_, err = WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		} else {
@@ -128,17 +128,17 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 		for sig := range c {
 			err := StoreActionResponse(ta.ts, actionNode, actionPath, fmt.Errorf("vtaction interrupted by signal: %v", sig))
 			if err != nil {
-				relog.Error("Signal handler failed to update actionNode: %v", err)
+				log.Errorf("Signal handler failed to update actionNode: %v", err)
 				os.Exit(-2)
 			}
 			os.Exit(-1)
 		}
 	}()
 
-	relog.Info("HandleAction: %v %v", actionPath, data)
+	log.Infof("HandleAction: %v %v", actionPath, data)
 	// validate actions, but don't write this back into topo.Server
 	if actionNode.Action != action || actionNode.ActionGuid != actionGuid {
-		relog.Error("HandleAction validation failed %v: (%v,%v) (%v,%v)",
+		log.Errorf("HandleAction validation failed %v: (%v,%v) (%v,%v)",
 			actionPath, actionNode.Action, action, actionNode.ActionGuid, actionGuid)
 		return TabletActorError("invalid action initiation: " + action + " " + actionGuid)
 	}
@@ -149,7 +149,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 
 	// unblock in topo.Server on completion
 	if err := ta.ts.UnblockTabletAction(actionPath); err != nil {
-		relog.Error("HandleAction failed unblocking: %v", err)
+		log.Errorf("HandleAction failed unblocking: %v", err)
 		return err
 	}
 	return actionErr
@@ -305,7 +305,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	relog.Info("PromoteSlave %v", rsd.String())
+	log.Infof("PromoteSlave %v", rsd.String())
 	actionNode.reply = rsd
 
 	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
@@ -356,7 +356,7 @@ func (ta *TabletActor) masterPosition(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	relog.Debug("MasterPosition %#v", *position)
+	log.V(6).Infof("MasterPosition %#v", *position)
 	actionNode.reply = position
 	return nil
 }
@@ -366,7 +366,7 @@ func (ta *TabletActor) slavePosition(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	relog.Debug("SlavePosition %#v", *position)
+	log.V(6).Infof("SlavePosition %#v", *position)
 	actionNode.reply = position
 	return nil
 }
@@ -383,14 +383,14 @@ func (ta *TabletActor) reparentPosition(actionNode *ActionNode) error {
 	rsd.TimePromoted = timePromoted
 	rsd.WaitPosition = waitPosition
 	rsd.Parent = ta.tabletAlias
-	relog.Debug("reparentPosition %v", rsd.String())
+	log.V(6).Infof("reparentPosition %v", rsd.String())
 	actionNode.reply = rsd
 	return nil
 }
 
 func (ta *TabletActor) waitSlavePosition(actionNode *ActionNode) error {
 	slavePos := actionNode.args.(*SlavePositionReq)
-	relog.Debug("WaitSlavePosition %#v", *slavePos)
+	log.V(6).Infof("WaitSlavePosition %#v", *slavePos)
 	if err := ta.mysqld.WaitMasterPos(&slavePos.ReplicationPosition, slavePos.WaitTimeout); err != nil {
 		return err
 	}
@@ -411,7 +411,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	// graph. Do NOT try to reparent again. That will either wedge
 	// replication or corrupt data.
 	if tablet.Parent != rsd.Parent {
-		relog.Debug("restart with new parent")
+		log.V(6).Infof("restart with new parent")
 		// Remove tablet from the replication graph.
 		err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
 		if err != nil && err != topo.ErrNoNode {
@@ -489,7 +489,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 		return err
 	}
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
-		relog.Error("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
+		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
 			return Scrap(ta.ts, tablet.Alias(), false)
 		} else {
@@ -811,9 +811,9 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 
 	// do the work
 	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}); err != nil {
-		relog.Error("RestoreFromSnapshot failed (%v), scrapping", err)
+		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
 		if err := Scrap(ta.ts, ta.tabletAlias, false); err != nil {
-			relog.Error("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
+			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
 		}
 
 		return err
@@ -886,7 +886,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	// run the action, scrap if it fails
 	if err := ta.mysqld.MultiRestore(tablet.DbName(), tablet.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
 		if e := Scrap(ta.ts, ta.tabletAlias, false); e != nil {
-			relog.Error("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
+			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
 		return err
 	}
@@ -924,7 +924,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	if force {
 		err := ts.PurgeTabletActions(tabletAlias, ActionNodeCanBePurged)
 		if err != nil {
-			relog.Warning("purge actions failed: %v", err)
+			log.Warningf("purge actions failed: %v", err)
 		}
 	}
 
@@ -933,7 +933,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 		if err != nil {
 			switch err {
 			case topo.ErrNoNode:
-				relog.Debug("no replication path: %v", replicationPath)
+				log.V(6).Infof("no replication path: %v", replicationPath)
 				err = nil
 			case topo.ErrNotEmpty:
 				// If you are forcing the scrapping of a master, you can't update the
@@ -947,7 +947,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 				}
 			}
 			if err != nil {
-				relog.Warning("remove replication path failed: %v %v", replicationPath, err)
+				log.Warningf("remove replication path failed: %v %v", replicationPath, err)
 			}
 		}
 	}
@@ -960,7 +960,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 		if hookErr := hk.ExecuteOptional(); hookErr != nil {
 			// we don't want to return an error, the server
 			// is already in bad shape probably.
-			relog.Warning("Scrap: postflight_scrap failed: %v", hookErr)
+			log.Warningf("Scrap: postflight_scrap failed: %v", hookErr)
 		}
 	}
 

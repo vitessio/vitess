@@ -8,11 +8,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strings"
 	"time"
+
+	log "github.com/golang/glog"
 
 //	"launchpad.net/gozk/zookeeper"
 )
@@ -85,13 +86,13 @@ func getCellAddrMap() map[string]string {
 	for _, configPath := range getConfigPaths() {
 		file, err := os.Open(configPath)
 		if err != nil {
-			log.Printf("error reading config file: %v: %v", configPath, err)
+			log.Infof("error reading config file: %v: %v", configPath, err)
 			continue
 		}
 		err = json.NewDecoder(file).Decode(&cellAddrMap)
 		file.Close()
 		if err != nil {
-			log.Printf("error decoding config file %v: %v", configPath, err)
+			log.Infof("error decoding config file %v: %v", configPath, err)
 			continue
 		}
 

@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/env"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -56,7 +56,7 @@ func (zkd *Zkd) LocalClientAddr() string {
  java -DZOO_LOG_DIR=${ZOO_LOG_DIR} -cp $CLASSPATH $ZOOMAIN $YT_ZK_CFG
 */
 func (zkd *Zkd) Start() error {
-	relog.Info("zkctl.Start")
+	log.Infof("zkctl.Start")
 	// NOTE(msolomon) use a script here so we can detach and continue to run
 	// if the wrangler process dies. this pretty much the same as mysqld_safe.
 	args := []string{
@@ -104,7 +104,7 @@ func (zkd *Zkd) Start() error {
 }
 
 func (zkd *Zkd) Shutdown() error {
-	relog.Info("zkctl.Shutdown")
+	log.Infof("zkctl.Shutdown")
 	pidData, err := ioutil.ReadFile(zkd.config.PidFile())
 	if err != nil {
 		return err
@@ -178,10 +178,10 @@ func (zkd *Zkd) Reinit(preserveData bool) (err error) {
 }
 
 func (zkd *Zkd) init(preserveData bool) error {
-	relog.Info("zkd.Init")
+	log.Infof("zkd.Init")
 	for _, path := range zkd.config.DirectoryList() {
 		if err := os.MkdirAll(path, 0775); err != nil {
-			relog.Error(err.Error())
+			log.Errorf(err.Error())
 			return err
 		}
 		// FIXME(msolomon) validate permissions?
@@ -192,18 +192,18 @@ func (zkd *Zkd) init(preserveData bool) error {
 		err = ioutil.WriteFile(zkd.config.ConfigFile(), []byte(configData), 0664)
 	}
 	if err != nil {
-		relog.Error("failed creating %v: %v", zkd.config.ConfigFile(), err)
+		log.Errorf("failed creating %v: %v", zkd.config.ConfigFile(), err)
 		return err
 	}
 
 	err = zkd.config.WriteMyid()
 	if err != nil {
-		relog.Error("failed creating %v: %v", zkd.config.MyidFile(), err)
+		log.Errorf("failed creating %v: %v", zkd.config.MyidFile(), err)
 		return err
 	}
 
 	if err = zkd.Start(); err != nil {
-		relog.Error("failed starting, check %v", zkd.config.LogDir())
+		log.Errorf("failed starting, check %v", zkd.config.LogDir())
 		return err
 	}
 
@@ -236,15 +236,15 @@ func (zkd *Zkd) init(preserveData bool) error {
 }
 
 func (zkd *Zkd) Teardown() error {
-	relog.Info("zkctl.Teardown")
+	log.Infof("zkctl.Teardown")
 	if err := zkd.Shutdown(); err != nil {
-		relog.Warning("failed zookeeper shutdown: %v", err.Error())
+		log.Warningf("failed zookeeper shutdown: %v", err.Error())
 	}
 	var removalErr error
 	for _, dir := range zkd.config.DirectoryList() {
-		relog.Debug("remove data dir %v", dir)
+		log.V(6).Infof("remove data dir %v", dir)
 		if err := os.RemoveAll(dir); err != nil {
-			relog.Error("failed removing %v: %v", dir, err.Error())
+			log.Errorf("failed removing %v: %v", dir, err.Error())
 			removalErr = err
 		}
 	}

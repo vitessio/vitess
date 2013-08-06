@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
@@ -49,7 +49,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
 func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
-	relog.Info("rebuildShard %v/%v", keyspace, shard)
+	log.Infof("rebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
@@ -71,7 +71,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
 			if ti.Parent.Uid != topo.NO_TABLET {
-				relog.Warning("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Alias())
+				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Alias())
 			}
 		}
 		tablets = append(tablets, ti)
@@ -109,7 +109,7 @@ type cellKeyspaceShardType struct {
 
 // Write serving graph data to the cells
 func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*topo.TabletInfo, cells []string) error {
-	relog.Info("rebuildShardSrvGraph %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
+	log.Infof("rebuildShardSrvGraph %v/%v", shardInfo.Keyspace(), shardInfo.ShardName())
 
 	// Get all existing db types so they can be removed if nothing
 	// had been editted.  This applies to all cells, which can't
@@ -172,7 +172,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 		entry, err := tm.VtnsAddrForTablet(tablet.Tablet)
 		if err != nil {
-			relog.Warning("VtnsAddrForTablet failed for tablet %v: %v", tablet.Alias(), err)
+			log.Warningf("VtnsAddrForTablet failed for tablet %v: %v", tablet.Alias(), err)
 			continue
 		}
 		addrs.Entries = append(addrs.Entries, *entry)
@@ -184,9 +184,9 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		loc := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
 		if addrs, ok := locationAddrsMap[loc]; ok {
 			if masterRecord != nil {
-				relog.Warning("Multiple master records in %v", shardLocation)
+				log.Warningf("Multiple master records in %v", shardLocation)
 			} else {
-				relog.Info("Found master record in %v", shardLocation)
+				log.Infof("Found master record in %v", shardLocation)
 				masterRecord = addrs
 			}
 		}
@@ -195,7 +195,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		for shardLocation, _ := range knownShardLocations {
 			location := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
 			if _, ok := locationAddrsMap[location]; !ok {
-				relog.Info("Adding remote master record in %v", location)
+				log.Infof("Adding remote master record in %v", location)
 				locationAddrsMap[location] = masterRecord
 			}
 		}
@@ -223,9 +223,9 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 				continue
 			}
 
-			relog.Info("removing stale db type from serving graph: %v", dbTypeLocation)
+			log.Infof("removing stale db type from serving graph: %v", dbTypeLocation)
 			if err := wr.ts.DeleteSrvTabletType(dbTypeLocation.cell, dbTypeLocation.keyspace, dbTypeLocation.shard, dbTypeLocation.tabletType); err != nil {
-				relog.Warning("unable to remove stale db type from serving graph: %v", err)
+				log.Warningf("unable to remove stale db type from serving graph: %v", err)
 			}
 		}
 	}
@@ -282,7 +282,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, useSer
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
 func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTypes bool) error {
-	relog.Info("rebuildKeyspace %v", keyspace)
+	log.Infof("rebuildKeyspace %v", keyspace)
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
@@ -496,7 +496,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 	}
 
 	for _, keyspace := range keyspaces {
-		relog.Debug("delete keyspace shards: %v", keyspace)
+		log.V(6).Infof("delete keyspace shards: %v", keyspace)
 		if err := wr.ts.DeleteKeyspaceShards(keyspace); err != nil {
 			return err
 		}
@@ -524,7 +524,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
-				relog.Warning("failed creating replication path: %v", err)
+				log.Warningf("failed creating replication path: %v", err)
 			}
 		}(ti)
 	}
@@ -538,7 +538,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()
-				relog.Warning("RebuildKeyspaceGraph(%v) failed: %v", keyspace, err)
+				log.Warningf("RebuildKeyspaceGraph(%v) failed: %v", keyspace, err)
 				return
 			}
 		}(keyspace)

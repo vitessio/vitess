@@ -12,14 +12,14 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
 	_ "github.com/youtube/vitess/go/snitch"
-
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -31,8 +31,6 @@ var actionNode = flag.String("action-node", "",
 	"path to zk node representing the action")
 var actionGuid = flag.String("action-guid", "",
 	"a label to help track processes")
-var logLevel = flag.String("log.level", "debug", "set log level")
-var logFilename = flag.String("logfile", "/dev/stderr", "log path")
 var force = flag.Bool("force", false, "force an action to rerun")
 
 // FIXME(msolomon) temporary, until we are starting mysql ourselves
@@ -46,7 +44,7 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
-	relog.Info("started vtaction %v", os.Args)
+	log.Infof("started vtaction %v", os.Args)
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()
@@ -54,29 +52,20 @@ func main() {
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
 
-	logFile, err := os.OpenFile(*logFilename,
-		os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
-	if err != nil {
-		relog.Fatal("Can't open log file: %v", err)
-	}
-	relog.SetOutput(logFile)
-	relog.SetPrefix(fmt.Sprintf("vtaction [%v] ", os.Getpid()))
-	if err := relog.SetLevelByName(*logLevel); err != nil {
-		relog.Fatal("%v", err)
-	}
-	relog.HijackLog(nil)
-	relog.HijackStdio(logFile, logFile)
+	// FIXME(ryszard): Bring this back when hijacking works with
+	// glog.
+	// relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
-		relog.Fatal("mycnf read failed: %v", mycnfErr)
+		log.Fatalf("mycnf read failed: %v", mycnfErr)
 	}
 
-	relog.Debug("mycnf: %v", jscfg.ToJson(mycnf))
+	log.V(6).Infof("mycnf: %v", jscfg.ToJson(mycnf))
 
 	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
-	if err != nil {
-		relog.Fatal("%s", cfErr)
+	if cfErr != nil {
+		log.Fatalf("%s", cfErr)
 	}
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
@@ -91,14 +80,14 @@ func main() {
 	httpServer := &http.Server{Addr: bindAddr}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil {
-			relog.Error("httpServer.ListenAndServe err: %v", err)
+			log.Errorf("httpServer.ListenAndServe err: %v", err)
 		}
 	}()
 
 	actionErr := actor.HandleAction(*actionNode, *action, *actionGuid, *force)
 	if actionErr != nil {
-		relog.Fatal("action error: %v", actionErr)
+		log.Fatalf("action error: %v", actionErr)
 	}
 
-	relog.Info("finished vtaction %v", os.Args)
+	log.Infof("finished vtaction %v", os.Args)
 }

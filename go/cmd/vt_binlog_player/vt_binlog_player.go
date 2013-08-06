@@ -20,8 +20,8 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
@@ -48,7 +48,7 @@ func readDbConfig(dbConfigFile string) (*mysql.ConnectionParams, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Error %s in reading db-config-file %s", err, dbConfigFile)
 	}
-	relog.Info("dbConfigData %v", string(dbConfigData))
+	log.Infof("dbConfigData %v", string(dbConfigData))
 
 	dbConfig := new(mysql.ConnectionParams)
 	err = json.Unmarshal(dbConfigData, dbConfig)
@@ -60,14 +60,14 @@ func readDbConfig(dbConfigFile string) (*mysql.ConnectionParams, error) {
 
 func main() {
 	flag.Parse()
-	servenv.Init("vt_binlog_player")
+	servenv.Init()
 
 	if *dbConfigFile == "" {
-		relog.Fatal("Cannot start without db-config-file")
+		log.Fatalf("Cannot start without db-config-file")
 	}
 	dbConfig, err := readDbConfig(*dbConfigFile)
 	if err != nil {
-		relog.Fatal("Cannot read db config file: %v", err)
+		log.Fatalf("Cannot read db config file: %v", err)
 	}
 
 	var t []string
@@ -91,22 +91,22 @@ func main() {
 	vtClient = mysqlctl.NewDbClient(dbConfig)
 	err = vtClient.Connect()
 	if err != nil {
-		relog.Fatal("error in initializing dbClient: %v", err)
+		log.Fatalf("error in initializing dbClient: %v", err)
 	}
 	brs, err := mysqlctl.ReadStartPosition(vtClient, *keyrangeStart, *keyrangeEnd)
 	if err != nil {
-		relog.Fatal("Cannot read start position from db: %v", err)
+		log.Fatalf("Cannot read start position from db: %v", err)
 	}
 	if *debug {
 		vtClient = mysqlctl.NewDummyVtClient()
 	}
 	blp, err := mysqlctl.NewBinlogPlayer(vtClient, brs, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
 	if err != nil {
-		relog.Fatal("error in initializing binlog player: %v", err)
+		log.Fatalf("error in initializing binlog player: %v", err)
 	}
 	err = blp.ApplyBinlogEvents(interrupted)
 	if err != nil {
-		relog.Error("Error in applying binlog events, err %v", err)
+		log.Errorf("Error in applying binlog events, err %v", err)
 	}
-	relog.Info("vt_binlog_player done")
+	log.Infof("vt_binlog_player done")
 }

@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -57,7 +57,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	err = wr.reparentShardExternal(slaveTabletMap, foundMaster, masterElectTablet, scrapStragglers, acceptSuccessPercents)
 	if err == nil {
 		// only log if it works, if it fails we'll show the error
-		relog.Info("reparentShardExternal finished")
+		log.Infof("reparentShardExternal finished")
 	}
 	return err
 }
@@ -83,7 +83,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap map[topo.TabletAlias]*t
 	// and rebuild the shard graph.
 	// we can't be smart and just do the old and new master cells,
 	// as we export master record everywhere.
-	relog.Info("rebuilding shard serving graph data")
+	log.Infof("rebuilding shard serving graph data")
 	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, nil)
 }
 
@@ -116,9 +116,9 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 			// the old master can be annoying if left
 			// around in the replication graph, so if we
 			// can't restart it, we just scrap it
-			relog.Warning("Old master %v is not restarting, scrapping it", masterTablet.Alias())
+			log.Warningf("Old master %v is not restarting, scrapping it", masterTablet.Alias())
 			if _, err := wr.Scrap(masterTablet.Alias() /*force*/, true /*skipRebuild*/, true); err != nil {
-				relog.Warning("Failed to scrap old master %v: %v", masterTablet.Alias(), err)
+				log.Warningf("Failed to scrap old master %v: %v", masterTablet.Alias(), err)
 			}
 		}
 	}
@@ -127,7 +127,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 	// try to remove any old tablet aliases that don't make sense anymore
 	toplevelAliases, err := wr.ts.GetReplicationPaths(masterElectTablet.Keyspace, masterElectTablet.Shard, "")
 	if err != nil {
-		relog.Warning("GetReplicationPaths() failed, cannot fix extra paths: %v", err)
+		log.Warningf("GetReplicationPaths() failed, cannot fix extra paths: %v", err)
 	} else {
 		for _, toplevelAlias := range toplevelAliases {
 			if toplevelAlias == masterElectTablet.Alias() {
@@ -142,9 +142,9 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 				continue
 			}
 
-			relog.Info("Removing stale replication path %v", toplevelAlias.String())
+			log.Infof("Removing stale replication path %v", toplevelAlias.String())
 			if err := wr.ts.DeleteReplicationPath(masterElectTablet.Keyspace, masterElectTablet.Shard, toplevelAlias.String()); err != nil {
-				relog.Warning("DeleteReplicationPath(%v) failed: %v", toplevelAlias.String(), err)
+				log.Warningf("DeleteReplicationPath(%v) failed: %v", toplevelAlias.String(), err)
 			}
 		}
 	}
@@ -156,7 +156,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 	// report errors only above a threshold
 	failurePercent := 100 * len(recorder.Errors) / (len(slaveTabletMap) + 1)
 	if failurePercent < 100-acceptSuccessPercents {
-		relog.Warning("Encountered %v%% failure, we keep going. Errors: %v", failurePercent, recorder.Error())
+		log.Warningf("Encountered %v%% failure, we keep going. Errors: %v", failurePercent, recorder.Error())
 		return nil
 	}
 
@@ -164,7 +164,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
-	relog.Info("slaveWasRestarted(%v)", ti.Alias())
+	log.Infof("slaveWasRestarted(%v)", ti.Alias())
 	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias(), swrd)
 	if err != nil {
 		return err

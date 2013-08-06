@@ -23,8 +23,8 @@ import (
 	"fmt"
 	"net"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/relog"
 )
 
 type VtnsAddr struct {
@@ -97,7 +97,7 @@ func SrvEntries(addrs *VtnsAddrs, namedPort string) (srvs []*net.SRV, err error)
 			port = entry.NamedPortMap[namedPort]
 		}
 		if port == 0 {
-			relog.Warning("vtns: bad port %v %v", namedPort, entry)
+			log.Warningf("vtns: bad port %v %v", namedPort, entry)
 			continue
 		}
 		srvs = append(srvs, &net.SRV{Target: host, Port: uint16(port)})

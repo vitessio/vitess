@@ -286,8 +286,6 @@ def zkocc_start(cells=['test_nj'], extra_params=[]):
   logfile = tmp_root + '/zkocc_%u.log' % zkocc_port_base
   args = [vtroot+'/bin/zkocc',
           '-port', str(zkocc_port_base),
-          '-logfile', logfile,
-          '-log.level', 'INFO',
           ] + extra_params + cells
   sp = run_bg(args)
 
@@ -313,16 +311,11 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtctl helpers
-def run_vtctl(clargs, log_level='WARNING', auto_log=False, **kwargs):
-  if auto_log:
-    if options.verbose:
-      log_level='INFO'
-    else:
-      log_level='ERROR'
+def run_vtctl(clargs, auto_log=False, **kwargs):
   prog_compile(['vtctl'])
-  args = [vtroot+'/bin/vtctl',
-          '-log.level='+log_level,
-          '-logfile=/dev/null']
+  args = [vtroot+'/bin/vtctl']
+  if auto_log:
+    args.append('--alsologtostderr')
   if isinstance(clargs, str):
     cmd = " ".join(args) + ' ' + clargs
   else:

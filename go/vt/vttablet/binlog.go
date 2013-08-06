@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -74,12 +74,12 @@ func (blc *BinlogPlayerController) statsJSON() string {
 }
 
 func (bpc *BinlogPlayerController) Start() {
-	relog.Info("Starting binlog player for %v", bpc.source)
+	log.Infof("Starting binlog player for %v", bpc.source)
 	go bpc.Loop()
 }
 
 func (bpc *BinlogPlayerController) Stop() {
-	relog.Info("Stopping binlog player for %v", bpc.source)
+	log.Infof("Stopping binlog player for %v", bpc.source)
 	close(bpc.interrupted)
 }
 
@@ -90,20 +90,20 @@ func (bpc *BinlogPlayerController) Loop() {
 			// this happens when we get interrupted
 			break
 		}
-		relog.Warning("BinlogPlayerController(%v-%v): %v", bpc.source.KeyRange.Start, bpc.source.KeyRange.End, err)
+		log.Warningf("BinlogPlayerController(%v-%v): %v", bpc.source.KeyRange.Start, bpc.source.KeyRange.End, err)
 
 		// sleep for a bit before retrying to connect
 		bpc.states.SetState(BINLOG_PLAYER_SLEEPING)
 		time.Sleep(5 * time.Second)
 	}
 
-	relog.Info("Exited main binlog player loop for %v", bpc.source)
+	log.Infof("Exited main binlog player loop for %v", bpc.source)
 }
 
 func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			relog.Error("BinlogPlayerController caught panic: %v", x)
+			log.Errorf("BinlogPlayerController caught panic: %v", x)
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
@@ -179,7 +179,7 @@ func (blm *BinlogPlayerMap) statsJSON() string {
 func (blm *BinlogPlayerMap) AddPlayer(keyspace string, source topo.SourceShard) {
 	bpc, ok := blm.players[source]
 	if ok {
-		relog.Info("Already playing logs for %v", source)
+		log.Infof("Already playing logs for %v", source)
 		return
 	}
 
@@ -198,12 +198,12 @@ func (blm *BinlogPlayerMap) StopAllPlayers() {
 // RefreshMap reads the right data from topo.Server and makes sure
 // we're playing the right logs
 func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
-	relog.Info("Refreshing map of binlog players")
+	log.Infof("Refreshing map of binlog players")
 
 	// read the shard to get SourceShards
 	shardInfo, err := blm.ts.GetShard(tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		relog.Error("Cannot read shard for this tablet: %v", tablet.Alias())
+		log.Errorf("Cannot read shard for this tablet: %v", tablet.Alias())
 		return
 	}
 

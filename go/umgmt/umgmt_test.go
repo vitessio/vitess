@@ -7,19 +7,19 @@ package umgmt
 import (
 	"testing"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 var ready = make(chan bool)
 
 func serve(t *testing.T) {
 	AddStartupCallback(func() { ready <- true })
-	AddShutdownCallback(func() { relog.Info("test server GracefulShutdown callback") })
+	AddShutdownCallback(func() { log.Infof("test server GracefulShutdown callback") })
 	err := ListenAndServe("/tmp/test-sock")
 	if err != nil {
 		t.Fatalf("listen err: %v", err)
 	}
-	relog.Info("test server finished")
+	log.Infof("test server finished")
 }
 
 func TestUmgmt(t *testing.T) {
@@ -37,19 +37,19 @@ func TestUmgmt(t *testing.T) {
 	if callErr != nil {
 		t.Fatalf("callErr: %v", callErr)
 	}
-	relog.Info("Ping reply: %v", reply.Message)
+	log.Infof("Ping reply: %v", reply.Message)
 
 	reply = new(Reply)
 	callErr = client.Call("UmgmtService.CloseListeners", reply, reply)
 	if callErr != nil {
 		t.Fatalf("callErr: %v", callErr)
 	}
-	relog.Info("CloseListeners reply: %v", reply.Message)
+	log.Infof("CloseListeners reply: %v", reply.Message)
 
 	reply = new(Reply)
 	callErr = client.Call("UmgmtService.GracefulShutdown", reply, reply)
 	if callErr != nil {
 		t.Fatalf("callErr: %v", callErr)
 	}
-	relog.Info("GracefulShutdown reply: %v", reply.Message)
+	log.Infof("GracefulShutdown reply: %v", reply.Message)
 }

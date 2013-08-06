@@ -13,8 +13,8 @@ import (
 	"strings"
 	"syscall"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 )
 
@@ -91,7 +91,7 @@ func (hook *Hook) Execute() (result *HookResult) {
 			args = append(args, "--"+key)
 		}
 	}
-	relog.Info("hook: executing hook: %v %v", vthook, strings.Join(args, " "))
+	log.Infof("hook: executing hook: %v %v", vthook, strings.Join(args, " "))
 	cmd := exec.Command(vthook, args...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
@@ -116,7 +116,7 @@ func (hook *Hook) Execute() (result *HookResult) {
 		result.Stderr += "ERROR: " + err.Error() + "\n"
 	}
 
-	relog.Info("hook: result is %v", result.String())
+	log.Infof("hook: result is %v", result.String())
 
 	return result
 }
@@ -125,7 +125,7 @@ func (hook *Hook) Execute() (result *HookResult) {
 func (hook *Hook) ExecuteOptional() error {
 	hr := hook.Execute()
 	if hr.ExitStatus == HOOK_DOES_NOT_EXIST {
-		relog.Info("%v hook doesn't exist", hook.Name)
+		log.Infof("%v hook doesn't exist", hook.Name)
 	} else if hr.ExitStatus != HOOK_SUCCESS {
 		return fmt.Errorf("%v hook failed(%v): %v", hook.Name, hr.ExitStatus, hr.Stderr)
 	}

@@ -92,9 +92,9 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/bufio2"
 	"github.com/youtube/vitess/go/cgzip"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
@@ -117,7 +117,7 @@ func replaceError(original, recent error) error {
 		return original
 	}
 	if original != nil {
-		relog.Error("One of multiple error: %v", original)
+		log.Errorf("One of multiple error: %v", original)
 	}
 	return recent
 }
@@ -172,11 +172,11 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 		return
 	}
 
-	relog.Info("Set Read Only")
+	log.Infof("Set Read Only")
 	if !readOnly {
 		mysqld.SetReadOnly(true)
 	}
-	relog.Info("Stop Slave")
+	log.Infof("Stop Slave")
 	if err = mysqld.StopSlave(); err != nil {
 		return
 	}
@@ -214,7 +214,7 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 		return
 	}
 
-	relog.Info("Flush tables")
+	log.Infof("Flush tables")
 	if err = mysqld.executeSuperQuery("FLUSH TABLES WITH READ LOCK"); err != nil {
 		return
 	}
@@ -401,7 +401,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSo
 	defer func() {
 		file.Close()
 		if e := os.Remove(filename); e != nil {
-			relog.Error("Cannot remove %v: %v", filename, e)
+			log.Errorf("Cannot remove %v: %v", filename, e)
 		}
 	}()
 
@@ -453,7 +453,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 
 	// same logic applies here
-	relog.Info("validateCloneSource")
+	log.Infof("validateCloneSource")
 	if err = mysqld.validateCloneSource(false, hookExtraEnv); err != nil {
 		return
 	}
@@ -496,7 +496,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 	if skipSlaveRestart {
 		if slaveStartRequired {
-			relog.Info("Overriding slaveStartRequired to false")
+			log.Infof("Overriding slaveStartRequired to false")
 		}
 		slaveStartRequired = false
 	}
@@ -523,7 +523,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 
 	if e := os.Remove(mainCloneSourcePath); e != nil {
-		relog.Error("Cannot remove %v: %v", mainCloneSourcePath, e)
+		log.Errorf("Cannot remove %v: %v", mainCloneSourcePath, e)
 	}
 
 	ssmFiles := make([]string, len(keyRanges))
@@ -596,7 +596,7 @@ func makeCreateTableSql(schema, tableName string, strategy string) (string, stri
 			// only add to the final ALTER TABLE if we're not
 			// dropping the AUTO_INCREMENT on the table
 			if strings.Contains(strategy, "skipAutoIncrement("+tableName+")") {
-				relog.Info("Will not add AUTO_INCREMENT back on table %v", tableName)
+				log.Infof("Will not add AUTO_INCREMENT back on table %v", tableName)
 			} else {
 				alters = append(alters, "MODIFY "+line[:len(line)-1])
 			}
@@ -700,7 +700,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 
 	defer func() {
 		if e := os.RemoveAll(tempStoragePath); e != nil {
-			relog.Error("error removing %v: %v", tempStoragePath, e)
+			log.Errorf("error removing %v: %v", tempStoragePath, e)
 		}
 
 	}()

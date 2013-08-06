@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/ioutil2"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/hook"
 )
 
@@ -144,7 +144,7 @@ func (mysqld *Mysqld) createSnapshot(concurrency int, serverMode bool) ([]Snapsh
 	destinations := make([]string, 0, 128)
 
 	// clean out and start fresh
-	relog.Info("removing previous snapshots: %v", mysqld.SnapshotDir)
+	log.Infof("removing previous snapshots: %v", mysqld.SnapshotDir)
 	if err := os.RemoveAll(mysqld.SnapshotDir); err != nil {
 		return nil, err
 	}
@@ -301,24 +301,24 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	var smFile string
 	dataFiles, snapshotErr := mysqld.createSnapshot(concurrency, serverMode)
 	if snapshotErr != nil {
-		relog.Error("CreateSnapshot failed: %v", snapshotErr)
+		log.Errorf("CreateSnapshot failed: %v", snapshotErr)
 	} else {
 		var sm *SnapshotManifest
 		sm, snapshotErr = newSnapshotManifest(sourceAddr, mysqld.IpAddr(),
 			masterAddr, dbName, dataFiles, replicationPosition, nil)
 		if snapshotErr != nil {
-			relog.Error("CreateSnapshot failed: %v", snapshotErr)
+			log.Errorf("CreateSnapshot failed: %v", snapshotErr)
 		} else {
 			smFile = path.Join(mysqld.SnapshotDir, SnapshotManifestFile)
 			if snapshotErr = writeJson(smFile, sm); snapshotErr != nil {
-				relog.Error("CreateSnapshot failed: %v", snapshotErr)
+				log.Errorf("CreateSnapshot failed: %v", snapshotErr)
 			}
 		}
 	}
 
 	// restore our state if required
 	if serverMode && snapshotErr == nil {
-		relog.Info("server mode snapshot worked, not restarting mysql")
+		log.Infof("server mode snapshot worked, not restarting mysql")
 	} else {
 		if err = mysqld.SnapshotSourceEnd(slaveStartRequired, readOnly /*deleteSnapshot*/, false); err != nil {
 			return
@@ -338,9 +338,9 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnapshot bool) error {
 	if deleteSnapshot {
 		// clean out our files
-		relog.Info("removing snapshot links: %v", mysqld.SnapshotDir)
+		log.Infof("removing snapshot links: %v", mysqld.SnapshotDir)
 		if err := os.RemoveAll(mysqld.SnapshotDir); err != nil {
-			relog.Warning("failed to remove old snapshot: %v", err)
+			log.Warningf("failed to remove old snapshot: %v", err)
 			return err
 		}
 	}
@@ -406,22 +406,22 @@ func (mysqld *Mysqld) RestoreFromSnapshot(snapshotManifest *SnapshotManifest, fe
 		return errors.New("RestoreFromSnapshot: nil snapshotManifest")
 	}
 
-	relog.Debug("ValidateCloneTarget")
+	log.V(6).Infof("ValidateCloneTarget")
 	if err := mysqld.ValidateCloneTarget(hookExtraEnv); err != nil {
 		return err
 	}
 
-	relog.Debug("Shutdown mysqld")
+	log.V(6).Infof("Shutdown mysqld")
 	if err := Shutdown(mysqld, true, MysqlWaitTime); err != nil {
 		return err
 	}
 
-	relog.Debug("Fetch snapshot")
+	log.V(6).Infof("Fetch snapshot")
 	if err := mysqld.fetchSnapshot(snapshotManifest, fetchConcurrency, fetchRetryCount); err != nil {
 		return err
 	}
 
-	relog.Debug("Restart mysqld")
+	log.V(6).Infof("Restart mysqld")
 	if err := Start(mysqld, MysqlWaitTime); err != nil {
 		return err
 	}

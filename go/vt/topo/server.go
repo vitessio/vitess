@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 var (
@@ -322,7 +322,7 @@ func GetServerByName(name string) Server {
 func GetServer() Server {
 	if len(serverImpls) == 1 {
 		for name, ts := range serverImpls {
-			relog.Debug("Using only topo.Server: %v", name)
+			log.V(6).Infof("Using only topo.Server: %v", name)
 			return ts
 		}
 	}
@@ -335,14 +335,14 @@ func GetServer() Server {
 	if result == nil {
 		panic(fmt.Errorf("No topo.Server named %v", name))
 	}
-	relog.Debug("Using topo.Server: %v", name)
+	log.V(6).Infof("Using topo.Server: %v", name)
 	return result
 }
 
 // Close all registered Server.
 func CloseServers() {
 	for name, ts := range serverImpls {
-		relog.Debug("Closing topo.Server: %v", name)
+		log.V(6).Infof("Closing topo.Server: %v", name)
 		ts.Close()
 	}
 }

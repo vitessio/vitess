@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 // if the master is still alive, then we need to demote it gracefully
@@ -101,7 +101,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *Replica
 }
 
 func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosition *ReplicationPosition, timeCheck int64) error {
-	relog.Info("Restart Slave")
+	log.Infof("Restart Slave")
 	cmds, err := StartReplicationCommands(mysqld, replicationState)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosit
 
 // Check for the magic row inserted under controlled reparenting.
 func (mysqld *Mysqld) CheckReplication(timeCheck int64) error {
-	relog.Info("Check replication restarted")
+	log.Infof("Check replication restarted")
 	checkQuery := fmt.Sprintf("SELECT * FROM _vt.replication_log WHERE time_created_ns = %v",
 		timeCheck)
 	qr, err := mysqld.fetchSuperQuery(checkQuery)
