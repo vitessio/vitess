@@ -6,6 +6,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"strconv"
@@ -178,13 +179,27 @@ type blplStats struct {
 
 func NewBlplStats() *blplStats {
 	bs := &blplStats{}
-	bs.txnCount = estats.NewCounters("TxnCount")
-	bs.queryCount = estats.NewCounters("QueryCount")
-	bs.queriesPerSec = estats.NewRates("QueriesPerSec", bs.queryCount, 15, 60e9)
-	bs.txnsPerSec = estats.NewRates("TxnPerSec", bs.txnCount, 15, 60e9)
-	bs.txnTime = estats.NewTimings("TxnTime")
-	bs.queryTime = estats.NewTimings("QueryTime")
+	bs.txnCount = estats.NewCounters("")
+	bs.queryCount = estats.NewCounters("")
+	bs.queriesPerSec = estats.NewRates("", bs.queryCount, 15, 60e9)
+	bs.txnsPerSec = estats.NewRates("", bs.txnCount, 15, 60e9)
+	bs.txnTime = estats.NewTimings("")
+	bs.queryTime = estats.NewTimings("")
 	return bs
+}
+
+// String returns a json encoded version of stats
+func (bs *blplStats) String() string {
+	buf := bytes.NewBuffer(make([]byte, 0, 128))
+	fmt.Fprintf(buf, "{")
+	fmt.Fprintf(buf, "\n \"TxnCount\": %v,", bs.txnCount)
+	fmt.Fprintf(buf, "\n \"QueryCount\": %v,", bs.queryCount)
+	fmt.Fprintf(buf, "\n \"QueriesPerSec\": %v,", bs.queriesPerSec)
+	fmt.Fprintf(buf, "\n \"TxnPerSec\": %v", bs.txnsPerSec)
+	fmt.Fprintf(buf, "\n \"TxnTime\": %v,", bs.txnTime)
+	fmt.Fprintf(buf, "\n \"QueryTime\": %v,", bs.queryTime)
+	fmt.Fprintf(buf, "\n}")
+	return buf.String()
 }
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
