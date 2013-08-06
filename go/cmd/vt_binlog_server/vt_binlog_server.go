@@ -41,9 +41,6 @@ func main() {
 
 	binlogServer := mysqlctl.NewBinlogServer(mycnf)
 	mysqlctl.EnableBinlogServerService(binlogServer, *dbname)
-	umgmt.AddCloseCallback(func() {
-		mysqlctl.DisableBinlogServerService(binlogServer)
-	})
 
 	proto.RegisterBinlogServer(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)
@@ -53,4 +50,5 @@ func main() {
 	bsonrpc.ServeRPC()
 
 	proc.ListenAndServe(fmt.Sprintf("%v", *port))
+	mysqlctl.DisableBinlogServerService(binlogServer)
 }

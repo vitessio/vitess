@@ -25,6 +25,11 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+var (
+	agent        *tm.ActionAgent
+	binlogServer *mysqlctl.BinlogServer
+)
+
 func loadCustomRules(customrules string) *ts.QueryRules {
 	if customrules == "" {
 		return ts.NewQueryRules()
@@ -62,16 +67,13 @@ func InitAgent(
 	dbConfigsFile, dbCredentialsFile string,
 	port, securePort int,
 	mycnfFile, customRules string,
-	overridesFile string) (agent *tm.ActionAgent, err error) {
+	overridesFile string) (err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
 
-	binlogServer := mysqlctl.NewBinlogServer(mycnf)
+	binlogServer = mysqlctl.NewBinlogServer(mycnf)
 	mysqlctl.RegisterBinlogServerService(binlogServer)
-	umgmt.AddCloseCallback(func() {
-		mysqlctl.DisableBinlogServerService(binlogServer)
-	})
 
 	bindAddr := fmt.Sprintf(":%v", port)
 	secureAddr := ""
@@ -85,7 +87,7 @@ func InitAgent(
 	// modifications to this tablet.
 	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		if newTablet.IsServingType() {
@@ -139,11 +141,20 @@ func InitAgent(
 
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	if err := agent.Start(bindAddr, secureAddr, mysqld.Addr()); err != nil {
-		return nil, err
+		return err
 	}
 
 	// register the RPC services from the agent
 	agent.RegisterQueryService(mysqld)
 
-	return agent, nil
+	return nil
+}
+
+func CloseAgent() {
+	if agent != nil {
+		agent.Stop()
+	}
+	if binlogServer != nil {
+		mysqlctl.DisableBinlogServerService(binlogServer)
+	}
 }

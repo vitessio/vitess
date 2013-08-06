@@ -105,8 +105,8 @@ func main() {
 
 	initQueryService(dbcfgs)
 	mysqlctl.RegisterUpdateStreamService(mycnf)
-	ts.RegisterCacheInvalidator()                                                                                                                                  // depends on both query and updateStream
-	agent, err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile) // depends on both query and updateStream
+	ts.RegisterCacheInvalidator()                                                                                                                          // depends on both query and updateStream
+	err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile) // depends on both query and updateStream
 	if err != nil {
 		relog.Fatal("%s", err)
 	}
@@ -149,7 +149,7 @@ func main() {
 	}
 	mysqlctl.DisableUpdateStreamService()
 	topo.CloseServers()
-	agent.Stop()
+	vttablet.CloseAgent()
 	relog.Info("done")
 }
 

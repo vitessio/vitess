@@ -8,7 +8,6 @@ package mysqlctl
 import (
 	"bufio"
 	"bytes"
-	"expvar"
 	"fmt"
 	"io"
 	"os"
@@ -783,7 +782,7 @@ func NewBinlogServer(mycnf *Mycnf) *BinlogServer {
 // RegisterBinlogServerService registers the service for serving and stats.
 func RegisterBinlogServerService(blServer *BinlogServer) {
 	rpcwrap.RegisterAuthenticated(blServer)
-	expvar.Publish("BinlogServerRpcService", estats.StrFunc(func() string { return blServer.statsJSON() }))
+	estats.PublishFunc("BinlogServerRpcService", func() string { return blServer.statsJSON() })
 }
 
 // EnableBinlogServerService enabled the service for serving.
