@@ -38,8 +38,7 @@ var (
 type binlogRecoveryState struct {
 	KeyrangeStart string //hex string
 	KeyrangeEnd   string //hex string
-	Host          string
-	Port          int
+	Addr          string
 	Position      cproto.ReplicationCoordinates
 }
 
@@ -271,7 +270,7 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 }
 
 func startPositionValid(startPos *binlogRecoveryState) bool {
-	if startPos.Host == "" || startPos.Port == 0 {
+	if startPos.Addr == "" {
 		relog.Error("Invalid connection params.")
 		return false
 	}
@@ -303,20 +302,10 @@ func ReadStartPosition(dbClient VtClient, keyrangeStart, keyrangeEnd string) (*b
 	row := qr.Rows[0]
 	for i, field := range qr.Fields {
 		switch strings.ToLower(field.Name) {
-		case "host":
+		case "addr":
 			val := row[i]
 			if !val.IsNull() {
-				brs.Host = val.String()
-			}
-		case "port":
-			val := row[i]
-			if !val.IsNull() {
-				strVal := val.String()
-				port, err := strconv.ParseUint(strVal, 0, 16)
-				if err != nil {
-					return nil, fmt.Errorf("Couldn't obtain correct value for '%v'", field.Name)
-				}
-				brs.Port = int(port)
+				brs.Addr = val.String()
 			}
 		case "master_filename":
 			val := row[i]
@@ -562,9 +551,8 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		blp.recoveryState.Position)
 
 	var err error
-	connectionStr := fmt.Sprintf("%v:%v", blp.recoveryState.Host, blp.recoveryState.Port)
-	relog.Info("Dialing server @ %v", connectionStr)
-	blp.rpcClient, err = rpcplus.DialHTTP("tcp", connectionStr)
+	relog.Info("Dialing server @ %v", blp.recoveryState.Addr)
+	blp.rpcClient, err = rpcplus.DialHTTP("tcp", blp.recoveryState.Addr)
 	defer blp.rpcClient.Close()
 	if err != nil {
 		relog.Error("Error in dialing to vt_binlog_server, %v", err)

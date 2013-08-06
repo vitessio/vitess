@@ -94,7 +94,6 @@ import (
 
 	"github.com/youtube/vitess/go/bufio2"
 	"github.com/youtube/vitess/go/cgzip"
-	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -106,8 +105,8 @@ const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
 
-	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (keyrange_start, keyrange_end, host, port, master_filename, master_position, group_id, txn_timestamp, time_updated) 
-	                          values ('%v', '%v', '%v', %v, '%v', %v, '%v', unix_timestamp(), %v)`
+	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (keyrange_start, keyrange_end, addr, master_filename, master_position, group_id, txn_timestamp, time_updated) 
+	                          values ('%v', '%v', '%v', '%v', %v, '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -889,18 +888,10 @@ func (mysqld *Mysqld) RestoreFromMultiSnapshot(destinationDbName string, keyRang
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
 		for _, manifest := range manifests {
-			// The _vt.blp_recovery table gets the vttablet
-			// address.
-			host, port, err := netutil.SplitHostPort(manifest.Source.Addr)
-			if err != nil {
-				return err
-			}
-
 			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
 				manifest.KeyRange.Start.Hex(),
 				manifest.KeyRange.End.Hex(),
-				host,
-				port,
+				manifest.Source.Addr,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
