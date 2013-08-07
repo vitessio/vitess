@@ -28,6 +28,10 @@ type SourceShard struct {
 	// also original keyspace.
 }
 
+func (source *SourceShard) String() string {
+	return "SourceShard from " + source.KeyRange.String()
+}
+
 // A pure data struct for information serialized into json and stored
 // in topology server. This node is used to present a controlled view
 // of the shard, unaware of every management action. It also contains

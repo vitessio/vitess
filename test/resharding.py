@@ -97,9 +97,56 @@ index by_msg (msg)
                    '-sql=' + create_view_template % ("view1", "resharding1"),
                    'test_keyspace'],
                   auto_log=True)
-  shard_0_master.mquery('vt_test_keyspace', 'insert into resharding1(id, msg, keyspace_id) values(1, "msg1", 0x1000000000000000)', write=True)
-  shard_1_master.mquery('vt_test_keyspace', 'insert into resharding1(id, msg, keyspace_id) values(2, "msg2", 0x9000000000000000)', write=True)
-  shard_1_master.mquery('vt_test_keyspace', 'insert into resharding1(id, msg, keyspace_id) values(3, "msg3", 0xD000000000000000)', write=True)
+
+# insert_value inserts a value in the MySQL database along with the comments
+# required for routing.
+def insert_value(tablet, table, id, msg, keyspace_id):
+  tablet.mquery('vt_test_keyspace', [
+      'begin',
+      'insert into %s(id, msg, keyspace_id) values(%u, "%s", 0x%x) /* EMD keyspace_id:%u user_id:%u */' % (table, id, msg, keyspace_id, keyspace_id, id),
+      'commit'
+      ], write=True)
+
+def check_value(tablet, table, id, msg, keyspace_id, should_be_here=True):
+  result = tablet.mquery('vt_test_keyspace', 'select id, msg, keyspace_id from %s where id=%u' % (table, id))
+  if should_be_here:
+    if len(result) != 1:
+      raise utils.TestError("Missing row in tablet %s for id=%u, keyspace_id=%x" % (tablet.tablet_alias, id, keyspace_id))
+    result = result[0]
+    if result[0] != id or result[1] != msg or result[2] != keyspace_id:
+      raise utils.TestError("Row mismatch in tablet %s for id=%u, keyspace_id=%x: %s" % (tablet.tablet_alias, id, keyspace_id, str(result)))
+  else:
+    if len(result) != 0:
+      raise utils.TestError("Extra row in tablet %s for id=%u, keyspace_id=%x: %s" % (tablet.tablet_alias, id, keyspace_id, str(result[0])))
+
+def insert_startup_values():
+  insert_value(shard_0_master, 'resharding1', 1, 'msg1', 0x1000000000000000)
+  insert_value(shard_1_master, 'resharding1', 2, 'msg2', 0x9000000000000000)
+  insert_value(shard_1_master, 'resharding1', 3, 'msg3', 0xD000000000000000)
+
+def check_startup_values():
+  # check first value is in the right shard
+  check_value(shard_2_master, 'resharding1', 2, 'msg2', 0x9000000000000000)
+  check_value(shard_2_replica, 'resharding1', 2, 'msg2', 0x9000000000000000)
+  check_value(shard_3_master, 'resharding1', 2, 'msg2', 0x9000000000000000, should_be_here=False)
+  check_value(shard_3_replica, 'resharding1', 2, 'msg2', 0x9000000000000000, should_be_here=False)
+
+  # check second value is in the right shard too
+  check_value(shard_2_master, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
+  check_value(shard_2_replica, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
+  check_value(shard_3_master, 'resharding1', 3, 'msg3', 0xD000000000000000)
+  check_value(shard_3_replica, 'resharding1', 3, 'msg3', 0xD000000000000000)
+
+
+def insert_lots():
+  for i in xrange(1000):
+    insert_value(shard_1_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i)
+    insert_value(shard_1_master, 'resharding1', 20000 + i, 'msg-range2-%u' % i, 0xE000000000000000 + i)
+
+def check_lots(percent):
+  for i in xrange(1000 * percent / 100):
+    check_value(shard_2_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i)
+    check_value(shard_3_master, 'resharding1', 20000 + i, 'msg-range2-%u' % i, 0xE000000000000000 + i)
 
 def wait_for_binlog_server_state(tablet, expected, timeout=5.0):
     while True:
@@ -155,6 +202,7 @@ def run_test_resharding():
 
   # create the tables
   create_schema()
+  insert_startup_values()
 
   # create the split shards
   shard_2_master.init_tablet( 'master',  'test_keyspace', '80-C0')
@@ -186,11 +234,27 @@ def run_test_resharding():
   wait_for_binlog_server_state(shard_1_master, "Disabled")
   wait_for_binlog_server_state(shard_1_replica, "Enabled")
 
-  # perform the restore. For now on all tablets individually.
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_2_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_2_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_3_master.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['MultiRestore', '-strategy=populateBlpRecovery', shard_3_replica.tablet_alias, shard_1_replica.tablet_alias], auto_log=True)
+  # perform the restore.
+  utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint', 'test_keyspace/80-C0', shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint', 'test_keyspace/C0-', shard_1_replica.tablet_alias], auto_log=True)
+
+  # check the startup values are in the right place
+  check_startup_values()
+
+  # testing filtered replication: insert a bunch of data on shard 1,
+  # check we get most of it after a few seconds, wait for binlog server
+  # timeout, check we get all of it.
+  utils.debug("Inserting lots of data on source shard")
+  insert_lots()
+  utils.debug("Waiting for 5 seconds for slaves to replicate the data")
+  time.sleep(5)
+  utils.debug("Checking 80 percent of data was sent")
+  check_lots(80)
+  utils.debug("Sleeping for 50 more seconds to let source shard flush")
+  time.sleep(50)
+  utils.debug("Checking all data went through")
+  check_lots(100)
+  utils.pause("AAAAAAAAAAAA")
 
   # now serve rdonly from the split shards
   utils.run_vtctl('SetShardServedTypes test_keyspace/80- master,replica')

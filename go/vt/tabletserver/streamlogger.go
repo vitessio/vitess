@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
@@ -110,7 +110,7 @@ func (stats *sqlQueryStats) FmtBindVariables(full bool) string {
 	}
 	b, err := json.Marshal(out)
 	if err != nil {
-		relog.Warning("could not marshal %q", stats.BindVariables)
+		log.Warningf("could not marshal %q", stats.BindVariables)
 		return ""
 	}
 	return string(b)

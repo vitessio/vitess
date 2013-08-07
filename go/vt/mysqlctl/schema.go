@@ -12,8 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 )
 
@@ -326,7 +326,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 		schemaDiffs := DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				relog.Warning("BeforeSchema differs: %v", msg)
+				log.Warningf("BeforeSchema differs: %v", msg)
 			}
 
 			// let's see if the schema was already applied
@@ -341,7 +341,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 			}
 
 			if change.Force {
-				relog.Warning("BeforeSchema differs, applying anyway")
+				log.Warningf("BeforeSchema differs, applying anyway")
 			} else {
 				return nil, fmt.Errorf("BeforeSchema differs")
 			}
@@ -373,10 +373,10 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 		schemaDiffs := DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
-				relog.Warning("AfterSchema differs: %v", msg)
+				log.Warningf("AfterSchema differs: %v", msg)
 			}
 			if change.Force {
-				relog.Warning("AfterSchema differs, not reporting error")
+				log.Warningf("AfterSchema differs, not reporting error")
 			} else {
 				return nil, fmt.Errorf("AfterSchema differs")
 			}

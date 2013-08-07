@@ -15,8 +15,8 @@ import (
 	"fmt"
 	"io/ioutil"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -26,8 +26,9 @@ import (
 )
 
 var (
-	agent        *tm.ActionAgent
-	binlogServer *mysqlctl.BinlogServer
+	agent           *tm.ActionAgent
+	binlogServer    *mysqlctl.BinlogServer
+	binlogPlayerMap *BinlogPlayerMap
 )
 
 func loadCustomRules(customrules string) *ts.QueryRules {
@@ -37,13 +38,13 @@ func loadCustomRules(customrules string) *ts.QueryRules {
 
 	data, err := ioutil.ReadFile(customrules)
 	if err != nil {
-		relog.Fatal("Error reading file %v: %v", customrules, err)
+		log.Fatalf("Error reading file %v: %v", customrules, err)
 	}
 
 	qrs := ts.NewQueryRules()
 	err = qrs.UnmarshalJSON(data)
 	if err != nil {
-		relog.Fatal("Error unmarshaling query rules %v", err)
+		log.Fatalf("Error unmarshaling query rules %v", err)
 	}
 	return qrs
 }
@@ -51,10 +52,10 @@ func loadCustomRules(customrules string) *ts.QueryRules {
 func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 	var schemaOverrides []ts.SchemaOverride
 	if err := jscfg.ReadJson(overridesFile, &schemaOverrides); err != nil {
-		relog.Warning("can't read overridesFile %v: %v", overridesFile, err)
+		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
 	} else {
 		data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
-		relog.Info("schemaOverrides: %s\n", data)
+		log.Infof("schemaOverrides: %s\n", data)
 	}
 	return schemaOverrides
 }
@@ -72,9 +73,15 @@ func InitAgent(
 
 	topoServer := topo.GetServer()
 
+	// Start the binlog server service, disabled at start.
 	binlogServer = mysqlctl.NewBinlogServer(mycnf)
 	mysqlctl.RegisterBinlogServerService(binlogServer)
 
+	// Start the binlog player services, not playing at start.
+	binlogPlayerMap = NewBinlogPlayerMap(topoServer, &dbcfgs.Dba)
+	RegisterBinlogPlayerMap(binlogPlayerMap)
+
+	// Compute the bind addresses
 	bindAddr := fmt.Sprintf(":%v", port)
 	secureAddr := ""
 	if securePort != 0 {
@@ -109,7 +116,7 @@ func InitAgent(
 				qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
 				err = qr.AddBindVarCond("keyspace_id", true, true, ts.QR_NOTIN, dbcfgs.App.KeyRange)
 				if err != nil {
-					relog.Warning("Unable to add keyspace rule: %v", err)
+					log.Warningf("Unable to add keyspace rule: %v", err)
 				} else {
 					qrs.Add(qr)
 				}
@@ -137,6 +144,13 @@ func InitAgent(
 				mysqlctl.DisableBinlogServerService(binlogServer)
 			}
 		}
+
+		// See if we need to start or stop any binlog player
+		if newTablet.Type == topo.TYPE_MASTER {
+			binlogPlayerMap.RefreshMap(newTablet)
+		} else {
+			binlogPlayerMap.StopAllPlayers()
+		}
 	})
 
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
@@ -156,5 +170,8 @@ func CloseAgent() {
 	}
 	if binlogServer != nil {
 		mysqlctl.DisableBinlogServerService(binlogServer)
+	}
+	if binlogPlayerMap != nil {
+		binlogPlayerMap.StopAllPlayers()
 	}
 }

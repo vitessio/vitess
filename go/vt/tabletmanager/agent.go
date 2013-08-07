@@ -14,16 +14,14 @@ due to external circumstances.
 package tabletmanager
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 	"sync"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -72,7 +70,7 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *topo.Tablet, context str
 	// Access directly since we have the lock.
 	newTablet := agent._tablet.Tablet
 	for _, f := range agent.changeCallbacks {
-		relog.Info("running tablet callback: %v %v", context, f)
+		log.Infof("running tablet callback: %v %v", context, f)
 		go f(*oldTablet, *newTablet)
 	}
 	agent.mutex.Unlock()
@@ -111,24 +109,19 @@ func (agent *ActionAgent) resolvePaths() error {
 
 // A non-nil return signals that event processing should stop.
 func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
-	relog.Info("action dispatch %v", actionPath)
+	log.Infof("action dispatch %v", actionPath)
 	actionNode, err := ActionNodeFromJson(data, actionPath)
 	if err != nil {
-		relog.Error("action decode failed: %v %v", actionPath, err)
+		log.Errorf("action decode failed: %v %v", actionPath, err)
 		return nil
 	}
 
-	logfile := flag.Lookup("logfile").Value.String()
-	if !strings.HasPrefix(logfile, "/dev") {
-		logfile = path.Join(path.Dir(logfile), "vtaction.log")
-	}
 	cmd := []string{
 		agent.vtActionBinFile,
 		"-action", actionNode.Action,
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
 		"-mycnf-file", agent.MycnfFile,
-		"-logfile", logfile,
 	}
 	cmd = append(cmd, agent.ts.GetSubprocessFlags()...)
 	if agent.DbConfigsFile != "" {
@@ -137,17 +130,17 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	if agent.DbCredentialsFile != "" {
 		cmd = append(cmd, "-db-credentials-file", agent.DbCredentialsFile)
 	}
-	relog.Info("action launch %v", cmd)
+	log.Infof("action launch %v", cmd)
 	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)
 
 	stdOut, vtActionErr := vtActionCmd.CombinedOutput()
 	if vtActionErr != nil {
-		relog.Error("agent action failed: %v %v\n%s", actionPath, vtActionErr, stdOut)
+		log.Errorf("agent action failed: %v %v\n%s", actionPath, vtActionErr, stdOut)
 		// If the action failed, preserve single execution path semantics.
 		return vtActionErr
 	}
 
-	relog.Info("agent action completed %v %s", actionPath, stdOut)
+	log.Infof("agent action completed %v %s", actionPath, stdOut)
 
 	// Save the old tablet so callbacks can have a better idea of the precise
 	// nature of the transition.
@@ -155,7 +148,7 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
-		relog.Warning("failed rereading tablet after action - services may be inconsistent: %v %v", actionPath, err)
+		log.Warningf("failed rereading tablet after action - services may be inconsistent: %v %v", actionPath, err)
 	} else {
 		agent.runChangeCallbacks(oldTablet, actionPath)
 	}
@@ -179,7 +172,7 @@ func (agent *ActionAgent) verifyTopology() error {
 
 	if err := topo.Validate(agent.ts, agent.tabletAlias, ""); err != nil {
 		// Don't stop, it's not serious enough, this is likely transient.
-		relog.Warning("tablet validate failed: %v %v", agent.tabletAlias, err)
+		log.Warningf("tablet validate failed: %v %v", agent.tabletAlias, err)
 	}
 
 	return agent.ts.ValidateTabletActions(agent.tabletAlias)

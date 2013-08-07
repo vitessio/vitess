@@ -204,7 +204,7 @@ func (ai *ActionInitiator) MultiSnapshot(tabletAlias topo.TabletAlias, args *Mul
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_MULTI_SNAPSHOT, args: args})
 }
 
-func (ai *ActionInitiator) RestoreFromMultiSnapshot(tabletAlias topo.TabletAlias, args *MultiRestoreArgs) (actionPath string, err error) {
+func (ai *ActionInitiator) MultiRestore(tabletAlias topo.TabletAlias, args *MultiRestoreArgs) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_MULTI_RESTORE, args: args})
 }
 
@@ -398,6 +398,14 @@ func (ai *ActionInitiator) SetShardServedTypesArgs(servedTypes []topo.TabletType
 		args: &SetShardServedTypesArgs{
 			ServedTypes: servedTypes,
 		},
+	}
+}
+
+func (ai *ActionInitiator) ShardMultiRestore(args *MultiRestoreArgs) *ActionNode {
+	return &ActionNode{
+		Action:     SHARD_ACTION_MULTI_RESTORE,
+		ActionGuid: actionGuid(),
+		args:       args,
 	}
 }
 

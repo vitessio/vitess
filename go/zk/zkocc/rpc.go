@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/zk"
@@ -56,9 +56,9 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 	for _, cellName := range preload {
 		_, path, err := zkr.getCell("/zk/" + cellName)
 		if err != nil {
-			relog.Error("Cell " + cellName + " could not be preloaded: " + err.Error())
+			log.Errorf("Cell " + cellName + " could not be preloaded: " + err.Error())
 		} else {
-			relog.Info("Cell " + cellName + " preloaded for: " + path)
+			log.Infof("Cell " + cellName + " preloaded for: " + path)
 		}
 	}
 	return zkr
@@ -99,7 +99,7 @@ func (zkr *ZkReader) getCell(path string) (*zkCell, string, error) {
 
 func handleError(err *error) {
 	if x := recover(); x != nil {
-		relog.Error("rpc panic: %v", x)
+		log.Errorf("rpc panic: %v", x)
 		terr, ok := x.(error)
 		if !ok {
 			*err = fmt.Errorf("rpc panic: %v", x)
@@ -113,7 +113,7 @@ func (zkr *ZkReader) get(req *zk.ZkPath, reply *zk.ZkNode) (err error) {
 	// get the cell
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
-		relog.Warning("Unknown cell for path %v: %v", req.Path, err)
+		log.Warningf("Unknown cell for path %v: %v", req.Path, err)
 		zkr.unknownCellErrors.Add(1)
 		return err
 	}
@@ -176,7 +176,7 @@ func (zkr *ZkReader) Children(req *zk.ZkPath, reply *zk.ZkNode) (err error) {
 	// get the cell
 	cell, path, err := zkr.getCell(req.Path)
 	if err != nil {
-		relog.Warning("Unknown cell for path %v: %v", req.Path, err)
+		log.Warningf("Unknown cell for path %v: %v", req.Path, err)
 		zkr.unknownCellErrors.Add(1)
 		return err
 	}

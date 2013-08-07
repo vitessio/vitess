@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
@@ -138,7 +138,7 @@ type rpcHandler struct {
 func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	conn, _, err := c.(http.Hijacker).Hijack()
 	if err != nil {
-		relog.Error("rpc hijacking %s: %v", req.RemoteAddr, err)
+		log.Errorf("rpc hijacking %s: %v", req.RemoteAddr, err)
 		return
 	}
 	io.WriteString(conn, "HTTP/1.0 "+connected+"\n\n")
@@ -147,7 +147,7 @@ func (h *rpcHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	if h.useAuth {
 		if authenticated, err := auth.Authenticate(codec, context); !authenticated {
 			if err != nil {
-				relog.Error("authentication erred at %s: %v", req.RemoteAddr, err)
+				log.Errorf("authentication erred at %s: %v", req.RemoteAddr, err)
 			}
 			codec.Close()
 			return
@@ -172,7 +172,7 @@ func (hh *httpHandler) ServeHTTP(c http.ResponseWriter, req *http.Request) {
 	conn := &httpConnectionBroker{c, req.Body}
 	codec := hh.cFactory(conn)
 	if err := rpc.ServeRequestWithContext(codec, &proto.Context{RemoteAddr: req.RemoteAddr}); err != nil {
-		relog.Error("rpcwrap: %v", err)
+		log.Errorf("rpcwrap: %v", err)
 	}
 }
 

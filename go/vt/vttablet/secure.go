@@ -10,7 +10,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 // SecureListen obtains a listener that accepts
@@ -21,7 +21,7 @@ func SecureServe(addr string, certFile, keyFile, caFile string) {
 	// load the server cert / key
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		relog.Fatal("%s", err)
+		log.Fatalf("%s", err)
 	}
 	config.Certificates = []tls.Certificate{cert}
 
@@ -33,17 +33,17 @@ func SecureServe(addr string, certFile, keyFile, caFile string) {
 
 		pemCerts, err := ioutil.ReadFile(caFile)
 		if err != nil {
-			relog.Fatal("%s", err)
+			log.Fatalf("%s", err)
 		}
 		if !config.ClientCAs.AppendCertsFromPEM(pemCerts) {
-			relog.Fatal("%s", err)
+			log.Fatalf("%s", err)
 		}
 
 		config.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 	l, err := tls.Listen("tcp", addr, &config)
 	if err != nil {
-		relog.Fatal("%s", err)
+		log.Fatalf("%s", err)
 	}
 	go http.Serve(l, nil)
 }

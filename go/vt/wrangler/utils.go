@@ -9,7 +9,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -28,7 +28,7 @@ func GetTabletMap(ts topo.Server, tabletAliases []topo.TabletAlias) (map[topo.Ta
 			tabletInfo, err := ts.GetTablet(tabletAlias)
 			mutex.Lock()
 			if err != nil {
-				relog.Warning("%v: %v", tabletAlias, err)
+				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
 				if err != topo.ErrNoNode {
 					someError = err
@@ -72,7 +72,7 @@ func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
 			// ZNONODE), just echo a warning
-			relog.Warning("failed to load tablet %v", tabletAlias)
+			log.Warningf("failed to load tablet %v", tabletAlias)
 		} else {
 			tablets = append(tablets, tabletInfo)
 		}

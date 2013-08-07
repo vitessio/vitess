@@ -5,7 +5,11 @@
 package wrangler
 
 import (
-	"github.com/youtube/vitess/go/relog"
+	"fmt"
+	"sync"
+
+	log "github.com/golang/glog"
+	cc "github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -19,7 +23,7 @@ func replaceError(original, recent error) error {
 		return original
 	}
 	if original != nil {
-		relog.Error("One of multiple error: %v", original)
+		log.Errorf("One of multiple error: %v", original)
 	}
 	return recent
 }
@@ -39,7 +43,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	if ti.Tablet.Type == topo.TYPE_MASTER && forceMasterSnapshot {
 		// In this case, we don't bother recomputing the serving graph.
 		// All queries will have to fail anyway.
-		relog.Info("force change type master -> backup: %v", tabletAlias)
+		log.Infof("force change type master -> backup: %v", tabletAlias)
 		// There is a legitimate reason to force in the case of a single
 		// master.
 		ti.Tablet.Type = topo.TYPE_BACKUP
@@ -53,10 +57,10 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 	}
 
 	restoreAfterSnapshot = func() (err error) {
-		relog.Info("change type after snapshot: %v %v", tabletAlias, originalType)
+		log.Infof("change type after snapshot: %v %v", tabletAlias, originalType)
 
 		if ti.Tablet.Parent.Uid == topo.NO_TABLET && forceMasterSnapshot {
-			relog.Info("force change type backup -> master: %v", tabletAlias)
+			log.Infof("force change type backup -> master: %v", tabletAlias)
 			ti.Tablet.Type = topo.TYPE_MASTER
 			return topo.UpdateTablet(wr.ts, ti)
 		}
@@ -68,8 +72,8 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 
 }
 
-func (wr *Wrangler) RestoreFromMultiSnapshot(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
-	actionPath, err := wr.ai.RestoreFromMultiSnapshot(dstTabletAlias, &tm.MultiRestoreArgs{
+func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+	actionPath, err := wr.ai.MultiRestore(dstTabletAlias, &tm.MultiRestoreArgs{
 		SrcTabletAliases:       sources,
 		Concurrency:            concurrency,
 		FetchConcurrency:       fetchConcurrency,
@@ -105,4 +109,85 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 	reply := results.(*tm.MultiSnapshotReply)
 
 	return reply.ManifestPaths, reply.ParentAlias, nil
+}
+
+func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+	// lock the shard to perform the changes we need done
+	actionNode := wr.ai.ShardMultiRestore(&tm.MultiRestoreArgs{
+		SrcTabletAliases:       sources,
+		Concurrency:            concurrency,
+		FetchConcurrency:       fetchConcurrency,
+		InsertTableConcurrency: insertTableConcurrency,
+		FetchRetryCount:        fetchRetryCount,
+		Strategy:               strategy})
+	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		return err
+	}
+
+	mrErr := wr.shardMultiRestore(keyspace, shard, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
+	err = wr.unlockShard(keyspace, shard, actionNode, lockPath, mrErr)
+	if err != nil {
+		return err
+	}
+	if mrErr != nil {
+		return mrErr
+	}
+
+	// find all tablets in the shard
+	destTablets, err := topo.FindAllTabletAliasesInShard(wr.ts, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	// now launch MultiRestore on all tablets we need to do
+	rec := cc.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
+	for _, tabletAlias := range destTablets {
+		wg.Add(1)
+		go func(tabletAlias topo.TabletAlias) {
+			log.Infof("Starting multirestore on tablet %v", tabletAlias)
+			err := wr.MultiRestore(tabletAlias, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
+			log.Infof("Multirestore on tablet %v is done (err=%v)", tabletAlias, err)
+			rec.RecordError(err)
+			wg.Done()
+		}(tabletAlias)
+	}
+	wg.Wait()
+
+	return rec.Error()
+}
+
+func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+	// read the shard
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	// read the source tablets
+	sourceTablets, err := GetTabletMap(wr.TopoServer(), sources)
+	if err != nil {
+		return err
+	}
+
+	// insert their KeyRange / shard in the SourceShards array
+	shardInfo.SourceShards = make([]topo.SourceShard, 0, len(sourceTablets))
+	for _, ti := range sourceTablets {
+		overlap, err := key.KeyRangesOverlap(shardInfo.KeyRange, ti.KeyRange)
+		if err != nil {
+			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", ti.KeyRange, shardInfo.KeyRange)
+		}
+		ss := topo.SourceShard{
+			KeyRange: overlap,
+		}
+		shardInfo.SourceShards = append(shardInfo.SourceShards, ss)
+	}
+
+	// and write the shard
+	if err = wr.ts.UpdateShard(shardInfo); err != nil {
+		return err
+	}
+
+	return nil
 }

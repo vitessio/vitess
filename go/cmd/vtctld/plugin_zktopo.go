@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
@@ -36,7 +36,7 @@ func init() {
 		zkPath := r.URL.Path[strings.Index(r.URL.Path, "/zk"):]
 
 		if cleanPath := path.Clean(zkPath); zkPath != cleanPath && zkPath != cleanPath+"/" {
-			relog.Info("redirecting to %v", cleanPath)
+			log.Infof("redirecting to %v", cleanPath)
 			http.Redirect(w, r, cleanPath, http.StatusTemporaryRedirect)
 			return
 		}

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 )
 
 // ErrorRecorder offers a way to record errors during complex
@@ -42,7 +42,7 @@ func (fer *FirstErrorRecorder) RecordError(err error) {
 	if fer.errorCount == 1 {
 		fer.firstError = err
 	} else {
-		relog.Error("FirstErrorRecorder: error[%v]: %v", fer.errorCount, err)
+		log.Errorf("FirstErrorRecorder: error[%v]: %v", fer.errorCount, err)
 	}
 	fer.mu.Unlock()
 }

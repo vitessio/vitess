@@ -17,7 +17,6 @@ import (
 
 	"github.com/youtube/vitess/go/hack"
 	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
@@ -86,8 +85,8 @@ func (c *ConnectionParams) SslEnabled() bool {
 	return (c.Flags & C.CLIENT_SSL) != 0
 }
 
-func (c ConnectionParams) Redacted() interface{} {
-	c.Pass = relog.Redact(c.Pass)
+func (c ConnectionParams) Redacted() ConnectionParams {
+	c.Pass = "****"
 	return c
 }
 

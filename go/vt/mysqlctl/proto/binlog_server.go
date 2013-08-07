@@ -8,6 +8,44 @@ import (
 	rpc "github.com/youtube/vitess/go/rpcplus"
 )
 
+// Possible values for SqlType (all lower case)
+const (
+	// contains all the statements of the given types
+	DDL = "ddl"
+	DML = "dml"
+
+	// transation commands
+	BEGIN  = "begin"
+	COMMIT = "commit"
+
+	// database selection
+	USE = "use"
+)
+
+var sqlKwMap = map[string]string{
+	"alter":    DDL,
+	"create":   DDL,
+	"drop":     DDL,
+	"rename":   DDL,
+	"truncate": DDL,
+
+	"insert": DML,
+	"update": DML,
+	"delete": DML,
+
+	"begin":  BEGIN,
+	"commit": COMMIT,
+
+	"use": USE,
+}
+
+// GetSqlType returns one of the possible values for SqlType, or
+// "" if it cannot be determined.
+// firstKeyword has to be normalized to lower case first.
+func GetSqlType(firstKeyword string) string {
+	return sqlKwMap[firstKeyword]
+}
+
 // BinlogServerRequest represents a request to the BinlogServer service.
 type BinlogServerRequest struct {
 	StartPosition ReplicationCoordinates
@@ -24,12 +62,14 @@ type BinlogResponse struct {
 
 // BinlogData is the payload for BinlogResponse
 type BinlogData struct {
-	SqlType    string
-	Sql        []string
+	// SqlType is one of the possible constants defined earlier
+	SqlType string
+
+	// Sql is the list of statements executed
+	Sql []string
+
+	// KeyspaceId is used for routing of events
 	KeyspaceId string
-	IndexType  string
-	IndexId    interface{}
-	UserId     uint64
 }
 
 // SendBinlogResponse makes it easier to define this interface

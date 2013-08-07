@@ -170,21 +170,26 @@ func TestContains(t *testing.T) {
 	}
 }
 
-func TestIntersect(t *testing.T) {
+func TestIntersectOverlap(t *testing.T) {
 	var table = []struct {
 		a          string
 		b          string
 		c          string
 		d          string
 		intersects bool
+		overlap    string
 	}{
 		{a: "40", b: "80", c: "c0", d: "d0", intersects: false},
 		{a: "", b: "80", c: "80", d: "", intersects: false},
-		{a: "", b: "80", c: "40", d: "80", intersects: true},
-		{a: "40", b: "80", c: "60", d: "A0", intersects: true},
-		{a: "40", b: "80", c: "50", d: "60", intersects: true},
-		{a: "40", b: "80", c: "10", d: "50", intersects: true},
-		{a: "40", b: "80", c: "40", d: "80", intersects: true},
+		{a: "", b: "80", c: "", d: "40", intersects: true, overlap: "-40"},
+		{a: "80", b: "", c: "C0", d: "", intersects: true, overlap: "C0-"},
+		{a: "", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
+		{a: "40", b: "80", c: "60", d: "A0", intersects: true, overlap: "60-80"},
+		{a: "40", b: "80", c: "50", d: "60", intersects: true, overlap: "50-60"},
+		{a: "40", b: "80", c: "10", d: "50", intersects: true, overlap: "40-50"},
+		{a: "40", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
+		{a: "", b: "80", c: "", d: "80", intersects: true, overlap: "-80"},
+		{a: "40", b: "", c: "40", d: "", intersects: true, overlap: "40-"},
 		{a: "40", b: "80", c: "20", d: "40", intersects: false},
 	}
 
@@ -210,6 +215,20 @@ func TestIntersect(t *testing.T) {
 		if c := KeyRangesIntersect(left, right); c != el.intersects {
 			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
 		}
-
+		overlap, err := KeyRangesOverlap(left, right)
+		if el.intersects {
+			if err != nil {
+				t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v returned an error: %v", left, right, err)
+			} else {
+				got := string(overlap.Start.Hex()) + "-" + string(overlap.End.Hex())
+				if got != el.overlap {
+					t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v should have returned: %v but got: %v", left, right, el.overlap, got)
+				}
+			}
+		} else {
+			if err == nil {
+				t.Errorf("Unexpected result: KeyRangesOverlap for non-overlapping %v and %v should have returned an error", left, right)
+			}
+		}
 	}
 }

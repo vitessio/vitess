@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -68,6 +68,8 @@ const (
 	SHARD_ACTION_APPLY_SCHEMA = "ApplySchemaShard"
 	// Changes the ServedTypes inside a shard
 	SHARD_ACTION_SET_SERVED_TYPES = "SetShardServedTypes"
+	// Multi-restore on all tablets of a shard in parallel
+	SHARD_ACTION_MULTI_RESTORE = "ShardMultiRestore"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
@@ -176,6 +178,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &ApplySchemaShardArgs{}
 	case SHARD_ACTION_SET_SERVED_TYPES:
 		node.args = &SetShardServedTypesArgs{}
+	case SHARD_ACTION_MULTI_RESTORE:
+		node.args = &MultiRestoreArgs{}
 
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:
@@ -237,12 +241,12 @@ func ActionNodeToJson(n *ActionNode) string {
 func ActionNodeCanBePurged(data string) bool {
 	actionNode, err := ActionNodeFromJson(data, "")
 	if err != nil {
-		relog.Warning("bad action data: %v %#v", err, data)
+		log.Warningf("bad action data: %v %#v", err, data)
 		return true
 	}
 
 	if actionNode.State == ACTION_STATE_RUNNING {
-		relog.Info("cannot remove running action: %v %v", actionNode.Action, actionNode.ActionGuid)
+		log.Infof("cannot remove running action: %v %v", actionNode.Action, actionNode.ActionGuid)
 		return false
 	}
 
@@ -252,7 +256,7 @@ func ActionNodeCanBePurged(data string) bool {
 func ActionNodeIsStale(data string) bool {
 	actionNode, err := ActionNodeFromJson(data, "")
 	if err != nil {
-		relog.Warning("bad action data: %v %#v", err, data)
+		log.Warningf("bad action data: %v %#v", err, data)
 		return false
 	}
 

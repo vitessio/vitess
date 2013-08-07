@@ -22,9 +22,9 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/relog"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/hook"
 )
@@ -87,7 +87,7 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 		name = "mysqld_start hook"
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
-		relog.Info("No mysqld_start hook, running mysqld_safe directly")
+		log.Infof("No mysqld_start hook, running mysqld_safe directly")
 		dir, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
@@ -100,7 +100,7 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 		cmd := exec.Command(name, arg...)
 		cmd.Dir = dir
 		cmd.Env = env
-		relog.Info("mysqlctl.Start mysqlWaitTime:%v %#v", mysqlWaitTime, cmd)
+		log.Infof("mysqlctl.Start mysqlWaitTime:%v %#v", mysqlWaitTime, cmd)
 		_, err = cmd.StderrPipe()
 		if err != nil {
 			return nil
@@ -141,12 +141,12 @@ This can actually take a *long* time if the buffer cache needs to be fully
 flushed - on the order of 20-30 minutes.
 */
 func Shutdown(mt *Mysqld, waitForMysqld bool, mysqlWaitTime time.Duration) error {
-	relog.Info("mysqlctl.Shutdown")
+	log.Infof("mysqlctl.Shutdown")
 	// possibly mysql is already shutdown, check for a few files first
 	_, socketPathErr := os.Stat(mt.config.SocketFile)
 	_, pidPathErr := os.Stat(mt.config.PidFile)
 	if socketPathErr != nil && pidPathErr != nil {
-		relog.Warning("assuming shutdown - no socket, no pid file")
+		log.Warningf("assuming shutdown - no socket, no pid file")
 		return nil
 	}
 
@@ -158,7 +158,7 @@ func Shutdown(mt *Mysqld, waitForMysqld bool, mysqlWaitTime time.Duration) error
 		// hook exists and worked, we can keep going
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, try mysqladmin
-		relog.Info("No mysqld_shutdown hook, running mysqladmin directly")
+		log.Infof("No mysqld_shutdown hook, running mysqladmin directly")
 		dir, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
@@ -197,7 +197,7 @@ func Shutdown(mt *Mysqld, waitForMysqld bool, mysqlWaitTime time.Duration) error
 /* exec and wait for a return code. look for name in $PATH. */
 func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err error) {
 	cmdPath, _ := exec.LookPath(name)
-	relog.Info("execCmd: %v %v %v", name, cmdPath, args)
+	log.Infof("execCmd: %v %v %v", name, cmdPath, args)
 
 	cmd = exec.Command(cmdPath, args...)
 	cmd.Env = env
@@ -210,15 +210,15 @@ func execCmd(name string, args, env []string, dir string) (cmd *exec.Cmd, err er
 }
 
 func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
-	relog.Info("mysqlctl.Init")
+	log.Infof("mysqlctl.Init")
 	err := mt.createDirs()
 	if err != nil {
-		relog.Error("%s", err.Error())
+		log.Errorf("%s", err.Error())
 		return err
 	}
 	root, err := vtenv.VtRoot()
 	if err != nil {
-		relog.Error("%s", err.Error())
+		log.Errorf("%s", err.Error())
 		return err
 	}
 
@@ -226,7 +226,7 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 
 	configData := ""
 	if hr.ExitStatus == hook.HOOK_DOES_NOT_EXIST {
-		relog.Info("make_mycnf hook doesn't exist")
+		log.Infof("make_mycnf hook doesn't exist")
 		cnfTemplatePaths := []string{
 			path.Join(root, "config/mycnf/default.cnf"),
 			path.Join(root, "config/mycnf/master.cnf"),
@@ -249,20 +249,20 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 		err = ioutil.WriteFile(mt.config.path, []byte(configData), 0664)
 	}
 	if err != nil {
-		relog.Error("failed creating %v: %v", mt.config.path, err)
+		log.Errorf("failed creating %v: %v", mt.config.path, err)
 		return err
 	}
 
 	dbTbzPath := path.Join(root, "data/bootstrap/mysql-db-dir.tbz")
-	relog.Info("decompress bootstrap db %v", dbTbzPath)
+	log.Infof("decompress bootstrap db %v", dbTbzPath)
 	args := []string{"-xj", "-C", mt.config.DataDir, "-f", dbTbzPath}
 	_, tarErr := execCmd("tar", args, []string{}, "")
 	if tarErr != nil {
-		relog.Error("failed unpacking %v: %v", dbTbzPath, tarErr)
+		log.Errorf("failed unpacking %v: %v", dbTbzPath, tarErr)
 		return tarErr
 	}
 	if err = Start(mt, mysqlWaitTime); err != nil {
-		relog.Error("failed starting, check %v", mt.config.ErrorLogPath)
+		log.Errorf("failed starting, check %v", mt.config.ErrorLogPath)
 		return err
 	}
 	schemaPath := path.Join(root, "data/bootstrap/_vt_schema.sql")
@@ -272,7 +272,7 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 	}
 
 	sqlCmds := make([]string, 0, 10)
-	relog.Info("initial schema: %v", string(schema))
+	log.Infof("initial schema: %v", string(schema))
 	for _, cmd := range strings.Split(string(schema), ";") {
 		cmd = strings.TrimSpace(cmd)
 		if cmd == "" {
@@ -285,7 +285,7 @@ func Init(mt *Mysqld, mysqlWaitTime time.Duration) error {
 }
 
 func (mt *Mysqld) createDirs() error {
-	relog.Info("creating directory %s", mt.TabletDir)
+	log.Infof("creating directory %s", mt.TabletDir)
 	if err := os.MkdirAll(mt.TabletDir, 0775); err != nil {
 		return err
 	}
@@ -295,7 +295,7 @@ func (mt *Mysqld) createDirs() error {
 		}
 	}
 	for _, dir := range DirectoryList(mt.config) {
-		relog.Info("creating directory %s", dir)
+		log.Infof("creating directory %s", dir)
 		if err := os.MkdirAll(dir, 0775); err != nil {
 			return err
 		}
@@ -318,26 +318,26 @@ func (mt *Mysqld) createTopDir(dir string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			topdir := path.Join(mt.TabletDir, dir)
-			relog.Info("creating directory %s", topdir)
+			log.Infof("creating directory %s", topdir)
 			return os.MkdirAll(topdir, 0775)
 		}
 		return err
 	}
 	linkto := path.Join(target, vtname)
 	source := path.Join(mt.TabletDir, dir)
-	relog.Info("creating directory %s", linkto)
+	log.Infof("creating directory %s", linkto)
 	err = os.MkdirAll(linkto, 0775)
 	if err != nil {
 		return err
 	}
-	relog.Info("creating symlink %s -> %s", source, linkto)
+	log.Infof("creating symlink %s -> %s", source, linkto)
 	return os.Symlink(linkto, source)
 }
 
 func Teardown(mt *Mysqld, force bool) error {
-	relog.Info("mysqlctl.Teardown")
+	log.Infof("mysqlctl.Teardown")
 	if err := Shutdown(mt, true, MysqlWaitTime); err != nil {
-		relog.Warning("failed mysqld shutdown: %v", err.Error())
+		log.Warningf("failed mysqld shutdown: %v", err.Error())
 		if !force {
 			return err
 		}
@@ -355,23 +355,23 @@ func Teardown(mt *Mysqld, force bool) error {
 func deleteTopDir(dir string) (removalErr error) {
 	fi, err := os.Lstat(dir)
 	if err != nil {
-		relog.Error("error deleting dir %v: %v", dir, err.Error())
+		log.Errorf("error deleting dir %v: %v", dir, err.Error())
 		removalErr = err
 	} else if fi.Mode()&os.ModeSymlink != 0 {
 		target, err := filepath.EvalSymlinks(dir)
 		if err != nil {
-			relog.Error("could not resolve symlink %v: %v", dir, err.Error())
+			log.Errorf("could not resolve symlink %v: %v", dir, err.Error())
 			removalErr = err
 		}
-		relog.Info("remove data dir (symlinked) %v", target)
+		log.Infof("remove data dir (symlinked) %v", target)
 		if err = os.RemoveAll(target); err != nil {
-			relog.Error("failed removing %v: %v", target, err.Error())
+			log.Errorf("failed removing %v: %v", target, err.Error())
 			removalErr = err
 		}
 	}
-	relog.Info("remove data dir %v", dir)
+	log.Infof("remove data dir %v", dir)
 	if err = os.RemoveAll(dir); err != nil {
-		relog.Error("failed removing %v: %v", dir, err.Error())
+		log.Errorf("failed removing %v: %v", dir, err.Error())
 		removalErr = err
 	}
 	return

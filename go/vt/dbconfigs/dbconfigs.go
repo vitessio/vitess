@@ -10,9 +10,9 @@ import (
 	"encoding/json"
 	"flag"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -60,8 +60,8 @@ func (d DBConfig) String() string {
 	return string(data)
 }
 
-func (d DBConfig) Redacted() interface{} {
-	d.Pass = relog.Redact(d.Pass)
+func (d DBConfig) Redacted() DBConfig {
+	d.Pass = "****"
 	return d
 }
 
@@ -92,10 +92,10 @@ func (dbcfgs DBConfigs) String() string {
 	return string(data)
 }
 
-func (dbcfgs DBConfigs) Redacted() interface{} {
-	dbcfgs.App = dbcfgs.App.Redacted().(DBConfig)
-	dbcfgs.Dba = dbcfgs.Dba.Redacted().(mysql.ConnectionParams)
-	dbcfgs.Repl = dbcfgs.Repl.Redacted().(mysql.ConnectionParams)
+func (dbcfgs DBConfigs) Redacted() DBConfigs {
+	dbcfgs.App = dbcfgs.App.Redacted()
+	dbcfgs.Dba = dbcfgs.Dba.Redacted()
+	dbcfgs.Repl = dbcfgs.Repl.Redacted()
 	return dbcfgs
 }
 
@@ -139,6 +139,6 @@ func Init(socketFile, dbConfigsFile, dbCredentialsFile string) (dbcfgs DBConfigs
 	dbcfgs.App.UnixSocket = socketFile
 	dbcfgs.Dba.UnixSocket = socketFile
 	dbcfgs.Repl.UnixSocket = socketFile
-	relog.Info("%s: %s\n", dbConfigsFile, dbcfgs)
+	log.Infof("%s: %s\n", dbConfigsFile, dbcfgs.Redacted())
 	return
 }

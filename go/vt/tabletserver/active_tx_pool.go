@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/streamlog"
 	"github.com/youtube/vitess/go/sync2"
@@ -61,7 +61,7 @@ func NewActiveTxPool(timeout time.Duration) *ActiveTxPool {
 }
 
 func (axp *ActiveTxPool) Open() {
-	relog.Info("Starting transaction id: %d", axp.lastId)
+	log.Infof("Starting transaction id: %d", axp.lastId)
 	axp.ticks.Start(func() { axp.TransactionKiller() })
 }
 
@@ -81,7 +81,7 @@ func (axp *ActiveTxPool) WaitForEmpty() {
 func (axp *ActiveTxPool) TransactionKiller() {
 	for _, v := range axp.pool.GetTimedout(time.Duration(axp.Timeout())) {
 		conn := v.(*TxConnection)
-		relog.Info("killing transaction %d: %#v", conn.transactionId, conn.queries)
+		log.Infof("killing transaction %d: %#v", conn.transactionId, conn.queries)
 		killStats.Add("Transactions", 1)
 		conn.Close()
 		conn.discard(TX_KILL)

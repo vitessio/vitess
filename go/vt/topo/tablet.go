@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -522,7 +522,7 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 }
 
 func CreateTabletReplicationPaths(ts Server, tablet *Tablet) error {
-	relog.Debug("CreateTabletReplicationPaths %v", tablet.Alias())
+	log.V(6).Infof("CreateTabletReplicationPaths %v", tablet.Alias())
 	trrp := tabletReplicationPath(tablet)
 	err := ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, trrp)
 	if err != nil && err != ErrNodeExists {

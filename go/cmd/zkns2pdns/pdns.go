@@ -22,8 +22,8 @@ import (
 	"path"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkns"
 )
@@ -115,7 +115,7 @@ func (rz *zknsResolver) getSRV(qname string) ([]*pdnsReply, error) {
 	if portName[0] != '_' {
 		// Since PDNS probes for all types, this isn't really an error worth mentioning.
 		// fmt.Errorf("invalid port name for query: %v", portName)
-		relog.Debug("skipping SRV query: %v", qname)
+		log.V(6).Infof("skipping SRV query: %v", qname)
 		return nil, nil
 	}
 	nameParts = reverse(nameParts[1:])
@@ -142,7 +142,7 @@ func (rz *zknsResolver) getCNAME(qname string) ([]*pdnsReply, error) {
 	}
 	if qname[0] == '_' {
 		// Since PDNS probes for all types, use some heuristics to limit error noise.
-		relog.Debug("skipping CNAME query: %v", qname)
+		log.V(6).Infof("skipping CNAME query: %v", qname)
 		return nil, nil
 	}
 	zkname := qname[:len(qname)-len(rz.zknsDomain)]
@@ -170,7 +170,7 @@ func (rz *zknsResolver) getA(qname string) ([]*pdnsReply, error) {
 	}
 	if qname[0] == '_' {
 		// Since PDNS probes for all types, use some heuristics to limit error noise.
-		relog.Debug("skipping A query: %v", qname)
+		log.V(6).Infof("skipping A query: %v", qname)
 		return nil, nil
 	}
 	zkname := qname[:len(qname)-len(rz.zknsDomain)]
@@ -250,7 +250,7 @@ func (pd *pdns) handleQReq(req *pdnsReq) (lines []string, err error) {
 	for _, qtype := range qtypes {
 		replies, err := pd.zr.getResult(qtype, req.qname)
 		if err != nil {
-			relog.Error("query failed %v %v: %v", qtype, req.qname, err)
+			log.Errorf("query failed %v %v: %v", qtype, req.qname, err)
 			continue
 		}
 		for _, reply := range replies {
@@ -259,7 +259,7 @@ func (pd *pdns) handleQReq(req *pdnsReq) (lines []string, err error) {
 	}
 	if len(lines) == 0 {
 		emptyCount.Add(1)
-		relog.Warning("no results for %v %v", req.qtype, req.qname)
+		log.Warningf("no results for %v %v", req.qtype, req.qname)
 	}
 	return lines, nil
 }
@@ -267,7 +267,7 @@ func (pd *pdns) handleQReq(req *pdnsReq) (lines []string, err error) {
 func write(w io.Writer, line string) {
 	_, err := io.WriteString(w, line)
 	if err != nil {
-		relog.Error("write failed: %v", err)
+		log.Errorf("write failed: %v", err)
 	}
 }
 
@@ -278,7 +278,7 @@ var (
 )
 
 func (pd *pdns) Serve(r io.Reader, w io.Writer) {
-	relog.Info("starting zkns resolver")
+	log.Infof("starting zkns resolver")
 	bufr := bufio.NewReader(r)
 	needHandshake := true
 	for {
@@ -290,13 +290,13 @@ func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 			return
 		}
 		if err != nil {
-			relog.Error("failed reading request: %v", err)
+			log.Errorf("failed reading request: %v", err)
 			continue
 		}
 
 		if needHandshake {
 			if !bytes.Equal(line, GREETING_ABI_V2) {
-				relog.Error("handshake failed: %v != %v", line, GREETING_ABI_V2)
+				log.Errorf("handshake failed: %v != %v", line, GREETING_ABI_V2)
 				write(w, FAIL_REPLY)
 			} else {
 				needHandshake = false
@@ -309,7 +309,7 @@ func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 		req, err := parseReq(line)
 		if err != nil {
 			errorCount.Add(1)
-			relog.Error("failed parsing request: %v", err)
+			log.Errorf("failed parsing request: %v", err)
 			write(w, FAIL_REPLY)
 			continue
 		}
@@ -319,7 +319,7 @@ func (pd *pdns) Serve(r io.Reader, w io.Writer) {
 			respLines, err := pd.handleQReq(req)
 			if err != nil {
 				errorCount.Add(1)
-				relog.Error("failed query: %v %v", req.qname, err)
+				log.Errorf("failed query: %v %v", req.qname, err)
 				write(w, FAIL_REPLY)
 				continue
 			}
@@ -343,7 +343,7 @@ func main() {
 		go func() {
 			err := http.ListenAndServe(*bindAddr, nil)
 			if err != nil {
-				relog.Fatal("ListenAndServe: ", err)
+				log.Fatalf("ListenAndServe: ", err)
 			}
 		}()
 	}

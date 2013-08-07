@@ -16,18 +16,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
-)
-
-const (
-	COLON   = ":"
-	DOT     = "."
-	MAX_KEY = "MAX_KEY"
 )
 
 const (
@@ -38,9 +32,6 @@ const (
 var (
 	KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
 	USER_ID             = []byte("user_id")
-	INDEX_COMMENT       = []byte("index")
-	COLON_BYTE          = []byte(COLON)
-	DOT_BYTE            = []byte(DOT)
 	END_COMMENT         = []byte("*/")
 	_VT                 = []byte("_vt.")
 	HEARTBEAT           = []byte("heartbeat")
@@ -104,7 +95,7 @@ func newBlsEventBuffer(pos *proto.BinlogPosition, line []byte) *blsEventBuffer {
 	//buf.LogLine = append(buf.LogLine, line...)
 	written := copy(buf.LogLine, line)
 	if written < len(line) {
-		relog.Warning("Problem in copying logline to new buffer, written %v, len %v", written, len(line))
+		log.Warningf("Problem in copying logline to new buffer, written %v, len %v", written, len(line))
 	}
 	buf.BinlogPosition = *pos
 	buf.BinlogPosition.Timestamp = pos.Timestamp
@@ -142,10 +133,7 @@ func newBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServ
 	blp.globalState = blServer
 	//by default assume that the db matches.
 	blp.dbmatch = true
-	blp.keyrangeTag = string(keyRange.End.Hex())
-	if blp.keyrangeTag == "" {
-		blp.keyrangeTag = MAX_KEY
-	}
+	blp.keyrangeTag = string(keyRange.Start.Hex()) + "-" + string(keyRange.End.Hex())
 	return blp
 }
 
@@ -168,15 +156,15 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted cha
 		if x := recover(); x != nil {
 			serr, ok := x.(*BinlogServerError)
 			if !ok {
-				relog.Error("[%v:%v] Uncaught panic for stream @ %v, err: %v ", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, x)
+				log.Errorf("[%v:%v] Uncaught panic for stream @ %v, err: %v ", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, x)
 				panic(x)
 			}
 			err := *serr
 			if readErr != nil {
-				relog.Error("[%v:%v] StreamBinlog error @ %v, error: %v, readErr %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err, readErr)
+				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v, readErr %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err, readErr)
 				err = BinlogServerError{Msg: fmt.Sprintf("%v, readErr: %v", err, readErr)}
 			} else {
-				relog.Error("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err)
+				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err)
 			}
 			sendError(sendReply, reqIdentifier, err, blp.currentPosition)
 		}
@@ -210,7 +198,7 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted cha
 	go func(readErr *error, readErrChan chan error, binlogDecoder *BinlogDecoder) {
 		select {
 		case *readErr = <-readErrChan:
-			//relog.Info("Read data-pipeline returned readErr: '%v'", *readErr)
+			//log.Infof("Read data-pipeline returned readErr: '%v'", *readErr)
 			if *readErr != nil {
 				binlogDecoder.Kill()
 			}
@@ -226,7 +214,7 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted cha
 func (blp *Bls) getBinlogStream(writer *os.File, blr *BinlogReader, readErrChan chan error) {
 	defer func() {
 		if err := recover(); err != nil {
-			relog.Error("getBinlogStream failed: %v", err)
+			log.Errorf("getBinlogStream failed: %v", err)
 			readErrChan <- err.(error)
 		}
 	}()
@@ -305,7 +293,7 @@ func (blp *Bls) readBlsLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 			blp.globalState.blsStats.parseStats.Add("BufferFullErrors."+blp.keyrangeTag, 1)
 			continue
 		} else if tempErr != nil {
-			relog.Error("[%v:%v] Error in reading %v, data read %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), tempErr, string(tempLine))
+			log.Errorf("[%v:%v] Error in reading %v, data read %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), tempErr, string(tempLine))
 			err = tempErr
 		} else if len(bigLine) > 0 {
 			if len(tempLine) > 0 {
@@ -323,11 +311,11 @@ func (blp *Bls) readBlsLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 
 //Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
 func (blp *Bls) parseDbChange(event *blsEventBuffer) {
-	if event.firstKw != USE {
+	if event.firstKw != proto.USE {
 		return
 	}
 	if blp.globalState.dbname == "" {
-		relog.Warning("Dbname is not set, will match all database names")
+		log.Warningf("Dbname is not set, will match all database names")
 		return
 	}
 	blp.globalState.blsStats.parseStats.Add("DBChange."+blp.keyrangeTag, 1)
@@ -386,22 +374,28 @@ func (blp *Bls) parseEventData(sendReply proto.SendBinlogResponse, event *blsEve
 		blp.inTxn = false
 		blp.txnLineBuffer = blp.txnLineBuffer[:0]
 	} else if len(event.LogLine) > 0 {
-		sqlType := GetSqlType(event.firstKw)
 		if blp.inTxn && IsTxnStatement(event.LogLine, event.firstKw) {
 			blp.txnLineBuffer = append(blp.txnLineBuffer, event)
-		} else if sqlType == DDL {
-			blp.handleDdlEvent(sendReply, event)
 		} else {
-			if sqlType == DML {
+			sqlType := proto.GetSqlType(event.firstKw)
+			switch sqlType {
+			case proto.DDL:
+				blp.handleDdlEvent(sendReply, event)
+			case proto.DML:
 				lineBuf := make([][]byte, 0, 10)
 				for _, dml := range blp.txnLineBuffer {
 					lineBuf = append(lineBuf, dml.LogLine)
 				}
+				// FIXME(alainjobart) in these cases, we
+				// probably want to skip that event and keep
+				// going. Or at least offer the option to do
+				// so somewhere.
 				panic(newBinlogServerError(fmt.Sprintf("DML outside a txn - len %v, dml '%v', txn buffer '%v'", len(blp.txnLineBuffer), string(event.LogLine), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
-			}
-			//Ignore these often occuring statement types.
-			if !IgnoredStatement(event.LogLine) {
-				relog.Warning("Unknown statement '%v'", string(event.LogLine))
+			default:
+				//Ignore these often occuring statement types.
+				if !IgnoredStatement(event.LogLine) {
+					log.Warningf("Unknown statement '%v'", string(event.LogLine))
+				}
 			}
 		}
 	}
@@ -480,7 +474,7 @@ func (blp *Bls) handleBeginEvent(event *blsEventBuffer) {
 			}
 			panic(newBinlogServerError(fmt.Sprintf("BEGIN encountered with non-empty trxn buffer, len: %d, buf %v", len(blp.txnLineBuffer), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
 		} else {
-			relog.Warning("Non-zero txn buffer, while inTxn false")
+			log.Warningf("Non-zero txn buffer, while inTxn false")
 		}
 	}
 	blp.txnLineBuffer = blp.txnLineBuffer[:0]
@@ -492,7 +486,7 @@ func (blp *Bls) handleBeginEvent(event *blsEventBuffer) {
 func blsCreateDdlStream(lineBuffer *blsEventBuffer) (ddlStream *proto.BinlogResponse) {
 	ddlStream = new(proto.BinlogResponse)
 	ddlStream.Position = lineBuffer.BinlogPosition
-	ddlStream.Data.SqlType = DDL
+	ddlStream.Data.SqlType = proto.DDL
 	ddlStream.Data.Sql = make([]string, 0, 1)
 	ddlStream.Data.Sql = append(ddlStream.Data.Sql, string(lineBuffer.LogLine))
 	return ddlStream
@@ -546,7 +540,7 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 		if bytes.HasPrefix(line, BINLOG_BEGIN) {
 			streamBuf := new(proto.BinlogResponse)
 			streamBuf.Position = event.BinlogPosition
-			streamBuf.Data.SqlType = BEGIN
+			streamBuf.Data.SqlType = proto.BEGIN
 			txnResponseList = append(txnResponseList, streamBuf)
 			continue
 		}
@@ -555,9 +549,9 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 			txnResponseList = append(txnResponseList, commitEvent)
 			continue
 		}
-		sqlType := GetSqlType(event.firstKw)
-		if sqlType == DML {
-			keyspaceIdStr, keyspaceId = parseKeyspaceId(line, GetDmlType(event.firstKw))
+		sqlType := proto.GetSqlType(event.firstKw)
+		if sqlType == proto.DML {
+			keyspaceIdStr, keyspaceId = parseKeyspaceId(line)
 			if keyspaceIdStr == "" {
 				continue
 			}
@@ -566,14 +560,12 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 				continue
 			}
 			dmlCount += 1
-			//extract keyspace id - match it with client's request,
-			//extract index ids.
 			dmlBuffer = append(dmlBuffer, string(line))
 			dmlEvent := blp.createDmlEvent(event, keyspaceIdStr)
 			dmlEvent.Data.Sql = make([]string, len(dmlBuffer))
 			dmlLines := copy(dmlEvent.Data.Sql, dmlBuffer)
 			if dmlLines < len(dmlBuffer) {
-				relog.Warning("The entire dml buffer was not properly copied")
+				log.Warningf("The entire dml buffer was not properly copied")
 			}
 			txnResponseList = append(txnResponseList, dmlEvent)
 			dmlBuffer = dmlBuffer[:0]
@@ -591,20 +583,12 @@ func (blp *Bls) createDmlEvent(eventBuf *blsEventBuffer, keyspaceId string) (dml
 	//for inserts check for index comments
 	dmlEvent = new(proto.BinlogResponse)
 	dmlEvent.Position = eventBuf.BinlogPosition
-	dmlEvent.Data.SqlType = GetDmlType(eventBuf.firstKw)
+	dmlEvent.Data.SqlType = proto.DML
 	dmlEvent.Data.KeyspaceId = keyspaceId
-	indexType, indexId, userId := parseIndex(eventBuf.LogLine)
-	if userId != 0 {
-		dmlEvent.Data.UserId = userId
-	}
-	if indexType != "" {
-		dmlEvent.Data.IndexType = indexType
-		dmlEvent.Data.IndexId = indexId
-	}
 	return dmlEvent
 }
 
-func controlDbStatement(sql []byte, dmlType string) bool {
+func controlDbStatement(sql []byte) bool {
 	sql = bytes.ToLower(sql)
 	if bytes.Contains(sql, _VT) || (bytes.Contains(sql, ADMIN) && bytes.Contains(sql, HEARTBEAT)) {
 		return true
@@ -612,11 +596,11 @@ func controlDbStatement(sql []byte, dmlType string) bool {
 	return false
 }
 
-func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspaceId key.KeyspaceId) {
+func parseKeyspaceId(sql []byte) (keyspaceIdStr string, keyspaceId key.KeyspaceId) {
 	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
 	if keyspaceIndex == -1 {
-		if controlDbStatement(sql, dmlType) {
-			relog.Warning("Ignoring no keyspace id, control db stmt %v", string(sql))
+		if controlDbStatement(sql) {
+			log.Warningf("Ignoring no keyspace id, control db stmt %v", string(sql))
 			return
 		}
 		panic(newBinlogServerError(fmt.Sprintf("Invalid Sql, doesn't contain keyspace id, sql: %v", string(sql))))
@@ -635,39 +619,11 @@ func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspace
 	return keyspaceIdStr, keyspaceId
 }
 
-func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint64) {
-	var err error
-	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
-	if keyspaceIndex == -1 {
-		panic(newBinlogServerError(fmt.Sprintf("Error parsing index comment, doesn't contain keyspace id %v", string(sql))))
-	}
-	keyspaceIdComment := sql[keyspaceIndex+len(KEYSPACE_ID_COMMENT):]
-	indexCommentStart := bytes.Index(keyspaceIdComment, INDEX_COMMENT)
-	if indexCommentStart != -1 {
-		indexCommentParts := bytes.SplitN(keyspaceIdComment[indexCommentStart:], COLON_BYTE, 2)
-		userId, err = strconv.ParseUint(string(bytes.SplitN(indexCommentParts[1], SPACE, 2)[0]), 10, 64)
-		if err != nil {
-			panic(newBinlogServerError(fmt.Sprintf("Error converting user_id %v", string(sql))))
-		}
-		indexNameId := bytes.Split(indexCommentParts[0], DOT_BYTE)
-		indexName = string(indexNameId[1])
-		if indexName == "username" {
-			indexId = string(bytes.TrimRight(indexNameId[2], COLON))
-		} else {
-			indexId, err = strconv.ParseUint(string(bytes.TrimRight(indexNameId[2], COLON)), 10, 64)
-			if err != nil {
-				panic(newBinlogServerError(fmt.Sprintf("Error converting index id %v %v", string(bytes.TrimRight(indexNameId[2], COLON)), string(sql))))
-			}
-		}
-	}
-	return
-}
-
 //This creates the response for COMMIT event.
 func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *proto.BinlogResponse) {
 	streamBuf = new(proto.BinlogResponse)
 	streamBuf.Position = eventBuf.BinlogPosition
-	streamBuf.Data.SqlType = COMMIT
+	streamBuf.Data.SqlType = proto.COMMIT
 	return
 }
 
@@ -703,7 +659,7 @@ func sendError(sendReply proto.SendBinlogResponse, reqIdentifier string, inputEr
 	buf := []*proto.BinlogResponse{streamBuf}
 	err = blsSendStream(sendReply, buf)
 	if err != nil {
-		relog.Error("Error in communicating message %v with the client: %v", inputErr, err)
+		log.Errorf("Error in communicating message %v with the client: %v", inputErr, err)
 	}
 }
 
@@ -713,14 +669,14 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 			//Send the error to the client.
 			_, ok := x.(*BinlogServerError)
 			if !ok {
-				relog.Error("Uncaught panic at top-most level: '%v'", x)
+				log.Errorf("Uncaught panic at top-most level: '%v'", x)
 				//panic(x)
 			}
 			sendError(sendReply, req.StartPosition.String(), x.(error), nil)
 		}
 	}()
 
-	relog.Info("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
+	log.Infof("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
 	if !blServer.isServiceEnabled() {
 		panic(newBinlogServerError("Binlog Server is disabled"))
 	}
@@ -747,7 +703,7 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 	blp := newBls(&req.StartPosition, blServer, keyRange)
 	blp.binlogPrefix = binlogPrefix
 
-	relog.Info("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)
+	log.Infof("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)
 	blp.streamBinlog(sendReply, blServer.interrupted)
 	return nil
 }
@@ -788,14 +744,14 @@ func RegisterBinlogServerService(blServer *BinlogServer) {
 // EnableBinlogServerService enabled the service for serving.
 func EnableBinlogServerService(blServer *BinlogServer, dbname string) {
 	if blServer.isServiceEnabled() {
-		relog.Warning("Binlog Server service is already enabled")
+		log.Warningf("Binlog Server service is already enabled")
 		return
 	}
 
 	blServer.dbname = dbname
 	blServer.interrupted = make(chan struct{}, 1)
 	blServer.setState(BINLOG_SERVER_ENABLED)
-	relog.Info("Binlog Server enabled")
+	log.Infof("Binlog Server enabled")
 }
 
 // DisableBinlogServerService disables the service for serving.
@@ -806,7 +762,7 @@ func DisableBinlogServerService(blServer *BinlogServer) {
 	}
 	blServer.setState(BINLOG_SERVER_DISABLED)
 	close(blServer.interrupted)
-	relog.Info("Binlog Server Disabled")
+	log.Infof("Binlog Server Disabled")
 }
 
 func IsBinlogServerEnabled(blServer *BinlogServer) bool {

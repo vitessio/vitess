@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cgzip"
-	"github.com/youtube/vitess/go/relog"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
@@ -50,7 +50,7 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 	// we won't crash vttablet)
 	defer func() {
 		if x := recover(); x != nil {
-			relog.Error("vttablet http server panic: %v", x)
+			log.Errorf("vttablet http server panic: %v", x)
 			http.Error(rw, fmt.Sprintf("500 internal server error: %v", x), http.StatusInternalServerError)
 		}
 	}()
@@ -58,7 +58,7 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 	// /snapshot must be rewritten to the actual location of the snapshot.
 	relative, err := filepath.Rel(mysqlctl.SnapshotURLPath, req.URL.Path)
 	if err != nil {
-		relog.Error("bad snapshot relative path %v %v", req.URL.Path, err)
+		log.Errorf("bad snapshot relative path %v %v", req.URL.Path, err)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)
 		return
 	}
@@ -67,14 +67,14 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 	// snapshotDir through a symlink.
 	realPath, err := filepath.Abs(path.Join(snapshotDir, relative))
 	if err != nil {
-		relog.Error("bad snapshot absolute path %v %v", req.URL.Path, err)
+		log.Errorf("bad snapshot absolute path %v %v", req.URL.Path, err)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)
 		return
 	}
 
 	realPath, err = filepath.EvalSymlinks(realPath)
 	if err != nil {
-		relog.Error("bad snapshot symlink eval %v %v", req.URL.Path, err)
+		log.Errorf("bad snapshot symlink eval %v %v", req.URL.Path, err)
 		http.Error(rw, "400 bad request", http.StatusBadRequest)
 		return
 	}
@@ -93,13 +93,13 @@ func handleSnapshot(rw http.ResponseWriter, req *http.Request, snapshotDir strin
 		}
 	}
 
-	relog.Error("bad snapshot real path %v %v", req.URL.Path, realPath)
+	log.Errorf("bad snapshot real path %v %v", req.URL.Path, realPath)
 	http.Error(rw, "400 bad request", http.StatusBadRequest)
 }
 
 // custom function to serve files
 func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
-	relog.Info("serve %v %v", req.URL.Path, path)
+	log.Infof("serve %v %v", req.URL.Path, path)
 	file, err := os.Open(path)
 	if err != nil {
 		http.NotFound(rw, req)
@@ -152,6 +152,6 @@ func sendFile(rw http.ResponseWriter, req *http.Request, path string) {
 	rw.Header().Set("Last-Modified", fileinfo.ModTime().UTC().Format(http.TimeFormat))
 	rw.WriteHeader(http.StatusOK)
 	if _, err := io.Copy(writer, reader); err != nil {
-		relog.Warning("transfer failed %v: %v", path, err)
+		log.Warningf("transfer failed %v: %v", path, err)
 	}
 }

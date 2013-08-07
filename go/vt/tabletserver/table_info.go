@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/schema"
@@ -45,7 +45,7 @@ func loadTableInfo(conn PoolConnection, tableName string) (ti *TableInfo) {
 func (ti *TableInfo) fetchColumns(conn PoolConnection) bool {
 	columns, err := conn.ExecuteFetch(fmt.Sprintf("describe %s", ti.Name), 10000, false)
 	if err != nil {
-		relog.Warning("%s", err.Error())
+		log.Warningf("%s", err.Error())
 		return false
 	}
 	for _, row := range columns.Rows {
@@ -81,7 +81,7 @@ func (ti *TableInfo) SetPK(colnames []string) error {
 func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
 	indexes, err := conn.ExecuteFetch(fmt.Sprintf("show index from %s", ti.Name), 10000, false)
 	if err != nil {
-		relog.Warning("%s", err.Error())
+		log.Warningf("%s", err.Error())
 		return false
 	}
 	var currentIndex *schema.Index
@@ -96,7 +96,7 @@ func (ti *TableInfo) fetchIndexes(conn PoolConnection) bool {
 		if !row[6].IsNull() {
 			cardinality, err = strconv.ParseUint(row[6].String(), 0, 64)
 			if err != nil {
-				relog.Warning("%s", err)
+				log.Warningf("%s", err)
 			}
 		}
 		currentIndex.AddColumn(row[4].String(), cardinality)
@@ -129,22 +129,22 @@ func (ti *TableInfo) initRowCache(conn PoolConnection, tableType string, createT
 	}
 
 	if strings.Contains(comment, "vtocc_nocache") {
-		relog.Info("%s commented as vtocc_nocache. Will not be cached.", ti.Name)
+		log.Infof("%s commented as vtocc_nocache. Will not be cached.", ti.Name)
 		return
 	}
 
 	if tableType == "VIEW" {
-		relog.Info("%s is a view. Will not be cached.", ti.Name)
+		log.Infof("%s is a view. Will not be cached.", ti.Name)
 		return
 	}
 
 	if ti.PKColumns == nil {
-		relog.Info("Table %s has no primary key. Will not be cached.", ti.Name)
+		log.Infof("Table %s has no primary key. Will not be cached.", ti.Name)
 		return
 	}
 	for _, col := range ti.PKColumns {
 		if ti.Columns[col].Category == schema.CAT_OTHER {
-			relog.Info("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
+			log.Infof("Table %s pk has unsupported column types. Will not be cached.", ti.Name)
 			return
 		}
 	}

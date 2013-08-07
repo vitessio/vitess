@@ -206,7 +206,7 @@ def prog_compile(names):
 # (note the zkocc addresses will only work with an extra zkocc process)
 zk_port_base = reserve_ports(3)
 zkocc_port_base = reserve_ports(3)
-def zk_setup():
+def zk_setup(add_bad_host=False):
   global zk_port_base
   global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
@@ -214,9 +214,12 @@ def zk_setup():
   run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':'+zk_ports+' init')
   config = tmp_root+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
+    ca_server = 'localhost:%u' % (zk_port_base+2)
+    if add_bad_host:
+      ca_server += ',does.not.exists:1234'
     zk_cell_mapping = {'test_nj': 'localhost:%u'%(zk_port_base+2),
                        'test_ny': 'localhost:%u'%(zk_port_base+2),
-                       'test_ca': 'localhost:%u,does.not.exists:1234'%(zk_port_base+2),
+                       'test_ca': ca_server,
                        'global': 'localhost:%u'%(zk_port_base+2),
                        'test_nj:_zkocc': 'localhost:%u,localhost:%u,localhost:%u'%(zkocc_port_base,zkocc_port_base+1,zkocc_port_base+2),
                        'test_ny:_zkocc': 'localhost:%u'%(zkocc_port_base),
@@ -283,8 +286,6 @@ def zkocc_start(cells=['test_nj'], extra_params=[]):
   logfile = tmp_root + '/zkocc_%u.log' % zkocc_port_base
   args = [vtroot+'/bin/zkocc',
           '-port', str(zkocc_port_base),
-          '-logfile', logfile,
-          '-log.level', 'INFO',
           ] + extra_params + cells
   sp = run_bg(args)
 
@@ -310,16 +311,11 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtctl helpers
-def run_vtctl(clargs, log_level='WARNING', auto_log=False, **kwargs):
-  if auto_log:
-    if options.verbose:
-      log_level='INFO'
-    else:
-      log_level='ERROR'
+def run_vtctl(clargs, auto_log=False, **kwargs):
   prog_compile(['vtctl'])
-  args = [vtroot+'/bin/vtctl',
-          '-log.level='+log_level,
-          '-logfile=/dev/null']
+  args = [vtroot+'/bin/vtctl']
+  if auto_log:
+    args.append('--alsologtostderr')
   if isinstance(clargs, str):
     cmd = " ".join(args) + ' ' + clargs
   else:

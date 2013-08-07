@@ -13,7 +13,7 @@ condition is if EOF is reached *and* the next file has appeared.
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/youtube/vitess/go/relog"
+	log "github.com/golang/glog"
 	"io"
 	"net/http"
 	"os"
@@ -116,7 +116,7 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 		for {
 			size, err := binlogFile.Seek(0, 2)
 			if err != nil {
-				relog.Error("BinlogReader.serve seek err: %v", err)
+				log.Errorf("BinlogReader.serve seek err: %v", err)
 				return
 			}
 			if startPosition > size {
@@ -140,19 +140,19 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 		firstEventSize := readFirstEventSize(binlogFile)
 		prefixSize := int64(BINLOG_HEADER_SIZE + firstEventSize)
 		writer.Header().Set("Vt-Binlog-Offset", strconv.FormatInt(prefixSize, 10))
-		relog.Info("BinlogReader.serve inject header + first event: %v", prefixSize)
+		log.Infof("BinlogReader.serve inject header + first event: %v", prefixSize)
 
 		position, err := binlogFile.Seek(0, 0)
 		if err == nil {
 			_, err = io.CopyN(writer, binlogFile, prefixSize)
-			//relog.Info("BinlogReader %x copy @ %v:%v,%v", stats.StartTime, binlogFile.Name(), position, written)
+			//log.Infof("BinlogReader %x copy @ %v:%v,%v", stats.StartTime, binlogFile.Name(), position, written)
 		}
 		if err != nil {
-			relog.Error("BinlogReader.serve err: %v", err)
+			log.Errorf("BinlogReader.serve err: %v", err)
 			return
 		}
 		position, err = binlogFile.Seek(startPosition, 0)
-		relog.Info("BinlogReader %x seek to startPosition %v @ %v:%v", stats.StartTime, startPosition, binlogFile.Name(), position)
+		log.Infof("BinlogReader %x seek to startPosition %v @ %v:%v", stats.StartTime, startPosition, binlogFile.Name(), position)
 	} else {
 		writer.Header().Set("Vt-Binlog-Offset", "0")
 	}
@@ -161,9 +161,9 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 	for {
 		//position, _ := binlogFile.Seek(0, 1)
 		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
-		//relog.Info("BinlogReader %x copy @ %v:%v,%v", stats.StartTime, binlogFile.Name(), position, written)
+		//log.Infof("BinlogReader %x copy @ %v:%v,%v", stats.StartTime, binlogFile.Name(), position, written)
 		if err != nil && err != io.EOF {
-			relog.Error("BinlogReader.serve err: %v", err)
+			log.Errorf("BinlogReader.serve err: %v", err)
 			return
 		}
 
@@ -172,7 +172,7 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 
 		if written != blr.BinlogBlockSize {
 			if _, statErr := os.Stat(nextLog); statErr == nil {
-				relog.Info("BinlogReader swap log file: %v", nextLog)
+				log.Infof("BinlogReader swap log file: %v", nextLog)
 				// swap to next log file
 				binlogFile.Close()
 				binlogFile, nextLog = blr.open(nextLog)
@@ -181,14 +181,14 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 			} else {
 				flusher.Flush()
 				position, _ := binlogFile.Seek(0, 1)
-				relog.Info("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
+				log.Infof("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
 				// wait for more data
 				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
 				stats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
 					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
-						relog.Error("MAX_WAIT_TIMEOUT exceeded, closing connection")
+						log.Errorf("MAX_WAIT_TIMEOUT exceeded, closing connection")
 						return
 					}
 				} else {
@@ -203,12 +203,12 @@ func (blr *BinlogReader) HandleBinlogRequest(rw http.ResponseWriter, req *http.R
 	defer func() {
 		if err := recover(); err != nil {
 			// nothing to do, but note it here and soldier on
-			relog.Error("HandleBinlogRequest failed: %v", err)
+			log.Errorf("HandleBinlogRequest failed: %v", err)
 		}
 	}()
 
 	// FIXME(msolomon) some sort of security, no?
-	relog.Info("serve %v", req.URL.Path)
+	log.Infof("serve %v", req.URL.Path)
 	// path is something like /vt/vt-xxxxxx-bin-log:position
 	pieces := strings.SplitN(path.Base(req.URL.Path), ":", 2)
 	pos, _ := strconv.ParseInt(pieces[1], 10, 64)
@@ -277,7 +277,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 		if err != nil && err != io.EOF {
 			panic(fmt.Errorf("BinlogReader.serve err: %v", err))
 		}
-		//relog.Info("BinlogReader copy @ %v:%v,%v", binlogFile.Name(), position, written)
+		//log.Infof("BinlogReader copy @ %v:%v,%v", binlogFile.Name(), position, written)
 
 		stats.Reads++
 		stats.Bytes += written
@@ -289,7 +289,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				// swap to next log file
 				size, _ := binlogFile.Seek(0, 2)
 				if size == position+written {
-					//relog.Info("BinlogReader swap log file: %v", nextLog)
+					//log.Infof("BinlogReader swap log file: %v", nextLog)
 					binlogFile.Close()
 					binlogFile, nextLog = blr.open(nextLog)
 					positionWaitStart = make(map[int64]time.Time)
@@ -297,7 +297,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				}
 			} else {
 				position, _ := binlogFile.Seek(0, 1)
-				//relog.Info("BinlogReader wait for more data: %v:%v %v", binlogFile.Name(), position, time.Duration(blr.LogWaitTimeout * 1e9))
+				//log.Infof("BinlogReader wait for more data: %v:%v %v", binlogFile.Name(), position, time.Duration(blr.LogWaitTimeout * 1e9))
 				// wait for more data
 				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
 				stats.Sleeps++
@@ -311,10 +311,10 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 						emptyBuf := make([]byte, MYSQLBINLOG_CHUNK)
 						_, err = writer.Write(emptyBuf[0:nullPadLen])
 						if err != nil {
-							//relog.Warning("Error in writing pad bytes to vt_mysqlbinlog %v", err)
+							//log.Warningf("Error in writing pad bytes to vt_mysqlbinlog %v", err)
 							panic(fmt.Errorf("Error in writing pad bytes to vt_mysqlbinlog %v", err))
 						}
-						relog.Info("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
+						log.Infof("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
 						return
 						//panic(fmt.Errorf("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9)))
 					}
@@ -343,7 +343,7 @@ func copyBufN(dst io.Writer, src io.Reader, totalLen int64, buf []byte) (written
 				break
 			}
 			if nr != nw {
-				relog.Warning("Short write to dst")
+				log.Warningf("Short write to dst")
 				err = io.ErrShortWrite
 				break
 			}
