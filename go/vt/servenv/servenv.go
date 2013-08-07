@@ -23,7 +23,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	_ "github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 var (
@@ -64,6 +64,8 @@ func Init() {
 	if err := exportBinaryVersion(); err != nil {
 		log.Fatalf("servenv.Init: exportBinaryVersion: %v", err)
 	}
+
+	go logutil.PurgeLogs()
 }
 
 func exportBinaryVersion() error {
