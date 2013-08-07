@@ -2,24 +2,24 @@ package logutil
 
 import (
 	"flag"
-	"log"
+	stdlog "log"
 	"path"
 
-	"github.com/golang/glog"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/env"
 )
 
 type logShim struct{}
 
 func (shim *logShim) Write(buf []byte) (n int, err error) {
-	glog.Info(string(buf))
+	log.Info(string(buf))
 	return len(buf), nil
 }
 
 func init() {
-	log.SetPrefix("log: ")
-	log.SetFlags(0)
-	log.SetOutput(new(logShim))
+	stdlog.SetPrefix("log: ")
+	stdlog.SetFlags(0)
+	stdlog.SetOutput(new(logShim))
 
 	// The default location of the logs is /vt/logs.
 	logDir := flag.Lookup("log_dir")
