@@ -24,8 +24,6 @@ import (
 
 var (
 	SLOW_TXN_THRESHOLD        = time.Duration(100 * time.Millisecond)
-	BLPL_BEGIN                = "begin"
-	BLPL_COMMIT               = "commit"
 	ROLLBACK                  = "rollback"
 	BLPL_STREAM_COMMENT_START = "/* _stream "
 	BLPL_SPACE                = " "
@@ -34,7 +32,7 @@ var (
 )
 
 // binlogRecoveryState is the checkpoint data we read / save into
-// _vt.blp_recovery table
+// _vt.blp_checkpoint table
 type binlogRecoveryState struct {
 	KeyrangeStart string //hex string
 	KeyrangeEnd   string //hex string
@@ -122,7 +120,7 @@ func (dc *DBClient) Connect() error {
 }
 
 func (dc *DBClient) Begin() error {
-	_, err := dc.dbConn.ExecuteFetch(BLPL_BEGIN, 1, false)
+	_, err := dc.dbConn.ExecuteFetch(cproto.BEGIN, 1, false)
 	if err != nil {
 		log.Errorf("BEGIN failed w/ error %v", err)
 		dc.handleError(err)
@@ -131,7 +129,7 @@ func (dc *DBClient) Begin() error {
 }
 
 func (dc *DBClient) Commit() error {
-	_, err := dc.dbConn.ExecuteFetch(BLPL_COMMIT, 1, false)
+	_, err := dc.dbConn.ExecuteFetch(cproto.COMMIT, 1, false)
 	if err != nil {
 		log.Errorf("COMMIT failed w/ error %v", err)
 		dc.dbConn.Close()
@@ -376,7 +374,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		//maybe pending transactions in the buffer.
 		if strings.Contains(binlogResponse.Error, "EOF") {
 			log.Infof("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
-			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].Data.SqlType == BLPL_COMMIT {
+			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].Data.SqlType == cproto.COMMIT {
 				blp.flushTxnBatch()
 			}
 		}
@@ -387,8 +385,8 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		}
 	}
 
-	switch strings.ToLower(binlogResponse.Data.SqlType) {
-	case DDL:
+	switch binlogResponse.Data.SqlType {
+	case cproto.DDL:
 		if blp.txnIndex > 0 {
 			log.Infof("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
 			blp.flushTxnBatch()
@@ -396,7 +394,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		if blp.execDdl {
 			blp.handleDdl(binlogResponse)
 		}
-	case BLPL_BEGIN:
+	case cproto.BEGIN:
 		if blp.txnIndex == 0 {
 			if blp.inTxn {
 				return fmt.Errorf("Invalid txn: txn already in progress, len(blp.txnBuffer) %v", len(blp.txnBuffer))
@@ -406,7 +404,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 			blp.batchStart = time.Now()
 		}
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
-	case BLPL_COMMIT:
+	case cproto.COMMIT:
 		if !blp.inTxn {
 			return fmt.Errorf("Invalid event: COMMIT event without a transaction.")
 		}
@@ -417,7 +415,7 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 			//log.Infof("Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
 			blp.flushTxnBatch()
 		}
-	case "insert", "update", "delete":
+	case cproto.DML:
 		if !blp.inTxn {
 			return fmt.Errorf("Invalid event: DML outside txn context.")
 		}
@@ -493,10 +491,10 @@ func (blp *BinlogPlayer) handleTxn() bool {
 	var txnStartTime, queryStartTime time.Time
 
 	for _, dmlEvent := range blp.txnBuffer {
-		switch strings.ToLower(dmlEvent.Data.SqlType) {
-		case BLPL_BEGIN:
+		switch dmlEvent.Data.SqlType {
+		case cproto.BEGIN:
 			continue
-		case BLPL_COMMIT:
+		case cproto.COMMIT:
 			txnCount += 1
 			if txnCount < blp.txnIndex {
 				continue
@@ -510,7 +508,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 			blp.blplStats.queryCount.Add("QueryCount", queryCount)
 			blp.blplStats.txnCount.Add("TxnCount", int64(blp.txnIndex))
 			blp.blplStats.txnTime.Record("TxnTime", txnStartTime)
-		case "update", "delete", "insert":
+		case cproto.DML:
 			if blp.dmlTableMatch(dmlEvent.Data.Sql) {
 				dmlMatch += 1
 				if dmlMatch == 1 {

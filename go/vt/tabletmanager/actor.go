@@ -884,7 +884,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	}
 
 	// run the action, scrap if it fails
-	if err := ta.mysqld.RestoreFromMultiSnapshot(tablet.DbName(), tablet.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
+	if err := ta.mysqld.MultiRestore(tablet.DbName(), tablet.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
 		if e := Scrap(ta.ts, ta.tabletAlias, false); e != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}

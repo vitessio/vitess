@@ -235,8 +235,8 @@ def run_test_resharding():
   wait_for_binlog_server_state(shard_1_replica, "Enabled")
 
   # perform the restore.
-  utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpRecovery', 'test_keyspace/80-C0', shard_1_replica.tablet_alias], auto_log=True)
-  utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpRecovery', 'test_keyspace/C0-', shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint', 'test_keyspace/80-C0', shard_1_replica.tablet_alias], auto_log=True)
+  utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint', 'test_keyspace/C0-', shard_1_replica.tablet_alias], auto_log=True)
 
   # check the startup values are in the right place
   check_startup_values()

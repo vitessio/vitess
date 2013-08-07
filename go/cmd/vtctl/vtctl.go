@@ -805,7 +805,7 @@ func commandMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	for i := 1; i < subFlags.NArg(); i++ {
 		sources[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
 	}
-	err = wr.RestoreFromMultiSnapshot(destination, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
+	err = wr.MultiRestore(destination, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
 	return
 }
 

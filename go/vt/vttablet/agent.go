@@ -148,6 +148,8 @@ func InitAgent(
 		// See if we need to start or stop any binlog player
 		if newTablet.Type == topo.TYPE_MASTER {
 			binlogPlayerMap.RefreshMap(newTablet)
+		} else {
+			binlogPlayerMap.StopAllPlayers()
 		}
 	})
 

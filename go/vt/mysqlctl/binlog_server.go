@@ -25,12 +25,6 @@ import (
 )
 
 const (
-	COLON   = ":"
-	DOT     = "."
-	MAX_KEY = "MAX_KEY"
-)
-
-const (
 	BINLOG_SERVER_DISABLED = iota
 	BINLOG_SERVER_ENABLED
 )
@@ -38,9 +32,6 @@ const (
 var (
 	KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
 	USER_ID             = []byte("user_id")
-	INDEX_COMMENT       = []byte("index")
-	COLON_BYTE          = []byte(COLON)
-	DOT_BYTE            = []byte(DOT)
 	END_COMMENT         = []byte("*/")
 	_VT                 = []byte("_vt.")
 	HEARTBEAT           = []byte("heartbeat")
@@ -142,10 +133,7 @@ func newBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServ
 	blp.globalState = blServer
 	//by default assume that the db matches.
 	blp.dbmatch = true
-	blp.keyrangeTag = string(keyRange.End.Hex())
-	if blp.keyrangeTag == "" {
-		blp.keyrangeTag = MAX_KEY
-	}
+	blp.keyrangeTag = string(keyRange.Start.Hex()) + "-" + string(keyRange.End.Hex())
 	return blp
 }
 
@@ -323,7 +311,7 @@ func (blp *Bls) readBlsLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 
 //Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
 func (blp *Bls) parseDbChange(event *blsEventBuffer) {
-	if event.firstKw != USE {
+	if event.firstKw != proto.USE {
 		return
 	}
 	if blp.globalState.dbname == "" {
@@ -386,22 +374,28 @@ func (blp *Bls) parseEventData(sendReply proto.SendBinlogResponse, event *blsEve
 		blp.inTxn = false
 		blp.txnLineBuffer = blp.txnLineBuffer[:0]
 	} else if len(event.LogLine) > 0 {
-		sqlType := GetSqlType(event.firstKw)
 		if blp.inTxn && IsTxnStatement(event.LogLine, event.firstKw) {
 			blp.txnLineBuffer = append(blp.txnLineBuffer, event)
-		} else if sqlType == DDL {
-			blp.handleDdlEvent(sendReply, event)
 		} else {
-			if sqlType == DML {
+			sqlType := proto.GetSqlType(event.firstKw)
+			switch sqlType {
+			case proto.DDL:
+				blp.handleDdlEvent(sendReply, event)
+			case proto.DML:
 				lineBuf := make([][]byte, 0, 10)
 				for _, dml := range blp.txnLineBuffer {
 					lineBuf = append(lineBuf, dml.LogLine)
 				}
+				// FIXME(alainjobart) in these cases, we
+				// probably want to skip that event and keep
+				// going. Or at least offer the option to do
+				// so somewhere.
 				panic(newBinlogServerError(fmt.Sprintf("DML outside a txn - len %v, dml '%v', txn buffer '%v'", len(blp.txnLineBuffer), string(event.LogLine), string(bytes.Join(lineBuf, SEMICOLON_BYTE)))))
-			}
-			//Ignore these often occuring statement types.
-			if !IgnoredStatement(event.LogLine) {
-				log.Warningf("Unknown statement '%v'", string(event.LogLine))
+			default:
+				//Ignore these often occuring statement types.
+				if !IgnoredStatement(event.LogLine) {
+					log.Warningf("Unknown statement '%v'", string(event.LogLine))
+				}
 			}
 		}
 	}
@@ -492,7 +486,7 @@ func (blp *Bls) handleBeginEvent(event *blsEventBuffer) {
 func blsCreateDdlStream(lineBuffer *blsEventBuffer) (ddlStream *proto.BinlogResponse) {
 	ddlStream = new(proto.BinlogResponse)
 	ddlStream.Position = lineBuffer.BinlogPosition
-	ddlStream.Data.SqlType = DDL
+	ddlStream.Data.SqlType = proto.DDL
 	ddlStream.Data.Sql = make([]string, 0, 1)
 	ddlStream.Data.Sql = append(ddlStream.Data.Sql, string(lineBuffer.LogLine))
 	return ddlStream
@@ -546,7 +540,7 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 		if bytes.HasPrefix(line, BINLOG_BEGIN) {
 			streamBuf := new(proto.BinlogResponse)
 			streamBuf.Position = event.BinlogPosition
-			streamBuf.Data.SqlType = BEGIN
+			streamBuf.Data.SqlType = proto.BEGIN
 			txnResponseList = append(txnResponseList, streamBuf)
 			continue
 		}
@@ -555,9 +549,9 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 			txnResponseList = append(txnResponseList, commitEvent)
 			continue
 		}
-		sqlType := GetSqlType(event.firstKw)
-		if sqlType == DML {
-			keyspaceIdStr, keyspaceId = parseKeyspaceId(line, GetDmlType(event.firstKw))
+		sqlType := proto.GetSqlType(event.firstKw)
+		if sqlType == proto.DML {
+			keyspaceIdStr, keyspaceId = parseKeyspaceId(line)
 			if keyspaceIdStr == "" {
 				continue
 			}
@@ -566,8 +560,6 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 				continue
 			}
 			dmlCount += 1
-			//extract keyspace id - match it with client's request,
-			//extract index ids.
 			dmlBuffer = append(dmlBuffer, string(line))
 			dmlEvent := blp.createDmlEvent(event, keyspaceIdStr)
 			dmlEvent.Data.Sql = make([]string, len(dmlBuffer))
@@ -591,20 +583,12 @@ func (blp *Bls) createDmlEvent(eventBuf *blsEventBuffer, keyspaceId string) (dml
 	//for inserts check for index comments
 	dmlEvent = new(proto.BinlogResponse)
 	dmlEvent.Position = eventBuf.BinlogPosition
-	dmlEvent.Data.SqlType = GetDmlType(eventBuf.firstKw)
+	dmlEvent.Data.SqlType = proto.DML
 	dmlEvent.Data.KeyspaceId = keyspaceId
-	indexType, indexId, userId := parseIndex(eventBuf.LogLine)
-	if userId != 0 {
-		dmlEvent.Data.UserId = userId
-	}
-	if indexType != "" {
-		dmlEvent.Data.IndexType = indexType
-		dmlEvent.Data.IndexId = indexId
-	}
 	return dmlEvent
 }
 
-func controlDbStatement(sql []byte, dmlType string) bool {
+func controlDbStatement(sql []byte) bool {
 	sql = bytes.ToLower(sql)
 	if bytes.Contains(sql, _VT) || (bytes.Contains(sql, ADMIN) && bytes.Contains(sql, HEARTBEAT)) {
 		return true
@@ -612,10 +596,10 @@ func controlDbStatement(sql []byte, dmlType string) bool {
 	return false
 }
 
-func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspaceId key.KeyspaceId) {
+func parseKeyspaceId(sql []byte) (keyspaceIdStr string, keyspaceId key.KeyspaceId) {
 	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
 	if keyspaceIndex == -1 {
-		if controlDbStatement(sql, dmlType) {
+		if controlDbStatement(sql) {
 			log.Warningf("Ignoring no keyspace id, control db stmt %v", string(sql))
 			return
 		}
@@ -635,39 +619,11 @@ func parseKeyspaceId(sql []byte, dmlType string) (keyspaceIdStr string, keyspace
 	return keyspaceIdStr, keyspaceId
 }
 
-func parseIndex(sql []byte) (indexName string, indexId interface{}, userId uint64) {
-	var err error
-	keyspaceIndex := bytes.Index(sql, KEYSPACE_ID_COMMENT)
-	if keyspaceIndex == -1 {
-		panic(newBinlogServerError(fmt.Sprintf("Error parsing index comment, doesn't contain keyspace id %v", string(sql))))
-	}
-	keyspaceIdComment := sql[keyspaceIndex+len(KEYSPACE_ID_COMMENT):]
-	indexCommentStart := bytes.Index(keyspaceIdComment, INDEX_COMMENT)
-	if indexCommentStart != -1 {
-		indexCommentParts := bytes.SplitN(keyspaceIdComment[indexCommentStart:], COLON_BYTE, 2)
-		userId, err = strconv.ParseUint(string(bytes.SplitN(indexCommentParts[1], SPACE, 2)[0]), 10, 64)
-		if err != nil {
-			panic(newBinlogServerError(fmt.Sprintf("Error converting user_id %v", string(sql))))
-		}
-		indexNameId := bytes.Split(indexCommentParts[0], DOT_BYTE)
-		indexName = string(indexNameId[1])
-		if indexName == "username" {
-			indexId = string(bytes.TrimRight(indexNameId[2], COLON))
-		} else {
-			indexId, err = strconv.ParseUint(string(bytes.TrimRight(indexNameId[2], COLON)), 10, 64)
-			if err != nil {
-				panic(newBinlogServerError(fmt.Sprintf("Error converting index id %v %v", string(bytes.TrimRight(indexNameId[2], COLON)), string(sql))))
-			}
-		}
-	}
-	return
-}
-
 //This creates the response for COMMIT event.
 func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *proto.BinlogResponse) {
 	streamBuf = new(proto.BinlogResponse)
 	streamBuf.Position = eventBuf.BinlogPosition
-	streamBuf.Data.SqlType = COMMIT
+	streamBuf.Data.SqlType = proto.COMMIT
 	return
 }
 
