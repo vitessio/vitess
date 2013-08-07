@@ -1116,6 +1116,23 @@ def run_test_sigterm():
 
   tablet_62344.kill_vttablet()
 
+@utils.test_case
+def run_test_restart():
+  utils.zk_wipe()
+  utils.run_vtctl('CreateKeyspace -force test_keyspace')
+
+  # create the database so vttablets start, as it is serving
+  tablet_62344.create_db('vt_test_keyspace')
+
+  tablet_62344.init_tablet('master', 'test_keyspace', '0')
+  proc1 = tablet_62344.start_vttablet()
+  proc2 = tablet_62344.start_vttablet()
+  time.sleep(2.0)
+  proc1.poll()
+  if proc1.returncode is None:
+    raise utils.TestError("proc1 still running")
+  tablet_62344.kill_vttablet()
+
 def run_all():
   run_test_sanity()
   run_test_sanity() # run twice to check behavior with existing znode data

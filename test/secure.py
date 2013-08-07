@@ -5,6 +5,7 @@
 # be found in the LICENSE file.
 
 import subprocess
+import time
 
 from vtdb import tablet3
 from vtdb import topology
@@ -167,9 +168,26 @@ def setup():
       ]
   utils.wait_procs(setup_procs)
 
+  utils.run_vtctl('CreateKeyspace test_keyspace')
+
+  shard_0_master.init_tablet('master',  'test_keyspace', '0')
+  shard_0_slave.init_tablet('replica',  'test_keyspace', '0')
+
+  utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
+
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+
+  # create databases so vttablet can start behaving normally
+  shard_0_master.create_db('vt_test_keyspace')
+  shard_0_slave.create_db('vt_test_keyspace')
+
+
 def teardown():
   if utils.options.skip_teardown:
     return
+
+  shard_0_master.kill_vttablet()
+  shard_0_slave.kill_vttablet()
 
   teardown_procs = [
       shard_0_master.teardown_mysql(),
@@ -185,20 +203,7 @@ def teardown():
   shard_0_slave.remove_tree()
 
 def run_test_secure():
-  utils.run_vtctl('CreateKeyspace test_keyspace')
-
-  shard_0_master.init_tablet('master',  'test_keyspace', '0')
-  shard_0_slave.init_tablet('replica',  'test_keyspace', '0')
-
-  utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
-
-  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
-
   zkocc_server = utils.zkocc_start()
-
-  # create databases so vttablet can start behaving normally
-  shard_0_master.create_db('vt_test_keyspace')
-  shard_0_slave.create_db('vt_test_keyspace')
 
   # start the tablets
   shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
@@ -263,11 +268,28 @@ def run_test_secure():
 
   # kill everything
   utils.kill_sub_process(zkocc_server)
+
+def run_test_restart():
+  zkocc_server = utils.zkocc_start()
+
+  # create databases so vttablet can start behaving normally
+  shard_0_master.create_db('vt_test_keyspace')
+
+  # start & restart the tablet
+  proc1 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
+                                        key=cert_dir + "/vt-server-key.pem")
+  proc2 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
+                                        key=cert_dir + "/vt-server-key.pem")
+  time.sleep(2.0)
+  proc1.poll()
+  if proc1.returncode is None:
+    raise utils.TestError("proc1 still running")
   shard_0_master.kill_vttablet()
-  shard_0_slave.kill_vttablet()
+  utils.kill_sub_process(zkocc_server)
 
 def run_all():
   run_test_secure()
+  run_test_restart()
 
 def main():
   args = utils.get_args()

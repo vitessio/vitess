@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"strings"
@@ -126,14 +127,20 @@ func main() {
 
 	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 
+	l, err := proc.Listen(fmt.Sprintf("%v", *port))
+	if err != nil {
+		relog.Fatal("%s", err)
+	}
+	go http.Serve(l, nil)
+
 	var secureListener net.Listener
 	if *securePort != 0 {
 		relog.Info("listening on secure port %v", *securePort)
 		vttablet.SecureServe(fmt.Sprintf(":%d", *securePort), *cert, *key, *caCert)
 	}
 
-	relog.Info("starting vttablet %v", *port)
-	s := proc.ListenAndServe(fmt.Sprintf("%v", *port))
+	relog.Info("started vttablet %v", *port)
+	s := proc.Wait()
 	if secureListener != nil {
 		secureListener.Close()
 	}
@@ -142,9 +149,11 @@ func main() {
 	if s == syscall.SIGUSR1 {
 		// Give some time for the other process
 		// to pick up the listeners
+		relog.Info("Exiting on SIGUSR1")
 		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries(true)
 	} else {
+		relog.Info("Exiting on SIGTERM")
 		ts.DisallowQueries(false)
 	}
 	mysqlctl.DisableUpdateStreamService()

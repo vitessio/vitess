@@ -225,7 +225,7 @@ class Tablet(object):
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, auth=False, dbname=None, memcache=False, parent=True):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, **kwargs):
     self.keyspace = keyspace
     self.shard = shard
 
@@ -260,7 +260,7 @@ class Tablet(object):
         expected_state = "OPEN"
       else:
         expected_state = "NOT_SERVING"
-      self.start_vttablet(wait_for_state=expected_state, auth=auth, memcache=True)
+      self.start_vttablet(wait_for_state=expected_state, **kwargs)
 
   @property
   def tablet_dir(self):
@@ -316,6 +316,9 @@ class Tablet(object):
         args.extend(['-ca-cert', ca_cert])
 
     stderr_fd = open(os.path.join(self.tablet_dir, "vttablet.stderr"), "w")
+    # increment count only the first time
+    if not self.proc:
+      Tablet.tablets_running += 1
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     stderr_fd.close()
 
@@ -325,7 +328,6 @@ class Tablet(object):
     # wait for query service to be in the right state
     self.wait_for_vttablet_state(wait_for_state, port=port)
 
-    Tablet.tablets_running += 1
     return self.proc
 
   def wait_for_vttablet_state(self, expected, timeout=5.0, port=None):
