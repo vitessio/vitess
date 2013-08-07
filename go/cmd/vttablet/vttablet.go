@@ -99,7 +99,7 @@ func main() {
 	mycnf := readMycnf(tabletAlias.Uid)
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
-		log.Warningf("%s", err)
+		log.Warning(err)
 	}
 
 	initQueryService(dbcfgs)
@@ -107,7 +107,7 @@ func main() {
 	ts.RegisterCacheInvalidator()                                                                                                                          // depends on both query and updateStream
 	err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile) // depends on both query and updateStream
 	if err != nil {
-		log.Fatalf("%s", err)
+		log.Fatal(err)
 	}
 
 	rpc.HandleHTTP()
@@ -127,7 +127,7 @@ func main() {
 
 	l, err := proc.Listen(fmt.Sprintf("%v", *port))
 	if err != nil {
-		relog.Fatal("%s", err)
+		log.Fatal(err)
 	}
 	go http.Serve(l, nil)
 
@@ -147,17 +147,17 @@ func main() {
 	if s == syscall.SIGUSR1 {
 		// Give some time for the other process
 		// to pick up the listeners
-		relog.Info("Exiting on SIGUSR1")
+		log.Info("Exiting on SIGUSR1")
 		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries(true)
 	} else {
-		relog.Info("Exiting on SIGTERM")
+		log.Info("Exiting on SIGTERM")
 		ts.DisallowQueries(false)
 	}
 	mysqlctl.DisableUpdateStreamService()
 	topo.CloseServers()
 	vttablet.CloseAgent()
-	log.Infof("done")
+	log.Info("done")
 }
 
 func serveAuthRPC() {
@@ -188,7 +188,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	ts.TxLogger.ServeLogs("/debug/txlog")
 
 	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
-		log.Warningf("%s", err)
+		log.Warning(err)
 	}
 	ts.RegisterQueryService(qsConfig)
 	if *queryLog != "" {
