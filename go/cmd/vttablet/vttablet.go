@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"strings"
@@ -100,7 +101,7 @@ func main() {
 	mycnf := readMycnf(tabletAlias.Uid)
 	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
 	if err != nil {
-		log.Warningf("%s", err)
+		log.Warning(err)
 	}
 
 	initQueryService(dbcfgs)
@@ -108,7 +109,7 @@ func main() {
 	ts.RegisterCacheInvalidator()                                                                                                                          // depends on both query and updateStream
 	err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile) // depends on both query and updateStream
 	if err != nil {
-		log.Fatalf("%s", err)
+		log.Fatal(err)
 	}
 
 	rpc.HandleHTTP()
@@ -126,14 +127,20 @@ func main() {
 
 	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 
+	l, err := proc.Listen(fmt.Sprintf("%v", *port))
+	if err != nil {
+		log.Fatal(err)
+	}
+	go http.Serve(l, nil)
+
 	var secureListener net.Listener
 	if *securePort != 0 {
 		log.Infof("listening on secure port %v", *securePort)
 		vttablet.SecureServe(fmt.Sprintf(":%d", *securePort), *cert, *key, *caCert)
 	}
 
-	log.Infof("starting vttablet %v", *port)
-	s := proc.ListenAndServe(fmt.Sprintf("%v", *port))
+	log.Infof("started vttablet %v", *port)
+	s := proc.Wait()
 	if secureListener != nil {
 		secureListener.Close()
 	}
@@ -142,9 +149,11 @@ func main() {
 	if s == syscall.SIGUSR1 {
 		// Give some time for the other process
 		// to pick up the listeners
+		log.Info("Exiting on SIGUSR1")
 		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries(true)
 	} else {
+		log.Info("Exiting on SIGTERM")
 		ts.DisallowQueries(false)
 	}
 	mysqlctl.DisableUpdateStreamService()
@@ -180,7 +189,7 @@ func initQueryService(dbcfgs dbconfigs.DBConfigs) {
 	ts.TxLogger.ServeLogs("/debug/txlog")
 
 	if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
-		log.Warningf("%s", err)
+		log.Warning(err)
 	}
 	ts.RegisterQueryService(qsConfig)
 	if *queryLog != "" {
