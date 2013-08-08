@@ -43,6 +43,7 @@ func init() {
 func main() {
 	flag.Parse()
 	servenv.Init()
+	defer servenv.Close()
 
 	rpc.HandleHTTP()
 	jsonrpc.ServeHTTP()

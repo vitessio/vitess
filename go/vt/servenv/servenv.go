@@ -5,9 +5,14 @@
 // Package env defines and initializes command line flags that control
 // the runtime environment.
 //
-// After the main program has called flag.Parse, it needs to call
+// After a server program has called flag.Parse, it needs to call
 // env.Init to make env use the command line variables to initialize
-// the environment.
+// the environment. It also needs to call env.Close when exiting.
+//
+// Note: If you need to plug in any custom initialization/cleanup for
+// a vitess distribution, register them using onInit and onClose. A
+// clean way of achieving that is adding to this package a file with
+// an init() function that registers the hooks.
 
 package servenv
 
@@ -19,18 +24,30 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sync"
 	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/logutil"
+	_ "github.com/youtube/vitess/go/vt/logutil"
 )
 
 var (
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
+	mu             sync.Mutex
+	onCloseHooks   []func()
+	onInitHooks    []func()
+	inited         bool
 )
 
 func Init() {
+	mu.Lock()
+	defer mu.Unlock()
+	if inited {
+		log.Fatal("servenv.Init called second time")
+	}
+	inited = true
+
 	// Once you run as root, you pretty much destroy the chances of a
 	// non-privileged user starting the program correctly.
 	if uid := os.Getuid(); uid == 0 {
@@ -65,7 +82,9 @@ func Init() {
 		log.Fatalf("servenv.Init: exportBinaryVersion: %v", err)
 	}
 
-	go logutil.PurgeLogs()
+	for _, f := range onInitHooks {
+		f()
+	}
 }
 
 func exportBinaryVersion() error {
@@ -88,4 +107,31 @@ func exportBinaryVersion() error {
 	// rexport this value for varz scraper
 	expvar.NewString("Version").Set(version)
 	return nil
+}
+
+// Close runs any registered exit hooks and exits the program.
+func Close() {
+	mu.Lock()
+	defer mu.Unlock()
+
+	for _, f := range onCloseHooks {
+		f()
+	}
+	log.Fatal("done")
+}
+
+// onInit registers f to be run at the beginning of the app
+// lifecycle. It should be called in an init() function.
+func onInit(f func()) {
+	mu.Lock()
+	defer mu.Unlock()
+	onInitHooks = append(onInitHooks, f)
+}
+
+// onClose registers f to be run at the end of the app lifecycle. It
+// should be called in an init() function.
+func onClose(f func()) {
+	mu.Lock()
+	defer mu.Unlock()
+	onCloseHooks = append(onCloseHooks, f)
 }

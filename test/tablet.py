@@ -267,6 +267,9 @@ class Tablet(object):
   def querylog_file(self):
     return os.path.join(self.tablet_dir, "vttablet.querylog")
 
+  def flush(self):
+    utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], trap_output=True)
+
   def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}):
     """
     Starts a vttablet process, and returns it.

@@ -193,9 +193,10 @@ class VttabletTestEnv(TestEnv):
     for i in range(30):
       try:
         self.conn = self.connect()
-        self.querylog = framework.Tailer(open(self.tablet.querylog_file, "r"))
+        self.querylog = framework.Tailer(open(self.tablet.querylog_file, "r"), flush=self.tablet.flush)
         self.txlogger = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/txlog'], stdout=open('/tmp/vtocc_txlog.log', 'w'))
-        self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log', 'r'))
+        self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log'), flush=self.tablet.flush)
+        self.log = framework.Tailer(open(os.path.join(self.tablet.tablet_dir, 'vttablet.INFO')), flush=self.tablet.flush)
         return
       except dbexceptions.OperationalError:
         if i == 29:
@@ -319,6 +320,10 @@ class VtoccTestEnv(TestEnv):
         self.querylog = framework.Tailer(open(self.querylogfile, "r"))
         self.txlogger = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/txlog'], stdout=open('/tmp/vtocc_txlog.log', 'w'))
         self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log', 'r'))
+        def flush():
+          utils.run(['curl', '-s', '-N', 'http://localhost:9461/debug/flushlogs'], trap_output=True)
+
+        self.log = framework.Tailer(open('/vt/logs/vtocc.INFO'), flush=flush)
         return
       except dbexceptions.OperationalError:
         if i == 29:

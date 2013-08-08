@@ -93,6 +93,8 @@ func main() {
 	flag.Parse()
 
 	servenv.Init()
+	defer servenv.Close()
+
 	tabletAlias := tabletParamToTabletAlias(*tabletPath)
 
 	mycnf := readMycnf(tabletAlias.Uid)
@@ -148,7 +150,6 @@ func main() {
 	mysqlctl.DisableUpdateStreamService()
 	topo.CloseServers()
 	vttablet.CloseAgent()
-	log.Infof("done")
 }
 
 func serveAuthRPC() {

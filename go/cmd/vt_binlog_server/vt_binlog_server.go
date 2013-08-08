@@ -30,6 +30,7 @@ var (
 func main() {
 	flag.Parse()
 	servenv.Init()
+	defer servenv.Close()
 
 	if *mycnfFile == "" {
 		log.Fatalf("Please specify the path for mycnf file.")

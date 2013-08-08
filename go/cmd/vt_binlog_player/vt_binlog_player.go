@@ -61,6 +61,7 @@ func readDbConfig(dbConfigFile string) (*mysql.ConnectionParams, error) {
 func main() {
 	flag.Parse()
 	servenv.Init()
+	defer servenv.Close()
 
 	if *dbConfigFile == "" {
 		log.Fatalf("Cannot start without db-config-file")

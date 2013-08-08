@@ -35,16 +35,21 @@ class MultiDict(dict):
     return v
 
 class Tailer(object):
-  def __init__(self, f):
+  def __init__(self, f, flush=None):
     self.f = f
+    self.flush = flush
     self.reset()
 
   def reset(self):
     """Call reset when you want to start using the tailer."""
+    if self.flush:
+      self.flush()
     self.f.seek(0, os.SEEK_END)
     self.pos = self.f.tell()
 
   def read(self):
+    if self.flush:
+      self.flush()
     self.f.seek(0, os.SEEK_END)
     newpos = self.f.tell()
     if newpos < self.pos:
