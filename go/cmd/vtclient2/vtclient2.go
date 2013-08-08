@@ -72,6 +72,11 @@ func (m *Map) Set(s string) (err error) {
 	return nil
 }
 
+// For internal flag compatibility
+func (m *Map) Get() interface{} {
+	return m
+}
+
 func FlagMap(name, usage string) (m map[string]interface{}) {
 	m = make(map[string]interface{})
 	mm := Map(m)
