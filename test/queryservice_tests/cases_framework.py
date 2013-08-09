@@ -150,10 +150,6 @@ class Case(object):
         if q and q != '*/':
           queries.append(q)
     return queries
-    # return [
-    #     q.strip() for q
-    #     in sum([ast.literal_eval(Log(line).rewritten_sql).split(';') for line in data.split('\n') if line], [])
-    #     if q.strip() and q.strip() !=  '*/']
 
   @property
   def is_testing_cache(self):

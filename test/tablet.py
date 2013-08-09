@@ -263,12 +263,8 @@ class Tablet(object):
   def tablet_dir(self):
     return "%s/vt_%010d" % (utils.vtdataroot, self.tablet_uid)
 
-  @property
-  def querylog_file(self):
-    return os.path.join(self.tablet_dir, "vttablet.querylog")
-
   def flush(self):
-    utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], trap_output=True)
+    utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=open('/dev/null', 'w'), stdout=open('/dev/null', 'w'))
 
   def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}):
     """
@@ -283,8 +279,7 @@ class Tablet(object):
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
             '-log_dir', self.tablet_dir,
-            '-db-configs-file', self._write_db_configs_file(repl_extra_flags),
-            '-debug-querylog-file', self.querylog_file]
+            '-db-configs-file', self._write_db_configs_file(repl_extra_flags)]
 
     if memcache:
       memcache = os.path.join(self.tablet_dir, "memcache.sock")

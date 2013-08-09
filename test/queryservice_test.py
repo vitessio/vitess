@@ -17,11 +17,11 @@ from queryservice_tests import test_env
 if __name__ == "__main__":
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
   parser.add_option("-m", "--memcache", action="store_true", default=False,
-                    help="starts a memcached, and tests rowcache")
+                    help="starts a memcache d, and tests rowcache")
   parser.add_option("-e", "--env", default='vttablet,vtocc',
                     help="Environment that will be used. Valid options: vttablet, vtocc")
   parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
+  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
   parser.add_option("--no-build", action="store_true")
   (options, args) = parser.parse_args()
   utils.options = options
@@ -36,6 +36,9 @@ if __name__ == "__main__":
         suite.addTest(stream_tests.TestStream(arg))
       elif hasattr(cache_tests.TestCache, arg) and options.memcache:
         suite.addTest(cache_tests.TestCache(arg))
+      elif hasattr(cache_tests.TestWillNotBeCached, arg) and options.memcache:
+        suite.addTest(cache_tests.TestWillNotBeCached(arg))
+
       else:
         raise Exception(arg, "not found in tests")
   else:

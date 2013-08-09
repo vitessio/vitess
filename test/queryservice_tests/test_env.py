@@ -226,7 +226,6 @@ class VttabletTestEnv(TestEnv):
 
 class VtoccTestEnv(TestEnv):
   logfile = "/tmp/vtocc.log"
-  querylogfile = "/tmp/vtocc_queries.log"
   tabletuid = "9460"
   vtoccport = 9461
   mysqlport = 9460
@@ -305,7 +304,6 @@ class VtoccTestEnv(TestEnv):
       self.vtroot+"/bin/vtocc",
       "-port", "9461",
       "-dbconfig", dbconfig,
-      "-querylog", self.querylogfile,
       "-customrules", customrules,
       "-schema-override", schema_override,
     ]
