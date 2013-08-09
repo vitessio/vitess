@@ -85,14 +85,20 @@ func GetQueryRules() (qrs *QueryRules) {
 	return SqlQueryRpcService.qe.schemaInfo.GetRules()
 }
 
-func healthCheck(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	err := SqlQueryRpcService.Execute(
+// IsHealthy returns nil if the query service is healthy (able to
+// connect to the database and serving traffic) or an error explaining
+// the unhealthiness otherwise.
+func IsHealthy() error {
+	return SqlQueryRpcService.Execute(
 		new(rpcproto.Context),
 		&proto.Query{Sql: "select 1 from dual", SessionId: SqlQueryRpcService.sessionId},
 		new(mproto.QueryResult),
 	)
-	if err != nil {
+}
+
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	if err := IsHealthy(); err != nil {
 		w.Write([]byte("notok"))
 	}
 	w.Write([]byte("ok"))
