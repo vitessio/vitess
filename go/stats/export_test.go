@@ -11,19 +11,19 @@ import (
 
 func TestNoHook(t *testing.T) {
 	Register(nil)
-	v := NewFloat("plainfloat")
-	v.Set(1.0)
+	v := NewInt("plainint")
+	v.Set(1)
 	if v.String() != "1" {
 		t.Errorf("want 1, got %s", v.String())
 	}
 }
 
-func TestFloatHook(t *testing.T) {
+func TestFloat(t *testing.T) {
 	var gotname string
-	var gotv *expvar.Float
+	var gotv *Float
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*expvar.Float)
+		gotv = v.(*Float)
 	})
 	v := NewFloat("Float")
 	if gotname != "Float" {
@@ -32,14 +32,25 @@ func TestFloatHook(t *testing.T) {
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
+	v.Set(5.1)
+	if v.Get() != 5.1 {
+		t.Errorf("want 5.1, got %v", v.Get())
+	}
+	v.Add(1.0)
+	if v.Get() != 6.1 {
+		t.Errorf("want 6.1, got %v", v.Get())
+	}
+	if v.String() != "6.1" {
+		t.Errorf("want 6.1, got %v", v.Get())
+	}
 }
 
-func TestIntHook(t *testing.T) {
+func TestInt(t *testing.T) {
 	var gotname string
-	var gotv *expvar.Int
+	var gotv *Int
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*expvar.Int)
+		gotv = v.(*Int)
 	})
 	v := NewInt("Int")
 	if gotname != "Int" {
@@ -48,30 +59,25 @@ func TestIntHook(t *testing.T) {
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
-}
-
-func TestMapHook(t *testing.T) {
-	var gotname string
-	var gotv *expvar.Map
-	Register(func(name string, v expvar.Var) {
-		gotname = name
-		gotv = v.(*expvar.Map)
-	})
-	v := NewMap("Map")
-	if gotname != "Map" {
-		t.Errorf("want Map, got %s", gotname)
+	v.Set(5)
+	if v.Get() != 5 {
+		t.Errorf("want 5, got %v", v.Get())
 	}
-	if gotv != v {
-		t.Errorf("want %#v, got %#v", v, gotv)
+	v.Add(1)
+	if v.Get() != 6 {
+		t.Errorf("want 6, got %v", v.Get())
+	}
+	if v.String() != "6" {
+		t.Errorf("want 6, got %v", v.Get())
 	}
 }
 
-func TestStringHook(t *testing.T) {
+func TestString(t *testing.T) {
 	var gotname string
-	var gotv *expvar.String
+	var gotv *String
 	Register(func(name string, v expvar.Var) {
 		gotname = name
-		gotv = v.(*expvar.String)
+		gotv = v.(*String)
 	})
 	v := NewString("String")
 	if gotname != "String" {
@@ -79,6 +85,13 @@ func TestStringHook(t *testing.T) {
 	}
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
+	}
+	v.Set("a\"b")
+	if v.Get() != "a\"b" {
+		t.Errorf("want \"a\"b\", got %#v", gotv)
+	}
+	if v.String() != "\"a\\\"b\"" {
+		t.Errorf("want \"\"a\\\"b\"\", got %#v", gotv)
 	}
 }
 
@@ -88,7 +101,7 @@ func (m *Mystr) String() string {
 	return string(*m)
 }
 
-func TestPublishHook(t *testing.T) {
+func TestPublish(t *testing.T) {
 	var gotname string
 	var gotv expvar.Var
 	Register(func(name string, v expvar.Var) {

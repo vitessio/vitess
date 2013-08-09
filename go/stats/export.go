@@ -17,6 +17,10 @@ package stats
 
 import (
 	"expvar"
+	"strconv"
+	"sync"
+
+	"github.com/youtube/vitess/go/sync2"
 )
 
 type NewVarHook func(name string, v expvar.Var)
@@ -37,40 +41,101 @@ func callHook(name string, v expvar.Var) {
 	}
 }
 
-// NewFloat is same as expvar.NewFloat, except
-// that it also calls the hook.
-func NewFloat(name string) *expvar.Float {
-	f := expvar.NewFloat(name)
-	callHook(name, f)
+// Float is expvar.Float+Get+hook
+type Float struct {
+	mu sync.Mutex
+	f  float64
+}
+
+func NewFloat(name string) *Float {
+	v := new(Float)
+	Publish(name, v)
+	callHook(name, v)
+	return v
+}
+
+func (v *Float) Add(delta float64) {
+	v.mu.Lock()
+	v.f += delta
+	v.mu.Unlock()
+}
+
+func (v *Float) Set(value float64) {
+	v.mu.Lock()
+	v.f = value
+	v.mu.Unlock()
+}
+
+func (v *Float) Get() float64 {
+	v.mu.Lock()
+	f := v.f
+	v.mu.Unlock()
 	return f
 }
 
-// NewInt is same as expvar.NewInt, except
-// that it also calls the hook.
-func NewInt(name string) *expvar.Int {
-	i := expvar.NewInt(name)
-	callHook(name, i)
-	return i
+func (v *Float) String() string {
+	return strconv.FormatFloat(v.Get(), 'g', -1, 64)
 }
 
-// NewMap is same as expvar.NewMap, except
-// that it also calls the hook.
-func NewMap(name string) *expvar.Map {
-	m := expvar.NewMap(name)
-	callHook(name, m)
-	return m
+// Int is expvar.Int+Get+hook
+type Int struct {
+	i sync2.AtomicInt64
 }
 
-// NewString is same as expvar.NewString, except
-// that it also calls the hook.
-func NewString(name string) *expvar.String {
-	s := expvar.NewString(name)
-	callHook(name, s)
+func NewInt(name string) *Int {
+	v := new(Int)
+	Publish(name, v)
+	callHook(name, v)
+	return v
+}
+
+func (v *Int) Add(delta int64) {
+	v.i.Add(delta)
+}
+
+func (v *Int) Set(value int64) {
+	v.i.Set(value)
+}
+
+func (v *Int) Get() int64 {
+	return v.i.Get()
+}
+
+func (v *Int) String() string {
+	return strconv.FormatInt(v.i.Get(), 10)
+}
+
+// String is expvar.String+Get+hook
+type String struct {
+	mu sync.Mutex
+	s  string
+}
+
+func NewString(name string) *String {
+	v := new(String)
+	Publish(name, v)
+	callHook(name, v)
+	return v
+}
+
+func (v *String) Set(value string) {
+	v.mu.Lock()
+	v.s = value
+	v.mu.Unlock()
+}
+
+func (v *String) Get() string {
+	v.mu.Lock()
+	s := v.s
+	v.mu.Unlock()
 	return s
 }
 
-// Publish is same as expvar.Publish, except
-// that it also calls the hook.
+func (v *String) String() string {
+	return strconv.Quote(v.Get())
+}
+
+// Publish is expvar.Publish+hook
 func Publish(name string, v expvar.Var) {
 	expvar.Publish(name, v)
 	callHook(name, v)
