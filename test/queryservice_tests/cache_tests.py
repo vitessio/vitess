@@ -109,11 +109,13 @@ class TestCache(framework.TestCase):
   def test_overrides(self):
     tstart = self.env.table_stats()["vtocc_view"]
     self.env.querylog.reset()
+
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 1L, 3L))
     tend = self.env.table_stats()["vtocc_view"]
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
     log = self.env.querylog.read()
+
     self.assertContains(log, "select * from vtocc_view where 1 != 1")
     self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
 

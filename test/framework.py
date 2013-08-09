@@ -5,6 +5,7 @@
 import os
 import shlex
 from subprocess import Popen, PIPE
+import time
 import unittest
 
 class TestCase(unittest.TestCase):
@@ -35,8 +36,9 @@ class MultiDict(dict):
     return v
 
 class Tailer(object):
-  def __init__(self, f, flush=None):
+  def __init__(self, f, flush=None, sleep=0):
     self.f = f
+    self.sleep = sleep
     self.flush = flush
     self.reset()
 
@@ -44,12 +46,16 @@ class Tailer(object):
     """Call reset when you want to start using the tailer."""
     if self.flush:
       self.flush()
+    else:
+      time.sleep(self.sleep)
     self.f.seek(0, os.SEEK_END)
     self.pos = self.f.tell()
 
   def read(self):
     if self.flush:
       self.flush()
+    else:
+      time.sleep(self.sleep)
     self.f.seek(0, os.SEEK_END)
     newpos = self.f.tell()
     if newpos < self.pos:

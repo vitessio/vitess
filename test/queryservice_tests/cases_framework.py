@@ -1,3 +1,4 @@
+import ast
 import json
 import re
 import urllib2
@@ -138,11 +139,21 @@ class Case(object):
     self.remote_address = remote_address
 
   def normalizelog(self, data):
-    return [line.split("INFO: ")[-1]
-            for line in data.split("\n") if "INFO: " in line]
-
-  def parse_streamlog(self, line):
-    line.split('\t')
+    if not data:
+      return []
+    queries = []
+    for line in data.split('\n'):
+      if not line:
+        continue
+      for q in ast.literal_eval(Log(line).rewritten_sql).split(';'):
+        q = q.strip()
+        if q and q != '*/':
+          queries.append(q)
+    return queries
+    # return [
+    #     q.strip() for q
+    #     in sum([ast.literal_eval(Log(line).rewritten_sql).split(';') for line in data.split('\n') if line], [])
+    #     if q.strip() and q.strip() !=  '*/']
 
   @property
   def is_testing_cache(self):
