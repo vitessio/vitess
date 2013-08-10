@@ -11,10 +11,6 @@ import (
 	"os"
 
 	"github.com/youtube/vitess/go/proc"
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
-	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
@@ -45,11 +41,7 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
-	rpc.HandleHTTP()
-	jsonrpc.ServeHTTP()
-	jsonrpc.ServeRPC()
-	bsonrpc.ServeHTTP()
-	bsonrpc.ServeRPC()
+	servenv.ServeRPC()
 	zkr := zkocc.NewZkReader(*resolveLocal, flag.Args())
 	zk.RegisterZkReader(zkr)
 

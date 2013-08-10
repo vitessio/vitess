@@ -14,13 +14,10 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
-	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -42,14 +39,12 @@ func init() {
 func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
+	servenv.Init()
+	defer servenv.Close()
 
 	log.Infof("started vtaction %v", os.Args)
 
-	rpc.HandleHTTP()
-	jsonrpc.ServeHTTP()
-	jsonrpc.ServeRPC()
-	bsonrpc.ServeHTTP()
-	bsonrpc.ServeRPC()
+	servenv.ServeRPC()
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {
