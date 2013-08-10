@@ -5,7 +5,6 @@
 package proc
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -17,8 +16,6 @@ import (
 	"testing"
 	"time"
 )
-
-var port = flag.String("port", "", "http port")
 
 func TestRestart(t *testing.T) {
 	switch os.Getenv("SERVER_NUM") {
@@ -59,7 +56,7 @@ func testLaunch(t *testing.T) {
 }
 
 func launchServer(t *testing.T, num int) *exec.Cmd {
-	cmd := exec.Command(os.Args[0], "-test.run=^TestRestart$", "-port", testPort)
+	cmd := exec.Command(os.Args[0], "-test.run=^TestRestart$")
 	cmd.Env = []string{fmt.Sprintf("SERVER_NUM=%d", num)}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -103,12 +100,7 @@ func testPid(t *testing.T, want int) {
 }
 
 func testServer(t *testing.T, want syscall.Signal) {
-	flag.Parse()
-	if *port != "12345" {
-		t.Errorf("want 12345, got %s", *port)
-	}
-
-	l, err := Listen(*port)
+	l, err := Listen(testPort)
 	if err != nil {
 		t.Fatalf("could not initialize listener: %v", err)
 	}
