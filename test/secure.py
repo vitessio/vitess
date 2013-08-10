@@ -249,6 +249,10 @@ def run_test_secure():
     if not e.args[0][0].startswith('Unexpected EOF in handshake to'):
       raise utils.TestError("Unexpected exception: %s" % str(e))
 
+  sconn = utils.get_vars(shard_0_master.port)["SecureConns"]
+  if sconn != 0:
+    raise utils.TestError("unexpected conns %s" % sconn)
+
   # connect to encrypted port
   conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
                                   "test_keyspace", "0", 5.0, encrypted=True)
@@ -258,6 +262,14 @@ def run_test_secure():
         results[0][0] != 1):
     print "conn._execute returned:", results
     raise utils.TestError('wrong conn._execute output')
+
+  sconn = utils.get_vars(shard_0_master.port)["SecureConns"]
+  if sconn != 1:
+    raise utils.TestError("unexpected conns %s" % sconn)
+  saccept = utils.get_vars(shard_0_master.port)["SecureAccepts"]
+  if saccept == 0:
+    raise utils.TestError("unexpected accepts %s" % saccept)
+
 
   # trigger a time out on a secure connection, see what exception we get
   try:
@@ -272,10 +284,8 @@ def run_test_secure():
 def run_test_restart():
   zkocc_server = utils.zkocc_start()
 
-  # create databases so vttablet can start behaving normally
   shard_0_master.create_db('vt_test_keyspace')
 
-  # start & restart the tablet
   proc1 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
                                         key=cert_dir + "/vt-server-key.pem")
   proc2 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",

@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestListener(t *testing.T) {
+func TestPublished(t *testing.T) {
 	l, err := Listen(testPort)
 	if err != nil {
 		t.Fatalf("could not initialize listener: %v", err)

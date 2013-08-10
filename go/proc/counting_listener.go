@@ -20,9 +20,9 @@ type countingConnection struct {
 	listener *CountingListener
 }
 
-// Listener creates a wrapper for net.Listener to
-// track and report connection creation.
-func Listener(l net.Listener, countTag, acceptTag string) net.Listener {
+// Published creates a wrapper for net.Listener that
+// publishes connection stats.
+func Published(l net.Listener, countTag, acceptTag string) net.Listener {
 	return &CountingListener{
 		Listener:   l,
 		ConnCount:  stats.NewInt(countTag),

@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/proc"
 )
 
 // SecureListen obtains a listener that accepts
@@ -45,5 +46,6 @@ func SecureServe(addr string, certFile, keyFile, caFile string) {
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
-	go http.Serve(l, nil)
+	cl := proc.Published(l, "SecureConns", "SecureAccepts")
+	go http.Serve(cl, nil)
 }
