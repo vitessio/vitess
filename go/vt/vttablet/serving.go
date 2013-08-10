@@ -2,11 +2,9 @@ package vttablet
 
 import (
 	"flag"
-	"os"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -14,7 +12,6 @@ import (
 )
 
 var (
-	queryLog        = flag.String("debug-querylog-file", "", "for testing: log all queries to this file")
 	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
 	qsConfigFile    = flag.String("queryserver-config-file", "", "config file name for the query service")
@@ -66,12 +63,4 @@ func InitQueryService(dbcfgs dbconfigs.DBConfigs) {
 	}
 
 	ts.RegisterQueryService(qsConfig)
-
-	if *queryLog != "" {
-		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
-			ts.QueryLogger = relog.New(f, "", relog.DEBUG)
-		} else {
-			log.Fatalf("Error opening file %v: %v", *queryLog, err)
-		}
-	}
 }

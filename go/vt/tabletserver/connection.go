@@ -10,13 +10,11 @@ import (
 
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/relog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 )
 
 var mysqlStats *stats.Timings
-var QueryLogger *relog.Logger
 
 func init() {
 	mysqlStats = stats.NewTimings("MySQL")
@@ -52,9 +50,6 @@ func (conn *DBConnection) handleError(err error) {
 
 func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
 	start := time.Now()
-	if QueryLogger != nil {
-		QueryLogger.Info("%s", query)
-	}
 	mqr, err := dbc.Connection.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		mysqlStats.Record("Exec", start)
@@ -68,9 +63,6 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 
 func (conn *DBConnection) ExecuteStreamFetch(query string, callback func(interface{}) error, streamBufferSize int) error {
 	start := time.Now()
-	if QueryLogger != nil {
-		QueryLogger.Info("%s", query)
-	}
 
 	err := conn.Connection.ExecuteStreamFetch(query)
 	if err != nil {

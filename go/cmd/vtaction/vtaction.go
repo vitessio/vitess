@@ -25,16 +25,15 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-var port = flag.Int("port", 0, "port for debug http server")
-var action = flag.String("action", "", "management action to perform")
-var actionNode = flag.String("action-node", "",
-	"path to zk node representing the action")
-var actionGuid = flag.String("action-guid", "",
-	"a label to help track processes")
-var force = flag.Bool("force", false, "force an action to rerun")
+var (
+	port       = flag.Int("port", 0, "port for debug http server")
+	action     = flag.String("action", "", "management action to perform")
+	actionNode = flag.String("action-node", "", "path to zk node representing the action")
+	actionGuid = flag.String("action-guid", "", "a label to help track processes")
+	force      = flag.Bool("force", false, "force an action to rerun")
 
-// FIXME(msolomon) temporary, until we are starting mysql ourselves
-var mycnfFile = flag.String("mycnf-file", "/etc/my.cnf", "path to my.cnf")
+	mycnfFile = flag.String("mycnf-file", "/etc/my.cnf", "path to my.cnf")
+)
 
 func init() {
 	expvar.NewString("binary-name").Set("vtaction")
@@ -51,10 +50,6 @@ func main() {
 	jsonrpc.ServeRPC()
 	bsonrpc.ServeHTTP()
 	bsonrpc.ServeRPC()
-
-	// FIXME(ryszard): Bring this back when hijacking works with
-	// glog.
-	// relog.HijackStdio(logFile, logFile)
 
 	mycnf, mycnfErr := mysqlctl.ReadMycnf(*mycnfFile)
 	if mycnfErr != nil {

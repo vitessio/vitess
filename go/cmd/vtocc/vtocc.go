@@ -10,13 +10,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	_ "net/http/pprof"
-	"os"
 	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
-	"github.com/youtube/vitess/go/relog"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -32,7 +30,6 @@ var (
 	authConfig    = flag.String("auth-credentials", "", "name of file containing auth credentials")
 	configFile    = flag.String("config", "", "config file name")
 	dbConfigFile  = flag.String("dbconfig", "", "db config file name")
-	queryLog      = flag.String("querylog", "", "for testing: log all queries to this file")
 	customrules   = flag.String("customrules", "", "custom query rules file")
 	overridesFile = flag.String("schema-override", "", "schema overrides file")
 )
@@ -75,13 +72,6 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
-	if *queryLog != "" {
-		if f, err := os.OpenFile(*queryLog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644); err == nil {
-			ts.QueryLogger = relog.New(f, "", relog.DEBUG)
-		} else {
-			log.Fatalf("Error opening file %v: %v", *queryLog, err)
-		}
-	}
 	ts.SqlQueryLogger.ServeLogs("/debug/querylog")
 	ts.TxLogger.ServeLogs("/debug/txlog")
 	unmarshalFile(*configFile, &config)

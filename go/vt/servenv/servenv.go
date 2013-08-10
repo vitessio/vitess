@@ -53,10 +53,7 @@ func Init() {
 	if uid := os.Getuid(); uid == 0 {
 		log.Fatalf("servenv.Init: running this as root makes no sense")
 	}
-	// FIXME(msolomon) Can't hijack with a logfile because the file descriptor
-	// changes after every rotation. Might need to make the logfile more posix
-	// friendly.
-	//relog.HijackStdio(f, f)
+
 	runtime.MemProfileRate = *memProfileRate
 	gomaxprocs := os.Getenv("GOMAXPROCS")
 	if gomaxprocs == "" {
