@@ -30,7 +30,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	_ "github.com/youtube/vitess/go/snitch"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 )
 
