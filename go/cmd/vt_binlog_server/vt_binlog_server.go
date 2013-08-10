@@ -12,10 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
-	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -46,9 +43,7 @@ func main() {
 	proto.RegisterBinlogServer(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)
 
-	rpc.HandleHTTP()
-	bsonrpc.ServeHTTP()
-	bsonrpc.ServeRPC()
+	servenv.ServeRPC()
 
 	proc.ListenAndServe(fmt.Sprintf("%v", *port))
 	mysqlctl.DisableBinlogServerService(binlogServer)

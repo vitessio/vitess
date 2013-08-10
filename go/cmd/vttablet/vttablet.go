@@ -15,9 +15,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/auth"
-	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -30,8 +27,6 @@ var (
 	port          = flag.Int("port", 6509, "port for the server")
 	tabletPath    = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
 	mycnfFile     = flag.String("mycnf-file", "", "my.cnf file")
-	authConfig    = flag.String("auth-credentials", "", "name of file containing auth credentials")
-	customrules   = flag.String("customrules", "", "custom query rules file")
 	overridesFile = flag.String("schema-override", "", "schema overrides file")
 
 	securePort = flag.Int("secure-port", 0, "port for the secure server")
@@ -63,29 +58,18 @@ func main() {
 		log.Warning(err)
 	}
 
-	vttablet.InitQueryService(dbcfgs)
+	ts.InitQueryService()
 	mysqlctl.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
 	ts.RegisterCacheInvalidator()
 
 	// Depends on both query and updateStream.
-	if err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *customrules, *overridesFile); err != nil {
+	if err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *overridesFile); err != nil {
 		log.Fatal(err)
 	}
 
-	rpc.HandleHTTP()
-
-	// NOTE(szopa): Changing credentials requires a server
-	// restart.
-	if *authConfig != "" {
-		if err := auth.LoadCredentials(*authConfig); err != nil {
-			log.Errorf("could not load authentication credentials, not starting rpc servers: %v", err)
-		}
-		vttablet.ServeAuthRPC()
-	}
-
-	vttablet.ServeRPC()
+	servenv.ServeRPC()
 
 	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 

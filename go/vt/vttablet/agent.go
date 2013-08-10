@@ -2,18 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-vttablet package contains the meat of the vttablet binary.
-*/
+// Package vttablet contains the meat of the vttablet binary.
 package vttablet
 
-// This file handles the agent initialization
+// This file handles the agent initialization.
 
 import (
 	"encoding/json"
 	"expvar"
 	"fmt"
-	"io/ioutil"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
@@ -30,24 +27,6 @@ var (
 	binlogServer    *mysqlctl.BinlogServer
 	binlogPlayerMap *BinlogPlayerMap
 )
-
-func loadCustomRules(customrules string) *ts.QueryRules {
-	if customrules == "" {
-		return ts.NewQueryRules()
-	}
-
-	data, err := ioutil.ReadFile(customrules)
-	if err != nil {
-		log.Fatalf("Error reading file %v: %v", customrules, err)
-	}
-
-	qrs := ts.NewQueryRules()
-	err = qrs.UnmarshalJSON(data)
-	if err != nil {
-		log.Fatalf("Error unmarshaling query rules %v", err)
-	}
-	return qrs
-}
 
 func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 	var schemaOverrides []ts.SchemaOverride
@@ -67,8 +46,7 @@ func InitAgent(
 	mycnf *mysqlctl.Mycnf,
 	dbConfigsFile, dbCredentialsFile string,
 	port, securePort int,
-	mycnfFile, customRules string,
-	overridesFile string) (err error) {
+	mycnfFile, overridesFile string) (err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
@@ -110,7 +88,7 @@ func InitAgent(
 			if newTablet.Type == topo.TYPE_MASTER && oldTablet.Type != topo.TYPE_MASTER {
 				ts.DisallowQueries(false)
 			}
-			qrs := loadCustomRules(customRules)
+			qrs := ts.LoadCustomRules()
 			if dbcfgs.App.KeyRange.IsPartial() {
 				qr := ts.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", ts.QR_FAIL_QUERY)
 				qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)

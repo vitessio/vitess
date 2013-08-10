@@ -15,11 +15,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
-	rpc "github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/auth"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"github.com/youtube/vitess/go/rpcwrap/jsonrpc"
-	_ "github.com/youtube/vitess/go/snitch"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/servenv"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
@@ -27,26 +22,9 @@ import (
 
 var (
 	port          = flag.Int("port", 6510, "tcp port to serve on")
-	authConfig    = flag.String("auth-credentials", "", "name of file containing auth credentials")
-	configFile    = flag.String("config", "", "config file name")
 	dbConfigFile  = flag.String("dbconfig", "", "db config file name")
-	customrules   = flag.String("customrules", "", "custom query rules file")
 	overridesFile = flag.String("schema-override", "", "schema overrides file")
 )
-
-var config = ts.Config{
-	PoolSize:           16,
-	StreamPoolSize:     750,
-	TransactionCap:     20,
-	TransactionTimeout: 30,
-	MaxResultSize:      10000,
-	QueryCacheSize:     5000,
-	SchemaReloadTime:   30 * 60,
-	QueryTimeout:       0,
-	IdleTimeout:        30 * 60,
-	StreamBufferSize:   32 * 1024,
-	RowCache:           nil,
-}
 
 var dbconfig = dbconfigs.DBConfig{
 	Host:    "localhost",
@@ -56,50 +34,23 @@ var dbconfig = dbconfigs.DBConfig{
 
 var schemaOverrides []ts.SchemaOverride
 
-func serveAuthRPC() {
-	bsonrpc.ServeAuthRPC()
-	jsonrpc.ServeAuthRPC()
-}
-
-func serveRPC() {
-	jsonrpc.ServeHTTP()
-	jsonrpc.ServeRPC()
-	bsonrpc.ServeHTTP()
-	bsonrpc.ServeRPC()
-}
-
 func main() {
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
-	ts.SqlQueryLogger.ServeLogs("/debug/querylog")
-	ts.TxLogger.ServeLogs("/debug/txlog")
-	unmarshalFile(*configFile, &config)
-	data, _ := json.MarshalIndent(config, "", "  ")
-	log.Infof("config: %s\n", data)
 
 	unmarshalFile(*dbConfigFile, &dbconfig)
 	log.Infof("dbconfig: %s\n", dbconfig)
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
-	data, _ = json.MarshalIndent(schemaOverrides, "", "  ")
+	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
 	log.Infof("schemaOverrides: %s\n", data)
 
-	ts.RegisterQueryService(config)
-	qrs := loadCustomRules()
-	ts.AllowQueries(dbconfig, schemaOverrides, qrs)
+	ts.InitQueryService()
 
-	rpc.HandleHTTP()
+	ts.AllowQueries(dbconfig, schemaOverrides, ts.LoadCustomRules())
 
-	// NOTE(szopa): Changing credentials requires a server
-	// restart.
-	if *authConfig != "" {
-		if err := auth.LoadCredentials(*authConfig); err != nil {
-			log.Errorf("could not load authentication credentials, not starting rpc servers: %v", err)
-		}
-		serveAuthRPC()
-	}
-	serveRPC()
+	servenv.ServeRPC()
 
 	log.Infof("starting vtocc %v", *port)
 	s := proc.ListenAndServe(fmt.Sprintf("%v", *port))
@@ -113,24 +64,6 @@ func main() {
 	} else {
 		ts.DisallowQueries(false)
 	}
-}
-
-func loadCustomRules() (qrs *ts.QueryRules) {
-	if *customrules == "" {
-		return ts.NewQueryRules()
-	}
-
-	data, err := ioutil.ReadFile(*customrules)
-	if err != nil {
-		log.Fatalf("Error reading file %v: %v", *customrules, err)
-	}
-
-	qrs = ts.NewQueryRules()
-	err = qrs.UnmarshalJSON(data)
-	if err != nil {
-		log.Fatalf("Error unmarshaling query rules %v", err)
-	}
-	return qrs
 }
 
 func unmarshalFile(name string, val interface{}) {
