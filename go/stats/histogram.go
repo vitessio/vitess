@@ -105,6 +105,10 @@ func (h *Histogram) Counts() map[string]int64 {
 	return counts
 }
 
+func (h *Histogram) CountLabel() string {
+	return h.countLabel
+}
+
 func (h *Histogram) Count() (count int64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -113,6 +117,10 @@ func (h *Histogram) Count() (count int64) {
 		count += v
 	}
 	return
+}
+
+func (h *Histogram) TotalLabel() {
+	return h.totalLabel
 }
 
 func (h *Histogram) Total() (total int64) {
