@@ -78,9 +78,8 @@ class BaseTest(unittest.TestCase):
     klass.process = subprocess.Popen([klass.vtroot +"/bin/vtocc",
                                      "-port", str(klass.vtocc_port),
                                      "-auth-credentials", klass.credentials_file,
-                                     "-dbconfig", klass.dbconfig_file,
-                                     "-querylog", QUERYLOGFILE],
-                                    stderr=klass.vtstderr)
+                                     "-dbconfig", klass.dbconfig_file],
+                                     stderr=klass.vtstderr)
     time.sleep(1)
     connection = vt_occ2.VtOCCConnection("localhost:%s" % klass.vtocc_port, klass.dbconfig['keyspace'], klass.dbconfig['shard'], timeout=10, user=klass.user, password=klass.password)
     connection.dial()

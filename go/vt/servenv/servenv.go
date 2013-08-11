@@ -2,12 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package env defines and initializes command line flags that control
-// the runtime environment.
+// Package servenv contains functionality that is common for all
+// Vitess server programs.  It defines and initializes command line
+// flags that control the runtime environment.
 //
 // After a server program has called flag.Parse, it needs to call
 // env.Init to make env use the command line variables to initialize
-// the environment. It also needs to call env.Close when exiting.
+// the environment. It also needs to call env.Close before exiting.
 //
 // Note: If you need to plug in any custom initialization/cleanup for
 // a vitess distribution, register them using onInit and onClose. A
