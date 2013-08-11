@@ -58,6 +58,10 @@ func TestTransitions(t *testing.T) {
 	now = time.Date(2012, 12, 12, 12, 0, 30, 0, location)
 	s.setStateAt(1, now)
 
+	if s.Get() != 1 {
+		t.Errorf("want 1, got %d", s.Get())
+	}
+
 	// and ask for current status a bit later
 	now = time.Date(2012, 12, 12, 12, 1, 0, 0, location)
 	result = s.stringAt(now)

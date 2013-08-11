@@ -71,11 +71,11 @@ func (s *States) setStateAt(state int, now time.Time) {
 	s.since = now
 }
 
-// Get returns the current state and the time since.
-func (s *States) Get() (state int, since time.Time) {
+// Get returns the current state.
+func (s *States) Get() (state int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.state, s.since
+	return int64(s.state)
 }
 
 func (s *States) String() string {
