@@ -69,7 +69,7 @@ func (t *Timings) String() string {
 	return string(data)
 }
 
-func (t *Timings) Histograms(h map[string]*Histogram) {
+func (t *Timings) Histograms() (h map[string]*Histogram) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	h = make(map[string]*Histogram, len(t.histograms))
