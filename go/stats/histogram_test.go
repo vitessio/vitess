@@ -32,8 +32,14 @@ func TestHistogram(t *testing.T) {
 	if h.Count() != 10 {
 		t.Errorf("want 10, got %d", h.Count())
 	}
+	if h.CountLabel() != "Count" {
+		t.Errorf("want Count, got %s", h.CountLabel())
+	}
 	if h.Total() != 45 {
 		t.Errorf("want 45, got %d", h.Total())
+	}
+	if h.TotalLabel() != "Total" {
+		t.Errorf("want Total, got %s", h.TotalLabel())
 	}
 }
 

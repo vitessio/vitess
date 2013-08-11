@@ -119,7 +119,7 @@ func (h *Histogram) Count() (count int64) {
 	return
 }
 
-func (h *Histogram) TotalLabel() {
+func (h *Histogram) TotalLabel() string {
 	return h.totalLabel
 }
 
