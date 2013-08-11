@@ -35,7 +35,9 @@ func Register(nvh NewVarHook) {
 	newVarHook = nvh
 }
 
-func callHook(name string, v expvar.Var) {
+// Publish is expvar.Publish+hook
+func Publish(name string, v expvar.Var) {
+	expvar.Publish(name, v)
 	if newVarHook != nil {
 		newVarHook(name, v)
 	}
@@ -50,7 +52,6 @@ type Float struct {
 func NewFloat(name string) *Float {
 	v := new(Float)
 	Publish(name, v)
-	callHook(name, v)
 	return v
 }
 
@@ -85,7 +86,6 @@ type Int struct {
 func NewInt(name string) *Int {
 	v := new(Int)
 	Publish(name, v)
-	callHook(name, v)
 	return v
 }
 
@@ -114,7 +114,6 @@ type String struct {
 func NewString(name string) *String {
 	v := new(String)
 	Publish(name, v)
-	callHook(name, v)
 	return v
 }
 
@@ -133,12 +132,6 @@ func (v *String) Get() string {
 
 func (v *String) String() string {
 	return strconv.Quote(v.Get())
-}
-
-// Publish is expvar.Publish+hook
-func Publish(name string, v expvar.Var) {
-	expvar.Publish(name, v)
-	callHook(name, v)
 }
 
 type strFunc func() string

@@ -6,7 +6,6 @@ package stats
 
 import (
 	"encoding/json"
-	"expvar"
 	"sync"
 	"time"
 )
@@ -44,8 +43,7 @@ func NewRates(name string, countTracker CountTracker, samples int, interval time
 		interval:     interval,
 	}
 	if name != "" {
-		expvar.Publish(name, rt)
-		callHook(name, rt)
+		Publish(name, rt)
 	}
 	go rt.track()
 	return rt

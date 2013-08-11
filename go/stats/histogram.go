@@ -6,7 +6,6 @@ package stats
 
 import (
 	"bytes"
-	"expvar"
 	"fmt"
 	"sync"
 )
@@ -56,8 +55,7 @@ func NewGenericHistogram(name string, cutoffs []int64, labels []string, countLab
 		total:      0,
 	}
 	if name != "" {
-		expvar.Publish(name, h)
-		callHook(name, h)
+		Publish(name, h)
 	}
 	return h
 }

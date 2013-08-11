@@ -6,7 +6,6 @@ package stats
 
 import (
 	"bytes"
-	"expvar"
 	"fmt"
 	"sync"
 	"time"
@@ -39,8 +38,7 @@ func NewStates(name string, labels []string, startTime time.Time, initialState i
 		panic(fmt.Errorf("initialState out of range 0-%v: %v", len(s.labels), initialState))
 	}
 	if name != "" {
-		expvar.Publish(name, s)
-		callHook(name, s)
+		Publish(name, s)
 	}
 	return s
 }

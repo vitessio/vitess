@@ -6,7 +6,6 @@ package stats
 
 import (
 	"encoding/json"
-	"expvar"
 	"fmt"
 	"sync"
 	"time"
@@ -24,8 +23,7 @@ type Timings struct {
 func NewTimings(name string) *Timings {
 	t := &Timings{histograms: make(map[string]*Histogram)}
 	if name != "" {
-		expvar.Publish(name, t)
-		callHook(name, t)
+		Publish(name, t)
 	}
 	return t
 }

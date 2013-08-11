@@ -6,7 +6,6 @@ package stats
 
 import (
 	"bytes"
-	"expvar"
 	"fmt"
 	"sync"
 )
@@ -22,8 +21,7 @@ type Counters struct {
 func NewCounters(name string) *Counters {
 	c := &Counters{counts: make(map[string]int64)}
 	if name != "" {
-		expvar.Publish(name, c)
-		callHook(name, c)
+		Publish(name, c)
 	}
 	return c
 }
