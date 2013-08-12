@@ -47,16 +47,23 @@ class TopoOccTest(unittest.TestCase):
     utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0', auto_log=True)
     utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
 
-  def test_get_keyspaces(self):
+  def test_get_srv_keyspace_names(self):
     utils.run_vtctl('CreateKeyspace test_keyspace1')
     utils.run_vtctl('CreateKeyspace test_keyspace2')
-    self.assertItemsEqual(self.topo.get_keyspaces(), ["test_keyspace1", "test_keyspace2"])
+    t1 = tablet.Tablet(tablet_uid=1, cell="nj")
+    t1.init_tablet("master", "test_keyspace1", "0")
+    utils.run_vtctl('UpdateTabletAddrs %s -mysql-ip-addr 127.0.0.1:%s -secure-addr 127.0.0.1:%s' % (t1.tablet_alias, t1.mysql_port, t1.port + 500))
+    t2 = tablet.Tablet(tablet_uid=2, cell="nj")
+    t2.init_tablet("master", "test_keyspace2", "0")
+    utils.run_vtctl('UpdateTabletAddrs %s -mysql-ip-addr 127.0.0.1:%s -secure-addr 127.0.0.1:%s' % (t2.tablet_alias, t2.mysql_port, t2.port + 500))
+    utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
+    self.assertItemsEqual(self.topo.get_srv_keyspace_names('local'), ["test_keyspace1", "test_keyspace2"])
 
   def test_get_srv_keyspace(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
     t = tablet.Tablet(tablet_uid=1, cell="nj")
     t.init_tablet("master", "test_keyspace", "0")
-    utils.run_vtctl('UpdateTabletAddrs %s -mysql-ip-addr 127.0.0.1:%s -secure-addr 127.0.0.1:%s' % (t.zk_tablet_path, t.mysql_port, t.port + 500))
+    utils.run_vtctl('UpdateTabletAddrs %s -mysql-ip-addr 127.0.0.1:%s -secure-addr 127.0.0.1:%s' % (t.tablet_alias, t.mysql_port, t.port + 500))
     self.rebuild()
     reply = self.topo.get_srv_keyspace("test_nj", "test_keyspace")
     self.assertEqual(reply['TabletTypes'], ['master'])
@@ -65,7 +72,7 @@ class TopoOccTest(unittest.TestCase):
     utils.run_vtctl('CreateKeyspace test_keyspace')
     t = tablet.Tablet(tablet_uid=1, cell="nj")
     t.init_tablet("master", "test_keyspace", "0")
-    utils.run_vtctl('UpdateTabletAddrs %s -mysql-ip-addr 127.0.0.1:%s -secure-addr 127.0.0.1:%s' % (t.zk_tablet_path, t.mysql_port, t.port + 500))
+    utils.run_vtctl('UpdateTabletAddrs %s -mysql-ip-addr 127.0.0.1:%s -secure-addr 127.0.0.1:%s' % (t.tablet_alias, t.mysql_port, t.port + 500))
     self.rebuild()
     reply = self.topo.get_srv_keyspace("local", "test_keyspace")
     self.assertEqual(reply['TabletTypes'], ['master'])
@@ -294,8 +301,8 @@ class TestZkocc(unittest.TestCase):
     self.assertEqual('{"entries": [{"host": "my.cool.hostname", "named_port_map": {"_mysql": 3310, "_vtocc": 6711}, "uid": 0, "port": 0}]}', entry['Data'], 'Entry fix-up is wrong')
 
     # new style API tests
-    keyspaces = fkc.get_keyspaces()
-    self.assertEqual(keyspaces, ["test_keyspace"], "get_keyspaces doesn't work")
+    keyspaces = fkc.get_srv_keyspace_names('testing')
+    self.assertEqual(keyspaces, ["test_keyspace"], "get_srv_keyspace_names doesn't work")
     keyspace = fkc.get_srv_keyspace('testing', 'test_keyspace')
     self.assertEqual({
         'Shards': [{

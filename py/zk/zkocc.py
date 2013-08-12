@@ -68,8 +68,8 @@ class SimpleZkOccConnection(object):
   def children(self, path):
     return self._call('ZkReader.Children', path=path)
 
-  def get_keyspaces(self):
-    return self._call('TopoReader.GetKeyspaces')['Entries']
+  def get_srv_keyspace_names(self, cell):
+    return self._call('TopoReader.GetSrvKeyspaceNames', cell=cell)['Entries']
 
   def get_srv_keyspace(self, cell, keyspace):
     return self._call('TopoReader.GetSrvKeyspace', cell=cell, keyspace=keyspace)
@@ -156,8 +156,10 @@ class ZkOccConnection(object):
 
   # New API.
 
-  def get_keyspaces(self):
-    return self._call('get_keyspaces')
+  def get_srv_keyspace_names(self, cell):
+    if cell == 'local':
+      cell = self.local_cell
+    return self._call('get_srv_keyspace_names', cell=cell)
 
   def get_srv_keyspace(self, cell, keyspace):
     if cell == 'local':
@@ -255,12 +257,12 @@ class FakeZkOccConnection(object):
 
   # New API. For this fake object, it is based on the old API.
 
-  def get_keyspaces(self):
-    return self.children("/zk/local/vt/ns")['Children']
-
-  def get_srv_keyspace(self, cell, keyspace):
+  def get_srv_keyspace_names(self, cell):
     if cell == 'local':
       cell = self.local_cell
+    return self.children('/zk/' + cell + '/vt/ns')['Children']
+
+  def get_srv_keyspace(self, cell, keyspace):
     keyspace_path = '/zk/' + cell + '/vt/ns/' + keyspace
     try:
       data = self.get(keyspace_path)['Data']
