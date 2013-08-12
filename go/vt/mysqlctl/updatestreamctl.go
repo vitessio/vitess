@@ -55,7 +55,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 		"Enabled",
 	}, time.Now(), DISABLED)
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
-	estats.PublishFunc("UpdateStreamRpcService", func() string { return UpdateStreamRpcService.statsJSON() })
+	estats.PublishJSONFunc("UpdateStreamRpcService", UpdateStreamRpcService.statsJSON)
 }
 
 func logError() {

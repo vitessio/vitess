@@ -738,7 +738,7 @@ func NewBinlogServer(mycnf *Mycnf) *BinlogServer {
 // RegisterBinlogServerService registers the service for serving and stats.
 func RegisterBinlogServerService(blServer *BinlogServer) {
 	rpcwrap.RegisterAuthenticated(blServer)
-	estats.PublishFunc("BinlogServerRpcService", func() string { return blServer.statsJSON() })
+	estats.PublishJSONFunc("BinlogServerRpcService", blServer.statsJSON)
 }
 
 // EnableBinlogServerService enabled the service for serving.

@@ -88,7 +88,7 @@ func RegisterCacheInvalidator() {
 		"Disabled",
 		"Enabled",
 	}, time.Now(), DISABLED)
-	estats.PublishFunc("CacheInvalidationProcessor", func() string { return CacheInvalidationProcessor.statsJSON() })
+	estats.PublishJSONFunc("CacheInvalidationProcessor", CacheInvalidationProcessor.statsJSON)
 }
 
 func StartRowCacheInvalidation() {

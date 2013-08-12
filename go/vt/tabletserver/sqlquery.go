@@ -82,7 +82,7 @@ func NewSqlQuery(config Config) *SqlQuery {
 		stateName[OPEN],
 		stateName[SHUTTING_DOWN],
 	}, time.Now(), NOT_SERVING)
-	stats.PublishFunc("Voltron", func() string { return sq.statsJSON() })
+	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	return sq
 }
 

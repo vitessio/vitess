@@ -162,7 +162,7 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams) *Binlo
 }
 
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
-	stats.PublishFunc("BinlogPlayerMap", func() string { return blm.statsJSON() })
+	stats.PublishJSONFunc("BinlogPlayerMap", blm.statsJSON)
 }
 
 func (blm *BinlogPlayerMap) statsJSON() string {
