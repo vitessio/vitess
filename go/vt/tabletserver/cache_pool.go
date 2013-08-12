@@ -176,42 +176,42 @@ func (cp *CachePool) StatsJSON() string {
 }
 
 func (cp *CachePool) Capacity() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.Capacity()
 }
 
 func (cp *CachePool) Available() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.Available()
 }
 
 func (cp *CachePool) MaxCap() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.MaxCap()
 }
 
 func (cp *CachePool) WaitCount() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.WaitCount()
 }
 
 func (cp *CachePool) WaitTime() time.Duration {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.WaitTime()
 }
 
 func (cp *CachePool) IdleTimeout() time.Duration {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.IdleTimeout()

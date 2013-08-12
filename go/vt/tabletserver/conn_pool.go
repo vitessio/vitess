@@ -110,42 +110,42 @@ func (cp *ConnectionPool) StatsJSON() string {
 }
 
 func (cp *ConnectionPool) Capacity() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.Capacity()
 }
 
 func (cp *ConnectionPool) Available() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.Available()
 }
 
 func (cp *ConnectionPool) MaxCap() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.MaxCap()
 }
 
 func (cp *ConnectionPool) WaitCount() int64 {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.WaitCount()
 }
 
 func (cp *ConnectionPool) WaitTime() time.Duration {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.WaitTime()
 }
 
 func (cp *ConnectionPool) IdleTimeout() time.Duration {
-	if cp == nil {
+	if cp.pool == nil {
 		return 0
 	}
 	return cp.pool.IdleTimeout()
