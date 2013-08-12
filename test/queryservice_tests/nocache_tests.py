@@ -113,14 +113,17 @@ class TestNocache(framework.TestCase):
     self.env.execute("select * from vtocc_test where intval=%(ival)s", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
+    self.assertEqual(vstart.mget("VTQueryCacheLength", 0)+1, vend.VTQueryCacheLength)
     # This should not increase the query cache size
     self.env.execute("select * from vtocc_test where intval=%(ival)s /* trailing comment */", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
+    self.assertEqual(vstart.mget("VTQueryCacheLength", 0)+1, vend.VTQueryCacheLength)
     # This should also not increase the query cache size
     self.env.execute("select * from vtocc_test where intval=%(ival)s /* trailing comment1 */ /* comment2 */", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
+    self.assertEqual(vstart.mget("VTQueryCacheLength", 0)+1, vend.VTQueryCacheLength)
 
   def test_for_update(self):
     try:
@@ -144,10 +147,13 @@ class TestNocache(framework.TestCase):
     self.env.execute("select 1 from dual")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 1)
+    self.assertEqual(vend.VTConnPoolCapacity, 1)
     self.assertEqual(vstart.Voltron.ConnPool.WaitCount+1, vend.Voltron.ConnPool.WaitCount)
+    self.assertEqual(vstart.VTConnPoolWaitCount+1, vend.VTConnPoolWaitCount)
     self.env.execute("set vt_pool_size=16")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.Capacity, 16)
+    self.assertEqual(vend.VTConnPoolCapacity, 16)
 
   def test_transaction_cap(self):
     self.env.execute("set vt_transaction_cap=1")
@@ -167,9 +173,11 @@ class TestNocache(framework.TestCase):
     self.env.conn.commit()
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 1)
+    self.assertEqual(vend.VTTxPoolCapacity, 1)
     self.env.execute("set vt_transaction_cap=20")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 20)
+    self.assertEqual(vend.VTTxPoolCapacity, 20)
     self.assertEqual(vstart.mget("Errors.TxPoolFull", 0) + 1, vend.Errors.TxPoolFull)
 
   def test_transaction_timeout(self):
@@ -191,10 +199,12 @@ class TestNocache(framework.TestCase):
     self.assertEqual(txlog[4], "kill")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 250000000)
+    self.assertEqual(vend.VTActiveTxPoolTimeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)
     self.env.execute("set vt_transaction_timeout=30")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 30000000000)
+    self.assertEqual(vend.VTActiveTxPoolTimeout, 30000000000)
 
   def test_query_cache(self):
     self.env.execute("set vt_query_cache_size=1")
@@ -203,29 +213,40 @@ class TestNocache(framework.TestCase):
     self.env.execute("select * from vtocc_test where intval=%(ival2)s", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.QueryCache.Length, 1)
+    self.assertEqual(vend.VTQueryCacheLength, 1)
     self.assertEqual(vend.Voltron.QueryCache.Size, 1)
+    self.assertEqual(vend.VTQueryCacheSize, 1)
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 1)
+    self.assertEqual(vend.VTQueryCacheCapacity, 1)
     self.env.execute("set vt_query_cache_size=5000")
     self.env.execute("select * from vtocc_test where intval=%(ival1)s", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.QueryCache.Length, 2)
+    self.assertEqual(vend.VTQueryCacheLength, 2)
     self.assertEqual(vend.Voltron.QueryCache.Size, 2)
+    self.assertEqual(vend.VTQueryCacheSize, 2)
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 5000)
+    self.assertEqual(vend.VTQueryCacheCapacity, 5000)
     self.env.execute("select * from vtocc_test where intval=1")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.QueryCache.Length, 3)
+    self.assertEqual(vend.VTQueryCacheLength, 3)
     self.assertEqual(vend.Voltron.QueryCache.Size, 3)
+    self.assertEqual(vend.VTQueryCacheSize, 3)
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 5000)
+    self.assertEqual(vend.VTQueryCacheCapacity, 5000)
 
   def test_schema_reload_time(self):
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.SchemaReloadTime, 1800 * 1e9)
+    self.assertEqual(vend.VTSchemaReloadTime, 1800 * 1e9)
     mcu = self.env.mysql_conn.cursor()
     mcu.execute("create table vtocc_temp(intval int)")
     # This should cause a reload
     self.env.execute("set vt_schema_reload_time=600")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.SchemaReloadTime, 600 * 1e9)
+    self.assertEqual(vend.VTSchemaReloadTime, 600 * 1e9)
     try:
       for i in range(10):
         try:
@@ -245,6 +266,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("set vt_max_result_size=2")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.MaxResultSize, 2)
+    self.assertEqual(vend.VTMaxResultSize, 2)
     try:
       self.env.execute("select * from vtocc_test")
     except dbexceptions.DatabaseError as e:
@@ -254,6 +276,7 @@ class TestNocache(framework.TestCase):
     self.env.execute("set vt_max_result_size=10000")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.MaxResultSize, 10000)
+    self.assertEqual(vend.VTMaxResultSize, 10000)
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
@@ -281,10 +304,12 @@ class TestNocache(framework.TestCase):
 
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActivePool.Timeout, 250000000)
+    self.assertEqual(vend.VTActivePoolTimeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Queries", 0)+1, vend.Kills.Queries)
     self.env.execute("set vt_query_timeout=30")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActivePool.Timeout, 30000000000)
+    self.assertEqual(vend.VTActivePoolTimeout, 30000000000)
 
   def test_idle_timeout(self):
     self.env.execute("set vt_idle_timeout=1")
@@ -292,11 +317,15 @@ class TestNocache(framework.TestCase):
     self.env.execute("select 1 from dual")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1000000000)
+    self.assertEqual(vend.VTConnPoolIdleTimeout, 1000000000)
     self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1000000000)
+    self.assertEqual(vend.VTTxPoolIdleTimeout, 1000000000)
     self.env.execute("set vt_idle_timeout=1800")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1800000000000)
+    self.assertEqual(vend.VTConnPoolIdleTimeout, 1800000000000)
     self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1800000000000)
+    self.assertEqual(vend.VTTxPoolIdleTimeout, 1800000000000)
 
   def test_consolidation(self):
     vstart = self.env.debug_vars()
