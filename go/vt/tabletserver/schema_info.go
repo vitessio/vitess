@@ -94,13 +94,13 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 		reloadTime:     reloadTime,
 		ticks:          timer.NewTimer(reloadTime),
 	}
-	stats.Publish("VTQueryCacheLength", stats.IntFunc(si.queries.Length))
-	stats.Publish("VTQueryCacheSize", stats.IntFunc(si.queries.Size))
-	stats.Publish("VTQueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
-	stats.Publish("VTQueryCacheOldest", stats.StringFunc(func() string {
+	stats.Publish("QueryCacheLength", stats.IntFunc(si.queries.Length))
+	stats.Publish("QueryCacheSize", stats.IntFunc(si.queries.Size))
+	stats.Publish("QueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
+	stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 		return fmt.Sprintf("%v", si.queries.Oldest())
 	}))
-	stats.Publish("VTSchemaReloadTime", stats.DurationFunc(func() time.Duration {
+	stats.Publish("SchemaReloadTime", stats.DurationFunc(func() time.Duration {
 		return si.reloadTime
 	}))
 	http.Handle("/debug/query_plans", si)

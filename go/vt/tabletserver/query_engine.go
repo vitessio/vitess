@@ -68,19 +68,19 @@ type CacheInvalidator interface {
 
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.cachePool = NewCachePool("VTCachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.cachePool = NewCachePool("CachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
-	qe.connPool = NewConnectionPool("VTConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.streamConnPool = NewConnectionPool("VTStreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.reservedPool = NewReservedPool("VTReservedPool")
-	qe.txPool = NewConnectionPool("VTTxPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
-	qe.activeTxPool = NewActiveTxPool("VTActiveTxPool", time.Duration(config.TransactionTimeout*1e9))
-	qe.activePool = NewActivePool("VTActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
+	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
+	qe.reservedPool = NewReservedPool("ReservedPool")
+	qe.txPool = NewConnectionPool("TxPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
+	qe.activeTxPool = NewActiveTxPool("ActiveTxPool", time.Duration(config.TransactionTimeout*1e9))
+	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
-	stats.Publish("VTMaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
-	stats.Publish("VTStreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
+	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	queryStats = stats.NewTimings("Queries")
 	stats.NewRates("QPS", queryStats, 15, 60e9)
 	waitStats = stats.NewTimings("Waits")
