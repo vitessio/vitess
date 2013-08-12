@@ -143,6 +143,7 @@ class VttabletTestEnv(TestEnv):
 
   def setUp(self):
     utils.zk_setup()
+    utils.setup()
     if self.vttop is None:
       raise EnvironmentError("VTTOP not defined")
     if self.vtroot is None:
@@ -239,6 +240,8 @@ class VtoccTestEnv(TestEnv):
       raise EnvironmentError("VTTOP not defined")
     if self.vtroot is None:
       raise EnvironmentError("VTROOT not defined")
+
+    utils.setup()
 
     framework.execute('go build', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/vtocc')
     framework.execute('go build', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
