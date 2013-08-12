@@ -360,10 +360,7 @@ class Tablet(object):
     if self.proc is not None:
       Tablet.tablets_running -= 1
       self.proc.terminate()
-      # FIXME(alainjobart) this wait() takes a long time. It shouldn't.
-      # We have to investigate why. In the meantime, commenting it out,
-      # as it breaks the timing of some tests.
-      # self.proc.wait()
+      self.proc.wait()
       self.proc = None
 
   @classmethod
