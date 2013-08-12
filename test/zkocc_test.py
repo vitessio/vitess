@@ -286,8 +286,8 @@ def main():
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
   parser.add_option('--skip-teardown', action='store_true')
   parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
+  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
+  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
   parser.add_option("--no-build", action="store_true")
 
   (options, args) = parser.parse_args()

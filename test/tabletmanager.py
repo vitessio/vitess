@@ -19,8 +19,6 @@ import MySQLdb
 import utils
 import tablet
 
-devnull = open('/dev/null', 'w')
-
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
 tablet_41983 = tablet.Tablet(41983)
@@ -416,11 +414,13 @@ index by_msg (msg)
   # try to get the schema on the source, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62044.tablet_alias,
+                             log_level='INFO',
                              trap_output=True)
   if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output: %s' % err)
   out, err = utils.run_vtctl('GetSchema ' +
                              tablet_62044.tablet_alias,
+                             log_level='INFO',
                              trap_output=True)
   if 'vt_insert_view' in err:
     raise utils.TestError('Unexpected GetSchema output: %s' % err)
@@ -449,6 +449,7 @@ index by_msg (msg)
   # try to get the schema on multi-restored guy, make sure the view is there
   out, err = utils.run_vtctl('GetSchema --include-views ' +
                              tablet_62344.tablet_alias,
+                             log_level='INFO',
                              trap_output=True)
   if 'vt_insert_view' not in err or 'VIEW `{{.DatabaseName}}`.`vt_insert_view` AS select' not in err:
     raise utils.TestError('Unexpected GetSchema --include-views output after multirestore: %s' % err)
@@ -601,7 +602,7 @@ def run_test_restart_during_action():
   utils.run_vtctl('Ping ' + tablet_62344.tablet_alias)
 
   # schedule long action
-  utils.run_vtctl('-no-wait Sleep %s 15s' % tablet_62344.tablet_alias, stdout=devnull)
+  utils.run_vtctl('-no-wait Sleep %s 15s' % tablet_62344.tablet_alias, stdout=utils.devnull)
   # ping blocks until the sleep finishes unless we have a schedule race
   action_path, _ = utils.run_vtctl('-no-wait Ping ' + tablet_62344.tablet_alias, trap_output=True)
 
@@ -783,7 +784,7 @@ def _run_test_reparent_graceful(shard_id):
   _check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
 
   # Run this to make sure it succeeds.
-  utils.run_vtctl('ShardReplicationPositions test_keyspace/%s' % shard_id, stdout=devnull)
+  utils.run_vtctl('ShardReplicationPositions test_keyspace/%s' % shard_id, stdout=utils.devnull)
 
   # Perform a graceful reparent operation.
   utils.pause("graceful ReparentShard?")

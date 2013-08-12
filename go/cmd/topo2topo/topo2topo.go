@@ -36,7 +36,6 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	flag.Set("alsologtostderr", "true")
 
 	if *fromTopo == "" || *toTopo == "" {
 		log.Fatalf("Need both from and to topo")

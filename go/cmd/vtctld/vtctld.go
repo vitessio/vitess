@@ -15,6 +15,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )

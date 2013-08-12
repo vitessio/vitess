@@ -244,13 +244,6 @@ var resolveWildcards = func(wr *wrangler.Wrangler, args []string) ([]string, err
 }
 
 func init() {
-	// FIXME(ryszard): vtctl and friends should not use logging to
-	// communicate with the user.
-	alsoLogToStdErr := flag.Lookup("alsologtostderr")
-	if alsoLogToStdErr != nil {
-		alsoLogToStdErr.Value.Set("true")
-	}
-
 	// FIXME(msolomon) need to send all of this to stdout
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
@@ -1406,7 +1399,6 @@ func main() {
 	installSignalHandlers()
 
 	startMsg := fmt.Sprintf("USER=%v SUDO_USER=%v %v", os.Getenv("USER"), os.Getenv("SUDO_USER"), strings.Join(os.Args, " "))
-	flag.Set("alsologtostderr", "true")
 
 	if syslogger, err := syslog.New(syslog.LOG_INFO, "vtctl "); err == nil {
 		syslogger.Info(startMsg)

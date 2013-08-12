@@ -18,8 +18,6 @@ import utils
 from vtdb import update_stream_service
 from vtdb import vt_occ2
 
-devnull = open('/dev/null', 'w')
-
 master_tablet = tablet.Tablet(62344)
 replica_tablet = tablet.Tablet(62345)
 master_host = "localhost:%u" % master_tablet.port
