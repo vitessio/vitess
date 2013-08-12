@@ -228,6 +228,8 @@ class FakeZkOccConnection(object):
   def close(self):
     pass
 
+  # Old, deprecated API.
+
   def get(self, path):
     path = self._resolve_path(path)
     if not path in self.data:
@@ -250,3 +252,31 @@ class FakeZkOccConnection(object):
         'Data':'',
         'Children':children
         }
+
+  # New API. For this fake object, it is based on the old API.
+
+  def get_keyspaces(self):
+    return self.children("/zk/local/vt/ns")['Children']
+
+  def get_srv_keyspace(self, cell, keyspace):
+    if cell == 'local':
+      cell = self.local_cell
+    keyspace_path = '/zk/' + cell + '/vt/ns/' + keyspace
+    try:
+      data = self.get(keyspace_path)['Data']
+      if not data:
+        raise ZkOccError("FakeZkOccConnection: empty keyspace: " + keyspace)
+      return json.loads(data)
+    except Exception as e:
+      raise ZkOccError('FakeZkOccConnection: invalid keyspace', keyspace, e)
+
+  def get_end_points(self, cell, keyspace, shard, tablet_type):
+    zk_path = os.path.join('/zk', cell, 'vt', 'ns', keyspace, shard,
+                           tablet_type)
+    try:
+      data = self.get(zk_path)['Data']
+      if not data:
+        raise ZkOccError("FakeZkOccConnection: empty end point: " + zk_path)
+      return json.loads(data)
+    except Exception as e:
+      raise ZkOccError('FakeZkOccConnection: invalid end point', zk_path, e)

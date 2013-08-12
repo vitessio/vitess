@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import datetime
+import json
 import logging
 import optparse
 import os
@@ -88,25 +89,25 @@ class TestZkocc(unittest.TestCase):
   longMessage = True
   def setUp(self):
     utils.zk_wipe()
-    utils.run(utils.vtroot+'/bin/zk touch -p /zk/test_nj/zkocc1')
-    utils.run(utils.vtroot+'/bin/zk touch -p /zk/test_nj/zkocc2')
+    utils.run(utils.vtroot+'/bin/zk touch -p /zk/test_nj/vt/zkocc1')
+    utils.run(utils.vtroot+'/bin/zk touch -p /zk/test_nj/vt/zkocc2')
     fd = tempfile.NamedTemporaryFile(dir=utils.tmp_root, delete=False)
     filename1 = fd.name
     fd.write("Test data 1")
     fd.close()
-    utils.run(utils.vtroot+'/bin/zk cp '+filename1+' /zk/test_nj/zkocc1/data1')
+    utils.run(utils.vtroot+'/bin/zk cp '+filename1+' /zk/test_nj/vt/zkocc1/data1')
 
     fd = tempfile.NamedTemporaryFile(dir=utils.tmp_root, delete=False)
     filename2 = fd.name
     fd.write("Test data 2")
     fd.close()
-    utils.run(utils.vtroot+'/bin/zk cp '+filename2+' /zk/test_nj/zkocc1/data2')
+    utils.run(utils.vtroot+'/bin/zk cp '+filename2+' /zk/test_nj/vt/zkocc1/data2')
 
     fd = tempfile.NamedTemporaryFile(dir=utils.tmp_root, delete=False)
     filename3 = fd.name
     fd.write("Test data 3")
     fd.close()
-    utils.run(utils.vtroot+'/bin/zk cp '+filename3+' /zk/test_nj/zkocc1/data3')
+    utils.run(utils.vtroot+'/bin/zk cp '+filename3+' /zk/test_nj/vt/zkocc1/data3')
 
   def _check_zk_output(self, cmd, expected):
     # directly for sanity
@@ -144,7 +145,7 @@ class TestZkocc(unittest.TestCase):
 
     # FIXME(ryszard): This can be changed into a self.assertRaises.
     try:
-      bad_zkocc_client.get("/zk/test_nj/zkocc1/data1")
+      bad_zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
       self.fail('exception expected')
     except zkocc.ZkOccError as e:
       if str(e) != "Cannot dial to any server":
@@ -154,10 +155,10 @@ class TestZkocc(unittest.TestCase):
 
     # get test
     utils.prog_compile(['zkclient2'])
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/zkocc1/data1' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqual(err, "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=false, Stale=false)\n")
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/vt/zkocc1/data1' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqual(err, "/zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=false, Stale=false)\n")
 
-    zk_data = zkocc_client.get("/zk/test_nj/zkocc1/data1")
+    zk_data = zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
     self.assertDictContainsSubset({'Data': "Test data 1",
                                    'Cached': True,
                                    'Stale': False,},
@@ -165,12 +166,12 @@ class TestZkocc(unittest.TestCase):
     self.assertDictContainsSubset({'NumChildren': 0, 'Version': 0}, zk_data['Stat'])
 
     # getv test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2 /zk/test_nj/zkocc1/data3' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqualNormalized(err, """[0] /zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)
-  [1] /zk/test_nj/zkocc1/data2 = Test data 2 (NumChildren=0, Version=0, Cached=false, Stale=false)
-  [2] /zk/test_nj/zkocc1/data3 = Test data 3 (NumChildren=0, Version=0, Cached=false, Stale=false)
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/vt/zkocc1/data1 /zk/test_nj/vt/zkocc1/data2 /zk/test_nj/vt/zkocc1/data3' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqualNormalized(err, """[0] /zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)
+  [1] /zk/test_nj/vt/zkocc1/data2 = Test data 2 (NumChildren=0, Version=0, Cached=false, Stale=false)
+  [2] /zk/test_nj/vt/zkocc1/data3 = Test data 3 (NumChildren=0, Version=0, Cached=false, Stale=false)
   """)
-    zk_data = zkocc_client.getv(["/zk/test_nj/zkocc1/data1", "/zk/test_nj/zkocc1/data2", "/zk/test_nj/zkocc1/data3"])['Nodes']
+    zk_data = zkocc_client.getv(["/zk/test_nj/vt/zkocc1/data1", "/zk/test_nj/vt/zkocc1/data2", "/zk/test_nj/vt/zkocc1/data3"])['Nodes']
     self.assertEqual(len(zk_data), 3)
     for i, d in enumerate(zk_data):
       self.assertEqual(d['Data'], 'Test data %s' % (i + 1))
@@ -179,19 +180,19 @@ class TestZkocc(unittest.TestCase):
       self.assertDictContainsSubset({'NumChildren': 0, 'Version': 0}, d['Stat'])
 
     # children test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode children /zk/test_nj' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqualNormalized(err, """Path = /zk/test_nj
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode children /zk/test_nj/vt' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqualNormalized(err, """Path = /zk/test_nj/vt
   Child[0] = zkocc1
   Child[1] = zkocc2
   NumChildren = 2
-  CVersion = 4
+  CVersion = 2
   Cached = false
   Stale = false
   """)
 
     # zk command tests
-    self._check_zk_output("cat /zk/test_nj/zkocc1/data1", "Test data 1")
-    self._check_zk_output("ls -l /zk/test_nj/zkocc1", """total: 3
+    self._check_zk_output("cat /zk/test_nj/vt/zkocc1/data1", "Test data 1")
+    self._check_zk_output("ls -l /zk/test_nj/vt/zkocc1", """total: 3
   -rw-rw-rw- zk zk       11  %s data1
   -rw-rw-rw- zk zk       11  %s data2
   -rw-rw-rw- zk zk       11  %s data3
@@ -200,14 +201,14 @@ class TestZkocc(unittest.TestCase):
          _format_time(zk_data[2]['Stat']['MTime'])))
 
     # test /zk/local is not resolved and rejected
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/local/zkocc1/data1' % utils.zkocc_port_base, trap_output=True, raise_on_error=False)
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/local/vt/zkocc1/data1' % utils.zkocc_port_base, trap_output=True, raise_on_error=False)
     self.assertIn("zkocc: cannot resolve local cell", err)
 
     # start a background process to query the same value over and over again
     # while we kill the zk server and restart it
     outfd = tempfile.NamedTemporaryFile(dir=utils.tmp_root, delete=False)
     filename = outfd.name
-    querier = utils.run_bg('/bin/bash -c "while true ; do '+utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/zkocc1/data1 ; sleep 0.1 ; done"' % utils.zkocc_port_base, stderr=outfd.file)
+    querier = utils.run_bg('/bin/bash -c "while true ; do '+utils.vtroot+'/bin/zkclient2 -server localhost:%u /zk/test_nj/vt/zkocc1/data1 ; sleep 0.1 ; done"' % utils.zkocc_port_base, stderr=outfd.file)
     outfd.close()
     time.sleep(1)
 
@@ -223,9 +224,9 @@ class TestZkocc(unittest.TestCase):
     fd = open(filename, "r")
     state = 0
     for line in fd:
-      if line == "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)\n":
+      if line == "/zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)\n":
         stale = False
-      elif line == "/zk/test_nj/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=true)\n":
+      elif line == "/zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=true)\n":
         stale = True
       else:
         raise utils.TestError('unexpected line: ', line)
@@ -246,7 +247,7 @@ class TestZkocc(unittest.TestCase):
     # check that after the server is gone, the python client fails correctly
     logging.getLogger().setLevel(logging.ERROR)
     try:
-      zkocc_client.get("/zk/test_nj/zkocc1/data1")
+      zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
       self.fail('exception expected')
     except zkocc.ZkOccError as e:
       if str(e) != "Cannot dial to any server":
@@ -257,7 +258,7 @@ class TestZkocc(unittest.TestCase):
     # preload the test_nj cell
     zkocc_14850 = utils.zkocc_start()
 
-    qpser = utils.run_bg(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode qps /zk/test_nj/zkocc1/data1 /zk/test_nj/zkocc1/data2' % utils.zkocc_port_base)
+    qpser = utils.run_bg(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode qps /zk/test_nj/vt/zkocc1/data1 /zk/test_nj/vt/zkocc1/data2' % utils.zkocc_port_base)
     time.sleep(10)
     utils.kill_sub_process(qpser)
 
@@ -281,6 +282,35 @@ class TestZkocc(unittest.TestCase):
     self.assertEqual(v['ZkReader']['UnknownCellErrors'], 0, 'unexpected UnknownCellErrors')
     utils.zkocc_kill(zkocc_14850)
 
+  def test_fake_zkocc_connection(self):
+    fkc = zkocc.FakeZkOccConnection.from_data_path("testing", "fake_zkocc_config.json")
+    fkc.replace_zk_data("3306", "3310")
+    fkc.replace_zk_data("127.0.0.1", "my.cool.hostname")
+
+    # old style API tests
+    keyspaces = fkc.children("/zk/testing/vt/ns")
+    self.assertEqual(keyspaces['Children'], ["test_keyspace"], "children doesn't work")
+    entry = fkc.get("/zk/testing/vt/ns/test_keyspace/0/master")
+    self.assertEqual('{"entries": [{"host": "my.cool.hostname", "named_port_map": {"_mysql": 3310, "_vtocc": 6711}, "uid": 0, "port": 0}]}', entry['Data'], 'Entry fix-up is wrong')
+
+    # new style API tests
+    keyspaces = fkc.get_keyspaces()
+    self.assertEqual(keyspaces, ["test_keyspace"], "get_keyspaces doesn't work")
+    keyspace = fkc.get_srv_keyspace('testing', 'test_keyspace')
+    self.assertEqual({
+        'Shards': [{
+            'AddrsByType': None,
+            'KeyRange': {'End': '', 'Start': ''},
+            'ReadOnly': False}],
+        'TabletTypes': ['rdonly', 'replica', 'master']},
+                     keyspace, "keyspace reading is wrong")
+    end_points = fkc.get_end_points("testing", "test_keyspace", "0", "master")
+    self.assertEqual({
+        'entries': [{'host': 'my.cool.hostname',
+                     'named_port_map': {'_mysql': 3310, '_vtocc': 6711},
+                     'port': 0,
+                     'uid': 0}]},
+                     end_points, "end points are wrong")
 
 def main():
   parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
