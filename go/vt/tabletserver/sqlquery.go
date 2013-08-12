@@ -39,7 +39,7 @@ const (
 	SHUTTING_DOWN
 )
 
-var stateName = map[int32]string{
+var stateName = map[int64]string{
 	NOT_SERVING:   "NOT_SERVING",
 	CLOSED:        "CLOSED",
 	CONNECTING:    "CONNECTING",
@@ -62,7 +62,7 @@ type SqlQuery struct {
 	// You should use the statemu lock if you want to execute a transition
 	// where you don't want the state to change from the time you've read it.
 	statemu sync.Mutex
-	state   sync2.AtomicInt32
+	state   sync2.AtomicInt64
 	states  *stats.States
 
 	qe        *QueryEngine
@@ -86,10 +86,10 @@ func NewSqlQuery(config Config) *SqlQuery {
 	return sq
 }
 
-func (sq *SqlQuery) setState(state int32) {
+func (sq *SqlQuery) setState(state int64) {
 	log.Infof("SqlQuery state: %v -> %v", stateName[sq.state.Get()], stateName[state])
 	sq.state.Set(state)
-	sq.states.SetState(int(state))
+	sq.states.SetState(state)
 }
 
 func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {

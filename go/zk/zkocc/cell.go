@@ -69,7 +69,7 @@ type zkCell struct {
 	// connection related variables
 	mutex   sync.Mutex // For connection & state only
 	zconn   zk.Conn
-	state   int
+	state   int64
 	ready   *sync.Cond // will be signaled at connection time
 	lastErr error      // last connection error
 	states  *stats.States
@@ -90,7 +90,7 @@ func newZkCell(name, zkaddr string) *zkCell {
 	return result
 }
 
-func (zcell *zkCell) setState(state int) {
+func (zcell *zkCell) setState(state int64) {
 	zcell.state = state
 	zcell.states.SetState(state)
 }

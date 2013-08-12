@@ -73,7 +73,7 @@ type BinlogServer struct {
 	dbname   string
 	mycnf    *Mycnf
 	blsStats *blsStats
-	state    sync2.AtomicInt32
+	state    sync2.AtomicInt64
 	states   *estats.States
 
 	// interrupted is used to stop the serving clients when the service
@@ -712,9 +712,9 @@ func (blServer *BinlogServer) isServiceEnabled() bool {
 	return blServer.state.Get() == BINLOG_SERVER_ENABLED
 }
 
-func (blServer *BinlogServer) setState(state int32) {
+func (blServer *BinlogServer) setState(state int64) {
 	blServer.state.Set(state)
-	blServer.states.SetState(int(state))
+	blServer.states.SetState(state)
 }
 
 func (blServer *BinlogServer) statsJSON() string {
