@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/memcache"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 )
 
@@ -47,8 +48,16 @@ func (cache *Cache) Recycle() {
 	}
 }
 
-func NewCachePool(commandLine []string, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
+func NewCachePool(name string, commandLine []string, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
 	cp := &CachePool{idleTimeout: idleTimeout}
+	if name != "" {
+		stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
+		stats.Publish(name+"Available", stats.IntFunc(cp.Available))
+		stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
+		stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
+		stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
+		stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+	}
 	http.Handle(statsURL, cp)
 
 	if len(commandLine) == 0 {
@@ -164,6 +173,48 @@ func (cp *CachePool) StatsJSON() string {
 		return "{}"
 	}
 	return cp.pool.StatsJSON()
+}
+
+func (cp *CachePool) Capacity() int64 {
+	if cp == nil {
+		return 0
+	}
+	return cp.pool.Capacity()
+}
+
+func (cp *CachePool) Available() int64 {
+	if cp == nil {
+		return 0
+	}
+	return cp.pool.Available()
+}
+
+func (cp *CachePool) MaxCap() int64 {
+	if cp == nil {
+		return 0
+	}
+	return cp.pool.MaxCap()
+}
+
+func (cp *CachePool) WaitCount() int64 {
+	if cp == nil {
+		return 0
+	}
+	return cp.pool.WaitCount()
+}
+
+func (cp *CachePool) WaitTime() time.Duration {
+	if cp == nil {
+		return 0
+	}
+	return cp.pool.WaitTime()
+}
+
+func (cp *CachePool) IdleTimeout() time.Duration {
+	if cp == nil {
+		return 0
+	}
+	return cp.pool.IdleTimeout()
 }
 
 func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {

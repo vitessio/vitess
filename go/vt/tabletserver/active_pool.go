@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/timer"
 )
@@ -21,13 +22,19 @@ type ActivePool struct {
 	ticks    *timer.Timer
 }
 
-func NewActivePool(queryTimeout, idleTimeout time.Duration) *ActivePool {
-	return &ActivePool{
+func NewActivePool(name string, queryTimeout, idleTimeout time.Duration) *ActivePool {
+	ap := &ActivePool{
 		pool:     pools.NewNumbered(),
 		timeout:  sync2.AtomicDuration(queryTimeout),
-		connPool: NewConnectionPool(1, idleTimeout),
+		connPool: NewConnectionPool("", 1, idleTimeout),
 		ticks:    timer.NewTimer(queryTimeout / 10),
 	}
+	stats.Publish(name+"Size", stats.IntFunc(ap.pool.Size))
+	stats.Publish(
+		name+"Timeout",
+		stats.DurationFunc(func() time.Duration { return ap.timeout.Get() }),
+	)
+	return ap
 }
 
 func (ap *ActivePool) Open(ConnFactory CreateConnectionFunc) {
@@ -85,6 +92,6 @@ func (ap *ActivePool) StatsJSON() string {
 	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
 }
 
-func (ap *ActivePool) Stats() (size int, timeout time.Duration) {
-	return ap.pool.Stats(), ap.Timeout()
+func (ap *ActivePool) Stats() (size int64, timeout time.Duration) {
+	return ap.pool.Size(), ap.Timeout()
 }

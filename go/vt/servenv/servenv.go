@@ -115,7 +115,6 @@ func Close() {
 	for _, f := range onCloseHooks {
 		f()
 	}
-	log.Fatal("done")
 }
 
 // onInit registers f to be run at the beginning of the app

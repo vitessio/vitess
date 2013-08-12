@@ -52,8 +52,8 @@ func TestNumbered(t *testing.T) {
 		p.Unregister(v.(int64))
 	}
 
-	if p.Stats() != 1 {
-		t.Errorf("Expecting 1, received %v", p.Stats())
+	if p.Size() != 1 {
+		t.Errorf("Expecting 1, received %v", p.Size())
 	}
 	go func() {
 		p.Unregister(2)

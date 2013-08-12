@@ -50,14 +50,20 @@ type ActiveTxPool struct {
 	txStats *stats.Timings
 }
 
-func NewActiveTxPool(timeout time.Duration) *ActiveTxPool {
-	return &ActiveTxPool{
+func NewActiveTxPool(name string, timeout time.Duration) *ActiveTxPool {
+	axp := &ActiveTxPool{
 		pool:    pools.NewNumbered(),
 		lastId:  sync2.AtomicInt64(time.Now().UnixNano()),
 		timeout: sync2.AtomicDuration(timeout),
 		ticks:   timer.NewTimer(timeout / 10),
 		txStats: stats.NewTimings("Transactions"),
 	}
+	stats.Publish(name+"Size", stats.IntFunc(axp.pool.Size))
+	stats.Publish(
+		name+"Timeout",
+		stats.DurationFunc(func() time.Duration { return axp.timeout.Get() }),
+	)
+	return axp
 }
 
 func (axp *ActiveTxPool) Open() {
@@ -142,8 +148,8 @@ func (axp *ActiveTxPool) StatsJSON() string {
 	return fmt.Sprintf("{\"Size\": %v, \"Timeout\": %v}", s, int64(t))
 }
 
-func (axp *ActiveTxPool) Stats() (size int, timeout time.Duration) {
-	return axp.pool.Stats(), axp.Timeout()
+func (axp *ActiveTxPool) Stats() (size int64, timeout time.Duration) {
+	return axp.pool.Size(), axp.Timeout()
 }
 
 type TxConnection struct {

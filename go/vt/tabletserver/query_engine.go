@@ -41,8 +41,8 @@ type QueryEngine struct {
 	activePool     *ActivePool
 	consolidator   *Consolidator
 
-	maxResultSize    sync2.AtomicInt32
-	streamBufferSize sync2.AtomicInt32
+	maxResultSize    sync2.AtomicInt64
+	streamBufferSize sync2.AtomicInt64
 }
 
 type CompiledPlan struct {
@@ -68,17 +68,19 @@ type CacheInvalidator interface {
 
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.cachePool = NewCachePool(config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.cachePool = NewCachePool("VTCachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
-	qe.connPool = NewConnectionPool(config.PoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.streamConnPool = NewConnectionPool(config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.reservedPool = NewReservedPool()
-	qe.txPool = NewConnectionPool(config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
-	qe.activeTxPool = NewActiveTxPool(time.Duration(config.TransactionTimeout * 1e9))
-	qe.activePool = NewActivePool(time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.connPool = NewConnectionPool("VTConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
+	qe.streamConnPool = NewConnectionPool("VTStreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
+	qe.reservedPool = NewReservedPool("VTReservedPool")
+	qe.txPool = NewConnectionPool("VTTxPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
+	qe.activeTxPool = NewActiveTxPool("VTActiveTxPool", time.Duration(config.TransactionTimeout*1e9))
+	qe.activePool = NewActivePool("VTActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
-	qe.maxResultSize = sync2.AtomicInt32(config.MaxResultSize)
-	qe.streamBufferSize = sync2.AtomicInt32(config.StreamBufferSize)
+	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
+	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
+	stats.Publish("VTMaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
+	stats.Publish("VTStreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	queryStats = stats.NewTimings("Queries")
 	stats.NewRates("QPS", queryStats, 15, 60e9)
 	waitStats = stats.NewTimings("Waits")
@@ -641,14 +643,14 @@ func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, pla
 		qe.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))
 		return &mproto.QueryResult{}
 	case "vt_max_result_size":
-		val := int32(plan.SetValue.(float64))
+		val := int64(plan.SetValue.(float64))
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
 		qe.maxResultSize.Set(val)
 		return &mproto.QueryResult{}
 	case "vt_stream_buffer_size":
-		val := int32(plan.SetValue.(float64))
+		val := int64(plan.SetValue.(float64))
 		if val < 1024 {
 			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
 		}

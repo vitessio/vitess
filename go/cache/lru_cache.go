@@ -25,10 +25,10 @@ type LRUCache struct {
 
 	// Our current size, in bytes. Obviously a gross simplification and low-grade
 	// approximation.
-	size uint64
+	size int64
 
 	// How many bytes we are limiting the cache to.
-	capacity uint64
+	capacity int64
 }
 
 // Values that go into LRUCache need to satisfy this interface.
@@ -44,11 +44,11 @@ type Item struct {
 type entry struct {
 	key           string
 	value         Value
-	size          int
+	size          int64
 	time_accessed time.Time
 }
 
-func NewLRUCache(capacity uint64) *LRUCache {
+func NewLRUCache(capacity int64) *LRUCache {
 	return &LRUCache{
 		list:     list.New(),
 		table:    make(map[string]*list.Element),
@@ -101,7 +101,7 @@ func (lru *LRUCache) Delete(key string) bool {
 
 	lru.list.Remove(element)
 	delete(lru.table, key)
-	lru.size -= uint64(element.Value.(*entry).size)
+	lru.size -= element.Value.(*entry).size
 	return true
 }
 
@@ -114,7 +114,7 @@ func (lru *LRUCache) Clear() {
 	lru.size = 0
 }
 
-func (lru *LRUCache) SetCapacity(capacity uint64) {
+func (lru *LRUCache) SetCapacity(capacity int64) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 
@@ -122,13 +122,13 @@ func (lru *LRUCache) SetCapacity(capacity uint64) {
 	lru.checkCapacity()
 }
 
-func (lru *LRUCache) Stats() (length, size, capacity uint64, oldest time.Time) {
+func (lru *LRUCache) Stats() (length, size, capacity int64, oldest time.Time) {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
 	if lastElem := lru.list.Back(); lastElem != nil {
 		oldest = lastElem.Value.(*entry).time_accessed
 	}
-	return uint64(lru.list.Len()), lru.size, lru.capacity, oldest
+	return int64(lru.list.Len()), lru.size, lru.capacity, oldest
 }
 
 func (lru *LRUCache) StatsJSON() string {
@@ -137,6 +137,33 @@ func (lru *LRUCache) StatsJSON() string {
 	}
 	l, s, c, o := lru.Stats()
 	return fmt.Sprintf("{\"Length\": %v, \"Size\": %v, \"Capacity\": %v, \"OldestAccess\": \"%v\"}", l, s, c, o)
+}
+
+func (lru *LRUCache) Length() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return int64(lru.list.Len())
+}
+
+func (lru *LRUCache) Size() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.size
+}
+
+func (lru *LRUCache) Capacity() int64 {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	return lru.capacity
+}
+
+func (lru *LRUCache) Oldest() (oldest time.Time) {
+	lru.mu.Lock()
+	defer lru.mu.Unlock()
+	if lastElem := lru.list.Back(); lastElem != nil {
+		oldest = lastElem.Value.(*entry).time_accessed
+	}
+	return
 }
 
 func (lru *LRUCache) Keys() []string {
@@ -163,11 +190,11 @@ func (lru *LRUCache) Items() []Item {
 }
 
 func (lru *LRUCache) updateInplace(element *list.Element, value Value) {
-	valueSize := value.Size()
+	valueSize := int64(value.Size())
 	sizeDiff := valueSize - element.Value.(*entry).size
 	element.Value.(*entry).value = value
 	element.Value.(*entry).size = valueSize
-	lru.size += uint64(sizeDiff)
+	lru.size += sizeDiff
 	lru.moveToFront(element)
 	lru.checkCapacity()
 }
@@ -178,10 +205,10 @@ func (lru *LRUCache) moveToFront(element *list.Element) {
 }
 
 func (lru *LRUCache) addNew(key string, value Value) {
-	newEntry := &entry{key, value, value.Size(), time.Now()}
+	newEntry := &entry{key, value, int64(value.Size()), time.Now()}
 	element := lru.list.PushFront(newEntry)
 	lru.table[key] = element
-	lru.size += uint64(newEntry.size)
+	lru.size += newEntry.size
 	lru.checkCapacity()
 }
 
@@ -192,6 +219,6 @@ func (lru *LRUCache) checkCapacity() {
 		delValue := delElem.Value.(*entry)
 		lru.list.Remove(delElem)
 		delete(lru.table, delValue.key)
-		lru.size -= uint64(delValue.size)
+		lru.size -= delValue.size
 	}
 }

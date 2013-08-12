@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/cache"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/timer"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -87,12 +88,21 @@ type SchemaInfo struct {
 func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout time.Duration) *SchemaInfo {
 	si := &SchemaInfo{
 		queryCacheSize: queryCacheSize,
-		queries:        cache.NewLRUCache(uint64(queryCacheSize)),
+		queries:        cache.NewLRUCache(int64(queryCacheSize)),
 		rules:          NewQueryRules(),
-		connPool:       NewConnectionPool(2, idleTimeout),
+		connPool:       NewConnectionPool("", 2, idleTimeout),
 		reloadTime:     reloadTime,
 		ticks:          timer.NewTimer(reloadTime),
 	}
+	stats.Publish("VTQueryCacheLength", stats.IntFunc(si.queries.Length))
+	stats.Publish("VTQueryCacheSize", stats.IntFunc(si.queries.Size))
+	stats.Publish("VTQueryCacheCapacity", stats.IntFunc(si.queries.Capacity))
+	stats.Publish("VTQueryCacheOldest", stats.StringFunc(func() string {
+		return fmt.Sprintf("%v", si.queries.Oldest())
+	}))
+	stats.Publish("VTSchemaReloadTime", stats.DurationFunc(func() time.Duration {
+		return si.reloadTime
+	}))
 	http.Handle("/debug/query_plans", si)
 	http.Handle("/debug/query_stats", si)
 	http.Handle("/debug/table_stats", si)
@@ -367,7 +377,7 @@ func (si *SchemaInfo) SetQueryCacheSize(size int) {
 		panic(NewTabletError(FAIL, "cache size %v out of range", size))
 	}
 	si.queryCacheSize = size
-	si.queries.SetCapacity(uint64(size))
+	si.queries.SetCapacity(int64(size))
 }
 
 func (si *SchemaInfo) SetReloadTime(reloadTime time.Duration) {
