@@ -32,11 +32,13 @@ class Break(Exception):
 
 # tmp files management: all under /vt/tmp
 tmp_root = os.path.join(vtdataroot, 'tmp')
-try:
-  os.makedirs(tmp_root)
-except OSError:
-  # directory already exists
-  pass
+def setup():
+  try:
+    os.makedirs(tmp_root)
+  except OSError:
+    # directory already exists
+    pass
+setup()
 
 def debug(msg):
   if options.verbose:
