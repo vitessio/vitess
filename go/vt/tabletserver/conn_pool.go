@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/stats"
 )
 
 // ConnectionPool re-exposes ResourcePool as a pool of DBConnection objects
@@ -19,8 +20,18 @@ type ConnectionPool struct {
 	idleTimeout time.Duration
 }
 
-func NewConnectionPool(capacity int, idleTimeout time.Duration) *ConnectionPool {
-	return &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
+func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *ConnectionPool {
+	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
+	if name == "" {
+		return cp
+	}
+	stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
+	stats.Publish(name+"Available", stats.IntFunc(cp.Available))
+	stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))
+	stats.Publish(name+"WaitCount", stats.IntFunc(cp.WaitCount))
+	stats.Publish(name+"WaitTime", stats.DurationFunc(cp.WaitTime))
+	stats.Publish(name+"IdleTimeout", stats.DurationFunc(cp.IdleTimeout))
+	return cp
 }
 
 func (cp *ConnectionPool) Open(connFactory CreateConnectionFunc) {
@@ -96,6 +107,48 @@ func (cp *ConnectionPool) StatsJSON() string {
 		return "{}"
 	}
 	return cp.pool.StatsJSON()
+}
+
+func (cp *ConnectionPool) Capacity() int64 {
+	if cp.pool == nil {
+		return 0
+	}
+	return cp.pool.Capacity()
+}
+
+func (cp *ConnectionPool) Available() int64 {
+	if cp.pool == nil {
+		return 0
+	}
+	return cp.pool.Available()
+}
+
+func (cp *ConnectionPool) MaxCap() int64 {
+	if cp.pool == nil {
+		return 0
+	}
+	return cp.pool.MaxCap()
+}
+
+func (cp *ConnectionPool) WaitCount() int64 {
+	if cp.pool == nil {
+		return 0
+	}
+	return cp.pool.WaitCount()
+}
+
+func (cp *ConnectionPool) WaitTime() time.Duration {
+	if cp.pool == nil {
+		return 0
+	}
+	return cp.pool.WaitTime()
+}
+
+func (cp *ConnectionPool) IdleTimeout() time.Duration {
+	if cp.pool == nil {
+		return 0
+	}
+	return cp.pool.IdleTimeout()
 }
 
 // pooledConnection re-exposes DBConnection as a PoolConnection

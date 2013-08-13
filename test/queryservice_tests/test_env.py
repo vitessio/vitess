@@ -240,6 +240,10 @@ class VtoccTestEnv(TestEnv):
       raise EnvironmentError("VTTOP not defined")
     if self.vtroot is None:
       raise EnvironmentError("VTROOT not defined")
+    try:
+      os.makedirs(utils.tmp_root)
+    except OSError:
+      pass
 
     utils.setup()
 

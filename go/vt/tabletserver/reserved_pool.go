@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 )
 
@@ -17,8 +18,10 @@ type ReservedPool struct {
 	connFactory CreateConnectionFunc
 }
 
-func NewReservedPool() *ReservedPool {
-	return &ReservedPool{pool: pools.NewNumbered(), lastId: 1}
+func NewReservedPool(name string) *ReservedPool {
+	rp := &ReservedPool{pool: pools.NewNumbered(), lastId: 1}
+	stats.Publish(name+"Size", stats.IntFunc(rp.pool.Size))
+	return rp
 }
 
 func (rp *ReservedPool) Open(connFactory CreateConnectionFunc) {
@@ -61,10 +64,6 @@ func (rp *ReservedPool) Get(connectionId int64) PoolConnection {
 
 func (rp *ReservedPool) StatsJSON() string {
 	return rp.pool.StatsJSON()
-}
-
-func (rp *ReservedPool) Stats() (size int) {
-	return rp.pool.Stats()
 }
 
 type reservedConnection struct {

@@ -19,6 +19,7 @@ import (
 	"expvar"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/youtube/vitess/go/sync2"
 )
@@ -78,6 +79,14 @@ func (v *Float) String() string {
 	return strconv.FormatFloat(v.Get(), 'g', -1, 64)
 }
 
+// FloatFunc converts a function that returns
+// a float64 as an expvar.
+type FloatFunc func() float64
+
+func (f FloatFunc) String() string {
+	return strconv.FormatFloat(f(), 'g', -1, 64)
+}
+
 // Int is expvar.Int+Get+hook
 type Int struct {
 	i sync2.AtomicInt64
@@ -103,6 +112,49 @@ func (v *Int) Get() int64 {
 
 func (v *Int) String() string {
 	return strconv.FormatInt(v.i.Get(), 10)
+}
+
+// Duration exports a time.Duration
+type Duration struct {
+	i sync2.AtomicDuration
+}
+
+func NewDuration(name string) *Duration {
+	v := new(Duration)
+	Publish(name, v)
+	return v
+}
+
+func (v *Duration) Add(delta time.Duration) {
+	v.i.Add(delta)
+}
+
+func (v *Duration) Set(value time.Duration) {
+	v.i.Set(value)
+}
+
+func (v *Duration) Get() time.Duration {
+	return v.i.Get()
+}
+
+func (v *Duration) String() string {
+	return strconv.FormatInt(int64(v.i.Get()), 10)
+}
+
+// IntFunc converts a function that returns
+// an int64 as an expvar.
+type IntFunc func() int64
+
+func (f IntFunc) String() string {
+	return strconv.FormatInt(f(), 10)
+}
+
+// DurationFunc converts a function that returns
+// an time.Duration as an expvar.
+type DurationFunc func() time.Duration
+
+func (f DurationFunc) String() string {
+	return strconv.FormatInt(int64(f()), 10)
 }
 
 // String is expvar.String+Get+hook
@@ -134,14 +186,23 @@ func (v *String) String() string {
 	return strconv.Quote(v.Get())
 }
 
-type strFunc func() string
+// StringFunc converts a function that returns
+// an string as an expvar.
+type StringFunc func() string
 
-func (f strFunc) String() string {
+func (f StringFunc) String() string {
+	return strconv.Quote(f())
+}
+
+type jsonFunc func() string
+
+func (f jsonFunc) String() string {
 	return f()
 }
 
-// PublishFunc publishes any function that returns
-// a JSON string as a variable.
-func PublishFunc(name string, f func() string) {
-	Publish(name, strFunc(f))
+// PublishJSONFunc publishes any function that returns
+// a JSON string as a variable. The string is sent to
+// expvar as is.
+func PublishJSONFunc(name string, f func() string) {
+	Publish(name, jsonFunc(f))
 }

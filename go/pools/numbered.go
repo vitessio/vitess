@@ -108,12 +108,11 @@ func (nu *Numbered) WaitForEmpty() {
 }
 
 func (nu *Numbered) StatsJSON() string {
-	s := nu.Stats()
-	return fmt.Sprintf("{\"Size\": %v}", s)
+	return fmt.Sprintf("{\"Size\": %v}", nu.Size())
 }
 
-func (nu *Numbered) Stats() (size int) {
+func (nu *Numbered) Size() (size int64) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
-	return len(nu.resources)
+	return int64(len(nu.resources))
 }

@@ -27,7 +27,7 @@ const (
 type UpdateStream struct {
 	mycnf          *Mycnf
 	tabletType     string
-	state          sync2.AtomicInt32
+	state          sync2.AtomicInt64
 	states         *estats.States
 	actionLock     sync.Mutex
 	binlogPrefix   string
@@ -55,7 +55,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 		"Enabled",
 	}, time.Now(), DISABLED)
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
-	estats.PublishFunc("UpdateStreamRpcService", func() string { return UpdateStreamRpcService.statsJSON() })
+	estats.PublishJSONFunc("UpdateStreamRpcService", UpdateStreamRpcService.statsJSON)
 }
 
 func logError() {
@@ -137,9 +137,9 @@ func (updateStream *UpdateStream) isServiceEnabled() bool {
 	return updateStream.state.Get() == ENABLED
 }
 
-func (updateStream *UpdateStream) setState(state int32) {
+func (updateStream *UpdateStream) setState(state int64) {
 	updateStream.state.Set(state)
-	updateStream.states.SetState(int(state))
+	updateStream.states.SetState(state)
 }
 
 // expvar.Var interface.

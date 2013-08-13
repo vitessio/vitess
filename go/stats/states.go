@@ -22,19 +22,19 @@ type States struct {
 
 	// the following variables can change, protected by mutex
 	mu    sync.Mutex
-	state int
+	state int64
 	since time.Time // when we switched to our state
 
 	// historical data about the states
 	durations   []time.Duration // how much time in each state
-	transitions []int           // how many times we got into a state
+	transitions []int64         // how many times we got into a state
 }
 
 // NewStates creates a states tracker.
 // If name is empty, the variable is not published.
-func NewStates(name string, labels []string, startTime time.Time, initialState int) *States {
-	s := &States{labels: labels, state: initialState, since: startTime, durations: make([]time.Duration, len(labels)), transitions: make([]int, len(labels))}
-	if initialState < 0 || initialState >= len(s.labels) {
+func NewStates(name string, labels []string, startTime time.Time, initialState int64) *States {
+	s := &States{labels: labels, state: initialState, since: startTime, durations: make([]time.Duration, len(labels)), transitions: make([]int64, len(labels))}
+	if initialState < 0 || initialState >= int64(len(s.labels)) {
 		panic(fmt.Errorf("initialState out of range 0-%v: %v", len(s.labels), initialState))
 	}
 	if name != "" {
@@ -43,15 +43,15 @@ func NewStates(name string, labels []string, startTime time.Time, initialState i
 	return s
 }
 
-func (s *States) SetState(state int) {
+func (s *States) SetState(state int64) {
 	s.setStateAt(state, time.Now())
 }
 
 // now has to be increasing, or we panic. Usually, only one execution
 // thread can change a state, and therefore just using time.now()
 // will be enough
-func (s *States) setStateAt(state int, now time.Time) {
-	if state < 0 || state >= len(s.labels) {
+func (s *States) setStateAt(state int64, now time.Time) {
+	if state < 0 || state >= int64(len(s.labels)) {
 		panic(fmt.Errorf("State out of range 0-%v: %v", len(s.labels), state))
 	}
 
@@ -75,7 +75,7 @@ func (s *States) setStateAt(state int, now time.Time) {
 func (s *States) Get() (state int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return int64(s.state)
+	return s.state
 }
 
 func (s *States) String() string {
@@ -97,7 +97,7 @@ func (s *States) stringAt(now time.Time) string {
 
 		d := s.durations[i]
 		t := s.transitions[i]
-		if i == s.state {
+		if int64(i) == s.state {
 			dur := now.Sub(s.since)
 			if dur > 0 {
 				// we don't panic if now is not growing,

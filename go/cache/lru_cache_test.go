@@ -101,7 +101,7 @@ func TestSetWithOldKeyUpdatesSize(t *testing.T) {
 
 	someValue := &CacheValue{20}
 	cache.Set(key, someValue)
-	expected := uint64(someValue.size)
+	expected := int64(someValue.size)
 	if _, sz, _, _ := cache.Stats(); sz != expected {
 		t.Errorf("cache.Size() = %v, expected %v", sz, expected)
 	}
@@ -153,7 +153,7 @@ func TestClear(t *testing.T) {
 }
 
 func TestCapacityIsObeyed(t *testing.T) {
-	size := uint64(3)
+	size := int64(3)
 	cache := NewLRUCache(size)
 	value := &CacheValue{1}
 
@@ -172,7 +172,7 @@ func TestCapacityIsObeyed(t *testing.T) {
 }
 
 func TestLRUIsEvicted(t *testing.T) {
-	size := uint64(3)
+	size := int64(3)
 	cache := NewLRUCache(size)
 
 	cache.Set("key1", &CacheValue{1})

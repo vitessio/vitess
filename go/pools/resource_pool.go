@@ -200,5 +200,29 @@ func (rp *ResourcePool) StatsJSON() string {
 }
 
 func (rp *ResourcePool) Stats() (capacity, available, maxCap, waitCount int64, waitTime, idleTimeout time.Duration) {
-	return rp.capacity.Get(), int64(len(rp.resources)), int64(cap(rp.resources)), rp.waitCount.Get(), rp.waitTime.Get(), rp.idleTimeout.Get()
+	return rp.Capacity(), rp.Available(), rp.MaxCap(), rp.WaitCount(), rp.WaitTime(), rp.IdleTimeout()
+}
+
+func (rp *ResourcePool) Capacity() int64 {
+	return rp.capacity.Get()
+}
+
+func (rp *ResourcePool) Available() int64 {
+	return int64(len(rp.resources))
+}
+
+func (rp *ResourcePool) MaxCap() int64 {
+	return int64(cap(rp.resources))
+}
+
+func (rp *ResourcePool) WaitCount() int64 {
+	return rp.waitCount.Get()
+}
+
+func (rp *ResourcePool) WaitTime() time.Duration {
+	return rp.waitTime.Get()
+}
+
+func (rp *ResourcePool) IdleTimeout() time.Duration {
+	return rp.idleTimeout.Get()
 }

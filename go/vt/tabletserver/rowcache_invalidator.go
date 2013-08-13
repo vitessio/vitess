@@ -56,7 +56,7 @@ func (err *InvalidationError) isFatal() bool {
 
 type InvalidationProcessor struct {
 	currentPosition *cproto.BinlogPosition
-	state           sync2.AtomicUint32
+	state           sync2.AtomicInt64
 	states          *estats.States
 	stateLock       sync.Mutex
 	inTxn           bool
@@ -88,7 +88,7 @@ func RegisterCacheInvalidator() {
 		"Disabled",
 		"Enabled",
 	}, time.Now(), DISABLED)
-	estats.PublishFunc("CacheInvalidationProcessor", func() string { return CacheInvalidationProcessor.statsJSON() })
+	estats.PublishJSONFunc("CacheInvalidationProcessor", CacheInvalidationProcessor.statsJSON)
 }
 
 func StartRowCacheInvalidation() {
@@ -140,9 +140,9 @@ func (rowCache *InvalidationProcessor) stopRowCacheInvalidation() {
 	rowCache.stateLock.Unlock()
 }
 
-func (rowCache *InvalidationProcessor) setState(state uint32) {
+func (rowCache *InvalidationProcessor) setState(state int64) {
 	rowCache.state.Set(state)
-	rowCache.states.SetState(int(state))
+	rowCache.states.SetState(state)
 }
 
 func (rowCache *InvalidationProcessor) statsJSON() string {
