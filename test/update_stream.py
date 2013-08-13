@@ -178,7 +178,7 @@ def run_test_service_enabled():
       binlog_pos, data, err = replica_conn.stream_next()
       if err:
         raise utils.TestError("Update stream returned error '%s'", err)
-      if data['SqlType'] == 'COMMIT' and utils.options.verbose:
+      if data['SqlType'] == 'COMMIT' and utils.options.verbose == 2:
         utils.debug("Test Service Enabled: Pass")
         break
   except Exception, e:

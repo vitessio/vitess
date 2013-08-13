@@ -113,7 +113,7 @@ class TestDbTopo(unittest.TestCase):
     self.data = vtctld.dbtopo()
 
   def test_assigned(self):
-    if utils.options.verbose:
+    if utils.options.verbose == 2:
       pprint.pprint(self.data)
     self.assertItemsEqual(self.data["Assigned"].keys(), ["test_keyspace"])
     self.assertItemsEqual(self.data["Assigned"]["test_keyspace"].keys(), ["-80", "80-"])
