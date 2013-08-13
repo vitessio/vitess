@@ -38,7 +38,7 @@ def read_keyspaces(zkocc_client):
 def read_topology(zkocc_client, read_fqdb_keys=True):
   fqdb_keys = []
   db_keys = []
-  keyspace_list = zkocc_client.children(keyspace.ZK_KEYSPACE_PATH)['Children']
+  keyspace_list = zkocc_client.get_srv_keyspace_names('local')
   for keyspace_name in keyspace_list:
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
@@ -71,26 +71,25 @@ def get_host_port_by_name(zkocc_client, db_key, encrypted=False):
   if service == '_vtocc' and encrypted:
     encrypted_service = '_vts'
   db_key = parts[0]
-  zk_path = '/zk/local/vt/ns/' + db_key.replace('.', '/') # no protocol here
+  keyspace, shard, tablet_type = db_key.split('.')
   try:
-    data = zkocc_client.get(zk_path)['Data']
-    data = json.loads(data)
+    data = zkocc_client.get_end_points('local', keyspace, shard, tablet_type)
   except zkocc.ZkOccError as e:
-    logging.warning('no data in %s: %s', zk_path, e)
+    logging.warning('no data for %s: %s', db_key, e)
     return []
   except Exception as e:
-    logging.warning('failed to get or parse zk data %s (%s): %s', zk_path, e,
+    logging.warning('failed to get or parse topo data %s (%s): %s', db_key, e,
                     data)
     return []
   host_port_list = []
   encrypted_host_port_list = []
-  for entry in data['entries']:
-    if service in entry['named_port_map']:
-      host_port = (entry['host'], entry['named_port_map'][service],
+  for entry in data['Entries']:
+    if service in entry['NamedPortMap']:
+      host_port = (entry['Host'], entry['NamedPortMap'][service],
                    service == '_vts')
       host_port_list.append(host_port)
-    if encrypted and encrypted_service in entry['named_port_map']:
-      host_port = (entry['host'], entry['named_port_map'][encrypted_service],
+    if encrypted and encrypted_service in entry['NamedPortMap']:
+      host_port = (entry['Host'], entry['NamedPortMap'][encrypted_service],
                    True)
       encrypted_host_port_list.append(host_port)
   if encrypted and len(encrypted_host_port_list) > 0:

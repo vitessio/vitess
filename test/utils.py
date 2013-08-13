@@ -32,11 +32,13 @@ class Break(Exception):
 
 # tmp files management: all under /vt/tmp
 tmp_root = os.path.join(vtdataroot, 'tmp')
-try:
-  os.makedirs(tmp_root)
-except OSError:
-  # directory already exists
-  pass
+def setup():
+  try:
+    os.makedirs(tmp_root)
+  except OSError:
+    # directory already exists
+    pass
+setup()
 
 def debug(msg):
   if options.verbose:
@@ -108,7 +110,7 @@ def kill_sub_processes():
           print >> sys.stderr, e
   # temporary hack until we figure it out
   debug("===== killing any remaining vt_mysqlbinlog process just to be sure...")
-  os.system("killall vt_mysqlbinlog")
+  os.system("killall -q vt_mysqlbinlog")
 
 def kill_sub_process(proc):
   pid = proc.pid
@@ -286,6 +288,7 @@ def zkocc_start(cells=['test_nj'], extra_params=[]):
   logfile = tmp_root + '/zkocc_%u.log' % zkocc_port_base
   args = [vtroot+'/bin/zkocc',
           '-port', str(zkocc_port_base),
+          '-stderrthreshold=ERROR',
           ] + extra_params + cells
   sp = run_bg(args)
 
@@ -311,15 +314,24 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtctl helpers
-def run_vtctl(clargs, auto_log=False, **kwargs):
+def run_vtctl(clargs, log_level='', auto_log=False, **kwargs):
   prog_compile(['vtctl'])
   args = [vtroot+'/bin/vtctl']
+
   if auto_log:
-    args.append('--alsologtostderr')
+    if options.verbose:
+      log_level='INFO'
+    else:
+      log_level='ERROR'
+
+  if log_level:
+    args.append('--stderrthreshold=%s' % log_level)
+
   if isinstance(clargs, str):
     cmd = " ".join(args) + ' ' + clargs
   else:
     cmd = args + clargs
+
   return run(cmd, **kwargs)
 
 # vtclient2 helpers

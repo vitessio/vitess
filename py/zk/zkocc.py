@@ -68,8 +68,8 @@ class SimpleZkOccConnection(object):
   def children(self, path):
     return self._call('ZkReader.Children', path=path)
 
-  def get_keyspaces(self):
-    return self._call('TopoReader.GetKeyspaces')['Entries']
+  def get_srv_keyspace_names(self, cell):
+    return self._call('TopoReader.GetSrvKeyspaceNames', cell=cell)['Entries']
 
   def get_srv_keyspace(self, cell, keyspace):
     return self._call('TopoReader.GetSrvKeyspace', cell=cell, keyspace=keyspace)
@@ -156,8 +156,10 @@ class ZkOccConnection(object):
 
   # New API.
 
-  def get_keyspaces(self):
-    return self._call('get_keyspaces')
+  def get_srv_keyspace_names(self, cell):
+    if cell == 'local':
+      cell = self.local_cell
+    return self._call('get_srv_keyspace_names', cell=cell)
 
   def get_srv_keyspace(self, cell, keyspace):
     if cell == 'local':
@@ -228,6 +230,8 @@ class FakeZkOccConnection(object):
   def close(self):
     pass
 
+  # Old, deprecated API.
+
   def get(self, path):
     path = self._resolve_path(path)
     if not path in self.data:
@@ -250,3 +254,31 @@ class FakeZkOccConnection(object):
         'Data':'',
         'Children':children
         }
+
+  # New API. For this fake object, it is based on the old API.
+
+  def get_srv_keyspace_names(self, cell):
+    if cell == 'local':
+      cell = self.local_cell
+    return self.children('/zk/' + cell + '/vt/ns')['Children']
+
+  def get_srv_keyspace(self, cell, keyspace):
+    keyspace_path = '/zk/' + cell + '/vt/ns/' + keyspace
+    try:
+      data = self.get(keyspace_path)['Data']
+      if not data:
+        raise ZkOccError("FakeZkOccConnection: empty keyspace: " + keyspace)
+      return json.loads(data)
+    except Exception as e:
+      raise ZkOccError('FakeZkOccConnection: invalid keyspace', keyspace, e)
+
+  def get_end_points(self, cell, keyspace, shard, tablet_type):
+    zk_path = os.path.join('/zk', cell, 'vt', 'ns', keyspace, shard,
+                           tablet_type)
+    try:
+      data = self.get(zk_path)['Data']
+      if not data:
+        raise ZkOccError("FakeZkOccConnection: empty end point: " + zk_path)
+      return json.loads(data)
+    except Exception as e:
+      raise ZkOccError('FakeZkOccConnection: invalid end point', zk_path, e)

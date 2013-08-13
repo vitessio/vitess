@@ -249,8 +249,6 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
-	flag.Set("alsologtostderr", "true")
-
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)
 	mycnf := mysqlctl.NewMycnf(uint32(*tabletUid), *mysqlPort, mysqlctl.VtReplParams{})
 

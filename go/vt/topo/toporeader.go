@@ -6,8 +6,9 @@ import (
 
 // TopoReader returns read only information about the topology.
 type TopoReader interface {
-	// GetKeyspaces returns all the keyspaces in the topology.
-	GetKeyspaces(struct{}, *Keyspaces) error
+	// GetSrvKeyspaces returns the names of all the keyspaces in
+	// the topology for the cell.
+	GetSrvKeyspaceNames(GetSrvKeyspaceNamesArgs, *SrvKeyspaceNames) error
 
 	// GetSrvKeyspace returns information about a keyspace in a
 	// particular cell (as specified by the GetSrvKeyspaceArgs).
@@ -18,12 +19,16 @@ type TopoReader interface {
 	GetEndPoints(GetEndPointsArgs, *VtnsAddrs) error
 }
 
+type GetSrvKeyspaceNamesArgs struct {
+	Cell string
+}
+
 type GetSrvKeyspaceArgs struct {
 	Cell     string
 	Keyspace string
 }
 
-type Keyspaces struct {
+type SrvKeyspaceNames struct {
 	Entries []string
 }
 

@@ -26,7 +26,7 @@ cert_dir = utils.tmp_root + "/certs"
 # to find the templates, and generate a different one for this test.
 
 def openssl(cmd):
-  result = subprocess.call(["openssl"] + cmd)
+  result = subprocess.call(["openssl"] + cmd, stderr=utils.devnull)
   if result != 0:
     raise utils.TestError("OpenSSL command failed: %s" % " ".join(cmd))
 

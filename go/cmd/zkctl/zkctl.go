@@ -56,8 +56,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	flag.Set("alsologtostderr", "true")
-
 	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myId))
 	zkd := zkctl.NewZkd(zkConfig)
 

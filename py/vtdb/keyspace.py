@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import json
 import struct
 
 from vtdb import dbexceptions
@@ -64,12 +63,11 @@ class Keyspace:
     return names
 
 def read_keyspace(zkocc_client, keyspace_name):
-  keyspace_path = ZK_KEYSPACE_PATH + '/' + keyspace_name
   try:
-    data = zkocc_client.get(keyspace_path)['Data']
+    data = zkocc_client.get_srv_keyspace('local', keyspace_name)
     if not data:
       raise dbexceptions.OperationalError('invalid empty keyspace',
                                           keyspace_path)
-    return Keyspace(keyspace_name, json.loads(data))
+    return Keyspace(keyspace_name, data)
   except Exception as e:
     raise dbexceptions.OperationalError('invalid keyspace', keyspace_path, e)
