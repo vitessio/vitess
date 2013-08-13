@@ -54,7 +54,7 @@ class SimpleZkOccConnection(object):
     try:
       return self.client.call(method, req).reply
     except gorpc.GoRpcError as e:
-      raise ZkOccError('%s failed'% method, e)
+      raise ZkOccError('%s %s failed' % (method, req), e)
 
   # returns a ZkNode, see header
   def get(self, path):
