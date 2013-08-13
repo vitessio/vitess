@@ -90,7 +90,7 @@ class Tablet(object):
     try:
       shutil.rmtree(path)
     except OSError as e:
-      if utils.options.verbose:
+      if utils.options.verbose == 2:
         print >> sys.stderr, e, path
 
   def mysql_connection_parameters(self, dbname):

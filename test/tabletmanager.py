@@ -61,7 +61,7 @@ def teardown():
   try:
     shutil.rmtree(path)
   except OSError as e:
-    if utils.options.verbose:
+    if utils.options.verbose == 2:
       print >> sys.stderr, e, path
 
 def _check_db_addr(db_addr, expected_addr):

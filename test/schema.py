@@ -228,7 +228,7 @@ def run_test_complex_schema():
   # now test action log pruning
   oldLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
   oldCount = len(oldLines)
-  if utils.options.verbose:
+  if utils.options.verbose == 2:
     print "I have %u actionlog before" % oldCount
   if oldCount <= 5:
     raise utils.TestError('Not enough actionlog before: %u' % oldCount)
@@ -237,7 +237,7 @@ def run_test_complex_schema():
 
   newLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
   newCount = len(newLines)
-  if utils.options.verbose:
+  if utils.options.verbose == 2:
     print "I have %u actionlog after" % newCount
 
   if newCount != 5:
