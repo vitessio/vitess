@@ -69,7 +69,7 @@ def check_rows(to_look_for, driver="vtdb"):
       print out
       print err
       raise utils.TestError('wrong vtclient2 output, missing: ' + pattern)
-  if utils.options.verbose:
+  if utils.options.verbose == 2:
     print out, err
 
 def check_rows_schema_diff(driver):
@@ -80,7 +80,7 @@ def check_rows_schema_diff(driver):
     print out
     print err
     raise utils.TestError('wrong vtclient2 output, missing "name mismatch" of some kind')
-  if utils.options.verbose:
+  if utils.options.verbose == 2:
     print out, err
 
 

@@ -41,14 +41,15 @@ def setup():
 setup()
 
 def debug(msg):
-  if options.verbose:
+  if options.verbose == 2:
     print msg
     sys.stdout.flush()
 
 def get_args():
   global options
   parser = OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-v', '--verbose', action='store_true', help='show a lot of logs')
+  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
+  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
   parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
   parser.add_option('--no-build', action='store_true', help='skip the build commands')
   parser.add_option('--skip-teardown', action='store_true', help='do not kill processes after the tests are done')
@@ -68,7 +69,7 @@ def remove_tmp_files():
   try:
     shutil.rmtree(tmp_root)
   except OSError as e:
-      if options.verbose:
+      if options.verbose == 2:
         print >> sys.stderr, e, tmp_root
 
 def pause(prompt):
@@ -106,7 +107,7 @@ def kill_sub_processes():
           if pid not in already_killed:
             os.kill(pid, signal.SIGTERM)
       except OSError as e:
-        if options.verbose:
+        if options.verbose == 2:
           print >> sys.stderr, e
   # temporary hack until we figure it out
   debug("===== killing any remaining vt_mysqlbinlog process just to be sure...")
@@ -128,7 +129,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   if trap_output:
     kargs['stdout'] = PIPE
     kargs['stderr'] = PIPE
-  if options.verbose:
+  if options.verbose == 2:
     print "run:", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
   proc = Popen(args, **kargs)
   proc.args = args
@@ -137,7 +138,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
     if raise_on_error:
       raise TestError('cmd fail:', args, stdout, stderr)
     else:
-      if options.verbose:
+      if options.verbose >= 1:
         print 'cmd fail:', args, stdout, stderr
   return stdout, stderr
 
@@ -149,7 +150,7 @@ def run_fail(cmd, **kargs):
     args = cmd
   kargs['stdout'] = PIPE
   kargs['stderr'] = PIPE
-  if options.verbose:
+  if options.verbose == 2:
     print "run: (expect fail)", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
   proc = Popen(args, **kargs)
   proc.args = args
@@ -161,7 +162,7 @@ def run_fail(cmd, **kargs):
 
 # run a daemon - kill when this script exits
 def run_bg(cmd, **kargs):
-  if options.verbose:
+  if options.verbose == 2:
     print "run:", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
   if isinstance(cmd, str):
     args = shlex.split(cmd)
@@ -181,7 +182,7 @@ def wait_procs(proc_list, raise_on_error=True):
     proc.wait()
   for proc in proc_list:
     if proc.returncode:
-      if options.verbose and proc.returncode not in (-9,):
+      if options.verbose >= 1 and proc.returncode not in (-9,):
         sys.stderr.write("proc failed: %s %s\n" % (proc.returncode, proc.args))
       if raise_on_error:
         raise CalledProcessError(proc.returncode, ' '.join(proc.args))
@@ -319,8 +320,10 @@ def run_vtctl(clargs, log_level='', auto_log=False, **kwargs):
   args = [vtroot+'/bin/vtctl']
 
   if auto_log:
-    if options.verbose:
+    if options.verbose == 2:
       log_level='INFO'
+    elif options.verbose == 1:
+      log_level='WARNING'
     else:
       log_level='ERROR'
 
