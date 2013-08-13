@@ -19,8 +19,6 @@ from checkers import checker
 warnings.simplefilter("ignore")
 
 
-skip_teardown = False
-
 # I need this mostly for mysql
 destination_tablet = tablet.Tablet(62344)
 source_tablets = [tablet.Tablet(62044),
@@ -37,8 +35,7 @@ def setUpModule():
 
 
 def tearDownModule():
-  global skip_teardown
-  if skip_teardown:
+  if utils.options.skip_teardown:
     return
 
   utils.wait_procs([t.teardown_mysql() for t in tablets], raise_on_error=False)
@@ -239,8 +236,6 @@ def main():
   (options, args) = parser.parse_args()
 
   utils.options = options
-  global skip_teardown
-  skip_teardown = options.skip_teardown
   if options.teardown:
     tearDownModule()
     sys.exit()

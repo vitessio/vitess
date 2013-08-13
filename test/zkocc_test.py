@@ -330,8 +330,6 @@ def main():
   (options, args) = parser.parse_args()
 
   utils.options = options
-  global skip_teardown
-  skip_teardown = options.skip_teardown
   if options.teardown:
     tearDownModule()
     sys.exit()
