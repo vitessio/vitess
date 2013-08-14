@@ -292,6 +292,7 @@ func (zkts *Server) unlockForAction(lockPath, results string) error {
 	// Write the data to the actionlog
 	actionLogPath := strings.Replace(lockPath, "/action/", "/actionlog/", 1)
 	if _, err := zk.CreateRecursive(zkts.zconn, actionLogPath, results, 0, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
+		log.Warningf("Cannot create actionlog path %v (check the permissions with 'zk stat'), will keep the lock, use 'zk rm' to clear the lock", actionLogPath)
 		return err
 	}
 
