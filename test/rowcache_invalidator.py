@@ -139,8 +139,8 @@ class RowCacheInvalidator(unittest.TestCase):
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
     time.sleep(5)
     invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
-    invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))['CacheInvalidationProcessor']
-    utils.debug("Invalidations %d InvalidatorStats %s" % (invalidations, invalidatorStats))
+    invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
+    utils.debug("Invalidations %d InvalidatorStats %s" % (invalidations, invalidatorStats['CacheInvalidationCheckPoint']))
     self.assertTrue(invalidations > 0, "Invalidations are flowing through.")
 
     res = replica_tablet.mquery('vt_test_keyspace', "select min(id) from vt_insert_test")
@@ -179,11 +179,11 @@ class RowCacheInvalidator(unittest.TestCase):
     #The sleep is needed here, so the invalidator can catch up and the number can be tested.
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
     time.sleep(10)
-    invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))['CacheInvalidationProcessor']
-    utils.debug("invalidatorStats %s" % invalidatorStats)
+    invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
+    utils.debug("invalidatorStats %s" % invalidatorStats['CacheInvalidationCheckPoint'])
     inv_count2 = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     utils.debug("invalidator count1 %d count2 %d" % (inv_count1, inv_count2))
-    self.assertEqual(invalidatorStats["States"]["Current"], "Enabled", "Row-cache invalidator should be enabled")
+    self.assertEqual(invalidatorStats["CacheInvalidationState"]["Current"], "Enabled", "Row-cache invalidator should be enabled")
     self.assertTrue(inv_count2 - inv_count1 > 0, "invalidator was able to restart after a small pause in replication")
 
 
@@ -207,14 +207,14 @@ class RowCacheInvalidator(unittest.TestCase):
     utils.debug("===========test_service_disabled=========")
     perform_insert(500)
     inv_before = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
-    invStats_before = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))['CacheInvalidationProcessor']
+    invStats_before = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
     utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
     time.sleep(5)
     inv_after = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
-    invStats_after = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))['CacheInvalidationProcessor']
-    utils.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before, inv_after, invStats_after))
+    invStats_after = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
+    utils.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before['CacheInvalidationCheckPoint'], inv_after, invStats_after['CacheInvalidationCheckPoint']))
     self.assertEqual(inv_after, 0, "Row-cache invalidator should be disabled, no invalidations")
-    self.assertEqual(invStats_after["States"]["Current"], "Disabled", "Row-cache invalidator should be disabled")
+    self.assertEqual(invStats_after["CacheInvalidationState"]["Current"], "Disabled", "Row-cache invalidator should be disabled")
 
 
 def _vtdb_conn(host):

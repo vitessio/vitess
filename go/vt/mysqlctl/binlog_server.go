@@ -48,25 +48,12 @@ type blsStats struct {
 
 func newBlsStats() *blsStats {
 	bs := &blsStats{}
-	bs.parseStats = estats.NewCounters("")
-	bs.txnCount = estats.NewCounters("")
-	bs.dmlCount = estats.NewCounters("")
-	bs.queriesPerSec = estats.NewRates("", bs.dmlCount, 15, 60e9)
-	bs.txnsPerSec = estats.NewRates("", bs.txnCount, 15, 60e9)
+	bs.parseStats = estats.NewCounters("BinlogServerParseEvent")
+	bs.txnCount = estats.NewCounters("BinlogServerTxnCount")
+	bs.dmlCount = estats.NewCounters("BinlogServerDmlCount")
+	bs.queriesPerSec = estats.NewRates("BinlogServerQPS", bs.dmlCount, 15, 60e9)
+	bs.txnsPerSec = estats.NewRates("BinlogServerTPS", bs.txnCount, 15, 60e9)
 	return bs
-}
-
-// String returns a json encoded version of stats
-func (bs *blsStats) String() string {
-	buf := bytes.NewBuffer(make([]byte, 0, 128))
-	fmt.Fprintf(buf, "{")
-	fmt.Fprintf(buf, "\n \"DmlCount\": %v,", bs.dmlCount)
-	fmt.Fprintf(buf, "\n \"ParseEvent\": %v,", bs.parseStats)
-	fmt.Fprintf(buf, "\n \"QueriesPerSec\": %v,", bs.queriesPerSec)
-	fmt.Fprintf(buf, "\n \"TxnCount\": %v,", bs.txnCount)
-	fmt.Fprintf(buf, "\n \"TxnPerSec\": %v", bs.txnsPerSec)
-	fmt.Fprintf(buf, "\n}")
-	return buf.String()
 }
 
 type BinlogServer struct {
@@ -717,18 +704,11 @@ func (blServer *BinlogServer) setState(state int64) {
 	blServer.states.SetState(state)
 }
 
-func (blServer *BinlogServer) statsJSON() string {
-	return fmt.Sprintf("{"+
-		"\"Stats\": %v,"+
-		"\"States\": %v"+
-		"}", blServer.blsStats.String(), blServer.states.String())
-}
-
 func NewBinlogServer(mycnf *Mycnf) *BinlogServer {
 	binlogServer := new(BinlogServer)
 	binlogServer.mycnf = mycnf
 	binlogServer.blsStats = newBlsStats()
-	binlogServer.states = estats.NewStates("", []string{
+	binlogServer.states = estats.NewStates("BinlogServerState", []string{
 		"Disabled",
 		"Enabled",
 	}, time.Now(), BINLOG_SERVER_DISABLED)
@@ -738,7 +718,6 @@ func NewBinlogServer(mycnf *Mycnf) *BinlogServer {
 // RegisterBinlogServerService registers the service for serving and stats.
 func RegisterBinlogServerService(blServer *BinlogServer) {
 	rpcwrap.RegisterAuthenticated(blServer)
-	estats.PublishJSONFunc("BinlogServerRpcService", blServer.statsJSON)
 }
 
 // EnableBinlogServerService enabled the service for serving.

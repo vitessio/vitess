@@ -154,10 +154,10 @@ def wait_for_binlog_server_state(tablet, expected, timeout=5.0):
       if v == None:
         utils.debug("  vttablet not answering at /debug/vars, waiting...")
       else:
-        if 'BinlogServerRpcService' not in v:
-          utils.debug("  vttablet not exporting BinlogServerRpcService, waiting...")
+        if 'BinlogServerState' not in v:
+          utils.debug("  vttablet not exporting BinlogServerState, waiting...")
         else:
-          s = v['BinlogServerRpcService']['States']['Current']
+          s = v['BinlogServerState']['Current']
           if s != expected:
             utils.debug("  vttablet's binlog server in state %s != %s" % (s, expected))
           else:

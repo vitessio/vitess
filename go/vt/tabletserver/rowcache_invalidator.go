@@ -84,11 +84,16 @@ func RegisterCacheInvalidator() {
 		return
 	}
 	CacheInvalidationProcessor = NewInvalidationProcessor()
-	CacheInvalidationProcessor.states = estats.NewStates("", []string{
+	CacheInvalidationProcessor.states = estats.NewStates("CacheInvalidationState", []string{
 		"Disabled",
 		"Enabled",
 	}, time.Now(), DISABLED)
-	estats.PublishJSONFunc("CacheInvalidationProcessor", CacheInvalidationProcessor.statsJSON)
+	estats.Publish("CacheInvalidationCheckPoint", estats.StringFunc(func() string {
+		if pos := CacheInvalidationProcessor.currentPosition; pos != nil {
+			return pos.String()
+		}
+		return ""
+	}))
 }
 
 func StartRowCacheInvalidation() {
@@ -143,18 +148,6 @@ func (rowCache *InvalidationProcessor) stopRowCacheInvalidation() {
 func (rowCache *InvalidationProcessor) setState(state int64) {
 	rowCache.state.Set(state)
 	rowCache.states.SetState(state)
-}
-
-func (rowCache *InvalidationProcessor) statsJSON() string {
-	currentPosition := ""
-	if rowCache.currentPosition != nil {
-		currentPosition = rowCache.currentPosition.String()
-	}
-	return fmt.Sprintf("{"+
-		"\n \"States\": %v,"+
-		"\n \"Checkpoint\": \"%v\""+
-		"\n"+
-		"}", rowCache.states.String(), currentPosition)
 }
 
 func (rowCache *InvalidationProcessor) isServiceEnabled() bool {
