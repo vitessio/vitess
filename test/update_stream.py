@@ -5,12 +5,14 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
-import json
+import optparse
 import os
 import sys
 import time
 import traceback
 import threading
+import unittest
+
 import MySQLdb
 
 import tablet
@@ -44,17 +46,22 @@ def _get_repl_current_position():
   return start_position.__dict__
 
 
-def setup():
-  utils.zk_setup()
+def setUpModule():
+  try:
+    utils.zk_setup()
 
   # start mysql instance external to the test
-  setup_procs = [master_tablet.init_mysql(),
-                 replica_tablet.init_mysql()
-                ]
-  utils.wait_procs(setup_procs)
-  setup_tablets()
+    setup_procs = [master_tablet.init_mysql(),
+                   replica_tablet.init_mysql()
+                   ]
+    utils.wait_procs(setup_procs)
+    setup_tablets()
+  except:
+    tearDownModule()
+    raise
 
-def teardown():
+
+def tearDownModule():
   if utils.options.skip_teardown:
     return
   utils.debug("Tearing down the servers and setup")
@@ -107,271 +114,253 @@ def setup_schema():
   master_tablet.create_db('vt_test_keyspace')
   global GLOBAL_MASTER_START_POSITION
   GLOBAL_MASTER_START_POSITION = _get_master_current_position()
-  master_tablet.mquery('vt_test_keyspace', create_vt_insert_test)
-  master_tablet.mquery('vt_test_keyspace', create_vt_a)
-  master_tablet.mquery('vt_test_keyspace', create_vt_b)
-  master_tablet.mquery('vt_test_keyspace', create_vt_c)
+  master_tablet.mquery('vt_test_keyspace', _create_vt_insert_test)
+  master_tablet.mquery('vt_test_keyspace', _create_vt_a)
+  master_tablet.mquery('vt_test_keyspace', _create_vt_b)
+  master_tablet.mquery('vt_test_keyspace', _create_vt_c)
 
 
-def _get_stream_connections():
-  master_conn = _get_master_stream_conn()
-  replica_conn =  _get_replica_stream_conn()
-  return master_conn, replica_conn
+class TestUpdateStream(unittest.TestCase):
 
-def _get_master_stream_conn():
-  #return update_stream_service.UpdateStreamConnection(master_host, 30, user="ala", password="ma kota")
-  return update_stream_service.UpdateStreamConnection(master_host, 30)
+  def _get_master_stream_conn(self):
+    #return update_stream_service.UpdateStreamConnection(master_host, 30, user="ala", password="ma kota")
+    return update_stream_service.UpdateStreamConnection(master_host, 30)
 
-def _get_replica_stream_conn():
-  #return update_stream_service.UpdateStreamConnection(replica_host, 30, user="ala", password="ma kota")
-  return update_stream_service.UpdateStreamConnection(replica_host, 30)
+  def _get_replica_stream_conn(self):
+    #return update_stream_service.UpdateStreamConnection(replica_host, 30, user="ala", password="ma kota")
+    return update_stream_service.UpdateStreamConnection(replica_host, 30)
 
 
-@utils.test_case
-def run_test_service_disabled():
-  start_position = _get_repl_current_position()
-  utils.debug("run_test_service_disabled starting @ %s" % start_position)
-  _exec_vt_txn(master_host, populate_vt_insert_test)
-  _exec_vt_txn(master_host, ['delete from vt_insert_test',])
-  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
-#  time.sleep(20)
-  replica_conn = _get_replica_stream_conn()
-  utils.debug("dialing replica update stream service")
-  replica_conn.dial()
-  try:
-    binlog_pos, data, err = replica_conn.stream_start(start_position)
-  except Exception, e:
-    utils.debug(str(e))
-    if str(e) == "Update stream service is not enabled yet":
-      utils.debug("Test Service Disabled: Pass")
-    else:
-      raise "Test Service Disabled: Fail - did not throw the correct exception"
+  def _test_service_disabled(self):
+    start_position = _get_repl_current_position()
+    utils.debug("_test_service_disabled starting @ %s" % start_position)
+    self._exec_vt_txn(master_host, _populate_vt_insert_test)
+    self._exec_vt_txn(master_host, ['delete from vt_insert_test',])
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
+    #  time.sleep(20)
+    replica_conn = self._get_replica_stream_conn()
+    utils.debug("dialing replica update stream service")
+    replica_conn.dial()
+    try:
+      binlog_pos, data, err = replica_conn.stream_start(start_position)
+    except Exception, e:
+      utils.debug(str(e))
+      if str(e) == "Update stream service is not enabled yet":
+        utils.debug("Test Service Disabled: Pass")
+      else:
+        self.fail("Test Service Disabled: Fail - did not throw the correct exception")
 
-  v = utils.get_vars(replica_tablet.port)
-  if v['UpdateStreamRpcService']['States']['Current'] != 'Disabled':
-    raise utils.TestError("Update stream service should be 'Disabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
+    v = utils.get_vars(replica_tablet.port)
+    if v['UpdateStreamRpcService']['States']['Current'] != 'Disabled':
+      self.fail("Update stream service should be 'Disabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
 
-def perform_writes(count):
-  for i in xrange(count):
-    _exec_vt_txn(master_host, populate_vt_insert_test)
-    _exec_vt_txn(master_host, ['delete from vt_insert_test',])
+  def perform_writes(self, count):
+    for i in xrange(count):
+      self._exec_vt_txn(master_host, _populate_vt_insert_test)
+      self._exec_vt_txn(master_host, ['delete from vt_insert_test',])
 
 
-@utils.test_case
-def run_test_service_enabled():
-  start_position = _get_repl_current_position()
-  utils.debug("run_test_service_enabled starting @ %s" % start_position)
-  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
-  utils.debug("sleeping a bit for the replica action to complete")
-  time.sleep(10)
-  thd = threading.Thread(target=perform_writes, name='write_thd', args=(400,))
-  thd.daemon = True
-  thd.start()
-  replica_conn = _get_replica_stream_conn()
-  replica_conn.dial()
+  def _test_service_enabled(self):
+    start_position = _get_repl_current_position()
+    utils.debug("_test_service_enabled starting @ %s" % start_position)
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
+    utils.debug("sleeping a bit for the replica action to complete")
+    time.sleep(10)
+    thd = threading.Thread(target=self.perform_writes, name='write_thd', args=(400,))
+    thd.daemon = True
+    thd.start()
+    replica_conn = self._get_replica_stream_conn()
+    replica_conn.dial()
 
-  try:
-    binlog_pos, data, err = replica_conn.stream_start(start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
-    for i in xrange(10):
-      binlog_pos, data, err = replica_conn.stream_next()
+    try:
+      binlog_pos, data, err = replica_conn.stream_start(start_position)
       if err:
         raise utils.TestError("Update stream returned error '%s'", err)
-      if data['SqlType'] == 'COMMIT' and utils.options.verbose == 2:
-        utils.debug("Test Service Enabled: Pass")
-        break
-  except Exception, e:
-    raise utils.TestError("Exception in getting stream from replica: %s\n Traceback %s",str(e), traceback.print_exc())
-  thd.join(timeout=30)
+      for i in xrange(10):
+        binlog_pos, data, err = replica_conn.stream_next()
+        if err:
+          raise utils.TestError("Update stream returned error '%s'", err)
+        if data['SqlType'] == 'COMMIT' and utils.options.verbose == 2:
+          utils.debug("Test Service Enabled: Pass")
+          break
+    except Exception, e:
+      raise utils.TestError("Exception in getting stream from replica: %s\n Traceback %s",str(e), traceback.print_exc())
+    thd.join(timeout=30)
 
-  v = utils.get_vars(replica_tablet.port)
-  if v['UpdateStreamRpcService']['States']['Current'] != 'Enabled':
-    raise utils.TestError("Update stream service should be 'Enabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
+    v = utils.get_vars(replica_tablet.port)
+    if v['UpdateStreamRpcService']['States']['Current'] != 'Enabled':
+      raise utils.TestError("Update stream service should be 'Enabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
 
-  utils.debug("Testing enable -> disable switch starting @ %s" % start_position)
-  replica_conn = _get_replica_stream_conn()
-  replica_conn.dial()
-  disabled_err = False
-  txn_count = 0
-  try:
-    binlog_pos, data, err = replica_conn.stream_start(start_position)
-    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
-    #utils.debug("Sleeping a bit for the spare action to complete")
-    #time.sleep(20)
-    while(1):
-      binlog_pos, data, err = replica_conn.stream_next()
-      if err is not None and err == "Fatal Service Error: Disconnecting because the Update Stream service has been disabled":
-        disabled_err = True
-        break
-      if data is not None and data['SqlType'] == 'COMMIT':
-        txn_count +=1
+    utils.debug("Testing enable -> disable switch starting @ %s" % start_position)
+    replica_conn = self._get_replica_stream_conn()
+    replica_conn.dial()
+    disabled_err = False
+    txn_count = 0
+    try:
+      binlog_pos, data, err = replica_conn.stream_start(start_position)
+      utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
+      #utils.debug("Sleeping a bit for the spare action to complete")
+      #time.sleep(20)
+      while(1):
+        binlog_pos, data, err = replica_conn.stream_next()
+        if err is not None and err == "Fatal Service Error: Disconnecting because the Update Stream service has been disabled":
+          disabled_err = True
+          break
+        if data is not None and data['SqlType'] == 'COMMIT':
+          txn_count +=1
 
-    if not disabled_err:
-      print "Test Service Switch: FAIL"
+      if not disabled_err:
+        print "Test Service Switch: FAIL"
+        return
+    except Exception, e:
+      print "Exception: %s" % str(e)
+      print traceback.print_exc()
+      raise utils.TestError("Update stream returned error '%s'", str(e))
+    utils.debug("Streamed %d transactions before exiting" % txn_count)
+
+  def _vtdb_conn(self, host):
+    return vt_occ2.connect(host, 'test_keyspace', '0', 2)
+
+  def _exec_vt_txn(self, host, query_list=None):
+    if not query_list:
       return
-  except Exception, e:
-    print "Exception: %s" % str(e)
-    print traceback.print_exc()
-    raise utils.TestError("Update stream returned error '%s'", str(e))
-  utils.debug("Streamed %d transactions before exiting" % txn_count)
+    vtdb_conn = self._vtdb_conn(host)
+    vtdb_cursor = vtdb_conn.cursor()
+    vtdb_conn.begin()
+    for q in query_list:
+      vtdb_cursor.execute(q, {})
+    vtdb_conn.commit()
 
-def _vtdb_conn(host):
-  return vt_occ2.connect(host, 'test_keyspace', '0', 2)
-
-def _exec_vt_txn(host, query_list=None):
-  if not query_list:
-    return
-  vtdb_conn = _vtdb_conn(host)
-  vtdb_cursor = vtdb_conn.cursor()
-  vtdb_conn.begin()
-  for q in query_list:
-    vtdb_cursor.execute(q, {})
-  vtdb_conn.commit()
-
-#The function below checks the parity of streams received
-#from master and replica for the same writes. Also tests
-#transactions are retrieved properly.
-@utils.test_case
-def run_test_stream_parity():
-  master_start_position = _get_master_current_position()
-  replica_start_position = _get_repl_current_position()
-  utils.debug("run_test_stream_parity starting @ %s" % master_start_position)
-  master_txn_count = 0
-  replica_txn_count = 0
-  _exec_vt_txn(master_host, populate_vt_a(15))
-  _exec_vt_txn(master_host, populate_vt_b(14))
-  _exec_vt_txn(master_host, ['delete from vt_a',])
-  _exec_vt_txn(master_host, ['delete from vt_b',])
-  master_conn = _get_master_stream_conn()
-  master_conn.dial()
-  master_tuples = []
-  binlog_pos, data, err = master_conn.stream_start(master_start_position)
-  if err:
-    raise utils.TestError("Update stream returned error '%s'", err)
-  master_tuples.append((binlog_pos, data))
-  for i in xrange(21):
-    binlog_pos, data, err = master_conn.stream_next()
+  #The function below checks the parity of streams received
+  #from master and replica for the same writes. Also tests
+  #transactions are retrieved properly.
+  def test_stream_parity(self):
+    master_start_position = _get_master_current_position()
+    replica_start_position = _get_repl_current_position()
+    utils.debug("run_test_stream_parity starting @ %s" % master_start_position)
+    master_txn_count = 0
+    replica_txn_count = 0
+    self._exec_vt_txn(master_host, _populate_vt_a(15))
+    self._exec_vt_txn(master_host, _populate_vt_b(14))
+    self._exec_vt_txn(master_host, ['delete from vt_a',])
+    self._exec_vt_txn(master_host, ['delete from vt_b',])
+    master_conn = self._get_master_stream_conn()
+    master_conn.dial()
+    master_tuples = []
+    binlog_pos, data, err = master_conn.stream_start(master_start_position)
     if err:
       raise utils.TestError("Update stream returned error '%s'", err)
     master_tuples.append((binlog_pos, data))
-    if data['SqlType'] == 'COMMIT':
-      master_txn_count +=1
-      break
-  replica_tuples = []
-  replica_conn = _get_replica_stream_conn()
-  replica_conn.dial()
-  binlog_pos, data, err = replica_conn.stream_start(replica_start_position)
-  if err:
-    raise utils.TestError("Update stream returned error '%s'", err)
-  replica_tuples.append((binlog_pos, data))
-  for i in xrange(21):
-    binlog_pos, data, err = replica_conn.stream_next()
+    for i in xrange(21):
+      binlog_pos, data, err = master_conn.stream_next()
+      if err:
+        raise utils.TestError("Update stream returned error '%s'", err)
+      master_tuples.append((binlog_pos, data))
+      if data['SqlType'] == 'COMMIT':
+        master_txn_count +=1
+        break
+    replica_tuples = []
+    replica_conn = self._get_replica_stream_conn()
+    replica_conn.dial()
+    binlog_pos, data, err = replica_conn.stream_start(replica_start_position)
     if err:
       raise utils.TestError("Update stream returned error '%s'", err)
     replica_tuples.append((binlog_pos, data))
-    if data['SqlType'] == 'COMMIT':
-      replica_txn_count +=1
-      break
-  if len(master_tuples) != len(replica_tuples):
-    utils.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_tuples, replica_tuples))
-  for master_val, replica_val in zip(master_tuples, replica_tuples):
-    master_data = master_val[1]
-    replica_data = replica_val[1]
-    if master_data != replica_data:
-      raise utils.TestError("Test failed, data mismatch - master '%s' and replica position '%s'" % (master_data, replica_data))
-  utils.debug("Test Writes: PASS")
+    for i in xrange(21):
+      binlog_pos, data, err = replica_conn.stream_next()
+      if err:
+        raise utils.TestError("Update stream returned error '%s'", err)
+      replica_tuples.append((binlog_pos, data))
+      if data['SqlType'] == 'COMMIT':
+        replica_txn_count +=1
+        break
+    if len(master_tuples) != len(replica_tuples):
+      utils.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_tuples, replica_tuples))
+    for master_val, replica_val in zip(master_tuples, replica_tuples):
+      master_data = master_val[1]
+      replica_data = replica_val[1]
+      self.assertEqual(master_data, replica_data, "Test failed, data mismatch - master '%s' and replica position '%s'" % (master_data, replica_data))
+    utils.debug("Test Writes: PASS")
 
 
-@utils.test_case
-def run_test_ddl():
-  global GLOBAL_MASTER_START_POSITION
-  start_position = GLOBAL_MASTER_START_POSITION
-  utils.debug("run_test_ddl: starting @ %s" % start_position)
-  master_conn = _get_master_stream_conn()
-  master_conn.dial()
-  binlog_pos, data, err = master_conn.stream_start(start_position)
-  if err:
-    raise utils.TestError("Update stream returned error '%s'", err)
-
-  if data['Sql'] != create_vt_insert_test.replace('\n', ''):
-    raise utils.TestError("Test Failed: DDL %s didn't match the original %s" % (data['Sql'], create_vt_insert_test))
-  utils.debug("Test DDL: PASS")
-
-#This tests the service switch from disable -> enable -> disable
-def run_test_service_switch():
-  run_test_service_disabled()
-  run_test_service_enabled()
-
-@utils.test_case
-def run_test_log_rotation():
-  start_position = _get_master_current_position()
-  master_tablet.mquery('vt_test_keyspace', "flush logs")
-  _exec_vt_txn(master_host, populate_vt_a(15))
-  _exec_vt_txn(master_host, ['delete from vt_a',])
-  master_conn = _get_master_stream_conn()
-  master_conn.dial()
-  binlog_pos, data, err = master_conn.stream_start(start_position)
-  if err:
-    raise utils.TestError("Update stream returned error '%s'", err)
-  master_txn_count = 0
-  logs_correct = False
-  while master_txn_count <=2:
-    binlog_pos, data, err = master_conn.stream_next()
+  def test_ddl(self):
+    global GLOBAL_MASTER_START_POSITION
+    start_position = GLOBAL_MASTER_START_POSITION
+    utils.debug("run_test_ddl: starting @ %s" % start_position)
+    master_conn = self._get_master_stream_conn()
+    master_conn.dial()
+    binlog_pos, data, err = master_conn.stream_start(start_position)
     if err:
       raise utils.TestError("Update stream returned error '%s'", err)
-    if start_position['Position']['MasterFilename'] < binlog_pos['Position']['MasterFilename']:
-      logs_correct = True
-      utils.debug("Log rotation correctly interpreted")
-      break
-    if data['SqlType'] == 'COMMIT':
-      master_txn_count +=1
-  if not logs_correct:
-    raise utils.TestError("Flush logs didn't get properly interpreted")
 
+    if data['Sql'] != _create_vt_insert_test.replace('\n', ''):
+      raise utils.TestError("Test Failed: DDL %s didn't match the original %s" % (data['Sql'], _create_vt_insert_test))
+    utils.debug("Test DDL: PASS")
 
-def run_all():
-  run_test_service_switch()
-  #The above test leaves the service in disabled state, hence enabling it.
-  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
-  #utils.debug("Sleeping a bit for the action to complete")
-  #time.sleep(20)
-  run_test_ddl()
-  run_test_stream_parity()
-  run_test_log_rotation()
+  #This tests the service switch from disable -> enable -> disable
+  def test_service_switch(self):
+    self._test_service_disabled()
+    self._test_service_enabled()
+    # The above tests leaves the service in disabled state, hence enabling it.
+    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
 
-create_vt_insert_test = '''create table vt_insert_test (
+  def test_log_rotation(self):
+    start_position = _get_master_current_position()
+    master_tablet.mquery('vt_test_keyspace', "flush logs")
+    self._exec_vt_txn(master_host, _populate_vt_a(15))
+    self._exec_vt_txn(master_host, ['delete from vt_a',])
+    master_conn = self._get_master_stream_conn()
+    master_conn.dial()
+    binlog_pos, data, err = master_conn.stream_start(start_position)
+    if err:
+      raise utils.TestError("Update stream returned error '%s'", err)
+    master_txn_count = 0
+    logs_correct = False
+    while master_txn_count <=2:
+      binlog_pos, data, err = master_conn.stream_next()
+      if err:
+        raise utils.TestError("Update stream returned error '%s'", err)
+      if start_position['Position']['MasterFilename'] < binlog_pos['Position']['MasterFilename']:
+        logs_correct = True
+        utils.debug("Log rotation correctly interpreted")
+        break
+      if data['SqlType'] == 'COMMIT':
+        master_txn_count +=1
+    if not logs_correct:
+      self.fail("Flush logs didn't get properly interpreted")
+
+_create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
 msg varchar(64),
 primary key (id)
 ) Engine=InnoDB'''
 
-populate_vt_insert_test = [
+_populate_vt_insert_test = [
     "insert into vt_insert_test (msg) values ('test %s')" % x
     for x in xrange(4)]
 
-create_vt_a = '''create table vt_a (
+_create_vt_a = '''create table vt_a (
 eid bigint,
 id int,
 primary key(eid, id)
 ) Engine=InnoDB'''
 
-def populate_vt_a(count):
+def _populate_vt_a(count):
   return ["insert into vt_a (eid, id) values (%d, %d)" % (x, x)
-    for x in xrange(count+1) if x >0]
+          for x in xrange(count+1) if x >0]
 
-create_vt_b = '''create table vt_b (
+_create_vt_b = '''create table vt_b (
 eid bigint,
 name varchar(128),
 foo varbinary(128),
 primary key(eid, name)
 ) Engine=InnoDB'''
 
-def populate_vt_b(count):
+def _populate_vt_b(count):
   return ["insert into vt_b (eid, name, foo) values (%d, 'name %s', 'foo %s')" % (x, x, x)
-    for x in xrange(count)]
+          for x in xrange(count)]
 
-create_vt_c = '''create table vt_c (
+_create_vt_c = '''create table vt_c (
 eid bigint auto_increment,
 id int default 1,
 name varchar(128) default 'name',
@@ -379,42 +368,28 @@ foo varchar(128),
 primary key(eid, id, name)
 ) Engine=InnoDB'''
 
-def populate_vt_c(count):
-  return ["insert into vt_c (foo) values ('foo %s')" % x
-    for x in xrange(count)]
-
-
-create_vt_select_test = '''create table vt_select_test (
-id bigint auto_increment,
-msg varchar(64),
-primary key (id)
-) Engine=InnoDB'''
-
-populate_vt_select_test = [
-    "insert into vt_select_test (msg) values ('test %s')" % x
-    for x in xrange(4)]
 
 
 def main():
-  args = utils.get_args()
   vt_mysqlbinlog =  os.environ.get('VT_MYSQL_ROOT') + '/bin/vt_mysqlbinlog'
   if not os.path.isfile(vt_mysqlbinlog):
     sys.exit("%s is not present, please install it and then re-run the test" % vt_mysqlbinlog)
 
-  try:
-    if args[0] != 'teardown':
-      setup()
-      if args[0] != 'setup':
-        for arg in args:
-          globals()[arg]()
-          print "GREAT SUCCESS"
-  except KeyboardInterrupt:
-    pass
-  except utils.Break:
-    utils.options.skip_teardown = True
-  finally:
-    teardown()
+  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
+  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
+  parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option('--teardown', action='store_true')
+  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
+  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
+  parser.add_option("--no-build", action="store_true")
 
+  (options, args) = parser.parse_args()
+
+  utils.options = options
+  if options.teardown:
+    tearDownModule()
+    sys.exit()
+  unittest.main(argv=sys.argv[:1] + ['-f'])
 
 if __name__ == '__main__':
   main()

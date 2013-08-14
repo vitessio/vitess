@@ -16,8 +16,6 @@ from net import bsonrpc
 from vtdb import vt_occ2
 from vtdb import dbexceptions
 
-QUERYLOGFILE = "/tmp/vtocc_queries.log"
-
 # This is a VtOCCConnection that doesn't attempt to do authentication.
 class BsonConnection(bsonrpc.BsonRpcClient):
   def __init__(self, addr, timeout, user=None, password=None):

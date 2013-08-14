@@ -72,6 +72,7 @@ def tearDownModule():
 
 class TestTabletManager(unittest.TestCase):
   def tearDown(self):
+    tablet.Tablet.check_vttablet_count()
     utils.zk_wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.clean_dbs()

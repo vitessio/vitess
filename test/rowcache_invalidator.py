@@ -6,6 +6,7 @@ import warnings
 warnings.simplefilter("ignore")
 
 import json
+import optparse
 import os
 import sys
 import time
@@ -227,15 +228,26 @@ def _exec_vt_txn(host, query_list=None):
   vtdb_conn.commit()
 
 def main():
-  print "Note: This is a slow test, has a couple of sleeps in it to simulate proper state changes"
-  args = utils.get_args()
   vt_mysqlbinlog =  os.environ.get('VT_MYSQL_ROOT') + '/bin/vt_mysqlbinlog'
   if not os.path.isfile(vt_mysqlbinlog):
     sys.exit("%s is not present, please install it and then re-run the test" % vt_mysqlbinlog)
 
+  print "Note: This is a slow test, has a couple of sleeps in it to simulate proper state changes"
+
+  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
+  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
+  parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option('--teardown', action='store_true')
+  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
+  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
+  parser.add_option("--no-build", action="store_true")
+
+  (options, args) = parser.parse_args()
+  utils.options = options
+
   try:
     suite = unittest.TestSuite()
-    if args[0] == 'run_all':
+    if not args:
       setup()
       suite.addTests(unittest.TestLoader().loadTestsFromTestCase(RowCacheInvalidator))
     else:
