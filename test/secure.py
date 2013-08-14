@@ -5,6 +5,7 @@
 # be found in the LICENSE file.
 
 import optparse
+import os
 import subprocess
 import sys
 import time
@@ -14,7 +15,6 @@ from vtdb import tablet3
 from vtdb import topology
 from zk import zkocc
 
-import os
 import utils
 import tablet
 

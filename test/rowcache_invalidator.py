@@ -6,24 +6,20 @@ import warnings
 warnings.simplefilter("ignore")
 
 import json
-from optparse import OptionParser
 import os
 import sys
 import time
-import traceback
-import threading
+import unittest
 import urllib2
 
 import MySQLdb
 
-import framework
-import tablet
-import utils
-import unittest
-
 from vtdb import update_stream_service
 from vtdb import vt_occ2
 
+import framework
+import tablet
+import utils
 
 master_tablet = tablet.Tablet(62344)
 replica_tablet = tablet.Tablet(62345)

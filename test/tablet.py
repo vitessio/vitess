@@ -162,13 +162,25 @@ class Tablet(object):
         return True
     return False
 
-  def create_db(self, name):
+  def drop_db(self, name):
     self.mquery('', 'drop database if exists %s' % name)
     while self.has_db(name):
       utils.debug("%s sleeping while waiting for database drop: %s" % (self.tablet_alias, name))
       time.sleep(0.3)
       self.mquery('', 'drop database if exists %s' % name)
+
+  def create_db(self, name):
+    self.drop_db(name)
     self.mquery('', 'create database %s' % name)
+
+  def clean_dbs(self):
+    utils.debug("mysql(%s): removing all databases" % self.tablet_uid)
+    rows = self.mquery('', 'show databases')
+    for row in rows:
+      dbname = row[0]
+      if dbname in ['information_schema', '_vt', 'mysql']:
+        continue
+      self.drop_db(dbname)
 
   def wait_check_db_var(self, name, value):
     for _ in range(3):
