@@ -27,7 +27,7 @@ class Keyspace:
     self.shard_count = len(data['Shards'])
     # if we have real values for shards and KeyRange.End, grab them
     if self.shard_count > 1 and data['Shards'][0]['KeyRange']['End'] != "":
-      self.shard_max_keys = [shard['KeyRange']['End'].decode('hex')
+      self.shard_max_keys = [shard['KeyRange']['End']
                              for shard in data['Shards']]
     # We end up needing the name for addressing so compute this once.
     self.shard_names = self._make_shard_names()
@@ -67,7 +67,7 @@ def read_keyspace(zkocc_client, keyspace_name):
     data = zkocc_client.get_srv_keyspace('local', keyspace_name)
     if not data:
       raise dbexceptions.OperationalError('invalid empty keyspace',
-                                          keyspace_path)
+                                          keyspace_name)
     return Keyspace(keyspace_name, data)
   except Exception as e:
-    raise dbexceptions.OperationalError('invalid keyspace', keyspace_path, e)
+    raise dbexceptions.OperationalError('invalid keyspace', keyspace_name, e)
