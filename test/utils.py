@@ -1,6 +1,8 @@
 #!/usr/bin/python
 
 import json
+import logging
+import optparse
 import os
 import shlex
 import shutil
@@ -9,6 +11,7 @@ import socket
 from subprocess import Popen, CalledProcessError, PIPE
 import sys
 import time
+import unittest
 import urllib
 
 import MySQLdb
@@ -39,24 +42,63 @@ def setup():
     pass
 setup()
 
+# DEPRECATED: just use logging.debug()
 def debug(msg):
-  if options.verbose == 2:
-    print msg
-    sys.stdout.flush()
+  logging.debug(msg)
 
-def test_case(fn):
-  def body():
-    debug("========== " + fn.__name__ + " ==========")
-    fn()
-    tablet.Tablet.check_vttablet_count()
-  return body
+# main executes the test classes contained in the passed module, or
+# __main__ if empty.
+def main(mod=None):
+  if mod == None:
+    mod = sys.modules['__main__']
+
+  global options
+
+  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
+  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
+  parser.add_option('--skip-teardown', action='store_true')
+  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
+  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
+  parser.add_option("--no-build", action="store_true")
+
+  (options, args) = parser.parse_args()
+
+  if options.verbose == 0:
+    level = logging.WARNING
+  elif options.verbose == 1:
+    level = logging.INFO
+  else:
+    level = logging.DEBUG
+  logging.basicConfig(format='-- %(asctime)s %(module)s:%(lineno)d %(levelname)s %(message)s', level=level)
+
+  try:
+    suite = unittest.TestSuite()
+    if not args:
+      # this will run the setup and teardown
+      suite.addTests(unittest.TestLoader().loadTestsFromModule(mod))
+    else:
+      if args[0] == 'teardown':
+        mod.tearDownModule()
+
+      elif args[0] == 'setup':
+        mod.setUpModule()
+
+      else:
+        for arg in args:
+          # this will run the setup and teardown
+          suite.addTests(unittest.TestLoader().loadTestsFromName(arg, mod))
+
+    if suite.countTestCases() > 0:
+      unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+  except KeyboardInterrupt:
+    logging.warning("======== Tests interrupted, cleaning up ========")
+    mod.tearDownModule()
 
 def remove_tmp_files():
   try:
     shutil.rmtree(tmp_root)
   except OSError as e:
-      if options.verbose == 2:
-        print >> sys.stderr, e, tmp_root
+    logging.debug("remove_tmp_files: %s", str(e))
 
 def pause(prompt):
   if options.debug:
@@ -93,10 +135,9 @@ def kill_sub_processes():
           if pid not in already_killed:
             os.kill(pid, signal.SIGTERM)
       except OSError as e:
-        if options.verbose == 2:
-          print >> sys.stderr, e
+        logging.debug("kill_sub_processes: %s", str(e))
   # temporary hack until we figure it out
-  debug("===== killing any remaining vt_mysqlbinlog process just to be sure...")
+  logging.debug("===== killing any remaining vt_mysqlbinlog process just to be sure...")
   os.system("killall -q vt_mysqlbinlog")
 
 def kill_sub_process(proc):
@@ -115,8 +156,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
   if trap_output:
     kargs['stdout'] = PIPE
     kargs['stderr'] = PIPE
-  if options.verbose == 2:
-    print "run:", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
+  logging.debug("run: %s %s", str(cmd), ', '.join('%s=%s' % x for x in kargs.iteritems()))
   proc = Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
@@ -124,8 +164,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
     if raise_on_error:
       raise TestError('cmd fail:', args, stdout, stderr)
     else:
-      if options.verbose >= 1:
-        print 'cmd fail:', args, stdout, stderr
+      logging.info('cmd fail: %s %s %s', str(args), stdout, stderr)
   return stdout, stderr
 
 # run sub-process, expects failure
@@ -137,19 +176,19 @@ def run_fail(cmd, **kargs):
   kargs['stdout'] = PIPE
   kargs['stderr'] = PIPE
   if options.verbose == 2:
-    print "run: (expect fail)", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
+    logging.debug("run: (expect fail) %s %s", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
   proc = Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
   if proc.returncode == 0:
-    debug("stdout:\n" + stdout + "stderr:\n" + stderr)
+    logging.info("stdout:\n%sstderr:\n%s", stdout, stderr)
     raise TestError('expected fail:', args, stdout, stderr)
   return stdout, stderr
 
 # run a daemon - kill when this script exits
 def run_bg(cmd, **kargs):
   if options.verbose == 2:
-    print "run:", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems())
+    logging.debug("run: %s %s", cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
   if isinstance(cmd, str):
     args = shlex.split(cmd)
   else:
@@ -187,7 +226,7 @@ def prog_compile(names):
       continue
     compiled_progs.append(name)
     if options.no_build:
-      debug('Skipping build of '+name)
+      logging.debug('Skipping build of %s', name)
     else:
       run('go build', cwd=vttop+'/go/cmd/'+name)
 
@@ -284,11 +323,11 @@ def zkocc_start(cells=['test_nj'], extra_params=[]):
   while True:
     v = get_vars(zkocc_port_base)
     if v == None:
-      debug("  zkocc not answering at /debug/vars, waiting...")
+      logging.debug("  zkocc not answering at /debug/vars, waiting...")
     else:
       break
 
-    debug("sleeping a bit while we wait")
+    logging.debug("sleeping a bit while we wait")
     time.sleep(0.1)
     timeout -= 0.1
     if timeout <= 0:
@@ -400,6 +439,6 @@ def wait_db_read_only(uid):
       check_db_read_only(uid)
       return
     except TestError as e:
-      print >> sys.stderr, 'WARNING: ', e
+      logging.warning("wait_db_read_only: %s", str(e))
       time.sleep(1.0)
   raise e

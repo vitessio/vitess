@@ -6,13 +6,11 @@ import warnings
 warnings.simplefilter("ignore")
 
 import gzip
-import optparse
+import logging
 import os
 import shutil
 import signal
-import socket
 from subprocess import PIPE, call
-import sys
 import time
 import unittest
 
@@ -67,8 +65,7 @@ def tearDownModule():
   try:
     shutil.rmtree(path)
   except OSError as e:
-    if utils.options.verbose == 2:
-      print >> sys.stderr, e, path
+    logging.debug("removing snapshot %s: %s", path, str(e))
 
 class TestTabletManager(unittest.TestCase):
   def tearDown(self):
@@ -346,7 +343,7 @@ class TestTabletManager(unittest.TestCase):
       raise utils.TestError("expected validation error", err)
     if "Un-reserved test_nj-0000062044" not in err:
       raise utils.TestError("expected Un-reserved", err)
-    utils.debug("Failed Clone output: " + err)
+    logging.debug("Failed Clone output: " + err)
     utils.run("chmod +w %s" % snapshot_dir)
 
     call(["touch", "/tmp/vtSimulateFetchFailures"])
@@ -610,7 +607,7 @@ class TestTabletManager(unittest.TestCase):
     # make sure they're accounted for properly
     # first the query engine States
     v = utils.get_vars(tablet_62344.port)
-    utils.debug("vars: %s" % str(v))
+    logging.debug("vars: %s" % str(v))
     if v['Voltron']['States']['DurationOPEN'] < 10e9:
       raise utils.TestError('not enough time in Open state', v['Voltron']['States']['DurationOPEN'])
     # then the Zookeeper connections
@@ -662,13 +659,13 @@ class TestTabletManager(unittest.TestCase):
     # Perform a reparent operation - the Validate part will try to ping
     # the master and fail somewhat quickly
     stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias)
-    utils.debug("Failed ReparentShard output:\n" + stderr)
+    logging.debug("Failed ReparentShard output:\n" + stderr)
     if 'ValidateShard verification failed: timed out during validate' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
     # Should timeout and fail
     stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias)
-    utils.debug("Failed ScrapTablet output:\n" + stderr)
+    logging.debug("Failed ScrapTablet output:\n" + stderr)
     if 'deadline exceeded' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
@@ -679,7 +676,7 @@ class TestTabletManager(unittest.TestCase):
     os.kill(sp.pid, signal.SIGINT)
     stdout, stderr = sp.communicate()
 
-    utils.debug("Failed ScrapTablet output:\n" + stderr)
+    logging.debug("Failed ScrapTablet output:\n" + stderr)
     if 'interrupted' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
@@ -867,7 +864,7 @@ class TestTabletManager(unittest.TestCase):
         "CHANGE MASTER TO MASTER_HOST = ''",
         ])
     new_pos = tablet_62044.mquery('', 'show master status')
-    utils.debug("New master position: %s" % str(new_pos))
+    logging.debug("New master position: %s" % str(new_pos))
 
     # 62344 will now be a slave of 62044
     tablet_62344.mquery('', [
@@ -895,12 +892,12 @@ class TestTabletManager(unittest.TestCase):
 
     # make sure the replication graph is fine
     shard_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0')
-    utils.debug('shard_files: %s' % " ".join(shard_files))
+    logging.debug('shard_files: %s' % " ".join(shard_files))
     if shard_files != ['action', 'actionlog', 'test_nj-0000062044']:
       raise utils.TestError('unexpected zk content: %s' % " ".join(shard_files))
 
     slave_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-0000062044')
-    utils.debug('slave_files: %s' % " ".join(slave_files))
+    logging.debug('slave_files: %s' % " ".join(slave_files))
     expected_slave_files = ['test_nj-0000041983', 'test_nj-0000062344']
     if brutal:
       expected_slave_files = ['test_nj-0000041983']
@@ -985,7 +982,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
 
     err, out = tablet_62344.vquery('select * from vt_select_test', path='test_keyspace/0', user='ala', password=r'ma kota')
-    utils.debug("Got rows: " + out)
+    logging.debug("Got rows: " + out)
     if 'Row count: ' not in out:
       raise utils.TestError("query didn't go through: %s, %s" % (err, out))
 
@@ -999,8 +996,7 @@ class TestTabletManager(unittest.TestCase):
     for exp in expected:
       if exp in text:
         return
-    print "ExecuteHook output:"
-    print text
+    logging.warning("ExecuteHook output:\n%s", text)
     raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
@@ -1074,7 +1070,7 @@ class TestTabletManager(unittest.TestCase):
     # check the vtctl command got the right remote error back
     if "vtaction interrupted by signal" not in err:
       raise utils.TestError("cannot find expected output in error:", err)
-    utils.debug("vtaction was interrupted correctly:\n" + err)
+    logging.debug("vtaction was interrupted correctly:\n" + err)
 
     tablet_62344.kill_vttablet()
 
@@ -1093,22 +1089,5 @@ class TestTabletManager(unittest.TestCase):
       raise utils.TestError("proc1 still running")
     tablet_62344.kill_vttablet()
 
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
 if __name__ == '__main__':
-  main()
+  utils.main()

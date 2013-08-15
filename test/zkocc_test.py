@@ -1,11 +1,7 @@
 #!/usr/bin/env python
 import datetime
-import json
 import logging
-import optparse
-import os
 import re
-import sys
 import tempfile
 import time
 import unittest
@@ -124,7 +120,7 @@ class TestZkocc(unittest.TestCase):
     # using zkocc
     out, err = utils.run(utils.vtroot+'/bin/zk --zk.zkocc-addr=localhost:%u %s' % (utils.zkocc_port_base, cmd), trap_output=True)
     self.assertEqualNormalized(out, expected, 'unexpected zk zkocc output')
-    utils.debug("Matched: " + out)
+    logging.debug("Matched: %s", out)
 
 
   def assertEqualNormalized(self, actual, expected, msg=None):
@@ -148,6 +144,7 @@ class TestZkocc(unittest.TestCase):
     except zkocc.ZkOccError as e:
       if str(e) != "Cannot dial to any server":
         raise
+    level = logging.getLogger().getEffectiveLevel()
     logging.getLogger().setLevel(logging.ERROR)
 
     # FIXME(ryszard): This can be changed into a self.assertRaises.
@@ -158,7 +155,7 @@ class TestZkocc(unittest.TestCase):
       if str(e) != "Cannot dial to any server":
         raise
 
-    logging.getLogger().setLevel(logging.WARNING)
+    logging.getLogger().setLevel(level)
 
     # get test
     utils.prog_compile(['zkclient2'])
@@ -227,7 +224,7 @@ class TestZkocc(unittest.TestCase):
 
     utils.kill_sub_process(querier)
 
-    utils.debug("Checking " + filename)
+    logging.debug("Checking %s", filename)
     fd = open(filename, "r")
     state = 0
     for line in fd:
@@ -252,6 +249,7 @@ class TestZkocc(unittest.TestCase):
     utils.zkocc_kill(zkocc_14850)
 
     # check that after the server is gone, the python client fails correctly
+    level = logging.getLogger().getEffectiveLevel()
     logging.getLogger().setLevel(logging.ERROR)
     try:
       zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
@@ -259,7 +257,7 @@ class TestZkocc(unittest.TestCase):
     except zkocc.ZkOccError as e:
       if str(e) != "Cannot dial to any server":
         raise
-    logging.getLogger().setLevel(logging.WARNING)
+    logging.getLogger().setLevel(level)
 
   def test_zkocc_qps(self):
     # preload the test_nj cell
@@ -319,22 +317,5 @@ class TestZkocc(unittest.TestCase):
                      'uid': 0}]},
                      end_points, "end points are wrong")
 
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
-
 if __name__ == '__main__':
-  main()
+  utils.main()

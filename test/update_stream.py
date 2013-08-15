@@ -5,9 +5,8 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
-import optparse
+import logging
 import os
-import sys
 import time
 import traceback
 import threading
@@ -210,11 +209,11 @@ class TestUpdateStream(unittest.TestCase):
           txn_count +=1
 
       if not disabled_err:
-        print "Test Service Switch: FAIL"
+        logging.error("Test Service Switch: FAIL")
         return
     except Exception, e:
-      print "Exception: %s" % str(e)
-      print traceback.print_exc()
+      logging.error("Exception: %s", str(e))
+      logging.error("Traceback: %s", traceback.print_exc())
       raise utils.TestError("Update stream returned error '%s'", str(e))
     utils.debug("Streamed %d transactions before exiting" % txn_count)
 
@@ -368,28 +367,5 @@ foo varchar(128),
 primary key(eid, id, name)
 ) Engine=InnoDB'''
 
-
-
-def main():
-  vt_mysqlbinlog =  os.environ.get('VT_MYSQL_ROOT') + '/bin/vt_mysqlbinlog'
-  if not os.path.isfile(vt_mysqlbinlog):
-    sys.exit("%s is not present, please install it and then re-run the test" % vt_mysqlbinlog)
-
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
 if __name__ == '__main__':
-  main()
+  utils.main()

@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import shutil
 import sys
@@ -112,7 +113,7 @@ class Tablet(object):
       query = [query]
 
     for q in query:
-      # utils.debug("mysql(%s,%s): %s" % (self.tablet_uid, dbname, q))
+      # logging.debug("mysql(%s,%s): %s" % (self.tablet_uid, dbname, q))
       cursor.execute(q)
 
     if write:
@@ -165,7 +166,7 @@ class Tablet(object):
   def drop_db(self, name):
     self.mquery('', 'drop database if exists %s' % name)
     while self.has_db(name):
-      utils.debug("%s sleeping while waiting for database drop: %s" % (self.tablet_alias, name))
+      logging.debug("%s sleeping while waiting for database drop: %s" % (self.tablet_alias, name))
       time.sleep(0.3)
       self.mquery('', 'drop database if exists %s' % name)
 
@@ -174,7 +175,7 @@ class Tablet(object):
     self.mquery('', 'create database %s' % name)
 
   def clean_dbs(self):
-    utils.debug("mysql(%s): removing all databases" % self.tablet_uid)
+    logging.debug("mysql(%s): removing all databases" % self.tablet_uid)
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
@@ -336,18 +337,18 @@ class Tablet(object):
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:
-        utils.debug("  vttablet not answering at /debug/vars, waiting...")
+        logging.debug("  vttablet not answering at /debug/vars, waiting...")
       else:
         if 'Voltron' not in v:
-          utils.debug("  vttablet not exporting Voltron, waiting...")
+          logging.debug("  vttablet not exporting Voltron, waiting...")
         else:
           s = v['Voltron']['States']['Current']
           if s != expected:
-            utils.debug("  vttablet in state %s != %s" % (s, expected))
+            logging.debug("  vttablet in state %s != %s" % (s, expected))
           else:
             break
 
-      utils.debug("sleeping a bit while we wait")
+      logging.debug("sleeping a bit while we wait")
       time.sleep(0.1)
       timeout -= 0.1
       if timeout <= 0:
@@ -368,7 +369,7 @@ class Tablet(object):
     return path
 
   def kill_vttablet(self):
-    utils.debug("killing vttablet: " + self.tablet_alias)
+    logging.debug("killing vttablet: " + self.tablet_alias)
     if self.proc is not None:
       Tablet.tablets_running -= 1
       self.proc.terminate()

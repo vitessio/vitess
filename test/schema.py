@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
-import optparse
-import sys
+import logging
 import unittest
 
 import utils
@@ -234,8 +233,7 @@ class TestSchema(unittest.TestCase):
     # now test action log pruning
     oldLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
     oldCount = len(oldLines)
-    if utils.options.verbose == 2:
-      print "I have %u actionlog before" % oldCount
+    logging.debug("I have %u actionlog before", oldCount)
     if oldCount <= 5:
       self.fail('Not enough actionlog before: %u' % oldCount)
 
@@ -243,8 +241,7 @@ class TestSchema(unittest.TestCase):
 
     newLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
     newCount = len(newLines)
-    if utils.options.verbose == 2:
-      print "I have %u actionlog after" % newCount
+    logging.debug("I have %u actionlog after", newCount)
 
     self.assertEqual(newCount, 5, 'Unexpected actionlog count after: %u' % newCount)
     if oldLines[-5:] != newLines:
@@ -261,22 +258,5 @@ class TestSchema(unittest.TestCase):
     shard_1_master.kill_vttablet()
     shard_1_replica1.kill_vttablet()
 
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
 if __name__ == '__main__':
-  main()
+  utils.main()
