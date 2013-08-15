@@ -28,8 +28,8 @@ const (
 	EVENT_HEADER_SIZE  = 19 // 4.0 and above, can be larger in 5.x
 	BINLOG_BLOCK_SIZE  = 16 * 1024
 	MYSQLBINLOG_CHUNK  = 64 * 1024
-	MAX_WAIT_TIMEOUT   = 30.0
-	LOG_WAIT_TIMEOUT   = 5.0
+	MAX_WAIT_TIMEOUT   = 30
+	LOG_WAIT_TIMEOUT   = 5
 )
 
 type stats struct {
@@ -52,8 +52,8 @@ type BinlogReader struct {
 
 	// these parameters will have reasonable default values but can be tuned
 	BinlogBlockSize int64
-	MaxWaitTimeout  float64
-	LogWaitTimeout  float64
+	MaxWaitTimeout  time.Duration
+	LogWaitTimeout  time.Duration
 }
 
 func (blr *BinlogReader) binLogPathForId(fileId int) string {
@@ -63,8 +63,8 @@ func (blr *BinlogReader) binLogPathForId(fileId int) string {
 func NewBinlogReader(binLogPrefix string) *BinlogReader {
 	return &BinlogReader{binLogPrefix: binLogPrefix,
 		BinlogBlockSize: BINLOG_BLOCK_SIZE,
-		MaxWaitTimeout:  MAX_WAIT_TIMEOUT,
-		LogWaitTimeout:  LOG_WAIT_TIMEOUT}
+		MaxWaitTimeout:  MAX_WAIT_TIMEOUT * time.Second,
+		LogWaitTimeout:  LOG_WAIT_TIMEOUT * time.Second}
 }
 
 /*
@@ -183,11 +183,11 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 				position, _ := binlogFile.Seek(0, 1)
 				log.Infof("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
 				// wait for more data
-				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
+				time.Sleep(blr.LogWaitTimeout)
 				stats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
-					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
+					if now.Sub(lastSlept) > blr.MaxWaitTimeout {
 						log.Errorf("MAX_WAIT_TIMEOUT exceeded, closing connection")
 						return
 					}
@@ -297,13 +297,13 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				}
 			} else {
 				position, _ := binlogFile.Seek(0, 1)
-				//log.Infof("BinlogReader wait for more data: %v:%v %v", binlogFile.Name(), position, time.Duration(blr.LogWaitTimeout * 1e9))
+				//log.Infof("BinlogReader wait for more data: %v:%v %v", binlogFile.Name(), position, blr.LogWaitTimeout)
 				// wait for more data
-				time.Sleep(time.Duration(blr.LogWaitTimeout * 1e9))
+				time.Sleep(blr.LogWaitTimeout)
 				stats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
-					if (now.Sub(lastSlept)) > time.Duration(blr.MaxWaitTimeout*1e9) {
+					if now.Sub(lastSlept) > blr.MaxWaitTimeout {
 						//vt_mysqlbinlog reads in chunks of 64k bytes, the code below pads null bytes so the remaining data
 						//in the buffer can be flushed before closing this stream. This manifests itself as end of log file,
 						//and would make the upstream code flow exit gracefully.
@@ -314,9 +314,9 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 							//log.Warningf("Error in writing pad bytes to vt_mysqlbinlog %v", err)
 							panic(fmt.Errorf("Error in writing pad bytes to vt_mysqlbinlog %v", err))
 						}
-						log.Infof("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9))
+						log.Infof("MAX_WAIT_TIMEOUT %v exceeded, closing connection", blr.MaxWaitTimeout)
 						return
-						//panic(fmt.Errorf("MAX_WAIT_TIMEOUT %v exceeded, closing connection", time.Duration(blr.MaxWaitTimeout*1e9)))
+						//panic(fmt.Errorf("MAX_WAIT_TIMEOUT %v exceeded, closing connection", blr.MaxWaitTimeout))
 					}
 				} else {
 					positionWaitStart[position] = now
