@@ -50,12 +50,11 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 	}
 
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
-	UpdateStreamRpcService.states = estats.NewStates("", []string{
+	UpdateStreamRpcService.states = estats.NewStates("UpdateStreamState", []string{
 		"Disabled",
 		"Enabled",
 	}, time.Now(), DISABLED)
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
-	estats.PublishJSONFunc("UpdateStreamRpcService", UpdateStreamRpcService.statsJSON)
 }
 
 func logError() {
@@ -140,14 +139,6 @@ func (updateStream *UpdateStream) isServiceEnabled() bool {
 func (updateStream *UpdateStream) setState(state int64) {
 	updateStream.state.Set(state)
 	updateStream.states.SetState(state)
-}
-
-// expvar.Var interface.
-// NOTE(szopa): It's unexported to avoid rpc logspam.
-func (updateStream *UpdateStream) statsJSON() string {
-	return fmt.Sprintf("{"+
-		"\"States\": %v"+
-		"}", updateStream.states.String())
 }
 
 func LogsDir() string {

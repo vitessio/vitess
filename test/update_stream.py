@@ -151,8 +151,8 @@ class TestUpdateStream(unittest.TestCase):
         self.fail("Test Service Disabled: Fail - did not throw the correct exception")
 
     v = utils.get_vars(replica_tablet.port)
-    if v['UpdateStreamRpcService']['States']['Current'] != 'Disabled':
-      self.fail("Update stream service should be 'Disabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
+    if v['UpdateStreamState']['Current'] != 'Disabled':
+      self.fail("Update stream service should be 'Disabled' but is '%s'" % v['UpdateStreamState']['Current'])
 
   def perform_writes(self, count):
     for i in xrange(count):
@@ -188,8 +188,8 @@ class TestUpdateStream(unittest.TestCase):
     thd.join(timeout=30)
 
     v = utils.get_vars(replica_tablet.port)
-    if v['UpdateStreamRpcService']['States']['Current'] != 'Enabled':
-      raise utils.TestError("Update stream service should be 'Enabled' but is '%s'" % v['UpdateStreamRpcService']['States']['Current'] )
+    if v['UpdateStreamState']['Current'] != 'Enabled':
+      self.fail("Update stream service should be 'Enabled' but is '%s'" % v['UpdateStreamState']['Current'] )
 
     utils.debug("Testing enable -> disable switch starting @ %s" % start_position)
     replica_conn = self._get_replica_stream_conn()
