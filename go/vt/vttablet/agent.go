@@ -9,11 +9,11 @@ package vttablet
 
 import (
 	"encoding/json"
-	"expvar"
 	"fmt"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -66,7 +66,7 @@ func InitAgent(
 		secureAddr = fmt.Sprintf(":%v", securePort)
 	}
 
-	exportedType := expvar.NewString("tablet-type")
+	exportedType := stats.NewString("TabletType")
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.

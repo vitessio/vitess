@@ -13,7 +13,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"expvar"
 	"flag"
 	"fmt"
 	"io"
@@ -24,6 +23,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/zk/zkns"
 )
@@ -272,9 +272,9 @@ func write(w io.Writer, line string) {
 }
 
 var (
-	requestCount = expvar.NewInt("pdns-request-count")
-	errorCount   = expvar.NewInt("pdns-error-count")
-	emptyCount   = expvar.NewInt("pdns-empty-count")
+	requestCount = stats.NewInt("PdnsRequestCount")
+	errorCount   = stats.NewInt("PdnsErrorCount")
+	emptyCount   = stats.NewInt("PdnsEmptyCount")
 )
 
 func (pd *pdns) Serve(r io.Reader, w io.Writer) {

@@ -7,7 +7,6 @@ package umgmt
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"expvar"
 	"net"
 	"net/http"
 	"os"
@@ -15,10 +14,11 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/stats"
 )
 
-var connectionCount = expvar.NewInt("connection-count")
-var connectionAccepted = expvar.NewInt("connection-accepted")
+var connectionCount = stats.NewInt("ConnectionCount")
+var connectionAccepted = stats.NewInt("ConnectionAccepted")
 
 type connCountConn struct {
 	net.Conn

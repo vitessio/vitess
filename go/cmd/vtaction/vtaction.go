@@ -5,7 +5,6 @@
 package main
 
 import (
-	"expvar"
 	"flag"
 	"fmt"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -33,7 +33,7 @@ var (
 )
 
 func init() {
-	expvar.NewString("binary-name").Set("vtaction")
+	stats.NewString("BinaryName").Set("vtaction")
 }
 
 func main() {

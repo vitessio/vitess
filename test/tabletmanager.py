@@ -617,8 +617,8 @@ class TestTabletManager(unittest.TestCase):
       raise utils.TestError('invalid zk global state: ', v['ZkMetaConn']['global']['Current'])
     if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
       raise utils.TestError('not enough time in Connected state', v['ZkMetaConn']['test_nj']['DurationConnected'])
-    if v['tablet-type'] != 'master':
-      raise utils.TestError('tablet-type not exported correctly')
+    if v['TabletType'] != 'master':
+      raise utils.TestError('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
 

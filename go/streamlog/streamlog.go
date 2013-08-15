@@ -1,17 +1,17 @@
 package streamlog
 
 import (
-	"expvar"
 	"io"
 	"net/http"
 	"net/url"
 	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 )
 
-var droppedMessages = expvar.NewMap("streamlog-dropped-messages")
+var droppedMessages = stats.NewCounters("StreamlogDroppedMessages")
 
 // A StreamLogger makes messages sent to it available through HTTP.
 type StreamLogger struct {
