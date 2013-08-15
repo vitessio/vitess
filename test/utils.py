@@ -42,10 +42,6 @@ def setup():
     pass
 setup()
 
-# DEPRECATED: just use logging.debug()
-def debug(msg):
-  logging.debug(msg)
-
 # main executes the test classes contained in the passed module, or
 # __main__ if empty.
 def main(mod=None):
