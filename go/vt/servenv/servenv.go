@@ -20,7 +20,6 @@ package servenv
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"expvar"
 	"flag"
 	"io"
 	"os"
@@ -30,6 +29,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/stats"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 )
 
@@ -60,8 +60,6 @@ func Init() {
 	if gomaxprocs == "" {
 		gomaxprocs = "1"
 	}
-	// Could report this in an expvar instead.
-	log.Infof("GOMAXPROCS = %v", gomaxprocs)
 
 	// We used to set this limit directly, but you pretty much have to
 	// use a root account to allow increasing a limit reliably. Dropping
@@ -71,10 +69,9 @@ func Init() {
 	fdLimit := &syscall.Rlimit{}
 	if err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, fdLimit); err != nil {
 		log.Errorf("max-open-fds failed: %v", err)
-	} else {
-		// Could report this in an expvar instead.
-		log.Infof("max-open-fds: %v", fdLimit.Cur)
 	}
+	fdl := stats.NewInt("MaxFds")
+	fdl.Set(int64(fdLimit.Cur))
 
 	if err := exportBinaryVersion(); err != nil {
 		log.Fatalf("servenv.Init: exportBinaryVersion: %v", err)
@@ -101,9 +98,10 @@ func exportBinaryVersion() error {
 	}
 	mtime := fileInfo.ModTime().Format(time.RFC3339)
 	version := mtime + " " + md5sum
-	expvar.NewString("binary-version").Set(version)
+	stats.NewString("BinaryVersion").Set(version)
 	// rexport this value for varz scraper
-	expvar.NewString("Version").Set(version)
+	// TODO(sougou): remove after varz migration
+	stats.NewString("Version").Set(version)
 	return nil
 }
 
