@@ -143,6 +143,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		shardLocation := cellKeyspaceShard{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard}
 		// only need to do this once per cell
 		if !knownShardLocations[shardLocation] {
+			log.Infof("Getting tablet types on cell %v for %v/%v", tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			if err != nil {
 				if err != topo.ErrNoNode {
@@ -195,7 +196,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		for shardLocation, _ := range knownShardLocations {
 			location := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
 			if _, ok := locationAddrsMap[location]; !ok {
-				log.Infof("Adding remote master record in %v", location)
+				log.Infof("adding remote master record in %v", location)
 				locationAddrsMap[location] = masterRecord
 			}
 		}
@@ -209,6 +210,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 			continue
 		}
 
+		log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", location.cell, location.keyspace, location.shard, location.tabletType)
 		if err := wr.ts.UpdateSrvTabletType(location.cell, location.keyspace, location.shard, location.tabletType, addrs); err != nil {
 			return fmt.Errorf("writing endpoints failed: %v", err)
 		}
@@ -256,6 +258,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 	// Save the shard entries
 	for cks, srvShard := range srvShardByPath {
+		log.Infof("updating shard serving graph in cell %v for %v/%v", cks.cell, cks.keyspace, cks.shard)
 		if err := wr.ts.UpdateSrvShard(cks.cell, cks.keyspace, cks.shard, srvShard); err != nil {
 			return fmt.Errorf("writing serving data failed: %v", err)
 		}
