@@ -115,15 +115,30 @@ index by_msg (msg)
         'commit'
         ], write=True)
 
+  def _get_value(self, tablet, table, id):
+    return tablet.mquery('vt_test_keyspace', 'select id, msg, keyspace_id from %s where id=%u' % (table, id))
+
   def _check_value(self, tablet, table, id, msg, keyspace_id, should_be_here=True):
-    result = tablet.mquery('vt_test_keyspace', 'select id, msg, keyspace_id from %s where id=%u' % (table, id))
+    result = self._get_value(tablet, table, id)
     if should_be_here:
       self.assertEqual(result, ((id, msg, keyspace_id),),
                        "Bad row in tablet %s for id=%u, keyspace_id=%x" % (
                          tablet.tablet_alias, id, keyspace_id))
     else:
-      if len(result) != 0:
-        self.fail("Extra row in tablet %s for id=%u, keyspace_id=%x: %s" % (tablet.tablet_alias, id, keyspace_id, str(result[0])))
+      self.assertEqual(len(result), 0, "Extra row in tablet %s for id=%u, keyspace_id=%x: %s" % (tablet.tablet_alias, id, keyspace_id, str(result)))
+
+  # _is_value_present_and_correct tries to read a value.
+  # if it is there, it will check it is correct and return True if it is.
+  # if not correct, it will self.fail.
+  # if not there, it will return False.
+  def _is_value_present_and_correct(self, tablet, table, id, msg, keyspace_id):
+    result = self._get_value(tablet, table, id)
+    if len(result) == 0:
+      return False
+    self.assertEqual(result, ((id, msg, keyspace_id),),
+                     "Bad row in tablet %s for id=%u, keyspace_id=%x" % (
+                         tablet.tablet_alias, id, keyspace_id))
+    return True
 
   def _insert_startup_values(self):
     self._insert_value(shard_0_master, 'resharding1', 1, 'msg1', 0x1000000000000000)
@@ -143,15 +158,33 @@ index by_msg (msg)
     self._check_value(shard_3_master, 'resharding1', 3, 'msg3', 0xD000000000000000)
     self._check_value(shard_3_replica, 'resharding1', 3, 'msg3', 0xD000000000000000)
 
-  def _insert_lots(self):
-    for i in xrange(1000):
+  def _insert_lots(self, count):
+    for i in xrange(count):
       self._insert_value(shard_1_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i)
       self._insert_value(shard_1_master, 'resharding1', 20000 + i, 'msg-range2-%u' % i, 0xE000000000000000 + i)
 
-  def _check_lots(self, percent):
-    for i in xrange(1000 * percent / 100):
-      self._check_value(shard_2_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i)
-      self._check_value(shard_3_master, 'resharding1', 20000 + i, 'msg-range2-%u' % i, 0xE000000000000000 + i)
+  def _check_lots(self, count):
+    # returns how many of the values we have, in percents.
+    found = 0
+    for i in xrange(count):
+      if self._is_value_present_and_correct(shard_2_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i):
+        found += 1
+      if self._is_value_present_and_correct(shard_3_master, 'resharding1', 20000 + i, 'msg-range2-%u' % i, 0xE000000000000000 + i):
+        found += 1
+    percent = found * 100 / count / 2
+    logging.debug("I have %u%% of the data", percent)
+    return percent
+
+  def _check_lots_timeout(self, count, threshold, timeout):
+    while True:
+      value = self._check_lots(count)
+      if value >= threshold:
+        return
+      if timeout == 0:
+        self.fail("timeout waiting for %u%% of the data", threshold)
+      logging.debug("sleeping until we get more than %u%%", threshold)
+      time.sleep(1)
+      timeout -= 1
 
   def _wait_for_binlog_server_state(self, tablet, expected, timeout=5.0):
     while True:
@@ -250,15 +283,11 @@ index by_msg (msg)
     # check we get most of it after a few seconds, wait for binlog server
     # timeout, check we get all of it.
     logging.debug("Inserting lots of data on source shard")
-    self._insert_lots()
-    logging.debug("Waiting for 5 seconds for slaves to replicate the data")
-    time.sleep(5)
-    logging.debug("Checking 80 percent of data was sent")
-    self._check_lots(80)
-    logging.debug("Sleeping for 50 more seconds to let source shard flush")
-    time.sleep(50)
-    logging.debug("Checking all data went through")
-    self._check_lots(100)
+    self._insert_lots(1000)
+    logging.debug("Checking 80 percent of data was sent quickly")
+    self._check_lots_timeout(1000, 80, 5)
+    logging.debug("Checking all data went through eventually")
+    self._check_lots_timeout(1000, 100, 50)
     utils.pause("AAAAAAAAAAAA")
 
     # now serve rdonly from the split shards
