@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
-import optparse
-import sys
+import logging
 import unittest
 
 from vtdb import tablet3
@@ -75,23 +74,17 @@ class TestSharded(unittest.TestCase):
     out, err = utils.vtclient2(0, "/test_nj/test_keyspace/master", "select id, msg from vt_select_test", driver=driver, verbose=True)
     for pattern in to_look_for:
       if pattern not in err:
-        print "vtclient2 returned:"
-        print out
-        print err
+        logging.error("vtclient2 returned:\n%s\n%s", out, err)
         self.fail('wrong vtclient2 output, missing: ' + pattern)
-    if utils.options.verbose == 2:
-        print out, err
+    logging.debug("_check_rows:\n%s\n%s", out, err)
 
   def _check_rows_schema_diff(self, driver):
     out, err = utils.vtclient2(0, "/test_nj/test_keyspace/master", "select * from vt_select_test", driver=driver, verbose=False, raise_on_error=False)
     if "column[0] name mismatch: id != msg" not in err and \
       "column[0] name mismatch: msg != id" not in err:
-      print "vtclient2 returned:"
-      print out
-      print err
+      logging.error("vtclient2 returned:\n%s\n%s", out, err)
       self.fail('wrong vtclient2 output, missing "name mismatch" of some kind')
-    if utils.options.verbose == 2:
-      print out, err
+    logging.debug("_check_rows_schema_diff:\n%s\n%s", out, err)
 
   def test_sharding(self):
 
@@ -237,7 +230,7 @@ class TestSharded(unittest.TestCase):
     shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.-80.master:_vtocc")
     if len(shard_0_master_addrs) != 1:
       self.fail('topology.get_host_port_by_name failed for "test_keyspace.-80.master:_vtocc", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
-    utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # connect to shard -80
     conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0],
@@ -274,22 +267,5 @@ class TestSharded(unittest.TestCase):
     shard_1_master.kill_vttablet()
     shard_1_replica.kill_vttablet()
 
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
 if __name__ == '__main__':
-  main()
+  utils.main()

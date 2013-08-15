@@ -1,9 +1,7 @@
 #!/usr/bin/env python
  # -*- coding: utf-8 -*-
 import logging
-import optparse
 import os
-import sys
 import tempfile
 import unittest
 import warnings
@@ -223,24 +221,5 @@ class TestRlookup(TestCheckersBase):
     self.c._run()
     self.assertTrue(self.c.mismatches)
 
-
-
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
-
 if __name__ == '__main__':
-  main()
+  utils.main()

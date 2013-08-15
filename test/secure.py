@@ -4,10 +4,8 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import optparse
 import os
 import subprocess
-import sys
 import time
 import unittest
 
@@ -33,7 +31,7 @@ def setUpModule():
   try:
     utils.zk_setup()
 
-    utils.debug("Creating certificates")
+    logging.debug("Creating certificates")
     os.makedirs(cert_dir)
 
     # Create CA certificate
@@ -236,7 +234,7 @@ class TestSecure(unittest.TestCase):
       raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
     if shard_0_master_addrs[0][2] != True:
       raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts" is not encrypted')
-    utils.debug("shard 0 master addrs: %s" % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+    logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # make sure asking for optionally secure connections works too
     auto_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vtocc", encrypted=True)
@@ -262,10 +260,7 @@ class TestSecure(unittest.TestCase):
                                     "test_keyspace", "0", 5.0, encrypted=True)
     conn.dial()
     (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})
-    if (len(results) != 1 or \
-          results[0][0] != 1):
-      print "conn._execute returned:", results
-      raise utils.TestError('wrong conn._execute output')
+    self.assertEqual(results, [(1,),], 'wrong conn._execute output: %s' % str(results))
 
     sconn = utils.get_vars(shard_0_master.port)["SecureConns"]
     if sconn != 1:
@@ -280,7 +275,7 @@ class TestSecure(unittest.TestCase):
       conn._execute("select sleep(100) from dual", {})
       raise utils.TestError("No timeout exception")
     except tablet3.TimeoutError as e:
-      utils.debug("Got the right exception for SSL timeout: %s" % str(e))
+      logging.debug("Got the right exception for SSL timeout: %s", str(e))
 
     # kill everything
     utils.kill_sub_process(zkocc_server)
@@ -300,25 +295,7 @@ class TestSecure(unittest.TestCase):
       raise utils.TestError("proc1 still running")
     shard_0_master.kill_vttablet()
     utils.kill_sub_process(zkocc_server)
-    utils.debug("Done here")
-
-
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
+    logging.debug("Done here")
 
 if __name__ == '__main__':
-  main()
+  utils.main()

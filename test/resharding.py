@@ -4,8 +4,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import optparse
-import sys
+import logging
 import time
 import unittest
 
@@ -158,23 +157,23 @@ index by_msg (msg)
     while True:
       v = utils.get_vars(tablet.port)
       if v == None:
-        utils.debug("  vttablet not answering at /debug/vars, waiting...")
+        logging.debug("  vttablet not answering at /debug/vars, waiting...")
       else:
         if 'BinlogServerState' not in v:
-          utils.debug("  vttablet not exporting BinlogServerState, waiting...")
+          logging.debug("  vttablet not exporting BinlogServerState, waiting...")
         else:
           s = v['BinlogServerState']['Current']
           if s != expected:
-            utils.debug("  vttablet's binlog server in state %s != %s" % (s, expected))
+            logging.debug("  vttablet's binlog server in state %s != %s", s, expected)
           else:
             break
 
-      utils.debug("sleeping a bit while we wait")
+      logging.debug("sleeping a bit while we wait")
       time.sleep(0.1)
       timeout -= 0.1
       if timeout <= 0:
         self.fail("timeout waiting for binlog server state %s" % expected)
-    utils.debug("tablet %s binlog service is in state %s" % (tablet.tablet_alias, expected))
+    logging.debug("tablet %s binlog service is in state %s", tablet.tablet_alias, expected)
 
   def test_resharding(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -250,15 +249,15 @@ index by_msg (msg)
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
     # timeout, check we get all of it.
-    utils.debug("Inserting lots of data on source shard")
+    logging.debug("Inserting lots of data on source shard")
     self._insert_lots()
-    utils.debug("Waiting for 5 seconds for slaves to replicate the data")
+    logging.debug("Waiting for 5 seconds for slaves to replicate the data")
     time.sleep(5)
-    utils.debug("Checking 80 percent of data was sent")
+    logging.debug("Checking 80 percent of data was sent")
     self._check_lots(80)
-    utils.debug("Sleeping for 50 more seconds to let source shard flush")
+    logging.debug("Sleeping for 50 more seconds to let source shard flush")
     time.sleep(50)
-    utils.debug("Checking all data went through")
+    logging.debug("Checking all data went through")
     self._check_lots(100)
     utils.pause("AAAAAAAAAAAA")
 
@@ -311,27 +310,10 @@ index by_msg (msg)
                                       shard['KeyRange']['End'])
       result += "\n"
     result += "TabletTypes: " + ",".join(sorted(ks['TabletTypes']))
-    utils.debug("Cell %s keyspace %s has data:\n%s" % (cell, keyspace, result))
+    logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
     self.assertEqual(expected, result,
                      "Mismatch in srv keyspace for cell %s keyspace %s" % (
                      cell, keyspace))
 
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
 if __name__ == '__main__':
-  main()
+  utils.main()

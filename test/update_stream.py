@@ -63,7 +63,7 @@ def setUpModule():
 def tearDownModule():
   if utils.options.skip_teardown:
     return
-  utils.debug("Tearing down the servers and setup")
+  logging.debug("Tearing down the servers and setup")
   teardown_procs = [master_tablet.teardown_mysql(),
                     replica_tablet.teardown_mysql()]
   utils.wait_procs(teardown_procs, raise_on_error=False)
@@ -79,7 +79,7 @@ def tearDownModule():
 
 def setup_tablets():
   # Start up a master mysql and vttablet
-  utils.debug("Setting up tablets")
+  logging.debug("Setting up tablets")
   utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph test_keyspace/0')
@@ -132,20 +132,20 @@ class TestUpdateStream(unittest.TestCase):
 
   def _test_service_disabled(self):
     start_position = _get_repl_current_position()
-    utils.debug("_test_service_disabled starting @ %s" % start_position)
+    logging.debug("_test_service_disabled starting @ %s" % start_position)
     self._exec_vt_txn(master_host, _populate_vt_insert_test)
     self._exec_vt_txn(master_host, ['delete from vt_insert_test',])
     utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
     #  time.sleep(20)
     replica_conn = self._get_replica_stream_conn()
-    utils.debug("dialing replica update stream service")
+    logging.debug("dialing replica update stream service")
     replica_conn.dial()
     try:
       binlog_pos, data, err = replica_conn.stream_start(start_position)
     except Exception, e:
-      utils.debug(str(e))
+      logging.debug(str(e))
       if str(e) == "Update stream service is not enabled yet":
-        utils.debug("Test Service Disabled: Pass")
+        logging.debug("Test Service Disabled: Pass")
       else:
         self.fail("Test Service Disabled: Fail - did not throw the correct exception")
 
@@ -161,9 +161,9 @@ class TestUpdateStream(unittest.TestCase):
 
   def _test_service_enabled(self):
     start_position = _get_repl_current_position()
-    utils.debug("_test_service_enabled starting @ %s" % start_position)
+    logging.debug("_test_service_enabled starting @ %s" % start_position)
     utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
-    utils.debug("sleeping a bit for the replica action to complete")
+    logging.debug("sleeping a bit for the replica action to complete")
     time.sleep(10)
     thd = threading.Thread(target=self.perform_writes, name='write_thd', args=(400,))
     thd.daemon = True
@@ -180,7 +180,7 @@ class TestUpdateStream(unittest.TestCase):
         if err:
           raise utils.TestError("Update stream returned error '%s'", err)
         if data['SqlType'] == 'COMMIT' and utils.options.verbose == 2:
-          utils.debug("Test Service Enabled: Pass")
+          logging.debug("Test Service Enabled: Pass")
           break
     except Exception, e:
       raise utils.TestError("Exception in getting stream from replica: %s\n Traceback %s",str(e), traceback.print_exc())
@@ -190,7 +190,7 @@ class TestUpdateStream(unittest.TestCase):
     if v['UpdateStreamState']['Current'] != 'Enabled':
       self.fail("Update stream service should be 'Enabled' but is '%s'" % v['UpdateStreamState']['Current'] )
 
-    utils.debug("Testing enable -> disable switch starting @ %s" % start_position)
+    logging.debug("Testing enable -> disable switch starting @ %s" % start_position)
     replica_conn = self._get_replica_stream_conn()
     replica_conn.dial()
     disabled_err = False
@@ -198,7 +198,7 @@ class TestUpdateStream(unittest.TestCase):
     try:
       binlog_pos, data, err = replica_conn.stream_start(start_position)
       utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
-      #utils.debug("Sleeping a bit for the spare action to complete")
+      #logging.debug("Sleeping a bit for the spare action to complete")
       #time.sleep(20)
       while(1):
         binlog_pos, data, err = replica_conn.stream_next()
@@ -215,7 +215,7 @@ class TestUpdateStream(unittest.TestCase):
       logging.error("Exception: %s", str(e))
       logging.error("Traceback: %s", traceback.print_exc())
       raise utils.TestError("Update stream returned error '%s'", str(e))
-    utils.debug("Streamed %d transactions before exiting" % txn_count)
+    logging.debug("Streamed %d transactions before exiting" % txn_count)
 
   def _vtdb_conn(self, host):
     return vt_occ2.connect(host, 'test_keyspace', '0', 2)
@@ -236,7 +236,7 @@ class TestUpdateStream(unittest.TestCase):
   def test_stream_parity(self):
     master_start_position = _get_master_current_position()
     replica_start_position = _get_repl_current_position()
-    utils.debug("run_test_stream_parity starting @ %s" % master_start_position)
+    logging.debug("run_test_stream_parity starting @ %s" % master_start_position)
     master_txn_count = 0
     replica_txn_count = 0
     self._exec_vt_txn(master_host, _populate_vt_a(15))
@@ -274,18 +274,18 @@ class TestUpdateStream(unittest.TestCase):
         replica_txn_count +=1
         break
     if len(master_tuples) != len(replica_tuples):
-      utils.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_tuples, replica_tuples))
+      logging.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_tuples, replica_tuples))
     for master_val, replica_val in zip(master_tuples, replica_tuples):
       master_data = master_val[1]
       replica_data = replica_val[1]
       self.assertEqual(master_data, replica_data, "Test failed, data mismatch - master '%s' and replica position '%s'" % (master_data, replica_data))
-    utils.debug("Test Writes: PASS")
+    logging.debug("Test Writes: PASS")
 
 
   def test_ddl(self):
     global GLOBAL_MASTER_START_POSITION
     start_position = GLOBAL_MASTER_START_POSITION
-    utils.debug("run_test_ddl: starting @ %s" % start_position)
+    logging.debug("run_test_ddl: starting @ %s" % start_position)
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
     binlog_pos, data, err = master_conn.stream_start(start_position)
@@ -294,7 +294,7 @@ class TestUpdateStream(unittest.TestCase):
 
     if data['Sql'] != _create_vt_insert_test.replace('\n', ''):
       raise utils.TestError("Test Failed: DDL %s didn't match the original %s" % (data['Sql'], _create_vt_insert_test))
-    utils.debug("Test DDL: PASS")
+    logging.debug("Test DDL: PASS")
 
   #This tests the service switch from disable -> enable -> disable
   def test_service_switch(self):
@@ -321,7 +321,7 @@ class TestUpdateStream(unittest.TestCase):
         raise utils.TestError("Update stream returned error '%s'", err)
       if start_position['Position']['MasterFilename'] < binlog_pos['Position']['MasterFilename']:
         logs_correct = True
-        utils.debug("Log rotation correctly interpreted")
+        logging.debug("Log rotation correctly interpreted")
         break
       if data['SqlType'] == 'COMMIT':
         master_txn_count +=1

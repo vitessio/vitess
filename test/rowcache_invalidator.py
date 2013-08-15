@@ -6,7 +6,7 @@ import warnings
 warnings.simplefilter("ignore")
 
 import json
-import optparse
+import logging
 import os
 import sys
 import time
@@ -56,7 +56,7 @@ def _get_repl_current_position():
   return start_position.__dict__
 
 
-def setup():
+def setUpModule():
   utils.zk_setup()
 
   # start mysql instance external to the test
@@ -66,10 +66,10 @@ def setup():
   utils.wait_procs(setup_procs)
   setup_tablets()
 
-def teardown():
+def tearDownModule():
   if utils.options.skip_teardown:
     return
-  utils.debug("Tearing down the servers and setup")
+  logging.debug("Tearing down the servers and setup")
   teardown_procs = [master_tablet.teardown_mysql(),
                     replica_tablet.teardown_mysql()]
   utils.wait_procs(teardown_procs, raise_on_error=False)
@@ -84,7 +84,7 @@ def teardown():
 
 def setup_tablets():
   # Start up a master mysql and vttablet
-  utils.debug("Setting up tablets")
+  logging.debug("Setting up tablets")
   utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph test_keyspace/0')
@@ -130,21 +130,21 @@ class RowCacheInvalidator(unittest.TestCase):
     perform_delete()
 
   def test_cache_invalidation(self):
-    utils.debug("===========test_cache_invalidation=========")
+    logging.debug("===========test_cache_invalidation=========")
     master_position = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
     #The sleep is needed here, so the invalidator can catch up and the number can be tested.
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
     time.sleep(5)
     invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
-    utils.debug("Invalidations %d InvalidatorStats %s" % (invalidations, invalidatorStats['CacheInvalidationCheckPoint']))
+    logging.debug("Invalidations %d InvalidatorStats %s" % (invalidations, invalidatorStats['CacheInvalidationCheckPoint']))
     self.assertTrue(invalidations > 0, "Invalidations are flowing through.")
 
     res = replica_tablet.mquery('vt_test_keyspace', "select min(id) from vt_insert_test")
     self.assertNotEqual(res[0][0], None, "Cannot proceed, no rows in vt_insert_test")
     id = int(res[0][0])
     stats_dict = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['vt_insert_test']
-    utils.debug("vt_insert_test stats %s" % stats_dict)
+    logging.debug("vt_insert_test stats %s" % stats_dict)
     misses = stats_dict['Misses']
     hits = stats_dict["Hits"]
     replica_tablet.vquery("select * from vt_insert_test where id=%d" % (id), path='test_keyspace/0')
@@ -157,7 +157,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
 
   def test_stop_replication(self):
-    utils.debug("===========test_stop_replication=========")
+    logging.debug("===========test_stop_replication=========")
     utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
     time.sleep(10)
     perform_insert(100)
@@ -177,15 +177,15 @@ class RowCacheInvalidator(unittest.TestCase):
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
     time.sleep(10)
     invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
-    utils.debug("invalidatorStats %s" % invalidatorStats['CacheInvalidationCheckPoint'])
+    logging.debug("invalidatorStats %s" % invalidatorStats['CacheInvalidationCheckPoint'])
     inv_count2 = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
-    utils.debug("invalidator count1 %d count2 %d" % (inv_count1, inv_count2))
+    logging.debug("invalidator count1 %d count2 %d" % (inv_count1, inv_count2))
     self.assertEqual(invalidatorStats["CacheInvalidationState"]["Current"], "Enabled", "Row-cache invalidator should be enabled")
     self.assertTrue(inv_count2 - inv_count1 > 0, "invalidator was able to restart after a small pause in replication")
 
 
   def test_cache_hit(self):
-    utils.debug("===========test_cache_hit=========")
+    logging.debug("===========test_cache_hit=========")
     res = replica_tablet.mquery('vt_test_keyspace', "select min(id) from vt_insert_test")
     self.assertNotEqual(res[0][0], None, "Cannot proceed, no rows in vt_insert_test")
     id = int(res[0][0])
@@ -201,7 +201,7 @@ class RowCacheInvalidator(unittest.TestCase):
     self.assertEqual(hits2 - hits, 1, "This should have hit the cache")
 
   def test_service_disabled(self):
-    utils.debug("===========test_service_disabled=========")
+    logging.debug("===========test_service_disabled=========")
     perform_insert(500)
     inv_before = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     invStats_before = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
@@ -209,7 +209,7 @@ class RowCacheInvalidator(unittest.TestCase):
     time.sleep(5)
     inv_after = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     invStats_after = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
-    utils.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before['CacheInvalidationCheckPoint'], inv_after, invStats_after['CacheInvalidationCheckPoint']))
+    logging.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before['CacheInvalidationCheckPoint'], inv_after, invStats_after['CacheInvalidationCheckPoint']))
     self.assertEqual(inv_after, 0, "Row-cache invalidator should be disabled, no invalidations")
     self.assertEqual(invStats_after["CacheInvalidationState"]["Current"], "Disabled", "Row-cache invalidator should be disabled")
 
@@ -234,38 +234,7 @@ def main():
 
   print "Note: This is a slow test, has a couple of sleeps in it to simulate proper state changes"
 
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('-d', '--debug', action='store_true', help='utils.pause() statements will wait for user input')
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=0)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=0)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-  utils.options = options
-
-  try:
-    suite = unittest.TestSuite()
-    if not args:
-      setup()
-      suite.addTests(unittest.TestLoader().loadTestsFromTestCase(RowCacheInvalidator))
-    else:
-      if args[0] != 'teardown':
-        setup()
-        if args[0] != 'setup':
-          for arg in args:
-            if hasattr(RowCacheInvalidator,arg):
-              suite.addTest(RowCacheInvalidator(arg))
-    if suite.countTestCases() > 0:
-      unittest.TextTestRunner(verbosity=utils.options.verbose).run(suite)
-  except KeyboardInterrupt:
-    pass
-  except utils.Break:
-    utils.options.skip_teardown = True
-  finally:
-    teardown()
-
+  utils.main()
 
 if __name__ == '__main__':
   main()

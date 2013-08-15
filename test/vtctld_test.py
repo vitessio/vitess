@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 import json
-import optparse
+import logging
 import os
-import pprint
-import socket
-import sys
 import unittest
 import urllib2
 
@@ -113,8 +110,7 @@ class TestDbTopo(unittest.TestCase):
     self.data = vtctld.dbtopo()
 
   def test_assigned(self):
-    if utils.options.verbose == 2:
-      pprint.pprint(self.data)
+    logging.debug("test_assigned: %s", str(self.data))
     self.assertItemsEqual(self.data["Assigned"].keys(), ["test_keyspace"])
     self.assertItemsEqual(self.data["Assigned"]["test_keyspace"].keys(), ["-80", "80-"])
 
@@ -122,22 +118,5 @@ class TestDbTopo(unittest.TestCase):
     self.assertEqual(len(self.data["Idle"]), 1)
     self.assertEqual(len(self.data["Scrap"]), 1)
 
-def main():
-  parser = optparse.OptionParser(usage="usage: %prog [options] [test_names]")
-  parser.add_option('--skip-teardown', action='store_true')
-  parser.add_option('--teardown', action='store_true')
-  parser.add_option("-q", "--quiet", action="store_const", const=0, dest="verbose", default=1)
-  parser.add_option("-v", "--verbose", action="store_const", const=2, dest="verbose", default=1)
-  parser.add_option("--no-build", action="store_true")
-
-  (options, args) = parser.parse_args()
-
-  utils.options = options
-  if options.teardown:
-    tearDownModule()
-    sys.exit()
-  unittest.main(argv=sys.argv[:1] + ['-f'])
-
-
 if __name__ == '__main__':
-  main()
+  utils.main()
