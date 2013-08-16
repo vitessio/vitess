@@ -24,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
@@ -65,6 +66,16 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
+	startKey, err := key.HexKeyspaceId(*keyrangeStart).Unhex()
+	if err != nil {
+		log.Fatalf("Invalid keyrangeStart: %v", err)
+	}
+	endKey, err := key.HexKeyspaceId(*keyrangeEnd).Unhex()
+	if err != nil {
+		log.Fatalf("Invalid keyrangeEnd: %v", err)
+	}
+	keyRange := key.KeyRange{Start: startKey, End: endKey}
+
 	if *dbConfigFile == "" {
 		log.Fatalf("Cannot start without db-config-file")
 	}
@@ -96,7 +107,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("error in initializing dbClient: %v", err)
 	}
-	brs, err := mysqlctl.ReadStartPosition(vtClient, *keyrangeStart, *keyrangeEnd)
+	brs, err := mysqlctl.ReadStartPosition(vtClient, keyRange)
 	if err != nil {
 		log.Fatalf("Cannot read start position from db: %v", err)
 	}

@@ -135,7 +135,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer vtClient.Close()
 
 	// Read the start position
-	startPosition, err := mysqlctl.ReadStartPosition(vtClient, string(bpc.sourceShard.KeyRange.Start.Hex()), string(bpc.sourceShard.KeyRange.End.Hex()))
+	startPosition, err := mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.KeyRange)
 	if err != nil {
 		return fmt.Errorf("can't read startPosition: %v", err)
 	}
@@ -181,8 +181,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	if err != nil {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
-	startPosition.KeyrangeStart = string(overlap.Start.Hex())
-	startPosition.KeyrangeEnd = string(overlap.End.Hex())
+	startPosition.KeyRange = overlap
 
 	// Create the player.
 	bpc.mu.Lock()
