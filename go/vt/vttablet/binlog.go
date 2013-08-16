@@ -140,39 +140,33 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("can't read startPosition: %v", err)
 	}
 
-	if true {
-		// Find the server list for the source shard in our cell
-		sourceShardName := string(bpc.sourceShard.KeyRange.Start.Hex()) + "-" + string(bpc.sourceShard.KeyRange.End.Hex())
-		addrs, err := bpc.ts.GetSrvTabletType(bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA)
-		if err != nil {
-			return fmt.Errorf("can't find any source tablet for %v %v %v %v: %v", bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA, err)
-		}
-		if len(addrs.Entries) == 0 {
-			return fmt.Errorf("empty source tablet list for %v %v %v %v", bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA)
-		}
+	// Find the server list for the source shard in our cell
+	sourceShardName := string(bpc.sourceShard.KeyRange.Start.Hex()) + "-" + string(bpc.sourceShard.KeyRange.End.Hex())
+	addrs, err := bpc.ts.GetSrvTabletType(bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA)
+	if err != nil {
+		return fmt.Errorf("can't find any source tablet for %v %v %v %v: %v", bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA, err)
+	}
+	if len(addrs.Entries) == 0 {
+		return fmt.Errorf("empty source tablet list for %v %v %v %v", bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA)
+	}
 
-		// if the server we were using before is in the list, just keep using it
-		usePreviousServer := false
-		for _, addr := range addrs.Entries {
-			vtAddr := fmt.Sprintf("%v:%v", addr.Host, addr.NamedPortMap["_vtocc"])
-			if vtAddr == startPosition.Addr {
-				log.Infof("%v: Previous server %s still healthy, using it", bpc, vtAddr)
-				usePreviousServer = true
-			}
+	// if the server we were using before is in the list, just keep using it
+	usePreviousServer := false
+	for _, addr := range addrs.Entries {
+		vtAddr := fmt.Sprintf("%v:%v", addr.Host, addr.NamedPortMap["_vtocc"])
+		if vtAddr == startPosition.Addr {
+			log.Infof("%v: Previous server %s still healthy, using it", bpc, vtAddr)
+			usePreviousServer = true
 		}
+	}
 
-		// if we can't use the previous server, pick a new one randomely
-		if !usePreviousServer {
-			newServerIndex := rand.Intn(len(addrs.Entries))
-			startPosition.Addr = fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
-			startPosition.Position.MasterFilename = ""
-			startPosition.Position.MasterPosition = 0
-			log.Infof("%v: Connecting to server: %s", bpc, startPosition.Addr)
-		}
-	} else {
-		// for now force this
+	// if we can't use the previous server, pick a new one randomely
+	if !usePreviousServer {
+		newServerIndex := rand.Intn(len(addrs.Entries))
+		startPosition.Addr = fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
 		startPosition.Position.MasterFilename = ""
 		startPosition.Position.MasterPosition = 0
+		log.Infof("%v: Connecting to different server: %s", bpc, startPosition.Addr)
 	}
 
 	// the data we have to replicate is the intersection of the
@@ -185,7 +179,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 
 	// Create the player.
 	bpc.mu.Lock()
-	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
+	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, startPosition, bpc.sourceShard.KeyRange, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
 	bpc.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("can't create player: %v", err)

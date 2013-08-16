@@ -113,7 +113,7 @@ class Tablet(object):
       query = [query]
 
     for q in query:
-      # logging.debug("mysql(%s,%s): %s" % (self.tablet_uid, dbname, q))
+      # logging.debug("mysql(%s,%s): %s", self.tablet_uid, dbname, q)
       cursor.execute(q)
 
     if write:
@@ -166,7 +166,8 @@ class Tablet(object):
   def drop_db(self, name):
     self.mquery('', 'drop database if exists %s' % name)
     while self.has_db(name):
-      logging.debug("%s sleeping while waiting for database drop: %s" % (self.tablet_alias, name))
+      logging.debug("%s sleeping while waiting for database drop: %s",
+                    self.tablet_alias, name)
       time.sleep(0.3)
       self.mquery('', 'drop database if exists %s' % name)
 
@@ -175,7 +176,7 @@ class Tablet(object):
     self.mquery('', 'create database %s' % name)
 
   def clean_dbs(self):
-    logging.debug("mysql(%s): removing all databases" % self.tablet_uid)
+    logging.debug("mysql(%s): removing all databases", self.tablet_uid)
     rows = self.mquery('', 'show databases')
     for row in rows:
       dbname = row[0]
@@ -337,14 +338,14 @@ class Tablet(object):
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:
-        logging.debug("  vttablet not answering at /debug/vars, waiting...")
+        logging.debug("  vttablet %s not answering at /debug/vars, waiting...", self.tablet_alias)
       else:
         if 'Voltron' not in v:
-          logging.debug("  vttablet not exporting Voltron, waiting...")
+          logging.debug("  vttablet %s not exporting Voltron, waiting...", self.tablet_alias)
         else:
           s = v['Voltron']['States']['Current']
           if s != expected:
-            logging.debug("  vttablet in state %s != %s" % (s, expected))
+            logging.debug("  vttablet %s in state %s != %s", self.tablet_alias, s, expected)
           else:
             break
 
@@ -369,7 +370,7 @@ class Tablet(object):
     return path
 
   def kill_vttablet(self):
-    logging.debug("killing vttablet: " + self.tablet_alias)
+    logging.debug("killing vttablet: %s", self.tablet_alias)
     if self.proc is not None:
       Tablet.tablets_running -= 1
       self.proc.terminate()

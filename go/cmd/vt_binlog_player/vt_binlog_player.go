@@ -114,7 +114,7 @@ func main() {
 	if *debug {
 		vtClient = mysqlctl.NewDummyVtClient()
 	}
-	blp, err := mysqlctl.NewBinlogPlayer(vtClient, brs, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
+	blp, err := mysqlctl.NewBinlogPlayer(vtClient, brs, keyRange, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
 	if err != nil {
 		log.Fatalf("error in initializing binlog player: %v", err)
 	}

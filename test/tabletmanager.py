@@ -72,6 +72,7 @@ class TestTabletManager(unittest.TestCase):
     tablet.Tablet.check_vttablet_count()
     utils.zk_wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+      t.reset_replication()
       t.clean_dbs()
 
   def _check_db_addr(self, db_addr, expected_addr):
@@ -696,7 +697,7 @@ class TestTabletManager(unittest.TestCase):
     expected_addr = utils.hostname + ':' + str(tablet_62044.port)
     self._check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
-    utils.run_vtctl('ChangeSlaveType -force %s idle' % tablet_62344.tablet_alias)
+    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias, 'idle'])
 
     idle_tablets, _ = utils.run_vtctl('ListAllTablets test_nj', trap_output=True)
     if '0000062344 <null> <null> idle' not in idle_tablets:
@@ -751,8 +752,8 @@ class TestTabletManager(unittest.TestCase):
 
     # Convert two replica to spare. That should leave only one node serving traffic,
     # but still needs to appear in the replication graph.
-    utils.run_vtctl('ChangeSlaveType ' + tablet_41983.tablet_alias + ' spare')
-    utils.run_vtctl('ChangeSlaveType ' + tablet_31981.tablet_alias + ' spare')
+    utils.run_vtctl(['ChangeSlaveType', tablet_41983.tablet_alias, 'spare'])
+    utils.run_vtctl(['ChangeSlaveType', tablet_31981.tablet_alias, 'spare'])
     utils.validate_topology()
     expected_addr = utils.hostname + ':' + str(tablet_62044.port)
     self._check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
