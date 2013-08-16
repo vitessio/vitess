@@ -123,8 +123,16 @@ func replaceError(original, recent error) error {
 }
 
 type SplitSnapshotManifest struct {
-	Source           *SnapshotManifest
-	KeyRange         key.KeyRange
+	// Source describes the files and our tablet
+	Source *SnapshotManifest
+
+	// KeyRange describes the data present in this snapshot
+	KeyRange key.KeyRange
+
+	// ServerKeyRange describes the data the server has
+	ServerKeyRange key.KeyRange
+
+	// The schema for this server
 	SchemaDefinition *SchemaDefinition
 }
 
@@ -133,7 +141,7 @@ type SplitSnapshotManifest struct {
 // masterAddr is the address of the server to use as master.
 // pos is the replication position to use on that master.
 // myMasterPos is the local server master position
-func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, startKey, endKey key.HexKeyspaceId, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, startKey, endKey, serverStartKey, serverEndKey key.HexKeyspaceId, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
 	s, err := startKey.Unhex()
 	if err != nil {
 		return nil, err
@@ -142,11 +150,24 @@ func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, fi
 	if err != nil {
 		return nil, err
 	}
+	ss, err := serverStartKey.Unhex()
+	if err != nil {
+		return nil, err
+	}
+	se, err := serverEndKey.Unhex()
+	if err != nil {
+		return nil, err
+	}
 	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
 	}
-	return &SplitSnapshotManifest{Source: sm, KeyRange: key.KeyRange{Start: s, End: e}, SchemaDefinition: sd}, nil
+	return &SplitSnapshotManifest{
+		Source:           sm,
+		KeyRange:         key.KeyRange{Start: s, End: e},
+		ServerKeyRange:   key.KeyRange{Start: ss, End: se},
+		SchemaDefinition: sd,
+	}, nil
 }
 
 // SanityCheckManifests checks if the ssms can be restored together.
@@ -446,7 +467,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSo
 	return snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(serverKeyRange key.KeyRange, keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -534,7 +555,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		}
 		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.IpAddr(),
 			masterAddr, dbName, krDatafiles, replicationPosition,
-			myMasterPosition, kr.Start.Hex(), kr.End.Hex(), sd)
+			myMasterPosition, kr.Start.Hex(), kr.End.Hex(), serverKeyRange.Start.Hex(), serverKeyRange.End.Hex(), sd)
 		if err != nil {
 			return nil, err
 		}
@@ -889,8 +910,8 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 		}
 		for _, manifest := range manifests {
 			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
-				manifest.KeyRange.Start.Hex(),
-				manifest.KeyRange.End.Hex(),
+				manifest.ServerKeyRange.Start.Hex(),
+				manifest.ServerKeyRange.End.Hex(),
 				manifest.Source.Addr,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,

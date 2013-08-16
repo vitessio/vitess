@@ -5,7 +5,6 @@
 package wrangler
 
 import (
-	"fmt"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -171,15 +170,11 @@ func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.Tab
 		return err
 	}
 
-	// insert their KeyRange / shard in the SourceShards array
+	// insert their KeyRange in the SourceShards array
 	shardInfo.SourceShards = make([]topo.SourceShard, 0, len(sourceTablets))
 	for _, ti := range sourceTablets {
-		overlap, err := key.KeyRangesOverlap(shardInfo.KeyRange, ti.KeyRange)
-		if err != nil {
-			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", ti.KeyRange, shardInfo.KeyRange)
-		}
 		ss := topo.SourceShard{
-			KeyRange: overlap,
+			KeyRange: ti.KeyRange,
 		}
 		shardInfo.SourceShards = append(shardInfo.SourceShards, ss)
 	}

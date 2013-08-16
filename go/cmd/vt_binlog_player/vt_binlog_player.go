@@ -5,6 +5,8 @@
 /*
 The vt_binlog_player reads data from the a remote host via vt_binlog_server.
 This is mostly intended for online data migrations.
+Note this binary replicates all the data from the source server,
+as it doesn't adjust the source keyrange.
 */
 package main
 

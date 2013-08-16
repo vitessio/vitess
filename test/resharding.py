@@ -163,8 +163,8 @@ index by_msg (msg)
       self._insert_value(shard_1_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i)
       self._insert_value(shard_1_master, 'resharding1', 20000 + i, 'msg-range2-%u' % i, 0xE000000000000000 + i)
 
+  # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count):
-    # returns how many of the values we have, in percents.
     found = 0
     for i in xrange(count):
       if self._is_value_present_and_correct(shard_2_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i):
@@ -185,6 +185,13 @@ index by_msg (msg)
       logging.debug("sleeping until we get %u%%", threshold)
       time.sleep(1)
       timeout -= 1
+
+  # _check_lots_not_present makes sure no data is in the wrong shard
+  def _check_lots_not_present(self, count):
+    found = 0
+    for i in xrange(count):
+      self._check_value(shard_3_master, 'resharding1', 10000 + i, 'msg-range1-%u' % i, 0xA000000000000000 + i, should_be_here=False)
+      self._check_value(shard_2_master, 'resharding1', 20000 + i, 'msg-range2-%u' % i, 0xE000000000000000 + i, should_be_here=False)
 
   def _wait_for_binlog_server_state(self, tablet, expected, timeout=5.0):
     while True:
@@ -288,7 +295,9 @@ index by_msg (msg)
     self._check_lots_timeout(1000, 80, 5)
     logging.debug("Checking all data went through eventually")
     self._check_lots_timeout(1000, 100, 20)
-    utils.pause("AAAAAAAAAAAA")
+    logging.debug("Checking no data was sent the wrong way")
+    self._check_lots_not_present(1000)
+    utils.pause("After filtered replication")
 
     # now serve rdonly from the split shards
     utils.run_vtctl('SetShardServedTypes test_keyspace/80- master,replica')

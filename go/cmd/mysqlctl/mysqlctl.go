@@ -38,6 +38,8 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	tablesString := subFlags.String("tables", "", "dump only this comma separated list of tables")
 	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
 	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
+	start := subFlags.String("start", "", "start of this server key range")
+	end := subFlags.String("end", "", "end of this server key range")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		log.Fatalf("action multisnapshot requires <db name> <key name>")
@@ -51,7 +53,18 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
-	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize, nil)
+
+	ss, err := key.HexKeyspaceId(*start).Unhex()
+	if err != nil {
+		log.Fatalf("Invalid start key %v: %v", *start, err)
+	}
+	se, err := key.HexKeyspaceId(*end).Unhex()
+	if err != nil {
+		log.Fatalf("Invalid end key %v: %v", *end, err)
+	}
+	serverKeyRange := key.KeyRange{Start: ss, End: se}
+
+	filenames, err := mysqld.CreateMultiSnapshot(serverKeyRange, shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize, nil)
 	if err != nil {
 		log.Fatalf("multisnapshot failed: %v", err)
 	} else {
