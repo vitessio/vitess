@@ -66,15 +66,10 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
-	keyRangeStart, err := key.HexKeyspaceId(*start).Unhex()
+	keyRange, err := key.ParseKeyRangeParts(*start, *end)
 	if err != nil {
-		log.Fatalf("Invalid start: %v", err)
+		log.Fatalf("Invalid key range: %v", err)
 	}
-	keyRangeEnd, err := key.HexKeyspaceId(*end).Unhex()
-	if err != nil {
-		log.Fatalf("Invalid end: %v", err)
-	}
-	keyRange := key.KeyRange{Start: keyRangeStart, End: keyRangeEnd}
 
 	if *dbConfigFile == "" {
 		log.Fatalf("Cannot start without db-config-file")
