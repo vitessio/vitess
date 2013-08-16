@@ -50,9 +50,10 @@ func InitAgent(
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
 	// Start the binlog server service, disabled at start.
-	binlogServer = mysqlctl.NewBinlogServer(mycnf)
+	binlogServer = mysqlctl.NewBinlogServer(mysqld)
 	mysqlctl.RegisterBinlogServerService(binlogServer)
 
 	// Start the binlog player services, not playing at start.
@@ -131,7 +132,6 @@ func InitAgent(
 		}
 	})
 
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	if err := agent.Start(bindAddr, secureAddr, mysqld.Addr()); err != nil {
 		return err
 	}

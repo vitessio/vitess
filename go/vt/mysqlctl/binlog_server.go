@@ -58,7 +58,7 @@ func newBlsStats() *blsStats {
 
 type BinlogServer struct {
 	dbname   string
-	mycnf    *Mycnf
+	mysqld   *Mysqld
 	blsStats *blsStats
 	state    sync2.AtomicInt64
 	states   *estats.States
@@ -616,9 +616,6 @@ func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *proto.BinlogResp
 }
 
 func isRequestValid(req *proto.BinlogServerRequest) bool {
-	if req.StartPosition.MasterFilename == "" || req.StartPosition.MasterPosition == 0 {
-		return false
-	}
 	if req.KeyspaceStart == "" && req.KeyspaceEnd == "" {
 		return false
 	}
@@ -651,6 +648,33 @@ func sendError(sendReply proto.SendBinlogResponse, reqIdentifier string, inputEr
 	}
 }
 
+// fillAndCheckMasterPosition validates the master position sent.
+// If only group_id is set, we try to resolve it.
+func (blServer *BinlogServer) fillAndCheckMasterPosition(startCoordinates *proto.ReplicationCoordinates) error {
+	if startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
+		if startCoordinates.GroupId == "" {
+			return fmt.Errorf("Not a valid StartPosition")
+		}
+
+		// we only have GroupId, resolve it
+		qr, err := blServer.mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %v", startCoordinates.GroupId))
+		if err != nil {
+			return err
+		}
+		if len(qr.Rows) != 1 {
+			return fmt.Errorf("SHOW BINLOG INFO FOR %u failed with %u rows", startCoordinates.GroupId, len(qr.Rows))
+		}
+		// row has Log_name, Pos, Server_ID
+		startCoordinates.MasterFilename = qr.Rows[0][0].String()
+		startCoordinates.MasterPosition, err = qr.Rows[0][1].ParseUint64()
+		if err != nil {
+			return fmt.Errorf("SHOW BINLOG INFO FOR %u returned an error parsing Pos: %v", startCoordinates.GroupId, err)
+		}
+		log.Infof("Resolved binlog position from GroupId %v to %v:%v", startCoordinates.GroupId, startCoordinates.MasterFilename, startCoordinates.MasterPosition)
+	}
+	return nil
+}
+
 func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendReply proto.SendBinlogResponse) error {
 	defer func() {
 		if x := recover(); x != nil {
@@ -672,10 +696,10 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 		panic(newBinlogServerError("Invalid request, cannot serve the stream"))
 	}
 
-	binlogPrefix := blServer.mycnf.BinLogPath
+	binlogPrefix := blServer.mysqld.config.BinLogPath
 	logsDir := path.Dir(binlogPrefix)
-	if !IsMasterPositionValid(&req.StartPosition) {
-		panic(newBinlogServerError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position", req.StartPosition)))
+	if err := blServer.fillAndCheckMasterPosition(&req.StartPosition); err != nil {
+		panic(newBinlogServerError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position: %v", req.StartPosition, err)))
 	}
 
 	startKey, err := key.HexKeyspaceId(req.KeyspaceStart).Unhex()
@@ -705,9 +729,9 @@ func (blServer *BinlogServer) setState(state int64) {
 	blServer.states.SetState(state)
 }
 
-func NewBinlogServer(mycnf *Mycnf) *BinlogServer {
+func NewBinlogServer(mysqld *Mysqld) *BinlogServer {
 	binlogServer := new(BinlogServer)
-	binlogServer.mycnf = mycnf
+	binlogServer.mysqld = mysqld
 	binlogServer.blsStats = newBlsStats()
 	binlogServer.states = estats.NewStates("BinlogServerState", []string{
 		"Disabled",

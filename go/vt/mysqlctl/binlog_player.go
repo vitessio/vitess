@@ -217,8 +217,8 @@ type BinlogPlayer struct {
 }
 
 func NewBinlogPlayer(dbClient VtClient, startPosition *binlogRecoveryState, tables []string, txnBatch int, maxTxnInterval time.Duration, execDdl bool) (*BinlogPlayer, error) {
-	if !startPositionValid(startPosition) {
-		log.Fatalf("Invalid Start Position")
+	if err := startPositionValid(startPosition); err != nil {
+		return nil, err
 	}
 
 	blp := new(BinlogPlayer)
@@ -271,21 +271,18 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 	}
 }
 
-func startPositionValid(startPos *binlogRecoveryState) bool {
+func startPositionValid(startPos *binlogRecoveryState) error {
 	if startPos.Addr == "" {
-		log.Errorf("Invalid connection params.")
-		return false
+		return fmt.Errorf("invalid connection params, empty Addr")
 	}
-	if startPos.Position.MasterFilename == "" || startPos.Position.MasterPosition == 0 {
-		log.Errorf("Invalid start coordinates.")
-		return false
+	if (startPos.Position.MasterFilename == "" || startPos.Position.MasterPosition == 0) && (startPos.Position.GroupId == "") {
+		return fmt.Errorf("invalid start coordinates, need GroupId or MasterFilename+MasterPosition")
 	}
 	//One of them can be empty for min or max key.
 	if startPos.KeyrangeStart == "" && startPos.KeyrangeEnd == "" {
-		log.Errorf("Invalid keyrange endpoints.")
-		return false
+		return fmt.Errorf("invalid keyrange endpoints")
 	}
-	return true
+	return nil
 }
 
 func ReadStartPosition(dbClient VtClient, keyrangeStart, keyrangeEnd string) (*binlogRecoveryState, error) {

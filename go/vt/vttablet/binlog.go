@@ -127,6 +127,11 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	// TODO(alainjobart): Pick a server (same if it's available,
 	// if not clear master file / pos and keep only group id)
 
+	// FIXME(alainjobart): for now, test the group id code works
+	// by clearing filename and position.
+	startPosition.Position.MasterFilename = ""
+	startPosition.Position.MasterPosition = 0
+
 	// Create the player.
 	bpc.mu.Lock()
 	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)

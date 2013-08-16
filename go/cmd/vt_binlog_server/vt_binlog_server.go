@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/rpcwrap"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -25,6 +26,7 @@ var (
 )
 
 func main() {
+	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
@@ -36,8 +38,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error reading mycnf file %v", *mycnfFile)
 	}
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
+	if err != nil {
+		log.Warning(err)
+	}
+	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
 
-	binlogServer := mysqlctl.NewBinlogServer(mycnf)
+	binlogServer := mysqlctl.NewBinlogServer(mysqld)
 	mysqlctl.EnableBinlogServerService(binlogServer, *dbname)
 
 	proto.RegisterBinlogServer(binlogServer)

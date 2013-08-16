@@ -181,8 +181,8 @@ index by_msg (msg)
       if value >= threshold:
         return
       if timeout == 0:
-        self.fail("timeout waiting for %u%% of the data", threshold)
-      logging.debug("sleeping until we get more than %u%%", threshold)
+        self.fail("timeout waiting for %u%% of the data" % threshold)
+      logging.debug("sleeping until we get %u%%", threshold)
       time.sleep(1)
       timeout -= 1
 
@@ -287,7 +287,7 @@ index by_msg (msg)
     logging.debug("Checking 80 percent of data was sent quickly")
     self._check_lots_timeout(1000, 80, 5)
     logging.debug("Checking all data went through eventually")
-    self._check_lots_timeout(1000, 100, 50)
+    self._check_lots_timeout(1000, 100, 20)
     utils.pause("AAAAAAAAAAAA")
 
     # now serve rdonly from the split shards
