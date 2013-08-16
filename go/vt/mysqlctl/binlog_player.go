@@ -200,7 +200,7 @@ func (bs *blplStats) statsJSON() string {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	keyrange       key.KeyRange
+	serverKeyRange key.KeyRange
 	recoveryState  binlogRecoveryState
 	rpcClient      *rpcplus.Client
 	inTxn          bool
@@ -215,14 +215,14 @@ type BinlogPlayer struct {
 	blplStats      *blplStats
 }
 
-func NewBinlogPlayer(dbClient VtClient, startPosition *binlogRecoveryState, tables []string, txnBatch int, maxTxnInterval time.Duration, execDdl bool) (*BinlogPlayer, error) {
+func NewBinlogPlayer(dbClient VtClient, startPosition *binlogRecoveryState, serverKeyRange key.KeyRange, tables []string, txnBatch int, maxTxnInterval time.Duration, execDdl bool) (*BinlogPlayer, error) {
 	if err := startPositionValid(startPosition); err != nil {
 		return nil, err
 	}
 
 	blp := new(BinlogPlayer)
 	blp.recoveryState = *startPosition
-	blp.keyrange = startPosition.KeyRange
+	blp.serverKeyRange = serverKeyRange
 	blp.txnIndex = 0
 	blp.inTxn = false
 	blp.txnBuffer = make([]*cproto.BinlogResponse, 0, MAX_TXN_BATCH)
@@ -247,8 +247,8 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 		currentPosition.MasterPosition,
 		currentPosition.GroupId,
 		time.Now().Unix(),
-		blp.recoveryState.KeyRange.Start.Hex(),
-		blp.recoveryState.KeyRange.End.Hex())
+		blp.serverKeyRange.Start.Hex(),
+		blp.serverKeyRange.End.Hex())
 
 	queryStartTime := time.Now()
 	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
@@ -543,7 +543,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	}
 
 	responseChan := make(chan *cproto.BinlogResponse)
-	log.Infof("making rpc request @ %v for keyrange %v-%v", blp.recoveryState.Position, blp.recoveryState.KeyRange.Start.Hex(), blp.recoveryState.KeyRange.End.Hex())
+	log.Infof("making rpc request @ %v for keyrange %v-%v", blp.recoveryState.Position.String(), blp.recoveryState.KeyRange.Start.Hex(), blp.recoveryState.KeyRange.End.Hex())
 	blServeRequest := &cproto.BinlogServerRequest{
 		StartPosition: blp.recoveryState.Position,
 		KeyRange:      blp.recoveryState.KeyRange,

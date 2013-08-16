@@ -35,8 +35,8 @@ const (
 )
 
 var (
-	keyrangeStart  = flag.String("start", "", "keyrange start to use in hex")
-	keyrangeEnd    = flag.String("end", "", "keyrange end to use in hex")
+	start          = flag.String("start", "", "keyrange start to use in hex")
+	end            = flag.String("end", "", "keyrange end to use in hex")
 	port           = flag.Int("port", 0, "port for the server")
 	txnBatch       = flag.Int("txn-batch", TXN_BATCH, "transaction batch size")
 	maxTxnInterval = flag.Int("max-txn-interval", MAX_TXN_INTERVAL, "max txn interval")
@@ -66,15 +66,10 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
-	startKey, err := key.HexKeyspaceId(*keyrangeStart).Unhex()
+	keyRange, err := key.ParseKeyRangeParts(*start, *end)
 	if err != nil {
-		log.Fatalf("Invalid keyrangeStart: %v", err)
+		log.Fatalf("Invalid key range: %v", err)
 	}
-	endKey, err := key.HexKeyspaceId(*keyrangeEnd).Unhex()
-	if err != nil {
-		log.Fatalf("Invalid keyrangeEnd: %v", err)
-	}
-	keyRange := key.KeyRange{Start: startKey, End: endKey}
 
 	if *dbConfigFile == "" {
 		log.Fatalf("Cannot start without db-config-file")
@@ -114,7 +109,7 @@ func main() {
 	if *debug {
 		vtClient = mysqlctl.NewDummyVtClient()
 	}
-	blp, err := mysqlctl.NewBinlogPlayer(vtClient, brs, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
+	blp, err := mysqlctl.NewBinlogPlayer(vtClient, brs, keyRange, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
 	if err != nil {
 		log.Fatalf("error in initializing binlog player: %v", err)
 	}
