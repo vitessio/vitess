@@ -141,31 +141,15 @@ type SplitSnapshotManifest struct {
 // masterAddr is the address of the server to use as master.
 // pos is the replication position to use on that master.
 // myMasterPos is the local server master position
-func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, startKey, endKey, serverStartKey, serverEndKey key.HexKeyspaceId, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
-	s, err := startKey.Unhex()
-	if err != nil {
-		return nil, err
-	}
-	e, err := endKey.Unhex()
-	if err != nil {
-		return nil, err
-	}
-	ss, err := serverStartKey.Unhex()
-	if err != nil {
-		return nil, err
-	}
-	se, err := serverEndKey.Unhex()
-	if err != nil {
-		return nil, err
-	}
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, keyRange, serverKeyRange key.KeyRange, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
 	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
 	}
 	return &SplitSnapshotManifest{
 		Source:           sm,
-		KeyRange:         key.KeyRange{Start: s, End: e},
-		ServerKeyRange:   key.KeyRange{Start: ss, End: se},
+		KeyRange:         keyRange,
+		ServerKeyRange:   serverKeyRange,
 		SchemaDefinition: sd,
 	}, nil
 }
@@ -555,7 +539,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(serverKeyRange key.KeyRange, keyRanges
 		}
 		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.IpAddr(),
 			masterAddr, dbName, krDatafiles, replicationPosition,
-			myMasterPosition, kr.Start.Hex(), kr.End.Hex(), serverKeyRange.Start.Hex(), serverKeyRange.End.Hex(), sd)
+			myMasterPosition, kr, serverKeyRange, sd)
 		if err != nil {
 			return nil, err
 		}
