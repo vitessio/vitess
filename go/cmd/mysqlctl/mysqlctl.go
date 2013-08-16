@@ -54,15 +54,10 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 		tables = strings.Split(*tablesString, ",")
 	}
 
-	ss, err := key.HexKeyspaceId(*start).Unhex()
+	serverKeyRange, err := key.ParseKeyRangeParts(*start, *end)
 	if err != nil {
-		log.Fatalf("Invalid start key %v: %v", *start, err)
+		log.Fatalf("Invalid start or end: %v", err)
 	}
-	se, err := key.HexKeyspaceId(*end).Unhex()
-	if err != nil {
-		log.Fatalf("Invalid end key %v: %v", *end, err)
-	}
-	serverKeyRange := key.KeyRange{Start: ss, End: se}
 
 	filenames, err := mysqld.CreateMultiSnapshot(serverKeyRange, shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize, nil)
 	if err != nil {
@@ -88,15 +83,10 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 
 	subFlags.Parse(args)
 
-	s, err := key.HexKeyspaceId(*start).Unhex()
+	keyRange, err := key.ParseKeyRangeParts(*start, *end)
 	if err != nil {
-		log.Fatalf("Invalid start key %v: %v", *start, err)
+		log.Fatalf("Invalid start or end: %v", err)
 	}
-	e, err := key.HexKeyspaceId(*end).Unhex()
-	if err != nil {
-		log.Fatalf("Invalid end key %v: %v", *end, err)
-	}
-	keyRange := key.KeyRange{Start: s, End: e}
 
 	if subFlags.NArg() < 2 {
 		log.Fatalf("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)

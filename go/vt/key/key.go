@@ -83,6 +83,19 @@ func (kr KeyRange) String() string {
 	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
+// Parse a start and end hex values and build a KeyRange
+func ParseKeyRangeParts(start, end string) (KeyRange, error) {
+	s, err := HexKeyspaceId(start).Unhex()
+	if err != nil {
+		return KeyRange{}, err
+	}
+	e, err := HexKeyspaceId(end).Unhex()
+	if err != nil {
+		return KeyRange{}, err
+	}
+	return KeyRange{Start: s, End: e}, nil
+}
+
 // Returns true if the KeyRange does not cover the entire space.
 func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
