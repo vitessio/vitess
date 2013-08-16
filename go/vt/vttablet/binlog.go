@@ -10,7 +10,7 @@ package vttablet
 import (
 	"bytes"
 	"fmt"
-	"math/rand"
+	"math/rand" // not crypto-safe is OK here
 	"sync"
 	"time"
 
@@ -160,7 +160,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		}
 	}
 
-	// if we can't use the previous server, pick a new one randomely
+	// if we can't use the previous server, pick a new one randomly
 	if !usePreviousServer {
 		newServerIndex := rand.Intn(len(addrs.Entries))
 		startPosition.Addr = fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])

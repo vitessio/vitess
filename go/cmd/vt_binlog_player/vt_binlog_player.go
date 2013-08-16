@@ -35,8 +35,8 @@ const (
 )
 
 var (
-	keyrangeStart  = flag.String("start", "", "keyrange start to use in hex")
-	keyrangeEnd    = flag.String("end", "", "keyrange end to use in hex")
+	start          = flag.String("start", "", "keyrange start to use in hex")
+	end            = flag.String("end", "", "keyrange end to use in hex")
 	port           = flag.Int("port", 0, "port for the server")
 	txnBatch       = flag.Int("txn-batch", TXN_BATCH, "transaction batch size")
 	maxTxnInterval = flag.Int("max-txn-interval", MAX_TXN_INTERVAL, "max txn interval")
@@ -66,15 +66,15 @@ func main() {
 	servenv.Init()
 	defer servenv.Close()
 
-	startKey, err := key.HexKeyspaceId(*keyrangeStart).Unhex()
+	keyRangeStart, err := key.HexKeyspaceId(*start).Unhex()
 	if err != nil {
-		log.Fatalf("Invalid keyrangeStart: %v", err)
+		log.Fatalf("Invalid start: %v", err)
 	}
-	endKey, err := key.HexKeyspaceId(*keyrangeEnd).Unhex()
+	keyRangeEnd, err := key.HexKeyspaceId(*end).Unhex()
 	if err != nil {
-		log.Fatalf("Invalid keyrangeEnd: %v", err)
+		log.Fatalf("Invalid end: %v", err)
 	}
-	keyRange := key.KeyRange{Start: startKey, End: endKey}
+	keyRange := key.KeyRange{Start: keyRangeStart, End: keyRangeEnd}
 
 	if *dbConfigFile == "" {
 		log.Fatalf("Cannot start without db-config-file")
