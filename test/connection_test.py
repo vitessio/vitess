@@ -195,19 +195,6 @@ class TestConnection(BaseTest):
     self.connection = vt_occ2.VtOCCConnection(self.vtocc_uri, self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
     self.connection.dial()
 
-  def test_reconnect(self):
-    cursor = self.connection.cursor()
-    cursor.execute("create table if not exists connection_test (c int)")
-    cursor.execute("select 1 from connection_test")
-    try:
-      cursor.execute("select sleep(1) from connection_test")
-    except dbexceptions.DatabaseError as e:
-      if "deadline exceeded" not in str(e):
-        raise
-    else:
-      self.fail("Expected timeout error not raised")
-    cursor.execute("select 2 from connection_test")
-
   def test_vtocc_not_there(self):
     connection = vt_occ2.VtOCCConnection("localhost:7777", self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
     self.assertRaises(dbexceptions.OperationalError, connection.dial)
