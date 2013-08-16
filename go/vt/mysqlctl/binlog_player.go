@@ -267,10 +267,6 @@ func startPositionValid(startPos *binlogRecoveryState) error {
 	if (startPos.Position.MasterFilename == "" || startPos.Position.MasterPosition == 0) && (startPos.Position.GroupId == "") {
 		return fmt.Errorf("invalid start coordinates, need GroupId or MasterFilename+MasterPosition")
 	}
-	// Only support partial keyranges for now
-	if !startPos.KeyRange.IsPartial() {
-		return fmt.Errorf("invalid full keyrange endpoints")
-	}
 	return nil
 }
 

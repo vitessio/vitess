@@ -615,10 +615,6 @@ func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *proto.BinlogResp
 	return
 }
 
-func isRequestValid(req *proto.BinlogServerRequest) bool {
-	return req.KeyRange.IsPartial()
-}
-
 //This sends the stream to the client.
 func blsSendStream(sendReply proto.SendBinlogResponse, responseBuf []*proto.BinlogResponse) (err error) {
 	for _, event := range responseBuf {
@@ -688,9 +684,6 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 	log.Infof("received req: %v %v-%v", req.StartPosition.String(), req.KeyRange.Start.Hex(), req.KeyRange.End.Hex())
 	if !blServer.isServiceEnabled() {
 		panic(newBinlogServerError("Binlog Server is disabled"))
-	}
-	if !isRequestValid(req) {
-		panic(newBinlogServerError("Invalid request, cannot serve the stream"))
 	}
 
 	binlogPrefix := blServer.mysqld.config.BinLogPath
