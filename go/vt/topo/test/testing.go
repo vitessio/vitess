@@ -5,6 +5,7 @@
 package test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
@@ -30,13 +31,29 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("%v GetKeyspaces: %v", ts, err)
 	}
-	if len(keyspaces) != 1 && keyspaces[0] != "test_keyspace" {
+	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace"}, keyspaces)
 	}
 }
 
+func tabletEqual(left, right *topo.Tablet) (bool, error) {
+	lj, err := json.Marshal(left)
+	if err != nil {
+		return false, err
+	}
+	rj, err := json.Marshal(right)
+	if err != nil {
+		return false, err
+	}
+	return string(lj) == string(rj), nil
+}
+
 func CheckTablet(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
+
+	krStart, _ := key.HexKeyspaceId("").Unhex()
+	krEnd, _ := key.HexKeyspaceId("10").Unhex()
+
 	tablet := &topo.Tablet{
 		Cell:     cell,
 		Uid:      1,
@@ -45,19 +62,20 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
 		State:    topo.STATE_READ_WRITE,
-		KeyRange: key.KeyRange{Start: "-", End: "10"},
+		KeyRange: key.KeyRange{Start: krStart, End: krEnd},
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
-		t.Errorf("ts.CreateTablet: %v")
+		t.Errorf("ts.CreateTablet: %v", err)
 	}
 
 	ti, err := ts.GetTablet(tablet.Alias())
 	if err != nil {
 		t.Errorf("ts.GetTablet %v: %v", tablet.Alias(), err)
 	}
-
-	if ti.Cell != tablet.Cell || ti.Uid != tablet.Uid || ti.State != tablet.State {
-		t.Errorf("put and got tablets are not identical: %v\n%v", tablet, ti)
+	if eq, err := tabletEqual(ti.Tablet, tablet); err != nil {
+		t.Errorf("cannot compare tablets: %v", err)
+	} else if !eq {
+		t.Errorf("put and got tablets are not identical:\n%#v\n%#v", tablet, ti.Tablet)
 	}
 
 	inCell, err := ts.GetTabletsByCell(cell)
