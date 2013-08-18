@@ -98,7 +98,7 @@ type Bls struct {
 	startPosition    *proto.ReplicationCoordinates
 	currentPosition  *proto.BinlogPosition
 	dbmatch          bool
-	keyspaceRange    key.KeyRange
+	keyRange         key.KeyRange
 	keyrangeTag      string
 	globalState      *BinlogServer
 	binlogPrefix     string
@@ -110,7 +110,7 @@ type Bls struct {
 func newBls(startCoordinates *proto.ReplicationCoordinates, blServer *BinlogServer, keyRange *key.KeyRange) *Bls {
 	blp := &Bls{}
 	blp.startPosition = startCoordinates
-	blp.keyspaceRange = *keyRange
+	blp.keyRange = *keyRange
 	blp.currentPosition = &proto.BinlogPosition{}
 	blp.currentPosition.Position = *startCoordinates
 	blp.inTxn = false
@@ -143,15 +143,15 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted cha
 		if x := recover(); x != nil {
 			serr, ok := x.(*BinlogServerError)
 			if !ok {
-				log.Errorf("[%v:%v] Uncaught panic for stream @ %v, err: %v ", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, x)
+				log.Errorf("[%v:%v] Uncaught panic for stream @ %v, err: %v ", blp.keyRange.Start.Hex(), blp.keyRange.End.Hex(), reqIdentifier, x)
 				panic(x)
 			}
 			err := *serr
 			if readErr != nil {
-				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v, readErr %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err, readErr)
+				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v, readErr %v", blp.keyRange.Start.Hex(), blp.keyRange.End.Hex(), reqIdentifier, err, readErr)
 				err = BinlogServerError{Msg: fmt.Sprintf("%v, readErr: %v", err, readErr)}
 			} else {
-				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), reqIdentifier, err)
+				log.Errorf("[%v:%v] StreamBinlog error @ %v, error: %v", blp.keyRange.Start.Hex(), blp.keyRange.End.Hex(), reqIdentifier, err)
 			}
 			sendError(sendReply, reqIdentifier, err, blp.currentPosition)
 		}
@@ -281,7 +281,7 @@ func (blp *Bls) readBlsLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 			blp.globalState.blsStats.parseStats.Add("BufferFullErrors."+blp.keyrangeTag, 1)
 			continue
 		} else if tempErr != nil {
-			log.Errorf("[%v:%v] Error in reading %v, data read %v", blp.keyspaceRange.Start.Hex(), blp.keyspaceRange.End.Hex(), tempErr, string(tempLine))
+			log.Errorf("[%v:%v] Error in reading %v, data read %v", blp.keyRange.Start.Hex(), blp.keyRange.End.Hex(), tempErr, string(tempLine))
 			err = tempErr
 		} else if len(bigLine) > 0 {
 			if len(tempLine) > 0 {
@@ -543,7 +543,7 @@ func (blp *Bls) buildTxnResponse() (txnResponseList []*proto.BinlogResponse, dml
 			if keyspaceIdStr == "" {
 				continue
 			}
-			if !blp.keyspaceRange.Contains(keyspaceId) {
+			if !blp.keyRange.Contains(keyspaceId) {
 				dmlBuffer = dmlBuffer[:0]
 				continue
 			}
@@ -615,13 +615,6 @@ func blsCreateCommitEvent(eventBuf *blsEventBuffer) (streamBuf *proto.BinlogResp
 	return
 }
 
-func isRequestValid(req *proto.BinlogServerRequest) bool {
-	if req.KeyspaceStart == "" && req.KeyspaceEnd == "" {
-		return false
-	}
-	return true
-}
-
 //This sends the stream to the client.
 func blsSendStream(sendReply proto.SendBinlogResponse, responseBuf []*proto.BinlogResponse) (err error) {
 	for _, event := range responseBuf {
@@ -688,12 +681,9 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 		}
 	}()
 
-	log.Infof("received req: %v kr start %v end %v", req.StartPosition.String(), req.KeyspaceStart, req.KeyspaceEnd)
+	log.Infof("received req: %v %v-%v", req.StartPosition.String(), req.KeyRange.Start.Hex(), req.KeyRange.End.Hex())
 	if !blServer.isServiceEnabled() {
 		panic(newBinlogServerError("Binlog Server is disabled"))
-	}
-	if !isRequestValid(req) {
-		panic(newBinlogServerError("Invalid request, cannot serve the stream"))
 	}
 
 	binlogPrefix := blServer.mysqld.config.BinLogPath
@@ -702,17 +692,7 @@ func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendRe
 		panic(newBinlogServerError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position: %v", req.StartPosition, err)))
 	}
 
-	startKey, err := key.HexKeyspaceId(req.KeyspaceStart).Unhex()
-	if err != nil {
-		panic(newBinlogServerError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceStart)))
-	}
-	endKey, err := key.HexKeyspaceId(req.KeyspaceEnd).Unhex()
-	if err != nil {
-		panic(newBinlogServerError(fmt.Sprintf("Unhex on key '%v' failed", req.KeyspaceEnd)))
-	}
-	keyRange := &key.KeyRange{Start: startKey, End: endKey}
-
-	blp := newBls(&req.StartPosition, blServer, keyRange)
+	blp := newBls(&req.StartPosition, blServer, &req.KeyRange)
 	blp.binlogPrefix = binlogPrefix
 
 	log.Infof("blp.binlogPrefix %v logsDir %v", blp.binlogPrefix, logsDir)

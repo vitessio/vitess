@@ -110,21 +110,16 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 		return "", key.KeyRange{}, fmt.Errorf("Invalid shardId, can only contain one '-': %v", shard)
 	}
 
-	start, err := key.HexKeyspaceId(parts[0]).Unhex()
+	keyRange, err := key.ParseKeyRangeParts(parts[0], parts[1])
 	if err != nil {
 		return "", key.KeyRange{}, err
 	}
 
-	end, err := key.HexKeyspaceId(parts[1]).Unhex()
-	if err != nil {
-		return "", key.KeyRange{}, err
+	if keyRange.End != key.MaxKey && keyRange.Start >= keyRange.End {
+		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", keyRange.Start.Hex(), keyRange.End.Hex())
 	}
 
-	if end != key.MaxKey && start >= end {
-		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", start, end)
-	}
-
-	return strings.ToUpper(shard), key.KeyRange{Start: start, End: end}, nil
+	return strings.ToUpper(shard), keyRange, nil
 }
 
 // ShardInfo is a meta struct that contains metadata to give the data

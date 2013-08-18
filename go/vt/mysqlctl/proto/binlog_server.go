@@ -6,6 +6,7 @@ package proto
 
 import (
 	rpc "github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/vt/key"
 )
 
 // Possible values for SqlType (all lower case)
@@ -49,8 +50,7 @@ func GetSqlType(firstKeyword string) string {
 // BinlogServerRequest represents a request to the BinlogServer service.
 type BinlogServerRequest struct {
 	StartPosition ReplicationCoordinates
-	KeyspaceStart string
-	KeyspaceEnd   string
+	KeyRange      key.KeyRange
 }
 
 // BinlogResponse is the response from the BinlogServer service.

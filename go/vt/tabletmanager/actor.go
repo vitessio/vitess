@@ -835,7 +835,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
+	filenames, err := ta.mysqld.CreateMultiSnapshot(tablet.KeyRange, args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
 	if err != nil {
 		return err
 	}
