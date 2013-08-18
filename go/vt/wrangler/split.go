@@ -174,6 +174,8 @@ func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.Tab
 	shardInfo.SourceShards = make([]topo.SourceShard, 0, len(sourceTablets))
 	for _, ti := range sourceTablets {
 		ss := topo.SourceShard{
+			Keyspace: ti.Keyspace,
+			Shard:    ti.Shard,
 			KeyRange: ti.KeyRange,
 		}
 		shardInfo.SourceShards = append(shardInfo.SourceShards, ss)

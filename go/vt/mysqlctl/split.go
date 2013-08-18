@@ -127,9 +127,14 @@ type SplitSnapshotManifest struct {
 	Source *SnapshotManifest
 
 	// KeyRange describes the data present in this snapshot
+	// When splitting 40-80 into 40-60 and 60-80, this would
+	// have 40-60 for instance.
 	KeyRange key.KeyRange
 
 	// ServerKeyRange describes the data the server has
+	// When splitting 40-80 into 40-60 and 60-80, this would
+	// have 40-80 for instance. This can be used to store
+	// source information in blp_recovery for instance.
 	ServerKeyRange key.KeyRange
 
 	// The schema for this server
