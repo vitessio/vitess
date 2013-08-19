@@ -835,7 +835,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(tablet.KeyRange, args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
 	if err != nil {
 		return err
 	}
@@ -867,12 +867,14 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// get source tablets addresses
 	sourceAddrs := make([]*url.URL, len(args.SrcTabletAliases))
+	uids := make([]uint32, len(args.SrcTabletAliases))
 	for i, alias := range args.SrcTabletAliases {
 		t, e := ta.ts.GetTablet(alias)
 		if e != nil {
 			return e
 		}
 		sourceAddrs[i] = &url.URL{Host: t.Addr, Path: "/" + t.DbName()}
+		uids[i] = t.Uid
 	}
 
 	// change type to restore, no change to replication graph
@@ -884,7 +886,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	}
 
 	// run the action, scrap if it fails
-	if err := ta.mysqld.MultiRestore(tablet.DbName(), tablet.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
+	if err := ta.mysqld.MultiRestore(tablet.DbName(), tablet.KeyRange, sourceAddrs, uids, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
 		if e := Scrap(ta.ts, ta.tabletAlias, false); e != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}

@@ -42,8 +42,7 @@ type BinlogPlayerController struct {
 	keyRange key.KeyRange
 
 	// Information about the source
-	sourceKeyspace string
-	sourceShard    topo.SourceShard
+	sourceShard topo.SourceShard
 
 	// Player is the BinlogPlayer when we have one, protected by mu
 	player *mysqlctl.BinlogPlayer
@@ -56,15 +55,14 @@ type BinlogPlayerController struct {
 	interrupted chan struct{}
 }
 
-func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, cell string, keyRange key.KeyRange, sourceKeyspace string, sourceShard topo.SourceShard) *BinlogPlayerController {
+func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
-		ts:             ts,
-		dbConfig:       dbConfig,
-		cell:           cell,
-		keyRange:       keyRange,
-		sourceKeyspace: sourceKeyspace,
-		sourceShard:    sourceShard,
-		interrupted:    make(chan struct{}, 1),
+		ts:          ts,
+		dbConfig:    dbConfig,
+		cell:        cell,
+		keyRange:    keyRange,
+		sourceShard: sourceShard,
+		interrupted: make(chan struct{}, 1),
 	}
 	blc.states = stats.NewStates("", []string{
 		"Connecting",
@@ -88,7 +86,7 @@ func (blc *BinlogPlayerController) statsJSON() string {
 }
 
 func (bpc *BinlogPlayerController) String() string {
-	return fmt.Sprintf("BinlogPlayerController(%v/%v-%v)", bpc.sourceKeyspace, bpc.sourceShard.KeyRange.Start.Hex(), bpc.sourceShard.KeyRange.End.Hex())
+	return fmt.Sprintf("BinlogPlayerController(%v/%v)", bpc.sourceShard.Keyspace, bpc.sourceShard.Shard)
 }
 
 func (bpc *BinlogPlayerController) Start() {
@@ -135,19 +133,18 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer vtClient.Close()
 
 	// Read the start position
-	startPosition, err := mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.KeyRange)
+	startPosition, err := mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
 		return fmt.Errorf("can't read startPosition: %v", err)
 	}
 
 	// Find the server list for the source shard in our cell
-	sourceShardName := string(bpc.sourceShard.KeyRange.Start.Hex()) + "-" + string(bpc.sourceShard.KeyRange.End.Hex())
-	addrs, err := bpc.ts.GetSrvTabletType(bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA)
+	addrs, err := bpc.ts.GetSrvTabletType(bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
 	if err != nil {
-		return fmt.Errorf("can't find any source tablet for %v %v %v %v: %v", bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA, err)
+		return fmt.Errorf("can't find any source tablet for %v %v %v %v: %v", bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA, err)
 	}
 	if len(addrs.Entries) == 0 {
-		return fmt.Errorf("empty source tablet list for %v %v %v %v", bpc.cell, bpc.sourceKeyspace, sourceShardName, topo.TYPE_REPLICA)
+		return fmt.Errorf("empty source tablet list for %v %v %v %v", bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
 	}
 
 	// if the server we were using before is in the list, just keep using it
@@ -175,11 +172,10 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	if err != nil {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
-	startPosition.KeyRange = overlap
 
 	// Create the player.
 	bpc.mu.Lock()
-	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, startPosition, bpc.sourceShard.KeyRange, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
+	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, overlap, bpc.sourceShard.Uid, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
 	bpc.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("can't create player: %v", err)
@@ -226,14 +222,14 @@ func (blm *BinlogPlayerMap) statsJSON() string {
 	return buf.String()
 }
 
-func (blm *BinlogPlayerMap) AddPlayer(cell string, keyRange key.KeyRange, sourceKeyspace string, sourceShard topo.SourceShard) {
+func (blm *BinlogPlayerMap) AddPlayer(cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) {
 	bpc, ok := blm.players[sourceShard]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
 		return
 	}
 
-	bpc = NewBinlogPlayerController(blm.ts, blm.dbConfig, cell, keyRange, sourceKeyspace, sourceShard)
+	bpc = NewBinlogPlayerController(blm.ts, blm.dbConfig, cell, keyRange, sourceShard)
 	blm.players[sourceShard] = bpc
 	bpc.Start()
 }
@@ -265,7 +261,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.AddPlayer(tablet.Cell, tablet.KeyRange, tablet.Keyspace, sourceShard)
+		blm.AddPlayer(tablet.Cell, tablet.KeyRange, sourceShard)
 		delete(toRemove, sourceShard)
 	}
 
