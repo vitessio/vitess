@@ -291,6 +291,9 @@ index by_msg (msg)
     # check the startup values are in the right place
     self._check_startup_values()
 
+    # check the schema too
+    utils.run_vtctl('ValidateSchemaKeyspace test_keyspace', auto_log=True)
+
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
     # timeout, check we get all of it.
