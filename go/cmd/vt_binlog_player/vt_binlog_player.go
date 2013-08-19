@@ -5,8 +5,8 @@
 /*
 The vt_binlog_player reads data from the a remote host via vt_binlog_server.
 This is mostly intended for online data migrations.
-Note this binary replicates all the data from the source server,
-as it doesn't adjust the source keyrange.
+This program reads the current status from blp_recovery (by uid),
+and updates it.
 */
 package main
 
@@ -35,6 +35,7 @@ const (
 )
 
 var (
+	uid            = flag.Uint("uid", 0, "id of the blp_checkpoint row")
 	start          = flag.String("start", "", "keyrange start to use in hex")
 	end            = flag.String("end", "", "keyrange end to use in hex")
 	port           = flag.Int("port", 0, "port for the server")
@@ -102,14 +103,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("error in initializing dbClient: %v", err)
 	}
-	brs, err := mysqlctl.ReadStartPosition(vtClient, keyRange)
+	brs, err := mysqlctl.ReadStartPosition(vtClient, uint32(*uid))
 	if err != nil {
 		log.Fatalf("Cannot read start position from db: %v", err)
 	}
 	if *debug {
 		vtClient = mysqlctl.NewDummyVtClient()
 	}
-	blp, err := mysqlctl.NewBinlogPlayer(vtClient, brs, keyRange, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
+	blp, err := mysqlctl.NewBinlogPlayer(vtClient, keyRange, uint32(*uid), brs, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
 	if err != nil {
 		log.Fatalf("error in initializing binlog player: %v", err)
 	}

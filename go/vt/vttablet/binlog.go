@@ -133,7 +133,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer vtClient.Close()
 
 	// Read the start position
-	startPosition, err := mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.KeyRange)
+	startPosition, err := mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
 		return fmt.Errorf("can't read startPosition: %v", err)
 	}
@@ -172,11 +172,10 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	if err != nil {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
-	startPosition.KeyRange = overlap
 
 	// Create the player.
 	bpc.mu.Lock()
-	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, startPosition, bpc.sourceShard.KeyRange, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
+	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, overlap, bpc.sourceShard.Uid, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
 	bpc.mu.Unlock()
 	if err != nil {
 		return fmt.Errorf("can't create player: %v", err)

@@ -170,10 +170,14 @@ func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.Tab
 		return err
 	}
 
-	// insert their KeyRange in the SourceShards array
+	// insert their KeyRange in the SourceShards array.
+	// We use the source tablet id as a unique Uid for the SourceShard,
+	// it is a unique ID as good as others, and is guaranteed
+	// to be unique in the Keyspace, so it's unique in the Shard for sure.
 	shardInfo.SourceShards = make([]topo.SourceShard, 0, len(sourceTablets))
 	for _, ti := range sourceTablets {
 		ss := topo.SourceShard{
+			Uid:      ti.Uid,
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
 			KeyRange: ti.KeyRange,
