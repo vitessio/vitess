@@ -6,382 +6,335 @@ package hourglass
 
 import (
 	"container/heap"
-	"errors"
 	"sync"
 	"testing"
 	"time"
 )
 
-type TimerEventQueue []*sandboxTimer
+type timerEventQueue []*sandboxTimer
 
-var _use_sys_time bool
+var mu sync.Mutex
+var currentTime time.Time
+var eventQueue *timerEventQueue
 
-var _lock sync.Mutex
-var _current_time time.Time
-var _event_queue *TimerEventQueue
-
-// package func
-func init() {
-	_use_sys_time = true
+// initSandboxMode enables sandbox mode.
+// It resets sandbox time function when called with a start time.
+func initSandboxMode(start time.Time) {
+	mu.Lock()
+	defer mu.Unlock()
+	currentTime = start
+	eventQueue = &timerEventQueue{}
+	heap.Init(eventQueue)
 }
 
-// Set if using system time; if not, it uses sandbox time.
-// It resets sandbox time function when called with sys_time as false.
-func SetRealTime(sys_time bool) {
-	_use_sys_time = sys_time
-	if !sys_time {
-		_lock.Lock()
-		defer _lock.Unlock()
-
-		_current_time = time.Now()
-		_event_queue = &TimerEventQueue{}
-		heap.Init(_event_queue)
-	}
+// InitSandboxTest initializes the sandbox mode in tests with a given start time.
+func InitSandboxTest(_ *testing.T, start time.Time) {
+	initSandboxMode(start)
 }
 
-// helper to make sure sandbox specific func not called when using system time.
-func _verify_sandbox_mode(_ *testing.T) {
-	if _use_sys_time {
-		panic("Hourglass: func can only be called in sandbox mode")
-	}
+// InitSandboxBench initializes the sandbox mode in benchmarks with a given start time.
+func InitSandboxBench(_ *testing.B, start time.Time) {
+	initSandboxMode(start)
+}
+
+func isSandboxMode() bool {
+	return eventQueue != nil
 }
 
 // It implements heap interface
-func (queue TimerEventQueue) Len() int {
+func (queue timerEventQueue) Len() int {
 	return len(queue)
 }
 
-func (queue TimerEventQueue) Less(i, j int) bool {
+func (queue timerEventQueue) Less(i, j int) bool {
 	return queue[i].when.Before(queue[j].when)
 }
 
-func (queue TimerEventQueue) Swap(i, j int) {
+func (queue timerEventQueue) Swap(i, j int) {
 	queue[i], queue[j] = queue[j], queue[i]
 }
 
-func (queue *TimerEventQueue) Push(x interface{}) {
+func (queue *timerEventQueue) Push(x interface{}) {
 	*queue = append(*queue, x.(*sandboxTimer))
 }
 
-func (queue *TimerEventQueue) Pop() interface{} {
-	old := *queue
-	n := len(old)
-	x := old[n-1]
-	*queue = old[0 : n-1]
-	return x
+func (queue *timerEventQueue) Pop() interface{} {
+	n := len(*queue)
+	popped := (*queue)[n-1]
+	*queue = (*queue)[:n-1]
+	return popped
 }
 
-// time.go
-
-// **Sandbox Only**
-// Advance the sandbox time by the duration d
+// Advance the sandbox time by the duration d.
+// It will panic if it is not called in sandbox mode.
 func Advance(t *testing.T, d time.Duration) {
-	_verify_sandbox_mode(t)
+	if !isSandboxMode() {
+		panic("Hourglass: func Advance can only be called in sandbox mode")
+	}
 
-	_lock.Lock()
-	defer _lock.Unlock()
-	_current_time = _current_time.Add(d)
+	mu.Lock()
+	defer mu.Unlock()
+	currentTime = currentTime.Add(d)
 	// notify Tick and Timer
-	for _event_queue.Len() > 0 {
-		sandtimer := heap.Pop(_event_queue).(*sandboxTimer)
+	for eventQueue.Len() > 0 {
+		sandtimer := heap.Pop(eventQueue).(*sandboxTimer)
 		// timer is scheduled for a later time, stop.
-		if sandtimer.when.After(_current_time) {
-			heap.Push(_event_queue, sandtimer)
+		if sandtimer.when.After(currentTime) {
+			heap.Push(eventQueue, sandtimer)
 			break
 		}
 		if sandtimer.period > 0 {
 			// ticker (repeat)
-			i := sandtimer.when
-			for ; !i.After(_current_time); i = i.Add(sandtimer.period) {
-				sandtimer.f(sandtimer.when, sandtimer.arg)
+			var i time.Time
+			for i = sandtimer.when; !i.After(currentTime); i = i.Add(sandtimer.period) {
+				sandtimer.trigger()
 			}
 			sandtimer.when = i
-			heap.Push(_event_queue, sandtimer)
+			heap.Push(eventQueue, sandtimer)
 		} else {
 			// timer
 			sandtimer.started = false
-			sandtimer.f(sandtimer.when, sandtimer.arg)
+			sandtimer.trigger()
 		}
 	}
 }
 
-// **Replace time.Since(t Time)**
-// Since returns the time elapsed since t.
+// Since returns the time elapsed since t, and is a replacement for time.Since.
 // It is shorthand for hourglass.Now().Sub(t).
 func Since(t time.Time) time.Duration {
 	return Now().Sub(t)
 }
 
-// **Replace time.Now()**
-// Now returns the current local time.
+// Now returns the current local time, and is a replacement for time.Now.
 // Sandbox time when in sandbox mode; system time otherwise.
 func Now() time.Time {
-	if _use_sys_time {
-		return time.Now()
-	} else {
-		_lock.Lock()
-		defer _lock.Unlock()
-		return _current_time
+	if isSandboxMode() {
+		mu.Lock()
+		defer mu.Unlock()
+		return currentTime
 	}
+	return time.Now()
 }
 
-// sleep.go
-
-// **Replace time.Sleep()**
-// Sleep pauses the current goroutine for the duration d.
+// Sleep pauses the current goroutine for the duration d, and is a replacement for time.Sleep.
 func Sleep(d time.Duration) {
-	if _use_sys_time {
-		time.Sleep(d)
-	} else {
+	if isSandboxMode() {
 		// register for interrupt
-		t := newSandTimer(d, 0)
-		<-t.C
+		<-newSandTimer(d, 0).C
+	} else {
+		time.Sleep(d)
 	}
 }
 
-// **Sandbox Only**
-// Always pauses the current goroutine for duration d at system level.
+// SleepSys always pauses the current goroutine for duration d at system level.
+// It will panic if it is not called in sandbox mode.
 func SleepSys(t *testing.T, d time.Duration) {
-	_verify_sandbox_mode(t)
+	if !isSandboxMode() {
+		panic("Hourglass: func SleepSys can only be called in sandbox mode")
+	}
 
 	time.Sleep(d)
 }
 
-// The Sandbox Timer simulating time.Timer and time.Ticker in sandbox mode.
+// sandboxTimer implements the function of time.Timer and time.Ticker in sandbox mode.
+// They can be scheduled to trigger at a later time (when), with the scheduled Time or a callback function.
+// Timer only triggers once, and Ticker triggers in an interval with period.
 type sandboxTimer struct {
-	C       <-chan time.Time
-	started bool
-	when    time.Time
-	period  time.Duration
-	f       func(time.Time, interface{})
-	arg     interface{}
+	C           <-chan time.Time
+	started     bool
+	when        time.Time
+	period      time.Duration
+	callbackArg interface{}
 }
 
-// NewSandTimer creates a new SandTimer that will send
+// newSandTimer creates a new SandTimer that will send
 // the sandbox time on its channel after at least duration d.
 // If duration p is greater than 0, it is treated as a periodic ticker.
 func newSandTimer(d time.Duration, p time.Duration) *sandboxTimer {
 	c := make(chan time.Time, 1)
-	t := &sandboxTimer{C: c, when: when(d), period: p, f: sendTimeSand, arg: c}
-	startSandTimer(t)
+	t := &sandboxTimer{C: c, when: when(d), period: p, callbackArg: c}
+	t.startTimer()
 	return t
-}
-
-func sendTimeSand(now time.Time, c interface{}) {
-	// Non-blocking send of time on c.
-	// Used in NewTimer, it cannot block anyway (buffer).
-	// Used in NewTicker, dropping sends on the floor is
-	// the desired behavior when the reader gets behind,
-	// because the sends are periodic.
-	select {
-	case c.(chan time.Time) <- now:
-	default:
-	}
 }
 
 // when is a helper function for setting the 'when' field of a SandTimer.
 // It returns that the time will be, Duration d in the future.
 // If d is negative or zero, it is ignored.
 func when(d time.Duration) time.Time {
-	new_time := _current_time
 	if d > 0 {
-		new_time = new_time.Add(d)
+		return currentTime.Add(d)
 	}
-	return new_time
+	return currentTime
 }
 
-// Start the Sandbox Timer
+// startTimer starts the Sandbox Timer
 // If the target time is current or earlier, call the function f immediately,
 // otherwise push into the event queue
-func startSandTimer(timer *sandboxTimer) {
-	_lock.Lock()
-	defer _lock.Unlock()
-	if timer.when.After(_current_time) {
-		timer.started = true
-		heap.Push(_event_queue, timer)
+func (t *sandboxTimer) startTimer() {
+	mu.Lock()
+	defer mu.Unlock()
+	if t.when.After(currentTime) {
+		t.started = true
+		heap.Push(eventQueue, t)
 	} else {
-		timer.f(timer.when, timer.arg)
+		t.trigger()
 	}
 }
 
-// Stop the Sandbox Timer
+// stopTimer stops the Sandbox Timer
 // If the target is active, remove it from the event queue
 // It returns if the timer is active
-func stopSandTimer(timer *sandboxTimer) bool {
-	_lock.Lock()
-	defer _lock.Unlock()
-	active := timer.started
+func (t *sandboxTimer) stopTimer() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	active := t.started
 	if active {
-		// delete timer from _event_queue
-		for i, n := 0, _event_queue.Len(); i < n; i++ {
-			item := (*_event_queue)[i]
-			if item == timer {
-				_event_queue.Swap(i, n-1)
-				(*_event_queue)[n-1] = nil
-				*_event_queue = (*_event_queue)[0 : n-1]
-				heap.Init(_event_queue)
+		// delete timer from eventQueue
+		for i, item := range *eventQueue {
+			if item == t {
+				heap.Remove(eventQueue, i)
 				break
 			}
 		}
-		timer.started = false
+		t.started = false
 	}
 	return active
 }
 
-// Simulate time.Timer.Reset(d) behavior.
-// Reset changes the sandbox timer to expire after duration d.
+// trigger handles time-up action depending on the type of callbackArg.
+// It sends the target time when if callbackArg is a channel,
+// and call the func in another goroutine if callbackArg is a func.
+func (t *sandboxTimer) trigger() {
+	switch t.callbackArg.(type) {
+	case chan time.Time:
+		// Non-blocking send of time on sandboxTimer.callbackArg,
+		// which is also sandboxTimer.C.
+		// Used in NewTimer, it cannot block anyway (buffer).
+		// Used in NewTicker, dropping sends on the floor is
+		// the desired behavior when the reader gets behind,
+		// because the sends are periodic.
+		select {
+		case t.callbackArg.(chan time.Time) <- t.when:
+		default:
+		}
+	case func():
+		go t.callbackArg.(func())()
+	}
+}
+
+// Reset changes the sandbox timer to expire after duration d, simulating time.Timer.Reset behavior.
 // It returns true if the sandbox timer had been active,
 // false if the sandbox timer expired or been stopped.
 func (t *sandboxTimer) Reset(d time.Duration) bool {
-	active := stopSandTimer(t)
+	active := t.stopTimer()
 	t.when = when(d)
-	startSandTimer(t)
+	t.startTimer()
 	return active
 }
 
-// Simulate time.Timer.Stop() behavior.
-// Stop prevents the Timer from firing.
-// It returns true if the call stops the timer, false if the timer has already
-// expired or been stopped.
-// Stop does not close the channel, to prevent a read from the channel succeeding
-// incorrectly.
+// Stop prevents the Timer from firing, simulating time.Timer.Stop behavior.
+// It returns true if the call stops the timer, false if the timer has already expired or been stopped.
+// Stop does not close the channel, to prevent a read from the channel succeeding incorrectly.
 func (t *sandboxTimer) Stop() bool {
-	return stopSandTimer(t)
+	return t.stopTimer()
 }
 
-// **Replace time.Timer**
-// The Timer type represents a single event.
+// Ch returns the channel used to communicate time.Time when sandboxTimer fires.
+func (t *sandboxTimer) Ch() <-chan time.Time {
+	return t.C
+}
+
+// Timer represents a system time.Timer, or a sandboxTimer.
 // When the Timer expires, the current time will be sent on C,
-// unless the Timer was created by AfterFunc
-type Timer struct {
-	C           <-chan time.Time
-	_sys_timer  *time.Timer
-	_sand_timer *sandboxTimer
+// unless the Timer was created by AfterFunc.
+type Timer interface {
+	Reset(d time.Duration) bool
+	Stop() bool
+	Ch() <-chan time.Time
 }
 
-// **Replace time.NewTimer(d)**
-// NewTimer creats a new Timer that will send
-// the current time on its channel after at least duration d.
-func NewTimer(d time.Duration) *Timer {
-	var t *Timer
-	if _use_sys_time {
-		sys_t := time.NewTimer(d)
-		t = &Timer{C: sys_t.C, _sys_timer: sys_t, _sand_timer: nil}
-	} else {
-		sand_t := newSandTimer(d, 0)
-		t = &Timer{C: sand_t.C, _sys_timer: nil, _sand_timer: sand_t}
+// sysTimer wraps the time.Timer to implement interface Timer.
+type sysTimer struct {
+	*time.Timer
+}
+
+// Ch returns the channel of underlying time.Timer.
+func (t sysTimer) Ch() <-chan time.Time {
+	return t.C
+}
+
+// NewTimer creats a new Timer that will send the current time on its channel after at least duration d,
+// and is a replacement of time.NewTimer.
+func NewTimer(d time.Duration) Timer {
+	if isSandboxMode() {
+		return newSandTimer(d, 0)
 	}
-	return t
+	return &sysTimer{time.NewTimer(d)}
 }
 
-// **Replace time.Timer.Reset(d)**
-// Reset changes the timer to expire after duration d.
-// It returns true if the timer had been active, false if the timer had
-// expired or been stopped.
-func (t *Timer) Reset(d time.Duration) bool {
-	var res bool
-	if _use_sys_time {
-		res = t._sys_timer.Reset(d)
-	} else {
-		res = t._sand_timer.Reset(d)
-	}
-	return res
-}
-
-// **Replace time.Timer.Stop()**
-// Stop prevents the Timer from firing.
-// It returns true if the call stops the timer, false if the timer has already
-// expired or been stopped.
-// Stop does not close the channel, to prevent a read from the channel succeeding
-// incorrectly.
-func (t *Timer) Stop() bool {
-	var res bool
-	if _use_sys_time {
-		res = t._sys_timer.Stop()
-	} else {
-		res = t._sand_timer.Stop()
-	}
-	return res
-}
-
-// **Replace time.After(d)**
-// After waits for the duration to elapse and then sends the current time
-// on the returned channel.
+// After waits for the duration to elapse and then sends the current time on the returned channel,
+// and is a replacement of time.After.
 // It is equivalent to NewTimer(d).C.
 func After(d time.Duration) <-chan time.Time {
-	return NewTimer(d).C
+	return NewTimer(d).Ch()
 }
 
-// **Replace time.AfterFunc(d, f)**
-// AfterFunc waits for the duration to elapse and then calls f
-// in its own goroutine. It returns a Timer that can
-// be used to cancel the call using its Stop method.
-func AfterFunc(d time.Duration, f func()) *Timer {
-	var t *Timer
-	if _use_sys_time {
-		sys_t := time.AfterFunc(d, f)
-		t = &Timer{_sys_timer: sys_t}
-	} else {
-		sand_t := &sandboxTimer{when: when(d), f: goFuncSand, arg: f}
-		startSandTimer(sand_t)
-		t = &Timer{_sand_timer: sand_t}
+// AfterFunc waits for the duration to elapse and then calls f in its own goroutine,
+// and is a replacement of time.AfterFunc.
+// It returns a Timer that can be used to cancel the call using its Stop method.
+func AfterFunc(d time.Duration, f func()) Timer {
+	if isSandboxMode() {
+		sandT := &sandboxTimer{when: when(d), callbackArg: f}
+		sandT.startTimer()
+		return sandT
 	}
-	return t
+	return &sysTimer{time.AfterFunc(d, f)}
 }
 
-// helper to call the attached func in sandboxTimer
-func goFuncSand(now time.Time, arg interface{}) {
-	go arg.(func())()
+// Ticker holds a channel that delivers ticks of a clock at intervals, and is a replacement of time.Ticker.
+type Ticker interface {
+	Stop() bool
+	Ch() <-chan time.Time // The channel on which the ticks are delivered
 }
 
-// tick.go
-
-// **Replace time.Ticker**
-// A Ticker holds a channel that delivers `ticks` of a clock at intervals.
-type Ticker struct {
-	C            <-chan time.Time // The channel on which the ticks are delivered
-	_sys_ticker  *time.Ticker
-	_sand_ticker *sandboxTimer
+// sysTicker wraps time.Ticker to implement interface Ticker.
+type sysTicker struct {
+	*time.Ticker
 }
 
-// **Replace time.NewTicker(d)**
+// Stop stops the sysTicker, which calls underlying time.Ticker.Stop.
+// It always returns true as a dummy value.
+func (t *sysTicker) Stop() bool {
+	t.Ticker.Stop()
+	return true
+}
+
+// Ch returns the channel of underlying time.Ticker.
+func (t *sysTicker) Ch() <-chan time.Time {
+	return t.C
+}
+
 // NewTicker returns a new Ticker containing a channel that will send the
-// time with a period specified by the duratino argument.
+// time with a period specified by the duration argument,
+// and is a replacement of time.NewTicker.
 // It adjusts the intervals or drops ticks to make up for slow receivers.
 // The duration d must be greater than zero; if not, NewTicker will panic.
-func NewTicker(d time.Duration) *Ticker {
+func NewTicker(d time.Duration) Ticker {
 	if d <= 0 {
-		panic(errors.New("non-positive interval for NewTicker"))
+		panic("non-positive interval for NewTicker")
 	}
-	var t *Ticker
-	if _use_sys_time {
-		sys_t := time.NewTicker(d)
-		t = &Ticker{C: sys_t.C, _sys_ticker: sys_t}
-	} else {
-		sand_t := newSandTimer(d, d)
-		t = &Ticker{C: sand_t.C, _sand_ticker: sand_t}
+	if isSandboxMode() {
+		return newSandTimer(d, d)
 	}
-	return t
+	return &sysTicker{time.NewTicker(d)}
 }
 
-// **Replace time.Ticker.Stop()**
-// Stop turns off a ticker. After stop, no more ticks will be sent.
-// Stop does not close the channel, to prevent a read from the channel succeeding
-// incorrectly.
-func (t *Ticker) Stop() {
-	if _use_sys_time {
-		t._sys_ticker.Stop()
-	} else {
-		t._sand_ticker.Stop()
-	}
-}
-
-// **Replace time.Tick(d)**
-// Tick is a convenience wrapper for NewTicker providing access to the ticking
-// channel only. Useful for clients that ahve no need to shut down the ticker.
+// Tick is a convenience wrapper for NewTicker providing access to the ticking channel only,
+// and is a replacement of time.Tick.
+// Useful for clients that have no need to shut down the ticker.
 func Tick(d time.Duration) <-chan time.Time {
 	if d <= 0 {
 		return nil
 	}
-	return NewTicker(d).C
+	return NewTicker(d).Ch()
 }
