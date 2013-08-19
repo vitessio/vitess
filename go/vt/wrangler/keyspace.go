@@ -6,9 +6,11 @@ package wrangler
 
 import (
 	"fmt"
+	"sync"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -157,7 +159,85 @@ func removeType(tabletType topo.TabletType, types []topo.TabletType) ([]topo.Tab
 	return result, found
 }
 
-// migrateServedTypes operates with all shards locked.
+func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, si := range shards {
+		if si.MasterAlias.IsZero() {
+			rec.RecordError(fmt.Errorf("Shard %v/%v has no master?", si.Keyspace(), si.ShardName()))
+			continue
+		}
+
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			defer wg.Done()
+
+			actionPath, err := wr.ai.SetReadOnly(si.MasterAlias)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			rec.RecordError(wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()))
+		}(si)
+	}
+	wg.Wait()
+	return rec.Error()
+}
+
+func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.ShardInfo]*mysqlctl.ReplicationPosition, error) {
+	mu := sync.Mutex{}
+	result := make(map[*topo.ShardInfo]*mysqlctl.ReplicationPosition)
+
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, si := range shards {
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			pos, err := wr.getMasterPosition(si.MasterAlias)
+			if err != nil {
+				rec.RecordError(err)
+			} else {
+				mu.Lock()
+				result[si] = pos
+				mu.Unlock()
+			}
+			wg.Done()
+		}(si)
+	}
+	wg.Wait()
+	return result, rec.Error()
+}
+
+func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardInfo]*mysqlctl.ReplicationPosition, destinationShards []*topo.ShardInfo) error {
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, si := range destinationShards {
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			for _, sourceShard := range si.SourceShards {
+				// we're waiting on this guy
+				blpPosition := mysqlctl.BlpPosition{
+					Uid: sourceShard.Uid,
+				}
+
+				// find the position it should be at
+				for s, rp := range sourcePositions {
+					if s.Keyspace() == sourceShard.Keyspace && s.ShardName() == sourceShard.Shard {
+						blpPosition.GroupId = rp.MasterLogGroupId
+					}
+				}
+
+				rec.RecordError(wr.ai.WaitBlpPosition(si.MasterAlias, blpPosition, wr.actionTimeout()))
+				wg.Done()
+			}
+		}(si)
+	}
+	wg.Wait()
+	return rec.Error()
+}
+
+// migrateServedTypes operates with all concerned shards locked.
 func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.ShardInfo, servedType topo.TabletType, reverse bool) error {
 
 	// re-read all the shards so we are up to date
@@ -205,10 +285,24 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 		}
 	}
 
-	// TODO(alainjobart) for master type migration, need to switch
-	// the source shard to read-only, wait for replication to
-	// catch up before we continue
+	// For master type migration, need to:
+	// - switch the source shards to read-only
+	// - gather all replication points
+	// - wait for filtered replication to catch up before we continue
 	if servedType == topo.TYPE_MASTER {
+		err := wr.makeMastersReadOnly(sourceShards)
+		if err != nil {
+			return err
+		}
+
+		masterPositions, err := wr.getMastersPosition(sourceShards)
+		if err != nil {
+			return err
+		}
+
+		if err := wr.waitForFilteredReplication(masterPositions, destinationShards); err != nil {
+			return err
+		}
 	}
 
 	// All is good, we can save the shards now

@@ -260,6 +260,14 @@ func (ai *ActionInitiator) StopSlave(tabletAlias topo.TabletAlias) (actionPath s
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
 }
 
+func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
+	var result string
+	return ai.rpcCall(tabletAlias, TABLET_ACTION_WAIT_BLP_POSITION, &WaitBlpPositionArgs{
+		BlpPosition: blpPosition,
+		WaitTimeout: int(waitTime / time.Second),
+	}, &result, waitTime)
+}
+
 type ReserveForRestoreArgs struct {
 	ZkSrcTabletPath string // XXX
 	SrcTabletAlias  topo.TabletAlias

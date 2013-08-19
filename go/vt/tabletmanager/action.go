@@ -42,6 +42,7 @@ const (
 	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
 	TABLET_ACTION_SLAVE_POSITION      = "SlavePosition"
 	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
+	TABLET_ACTION_WAIT_BLP_POSITION   = "WaitBlpPosition"
 	TABLET_ACTION_SCRAP               = "Scrap"
 	TABLET_ACTION_GET_SCHEMA          = "GetSchema"
 	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
@@ -139,6 +140,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
 		node.args = &SlavePositionReq{}
 		node.reply = &mysqlctl.ReplicationPosition{}
+	case TABLET_ACTION_WAIT_BLP_POSITION:
+		node.args = &WaitBlpPositionArgs{}
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_GET_SCHEMA:
 		node.args = &GetSchemaArgs{}

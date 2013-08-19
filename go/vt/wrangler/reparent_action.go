@@ -26,8 +26,8 @@ type rpcContext struct {
 // mechanism for performing critical actions. It also leaves more
 // centralized debug information in TopologyServer when a failure occurs.
 
-func (wr *Wrangler) getMasterPosition(ti *topo.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
-	actionPath, err := wr.ai.MasterPosition(ti.Alias())
+func (wr *Wrangler) getMasterPosition(tabletAlias topo.TabletAlias) (*mysqlctl.ReplicationPosition, error) {
+	actionPath, err := wr.ai.MasterPosition(tabletAlias)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*mysqlctl.ReplicationPosi
 	if err != nil {
 		return nil, err
 	}
-	return wr.getMasterPosition(ti)
+	return wr.getMasterPosition(ti.Alias())
 }
 
 func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *tm.RestartSlaveData, err error) {
