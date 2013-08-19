@@ -391,7 +391,7 @@ type SetShardServedTypesArgs struct {
 	ServedTypes []topo.TabletType
 }
 
-func (ai *ActionInitiator) SetShardServedTypesArgs(servedTypes []topo.TabletType) *ActionNode {
+func (ai *ActionInitiator) SetShardServedTypes(servedTypes []topo.TabletType) *ActionNode {
 	return &ActionNode{
 		Action:     SHARD_ACTION_SET_SERVED_TYPES,
 		ActionGuid: actionGuid(),
@@ -406,6 +406,21 @@ func (ai *ActionInitiator) ShardMultiRestore(args *MultiRestoreArgs) *ActionNode
 		Action:     SHARD_ACTION_MULTI_RESTORE,
 		ActionGuid: actionGuid(),
 		args:       args,
+	}
+}
+
+// parameters are stored for debug purposes
+type MigrateServedTypesArgs struct {
+	ServedType topo.TabletType
+}
+
+func (ai *ActionInitiator) MigrateServedTypes(servedType topo.TabletType) *ActionNode {
+	return &ActionNode{
+		Action:     SHARD_ACTION_MIGRATE_SERVED_TYPES,
+		ActionGuid: actionGuid(),
+		args: &MigrateServedTypesArgs{
+			ServedType: servedType,
+		},
 	}
 }
 

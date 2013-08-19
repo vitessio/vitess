@@ -70,6 +70,8 @@ const (
 	SHARD_ACTION_SET_SERVED_TYPES = "SetShardServedTypes"
 	// Multi-restore on all tablets of a shard in parallel
 	SHARD_ACTION_MULTI_RESTORE = "ShardMultiRestore"
+	// Migrate served types from one shard to another
+	SHARD_ACTION_MIGRATE_SERVED_TYPES = "MigrateServedTypes"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
@@ -180,6 +182,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &SetShardServedTypesArgs{}
 	case SHARD_ACTION_MULTI_RESTORE:
 		node.args = &MultiRestoreArgs{}
+	case SHARD_ACTION_MIGRATE_SERVED_TYPES:
+		node.args = &MigrateServedTypesArgs{}
 
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:

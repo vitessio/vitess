@@ -320,10 +320,8 @@ index by_msg (msg)
     self._check_lots_timeout(1000, 80, 5, base=1000)
 
     # now serve rdonly from the split shards
-    utils.run_vtctl('SetShardServedTypes test_keyspace/80- master,replica')
-    utils.run_vtctl('SetShardServedTypes test_keyspace/80-C0 rdonly')
-    utils.run_vtctl('SetShardServedTypes test_keyspace/C0- rdonly')
-    utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
+    utils.run_fail(utils.vtroot+'/bin/vtctl MigrateServedTypes test_keyspace/80- master')
+    utils.run_vtctl('MigrateServedTypes test_keyspace/80- rdonly', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
@@ -331,10 +329,21 @@ index by_msg (msg)
                              'TabletTypes: master,replica')
 
     # then serve replica from the split shards
-    utils.run_vtctl('SetShardServedTypes test_keyspace/80- master')
-    utils.run_vtctl('SetShardServedTypes test_keyspace/80-C0 replica,rdonly')
-    utils.run_vtctl('SetShardServedTypes test_keyspace/C0- replica,rdonly')
-    utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
+    utils.run_vtctl('MigrateServedTypes test_keyspace/80- replica', auto_log=True)
+    self._check_srv_keyspace('test_nj', 'test_keyspace',
+                             'Partitions(master): -80 80-\n' +
+                             'Partitions(rdonly): -80 80-C0 C0-\n' +
+                             'Partitions(replica): -80 80-C0 C0-\n' +
+                             'TabletTypes: master,replica')
+
+    # move replica back and forth
+    utils.run_vtctl('MigrateServedTypes -reverse test_keyspace/80- replica', auto_log=True)
+    self._check_srv_keyspace('test_nj', 'test_keyspace',
+                             'Partitions(master): -80 80-\n' +
+                             'Partitions(rdonly): -80 80-C0 C0-\n' +
+                             'Partitions(replica): -80 80-\n' +
+                             'TabletTypes: master,replica')
+    utils.run_vtctl('MigrateServedTypes test_keyspace/80- replica', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
@@ -342,10 +351,7 @@ index by_msg (msg)
                              'TabletTypes: master,replica')
 
     # then serve master from the split shards
-    utils.run_vtctl('SetShardServedTypes test_keyspace/80-')
-    utils.run_vtctl('SetShardServedTypes test_keyspace/80-C0 master,replica,rdonly')
-    utils.run_vtctl('SetShardServedTypes test_keyspace/C0- master,replica,rdonly')
-    utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
+    utils.run_vtctl('MigrateServedTypes test_keyspace/80- master', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-C0 C0-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
