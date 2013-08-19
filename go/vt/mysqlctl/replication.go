@@ -606,18 +606,13 @@ type BlpPosition struct {
 }
 
 func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
-
-	// FIXME(alainjobart) This code doesn't work yet, we're getting
-	// smaller GroupIds. For now ignore.
-	waitTimeout = 30
-
 	timeOut := time.Now().Add(time.Duration(waitTimeout) * time.Second)
 	for {
 		if time.Now().After(timeOut) {
 			break
 		}
 
-		cmd := fmt.Sprintf("SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", bp.Uid)
+		cmd := fmt.Sprintf("SELECT last_eof_group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", bp.Uid)
 		qr, err := mysqld.fetchSuperQuery(cmd)
 		if err != nil {
 			return err
@@ -625,7 +620,10 @@ func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
 		if len(qr.Rows) != 1 {
 			return fmt.Errorf("WaitBlpPos(%v) returned unexpected row count: %v", bp.Uid, len(qr.Rows))
 		}
-		groupId := qr.Rows[0][0].String()
+		var groupId string
+		if !qr.Rows[0][0].IsNull() {
+			groupId = qr.Rows[0][0].String()
+		}
 		if groupId == bp.GroupId {
 			return nil
 		}
@@ -634,7 +632,5 @@ func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
 		time.Sleep(1 * time.Second)
 	}
 
-	// FIXME(alainjobart) see previous FIXME
-	return nil
-	// return fmt.Errorf("WaitBlpPos(%v) timed out", bp.Uid)
+	return fmt.Errorf("WaitBlpPos(%v) timed out", bp.Uid)
 }

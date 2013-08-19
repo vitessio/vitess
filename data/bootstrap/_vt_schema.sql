@@ -20,4 +20,5 @@ CREATE TABLE _vt.blp_checkpoint (
   group_id varchar(255) default NULL,
   txn_timestamp int(10) unsigned NOT NULL,
   time_updated int(10) unsigned NOT NULL,
+  last_eof_group_id varchar(255) default NULL,
   PRIMARY KEY (source_shard_uid));
