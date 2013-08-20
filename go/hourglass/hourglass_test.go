@@ -23,7 +23,7 @@ func TestAdvance(t *testing.T) {
 	t2 := Now()
 	dt := t2.Sub(t1)
 	if dt != d {
-		t.Fatalf("TestAdvanceHourglass: want %d, got %d", d, dt)
+		t.Fatalf("TestAdvance: want %d, got %d", d, dt)
 	}
 }
 
@@ -53,11 +53,11 @@ func TestAfterFunc(t *testing.T) {
 			i--
 			if i >= 0 {
 				AfterFunc(0, f)
+				tempC := After(time.Second)
 				if ttype {
-					Advance(t, time.Second)
-				} else {
-					Sleep(time.Second)
+					go Advance(t, time.Second)
 				}
+				<-tempC
 			} else {
 				c <- true
 			}
@@ -74,7 +74,7 @@ func TestAfter(t *testing.T) {
 		start := Now()
 		c := After(delay)
 		if ttype {
-			Advance(t, delay)
+			go Advance(t, delay)
 		}
 		end := <-c
 		if duration := Now().Sub(start); duration < delay {
@@ -83,6 +83,25 @@ func TestAfter(t *testing.T) {
 		if min := start.Add(delay); end.Before(min) {
 			t.Fatalf("After(%s): want >= %s, got %s", delay, min, end)
 		}
+	}
+}
+
+func TestAfterFuncTime(t *testing.T) {
+	setSandboxMode(true)
+	const delay = 100 * time.Millisecond
+	c := make(chan time.Time)
+	t0 := Now()
+	f := func() {
+		c <- Now()
+	}
+	AfterFunc(delay, f)
+	go Advance(t, 2*delay)
+	t1 := <-c
+	if delta := t1.Sub(t0); delta != delay {
+		t.Fatalf("AfterFuncTime: triggered at incorrect time, expect %s, got %s", delay, delta)
+	}
+	if delta := Now().Sub(t0); delta != (2 * delay) {
+		t.Fatalf("AfterFuncTime: time is incorrect after Advance, expect %s, got %s", (2 * delay), delta)
 	}
 }
 
@@ -98,7 +117,7 @@ func TestAfterTick(t *testing.T) {
 		for i := 0; i < Count; i++ {
 			c := After(Delta)
 			if ttype {
-				Advance(t, Delta)
+				go Advance(t, Delta)
 			}
 			<-c
 		}
@@ -129,7 +148,7 @@ func TestAfterStop(t *testing.T) {
 			t.Fatalf("sandbox mode %t: failed to stop event 1", ttype)
 		}
 		if ttype {
-			Advance(t, 250*time.Millisecond)
+			go Advance(t, 250*time.Millisecond)
 		}
 		<-c2
 		select {
@@ -170,23 +189,7 @@ func TestAfterQueuing(t *testing.T) {
 		}
 
 		if ttype {
-			// advance time in interval of duration Delay
-			// to receive time in expected order in await().
-			// if advance time in one large step, it cannot control the order that
-			// await()s are being called, and hence the results are out of order.
-			// cannot use AfterFunc() with customized func as well,
-			// because per Go time implementation, func passed in AfterFunc() are called
-			// in separate goroutine ("go func()")
-			max := slots[0]
-			for _, value := range slots {
-				if value > max {
-					max = value
-				}
-			}
-			for i := 0; i <= max; i++ {
-				SleepSys(t, Delta)
-				Advance(t, Delta)
-			}
+			go Advance(t, time.Minute)
 		}
 
 		sort.Ints(slots)
@@ -209,33 +212,33 @@ func TestReset(t *testing.T) {
 	for _, ttype := range []bool{false, true} {
 		setSandboxMode(ttype)
 		t0 := NewTimer(2 * delay)
+		c := After(delay)
 		if ttype {
-			Advance(t, delay)
-		} else {
-			Sleep(delay)
+			go Advance(t, delay)
 		}
+		<-c
 		if t0.Reset(3*delay) != true {
 			t.Fatalf("resetting unfired timer returned false")
 		}
+		c = After(2 * delay)
 		if ttype {
-			Advance(t, 2*delay)
-		} else {
-			Sleep(2 * delay)
+			go Advance(t, 2*delay)
 		}
 		select {
+		case <-c:
+			// OK
 		case <-t0.Ch():
 			t.Fatalf("time fired early")
-		default:
 		}
+		c = After(2 * delay)
 		if ttype {
-			Advance(t, 2*delay)
-		} else {
-			Sleep(2 * delay)
+			go Advance(t, 2*delay)
 		}
 		select {
+		case <-c:
+			t.Fatalf("time did not fire")
 		case <-t0.Ch():
-		default:
-			t.Fatalf("reset timer did not fire")
+			// OK
 		}
 		if t0.Reset(50*time.Millisecond) != false {
 			t.Fatalf("resetting expired timer returned true")
@@ -251,7 +254,7 @@ func TestOverflowSleep(t *testing.T) {
 		c1 := After(big)
 		c2 := After(timeout)
 		if ttype {
-			Advance(t, timeout)
+			go Advance(t, timeout)
 		}
 		select {
 		case <-c1:
@@ -276,13 +279,7 @@ func TestTicker(t *testing.T) {
 		Delta := 100 * time.Millisecond
 		ticker := NewTicker(Delta)
 		if ttype {
-			go func() {
-				for i := 0; i < Count; i++ {
-					// sleep so will not drop ticks
-					SleepSys(t, Delta)
-					Advance(t, Delta)
-				}
-			}()
+			go Advance(t, Count*Delta)
 		}
 		t0 := Now()
 		for i := 0; i < Count; i++ {
@@ -297,16 +294,15 @@ func TestTicker(t *testing.T) {
 			t.Fatalf("%d %s ticks: want [%s,%s], got %s", Count, Delta, target-slop, target+slop, dt)
 		}
 		// Now test that the ticker stopped
+		c := After(2 * Delta)
 		if ttype {
-			Advance(t, 2*Delta)
-		} else {
-			Sleep(2 * Delta)
+			go Advance(t, 2*Delta)
 		}
 		select {
+		case <-c:
+			// ok
 		case <-ticker.Ch():
 			t.Fatal("Ticker did not shut down")
-		default:
-			// ok
 		}
 	}
 }
@@ -321,9 +317,7 @@ func TestTeardown(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			ticker := NewTicker(Delta)
 			if ttype {
-				go func() {
-					Advance(t, Delta)
-				}()
+				go Advance(t, Delta)
 			}
 			<-ticker.Ch()
 			ticker.Stop()
