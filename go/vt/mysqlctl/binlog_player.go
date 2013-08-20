@@ -28,6 +28,7 @@ var (
 	BLPL_STREAM_COMMENT_START = "/* _stream "
 	BLPL_SPACE                = " "
 	UPDATE_RECOVERY           = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, group_id='%v', txn_timestamp=unix_timestamp(), time_updated=%v where source_shard_uid=%v"
+	UPDATE_RECOVERY_LAST_EOF  = "update _vt.blp_checkpoint set last_eof_group_id='%v' where source_shard_uid=%v"
 	SELECT_FROM_RECOVERY      = "select * from _vt.blp_checkpoint where source_shard_uid=%v"
 )
 
@@ -270,6 +271,29 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 	}
 }
 
+func (blp *BinlogPlayer) saveLastEofGroupId(groupId string) {
+	if err := blp.dbClient.Begin(); err != nil {
+		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
+	}
+
+	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY_LAST_EOF,
+		groupId,
+		blp.uid)
+
+	queryStartTime := time.Now()
+	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
+		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
+	}
+	blp.blplStats.txnTime.Record("QueryTime", queryStartTime)
+	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
+		log.Infof("SLOW QUERY '%v'", updateRecovery)
+	}
+
+	if err := blp.dbClient.Commit(); err != nil {
+		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
+	}
+}
+
 func startPositionValid(startPos *binlogRecoveryState) error {
 	if startPos.Addr == "" {
 		return fmt.Errorf("invalid connection params, empty Addr")
@@ -367,6 +391,11 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 			log.Infof("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
 			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].Data.SqlType == cproto.COMMIT {
 				blp.flushTxnBatch()
+			}
+
+			// nothing left to process, we got it all
+			if blp.txnIndex == 0 {
+				blp.saveLastEofGroupId(binlogResponse.Position.Position.GroupId)
 			}
 		}
 		if binlogResponse.Position.Position.MasterFilename != "" {

@@ -87,7 +87,7 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 	}
 
 	ti.State = topo.STATE_READ_ONLY
-	if err := ts.UpdateTablet(ts, ti); err != nil {
+	if err := topo.UpdateTablet(ts, ti); err != nil {
 		t.Errorf("ts.UpdateTablet: %v", err)
 	}
 

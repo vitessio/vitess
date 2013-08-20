@@ -105,3 +105,12 @@ func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRe
 	reply.Addrs, err = tm.mysqld.FindSlaves()
 	return tm.wrapErr(context, TABLET_ACTION_GET_SLAVES, args, reply, err)
 }
+
+type WaitBlpPositionArgs struct {
+	BlpPosition mysqlctl.BlpPosition
+	WaitTimeout int
+}
+
+func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
+	return tm.wrapErr(context, TABLET_ACTION_WAIT_BLP_POSITION, args, reply, tm.mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout))
+}

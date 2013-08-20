@@ -86,7 +86,6 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 	}
 	dbName, dbis := subFlags.Arg(0), subFlags.Args()[1:]
 	sources := make([]*url.URL, len(dbis))
-	uids := make([]uint32, len(dbis))
 	for i, dbi := range dbis {
 		if !strings.HasPrefix(dbi, "vttp://") && !strings.HasPrefix(dbi, "http://") {
 			dbi = "vttp://" + dbi
@@ -96,9 +95,8 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 			log.Fatalf("incorrect source url: %v", err)
 		}
 		sources[i] = dbUrl
-		uids[i] = uint32(i)
 	}
-	if err := mysqld.MultiRestore(dbName, keyRange, sources, uids, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
+	if err := mysqld.MultiRestore(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
 		log.Fatalf("multirestore failed: %v", err)
 	}
 }

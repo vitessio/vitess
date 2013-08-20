@@ -132,25 +132,6 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('idle')
     tablet_62344.scrap(force=True)
 
-  def test_rebuild(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-    tablet_31981.init_tablet('experimental', 'test_keyspace', '0') # in ny by default
-
-    utils.run_vtctl('RebuildKeyspaceGraph -cells=test_nj test_keyspace',
-                    auto_log=True)
-    utils.run_fail(utils.vtroot+'/bin/zk cat /zk/test_ny/vt/ns/test_keyspace/0/master')
-
-    utils.run_vtctl('RebuildKeyspaceGraph -cells=test_ny test_keyspace',
-                    auto_log=True)
-
-    real_master = utils.zk_cat('/zk/test_nj/vt/ns/test_keyspace/0/master')
-    master_alias = utils.zk_cat('/zk/test_ny/vt/ns/test_keyspace/0/master')
-    self.assertEqual(real_master, master_alias,
-                     'master serving graph in all cells failed:\n%s!=\n%s' %
-                     (real_master, master_alias))
-
   def test_scrap(self):
     # Start up a master mysql and vttablet
     utils.run_vtctl('CreateKeyspace test_keyspace')

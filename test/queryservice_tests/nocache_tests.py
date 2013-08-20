@@ -164,7 +164,7 @@ class TestNocache(framework.TestCase):
       cu2 = co2.cursor()
       co2.begin()
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "connection limit")
+      self.assertContains(str(e), "tx_pool_full")
     else:
       self.fail("Did not receive exception")
     finally:
