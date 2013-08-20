@@ -16,12 +16,10 @@ from zk import zkocc
 from net import gorpc
 from net import bsonrpc
 from vtdb import cursor
-from vtdb import tablet3
-from vtdb import vt_occ2
+from vtdb import tablet as tablet3
+from vtdb import vtclient
 from vtdb import topology
 from vtdb import dbexceptions
-
-devnull = open('/dev/null', 'w')
 
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
@@ -199,14 +197,14 @@ def get_master_connection(shard=0):
   db_key = "%s.%d.master" % (TEST_KEYSPACE, shard)
   master_db_params = get_vt_connection_params(db_key)
   logging.debug("connecting to master with params %s" % master_db_params)
-  master_conn = vt_occ2.connect(**master_db_params)
+  master_conn = vtclient.connect(**master_db_params)
   return master_conn
 
 def get_replica_connection(shard=0):
   db_key = "%s.%d.replica" % (TEST_KEYSPACE, shard)
   replica_db_params = get_vt_connection_params(db_key)
   logging.debug("connecting to replica with params %s" % replica_db_params)
-  replica_conn = vt_occ2.connect(**replica_db_params)
+  replica_conn = vtclient.connect(**replica_db_params)
   return replica_conn
 
 def do_write(count):
@@ -229,7 +227,8 @@ class TestTabletFunctions(unittest.TestCase):
     try:
       replica_conn = get_replica_connection()
     except Exception, e:
-      self.fail("Connection to shard0 replica failed with error %s" % str(e))
+      logging.debug("Connection to shard0 replica failed with error %s" % str(e))
+      raise
     self.assertNotEqual(replica_conn, None)
     self.assertIsInstance(replica_conn, tablet3.TabletConnection, "Invalid replica connection")
 
@@ -242,10 +241,11 @@ class TestTabletFunctions(unittest.TestCase):
       for x in xrange(count):
         master_conn._execute("insert into vt_insert_test (msg) values (%(msg)s)", {'msg': 'test %s' % x})
       master_conn.commit()
-      results, rowcount, _, _ = master_conn._execute("select * from vt_insert_test", {})
+      results, rowcount = master_conn._execute("select * from vt_insert_test", {})[:2]
       self.assertEqual(rowcount, count, "master fetch works")
     except Exception, e:
-      self.fail("Write failed with error %s" % str(e))
+      logging.debug("Write failed with error %s" % str(e))
+      raise
 
   def test_batch_read(self):
     try:

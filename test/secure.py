@@ -4,12 +4,13 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+import logging
 import os
 import subprocess
 import time
 import unittest
 
-from vtdb import tablet3
+from vtdb import tablet as tablet3
 from vtdb import topology
 from zk import zkocc
 
