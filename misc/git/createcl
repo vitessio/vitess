@@ -39,4 +39,4 @@ git_log=`echo $rev_param | sed -n 's/:/../p'`
 git log $git_log > /tmp/createcl.msg
 
 echo "Visit https://accounts.google.com/b/0/IssuedAuthSubTokens to generate an app specific password."
-echo upload.py $rev -y -s codereview.appspot.com -e ${USER}@google.com --cc yt-vt-issues@google.com --send_mail -F /tmp/createcl.msg $*
+upload.py $rev -y -s codereview.appspot.com -e ${USER}@google.com --cc yt-vt-issues@google.com --send_mail -F /tmp/createcl.msg $*
