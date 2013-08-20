@@ -246,6 +246,35 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 	return rec.Error()
 }
 
+// FIXME(alainjobart) no action to become read-write now, just use Ping,
+// that forces the shard reload and will stop replication.
+func (wr *Wrangler) makeMastersReadWrite(shards []*topo.ShardInfo) error {
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, si := range shards {
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			defer wg.Done()
+			log.Infof("Pinging master %v", si.MasterAlias)
+
+			actionPath, err := wr.ai.Ping(si.MasterAlias)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			if err := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+				rec.RecordError(err)
+			} else {
+				log.Infof("%v responded", si.MasterAlias)
+			}
+
+		}(si)
+	}
+	wg.Wait()
+	return rec.Error()
+}
+
 // migrateServedTypes operates with all concerned shards locked.
 func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.ShardInfo, servedType topo.TabletType, reverse bool) error {
 
@@ -298,6 +327,7 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 	// - switch the source shards to read-only
 	// - gather all replication points
 	// - wait for filtered replication to catch up before we continue
+	// - disable filtered replication after the fact
 	if servedType == topo.TYPE_MASTER {
 		err := wr.makeMastersReadOnly(sourceShards)
 		if err != nil {
@@ -312,6 +342,10 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 		if err := wr.waitForFilteredReplication(masterPositions, destinationShards); err != nil {
 			return err
 		}
+
+		for _, si := range destinationShards {
+			si.SourceShards = nil
+		}
 	}
 
 	// All is good, we can save the shards now
@@ -322,6 +356,15 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 	}
 	for _, si := range destinationShards {
 		if err := wr.ts.UpdateShard(si); err != nil {
+			return err
+		}
+	}
+
+	// And tell the new shards masters they can now be read-write.
+	// Invoking a remote action will also make the tablet stop filtered
+	// replication.
+	if servedType == topo.TYPE_MASTER {
+		if err := wr.makeMastersReadWrite(destinationShards); err != nil {
 			return err
 		}
 	}
