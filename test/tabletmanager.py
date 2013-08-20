@@ -72,6 +72,7 @@ class TestTabletManager(unittest.TestCase):
     tablet.Tablet.check_vttablet_count()
     utils.zk_wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+      t.reset_replication()
       t.clean_dbs()
 
   def _check_db_addr(self, db_addr, expected_addr):
@@ -130,25 +131,6 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.init_tablet('idle')
     tablet_62344.scrap(force=True)
-
-  def test_rebuild(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-    tablet_31981.init_tablet('experimental', 'test_keyspace', '0') # in ny by default
-
-    utils.run_vtctl('RebuildKeyspaceGraph -cells=test_nj test_keyspace',
-                    auto_log=True)
-    utils.run_fail(utils.vtroot+'/bin/zk cat /zk/test_ny/vt/ns/test_keyspace/0/master')
-
-    utils.run_vtctl('RebuildKeyspaceGraph -cells=test_ny test_keyspace',
-                    auto_log=True)
-
-    real_master = utils.zk_cat('/zk/test_nj/vt/ns/test_keyspace/0/master')
-    master_alias = utils.zk_cat('/zk/test_ny/vt/ns/test_keyspace/0/master')
-    self.assertEqual(real_master, master_alias,
-                     'master serving graph in all cells failed:\n%s!=\n%s' %
-                     (real_master, master_alias))
 
   def test_scrap(self):
     # Start up a master mysql and vttablet
@@ -696,7 +678,7 @@ class TestTabletManager(unittest.TestCase):
     expected_addr = utils.hostname + ':' + str(tablet_62044.port)
     self._check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
 
-    utils.run_vtctl('ChangeSlaveType -force %s idle' % tablet_62344.tablet_alias)
+    utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias, 'idle'])
 
     idle_tablets, _ = utils.run_vtctl('ListAllTablets test_nj', trap_output=True)
     if '0000062344 <null> <null> idle' not in idle_tablets:
@@ -751,8 +733,8 @@ class TestTabletManager(unittest.TestCase):
 
     # Convert two replica to spare. That should leave only one node serving traffic,
     # but still needs to appear in the replication graph.
-    utils.run_vtctl('ChangeSlaveType ' + tablet_41983.tablet_alias + ' spare')
-    utils.run_vtctl('ChangeSlaveType ' + tablet_31981.tablet_alias + ' spare')
+    utils.run_vtctl(['ChangeSlaveType', tablet_41983.tablet_alias, 'spare'])
+    utils.run_vtctl(['ChangeSlaveType', tablet_31981.tablet_alias, 'spare'])
     utils.validate_topology()
     expected_addr = utils.hostname + ':' + str(tablet_62044.port)
     self._check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)

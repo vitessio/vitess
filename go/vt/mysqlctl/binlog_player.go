@@ -27,17 +27,17 @@ var (
 	ROLLBACK                  = "rollback"
 	BLPL_STREAM_COMMENT_START = "/* _stream "
 	BLPL_SPACE                = " "
-	UPDATE_RECOVERY           = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, group_id='%v', txn_timestamp=unix_timestamp(), time_updated=%v where keyrange_start='%v' and keyrange_end='%v'"
-	SELECT_FROM_RECOVERY      = "select * from _vt.blp_checkpoint where keyrange_start='%v' and keyrange_end='%v'"
+	UPDATE_RECOVERY           = "update _vt.blp_checkpoint set master_filename='%v', master_position=%v, group_id='%v', txn_timestamp=unix_timestamp(), time_updated=%v where source_shard_uid=%v"
+	UPDATE_RECOVERY_LAST_EOF  = "update _vt.blp_checkpoint set last_eof_group_id='%v' where source_shard_uid=%v"
+	SELECT_FROM_RECOVERY      = "select * from _vt.blp_checkpoint where source_shard_uid=%v"
 )
 
 // binlogRecoveryState is the checkpoint data we read / save into
 // _vt.blp_checkpoint table
 type binlogRecoveryState struct {
-	KeyrangeStart string //hex string
-	KeyrangeEnd   string //hex string
-	Addr          string
-	Position      cproto.ReplicationCoordinates
+	Uid      uint32
+	Addr     string
+	Position cproto.ReplicationCoordinates
 }
 
 // VtClient is a high level interface to the database
@@ -201,49 +201,50 @@ func (bs *blplStats) statsJSON() string {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	keyrange       key.KeyRange
-	recoveryState  binlogRecoveryState
-	rpcClient      *rpcplus.Client
-	inTxn          bool
-	txnBuffer      []*cproto.BinlogResponse
-	dbClient       VtClient
+	// filters for replication
+	keyRange key.KeyRange
+
+	// saved position in _vt.blp_checkpoint
+	uid           uint32
+	recoveryState binlogRecoveryState
+
+	// runtime variables used for replication
+	rpcClient  *rpcplus.Client
+	inTxn      bool
+	txnBuffer  []*cproto.BinlogResponse
+	dbClient   VtClient
+	txnIndex   int
+	batchStart time.Time
+
+	// configuration
 	tables         []string
-	txnIndex       int
-	batchStart     time.Time
 	txnBatch       int
 	maxTxnInterval time.Duration
 	execDdl        bool
-	blplStats      *blplStats
+
+	// runtime stats
+	blplStats *blplStats
 }
 
-func NewBinlogPlayer(dbClient VtClient, startPosition *binlogRecoveryState, tables []string, txnBatch int, maxTxnInterval time.Duration, execDdl bool) (*BinlogPlayer, error) {
+func NewBinlogPlayer(dbClient VtClient, keyRange key.KeyRange, uid uint32, startPosition *binlogRecoveryState, tables []string, txnBatch int, maxTxnInterval time.Duration, execDdl bool) (*BinlogPlayer, error) {
 	if err := startPositionValid(startPosition); err != nil {
 		return nil, err
 	}
 
 	blp := new(BinlogPlayer)
+	blp.keyRange = keyRange
+	blp.uid = uid
 	blp.recoveryState = *startPosition
-
-	// convert start and end keyrange
-	var err error
-	blp.keyrange.Start, err = key.HexKeyspaceId(startPosition.KeyrangeStart).Unhex()
-	if err != nil {
-		return nil, fmt.Errorf("Error in Unhex for %v, '%v'", startPosition.KeyrangeStart, err)
-	}
-	blp.keyrange.End, err = key.HexKeyspaceId(startPosition.KeyrangeEnd).Unhex()
-	if err != nil {
-		return nil, fmt.Errorf("Error in Unhex for %v, '%v'", startPosition.KeyrangeEnd, err)
-	}
-	blp.txnIndex = 0
 	blp.inTxn = false
 	blp.txnBuffer = make([]*cproto.BinlogResponse, 0, MAX_TXN_BATCH)
 	blp.dbClient = dbClient
-	blp.tables = tables
-	blp.blplStats = NewBlplStats()
+	blp.txnIndex = 0
 	blp.batchStart = time.Now()
+	blp.tables = tables
 	blp.txnBatch = txnBatch
 	blp.maxTxnInterval = maxTxnInterval
 	blp.execDdl = execDdl
+	blp.blplStats = NewBlplStats()
 	return blp, nil
 }
 
@@ -258,8 +259,7 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 		currentPosition.MasterPosition,
 		currentPosition.GroupId,
 		time.Now().Unix(),
-		blp.recoveryState.KeyrangeStart,
-		blp.recoveryState.KeyrangeEnd)
+		blp.uid)
 
 	queryStartTime := time.Now()
 	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
@@ -271,6 +271,29 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 	}
 }
 
+func (blp *BinlogPlayer) saveLastEofGroupId(groupId string) {
+	if err := blp.dbClient.Begin(); err != nil {
+		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
+	}
+
+	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY_LAST_EOF,
+		groupId,
+		blp.uid)
+
+	queryStartTime := time.Now()
+	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
+		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
+	}
+	blp.blplStats.txnTime.Record("QueryTime", queryStartTime)
+	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
+		log.Infof("SLOW QUERY '%v'", updateRecovery)
+	}
+
+	if err := blp.dbClient.Commit(); err != nil {
+		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
+	}
+}
+
 func startPositionValid(startPos *binlogRecoveryState) error {
 	if startPos.Addr == "" {
 		return fmt.Errorf("invalid connection params, empty Addr")
@@ -278,25 +301,20 @@ func startPositionValid(startPos *binlogRecoveryState) error {
 	if (startPos.Position.MasterFilename == "" || startPos.Position.MasterPosition == 0) && (startPos.Position.GroupId == "") {
 		return fmt.Errorf("invalid start coordinates, need GroupId or MasterFilename+MasterPosition")
 	}
-	//One of them can be empty for min or max key.
-	if startPos.KeyrangeStart == "" && startPos.KeyrangeEnd == "" {
-		return fmt.Errorf("invalid keyrange endpoints")
-	}
 	return nil
 }
 
-func ReadStartPosition(dbClient VtClient, keyrangeStart, keyrangeEnd string) (*binlogRecoveryState, error) {
+func ReadStartPosition(dbClient VtClient, uid uint32) (*binlogRecoveryState, error) {
 	brs := new(binlogRecoveryState)
-	brs.KeyrangeStart = keyrangeStart
-	brs.KeyrangeEnd = keyrangeEnd
+	brs.Uid = uid
 
-	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, keyrangeStart, keyrangeEnd)
+	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
 		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
 	}
 	if qr.RowsAffected != 1 {
-		log.Fatalf("Checkpoint information not available in db for %v-%v", keyrangeStart, keyrangeEnd)
+		log.Fatalf("Checkpoint information not available in db for %v", uid)
 	}
 	row := qr.Rows[0]
 	for i, field := range qr.Fields {
@@ -373,6 +391,11 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 			log.Infof("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
 			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].Data.SqlType == cproto.COMMIT {
 				blp.flushTxnBatch()
+			}
+
+			// nothing left to process, we got it all
+			if blp.txnIndex == 0 {
+				blp.saveLastEofGroupId(binlogResponse.Position.Position.GroupId)
 			}
 		}
 		if binlogResponse.Position.Position.MasterFilename != "" {
@@ -544,9 +567,10 @@ func (blp *BinlogPlayer) handleTxn() bool {
 // ApplyBinlogEvents makes a bson rpc request to BinlogServer
 // and processes the events.
 func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
-	log.Infof("BinlogPlayer client for keyrange '%v:%v' starting @ '%v'",
-		blp.recoveryState.KeyrangeStart,
-		blp.recoveryState.KeyrangeEnd,
+	log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v'",
+		blp.uid,
+		blp.keyRange.Start.Hex(),
+		blp.keyRange.End.Hex(),
 		blp.recoveryState.Position)
 
 	var err error
@@ -559,11 +583,11 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	}
 
 	responseChan := make(chan *cproto.BinlogResponse)
-	log.Infof("making rpc request @ %v for keyrange %v:%v", blp.recoveryState.Position, blp.recoveryState.KeyrangeStart, blp.recoveryState.KeyrangeEnd)
+	log.Infof("making rpc request @ %v for keyrange %v-%v", blp.recoveryState.Position.String(), blp.keyRange.Start.Hex(), blp.keyRange.End.Hex())
 	blServeRequest := &cproto.BinlogServerRequest{
 		StartPosition: blp.recoveryState.Position,
-		KeyspaceStart: blp.recoveryState.KeyrangeStart,
-		KeyspaceEnd:   blp.recoveryState.KeyrangeEnd}
+		KeyRange:      blp.keyRange,
+	}
 	resp := blp.rpcClient.StreamGo("BinlogServer.ServeBinlog", blServeRequest, responseChan)
 
 processLoop:

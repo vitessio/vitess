@@ -83,6 +83,19 @@ func (kr KeyRange) String() string {
 	return fmt.Sprintf("{Start: %v, End: %v}", string(kr.Start.Hex()), string(kr.End.Hex()))
 }
 
+// Parse a start and end hex values and build a KeyRange
+func ParseKeyRangeParts(start, end string) (KeyRange, error) {
+	s, err := HexKeyspaceId(start).Unhex()
+	if err != nil {
+		return KeyRange{}, err
+	}
+	e, err := HexKeyspaceId(end).Unhex()
+	if err != nil {
+		return KeyRange{}, err
+	}
+	return KeyRange{Start: s, End: e}, nil
+}
+
 // Returns true if the KeyRange does not cover the entire space.
 func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
@@ -105,11 +118,18 @@ func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
 	if !KeyRangesIntersect(first, second) {
 		return KeyRange{}, fmt.Errorf("Keyranges %v and %v don't overlap", first, second)
 	}
+	// compute max(c,a) and min(b,d)
+	// start with (a,b)
 	result := first
+	// if c > a, then use c
 	if second.Start > first.Start {
 		result.Start = second.Start
 	}
-	if second.End != MaxKey && second.End < first.End {
+	// if b is maxed out, or
+	// (d is not maxed out and d < b)
+	//                           ^ valid test as neither b nor d are max
+	// then use d
+	if first.End == MaxKey || (second.End != MaxKey && second.End < first.End) {
 		result.End = second.End
 	}
 	return result, nil

@@ -159,6 +159,9 @@ var commands = []commandGroup{
 			command{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name|zk keyspace path>",
 				"Validate all nodes reachable from this keyspace are consistent."},
+			command{"MigrateServedTypes", commandMigrateServedTypes,
+				"[-reverse] <keyspace/source shard|zk source shard path> <served type>",
+				"Migrates a serving type from the source shard to the shards it replicates to. Will also rebuild the serving graph."},
 		},
 	},
 	commandGroup{
@@ -1066,6 +1069,18 @@ func commandValidateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
 	return "", wr.ValidateKeyspace(keyspace, *pingTablets)
+}
+
+func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	reverse := subFlags.Bool("reverse", false, "move the served type back instead of forward, use in case of trouble")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action MigrateServedTypes requires <keyspace/source shard|zk source shard path> <served type>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	servedType := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	return "", wr.MigrateServedTypes(keyspace, shard, servedType, *reverse)
 }
 
 func commandWaitForAction(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -5,6 +5,7 @@
 package zktopo
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"path"
@@ -39,6 +40,23 @@ func tabletDirectoryForCell(cell string) string {
 //
 // Tablet management
 //
+
+func tabletFromJson(data string) (*topo.Tablet, error) {
+	t := &topo.Tablet{}
+	err := json.Unmarshal([]byte(data), t)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func tabletInfoFromJson(data string, version int) (*topo.TabletInfo, error) {
+	tablet, err := tabletFromJson(data)
+	if err != nil {
+		return nil, err
+	}
+	return topo.NewTabletInfo(tablet, version), nil
+}
 
 func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 	zkTabletPath := TabletPathForAlias(tablet.Alias())
@@ -91,7 +109,7 @@ func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func
 			return "", fmt.Errorf("no data for tablet addr update: %v", tabletAlias)
 		}
 
-		tablet, err := topo.TabletFromJson(oldValue)
+		tablet, err := tabletFromJson(oldValue)
 		if err != nil {
 			return "", err
 		}
@@ -145,7 +163,7 @@ func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) 
 		}
 		return nil, err
 	}
-	return topo.TabletInfoFromJson(data, stat.Version())
+	return tabletInfoFromJson(data, stat.Version())
 }
 
 func (zkts *Server) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {

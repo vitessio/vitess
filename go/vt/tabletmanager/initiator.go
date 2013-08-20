@@ -260,6 +260,14 @@ func (ai *ActionInitiator) StopSlave(tabletAlias topo.TabletAlias) (actionPath s
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
 }
 
+func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
+	var result string
+	return ai.rpcCall(tabletAlias, TABLET_ACTION_WAIT_BLP_POSITION, &WaitBlpPositionArgs{
+		BlpPosition: blpPosition,
+		WaitTimeout: int(waitTime / time.Second),
+	}, &result, waitTime)
+}
+
 type ReserveForRestoreArgs struct {
 	ZkSrcTabletPath string // XXX
 	SrcTabletAlias  topo.TabletAlias
@@ -391,7 +399,7 @@ type SetShardServedTypesArgs struct {
 	ServedTypes []topo.TabletType
 }
 
-func (ai *ActionInitiator) SetShardServedTypesArgs(servedTypes []topo.TabletType) *ActionNode {
+func (ai *ActionInitiator) SetShardServedTypes(servedTypes []topo.TabletType) *ActionNode {
 	return &ActionNode{
 		Action:     SHARD_ACTION_SET_SERVED_TYPES,
 		ActionGuid: actionGuid(),
@@ -406,6 +414,21 @@ func (ai *ActionInitiator) ShardMultiRestore(args *MultiRestoreArgs) *ActionNode
 		Action:     SHARD_ACTION_MULTI_RESTORE,
 		ActionGuid: actionGuid(),
 		args:       args,
+	}
+}
+
+// parameters are stored for debug purposes
+type MigrateServedTypesArgs struct {
+	ServedType topo.TabletType
+}
+
+func (ai *ActionInitiator) MigrateServedTypes(servedType topo.TabletType) *ActionNode {
+	return &ActionNode{
+		Action:     SHARD_ACTION_MIGRATE_SERVED_TYPES,
+		ActionGuid: actionGuid(),
+		args: &MigrateServedTypesArgs{
+			ServedType: servedType,
+		},
 	}
 }
 

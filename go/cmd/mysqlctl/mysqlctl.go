@@ -51,6 +51,7 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 	if *tablesString != "" {
 		tables = strings.Split(*tablesString, ",")
 	}
+
 	filenames, err := mysqld.CreateMultiSnapshot(shards, subFlags.Arg(0), subFlags.Arg(1), tabletAddr, false, *concurrency, tables, *skipSlaveRestart, *maximumFilesize, nil)
 	if err != nil {
 		log.Fatalf("multisnapshot failed: %v", err)
@@ -75,15 +76,10 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 
 	subFlags.Parse(args)
 
-	s, err := key.HexKeyspaceId(*start).Unhex()
+	keyRange, err := key.ParseKeyRangeParts(*start, *end)
 	if err != nil {
-		log.Fatalf("Invalid start key %v: %v", *start, err)
+		log.Fatalf("Invalid start or end: %v", err)
 	}
-	e, err := key.HexKeyspaceId(*end).Unhex()
-	if err != nil {
-		log.Fatalf("Invalid end key %v: %v", *end, err)
-	}
-	keyRange := key.KeyRange{Start: s, End: e}
 
 	if subFlags.NArg() < 2 {
 		log.Fatalf("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)

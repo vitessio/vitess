@@ -135,7 +135,7 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("_test_service_disabled starting @ %s" % start_position)
     self._exec_vt_txn(master_host, _populate_vt_insert_test)
     self._exec_vt_txn(master_host, ['delete from vt_insert_test',])
-    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
+    utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
     #  time.sleep(20)
     replica_conn = self._get_replica_stream_conn()
     logging.debug("dialing replica update stream service")
@@ -162,7 +162,7 @@ class TestUpdateStream(unittest.TestCase):
   def _test_service_enabled(self):
     start_position = _get_repl_current_position()
     logging.debug("_test_service_enabled starting @ %s" % start_position)
-    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
+    utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
     logging.debug("sleeping a bit for the replica action to complete")
     time.sleep(10)
     thd = threading.Thread(target=self.perform_writes, name='write_thd', args=(400,))
@@ -197,7 +197,7 @@ class TestUpdateStream(unittest.TestCase):
     txn_count = 0
     try:
       binlog_pos, data, err = replica_conn.stream_start(start_position)
-      utils.run_vtctl('ChangeSlaveType test_nj-0000062345 spare')
+      utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
       #logging.debug("Sleeping a bit for the spare action to complete")
       #time.sleep(20)
       while(1):
@@ -301,7 +301,7 @@ class TestUpdateStream(unittest.TestCase):
     self._test_service_disabled()
     self._test_service_enabled()
     # The above tests leaves the service in disabled state, hence enabling it.
-    utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
+    utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
 
   def test_log_rotation(self):
     start_position = _get_master_current_position()

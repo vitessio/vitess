@@ -21,15 +21,26 @@ import (
 // accross shards. When this is used in a destination shard, the master
 // of that shard will run filtered replication.
 type SourceShard struct {
+	// Uid is the unique ID for this SourceShard object.
+	// It is for instance used as a unique index in blp_checkpoint
+	// when storing the position. It should be unique whithin a
+	// destination Shard, but not globally unique.
+	Uid uint32
+
+	// the source keyspace
+	Keyspace string
+
+	// the source shard
+	Shard string
+
 	// the source shard keyrange
 	KeyRange key.KeyRange
 
 	// we could add other filtering information, like table list, ...
-	// also original keyspace.
 }
 
 func (source *SourceShard) String() string {
-	return "SourceShard from " + source.KeyRange.String()
+	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
 }
 
 // A pure data struct for information serialized into json and stored
@@ -110,21 +121,16 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 		return "", key.KeyRange{}, fmt.Errorf("Invalid shardId, can only contain one '-': %v", shard)
 	}
 
-	start, err := key.HexKeyspaceId(parts[0]).Unhex()
+	keyRange, err := key.ParseKeyRangeParts(parts[0], parts[1])
 	if err != nil {
 		return "", key.KeyRange{}, err
 	}
 
-	end, err := key.HexKeyspaceId(parts[1]).Unhex()
-	if err != nil {
-		return "", key.KeyRange{}, err
+	if keyRange.End != key.MaxKey && keyRange.Start >= keyRange.End {
+		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", keyRange.Start.Hex(), keyRange.End.Hex())
 	}
 
-	if end != key.MaxKey && start >= end {
-		return "", key.KeyRange{}, fmt.Errorf("Out of order keys: %v is not strictly smaller than %v", start, end)
-	}
-
-	return strings.ToUpper(shard), key.KeyRange{Start: start, End: end}, nil
+	return strings.ToUpper(shard), keyRange, nil
 }
 
 // ShardInfo is a meta struct that contains metadata to give the data

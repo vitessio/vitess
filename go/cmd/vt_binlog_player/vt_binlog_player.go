@@ -5,6 +5,8 @@
 /*
 The vt_binlog_player reads data from the a remote host via vt_binlog_server.
 This is mostly intended for online data migrations.
+This program reads the current status from blp_recovery (by uid),
+and updates it.
 */
 package main
 
@@ -22,6 +24,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
 )
@@ -32,8 +35,9 @@ const (
 )
 
 var (
-	keyrangeStart  = flag.String("start", "", "keyrange start to use in hex")
-	keyrangeEnd    = flag.String("end", "", "keyrange end to use in hex")
+	uid            = flag.Uint("uid", 0, "id of the blp_checkpoint row")
+	start          = flag.String("start", "", "keyrange start to use in hex")
+	end            = flag.String("end", "", "keyrange end to use in hex")
 	port           = flag.Int("port", 0, "port for the server")
 	txnBatch       = flag.Int("txn-batch", TXN_BATCH, "transaction batch size")
 	maxTxnInterval = flag.Int("max-txn-interval", MAX_TXN_INTERVAL, "max txn interval")
@@ -62,6 +66,11 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
+
+	keyRange, err := key.ParseKeyRangeParts(*start, *end)
+	if err != nil {
+		log.Fatalf("Invalid key range: %v", err)
+	}
 
 	if *dbConfigFile == "" {
 		log.Fatalf("Cannot start without db-config-file")
@@ -94,14 +103,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("error in initializing dbClient: %v", err)
 	}
-	brs, err := mysqlctl.ReadStartPosition(vtClient, *keyrangeStart, *keyrangeEnd)
+	brs, err := mysqlctl.ReadStartPosition(vtClient, uint32(*uid))
 	if err != nil {
 		log.Fatalf("Cannot read start position from db: %v", err)
 	}
 	if *debug {
 		vtClient = mysqlctl.NewDummyVtClient()
 	}
-	blp, err := mysqlctl.NewBinlogPlayer(vtClient, brs, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
+	blp, err := mysqlctl.NewBinlogPlayer(vtClient, keyRange, uint32(*uid), brs, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
 	if err != nil {
 		log.Fatalf("error in initializing binlog player: %v", err)
 	}

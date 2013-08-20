@@ -134,7 +134,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		// only look at tablets in the cells we want to rebuild
 		// we also include masters from everywhere, so we can
 		// write the right aliases
-		if !inCellList(tablet.Tablet.Cell, cells) && tablet.Type != topo.TYPE_MASTER {
+		if !inCellList(tablet.Tablet.Cell, cells) {
 			continue
 		}
 
@@ -179,41 +179,21 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		addrs.Entries = append(addrs.Entries, *entry)
 	}
 
-	// if there is a master in one cell, put it in all of them
-	var masterRecord *topo.VtnsAddrs
-	for shardLocation, _ := range knownShardLocations {
-		loc := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
-		if addrs, ok := locationAddrsMap[loc]; ok {
-			if masterRecord != nil {
-				log.Warningf("Multiple master records in %v", shardLocation)
-			} else {
-				log.Infof("Found master record in %v", shardLocation)
-				masterRecord = addrs
-			}
-		}
-	}
-	if masterRecord != nil {
-		for shardLocation, _ := range knownShardLocations {
-			location := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
-			if _, ok := locationAddrsMap[location]; !ok {
-				log.Infof("adding remote master record in %v", location)
-				locationAddrsMap[location] = masterRecord
-			}
-		}
-	}
+	// we're gonna parallelize a lot here
+	rec := concurrency.AllErrorRecorder{}
+	wg := sync.WaitGroup{}
 
 	// write all the {cell,keyspace,shard,type}
 	// nodes everywhere we want them
 	for location, addrs := range locationAddrsMap {
-		cell := location.cell
-		if !inCellList(cell, cells) {
-			continue
-		}
-
-		log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", location.cell, location.keyspace, location.shard, location.tabletType)
-		if err := wr.ts.UpdateSrvTabletType(location.cell, location.keyspace, location.shard, location.tabletType, addrs); err != nil {
-			return fmt.Errorf("writing endpoints failed: %v", err)
-		}
+		wg.Add(1)
+		go func(location cellKeyspaceShardType, addrs *topo.VtnsAddrs) {
+			log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", location.cell, location.keyspace, location.shard, location.tabletType)
+			if err := wr.ts.UpdateSrvTabletType(location.cell, location.keyspace, location.shard, location.tabletType, addrs); err != nil {
+				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", location.cell, location.keyspace, location.shard, location.tabletType, err))
+			}
+			wg.Done()
+		}(location, addrs)
 	}
 
 	// Delete any pre-existing paths that were not updated by this process.
@@ -225,11 +205,23 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 				continue
 			}
 
-			log.Infof("removing stale db type from serving graph: %v", dbTypeLocation)
-			if err := wr.ts.DeleteSrvTabletType(dbTypeLocation.cell, dbTypeLocation.keyspace, dbTypeLocation.shard, dbTypeLocation.tabletType); err != nil {
-				log.Warningf("unable to remove stale db type from serving graph: %v", err)
-			}
+			wg.Add(1)
+			go func(dbTypeLocation cellKeyspaceShardType) {
+				log.Infof("removing stale db type from serving graph: %v", dbTypeLocation)
+				if err := wr.ts.DeleteSrvTabletType(dbTypeLocation.cell, dbTypeLocation.keyspace, dbTypeLocation.shard, dbTypeLocation.tabletType); err != nil {
+					log.Warningf("unable to remove stale db type %v from serving graph: %v", dbTypeLocation, err)
+				}
+				wg.Done()
+			}(dbTypeLocation)
 		}
+	}
+
+	// wait until we're done with the background stuff to do the rest
+	// FIXME(alainjobart) this wouldn't be necessary if UpdateSrvShard
+	// below was creating the zookeeper nodes recursively.
+	wg.Wait()
+	if err := rec.Error(); err != nil {
+		return err
 	}
 
 	// Update per-shard information per cell-specific serving path.
@@ -258,12 +250,17 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 	// Save the shard entries
 	for cks, srvShard := range srvShardByPath {
-		log.Infof("updating shard serving graph in cell %v for %v/%v", cks.cell, cks.keyspace, cks.shard)
-		if err := wr.ts.UpdateSrvShard(cks.cell, cks.keyspace, cks.shard, srvShard); err != nil {
-			return fmt.Errorf("writing serving data failed: %v", err)
-		}
+		wg.Add(1)
+		go func(cks cellKeyspaceShard, srvShard *topo.SrvShard) {
+			log.Infof("updating shard serving graph in cell %v for %v/%v", cks.cell, cks.keyspace, cks.shard)
+			if err := wr.ts.UpdateSrvShard(cks.cell, cks.keyspace, cks.shard, srvShard); err != nil {
+				rec.RecordError(fmt.Errorf("writing serving data in cell %v for %v/%v failed: %v", cks.cell, cks.keyspace, cks.shard, err))
+			}
+			wg.Done()
+		}(cks, srvShard)
 	}
-	return nil
+	wg.Wait()
+	return rec.Error()
 }
 
 // Rebuild the serving graph data while locking out other changes.

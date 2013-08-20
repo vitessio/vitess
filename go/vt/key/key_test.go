@@ -191,6 +191,7 @@ func TestIntersectOverlap(t *testing.T) {
 		{a: "", b: "80", c: "", d: "80", intersects: true, overlap: "-80"},
 		{a: "40", b: "", c: "40", d: "", intersects: true, overlap: "40-"},
 		{a: "40", b: "80", c: "20", d: "40", intersects: false},
+		{a: "80", b: "", c: "80", d: "C0", intersects: true, overlap: "80-C0"},
 	}
 
 	for _, el := range table {

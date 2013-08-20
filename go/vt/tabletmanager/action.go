@@ -42,6 +42,7 @@ const (
 	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
 	TABLET_ACTION_SLAVE_POSITION      = "SlavePosition"
 	TABLET_ACTION_WAIT_SLAVE_POSITION = "WaitSlavePosition"
+	TABLET_ACTION_WAIT_BLP_POSITION   = "WaitBlpPosition"
 	TABLET_ACTION_SCRAP               = "Scrap"
 	TABLET_ACTION_GET_SCHEMA          = "GetSchema"
 	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
@@ -70,6 +71,8 @@ const (
 	SHARD_ACTION_SET_SERVED_TYPES = "SetShardServedTypes"
 	// Multi-restore on all tablets of a shard in parallel
 	SHARD_ACTION_MULTI_RESTORE = "ShardMultiRestore"
+	// Migrate served types from one shard to another
+	SHARD_ACTION_MIGRATE_SERVED_TYPES = "MigrateServedTypes"
 
 	// Keyspace actions - require very high level locking for consistency
 	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
@@ -137,6 +140,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
 		node.args = &SlavePositionReq{}
 		node.reply = &mysqlctl.ReplicationPosition{}
+	case TABLET_ACTION_WAIT_BLP_POSITION:
+		node.args = &WaitBlpPositionArgs{}
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_GET_SCHEMA:
 		node.args = &GetSchemaArgs{}
@@ -180,6 +185,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &SetShardServedTypesArgs{}
 	case SHARD_ACTION_MULTI_RESTORE:
 		node.args = &MultiRestoreArgs{}
+	case SHARD_ACTION_MIGRATE_SERVED_TYPES:
+		node.args = &MigrateServedTypesArgs{}
 
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:
