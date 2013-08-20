@@ -170,14 +170,13 @@ func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.Tab
 		return err
 	}
 
-	// insert their KeyRange in the SourceShards array.
-	// We use the source tablet id as a unique Uid for the SourceShard,
-	// it is a unique ID as good as others, and is guaranteed
-	// to be unique in the Keyspace, so it's unique in the Shard for sure.
+	// Insert their KeyRange in the SourceShards array.
+	// We use a linear 0-based id, that matches what mysqlctld/split.go
+	// inserts into _vt.blp_recovery.
 	shardInfo.SourceShards = make([]topo.SourceShard, 0, len(sourceTablets))
 	for _, ti := range sourceTablets {
 		ss := topo.SourceShard{
-			Uid:      ti.Uid,
+			Uid:      uint32(len(shardInfo.SourceShards)),
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
 			KeyRange: ti.KeyRange,

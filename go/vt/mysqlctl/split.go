@@ -657,7 +657,7 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 //   also write to the binary logs.
 // - If the strategy contains the command 'populateBlpCheckpoint' then we
 //   will populate the blp_checkpoint table with master positions to start from
-func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, uids []uint32, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
@@ -892,7 +892,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 		}
 		for manifestIndex, manifest := range manifests {
 			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
-				uids[manifestIndex],
+				manifestIndex,
 				manifest.Source.Addr,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
