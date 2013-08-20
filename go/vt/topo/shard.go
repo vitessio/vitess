@@ -40,7 +40,7 @@ type SourceShard struct {
 }
 
 func (source *SourceShard) String() string {
-	return "SourceShard from " + source.Keyspace + "/" + source.Shard
+	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
 }
 
 // A pure data struct for information serialized into json and stored

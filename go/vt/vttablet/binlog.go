@@ -86,7 +86,7 @@ func (blc *BinlogPlayerController) statsJSON() string {
 }
 
 func (bpc *BinlogPlayerController) String() string {
-	return fmt.Sprintf("BinlogPlayerController(%v/%v)", bpc.sourceShard.Keyspace, bpc.sourceShard.Shard)
+	return "BinlogPlayerController(" + bpc.sourceShard.String() + ")"
 }
 
 func (bpc *BinlogPlayerController) Start() {
@@ -141,10 +141,10 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	// Find the server list for the source shard in our cell
 	addrs, err := bpc.ts.GetSrvTabletType(bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
 	if err != nil {
-		return fmt.Errorf("can't find any source tablet for %v %v %v %v: %v", bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA, err)
+		return fmt.Errorf("can't find any source tablet for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA, err)
 	}
 	if len(addrs.Entries) == 0 {
-		return fmt.Errorf("empty source tablet list for %v %v %v %v", bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
+		return fmt.Errorf("empty source tablet list for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
 	}
 
 	// if the server we were using before is in the list, just keep using it

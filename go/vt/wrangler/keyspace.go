@@ -172,11 +172,13 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
 
+			log.Infof("Making master %v read-only", si.MasterAlias)
 			actionPath, err := wr.ai.SetReadOnly(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 				return
 			}
+			log.Infof("Master %v is read-only", si.MasterAlias)
 
 			rec.RecordError(wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()))
 		}(si)
@@ -194,10 +196,12 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 	for _, si := range shards {
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
+			log.Infof("Gathering master position for %v", si.MasterAlias)
 			pos, err := wr.getMasterPosition(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
 			} else {
+				log.Infof("Got master position for %v", si.MasterAlias)
 				mu.Lock()
 				result[si] = pos
 				mu.Unlock()
@@ -228,7 +232,12 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 					}
 				}
 
-				rec.RecordError(wr.ai.WaitBlpPosition(si.MasterAlias, blpPosition, wr.actionTimeout()))
+				log.Infof("Waiting for %v to catch up", si.MasterAlias)
+				if err := wr.ai.WaitBlpPosition(si.MasterAlias, blpPosition, wr.actionTimeout()); err != nil {
+					rec.RecordError(err)
+				} else {
+					log.Infof("%v caught up", si.MasterAlias)
+				}
 				wg.Done()
 			}
 		}(si)
