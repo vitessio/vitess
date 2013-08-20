@@ -105,8 +105,8 @@ const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
 
-	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (keyrange_start, keyrange_end, addr, master_filename, master_position, group_id, txn_timestamp, time_updated) 
-	                          values ('%v', '%v', '%v', '%v', %v, '%v', unix_timestamp(), %v)`
+	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (source_shard_uid, addr, master_filename, master_position, group_id, txn_timestamp, time_updated) 
+	                          values (%v, '%v', '%v', %v, '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -127,10 +127,9 @@ type SplitSnapshotManifest struct {
 	Source *SnapshotManifest
 
 	// KeyRange describes the data present in this snapshot
+	// When splitting 40-80 into 40-60 and 60-80, this would
+	// have 40-60 for instance.
 	KeyRange key.KeyRange
-
-	// ServerKeyRange describes the data the server has
-	ServerKeyRange key.KeyRange
 
 	// The schema for this server
 	SchemaDefinition *SchemaDefinition
@@ -141,7 +140,7 @@ type SplitSnapshotManifest struct {
 // masterAddr is the address of the server to use as master.
 // pos is the replication position to use on that master.
 // myMasterPos is the local server master position
-func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, keyRange, serverKeyRange key.KeyRange, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, keyRange key.KeyRange, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
 	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
@@ -149,7 +148,6 @@ func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, fi
 	return &SplitSnapshotManifest{
 		Source:           sm,
 		KeyRange:         keyRange,
-		ServerKeyRange:   serverKeyRange,
 		SchemaDefinition: sd,
 	}, nil
 }
@@ -451,7 +449,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSo
 	return snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) CreateMultiSnapshot(serverKeyRange key.KeyRange, keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -539,7 +537,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(serverKeyRange key.KeyRange, keyRanges
 		}
 		ssm, err := NewSplitSnapshotManifest(sourceAddr, mysqld.IpAddr(),
 			masterAddr, dbName, krDatafiles, replicationPosition,
-			myMasterPosition, kr, serverKeyRange, sd)
+			myMasterPosition, kr, sd)
 		if err != nil {
 			return nil, err
 		}
@@ -892,10 +890,9 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 			queries = append(queries, "SET sql_log_bin = OFF")
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
-		for _, manifest := range manifests {
+		for manifestIndex, manifest := range manifests {
 			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
-				manifest.ServerKeyRange.Start.Hex(),
-				manifest.ServerKeyRange.End.Hex(),
+				manifestIndex,
 				manifest.Source.Addr,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,

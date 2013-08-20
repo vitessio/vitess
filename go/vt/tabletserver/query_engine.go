@@ -41,6 +41,8 @@ type QueryEngine struct {
 	activePool     *ActivePool
 	consolidator   *Consolidator
 
+	verifyMode bool
+
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
 }
@@ -77,6 +79,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.activeTxPool = NewActiveTxPool("ActiveTxPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
+	qe.verifyMode = config.VerifyMode
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -87,6 +90,12 @@ func NewQueryEngine(config Config) *QueryEngine {
 	killStats = stats.NewCounters("Kills")
 	errorStats = stats.NewCounters("Errors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
+	stats.Publish("VerifyMode", stats.IntFunc(func() int64 {
+		if qe.verifyMode {
+			return 1
+		}
+		return 0
+	}))
 	return qe
 }
 
@@ -429,10 +438,13 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 	for i, pk := range pkRows {
 		rcresult := rcresults[keys[i]]
 		if rcresult.Row != nil {
-			/*if dbrow := qe.compareRow(logStats, plan, rcresult.Row, pk); dbrow != nil {
-				rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
-			}*/
-			rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
+			if qe.verifyMode {
+				if dbrow := qe.compareRow(logStats, plan, rcresult.Row, pk); dbrow != nil {
+					rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
+				}
+			} else {
+				rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
+			}
 			hits++
 		} else {
 			resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
@@ -441,12 +453,15 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 				continue
 			}
 			row := resultFromdb.Rows[0]
-			pkRow := applyFilter(tableInfo.PKColumns, row)
-			newKey := buildKey(pkRow)
-			if newKey != keys[i] {
-				log.Warningf("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, keys[i], newKey)
+			if qe.verifyMode {
+				pkRow := applyFilter(tableInfo.PKColumns, row)
+				newKey := buildKey(pkRow)
+				if newKey != keys[i] {
+					log.Warningf("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, keys[i], newKey)
+					errorStats.Add("Mismatch", 1)
+				}
 			}
-			tableInfo.Cache.Set(newKey, row, rcresult.Cas)
+			tableInfo.Cache.Set(keys[i], row, rcresult.Cas)
 			rows = append(rows, applyFilter(plan.ColumnNumbers, row))
 			misses++
 		}

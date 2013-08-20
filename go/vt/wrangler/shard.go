@@ -56,7 +56,7 @@ func (wr *Wrangler) getMasterAlias(keyspace, shard string) (topo.TabletAlias, er
 // It does not rebuild any serving graph or do any consistency check (yet).
 func (wr *Wrangler) SetShardServedTypes(keyspace, shard string, servedTypes []topo.TabletType) error {
 
-	actionNode := wr.ai.SetShardServedTypesArgs(servedTypes)
+	actionNode := wr.ai.SetShardServedTypes(servedTypes)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err

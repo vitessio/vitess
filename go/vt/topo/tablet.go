@@ -5,7 +5,6 @@
 package topo
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -421,21 +420,11 @@ func (tablet *Tablet) Complete() error {
 	return err
 }
 
-func TabletFromJson(data string) (*Tablet, error) {
-	t := &Tablet{}
-	err := json.Unmarshal([]byte(data), t)
-	if err != nil {
-		return nil, err
-	}
-	return t, nil
-}
-
-func TabletInfoFromJson(data string, version int) (*TabletInfo, error) {
-	tablet, err := TabletFromJson(data)
-	if err != nil {
-		return nil, err
-	}
-	return &TabletInfo{version, tablet}, nil
+// NewTabletInfo returns a TabletInfo basing on tablet with the
+// version set. This function should be only used by Server
+// implementations.
+func NewTabletInfo(tablet *Tablet, version int) *TabletInfo {
+	return &TabletInfo{version: version, Tablet: tablet}
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.

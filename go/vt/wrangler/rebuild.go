@@ -134,7 +134,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		// only look at tablets in the cells we want to rebuild
 		// we also include masters from everywhere, so we can
 		// write the right aliases
-		if !inCellList(tablet.Tablet.Cell, cells) && tablet.Type != topo.TYPE_MASTER {
+		if !inCellList(tablet.Tablet.Cell, cells) {
 			continue
 		}
 
@@ -179,29 +179,6 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		addrs.Entries = append(addrs.Entries, *entry)
 	}
 
-	// if there is a master in one cell, put it in all of them
-	var masterRecord *topo.VtnsAddrs
-	for shardLocation, _ := range knownShardLocations {
-		loc := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
-		if addrs, ok := locationAddrsMap[loc]; ok {
-			if masterRecord != nil {
-				log.Warningf("Multiple master records in %v", shardLocation)
-			} else {
-				log.Infof("Found master record in %v", shardLocation)
-				masterRecord = addrs
-			}
-		}
-	}
-	if masterRecord != nil {
-		for shardLocation, _ := range knownShardLocations {
-			location := cellKeyspaceShardType{shardLocation.cell, shardLocation.keyspace, shardLocation.shard, topo.TYPE_MASTER}
-			if _, ok := locationAddrsMap[location]; !ok {
-				log.Infof("adding remote master record in %v", location)
-				locationAddrsMap[location] = masterRecord
-			}
-		}
-	}
-
 	// we're gonna parallelize a lot here
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
@@ -209,11 +186,6 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 	// write all the {cell,keyspace,shard,type}
 	// nodes everywhere we want them
 	for location, addrs := range locationAddrsMap {
-		cell := location.cell
-		if !inCellList(cell, cells) {
-			continue
-		}
-
 		wg.Add(1)
 		go func(location cellKeyspaceShardType, addrs *topo.VtnsAddrs) {
 			log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", location.cell, location.keyspace, location.shard, location.tabletType)
