@@ -83,7 +83,7 @@ func (dc DummyVtClient) Close() {
 
 func (dc DummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	dc.stdout.WriteString(string(query) + ";\n")
-	return nil, nil
+	return &proto.QueryResult{nil, 1, 0, nil}, nil
 }
 
 // DBClient is a real VtClient backed by a mysql connection
@@ -99,7 +99,7 @@ func NewDbClient(dbConfig *mysql.ConnectionParams) *DBClient {
 }
 
 func (dc *DBClient) handleError(err error) {
-	//log.Errorf("in DBClient handleError %v", err.(error))
+	// log.Errorf("in DBClient handleError %v", err.(error))
 	if sqlErr, ok := err.(*mysql.SqlError); ok {
 		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
 			dc.Close()
@@ -209,7 +209,6 @@ type BinlogPlayer struct {
 	recoveryState binlogRecoveryState
 
 	// runtime variables used for replication
-	rpcClient  *rpcplus.Client
 	inTxn      bool
 	txnBuffer  []*cproto.BinlogResponse
 	dbClient   VtClient
@@ -252,7 +251,7 @@ func (blp *BinlogPlayer) StatsJSON() string {
 	return blp.blplStats.statsJSON()
 }
 
-func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.ReplicationCoordinates) {
+func (blp *BinlogPlayer) writeRecoveryPosition(currentPosition *cproto.ReplicationCoordinates) error {
 	blp.recoveryState.Position = *currentPosition
 	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY,
 		currentPosition.MasterFilename,
@@ -262,18 +261,23 @@ func (blp *BinlogPlayer) WriteRecoveryPosition(currentPosition *cproto.Replicati
 		blp.uid)
 
 	queryStartTime := time.Now()
-	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
-		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
+	qr, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false)
+	if err != nil {
+		return fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery)
+	}
+	if qr.RowsAffected != 1 {
+		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
 	blp.blplStats.txnTime.Record("QueryTime", queryStartTime)
 	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
 		log.Infof("SLOW QUERY '%v'", updateRecovery)
 	}
+	return nil
 }
 
-func (blp *BinlogPlayer) saveLastEofGroupId(groupId string) {
+func (blp *BinlogPlayer) saveLastEofGroupId(groupId string) error {
 	if err := blp.dbClient.Begin(); err != nil {
-		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
+		return fmt.Errorf("Failed query BEGIN, err: %s", err)
 	}
 
 	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY_LAST_EOF,
@@ -281,8 +285,12 @@ func (blp *BinlogPlayer) saveLastEofGroupId(groupId string) {
 		blp.uid)
 
 	queryStartTime := time.Now()
-	if _, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false); err != nil {
-		panic(fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery))
+	qr, err := blp.dbClient.ExecuteFetch(updateRecovery, 0, false)
+	if err != nil {
+		return fmt.Errorf("Error %v in writing recovery info %v", err, updateRecovery)
+	}
+	if qr.RowsAffected != 1 {
+		return fmt.Errorf("Cannot update blp_recovery table, affected %v rows", qr.RowsAffected)
 	}
 	blp.blplStats.txnTime.Record("QueryTime", queryStartTime)
 	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
@@ -290,8 +298,9 @@ func (blp *BinlogPlayer) saveLastEofGroupId(groupId string) {
 	}
 
 	if err := blp.dbClient.Commit(); err != nil {
-		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
+		return fmt.Errorf("Failed query 'COMMIT', err: %s", err)
 	}
+	return nil
 }
 
 func startPositionValid(startPos *binlogRecoveryState) error {
@@ -311,10 +320,10 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*binlogRecoveryState, err
 	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
-		panic(fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery))
+		return nil, fmt.Errorf("Error %v in selecting from recovery table %v", err, selectRecovery)
 	}
 	if qr.RowsAffected != 1 {
-		log.Fatalf("Checkpoint information not available in db for %v", uid)
+		return nil, fmt.Errorf("Checkpoint information not available in db for %v", uid)
 	}
 	row := qr.Rows[0]
 	for i, field := range qr.Fields {
@@ -351,23 +360,12 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*binlogRecoveryState, err
 	return brs, nil
 }
 
-func handleError(err *error, blp *BinlogPlayer) {
-	lastTxnPosition := blp.recoveryState.Position
-	if x := recover(); x != nil {
-		serr, ok := x.(error)
-		if ok {
-			*err = serr
-			log.Errorf("Last Txn Position '%v', error %v", lastTxnPosition, serr)
-			return
-		}
-		log.Errorf("uncaught panic %v", x)
-		panic(x)
-	}
-}
-
-func (blp *BinlogPlayer) flushTxnBatch() {
+func (blp *BinlogPlayer) flushTxnBatch() error {
 	for {
-		txnOk := blp.handleTxn()
+		txnOk, err := blp.handleTxn()
+		if err != nil {
+			return err
+		}
 		if txnOk {
 			break
 		} else {
@@ -378,30 +376,33 @@ func (blp *BinlogPlayer) flushTxnBatch() {
 	blp.inTxn = false
 	blp.txnBuffer = blp.txnBuffer[:0]
 	blp.txnIndex = 0
+	return nil
 }
 
 func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogResponse) (err error) {
-	defer handleError(&err, blp)
-
-	//Read event
+	// Read event
 	if binlogResponse.Error != "" {
-		//This is to handle the terminal condition where the client is exiting but there
-		//maybe pending transactions in the buffer.
+		// This is to handle the terminal condition where the client is exiting but there
+		// maybe pending transactions in the buffer.
 		if strings.Contains(binlogResponse.Error, "EOF") {
 			log.Infof("Flushing last few txns before exiting, txnIndex %v, len(txnBuffer) %v", blp.txnIndex, len(blp.txnBuffer))
 			if blp.txnIndex > 0 && blp.txnBuffer[len(blp.txnBuffer)-1].Data.SqlType == cproto.COMMIT {
-				blp.flushTxnBatch()
+				if err := blp.flushTxnBatch(); err != nil {
+					return err
+				}
 			}
 
 			// nothing left to process, we got it all
 			if blp.txnIndex == 0 {
-				blp.saveLastEofGroupId(binlogResponse.Position.Position.GroupId)
+				if err := blp.saveLastEofGroupId(binlogResponse.Position.Position.GroupId); err != nil {
+					return err
+				}
 			}
 		}
 		if binlogResponse.Position.Position.MasterFilename != "" {
-			panic(fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.Position.Position.String(), binlogResponse.Error))
+			return fmt.Errorf("Error encountered at position %v, err: '%v'", binlogResponse.Position.Position.String(), binlogResponse.Error)
 		} else {
-			panic(fmt.Errorf("Error encountered from server %v", binlogResponse.Error))
+			return fmt.Errorf("Error encountered from server %v", binlogResponse.Error)
 		}
 	}
 
@@ -409,10 +410,14 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 	case cproto.DDL:
 		if blp.txnIndex > 0 {
 			log.Infof("Flushing before ddl, Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
-			blp.flushTxnBatch()
+			if err := blp.flushTxnBatch(); err != nil {
+				return err
+			}
 		}
 		if blp.execDdl {
-			blp.handleDdl(binlogResponse)
+			if err := blp.handleDdl(binlogResponse); err != nil {
+				return err
+			}
 		}
 	case cproto.BEGIN:
 		if blp.txnIndex == 0 {
@@ -432,8 +437,10 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 		blp.txnBuffer = append(blp.txnBuffer, binlogResponse)
 
 		if time.Now().Sub(blp.batchStart) > blp.maxTxnInterval || blp.txnIndex == blp.txnBatch {
-			//log.Infof("Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
-			blp.flushTxnBatch()
+			// log.Infof("Txn Batch %v len %v", blp.txnIndex, len(blp.txnBuffer))
+			if err := blp.flushTxnBatch(); err != nil {
+				return err
+			}
 		}
 	case cproto.DML:
 		if !blp.inTxn {
@@ -447,24 +454,27 @@ func (blp *BinlogPlayer) processBinlogEvent(binlogResponse *cproto.BinlogRespons
 	return nil
 }
 
-//DDL - apply the schema
-func (blp *BinlogPlayer) handleDdl(ddlEvent *cproto.BinlogResponse) {
+// DDL - apply the schema
+func (blp *BinlogPlayer) handleDdl(ddlEvent *cproto.BinlogResponse) error {
 	for _, sql := range ddlEvent.Data.Sql {
 		if sql == "" {
 			continue
 		}
 		if _, err := blp.dbClient.ExecuteFetch(sql, 0, false); err != nil {
-			panic(fmt.Errorf("Error %v in executing sql %v", err, sql))
+			return fmt.Errorf("Error %v in executing sql %v", err, sql)
 		}
 	}
 	var err error
 	if err = blp.dbClient.Begin(); err != nil {
-		panic(fmt.Errorf("Failed query BEGIN, err: %s", err))
+		return fmt.Errorf("Failed query BEGIN, err: %s", err)
 	}
-	blp.WriteRecoveryPosition(&ddlEvent.Position.Position)
+	if err = blp.writeRecoveryPosition(&ddlEvent.Position.Position); err != nil {
+		return err
+	}
 	if err = blp.dbClient.Commit(); err != nil {
-		panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
+		return fmt.Errorf("Failed query 'COMMIT', err: %s", err)
 	}
+	return nil
 }
 
 func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
@@ -482,8 +492,8 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 		}
 		streamCommentIndex := strings.Index(sql, BLPL_STREAM_COMMENT_START)
 		if streamCommentIndex == -1 {
-			//log.Warningf("sql doesn't have stream comment '%v'", sql)
-			//If sql doesn't have stream comment, don't match
+			// log.Warningf("sql doesn't have stream comment '%v'", sql)
+			// If sql doesn't have stream comment, don't match
 			return false
 		}
 		tableName := strings.TrimSpace(strings.Split(sql[(streamCommentIndex+len(BLPL_STREAM_COMMENT_START)):], BLPL_SPACE)[0])
@@ -502,7 +512,7 @@ func (blp *BinlogPlayer) dmlTableMatch(sqlSlice []string) bool {
 // blp.TxnBuffer contains 'n' complete txns, we
 // send one begin at the start and then ignore blp.txnIndex - 1 "Commit" events
 // and commit the entire batch at the last commit.
-func (blp *BinlogPlayer) handleTxn() bool {
+func (blp *BinlogPlayer) handleTxn() (bool, error) {
 	var err error
 
 	dmlMatch := 0
@@ -519,11 +529,13 @@ func (blp *BinlogPlayer) handleTxn() bool {
 			if txnCount < blp.txnIndex {
 				continue
 			}
-			blp.WriteRecoveryPosition(&dmlEvent.Position.Position)
-			if err = blp.dbClient.Commit(); err != nil {
-				panic(fmt.Errorf("Failed query 'COMMIT', err: %s", err))
+			if err = blp.writeRecoveryPosition(&dmlEvent.Position.Position); err != nil {
+				return false, err
 			}
-			//added 1 for recovery dml
+			if err = blp.dbClient.Commit(); err != nil {
+				return false, fmt.Errorf("Failed query 'COMMIT', err: %s", err)
+			}
+			// added 1 for recovery dml
 			queryCount += 2
 			blp.blplStats.queryCount.Add("QueryCount", queryCount)
 			blp.blplStats.txnCount.Add("TxnCount", int64(blp.txnIndex))
@@ -533,7 +545,7 @@ func (blp *BinlogPlayer) handleTxn() bool {
 				dmlMatch += 1
 				if dmlMatch == 1 {
 					if err = blp.dbClient.Begin(); err != nil {
-						panic(fmt.Errorf("Failed query 'BEGIN', err: %s", err))
+						return false, fmt.Errorf("Failed query 'BEGIN', err: %s", err)
 					}
 					queryCount += 1
 					txnStartTime = time.Now()
@@ -548,23 +560,23 @@ func (blp *BinlogPlayer) handleTxn() bool {
 							if sqlErr.Number() == 1213 {
 								log.Infof("Detected deadlock, returning")
 								_ = blp.dbClient.Rollback()
-								return false
+								return false, nil
 							}
 						}
-						panic(err)
+						return false, err
 					}
 					blp.blplStats.txnTime.Record("QueryTime", queryStartTime)
 				}
 				queryCount += int64(len(dmlEvent.Data.Sql))
 			}
 		default:
-			panic(fmt.Errorf("Invalid SqlType %v", dmlEvent.Data.SqlType))
+			return false, fmt.Errorf("Invalid SqlType %v", dmlEvent.Data.SqlType)
 		}
 	}
-	return true
+	return true, nil
 }
 
-// ApplyBinlogEvents makes a bson rpc request to BinlogServer
+// ApplyBinlogEvents makes a gob rpc request to BinlogServer
 // and processes the events.
 func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v'",
@@ -573,10 +585,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		blp.keyRange.End.Hex(),
 		blp.recoveryState.Position)
 
-	var err error
 	log.Infof("Dialing server @ %v", blp.recoveryState.Addr)
-	blp.rpcClient, err = rpcplus.DialHTTP("tcp", blp.recoveryState.Addr)
-	defer blp.rpcClient.Close()
+	rpcClient, err := rpcplus.DialHTTP("tcp", blp.recoveryState.Addr)
+	defer rpcClient.Close()
 	if err != nil {
 		log.Errorf("Error in dialing to vt_binlog_server, %v", err)
 		return fmt.Errorf("Error in dialing to vt_binlog_server, %v", err)
@@ -588,7 +599,7 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		StartPosition: blp.recoveryState.Position,
 		KeyRange:      blp.keyRange,
 	}
-	resp := blp.rpcClient.StreamGo("BinlogServer.ServeBinlog", blServeRequest, responseChan)
+	resp := rpcClient.StreamGo("BinlogServer.ServeBinlog", blServeRequest, responseChan)
 
 processLoop:
 	for {

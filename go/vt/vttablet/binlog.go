@@ -152,14 +152,14 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 // BinlogPlayerMap controls all the players
 type BinlogPlayerMap struct {
 	ts       topo.Server
-	dbConfig *mysql.ConnectionParams
+	dbConfig mysql.ConnectionParams
 
 	// This mutex protects the map
 	mu      sync.Mutex
 	players map[topo.SourceShard]*BinlogPlayerController
 }
 
-func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts topo.Server, dbConfig mysql.ConnectionParams) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:       ts,
 		dbConfig: dbConfig,
@@ -186,7 +186,7 @@ func (blm *BinlogPlayerMap) addPlayer(cell string, keyRange key.KeyRange, source
 		return
 	}
 
-	bpc = NewBinlogPlayerController(blm.ts, blm.dbConfig, cell, keyRange, sourceShard)
+	bpc = NewBinlogPlayerController(blm.ts, &blm.dbConfig, cell, keyRange, sourceShard)
 	blm.players[sourceShard] = bpc
 	bpc.Start()
 }
