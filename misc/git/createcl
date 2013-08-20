@@ -36,7 +36,7 @@ if ! ( echo $rev_param | grep : ) ; then
   rev_param=${rev_param}:
 fi
 git_log=`echo $rev_param | sed -n 's/:/../p'`
-git log --pretty=oneline $git_log > /tmp/createcl.msg
+git log --pretty=oneline --abbrev-commit $git_log > /tmp/createcl.msg
 echo "----- Full commit log:" >> /tmp/createcl.msg
 git log $git_log | sed 's_commit \(.*\)_commit https://github.com/youtube/vitess/commit/\1_' >> /tmp/createcl.msg
 
