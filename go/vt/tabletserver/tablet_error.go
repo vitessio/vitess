@@ -52,6 +52,8 @@ func (te *TabletError) Error() string {
 		format = "retry: %s"
 	case FATAL:
 		format = "fatal: %s"
+	case TX_POOL_FULL:
+		format = "tx_pool_full: %s"
 	}
 	return fmt.Sprintf(format, te.Message)
 }
