@@ -427,8 +427,8 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *topo.TabletInfo, majo
 		log.Warningf("minority reparent, manual fixes are needed, leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias())
 	}
 
-	// we can't be smart and just do the old and new master cells,
-	// as we export master record everywhere.
+	// We rebuild all the cells, as we may have taken tablets in and
+	// out of the graph.
 	log.Infof("rebuilding shard serving graph data")
 	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil)
 }
