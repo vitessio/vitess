@@ -219,6 +219,28 @@ index by_msg (msg)
         self.fail("timeout waiting for binlog server state %s" % expected)
     logging.debug("tablet %s binlog service is in state %s", tablet.tablet_alias, expected)
 
+  def _wait_for_binlog_player_count(self, tablet, expected, timeout=5.0):
+    while True:
+      v = utils.get_vars(tablet.port)
+      if v == None:
+        logging.debug("  vttablet not answering at /debug/vars, waiting...")
+      else:
+        if 'BinlogPlayerMapSize' not in v:
+          logging.debug("  vttablet not exporting BinlogPlayerMapSize, waiting...")
+        else:
+          s = v['BinlogPlayerMapSize']
+          if s != expected:
+            logging.debug("  vttablet's binlog player map has count %u != %u", s, expected)
+          else:
+            break
+
+      logging.debug("sleeping a bit while we wait")
+      time.sleep(0.1)
+      timeout -= 0.1
+      if timeout <= 0:
+        self.fail("timeout waiting for binlog player count %d" % expected)
+    logging.debug("tablet %s binlog player has %d players", tablet.tablet_alias, expected)
+
   def test_resharding(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
 
@@ -294,6 +316,10 @@ index by_msg (msg)
     # check the schema too
     utils.run_vtctl('ValidateSchemaKeyspace test_keyspace', auto_log=True)
 
+    # check the binlog players are running
+    self._wait_for_binlog_player_count(shard_2_master, 1)
+    self._wait_for_binlog_player_count(shard_3_master, 1)
+
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server
     # timeout, check we get all of it.
@@ -357,6 +383,10 @@ index by_msg (msg)
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
                              'TabletTypes: master,replica')
+
+    # check the binlog players are gone now
+    self._wait_for_binlog_player_count(shard_2_master, 0)
+    self._wait_for_binlog_player_count(shard_3_master, 0)
 
     # kill everything
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_slave1,

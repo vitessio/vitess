@@ -8,7 +8,6 @@ package vttablet
 // replication
 
 import (
-	"bytes"
 	"fmt"
 	"math/rand" // not crypto-safe is OK here
 	"sync"
@@ -20,12 +19,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
-)
-
-const (
-	BINLOG_PLAYER_CONNECTING = iota
-	BINLOG_PLAYER_PLAYING
-	BINLOG_PLAYER_SLEEPING
 )
 
 func init() {
@@ -44,13 +37,6 @@ type BinlogPlayerController struct {
 	// Information about the source
 	sourceShard topo.SourceShard
 
-	// Player is the BinlogPlayer when we have one, protected by mu
-	player *mysqlctl.BinlogPlayer
-	mu     sync.Mutex
-
-	// states is our state accounting variable, for stats
-	states *stats.States
-
 	// interrupted is the channel to close to stop the playback
 	interrupted chan struct{}
 }
@@ -64,25 +50,7 @@ func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams,
 		sourceShard: sourceShard,
 		interrupted: make(chan struct{}, 1),
 	}
-	blc.states = stats.NewStates("", []string{
-		"Connecting",
-		"Playing",
-		"Sleeping",
-	}, time.Now(), BINLOG_PLAYER_CONNECTING)
 	return blc
-}
-
-func (blc *BinlogPlayerController) statsJSON() string {
-	buf := bytes.NewBuffer(make([]byte, 0, 128))
-	fmt.Fprintf(buf, "{")
-	blc.mu.Lock()
-	if blc.player != nil {
-		fmt.Fprintf(buf, "\n \"Player\": %v", blc.player.StatsJSON())
-	}
-	blc.mu.Unlock()
-	fmt.Fprintf(buf, "\n \"States\": %v", blc.states.String())
-	fmt.Fprintf(buf, "\n}")
-	return buf.String()
 }
 
 func (bpc *BinlogPlayerController) String() string {
@@ -109,7 +77,6 @@ func (bpc *BinlogPlayerController) Loop() {
 		log.Warningf("%v: %v", bpc, err)
 
 		// sleep for a bit before retrying to connect
-		bpc.states.SetState(BINLOG_PLAYER_SLEEPING)
 		time.Sleep(5 * time.Second)
 	}
 
@@ -123,7 +90,6 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
-	bpc.states.SetState(BINLOG_PLAYER_CONNECTING)
 
 	// create the db connection, connect it
 	vtClient := mysqlctl.NewDbClient(bpc.dbConfig)
@@ -174,29 +140,23 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// Create the player.
-	bpc.mu.Lock()
-	bpc.player, err = mysqlctl.NewBinlogPlayer(vtClient, overlap, bpc.sourceShard.Uid, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
-	bpc.mu.Unlock()
+	player, err := mysqlctl.NewBinlogPlayer(vtClient, overlap, bpc.sourceShard.Uid, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
 	if err != nil {
 		return fmt.Errorf("can't create player: %v", err)
 	}
 
 	// Run player loop until it's done.
-	bpc.states.SetState(BINLOG_PLAYER_PLAYING)
-	err = bpc.player.ApplyBinlogEvents(bpc.interrupted)
-
-	bpc.mu.Lock()
-	bpc.player = nil
-	bpc.mu.Unlock()
-
-	return err
+	return player.ApplyBinlogEvents(bpc.interrupted)
 }
 
 // BinlogPlayerMap controls all the players
 type BinlogPlayerMap struct {
 	ts       topo.Server
 	dbConfig *mysql.ConnectionParams
-	players  map[topo.SourceShard]*BinlogPlayerController
+
+	// This mutex protects the map
+	mu      sync.Mutex
+	players map[topo.SourceShard]*BinlogPlayerController
 }
 
 func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams) *BinlogPlayerMap {
@@ -208,21 +168,18 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams) *Binlo
 }
 
 func RegisterBinlogPlayerMap(blm *BinlogPlayerMap) {
-	stats.PublishJSONFunc("BinlogPlayerMap", blm.statsJSON)
+	stats.Publish("BinlogPlayerMapSize", stats.IntFunc(blm.size))
 }
 
-func (blm *BinlogPlayerMap) statsJSON() string {
-	buf := bytes.NewBuffer(make([]byte, 0, 128))
-	fmt.Fprintf(buf, "{")
-	for source, player := range blm.players {
-		fmt.Fprintf(buf, "\n \"%v-%v\": %v,", source.KeyRange.Start, source.KeyRange.End, player.statsJSON())
-	}
-	fmt.Fprintf(buf, "\n \"Enabled\": 1")
-	fmt.Fprintf(buf, "\n}")
-	return buf.String()
+func (blm *BinlogPlayerMap) size() int64 {
+	blm.mu.Lock()
+	result := len(blm.players)
+	blm.mu.Unlock()
+	return int64(result)
 }
 
-func (blm *BinlogPlayerMap) AddPlayer(cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) {
+// addPlayer adds a new player to the map. It assumes we have the lock.
+func (blm *BinlogPlayerMap) addPlayer(cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) {
 	bpc, ok := blm.players[sourceShard]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
@@ -235,10 +192,12 @@ func (blm *BinlogPlayerMap) AddPlayer(cell string, keyRange key.KeyRange, source
 }
 
 func (blm *BinlogPlayerMap) StopAllPlayers() {
+	blm.mu.Lock()
 	for _, bpc := range blm.players {
 		bpc.Stop()
 	}
 	blm.players = make(map[topo.SourceShard]*BinlogPlayerController)
+	blm.mu.Unlock()
 }
 
 // RefreshMap reads the right data from topo.Server and makes sure
@@ -253,6 +212,8 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 		return
 	}
 
+	blm.mu.Lock()
+
 	// get the existing sources and build a map of sources to remove
 	toRemove := make(map[topo.SourceShard]bool)
 	for source, _ := range blm.players {
@@ -261,7 +222,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.AddPlayer(tablet.Cell, tablet.KeyRange, sourceShard)
+		blm.addPlayer(tablet.Cell, tablet.KeyRange, sourceShard)
 		delete(toRemove, sourceShard)
 	}
 
@@ -270,4 +231,6 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 		blm.players[source].Stop()
 		delete(blm.players, source)
 	}
+
+	blm.mu.Unlock()
 }
