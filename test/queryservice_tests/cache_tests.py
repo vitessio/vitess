@@ -204,6 +204,9 @@ class TestCache(framework.TestCase):
     self._verify_mismatch("select * from vtocc_cached where eid = 1.2 and bid = 1.2")
     self._verify_mismatch("select * from vtocc_cached where eid = %(fl)s and bid = %(fl)s", {"fl": 1.2})
 
+  def test_verify_mode(self):
+    self.assertEqual(self.env.debug_vars()["VerifyMode"], 0)
+
   def _verify_mismatch(self, query, bindvars=None):
     try:
       self.env.execute(query, bindvars)
