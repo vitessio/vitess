@@ -113,9 +113,9 @@ type Server interface {
 	CreateTablet(tablet *Tablet) error
 
 	// UpdateTablet updates a given tablet. The version is used
-	// for atomic updates (use -1 to overwrite any version).
-	// Can return ErrNoNode if the tablet doesn't exist.
-	// Can return ErrBadVersion if the version has changed.
+	// for atomic updates. UpdateTablet will return ErrNoNode if
+	// the tablet doesn't exist and ErrBadVersion if the version
+	// has changed.
 	UpdateTablet(tablet *TabletInfo, existingVersion int) (newVersion int, err error)
 
 	// UpdateTabletFields updates the current tablet record

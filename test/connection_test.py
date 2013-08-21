@@ -13,7 +13,7 @@ import unittest
 
 from net import gorpc
 from net import bsonrpc
-from vtdb import vt_occ2
+from vtdb import vtclient
 from vtdb import dbexceptions
 
 # This is a VtOCCConnection that doesn't attempt to do authentication.
@@ -79,7 +79,7 @@ class BaseTest(unittest.TestCase):
                                      "-dbconfig", klass.dbconfig_file],
                                      stderr=klass.vtstderr)
     time.sleep(1)
-    connection = vt_occ2.VtOCCConnection("localhost:%s" % klass.vtocc_port, klass.dbconfig['keyspace'], klass.dbconfig['shard'], timeout=10, user=klass.user, password=klass.password)
+    connection = vtclient.VtOCCConnection("localhost:%s" % klass.vtocc_port, klass.dbconfig['keyspace'], klass.dbconfig['shard'], timeout=10, user=klass.user, password=klass.password)
     connection.dial()
     cursor = connection.cursor()
     cursor.execute("create table if not exists connection_test (c int)")
@@ -192,24 +192,11 @@ class TestAuthentication(BaseTest):
 class TestConnection(BaseTest):
 
   def setUp(self):
-    self.connection = vt_occ2.VtOCCConnection(self.vtocc_uri, self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
+    self.connection = vtclient.VtOCCConnection(self.vtocc_uri, self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
     self.connection.dial()
 
-  def test_reconnect(self):
-    cursor = self.connection.cursor()
-    cursor.execute("create table if not exists connection_test (c int)")
-    cursor.execute("select 1 from connection_test")
-    try:
-      cursor.execute("select sleep(1) from connection_test")
-    except dbexceptions.DatabaseError as e:
-      if "deadline exceeded" not in str(e):
-        raise
-    else:
-      self.fail("Expected timeout error not raised")
-    cursor.execute("select 2 from connection_test")
-
   def test_vtocc_not_there(self):
-    connection = vt_occ2.VtOCCConnection("localhost:7777", self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
+    connection = vtclient.VtOCCConnection("localhost:7777", self.dbconfig['keyspace'], self.dbconfig['shard'], timeout=1, user=self.user, password=self.password)
     self.assertRaises(dbexceptions.OperationalError, connection.dial)
 
   def test_vtocc_has_gone_away(self):

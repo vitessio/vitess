@@ -122,8 +122,10 @@ func CopyTablets(fromTS, toTS topo.Server) {
 						err = toTS.CreateTablet(ti.Tablet)
 						if err == topo.ErrNodeExists {
 							// update the destination tablet
-							_, err = toTS.UpdateTablet(ti, -1)
-
+							err = toTS.UpdateTabletFields(ti.Alias(), func(t *topo.Tablet) error {
+								*t = *ti.Tablet
+								return nil
+							})
 						}
 						if err != nil {
 							rec.RecordError(err)

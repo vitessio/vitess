@@ -16,7 +16,7 @@ import urllib2
 import MySQLdb
 
 from vtdb import update_stream_service
-from vtdb import vt_occ2
+from vtdb import vtclient
 
 import framework
 import tablet
@@ -215,7 +215,7 @@ class RowCacheInvalidator(unittest.TestCase):
 
 
 def _vtdb_conn(host):
-  return vt_occ2.connect(host, 'test_keyspace', '0', 2)
+  return vtclient.connect(host, 'test_keyspace', '0', 2)
 
 def _exec_vt_txn(host, query_list=None):
   if query_list is None:

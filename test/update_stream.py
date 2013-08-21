@@ -17,7 +17,7 @@ import MySQLdb
 import tablet
 import utils
 from vtdb import update_stream_service
-from vtdb import vt_occ2
+from vtdb import vtclient
 
 master_tablet = tablet.Tablet(62344)
 replica_tablet = tablet.Tablet(62345)
@@ -218,7 +218,7 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("Streamed %d transactions before exiting" % txn_count)
 
   def _vtdb_conn(self, host):
-    return vt_occ2.connect(host, 'test_keyspace', '0', 2)
+    return vtclient.connect(host, 'test_keyspace', '0', 2)
 
   def _exec_vt_txn(self, host, query_list=None):
     if not query_list:
