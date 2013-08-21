@@ -7,14 +7,9 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	"net/http"
-	_ "net/http/pprof"
-	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -40,7 +35,6 @@ func main() {
 	flag.Parse()
 
 	servenv.Init()
-	defer servenv.Close()
 
 	tabletAlias := vttablet.TabletParamToTabletAlias(*tabletPath)
 
@@ -69,36 +63,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	servenv.ServeRPC()
-
 	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
-
-	l, err := proc.Listen(fmt.Sprintf("%v", *port))
-	if err != nil {
-		log.Fatal(err)
-	}
-	go http.Serve(l, nil)
-
-	if *securePort != 0 {
-		log.Infof("listening on secure port %v", *securePort)
-		vttablet.SecureServe(fmt.Sprintf(":%d", *securePort), *cert, *key, *caCert)
-	}
-
-	log.Infof("started vttablet %v", *port)
-	s := proc.Wait()
-
-	// A SIGUSR1 means that we're restarting
-	if s == syscall.SIGUSR1 {
-		// Give some time for the other process
-		// to pick up the listeners
-		log.Info("Exiting on SIGUSR1")
+	servenv.OnClose(func() {
 		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries(true)
-	} else {
-		log.Info("Exiting on SIGTERM")
-		ts.DisallowQueries(false)
-	}
-	mysqlctl.DisableUpdateStreamService()
-	topo.CloseServers()
-	vttablet.CloseAgent()
+		mysqlctl.DisableUpdateStreamService()
+		topo.CloseServers()
+		vttablet.CloseAgent()
+	})
+	servenv.RunSecure(*port, *securePort, *cert, *key, *caCert)
 }
