@@ -7,10 +7,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	_ "net/http/pprof"
 	"os"
 
-	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
@@ -39,13 +37,10 @@ func init() {
 func main() {
 	flag.Parse()
 	servenv.Init()
-	defer servenv.Close()
 
-	servenv.ServeRPC()
 	zkr := zkocc.NewZkReader(*resolveLocal, flag.Args())
 	zk.RegisterZkReader(zkr)
 
 	topo.RegisterTopoReader(&TopoReader{zkr: zkr})
-
-	proc.ListenAndServe(fmt.Sprintf("%v", *port))
+	servenv.Run(*port)
 }

@@ -15,5 +15,5 @@ func init() {
 		})
 
 	})
-	onClose(log.Flush)
+	OnClose(log.Flush)
 }
