@@ -94,7 +94,7 @@ func (entry *zkCacheEntry) get(zcell *zkCell, path string, reply *zk.ZkNode) err
 		if err != nil {
 			entry.dataError = err
 			log.Warningf("ZK connection error for path %v: %v", path, err)
-			zcell.otherErrors.Add(1)
+			zcell.zkrStats.otherErrors.Add("ZkCell-"+zcell.cellName, 1) // zcell.otherErrors.Add(1)
 			return err
 		}
 
@@ -107,13 +107,13 @@ func (entry *zkCacheEntry) get(zcell *zkCell, path string, reply *zk.ZkNode) err
 			entry.dataError = err
 			log.Warningf("ZK error for path %v: %v", path, err)
 			if zookeeper.IsError(err, zookeeper.ZNONODE) {
-				zcell.nodeNotFoundErrors.Add(1)
+				zcell.zkrStats.nodeNotFoundErrors.Add("ZkCell-"+zcell.cellName, 1) // zcell.nodeNotFoundErrors.Add(1)
 			} else {
-				zcell.otherErrors.Add(1)
+				zcell.zkrStats.otherErrors.Add("ZkCell-"+zcell.cellName, 1) // zcell.otherErrors.Add(1)
 			}
 			return err
 		}
-		zcell.zkReads.Add(1)
+		zcell.zkrStats.zkReads.Add("ZkCell-"+zcell.cellName, 1) //zcell.zkReads.Add(1)
 		entry.node.Stat.FromZookeeperStat(stat)
 		entry.dataTime = time.Now()
 
@@ -125,9 +125,9 @@ func (entry *zkCacheEntry) get(zcell *zkCell, path string, reply *zk.ZkNode) err
 		// update the stats
 		if entry.dataError != nil {
 			// we have an error, so the entry is stale
-			zcell.staleReads.Add(1)
+			zcell.zkrStats.staleReads.Add("ZkCell-"+zcell.cellName, 1) //zcell.staleReads.Add(1)
 		} else {
-			zcell.cacheReads.Add(1)
+			zcell.zkrStats.cacheReads.Add("ZkCell-"+zcell.cellName, 1) // zcell.cacheReads.Add(1)
 		}
 	}
 
@@ -160,7 +160,7 @@ func (entry *zkCacheEntry) children(zcell *zkCell, path string, reply *zk.ZkNode
 		if err != nil {
 			entry.childrenError = err
 			log.Warningf("ZK connection error for path %v: %v", path, err)
-			zcell.otherErrors.Add(1)
+			zcell.zkrStats.otherErrors.Add("ZkCell-"+zcell.cellName, 1) // zcell.otherErrors.Add(1)
 			return err
 		}
 
@@ -173,13 +173,13 @@ func (entry *zkCacheEntry) children(zcell *zkCell, path string, reply *zk.ZkNode
 			entry.childrenError = err
 			log.Warningf("ZK error for path %v: %v", path, err)
 			if zookeeper.IsError(err, zookeeper.ZNONODE) {
-				zcell.nodeNotFoundErrors.Add(1)
+				zcell.zkrStats.nodeNotFoundErrors.Add("ZkCell-"+zcell.cellName, 1) // zcell.nodeNotFoundErrors.Add(1)
 			} else {
-				zcell.otherErrors.Add(1)
+				zcell.zkrStats.otherErrors.Add("ZkCell-"+zcell.cellName, 1) // zcell.otherErrors.Add(1)
 			}
 			return err
 		}
-		zcell.zkReads.Add(1)
+		zcell.zkrStats.zkReads.Add("ZkCell-"+zcell.cellName, 1) // zcell.zkReads.Add(1)
 		entry.node.Stat.FromZookeeperStat(stat)
 		entry.childrenTime = time.Now()
 
@@ -190,9 +190,9 @@ func (entry *zkCacheEntry) children(zcell *zkCell, path string, reply *zk.ZkNode
 	} else {
 		// update the stats
 		if entry.childrenError != nil {
-			zcell.staleReads.Add(1)
+			zcell.zkrStats.staleReads.Add("ZkCell-"+zcell.cellName, 1) // zcell.staleReads.Add(1)
 		} else {
-			zcell.cacheReads.Add(1)
+			zcell.zkrStats.cacheReads.Add("ZkCell-"+zcell.cellName, 1) // zcell.cacheReads.Add(1)
 		}
 	}
 

@@ -5,7 +5,6 @@
 package zkocc
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -13,7 +12,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/zk"
 )
 
@@ -27,6 +25,24 @@ import (
 //    * On reconnect, re-read all paths.
 //    * Report ZkNode as stale when things are disconnected?
 
+type zkrStats struct {
+	zkReads            *stats.Counters
+	cacheReads         *stats.Counters
+	staleReads         *stats.Counters
+	nodeNotFoundErrors *stats.Counters
+	otherErrors        *stats.Counters
+}
+
+func newZkrStats() *zkrStats {
+	zs := &zkrStats{}
+	zs.zkReads = stats.NewCounters("ZkReader-ZkReads")
+	zs.cacheReads = stats.NewCounters("ZkReader-CacheReads")
+	zs.staleReads = stats.NewCounters("ZkReader-StaleReads")
+	zs.nodeNotFoundErrors = stats.NewCounters("ZkReader-NodeNotFoundErrors")
+	zs.otherErrors = stats.NewCounters("ZkReader-OtherErrors")
+	return zs
+}
+
 // ZkReader is the main object receiving RPC calls
 type ZkReader struct {
 	mutex        sync.Mutex
@@ -35,8 +51,9 @@ type ZkReader struct {
 	localCell    string
 
 	// stats
-	rpcCalls          sync2.AtomicInt32
-	unknownCellErrors sync2.AtomicInt32
+	rpcCalls          *stats.Int //sync2.AtomicInt32
+	unknownCellErrors *stats.Int //sync2.AtomicInt32
+	zkrStats          *zkrStats
 }
 
 var (
@@ -49,8 +66,11 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 	if resolveLocal {
 		zkr.localCell = zk.GuessLocalCell()
 	}
+	zkr.rpcCalls = stats.NewInt("ZkReader-RcpCalls")
+	zkr.unknownCellErrors = stats.NewInt("ZkReader-UnknownCellErrors")
+	zkr.zkrStats = newZkrStats()
 
-	stats.PublishJSONFunc("ZkReader", zkr.statsJSON)
+	//stats.PublishJSONFunc("ZkReader", zkr.statsJSON)
 
 	// start some cells
 	for _, cellName := range preload {
@@ -91,7 +111,7 @@ func (zkr *ZkReader) getCell(path string) (*zkCell, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		cell = newZkCell(cellName, zkaddr)
+		cell = newZkCell(cellName, zkaddr, zkr.zkrStats)
 		zkr.zcell[cellName] = cell
 	}
 	return cell, resolvedPath, nil
@@ -186,37 +206,4 @@ func (zkr *ZkReader) Children(req *zk.ZkPath, reply *zk.ZkNode) (err error) {
 
 	// and fill it in if we can
 	return entry.children(cell, path, reply)
-}
-
-func (zkr *ZkReader) statsJSON() string {
-	zkr.mutex.Lock()
-	defer zkr.mutex.Unlock()
-
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-	fmt.Fprintf(b, "{")
-	fmt.Fprintf(b, "\"RpcCalls\": %v,", zkr.rpcCalls.Get())
-	fmt.Fprintf(b, "\"UnknownCellErrors\": %v", zkr.unknownCellErrors.Get())
-	var zkReads int32
-	var cacheReads int32
-	var staleReads int32
-	var nodeNotFoundErrors int32
-	var otherErrors int32
-	for name, zcell := range zkr.zcell {
-		fmt.Fprintf(b, ", \"%v\": %v", name, zcell.String())
-		zkReads += zcell.zkReads.Get()
-		cacheReads += zcell.cacheReads.Get()
-		staleReads += zcell.staleReads.Get()
-		nodeNotFoundErrors += zcell.nodeNotFoundErrors.Get()
-		otherErrors += zcell.otherErrors.Get()
-	}
-	fmt.Fprintf(b, ", \"total\": {")
-	fmt.Fprintf(b, "\"CacheReads\": %v,", cacheReads)
-	fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", nodeNotFoundErrors)
-	fmt.Fprintf(b, "\"OtherErrors\": %v,", otherErrors)
-	fmt.Fprintf(b, "\"StaleReads\": %v,", staleReads)
-	fmt.Fprintf(b, "\"ZkReads\": %v", zkReads)
-	fmt.Fprintf(b, "}")
-
-	fmt.Fprintf(b, "}")
-	return b.String()
 }

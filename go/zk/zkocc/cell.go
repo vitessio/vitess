@@ -5,7 +5,6 @@
 package zkocc
 
 import (
-	"bytes"
 	"flag"
 	"fmt"
 	"sync"
@@ -13,7 +12,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
-	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -65,6 +63,7 @@ type zkCell struct {
 	cellName string
 	zkAddr   string
 	zcache   *ZkCache
+	zkrStats *zkrStats
 
 	// connection related variables
 	mutex   sync.Mutex // For connection & state only
@@ -75,15 +74,15 @@ type zkCell struct {
 	states  *stats.States
 
 	// stats
-	zkReads            sync2.AtomicInt32
-	cacheReads         sync2.AtomicInt32
-	staleReads         sync2.AtomicInt32
-	nodeNotFoundErrors sync2.AtomicInt32
-	otherErrors        sync2.AtomicInt32
+	//zkReads            sync2.AtomicInt32
+	//cacheReads         sync2.AtomicInt32
+	//staleReads         sync2.AtomicInt32
+	//nodeNotFoundErrors sync2.AtomicInt32
+	//otherErrors        sync2.AtomicInt32
 }
 
-func newZkCell(name, zkaddr string) *zkCell {
-	result := &zkCell{cellName: name, zkAddr: zkaddr, zcache: newZkCache()}
+func newZkCell(name, zkaddr string, zkrstats *zkrStats) *zkCell {
+	result := &zkCell{cellName: name, zkAddr: zkaddr, zcache: newZkCache(), zkrStats: zkrstats}
 	result.ready = sync.NewCond(&result.mutex)
 	result.states = stats.NewStates("", []string{"Disconnected", "Connecting", "Connected", "BackOff"}, time.Now(), CELL_DISCONNECTED)
 	go result.backgroundRefresher()
@@ -235,18 +234,4 @@ func (zcell *zkCell) backgroundRefresher() {
 		// get a few values to refresh, and ask for them
 		zcell.zcache.refreshSomeValues(zconn, *refreshCount)
 	}
-}
-
-// Implements expvar.Var()
-func (zcell *zkCell) String() string {
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-	fmt.Fprintf(b, "{")
-	fmt.Fprintf(b, "\"CacheReads\": %v,", zcell.cacheReads.Get())
-	fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", zcell.nodeNotFoundErrors.Get())
-	fmt.Fprintf(b, "\"OtherErrors\": %v,", zcell.otherErrors.Get())
-	fmt.Fprintf(b, "\"StaleReads\": %v,", zcell.staleReads.Get())
-	fmt.Fprintf(b, "\"State\": %v,", zcell.states.String())
-	fmt.Fprintf(b, "\"ZkReads\": %v", zcell.zkReads.Get())
-	fmt.Fprintf(b, "}")
-	return b.String()
 }
