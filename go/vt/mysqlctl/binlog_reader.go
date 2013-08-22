@@ -32,19 +32,11 @@ const (
 	LOG_WAIT_TIMEOUT   = 5
 )
 
-type stats struct {
+type brStats struct {
 	Reads     int64
 	Bytes     int64
 	Sleeps    int64
 	StartTime time.Time
-}
-
-type request struct {
-	config        *Mycnf
-	startPosition int64
-	file          *os.File
-	nextFilename  string
-	stats
 }
 
 type BinlogReader struct {
@@ -104,7 +96,7 @@ func readFirstEventSize(binlog io.ReadSeeker) uint32 {
 
 func (blr *BinlogReader) serve(filename string, startPosition int64, writer http.ResponseWriter) {
 	flusher := writer.(http.Flusher)
-	stats := stats{StartTime: time.Now()}
+	brStats := brStats{StartTime: time.Now()}
 
 	binlogFile, nextLog := blr.open(filename)
 	defer binlogFile.Close()
@@ -145,14 +137,14 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 		position, err := binlogFile.Seek(0, 0)
 		if err == nil {
 			_, err = io.CopyN(writer, binlogFile, prefixSize)
-			//log.Infof("BinlogReader %x copy @ %v:%v,%v", stats.StartTime, binlogFile.Name(), position, written)
+			//log.Infof("BinlogReader %x copy @ %v:%v,%v", brStats.StartTime, binlogFile.Name(), position, written)
 		}
 		if err != nil {
 			log.Errorf("BinlogReader.serve err: %v", err)
 			return
 		}
 		position, err = binlogFile.Seek(startPosition, 0)
-		log.Infof("BinlogReader %x seek to startPosition %v @ %v:%v", stats.StartTime, startPosition, binlogFile.Name(), position)
+		log.Infof("BinlogReader %x seek to startPosition %v @ %v:%v", brStats.StartTime, startPosition, binlogFile.Name(), position)
 	} else {
 		writer.Header().Set("Vt-Binlog-Offset", "0")
 	}
@@ -161,14 +153,14 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 	for {
 		//position, _ := binlogFile.Seek(0, 1)
 		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
-		//log.Infof("BinlogReader %x copy @ %v:%v,%v", stats.StartTime, binlogFile.Name(), position, written)
+		//log.Infof("BinlogReader %x copy @ %v:%v,%v", brStats.StartTime, binlogFile.Name(), position, written)
 		if err != nil && err != io.EOF {
 			log.Errorf("BinlogReader.serve err: %v", err)
 			return
 		}
 
-		stats.Reads++
-		stats.Bytes += written
+		brStats.Reads++
+		brStats.Bytes += written
 
 		if written != blr.BinlogBlockSize {
 			if _, statErr := os.Stat(nextLog); statErr == nil {
@@ -181,10 +173,10 @@ func (blr *BinlogReader) serve(filename string, startPosition int64, writer http
 			} else {
 				flusher.Flush()
 				position, _ := binlogFile.Seek(0, 1)
-				log.Infof("BinlogReader %x wait for more data: %v:%v", stats.StartTime, binlogFile.Name(), position)
+				log.Infof("BinlogReader %x wait for more data: %v:%v", brStats.StartTime, binlogFile.Name(), position)
 				// wait for more data
 				time.Sleep(blr.LogWaitTimeout)
-				stats.Sleeps++
+				brStats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
 					if now.Sub(lastSlept) > blr.MaxWaitTimeout {
@@ -235,7 +227,7 @@ func (blr *BinlogReader) open(name string) (*os.File, string) {
 }
 
 func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosition int64) {
-	stats := stats{StartTime: time.Now()}
+	brStats := brStats{StartTime: time.Now()}
 
 	binlogFile, nextLog := blr.open(filename)
 	defer binlogFile.Close()
@@ -279,8 +271,8 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 		}
 		//log.Infof("BinlogReader copy @ %v:%v,%v", binlogFile.Name(), position, written)
 
-		stats.Reads++
-		stats.Bytes += written
+		brStats.Reads++
+		brStats.Bytes += written
 
 		//EOF is implicit in this case - either we have reached end of current file
 		//and are waiting for more data or rotating to next log.
@@ -300,7 +292,7 @@ func (blr *BinlogReader) ServeData(writer io.Writer, filename string, startPosit
 				//log.Infof("BinlogReader wait for more data: %v:%v %v", binlogFile.Name(), position, blr.LogWaitTimeout)
 				// wait for more data
 				time.Sleep(blr.LogWaitTimeout)
-				stats.Sleeps++
+				brStats.Sleeps++
 				now := time.Now()
 				if lastSlept, ok := positionWaitStart[position]; ok {
 					if now.Sub(lastSlept) > blr.MaxWaitTimeout {
