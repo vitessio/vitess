@@ -66,7 +66,7 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 	if resolveLocal {
 		zkr.localCell = zk.GuessLocalCell()
 	}
-	zkr.rpcCalls = stats.NewInt("ZkReader-RcpCalls")
+	zkr.rpcCalls = stats.NewInt("ZkReader-RpcCalls")
 	zkr.unknownCellErrors = stats.NewInt("ZkReader-UnknownCellErrors")
 	zkr.zkrStats = newZkrStats()
 
