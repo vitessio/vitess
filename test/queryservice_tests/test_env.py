@@ -226,7 +226,6 @@ class VttabletTestEnv(TestEnv):
     return self.tablet.connect()
 
 class VtoccTestEnv(TestEnv):
-  logfile = "/tmp/vtocc.log"
   tabletuid = "9460"
   vtoccport = 9461
   mysqlport = 9460
