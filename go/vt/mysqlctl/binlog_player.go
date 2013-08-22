@@ -17,7 +17,7 @@ import (
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
-	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
 	cproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -166,22 +166,22 @@ func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*p
 
 // blplStats is the internal stats of this player
 type blplStats struct {
-	queryCount    *estats.Counters
-	txnCount      *estats.Counters
-	queriesPerSec *estats.Rates
-	txnsPerSec    *estats.Rates
-	txnTime       *estats.Timings
-	queryTime     *estats.Timings
+	queryCount    *stats.Counters
+	txnCount      *stats.Counters
+	queriesPerSec *stats.Rates
+	txnsPerSec    *stats.Rates
+	txnTime       *stats.Timings
+	queryTime     *stats.Timings
 }
 
 func NewBlplStats() *blplStats {
 	bs := &blplStats{}
-	bs.txnCount = estats.NewCounters("")
-	bs.queryCount = estats.NewCounters("")
-	bs.queriesPerSec = estats.NewRates("", bs.queryCount, 15, 60e9)
-	bs.txnsPerSec = estats.NewRates("", bs.txnCount, 15, 60e9)
-	bs.txnTime = estats.NewTimings("")
-	bs.queryTime = estats.NewTimings("")
+	bs.txnCount = stats.NewCounters("")
+	bs.queryCount = stats.NewCounters("")
+	bs.queriesPerSec = stats.NewRates("", bs.queryCount, 15, 60e9)
+	bs.txnsPerSec = stats.NewRates("", bs.txnCount, 15, 60e9)
+	bs.txnTime = stats.NewTimings("")
+	bs.queryTime = stats.NewTimings("")
 	return bs
 }
 

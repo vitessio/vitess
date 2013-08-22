@@ -11,7 +11,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
-	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -28,7 +28,7 @@ type UpdateStream struct {
 	mycnf          *Mycnf
 	tabletType     string
 	state          sync2.AtomicInt64
-	states         *estats.States
+	states         *stats.States
 	actionLock     sync.Mutex
 	binlogPrefix   string
 	logsDir        string
@@ -50,7 +50,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 	}
 
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
-	UpdateStreamRpcService.states = estats.NewStates("UpdateStreamState", []string{
+	UpdateStreamRpcService.states = stats.NewStates("UpdateStreamState", []string{
 		"Disabled",
 		"Enabled",
 	}, time.Now(), DISABLED)

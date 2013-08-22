@@ -18,7 +18,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
-	estats "github.com/youtube/vitess/go/stats" // stats is a private type defined somewhere else in this package, so it would conflict
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -39,20 +39,20 @@ var (
 )
 
 type blsStats struct {
-	parseStats    *estats.Counters
-	dmlCount      *estats.Counters
-	txnCount      *estats.Counters
-	queriesPerSec *estats.Rates
-	txnsPerSec    *estats.Rates
+	parseStats    *stats.Counters
+	dmlCount      *stats.Counters
+	txnCount      *stats.Counters
+	queriesPerSec *stats.Rates
+	txnsPerSec    *stats.Rates
 }
 
 func newBlsStats() *blsStats {
 	bs := &blsStats{}
-	bs.parseStats = estats.NewCounters("BinlogServerParseEvent")
-	bs.txnCount = estats.NewCounters("BinlogServerTxnCount")
-	bs.dmlCount = estats.NewCounters("BinlogServerDmlCount")
-	bs.queriesPerSec = estats.NewRates("BinlogServerQPS", bs.dmlCount, 15, 60e9)
-	bs.txnsPerSec = estats.NewRates("BinlogServerTPS", bs.txnCount, 15, 60e9)
+	bs.parseStats = stats.NewCounters("BinlogServerParseEvent")
+	bs.txnCount = stats.NewCounters("BinlogServerTxnCount")
+	bs.dmlCount = stats.NewCounters("BinlogServerDmlCount")
+	bs.queriesPerSec = stats.NewRates("BinlogServerQPS", bs.dmlCount, 15, 60e9)
+	bs.txnsPerSec = stats.NewRates("BinlogServerTPS", bs.txnCount, 15, 60e9)
 	return bs
 }
 
@@ -61,7 +61,7 @@ type BinlogServer struct {
 	mysqld   *Mysqld
 	blsStats *blsStats
 	state    sync2.AtomicInt64
-	states   *estats.States
+	states   *stats.States
 
 	// interrupted is used to stop the serving clients when the service
 	// gets interrupted. It is created when the service is enabled.
@@ -671,25 +671,39 @@ func (blServer *BinlogServer) fillAndCheckMasterPosition(startCoordinates *proto
 func (blServer *BinlogServer) ServeBinlog(req *proto.BinlogServerRequest, sendReply proto.SendBinlogResponse) error {
 	defer func() {
 		if x := recover(); x != nil {
-			//Send the error to the client.
+			// Send the error to the client:
+			// - If it is a BinlogServerError it's a normal error
+			// condition, just send it.
 			_, ok := x.(*BinlogServerError)
-			if !ok {
-				log.Errorf("Uncaught panic at top-most level: '%v'", x)
-				//panic(x)
+			if ok {
+				sendError(sendReply, req.StartPosition.String(), x.(error), nil)
+				return
 			}
-			sendError(sendReply, req.StartPosition.String(), x.(error), nil)
+
+			// - See if it is a regular error
+			_, ok = x.(error)
+			if ok {
+				log.Errorf("Uncaught panic from error at top-most level: '%v'", x)
+				sendError(sendReply, req.StartPosition.String(), x.(error), nil)
+				return
+			}
+
+			// - This is a panic(xxx) with xxx not an error, send
+			//   it to the client as error
+			log.Errorf("Uncaught panic at top-most level: '%v'", x)
+			sendError(sendReply, req.StartPosition.String(), fmt.Errorf("Uncaught panic at top-most level: '%v'", x), nil)
 		}
 	}()
 
 	log.Infof("received req: %v %v-%v", req.StartPosition.String(), req.KeyRange.Start.Hex(), req.KeyRange.End.Hex())
 	if !blServer.isServiceEnabled() {
-		panic(newBinlogServerError("Binlog Server is disabled"))
+		return newBinlogServerError("Binlog Server is disabled")
 	}
 
 	binlogPrefix := blServer.mysqld.config.BinLogPath
 	logsDir := path.Dir(binlogPrefix)
 	if err := blServer.fillAndCheckMasterPosition(&req.StartPosition); err != nil {
-		panic(newBinlogServerError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position: %v", req.StartPosition, err)))
+		return newBinlogServerError(fmt.Sprintf("Invalid start position %v, cannot serve the stream, cannot locate start position: %v", req.StartPosition, err))
 	}
 
 	blp := newBls(&req.StartPosition, blServer, &req.KeyRange)
@@ -713,7 +727,7 @@ func NewBinlogServer(mysqld *Mysqld) *BinlogServer {
 	binlogServer := new(BinlogServer)
 	binlogServer.mysqld = mysqld
 	binlogServer.blsStats = newBlsStats()
-	binlogServer.states = estats.NewStates("BinlogServerState", []string{
+	binlogServer.states = stats.NewStates("BinlogServerState", []string{
 		"Disabled",
 		"Enabled",
 	}, time.Now(), BINLOG_SERVER_DISABLED)
