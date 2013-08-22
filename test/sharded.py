@@ -3,7 +3,7 @@
 import logging
 import unittest
 
-from vtdb import tablet3
+from vtdb import tablet as tablet3
 from vtdb import topology
 from zk import zkocc
 

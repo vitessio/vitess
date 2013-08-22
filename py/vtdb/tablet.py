@@ -12,6 +12,7 @@ from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
 
+
 # Retry means a simple and immediate reconnect to the same host/port
 # will likely fix things. This is initiated by a graceful restart on
 # the server side. In general this can be handled transparently
@@ -19,11 +20,13 @@ from vtdb import field_types
 class RetryError(dbexceptions.OperationalError):
   pass
 
+
 # This failure is "permanent" - retying on this host is futile. Push there error
 # up in case the upper layers can gracefully recover by reresolving a suitable
 # endpoint.
 class FatalError(dbexceptions.OperationalError):
   pass
+
 
 # This failure is operational in the sense that we must teardown the connection to
 # ensure future RPCs are handled correctly.
@@ -34,7 +37,7 @@ class TimeoutError(dbexceptions.OperationalError):
 _errno_pattern = re.compile('\(errno (\d+)\)')
 # Map specific errors to specific classes.
 _errno_map = {
-  1062: dbexceptions.IntegrityError,
+    1062: dbexceptions.IntegrityError,
 }
 
 
@@ -91,12 +94,13 @@ class TabletConnection(object):
         # it wrong and misunderstanding the life cycle of a
         # TabletConnection.
         #raise dbexceptions.ProgrammingError('attempting to reuse TabletConnection')
+
       self.client.dial()
       params = {'Keyspace': self.keyspace, 'Shard': self.shard}
       response = self.client.call('SqlQuery.GetSessionId', params)
       self.session_id = response.reply['SessionId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e)
+      raise convert_exception(e, str(self))
 
   def close(self):
     self.transaction_id = 0
@@ -119,7 +123,7 @@ class TabletConnection(object):
       response = self.client.call('SqlQuery.Begin', req)
       self.transaction_id = response.reply['TransactionId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e)
+      raise convert_exception(e, str(self))
 
   def commit(self):
     if not self.transaction_id:
@@ -137,7 +141,7 @@ class TabletConnection(object):
       response = self.client.call('SqlQuery.Commit', req)
       return response.reply
     except gorpc.GoRpcError as e:
-      raise convert_exception(e)
+      raise convert_exception(e, str(self))
 
   def rollback(self):
     if not self.transaction_id:
@@ -154,7 +158,7 @@ class TabletConnection(object):
       response = self.client.call('SqlQuery.Rollback', req)
       return response.reply
     except gorpc.GoRpcError as e:
-      raise convert_exception(e)
+      raise convert_exception(e, str(self))
 
   def cursor(self, cursorclass=None, **kargs):
     return (cursorclass or self.cursorclass)(self, **kargs)
@@ -182,7 +186,7 @@ class TabletConnection(object):
       rowcount = reply['RowsAffected']
       lastrowid = reply['InsertId']
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, sql, bind_variables)
+      raise convert_exception(e, str(self), sql, bind_variables)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -218,7 +222,7 @@ class TabletConnection(object):
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, sql_list, bind_variables_list)
+      raise convert_exception(e, str(self), sql_list, bind_variables_list)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -246,13 +250,17 @@ class TabletConnection(object):
         self._stream_fields.append((field['Name'], field['Type']))
         self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
-      raise convert_exception(e, sql, bind_variables)
+      raise convert_exception(e, str(self), sql, bind_variables)
     except:
       logging.exception('gorpc low-level error')
       raise
     return None, 0, 0, self._stream_fields
 
   def _stream_next(self):
+    # Terminating condition
+    if self._stream_result_index is None:
+      return None
+
     # See if we need to read more or whether we just pop the next row.
     if self._stream_result is None :
       try:
@@ -260,7 +268,7 @@ class TabletConnection(object):
         if self._stream_result is None:
           return None
       except gorpc.GoRpcError as e:
-        raise convert_exception(e)
+        raise convert_exception(e, str(self))
       except:
         logging.exception('gorpc low-level error')
         raise
@@ -275,6 +283,7 @@ class TabletConnection(object):
 
     return row
 
+
 def _make_row(row, conversions):
   converted_row = []
   for conversion_func, field_data in izip(conversions, row):
@@ -286,6 +295,7 @@ def _make_row(row, conversions):
       v = field_data
     converted_row.append(v)
   return converted_row
+
 
 def connect(*pargs, **kargs):
   conn = TabletConnection(*pargs, **kargs)
