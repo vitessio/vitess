@@ -31,6 +31,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	_ "github.com/youtube/vitess/go/vt/logutil"
+	_ "net/http/pprof"
 )
 
 var (
@@ -105,28 +106,10 @@ func exportBinaryVersion() error {
 	return nil
 }
 
-// Close runs any registered exit hooks and exits the program.
-func Close() {
-	mu.Lock()
-	defer mu.Unlock()
-
-	for _, f := range onCloseHooks {
-		f()
-	}
-}
-
 // onInit registers f to be run at the beginning of the app
 // lifecycle. It should be called in an init() function.
 func onInit(f func()) {
 	mu.Lock()
 	defer mu.Unlock()
 	onInitHooks = append(onInitHooks, f)
-}
-
-// onClose registers f to be run at the end of the app lifecycle. It
-// should be called in an init() function.
-func onClose(f func()) {
-	mu.Lock()
-	defer mu.Unlock()
-	onCloseHooks = append(onCloseHooks, f)
 }

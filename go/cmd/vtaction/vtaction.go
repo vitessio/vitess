@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 
 	log "github.com/golang/glog"
