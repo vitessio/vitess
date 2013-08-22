@@ -23,7 +23,8 @@ shard_1_slave2 = tablet.Tablet()
 # split shards
 # range 80 - C0
 shard_2_master = tablet.Tablet()
-shard_2_replica = tablet.Tablet()
+shard_2_replica1 = tablet.Tablet()
+shard_2_replica2 = tablet.Tablet()
 # range C0 - ""
 shard_3_master = tablet.Tablet()
 shard_3_replica = tablet.Tablet()
@@ -40,7 +41,8 @@ def setUpModule():
         shard_1_slave1.init_mysql(),
         shard_1_slave2.init_mysql(),
         shard_2_master.init_mysql(),
-        shard_2_replica.init_mysql(),
+        shard_2_replica1.init_mysql(),
+        shard_2_replica2.init_mysql(),
         shard_3_master.init_mysql(),
         shard_3_replica.init_mysql(),
         ]
@@ -60,7 +62,8 @@ def tearDownModule():
       shard_1_slave1.teardown_mysql(),
       shard_1_slave2.teardown_mysql(),
       shard_2_master.teardown_mysql(),
-      shard_2_replica.teardown_mysql(),
+      shard_2_replica1.teardown_mysql(),
+      shard_2_replica2.teardown_mysql(),
       shard_3_master.teardown_mysql(),
       shard_3_replica.teardown_mysql(),
       ]
@@ -76,7 +79,8 @@ def tearDownModule():
   shard_1_slave1.remove_tree()
   shard_1_slave2.remove_tree()
   shard_2_master.remove_tree()
-  shard_2_replica.remove_tree()
+  shard_2_replica1.remove_tree()
+  shard_2_replica2.remove_tree()
   shard_3_master.remove_tree()
   shard_3_replica.remove_tree()
 
@@ -152,13 +156,15 @@ index by_msg (msg)
   def _check_startup_values(self):
     # check first value is in the right shard
     self._check_value(shard_2_master, 'resharding1', 2, 'msg2', 0x9000000000000000)
-    self._check_value(shard_2_replica, 'resharding1', 2, 'msg2', 0x9000000000000000)
+    self._check_value(shard_2_replica1, 'resharding1', 2, 'msg2', 0x9000000000000000)
+    self._check_value(shard_2_replica2, 'resharding1', 2, 'msg2', 0x9000000000000000)
     self._check_value(shard_3_master, 'resharding1', 2, 'msg2', 0x9000000000000000, should_be_here=False)
     self._check_value(shard_3_replica, 'resharding1', 2, 'msg2', 0x9000000000000000, should_be_here=False)
 
     # check second value is in the right shard too
     self._check_value(shard_2_master, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
-    self._check_value(shard_2_replica, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
+    self._check_value(shard_2_replica1, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
+    self._check_value(shard_2_replica2, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
     self._check_value(shard_3_master, 'resharding1', 3, 'msg3', 0xD000000000000000)
     self._check_value(shard_3_replica, 'resharding1', 3, 'msg3', 0xD000000000000000)
 
@@ -171,9 +177,9 @@ index by_msg (msg)
   def _check_lots(self, count, base=0):
     found = 0
     for i in xrange(count):
-      if self._is_value_present_and_correct(shard_2_master, 'resharding1', 10000 + base + i, 'msg-range1-%u' % i, 0xA000000000000000 + base + i):
+      if self._is_value_present_and_correct(shard_2_replica2, 'resharding1', 10000 + base + i, 'msg-range1-%u' % i, 0xA000000000000000 + base + i):
         found += 1
-      if self._is_value_present_and_correct(shard_3_master, 'resharding1', 20000 + base + i, 'msg-range2-%u' % i, 0xE000000000000000 + base + i):
+      if self._is_value_present_and_correct(shard_3_replica, 'resharding1', 20000 + base + i, 'msg-range2-%u' % i, 0xE000000000000000 + base + i):
         found += 1
     percent = found * 100 / count / 2
     logging.debug("I have %u%% of the data", percent)
@@ -194,8 +200,8 @@ index by_msg (msg)
   def _check_lots_not_present(self, count, base=0):
     found = 0
     for i in xrange(count):
-      self._check_value(shard_3_master, 'resharding1', 10000 + base + i, 'msg-range1-%u' % i, 0xA000000000000000 + base + i, should_be_here=False)
-      self._check_value(shard_2_master, 'resharding1', 20000 + base + i, 'msg-range2-%u' % i, 0xE000000000000000 + base + i, should_be_here=False)
+      self._check_value(shard_3_replica, 'resharding1', 10000 + base + i, 'msg-range1-%u' % i, 0xA000000000000000 + base + i, should_be_here=False)
+      self._check_value(shard_2_replica2, 'resharding1', 20000 + base + i, 'msg-range2-%u' % i, 0xE000000000000000 + base + i, should_be_here=False)
 
   def _wait_for_binlog_server_state(self, tablet, expected, timeout=5.0):
     while True:
@@ -278,16 +284,21 @@ index by_msg (msg)
 
     # create the split shards
     shard_2_master.init_tablet( 'master',  'test_keyspace', '80-C0')
-    shard_2_replica.init_tablet('spare', 'test_keyspace', '80-C0')
+    shard_2_replica1.init_tablet('spare', 'test_keyspace', '80-C0')
+    shard_2_replica2.init_tablet('spare', 'test_keyspace', '80-C0')
     shard_3_master.init_tablet( 'master',  'test_keyspace', 'C0-')
     shard_3_replica.init_tablet('spare', 'test_keyspace', 'C0-')
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
     shard_2_master.start_vttablet(wait_for_state='CONNECTING')
-    shard_2_replica.start_vttablet(wait_for_state='NOT_SERVING')
+    shard_2_replica1.start_vttablet(wait_for_state='NOT_SERVING')
+    shard_2_replica2.start_vttablet(wait_for_state='NOT_SERVING')
     shard_3_master.start_vttablet(wait_for_state='CONNECTING')
     shard_3_replica.start_vttablet(wait_for_state='NOT_SERVING')
+
+    utils.run_vtctl('ReparentShard -force test_keyspace/80-C0 ' + shard_2_master.tablet_alias, auto_log=True)
+    utils.run_vtctl('ReparentShard -force test_keyspace/C0- ' + shard_3_master.tablet_alias, auto_log=True)
 
     utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
 
@@ -376,6 +387,15 @@ index by_msg (msg)
                              'Partitions(replica): -80 80-C0 C0-\n' +
                              'TabletTypes: master,replica')
 
+    # reparent shard_2 to shard_2_replica1, then insert more data and
+    # see it flow through still
+    utils.pause("Before ReparentShard")
+    utils.run_vtctl('ReparentShard test_keyspace/80-C0 %s' % shard_2_replica1.tablet_alias)
+    logging.debug("Inserting lots of data on source shard after reparenting")
+    self._insert_lots(3000, base=2000)
+    logging.debug("Checking 80 percent of data was sent fairly quickly")
+    self._check_lots_timeout(3000, 80, 10, base=2000)
+
     # then serve master from the split shards
     utils.run_vtctl('MigrateServedTypes test_keyspace/80- master', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
@@ -390,8 +410,8 @@ index by_msg (msg)
 
     # kill everything
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_slave1,
-              shard_1_slave2, shard_2_master, shard_2_replica, shard_3_master,
-              shard_3_replica]:
+              shard_1_slave2, shard_2_master, shard_2_replica1,
+              shard_2_replica2, shard_3_master, shard_3_replica]:
       t.kill_vttablet()
 
   def _check_srv_keyspace(self, cell, keyspace, expected):
