@@ -32,7 +32,7 @@ func TestSleep(t *testing.T) {
 	const delay = 100 * time.Millisecond
 	go func() {
 		// pause for a while to make sure main thread is waiting
-		SleepSys(t, delay/2)
+		RealSleep(t, delay/2)
 		Advance(t, delay)
 	}()
 	start := Now()
@@ -152,7 +152,7 @@ func TestAfterStop(t *testing.T) {
 		}
 		<-c2
 		select {
-		case <-t0.Ch():
+		case <-t0.C:
 			t.Fatalf("sandbox mode %t: event 0 was not stopped", ttype)
 		case <-c1:
 			t.Fatalf("sandbox mode %t: event 1 was not stopped", ttype)
@@ -227,7 +227,7 @@ func TestReset(t *testing.T) {
 		select {
 		case <-c:
 			// OK
-		case <-t0.Ch():
+		case <-t0.C:
 			t.Fatalf("time fired early")
 		}
 		c = After(2 * delay)
@@ -237,7 +237,7 @@ func TestReset(t *testing.T) {
 		select {
 		case <-c:
 			t.Fatalf("time did not fire")
-		case <-t0.Ch():
+		case <-t0.C:
 			// OK
 		}
 		if t0.Reset(50*time.Millisecond) != false {
@@ -283,7 +283,7 @@ func TestTicker(t *testing.T) {
 		}
 		t0 := Now()
 		for i := 0; i < Count; i++ {
-			<-ticker.Ch()
+			<-ticker.C
 		}
 		ticker.Stop()
 		t1 := Now()
@@ -301,7 +301,7 @@ func TestTicker(t *testing.T) {
 		select {
 		case <-c:
 			// ok
-		case <-ticker.Ch():
+		case <-ticker.C:
 			t.Fatal("Ticker did not shut down")
 		}
 	}
@@ -319,7 +319,7 @@ func TestTeardown(t *testing.T) {
 			if ttype {
 				go Advance(t, Delta)
 			}
-			<-ticker.Ch()
+			<-ticker.C
 			ticker.Stop()
 		}
 	}
