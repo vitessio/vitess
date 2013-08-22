@@ -15,7 +15,6 @@ import (
 	"fmt"
 	log "github.com/golang/glog"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"strconv"
@@ -92,119 +91,6 @@ func readFirstEventSize(binlog io.ReadSeeker) uint32 {
 		panic("failed binlog read: " + err.Error())
 	}
 	return eventLength
-}
-
-func (blr *BinlogReader) serve(filename string, startPosition int64, writer http.ResponseWriter) {
-	flusher := writer.(http.Flusher)
-	brStats := brStats{StartTime: time.Now()}
-
-	binlogFile, nextLog := blr.open(filename)
-	defer binlogFile.Close()
-	positionWaitStart := make(map[int64]time.Time)
-
-	if startPosition > 0 {
-		// the start position can be greater than the file length
-		// in which case, we just keep rotating files until we find it
-		for {
-			size, err := binlogFile.Seek(0, 2)
-			if err != nil {
-				log.Errorf("BinlogReader.serve seek err: %v", err)
-				return
-			}
-			if startPosition > size {
-				startPosition -= size
-
-				// swap to next file
-				binlogFile.Close()
-				binlogFile, nextLog = blr.open(nextLog)
-
-				// normally we chomp subsequent headers, so we have to
-				// add this back into the position
-				//startPosition += BINLOG_HEADER_SIZE
-			} else {
-				break
-			}
-		}
-
-		// inject the header again to fool mysqlbinlog
-		// FIXME(msolomon) experimentally determine the header size.
-		// 5.1.50 is 106, 5.0.24 is 98
-		firstEventSize := readFirstEventSize(binlogFile)
-		prefixSize := int64(BINLOG_HEADER_SIZE + firstEventSize)
-		writer.Header().Set("Vt-Binlog-Offset", strconv.FormatInt(prefixSize, 10))
-		log.Infof("BinlogReader.serve inject header + first event: %v", prefixSize)
-
-		position, err := binlogFile.Seek(0, 0)
-		if err == nil {
-			_, err = io.CopyN(writer, binlogFile, prefixSize)
-			//log.Infof("BinlogReader %x copy @ %v:%v,%v", brStats.StartTime, binlogFile.Name(), position, written)
-		}
-		if err != nil {
-			log.Errorf("BinlogReader.serve err: %v", err)
-			return
-		}
-		position, err = binlogFile.Seek(startPosition, 0)
-		log.Infof("BinlogReader %x seek to startPosition %v @ %v:%v", brStats.StartTime, startPosition, binlogFile.Name(), position)
-	} else {
-		writer.Header().Set("Vt-Binlog-Offset", "0")
-	}
-
-	// FIXME(msolomon) register stats on http handler
-	for {
-		//position, _ := binlogFile.Seek(0, 1)
-		written, err := io.CopyN(writer, binlogFile, blr.BinlogBlockSize)
-		//log.Infof("BinlogReader %x copy @ %v:%v,%v", brStats.StartTime, binlogFile.Name(), position, written)
-		if err != nil && err != io.EOF {
-			log.Errorf("BinlogReader.serve err: %v", err)
-			return
-		}
-
-		brStats.Reads++
-		brStats.Bytes += written
-
-		if written != blr.BinlogBlockSize {
-			if _, statErr := os.Stat(nextLog); statErr == nil {
-				log.Infof("BinlogReader swap log file: %v", nextLog)
-				// swap to next log file
-				binlogFile.Close()
-				binlogFile, nextLog = blr.open(nextLog)
-				positionWaitStart = make(map[int64]time.Time)
-				binlogFile.Seek(BINLOG_HEADER_SIZE, 0)
-			} else {
-				flusher.Flush()
-				position, _ := binlogFile.Seek(0, 1)
-				log.Infof("BinlogReader %x wait for more data: %v:%v", brStats.StartTime, binlogFile.Name(), position)
-				// wait for more data
-				time.Sleep(blr.LogWaitTimeout)
-				brStats.Sleeps++
-				now := time.Now()
-				if lastSlept, ok := positionWaitStart[position]; ok {
-					if now.Sub(lastSlept) > blr.MaxWaitTimeout {
-						log.Errorf("MAX_WAIT_TIMEOUT exceeded, closing connection")
-						return
-					}
-				} else {
-					positionWaitStart[position] = now
-				}
-			}
-		}
-	}
-}
-
-func (blr *BinlogReader) HandleBinlogRequest(rw http.ResponseWriter, req *http.Request) {
-	defer func() {
-		if err := recover(); err != nil {
-			// nothing to do, but note it here and soldier on
-			log.Errorf("HandleBinlogRequest failed: %v", err)
-		}
-	}()
-
-	// FIXME(msolomon) some sort of security, no?
-	log.Infof("serve %v", req.URL.Path)
-	// path is something like /vt/vt-xxxxxx-bin-log:position
-	pieces := strings.SplitN(path.Base(req.URL.Path), ":", 2)
-	pos, _ := strconv.ParseInt(pieces[1], 10, 64)
-	blr.serve(pieces[0], pos, rw)
 }
 
 // return open log file and the name of the next log path to watch
