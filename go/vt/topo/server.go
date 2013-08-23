@@ -104,7 +104,6 @@ type Server interface {
 
 	//
 	// Tablet management, per cell.
-	// The tablet string is json-encoded.
 	//
 
 	// CreateTablet creates the given tablet, assuming it doesn't exist
