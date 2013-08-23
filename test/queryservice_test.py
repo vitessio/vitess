@@ -60,6 +60,8 @@ if __name__ == "__main__":
       print "Starting queryservice_test.py: %s" % env_name
       sys.stdout.flush()
       framework.TestCase.setenv(env)
-      unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+      result = unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+      if not result.wasSuccessful():
+        raise Exception("test failures")
     finally:
       env.tearDown()
