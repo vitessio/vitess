@@ -45,6 +45,9 @@ func (l *CountingListener) Accept() (c net.Conn, err error) {
 // Close decrements the stats counter and
 // closes the connection.
 func (c *countingConnection) Close() error {
-	c.listener.ConnCount.Add(-1)
+	if c.listener != nil {
+		c.listener.ConnCount.Add(-1)
+		c.listener = nil
+	}
 	return c.Conn.Close()
 }
