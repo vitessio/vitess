@@ -7,14 +7,10 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
-	_ "net/http/pprof"
-	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/servenv"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
@@ -37,7 +33,6 @@ var schemaOverrides []ts.SchemaOverride
 func main() {
 	flag.Parse()
 	servenv.Init()
-	defer servenv.Close()
 
 	unmarshalFile(*dbConfigFile, &dbconfig)
 	log.Infof("dbconfig: %s\n", dbconfig)
@@ -50,20 +45,12 @@ func main() {
 
 	ts.AllowQueries(dbconfig, schemaOverrides, ts.LoadCustomRules())
 
-	servenv.ServeRPC()
-
 	log.Infof("starting vtocc %v", *port)
-	s := proc.ListenAndServe(fmt.Sprintf("%v", *port))
-
-	// A SIGUSR1 means that we're restarting
-	if s == syscall.SIGUSR1 {
-		// Give some time for the other process
-		// to pick up the listeners
+	servenv.OnClose(func() {
 		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries(true)
-	} else {
-		ts.DisallowQueries(false)
-	}
+	})
+	servenv.Run(*port)
 }
 
 func unmarshalFile(name string, val interface{}) {

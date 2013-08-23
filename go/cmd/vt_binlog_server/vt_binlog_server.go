@@ -7,11 +7,8 @@ package main
 
 import (
 	"flag"
-	"fmt"
-	_ "net/http/pprof"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/proc"
 	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -29,7 +26,6 @@ func main() {
 	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 	servenv.Init()
-	defer servenv.Close()
 
 	if *mycnfFile == "" {
 		log.Fatalf("Please specify the path for mycnf file.")
@@ -49,9 +45,8 @@ func main() {
 
 	proto.RegisterBinlogServer(binlogServer)
 	rpcwrap.RegisterAuthenticated(binlogServer)
-
-	servenv.ServeRPC()
-
-	proc.ListenAndServe(fmt.Sprintf("%v", *port))
-	mysqlctl.DisableBinlogServerService(binlogServer)
+	servenv.OnClose(func() {
+		mysqlctl.DisableBinlogServerService(binlogServer)
+	})
+	servenv.Run(*port)
 }
