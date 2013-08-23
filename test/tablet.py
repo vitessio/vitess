@@ -26,8 +26,7 @@ class Tablet(object):
   tablets_running = 0
   default_db_config = {
     "app": {
-      "uname": "vt_dba", # it's vt_dba so that the tests can create
-                         # and drop tables.
+      "uname": "vt_app",
       "charset": "utf8"
       },
     "dba": {
@@ -94,19 +93,19 @@ class Tablet(object):
       if utils.options.verbose == 2:
         print >> sys.stderr, e, path
 
-  def mysql_connection_parameters(self, dbname):
-    return dict(user='vt_dba',
+  def mysql_connection_parameters(self, dbname, user):
+    return dict(user=user,
                 unix_socket='%s/vt_%010d/mysql.sock' % (utils.vtdataroot, self.tablet_uid),
                 db=dbname)
 
-  def connect(self, dbname=''):
+  def connect(self, dbname='', user='vt_dba'):
     conn = MySQLdb.Connect(
-      **self.mysql_connection_parameters(dbname))
+      **self.mysql_connection_parameters(dbname, user))
     return conn, conn.cursor()
 
   # Query the MySQL instance directly
-  def mquery(self, dbname, query, write=False):
-    conn, cursor = self.connect(dbname)
+  def mquery(self, dbname, query, write=False, user='vt_dba'):
+    conn, cursor = self.connect(dbname, user=user)
     if write:
       conn.begin()
     if isinstance(query, basestring):
