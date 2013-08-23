@@ -5,6 +5,7 @@
 package zkocc
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"strings"
@@ -70,7 +71,7 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 	zkr.unknownCellErrors = stats.NewInt("ZkReader-UnknownCellErrors")
 	zkr.zkrStats = newZkrStats()
 
-	//stats.PublishJSONFunc("ZkReader", zkr.statsJSON)
+	stats.PublishJSONFunc("ZkReader", zkr.statsJSON)
 
 	// start some cells
 	for _, cellName := range preload {
@@ -206,4 +207,49 @@ func (zkr *ZkReader) Children(req *zk.ZkPath, reply *zk.ZkNode) (err error) {
 
 	// and fill it in if we can
 	return entry.children(cell, path, reply)
+}
+
+func (zkr *ZkReader) statsJSON() string {
+	zkr.mutex.Lock()
+	defer zkr.mutex.Unlock()
+
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	fmt.Fprintf(b, "{")
+	fmt.Fprintf(b, "\"RpcCalls\": %v,", zkr.rpcCalls.Get())
+	fmt.Fprintf(b, "\"UnknownCellErrors\": %v", zkr.unknownCellErrors.Get())
+	var zkReads int64
+	var cacheReads int64
+	var staleReads int64
+	var nodeNotFoundErrors int64
+	var otherErrors int64
+	mapZkReads := zkr.zkrStats.zkReads.Counts()
+	mapCacheReads := zkr.zkrStats.cacheReads.Counts()
+	mapStaleReads := zkr.zkrStats.staleReads.Counts()
+	mapNodeNotFoundErrors := zkr.zkrStats.nodeNotFoundErrors.Counts()
+	mapOtherErrors := zkr.zkrStats.otherErrors.Counts()
+	for name, zcell := range zkr.zcell {
+		fmt.Fprintf(b, ", \"%v\": {", name)
+		fmt.Fprintf(b, "\"CacheReads\": %v,", mapCacheReads[name])
+		fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", mapNodeNotFoundErrors[name])
+		fmt.Fprintf(b, "\"OtherErrors\": %v,", mapOtherErrors[name])
+		fmt.Fprintf(b, "\"StaleReads\": %v,", mapStaleReads[name])
+		fmt.Fprintf(b, "\"State\": %v,", zcell.states.String())
+		fmt.Fprintf(b, "\"ZkReads\": %v", mapZkReads[name])
+		fmt.Fprintf(b, "}")
+		zkReads += mapZkReads[name]
+		cacheReads += mapCacheReads[name]
+		staleReads += mapStaleReads[name]
+		nodeNotFoundErrors += mapNodeNotFoundErrors[name]
+		otherErrors += mapOtherErrors[name]
+	}
+	fmt.Fprintf(b, ", \"total\": {")
+	fmt.Fprintf(b, "\"CacheReads\": %v,", cacheReads)
+	fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", nodeNotFoundErrors)
+	fmt.Fprintf(b, "\"OtherErrors\": %v,", otherErrors)
+	fmt.Fprintf(b, "\"StaleReads\": %v,", staleReads)
+	fmt.Fprintf(b, "\"ZkReads\": %v", zkReads)
+	fmt.Fprintf(b, "}")
+
+	fmt.Fprintf(b, "}")
+	return b.String()
 }

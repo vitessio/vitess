@@ -268,22 +268,22 @@ class TestZkocc(unittest.TestCase):
 
     # get the zkocc vars, make sure we have what we need
     v = utils.get_vars(utils.zkocc_port_base)
-    #if v['ZkReader']['test_nj']['State']['Current'] != 'Connected':
-    #  raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State']['Current'])
-    #if v['ZkReader']['test_nj']['State']['DurationConnected'] < 9e9:
-    #  self.fail('not enough time in Connected state: %s' %v['ZkReader']['test_nj']['State']['DurationConnected'])
+    if v['ZkReader']['test_nj']['State']['Current'] != 'Connected':
+      raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State']['Current'])
+    if v['ZkReader']['test_nj']['State']['DurationConnected'] < 9e9:
+      self.fail('not enough time in Connected state: %s' %v['ZkReader']['test_nj']['State']['DurationConnected'])
 
     # some checks on performance / stats
     # a typical workstation will do 15k QPS, check we have more than 3k
-    rpcCalls = v['ZkReader-RpcCalls']
+    rpcCalls = v['ZkReader']['RpcCalls']
     if rpcCalls < 30000:
       self.fail('QPS is too low: %u < 30000' % rpcCalls / 10)
-    cacheReads = v['ZkReader-CacheReads']['ZkCell-test_nj']
+    cacheReads = v['ZkReader']['test_nj']['CacheReads']
     if cacheReads < 30000:
       self.fail('Cache QPS is too low: %u < 30000' % cacheReads / 10)
-    # totalCacheReads = v['ZkReader']['total']['CacheReads']
-    # self.assertEqual(cacheReads, totalCacheReads, 'Rollup stats are wrong')
-    self.assertEqual(v['ZkReader-UnknownCellErrors'], 0, 'unexpected UnknownCellErrors')
+    totalCacheReads = v['ZkReader']['total']['CacheReads']
+    self.assertEqual(cacheReads, totalCacheReads, 'Rollup stats are wrong')
+    self.assertEqual(v['ZkReader']['UnknownCellErrors'], 0, 'unexpected UnknownCellErrors')
     utils.zkocc_kill(zkocc_14850)
 
   def test_fake_zkocc_connection(self):

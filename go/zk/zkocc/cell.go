@@ -72,19 +72,12 @@ type zkCell struct {
 	ready   *sync.Cond // will be signaled at connection time
 	lastErr error      // last connection error
 	states  *stats.States
-
-	// stats
-	//zkReads            sync2.AtomicInt32
-	//cacheReads         sync2.AtomicInt32
-	//staleReads         sync2.AtomicInt32
-	//nodeNotFoundErrors sync2.AtomicInt32
-	//otherErrors        sync2.AtomicInt32
 }
 
 func newZkCell(name, zkaddr string, zkrstats *zkrStats) *zkCell {
 	result := &zkCell{cellName: name, zkAddr: zkaddr, zcache: newZkCache(), zkrStats: zkrstats}
 	result.ready = sync.NewCond(&result.mutex)
-	result.states = stats.NewStates("", []string{"Disconnected", "Connecting", "Connected", "BackOff"}, time.Now(), CELL_DISCONNECTED)
+	result.states = stats.NewStates("ZkCell-"+name, []string{"Disconnected", "Connecting", "Connected", "BackOff"}, time.Now(), CELL_DISCONNECTED)
 	go result.backgroundRefresher()
 	return result
 }
