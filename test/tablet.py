@@ -93,7 +93,7 @@ class Tablet(object):
       if utils.options.verbose == 2:
         print >> sys.stderr, e, path
 
-  def mysql_connection_parameters(self, dbname, user):
+  def mysql_connection_parameters(self, dbname, user='vt_dba'):
     return dict(user=user,
                 unix_socket='%s/vt_%010d/mysql.sock' % (utils.vtdataroot, self.tablet_uid),
                 db=dbname)
