@@ -39,6 +39,8 @@ func NewStates(name string, labels []string, startTime time.Time, initialState i
 	}
 	if name != "" {
 		Publish(name, s)
+		// publish current state as a separate Var
+		Publish(name+"-State", StringFunc(s.varzState))
 	}
 	return s
 }
@@ -76,6 +78,12 @@ func (s *States) Get() (state int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.state
+}
+
+func (s *States) varzState() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.labels[s.state]
 }
 
 func (s *States) String() string {
