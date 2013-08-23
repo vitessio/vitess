@@ -67,9 +67,6 @@ var commands = []commandGroup{
 			command{"SetReadWrite", commandSetReadWrite,
 				"[<tablet alias|zk tablet path>]",
 				"Sets the tablet as ReadWrite."},
-			command{"DemoteMaster", commandDemoteMaster,
-				"<tablet alias|zk tablet path>",
-				"Demotes a master tablet."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
 				"[-force] [-dry-run] <tablet alias|zk tablet path> <tablet type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
@@ -103,9 +100,6 @@ var commands = []commandGroup{
 			command{"Clone", commandClone,
 				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...",
 				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
-			command{"ReparentTablet", commandReparentTablet,
-				"<tablet alias|zk tablet path>",
-				"Reparent a tablet to the current master in the shard. This only works if the current slave position matches the last known reparent action."},
 			command{"MultiSnapshot", commandMultiSnapshot,
 				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path> <key name>",
 				"Locks mysqld and copy compressed data aside."},
@@ -125,9 +119,6 @@ var commands = []commandGroup{
 			command{"RebuildShardGraph", commandRebuildShardGraph,
 				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
-			command{"ReparentShard", commandReparentShard,
-				"[-force] [-leave-master-read-only] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
-				"Specify which shard to reparent and which tablet should be the new master."},
 			command{"ShardExternallyReparented", commandShardExternallyReparented,
 				"[-scrap-stragglers] [-accept-success-percents=80] <keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
 				"Changes metadata to acknowledge a shard master change performed by an external tool."},
@@ -625,15 +616,6 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	return wr.ActionInitiator().SetReadWrite(tabletAlias)
 }
 
-func commandDemoteMaster(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		log.Fatalf("action DemoteMaster requires <tablet alias|zk tablet path>")
-	}
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	return wr.ActionInitiator().DemoteMaster(tabletAlias)
-}
-
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will change the type in zookeeper, and not run hooks")
 	dryRun := subFlags.Bool("dry-run", false, "just list the proposed change")
@@ -776,15 +758,6 @@ func commandClone(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) 
 	return "", wr.Clone(srcTabletAlias, dstTabletAliases, *force, *concurrency, *fetchConcurrency, *fetchRetryCount, *serverMode)
 }
 
-func commandReparentTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		log.Fatalf("action ReparentTablet requires <tablet alias|zk tablet path>")
-	}
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	return "", wr.ReparentTablet(tabletAlias)
-}
-
 func commandMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent jobs to run simultaneously")
@@ -901,19 +874,6 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 		}
 	}
 	return "", nil
-}
-
-func commandReparentShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	leaveMasterReadOnly := subFlags.Bool("leave-master-read-only", false, "leaves the master read-only after reparenting")
-	force := subFlags.Bool("force", false, "will force the reparent even if the master is already correct")
-	subFlags.Parse(args)
-	if subFlags.NArg() != 2 {
-		log.Fatalf("action ReparentShard requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
-	}
-
-	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
-	return "", wr.ReparentShard(keyspace, shard, tabletAlias, *leaveMasterReadOnly, *force)
 }
 
 func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1450,7 +1410,9 @@ func main() {
 	}
 
 	if err != nil {
-		log.Fatalf("action failed: %v %v", action, err)
+		log.Error("action failed: %v %v", action, err)
+		log.Flush()
+		os.Exit(255)
 	}
 	if actionPath != "" {
 		if *noWaitForAction {
@@ -1458,7 +1420,9 @@ func main() {
 		} else {
 			err := wr.ActionInitiator().WaitForCompletion(actionPath, *waitTime)
 			if err != nil {
-				log.Fatalf(err.Error())
+				log.Error(err.Error())
+				log.Flush()
+				os.Exit(255)
 			} else {
 				log.Infof("action completed: %v", actionPath)
 			}
