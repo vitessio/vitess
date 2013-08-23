@@ -85,7 +85,9 @@ def main(mod=None):
           suite.addTests(unittest.TestLoader().loadTestsFromName(arg, mod))
 
     if suite.countTestCases() > 0:
-      unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+      result = unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+      if not result.wasSuccessful():
+        sys.exit(-1)
   except KeyboardInterrupt:
     logging.warning("======== Tests interrupted, cleaning up ========")
     mod.tearDownModule()
