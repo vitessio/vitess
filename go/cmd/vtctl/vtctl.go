@@ -1410,7 +1410,7 @@ func main() {
 	}
 
 	if err != nil {
-		log.Error("action failed: %v %v", action, err)
+		log.Errorf("action failed: %v %v", action, err)
 		log.Flush()
 		os.Exit(255)
 	}
