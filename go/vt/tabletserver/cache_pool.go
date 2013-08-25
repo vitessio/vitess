@@ -129,8 +129,10 @@ func (cp *CachePool) startMemcache() {
 		c, err := memcache.Connect(cp.port)
 		if err != nil {
 			attempts++
-			if attempts >= 8 {
-				panic(NewTabletError(FATAL, "can't connect to memcache"))
+			if attempts >= 30 {
+				cp.cmd.Process.Kill()
+				// FIXME(sougou): Throw proper error if we can recover
+				log.Fatal("Can't connect to memcache")
 			}
 			continue
 		}

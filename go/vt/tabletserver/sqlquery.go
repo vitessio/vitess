@@ -432,7 +432,10 @@ func (sq *SqlQuery) statsJSON() string {
 	return buf.String()
 }
 
-func Rand() int64 {
+func init() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+func Rand() int64 {
 	return rand.Int63()
 }

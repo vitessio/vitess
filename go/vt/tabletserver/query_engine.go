@@ -23,6 +23,10 @@ import (
 const (
 	MAX_RESULT_NAME                = "_vtMaxResultSize"
 	ROWCACHE_INVALIDATION_POSITION = "ROWCACHE_INVALIDATION_POSITION"
+
+	// SPOT_CHECK_MULTIPLIER determines the precision of the
+	// spot check ratio: 1e6 == 6 digits
+	SPOT_CHECK_MULTIPLIER = 1e6
 )
 
 //-----------------------------------------------
@@ -41,7 +45,7 @@ type QueryEngine struct {
 	activePool     *ActivePool
 	consolidator   *Consolidator
 
-	verifyMode bool
+	spotCheckFreq sync2.AtomicInt64
 
 	maxResultSize    sync2.AtomicInt64
 	streamBufferSize sync2.AtomicInt64
@@ -59,6 +63,7 @@ type CompiledPlan struct {
 var queryStats, waitStats *stats.Timings
 var killStats, errorStats *stats.Counters
 var resultStats *stats.Histogram
+var spotCheckCount *stats.Int
 
 var resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
 
@@ -79,7 +84,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.activeTxPool = NewActiveTxPool("ActiveTxPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
-	qe.verifyMode = config.VerifyMode
+	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
@@ -90,12 +95,10 @@ func NewQueryEngine(config Config) *QueryEngine {
 	killStats = stats.NewCounters("Kills")
 	errorStats = stats.NewCounters("Errors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
-	stats.Publish("VerifyMode", stats.IntFunc(func() int64 {
-		if qe.verifyMode {
-			return 1
-		}
-		return 0
+	stats.Publish("SpotCheckRatio", stats.FloatFunc(func() float64 {
+		return float64(qe.spotCheckFreq.Get()) / SPOT_CHECK_MULTIPLIER
 	}))
+	spotCheckCount = stats.NewInt("SpotCheckCount")
 	return qe
 }
 
@@ -414,7 +417,6 @@ func (qe *QueryEngine) execPK(logStats *sqlQueryStats, plan *CompiledPlan) (resu
 
 func (qe *QueryEngine) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	innerResult := qe.qFetch(logStats, plan, plan.Subquery, nil)
-	// no need to validate innerResult
 	return qe.fetchPKRows(logStats, plan, innerResult.Rows)
 }
 
@@ -425,7 +427,6 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 		panic("unexpected")
 	}
 
-	// Fetch from cache first
 	keys := make([]string, len(pkRows))
 	for i, pk := range pkRows {
 		keys[i] = buildKey(pk)
@@ -438,13 +439,10 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 	for i, pk := range pkRows {
 		rcresult := rcresults[keys[i]]
 		if rcresult.Row != nil {
-			if qe.verifyMode {
-				if dbrow := qe.compareRow(logStats, plan, rcresult.Row, pk); dbrow != nil {
-					rows = append(rows, applyFilter(plan.ColumnNumbers, dbrow))
-				}
-			} else {
-				rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
+			if qe.mustVerify() {
+				qe.spotCheck(logStats, plan, rcresult, pk)
 			}
+			rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
 			hits++
 		} else {
 			resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
@@ -453,7 +451,8 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 				continue
 			}
 			row := resultFromdb.Rows[0]
-			if qe.verifyMode {
+			if qe.mustVerify() {
+				spotCheckCount.Add(1)
 				pkRow := applyFilter(tableInfo.PKColumns, row)
 				newKey := buildKey(pkRow)
 				if newKey != keys[i] {
@@ -481,55 +480,38 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 	return result
 }
 
-func (qe *QueryEngine) compareRow(logStats *sqlQueryStats, plan *CompiledPlan, cacheRow []sqltypes.Value, pk []sqltypes.Value) (dbrow []sqltypes.Value) {
-	rowsAreEquql := func(row1, row2 []sqltypes.Value) bool {
-		if len(row1) != len(row2) {
-			return false
-		}
-		for i := 0; i < len(row1); i++ {
-			if row1[i].IsNull() && row2[i].IsNull() {
-				continue
-			}
-			if (row1[i].IsNull() && !row2[i].IsNull()) || (!row1[i].IsNull() && row2[i].IsNull()) || row1[i].String() != row2[i].String() {
-				return false
-			}
-		}
-		return true
-	}
-	reloadFromCache := func(pk []sqltypes.Value) (newRow []sqltypes.Value) {
-		keys := make([]string, 1)
-		keys[0] = buildKey(pk)
-		rcresults := plan.TableInfo.Cache.Get(keys)
-		if len(rcresults) == 0 {
-			return nil
-		}
-		return rcresults[keys[0]].Row
-	}
+func (qe *QueryEngine) mustVerify() bool {
+	return (Rand() % SPOT_CHECK_MULTIPLIER) < qe.spotCheckFreq.Get()
+}
 
+func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *CompiledPlan, rcresult RCResult, pk []sqltypes.Value) {
+	spotCheckCount.Add(1)
 	resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
-	if len(resultFromdb.Rows) == 0 {
-		// Reload from cache for verification
-		if reloadFromCache(pk) == nil {
-			return nil
-		}
-		log.Warningf("unexpected number of rows for %v", pk)
-		errorStats.Add("Mismatch", 1)
-		return nil
+	var dbrow []sqltypes.Value
+	if len(resultFromdb.Rows) != 0 {
+		dbrow = resultFromdb.Rows[0]
 	}
-	dbrow = resultFromdb.Rows[0]
-	if !rowsAreEquql(cacheRow, dbrow) {
-		// Reload from cache for verification
-		newRow := reloadFromCache(pk)
-		if newRow == nil {
-			return
-		}
-		if !rowsAreEquql(newRow, dbrow) {
-			log.Warningf("query: %v", plan.FullQuery)
-			log.Warningf("mismatch for: %v, cache: %v, db: %v", pk, newRow, dbrow)
-			errorStats.Add("Mismatch", 1)
-		}
+	if dbrow == nil || !rowsAreEqual(rcresult.Row, dbrow) {
+		go qe.recheckLater(plan, rcresult, dbrow, pk)
 	}
-	return dbrow
+}
+
+func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow []sqltypes.Value, pk []sqltypes.Value) {
+	// Read lock is needed because this runs as a separate goroutine.
+	qe.mu.RLock()
+	defer qe.mu.RUnlock()
+
+	time.Sleep(5 * time.Second)
+	keys := make([]string, 1)
+	keys[0] = buildKey(pk)
+	reloaded := plan.TableInfo.Cache.Get(keys)[keys[0]]
+	// If reloaded row is absent or has changed, we're good
+	if reloaded.Row == nil || reloaded.Cas != rcresult.Cas {
+		return
+	}
+	log.Warningf("query: %v", plan.FullQuery)
+	log.Warningf("mismatch for: %v\ncache: %v\ndb:    %v", pk, rcresult.Row, dbrow)
+	errorStats.Add("Mismatch", 1)
 }
 
 // execDirect always sends the query to mysql
@@ -641,48 +623,42 @@ func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, pla
 	switch plan.SetKey {
 	case "vt_pool_size":
 		qe.connPool.SetCapacity(int(plan.SetValue.(float64)))
-		return &mproto.QueryResult{}
 	case "vt_stream_pool_size":
 		qe.streamConnPool.SetCapacity(int(plan.SetValue.(float64)))
-		return &mproto.QueryResult{}
 	case "vt_transaction_cap":
 		qe.txPool.SetCapacity(int(plan.SetValue.(float64)))
-		return &mproto.QueryResult{}
 	case "vt_transaction_timeout":
 		qe.activeTxPool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		return &mproto.QueryResult{}
 	case "vt_schema_reload_time":
 		qe.schemaInfo.SetReloadTime(time.Duration(plan.SetValue.(float64) * 1e9))
-		return &mproto.QueryResult{}
 	case "vt_query_cache_size":
 		qe.schemaInfo.SetQueryCacheSize(int(plan.SetValue.(float64)))
-		return &mproto.QueryResult{}
 	case "vt_max_result_size":
 		val := int64(plan.SetValue.(float64))
 		if val < 1 {
 			panic(NewTabletError(FAIL, "max result size out of range %v", val))
 		}
 		qe.maxResultSize.Set(val)
-		return &mproto.QueryResult{}
 	case "vt_stream_buffer_size":
 		val := int64(plan.SetValue.(float64))
 		if val < 1024 {
 			panic(NewTabletError(FAIL, "stream buffer size out of range %v", val))
 		}
 		qe.streamBufferSize.Set(val)
-		return &mproto.QueryResult{}
 	case "vt_query_timeout":
 		qe.activePool.SetTimeout(time.Duration(plan.SetValue.(float64) * 1e9))
-		return &mproto.QueryResult{}
 	case "vt_idle_timeout":
 		t := plan.SetValue.(float64) * 1e9
 		qe.connPool.SetIdleTimeout(time.Duration(t))
 		qe.streamConnPool.SetIdleTimeout(time.Duration(t))
 		qe.txPool.SetIdleTimeout(time.Duration(t))
 		qe.activePool.SetIdleTimeout(time.Duration(t))
-		return &mproto.QueryResult{}
+	case "vt_spot_check_ratio":
+		qe.spotCheckFreq.Set(int64(plan.SetValue.(float64) * SPOT_CHECK_MULTIPLIER))
+	default:
+		return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 	}
-	return qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+	return &mproto.QueryResult{}
 }
 
 func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []sqltypes.Value) (result *mproto.QueryResult) {
@@ -780,4 +756,19 @@ func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnec
 		return NewTabletErrorSql(FAIL, err)
 	}
 	return nil
+}
+
+func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
+	if len(row1) != len(row2) {
+		return false
+	}
+	for i := 0; i < len(row1); i++ {
+		if row1[i].IsNull() && row2[i].IsNull() {
+			continue
+		}
+		if (row1[i].IsNull() && !row2[i].IsNull()) || (!row1[i].IsNull() && row2[i].IsNull()) || row1[i].String() != row2[i].String() {
+			return false
+		}
+	}
+	return true
 }
