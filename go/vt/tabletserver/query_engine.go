@@ -501,7 +501,7 @@ func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 	keys := make([]string, 1)
 	keys[0] = buildKey(pk)
 	reloaded := plan.TableInfo.Cache.Get(keys)[keys[0]]
