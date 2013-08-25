@@ -1411,7 +1411,7 @@ func main() {
 
 	if err != nil {
 		log.Errorf("action failed: %v %v", action, err)
-		log.Flush()
+		//log.Flush()
 		os.Exit(255)
 	}
 	if actionPath != "" {
@@ -1421,7 +1421,7 @@ func main() {
 			err := wr.ActionInitiator().WaitForCompletion(actionPath, *waitTime)
 			if err != nil {
 				log.Error(err.Error())
-				log.Flush()
+				//log.Flush()
 				os.Exit(255)
 			} else {
 				log.Infof("action completed: %v", actionPath)
