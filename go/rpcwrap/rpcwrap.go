@@ -42,6 +42,7 @@ func NewBufferedConnection(conn io.ReadWriteCloser) *BufferedConnection {
 	return &BufferedConnection{false, bufio.NewReader(conn), conn}
 }
 
+// FIXME(sougou/szopa): Find a better way to track connection count.
 func (bc *BufferedConnection) Close() error {
 	if !bc.isClosed {
 		bc.isClosed = true
