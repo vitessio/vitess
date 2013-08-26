@@ -42,6 +42,27 @@ def setup():
     pass
 setup()
 
+class LoggingStream(object):
+  def __init__(self):
+    self.line = ""
+
+  def write(self, value):
+    if value == "\n":
+      # we already printed it
+      self.line = ""
+      return
+    self.line += value
+    logging.info("===== " + self.line)
+    if value.endswith("\n"):
+      self.line = ""
+
+  def writeln(self, value):
+    self.write(value)
+    self.line = ""
+
+  def flush(self):
+    pass
+
 # main executes the test classes contained in the passed module, or
 # __main__ if empty.
 def main(mod=None):
@@ -85,7 +106,8 @@ def main(mod=None):
           suite.addTests(unittest.TestLoader().loadTestsFromName(arg, mod))
 
     if suite.countTestCases() > 0:
-      result = unittest.TextTestRunner(verbosity=options.verbose).run(suite)
+      logger = LoggingStream()
+      result = unittest.TextTestRunner(stream=logger, verbosity=options.verbose).run(suite)
       if not result.wasSuccessful():
         sys.exit(-1)
   except KeyboardInterrupt:
