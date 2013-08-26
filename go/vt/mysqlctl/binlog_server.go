@@ -159,6 +159,7 @@ func (blp *Bls) streamBinlog(sendReply proto.SendBinlogResponse, interrupted cha
 
 	blr := NewBinlogReader(blp.binlogPrefix)
 	blr.MaxWaitTimeout = 10 * time.Second
+	blr.LogWaitTimeout = time.Second / 2
 
 	var binlogReader io.Reader
 	var blrReader, blrWriter *os.File
