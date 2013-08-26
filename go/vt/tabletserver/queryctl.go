@@ -22,7 +22,7 @@ var (
 	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
 	qsConfigFile    = flag.String("queryserver-config-file", "", "config file name for the query service")
 	customRules     = flag.String("customrules", "", "custom query rules file")
-	verifyMode      = flag.Bool("verify-mode", false, "Turn on row cache verification mode (very slow)")
+	spotCheckRatio  = flag.Float64("spot-check-ratio", 0.0, "rowcache spot check frequency")
 )
 
 type Config struct {
@@ -37,7 +37,7 @@ type Config struct {
 	QueryTimeout       float64
 	IdleTimeout        float64
 	RowCache           []string
-	VerifyMode         bool
+	SpotCheckRatio     float64
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -60,7 +60,7 @@ var DefaultQsConfig = Config{
 	IdleTimeout:        30 * 60,
 	StreamBufferSize:   32 * 1024,
 	RowCache:           nil,
-	VerifyMode:         false,
+	SpotCheckRatio:     0,
 }
 
 var SqlQueryRpcService *SqlQuery
@@ -151,7 +151,7 @@ func InitQueryService() {
 			log.Fatalf("cannot load qsconfig file: %v", err)
 		}
 	}
-	qsConfig.VerifyMode = *verifyMode
+	qsConfig.SpotCheckRatio = *spotCheckRatio
 
 	RegisterQueryService(qsConfig)
 }

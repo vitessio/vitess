@@ -34,10 +34,10 @@ func TestPublished(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		if vars["connection-count"].(float64) != 1 {
+		if vars["ConnCount"].(float64) != 1 {
 			t.Errorf("want 1, got %v", vars["connection-count"])
 		}
-		if vars["connection-accepted"].(float64) != float64(i) {
+		if vars["ConnAccepted"].(float64) != float64(i) {
 			t.Errorf("want %d, got %v", i, vars["connection-count"])
 		}
 	}

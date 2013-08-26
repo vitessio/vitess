@@ -204,8 +204,17 @@ class TestCache(framework.TestCase):
     self._verify_mismatch("select * from vtocc_cached where eid = 1.2 and bid = 1.2")
     self._verify_mismatch("select * from vtocc_cached where eid = %(fl)s and bid = %(fl)s", {"fl": 1.2})
 
-  def test_verify_mode(self):
-    self.assertEqual(self.env.debug_vars()["VerifyMode"], 0)
+  def test_spot_check(self):
+    vstart = self.env.debug_vars()
+    self.assertEqual(vstart["SpotCheckRatio"], 0)
+    self.env.execute("select * from vtocc_cached where eid = 225 and bid = 'foo'")
+    self.assertEqual(vstart["SpotCheckCount"], self.env.debug_vars()["SpotCheckCount"])
+    self.env.execute("set vt_spot_check_ratio=1")
+    self.assertEqual(self.env.debug_vars()["SpotCheckRatio"], 1)
+    self.env.execute("select * from vtocc_cached where eid = 2 and bid = 'foo'")
+    self.assertEqual(vstart["SpotCheckCount"]+1, self.env.debug_vars()["SpotCheckCount"])
+    self.env.execute("set vt_spot_check_ratio=0")
+    self.assertEqual(self.env.debug_vars()["SpotCheckRatio"], 0)
 
   def _verify_mismatch(self, query, bindvars=None):
     try:

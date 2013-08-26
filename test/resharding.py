@@ -5,6 +5,7 @@
 # be found in the LICENSE file.
 
 import logging
+import threading
 import time
 import unittest
 
@@ -51,6 +52,7 @@ def setUpModule():
     tearDownModule()
     raise
 
+
 def tearDownModule():
   if utils.options.skip_teardown:
     return
@@ -84,12 +86,75 @@ def tearDownModule():
   shard_3_master.remove_tree()
   shard_3_replica.remove_tree()
 
+
+# InsertThread will insert a value into the timestamps table, and then
+# every 1/5s will update its value with the current timestamp
+class InsertThread(threading.Thread):
+
+  def __init__(self, tablet, object_name, user_id, keyspace_id):
+    threading.Thread.__init__(self)
+    self.tablet = tablet
+    self.object_name = object_name
+    self.user_id = user_id
+    self.keyspace_id = keyspace_id
+    self.done = False
+    self.tablet.mquery('vt_test_keyspace', [
+        'begin',
+        'insert into timestamps(name, time_milli, keyspace_id) values("%s", %u, 0x%x) /* EMD keyspace_id:%u user_id:%u */' % (self.object_name, long(time.time() * 1000), self.keyspace_id, self.keyspace_id, self.user_id),
+        'commit'
+        ], write=True, user='vt_app')
+    self.start()
+
+  def run(self):
+    try:
+      while not self.done:
+        self.tablet.mquery('vt_test_keyspace', [
+            'begin',
+            'update timestamps set time_milli=%u where name="%s" /* EMD keyspace_id:%u user_id:%u */' % (long(time.time() * 1000), self.object_name, self.keyspace_id, self.user_id),
+            'commit'
+            ], write=True, user='vt_app')
+        time.sleep(0.2)
+    except Exception as e:
+      logging.error("InsertThread got exception: %s", e)
+
+
+# MonitorLagThread will get values from a database, and compare the timestamp
+# to evaluate lag. Since the qps is really low, and we send binlogs as chuncks,
+# the latency is pretty high (a few seconds).
+class MonitorLagThread(threading.Thread):
+
+  def __init__(self, tablet, object_name):
+    threading.Thread.__init__(self)
+    self.tablet = tablet
+    self.object_name = object_name
+    self.done = False
+    self.max_lag = 0
+    self.lag_sum = 0
+    self.sample_count = 0
+    self.start()
+
+  def run(self):
+    try:
+      while not self.done:
+        result = self.tablet.mquery('vt_test_keyspace', 'select time_milli from timestamps where name="%s"' % self.object_name)
+        if result:
+          lag = long(time.time() * 1000) - long(result[0][0])
+          logging.debug("MonitorLagThread(%s) got %u", self.object_name, lag)
+          self.sample_count += 1
+          self.lag_sum += lag
+          if lag > self.max_lag:
+            self.max_lag = lag
+        time.sleep(1.0)
+    except Exception as e:
+      logging.error("MonitorLagThread got exception: %s", e)
+
+
 class TestResharding(unittest.TestCase):
 
   # create_schema will create the same schema on the keyspace
   # then insert some values
   def _create_schema(self):
-    create_table_template = '''create table %s (
+    create_table_template = '''create table %s(
 id bigint auto_increment,
 msg varchar(64),
 keyspace_id bigint(20) unsigned not null,
@@ -97,6 +162,12 @@ primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
     create_view_template = '''create view %s(id, msg, keyspace_id) as select id, msg, keyspace_id from %s'''
+    create_timestamp_tablet = '''create table timestamps(
+name varchar(64),
+time_milli bigint(20) unsigned not null,
+keyspace_id bigint(20) unsigned not null,
+primary key (name)
+) Engine=InnoDB'''
 
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
@@ -111,6 +182,11 @@ index by_msg (msg)
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
                      '-sql=' + create_view_template % ("view1", "resharding1"),
+                     'test_keyspace'],
+                    auto_log=True)
+    utils.run_vtctl(['ApplySchemaKeyspace',
+                     '-simple',
+                     '-sql=' + create_timestamp_tablet,
                      'test_keyspace'],
                     auto_log=True)
 
@@ -342,7 +418,13 @@ index by_msg (msg)
     self._check_lots_timeout(1000, 100, 20)
     logging.debug("Checking no data was sent the wrong way")
     self._check_lots_not_present(1000)
-    utils.pause("After filtered replication")
+
+    # start a thread to insert data into shard_1 in the background
+    # with current time, and monitor the delay
+    insert_thread_1 = InsertThread(shard_1_master, "insert_low", 10000, 0x9000000000000000)
+    insert_thread_2 = InsertThread(shard_1_master, "insert_high", 10001, 0xD000000000000000)
+    monitor_thread_1 = MonitorLagThread(shard_2_replica2, "insert_low")
+    monitor_thread_2 = MonitorLagThread(shard_3_replica, "insert_high")
 
     # tests a failover switching serving to a different replica
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'replica'])
@@ -389,12 +471,25 @@ index by_msg (msg)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
-    utils.pause("Before ReparentShard")
     utils.run_vtctl('ReparentShard test_keyspace/80-C0 %s' % shard_2_replica1.tablet_alias)
     logging.debug("Inserting lots of data on source shard after reparenting")
     self._insert_lots(3000, base=2000)
     logging.debug("Checking 80 percent of data was sent fairly quickly")
     self._check_lots_timeout(3000, 80, 10, base=2000)
+
+    # going to migrate the master now, check the delays
+    monitor_thread_1.done = True
+    monitor_thread_2.done = True
+    insert_thread_1.done = True
+    insert_thread_2.done = True
+    logging.debug("DELAY 1: %s max_lag=%u avg_lag=%u",
+                  monitor_thread_1.object_name,
+                  monitor_thread_1.max_lag,
+                  monitor_thread_1.lag_sum / monitor_thread_1.sample_count)
+    logging.debug("DELAY 2: %s max_lag=%u avg_lag=%u",
+                  monitor_thread_2.object_name,
+                  monitor_thread_2.max_lag,
+                  monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
 
     # then serve master from the split shards
     utils.run_vtctl('MigrateServedTypes test_keyspace/80- master', auto_log=True)

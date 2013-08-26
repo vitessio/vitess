@@ -16,21 +16,39 @@ import (
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/auth"
 	"github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/stats"
 )
 
 const (
 	connected = "200 Connected to Go RPC"
 )
 
+var (
+	connCount    = stats.NewInt("connection-count")
+	connAccepted = stats.NewInt("connection-accepted")
+)
+
 type ClientCodecFactory func(conn io.ReadWriteCloser) rpc.ClientCodec
 
 type BufferedConnection struct {
+	isClosed bool
 	*bufio.Reader
 	io.WriteCloser
 }
 
 func NewBufferedConnection(conn io.ReadWriteCloser) *BufferedConnection {
-	return &BufferedConnection{bufio.NewReader(conn), conn}
+	connCount.Add(1)
+	connAccepted.Add(1)
+	return &BufferedConnection{false, bufio.NewReader(conn), conn}
+}
+
+// FIXME(sougou/szopa): Find a better way to track connection count.
+func (bc *BufferedConnection) Close() error {
+	if !bc.isClosed {
+		bc.isClosed = true
+		connCount.Add(-1)
+	}
+	return bc.WriteCloser.Close()
 }
 
 // DialHTTP connects to a go HTTP RPC server using the specified codec.

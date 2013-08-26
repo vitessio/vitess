@@ -342,11 +342,14 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 		return NewTabletError(FAIL, "Persistent connections not supported with streaming")
 	}
 
-	// allow shutdown state if we're in a transaction
-	allowShutdown := (query.TransactionId != 0)
-	sq.checkState(query.SessionId, allowShutdown)
+	sq.checkState(query.SessionId, false)
 
-	sq.qe.StreamExecute(logStats, query, sendReply)
+	sq.qe.StreamExecute(logStats, query, func(reply interface{}) error {
+		if sq.state.Get() != OPEN {
+			return NewTabletError(FAIL, "Query server is in %s state", stateName[sq.state.Get()])
+		}
+		return sendReply(reply)
+	})
 	return nil
 }
 
@@ -432,7 +435,10 @@ func (sq *SqlQuery) statsJSON() string {
 	return buf.String()
 }
 
-func Rand() int64 {
+func init() {
 	rand.Seed(time.Now().UnixNano())
+}
+
+func Rand() int64 {
 	return rand.Int63()
 }

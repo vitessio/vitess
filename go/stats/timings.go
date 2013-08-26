@@ -55,7 +55,7 @@ func (t *Timings) String() string {
 
 	tm := struct {
 		TotalCount int64
-		totalTime  int64
+		TotalTime  int64
 		Histograms map[string]*Histogram
 	}{
 		t.totalCount,

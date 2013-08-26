@@ -20,6 +20,12 @@ var pack = binary.BigEndian
 
 const (
 	RC_DELETED = 1
+
+	// MAX_KEY_LEN is a value less than memcache's limit of 250.
+	MAX_KEY_LEN = 200
+
+	// MAX_DATA_LEN prevents large rows from being inserted in rowcache.
+	MAX_DATA_LEN = 8000
 )
 
 type RowCache struct {
@@ -39,9 +45,12 @@ func NewRowCache(tableInfo *TableInfo, cachePool *CachePool) *RowCache {
 }
 
 func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
-	mkeys := make([]string, len(keys))
-	for i, key := range keys {
-		mkeys[i] = rc.prefix + key
+	mkeys := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if len(key) > MAX_KEY_LEN {
+			continue
+		}
+		mkeys = append(mkeys, rc.prefix+key)
 	}
 	prefixlen := len(rc.prefix)
 	conn := rc.cachePool.Get()
@@ -53,7 +62,7 @@ func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
 		conn.Close()
 		panic(NewTabletError(FATAL, "%s", err))
 	}
-	results = make(map[string]RCResult, len(keys))
+	results = make(map[string]RCResult, len(mkeys))
 	for _, mcresult := range mcresults {
 		if mcresult.Flags == RC_DELETED {
 			// The row was recently invalidated.
@@ -66,16 +75,16 @@ func (rc *RowCache) Get(keys []string) (results map[string]RCResult) {
 		if row == nil {
 			panic(NewTabletError(FAIL, "Corrupt data for %s", mcresult.Key))
 		}
-		// No cas. If you've read the row, we don't expect you to update it back.
-		results[mcresult.Key[prefixlen:]] = RCResult{Row: row}
+		results[mcresult.Key[prefixlen:]] = RCResult{Row: row, Cas: mcresult.Cas}
 	}
 	return
 }
 
 func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
-	// This value is hardcoded for now.
-	// We're assuming it's not worth caching rows that are too large.
-	b := rc.encodeRow(row, 8000)
+	if len(key) > MAX_KEY_LEN {
+		return
+	}
+	b := rc.encodeRow(row)
 	if b == nil {
 		return
 	}
@@ -99,6 +108,9 @@ func (rc *RowCache) Set(key string, row []sqltypes.Value, cas uint64) {
 }
 
 func (rc *RowCache) Delete(key string) {
+	if len(key) > MAX_KEY_LEN {
+		return
+	}
 	conn := rc.cachePool.Get()
 	defer conn.Recycle()
 	mkey := rc.prefix + key
@@ -110,11 +122,11 @@ func (rc *RowCache) Delete(key string) {
 	}
 }
 
-func (rc *RowCache) encodeRow(row []sqltypes.Value, max int) (b []byte) {
+func (rc *RowCache) encodeRow(row []sqltypes.Value) (b []byte) {
 	length := 0
 	for _, v := range row {
 		length += len(v.Raw())
-		if length > max {
+		if length > MAX_DATA_LEN {
 			return nil
 		}
 	}
@@ -154,14 +166,6 @@ func (rc *RowCache) decodeRow(b []byte) (row []sqltypes.Value) {
 		data = data[length:]
 	}
 	return row
-}
-
-func rowLen(row []sqltypes.Value) int {
-	length := 0
-	for _, v := range row {
-		length += len(v.Raw())
-	}
-	return length
 }
 
 type GenericCache struct {
