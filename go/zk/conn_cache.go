@@ -59,7 +59,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	conn, ok := cc.zconnCellMap[zcell]
 	if !ok {
 		conn = &cachedConn{}
-		conn.states = stats.NewStates("", []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
+		conn.states = stats.NewStates("ZkCell-"+zcell, []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
 		cc.zconnCellMap[zcell] = conn
 	}
 	cc.mutex.Unlock()

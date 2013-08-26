@@ -5,12 +5,12 @@
 package zktopo
 
 import (
-	"expvar"
 	"fmt"
 	"path"
 	"sort"
 	"time"
 
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -38,7 +38,7 @@ func NewServer(zconn zk.Conn) *Server {
 
 func init() {
 	zconn := zk.NewMetaConn(false)
-	expvar.Publish("ZkMetaConn", zconn)
+	stats.Publish("ZkMetaConn", zconn)
 	topo.RegisterServer("zookeeper", NewServer(zconn))
 }
 
