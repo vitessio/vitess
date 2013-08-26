@@ -26,22 +26,49 @@ import (
 
 type NewVarHook func(name string, v expvar.Var)
 
-var newVarHook NewVarHook
+type varGroup struct {
+	sync.Mutex
+	vars       map[string]expvar.Var
+	newVarHook NewVarHook
+}
+
+func (vg *varGroup) register(nvh NewVarHook) {
+	vg.Lock()
+	defer vg.Unlock()
+	vg.newVarHook = nvh
+	if nvh == nil {
+		return
+	}
+	// Call hook on existing vars because some might have been
+	// created before the call to register
+	for k, v := range vg.vars {
+		nvh(k, v)
+	}
+}
+
+func (vg *varGroup) publish(name string, v expvar.Var) {
+	vg.Lock()
+	defer vg.Unlock()
+	expvar.Publish(name, v)
+	vg.vars[name] = v
+	if vg.newVarHook != nil {
+		vg.newVarHook(name, v)
+	}
+}
+
+var defaultVarGroup = varGroup{vars: make(map[string]expvar.Var)}
 
 // Register allows you to register a callback function
 // that will be called whenever a new stats variable gets
 // created. This can be used to build alternate methods
 // of exporting stats variables.
 func Register(nvh NewVarHook) {
-	newVarHook = nvh
+	defaultVarGroup.register(nvh)
 }
 
 // Publish is expvar.Publish+hook
 func Publish(name string, v expvar.Var) {
-	expvar.Publish(name, v)
-	if newVarHook != nil {
-		newVarHook(name, v)
-	}
+	defaultVarGroup.publish(name, v)
 }
 
 // Float is expvar.Float+Get+hook

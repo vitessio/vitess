@@ -10,7 +10,12 @@ import (
 	"time"
 )
 
+func clear() {
+	defaultVarGroup.vars = make(map[string]expvar.Var)
+}
+
 func TestNoHook(t *testing.T) {
+	clear()
 	Register(nil)
 	v := NewInt("plainint")
 	v.Set(1)
@@ -22,6 +27,7 @@ func TestNoHook(t *testing.T) {
 func TestFloat(t *testing.T) {
 	var gotname string
 	var gotv *Float
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Float)
@@ -56,6 +62,7 @@ func TestFloat(t *testing.T) {
 func TestInt(t *testing.T) {
 	var gotname string
 	var gotv *Int
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Int)
@@ -90,6 +97,7 @@ func TestInt(t *testing.T) {
 func TestDuration(t *testing.T) {
 	var gotname string
 	var gotv *Duration
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Duration)
@@ -124,6 +132,7 @@ func TestDuration(t *testing.T) {
 func TestString(t *testing.T) {
 	var gotname string
 	var gotv *String
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*String)
@@ -160,6 +169,7 @@ func (m *Mystr) String() string {
 func TestPublish(t *testing.T) {
 	var gotname string
 	var gotv expvar.Var
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Mystr)
@@ -181,6 +191,7 @@ func f() string {
 func TestPublishFunc(t *testing.T) {
 	var gotname string
 	var gotv jsonFunc
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(jsonFunc)

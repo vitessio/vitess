@@ -10,6 +10,7 @@ import (
 )
 
 func TestHistogram(t *testing.T) {
+	clear()
 	Register(nil)
 	h := NewHistogram("hist1", []int64{1, 5})
 	for i := 0; i < 10; i++ {
@@ -44,6 +45,7 @@ func TestHistogram(t *testing.T) {
 }
 
 func TestGenericHistogram(t *testing.T) {
+	clear()
 	Register(nil)
 	h := NewGenericHistogram(
 		"histgen",
@@ -61,6 +63,7 @@ func TestGenericHistogram(t *testing.T) {
 func TestHistogramHook(t *testing.T) {
 	var gotname string
 	var gotv *Histogram
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Histogram)
