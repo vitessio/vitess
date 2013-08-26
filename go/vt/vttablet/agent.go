@@ -57,7 +57,7 @@ func InitAgent(
 	mysqlctl.RegisterBinlogServerService(binlogServer)
 
 	// Start the binlog player services, not playing at start.
-	binlogPlayerMap = NewBinlogPlayerMap(topoServer, dbcfgs.Dba)
+	binlogPlayerMap = NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams())
 	RegisterBinlogPlayerMap(binlogPlayerMap)
 
 	// Compute the bind addresses

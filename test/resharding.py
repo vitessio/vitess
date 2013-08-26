@@ -119,7 +119,8 @@ class InsertThread(threading.Thread):
 
 
 # MonitorLagThread will get values from a database, and compare the timestamp
-# to evaluate lag
+# to evaluate lag. Since the qps is really low, and we send binlogs as chuncks,
+# the latency is pretty high (a few seconds).
 class MonitorLagThread(threading.Thread):
 
   def __init__(self, tablet, object_name):
@@ -138,7 +139,7 @@ class MonitorLagThread(threading.Thread):
         result = self.tablet.mquery('vt_test_keyspace', 'select time_milli from timestamps where name="%s"' % self.object_name)
         if result:
           lag = long(time.time() * 1000) - long(result[0][0])
-          logging.error("%s got %u", self.object_name, lag)
+          logging.debug("MonitorLagThread(%s) got %u", self.object_name, lag)
           self.sample_count += 1
           self.lag_sum += lag
           if lag > self.max_lag:
@@ -418,13 +419,12 @@ primary key (name)
     logging.debug("Checking no data was sent the wrong way")
     self._check_lots_not_present(1000)
 
-# FIXME(alainjobart) broken right now, because of user permissions.
-#    # start a thread to insert data into shard_1 in the background
-#    # with current time, and monitor the delay
-#    insert_thread_1 = InsertThread(shard_1_master, "insert_low", 10000, 0x9000000000000000)
-#    insert_thread_2 = InsertThread(shard_1_master, "insert_high", 10001, 0xD000000000000000)
-#    monitor_thread_1 = MonitorLagThread(shard_2_replica2, "insert_low")
-#    monitor_thread_2 = MonitorLagThread(shard_3_replica, "insert_high")
+    # start a thread to insert data into shard_1 in the background
+    # with current time, and monitor the delay
+    insert_thread_1 = InsertThread(shard_1_master, "insert_low", 10000, 0x9000000000000000)
+    insert_thread_2 = InsertThread(shard_1_master, "insert_high", 10001, 0xD000000000000000)
+    monitor_thread_1 = MonitorLagThread(shard_2_replica2, "insert_low")
+    monitor_thread_2 = MonitorLagThread(shard_3_replica, "insert_high")
 
     # tests a failover switching serving to a different replica
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'replica'])
@@ -477,20 +477,19 @@ primary key (name)
     logging.debug("Checking 80 percent of data was sent fairly quickly")
     self._check_lots_timeout(3000, 80, 10, base=2000)
 
-# FIXME(alainjobart) Broken now, because of users.
-#    # going to migrate the master now, check the delays
-#    monitor_thread_1.done = True
-#    monitor_thread_2.done = True
-#    insert_thread_1.done = True
-#    insert_thread_2.done = True
-#    logging.debug("DELAY 1: %s max_lag=%u avg_lag=%u",
-#                  monitor_thread_1.object_name,
-#                  monitor_thread_1.max_lag,
-#                  monitor_thread_1.lag_sum / monitor_thread_1.sample_count)
-#    logging.debug("DELAY 2: %s max_lag=%u avg_lag=%u",
-#                  monitor_thread_2.object_name,
-#                  monitor_thread_2.max_lag,
-#                  monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
+    # going to migrate the master now, check the delays
+    monitor_thread_1.done = True
+    monitor_thread_2.done = True
+    insert_thread_1.done = True
+    insert_thread_2.done = True
+    logging.debug("DELAY 1: %s max_lag=%u avg_lag=%u",
+                  monitor_thread_1.object_name,
+                  monitor_thread_1.max_lag,
+                  monitor_thread_1.lag_sum / monitor_thread_1.sample_count)
+    logging.debug("DELAY 2: %s max_lag=%u avg_lag=%u",
+                  monitor_thread_2.object_name,
+                  monitor_thread_2.max_lag,
+                  monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
 
     # then serve master from the split shards
     utils.run_vtctl('MigrateServedTypes test_keyspace/80- master', auto_log=True)
