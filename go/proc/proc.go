@@ -100,5 +100,5 @@ func listen(port string) (l net.Listener, err error) {
 		}
 		break
 	}
-	return Published(l, "connection-count", "connection-accepted"), err
+	return Published(l, "ConnCount", "ConnAccepted"), err
 }
