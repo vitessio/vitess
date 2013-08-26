@@ -179,6 +179,7 @@ type Server interface {
 
 	// DeleteSrvTabletType deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
+	// Can return ErrNoNode.
 	DeleteSrvTabletType(cell, keyspace, shard string, tabletType TabletType) error
 
 	// UpdateSrvShard updates the serving records for a cell,
@@ -199,6 +200,7 @@ type Server interface {
 	// UpdateTabletEndpoint updates a single tablet record in the
 	// already computed serving graph. The update has to be somewhat
 	// atomic, so it requires Server intrisic knowledge.
+	// If the node doesn't exist, it is not updated, this is not an error.
 	UpdateTabletEndpoint(cell, keyspace, shard string, tabletType TabletType, addr *VtnsAddr) error
 
 	//

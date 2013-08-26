@@ -250,7 +250,14 @@ func (zkts *Server) GetSrvTabletType(cell, keyspace, shard string, tabletType to
 
 func (zkts *Server) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	return zkts.zconn.Delete(path, -1)
+	err := zkts.zconn.Delete(path, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return err
+	}
+	return nil
 }
 
 func (zkts *Server) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
