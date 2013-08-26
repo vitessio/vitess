@@ -139,6 +139,51 @@ func getLocalCell(t *testing.T, ts topo.Server) string {
 var AllChecks = []CheckFunc{
 	CheckKeyspace,
 	CheckTablet,
+	CheckShard,
+}
+
+func CheckShard(t *testing.T, ts topo.Server) {
+	if err := ts.CreateKeyspace("test_keyspace"); err != nil {
+		t.Fatalf("ts.CreateKeyspace: %v", err)
+	}
+
+	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != nil {
+		t.Errorf("ts.CreateShard: %v", err)
+	}
+	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != topo.ErrNodeExists {
+		t.Errorf("ts.CreateShard called second time, want: %v, got: %v", err, topo.ErrNodeExists)
+	}
+
+	shardInfo, err := ts.GetShard("test_keyspace", "-10")
+	if err != nil {
+		t.Errorf("ts.GetShard: %v", err)
+	}
+	if want, _ := key.ParseKeyRangeParts("", "10"); shardInfo.KeyRange != want {
+		t.Errorf("shardInfo.KeyRange: want %v, got %v", want, shardInfo.KeyRange)
+	}
+	newMaster := topo.TabletAlias{Cell: "nyc", Uid: 1}
+	shardInfo.MasterAlias = newMaster
+
+	if err := ts.UpdateShard(shardInfo); err != nil {
+		t.Errorf("ts.UpdateShard: %v", err)
+	}
+
+	shardInfo, err = ts.GetShard("test_keyspace", "-10")
+	if err != nil {
+		t.Errorf("ts.GetShard: %v", err)
+	}
+	if shardInfo.MasterAlias != newMaster {
+		t.Errorf("after ts.UpdateShard: shardInfo.MasterAlias want %v, got %v", newMaster, shardInfo.MasterAlias)
+	}
+
+	shards, err := ts.GetShardNames("test_keyspace")
+	if err != nil {
+		t.Errorf("ts.GetShardNames: %v", err)
+	}
+	if len(shards) != 1 && shards[0] != "-10" {
+		t.Errorf(`ts.GetShardNames: want [ "-10" ], got %v`, shards)
+	}
+
 }
 
 // CheckAll runs all available checks. For each check, a fresh
