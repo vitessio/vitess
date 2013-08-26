@@ -72,6 +72,9 @@ func (zkts *Server) CreateKeyspace(keyspace string) error {
 func (zkts *Server) GetKeyspaces() ([]string, error) {
 	children, _, err := zkts.zconn.Children(globalKeyspacesPath)
 	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			return nil, nil
+		}
 		return nil, err
 	}
 
