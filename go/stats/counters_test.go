@@ -10,7 +10,7 @@ import (
 )
 
 func TestCounters(t *testing.T) {
-	Register(nil)
+	clear()
 	c := NewCounters("counter1")
 	c.Add("c1", 1)
 	c.Add("c2", 1)
@@ -32,6 +32,7 @@ func TestCounters(t *testing.T) {
 func TestCountersHook(t *testing.T) {
 	var gotname string
 	var gotv *Counters
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Counters)

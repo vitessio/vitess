@@ -11,7 +11,7 @@ import (
 )
 
 func TestTimings(t *testing.T) {
-	Register(nil)
+	clear()
 	tm := NewTimings("timings1")
 	tm.Add("tag1", 500*time.Microsecond)
 	tm.Add("tag1", 1*time.Millisecond)
@@ -25,6 +25,7 @@ func TestTimings(t *testing.T) {
 func TestTimingsHook(t *testing.T) {
 	var gotname string
 	var gotv *Timings
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Timings)
