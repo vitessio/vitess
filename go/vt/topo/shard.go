@@ -5,13 +5,11 @@
 package topo
 
 import (
-	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
 	"sync"
 
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -43,10 +41,10 @@ func (source *SourceShard) String() string {
 	return fmt.Sprintf("SourceShard(%v,%v/%v)", source.Uid, source.Keyspace, source.Shard)
 }
 
-// A pure data struct for information serialized into json and stored
-// in topology server. This node is used to present a controlled view
-// of the shard, unaware of every management action. It also contains
-// configuration data for a shard.
+// A pure data struct for information stored in topology server.  This
+// node is used to present a controlled view of the shard, unaware of
+// every management action. It also contains configuration data for a
+// shard.
 type Shard struct {
 	// There can be only at most one master, but there may be none. (0)
 	MasterAlias TabletAlias
@@ -91,22 +89,9 @@ func (shard *Shard) Contains(tablet *Tablet) bool {
 	return false
 }
 
-func (shard *Shard) Json() string {
-	return jscfg.ToJson(shard)
-}
-
 func newShard() *Shard {
 	return &Shard{ReplicaAliases: make([]TabletAlias, 0, 16),
 		RdonlyAliases: make([]TabletAlias, 0, 16)}
-}
-
-func shardFromJson(data string) (*Shard, error) {
-	shard := newShard()
-	err := json.Unmarshal([]byte(data), shard)
-	if err != nil {
-		return nil, fmt.Errorf("bad shard data %v", err)
-	}
-	return shard, nil
 }
 
 // ValidateShardName takes a shard name and sanitizes it, and also returns
@@ -151,11 +136,6 @@ func (si *ShardInfo) ShardName() string {
 	return si.shardName
 }
 
-// Json converts the underlying shard structure into json
-func (si *ShardInfo) Json() string {
-	return si.Shard.Json()
-}
-
 // Rebuild takes all the tablets in the list and puts them in the
 // right place in the shard. Only serving tablets are considered.
 func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
@@ -187,18 +167,15 @@ func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 	return nil
 }
 
-// NewShardInfo should be called by topo.Server implementations that wish to
-// construct a ShardInfo from JSON data.
-func NewShardInfo(keyspace, shard, shardData string) (shardInfo *ShardInfo, err error) {
-	if shardData == "" {
-		return nil, fmt.Errorf("empty shard data for shard: %v/%v", keyspace, shard)
+// NewShardInfo returns a ShardInfo basing on shard with the
+// keyspace / shard. This function should be only used by Server
+// implementations.
+func NewShardInfo(keyspace, shard string, value *Shard) *ShardInfo {
+	return &ShardInfo{
+		keyspace:  keyspace,
+		shardName: shard,
+		Shard:     value,
 	}
-	s, err := shardFromJson(shardData)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ShardInfo{keyspace, shard, s}, nil
 }
 
 // CreateShard creates a new shard and tries to fill in the right information.

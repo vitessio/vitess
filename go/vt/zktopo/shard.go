@@ -5,10 +5,12 @@
 package zktopo
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
 
+	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -30,7 +32,7 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 	for i, zkPath := range pathList {
 		c := ""
 		if i == 0 {
-			c = value.Json()
+			c = jscfg.ToJson(value)
 		}
 		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
@@ -49,7 +51,7 @@ func (zkts *Server) CreateShard(keyspace, shard string, value *topo.Shard) error
 
 func (zkts *Server) UpdateShard(si *topo.ShardInfo) error {
 	shardPath := path.Join(globalKeyspacesPath, si.Keyspace(), "shards", si.ShardName())
-	_, err := zkts.zconn.Set(shardPath, si.Json(), -1)
+	_, err := zkts.zconn.Set(shardPath, jscfg.ToJson(si.Shard), -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
@@ -83,11 +85,12 @@ func (zkts *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 		return nil, err
 	}
 
-	shardInfo, err := topo.NewShardInfo(keyspace, shard, data)
-	if err != nil {
-		return nil, err
+	s := &topo.Shard{}
+	if err = json.Unmarshal([]byte(data), s); err != nil {
+		return nil, fmt.Errorf("bad shard data %v", err)
 	}
-	return shardInfo, nil
+
+	return topo.NewShardInfo(keyspace, shard, s), nil
 }
 
 func (zkts *Server) GetShardNames(keyspace string) ([]string, error) {
