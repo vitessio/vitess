@@ -35,24 +35,29 @@ type varGroup struct {
 func (vg *varGroup) register(nvh NewVarHook) {
 	vg.Lock()
 	defer vg.Unlock()
-	vg.newVarHook = nvh
-	if nvh == nil {
-		return
+	if vg.newVarHook != nil {
+		panic("You've already registered a function")
 	}
+	if nvh == nil {
+		panic("nil not allowed")
+	}
+	vg.newVarHook = nvh
 	// Call hook on existing vars because some might have been
 	// created before the call to register
 	for k, v := range vg.vars {
 		nvh(k, v)
 	}
+	vg.vars = nil
 }
 
 func (vg *varGroup) publish(name string, v expvar.Var) {
 	vg.Lock()
 	defer vg.Unlock()
 	expvar.Publish(name, v)
-	vg.vars[name] = v
 	if vg.newVarHook != nil {
 		vg.newVarHook(name, v)
+	} else {
+		vg.vars[name] = v
 	}
 }
 

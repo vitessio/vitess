@@ -11,7 +11,6 @@ import (
 
 func TestCounters(t *testing.T) {
 	clear()
-	Register(nil)
 	c := NewCounters("counter1")
 	c.Add("c1", 1)
 	c.Add("c2", 1)

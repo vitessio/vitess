@@ -12,7 +12,6 @@ import (
 
 func TestTimings(t *testing.T) {
 	clear()
-	Register(nil)
 	tm := NewTimings("timings1")
 	tm.Add("tag1", 500*time.Microsecond)
 	tm.Add("tag1", 1*time.Millisecond)

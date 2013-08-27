@@ -12,11 +12,11 @@ import (
 
 func clear() {
 	defaultVarGroup.vars = make(map[string]expvar.Var)
+	defaultVarGroup.newVarHook = nil
 }
 
 func TestNoHook(t *testing.T) {
 	clear()
-	Register(nil)
 	v := NewInt("plainint")
 	v.Set(1)
 	if v.String() != "1" {

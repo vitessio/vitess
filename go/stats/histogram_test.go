@@ -11,7 +11,6 @@ import (
 
 func TestHistogram(t *testing.T) {
 	clear()
-	Register(nil)
 	h := NewHistogram("hist1", []int64{1, 5})
 	for i := 0; i < 10; i++ {
 		h.Add(int64(i))
@@ -46,7 +45,6 @@ func TestHistogram(t *testing.T) {
 
 func TestGenericHistogram(t *testing.T) {
 	clear()
-	Register(nil)
 	h := NewGenericHistogram(
 		"histgen",
 		[]int64{1, 5},
