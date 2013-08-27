@@ -372,9 +372,10 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 // AllChecks is a list of functions that are called by CheckAll.
 var AllChecks = []CheckFunc{
 	CheckKeyspace,
+	//	CheckShard,
 	CheckTablet,
-	CheckReplicationPaths,
-	CheckServingGraph,
+	//	CheckReplicationPaths,
+	//	CheckServingGraph,
 }
 
 // CheckAll runs all available checks. For each check, a fresh
