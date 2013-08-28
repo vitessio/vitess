@@ -12,6 +12,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+func newKeyRange(value string) key.KeyRange {
+	_, result, err := topo.ValidateShardName(value)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 func CheckKeyspace(t *testing.T, ts topo.Server) {
 	keyspaces, err := ts.GetKeyspaces()
 	if err != nil {
@@ -62,10 +70,6 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 
 func CheckTablet(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
-
-	krStart, _ := key.HexKeyspaceId("").Unhex()
-	krEnd, _ := key.HexKeyspaceId("10").Unhex()
-
 	tablet := &topo.Tablet{
 		Cell:     cell,
 		Uid:      1,
@@ -74,7 +78,7 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
 		State:    topo.STATE_READ_WRITE,
-		KeyRange: key.KeyRange{Start: krStart, End: krEnd},
+		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
@@ -181,7 +185,7 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
-	if want, _ := key.ParseKeyRangeParts("", "10"); shardInfo.KeyRange != want {
+	if want := newKeyRange("-10"); shardInfo.KeyRange != want {
 		t.Errorf("shardInfo.KeyRange: want %v, got %v", want, shardInfo.KeyRange)
 	}
 	master := topo.TabletAlias{Cell: "ny", Uid: 1}
@@ -189,20 +193,17 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	replica2 := topo.TabletAlias{Cell: "ny", Uid: 3}
 	rdonly1 := topo.TabletAlias{Cell: "sj", Uid: 4}
 	rdonly2 := topo.TabletAlias{Cell: "sj", Uid: 5}
-	krStart, _ := key.HexKeyspaceId("").Unhex()
-	krEnd, _ := key.HexKeyspaceId("10").Unhex()
-	keyRange := key.KeyRange{Start: krStart, End: krEnd}
 	shardInfo.MasterAlias = master
 	shardInfo.ReplicaAliases = []topo.TabletAlias{replica1, replica2}
 	shardInfo.RdonlyAliases = []topo.TabletAlias{rdonly1, rdonly2}
-	shardInfo.KeyRange = keyRange
+	shardInfo.KeyRange = newKeyRange("-10")
 	shardInfo.ServedTypes = []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	shardInfo.SourceShards = []topo.SourceShard{
 		topo.SourceShard{
 			Uid:      1,
 			Keyspace: "source_ks",
-			Shard:    "-10",
-			KeyRange: keyRange,
+			Shard:    "08-10",
+			KeyRange: newKeyRange("08-10"),
 		},
 	}
 
@@ -223,13 +224,13 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if len(shardInfo.RdonlyAliases) != 2 || shardInfo.RdonlyAliases[0] != rdonly1 || shardInfo.RdonlyAliases[1] != rdonly2 {
 		t.Errorf("after UpdateShard: shardInfo.RdonlyAliases got %v", shardInfo.RdonlyAliases)
 	}
-	if shardInfo.KeyRange != keyRange {
+	if shardInfo.KeyRange != newKeyRange("-10") {
 		t.Errorf("after UpdateShard: shardInfo.KeyRange got %v", shardInfo.KeyRange)
 	}
 	if len(shardInfo.ServedTypes) != 3 || shardInfo.ServedTypes[0] != topo.TYPE_MASTER || shardInfo.ServedTypes[1] != topo.TYPE_REPLICA || shardInfo.ServedTypes[2] != topo.TYPE_RDONLY {
 		t.Errorf("after UpdateShard: shardInfo.ServedTypes got %v", shardInfo.ServedTypes)
 	}
-	if len(shardInfo.SourceShards) != 1 || shardInfo.SourceShards[0].Uid != 1 || shardInfo.SourceShards[0].Keyspace != "source_ks" || shardInfo.SourceShards[0].Shard != "-10" || shardInfo.SourceShards[0].KeyRange != keyRange {
+	if len(shardInfo.SourceShards) != 1 || shardInfo.SourceShards[0].Uid != 1 || shardInfo.SourceShards[0].Keyspace != "source_ks" || shardInfo.SourceShards[0].Shard != "08-10" || shardInfo.SourceShards[0].KeyRange != newKeyRange("08-10") {
 		t.Errorf("after UpdateShard: shardInfo.SourceShards got %v", shardInfo.SourceShards)
 	}
 
