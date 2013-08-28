@@ -210,13 +210,15 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 	var err error
 	for {
 		err = blp.streamBinlog(sendReply, binlogPrefix)
-		if err != nil {
-			log.Errorf("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
-			SendError(sendReply, err, blp.currentPosition)
-			return
+		sErr, ok := err.(*BinlogParseError)
+		if ok && sErr.IsEOF() {
+			time.Sleep(1.0 * time.Second)
+			*blp.startPosition = blp.currentPosition.Position
+			continue
 		}
-		time.Sleep(1.0 * time.Second)
-		*blp.startPosition = blp.currentPosition.Position
+		log.Errorf("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
+		SendError(sendReply, err, blp.currentPosition)
+		return
 	}
 }
 
