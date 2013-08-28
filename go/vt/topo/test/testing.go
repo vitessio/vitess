@@ -12,16 +12,14 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// PrepareTSFunc is a function that returns a fully functional
-// topo.Server, that should contain at least two cells, one of which
-// is global.
-type PrepareTSFunc func(t *testing.T) topo.Server
+func newKeyRange(value string) key.KeyRange {
+	_, result, err := topo.ValidateShardName(value)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
 
-// CheckFunc is a function that tests the implementation of a fragment
-// of the topo.Server API.
-type CheckFunc func(t *testing.T, ts topo.Server)
-
-// CheckKeyspace runs test
 func CheckKeyspace(t *testing.T, ts topo.Server) {
 	keyspaces, err := ts.GetKeyspaces()
 	if err != nil {
@@ -72,10 +70,6 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 
 func CheckTablet(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
-
-	krStart, _ := key.HexKeyspaceId("").Unhex()
-	krEnd, _ := key.HexKeyspaceId("10").Unhex()
-
 	tablet := &topo.Tablet{
 		Cell:     cell,
 		Uid:      1,
@@ -84,7 +78,7 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
 		State:    topo.STATE_READ_WRITE,
-		KeyRange: key.KeyRange{Start: krStart, End: krEnd},
+		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
@@ -177,10 +171,10 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	}
 
 	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != nil {
-		t.Errorf("CreateShard: %v", err)
+		t.Fatalf("CreateShard: %v", err)
 	}
 	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != topo.ErrNodeExists {
-		t.Errorf("CreateShard called second time, want: %v, got: %v", err, topo.ErrNodeExists)
+		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
 	if _, err := ts.GetShard("test_keyspace", "666"); err != topo.ErrNoNode {
@@ -191,11 +185,27 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
-	if want, _ := key.ParseKeyRangeParts("", "10"); shardInfo.KeyRange != want {
+	if want := newKeyRange("-10"); shardInfo.KeyRange != want {
 		t.Errorf("shardInfo.KeyRange: want %v, got %v", want, shardInfo.KeyRange)
 	}
-	newMaster := topo.TabletAlias{Cell: "nyc", Uid: 1}
-	shardInfo.MasterAlias = newMaster
+	master := topo.TabletAlias{Cell: "ny", Uid: 1}
+	replica1 := topo.TabletAlias{Cell: "ny", Uid: 2}
+	replica2 := topo.TabletAlias{Cell: "ny", Uid: 3}
+	rdonly1 := topo.TabletAlias{Cell: "sj", Uid: 4}
+	rdonly2 := topo.TabletAlias{Cell: "sj", Uid: 5}
+	shardInfo.MasterAlias = master
+	shardInfo.ReplicaAliases = []topo.TabletAlias{replica1, replica2}
+	shardInfo.RdonlyAliases = []topo.TabletAlias{rdonly1, rdonly2}
+	shardInfo.KeyRange = newKeyRange("-10")
+	shardInfo.ServedTypes = []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
+	shardInfo.SourceShards = []topo.SourceShard{
+		topo.SourceShard{
+			Uid:      1,
+			Keyspace: "source_ks",
+			Shard:    "08-10",
+			KeyRange: newKeyRange("08-10"),
+		},
+	}
 
 	if err := ts.UpdateShard(shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
@@ -205,15 +215,30 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
-	if shardInfo.MasterAlias != newMaster {
-		t.Errorf("after UpdateShard: shardInfo.MasterAlias want %v, got %v", newMaster, shardInfo.MasterAlias)
+	if shardInfo.MasterAlias != master {
+		t.Errorf("after UpdateShard: shardInfo.MasterAlias got %v", shardInfo.MasterAlias)
+	}
+	if len(shardInfo.ReplicaAliases) != 2 || shardInfo.ReplicaAliases[0] != replica1 || shardInfo.ReplicaAliases[1] != replica2 {
+		t.Errorf("after UpdateShard: shardInfo.ReplicaAliases got %v", shardInfo.ReplicaAliases)
+	}
+	if len(shardInfo.RdonlyAliases) != 2 || shardInfo.RdonlyAliases[0] != rdonly1 || shardInfo.RdonlyAliases[1] != rdonly2 {
+		t.Errorf("after UpdateShard: shardInfo.RdonlyAliases got %v", shardInfo.RdonlyAliases)
+	}
+	if shardInfo.KeyRange != newKeyRange("-10") {
+		t.Errorf("after UpdateShard: shardInfo.KeyRange got %v", shardInfo.KeyRange)
+	}
+	if len(shardInfo.ServedTypes) != 3 || shardInfo.ServedTypes[0] != topo.TYPE_MASTER || shardInfo.ServedTypes[1] != topo.TYPE_REPLICA || shardInfo.ServedTypes[2] != topo.TYPE_RDONLY {
+		t.Errorf("after UpdateShard: shardInfo.ServedTypes got %v", shardInfo.ServedTypes)
+	}
+	if len(shardInfo.SourceShards) != 1 || shardInfo.SourceShards[0].Uid != 1 || shardInfo.SourceShards[0].Keyspace != "source_ks" || shardInfo.SourceShards[0].Shard != "08-10" || shardInfo.SourceShards[0].KeyRange != newKeyRange("08-10") {
+		t.Errorf("after UpdateShard: shardInfo.SourceShards got %v", shardInfo.SourceShards)
 	}
 
 	shards, err := ts.GetShardNames("test_keyspace")
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
 	}
-	if len(shards) != 1 && shards[0] != "-10" {
+	if len(shards) != 1 || shards[0] != "-10" {
 		t.Errorf(`GetShardNames: want [ "-10" ], got %v`, shards)
 	}
 
@@ -367,26 +392,4 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		t.Errorf("GetSrvKeyspace(valid): %v", err)
 	}
 
-}
-
-// AllChecks is a list of functions that are called by CheckAll.
-var AllChecks = []CheckFunc{
-	CheckKeyspace,
-	//	CheckShard,
-	CheckTablet,
-	//	CheckReplicationPaths,
-	//	CheckServingGraph,
-}
-
-// CheckAll runs all available checks. For each check, a fresh
-// topo.Server is created by calling prepareTS. The server will be
-// closed after running the check.
-func CheckAll(t *testing.T, prepareTS PrepareTSFunc) {
-	for _, checkFunc := range AllChecks {
-		func() {
-			ts := prepareTS(t)
-			defer ts.Close()
-			checkFunc(t, ts)
-		}()
-	}
 }
