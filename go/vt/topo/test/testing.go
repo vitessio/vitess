@@ -177,10 +177,10 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	}
 
 	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != nil {
-		t.Errorf("CreateShard: %v", err)
+		t.Fatalf("CreateShard: %v", err)
 	}
 	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != topo.ErrNodeExists {
-		t.Errorf("CreateShard called second time, want: %v, got: %v", err, topo.ErrNodeExists)
+		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
 	if _, err := ts.GetShard("test_keyspace", "666"); err != topo.ErrNoNode {
@@ -213,7 +213,7 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
 	}
-	if len(shards) != 1 && shards[0] != "-10" {
+	if len(shards) != 1 || shards[0] != "-10" {
 		t.Errorf(`GetShardNames: want [ "-10" ], got %v`, shards)
 	}
 
