@@ -184,8 +184,27 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if want, _ := key.ParseKeyRangeParts("", "10"); shardInfo.KeyRange != want {
 		t.Errorf("shardInfo.KeyRange: want %v, got %v", want, shardInfo.KeyRange)
 	}
-	newMaster := topo.TabletAlias{Cell: "nyc", Uid: 1}
-	shardInfo.MasterAlias = newMaster
+	master := topo.TabletAlias{Cell: "ny", Uid: 1}
+	replica1 := topo.TabletAlias{Cell: "ny", Uid: 2}
+	replica2 := topo.TabletAlias{Cell: "ny", Uid: 3}
+	rdonly1 := topo.TabletAlias{Cell: "sj", Uid: 4}
+	rdonly2 := topo.TabletAlias{Cell: "sj", Uid: 5}
+	krStart, _ := key.HexKeyspaceId("").Unhex()
+	krEnd, _ := key.HexKeyspaceId("10").Unhex()
+	keyRange := key.KeyRange{Start: krStart, End: krEnd}
+	shardInfo.MasterAlias = master
+	shardInfo.ReplicaAliases = []topo.TabletAlias{replica1, replica2}
+	shardInfo.RdonlyAliases = []topo.TabletAlias{rdonly1, rdonly2}
+	shardInfo.KeyRange = keyRange
+	shardInfo.ServedTypes = []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
+	shardInfo.SourceShards = []topo.SourceShard{
+		topo.SourceShard{
+			Uid:      1,
+			Keyspace: "source_ks",
+			Shard:    "-10",
+			KeyRange: keyRange,
+		},
+	}
 
 	if err := ts.UpdateShard(shardInfo); err != nil {
 		t.Errorf("UpdateShard: %v", err)
@@ -195,8 +214,23 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
-	if shardInfo.MasterAlias != newMaster {
-		t.Errorf("after UpdateShard: shardInfo.MasterAlias want %v, got %v", newMaster, shardInfo.MasterAlias)
+	if shardInfo.MasterAlias != master {
+		t.Errorf("after UpdateShard: shardInfo.MasterAlias got %v", shardInfo.MasterAlias)
+	}
+	if len(shardInfo.ReplicaAliases) != 2 || shardInfo.ReplicaAliases[0] != replica1 || shardInfo.ReplicaAliases[1] != replica2 {
+		t.Errorf("after UpdateShard: shardInfo.ReplicaAliases got %v", shardInfo.ReplicaAliases)
+	}
+	if len(shardInfo.RdonlyAliases) != 2 || shardInfo.RdonlyAliases[0] != rdonly1 || shardInfo.RdonlyAliases[1] != rdonly2 {
+		t.Errorf("after UpdateShard: shardInfo.RdonlyAliases got %v", shardInfo.RdonlyAliases)
+	}
+	if shardInfo.KeyRange != keyRange {
+		t.Errorf("after UpdateShard: shardInfo.KeyRange got %v", shardInfo.KeyRange)
+	}
+	if len(shardInfo.ServedTypes) != 3 || shardInfo.ServedTypes[0] != topo.TYPE_MASTER || shardInfo.ServedTypes[1] != topo.TYPE_REPLICA || shardInfo.ServedTypes[2] != topo.TYPE_RDONLY {
+		t.Errorf("after UpdateShard: shardInfo.ServedTypes got %v", shardInfo.ServedTypes)
+	}
+	if len(shardInfo.SourceShards) != 1 || shardInfo.SourceShards[0].Uid != 1 || shardInfo.SourceShards[0].Keyspace != "source_ks" || shardInfo.SourceShards[0].Shard != "-10" || shardInfo.SourceShards[0].KeyRange != keyRange {
+		t.Errorf("after UpdateShard: shardInfo.SourceShards got %v", shardInfo.SourceShards)
 	}
 
 	shards, err := ts.GetShardNames("test_keyspace")
