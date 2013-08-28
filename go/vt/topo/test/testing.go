@@ -12,16 +12,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// PrepareTSFunc is a function that returns a fully functional
-// topo.Server, that should contain at least two cells, one of which
-// is global.
-type PrepareTSFunc func(t *testing.T) topo.Server
-
-// CheckFunc is a function that tests the implementation of a fragment
-// of the topo.Server API.
-type CheckFunc func(t *testing.T, ts topo.Server)
-
-// CheckKeyspace runs test
 func CheckKeyspace(t *testing.T, ts topo.Server) {
 	keyspaces, err := ts.GetKeyspaces()
 	if err != nil {
@@ -367,26 +357,4 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		t.Errorf("GetSrvKeyspace(valid): %v", err)
 	}
 
-}
-
-// AllChecks is a list of functions that are called by CheckAll.
-var AllChecks = []CheckFunc{
-	CheckKeyspace,
-	//	CheckShard,
-	CheckTablet,
-	//	CheckReplicationPaths,
-	//	CheckServingGraph,
-}
-
-// CheckAll runs all available checks. For each check, a fresh
-// topo.Server is created by calling prepareTS. The server will be
-// closed after running the check.
-func CheckAll(t *testing.T, prepareTS PrepareTSFunc) {
-	for _, checkFunc := range AllChecks {
-		func() {
-			ts := prepareTS(t)
-			defer ts.Close()
-			checkFunc(t, ts)
-		}()
-	}
 }
