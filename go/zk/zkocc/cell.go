@@ -77,7 +77,7 @@ type zkCell struct {
 func newZkCell(name, zkaddr string, zkrstats *zkrStats) *zkCell {
 	result := &zkCell{cellName: name, zkAddr: zkaddr, zcache: newZkCache(), zkrStats: zkrstats}
 	result.ready = sync.NewCond(&result.mutex)
-	result.states = stats.NewStates("ZkCell-"+name, []string{"Disconnected", "Connecting", "Connected", "BackOff"}, time.Now(), CELL_DISCONNECTED)
+	result.states = stats.NewStates("Zcell"+name, []string{"Disconnected", "Connecting", "Connected", "BackOff"}, time.Now(), CELL_DISCONNECTED)
 	go result.backgroundRefresher()
 	return result
 }

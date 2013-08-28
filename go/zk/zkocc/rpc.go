@@ -36,11 +36,11 @@ type zkrStats struct {
 
 func newZkrStats() *zkrStats {
 	zs := &zkrStats{}
-	zs.zkReads = stats.NewCounters("ZkReader-ZkReads")
-	zs.cacheReads = stats.NewCounters("ZkReader-CacheReads")
-	zs.staleReads = stats.NewCounters("ZkReader-StaleReads")
-	zs.nodeNotFoundErrors = stats.NewCounters("ZkReader-NodeNotFoundErrors")
-	zs.otherErrors = stats.NewCounters("ZkReader-OtherErrors")
+	zs.zkReads = stats.NewCounters("ZkReaderZkReads")
+	zs.cacheReads = stats.NewCounters("ZkReaderCacheReads")
+	zs.staleReads = stats.NewCounters("ZkReaderStaleReads")
+	zs.nodeNotFoundErrors = stats.NewCounters("ZkReaderNodeNotFoundErrors")
+	zs.otherErrors = stats.NewCounters("ZkReaderOtherErrors")
 	return zs
 }
 
@@ -67,8 +67,8 @@ func NewZkReader(resolveLocal bool, preload []string) *ZkReader {
 	if resolveLocal {
 		zkr.localCell = zk.GuessLocalCell()
 	}
-	zkr.rpcCalls = stats.NewInt("ZkReader-RpcCalls")
-	zkr.unknownCellErrors = stats.NewInt("ZkReader-UnknownCellErrors")
+	zkr.rpcCalls = stats.NewInt("ZkReaderRpcCalls")
+	zkr.unknownCellErrors = stats.NewInt("ZkReaderUnknownCellErrors")
 	zkr.zkrStats = newZkrStats()
 
 	stats.PublishJSONFunc("ZkReader", zkr.statsJSON)
