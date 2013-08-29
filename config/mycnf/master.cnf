@@ -7,7 +7,3 @@ sync_binlog = 1
 # enable group_id for google mysql. group_id is used for binlog positions,
 # so we don't depend on the specific host.
 rpl-hierarchical
-
-# allow any user to set timestamp, so we can use filtered replication
-# as a regular user.
-super_to_set_timestamp = 0

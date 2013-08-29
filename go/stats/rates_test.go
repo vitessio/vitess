@@ -11,7 +11,7 @@ import (
 )
 
 func TestRates(t *testing.T) {
-	Register(nil)
+	clear()
 	c := NewCounters("rcounter1")
 	r := NewRates("rates1", c, 3, 1*time.Second)
 	time.Sleep(50 * time.Millisecond)
@@ -42,10 +42,11 @@ func TestRates(t *testing.T) {
 }
 
 func TestRatesHook(t *testing.T) {
-	Register(nil)
+	clear()
 	c := NewCounters("rcounter2")
 	var gotname string
 	var gotv *Rates
+	clear()
 	Register(func(name string, v expvar.Var) {
 		gotname = name
 		gotv = v.(*Rates)

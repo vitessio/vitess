@@ -27,8 +27,8 @@ const (
 	EVENT_HEADER_SIZE  = 19 // 4.0 and above, can be larger in 5.x
 	BINLOG_BLOCK_SIZE  = 16 * 1024
 	MYSQLBINLOG_CHUNK  = 64 * 1024
-	MAX_WAIT_TIMEOUT   = 30
-	LOG_WAIT_TIMEOUT   = 5
+	MAX_WAIT_TIMEOUT   = 30 * time.Second
+	LOG_WAIT_TIMEOUT   = time.Second / 2
 )
 
 type brStats struct {
@@ -54,8 +54,8 @@ func (blr *BinlogReader) binLogPathForId(fileId int) string {
 func NewBinlogReader(binLogPrefix string) *BinlogReader {
 	return &BinlogReader{binLogPrefix: binLogPrefix,
 		BinlogBlockSize: BINLOG_BLOCK_SIZE,
-		MaxWaitTimeout:  MAX_WAIT_TIMEOUT * time.Second,
-		LogWaitTimeout:  LOG_WAIT_TIMEOUT * time.Second}
+		MaxWaitTimeout:  MAX_WAIT_TIMEOUT,
+		LogWaitTimeout:  LOG_WAIT_TIMEOUT}
 }
 
 /*

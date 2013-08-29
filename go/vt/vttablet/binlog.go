@@ -29,6 +29,7 @@ func init() {
 type BinlogPlayerController struct {
 	ts       topo.Server
 	dbConfig *mysql.ConnectionParams
+	mysqld   *mysqlctl.Mysqld
 
 	// Information about us
 	cell     string
@@ -41,10 +42,11 @@ type BinlogPlayerController struct {
 	interrupted chan struct{}
 }
 
-func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) *BinlogPlayerController {
+func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) *BinlogPlayerController {
 	blc := &BinlogPlayerController{
 		ts:          ts,
 		dbConfig:    dbConfig,
+		mysqld:      mysqld,
 		cell:        cell,
 		keyRange:    keyRange,
 		sourceShard: sourceShard,
@@ -83,6 +85,14 @@ func (bpc *BinlogPlayerController) Loop() {
 	log.Infof("%v: Exited main binlog player loop", bpc)
 }
 
+func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
+	if err := bpc.mysqld.ExecuteMysqlCommand("set @@global.super_to_set_timestamp = 0"); err != nil {
+		log.Warningf("Cannot set super_to_set_timestamp=0: %v", err)
+	} else {
+		log.Info("Successfully set super_to_set_timestamp=0")
+	}
+}
+
 func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
@@ -90,6 +100,11 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
+
+	// Enable any user to set the timestamp.
+	// We do it on every iteration to be sure, in case mysql was
+	// restarted.
+	bpc.DisableSuperToSetTimestamp()
 
 	// create the db connection, connect it
 	vtClient := mysqlctl.NewDbClient(bpc.dbConfig)
@@ -153,16 +168,18 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 type BinlogPlayerMap struct {
 	ts       topo.Server
 	dbConfig mysql.ConnectionParams
+	mysqld   *mysqlctl.Mysqld
 
 	// This mutex protects the map
 	mu      sync.Mutex
 	players map[topo.SourceShard]*BinlogPlayerController
 }
 
-func NewBinlogPlayerMap(ts topo.Server, dbConfig mysql.ConnectionParams) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts topo.Server, dbConfig mysql.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:       ts,
 		dbConfig: dbConfig,
+		mysqld:   mysqld,
 		players:  make(map[topo.SourceShard]*BinlogPlayerController),
 	}
 }
@@ -186,18 +203,24 @@ func (blm *BinlogPlayerMap) addPlayer(cell string, keyRange key.KeyRange, source
 		return
 	}
 
-	bpc = NewBinlogPlayerController(blm.ts, &blm.dbConfig, cell, keyRange, sourceShard)
+	bpc = NewBinlogPlayerController(blm.ts, &blm.dbConfig, blm.mysqld, cell, keyRange, sourceShard)
 	blm.players[sourceShard] = bpc
 	bpc.Start()
 }
 
 func (blm *BinlogPlayerMap) StopAllPlayers() {
+	hadPlayers := false
 	blm.mu.Lock()
 	for _, bpc := range blm.players {
 		bpc.Stop()
+		hadPlayers = true
 	}
 	blm.players = make(map[topo.SourceShard]*BinlogPlayerController)
 	blm.mu.Unlock()
+
+	if hadPlayers {
+		blm.EnableSuperToSetTimestamp()
+	}
 }
 
 // RefreshMap reads the right data from topo.Server and makes sure
@@ -216,8 +239,10 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 
 	// get the existing sources and build a map of sources to remove
 	toRemove := make(map[topo.SourceShard]bool)
+	hadPlayers := false
 	for source, _ := range blm.players {
 		toRemove[source] = true
+		hadPlayers = true
 	}
 
 	// for each source, add it if not there, and delete from toRemove
@@ -225,6 +250,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 		blm.addPlayer(tablet.Cell, tablet.KeyRange, sourceShard)
 		delete(toRemove, sourceShard)
 	}
+	hasPlayers := len(shardInfo.SourceShards) > 0
 
 	// remove all entries from toRemove
 	for source, _ := range toRemove {
@@ -233,4 +259,18 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 	}
 
 	blm.mu.Unlock()
+
+	if hadPlayers && !hasPlayers {
+		blm.EnableSuperToSetTimestamp()
+	}
+}
+
+// After this is called, the clients will need super privileges
+// to set timestamp
+func (blm *BinlogPlayerMap) EnableSuperToSetTimestamp() {
+	if err := blm.mysqld.ExecuteMysqlCommand("set @@global.super_to_set_timestamp = 1"); err != nil {
+		log.Warningf("Cannot set super_to_set_timestamp=1: %v", err)
+	} else {
+		log.Info("Successfully set super_to_set_timestamp=1")
+	}
 }

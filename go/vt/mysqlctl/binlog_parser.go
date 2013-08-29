@@ -193,16 +193,16 @@ func (err *BinlogParseError) IsEOF() bool {
 
 type SendUpdateStreamResponse func(response interface{}) error
 
-func (blp *Blp) isBehindReplication() (bool, error) {
+func (blp *Blp) ComputeBacklog() int64 {
 	rp, replErr := blp.globalState.getReplicationPosition()
 	if replErr != nil {
-		return false, replErr
+		return -1
 	}
-	if rp.MasterFilename != blp.currentPosition.Position.MasterFilename ||
-		rp.MasterPosition != blp.currentPosition.Position.MasterPosition {
-		return false, nil
+	pos := int64(blp.currentPosition.Position.MasterPosition)
+	if rp.MasterFilename != blp.currentPosition.Position.MasterFilename {
+		pos = 0
 	}
-	return true, nil
+	return int64(rp.MasterPosition) - pos
 }
 
 //Main entry function for reading and parsing the binlog.
@@ -212,24 +212,13 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 		err = blp.streamBinlog(sendReply, binlogPrefix)
 		sErr, ok := err.(*BinlogParseError)
 		if ok && sErr.IsEOF() {
-			// Double check the current parse position
-			// with replication position, if not so, it is an error
-			// otherwise it is a true EOF so retry.
-			log.Infof("EOF, retrying")
-			ok, replErr := blp.isBehindReplication()
-			if replErr != nil {
-				err = replErr
-			} else if !ok {
-				err = NewBinlogParseError(REPLICATION_ERROR, "EOF, but parse position behind replication")
-			} else {
-				time.Sleep(5.0 * time.Second)
-				*blp.startPosition = blp.currentPosition.Position
-				continue
-			}
+			time.Sleep(1.0 * time.Second)
+			*blp.startPosition = blp.currentPosition.Position
+			continue
 		}
 		log.Errorf("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
 		SendError(sendReply, err, blp.currentPosition)
-		break
+		return
 	}
 }
 
