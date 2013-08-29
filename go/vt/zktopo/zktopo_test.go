@@ -56,3 +56,8 @@ func TestServingGraph(t *testing.T) {
 	ts := newFakeServer(t)
 	test.CheckServingGraph(t, ts)
 }
+
+func TestLocks(t *testing.T) {
+	ts := newFakeServer(t)
+	test.CheckLocks(t, ts)
+}
