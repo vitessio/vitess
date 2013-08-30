@@ -498,8 +498,13 @@ func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *CompiledPlan, rc
 
 func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow []sqltypes.Value, pk []sqltypes.Value) {
 	// Read lock is needed because this runs as a separate goroutine.
+	// We also have to ensure that the server hasn't shut down by the time
+	// we got the lock.
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
+	if qe.cachePool.IsClosed() {
+		return
+	}
 
 	time.Sleep(10 * time.Second)
 	keys := make([]string, 1)
