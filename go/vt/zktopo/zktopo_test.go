@@ -71,3 +71,8 @@ func TestPid(t *testing.T) {
 	ts := newFakeServer(t)
 	test.CheckPid(t, ts)
 }
+
+func TestActions(t *testing.T) {
+	ts := newFakeServer(t)
+	test.CheckActions(t, ts)
+}
