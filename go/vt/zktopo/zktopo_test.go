@@ -61,3 +61,8 @@ func TestLocks(t *testing.T) {
 	ts := newFakeServer(t)
 	test.CheckLocks(t, ts)
 }
+
+func TestPid(t *testing.T) {
+	ts := newFakeServer(t)
+	test.CheckPid(t, ts)
+}

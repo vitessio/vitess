@@ -479,3 +479,32 @@ func CheckLocks(t *testing.T, ts topo.Server) {
 		t.Fatalf("LockShardForAction(666) worked")
 	}
 }
+
+func CheckPid(t *testing.T, ts topo.Server) {
+	cell := getLocalCell(t, ts)
+	tablet := &topo.Tablet{
+		Cell:     cell,
+		Uid:      1,
+		Parent:   topo.TabletAlias{},
+		Addr:     "localhost:3333",
+		Keyspace: "test_keyspace",
+		Type:     topo.TYPE_MASTER,
+		State:    topo.STATE_READ_WRITE,
+		KeyRange: newKeyRange("-10"),
+	}
+	if err := ts.CreateTablet(tablet); err != nil {
+		t.Errorf("CreateTablet: %v", err)
+	}
+	tabletAlias := topo.TabletAlias{cell, 1}
+
+	done := make(chan struct{}, 1)
+	if err := ts.CreateTabletPidNode(tabletAlias, done); err != nil {
+		t.Errorf("ts.CreateTabletPidNode: %v", err)
+	}
+
+	if err := ts.ValidateTabletPidNode(tabletAlias); err != nil {
+		t.Errorf("ts.ValidateTabletPidNode: %v", err)
+	}
+
+	close(done)
+}
