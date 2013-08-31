@@ -7,6 +7,7 @@ package test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -392,4 +393,118 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		t.Errorf("GetSrvKeyspace(valid): %v", err)
 	}
 
+}
+
+func CheckKeyspaceLock(t *testing.T, ts topo.Server) {
+	if err := ts.CreateKeyspace("test_keyspace"); err != nil {
+		t.Fatalf("CreateKeyspace: %v", err)
+	}
+
+	interrupted := make(chan struct{}, 1)
+	lockPath, err := ts.LockKeyspaceForAction("test_keyspace", "fake-content", 5*time.Second, interrupted)
+	if err != nil {
+		t.Fatalf("LockKeyspaceForAction: %v", err)
+	}
+
+	// test we can't take the lock again
+	if _, err := ts.LockKeyspaceForAction("test_keyspace", "unused-fake-content", time.Second/10, interrupted); err != topo.ErrTimeout {
+		t.Errorf("LockKeyspaceForAction(again): %v", err)
+	}
+
+	// test we can interrupt taking the lock
+	go func() {
+		time.Sleep(time.Second / 10)
+		close(interrupted)
+	}()
+	if _, err := ts.LockKeyspaceForAction("test_keyspace", "unused-fake-content", 5*time.Second, interrupted); err != topo.ErrInterrupted {
+		t.Errorf("LockKeyspaceForAction(interrupted): %v", err)
+	}
+
+	if err := ts.UnlockKeyspaceForAction("test_keyspace", lockPath, "fake-results"); err != nil {
+		t.Errorf("UnlockKeyspaceForAction(): %v", err)
+	}
+
+	// test we can't unlock again
+	if err := ts.UnlockKeyspaceForAction("test_keyspace", lockPath, "fake-results"); err == nil {
+		t.Error("UnlockKeyspaceForAction(again) worked")
+	}
+
+	// test we can't lock a non-existing keyspace
+	interrupted = make(chan struct{}, 1)
+	if _, err := ts.LockKeyspaceForAction("test_keyspace_666", "fake-content", 5*time.Second, interrupted); err == nil {
+		t.Fatalf("LockKeyspaceForAction(test_keyspace_666) worked for non-existing keyspace")
+	}
+}
+
+func CheckShardLock(t *testing.T, ts topo.Server) {
+	if err := ts.CreateKeyspace("test_keyspace"); err != nil {
+		t.Fatalf("CreateKeyspace: %v", err)
+	}
+	if err := topo.CreateShard(ts, "test_keyspace", "10-20"); err != nil {
+		t.Fatalf("CreateShard: %v", err)
+	}
+
+	interrupted := make(chan struct{}, 1)
+	lockPath, err := ts.LockShardForAction("test_keyspace", "10-20", "fake-content", 5*time.Second, interrupted)
+	if err != nil {
+		t.Fatalf("LockShardForAction: %v", err)
+	}
+
+	// test we can't take the lock again
+	if _, err := ts.LockShardForAction("test_keyspace", "10-20", "unused-fake-content", time.Second/2, interrupted); err != topo.ErrTimeout {
+		t.Errorf("LockShardForAction(again): %v", err)
+	}
+
+	// test we can interrupt taking the lock
+	go func() {
+		time.Sleep(time.Second / 2)
+		close(interrupted)
+	}()
+	if _, err := ts.LockShardForAction("test_keyspace", "10-20", "unused-fake-content", 5*time.Second, interrupted); err != topo.ErrInterrupted {
+		t.Errorf("LockShardForAction(interrupted): %v", err)
+	}
+
+	if err := ts.UnlockShardForAction("test_keyspace", "10-20", lockPath, "fake-results"); err != nil {
+		t.Errorf("UnlockShardForAction(): %v", err)
+	}
+
+	// test we can't unlock again
+	if err := ts.UnlockShardForAction("test_keyspace", "10-20", lockPath, "fake-results"); err == nil {
+		t.Error("UnlockShardForAction(again) worked")
+	}
+
+	// test we can't lock a non-existing shard
+	interrupted = make(chan struct{}, 1)
+	if _, err := ts.LockShardForAction("test_keyspace", "20-30", "fake-content", 5*time.Second, interrupted); err == nil {
+		t.Fatalf("LockShardForAction(test_keyspace/20-30) worked for non-existing shard")
+	}
+}
+
+func CheckPid(t *testing.T, ts topo.Server) {
+	cell := getLocalCell(t, ts)
+	tablet := &topo.Tablet{
+		Cell:     cell,
+		Uid:      1,
+		Parent:   topo.TabletAlias{},
+		Addr:     "localhost:3333",
+		Keyspace: "test_keyspace",
+		Type:     topo.TYPE_MASTER,
+		State:    topo.STATE_READ_WRITE,
+		KeyRange: newKeyRange("-10"),
+	}
+	if err := ts.CreateTablet(tablet); err != nil {
+		t.Errorf("CreateTablet: %v", err)
+	}
+	tabletAlias := topo.TabletAlias{cell, 1}
+
+	done := make(chan struct{}, 1)
+	if err := ts.CreateTabletPidNode(tabletAlias, done); err != nil {
+		t.Errorf("ts.CreateTabletPidNode: %v", err)
+	}
+
+	if err := ts.ValidateTabletPidNode(tabletAlias); err != nil {
+		t.Errorf("ts.ValidateTabletPidNode: %v", err)
+	}
+
+	close(done)
 }

@@ -56,3 +56,18 @@ func TestServingGraph(t *testing.T) {
 	ts := newFakeServer(t)
 	test.CheckServingGraph(t, ts)
 }
+
+func TestKeyspaceLock(t *testing.T) {
+	ts := newFakeServer(t)
+	test.CheckKeyspaceLock(t, ts)
+}
+
+func TestShardLock(t *testing.T) {
+	ts := newFakeServer(t)
+	test.CheckShardLock(t, ts)
+}
+
+func TestPid(t *testing.T) {
+	ts := newFakeServer(t)
+	test.CheckPid(t, ts)
+}
