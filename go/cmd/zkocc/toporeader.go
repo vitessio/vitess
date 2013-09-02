@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -48,7 +49,12 @@ func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.Sr
 		return err
 	}
 
-	keyspace, err := topo.NewSrvKeyspace(zkrReply.Data, zkrReply.Stat.Version())
+	keyspace := topo.NewSrvKeyspace(zkrReply.Stat.Version())
+	if len(zkrReply.Data) > 0 {
+		if err := json.Unmarshal([]byte(zkrReply.Data), keyspace); err != nil {
+			return fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", zkrReply.Data, err)
+		}
+	}
 	*reply = *keyspace
 	return
 }
@@ -59,9 +65,11 @@ func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.VtnsAd
 	if err := tr.zkr.Get(&zk.ZkPath{Path: shardPath}, zkrReply); err != nil {
 		return err
 	}
-	shard, err := topo.NewSrvShard(zkrReply.Data, zkrReply.Stat.Version())
-	if err != nil {
-		return err
+	shard := topo.NewSrvShard(zkrReply.Stat.Version())
+	if len(zkrReply.Data) > 0 {
+		if err := json.Unmarshal([]byte(zkrReply.Data), shard); err != nil {
+			return fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", zkrReply.Data, err)
+		}
 	}
 	*reply = shard.AddrsByType[req.TabletType]
 	return nil

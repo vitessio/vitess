@@ -5,6 +5,7 @@
 package zktopo
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 
@@ -103,7 +104,13 @@ func (zkts *Server) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, e
 		}
 		return nil, err
 	}
-	return topo.NewSrvShard(data, stat.Version())
+	srvShard := topo.NewSrvShard(stat.Version())
+	if len(data) > 0 {
+		if err := json.Unmarshal([]byte(data), srvShard); err != nil {
+			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v", data, err)
+		}
+	}
+	return srvShard, nil
 }
 
 func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
@@ -122,7 +129,13 @@ func (zkts *Server) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 		}
 		return nil, err
 	}
-	return topo.NewSrvKeyspace(data, stat.Version())
+	srvKeyspace := topo.NewSrvKeyspace(stat.Version())
+	if len(data) > 0 {
+		if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
+			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
+		}
+	}
+	return srvKeyspace, nil
 }
 
 var skipUpdateErr = fmt.Errorf("skip update")
