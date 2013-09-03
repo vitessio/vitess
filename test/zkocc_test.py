@@ -55,6 +55,11 @@ class TopoOccTest(unittest.TestCase):
     utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
     self.assertItemsEqual(self.topo.get_srv_keyspace_names('local'), ["test_keyspace1", "test_keyspace2"])
 
+    utils.prog_compile(['zkclient2'])
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqual(err, "KeyspaceName[0] = test_keyspace1\n" +
+                          "KeyspaceName[1] = test_keyspace2\n")
+
   def test_get_srv_keyspace(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
     t = tablet.Tablet(tablet_uid=1, cell="nj")
@@ -63,6 +68,10 @@ class TopoOccTest(unittest.TestCase):
     self.rebuild()
     reply = self.topo.get_srv_keyspace("test_nj", "test_keyspace")
     self.assertEqual(reply['TabletTypes'], ['master'])
+
+    utils.prog_compile(['zkclient2'])
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqual(err, "TabletType[0] = master\n")
 
   def test_get_srv_keyspace_local(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -80,6 +89,10 @@ class TopoOccTest(unittest.TestCase):
     t.update_addrs(mysql_ip_addr="127.0.0.1:%s" % t.mysql_port, secure_addr="localhost:%s" % (t.port + 500))
     self.rebuild()
     self.assertEqual(len(self.topo.get_end_points("test_nj", "test_keyspace", "0", "master")['Entries']), 1)
+
+    utils.prog_compile(['zkclient2'])
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqual(err, "Entry[0] = 1 localhost\n")
 
 
 def _format_time(timeFromBson):

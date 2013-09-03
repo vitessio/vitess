@@ -5,8 +5,6 @@
 package topo
 
 import (
-	"encoding/json"
-	"fmt"
 	"sort"
 
 	"github.com/youtube/vitess/go/vt/key"
@@ -42,15 +40,10 @@ func (sa SrvShardArray) Swap(i, j int) {
 
 func (sa SrvShardArray) Sort() { sort.Sort(sa) }
 
-func NewSrvShard(data string, version int) (*SrvShard, error) {
-	srv := new(SrvShard)
-	if len(data) > 0 {
-		if err := json.Unmarshal([]byte(data), srv); err != nil {
-			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v", data, err)
-		}
+func NewSrvShard(version int) *SrvShard {
+	return &SrvShard{
+		version: version,
 	}
-	srv.version = version
-	return srv, nil
 }
 
 // KeyspacePartition represents a continuous set of shards to
@@ -79,13 +72,8 @@ type SrvKeyspace struct {
 	version int
 }
 
-func NewSrvKeyspace(data string, version int) (*SrvKeyspace, error) {
-	srv := new(SrvKeyspace)
-	if len(data) > 0 {
-		if err := json.Unmarshal([]byte(data), srv); err != nil {
-			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
-		}
+func NewSrvKeyspace(version int) *SrvKeyspace {
+	return &SrvKeyspace{
+		version: version,
 	}
-	srv.version = version
-	return srv, nil
 }

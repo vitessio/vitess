@@ -6,6 +6,7 @@ package test
 
 import (
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,10 +172,10 @@ func CheckShard(t *testing.T, ts topo.Server) {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 
-	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != nil {
+	if err := topo.CreateShard(ts, "test_keyspace", "B0-C0"); err != nil {
 		t.Fatalf("CreateShard: %v", err)
 	}
-	if err := topo.CreateShard(ts, "test_keyspace", "-10"); err != topo.ErrNodeExists {
+	if err := topo.CreateShard(ts, "test_keyspace", "B0-C0"); err != topo.ErrNodeExists {
 		t.Errorf("CreateShard called second time, got: %v", err)
 	}
 
@@ -182,11 +183,11 @@ func CheckShard(t *testing.T, ts topo.Server) {
 		t.Errorf("GetShard(666): %v", err)
 	}
 
-	shardInfo, err := ts.GetShard("test_keyspace", "-10")
+	shardInfo, err := ts.GetShard("test_keyspace", "B0-C0")
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
-	if want := newKeyRange("-10"); shardInfo.KeyRange != want {
+	if want := newKeyRange("B0-C0"); shardInfo.KeyRange != want {
 		t.Errorf("shardInfo.KeyRange: want %v, got %v", want, shardInfo.KeyRange)
 	}
 	master := topo.TabletAlias{Cell: "ny", Uid: 1}
@@ -197,14 +198,14 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	shardInfo.MasterAlias = master
 	shardInfo.ReplicaAliases = []topo.TabletAlias{replica1, replica2}
 	shardInfo.RdonlyAliases = []topo.TabletAlias{rdonly1, rdonly2}
-	shardInfo.KeyRange = newKeyRange("-10")
+	shardInfo.KeyRange = newKeyRange("B0-C0")
 	shardInfo.ServedTypes = []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	shardInfo.SourceShards = []topo.SourceShard{
 		topo.SourceShard{
 			Uid:      1,
 			Keyspace: "source_ks",
-			Shard:    "08-10",
-			KeyRange: newKeyRange("08-10"),
+			Shard:    "B8-C0",
+			KeyRange: newKeyRange("B8-C0"),
 		},
 	}
 
@@ -212,7 +213,7 @@ func CheckShard(t *testing.T, ts topo.Server) {
 		t.Errorf("UpdateShard: %v", err)
 	}
 
-	shardInfo, err = ts.GetShard("test_keyspace", "-10")
+	shardInfo, err = ts.GetShard("test_keyspace", "B0-C0")
 	if err != nil {
 		t.Errorf("GetShard: %v", err)
 	}
@@ -225,13 +226,13 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if len(shardInfo.RdonlyAliases) != 2 || shardInfo.RdonlyAliases[0] != rdonly1 || shardInfo.RdonlyAliases[1] != rdonly2 {
 		t.Errorf("after UpdateShard: shardInfo.RdonlyAliases got %v", shardInfo.RdonlyAliases)
 	}
-	if shardInfo.KeyRange != newKeyRange("-10") {
+	if shardInfo.KeyRange != newKeyRange("B0-C0") {
 		t.Errorf("after UpdateShard: shardInfo.KeyRange got %v", shardInfo.KeyRange)
 	}
 	if len(shardInfo.ServedTypes) != 3 || shardInfo.ServedTypes[0] != topo.TYPE_MASTER || shardInfo.ServedTypes[1] != topo.TYPE_REPLICA || shardInfo.ServedTypes[2] != topo.TYPE_RDONLY {
 		t.Errorf("after UpdateShard: shardInfo.ServedTypes got %v", shardInfo.ServedTypes)
 	}
-	if len(shardInfo.SourceShards) != 1 || shardInfo.SourceShards[0].Uid != 1 || shardInfo.SourceShards[0].Keyspace != "source_ks" || shardInfo.SourceShards[0].Shard != "08-10" || shardInfo.SourceShards[0].KeyRange != newKeyRange("08-10") {
+	if len(shardInfo.SourceShards) != 1 || shardInfo.SourceShards[0].Uid != 1 || shardInfo.SourceShards[0].Keyspace != "source_ks" || shardInfo.SourceShards[0].Shard != "B8-C0" || shardInfo.SourceShards[0].KeyRange != newKeyRange("B8-C0") {
 		t.Errorf("after UpdateShard: shardInfo.SourceShards got %v", shardInfo.SourceShards)
 	}
 
@@ -239,8 +240,8 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetShardNames: %v", err)
 	}
-	if len(shards) != 1 || shards[0] != "-10" {
-		t.Errorf(`GetShardNames: want [ "-10" ], got %v`, shards)
+	if len(shards) != 1 || shards[0] != "B0-C0" {
+		t.Errorf(`GetShardNames: want [ "B0-C0" ], got %v`, shards)
 	}
 
 	if _, err := ts.GetShardNames("test_keyspace666"); err != topo.ErrNoNode {
@@ -493,7 +494,7 @@ func CheckPid(t *testing.T, ts topo.Server) {
 		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
-		t.Errorf("CreateTablet: %v", err)
+		t.Fatalf("CreateTablet: %v", err)
 	}
 	tabletAlias := topo.TabletAlias{cell, 1}
 
@@ -507,4 +508,92 @@ func CheckPid(t *testing.T, ts topo.Server) {
 	}
 
 	close(done)
+}
+
+func CheckActions(t *testing.T, ts topo.Server) {
+	cell := getLocalCell(t, ts)
+	tablet := &topo.Tablet{
+		Cell:     cell,
+		Uid:      1,
+		Parent:   topo.TabletAlias{},
+		Addr:     "localhost:3333",
+		Keyspace: "test_keyspace",
+		Type:     topo.TYPE_MASTER,
+		State:    topo.STATE_READ_WRITE,
+		KeyRange: newKeyRange("-10"),
+	}
+	if err := ts.CreateTablet(tablet); err != nil {
+		t.Fatalf("CreateTablet: %v", err)
+	}
+	tabletAlias := topo.TabletAlias{cell, 1}
+
+	actionPath, err := ts.WriteTabletAction(tabletAlias, "contents1")
+	if err != nil {
+		t.Fatalf("WriteTabletAction: %v", err)
+	}
+
+	interrupted := make(chan struct{}, 1)
+	if _, err := ts.WaitForTabletAction(actionPath, time.Second/100, interrupted); err != topo.ErrTimeout {
+		t.Errorf("WaitForTabletAction returned %v", err)
+	}
+	go func() {
+		time.Sleep(time.Second / 10)
+		close(interrupted)
+	}()
+	if _, err := ts.WaitForTabletAction(actionPath, time.Second*5, interrupted); err != topo.ErrInterrupted {
+		t.Errorf("WaitForTabletAction returned %v", err)
+	}
+
+	wg := sync.WaitGroup{}
+
+	// wait for the result in one thread
+	wg.Add(1)
+	go func() {
+		interrupted := make(chan struct{}, 1)
+		result, err := ts.WaitForTabletAction(actionPath, time.Second*10, interrupted)
+		if err != nil {
+			t.Errorf("WaitForTabletAction returned %v", err)
+		}
+		if result != "contents3" {
+			t.Errorf("WaitForTabletAction returned bad result: %v", result)
+		}
+		wg.Done()
+	}()
+
+	// process the action in another thread
+	done := make(chan struct{}, 1)
+	wg.Add(1)
+	go ts.ActionEventLoop(tabletAlias, func(ap, data string) error {
+		if ap != actionPath {
+			t.Errorf("Bad action path: %v", ap)
+		}
+		if data != "contents1" {
+			t.Errorf("Bad data: %v", data)
+		}
+		ta, contents, version, err := ts.ReadTabletActionPath(ap)
+		if err != nil {
+			t.Errorf("Error from ReadTabletActionPath: %v", err)
+		}
+		if contents != data {
+			t.Errorf("Bad contents: %v", contents)
+		}
+		if ta != tabletAlias {
+			t.Errorf("Bad tablet alias: %v", ta)
+		}
+
+		if err := ts.UpdateTabletAction(ap, "contents2", version); err != nil {
+			t.Errorf("UpdateTabletAction failed: %v", err)
+		}
+		if err := ts.StoreTabletActionResponse(ap, "contents3"); err != nil {
+			t.Errorf("StoreTabletActionResponse failed: %v", err)
+		}
+		if err := ts.UnblockTabletAction(ap); err != nil {
+			t.Errorf("UnblockTabletAction failed: %v", err)
+		}
+
+		wg.Done()
+		return nil
+	}, done)
+	close(done)
+	wg.Wait()
 }

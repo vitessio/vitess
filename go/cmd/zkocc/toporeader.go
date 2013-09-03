@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
@@ -26,8 +27,8 @@ func zkPathForVtKeyspace(cell, keyspace string) string {
 	return path.Join(zkPathForVt(cell), keyspace)
 }
 
-func zkPathForVtShard(cell, keyspace, shard string) string {
-	return path.Join(zkPathForVt(cell), keyspace, shard)
+func zkPathForVtType(cell, keyspace, shard string, tabletType topo.TabletType) string {
+	return path.Join(zkPathForVt(cell), keyspace, shard, string(tabletType))
 }
 
 func (tr *TopoReader) GetSrvKeyspaceNames(req topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
@@ -48,21 +49,26 @@ func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.Sr
 		return err
 	}
 
-	keyspace, err := topo.NewSrvKeyspace(zkrReply.Data, zkrReply.Stat.Version())
+	keyspace := topo.NewSrvKeyspace(zkrReply.Stat.Version())
+	if len(zkrReply.Data) > 0 {
+		if err := json.Unmarshal([]byte(zkrReply.Data), keyspace); err != nil {
+			return fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", zkrReply.Data, err)
+		}
+	}
 	*reply = *keyspace
 	return
 }
 
 func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.VtnsAddrs) (err error) {
-	shardPath := zkPathForVtShard(req.Cell, req.Keyspace, req.Shard)
+	tabletTypePath := zkPathForVtType(req.Cell, req.Keyspace, req.Shard, req.TabletType)
 	zkrReply := &zk.ZkNode{}
-	if err := tr.zkr.Get(&zk.ZkPath{Path: shardPath}, zkrReply); err != nil {
+	if err := tr.zkr.Get(&zk.ZkPath{Path: tabletTypePath}, zkrReply); err != nil {
 		return err
 	}
-	shard, err := topo.NewSrvShard(zkrReply.Data, zkrReply.Stat.Version())
-	if err != nil {
-		return err
+	if len(zkrReply.Data) > 0 {
+		if err := json.Unmarshal([]byte(zkrReply.Data), reply); err != nil {
+			return fmt.Errorf("VtnsAddrs unmarshal failed: %v %v", zkrReply.Data, err)
+		}
 	}
-	*reply = shard.AddrsByType[req.TabletType]
 	return nil
 }

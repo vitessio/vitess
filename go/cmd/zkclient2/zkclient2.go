@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 )
 
@@ -89,6 +90,61 @@ func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 	}
 }
 
+func getSrvKeyspaceNames(rpcClient *rpcplus.Client, cell string, verbose bool) {
+	req := &topo.GetSrvKeyspaceNamesArgs{
+		Cell: cell,
+	}
+	reply := &topo.SrvKeyspaceNames{}
+	if err := rpcClient.Call("TopoReader.GetSrvKeyspaceNames", req, reply); err != nil {
+		log.Fatalf("TopoReader.GetSrvKeyspaceNames error: %v", err)
+	}
+	if verbose {
+		for i, entry := range reply.Entries {
+			println(fmt.Sprintf("KeyspaceName[%v] = %v", i, entry))
+		}
+	}
+}
+
+func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bool) {
+	req := &topo.GetSrvKeyspaceArgs{
+		Cell:     cell,
+		Keyspace: keyspace,
+	}
+	reply := &topo.SrvKeyspace{}
+	if err := rpcClient.Call("TopoReader.GetSrvKeyspace", req, reply); err != nil {
+		log.Fatalf("TopoReader.GetSrvKeyspace error: %v", err)
+	}
+	if verbose {
+		for t, p := range reply.Partitions {
+			println(fmt.Sprintf("Partition[%v] =", t))
+			for i, s := range p.Shards {
+				println(fmt.Sprintf("Shard[%v]=%v", i, s.KeyRange.String()))
+			}
+		}
+		for i, t := range reply.TabletTypes {
+			println(fmt.Sprintf("TabletType[%v] = %v", i, t))
+		}
+	}
+}
+
+func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType string, verbose bool) {
+	req := &topo.GetEndPointsArgs{
+		Cell:       cell,
+		Keyspace:   keyspace,
+		Shard:      shard,
+		TabletType: topo.TabletType(tabletType),
+	}
+	reply := &topo.VtnsAddrs{}
+	if err := rpcClient.Call("TopoReader.GetEndPoints", req, reply); err != nil {
+		log.Fatalf("TopoReader.GetEndPoints error: %v", err)
+	}
+	if verbose {
+		for i, e := range reply.Entries {
+			println(fmt.Sprintf("Entry[%v] = %v %v", i, e.Uid, e.Host))
+		}
+	}
+}
+
 func qps(paths []string) {
 	var count sync2.AtomicInt32
 	for _, path := range paths {
@@ -131,11 +187,35 @@ func main() {
 		rpcClient := connect()
 		children(rpcClient, args, true)
 
+	} else if *mode == "getSrvKeyspaceNames" {
+		rpcClient := connect()
+		if len(args) == 1 {
+			getSrvKeyspaceNames(rpcClient, args[0], true)
+		} else {
+			log.Fatalf("getSrvKeyspaceNames only takes one argument")
+		}
+
+	} else if *mode == "getSrvKeyspace" {
+		rpcClient := connect()
+		if len(args) == 2 {
+			getSrvKeyspace(rpcClient, args[0], args[1], true)
+		} else {
+			log.Fatalf("getSrvKeyspace only takes two arguments")
+		}
+
+	} else if *mode == "getEndPoints" {
+		rpcClient := connect()
+		if len(args) == 4 {
+			getEndPoints(rpcClient, args[0], args[1], args[2], args[3], true)
+		} else {
+			log.Fatalf("getEndPoints only takes four arguments")
+		}
+
 	} else if *mode == "qps" {
 		qps(args)
 
 	} else {
 		flag.Usage()
-		log.Fatalf("Invalid mode: %v", mode)
+		log.Fatalf("Invalid mode: %v", *mode)
 	}
 }

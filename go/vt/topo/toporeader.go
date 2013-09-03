@@ -36,7 +36,7 @@ type GetEndPointsArgs struct {
 	Cell       string
 	Keyspace   string
 	Shard      string
-	TabletType string
+	TabletType TabletType
 }
 
 func RegisterTopoReader(tr TopoReader) {
