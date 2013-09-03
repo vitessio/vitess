@@ -117,7 +117,7 @@ class Log(object):
 
 class Case(object):
   def __init__(self, sql, bindings=None, result=None, rewritten=None, doc='',
-               cache_table="vtocc_cached", query_plan=None, cache_hits=None,
+               cache_table=None, query_plan=None, cache_hits=None,
                cache_misses=None, cache_absent=None, cache_invalidations=None,
                remote_address="[::1]"):
     # For all cache_* parameters, a number n means "check this value

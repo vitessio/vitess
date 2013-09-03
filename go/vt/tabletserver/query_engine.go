@@ -281,8 +281,10 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 				panic(NewTabletError(FAIL, "Disallowed outside transaction"))
 			}
 			reply = qe.execSelect(logStats, plan)
-		case sqlparser.PLAN_SELECT_PK:
-			reply = qe.execPK(logStats, plan)
+		case sqlparser.PLAN_PK_EQUAL:
+			reply = qe.execPKEqual(logStats, plan)
+		case sqlparser.PLAN_PK_IN:
+			reply = qe.execPKIN(logStats, plan)
 		case sqlparser.PLAN_SELECT_SUBQUERY:
 			reply = qe.execSubquery(logStats, plan)
 		case sqlparser.PLAN_SET:
@@ -410,23 +412,71 @@ func (qe *QueryEngine) execDDL(logStats *sqlQueryStats, ddl string) *mproto.Quer
 //-----------------------------------------------
 // Execution
 
-func (qe *QueryEngine) execPK(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
+func (qe *QueryEngine) execPKEqual(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	pkRows := buildValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
-	return qe.fetchPKRows(logStats, plan, pkRows)
+	if len(pkRows) != 1 || plan.Fields == nil {
+		panic("unexpected")
+	}
+	row := qe.fetchOne(logStats, plan, pkRows[0])
+	result = &mproto.QueryResult{}
+	result.Fields = plan.Fields
+	if row == nil {
+		return
+	}
+	result.Rows = make([][]sqltypes.Value, 1)
+	result.Rows[0] = applyFilter(plan.ColumnNumbers, row)
+	result.RowsAffected = 1
+	return
+}
+
+func (qe *QueryEngine) fetchOne(logStats *sqlQueryStats, plan *CompiledPlan, pk []sqltypes.Value) (row []sqltypes.Value) {
+	logStats.QuerySources |= QUERY_SOURCE_ROWCACHE
+	tableInfo := plan.TableInfo
+	keys := make([]string, 1)
+	keys[0] = buildKey(pk)
+	rcresults := tableInfo.Cache.Get(keys)
+	rcresult := rcresults[keys[0]]
+	if rcresult.Row != nil {
+		if qe.mustVerify() {
+			qe.spotCheck(logStats, plan, rcresult, pk)
+		}
+		logStats.CacheHits++
+		tableInfo.hits.Add(1)
+		return rcresult.Row
+	}
+	resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, pk)
+	if len(resultFromdb.Rows) == 0 {
+		logStats.CacheAbsent++
+		tableInfo.absent.Add(1)
+		return nil
+	}
+	row = resultFromdb.Rows[0]
+	tableInfo.Cache.Set(keys[0], row, rcresult.Cas)
+	logStats.CacheMisses++
+	tableInfo.misses.Add(1)
+	return row
+}
+
+func (qe *QueryEngine) execPKIN(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
+	pkRows := buildINValueList(plan.TableInfo, plan.PKValues, plan.BindVars)
+	return qe.fetchMulti(logStats, plan, pkRows)
 }
 
 func (qe *QueryEngine) execSubquery(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
-	innerResult := qe.qFetch(logStats, plan, plan.Subquery, nil)
-	return qe.fetchPKRows(logStats, plan, innerResult.Rows)
+	innerResult := qe.qFetch(logStats, plan.Subquery, plan.BindVars, nil)
+	return qe.fetchMulti(logStats, plan, innerResult.Rows)
 }
 
-func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
+func (qe *QueryEngine) fetchMulti(logStats *sqlQueryStats, plan *CompiledPlan, pkRows [][]sqltypes.Value) (result *mproto.QueryResult) {
 	result = &mproto.QueryResult{}
-	tableInfo := plan.TableInfo
-	if plan.Fields == nil {
+	if len(pkRows) == 0 {
+		return
+	}
+	if len(pkRows[0]) != 1 || plan.Fields == nil {
 		panic("unexpected")
 	}
 
+	tableInfo := plan.TableInfo
 	keys := make([]string, len(pkRows))
 	for i, pk := range pkRows {
 		keys[i] = buildKey(pk)
@@ -435,6 +485,7 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 
 	result.Fields = plan.Fields
 	rows := make([][]sqltypes.Value, 0, len(pkRows))
+	missingRows := make([]sqltypes.Value, 0, len(pkRows))
 	var hits, absent, misses int64
 	for i, pk := range pkRows {
 		rcresult := rcresults[keys[i]]
@@ -445,24 +496,17 @@ func (qe *QueryEngine) fetchPKRows(logStats *sqlQueryStats, plan *CompiledPlan, 
 			rows = append(rows, applyFilter(plan.ColumnNumbers, rcresult.Row))
 			hits++
 		} else {
-			resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
-			if len(resultFromdb.Rows) == 0 {
-				absent++
-				continue
-			}
-			row := resultFromdb.Rows[0]
-			if qe.mustVerify() {
-				spotCheckCount.Add(1)
-				pkRow := applyFilter(tableInfo.PKColumns, row)
-				newKey := buildKey(pkRow)
-				if newKey != keys[i] {
-					log.Warningf("Key mismatch for query %s. computed: %s, fetched: %s", plan.FullQuery.Query, keys[i], newKey)
-					errorStats.Add("Mismatch", 1)
-				}
-			}
-			tableInfo.Cache.Set(keys[i], row, rcresult.Cas)
+			missingRows = append(missingRows, pk[0])
+		}
+	}
+	if len(missingRows) != 0 {
+		resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, missingRows)
+		misses = int64(len(resultFromdb.Rows))
+		absent = int64(len(pkRows)) - hits - misses
+		for _, row := range resultFromdb.Rows {
 			rows = append(rows, applyFilter(plan.ColumnNumbers, row))
-			misses++
+			key := buildKey(applyFilter(plan.TableInfo.PKColumns, row))
+			tableInfo.Cache.Set(key, row, rcresults[key].Cas)
 		}
 	}
 
@@ -486,7 +530,7 @@ func (qe *QueryEngine) mustVerify() bool {
 
 func (qe *QueryEngine) spotCheck(logStats *sqlQueryStats, plan *CompiledPlan, rcresult RCResult, pk []sqltypes.Value) {
 	spotCheckCount.Add(1)
-	resultFromdb := qe.qFetch(logStats, plan, plan.OuterQuery, pk)
+	resultFromdb := qe.qFetch(logStats, plan.OuterQuery, plan.BindVars, pk)
 	var dbrow []sqltypes.Value
 	if len(resultFromdb.Rows) != 0 {
 		dbrow = resultFromdb.Rows[0]
@@ -534,7 +578,7 @@ func (qe *QueryEngine) execDirect(logStats *sqlQueryStats, plan *CompiledPlan, c
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
 func (qe *QueryEngine) execSelect(logStats *sqlQueryStats, plan *CompiledPlan) (result *mproto.QueryResult) {
 	if plan.Fields != nil {
-		result = qe.qFetch(logStats, plan, plan.FullQuery, nil)
+		result = qe.qFetch(logStats, plan.FullQuery, plan.BindVars, nil)
 		result.Fields = plan.Fields
 		return
 	}
@@ -666,8 +710,8 @@ func (qe *QueryEngine) execSet(logStats *sqlQueryStats, conn PoolConnection, pla
 	return &mproto.QueryResult{}
 }
 
-func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, plan *CompiledPlan, parsed_query *sqlparser.ParsedQuery, listVars []sqltypes.Value) (result *mproto.QueryResult) {
-	sql := qe.generateFinalSql(parsed_query, plan.BindVars, listVars, nil)
+func (qe *QueryEngine) qFetch(logStats *sqlQueryStats, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value) (result *mproto.QueryResult) {
+	sql := qe.generateFinalSql(parsed_query, bindVars, listVars, nil)
 	q, ok := qe.consolidator.Create(string(sql))
 	if ok {
 		defer q.Broadcast()

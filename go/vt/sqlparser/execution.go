@@ -18,7 +18,8 @@ type PlanType int
 const (
 	PLAN_PASS_SELECT PlanType = iota
 	PLAN_PASS_DML
-	PLAN_SELECT_PK
+	PLAN_PK_EQUAL
+	PLAN_PK_IN
 	PLAN_SELECT_SUBQUERY
 	PLAN_DML_PK
 	PLAN_DML_SUBQUERY
@@ -33,7 +34,8 @@ const (
 var planName = []string{
 	"PASS_SELECT",
 	"PASS_DML",
-	"SELECT_PK",
+	"PK_EQUAL",
+	"PK_IN",
 	"SELECT_SUBQUERY",
 	"DML_PK",
 	"DML_SUBQUERY",
@@ -57,7 +59,7 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 }
 
 func (pt PlanType) IsSelect() bool {
-	return pt == PLAN_PASS_SELECT || pt == PLAN_SELECT_PK || pt == PLAN_SELECT_SUBQUERY
+	return pt == PLAN_PASS_SELECT || pt == PLAN_PK_EQUAL || pt == PLAN_PK_IN || pt == PLAN_SELECT_SUBQUERY
 }
 
 func (pt PlanType) MarshalJSON() ([]byte, error) {
@@ -79,6 +81,7 @@ const (
 	REASON_NOINDEX_MATCH
 	REASON_TABLE_NOINDEX
 	REASON_PK_CHANGE
+	REASON_COMPOSITE_PK
 	REASON_HAS_HINTS
 )
 
@@ -96,6 +99,7 @@ var reasonName = []string{
 	"NOINDEX_MATCH",
 	"TABLE_NOINDEX",
 	"PK_CHANGE",
+	"COMPOSITE_PK",
 	"HAS_HINTS",
 }
 
@@ -117,13 +121,15 @@ type ExecPlan struct {
 	Reason    ReasonType
 	TableName string
 
-	// Query to fetch field info
+	// FieldQuery is used to fetch field info
 	FieldQuery *ParsedQuery
 
-	// PLAN_PASS_*
+	// FullQuery will be set for all plans.
 	FullQuery *ParsedQuery
 
-	// For anything that's not PLAN_PASS_*
+	// For PK plans, only OuterQuery is set.
+	// For SUBQUERY plans, Subquery is also set.
+	// IndexUsed is set only for PLAN_SELECT_SUBQUERY
 	OuterQuery *ParsedQuery
 	Subquery   *ParsedQuery
 	IndexUsed  string
@@ -132,10 +138,9 @@ type ExecPlan struct {
 	// For PLAN_INSERT_SUBQUERY, columns to be inserted
 	ColumnNumbers []int
 
-	// PLAN_*_PK
-	// For select, update & delete: where clause
-	// For insert: values clause
-	// For PLAN_INSERT_SUBQUERY: Location of pk values in subquery
+	// PLAN_PK_EQUAL, PLAN_DML_PK: where clause values
+	// PLAN_PK_IN: IN clause values
+	// PLAN_INSERT_PK: values clause
 	PKValues []interface{}
 
 	// For update: set clause
@@ -287,19 +292,36 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 
 	// order
-	orders := node.At(SELECT_ORDER_OFFSET).execAnalyzeOrder()
-	if orders == nil {
+	if node.At(SELECT_ORDER_OFFSET).Len() != 0 {
 		plan.Reason = REASON_ORDER
 		return plan
 	}
 
-	if len(orders) == 0 { // Only do pk analysis if there's no order by clause
-		if pkValues := getPKValues(conditions, tableInfo.Indexes[0]); pkValues != nil {
-			plan.PlanId = PLAN_SELECT_PK
-			plan.OuterQuery = node.GenerateSelectOuterQuery(tableInfo)
+	// This check should never fail because we only cache tables with primary keys.
+	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
+		panic("unexpected")
+	}
+
+	// Attempt PK match only if there's no limit clause
+	if node.At(SELECT_LIMIT_OFFSET).Len() == 0 {
+		planId, pkValues := getSelectPKValues(conditions, tableInfo.Indexes[0])
+		switch planId {
+		case PLAN_PK_EQUAL:
+			plan.PlanId = PLAN_PK_EQUAL
+			plan.OuterQuery = node.GenerateEqualOuterQuery(tableInfo)
+			plan.PKValues = pkValues
+			return plan
+		case PLAN_PK_IN:
+			plan.PlanId = PLAN_PK_IN
+			plan.OuterQuery = node.GenerateInOuterQuery(tableInfo)
 			plan.PKValues = pkValues
 			return plan
 		}
+	}
+
+	if len(tableInfo.Indexes[0].Columns) != 1 {
+		plan.Reason = REASON_COMPOSITE_PK
+		return plan
 	}
 
 	// TODO: Analyze hints to improve plan.
@@ -308,7 +330,7 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 		return plan
 	}
 
-	plan.IndexUsed = getIndexMatch(conditions, orders, tableInfo.Indexes)
+	plan.IndexUsed = getIndexMatch(conditions, tableInfo.Indexes)
 	if plan.IndexUsed == "" {
 		plan.Reason = REASON_NOINDEX_MATCH
 		return plan
@@ -319,7 +341,7 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 	}
 	// TODO: We can further optimize. Change this to pass-through if select list matches all columns in index.
 	plan.PlanId = PLAN_SELECT_SUBQUERY
-	plan.OuterQuery = node.GenerateSelectOuterQuery(tableInfo)
+	plan.OuterQuery = node.GenerateInOuterQuery(tableInfo)
 	plan.Subquery = node.GenerateSelectSubquery(tableInfo, plan.IndexUsed)
 	return plan
 }
@@ -588,7 +610,14 @@ func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 		n.PushTwo(left, right)
 		return []*Node{n}
 	case IN:
-		return node.execAnalyzeIN()
+		left := node.At(0).execAnalyzeID()
+		right := node.At(1).execAnalyzeSimpleINList()
+		if left == nil || right == nil {
+			return nil
+		}
+		n := NewParseNode(node.Type, node.Value)
+		n.PushTwo(left, right)
+		return []*Node{n}
 	case BETWEEN:
 		left := node.At(0).execAnalyzeID()
 		right1 := node.At(1).execAnalyzeValue()
@@ -599,57 +628,6 @@ func (node *Node) execAnalyzeBoolean() (conditions []*Node) {
 		return []*Node{node}
 	}
 	return nil
-}
-
-func (node *Node) execAnalyzeIN() []*Node {
-	// simple
-	if node.At(0).Type != '(' { // IN->ID
-		left := node.At(0).execAnalyzeID()
-		right := node.At(1).execAnalyzeSimpleINList() // IN->'('
-		if left == nil || right == nil {
-			return nil
-		}
-		n := NewParseNode(node.Type, node.Value)
-		n.PushTwo(left, right)
-		return []*Node{n}
-	}
-
-	// composite
-	idList := node.At(0).At(0) // IN->'('->NODE_LIST
-	conditions := make([]*Node, idList.Len())
-	for i := 0; i < idList.Len(); i++ {
-		left := idList.At(i).execAnalyzeID()
-		right := node.execBuildINList(i)
-		if left == nil || right == nil {
-			return nil
-		}
-		n := NewParseNode(node.Type, node.Value)
-		n.PushTwo(left, right)
-		conditions[i] = n
-	}
-	return conditions
-}
-
-func (node *Node) execBuildINList(index int) *Node {
-	valuesList := node.At(1).At(0) // IN->'('->NODE_LIST
-	newList := NewSimpleParseNode(NODE_LIST, "node_list")
-	for i := 0; i < valuesList.Len(); i++ {
-		if valuesList.At(i).Type != '(' { // NODE_LIST->'('
-			return nil
-		}
-		innerList := valuesList.At(i).At(0) // NODE_LIST->'('->NODE_LIST
-		if innerList.Type != NODE_LIST || index >= innerList.Len() {
-			return nil
-		}
-		innerValue := innerList.At(index).execAnalyzeValue()
-		if innerValue == nil {
-			return nil
-		}
-		newList.Push(innerValue)
-	}
-	INList := NewSimpleParseNode('(', "(")
-	INList.Push(newList)
-	return INList
 }
 
 func (node *Node) execAnalyzeSimpleINList() *Node {
@@ -718,37 +696,6 @@ func (node *Node) execAnalyzeUpdateExpressions(pkIndex *schema.Index) (pkValues 
 		pkValues[index] = asInterface(value)
 	}
 	return pkValues, true
-}
-
-//-----------------------------------------------
-// Order
-
-func (node *Node) execAnalyzeOrder() (orders []*Node) {
-	orders = make([]*Node, 0, 8)
-	if node.Len() == 0 {
-		return orders
-	}
-	orderList := node.At(0)
-	for i := 0; i < orderList.Len(); i++ {
-		if order := orderList.At(i).execAnalyzeOrderExpression(); order != nil {
-			orders = append(orders, order)
-		} else {
-			return nil
-		}
-	}
-	return orders
-}
-
-func (node *Node) execAnalyzeOrderExpression() (order *Node) {
-	switch node.Type {
-	case ID:
-		return node
-	case '.':
-		return node.At(1).execAnalyzeOrderExpression()
-	case '(', ASC, DESC:
-		return node.At(0).execAnalyzeOrderExpression()
-	}
-	return nil
 }
 
 //-----------------------------------------------
@@ -861,11 +808,25 @@ func NewIndexScoreList(indexes []*schema.Index) []*IndexScore {
 	return scoreList
 }
 
-func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interface{}) {
-	if pkIndex.Name != "PRIMARY" {
-		log.Warningf("Table has no primary key")
-		return nil
+func getSelectPKValues(conditions []*Node, pkIndex *schema.Index) (planId PlanType, pkValues []interface{}) {
+	pkValues = getPKValues(conditions, pkIndex)
+	if pkValues == nil {
+		return PLAN_PASS_SELECT, nil
 	}
+	for _, pkValue := range pkValues {
+		inList, ok := pkValue.([]interface{})
+		if !ok {
+			continue
+		}
+		if len(pkValues) == 1 {
+			return PLAN_PK_IN, inList
+		}
+		return PLAN_PASS_SELECT, nil
+	}
+	return PLAN_PK_EQUAL, pkValues
+}
+
+func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interface{}) {
 	pkIndexScore := NewIndexScore(pkIndex)
 	pkValues = make([]interface{}, len(pkIndexScore.ColumnMatch))
 	for _, condition := range conditions {
@@ -889,16 +850,11 @@ func getPKValues(conditions []*Node, pkIndex *schema.Index) (pkValues []interfac
 	return nil
 }
 
-func getIndexMatch(conditions []*Node, orders []*Node, indexes []*schema.Index) string {
+func getIndexMatch(conditions []*Node, indexes []*schema.Index) string {
 	indexScores := NewIndexScoreList(indexes)
 	for _, condition := range conditions {
 		for _, index := range indexScores {
 			index.FindMatch(string(condition.At(0).Value))
-		}
-	}
-	for _, order := range orders {
-		for _, index := range indexScores {
-			index.FindMatch(string(order.Value))
 		}
 	}
 	highScore := NO_MATCH
@@ -993,7 +949,7 @@ func (node *Node) GenerateDefaultQuery(tableInfo *schema.Table) *ParsedQuery {
 	return buf.ParsedQuery()
 }
 
-func (node *Node) GenerateSelectOuterQuery(tableInfo *schema.Table) *ParsedQuery {
+func (node *Node) GenerateEqualOuterQuery(tableInfo *schema.Table) *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
 	fmt.Fprintf(buf, "select ")
 	writeColumnList(buf, tableInfo.Columns)
@@ -1002,12 +958,25 @@ func (node *Node) GenerateSelectOuterQuery(tableInfo *schema.Table) *ParsedQuery
 	return buf.ParsedQuery()
 }
 
+func (node *Node) GenerateInOuterQuery(tableInfo *schema.Table) *ParsedQuery {
+	buf := NewTrackedBuffer(nil)
+	fmt.Fprintf(buf, "select ")
+	writeColumnList(buf, tableInfo.Columns)
+	// We assume there is one and only one PK column.
+	// A '*' argument name means all variables of the list.
+	buf.Fprintf(" from %v where %s in (%a)", node.At(SELECT_FROM_OFFSET), tableInfo.Indexes[0].Columns[0], "*")
+	return buf.ParsedQuery()
+}
+
 func (node *Node) GenerateInsertOuterQuery() *ParsedQuery {
 	buf := NewTrackedBuffer(nil)
-	buf.Fprintf("insert %vinto %v%v values ",
-		node.At(INSERT_COMMENT_OFFSET), node.At(INSERT_TABLE_OFFSET), node.At(INSERT_COLUMN_LIST_OFFSET))
-	writeArg(buf, "_rowValues")
-	buf.Fprintf("%v", node.At(INSERT_ON_DUP_OFFSET))
+	buf.Fprintf("insert %vinto %v%v values %a%v",
+		node.At(INSERT_COMMENT_OFFSET),
+		node.At(INSERT_TABLE_OFFSET),
+		node.At(INSERT_COLUMN_LIST_OFFSET),
+		"_rowValues",
+		node.At(INSERT_ON_DUP_OFFSET),
+	)
 	return buf.ParsedQuery()
 }
 
@@ -1031,18 +1000,8 @@ func generatePKWhere(buf *TrackedBuffer, pkIndex *schema.Index) {
 		if i != 0 {
 			buf.WriteString(" and ")
 		}
-		buf.WriteString(pkIndex.Columns[i])
-		buf.WriteString(" = ")
-		writeArg(buf, strconv.FormatInt(int64(i), 10))
+		buf.Fprintf("%s = %a", pkIndex.Columns[i], strconv.FormatInt(int64(i), 10))
 	}
-}
-
-func writeArg(buf *TrackedBuffer, arg string) {
-	start := buf.Len()
-	buf.WriteString(":")
-	buf.WriteString(arg)
-	end := buf.Len()
-	buf.bindLocations = append(buf.bindLocations, BindLocation{start, end - start})
 }
 
 func (node *Node) GenerateSelectSubquery(tableInfo *schema.Table, index string) *ParsedQuery {

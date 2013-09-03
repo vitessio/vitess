@@ -42,6 +42,8 @@ func (pq *ParsedQuery) GenerateQuery(bindVariables map[string]interface{}, listV
 				return nil, NewParserError("Index out of range: %d", index)
 			}
 			supplied = listVariables[index]
+		} else if varName[0] == '*' {
+			supplied = listVariables
 		} else {
 			var ok bool
 			supplied, ok = bindVariables[varName]

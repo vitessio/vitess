@@ -20,14 +20,26 @@ insert into vtocc_b(eid, id) values(1, 1), (1, 2)
 insert into vtocc_c(eid, name, foo) values(10, 'abcd', '20'), (11, 'bcde', '30')
 commit
 
-create table vtocc_cached(eid bigint, bid varbinary(16), name varchar(128), foo varbinary(128), primary key(eid, bid))
-create index aname on vtocc_cached(eid, name)
+create table vtocc_cached1(eid bigint, name varchar(128), foo varbinary(128), primary key(eid))
+create index aname1 on vtocc_cached1(name)
 begin
-delete from vtocc_cached
-insert into vtocc_cached values (1, 'foo', 'abcd1', 'efgh')
-insert into vtocc_cached values (1, 'bar', 'abcd1', 'efgh')
-insert into vtocc_cached values (2, 'foo', 'abcd2', 'efgh')
-insert into vtocc_cached values (2, 'bar', 'abcd2', 'efgh')
+delete from vtocc_cached1
+insert into vtocc_cached1 values (1, 'a', 'abcd')
+insert into vtocc_cached1 values (2, 'a', 'abcd')
+insert into vtocc_cached1 values (3, 'c', 'abcd')
+insert into vtocc_cached1 values (4, 'd', 'abcd')
+insert into vtocc_cached1 values (5, 'e', 'efgh')
+insert into vtocc_cached1 values (9, 'i', 'ijkl')
+commit
+
+create table vtocc_cached2(eid bigint, bid varbinary(16), name varchar(128), foo varbinary(128), primary key(eid, bid))
+create index aname2 on vtocc_cached2(eid, name)
+begin
+delete from vtocc_cached2
+insert into vtocc_cached2 values (1, 'foo', 'abcd1', 'efgh')
+insert into vtocc_cached2 values (1, 'bar', 'abcd1', 'efgh')
+insert into vtocc_cached2 values (2, 'foo', 'abcd2', 'efgh')
+insert into vtocc_cached2 values (2, 'bar', 'abcd2', 'efgh')
 commit
 
 create table vtocc_big(id int, string1 varchar(128), string2 varchar(100), string3 char(1), string4 varchar(50), string5 varchar(50), date1 date, string6 varchar(16), string7 varchar(120), bigint1 bigint(20), bigint2 bigint(20), date2 date, integer1 int, tinyint1 tinyint(4), primary key(id)) comment 'vtocc_big'
@@ -58,8 +70,9 @@ drop table vtocc_c
 drop table vtocc_d
 drop table vtocc_e
 drop table vtocc_f
-drop table vtocc_cached
+drop table vtocc_cached1
 drop table vtocc_cached2
+drop table vtocc_renamed
 drop table vtocc_nocache
 drop table vtocc_big
 drop table vtocc_ints

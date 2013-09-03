@@ -68,8 +68,13 @@ func initTables() {
 	d := schema.NewTable("d")
 	d.AddColumn("name", "varbinary(10)", SQLZERO, "")
 	d.AddColumn("id", "int", SQLZERO, "")
+	d.AddColumn("foo", "varchar(10)", SQLZERO, "")
+	d.AddColumn("bar", "varchar(10)", SQLZERO, "")
 	dcolumns := []string{"name"}
 	d.Indexes = append(d.Indexes, &schema.Index{"PRIMARY", []string{"name"}, []uint64{1}, dcolumns})
+	d.Indexes = append(d.Indexes, &schema.Index{"d_id", []string{"id"}, []uint64{1}, d.Indexes[0].Columns})
+	d.Indexes = append(d.Indexes, &schema.Index{"d_bar_never", []string{"bar", "foo"}, []uint64{2, 1}, d.Indexes[0].Columns})
+	d.Indexes = append(d.Indexes, &schema.Index{"d_bar", []string{"bar", "foo"}, []uint64{3, 1}, d.Indexes[0].Columns})
 	d.PKColumns = append(d.PKColumns, 0)
 	d.CacheType = schema.CACHE_RW
 	schem["d"] = d
@@ -78,7 +83,7 @@ func initTables() {
 	e.AddColumn("eid", "int", SQLZERO, "")
 	e.AddColumn("id", "int", SQLZERO, "")
 	ecolumns := []string{"eid", "id"}
-	e.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, ecolumns})
+	e.Indexes = append(e.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, ecolumns})
 	e.PKColumns = append(a.PKColumns, 0, 1)
 	e.CacheType = schema.CACHE_W
 	schem["e"] = e

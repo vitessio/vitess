@@ -16,7 +16,7 @@ import (
 )
 
 // buildValueList builds the set of PK reference rows used to drive the next query.
-// It is uses the PK values supplied in the original query and bind variables.
+// It uses the PK values supplied in the original query and bind variables.
 // The generated reference rows are validated for type match against the PK of the table.
 func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) [][]sqltypes.Value {
 	length := -1
@@ -44,6 +44,21 @@ func buildValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[s
 				valueList[i][j] = resolveValue(tableInfo.GetPKColumn(j), pkValue, bindVars)
 			}
 		}
+	}
+	return valueList
+}
+
+// buildINValueList builds the set of PK reference rows used to drive the next query
+// using an IN clause. This works only for tables with no composite PK columns.
+// The generated reference rows are validated for type match against the PK of the table.
+func buildINValueList(tableInfo *TableInfo, pkValues []interface{}, bindVars map[string]interface{}) [][]sqltypes.Value {
+	if len(tableInfo.PKColumns) != 1 {
+		panic("unexpected")
+	}
+	valueList := make([][]sqltypes.Value, len(pkValues))
+	for i, pkValue := range pkValues {
+		valueList[i] = make([]sqltypes.Value, 1)
+		valueList[i][0] = resolveValue(tableInfo.GetPKColumn(0), pkValue, bindVars)
 	}
 	return valueList
 }

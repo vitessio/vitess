@@ -298,13 +298,13 @@ select c.eid from a as c
 }
 
 # (eid)
-select (eid) from a as c
+select (eid) from a
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
   "TableName": "a",
-  "FieldQuery": "select eid from a as c where 1 != 1",
-  "FullQuery": "select eid from a as c limit :_vtMaxResultSize",
+  "FieldQuery": "select eid from a where 1 != 1",
+  "FullQuery": "select eid from a limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
@@ -337,17 +337,89 @@ select eid from a for update
   "SetValue": null
 }
 
-# simple where
-select * from a where eid=1
+# composite pk supplied values
+select * from a where eid = 1 and id in (1, 2)
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "COMPOSITE_PK",
+  "TableName": "a",
+  "FieldQuery": "select * from a where 1 != 1",
+  "FullQuery": "select * from a where eid = 1 and id in (1, 2) limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# composite pk subquery
+select * from a where name = 'foo'
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "COMPOSITE_PK",
+  "TableName": "a",
+  "FieldQuery": "select * from a where 1 != 1",
+  "FullQuery": "select * from a where name = 'foo' limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# subquery
+select * from d where id = 1
 {
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where eid = 1 limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where id = 1 limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "Subquery": "select name from d use index (d_id) where id = 1 limit :_vtMaxResultSize",
+  "IndexUsed": "d_id",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# subquery with limit
+select * from d where id = 1 limit 1
+{
+  "PlanId": "SELECT_SUBQUERY",
+  "Reason": "DEFAULT",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where id = 1 limit 1",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "Subquery": "select name from d use index (d_id) where id = 1 limit 1",
+  "IndexUsed": "d_id",
   "ColumnNumbers": [
     0,
     1,
@@ -409,14 +481,14 @@ select * from a where eid = id
   "SetValue": null
 }
 
-# and
-select * from a where eid=1 and foo='b'
+# inequality on pk columns
+select * from d where name between 'foo' and 'bar'
 {
   "PlanId": "PASS_SELECT",
   "Reason": "PKINDEX",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and foo = 'b' limit :_vtMaxResultSize",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name between 'foo' and 'bar' limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "PRIMARY",
@@ -434,23 +506,26 @@ select * from a where eid=1 and foo='b'
 }
 
 # (condition)
-select * from a where (eid=1)
+select * from a where (eid=1) and (id=2)
 {
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where (eid = 1) limit :_vtMaxResultSize",
+  "FullQuery": "select * from a where (eid = 1) and (id = 2) limit :_vtMaxResultSize",
   "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where (eid = 1) limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
+  "Subquery": null,
+  "IndexUsed": "",
   "ColumnNumbers": [
     0,
     1,
     2,
     3
   ],
-  "PKValues": null,
+  "PKValues": [
+    1,
+    2
+  ],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -460,7 +535,7 @@ select * from a where (eid=1)
 # pk match
 select * from a where eid=1 and id=1
 {
-  "PlanId": "SELECT_PK",
+  "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
@@ -487,17 +562,19 @@ select * from a where eid=1 and id=1
 # string pk match
 select * from d where name='foo'
 {
-  "PlanId": "SELECT_PK",
+  "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
   "TableName": "d",
   "FieldQuery": "select * from d where 1 != 1",
   "FullQuery": "select * from d where name = 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select name, id from d where name = :0",
+  "OuterQuery": "select name, id, foo, bar from d where name = :0",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
     0,
-    1
+    1,
+    2,
+    3
   ],
   "PKValues": [
     "Zm9v"
@@ -508,15 +585,39 @@ select * from d where name='foo'
   "SetValue": null
 }
 
-# pk IN
-select * from a where eid=1 and id in (1, 2)
+# string pk match with limit
+select * from d where name='foo' limit 1
 {
-  "PlanId": "SELECT_PK",
+  "PlanId": "PASS_SELECT",
+  "Reason": "PKINDEX",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name = 'foo' limit 1",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "PRIMARY",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# pk IN
+select * from d where name in ('foo', 'bar')
+{
+  "PlanId": "PK_IN",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and id in (1, 2) limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name in ('foo', 'bar') limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -526,11 +627,8 @@ select * from a where eid=1 and id in (1, 2)
     3
   ],
   "PKValues": [
-    1,
-    [
-      1,
-      2
-    ]
+    "Zm9v",
+    "YmFy"
   ],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
@@ -539,14 +637,14 @@ select * from a where eid=1 and id in (1, 2)
 }
 
 # pk IN parameter list
-select * from a where eid=1 and id in (:a, :b)
+select * from d where name in (:a,:b)
 {
-  "PlanId": "SELECT_PK",
+  "PlanId": "PK_IN",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and id in (:a, :b) limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name in (:a, :b) limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -556,11 +654,8 @@ select * from a where eid=1 and id in (:a, :b)
     3
   ],
   "PKValues": [
-    1,
-    [
-      ":a",
-      ":b"
-    ]
+    ":a",
+    ":b"
   ],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
@@ -569,14 +664,14 @@ select * from a where eid=1 and id in (:a, :b)
 }
 
 # pk IN, single value list
-select * from a where eid=1 and id in (1)
+select * from d where name in ('foo')
 {
-  "PlanId": "SELECT_PK",
+  "PlanId": "PK_IN",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and id in (1) limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name in ('foo') limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
   "Subquery": null,
   "IndexUsed": "",
   "ColumnNumbers": [
@@ -586,10 +681,33 @@ select * from a where eid=1 and id in (1)
     3
   ],
   "PKValues": [
+    "Zm9v"
+  ],
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# pk IN, single value parameter list
+select * from d where name in (:a)
+{
+  "PlanId": "PK_IN",
+  "Reason": "DEFAULT",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name in (:a) limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
     1,
-    [
-      1
-    ]
+    2,
+    3
+  ],
+  "PKValues": [
+    ":a"
   ],
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
@@ -648,124 +766,14 @@ select * from a where eid in (1, 2) and id in (1, 2)
 # pk as tuple
 select * from a where (eid, id) in ((1, 1), (2, 2))
 {
-  "PlanId": "SELECT_PK",
-  "Reason": "DEFAULT",
+  "PlanId": "PASS_SELECT",
+  "Reason": "WHERE",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
   "FullQuery": "select * from a where (eid, id) in ((1, 1), (2, 2)) limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [
-    [
-      1,
-      2
-    ],
-    [
-      1,
-      2
-    ]
-  ],
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# pk IN, single value parameter list
-select * from a where eid=1 and id in (:a)
-{
-  "PlanId": "SELECT_PK",
-  "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and id in (:a) limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": null,
-  "IndexUsed": "",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": [
-    1,
-    [
-      ":a"
-    ]
-  ],
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# inequality on pk columns
-select * from a where eid=1 and id>1
-{
-  "PlanId": "PASS_SELECT",
-  "Reason": "PKINDEX",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and id \u003e 1 limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
-  "IndexUsed": "PRIMARY",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# non-pk match
-select * from a where eid=1 and name='foo'
-{
-  "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and name = 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where eid = 1 and name = 'foo' limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# non-pk match with limit
-select * from a where eid=1 and name='foo' limit 10
-{
-  "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and name = 'foo' limit 10",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where eid = 1 and name = 'foo' limit 10",
-  "IndexUsed": "a_name",
+  "IndexUsed": "",
   "ColumnNumbers": [
     0,
     1,
@@ -780,17 +788,17 @@ select * from a where eid=1 and name='foo' limit 10
 }
 
 # no index match
-select * from a where foo='bar'
+select * from d where foo='bar'
 {
   "PlanId":"PASS_SELECT",
   "Reason":"NOINDEX_MATCH",
-  "TableName":"a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery":"select * from a where foo = 'bar' limit :_vtMaxResultSize",
+  "TableName":"d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery":"select * from d where foo = 'bar' limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery":null,
   "IndexUsed":"",
-  "ColumnNumbers":[
+  "ColumnNumbers": [
     0,
     1,
     2,
@@ -803,48 +811,26 @@ select * from a where foo='bar'
   "SetValue":null
 }
 
-# covering index in where through data column
-select * from a where name = 'foo' and id = 1
+# table alias
+select * from d as c where c.name='foo'
 {
-  "PlanId": "SELECT_SUBQUERY",
+  "PlanId": "PK_EQUAL",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where name = 'foo' and id = 1 limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (b_name) where name = 'foo' and id = 1 limit :_vtMaxResultSize",
-  "IndexUsed": "b_name",
+  "TableName": "d",
+  "FieldQuery": "select * from d as c where 1 != 1",
+  "FullQuery": "select * from d as c where c.name = 'foo' limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d as c where name = :0",
+  "Subquery": null,
+  "IndexUsed": "",
   "ColumnNumbers": [
     0,
     1,
     2,
     3
   ],
-  "PKValues": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# table alias & subquery
-select * from a as c where c.eid=1 and name='foo'
-{
-  "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a as c where 1 != 1",
-  "FullQuery": "select * from a as c where c.eid = 1 and name = 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a as c where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a as c use index (a_name) where c.eid = 1 and name = 'foo' limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
+  "PKValues": [
+    "Zm9v"
   ],
-  "PKValues": null,
   "SecondaryPKValues": null,
   "SubqueryPKColumns": null,
   "SetKey": "",
@@ -852,40 +838,16 @@ select * from a as c where c.eid=1 and name='foo'
 }
 
 # non-pk inequality match
-select * from a where eid=1 and name<'foo'
+select * from d where id<0
 {
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and name \u003c 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where eid = 1 and name \u003c 'foo' limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# non-pk IN
-select * from a where eid in (1, 2) and name='foo'
-{
-  "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid in (1, 2) and name = 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where eid in (1, 2) and name = 'foo' limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where id \u003c 0 limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "Subquery": "select name from d use index (d_id) where id \u003c 0 limit :_vtMaxResultSize",
+  "IndexUsed": "d_id",
   "ColumnNumbers": [
     0,
     1,
@@ -900,13 +862,13 @@ select * from a where eid in (1, 2) and name='foo'
 }
 
 # non-pk IN non-value operand
-select * from a where eid in (1, id) and name='foo'
+select * from d where name in ('foo', id)
 {
   "PlanId": "PASS_SELECT",
   "Reason": "WHERE",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid in (1, id) and name = 'foo' limit :_vtMaxResultSize",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where name in ('foo', id) limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
@@ -924,40 +886,16 @@ select * from a where eid in (1, id) and name='foo'
 }
 
 # non-pk between
-select * from a where eid between 1 and 2 and name='foo'
+select * from d where id between 1 and 2
 {
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid between 1 and 2 and name = 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where eid between 1 and 2 and name = 'foo' limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
-  "ColumnNumbers": [
-    0,
-    1,
-    2,
-    3
-  ],
-  "PKValues": null,
-  "SecondaryPKValues": null,
-  "SubqueryPKColumns": null,
-  "SetKey": "",
-  "SetValue": null
-}
-
-# order by (pk)
-select * from a where eid=1 and id=1 order by name
-{
-  "PlanId": "PASS_SELECT",
-  "Reason": "PKINDEX",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 and id = 1 order by name asc limit :_vtMaxResultSize",
-  "OuterQuery": null,
-  "Subquery": null,
-  "IndexUsed": "PRIMARY",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where id between 1 and 2 limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "Subquery": "select name from d use index (d_id) where id between 1 and 2 limit :_vtMaxResultSize",
+  "IndexUsed": "d_id",
   "ColumnNumbers": [
     0,
     1,
@@ -972,16 +910,16 @@ select * from a where eid=1 and id=1 order by name
 }
 
 # order by
-select * from a where eid=1 order by name
+select * from a where eid=1 and id=1 order by name
 {
-  "PlanId": "SELECT_SUBQUERY",
-  "Reason": "DEFAULT",
+  "PlanId": "PASS_SELECT",
+  "Reason": "ORDER",
   "TableName": "a",
   "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where eid = 1 order by name asc limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (a_name) where eid = 1 order by name asc limit :_vtMaxResultSize",
-  "IndexUsed": "a_name",
+  "FullQuery": "select * from a where eid = 1 and id = 1 order by name asc limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
   "ColumnNumbers": [
     0,
     1,
@@ -996,16 +934,16 @@ select * from a where eid=1 order by name
 }
 
 # cardinality override
-select * from a where name='foo'
+select * from d where bar = 'foo'
 { 
   "PlanId": "SELECT_SUBQUERY",
   "Reason": "DEFAULT",
-  "TableName": "a",
-  "FieldQuery": "select * from a where 1 != 1",
-  "FullQuery": "select * from a where name = 'foo' limit :_vtMaxResultSize",
-  "OuterQuery": "select eid, id, name, foo from a where eid = :0 and id = :1",
-  "Subquery": "select eid, id from a use index (b_name) where name = 'foo' limit :_vtMaxResultSize",
-  "IndexUsed": "b_name",
+  "TableName": "d",
+  "FieldQuery": "select * from d where 1 != 1",
+  "FullQuery": "select * from d where bar = 'foo' limit :_vtMaxResultSize",
+  "OuterQuery": "select name, id, foo, bar from d where name in (:*)",
+  "Subquery": "select name from d use index (d_bar) where bar = 'foo' limit :_vtMaxResultSize",
+  "IndexUsed": "d_bar",
   "ColumnNumbers": [
     0,
     1,
@@ -1020,13 +958,13 @@ select * from a where name='foo'
 }
 
 # index override
-select * from a use index(a_name) where eid = 1
+select * from d use index(d_bar_never) where bar = 'foo'
 {
   "PlanId": "PASS_SELECT",
   "Reason": "HAS_HINTS",
-  "TableName": "a",
-  "FieldQuery": "select * from a use index (a_name) where 1 != 1",
-  "FullQuery": "select * from a use index (a_name) where eid = 1 limit :_vtMaxResultSize",
+  "TableName": "d",
+  "FieldQuery": "select * from d use index (d_bar_never) where 1 != 1",
+  "FullQuery": "select * from d use index (d_bar_never) where bar = 'foo' limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",

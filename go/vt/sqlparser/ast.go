@@ -219,8 +219,7 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 			buf.Fprintf("%s", node.Value)
 		}
 	case VALUE_ARG:
-		buf.bindLocations = append(buf.bindLocations, BindLocation{buf.Len(), len(node.Value)})
-		buf.Fprintf("%s", node.Value)
+		buf.WriteArg(string(node.Value[1:]))
 	case STRING:
 		s := sqltypes.MakeString(node.Value)
 		s.EncodeSql(buf)
@@ -286,7 +285,9 @@ func NewTrackedBuffer(nodeFormatter func(buf *TrackedBuffer, node *Node)) *Track
 	return buf
 }
 
-// Mimics fmt.Fprintf, but limited to Value & Node
+// Fprintf mimics fmt.Fprintf, but limited to Node(%v), Node.Value(%s) and string(%s).
+// It also allows a %a for a value argument, in which case it adds tracking info for
+// future substitutions.
 func (buf *TrackedBuffer) Fprintf(format string, values ...interface{}) {
 	end := len(format)
 	fieldnum := 0
@@ -304,17 +305,33 @@ func (buf *TrackedBuffer) Fprintf(format string, values ...interface{}) {
 		i++ // '%'
 		switch format[i] {
 		case 's':
-			nodeValue := values[fieldnum].([]byte)
-			buf.Write(nodeValue)
+			switch v := values[fieldnum].(type) {
+			case []byte:
+				buf.Write(v)
+			case string:
+				buf.WriteString(v)
+			default:
+				panic(fmt.Sprintf("unexpected type %T", v))
+			}
 		case 'v':
 			node := values[fieldnum].(*Node)
 			buf.nodeFormatter(buf, node)
+		case 'a':
+			buf.WriteArg(values[fieldnum].(string))
 		default:
 			panic("unexpected")
 		}
 		fieldnum++
 		i++
 	}
+}
+
+// WriteArg writes a value argument into the buffer. arg should not contain
+// the ':' prefix. It also adds tracking info for future substitutions.
+func (buf *TrackedBuffer) WriteArg(arg string) {
+	buf.bindLocations = append(buf.bindLocations, BindLocation{buf.Len(), len(arg) + 1})
+	buf.WriteString(":")
+	buf.WriteString(arg)
 }
 
 func (buf *TrackedBuffer) ParsedQuery() *ParsedQuery {

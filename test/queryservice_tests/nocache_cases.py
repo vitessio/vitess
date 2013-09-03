@@ -467,19 +467,6 @@ cases = [
          "update vtocc_a set foo='fghi' where id=2",
          'commit']),
 
-    MultiCase(
-        'tuple in',
-        ['begin',
-         Case(sql="update /* pk */ vtocc_a set foo='bar' where (eid, id) in ((1, 1), (1, 2))",
-              rewritten="update /* pk */ vtocc_a set foo = 'bar' where (eid, id) in ((1, 1), (1, 2)) /* _stream vtocc_a (eid id ) (1 1 ) (1 2 )"),
-         'commit',
-         Case(sql='select foo from vtocc_a where id = 1',
-              result=[('bar',)]),
-         'begin',
-         "update vtocc_a set foo='efgh' where id=1",
-         "update vtocc_a set foo='fghi' where id=2",
-         'commit']),
-
   MultiCase(
       'pk change',
       ['begin',
@@ -627,16 +614,6 @@ cases = [
             rewritten=[
                 'select eid, id from vtocc_a where eid in (2, 3) and id in (1, 2) limit 10001 for update',
                 'delete /* pk */ from vtocc_a where eid = 2 and id = 1 /* _stream vtocc_a (eid id ) (2 1 )']),
-       'commit',
-       Case(sql='select * from vtocc_a where eid=2',
-            result=[])]),
-
-  MultiCase(
-      'tuple in',
-      ['begin',
-       "insert into vtocc_a(eid, id, name, foo) values (2, 1, '', '')",
-       Case(sql="delete /* pk */ from vtocc_a where (eid, id) in ((2, 1), (3, 2))",
-            rewritten="delete /* pk */ from vtocc_a where (eid, id) in ((2, 1), (3, 2)) /* _stream vtocc_a (eid id ) (2 1 ) (3 2 )"),
        'commit',
        Case(sql='select * from vtocc_a where eid=2',
             result=[])]),
