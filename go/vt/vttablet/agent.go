@@ -80,7 +80,6 @@ func InitAgent(
 			if dbcfgs.App.Dbname == "" {
 				dbcfgs.App.Dbname = newTablet.DbName()
 			}
-			dbcfgs.App.KeyRange = newTablet.KeyRange
 			dbcfgs.App.Keyspace = newTablet.Keyspace
 			dbcfgs.App.Shard = newTablet.Shard
 			// Transitioning from replica to master, first disconnect
@@ -90,10 +89,10 @@ func InitAgent(
 				ts.DisallowQueries(false)
 			}
 			qrs := ts.LoadCustomRules()
-			if dbcfgs.App.KeyRange.IsPartial() {
+			if newTablet.KeyRange.IsPartial() {
 				qr := ts.NewQueryRule("enforce keyspace_id range", "keyspace_id_not_in_range", ts.QR_FAIL_QUERY)
 				qr.AddPlanCond(sqlparser.PLAN_INSERT_PK)
-				err = qr.AddBindVarCond("keyspace_id", true, true, ts.QR_NOTIN, dbcfgs.App.KeyRange)
+				err = qr.AddBindVarCond("keyspace_id", true, true, ts.QR_NOTIN, newTablet.KeyRange)
 				if err != nil {
 					log.Warningf("Unable to add keyspace rule: %v", err)
 				} else {

@@ -218,20 +218,11 @@ func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 }
 
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	if sessionParams.DbName == "" {
-		if sessionParams.Keyspace != sq.dbconfig.Keyspace {
-			return NewTabletError(FATAL, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
-		}
-		if sessionParams.Shard != sq.dbconfig.Shard {
-			return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
-		}
-	} else {
-		if sessionParams.DbName != sq.dbconfig.Dbname {
-			return NewTabletError(FATAL, "db name mismatch, expecting %v, received %v", sq.dbconfig.Dbname, sessionParams.DbName)
-		}
-		if sessionParams.KeyRange != sq.dbconfig.KeyRange {
-			return NewTabletError(FATAL, "KeyRange mismatch, expecting %v, received %v", sq.dbconfig.KeyRange.String(), sessionParams.KeyRange.String())
-		}
+	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
+		return NewTabletError(FATAL, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
+	}
+	if sessionParams.Shard != sq.dbconfig.Shard {
+		return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
 	}
 	sessionInfo.SessionId = sq.sessionId
 	return nil

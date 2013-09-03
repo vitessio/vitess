@@ -6,12 +6,9 @@ package proto
 
 import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
 )
 
 type SessionParams struct {
-	DbName   string
-	KeyRange key.KeyRange
 	Keyspace string
 	Shard    string
 }
