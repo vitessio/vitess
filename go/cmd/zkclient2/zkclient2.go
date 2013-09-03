@@ -132,7 +132,7 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 		Cell:       cell,
 		Keyspace:   keyspace,
 		Shard:      shard,
-		TabletType: tabletType,
+		TabletType: topo.TabletType(tabletType),
 	}
 	reply := &topo.VtnsAddrs{}
 	if err := rpcClient.Call("TopoReader.GetEndPoints", req, reply); err != nil {

@@ -27,8 +27,8 @@ func zkPathForVtKeyspace(cell, keyspace string) string {
 	return path.Join(zkPathForVt(cell), keyspace)
 }
 
-func zkPathForVtType(cell, keyspace, shard, tabletType string) string {
-	return path.Join(zkPathForVt(cell), keyspace, shard, tabletType)
+func zkPathForVtType(cell, keyspace, shard string, tabletType topo.TabletType) string {
+	return path.Join(zkPathForVt(cell), keyspace, shard, string(tabletType))
 }
 
 func (tr *TopoReader) GetSrvKeyspaceNames(req topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
