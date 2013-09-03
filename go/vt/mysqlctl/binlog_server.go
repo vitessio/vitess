@@ -303,7 +303,7 @@ func (blp *Bls) parseDbChange(event *blsEventBuffer) {
 		return
 	}
 	if blp.globalState.dbname == "" {
-		log.Warningf("Dbname is not set, will match all database names")
+		log.Warningf("dbname is not set, will match all database names")
 		return
 	}
 	blp.globalState.blsStats.parseStats.Add("DBChange."+blp.keyrangeTag, 1)

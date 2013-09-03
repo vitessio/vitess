@@ -77,8 +77,8 @@ func InitAgent(
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		if newTablet.IsServingType() {
-			if dbcfgs.App.Dbname == "" {
-				dbcfgs.App.Dbname = newTablet.DbName()
+			if dbcfgs.App.DbName == "" {
+				dbcfgs.App.DbName = newTablet.DbName()
 			}
 			dbcfgs.App.Keyspace = newTablet.Keyspace
 			dbcfgs.App.Shard = newTablet.Shard
@@ -115,7 +115,7 @@ func InitAgent(
 		// BinlogServer is only enabled for replicas
 		if newTablet.Type == topo.TYPE_REPLICA {
 			if !mysqlctl.IsBinlogServerEnabled(binlogServer) {
-				mysqlctl.EnableBinlogServerService(binlogServer, dbcfgs.App.Dbname)
+				mysqlctl.EnableBinlogServerService(binlogServer, dbcfgs.App.DbName)
 			}
 		} else {
 			if mysqlctl.IsBinlogServerEnabled(binlogServer) {

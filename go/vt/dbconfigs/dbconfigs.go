@@ -42,7 +42,7 @@ type DBConfig struct {
 	Port       int    `json:"port"`
 	Uname      string `json:"uname"`
 	Pass       string `json:"pass"`
-	Dbname     string `json:"dbname"`
+	DbName     string `json:"dbname"`
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
 	Memcache   string `json:"memcache"`
@@ -69,7 +69,7 @@ func (d DBConfig) MysqlParams() mysql.ConnectionParams {
 		Port:       d.Port,
 		Uname:      d.Uname,
 		Pass:       d.Pass,
-		Dbname:     d.Dbname,
+		DbName:     d.DbName,
 		UnixSocket: d.UnixSocket,
 		Charset:    d.Charset,
 	}

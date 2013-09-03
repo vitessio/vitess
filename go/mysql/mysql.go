@@ -64,7 +64,7 @@ type ConnectionParams struct {
 	Port       int    `json:"port"`
 	Uname      string `json:"uname"`
 	Pass       string `json:"pass"`
-	Dbname     string `json:"dbname"`
+	DbName     string `json:"dbname"`
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
 	Flags      uint64 `json:"flags"`
@@ -104,7 +104,7 @@ func Connect(params ConnectionParams) (conn *Connection, err error) {
 	defer cfree(uname)
 	pass := C.CString(params.Pass)
 	defer cfree(pass)
-	dbname := C.CString(params.Dbname)
+	dbname := C.CString(params.DbName)
 	defer cfree(dbname)
 	unix_socket := C.CString(params.UnixSocket)
 	defer cfree(unix_socket)

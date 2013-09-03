@@ -100,8 +100,8 @@ func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
 	UpdateStreamRpcService.setState(ENABLED)
 
 	UpdateStreamRpcService.mysqld = NewMysqld(UpdateStreamRpcService.mycnf, dbcfgs.Dba, dbcfgs.Repl)
-	UpdateStreamRpcService.dbname = dbcfgs.App.Dbname
-	log.Infof("dbcfgs.App.Dbname %v DbName %v", dbcfgs.App.Dbname, UpdateStreamRpcService.dbname)
+	UpdateStreamRpcService.dbname = dbcfgs.App.DbName
+	log.Infof("dbcfgs.App.DbName %v DbName %v", dbcfgs.App.DbName, UpdateStreamRpcService.dbname)
 	log.Infof("mycnf.BinLogPath %v mycnf.RelayLogPath %v", UpdateStreamRpcService.mycnf.BinLogPath, UpdateStreamRpcService.mycnf.RelayLogPath)
 	UpdateStreamRpcService.tabletType = tabletType
 	UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.BinLogPath

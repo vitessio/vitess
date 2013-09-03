@@ -552,7 +552,7 @@ const (
 	colConnectionId = iota
 	colUsername
 	colClientAddr
-	colDbname
+	colDbName
 	colCommand
 )
 
