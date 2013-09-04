@@ -158,16 +158,25 @@ func TestMemcache(t *testing.T) {
 	expect(t, c, "Data", "Overwritten")
 
 	// stats
-	_, err = c.Stats("")
+	var stats []byte
+	stats, err = c.Stats("")
 	if err != nil {
 		t.Errorf("Stats: %v", err)
 		return
 	}
+	t.Logf("Main stats:\n" + string(stats))
 
-	_, err = c.Stats("slabs")
+	stats, err = c.Stats("slabs")
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
+	t.Logf("Slabs stats:\n" + string(stats))
+
+	stats, err = c.Stats("items")
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	t.Logf("Items stats:\n" + string(stats))
 
 	// FlushAll
 	// Set

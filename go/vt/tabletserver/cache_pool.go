@@ -23,14 +23,16 @@ type CreateCacheFunc func() (*memcache.Connection, error)
 
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.
 type CachePool struct {
-	pool         *pools.ResourcePool
-	maxPrefix    sync2.AtomicInt64
-	cmd          *exec.Cmd
-	commandLine  []string
-	capacity     int
-	port         string
-	idleTimeout  time.Duration
-	DeleteExpiry uint64
+	name          string
+	pool          *pools.ResourcePool
+	maxPrefix     sync2.AtomicInt64
+	cmd           *exec.Cmd
+	commandLine   []string
+	capacity      int
+	port          string
+	idleTimeout   time.Duration
+	DeleteExpiry  uint64
+	memcacheStats *MemcacheStats
 }
 
 // Cache re-exposes memcache.Connection
@@ -49,7 +51,7 @@ func (cache *Cache) Recycle() {
 }
 
 func NewCachePool(name string, commandLine []string, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
-	cp := &CachePool{idleTimeout: idleTimeout}
+	cp := &CachePool{name: name, idleTimeout: idleTimeout}
 	if name != "" {
 		stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
 		stats.Publish(name+"Available", stats.IntFunc(cp.Available))
@@ -116,6 +118,11 @@ func (cp *CachePool) Open() {
 		return &Cache{c, cp}, nil
 	}
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
+	if cp.memcacheStats == nil {
+		cp.memcacheStats = NewMemcacheStats(cp)
+	} else {
+		cp.memcacheStats.Start()
+	}
 }
 
 func (cp *CachePool) startMemcache() {
@@ -147,6 +154,9 @@ func (cp *CachePool) startMemcache() {
 func (cp *CachePool) Close() {
 	if cp.pool == nil {
 		return
+	}
+	if cp.memcacheStats != nil {
+		cp.memcacheStats.Stop()
 	}
 	cp.pool.Close()
 	cp.cmd.Process.Kill()

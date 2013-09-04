@@ -29,20 +29,7 @@ func NewCounters(name string) *Counters {
 func (c *Counters) String() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	b := bytes.NewBuffer(make([]byte, 0, 4096))
-	fmt.Fprintf(b, "{")
-	firstValue := true
-	for k, v := range c.counts {
-		if firstValue {
-			firstValue = false
-		} else {
-			fmt.Fprintf(b, ", ")
-		}
-		fmt.Fprintf(b, "\"%v\": %v", k, v)
-	}
-	fmt.Fprintf(b, "}")
-	return b.String()
+	return toString(c.counts)
 }
 
 func (c *Counters) Add(name string, value int64) {
@@ -60,4 +47,32 @@ func (c *Counters) Counts() map[string]int64 {
 		counts[k] = v
 	}
 	return counts
+}
+
+// CounterFunc converts a function that returns
+// a map of int64 as an expvar.
+type CounterFunc func() map[string]int64
+
+func (f CounterFunc) String() string {
+	m := f()
+	if m == nil {
+		return "{}"
+	}
+	return toString(m)
+}
+
+func toString(m map[string]int64) string {
+	b := bytes.NewBuffer(make([]byte, 0, 4096))
+	fmt.Fprintf(b, "{")
+	firstValue := true
+	for k, v := range m {
+		if firstValue {
+			firstValue = false
+		} else {
+			fmt.Fprintf(b, ", ")
+		}
+		fmt.Fprintf(b, "\"%v\": %v", k, v)
+	}
+	fmt.Fprintf(b, "}")
+	return b.String()
 }
