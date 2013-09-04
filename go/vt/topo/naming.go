@@ -19,7 +19,6 @@ In zk, this is in /zk/local/vt/ns/<keyspace>/<shard>/<db type>
 */
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 
@@ -41,7 +40,6 @@ type VtnsAddr struct {
 
 type VtnsAddrs struct {
 	Entries []VtnsAddr `json:"entries"`
-	version int64      // version to allow non-stomping writes
 }
 
 func NewAddr(uid uint32, host string) *VtnsAddr {
@@ -70,8 +68,9 @@ func VtnsAddrEquality(left, right *VtnsAddr) bool {
 	return true
 }
 
-func NewAddrs() *VtnsAddrs {
-	return &VtnsAddrs{Entries: make([]VtnsAddr, 0, 8), version: -1}
+// NewVtnsAddrs creates a VtnsAddrs with a pre-allocated slice for Entries.
+func NewVtnsAddrs() *VtnsAddrs {
+	return &VtnsAddrs{Entries: make([]VtnsAddr, 0, 8)}
 }
 
 func LookupVtName(ts Server, cell, keyspace, shard string, tabletType TabletType, namedPort string) ([]*net.SRV, error) {
@@ -112,15 +111,4 @@ func SrvEntries(addrs *VtnsAddrs, namedPort string) (srvs []*net.SRV, err error)
 
 func SrvAddr(srv *net.SRV) string {
 	return fmt.Sprintf("%s:%d", srv.Target, srv.Port)
-}
-
-func NewVtnsAddrs(data string, version int64) (*VtnsAddrs, error) {
-	addrs := new(VtnsAddrs)
-	if len(data) > 0 {
-		if err := json.Unmarshal([]byte(data), addrs); err != nil {
-			return nil, fmt.Errorf("VtnsAddrs unmarshal failed: %v %v", data, err)
-		}
-	}
-	addrs.version = version
-	return addrs, nil
 }
