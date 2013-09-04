@@ -329,7 +329,6 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 			topo.VtnsAddr{
 				Uid:  1,
 				Host: "host1",
-				Port: 1,
 			},
 		},
 	}
@@ -344,16 +343,16 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		t.Errorf("GetSrvTabletType(1): %v %v", err, addrs)
 	}
 
-	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_REPLICA, &topo.VtnsAddr{Uid: 2, Host: "host2", Port: 2}); err != nil {
+	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_REPLICA, &topo.VtnsAddr{Uid: 2, Host: "host2"}); err != nil {
 		t.Errorf("UpdateTabletEndpoint(invalid): %v", err)
 	}
-	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.VtnsAddr{Uid: 1, Host: "host2", Port: 2}); err != nil {
+	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.VtnsAddr{Uid: 1, Host: "host2"}); err != nil {
 		t.Errorf("UpdateTabletEndpoint(master): %v", err)
 	}
 	if addrs, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
 		t.Errorf("GetSrvTabletType(2): %v %v", err, addrs)
 	}
-	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.VtnsAddr{Uid: 3, Host: "host3", Port: 3}); err != nil {
+	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.VtnsAddr{Uid: 3, Host: "host3"}); err != nil {
 		t.Errorf("UpdateTabletEndpoint(master): %v", err)
 	}
 	if addrs, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 2 {

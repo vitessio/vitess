@@ -208,7 +208,7 @@ func VtnsAddrForTablet(tablet *topo.Tablet) (*topo.VtnsAddr, error) {
 	if err != nil {
 		return nil, err
 	}
-	entry := topo.NewAddr(tablet.Uid, host, 0)
+	entry := topo.NewAddr(tablet.Uid, host)
 	entry.NamedPortMap["_vtocc"] = port
 	if tablet.SecureAddr != "" {
 		host, port, err = netutil.SplitHostPort(tablet.SecureAddr)

@@ -27,10 +27,15 @@ import (
 	"github.com/youtube/vitess/go/netutil"
 )
 
+const (
+	// DefaultPortName is the port named used by SrvEntries
+	// if "" is given as the named port.
+	DefaultPortName = "_vtocc"
+)
+
 type VtnsAddr struct {
 	Uid          uint32         `json:"uid"` // Keep track of which tablet this corresponds to.
 	Host         string         `json:"host"`
-	Port         int            `json:"port"`
 	NamedPortMap map[string]int `json:"named_port_map"`
 }
 
@@ -39,8 +44,8 @@ type VtnsAddrs struct {
 	version int64      // version to allow non-stomping writes
 }
 
-func NewAddr(uid uint32, host string, port int) *VtnsAddr {
-	return &VtnsAddr{Uid: uid, Host: host, Port: port, NamedPortMap: make(map[string]int)}
+func NewAddr(uid uint32, host string) *VtnsAddr {
+	return &VtnsAddr{Uid: uid, Host: host, NamedPortMap: make(map[string]int)}
 }
 
 func VtnsAddrEquality(left, right *VtnsAddr) bool {
@@ -48,9 +53,6 @@ func VtnsAddrEquality(left, right *VtnsAddr) bool {
 		return false
 	}
 	if left.Host != right.Host {
-		return false
-	}
-	if left.Port != right.Port {
 		return false
 	}
 	if len(left.NamedPortMap) != len(right.NamedPortMap) {
@@ -92,10 +94,9 @@ func SrvEntries(addrs *VtnsAddrs, namedPort string) (srvs []*net.SRV, err error)
 		host := entry.Host
 		port := 0
 		if namedPort == "" {
-			port = entry.Port
-		} else {
-			port = entry.NamedPortMap[namedPort]
+			namedPort = DefaultPortName
 		}
+		port = entry.NamedPortMap[namedPort]
 		if port == 0 {
 			log.Warningf("vtns: bad port %v %v", namedPort, entry)
 			continue

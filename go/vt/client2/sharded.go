@@ -46,10 +46,6 @@ var (
 	ErrNotConnected = fmt.Errorf("vt: not connected")
 )
 
-const (
-	DefaultPortName = "_vtocc"
-)
-
 type VtClientError struct {
 	msg     string
 	partial bool
@@ -549,7 +545,7 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 		return nil, fmt.Errorf("vt: GetSrvTabletType failed %v", err)
 	}
 
-	srvs, err := topo.SrvEntries(addrs, DefaultPortName)
+	srvs, err := topo.SrvEntries(addrs, "")
 	if err != nil {
 		return nil, err
 	}
