@@ -171,7 +171,7 @@ func (tee *Tee) CreateTablet(tablet *topo.Tablet) error {
 	return err
 }
 
-func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int) (newVersion int, err error) {
+func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateTablet(tablet, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
@@ -480,11 +480,11 @@ func (tee *Tee) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction fun
 	tee.primary.ActionEventLoop(tabletAlias, dispatchAction, done)
 }
 
-func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int, error) {
+func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int64, error) {
 	return tee.primary.ReadTabletActionPath(actionPath)
 }
 
-func (tee *Tee) UpdateTabletAction(actionPath, data string, version int) error {
+func (tee *Tee) UpdateTabletAction(actionPath, data string, version int64) error {
 	return tee.primary.UpdateTabletAction(actionPath, data, version)
 }
 

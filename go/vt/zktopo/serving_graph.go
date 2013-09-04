@@ -73,7 +73,7 @@ func (zkts *Server) GetSrvTabletType(cell, keyspace, shard string, tabletType to
 		}
 		return nil, err
 	}
-	return topo.NewVtnsAddrs(data, stat.Version())
+	return topo.NewVtnsAddrs(data, int64(stat.Version()))
 }
 
 func (zkts *Server) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
@@ -104,7 +104,7 @@ func (zkts *Server) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, e
 		}
 		return nil, err
 	}
-	srvShard := topo.NewSrvShard(stat.Version())
+	srvShard := topo.NewSrvShard(int64(stat.Version()))
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), srvShard); err != nil {
 			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v", data, err)
@@ -129,7 +129,7 @@ func (zkts *Server) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 		}
 		return nil, err
 	}
-	srvKeyspace := topo.NewSrvKeyspace(stat.Version())
+	srvKeyspace := topo.NewSrvKeyspace(int64(stat.Version()))
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
 			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
@@ -150,7 +150,7 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 
 	var addrs *topo.VtnsAddrs
 	if oldValue != "" {
-		addrs, err = topo.NewVtnsAddrs(oldValue, oldStat.Version())
+		addrs, err = topo.NewVtnsAddrs(oldValue, int64(oldStat.Version()))
 		if err != nil {
 			return
 		}

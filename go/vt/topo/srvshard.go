@@ -23,7 +23,7 @@ type SrvShard struct {
 
 	// True if the master cannot process writes
 	ReadOnly bool
-	version  int
+	version  int64
 }
 
 type SrvShardArray []SrvShard
@@ -40,7 +40,7 @@ func (sa SrvShardArray) Swap(i, j int) {
 
 func (sa SrvShardArray) Sort() { sort.Sort(sa) }
 
-func NewSrvShard(version int) *SrvShard {
+func NewSrvShard(version int64) *SrvShard {
 	return &SrvShard{
 		version: version,
 	}
@@ -69,10 +69,10 @@ type SrvKeyspace struct {
 	// May not have a server for every shard, but we have some.
 	TabletTypes []TabletType
 
-	version int
+	version int64
 }
 
-func NewSrvKeyspace(version int) *SrvKeyspace {
+func NewSrvKeyspace(version int64) *SrvKeyspace {
 	return &SrvKeyspace{
 		version: version,
 	}

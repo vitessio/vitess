@@ -49,7 +49,7 @@ func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.Sr
 		return err
 	}
 
-	keyspace := topo.NewSrvKeyspace(zkrReply.Stat.Version())
+	keyspace := topo.NewSrvKeyspace(int64(zkrReply.Stat.Version()))
 	if len(zkrReply.Data) > 0 {
 		if err := json.Unmarshal([]byte(zkrReply.Data), keyspace); err != nil {
 			return fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", zkrReply.Data, err)
