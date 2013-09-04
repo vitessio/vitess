@@ -184,7 +184,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
     if raise_on_error:
       raise TestError('cmd fail:', args, stdout, stderr)
     else:
-      logging.info('cmd fail: %s %s %s', str(args), stdout, stderr)
+      logging.debug('cmd fail: %s %s %s', str(args), stdout, stderr)
   return stdout, stderr
 
 # run sub-process, expects failure
