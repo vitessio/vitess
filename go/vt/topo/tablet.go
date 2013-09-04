@@ -375,7 +375,7 @@ func (tablet *Tablet) Hostname() string {
 }
 
 type TabletInfo struct {
-	version int // node version - used to prevent stomping concurrent writes
+	version int64 // node version - used to prevent stomping concurrent writes
 	*Tablet
 }
 
@@ -423,13 +423,13 @@ func (tablet *Tablet) Complete() error {
 // NewTabletInfo returns a TabletInfo basing on tablet with the
 // version set. This function should be only used by Server
 // implementations.
-func NewTabletInfo(tablet *Tablet, version int) *TabletInfo {
+func NewTabletInfo(tablet *Tablet, version int64) *TabletInfo {
 	return &TabletInfo{version: version, Tablet: tablet}
 }
 
 // UpdateTablet updates the tablet data only - not associated replication paths.
 func UpdateTablet(ts Server, tablet *TabletInfo) error {
-	version := -1
+	var version int64 = -1
 	if tablet.version != 0 {
 		version = tablet.version
 	}

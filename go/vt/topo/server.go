@@ -115,7 +115,7 @@ type Server interface {
 	// for atomic updates. UpdateTablet will return ErrNoNode if
 	// the tablet doesn't exist and ErrBadVersion if the version
 	// has changed.
-	UpdateTablet(tablet *TabletInfo, existingVersion int) (newVersion int, err error)
+	UpdateTablet(tablet *TabletInfo, existingVersion int64) (newVersion int64, err error)
 
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version
@@ -279,13 +279,13 @@ type Server interface {
 	// ReadTabletActionPath reads the actionPath and returns the
 	// associated TabletAlias, the data (originally written by
 	// WriteTabletAction), and its version
-	ReadTabletActionPath(actionPath string) (TabletAlias, string, int, error)
+	ReadTabletActionPath(actionPath string) (TabletAlias, string, int64, error)
 
 	// UpdateTabletAction updates the actionPath with the new data.
 	// version is the current version we're expecting. Use -1 to set
 	// any version.
 	// Can return ErrBadVersion.
-	UpdateTabletAction(actionPath, data string, version int) error
+	UpdateTabletAction(actionPath, data string, version int64) error
 
 	// StoreTabletActionResponse stores the data for the response.
 	// This will not unblock the caller yet.

@@ -36,7 +36,7 @@ type VtnsAddr struct {
 
 type VtnsAddrs struct {
 	Entries []VtnsAddr `json:"entries"`
-	version int        // version to allow non-stomping writes
+	version int64      // version to allow non-stomping writes
 }
 
 func NewAddr(uid uint32, host string, port int) *VtnsAddr {
@@ -113,7 +113,7 @@ func SrvAddr(srv *net.SRV) string {
 	return fmt.Sprintf("%s:%d", srv.Target, srv.Port)
 }
 
-func NewVtnsAddrs(data string, version int) (*VtnsAddrs, error) {
+func NewVtnsAddrs(data string, version int64) (*VtnsAddrs, error) {
 	addrs := new(VtnsAddrs)
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), addrs); err != nil {
