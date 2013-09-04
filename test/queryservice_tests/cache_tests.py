@@ -1,6 +1,8 @@
 from vtdb import dbexceptions
+from vtdb import vt_occ2
 
 import framework
+import cache_cases1
 import cache_cases2
 
 class TestWillNotBeCached(framework.TestCase):
@@ -204,6 +206,11 @@ class TestCache(framework.TestCase):
       self.assertContains(str(e), "error: Type mismatch")
     else:
       self.fail("Did not receive exception")
+
+  def test_cache1_sqls(self):
+    error_count = self.env.run_cases(cache_cases1.cases)
+    if error_count != 0:
+      self.fail("test_cache1_sqls errors: %d" % error_count)
 
   def test_cache2_sqls(self):
     error_count = self.env.run_cases(cache_cases2.cases)

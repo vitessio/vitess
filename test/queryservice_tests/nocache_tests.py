@@ -1,7 +1,7 @@
 import time
 
 from vtdb import dbexceptions
-from vtdb import vtclient
+from vtdb import vt_occ2
 
 import framework
 import nocache_cases
@@ -280,7 +280,7 @@ class TestNocache(framework.TestCase):
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
-    conn = vtclient.connect("localhost:9461", 'test_keyspace', '0', 5)
+    conn = vt_occ2.connect("localhost:9461", 'test_keyspace', '0', 5)
     cu = conn.cursor()
     self.env.execute("set vt_query_timeout=0.25")
     try:
