@@ -68,8 +68,8 @@ func VtnsAddrEquality(left, right *VtnsAddr) bool {
 	return true
 }
 
-// NewAddrs creates a VtnsAddrs with a pre-allocated slice for Entries.
-func NewAddrs() *VtnsAddrs {
+// NewVtnsAddrs creates a VtnsAddrs with a pre-allocated slice for Entries.
+func NewVtnsAddrs() *VtnsAddrs {
 	return &VtnsAddrs{Entries: make([]VtnsAddr, 0, 8)}
 }
 

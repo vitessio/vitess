@@ -178,7 +178,7 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 			addrs.Entries = append(addrs.Entries, *addr)
 		}
 	} else {
-		addrs = topo.NewAddrs()
+		addrs = topo.NewVtnsAddrs()
 		addrs.Entries = append(addrs.Entries, *addr)
 	}
 	return jscfg.ToJson(addrs), nil
