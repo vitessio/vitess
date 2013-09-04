@@ -1,5 +1,4 @@
 from vtdb import dbexceptions
-from vtdb import vt_occ2
 
 import framework
 import cache_cases1
