@@ -224,6 +224,9 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	if sessionParams.Shard != sq.dbconfig.Shard {
 		return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
 	}
+	if sq.state.Get() != OPEN {
+		return NewTabletError(FAIL, "Query server is in %s state", stateName[sq.state.Get()])
+	}
 	sessionInfo.SessionId = sq.sessionId
 	return nil
 }

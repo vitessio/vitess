@@ -12,7 +12,7 @@ import time
 import urllib2
 import MySQLdb as mysql
 
-from vtdb import vt_occ2
+from vtdb import vtclient
 from vtdb import dbexceptions
 
 import framework
@@ -28,7 +28,7 @@ class EnvironmentError(Exception):
 class TestEnv(object):
 
   def connect(self):
-    c = vt_occ2.connect("localhost:%s" % self.tablet.port, 'test_keyspace', '0', 2)
+    c = vtclient.connect("localhost:%s" % self.tablet.port, 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 
@@ -367,7 +367,7 @@ class VtoccTestEnv(TestEnv):
     shutil.rmtree(self.mysqldir)
 
   def connect(self):
-    c = vt_occ2.connect("localhost:9461", 'test_keyspace', '0', 2)
+    c = vtclient.connect("localhost:9461", 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 

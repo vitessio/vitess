@@ -34,10 +34,10 @@ func (zkts *Server) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
 	return nil
 }
 
-func (zkts *Server) CreateTabletPidNode(tabletAlias topo.TabletAlias, done chan struct{}) error {
+func (zkts *Server) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
 	zkTabletPath := TabletPathForAlias(tabletAlias)
 	path := path.Join(zkTabletPath, "pid")
-	return zk.CreatePidNode(zkts.zconn, path, done)
+	return zk.CreatePidNode(zkts.zconn, path, contents, done)
 }
 
 func (zkts *Server) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
@@ -127,7 +127,7 @@ func actionPathToTabletAlias(actionPath string) (topo.TabletAlias, error) {
 	return topo.ParseTabletAliasString(pathParts[2] + "-" + pathParts[5])
 }
 
-func (zkts *Server) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int, error) {
+func (zkts *Server) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int64, error) {
 	tabletAlias, err := actionPathToTabletAlias(actionPath)
 	if err != nil {
 		return topo.TabletAlias{}, "", 0, err
@@ -138,11 +138,11 @@ func (zkts *Server) ReadTabletActionPath(actionPath string) (topo.TabletAlias, s
 		return topo.TabletAlias{}, "", 0, err
 	}
 
-	return tabletAlias, data, stat.Version(), nil
+	return tabletAlias, data, int64(stat.Version()), nil
 }
 
-func (zkts *Server) UpdateTabletAction(actionPath, data string, version int) error {
-	_, err := zkts.zconn.Set(actionPath, data, version)
+func (zkts *Server) UpdateTabletAction(actionPath, data string, version int64) error {
+	_, err := zkts.zconn.Set(actionPath, data, int(version))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
 			err = topo.ErrBadVersion

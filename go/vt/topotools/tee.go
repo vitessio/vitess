@@ -171,7 +171,7 @@ func (tee *Tee) CreateTablet(tablet *topo.Tablet) error {
 	return err
 }
 
-func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int) (newVersion int, err error) {
+func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (newVersion int64, err error) {
 	if newVersion, err = tee.primary.UpdateTablet(tablet, existingVersion); err != nil {
 		// failed on primary, not updating secondary
 		return
@@ -329,6 +329,10 @@ func (tee *Tee) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error)
 	return tee.readFrom.GetSrvKeyspace(cell, keyspace)
 }
 
+func (tee *Tee) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	return tee.readFrom.GetSrvKeyspaceNames(cell)
+}
+
 func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.VtnsAddr) error {
 	if err := tee.primary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
 		return err
@@ -455,8 +459,8 @@ func (tee *Tee) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
 	return tee.primary.ValidateTabletActions(tabletAlias)
 }
 
-func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, done chan struct{}) error {
-	return tee.primary.CreateTabletPidNode(tabletAlias, done)
+func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
+	return tee.primary.CreateTabletPidNode(tabletAlias, contents, done)
 }
 
 func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
@@ -480,11 +484,11 @@ func (tee *Tee) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction fun
 	tee.primary.ActionEventLoop(tabletAlias, dispatchAction, done)
 }
 
-func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int, error) {
+func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int64, error) {
 	return tee.primary.ReadTabletActionPath(actionPath)
 }
 
-func (tee *Tee) UpdateTabletAction(actionPath, data string, version int) error {
+func (tee *Tee) UpdateTabletAction(actionPath, data string, version int64) error {
 	return tee.primary.UpdateTabletAction(actionPath, data, version)
 }
 

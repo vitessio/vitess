@@ -5,6 +5,8 @@
 package zktopo
 
 import (
+	"sort"
+
 	"github.com/youtube/vitess/go/zk"
 )
 
@@ -20,5 +22,6 @@ func (zkts *Server) GetKnownCells() ([]string, error) {
 			cells = append(cells, cell)
 		}
 	}
+	sort.Strings(cells)
 	return cells, nil
 }

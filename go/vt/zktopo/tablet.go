@@ -41,7 +41,7 @@ func tabletFromJson(data string) (*topo.Tablet, error) {
 	return t, nil
 }
 
-func tabletInfoFromJson(data string, version int) (*topo.TabletInfo, error) {
+func tabletInfoFromJson(data string, version int64) (*topo.TabletInfo, error) {
 	tablet, err := tabletFromJson(data)
 	if err != nil {
 		return nil, err
@@ -78,9 +78,9 @@ func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 	return nil
 }
 
-func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int) (int, error) {
+func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (int64, error) {
 	zkTabletPath := TabletPathForAlias(tablet.Alias())
-	stat, err := zkts.zconn.Set(zkTabletPath, tablet.Json(), existingVersion)
+	stat, err := zkts.zconn.Set(zkTabletPath, tablet.Json(), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {
 			err = topo.ErrBadVersion
@@ -90,7 +90,7 @@ func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int) (
 
 		return 0, err
 	}
-	return stat.Version(), nil
+	return int64(stat.Version()), nil
 }
 
 func (zkts *Server) UpdateTabletFields(tabletAlias topo.TabletAlias, update func(*topo.Tablet) error) error {
@@ -154,7 +154,7 @@ func (zkts *Server) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) 
 		}
 		return nil, err
 	}
-	return tabletInfoFromJson(data, stat.Version())
+	return tabletInfoFromJson(data, int64(stat.Version()))
 }
 
 func (zkts *Server) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {

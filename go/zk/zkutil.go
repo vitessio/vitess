@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
 	"path"
 	"sort"
 	"strings"
@@ -382,24 +381,17 @@ trylock:
 }
 
 // Close done when you want to exit cleanly.
-func CreatePidNode(zconn Conn, zkPath string, done chan struct{}) error {
-	hostname, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("zkutil: failed creating pid node %v: %v", zkPath, err)
-	}
-	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
-
+func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{}) error {
 	// On the first try, assume the cluster is up and running, that will
 	// help hunt down any config issues present at startup
-	_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
-	if err != nil {
+	if _, err := zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL)); err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 			err = zconn.Delete(zkPath, -1)
 		}
 		if err != nil {
 			return fmt.Errorf("zkutil: failed deleting pid node: %v: %v", zkPath, err)
 		}
-		_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
+		_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
 			return fmt.Errorf("zkutil: failed creating pid node: %v: %v", zkPath, err)
 		}
@@ -410,7 +402,7 @@ func CreatePidNode(zconn Conn, zkPath string, done chan struct{}) error {
 			_, _, watch, err := zconn.GetW(zkPath)
 			if err != nil {
 				if zookeeper.IsError(err, zookeeper.ZNONODE) {
-					_, err = zconn.Create(zkPath, data, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
+					_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 					if err == nil {
 						log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
 					} else {

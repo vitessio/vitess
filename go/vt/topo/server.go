@@ -57,6 +57,7 @@ type Server interface {
 	// GetKnownCells returns the list of known cells running our processes.
 	// It is possible to find all tablets in the entire system
 	// by then calling GetTabletsByCell on every cell, for instance.
+	// They shall be sorted.
 	GetKnownCells() ([]string, error)
 
 	//
@@ -67,7 +68,7 @@ type Server interface {
 	// yet. Can return ErrNodeExists if it already exists.
 	CreateKeyspace(keyspace string) error
 
-	// GetKeyspaces returns the known keyspaces.
+	// GetKeyspaces returns the known keyspaces. They shall be sorted.
 	GetKeyspaces() ([]string, error)
 
 	// DeleteKeyspaceShards deletes all the shards in a keyspace.
@@ -99,7 +100,7 @@ type Server interface {
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created,
-	// or if DeleteKeyspaceShards was called.
+	// or if DeleteKeyspaceShards was called. They shall be sorted.
 	GetShardNames(keyspace string) ([]string, error)
 
 	//
@@ -115,7 +116,7 @@ type Server interface {
 	// for atomic updates. UpdateTablet will return ErrNoNode if
 	// the tablet doesn't exist and ErrBadVersion if the version
 	// has changed.
-	UpdateTablet(tablet *TabletInfo, existingVersion int) (newVersion int, err error)
+	UpdateTablet(tablet *TabletInfo, existingVersion int64) (newVersion int64, err error)
 
 	// UpdateTabletFields updates the current tablet record
 	// with new values, independently of the version
@@ -197,6 +198,10 @@ type Server interface {
 	// Can return ErrNoNode.
 	GetSrvKeyspace(cell, keyspace string) (*SrvKeyspace, error)
 
+	// GetSrvKeyspaceNames returns the list of visible Keyspaces
+	// in this cell. They shall be sorted.
+	GetSrvKeyspaceNames(cell string) ([]string, error)
+
 	// UpdateTabletEndpoint updates a single tablet record in the
 	// already computed serving graph. The update has to be somewhat
 	// atomic, so it requires Server intrisic knowledge.
@@ -259,7 +264,7 @@ type Server interface {
 
 	// CreateTabletPidNode will keep a PID node up to date with
 	// this tablet's current PID, until 'done' is closed.
-	CreateTabletPidNode(tabletAlias TabletAlias, done chan struct{}) error
+	CreateTabletPidNode(tabletAlias TabletAlias, contents string, done chan struct{}) error
 
 	// ValidateTabletPidNode makes sure a PID file exists for the tablet
 	ValidateTabletPidNode(tabletAlias TabletAlias) error
@@ -279,13 +284,13 @@ type Server interface {
 	// ReadTabletActionPath reads the actionPath and returns the
 	// associated TabletAlias, the data (originally written by
 	// WriteTabletAction), and its version
-	ReadTabletActionPath(actionPath string) (TabletAlias, string, int, error)
+	ReadTabletActionPath(actionPath string) (TabletAlias, string, int64, error)
 
 	// UpdateTabletAction updates the actionPath with the new data.
 	// version is the current version we're expecting. Use -1 to set
 	// any version.
 	// Can return ErrBadVersion.
-	UpdateTabletAction(actionPath, data string, version int) error
+	UpdateTabletAction(actionPath, data string, version int64) error
 
 	// StoreTabletActionResponse stores the data for the response.
 	// This will not unblock the caller yet.

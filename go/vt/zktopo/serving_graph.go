@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"sort"
 
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -18,9 +19,12 @@ import (
 /*
 This file contains the serving graph management code of zktopo.Server
 */
+func zkPathForCell(cell string) string {
+	return fmt.Sprintf("/zk/%v/vt/ns", cell)
+}
 
 func zkPathForVtKeyspace(cell, keyspace string) string {
-	return fmt.Sprintf("/zk/%v/vt/ns/%v", cell, keyspace)
+	return path.Join(zkPathForCell(cell), keyspace)
 }
 
 func zkPathForVtShard(cell, keyspace, shard string) string {
@@ -66,14 +70,20 @@ func (zkts *Server) UpdateSrvTabletType(cell, keyspace, shard string, tabletType
 
 func (zkts *Server) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
-	data, stat, err := zkts.zconn.Get(path)
+	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
 			err = topo.ErrNoNode
 		}
 		return nil, err
 	}
-	return topo.NewVtnsAddrs(data, stat.Version())
+	result := &topo.VtnsAddrs{}
+	if len(data) > 0 {
+		if err := json.Unmarshal([]byte(data), result); err != nil {
+			return nil, fmt.Errorf("VtnsAddrs unmarshal failed: %v %v", data, err)
+		}
+	}
+	return result, nil
 }
 
 func (zkts *Server) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
@@ -104,7 +114,7 @@ func (zkts *Server) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, e
 		}
 		return nil, err
 	}
-	srvShard := topo.NewSrvShard(stat.Version())
+	srvShard := topo.NewSrvShard(int64(stat.Version()))
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), srvShard); err != nil {
 			return nil, fmt.Errorf("SrvShard unmarshal failed: %v %v", data, err)
@@ -129,13 +139,26 @@ func (zkts *Server) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 		}
 		return nil, err
 	}
-	srvKeyspace := topo.NewSrvKeyspace(stat.Version())
+	srvKeyspace := topo.NewSrvKeyspace(int64(stat.Version()))
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), srvKeyspace); err != nil {
 			return nil, fmt.Errorf("SrvKeyspace unmarshal failed: %v %v", data, err)
 		}
 	}
 	return srvKeyspace, nil
+}
+
+func (zkts *Server) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	children, _, err := zkts.zconn.Children(zkPathForCell(cell))
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	sort.Strings(children)
+	return children, nil
 }
 
 var skipUpdateErr = fmt.Errorf("skip update")
@@ -150,9 +173,11 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 
 	var addrs *topo.VtnsAddrs
 	if oldValue != "" {
-		addrs, err = topo.NewVtnsAddrs(oldValue, oldStat.Version())
-		if err != nil {
-			return
+		addrs = &topo.VtnsAddrs{}
+		if len(oldValue) > 0 {
+			if err := json.Unmarshal([]byte(oldValue), addrs); err != nil {
+				return "", fmt.Errorf("VtnsAddrs unmarshal failed: %v %v", oldValue, err)
+			}
 		}
 
 		foundTablet := false
@@ -170,7 +195,7 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 			addrs.Entries = append(addrs.Entries, *addr)
 		}
 	} else {
-		addrs = topo.NewAddrs()
+		addrs = topo.NewVtnsAddrs()
 		addrs.Entries = append(addrs.Entries, *addr)
 	}
 	return jscfg.ToJson(addrs), nil

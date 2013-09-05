@@ -208,7 +208,7 @@ func VtnsAddrForTablet(tablet *topo.Tablet) (*topo.VtnsAddr, error) {
 	if err != nil {
 		return nil, err
 	}
-	entry := topo.NewAddr(tablet.Uid, host, 0)
+	entry := topo.NewAddr(tablet.Uid, host)
 	entry.NamedPortMap["_vtocc"] = port
 	if tablet.SecureAddr != "" {
 		host, port, err = netutil.SplitHostPort(tablet.SecureAddr)
@@ -272,7 +272,13 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	if err := agent.ts.CreateTabletPidNode(agent.tabletAlias, agent.done); err != nil {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("agent.Start: cannot get hostname: %v", err)
+	}
+	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
+
+	if err := agent.ts.CreateTabletPidNode(agent.tabletAlias, data, agent.done); err != nil {
 		return err
 	}
 

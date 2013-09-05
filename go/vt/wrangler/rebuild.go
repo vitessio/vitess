@@ -167,7 +167,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		location := cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
 		addrs, ok := locationAddrsMap[location]
 		if !ok {
-			addrs = topo.NewAddrs()
+			addrs = topo.NewVtnsAddrs()
 			locationAddrsMap[location] = addrs
 		}
 

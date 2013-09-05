@@ -37,10 +37,35 @@ import (
 var (
 	memProfileRate = flag.Int("mem-profile-rate", 512*1024, "profile every n bytes allocated")
 	mu             sync.Mutex
-	onCloseHooks   []func()
-	onInitHooks    []func()
-	inited         bool
+
+	onInitHooks hooks
+	onRunHooks  hooks
+	inited      bool
 )
+
+type hooks struct {
+	funcs []func()
+	mu    sync.Mutex
+}
+
+func (h *hooks) Add(f func()) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.funcs = append(h.funcs, f)
+}
+
+func (h *hooks) Fire() {
+	wg := sync.WaitGroup{}
+
+	for _, f := range h.funcs {
+		wg.Add(1)
+		go func(f func()) {
+			f()
+			wg.Done()
+		}(f)
+	}
+	wg.Wait()
+}
 
 func Init() {
 	mu.Lock()
@@ -78,9 +103,7 @@ func Init() {
 		log.Fatalf("servenv.Init: exportBinaryVersion: %v", err)
 	}
 
-	for _, f := range onInitHooks {
-		f()
-	}
+	onInitHooks.Fire()
 }
 
 func exportBinaryVersion() error {
@@ -109,7 +132,11 @@ func exportBinaryVersion() error {
 // onInit registers f to be run at the beginning of the app
 // lifecycle. It should be called in an init() function.
 func onInit(f func()) {
-	mu.Lock()
-	defer mu.Unlock()
-	onInitHooks = append(onInitHooks, f)
+	onInitHooks.Add(f)
+}
+
+// OnRun registers f to be run right at the beginning of Run. All
+// hooks are run in parallel.
+func OnRun(f func()) {
+	onRunHooks.Add(f)
 }
