@@ -331,7 +331,6 @@ def get_vars(port):
 def zkocc_start(cells=['test_nj'], extra_params=[]):
   global zkocc_port_base
   prog_compile(['zkocc'])
-  logfile = tmp_root + '/zkocc_%u.log' % zkocc_port_base
   args = [vtroot+'/bin/zkocc',
           '-port', str(zkocc_port_base),
           '-stderrthreshold=ERROR',
@@ -356,6 +355,38 @@ def zkocc_start(cells=['test_nj'], extra_params=[]):
   return sp
 
 def zkocc_kill(sp):
+  kill_sub_process(sp)
+  sp.wait()
+
+# toporeader helpers
+toporeader_port_base = reserve_ports(1)
+def toporeader_start():
+  global toporeader_port_base
+  prog_compile(['toporeader'])
+  args = [vtroot+'/bin/toporeader',
+          '-port', str(toporeader_port_base),
+          '-stderrthreshold=ERROR',
+          ]
+  sp = run_bg(args)
+
+  # wait for vars
+  timeout = 5.0
+  while True:
+    v = get_vars(toporeader_port_base)
+    if v == None:
+      logging.debug("  toporeader not answering at /debug/vars, waiting...")
+    else:
+      break
+
+    logging.debug("sleeping a bit while we wait")
+    time.sleep(0.1)
+    timeout -= 0.1
+    if timeout <= 0:
+      raise TestError("timeout waiting for toporeader")
+
+  return sp
+
+def toporeader_kill(sp):
   kill_sub_process(sp)
   sp.wait()
 

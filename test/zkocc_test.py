@@ -33,11 +33,13 @@ class TopoOccTest(unittest.TestCase):
   def setUp(self):
     utils.zk_wipe()
     self.zkocc_server = utils.zkocc_start()
+    self.toporeader_server = utils.toporeader_start()
     self.topo = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base, 'test_nj', 30)
     self.topo.dial()
 
   def tearDown(self):
-    utils.kill_sub_process(self.zkocc_server)
+    utils.zkocc_kill(self.zkocc_server)
+    utils.toporeader_kill(self.toporeader_server)
 
   def rebuild(self):
     utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0', auto_log=True)
@@ -55,8 +57,14 @@ class TopoOccTest(unittest.TestCase):
     utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
     self.assertItemsEqual(self.topo.get_srv_keyspace_names('local'), ["test_keyspace1", "test_keyspace2"])
 
+    # zkocc API test
     utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqual(err, "KeyspaceName[0] = test_keyspace1\n" +
+                          "KeyspaceName[1] = test_keyspace2\n")
+
+    # toporeader API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.toporeader_port_base, trap_output=True)
     self.assertEqual(err, "KeyspaceName[0] = test_keyspace1\n" +
                           "KeyspaceName[1] = test_keyspace2\n")
 
@@ -69,8 +77,13 @@ class TopoOccTest(unittest.TestCase):
     reply = self.topo.get_srv_keyspace("test_nj", "test_keyspace")
     self.assertEqual(reply['TabletTypes'], ['master'])
 
+    # zkocc API test
     utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqual(err, "TabletType[0] = master\n")
+
+    # toporeader API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.toporeader_port_base, trap_output=True)
     self.assertEqual(err, "TabletType[0] = master\n")
 
   def test_get_srv_keyspace_local(self):
@@ -90,8 +103,13 @@ class TopoOccTest(unittest.TestCase):
     self.rebuild()
     self.assertEqual(len(self.topo.get_end_points("test_nj", "test_keyspace", "0", "master")['Entries']), 1)
 
+    # zkocc API test
     utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.zkocc_port_base, trap_output=True)
+    self.assertEqual(err, "Entry[0] = 1 localhost\n")
+
+    # toporeader API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.toporeader_port_base, trap_output=True)
     self.assertEqual(err, "Entry[0] = 1 localhost\n")
 
 

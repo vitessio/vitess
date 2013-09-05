@@ -19,6 +19,7 @@ third_party/mysql
 go/cmd/mysqlctl/mysqlctl
 go/cmd/normalizer/normalizer
 go/cmd/topo2topo/topo2topo
+go/cmd/toporeader/toporeader
 go/cmd/vt_binlog_player/vt_binlog_player
 go/cmd/vt_binlog_server/vt_binlog_server
 go/cmd/vtaction/vtaction
