@@ -229,23 +229,29 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 	// srvShardByPath is a map:
 	//   key: {cell,keyspace,shard}
 	//   value: topo.SrvShard
-	// this will fill in the AddrsByType part for each shard
+	// this will create all the SrvShard objects
 	srvShardByPath := make(map[cellKeyspaceShard]*topo.SrvShard)
-	for location, addrs := range locationAddrsMap {
+	for location, _ := range locationAddrsMap {
 		// location will be {cell,keyspace,shard,type}
 		srvShardPath := cellKeyspaceShard{location.cell, location.keyspace, location.shard}
-		tabletType := location.tabletType
-
 		srvShard, ok := srvShardByPath[srvShardPath]
 		if !ok {
 			srvShard = &topo.SrvShard{
 				KeyRange:    shardInfo.KeyRange,
 				ServedTypes: shardInfo.ServedTypes,
-				AddrsByType: make(map[string]topo.VtnsAddrs),
+				TabletTypes: make([]topo.TabletType, 0, 2),
 			}
 			srvShardByPath[srvShardPath] = srvShard
 		}
-		srvShard.AddrsByType[string(tabletType)] = *addrs
+		foundType := false
+		for _, t := range srvShard.TabletTypes {
+			if t == location.tabletType {
+				foundType = true
+			}
+		}
+		if !foundType {
+			srvShard.TabletTypes = append(srvShard.TabletTypes, location.tabletType)
+		}
 	}
 
 	// Save the shard entries
@@ -348,7 +354,6 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - read the ShardInfo structures for each shard
-	//    - prune the AddrsByType field, result would be too big
 	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
@@ -359,12 +364,9 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 			if err != nil {
 				return err
 			}
-			for dbType, _ := range srvShard.AddrsByType {
-				keyspaceDbTypes[topo.TabletType(dbType)] = true
+			for _, tabletType := range srvShard.TabletTypes {
+				keyspaceDbTypes[tabletType] = true
 			}
-			// Prune addrs, this is unnecessarily expensive right now. It is easier to
-			// load on-demand since we have to do that anyway on a reconnect.
-			srvShard.AddrsByType = nil
 			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
 		}
 		tabletTypes := make([]topo.TabletType, 0, len(keyspaceDbTypes))
@@ -402,7 +404,6 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceMap map[cellKeyspace]*topo.SrvKeyspace) error {
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - read the ShardInfo structures for each shard
-	//    - prune the AddrsByType field, result would be too big
 	// - compute the union of the db types (replica, master, ...)
 	// - sort the shards in the list by range
 	// - check the ranges are compatible (no hole, covers everything)
@@ -414,13 +415,9 @@ func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceM
 			if err != nil {
 				return err
 			}
-			for dbType, _ := range srvShard.AddrsByType {
-				keyspaceDbTypes[topo.TabletType(dbType)] = true
+			for _, tabletType := range srvShard.TabletTypes {
+				keyspaceDbTypes[tabletType] = true
 			}
-			// Prune addrs, this is unnecessarily expensive right
-			// now. It is easier to load on-demand since we have
-			// to do that anyway on a reconnect.
-			srvShard.AddrsByType = nil
 
 			// for each type this shard is supposed to serve,
 			// add it to srvKeyspace.Partitions
