@@ -29,7 +29,7 @@ func NewCounters(name string) *Counters {
 func (c *Counters) String() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return toString(c.counts)
+	return counterToString(c.counts)
 }
 
 func (c *Counters) Add(name string, value int64) {
@@ -49,19 +49,19 @@ func (c *Counters) Counts() map[string]int64 {
 	return counts
 }
 
-// CounterFunc converts a function that returns
+// CountersFunc converts a function that returns
 // a map of int64 as an expvar.
-type CounterFunc func() map[string]int64
+type CountersFunc func() map[string]int64
 
-func (f CounterFunc) String() string {
+func (f CountersFunc) String() string {
 	m := f()
 	if m == nil {
 		return "{}"
 	}
-	return toString(m)
+	return counterToString(m)
 }
 
-func toString(m map[string]int64) string {
+func counterToString(m map[string]int64) string {
 	b := bytes.NewBuffer(make([]byte, 0, 4096))
 	fmt.Fprintf(b, "{")
 	firstValue := true

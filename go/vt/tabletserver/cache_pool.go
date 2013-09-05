@@ -52,6 +52,7 @@ func (cache *Cache) Recycle() {
 
 func NewCachePool(name string, commandLine []string, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout}
+	cp.memcacheStats = NewMemcacheStats(cp)
 	if name != "" {
 		stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
 		stats.Publish(name+"Available", stats.IntFunc(cp.Available))
@@ -118,11 +119,7 @@ func (cp *CachePool) Open() {
 		return &Cache{c, cp}, nil
 	}
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
-	if cp.memcacheStats == nil {
-		cp.memcacheStats = NewMemcacheStats(cp)
-	} else {
-		cp.memcacheStats.Start()
-	}
+	cp.memcacheStats.Open()
 }
 
 func (cp *CachePool) startMemcache() {
@@ -155,9 +152,7 @@ func (cp *CachePool) Close() {
 	if cp.pool == nil {
 		return
 	}
-	if cp.memcacheStats != nil {
-		cp.memcacheStats.Stop()
-	}
+	cp.memcacheStats.Close()
 	cp.pool.Close()
 	cp.cmd.Process.Kill()
 	cp.pool = nil
