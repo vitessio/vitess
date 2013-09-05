@@ -499,7 +499,7 @@ func CheckPid(t *testing.T, ts topo.Server) {
 	tabletAlias := topo.TabletAlias{cell, 1}
 
 	done := make(chan struct{}, 1)
-	if err := ts.CreateTabletPidNode(tabletAlias, done); err != nil {
+	if err := ts.CreateTabletPidNode(tabletAlias, "contents", done); err != nil {
 		t.Errorf("ts.CreateTabletPidNode: %v", err)
 	}
 

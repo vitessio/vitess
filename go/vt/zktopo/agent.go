@@ -34,10 +34,10 @@ func (zkts *Server) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
 	return nil
 }
 
-func (zkts *Server) CreateTabletPidNode(tabletAlias topo.TabletAlias, done chan struct{}) error {
+func (zkts *Server) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
 	zkTabletPath := TabletPathForAlias(tabletAlias)
 	path := path.Join(zkTabletPath, "pid")
-	return zk.CreatePidNode(zkts.zconn, path, done)
+	return zk.CreatePidNode(zkts.zconn, path, contents, done)
 }
 
 func (zkts *Server) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {

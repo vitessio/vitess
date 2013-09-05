@@ -455,8 +455,8 @@ func (tee *Tee) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
 	return tee.primary.ValidateTabletActions(tabletAlias)
 }
 
-func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, done chan struct{}) error {
-	return tee.primary.CreateTabletPidNode(tabletAlias, done)
+func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
+	return tee.primary.CreateTabletPidNode(tabletAlias, contents, done)
 }
 
 func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {

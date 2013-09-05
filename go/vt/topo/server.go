@@ -259,7 +259,7 @@ type Server interface {
 
 	// CreateTabletPidNode will keep a PID node up to date with
 	// this tablet's current PID, until 'done' is closed.
-	CreateTabletPidNode(tabletAlias TabletAlias, done chan struct{}) error
+	CreateTabletPidNode(tabletAlias TabletAlias, contents string, done chan struct{}) error
 
 	// ValidateTabletPidNode makes sure a PID file exists for the tablet
 	ValidateTabletPidNode(tabletAlias TabletAlias) error

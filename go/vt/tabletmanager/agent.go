@@ -272,7 +272,13 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	if err := agent.ts.CreateTabletPidNode(agent.tabletAlias, agent.done); err != nil {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("agent.Start: cannot get hostname: %v", err)
+	}
+	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
+
+	if err := agent.ts.CreateTabletPidNode(agent.tabletAlias, data, agent.done); err != nil {
 		return err
 	}
 
