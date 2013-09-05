@@ -329,6 +329,10 @@ func (tee *Tee) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error)
 	return tee.readFrom.GetSrvKeyspace(cell, keyspace)
 }
 
+func (tee *Tee) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	return tee.readFrom.GetSrvKeyspaceNames(cell)
+}
+
 func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.VtnsAddr) error {
 	if err := tee.primary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
 		return err

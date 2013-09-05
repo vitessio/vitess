@@ -57,6 +57,7 @@ type Server interface {
 	// GetKnownCells returns the list of known cells running our processes.
 	// It is possible to find all tablets in the entire system
 	// by then calling GetTabletsByCell on every cell, for instance.
+	// They shall be sorted.
 	GetKnownCells() ([]string, error)
 
 	//
@@ -67,7 +68,7 @@ type Server interface {
 	// yet. Can return ErrNodeExists if it already exists.
 	CreateKeyspace(keyspace string) error
 
-	// GetKeyspaces returns the known keyspaces.
+	// GetKeyspaces returns the known keyspaces. They shall be sorted.
 	GetKeyspaces() ([]string, error)
 
 	// DeleteKeyspaceShards deletes all the shards in a keyspace.
@@ -99,7 +100,7 @@ type Server interface {
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created,
-	// or if DeleteKeyspaceShards was called.
+	// or if DeleteKeyspaceShards was called. They shall be sorted.
 	GetShardNames(keyspace string) ([]string, error)
 
 	//
@@ -196,6 +197,10 @@ type Server interface {
 	// GetSrvKeyspace reads a SrvKeyspace record.
 	// Can return ErrNoNode.
 	GetSrvKeyspace(cell, keyspace string) (*SrvKeyspace, error)
+
+	// GetSrvKeyspaceNames returns the list of visible Keyspaces
+	// in this cell. They shall be sorted.
+	GetSrvKeyspaceNames(cell string) ([]string, error)
 
 	// UpdateTabletEndpoint updates a single tablet record in the
 	// already computed serving graph. The update has to be somewhat

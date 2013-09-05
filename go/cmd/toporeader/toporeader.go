@@ -1,8 +1,6 @@
 package main
 
 import (
-	"sort"
-
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -11,13 +9,11 @@ type TopoReader struct {
 }
 
 func (tr *TopoReader) GetSrvKeyspaceNames(req topo.GetSrvKeyspaceNamesArgs, reply *topo.SrvKeyspaceNames) error {
-	// FIXME(alainjobart) this is wrong, we need GetSrvKeyspaceNames in API
 	var err error
-	reply.Entries, err = tr.ts.GetKeyspaces()
+	reply.Entries, err = tr.ts.GetSrvKeyspaceNames(req.Cell)
 	if err != nil {
 		return err
 	}
-	sort.Strings(reply.Entries)
 	return nil
 }
 

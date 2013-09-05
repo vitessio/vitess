@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"sort"
 
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -18,9 +19,12 @@ import (
 /*
 This file contains the serving graph management code of zktopo.Server
 */
+func zkPathForCell(cell string) string {
+	return fmt.Sprintf("/zk/%v/vt/ns", cell)
+}
 
 func zkPathForVtKeyspace(cell, keyspace string) string {
-	return fmt.Sprintf("/zk/%v/vt/ns/%v", cell, keyspace)
+	return path.Join(zkPathForCell(cell), keyspace)
 }
 
 func zkPathForVtShard(cell, keyspace, shard string) string {
@@ -142,6 +146,19 @@ func (zkts *Server) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, er
 		}
 	}
 	return srvKeyspace, nil
+}
+
+func (zkts *Server) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	children, _, err := zkts.zconn.Children(zkPathForCell(cell))
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	sort.Strings(children)
+	return children, nil
 }
 
 var skipUpdateErr = fmt.Errorf("skip update")

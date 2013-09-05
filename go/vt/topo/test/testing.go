@@ -393,7 +393,9 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	if s, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil || len(s.TabletTypes) != 1 || s.TabletTypes[0] != topo.TYPE_MASTER {
 		t.Errorf("GetSrvKeyspace(valid): %v", err)
 	}
-
+	if k, err := ts.GetSrvKeyspaceNames(cell); err != nil || len(k) != 1 || k[0] != "test_keyspace" {
+		t.Errorf("GetSrvKeyspaceNames(): %v", err)
+	}
 }
 
 func CheckKeyspaceLock(t *testing.T, ts topo.Server) {
