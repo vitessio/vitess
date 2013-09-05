@@ -358,13 +358,13 @@ def zkocc_kill(sp):
   kill_sub_process(sp)
   sp.wait()
 
-# toporeader helpers
-toporeader_port_base = reserve_ports(1)
-def toporeader_start():
-  global toporeader_port_base
-  prog_compile(['toporeader'])
-  args = [vtroot+'/bin/toporeader',
-          '-port', str(toporeader_port_base),
+# vttopo helpers
+vttopo_port_base = reserve_ports(1)
+def vttopo_start():
+  global vttopo_port_base
+  prog_compile(['vttopo'])
+  args = [vtroot+'/bin/vttopo',
+          '-port', str(vttopo_port_base),
           '-stderrthreshold=ERROR',
           ]
   sp = run_bg(args)
@@ -372,9 +372,9 @@ def toporeader_start():
   # wait for vars
   timeout = 5.0
   while True:
-    v = get_vars(toporeader_port_base)
+    v = get_vars(vttopo_port_base)
     if v == None:
-      logging.debug("  toporeader not answering at /debug/vars, waiting...")
+      logging.debug("  vttopo not answering at /debug/vars, waiting...")
     else:
       break
 
@@ -382,11 +382,11 @@ def toporeader_start():
     time.sleep(0.1)
     timeout -= 0.1
     if timeout <= 0:
-      raise TestError("timeout waiting for toporeader")
+      raise TestError("timeout waiting for vttopo")
 
   return sp
 
-def toporeader_kill(sp):
+def vttopo_kill(sp):
   kill_sub_process(sp)
   sp.wait()
 

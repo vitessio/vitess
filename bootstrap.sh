@@ -47,13 +47,13 @@ ln -snf $VTTOP/data $VTROOT/data
 ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/cmd/mysqlctl/mysqlctl $VTROOT/bin/mysqlctl
 ln -snf $VTTOP/go/cmd/normalizer/normalizer $VTROOT/bin/normalizer
-ln -snf $VTTOP/go/cmd/toporeader/toporeader $VTROOT/bin/toporeader
 ln -snf $VTTOP/go/cmd/vtaction/vtaction $VTROOT/bin/vtaction
 ln -snf $VTTOP/go/cmd/vtclient2/vtclient2 $VTROOT/bin/vtclient2
 ln -snf $VTTOP/go/cmd/vtctl/vtctl $VTROOT/bin/vtctl
 ln -snf $VTTOP/go/cmd/vtctld/vtctld $VTROOT/bin/vtctld
 ln -snf $VTTOP/go/cmd/vtocc/vtocc $VTROOT/bin/vtocc
 ln -snf $VTTOP/go/cmd/vttablet/vttablet $VTROOT/bin/vttablet
+ln -snf $VTTOP/go/cmd/vttopo/vttopo $VTROOT/bin/vttopo
 ln -snf $VTTOP/go/cmd/zk/zk $VTROOT/bin/zk
 ln -snf $VTTOP/go/cmd/zkctl/zkctl $VTROOT/bin/zkctl
 ln -snf $VTTOP/go/cmd/zkocc/zkocc $VTROOT/bin/zkocc
