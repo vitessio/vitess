@@ -500,6 +500,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 	}
 
 	keyspacesToRebuild := make(map[string]bool)
+	shardsCreated := make(map[string]bool)
 	hasErr := false
 	mu := sync.Mutex{}
 	wg := sync.WaitGroup{}
@@ -515,6 +516,15 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 			}
 			mu.Lock()
 			keyspacesToRebuild[ti.Keyspace] = true
+			shardPath := ti.Keyspace + "/" + ti.Shard
+			if !shardsCreated[shardPath] {
+				if err := topo.CreateShard(wr.ts, ti.Keyspace, ti.Shard); err != nil && err != topo.ErrNodeExists {
+					log.Warningf("failed re-creating shard %v: %v", shardPath, err)
+					hasErr = true
+				} else {
+					shardsCreated[shardPath] = true
+				}
+			}
 			mu.Unlock()
 			err := topo.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
 			if err != nil {

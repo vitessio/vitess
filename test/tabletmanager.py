@@ -705,6 +705,18 @@ class TestTabletManager(unittest.TestCase):
     # update zk with the new graph
     utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)
 
+    self._test_reparent_from_outside_check(brutal)
+
+    utils.run_vtctl('RebuildReplicationGraph test_nj test_keyspace')
+
+    self._test_reparent_from_outside_check(brutal)
+
+    tablet_31981.kill_vttablet()
+    tablet_62344.kill_vttablet()
+    tablet_62044.kill_vttablet()
+    tablet_41983.kill_vttablet()
+
+  def _test_reparent_from_outside_check(self, brutal):
     # make sure the replication graph is fine
     shard_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0')
     logging.debug('shard_files: %s' % " ".join(shard_files))
@@ -720,11 +732,6 @@ class TestTabletManager(unittest.TestCase):
       raise utils.TestError('unexpected zk content: %s instead of expected %s' %
                             ("|".join(slave_files),
                              "|".join(expected_slave_files_files)))
-
-    tablet_31981.kill_vttablet()
-    tablet_62344.kill_vttablet()
-    tablet_62044.kill_vttablet()
-    tablet_41983.kill_vttablet()
 
 
   # See if a lag slave can be safely reparent.

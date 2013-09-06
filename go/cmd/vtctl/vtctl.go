@@ -168,7 +168,7 @@ var commands = []commandGroup{
 				"Validate all nodes reachable from global replication graph and all tablets in all discoverable cells are consistent."},
 			command{"RebuildReplicationGraph", commandRebuildReplicationGraph,
 				"<cell1|zk local vt path1>,<cell2|zk local vt path2>... <keyspace1>,<keyspace2>,...",
-				"This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
+				"HIDDEN This takes the Thor's hammer approach of recovery and should only be used in emergencies.  cell1,cell2,... are the canonical source of data for the system. This function uses that canonical data to recover the replication graph, at which point further auditing with Validate can reveal any remaining issues."},
 			command{"ListAllTablets", commandListAllTablets,
 				"<cell name|zk local vt path>",
 				"List all tablets in an awk-friendly way."},
@@ -247,7 +247,7 @@ func init() {
 		for _, group := range commands {
 			fmt.Fprintf(os.Stderr, "%s:\n", group.name)
 			for _, cmd := range group.commands {
-				if strings.HasPrefix(cmd.help, "DEPRECATED") {
+				if strings.HasPrefix(cmd.help, "HIDDEN") {
 					continue
 				}
 				fmt.Fprintf(os.Stderr, "  %s %s\n", cmd.name, cmd.params)
