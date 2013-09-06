@@ -35,9 +35,9 @@ func main() {
 	flag.Parse()
 	servenv.Init()
 
-	topoServer := topo.GetServer()
+	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	topo.RegisterTopoReader(&TopoReader{ts: topoServer})
+	topo.RegisterTopoReader(NewTopoReader(ts))
 	servenv.Run(*port)
 }
