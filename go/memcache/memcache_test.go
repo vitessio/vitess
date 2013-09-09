@@ -161,21 +161,35 @@ func TestMemcache(t *testing.T) {
 	var stats []byte
 	stats, err = c.Stats("")
 	if err != nil {
-		t.Errorf("Stats: %v", err)
-		return
+		t.Fatalf("Stats: %v", err)
 	}
-	t.Logf("Main stats:\n" + string(stats))
+	statsStr := string(stats)
+	if !strings.Contains(statsStr, "STAT version ") {
+		t.Fatalf("want containing \"version\", got %v", statsStr)
+	}
+	// for manual inspection of stats with -v
+	t.Logf("Main stats:\n" + statsStr)
 
 	stats, err = c.Stats("slabs")
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
+	statsStr = string(stats)
+	if !strings.Contains(statsStr, "STAT 1:chunk_size ") {
+		t.Fatalf("want containing \"chunk_size\", got %v", statsStr)
+	}
+	// for manual inspection of stats with -v
 	t.Logf("Slabs stats:\n" + string(stats))
 
 	stats, err = c.Stats("items")
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
+	statsStr = string(stats)
+	if !strings.Contains(statsStr, "STAT items:1:number ") {
+		t.Fatalf("want containing \"number\", got %v", statsStr)
+	}
+	// for manual inspection of stats with -v
 	t.Logf("Items stats:\n" + string(stats))
 
 	// FlushAll

@@ -103,12 +103,12 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	stats.Publish("SchemaReloadTime", stats.DurationFunc(func() time.Duration {
 		return si.reloadTime
 	}))
-	stats.Publish("TableStats", stats.MatrixFunc(si.getTableStats))
+	stats.Publish("TableStats", stats.NewMatrixFunc("Table", "Stats", si.getTableStats))
 	stats.Publish("TableInvalidations", stats.CountersFunc(si.getTableInvalidations))
-	stats.Publish("QueryCount", stats.MatrixFunc(si.getQueryCount))
-	stats.Publish("QueryTime", stats.MatrixFunc(si.getQueryTime))
-	stats.Publish("QueryRowCount", stats.MatrixFunc(si.getQueryRowCount))
-	stats.Publish("QueryErrorCount", stats.MatrixFunc(si.getQueryErrorCount))
+	stats.Publish("QueryCount", stats.NewMatrixFunc("Table", "Plan", si.getQueryCount))
+	stats.Publish("QueryTime", stats.NewMatrixFunc("Table", "Plan", si.getQueryTime))
+	stats.Publish("QueryRowCount", stats.NewMatrixFunc("Table", "Plan", si.getQueryRowCount))
+	stats.Publish("QueryErrorCount", stats.NewMatrixFunc("Table", "Plan", si.getQueryErrorCount))
 	http.Handle("/debug/query_plans", si)
 	http.Handle("/debug/query_stats", si)
 	http.Handle("/debug/table_stats", si)
@@ -400,9 +400,9 @@ func (si *SchemaInfo) getTableStats() map[string]map[string]int64 {
 		if v.CacheType != schema.CACHE_NONE {
 			hits, absent, misses, _ := v.Stats()
 			tblstats := make(map[string]int64)
-			tblstats["hits"] = hits
-			tblstats["absent"] = absent
-			tblstats["misses"] = misses
+			tblstats["Hits"] = hits
+			tblstats["Absent"] = absent
+			tblstats["Misses"] = misses
 			tstats[k] = tblstats
 		}
 	}

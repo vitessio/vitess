@@ -396,6 +396,15 @@ class TestNocache(framework.TestCase):
     bv = {'eid': 1}
     self.env.execute("select eid as query_stats from vtocc_a where eid = %(eid)s", bv)
     self._verify_query_stats(self.env.query_stats(), "select eid as query_stats from vtocc_a where eid = :eid", "vtocc_a", "PASS_SELECT", 1, 2, 0)
+    tstartQueryCount = self._get_vars_query_stats(self.env.debug_vars()["QueryCount"], "vtocc_a", "PASS_SELECT")
+    tstartRowCount = self._get_vars_query_stats(self.env.debug_vars()["QueryRowCount"], "vtocc_a", "PASS_SELECT")
+    tstartErrorCount = self._get_vars_query_stats(self.env.debug_vars()["QueryErrorCount"], "vtocc_a", "PASS_SELECT")
+    tstartTime = self._get_vars_query_stats(self.env.debug_vars()["QueryTime"], "vtocc_a", "PASS_SELECT")
+    self.assertEqual(tstartQueryCount, 1)
+    self.assertEqual(tstartRowCount, 2)
+    self.assertEqual(tstartErrorCount, 0)
+    self.assertTrue(tstartTime > 0)
+
     try:
       self.env.execute("select eid as query_stats from vtocc_a where dontexist(eid) = %(eid)s", bv)
     except dbexceptions.DatabaseError:
@@ -403,6 +412,14 @@ class TestNocache(framework.TestCase):
     else:
       self.fail("Did not receive exception: " + query)
     self._verify_query_stats(self.env.query_stats(), "select eid as query_stats from vtocc_a where dontexist(eid) = :eid", "vtocc_a", "PASS_SELECT", 1, 0, 1)
+    tendQueryCount = self._get_vars_query_stats(self.env.debug_vars()["QueryCount"], "vtocc_a", "PASS_SELECT")
+    tendRowCount = self._get_vars_query_stats(self.env.debug_vars()["QueryRowCount"], "vtocc_a", "PASS_SELECT")
+    tendErrorCount = self._get_vars_query_stats(self.env.debug_vars()["QueryErrorCount"], "vtocc_a", "PASS_SELECT")
+    tendTime = self._get_vars_query_stats(self.env.debug_vars()["QueryTime"], "vtocc_a", "PASS_SELECT")
+    self.assertEqual(tstartQueryCount+1, tendQueryCount)
+    self.assertEqual(tstartRowCount, tendRowCount)
+    self.assertEqual(tstartErrorCount+1, tendErrorCount)
+    self.assertTrue((tendTime - tstartTime) > 0)
 
   def _verify_mismatch(self, query, bindvars=None):
     self._verify_error(query, bindvars, "error: Type mismatch")
@@ -417,6 +434,15 @@ class TestNocache(framework.TestCase):
       self.fail("Did not receive exception: " + query)
     finally:
       self.env.conn.rollback()
+
+  def _get_vars_query_stats(self, query_stats, table, plan):
+    for stat in query_stats:
+      if stat["Table"] != table:
+        continue
+      if stat["Plan"] != plan:
+        continue
+      return stat["Value"]
+    raise KeyError
 
   def _verify_query_stats(self, query_stats, query, table, plan, count, rows, errors):
     for stat in query_stats:

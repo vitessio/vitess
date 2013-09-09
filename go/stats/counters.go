@@ -53,6 +53,10 @@ func (c *Counters) Counts() map[string]int64 {
 // a map of int64 as an expvar.
 type CountersFunc func() map[string]int64
 
+func (f CountersFunc) Counts() map[string]int64 {
+	return f()
+}
+
 func (f CountersFunc) String() string {
 	m := f()
 	if m == nil {

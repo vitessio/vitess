@@ -27,6 +27,15 @@ func TestCounters(t *testing.T) {
 	if counts["c2"] != 2 {
 		t.Errorf("want 2, got %d", counts["c2"])
 	}
+	f := CountersFunc(func() map[string]int64 {
+		return map[string]int64{
+			"c1": 1,
+			"c2": 2,
+		}
+	})
+	if f.String() != want1 && f.String() != want2 {
+		t.Errorf("want %s or %s, got %s", want1, want2, f.String())
+	}
 }
 
 func TestCountersHook(t *testing.T) {

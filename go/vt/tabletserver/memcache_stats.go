@@ -173,7 +173,7 @@ func NewMemcacheStats(cachePool *CachePool) *MemcacheStats {
 
 // Open provides a common function API, and does nothing.
 func (s *MemcacheStats) Open() {
-	//noop
+	// noop
 }
 
 // Close clears the variable values.
@@ -327,10 +327,16 @@ func (s *MemcacheStats) publishItemsStats() {
 }
 
 func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
-	defer recover() // avoid race condition when cachepool stopped right before Get()
-	if s.cachePool.IsClosed() {
-		return
-	}
+	defer func() {
+		if x := recover(); x != nil {
+			_, ok := x.(*TabletError)
+			if !ok {
+				log.Errorf("Uncaught panic when reading memcache stats: %v", x)
+				return
+			}
+			// ignore if cache pool is closed
+		}
+	}()
 	conn := s.cachePool.Get()
 	defer conn.Recycle()
 	stats, err := conn.Stats(k)
