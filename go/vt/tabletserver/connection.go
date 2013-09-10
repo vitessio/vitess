@@ -17,7 +17,7 @@ import (
 var mysqlStats *stats.Timings
 
 func init() {
-	mysqlStats = stats.NewTimings("MySQL")
+	mysqlStats = stats.NewTimings("Mysql")
 }
 
 type PoolConnection interface {
