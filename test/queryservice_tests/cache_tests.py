@@ -179,6 +179,21 @@ class TestCache(framework.TestCase):
     self._verify_mismatch("select * from vtocc_cached2 where eid = 1.2 and bid = 1.2")
     self._verify_mismatch("select * from vtocc_cached2 where eid = %(fl)s and bid = %(fl)s", {"fl": 1.2})
 
+  def test_stats(self):
+    self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
+    tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
+    self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
+    tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
+    self.assertEqual(tstartHits+1, tendHits)
+
+    tstartMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
+    self.env.conn.begin()
+    self.env.execute("update vtocc_part2 set data2 = 2 where key3 = 1")
+    self.env.conn.commit()
+    self.env.execute("select * from vtocc_view where key2 = 1")
+    tendMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
+    self.assertEqual(tstartMisses+1, tendMisses)
+
   def test_spot_check(self):
     vstart = self.env.debug_vars()
     self.assertEqual(vstart["SpotCheckRatio"], 0)
@@ -215,3 +230,12 @@ class TestCache(framework.TestCase):
     error_count = self.env.run_cases(cache_cases2.cases)
     if error_count != 0:
       self.fail("test_cache2_sqls errors: %d" % error_count)
+
+  def _get_vars_table_stats(self, table_stats, table, stats):
+    for item in table_stats:
+      if item["Table"] != table:
+        continue
+      if item["Stats"] != stats:
+        continue
+      return item["Value"]
+    raise KeyError
