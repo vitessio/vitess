@@ -305,7 +305,7 @@ type Server interface {
 var serverImpls map[string]Server = make(map[string]Server)
 
 // Which implementation to use
-var topoImplementation = flag.String("topo_implementation", "zookeeper", "The topology implementation to use.")
+var topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
 
 // RegisterServer adds an implementation for a Server.
 // If an implementation with that name already exists, panics.
@@ -322,7 +322,7 @@ func GetServerByName(name string) Server {
 	return serverImpls[name]
 }
 
-// Returns 'our' Server:
+// GetServer returns 'our' Server, going down this list:
 // - If only one is registered, that's the one.
 // - If more than one are registered, use the 'topo_implementation' flag
 //   (which defaults to zookeeper).
