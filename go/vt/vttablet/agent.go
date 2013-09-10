@@ -67,7 +67,11 @@ func InitAgent(
 		secureAddr = fmt.Sprintf(":%v", securePort)
 	}
 
-	exportedType := stats.NewString("TabletType")
+	statsType := stats.NewString("TabletType")
+	statsKeyspace := stats.NewString("TabletKeyspace")
+	statsShard := stats.NewString("TabletShard")
+	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
+	statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
@@ -110,7 +114,11 @@ func InitAgent(
 			mysqlctl.DisableUpdateStreamService()
 		}
 
-		exportedType.Set(string(newTablet.Type))
+		statsType.Set(string(newTablet.Type))
+		statsKeyspace.Set(newTablet.Keyspace)
+		statsShard.Set(newTablet.Shard)
+		statsKeyRangeStart.Set(string(newTablet.KeyRange.Start.Hex()))
+		statsKeyRangeEnd.Set(string(newTablet.KeyRange.End.Hex()))
 
 		// BinlogServer is only enabled for replicas
 		if newTablet.Type == topo.TYPE_REPLICA {
