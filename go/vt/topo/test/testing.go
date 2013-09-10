@@ -369,6 +369,7 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	// test cell/keyspace/shard entries (SrvShard)
 	srvShard := topo.SrvShard{
 		ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
+		TabletTypes: []topo.TabletType{topo.TYPE_REPLICA, topo.TYPE_RDONLY},
 	}
 	if err := ts.UpdateSrvShard(cell, "test_keyspace", "-10", &srvShard); err != nil {
 		t.Errorf("UpdateSrvShard(1): %v", err)
@@ -376,12 +377,26 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	if _, err := ts.GetSrvShard(cell, "test_keyspace", "666"); err != topo.ErrNoNode {
 		t.Errorf("GetSrvShard(invalid): %v", err)
 	}
-	if s, err := ts.GetSrvShard(cell, "test_keyspace", "-10"); err != nil || len(s.ServedTypes) != 1 || s.ServedTypes[0] != topo.TYPE_MASTER {
+	if s, err := ts.GetSrvShard(cell, "test_keyspace", "-10"); err != nil ||
+		len(s.ServedTypes) != 1 ||
+		s.ServedTypes[0] != topo.TYPE_MASTER ||
+		len(s.TabletTypes) != 2 ||
+		s.TabletTypes[0] != topo.TYPE_REPLICA ||
+		s.TabletTypes[1] != topo.TYPE_RDONLY {
 		t.Errorf("GetSrvShard(valid): %v", err)
 	}
 
 	// test cell/keyspace entries (SrvKeyspace)
 	srvKeyspace := topo.SrvKeyspace{
+		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
+			topo.TYPE_MASTER: &topo.KeyspacePartition{
+				Shards: []topo.SrvShard{
+					topo.SrvShard{
+						ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
+					},
+				},
+			},
+		},
 		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
 	}
 	if err := ts.UpdateSrvKeyspace(cell, "test_keyspace", &srvKeyspace); err != nil {
@@ -390,7 +405,13 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	if _, err := ts.GetSrvKeyspace(cell, "test_keyspace666"); err != topo.ErrNoNode {
 		t.Errorf("GetSrvKeyspace(invalid): %v", err)
 	}
-	if s, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil || len(s.TabletTypes) != 1 || s.TabletTypes[0] != topo.TYPE_MASTER {
+	if s, err := ts.GetSrvKeyspace(cell, "test_keyspace"); err != nil ||
+		len(s.TabletTypes) != 1 ||
+		s.TabletTypes[0] != topo.TYPE_MASTER ||
+		len(s.Partitions) != 1 ||
+		len(s.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
+		len(s.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
+		s.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER {
 		t.Errorf("GetSrvKeyspace(valid): %v", err)
 	}
 	if k, err := ts.GetSrvKeyspaceNames(cell); err != nil || len(k) != 1 || k[0] != "test_keyspace" {

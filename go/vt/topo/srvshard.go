@@ -17,13 +17,12 @@ type SrvShard struct {
 	KeyRange    key.KeyRange
 	ServedTypes []TabletType
 
-	// This is really keyed by TabletType, but the json marshaller doesn't like
-	// that since it requires all keys to be "string" - not "string-ish".
-	AddrsByType map[string]VtnsAddrs
+	// TabletTypes represents the list of types we have serving tablets
+	// for, in this cell only.
+	TabletTypes []TabletType
 
-	// True if the master cannot process writes
-	ReadOnly bool
-	version  int64
+	// For atomic updates
+	version int64
 }
 
 type SrvShardArray []SrvShard
@@ -69,6 +68,7 @@ type SrvKeyspace struct {
 	// May not have a server for every shard, but we have some.
 	TabletTypes []TabletType
 
+	// For atomic updates
 	version int64
 }
 
