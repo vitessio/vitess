@@ -39,12 +39,9 @@ class TestCache(framework.TestCase):
       # Verify row cache is working
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       tstart = self.env.table_stats()["vtocc_cached2"]
-      tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       tend = self.env.table_stats()["vtocc_cached2"]
-      tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-      self.assertEqual(tstartHits+1, tendHits)
       # disable
       self.env.execute("alter table vtocc_cached2 comment 'vtocc_nocache'")
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
@@ -54,36 +51,24 @@ class TestCache(framework.TestCase):
         pass
       else:
         self.fail("Did not receive exception")
-      try:
-        tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
-      except KeyError:
-        pass
-      else:
-        self.fail("Did not recevie exception")
     finally:
       self.env.execute("alter table vtocc_cached2 comment ''")
 
     # Verify row cache is working again
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
     tstart = self.env.table_stats()["vtocc_cached2"]
-    tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
     tend = self.env.table_stats()["vtocc_cached2"]
-    tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-    self.assertEqual(tstartHits+1, tendHits)
 
   def test_rename(self):
     try:
       # Verify row cache is working
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       tstart = self.env.table_stats()["vtocc_cached2"]
-      tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
       self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
       tend = self.env.table_stats()["vtocc_cached2"]
-      tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-      self.assertEqual(tstartHits+1, tendHits)
       # rename
       self.env.execute("alter table vtocc_cached2 rename to vtocc_renamed")
       try:
@@ -92,21 +77,12 @@ class TestCache(framework.TestCase):
         pass
       else:
         self.fail("Did not receive exception")
-      try:
-        tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
-      except KeyError:
-        pass
-      else:
-        self.fail("Did not receive exception")
       # Verify row cache is working
       self.env.execute("select * from vtocc_renamed where eid = 2 and bid = 'foo'")
       tstart = self.env.table_stats()["vtocc_renamed"]
-      tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_renamed", "Hits")
       self.env.execute("select * from vtocc_renamed where eid = 2 and bid = 'foo'")
       tend = self.env.table_stats()["vtocc_renamed"]
-      tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_renamed", "Hits")
       self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-      self.assertEqual(tstartHits+1, tendHits)
     finally:
       # alter table so there's no hash collision when renamed
       self.env.execute("alter table vtocc_renamed comment 'renamed'")
@@ -115,12 +91,9 @@ class TestCache(framework.TestCase):
     # Verify row cache is working again
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
     tstart = self.env.table_stats()["vtocc_cached2"]
-    tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
     tend = self.env.table_stats()["vtocc_cached2"]
-    tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-    self.assertEqual(tstartHits+1, tendHits)
 
   def test_nopass(self):
     try:
@@ -135,31 +108,24 @@ class TestCache(framework.TestCase):
 
   def test_overrides(self):
     tstart = self.env.table_stats()["vtocc_view"]
-    tstartMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
     self.env.querylog.reset()
 
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 1L, 3L))
     tend = self.env.table_stats()["vtocc_view"]
-    tendMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
-    self.assertEqual(tstartMisses+1, tendMisses)
     log = self.env.querylog.read()
 
     self.assertContains(log, "select * from vtocc_view where 1 != 1")
     self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
 
     tstart = self.env.table_stats()["vtocc_view"]
-    tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Hits")
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 1L, 3L))
     tend = self.env.table_stats()["vtocc_view"]
-    tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Hits")
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-    self.assertEqual(tstartHits+1, tendHits)
 
     tstart = self.env.table_stats()["vtocc_view"]
-    tstartMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
     self.env.conn.begin()
     self.env.querylog.reset()
     self.env.execute("update vtocc_part1 set data1 = 2 where key2 = 1")
@@ -171,23 +137,17 @@ class TestCache(framework.TestCase):
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 3L))
     tend = self.env.table_stats()["vtocc_view"]
-    tendMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
-    self.assertEqual(tstartMisses+1, tendMisses)
     log = self.env.querylog.read()
     self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
 
     tstart = self.env.table_stats()["vtocc_view"]
-    tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Hits")
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 3L))
     tend = self.env.table_stats()["vtocc_view"]
-    tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Hits")
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-    self.assertEqual(tstartHits+1, tendHits)
 
     tstart = self.env.table_stats()["vtocc_view"]
-    tstartMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
     self.env.conn.begin()
     self.env.execute("update vtocc_part2 set data2 = 2 where key3 = 1")
     self.env.conn.commit()
@@ -196,20 +156,15 @@ class TestCache(framework.TestCase):
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 2L))
     tend = self.env.table_stats()["vtocc_view"]
-    tendMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
     self.assertEqual(tstart["Misses"]+1, tend["Misses"])
-    self.assertEqual(tstartMisses+1, tendMisses)
     log = self.env.querylog.read()
     self.assertContains(log, "select key2, key1, data1, data2 from vtocc_view where key2 = 1")
 
     tstart = self.env.table_stats()["vtocc_view"]
-    tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Hits")
     cu = self.env.execute("select * from vtocc_view where key2 = 1")
     self.assertEqual(cu.fetchone(), (1L, 10L, 2L, 2L))
     tend = self.env.table_stats()["vtocc_view"]
-    tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Hits")
     self.assertEqual(tstart["Hits"]+1, tend["Hits"])
-    self.assertEqual(tstartHits+1, tendHits)
 
   def test_nodata(self):
     # This should not fail
@@ -223,6 +178,21 @@ class TestCache(framework.TestCase):
     self._verify_mismatch("select * from vtocc_cached2 where eid = %(id)s and bid = %(id)s", {"id": 1})
     self._verify_mismatch("select * from vtocc_cached2 where eid = 1.2 and bid = 1.2")
     self._verify_mismatch("select * from vtocc_cached2 where eid = %(fl)s and bid = %(fl)s", {"fl": 1.2})
+
+  def test_stats(self):
+    self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
+    tstartHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
+    self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")
+    tendHits = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_cached2", "Hits")
+    self.assertEqual(tstartHits+1, tendHits)
+
+    tstartMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
+    self.env.conn.begin()
+    self.env.execute("update vtocc_part2 set data2 = 2 where key3 = 1")
+    self.env.conn.commit()
+    self.env.execute("select * from vtocc_view where key2 = 1")
+    tendMisses = self._get_vars_table_stats(self.env.debug_vars()["TableStats"], "vtocc_view", "Misses")
+    self.assertEqual(tstartMisses+1, tendMisses)
 
   def test_spot_check(self):
     vstart = self.env.debug_vars()

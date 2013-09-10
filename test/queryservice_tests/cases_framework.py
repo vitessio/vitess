@@ -165,8 +165,6 @@ class Case(object):
       querylog.reset()
     if self.is_testing_cache:
       tstart = self.table_stats()
-      tstartVars = self.debug_vars()["TableStats"]
-      tstartInvalid = self.debug_vars()["TableInvalidations"]
     if self.sql in ('begin', 'commit', 'rollback'):
       getattr(cursor.connection, self.sql)()
     else:
@@ -194,23 +192,6 @@ class Case(object):
       if self.cache_invalidations is not None and tdelta['Invalidations'] != self.cache_invalidations:
         failures.append("Bad Cache Invalidations: %s != %s" % (self.cache_invalidations, tdelta['Invalidations']))
 
-      tendVars = self.debug_vars()["TableStats"]
-      hits = self.get_vars_table_stats(tendVars, self.cache_table, "Hits") - self.get_vars_table_stats(tstartVars, self.cache_table, "Hits")
-      if self.cache_hits is not None and hits != self.cache_hits:
-        failures.append("Bad Cache Hits: %s != %s" % (self.cache_hits, hits))
-
-      absent = self.get_vars_table_stats(tendVars, self.cache_table, "Absent") - self.get_vars_table_stats(tstartVars, self.cache_table, "Absent")
-      if self.cache_absent is not None and absent != self.cache_absent:
-        failures.append("Bad Cache Absent: %s != %s" % (self.cache_absent, absent))
-
-      misses = self.get_vars_table_stats(tendVars, self.cache_table, "Misses") - self.get_vars_table_stats(tstartVars, self.cache_table, "Misses")
-      if self.cache_misses is not None and misses != self.cache_misses:
-        failures.append("Bad Cache Misses: %s != %s" % (self.cache_misses, misses))
-
-      tendInvalid = self.debug_vars()["TableInvalidations"]
-      invalids = tendInvalid[self.cache_table] - tstartInvalid[self.cache_table]
-      if self.cache_invalidations is not None and invalids != self.cache_invalidations:
-        failures.append("Bad Cache Invalidations: %s != %s" % (self.cache_invalidations, invalids))
 
     return failures
 
@@ -223,18 +204,6 @@ class Case(object):
 
   def table_stats(self):
     return json.load(urllib2.urlopen("http://localhost:9461/debug/table_stats"))[self.cache_table]
-
-  def debug_vars(self):
-    return json.load(urllib2.urlopen("http://localhost:9461/debug/vars"))
-
-  def get_vars_table_stats(self, table_stats, table, stats):
-    for item in table_stats:
-      if item["Table"] != table:
-        continue
-      if item["Stats"] != stats:
-        continue
-      return item["Value"]
-    raise KeyError
 
   def __str__(self):
     return "Case %r" % self.doc
