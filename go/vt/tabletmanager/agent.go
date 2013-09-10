@@ -123,7 +123,7 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 		"-action-guid", actionNode.ActionGuid,
 		"-mycnf-file", agent.MycnfFile,
 	}
-	cmd = append(cmd, agent.ts.GetSubprocessFlags()...)
+	cmd = append(cmd, topo.GetSubprocessFlags()...)
 	if agent.DbConfigsFile != "" {
 		cmd = append(cmd, "-db-configs-file", agent.DbConfigsFile)
 	}

@@ -350,3 +350,12 @@ func CloseServers() {
 		ts.Close()
 	}
 }
+
+// GetSubprocessFlags returns all the flags required to launch a subprocess
+// with the exact same topology server as the current process.
+func GetSubprocessFlags() []string {
+	result := []string{
+		"-topo_implementation", *topoImplementation,
+	}
+	return append(result, GetServer().GetSubprocessFlags()...)
+}
