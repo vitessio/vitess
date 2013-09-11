@@ -70,7 +70,8 @@ class Tablet(object):
       env['EXTRA_MY_CNF'] = extra_my_cnf
 
     return utils.run_bg(os.path.join(utils.vtroot, 'bin', 'mysqlctl') +
-                        ' -tablet-uid %u ' % self.tablet_uid + cmd,
+                        ' -log_dir %s -tablet-uid %u %s' %
+                        (utils.tmp_root, self.tablet_uid, cmd),
                         env=env)
 
   def init_mysql(self, extra_my_cnf=None):
