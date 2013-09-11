@@ -21,6 +21,8 @@ var usage = `Allows an RPC access to the topo.Server for read-only access to the
 
 var (
 	port = flag.Int("port", 14850, "port for the server")
+
+	topoReader topo.TopoReader
 )
 
 func init() {
@@ -38,6 +40,8 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	topo.RegisterTopoReader(NewTopoReader(ts))
+	topoReader = NewTopoReader(ts)
+	topo.RegisterTopoReader(topoReader)
+
 	servenv.Run(*port)
 }
