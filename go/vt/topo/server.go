@@ -6,8 +6,8 @@ package topo
 
 import (
 	"errors"
+	"flag"
 	"fmt"
-	"os"
 	"time"
 
 	log "github.com/golang/glog"
@@ -304,6 +304,9 @@ type Server interface {
 // Registry for Server implementations.
 var serverImpls map[string]Server = make(map[string]Server)
 
+// Which implementation to use
+var topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
+
 // RegisterServer adds an implementation for a Server.
 // If an implementation with that name already exists, panics.
 // Call this in the 'init' function in your module.
@@ -319,11 +322,10 @@ func GetServerByName(name string) Server {
 	return serverImpls[name]
 }
 
-// Returns 'our' Server:
+// GetServer returns 'our' Server, going down this list:
 // - If only one is registered, that's the one.
-// - If more than one are registered, use the 'VT_TOPOLOGY_SERVER'
-//   environment variable.
-// - Then defaults to 'zookeeper'.
+// - If more than one are registered, use the 'topo_implementation' flag
+//   (which defaults to zookeeper).
 // - Then panics.
 func GetServer() Server {
 	if len(serverImpls) == 1 {
@@ -333,15 +335,11 @@ func GetServer() Server {
 		}
 	}
 
-	name := os.Getenv("VT_TOPOLOGY_SERVER")
-	if name == "" {
-		name = "zookeeper"
-	}
-	result := serverImpls[name]
+	result := serverImpls[*topoImplementation]
 	if result == nil {
-		panic(fmt.Errorf("No topo.Server named %v", name))
+		panic(fmt.Errorf("No topo.Server named %v", *topoImplementation))
 	}
-	log.V(6).Infof("Using topo.Server: %v", name)
+	log.V(6).Infof("Using topo.Server: %v", *topoImplementation)
 	return result
 }
 
@@ -351,4 +349,13 @@ func CloseServers() {
 		log.V(6).Infof("Closing topo.Server: %v", name)
 		ts.Close()
 	}
+}
+
+// GetSubprocessFlags returns all the flags required to launch a subprocess
+// with the exact same topology server as the current process.
+func GetSubprocessFlags() []string {
+	result := []string{
+		"-topo_implementation", *topoImplementation,
+	}
+	return append(result, GetServer().GetSubprocessFlags()...)
 }

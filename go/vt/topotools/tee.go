@@ -469,15 +469,7 @@ func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
 
 func (tee *Tee) GetSubprocessFlags() []string {
 	p := tee.primary.GetSubprocessFlags()
-	p = append(p, tee.secondary.GetSubprocessFlags()...)
-
-	// propagate the VT_TOPOLOGY_SERVER environment too
-	name := os.Getenv("VT_TOPOLOGY_SERVER")
-	if name != "" {
-		p = append(p, "VT_TOPOLOGY_SERVER="+name)
-	}
-
-	return p
+	return append(p, tee.secondary.GetSubprocessFlags()...)
 }
 
 func (tee *Tee) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
