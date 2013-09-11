@@ -23,6 +23,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/env"
+	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -123,6 +124,7 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 		"-action-guid", actionNode.ActionGuid,
 		"-mycnf-file", agent.MycnfFile,
 	}
+	cmd = append(cmd, logutil.GetSubprocessFlags()...)
 	cmd = append(cmd, topo.GetSubprocessFlags()...)
 	if agent.DbConfigsFile != "" {
 		cmd = append(cmd, "-db-configs-file", agent.DbConfigsFile)
