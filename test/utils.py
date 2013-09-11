@@ -259,7 +259,7 @@ def zk_setup(add_bad_host=False):
   global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
   prog_compile(['zkctl', 'zk'])
-  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':'+zk_ports+' init')
+  run('%s/bin/zkctl -log_dir %s -zk.cfg 1@%s:%s init' % (vtroot, tmp_root, hostname, zk_ports))
   config = tmp_root+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
     ca_server = 'localhost:%u' % (zk_port_base+2)
@@ -282,7 +282,7 @@ def zk_setup(add_bad_host=False):
 def zk_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run(vtroot+'/bin/zkctl -zk.cfg 1@'+hostname+':'+zk_ports+' teardown', raise_on_error=False)
+  run('%s/bin/zkctl -log_dir %s -zk.cfg 1@%s:%s teardown' % (vtroot, tmp_root, hostname, zk_ports), raise_on_error=False)
 
 def zk_wipe():
   # Work around safety check on recursive delete.
@@ -393,7 +393,7 @@ def vttopo_kill(sp):
 # vtctl helpers
 def run_vtctl(clargs, log_level='', auto_log=False, **kwargs):
   prog_compile(['vtctl'])
-  args = [vtroot+'/bin/vtctl']
+  args = [vtroot+'/bin/vtctl', '-log_dir', tmp_root]
 
   if auto_log:
     if options.verbose == 2:

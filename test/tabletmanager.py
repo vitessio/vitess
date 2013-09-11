@@ -77,7 +77,7 @@ class TestTabletManager(unittest.TestCase):
 
   def _check_db_addr(self, db_addr, expected_addr):
     # Run in the background to capture output.
-    proc = utils.run_bg(utils.vtroot+'/bin/vtctl --alsologtostderr -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
+    proc = utils.run_bg(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
     stdout = proc.communicate()[0].strip()
     self.assertEqual(stdout, expected_addr, 'wrong zk address for %s: %s expected: %s' % (db_addr, stdout, expected_addr))
 
@@ -317,8 +317,9 @@ class TestTabletManager(unittest.TestCase):
     utils.run("rm -rf %s" % snapshot_dir)
     utils.run("mkdir -p %s" % snapshot_dir)
     utils.run("chmod -w %s" % snapshot_dir)
-    out, err = utils.run(utils.vtroot+'/bin/vtctl --alsologtostderr Clone -force %s %s %s' %
-                         (clone_flags, tablet_62344.tablet_alias,
+    out, err = utils.run('%s/bin/vtctl -log_dir %s --alsologtostderr Clone -force %s %s %s' %
+                         (utils.vtroot, utils.tmp_root,
+                          clone_flags, tablet_62344.tablet_alias,
                           tablet_62044.tablet_alias),
                          trap_output=True, raise_on_error=False)
     if "Cannot validate snapshot directory" not in err:
@@ -409,7 +410,7 @@ class TestTabletManager(unittest.TestCase):
 
     # we expect this action with a short wait time to fail. this isn't the best
     # and has some potential for flakiness.
-    utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 2s WaitForAction ' + action_path)
+    utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -wait-time 2s WaitForAction ' + action_path)
 
     # wait until the background sleep action is done, otherwise there will be
     # a leftover vtaction whose result may overwrite running actions
@@ -473,19 +474,19 @@ class TestTabletManager(unittest.TestCase):
 
     # Perform a reparent operation - the Validate part will try to ping
     # the master and fail somewhat quickly
-    stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias)
+    stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias)
     logging.debug("Failed ReparentShard output:\n" + stderr)
     if 'ValidateShard verification failed: timed out during validate' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
     # Should timeout and fail
-    stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr -wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias)
+    stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias)
     logging.debug("Failed ScrapTablet output:\n" + stderr)
     if 'deadline exceeded' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
     # Should interrupt and fail
-    sp = utils.run_bg(utils.vtroot+'/bin/vtctl -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
+    sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
     # Need time for the process to start before killing it.
     time.sleep(3.0)
     os.kill(sp.pid, signal.SIGINT)
@@ -498,7 +499,7 @@ class TestTabletManager(unittest.TestCase):
     # Force the scrap action in zk even though tablet is not accessible.
     tablet_62344.scrap(force=True)
 
-    utils.run_fail(utils.vtroot+'/bin/vtctl --alsologtostderr ChangeSlaveType -force %s idle' %
+    utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr ChangeSlaveType -force %s idle' %
                    tablet_62344.tablet_alias)
 
     # Remove pending locks (make this the force option to ReparentShard?)
@@ -822,7 +823,7 @@ class TestTabletManager(unittest.TestCase):
     raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
-    out, err = utils.run(utils.vtroot+'/bin/vtctl --alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
+    out, err = utils.run(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
     for expected in expectedStrings:
       self._check_string_in_hook_result(err, expected)
 
@@ -880,7 +881,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # start a 'vtctl Sleep' command in the background
-    sp = utils.run_bg(utils.vtroot+'/bin/vtctl --alsologtostderr Sleep %s 60s' %
+    sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr Sleep %s 60s' %
                       tablet_62344.tablet_alias,
                       stdout=PIPE, stderr=PIPE)
 
