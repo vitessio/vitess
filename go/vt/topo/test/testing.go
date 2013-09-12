@@ -73,14 +73,16 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 func CheckTablet(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	tablet := &topo.Tablet{
-		Cell:     cell,
-		Uid:      1,
-		Parent:   topo.TabletAlias{},
-		Addr:     "localhost:3333",
-		Keyspace: "test_keyspace",
-		Type:     topo.TYPE_MASTER,
-		State:    topo.STATE_READ_WRITE,
-		KeyRange: newKeyRange("-10"),
+		Cell:        cell,
+		Uid:         1,
+		Parent:      topo.TabletAlias{},
+		Addr:        "localhost:3333",
+		MysqlAddr:   "localhost:3334",
+		MysqlIpAddr: "10.11.12.13:3334",
+		Keyspace:    "test_keyspace",
+		Type:        topo.TYPE_MASTER,
+		State:       topo.STATE_READ_WRITE,
+		KeyRange:    newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
