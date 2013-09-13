@@ -26,7 +26,7 @@ func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNod
 		actionNode.Error = actionError.Error()
 		actionNode.State = tm.ACTION_STATE_FAILED
 	} else {
-		log.Infof("Unlocking keyspace %v/%v for successful action %v", keyspace, shard, actionNode.Action)
+		log.Infof("Unlocking shard %v/%v for successful action %v", keyspace, shard, actionNode.Action)
 		actionNode.Error = ""
 		actionNode.State = tm.ACTION_STATE_DONE
 	}
