@@ -73,14 +73,16 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 func CheckTablet(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	tablet := &topo.Tablet{
-		Cell:     cell,
-		Uid:      1,
-		Parent:   topo.TabletAlias{},
-		Addr:     "localhost:3333",
-		Keyspace: "test_keyspace",
-		Type:     topo.TYPE_MASTER,
-		State:    topo.STATE_READ_WRITE,
-		KeyRange: newKeyRange("-10"),
+		Cell:        cell,
+		Uid:         1,
+		Parent:      topo.TabletAlias{},
+		Addr:        "localhost:3333",
+		MysqlAddr:   "localhost:3334",
+		MysqlIpAddr: "10.11.12.13:3334",
+		Keyspace:    "test_keyspace",
+		Type:        topo.TYPE_MASTER,
+		State:       topo.STATE_READ_WRITE,
+		KeyRange:    newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
@@ -327,8 +329,9 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	vtnsAddrs := topo.VtnsAddrs{
 		Entries: []topo.VtnsAddr{
 			topo.VtnsAddr{
-				Uid:  1,
-				Host: "host1",
+				Uid:          1,
+				Host:         "host1",
+				NamedPortMap: map[string]int{"_vt": 1234, "_mysql": 1235, "_vts": 1236},
 			},
 		},
 	}
@@ -339,8 +342,16 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	if types, err := ts.GetSrvTabletTypesPerShard(cell, "test_keyspace", "-10"); err != nil || len(types) != 1 || types[0] != topo.TYPE_MASTER {
 		t.Errorf("GetSrvTabletTypesPerShard(1): %v %v", err, types)
 	}
-	if addrs, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
-		t.Errorf("GetSrvTabletType(1): %v %v", err, addrs)
+
+	addrs, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER)
+	if err != nil {
+		t.Errorf("GetSrvTabletType: %v", err)
+	}
+	if len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
+		t.Errorf("GetSrvTabletType(1): %v", addrs)
+	}
+	if pm := addrs.Entries[0].NamedPortMap; pm["_vt"] != 1234 || pm["_mysql"] != 1235 || pm["_vts"] != 1236 {
+		t.Errorf("GetSrcTabletType(1).NamedPortmap: want %v, got %v", vtnsAddrs.Entries[0].NamedPortMap, pm)
 	}
 
 	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_REPLICA, &topo.VtnsAddr{Uid: 2, Host: "host2"}); err != nil {
