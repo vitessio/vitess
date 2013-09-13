@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/youtube/vitess/go/stats"
 	"launchpad.net/gozk/zookeeper"
 )
+
+var cachedConnStates = stats.NewCounters("CachedConn")
+var cachedConnStatesMutex sync.Mutex
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -44,6 +48,13 @@ type ConnCache struct {
 	useZkocc     bool
 }
 
+func (cc *ConnCache) setState(zcell string, conn *cachedConn, state int64) {
+	conn.states.SetState(state)
+	cachedConnStatesMutex.Lock()
+	defer cachedConnStatesMutex.Unlock()
+	cachedConnStates.Set(zcell, state)
+}
+
 func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	zcell, err := ZkCellFromZkPath(zkPath)
 	if err != nil {
@@ -59,7 +70,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	conn, ok := cc.zconnCellMap[zcell]
 	if !ok {
 		conn = &cachedConn{}
-		conn.states = stats.NewStates("Cachedconn"+zcell, []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
+		conn.states = stats.NewStates("CachedConn"+strings.Title(zcell), []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
 		cc.zconnCellMap[zcell] = conn
 	}
 	cc.mutex.Unlock()
@@ -78,16 +89,16 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 		return nil, &zookeeper.Error{Op: "dial", Code: zookeeper.ZBADARGUMENTS}
 	}
 
-	conn.states.SetState(CONNECTING)
+	cc.setState(zcell, conn, CONNECTING)
 	if cc.useZkocc {
 		conn.zconn, err = DialZkocc(zkAddr, *baseTimeout)
 	} else {
 		conn.zconn, err = cc.newZookeeperConn(zkAddr, zcell)
 	}
 	if conn.zconn != nil {
-		conn.states.SetState(CONNECTED)
+		cc.setState(zcell, conn, CONNECTED)
 	} else {
-		conn.states.SetState(DISCONNECTED)
+		cc.setState(zcell, conn, DISCONNECTED)
 	}
 	return conn.zconn, err
 }
@@ -120,7 +131,7 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 			// we ask for a variable)
 			if cached != nil {
 				cached.zconn = nil
-				cached.states.SetState(DISCONNECTED)
+				cc.setState(cell, cached, DISCONNECTED)
 			}
 
 			log.Printf("zk conn cache: session for cell %v ended: %v", cell, event)

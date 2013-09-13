@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strconv"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -33,6 +34,7 @@ type CachePool struct {
 	idleTimeout   time.Duration
 	DeleteExpiry  uint64
 	memcacheStats *MemcacheStats
+	mu            sync.Mutex
 }
 
 // Cache re-exposes memcache.Connection
@@ -118,6 +120,8 @@ func (cp *CachePool) Open() {
 		}
 		return &Cache{c, cp}, nil
 	}
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
 	cp.memcacheStats.Open()
 }
@@ -149,6 +153,8 @@ func (cp *CachePool) startMemcache() {
 }
 
 func (cp *CachePool) Close() {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
 	if cp.pool == nil {
 		return
 	}
@@ -159,12 +165,24 @@ func (cp *CachePool) Close() {
 }
 
 func (cp *CachePool) IsClosed() bool {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
 	return cp.pool == nil
+}
+
+func (cp *CachePool) getPool() *pools.ResourcePool {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+	return cp.pool
 }
 
 // You must call Recycle on the *Cache once done.
 func (cp *CachePool) Get() *Cache {
-	r, err := cp.pool.Get()
+	pool := cp.getPool()
+	if pool == nil {
+		return nil
+	}
+	r, err := pool.Get()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -172,56 +190,67 @@ func (cp *CachePool) Get() *Cache {
 }
 
 func (cp *CachePool) Put(conn *Cache) {
-	cp.pool.Put(conn)
+	pool := cp.getPool()
+	if pool == nil {
+		return
+	}
+	pool.Put(conn)
 }
 
 func (cp *CachePool) StatsJSON() string {
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		return "{}"
 	}
-	return cp.pool.StatsJSON()
+	return pool.StatsJSON()
 }
 
 func (cp *CachePool) Capacity() int64 {
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		return 0
 	}
-	return cp.pool.Capacity()
+	return pool.Capacity()
 }
 
 func (cp *CachePool) Available() int64 {
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		return 0
 	}
-	return cp.pool.Available()
+	return pool.Available()
 }
 
 func (cp *CachePool) MaxCap() int64 {
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		return 0
 	}
-	return cp.pool.MaxCap()
+	return pool.MaxCap()
 }
 
 func (cp *CachePool) WaitCount() int64 {
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		return 0
 	}
-	return cp.pool.WaitCount()
+	return pool.WaitCount()
 }
 
 func (cp *CachePool) WaitTime() time.Duration {
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		return 0
 	}
-	return cp.pool.WaitTime()
+	return pool.WaitTime()
 }
 
 func (cp *CachePool) IdleTimeout() time.Duration {
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		return 0
 	}
-	return cp.pool.IdleTimeout()
+	return pool.IdleTimeout()
 }
 
 func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -231,7 +260,8 @@ func (cp *CachePool) ServeHTTP(response http.ResponseWriter, request *http.Reque
 		}
 	}()
 	response.Header().Set("Content-Type", "text/plain")
-	if cp.pool == nil {
+	pool := cp.getPool()
+	if pool == nil {
 		response.Write(([]byte)("closed"))
 		return
 	}

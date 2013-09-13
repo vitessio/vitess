@@ -462,6 +462,9 @@ func (si *SchemaInfo) getQueryStats(f queryStatsFunc) map[string]map[string]int6
 	for _, v := range keys {
 		if plan := si.getQuery(v); plan != nil {
 			table := plan.TableName
+			if table == "" {
+				table = "Join"
+			}
 			planType := plan.PlanId.String()
 			data := f(plan)
 			queryStats, ok := qstats[table]

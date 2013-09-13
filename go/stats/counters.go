@@ -38,6 +38,12 @@ func (c *Counters) Add(name string, value int64) {
 	c.counts[name] += value
 }
 
+func (c *Counters) Set(name string, value int64) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.counts[name] = value
+}
+
 func (c *Counters) Counts() map[string]int64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()

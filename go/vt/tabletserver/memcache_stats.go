@@ -338,6 +338,9 @@ func (s *MemcacheStats) readStats(k string, proc func(key, value string)) {
 		}
 	}()
 	conn := s.cachePool.Get()
+	if conn == nil {
+		return
+	}
 	defer conn.Recycle()
 	stats, err := conn.Stats(k)
 	if err != nil {
