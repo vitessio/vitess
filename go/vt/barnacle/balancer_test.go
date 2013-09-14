@@ -17,7 +17,7 @@ func endPoints3() ([]string, error) {
 	return []string{"0", "1", "2"}, nil
 }
 
-func TestNew(t *testing.T) {
+func TestRandomness(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		b := NewBalancer(endPoints3)
 		addr := b.Get()
@@ -29,7 +29,7 @@ func TestNew(t *testing.T) {
 	t.Errorf("end points are not shuffled")
 }
 
-func TestAddrs(t *testing.T) {
+func TestFindAddress(t *testing.T) {
 	addrs, _ := endPoints3()
 	goti := findAddress(addrs, "1")
 	if goti != 1 {
@@ -37,7 +37,7 @@ func TestAddrs(t *testing.T) {
 	}
 }
 
-func TestAddrNodes(t *testing.T) {
+func TestFindDeleteAddrNode(t *testing.T) {
 	addrNodes := []*addressStatus{
 		{Address: "0"},
 		{Address: "1"},
@@ -60,7 +60,7 @@ func endPointsError() ([]string, error) {
 	return nil, fmt.Errorf("expected error")
 }
 
-func TestFail(t *testing.T) {
+func TestGetAddressesFail(t *testing.T) {
 	b := NewBalancer(endPointsError)
 	addr := b.Get()
 	if addr != "" {

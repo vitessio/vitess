@@ -18,6 +18,9 @@ var (
 
 type GetAddressesFunc func() ([]string, error)
 
+// Balancer is a simple round-robin load balancer.
+// It allows you to temporarily mark down nodes that
+// are non-functional.
 type Balancer struct {
 	mu           sync.Mutex
 	addressNodes []*addressStatus
@@ -31,6 +34,9 @@ type addressStatus struct {
 	balancer *Balancer
 }
 
+// NewBalancer creates a Balancer. getAddreses is the function
+// it will use to refresh the list of addresses if one of the
+// nodes has been marked down. The list of addresses is shuffled.
 func NewBalancer(getAddresses GetAddressesFunc) *Balancer {
 	blc := new(Balancer)
 	blc.getAddresses = getAddresses
@@ -38,6 +44,10 @@ func NewBalancer(getAddresses GetAddressesFunc) *Balancer {
 	return blc
 }
 
+// Get returns a single address that was not recently marked down.
+// If it finds an address that was down for longer than RETRY_DELAY,
+// it refreshes the list of addresses and returns the next available
+// node.
 func (blc *Balancer) Get() (address string) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
@@ -59,6 +69,8 @@ func (blc *Balancer) Get() (address string) {
 	return ""
 }
 
+// MarkDown marks the specified address down. Such addresses
+// will not be used by Balancer for the duration of RETRY_DELAY.
 func (blc *Balancer) MarkDown(address string) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
@@ -67,6 +79,8 @@ func (blc *Balancer) MarkDown(address string) {
 	}
 }
 
+// Refresh forces a refresh. All mark down flags for nodes are
+// cleared. The address order is shuffled after the update.
 func (blc *Balancer) Refresh() {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
@@ -124,6 +138,7 @@ func delAddrNode(addressNodes []*addressStatus, index int) []*addressStatus {
 	return addressNodes[:len(addressNodes)-1]
 }
 
+// shuffle uses the Fisher-Yates algorithm.
 func shuffle(addressNodes []*addressStatus) {
 	index := 0
 	for i := len(addressNodes) - 1; i > 0; i-- {
