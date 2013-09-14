@@ -16,108 +16,120 @@ var (
 	RETRY_DELAY = time.Duration(1 * time.Second)
 )
 
-type GetEndPointsFunc func() ([]*VTAddress, error)
+type GetAddressesFunc func() ([]string, error)
 
 type Balancer struct {
 	mu           sync.Mutex
-	addresses    []*VTAddress
+	addressNodes []*addressStatus
 	index        int
-	getEndPoints GetEndPointsFunc
+	getAddresses GetAddressesFunc
 }
 
-type VTAddress struct {
-	Id       int64
+type addressStatus struct {
 	Address  string
 	timeDown time.Time
 	balancer *Balancer
 }
 
-func NewBalancer(getEndPoints GetEndPointsFunc) *Balancer {
+func NewBalancer(getAddresses GetAddressesFunc) *Balancer {
 	blc := new(Balancer)
-	blc.getEndPoints = getEndPoints
+	blc.getAddresses = getAddresses
 	blc.refresh()
-	if len(blc.addresses) != 0 {
-		blc.index = int(rand.Int63()) % len(blc.addresses)
-	}
 	return blc
 }
 
-func (blc *Balancer) Get() *VTAddress {
+func (blc *Balancer) Get() (address string) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
-	if len(blc.addresses) == 0 {
-		return nil
+	if len(blc.addressNodes) == 0 {
+		return ""
 	}
-	for _ = range blc.addresses {
-		blc.index = (blc.index + 1) % len(blc.addresses)
-		addr := blc.addresses[blc.index]
-		if addr.timeDown.IsZero() {
-			return addr
+	for _ = range blc.addressNodes {
+		blc.index = (blc.index + 1) % len(blc.addressNodes)
+		addrNode := blc.addressNodes[blc.index]
+		if addrNode.timeDown.IsZero() {
+			return addrNode.Address
 		}
-		if time.Now().Sub(addr.timeDown) > RETRY_DELAY {
-			addr.timeDown = time.Time{}
+		if time.Now().Sub(addrNode.timeDown) > RETRY_DELAY {
+			addrNode.timeDown = time.Time{}
 			blc.refresh()
-			return addr
+			return addrNode.Address
 		}
 	}
-	return nil
+	return ""
+}
+
+func (blc *Balancer) MarkDown(address string) {
+	blc.mu.Lock()
+	defer blc.mu.Unlock()
+	if index := findAddrNode(blc.addressNodes, address); index != -1 {
+		blc.addressNodes[index].timeDown = time.Now()
+	}
 }
 
 func (blc *Balancer) Refresh() {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 	blc.refresh()
-	for _, addr := range blc.addresses {
-		addr.timeDown = time.Time{}
+	for _, addrNode := range blc.addressNodes {
+		addrNode.timeDown = time.Time{}
 	}
 }
 
 func (blc *Balancer) refresh() {
-	addresses, err := blc.getEndPoints()
+	addresses, err := blc.getAddresses()
 	if err != nil {
 		log.Errorf("%v", err)
 		return
 	}
-	// Add new addresses
-	for _, addr := range addresses {
-		if index := findAddress(blc.addresses, addr.Id); index == -1 {
-			addr.balancer = blc
-			blc.addresses = append(blc.addresses, addr)
-		} else if blc.addresses[index].Address != addr.Address {
-			blc.addresses[index].Address = addr.Address
-			blc.addresses[index].timeDown = time.Time{}
+	// Add new addressNodes
+	for _, address := range addresses {
+		if index := findAddrNode(blc.addressNodes, address); index == -1 {
+			addrNode := &addressStatus{Address: address, balancer: blc}
+			blc.addressNodes = append(blc.addressNodes, addrNode)
 		}
 	}
 	// Remove those that went away
 	i := 0
-	for i < len(blc.addresses) {
-		if index := findAddress(addresses, blc.addresses[i].Id); index == -1 {
-			blc.addresses = delAddress(blc.addresses, i)
+	for i < len(blc.addressNodes) {
+		if index := findAddress(addresses, blc.addressNodes[i].Address); index == -1 {
+			blc.addressNodes = delAddrNode(blc.addressNodes, i)
 			continue
 		}
 		i++
 	}
+	shuffle(blc.addressNodes)
 }
 
-func findAddress(addresses []*VTAddress, id int64) (index int) {
-	for i, addr := range addresses {
-		if id == addr.Id {
+func findAddrNode(addressNodes []*addressStatus, address string) (index int) {
+	for i, addrNode := range addressNodes {
+		if address == addrNode.Address {
 			return i
 		}
 	}
 	return -1
 }
 
-func delAddress(addresses []*VTAddress, index int) []*VTAddress {
-	copy(addresses[index:len(addresses)-1], addresses[index+1:])
-	return addresses[:len(addresses)-1]
+func findAddress(addresses []string, address string) (index int) {
+	for i, addr := range addresses {
+		if address == addr {
+			return i
+		}
+	}
+	return -1
 }
 
-func (vta *VTAddress) MarkDown() {
-	// We use the balancer's mutex for this
-	vta.balancer.mu.Lock()
-	defer vta.balancer.mu.Unlock()
-	vta.timeDown = time.Now()
+func delAddrNode(addressNodes []*addressStatus, index int) []*addressStatus {
+	copy(addressNodes[index:len(addressNodes)-1], addressNodes[index+1:])
+	return addressNodes[:len(addressNodes)-1]
+}
+
+func shuffle(addressNodes []*addressStatus) {
+	index := 0
+	for i := len(addressNodes) - 1; i > 0; i-- {
+		index = int(rand.Int63()) % (i + 1)
+		addressNodes[i], addressNodes[index] = addressNodes[index], addressNodes[i]
+	}
 }
 
 func init() {
