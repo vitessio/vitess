@@ -49,10 +49,6 @@ type Shard struct {
 	// There can be only at most one master, but there may be none. (0)
 	MasterAlias TabletAlias
 
-	// Uids by type - could be a generic map.
-	ReplicaAliases []TabletAlias
-	RdonlyAliases  []TabletAlias
-
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
 	KeyRange key.KeyRange
@@ -67,31 +63,8 @@ type Shard struct {
 	SourceShards []SourceShard
 }
 
-// Contains returns true if the provided tablet is in the shard serving graph
-func (shard *Shard) Contains(tablet *Tablet) bool {
-	alias := TabletAlias{tablet.Cell, tablet.Uid}
-	switch tablet.Type {
-	case TYPE_MASTER:
-		return shard.MasterAlias == alias
-	case TYPE_REPLICA:
-		for _, replicaAlias := range shard.ReplicaAliases {
-			if replicaAlias == alias {
-				return true
-			}
-		}
-	case TYPE_RDONLY:
-		for _, rdonlyAlias := range shard.RdonlyAliases {
-			if rdonlyAlias == alias {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func newShard() *Shard {
-	return &Shard{ReplicaAliases: make([]TabletAlias, 0, 16),
-		RdonlyAliases: make([]TabletAlias, 0, 16)}
+	return &Shard{}
 }
 
 // ValidateShardName takes a shard name and sanitizes it, and also returns
@@ -137,21 +110,15 @@ func (si *ShardInfo) ShardName() string {
 }
 
 // Rebuild takes all the tablets in the list and puts them in the
-// right place in the shard. Only serving tablets are considered.
+// right place in the shard. Only master tablet is considered.
 func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
 	si.MasterAlias = TabletAlias{}
-	si.ReplicaAliases = make([]TabletAlias, 0, 16)
-	si.RdonlyAliases = make([]TabletAlias, 0, 16)
 	si.KeyRange = key.KeyRange{}
 
 	for i, ti := range shardTablets {
 		switch ti.Type {
 		case TYPE_MASTER:
 			si.MasterAlias = ti.Alias()
-		case TYPE_REPLICA:
-			si.ReplicaAliases = append(si.ReplicaAliases, ti.Alias())
-		case TYPE_RDONLY:
-			si.RdonlyAliases = append(si.RdonlyAliases, ti.Alias())
 		}
 
 		if i == 0 {

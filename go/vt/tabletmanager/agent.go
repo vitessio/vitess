@@ -185,18 +185,6 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 		return nil
 	}
 
-	// Load the shard and see if we are supposed to be serving. We might be a serving type,
-	// but we might be in a transitional state. Only once the shard info is updated do we
-	// put ourselves in the client serving graph.
-	shardInfo, err := agent.ts.GetShard(agent.Tablet().Keyspace, agent.Tablet().Shard)
-	if err != nil {
-		return err
-	}
-
-	if !shardInfo.Contains(agent.Tablet().Tablet) {
-		return nil
-	}
-
 	// Check to see our address is registered in the right place.
 	addr, err := VtnsAddrForTablet(agent.Tablet().Tablet)
 	if err != nil {

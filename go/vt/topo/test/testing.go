@@ -193,13 +193,7 @@ func CheckShard(t *testing.T, ts topo.Server) {
 		t.Errorf("shardInfo.KeyRange: want %v, got %v", want, shardInfo.KeyRange)
 	}
 	master := topo.TabletAlias{Cell: "ny", Uid: 1}
-	replica1 := topo.TabletAlias{Cell: "ny", Uid: 2}
-	replica2 := topo.TabletAlias{Cell: "ny", Uid: 3}
-	rdonly1 := topo.TabletAlias{Cell: "sj", Uid: 4}
-	rdonly2 := topo.TabletAlias{Cell: "sj", Uid: 5}
 	shardInfo.MasterAlias = master
-	shardInfo.ReplicaAliases = []topo.TabletAlias{replica1, replica2}
-	shardInfo.RdonlyAliases = []topo.TabletAlias{rdonly1, rdonly2}
 	shardInfo.KeyRange = newKeyRange("B0-C0")
 	shardInfo.ServedTypes = []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	shardInfo.SourceShards = []topo.SourceShard{
@@ -221,12 +215,6 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	}
 	if shardInfo.MasterAlias != master {
 		t.Errorf("after UpdateShard: shardInfo.MasterAlias got %v", shardInfo.MasterAlias)
-	}
-	if len(shardInfo.ReplicaAliases) != 2 || shardInfo.ReplicaAliases[0] != replica1 || shardInfo.ReplicaAliases[1] != replica2 {
-		t.Errorf("after UpdateShard: shardInfo.ReplicaAliases got %v", shardInfo.ReplicaAliases)
-	}
-	if len(shardInfo.RdonlyAliases) != 2 || shardInfo.RdonlyAliases[0] != rdonly1 || shardInfo.RdonlyAliases[1] != rdonly2 {
-		t.Errorf("after UpdateShard: shardInfo.RdonlyAliases got %v", shardInfo.RdonlyAliases)
 	}
 	if shardInfo.KeyRange != newKeyRange("B0-C0") {
 		t.Errorf("after UpdateShard: shardInfo.KeyRange got %v", shardInfo.KeyRange)

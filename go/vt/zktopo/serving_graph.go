@@ -207,7 +207,7 @@ func (zkts *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletTyp
 		return zkts.updateTabletEndpoint(oldValue, oldStat, addr)
 	}
 	err := zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-	if err == skipUpdateErr {
+	if err == skipUpdateErr || zookeeper.IsError(err, zookeeper.ZNONODE) {
 		err = nil
 	}
 	return err
