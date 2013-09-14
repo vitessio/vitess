@@ -16,6 +16,7 @@ import (
 
 	log "github.com/golang/glog"
 	_ "github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -382,7 +383,8 @@ var indexContent = IndexContent{
 
 func main() {
 	flag.Parse()
-
+	servenv.Init()
+	defer servenv.Close()
 	templateLoader = NewTemplateLoader(*templateDir, dummyTemplate, *debug)
 
 	ts := topo.GetServer()
@@ -527,5 +529,5 @@ func main() {
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
-	log.Fatalf("%s", http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
+	servenv.Run(*port)
 }
