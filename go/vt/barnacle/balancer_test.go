@@ -136,7 +136,7 @@ func TestRefresh(t *testing.T) {
 	b.Refresh()
 	addr := b.Get()
 	if addr == "" {
-		t.Errorf("want non-empty, got nil")
+		t.Errorf("want non-empty")
 	}
 	if start+2 != counter {
 		t.Errorf("want %v, got %v", start+2, counter)
@@ -150,7 +150,7 @@ func endPointsMorph() ([]string, error) {
 	return []string{fmt.Sprintf("%d", addrNum), "1", "2"}, nil
 }
 
-func TestMorph(t *testing.T) {
+func TestRefreshInternal(t *testing.T) {
 	b := NewBalancer(endPointsMorph, RETRY_DELAY)
 	index := findAddrNode(b.addressNodes, "11")
 	if index == -1 {
