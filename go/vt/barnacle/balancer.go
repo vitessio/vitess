@@ -8,12 +8,6 @@ import (
 	"math/rand"
 	"sync"
 	"time"
-
-	log "github.com/golang/glog"
-)
-
-var (
-	RETRY_DELAY = time.Duration(1 * time.Second)
 )
 
 type GetAddressesFunc func() ([]string, error)
@@ -26,6 +20,8 @@ type Balancer struct {
 	addressNodes []*addressStatus
 	index        int
 	getAddresses GetAddressesFunc
+	retryDelay   time.Duration
+	lastError    error
 }
 
 type addressStatus struct {
@@ -37,40 +33,59 @@ type addressStatus struct {
 // NewBalancer creates a Balancer. getAddreses is the function
 // it will use to refresh the list of addresses if one of the
 // nodes has been marked down. The list of addresses is shuffled.
-func NewBalancer(getAddresses GetAddressesFunc) *Balancer {
+// retryDelay specifies the minimum time a node will be marked down
+// before it will be cleared for a retry.
+func NewBalancer(getAddresses GetAddressesFunc, retryDelay time.Duration) *Balancer {
 	blc := new(Balancer)
 	blc.getAddresses = getAddresses
+	blc.retryDelay = retryDelay
 	blc.refresh()
 	return blc
 }
 
 // Get returns a single address that was not recently marked down.
-// If it finds an address that was down for longer than RETRY_DELAY,
+// If it finds an address that was down for longer than retryDelay,
 // it refreshes the list of addresses and returns the next available
-// node.
+// node. If Get returns an empty string, it means that there were
+// no available nodes. You can use LastError to check if it was due
+// the getAddresses call failing.
 func (blc *Balancer) Get() (address string) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 	if len(blc.addressNodes) == 0 {
-		return ""
+		blc.refresh()
+		if len(blc.addressNodes) == 0 {
+			return ""
+		}
 	}
-	for _ = range blc.addressNodes {
-		blc.index = (blc.index + 1) % len(blc.addressNodes)
-		addrNode := blc.addressNodes[blc.index]
+	i := 0
+	for i < len(blc.addressNodes) {
+		index := (blc.index + i + 1) % len(blc.addressNodes)
+		addrNode := blc.addressNodes[index]
 		if addrNode.timeDown.IsZero() {
+			blc.index = index
 			return addrNode.Address
 		}
-		if time.Now().Sub(addrNode.timeDown) > RETRY_DELAY {
+		if time.Now().Sub(addrNode.timeDown) > blc.retryDelay {
 			addrNode.timeDown = time.Time{}
 			blc.refresh()
-			return addrNode.Address
+			// A refresh could cause the list to shrink, and it will
+			// be shuffled. So, we start from scratch.
+			// After the refresh, either the list will be empty,
+			// in which case the loop will exit, or there will be at
+			// least be one usable node. It will be either the
+			// current one that was reset, or a new node added by
+			// the refresh.
+			i = 0
+			continue
 		}
+		i++
 	}
 	return ""
 }
 
 // MarkDown marks the specified address down. Such addresses
-// will not be used by Balancer for the duration of RETRY_DELAY.
+// will not be used by Balancer for the duration of retryDelay.
 func (blc *Balancer) MarkDown(address string) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
@@ -81,6 +96,8 @@ func (blc *Balancer) MarkDown(address string) {
 
 // Refresh forces a refresh. All mark down flags for nodes are
 // cleared. The address order is shuffled after the update.
+// This function can be called if all nodes are marked down to
+// force an immediate refresh and retry.
 func (blc *Balancer) Refresh() {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
@@ -93,7 +110,7 @@ func (blc *Balancer) Refresh() {
 func (blc *Balancer) refresh() {
 	addresses, err := blc.getAddresses()
 	if err != nil {
-		log.Errorf("%v", err)
+		blc.lastError = err
 		return
 	}
 	// Add new addressNodes
@@ -113,6 +130,7 @@ func (blc *Balancer) refresh() {
 		i++
 	}
 	shuffle(blc.addressNodes)
+	blc.lastError = nil
 }
 
 func findAddrNode(addressNodes []*addressStatus, address string) (index int) {
@@ -145,6 +163,12 @@ func shuffle(addressNodes []*addressStatus) {
 		index = int(rand.Int63()) % (i + 1)
 		addressNodes[i], addressNodes[index] = addressNodes[index], addressNodes[i]
 	}
+}
+
+func (blc *Balancer) LastError() error {
+	blc.mu.Lock()
+	defer blc.mu.Unlock()
+	return blc.lastError
 }
 
 func init() {

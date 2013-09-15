@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+var (
+	RETRY_DELAY = time.Duration(1 * time.Second)
+)
+
 var counter = 0
 
 func endPoints3() ([]string, error) {
@@ -19,7 +23,7 @@ func endPoints3() ([]string, error) {
 
 func TestRandomness(t *testing.T) {
 	for i := 0; i < 100; i++ {
-		b := NewBalancer(endPoints3)
+		b := NewBalancer(endPoints3, RETRY_DELAY)
 		addr := b.Get()
 		if addr == "0" {
 			continue
@@ -61,21 +65,31 @@ func endPointsError() ([]string, error) {
 }
 
 func TestGetAddressesFail(t *testing.T) {
-	b := NewBalancer(endPointsError)
+	b := NewBalancer(endPointsError, RETRY_DELAY)
 	addr := b.Get()
 	if addr != "" {
 		t.Errorf("want empty, got %v", addr)
 	}
+	got := b.LastError()
+	if got.Error() != "expected error" {
+		t.Errorf("want expected error, got %v", got)
+	}
+	b.getAddresses = endPoints3
+	b.Get()
+	got = b.LastError()
+	if got != nil {
+		t.Errorf("want nil, got %v", got)
+	}
 }
 
 func TestGetSimple(t *testing.T) {
-	b := NewBalancer(endPoints3)
+	b := NewBalancer(endPoints3, RETRY_DELAY)
 	addrs := make([]string, 0, 4)
 	for i := 0; i < 4; i++ {
 		addrs = append(addrs, b.Get())
 	}
 	if addrs[0] == addrs[1] {
-		t.Errorf("ids are equal: %d", addrs[0])
+		t.Errorf("ids are equal: %v", addrs[0])
 	}
 	if addrs[0] != addrs[3] {
 		t.Errorf("ids are not equal: %d, %d", addrs[0], addrs[3])
@@ -84,13 +98,12 @@ func TestGetSimple(t *testing.T) {
 
 func TestMarkDown(t *testing.T) {
 	start := counter
-	b := NewBalancer(endPoints3)
+	b := NewBalancer(endPoints3, 10*time.Millisecond)
 	if start+1 != counter {
 		t.Errorf("want %v, got %v", start+1, counter)
 	}
-	for i := 0; i < 2; i++ {
-		b.MarkDown(b.Get())
-	}
+	b.MarkDown(b.Get())
+	b.MarkDown(b.Get())
 	addr1 := b.Get()
 	addr2 := b.Get()
 	if addr1 != addr2 {
@@ -101,19 +114,19 @@ func TestMarkDown(t *testing.T) {
 	if addr != "" {
 		t.Errorf("want empty, got %v", addr)
 	}
-	time.Sleep(1100 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 	addr = b.Get()
 	if addr == "" {
 		t.Errorf("want non-empty, got nil")
 	}
-	if start+2 != counter {
-		t.Errorf("want %v, got %v", start+2, counter)
+	if start+1 == counter {
+		t.Errorf("want %v < %v", start+1, counter)
 	}
 }
 
 func TestRefresh(t *testing.T) {
 	start := counter
-	b := NewBalancer(endPoints3)
+	b := NewBalancer(endPoints3, RETRY_DELAY)
 	if start+1 != counter {
 		t.Errorf("want %v, got %v", start+1, counter)
 	}
@@ -138,7 +151,7 @@ func endPointsMorph() ([]string, error) {
 }
 
 func TestMorph(t *testing.T) {
-	b := NewBalancer(endPointsMorph)
+	b := NewBalancer(endPointsMorph, RETRY_DELAY)
 	index := findAddrNode(b.addressNodes, "11")
 	if index == -1 {
 		t.Errorf("got other than -1: %v", index)

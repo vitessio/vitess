@@ -7,19 +7,25 @@ package barnacle
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+// bcTopoServ is a subset of topo.Server
+type bcTopoServ interface {
+	GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error)
+}
+
 type bcTopo struct {
-	toposerv  topo.Server
+	toposerv  bcTopoServ
 	cell      string
 	portName  string
 	mu        sync.Mutex
 	balancers map[string]*Balancer
 }
 
-func NewBCTopo(serv topo.Server, cell, namedPort string) *bcTopo {
+func NewBCTopo(serv bcTopoServ, cell, namedPort string) *bcTopo {
 	return &bcTopo{
 		toposerv:  serv,
 		cell:      cell,
@@ -28,14 +34,14 @@ func NewBCTopo(serv topo.Server, cell, namedPort string) *bcTopo {
 	}
 }
 
-func (bct *bcTopo) Balancer(keyspace string, typ topo.TabletType, shard string) *Balancer {
-	key := fmt.Sprintf("%s.%s.%s.%s", bct.cell, keyspace, typ, shard)
+func (bct *bcTopo) Balancer(keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration) *Balancer {
+	key := fmt.Sprintf("%s.%s.%s.%s", bct.cell, keyspace, tabletType, shard)
 	blc, ok := bct.get(key)
 	if ok {
 		return blc
 	}
 	getAddresses := func() ([]string, error) {
-		endpoints, err := bct.toposerv.GetSrvTabletType(bct.cell, keyspace, shard, typ)
+		endpoints, err := bct.toposerv.GetSrvTabletType(bct.cell, keyspace, shard, tabletType)
 		if err != nil {
 			return nil, err
 		}
@@ -45,7 +51,7 @@ func (bct *bcTopo) Balancer(keyspace string, typ topo.TabletType, shard string) 
 		}
 		return result, nil
 	}
-	return bct.set(key, NewBalancer(getAddresses))
+	return bct.set(key, NewBalancer(getAddresses, retryDelay))
 }
 
 func (bct *bcTopo) get(key string) (blc *Balancer, ok bool) {
