@@ -18,25 +18,23 @@ type bcTopoServ interface {
 }
 
 type bcTopo struct {
-	Toposerv   bcTopoServ
-	Cell       string
-	PortName   string
-	RetryDelay time.Duration
-	mu         sync.Mutex
-	balancers  map[string]*Balancer
+	Toposerv  bcTopoServ
+	Cell      string
+	PortName  string
+	mu        sync.Mutex
+	balancers map[string]*Balancer
 }
 
-func NewBCTopo(serv bcTopoServ, cell, namedPort string, retryDelay time.Duration) *bcTopo {
+func NewBCTopo(serv bcTopoServ, cell, namedPort string) *bcTopo {
 	return &bcTopo{
-		Toposerv:   serv,
-		Cell:       cell,
-		PortName:   namedPort,
-		RetryDelay: retryDelay,
-		balancers:  make(map[string]*Balancer, 256),
+		Toposerv:  serv,
+		Cell:      cell,
+		PortName:  namedPort,
+		balancers: make(map[string]*Balancer, 256),
 	}
 }
 
-func (bct *bcTopo) Balancer(keyspace, shard string, tabletType topo.TabletType) *Balancer {
+func (bct *bcTopo) Balancer(keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration) *Balancer {
 	key := fmt.Sprintf("%s.%s.%s.%s", bct.Cell, keyspace, tabletType, shard)
 	blc, ok := bct.get(key)
 	if ok {
@@ -57,7 +55,7 @@ func (bct *bcTopo) Balancer(keyspace, shard string, tabletType topo.TabletType) 
 		}
 		return result, nil
 	}
-	return bct.set(key, NewBalancer(getAddresses, bct.RetryDelay))
+	return bct.set(key, NewBalancer(getAddresses, retryDelay))
 }
 
 func (bct *bcTopo) get(key string) (blc *Balancer, ok bool) {
