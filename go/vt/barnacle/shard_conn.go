@@ -40,7 +40,7 @@ func (sdc *ShardConn) connect() error {
 		if err != nil {
 			return err
 		}
-		conn, err := DialTablet(sdc.address, sdc.keyspace, sdc.shard, "", "", false)
+		conn, err := DialTablet(addr, sdc.keyspace, sdc.shard, "", "", false)
 		if err != nil {
 			lastError = err
 			sdc.balancer.MarkDown(addr)
