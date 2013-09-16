@@ -39,7 +39,8 @@ func TestSimple(t *testing.T) {
 		t.Errorf("Balancers match, map is %v", tps.balancers)
 	}
 	for i := 0; i < 3; i++ {
-		if blc.Get() == "0:1" {
+		addr, _ := blc.Get()
+		if addr == "0:1" {
 			return
 		}
 	}
@@ -49,12 +50,12 @@ func TestSimple(t *testing.T) {
 func TestPortError(t *testing.T) {
 	tps := NewBCTopo(new(SimpleTopoServ), "aa", "noport", 1*time.Second)
 	blc := tps.Balancer("test_keyspace", "0", "master")
-	got := blc.Get()
+	got, err := blc.Get()
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
 	}
-	if blc.LastError().Error() != "named port noport not found in map[vt:1]" {
-		t.Errorf("want named port noport not found in map[vt:1], got %v", blc.LastError())
+	if err.Error() != "named port noport not found in map[vt:1]" {
+		t.Errorf("want named port noport not found in map[vt:1], got %v", err)
 	}
 }
 
@@ -68,11 +69,11 @@ func (tps *ErrorTopoServ) GetSrvTabletType(cell, keyspace, shard string, tabletT
 func TestTopoError(t *testing.T) {
 	tps := NewBCTopo(new(ErrorTopoServ), "aa", "vt", 1*time.Second)
 	blc := tps.Balancer("test_keyspace", "0", "master")
-	got := blc.Get()
+	got, err := blc.Get()
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
 	}
-	if blc.LastError().Error() != "topo error" {
-		t.Errorf("want topo error, got %v", blc.LastError())
+	if err.Error() != "topo error" {
+		t.Errorf("want topo error, got %v", err)
 	}
 }

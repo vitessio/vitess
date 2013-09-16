@@ -24,7 +24,7 @@ func endPoints3() ([]string, error) {
 func TestRandomness(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		b := NewBalancer(endPoints3, RETRY_DELAY)
-		addr := b.Get()
+		addr, _ := b.Get()
 		if addr == "0" {
 			continue
 		}
@@ -66,19 +66,14 @@ func endPointsError() ([]string, error) {
 
 func TestGetAddressesFail(t *testing.T) {
 	b := NewBalancer(endPointsError, RETRY_DELAY)
-	addr := b.Get()
-	if addr != "" {
-		t.Errorf("want empty, got %v", addr)
-	}
-	got := b.LastError()
-	if got.Error() != "expected error" {
-		t.Errorf("want expected error, got %v", got)
+	_, err := b.Get()
+	if err == nil {
+		t.Errorf("want error")
 	}
 	b.getAddresses = endPoints3
-	b.Get()
-	got = b.LastError()
-	if got != nil {
-		t.Errorf("want nil, got %v", got)
+	_, err = b.Get()
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
 	}
 }
 
@@ -86,7 +81,8 @@ func TestGetSimple(t *testing.T) {
 	b := NewBalancer(endPoints3, RETRY_DELAY)
 	addrs := make([]string, 0, 4)
 	for i := 0; i < 4; i++ {
-		addrs = append(addrs, b.Get())
+		addr, _ := b.Get()
+		addrs = append(addrs, addr)
 	}
 	if addrs[0] == addrs[1] {
 		t.Errorf("ids are equal: %v", addrs[0])
@@ -99,47 +95,27 @@ func TestGetSimple(t *testing.T) {
 func TestMarkDown(t *testing.T) {
 	start := counter
 	b := NewBalancer(endPoints3, 10*time.Millisecond)
-	if start+1 != counter {
-		t.Errorf("want %v, got %v", start+1, counter)
-	}
-	b.MarkDown(b.Get())
-	b.MarkDown(b.Get())
-	addr1 := b.Get()
-	addr2 := b.Get()
+	addr, _ := b.Get()
+	b.MarkDown(addr)
+	addr, _ = b.Get()
+	b.MarkDown(addr)
+	addr1, _ := b.Get()
+	addr2, _ := b.Get()
 	if addr1 != addr2 {
 		t.Errorf("ids are not equal: %v, %v", addr1, addr2)
 	}
-	b.MarkDown(b.Get())
-	addr := b.Get()
-	if addr != "" {
-		t.Errorf("want empty, got %v", addr)
+	addr, _ = b.Get()
+	b.MarkDown(addr)
+	startTime := time.Now()
+	addr, _ = b.Get()
+	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
+		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))
 	}
-	time.Sleep(50 * time.Millisecond)
-	addr = b.Get()
-	if addr == "" {
-		t.Errorf("want non-empty, got nil")
-	}
-	if start+1 == counter {
-		t.Errorf("want %v < %v", start+1, counter)
-	}
-}
-
-func TestRefresh(t *testing.T) {
-	start := counter
-	b := NewBalancer(endPoints3, RETRY_DELAY)
-	if start+1 != counter {
-		t.Errorf("want %v, got %v", start+1, counter)
-	}
-	for i := 0; i < 3; i++ {
-		b.MarkDown(b.Get())
-	}
-	b.Refresh()
-	addr := b.Get()
 	if addr == "" {
 		t.Errorf("want non-empty")
 	}
-	if start+2 != counter {
-		t.Errorf("want %v, got %v", start+2, counter)
+	if start == counter {
+		t.Errorf("want %v < %v", start, counter)
 	}
 }
 
@@ -150,11 +126,12 @@ func endPointsMorph() ([]string, error) {
 	return []string{fmt.Sprintf("%d", addrNum), "1", "2"}, nil
 }
 
-func TestRefreshInternal(t *testing.T) {
+func TestRefresh(t *testing.T) {
 	b := NewBalancer(endPointsMorph, RETRY_DELAY)
+	b.refresh()
 	index := findAddrNode(b.addressNodes, "11")
 	if index == -1 {
-		t.Errorf("got other than -1: %v", index)
+		t.Errorf("want other than -1: %v", index)
 	}
 	b.MarkDown("1")
 	b.refresh()
@@ -167,11 +144,7 @@ func TestRefreshInternal(t *testing.T) {
 		t.Errorf("got other than -1: %v", index)
 	}
 	index = findAddrNode(b.addressNodes, "1")
-	if b.addressNodes[index].timeDown.IsZero() {
+	if b.addressNodes[index].timeRetry.IsZero() {
 		t.Errorf("want non-zero, got 0")
-	}
-	b.Refresh()
-	if !b.addressNodes[index].timeDown.IsZero() {
-		t.Errorf("want zero, got %v", b.addressNodes[index].timeDown)
 	}
 }
