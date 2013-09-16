@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/client2/tablet"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -19,7 +20,7 @@ type ShardConn struct {
 	tabletType topo.TabletType
 	retryCount int
 	balancer   *Balancer
-	conn       *tablet.Conn
+	conn       *TabletConn
 }
 
 func NewShardConn(bctopo *bcTopo, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
@@ -39,8 +40,7 @@ func (sdc *ShardConn) connect() error {
 		if err != nil {
 			return err
 		}
-		dbi := fmt.Sprintf("%s/%s/%s", addr, sdc.keyspace, sdc.shard)
-		conn, err := tablet.DialTablet(dbi, false)
+		conn, err := DialTablet(sdc.address, sdc.keyspace, sdc.shard, "", "", false)
 		if err != nil {
 			lastError = err
 			sdc.balancer.MarkDown(addr)
@@ -51,4 +51,93 @@ func (sdc *ShardConn) connect() error {
 		return nil
 	}
 	return fmt.Errorf("could not obtain connection to %s.%s.%s, last error: %v", sdc.keyspace, sdc.shard, sdc.tabletType, lastError)
+}
+
+func (sdc *ShardConn) Close() error {
+	if sdc.conn == nil {
+		return nil
+	}
+	err := sdc.conn.Close()
+	sdc.address = ""
+	sdc.conn = nil
+	return err
+}
+
+func (sdc *ShardConn) mustReturn(err error) bool {
+	if err == nil {
+		return true
+	}
+	if _, ok := err.(rpcplus.ServerError); ok {
+		return true
+	}
+	inTransaction := sdc.inTransaction()
+	sdc.balancer.MarkDown(sdc.address)
+	sdc.Close()
+	return inTransaction
+}
+
+func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) (qr *mproto.QueryResult, err error) {
+	for i := 0; i < 2; i++ {
+		if sdc.conn == nil {
+			if err = sdc.connect(); err != nil {
+				return nil, err
+			}
+		}
+		qr, err = sdc.conn.ExecDirect(query, bindVars)
+		if sdc.mustReturn(err) {
+			return qr, err
+		}
+	}
+	return qr, err
+}
+
+func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (sr *StreamResult, err error) {
+	for i := 0; i < 2; i++ {
+		if sdc.conn == nil {
+			if err = sdc.connect(); err != nil {
+				return nil, err
+			}
+		}
+		sr, err = sdc.conn.ExecStream(query, bindVars)
+		if sdc.mustReturn(err) {
+			return sr, err
+		}
+	}
+	return sr, err
+}
+
+func (sdc *ShardConn) Begin() (err error) {
+	if sdc.inTransaction() {
+		return fmt.Errorf("cannot begin: already in transaction")
+	}
+	for i := 0; i < 2; i++ {
+		if sdc.conn == nil {
+			if err = sdc.connect(); err != nil {
+				return err
+			}
+		}
+		err = sdc.conn.Begin()
+		if sdc.mustReturn(err) {
+			return err
+		}
+	}
+	return err
+}
+
+func (sdc *ShardConn) Commit() (err error) {
+	if !sdc.inTransaction() {
+		return fmt.Errorf("cannot commit: not in transaction")
+	}
+	return sdc.conn.Commit()
+}
+
+func (sdc *ShardConn) Rollback() (err error) {
+	if !sdc.inTransaction() {
+		return fmt.Errorf("cannot rollback: not in transaction")
+	}
+	return sdc.conn.Rollback()
+}
+
+func (sdc *ShardConn) inTransaction() bool {
+	return sdc.conn != nil && sdc.conn.TransactionId != 0
 }
