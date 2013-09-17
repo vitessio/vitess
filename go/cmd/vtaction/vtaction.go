@@ -36,7 +36,7 @@ func init() {
 }
 
 func main() {
-	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
+	dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 	servenv.Init()
 	defer servenv.Close()
@@ -52,7 +52,7 @@ func main() {
 
 	log.V(6).Infof("mycnf: %v", jscfg.ToJson(mycnf))
 
-	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
+	dbcfgs, cfErr := dbconfigs.Init(mycnf.SocketFile, *dbCredentialsFile)
 	if cfErr != nil {
 		log.Fatalf("%s", cfErr)
 	}

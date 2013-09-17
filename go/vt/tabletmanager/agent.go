@@ -22,6 +22,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/tabletserver"
@@ -48,12 +49,11 @@ type ActionAgent struct {
 	done    chan struct{}    // closed when we are done.
 }
 
-func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile string) (*ActionAgent, error) {
+func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfFile, dbCredentialsFile string) (*ActionAgent, error) {
 	return &ActionAgent{
 		ts:                topoServer,
 		tabletAlias:       tabletAlias,
 		MycnfFile:         mycnfFile,
-		DbConfigsFile:     dbConfigsFile,
 		DbCredentialsFile: dbCredentialsFile,
 		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
 		done:              make(chan struct{}),
@@ -126,9 +126,7 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	}
 	cmd = append(cmd, logutil.GetSubprocessFlags()...)
 	cmd = append(cmd, topo.GetSubprocessFlags()...)
-	if agent.DbConfigsFile != "" {
-		cmd = append(cmd, "-db-configs-file", agent.DbConfigsFile)
-	}
+	cmd = append(cmd, dbconfigs.GetSubprocessFlags()...)
 	if agent.DbCredentialsFile != "" {
 		cmd = append(cmd, "-db-credentials-file", agent.DbCredentialsFile)
 	}

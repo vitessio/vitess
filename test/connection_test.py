@@ -34,12 +34,11 @@ class BaseTest(unittest.TestCase):
   mysql_socket = os.path.join(mysqldir, "mysql.sock")
   credentials = {"ala": ["ma kota", "miala kota"]}
   credentials_file = os.path.join(mysqldir, 'authcredentials.json')
-  dbconfig_file = os.path.join(mysqldir, "dbconf.json")
   dbconfig = {
       'charset': 'utf8',
       'dbname': 'vt_test',
       'host': 'localhost',
-      'unix_socket': mysql_socket,
+      'unixsocket': mysql_socket,
       'uname': 'vt_dba',  # use vt_dba as some tests depend on 'drop'
       'keyspace' : 'test_keyspace',
       'shard' : '0',
@@ -54,9 +53,6 @@ class BaseTest(unittest.TestCase):
     with open(klass.credentials_file, 'w') as f:
       json.dump(klass.credentials, f)
 
-    with open(klass.dbconfig_file, 'w') as f:
-      json.dump(klass.dbconfig, f)
-
   @classmethod
   def _setUpClass(klass):
     os.mkdir(klass.mysqldir)
@@ -66,18 +62,18 @@ class BaseTest(unittest.TestCase):
 
   @classmethod
   def start_vtocc(klass):
-
     klass.user = str(klass.credentials.keys()[0])
     klass.password = str(klass.credentials[klass.user][0])
     klass.secondary_password = str(klass.credentials[klass.user][1])
 
     klass.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
     # TODO(szopa): authcredentials
-    klass.process = subprocess.Popen([klass.vtroot +"/bin/vtocc",
-                                     "-port", str(klass.vtocc_port),
-                                     "-auth-credentials", klass.credentials_file,
-                                     "-dbconfig", klass.dbconfig_file],
-                                     stderr=klass.vtstderr)
+    vtocc_args = [klass.vtroot +"/bin/vtocc",
+                  "-port", str(klass.vtocc_port),
+                  "-auth-credentials", klass.credentials_file]
+    for key in klass.dbconfig:
+      vtocc_args.extend(["-db-config-app-"+key, klass.dbconfig[key]])
+    klass.process = subprocess.Popen(vtocc_args, stderr=klass.vtstderr)
     time.sleep(1)
     connection = vtclient.VtOCCConnection("localhost:%s" % klass.vtocc_port, klass.dbconfig['keyspace'], klass.dbconfig['shard'], timeout=10, user=klass.user, password=klass.password)
     connection.dial()

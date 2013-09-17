@@ -31,7 +31,7 @@ var (
 )
 
 func main() {
-	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
+	dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
 	servenv.Init()
@@ -47,7 +47,7 @@ func main() {
 		log.Fatalf("mycnf read failed: %v", err)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbCredentialsFile)
 	if err != nil {
 		log.Warning(err)
 	}
@@ -59,7 +59,7 @@ func main() {
 	ts.RegisterCacheInvalidator()
 
 	// Depends on both query and updateStream.
-	if err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbConfigsFile, *dbCredentialsFile, *port, *securePort, *mycnfFile, *overridesFile); err != nil {
+	if err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *mycnfFile, *overridesFile); err != nil {
 		log.Fatal(err)
 	}
 
