@@ -18,7 +18,6 @@ from net import bsonrpc
 from vtdb import cursor
 from vtdb import tablet as tablet3
 from vtdb import vtclient
-from vtdb import topology
 from vtdb import dbexceptions
 
 shard_0_master = tablet.Tablet()
@@ -28,6 +27,8 @@ shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 
 TEST_KEYSPACE = "test_keyspace"
+zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+                                     "test_nj", 30.0)
 
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
@@ -150,11 +151,6 @@ def setup_tablets():
 
 
   # then get the topology and check it
-  zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
-                                       "test_nj", 30.0)
-  topology.read_keyspaces(zkocc_client)
-  shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vtocc")
-  logging.debug(shard_0_master_addrs)
 
 
 def setup_schema():
@@ -183,8 +179,8 @@ def get_vt_connection_params(db_key, port="_vtocc"):
   zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
                                        "test_nj", 30.0)
   keyspace, shard, db_type = db_key.split('.')
-  topo = topology.read_keyspaces(zkocc_client)
-  addr = topology.get_host_port_by_name(zkocc_client, "%s:%s" % (db_key, port))
+  #topo = topology.read_keyspaces(zkocc_client)
+  #addr = topology.get_host_port_by_name(zkocc_client, "%s:%s" % (db_key, port))
   vt_addr = "%s:%d" % (addr[0][0], addr[0][1])
   vt_params = DBParams()
   vt_params.addr = vt_addr
@@ -193,18 +189,16 @@ def get_vt_connection_params(db_key, port="_vtocc"):
   vt_params.timeout = 10.0
   return vt_params.__dict__
 
-def get_master_connection(shard=0):
-  db_key = "%s.%d.master" % (TEST_KEYSPACE, shard)
-  master_db_params = get_vt_connection_params(db_key)
-  logging.debug("connecting to master with params %s" % master_db_params)
-  master_conn = vtclient.connect(**master_db_params)
+def get_master_connection(shard='1'):
+  logging.debug("connecting to master with params")
+  master_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "master", 10.0) 
+  master_conn.connect()
   return master_conn
 
-def get_replica_connection(shard=0):
-  db_key = "%s.%d.replica" % (TEST_KEYSPACE, shard)
-  replica_db_params = get_vt_connection_params(db_key)
-  logging.debug("connecting to replica with params %s" % replica_db_params)
-  replica_conn = vtclient.connect(**replica_db_params)
+def get_replica_connection(shard='1'):
+  logging.debug("connecting to replica with params")
+  replica_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "replica", 10.0) 
+  replica_conn.connect()
   return replica_conn
 
 def do_write(count):
@@ -223,14 +217,14 @@ class TestTabletFunctions(unittest.TestCase):
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     self.assertNotEqual(master_conn, None)
-    self.assertIsInstance(master_conn, tablet3.TabletConnection, "Invalid master connection")
+    self.assertIsInstance(master_conn, vtclient.VtOCCConnection, "Invalid master connection")
     try:
       replica_conn = get_replica_connection()
     except Exception, e:
       logging.debug("Connection to shard0 replica failed with error %s" % str(e))
       raise
     self.assertNotEqual(replica_conn, None)
-    self.assertIsInstance(replica_conn, tablet3.TabletConnection, "Invalid replica connection")
+    self.assertIsInstance(replica_conn, vtclient.VtOCCConnection, "Invalid replica connection")
 
   def test_writes(self):
     try:
@@ -366,12 +360,13 @@ class TestFailures(unittest.TestCase):
       replica_conn = get_replica_connection()
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
-    shard_0_replica.kill_vttablet()
+    shard_1_replica.kill_vttablet()
+    print "first select"
     with self.assertRaises(dbexceptions.OperationalError):
       replica_conn._execute("select 1 from vt_insert_test", {})
-    proc = shard_0_replica.start_vttablet()
+    proc = shard_1_replica.start_vttablet()
     try:
-      replica_conn = get_replica_connection()
+      print "second select"
       results = replica_conn._execute("select 1 from vt_insert_test", {})
     except Exception, e:
       self.fail("Communication with shard0 replica failed with error %s" % str(e))
@@ -381,43 +376,28 @@ class TestFailures(unittest.TestCase):
       master_conn = get_master_connection()
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
-    shard_0_master.kill_vttablet()
+    shard_1_master.kill_vttablet()
     with self.assertRaises(dbexceptions.OperationalError):
       master_conn.begin()
-    proc = shard_0_master.start_vttablet()
-    try:
-      master_conn = get_master_connection()
-    except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
-    try:
-      master_conn.begin()
-      master_conn._execute("delete from vt_insert_test", {})
-      master_conn.commit()
-    except Exception, e:
-      self.fail("Failure in executing txn after restart, '%s'" % str(e))
+    proc = shard_1_master.start_vttablet()
+    master_conn.begin()
 
-  def test_tablet_restart_write(self):
+  def test_tablet_fail_write(self):
     try:
       master_conn = get_master_connection()
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.OperationalError):
       master_conn.begin()
-      shard_0_master.kill_vttablet()
+      shard_1_master.kill_vttablet()
       master_conn._execute("delete from vt_insert_test", {})
       master_conn.commit()
-    proc = shard_0_master.start_vttablet()
-    try:
-      master_conn = get_master_connection()
-    except Exception, e:
-      self.fail("Connection to shard0 master failed with error %s" % str(e))
-    try:
+    proc = shard_1_master.start_vttablet()
+    with self.assertRaises(dbexceptions.OperationalError):
       master_conn.begin()
+      shard_1_master.kill_vttablet()
       master_conn._execute("delete from vt_insert_test", {})
       master_conn.commit()
-    except Exception, e:
-      self.fail("Failure in executing txn after restart, '%s'" % str(e))
-
 
   def test_query_timeout(self):
     try:
@@ -434,17 +414,18 @@ class TestFailures(unittest.TestCase):
     with self.assertRaises(tablet3.TimeoutError):
       master_conn._execute("select sleep(12) from dual", {})
 
-  def test_mysql_failure(self):
+  def test_restart_mysql_failure(self):
     try:
       replica_conn = get_replica_connection()
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
-    utils.wait_procs([shard_0_replica.shutdown_mysql(),])
-    with self.assertRaises(tablet3.FatalError):
+    utils.wait_procs([shard_1_replica.shutdown_mysql(),])
+    with self.assertRaises(dbexceptions.DatabaseError):
       replica_conn._execute("select 1 from vt_insert_test", {})
-    utils.wait_procs([shard_0_replica.start_mysql(),])
-    shard_0_replica.kill_vttablet()
-    shard_0_replica.start_vttablet()
+    utils.wait_procs([shard_1_replica.start_mysql(),])
+    shard_1_replica.kill_vttablet()
+    shard_1_replica.start_vttablet()
+    replica_conn._execute("select 1 from vt_insert_test", {})
 
 
 if __name__ == '__main__':
