@@ -23,13 +23,13 @@ type ShardConn struct {
 	conn       *TabletConn
 }
 
-func NewShardConn(bctopo *bcTopo, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
+func NewShardConn(blm *BalancerMap, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
 	return &ShardConn{
 		keyspace:   keyspace,
 		shard:      shard,
 		tabletType: tabletType,
 		retryCount: retryCount,
-		balancer:   bctopo.Balancer(keyspace, shard, tabletType, retryDelay),
+		balancer:   blm.Balancer(keyspace, shard, tabletType, retryDelay),
 	}
 }
 

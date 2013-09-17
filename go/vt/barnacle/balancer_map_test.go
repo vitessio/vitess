@@ -19,7 +19,7 @@ var vtmap = map[string]int{
 type SimpleTopoServ struct {
 }
 
-func (tps *SimpleTopoServ) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
+func (blm *SimpleTopoServ) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
 	return &topo.VtnsAddrs{Entries: []topo.VtnsAddr{
 		{Host: "0", NamedPortMap: vtmap},
 		{Host: "1", NamedPortMap: vtmap},
@@ -28,15 +28,15 @@ func (tps *SimpleTopoServ) GetSrvTabletType(cell, keyspace, shard string, tablet
 }
 
 func TestSimple(t *testing.T) {
-	tps := NewBCTopo(new(SimpleTopoServ), "aa", "vt")
-	blc := tps.Balancer("test_keyspace", "0", "master", 1*time.Second)
-	blc2 := tps.Balancer("test_keyspace", "0", "master", 1*time.Second)
+	blm := NewBalancerMap(new(SimpleTopoServ), "aa", "vt")
+	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
+	blc2 := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	if blc != blc2 {
-		t.Errorf("Balancers don't match, map is %v", tps.balancers)
+		t.Errorf("Balancers don't match, map is %v", blm.balancers)
 	}
-	blc3 := tps.Balancer("other_keyspace", "0", "master", 1*time.Second)
+	blc3 := blm.Balancer("other_keyspace", "0", "master", 1*time.Second)
 	if blc == blc3 {
-		t.Errorf("Balancers match, map is %v", tps.balancers)
+		t.Errorf("Balancers match, map is %v", blm.balancers)
 	}
 	for i := 0; i < 3; i++ {
 		addr, _ := blc.Get()
@@ -48,8 +48,8 @@ func TestSimple(t *testing.T) {
 }
 
 func TestPortError(t *testing.T) {
-	tps := NewBCTopo(new(SimpleTopoServ), "aa", "noport")
-	blc := tps.Balancer("test_keyspace", "0", "master", 1*time.Second)
+	blm := NewBalancerMap(new(SimpleTopoServ), "aa", "noport")
+	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	got, err := blc.Get()
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
@@ -62,13 +62,13 @@ func TestPortError(t *testing.T) {
 type ErrorTopoServ struct {
 }
 
-func (tps *ErrorTopoServ) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
+func (blm *ErrorTopoServ) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
 	return nil, fmt.Errorf("topo error")
 }
 
 func TestTopoError(t *testing.T) {
-	tps := NewBCTopo(new(ErrorTopoServ), "aa", "vt")
-	blc := tps.Balancer("test_keyspace", "0", "master", 1*time.Second)
+	blm := NewBalancerMap(new(ErrorTopoServ), "aa", "vt")
+	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	got, err := blc.Get()
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
