@@ -17,6 +17,8 @@ type SubsetTopoServ interface {
 	GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error)
 }
 
+// BalancerMap builds and maintains a map from cell.keyspace.dbtype.shard to
+// Balancers.
 type BalancerMap struct {
 	Toposerv  SubsetTopoServ
 	Cell      string
@@ -25,6 +27,9 @@ type BalancerMap struct {
 	balancers map[string]*Balancer
 }
 
+// NewBalancerMap builds a new BalancerMap. Each BalancerMap is dedicated to a
+// cell. serv is the TopoServ used to fetch the list of tablets when needed.
+// The Balancers will be built using the namedPort from each tablet info.
 func NewBalancerMap(serv SubsetTopoServ, cell, namedPort string) *BalancerMap {
 	return &BalancerMap{
 		Toposerv:  serv,
@@ -34,6 +39,9 @@ func NewBalancerMap(serv SubsetTopoServ, cell, namedPort string) *BalancerMap {
 	}
 }
 
+// Balancer creates a Balancer if one doesn't exist for a cell.keyspace.dbtype.shard.
+// If one was previously created, then that is returned. The retryDelay is used only
+// when a Balancer is created.
 func (blm *BalancerMap) Balancer(keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration) *Balancer {
 	key := fmt.Sprintf("%s.%s.%s.%s", blm.Cell, keyspace, tabletType, shard)
 	blc, ok := blm.get(key)

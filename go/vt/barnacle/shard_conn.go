@@ -13,6 +13,8 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+// ShardConn represents a load balanced connection to a group
+// of vttablets that belong to the same shard.
 type ShardConn struct {
 	address    string
 	keyspace   string
@@ -23,6 +25,9 @@ type ShardConn struct {
 	conn       *TabletConn
 }
 
+// NewShardConn creates a new ShardConn. It creates or reuses a Balancer from
+// the supplied BalancerMap. retryDelay is as specified by Balancer. retryCount
+// is the max number of retries before a ShardConn returns an error on an operation.
 func NewShardConn(blm *BalancerMap, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
 	return &ShardConn{
 		keyspace:   keyspace,
@@ -53,6 +58,7 @@ func (sdc *ShardConn) connect() error {
 	return fmt.Errorf("could not obtain connection to %s.%s.%s, last error: %v", sdc.keyspace, sdc.shard, sdc.tabletType, lastError)
 }
 
+// Close closes the underlying vttablet connection.
 func (sdc *ShardConn) Close() error {
 	if sdc.conn == nil {
 		return nil
@@ -76,6 +82,9 @@ func (sdc *ShardConn) mustReturn(err error) bool {
 	return inTransaction
 }
 
+// ExecDirect executes a non-streaming query on vttablet. If there are connection errors,
+// it retries retryCount times before failing. It does not retry if the connection is in
+// the middle of a transaction.
 func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) (qr *mproto.QueryResult, err error) {
 	for i := 0; i < 2; i++ {
 		if sdc.conn == nil {
@@ -91,6 +100,7 @@ func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) 
 	return qr, err
 }
 
+// ExecStream executes a streaming query on vttablet. The retry rules are the same.
 func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (sr *StreamResult, err error) {
 	for i := 0; i < 2; i++ {
 		if sdc.conn == nil {
@@ -106,6 +116,7 @@ func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) 
 	return sr, err
 }
 
+// Begin begins a transaction. The retry rules are the same.
 func (sdc *ShardConn) Begin() (err error) {
 	if sdc.inTransaction() {
 		return fmt.Errorf("cannot begin: already in transaction")
@@ -124,6 +135,7 @@ func (sdc *ShardConn) Begin() (err error) {
 	return err
 }
 
+// Commit commits the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Commit() (err error) {
 	if !sdc.inTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
@@ -131,6 +143,7 @@ func (sdc *ShardConn) Commit() (err error) {
 	return sdc.conn.Commit()
 }
 
+// Rollback rolls back the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Rollback() (err error) {
 	if !sdc.inTransaction() {
 		return fmt.Errorf("cannot rollback: not in transaction")
