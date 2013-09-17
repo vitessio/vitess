@@ -53,6 +53,36 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		if si.KeyRange != tablet.KeyRange {
 			return fmt.Errorf("Shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 		}
+
+		// add the tablet's cell to the shard cell if needed
+		if !si.HasCell(tablet.Cell) {
+			actionNode := wr.ai.UpdateShard()
+			lockPath, err := wr.lockShard(tablet.Keyspace, tablet.Shard, actionNode)
+			if err != nil {
+				return err
+			}
+
+			// re-read the shard with the lock
+			si, err = wr.ts.GetShard(tablet.Keyspace, tablet.Shard)
+			if err != nil {
+				return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err)
+			}
+
+			// update it
+			if !si.HasCell(tablet.Cell) {
+				si.Cells = append(si.Cells, tablet.Cell)
+
+				// write it back
+				if err := wr.ts.UpdateShard(si); err != nil {
+					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err)
+				}
+			}
+
+			// and unlock
+			if err := wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err); err != nil {
+				return err
+			}
+		}
 	}
 
 	err := topo.CreateTablet(wr.ts, tablet)
