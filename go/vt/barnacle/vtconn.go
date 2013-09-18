@@ -70,6 +70,18 @@ func (vtc *VTConn) getConnection(keyspace, shard string) (*ShardConn, error) {
 	return sdc, nil
 }
 
+func (vtc *VTConn) execOnShard(query string, bindVars map[string]interface{}, keyspace string, shard string) (qr *mproto.QueryResult, err error) {
+	sdc, err := vtc.getConnection(keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+	qr, err = sdc.ExecDirect(query, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	return qr, nil
+}
+
 func (vtc *VTConn) appendResult(qr, innerqr *mproto.QueryResult) {
 	if qr.Fields == nil {
 		qr.Fields = innerqr.Fields
@@ -83,10 +95,13 @@ func (vtc *VTConn) appendResult(qr, innerqr *mproto.QueryResult) {
 
 // ExecDirect executes a non-streaming query on the specified shards.
 func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, keyspace string, shards []string) (qr *mproto.QueryResult, err error) {
-	qr = &mproto.QueryResult{}
-	if len(shards) == 0 {
-		return qr, nil
+	switch len(shards) {
+	case 0:
+		return nil, nil
+	case 1:
+		return vtc.execOnShard(query, bindVars, keyspace, shards[0])
 	}
+	qr = new(mproto.QueryResult)
 	resultChan := make(chan *mproto.QueryResult, len(shards))
 	errorChan := make(chan error, len(shards))
 	var wg sync.WaitGroup
@@ -94,12 +109,7 @@ func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, key
 	for _, shard := range shards {
 		go func() {
 			defer wg.Done()
-			sdc, err := vtc.getConnection(keyspace, shard)
-			if err != nil {
-				errorChan <- err
-				return
-			}
-			innerqr, err := sdc.ExecDirect(query, bindVars)
+			innerqr, err := vtc.execOnShard(query, bindVars, keyspace, shard)
 			if err != nil {
 				errorChan <- err
 				return
