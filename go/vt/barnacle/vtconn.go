@@ -11,6 +11,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -51,13 +52,18 @@ func (vtc *VTConn) Close() error {
 	return nil
 }
 
-func (vtc *VTConn) getConnection(keyspace, shard string) (*ShardConn, error) {
+func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
 	key := fmt.Sprintf("%s.%s.%s", keyspace, vtc.tabletType, shard)
 	sdc, ok := vtc.shardConns[key]
 	if !ok {
 		sdc = NewShardConn(vtc.balancerMap, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
 		vtc.shardConns[key] = sdc
 	}
+	return sdc
+}
+
+func (vtc *VTConn) prepConnection(keyspace, shard string) (*ShardConn, error) {
+	sdc := vtc.getConnection(keyspace, shard)
 	if vtc.transactionId != 0 {
 		if sdc.InTransaction() {
 			return sdc, nil
@@ -71,7 +77,7 @@ func (vtc *VTConn) getConnection(keyspace, shard string) (*ShardConn, error) {
 }
 
 func (vtc *VTConn) execOnShard(query string, bindVars map[string]interface{}, keyspace string, shard string) (qr *mproto.QueryResult, err error) {
-	sdc, err := vtc.getConnection(keyspace, shard)
+	sdc, err := vtc.prepConnection(keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +88,7 @@ func (vtc *VTConn) execOnShard(query string, bindVars map[string]interface{}, ke
 	return qr, nil
 }
 
-func (vtc *VTConn) appendResult(qr, innerqr *mproto.QueryResult) {
+func appendResult(qr, innerqr *mproto.QueryResult) {
 	if qr.Fields == nil {
 		qr.Fields = innerqr.Fields
 	}
@@ -102,8 +108,8 @@ func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, key
 		return vtc.execOnShard(query, bindVars, keyspace, shards[0])
 	}
 	qr = new(mproto.QueryResult)
-	resultChan := make(chan *mproto.QueryResult, len(shards))
-	errorChan := make(chan error, len(shards))
+	results := make(chan *mproto.QueryResult, len(shards))
+	allErrors := new(concurrency.AllErrorRecorder)
 	var wg sync.WaitGroup
 	wg.Add(len(shards))
 	for _, shard := range shards {
@@ -111,29 +117,53 @@ func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, key
 			defer wg.Done()
 			innerqr, err := vtc.execOnShard(query, bindVars, keyspace, shard)
 			if err != nil {
-				errorChan <- err
+				allErrors.RecordError(err)
 				return
 			}
-			resultChan <- innerqr
+			results <- innerqr
 		}()
 	}
 	go func() {
 		wg.Wait()
-		close(resultChan)
-		close(errorChan)
+		close(results)
 	}()
-	for innerqr := range resultChan {
-		vtc.appendResult(qr, innerqr)
+	for innerqr := range results {
+		appendResult(qr, innerqr)
 	}
-	for err = range errorChan {
-		return nil, err
+	if allErrors.HasErrors() {
+		return nil, allErrors.Error()
 	}
 	return qr, nil
 }
 
 // ExecStream executes a streaming query on vttablet. The retry rules are the same.
-func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}) (sr *StreamResult, err error) {
-	return nil, fmt.Errorf("Unimplemented")
+func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}, keyspace string, shards []string) (results chan *mproto.QueryResult, errFunc ErrFunc) {
+	res := make(chan *mproto.QueryResult, len(shards))
+	if vtc.transactionId != 0 {
+		close(res)
+		return res, func() error { return fmt.Errorf("cannot stream in a transaction") }
+	}
+	allErrors := new(concurrency.AllErrorRecorder)
+	var wg sync.WaitGroup
+	wg.Add(len(shards))
+	for _, shard := range shards {
+		go func() {
+			defer wg.Done()
+			sr, errFunc := vtc.getConnection(keyspace, shard).ExecStream(query, bindVars)
+			for qr := range sr {
+				res <- qr
+			}
+			err := errFunc()
+			if err != nil {
+				allErrors.RecordError(err)
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		close(res)
+	}()
+	return res, func() error { return allErrors.Error() }
 }
 
 // Begin begins a transaction. The retry rules are the same.

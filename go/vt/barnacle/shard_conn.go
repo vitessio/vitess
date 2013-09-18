@@ -101,19 +101,22 @@ func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) 
 }
 
 // ExecStream executes a streaming query on vttablet. The retry rules are the same.
-func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (sr *StreamResult, err error) {
+func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
 	for i := 0; i < 2; i++ {
 		if sdc.conn == nil {
-			if err = sdc.connect(); err != nil {
-				return nil, err
+			if err := sdc.connect(); err != nil {
+				r := make(chan *mproto.QueryResult)
+				close(r)
+				return r, func() error { return err }
 			}
 		}
-		sr, err = sdc.conn.ExecStream(query, bindVars)
+		results, errFunc = sdc.conn.ExecStream(query, bindVars)
+		err := errFunc()
 		if sdc.mustReturn(err) {
-			return sr, err
+			return results, errFunc
 		}
 	}
-	return sr, err
+	return results, errFunc
 }
 
 // Begin begins a transaction. The retry rules are the same.

@@ -17,6 +17,8 @@ type TabletConn struct {
 	tproto.Session
 }
 
+type ErrFunc func() error
+
 // StreamResult is the object used to stream query results from
 // ExecStream.
 type StreamResult struct {
@@ -69,8 +71,11 @@ func (conn *TabletConn) ExecDirect(query string, bindVars map[string]interface{}
 	return qr, nil
 }
 
-// ExecStream exectutes a streaming query on vttablet.
-func (conn *TabletConn) ExecStream(query string, bindVars map[string]interface{}) (*StreamResult, error) {
+// ExecStream exectutes a streaming query on vttablet. It returns a channel that will stream results.
+// It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called
+// immediately after ExecStream returns to check if there were errors sending the call. It should also
+// be called after finishing the iteration over the channel to see if there were other errors.
+func (conn *TabletConn) ExecStream(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
@@ -80,7 +85,7 @@ func (conn *TabletConn) ExecStream(query string, bindVars map[string]interface{}
 	}
 	sr := make(chan *mproto.QueryResult, 10)
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-	return &StreamResult{c, sr}, nil
+	return sr, func() error { return c.Error }
 }
 
 // Begin issues a vttablet Begin. TransactionId is set to the
