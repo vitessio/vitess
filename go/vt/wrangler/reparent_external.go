@@ -142,8 +142,8 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 			}
 
 			log.Infof("Removing stale replication path %v", toplevelAlias.String())
-			if err := wr.ts.DeleteReplicationPath(masterElectTablet.Keyspace, masterElectTablet.Shard, toplevelAlias.String()); err != nil {
-				log.Warningf("DeleteReplicationPath(%v) failed: %v", toplevelAlias.String(), err)
+			if err := topo.DeleteTabletReplicationData(wr.ts, masterElectTablet.Tablet, toplevelAlias.String()); err != nil {
+				log.Warningf("DeleteTabletReplicationData(%v) failed: %v", toplevelAlias.String(), err)
 			}
 		}
 	}

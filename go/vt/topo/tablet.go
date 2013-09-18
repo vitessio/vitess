@@ -512,10 +512,8 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 
 func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 	tabletAlias := tablet.Alias()
-	log.V(6).Infof("CreateTabletReplicationPaths %v", tabletAlias)
-	trrp := tabletReplicationPath(tablet)
-	err := ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, trrp)
-	if err != nil && err != ErrNodeExists {
+	log.V(6).Infof("CreateTabletReplicationData(%v)", tabletAlias)
+	if err := ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tabletReplicationPath(tablet)); err != nil && err != ErrNodeExists {
 		return err
 	}
 
@@ -525,6 +523,10 @@ func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 		found := false
 		for _, link := range sr.ReplicationLinks {
 			if link.TabletAlias == tabletAlias {
+				if found {
+					log.Warningf("Found a second ReplicationLink for tablet %v, deleting it", tabletAlias)
+					continue
+				}
 				found = true
 				if tablet.Parent.IsZero() {
 					// no master now, we skip the record
@@ -541,7 +543,7 @@ func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 		sr.ReplicationLinks = links
 		return nil
 	}
-	err = ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, f)
+	err := ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, f)
 	if err == ErrNoNode {
 		// The ShardReplication object doesn't exist, for some reason,
 		// just create it now.
@@ -549,6 +551,34 @@ func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 			return err
 		}
 		err = ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, f)
+	}
+	return err
+}
+
+// DeleteTabletReplicationData deletes both old and new style
+// replication data: we need the path for old style (can be just
+// tablet.ReplicationPath()), and we just use the tablet for new
+// style.
+func DeleteTabletReplicationData(ts Server, tablet *Tablet, replicationPath string) error {
+	if err := ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, replicationPath); err != nil {
+		return err
+	}
+
+	tabletAlias := tablet.Alias()
+	err := ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, func(sr *ShardReplication) error {
+		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks))
+		for _, link := range sr.ReplicationLinks {
+			if link.TabletAlias != tabletAlias {
+				links = append(links, link)
+			}
+		}
+		sr.ReplicationLinks = links
+		return nil
+	})
+	if err == ErrNoNode {
+		// if the ShardReplication object doesn not exist, we don't
+		// mind, not mandatory yet
+		err = nil
 	}
 	return err
 }

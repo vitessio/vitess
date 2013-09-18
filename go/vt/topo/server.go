@@ -154,10 +154,12 @@ type Server interface {
 
 	// CreateReplicationPath creates a replication path.
 	// Can return ErrNodeExists if it already exists.
+	// DEPRECATED: use topo.CreateTabletReplicationData
 	CreateReplicationPath(keyspace, shard, repPath string) error
 
 	// DeleteReplicationPath removes a replication path.
 	// Can returnErrNoNode if it doesn't exist.
+	// DEPRECATED: use topo.DeleteTabletReplicationData
 	DeleteReplicationPath(keyspace, shard, repPath string) error
 
 	//
