@@ -76,7 +76,7 @@ func (sdc *ShardConn) mustReturn(err error) bool {
 	if _, ok := err.(rpcplus.ServerError); ok {
 		return true
 	}
-	inTransaction := sdc.inTransaction()
+	inTransaction := sdc.InTransaction()
 	sdc.balancer.MarkDown(sdc.address)
 	sdc.Close()
 	return inTransaction
@@ -118,7 +118,7 @@ func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) 
 
 // Begin begins a transaction. The retry rules are the same.
 func (sdc *ShardConn) Begin() (err error) {
-	if sdc.inTransaction() {
+	if sdc.InTransaction() {
 		return fmt.Errorf("cannot begin: already in transaction")
 	}
 	for i := 0; i < 2; i++ {
@@ -137,7 +137,7 @@ func (sdc *ShardConn) Begin() (err error) {
 
 // Commit commits the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Commit() (err error) {
-	if !sdc.inTransaction() {
+	if !sdc.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
 	return sdc.conn.Commit()
@@ -145,12 +145,12 @@ func (sdc *ShardConn) Commit() (err error) {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Rollback() (err error) {
-	if !sdc.inTransaction() {
+	if !sdc.InTransaction() {
 		return fmt.Errorf("cannot rollback: not in transaction")
 	}
 	return sdc.conn.Rollback()
 }
 
-func (sdc *ShardConn) inTransaction() bool {
+func (sdc *ShardConn) InTransaction() bool {
 	return sdc.conn != nil && sdc.conn.TransactionId != 0
 }
