@@ -261,6 +261,53 @@ func (tee *Tee) DeleteReplicationPath(keyspace, shard, repPath string) error {
 }
 
 //
+// Replication graph management, global.
+//
+
+func (tee *Tee) CreateShardReplication(cell, keyspace, shard string, sr *topo.ShardReplication) error {
+	err := tee.primary.CreateShardReplication(cell, keyspace, shard, sr)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	serr := tee.secondary.CreateShardReplication(cell, keyspace, shard, sr)
+	if serr != nil && serr != topo.ErrNodeExists {
+		// not critical enough to fail
+		log.Warningf("secondary.CreateShardReplication(%v,%v,%v) failed: %v", cell, keyspace, shard, err)
+	}
+	return err
+}
+
+func (tee *Tee) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+	if err := tee.primary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
+		// failed on primary, not updating secondary
+		return err
+	}
+
+	if err := tee.secondary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.UpdateShardReplicationFields(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return nil
+}
+
+func (tee *Tee) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+	return tee.readFrom.GetShardReplication(cell, keyspace, shard)
+}
+
+func (tee *Tee) DeleteShardReplication(cell, keyspace, shard string) error {
+	if err := tee.primary.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return nil
+}
+
+//
 // Serving Graph management, per cell.
 //
 

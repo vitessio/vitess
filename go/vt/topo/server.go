@@ -161,6 +161,28 @@ type Server interface {
 	DeleteReplicationPath(keyspace, shard, repPath string) error
 
 	//
+	// Replication graph management, per cell.
+	//
+
+	// CreateShardReplication creates the ShardReplication object,
+	// assuming it doesn't exist yet.
+	// Can return ErrNodeExists if it already exists.
+	CreateShardReplication(cell, keyspace, shard string, sr *ShardReplication) error
+
+	// UpdateShardReplicationFields updates the current
+	// ShardReplication record with new values
+	// Can return ErrNoNode if the object doesn't exist.
+	UpdateShardReplicationFields(cell, keyspace, shard string, update func(*ShardReplication) error) error
+
+	// GetShardReplication returns the replication data.
+	// Can return ErrNoNode if the object doesn't exist.
+	GetShardReplication(cell, keyspace, shard string) (*ShardReplicationInfo, error)
+
+	// DeleteShardReplication deletes the replication data.
+	// Can return ErrNoNode if the object doesn't exist.
+	DeleteShardReplication(cell, keyspace, shard string) error
+
+	//
 	// Serving Graph management, per cell.
 	//
 

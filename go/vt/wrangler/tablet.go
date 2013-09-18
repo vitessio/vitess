@@ -82,6 +82,11 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			if err := wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err); err != nil {
 				return err
 			}
+
+			// also create the cell's ShardReplication
+			if err := wr.ts.CreateShardReplication(tablet.Cell, tablet.Keyspace, tablet.Shard, &topo.ShardReplication{}); err != nil && err != topo.ErrNodeExists {
+				return err
+			}
 		}
 	}
 

@@ -696,7 +696,7 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo
 	}
 
 	// and create the replication graph items
-	return topo.CreateTabletReplicationPaths(ta.ts, tablet.Tablet)
+	return topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
 }
 
 // FIXME(alainjobart) remove after migration

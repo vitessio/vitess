@@ -526,7 +526,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				}
 			}
 			mu.Unlock()
-			err := topo.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
+			err := topo.CreateTabletReplicationData(wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true
