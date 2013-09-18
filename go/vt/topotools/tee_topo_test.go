@@ -70,6 +70,11 @@ func TestServingGraph(t *testing.T) {
 	test.CheckServingGraph(t, ts)
 }
 
+func TestShardReplication(t *testing.T) {
+	ts := newFakeTeeServer(t)
+	test.CheckShardReplication(t, ts)
+}
+
 func TestKeyspaceLock(t *testing.T) {
 	ts := newFakeTeeServer(t)
 	test.CheckKeyspaceLock(t, ts)
