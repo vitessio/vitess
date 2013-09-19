@@ -186,14 +186,14 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	}
 
 	// Check to see our address is registered in the right place.
-	addr, err := VtnsAddrForTablet(agent.Tablet().Tablet)
+	addr, err := EndPointForTablet(agent.Tablet().Tablet)
 	if err != nil {
 		return err
 	}
 	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
-func VtnsAddrForTablet(tablet *topo.Tablet) (*topo.VtnsAddr, error) {
+func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
 	host, port, err := netutil.SplitHostPort(tablet.Addr)
 	if err != nil {
 		return nil, err

@@ -17,13 +17,13 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 	if _, err := ts.GetSrvTabletTypesPerShard(cell, "test_keyspace", "-10"); err != topo.ErrNoNode {
 		t.Errorf("GetSrvTabletTypesPerShard(invalid): %v", err)
 	}
-	if _, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != topo.ErrNoNode {
-		t.Errorf("GetSrvTabletType(invalid): %v", err)
+	if _, err := ts.GetEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != topo.ErrNoNode {
+		t.Errorf("GetEndPoints(invalid): %v", err)
 	}
 
-	vtnsAddrs := topo.VtnsAddrs{
-		Entries: []topo.VtnsAddr{
-			topo.VtnsAddr{
+	endPoints := topo.EndPoints{
+		Entries: []topo.EndPoint{
+			topo.EndPoint{
 				Uid:          1,
 				Host:         "host1",
 				NamedPortMap: map[string]int{"_vt": 1234, "_mysql": 1235, "_vts": 1236},
@@ -31,38 +31,38 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		},
 	}
 
-	if err := ts.UpdateSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &vtnsAddrs); err != nil {
-		t.Errorf("UpdateSrvTabletType(master): %v", err)
+	if err := ts.UpdateEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &endPoints); err != nil {
+		t.Errorf("UpdateEndPoints(master): %v", err)
 	}
 	if types, err := ts.GetSrvTabletTypesPerShard(cell, "test_keyspace", "-10"); err != nil || len(types) != 1 || types[0] != topo.TYPE_MASTER {
 		t.Errorf("GetSrvTabletTypesPerShard(1): %v %v", err, types)
 	}
 
-	addrs, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER)
+	addrs, err := ts.GetEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER)
 	if err != nil {
-		t.Errorf("GetSrvTabletType: %v", err)
+		t.Errorf("GetEndPoints: %v", err)
 	}
 	if len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
-		t.Errorf("GetSrvTabletType(1): %v", addrs)
+		t.Errorf("GetEndPoints(1): %v", addrs)
 	}
 	if pm := addrs.Entries[0].NamedPortMap; pm["_vt"] != 1234 || pm["_mysql"] != 1235 || pm["_vts"] != 1236 {
-		t.Errorf("GetSrcTabletType(1).NamedPortmap: want %v, got %v", vtnsAddrs.Entries[0].NamedPortMap, pm)
+		t.Errorf("GetSrcTabletType(1).NamedPortmap: want %v, got %v", endPoints.Entries[0].NamedPortMap, pm)
 	}
 
-	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_REPLICA, &topo.VtnsAddr{Uid: 2, Host: "host2"}); err != nil {
+	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_REPLICA, &topo.EndPoint{Uid: 2, Host: "host2"}); err != nil {
 		t.Errorf("UpdateTabletEndpoint(invalid): %v", err)
 	}
-	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.VtnsAddr{Uid: 1, Host: "host2"}); err != nil {
+	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.EndPoint{Uid: 1, Host: "host2"}); err != nil {
 		t.Errorf("UpdateTabletEndpoint(master): %v", err)
 	}
-	if addrs, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
-		t.Errorf("GetSrvTabletType(2): %v %v", err, addrs)
+	if addrs, err := ts.GetEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 1 || addrs.Entries[0].Uid != 1 {
+		t.Errorf("GetEndPoints(2): %v %v", err, addrs)
 	}
-	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.VtnsAddr{Uid: 3, Host: "host3"}); err != nil {
+	if err := ts.UpdateTabletEndpoint(cell, "test_keyspace", "-10", topo.TYPE_MASTER, &topo.EndPoint{Uid: 3, Host: "host3"}); err != nil {
 		t.Errorf("UpdateTabletEndpoint(master): %v", err)
 	}
-	if addrs, err := ts.GetSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 2 {
-		t.Errorf("GetSrvTabletType(2): %v %v", err, addrs)
+	if addrs, err := ts.GetEndPoints(cell, "test_keyspace", "-10", topo.TYPE_MASTER); err != nil || len(addrs.Entries) != 2 {
+		t.Errorf("GetEndPoints(2): %v %v", err, addrs)
 	}
 
 	if err := ts.DeleteSrvTabletType(cell, "test_keyspace", "-10", topo.TYPE_REPLICA); err != topo.ErrNoNode {

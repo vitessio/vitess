@@ -16,7 +16,7 @@ type TopoReader interface {
 
 	// GetEndPoints returns addresses for a tablet type in a shard
 	// in a keyspace (as specified in GetEndPointsArgs).
-	GetEndPoints(GetEndPointsArgs, *VtnsAddrs) error
+	GetEndPoints(GetEndPointsArgs, *EndPoints) error
 }
 
 type GetSrvKeyspaceNamesArgs struct {

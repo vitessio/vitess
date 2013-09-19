@@ -150,7 +150,7 @@ func (wr *Wrangler) exportVtnsToZkns(zconn zk.Conn, vtnsAddrPath, zknsAddrPath s
 	keyspace := parts[5]
 	shard := parts[6]
 	tabletType := topo.TabletType(parts[7])
-	addrs, err := wr.ts.GetSrvTabletType(cell, keyspace, shard, tabletType)
+	addrs, err := wr.ts.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, err
 	}
