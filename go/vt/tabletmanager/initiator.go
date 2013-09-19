@@ -432,6 +432,13 @@ func (ai *ActionInitiator) MigrateServedTypes(servedType topo.TabletType) *Actio
 	}
 }
 
+func (ai *ActionInitiator) UpdateShard() *ActionNode {
+	return &ActionNode{
+		Action:     SHARD_ACTION_UPDATE_SHARD,
+		ActionGuid: actionGuid(),
+	}
+}
+
 func (ai *ActionInitiator) RebuildKeyspace() *ActionNode {
 	return &ActionNode{
 		Action:     KEYSPACE_ACTION_REBUILD,

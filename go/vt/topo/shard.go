@@ -61,6 +61,11 @@ type Shard struct {
 	// SourceShards is the list of shards we're replicating from,
 	// using filtered replication.
 	SourceShards []SourceShard
+
+	// Cells is the list of cells that have tablets for this shard.
+	// It is populated at InitTablet time when a tabelt is added
+	// in a cell that is not in the list yet.
+	Cells []string
 }
 
 func newShard() *Shard {
@@ -89,6 +94,16 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 	}
 
 	return strings.ToUpper(shard), keyRange, nil
+}
+
+// HasCell returns true if the cell is listed in the Cells for the shard.
+func (shard *Shard) HasCell(cell string) bool {
+	for _, c := range shard.Cells {
+		if c == cell {
+			return true
+		}
+	}
+	return false
 }
 
 // ShardInfo is a meta struct that contains metadata to give the data

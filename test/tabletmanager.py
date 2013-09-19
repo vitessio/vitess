@@ -545,11 +545,15 @@ class TestTabletManager(unittest.TestCase):
 
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
+    shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+    self.assertEqual(shard['Cells'], ['test_nj'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True)
     tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+    shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+    self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Recompute the shard layout node - until you do that, it might not be valid.
     utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
