@@ -11,7 +11,8 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
-// TabletConn is a thin rpc client for a vttablet.
+// TabletConn is a thin rpc client for a vttablet. It should
+// not be concurrently used across goroutines.
 type TabletConn struct {
 	rpcClient *rpcplus.Client
 	tproto.Session

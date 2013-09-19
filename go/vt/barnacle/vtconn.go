@@ -18,6 +18,7 @@ import (
 var idGen sync2.AtomicInt64
 
 type VTConn struct {
+	mu               sync.Mutex
 	Id               int64
 	balancerMap      *BalancerMap
 	tabletType       topo.TabletType
@@ -25,6 +26,7 @@ type VTConn struct {
 	retryCount       int
 	shardConns       map[string]*ShardConn
 	transactionId    int64
+	connsMu          sync.Mutex
 	transactionConns []*ShardConn
 }
 
@@ -53,6 +55,9 @@ func (vtc *VTConn) Close() error {
 }
 
 func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
+	vtc.connsMu.Lock()
+	defer vtc.connsMu.Unlock()
+
 	key := fmt.Sprintf("%s.%s.%s", keyspace, vtc.tabletType, shard)
 	sdc, ok := vtc.shardConns[key]
 	if !ok {
@@ -101,6 +106,9 @@ func appendResult(qr, innerqr *mproto.QueryResult) {
 
 // ExecDirect executes a non-streaming query on the specified shards.
 func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, keyspace string, shards []string) (qr *mproto.QueryResult, err error) {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
+
 	switch len(shards) {
 	case 0:
 		return nil, nil
@@ -111,8 +119,8 @@ func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, key
 	results := make(chan *mproto.QueryResult, len(shards))
 	allErrors := new(concurrency.AllErrorRecorder)
 	var wg sync.WaitGroup
-	wg.Add(len(shards))
-	for _, shard := range shards {
+	for shard := range unique(shards) {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			innerqr, err := vtc.execOnShard(query, bindVars, keyspace, shard)
@@ -137,21 +145,23 @@ func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, key
 }
 
 // ExecStream executes a streaming query on vttablet. The retry rules are the same.
-func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}, keyspace string, shards []string) (results chan *mproto.QueryResult, errFunc ErrFunc) {
-	res := make(chan *mproto.QueryResult, len(shards))
+func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}, keyspace string, shards []string, sendReply func(reply interface{})) error {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
+
 	if vtc.transactionId != 0 {
-		close(res)
-		return res, func() error { return fmt.Errorf("cannot stream in a transaction") }
+		return fmt.Errorf("cannot stream in a transaction")
 	}
+	results := make(chan *mproto.QueryResult, len(shards))
 	allErrors := new(concurrency.AllErrorRecorder)
 	var wg sync.WaitGroup
-	wg.Add(len(shards))
-	for _, shard := range shards {
+	for shard := range unique(shards) {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			sr, errFunc := vtc.getConnection(keyspace, shard).ExecStream(query, bindVars)
 			for qr := range sr {
-				res <- qr
+				results <- qr
 			}
 			err := errFunc()
 			if err != nil {
@@ -161,13 +171,19 @@ func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}, key
 	}
 	go func() {
 		wg.Wait()
-		close(res)
+		close(results)
 	}()
-	return res, func() error { return allErrors.Error() }
+	for innerqr := range results {
+		sendReply(innerqr)
+	}
+	return allErrors.Error()
 }
 
 // Begin begins a transaction. The retry rules are the same.
 func (vtc *VTConn) Begin() (err error) {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
+
 	if vtc.transactionId != 0 {
 		return fmt.Errorf("cannot begin: already in a transaction")
 	}
@@ -177,6 +193,9 @@ func (vtc *VTConn) Begin() (err error) {
 
 // Commit commits the current transaction. There are no retries on this operation.
 func (vtc *VTConn) Commit() (err error) {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
+
 	if vtc.transactionId == 0 {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
@@ -197,10 +216,21 @@ func (vtc *VTConn) Commit() (err error) {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (vtc *VTConn) Rollback() (err error) {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
+
 	for _, tConn := range vtc.transactionConns {
 		tConn.Rollback()
 	}
 	vtc.transactionConns = nil
 	vtc.transactionId = 0
 	return nil
+}
+
+func unique(in []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(in))
+	for _, v := range in {
+		out[v] = struct{}{}
+	}
+	return out
 }

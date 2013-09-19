@@ -14,14 +14,15 @@ import (
 )
 
 // ShardConn represents a load balanced connection to a group
-// of vttablets that belong to the same shard.
+// of vttablets that belong to the same shard. ShardConn should
+// not be concurrently used across goroutines.
 type ShardConn struct {
-	address    string
 	keyspace   string
 	shard      string
 	tabletType topo.TabletType
 	retryCount int
 	balancer   *Balancer
+	address    string
 	conn       *TabletConn
 }
 
@@ -101,6 +102,7 @@ func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) 
 }
 
 // ExecStream executes a streaming query on vttablet. The retry rules are the same.
+// Calling other functions while streaming is not recommended.
 func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
 	for i := 0; i < 2; i++ {
 		if sdc.conn == nil {
