@@ -4,22 +4,13 @@
 
 package topo
 
-import (
-//	"errors"
-//	"flag"
-//	"fmt"
-//	"time"
-
-//	log "github.com/golang/glog"
-)
-
 // ReplicationLink describes a MySQL replication relationship
 type ReplicationLink struct {
 	TabletAlias TabletAlias
 	Parent      TabletAlias
 }
 
-// The ShardReplication object describes the MySQL replication relationships
+// ShardReplication describes the MySQL replication relationships
 // whithin a cell.
 type ShardReplication struct {
 	// Note there can be only one ReplicationLink in this array
@@ -27,7 +18,7 @@ type ShardReplication struct {
 	ReplicationLinks []ReplicationLink
 }
 
-// The ShardReplicationInfo is the companion structure for ShardReplication
+// ShardReplicationInfo is the companion structure for ShardReplication.
 type ShardReplicationInfo struct {
 	*ShardReplication
 	cell     string
@@ -35,6 +26,7 @@ type ShardReplicationInfo struct {
 	shard    string
 }
 
+// For topo.Server implementations to create the structure
 func NewShardReplicationInfo(sr *ShardReplication, cell, keyspace, shard string) *ShardReplicationInfo {
 	return &ShardReplicationInfo{
 		ShardReplication: sr,
@@ -43,6 +35,8 @@ func NewShardReplicationInfo(sr *ShardReplication, cell, keyspace, shard string)
 		shard:            shard,
 	}
 }
+
+// Accessor methods
 
 func (sri *ShardReplicationInfo) Cell() string {
 	return sri.cell
