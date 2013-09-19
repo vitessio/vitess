@@ -14,14 +14,15 @@ import (
 )
 
 // ShardConn represents a load balanced connection to a group
-// of vttablets that belong to the same shard.
+// of vttablets that belong to the same shard. ShardConn should
+// not be concurrently used across goroutines.
 type ShardConn struct {
-	address    string
 	keyspace   string
 	shard      string
 	tabletType topo.TabletType
 	retryCount int
 	balancer   *Balancer
+	address    string
 	conn       *TabletConn
 }
 
@@ -76,7 +77,7 @@ func (sdc *ShardConn) mustReturn(err error) bool {
 	if _, ok := err.(rpcplus.ServerError); ok {
 		return true
 	}
-	inTransaction := sdc.inTransaction()
+	inTransaction := sdc.InTransaction()
 	sdc.balancer.MarkDown(sdc.address)
 	sdc.Close()
 	return inTransaction
@@ -101,24 +102,28 @@ func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) 
 }
 
 // ExecStream executes a streaming query on vttablet. The retry rules are the same.
-func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (sr *StreamResult, err error) {
+// Calling other functions while streaming is not recommended.
+func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
 	for i := 0; i < 2; i++ {
 		if sdc.conn == nil {
-			if err = sdc.connect(); err != nil {
-				return nil, err
+			if err := sdc.connect(); err != nil {
+				r := make(chan *mproto.QueryResult)
+				close(r)
+				return r, func() error { return err }
 			}
 		}
-		sr, err = sdc.conn.ExecStream(query, bindVars)
+		results, errFunc = sdc.conn.ExecStream(query, bindVars)
+		err := errFunc()
 		if sdc.mustReturn(err) {
-			return sr, err
+			return results, errFunc
 		}
 	}
-	return sr, err
+	return results, errFunc
 }
 
 // Begin begins a transaction. The retry rules are the same.
 func (sdc *ShardConn) Begin() (err error) {
-	if sdc.inTransaction() {
+	if sdc.InTransaction() {
 		return fmt.Errorf("cannot begin: already in transaction")
 	}
 	for i := 0; i < 2; i++ {
@@ -137,7 +142,7 @@ func (sdc *ShardConn) Begin() (err error) {
 
 // Commit commits the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Commit() (err error) {
-	if !sdc.inTransaction() {
+	if !sdc.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
 	return sdc.conn.Commit()
@@ -145,12 +150,12 @@ func (sdc *ShardConn) Commit() (err error) {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Rollback() (err error) {
-	if !sdc.inTransaction() {
+	if !sdc.InTransaction() {
 		return fmt.Errorf("cannot rollback: not in transaction")
 	}
 	return sdc.conn.Rollback()
 }
 
-func (sdc *ShardConn) inTransaction() bool {
+func (sdc *ShardConn) InTransaction() bool {
 	return sdc.conn != nil && sdc.conn.TransactionId != 0
 }

@@ -76,7 +76,10 @@ outer:
 				continue outer
 			}
 		}
+		// Allow mark downs to hapen while sleeping.
+		blc.mu.Unlock()
 		time.Sleep(blc.retryDelay + (1 * time.Millisecond))
+		blc.mu.Lock()
 	}
 	panic("unreachable")
 }

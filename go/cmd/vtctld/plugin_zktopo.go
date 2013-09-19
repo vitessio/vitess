@@ -23,6 +23,7 @@ func init() {
 	ts := topo.GetServerByName("zookeeper")
 	if ts == nil {
 		log.Error("zookeeper explorer disabled: no zktopo.Server")
+		return
 	}
 
 	HandleExplorer("/zk/", "zk.html", NewZkExplorer(ts.(*zktopo.Server).GetZConn()))
