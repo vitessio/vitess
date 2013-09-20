@@ -14,7 +14,7 @@ import (
 
 // SubsetTopoServ is a subset of topo.Server
 type SubsetTopoServ interface {
-	GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error)
+	GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error)
 }
 
 // BalancerMap builds and maintains a map from cell.keyspace.dbtype.shard to
@@ -49,7 +49,7 @@ func (blm *BalancerMap) Balancer(keyspace, shard string, tabletType topo.TabletT
 		return blc
 	}
 	getAddresses := func() ([]string, error) {
-		endpoints, err := blm.Toposerv.GetSrvTabletType(blm.Cell, keyspace, shard, tabletType)
+		endpoints, err := blm.Toposerv.GetEndPoints(blm.Cell, keyspace, shard, tabletType)
 		if err != nil {
 			return nil, err
 		}

@@ -38,7 +38,7 @@ func main() {
 			}
 			log.Infof("tablet types: %v", typs)
 			for _, typ := range typs {
-				endpoints, err := ts.GetSrvTabletType(*cell, keyspace, shard, typ)
+				endpoints, err := ts.GetEndPoints(*cell, keyspace, shard, typ)
 				if err != nil {
 					log.Errorf("error: %v", err)
 					return

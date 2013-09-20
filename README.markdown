@@ -1,8 +1,11 @@
 Vitess
 ======
 
-Vitess is a set of servers and tools to facilitate scaling of MySQL
-databases for the web. It serves all of YouTube's MySQL traffic.
+Vitess is a set of servers and tools meant to facilitate scaling of MySQL databases for the web.
+It's currently used as a fundamental component of YouTube's MySQL infrastructure.
+
+The project is currently under active development. We haven't spent much time on documentation.
+However, you can subscribe to our mailing list vitess@googlegroups.com for questions and updates.
 
 Development
 -----------

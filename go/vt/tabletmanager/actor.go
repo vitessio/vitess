@@ -323,8 +323,7 @@ func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
 func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *topo.TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != topo.NO_TABLET {
-		err := ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-		if err != nil && err != topo.ErrNoNode {
+		if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet, tablet.ReplicationPath()); err != nil && err != topo.ErrNoNode {
 			return err
 		}
 	}
@@ -343,7 +342,7 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *topo.Table
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
+	err = topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
@@ -413,8 +412,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	if tablet.Parent != rsd.Parent {
 		log.V(6).Infof("restart with new parent")
 		// Remove tablet from the replication graph.
-		err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-		if err != nil && err != topo.ErrNoNode {
+		if err = topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet, tablet.ReplicationPath()); err != nil && err != topo.ErrNoNode {
 			return err
 		}
 
@@ -461,7 +459,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
+	err = topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
@@ -478,8 +476,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	}
 
 	// Remove tablet from the replication graph.
-	err = ta.ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-	if err != nil && err != topo.ErrNoNode {
+	if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet, tablet.ReplicationPath()); err != nil && err != topo.ErrNoNode {
 		return err
 	}
 
@@ -510,7 +507,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = ta.ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
+	err = topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
@@ -696,7 +693,7 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo
 	}
 
 	// and create the replication graph items
-	return topo.CreateTabletReplicationPaths(ta.ts, tablet.Tablet)
+	return topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
 }
 
 // FIXME(alainjobart) remove after migration
@@ -911,6 +908,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 		replicationPath = tablet.ReplicationPath()
 	}
 
+	wasMaster := tablet.Parent.IsZero()
 	tablet.Type = topo.TYPE_SCRAP
 	tablet.Parent = topo.TabletAlias{}
 	// Update the tablet first, since that is canonical.
@@ -929,7 +927,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	}
 
 	if wasAssigned {
-		err = ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, replicationPath)
+		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet, replicationPath)
 		if err != nil {
 			switch err {
 			case topo.ErrNoNode:
@@ -942,7 +940,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 				// If the node was not empty, we can't do anything about it - the replication
 				// graph needs to be fixed by reparenting. If the action was forced, assume
 				// the user knows best and squelch the error.
-				if tablet.Parent.Uid == topo.NO_TABLET && force {
+				if wasMaster && force {
 					err = nil
 				}
 			}

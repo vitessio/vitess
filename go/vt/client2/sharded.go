@@ -540,9 +540,9 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 	if !srvShard.KeyRange.IsPartial() {
 		shard = fmt.Sprintf("%v", shardIdx)
 	}
-	addrs, err := sc.ts.GetSrvTabletType(sc.cell, sc.keyspace, shard, sc.tabletType)
+	addrs, err := sc.ts.GetEndPoints(sc.cell, sc.keyspace, shard, sc.tabletType)
 	if err != nil {
-		return nil, fmt.Errorf("vt: GetSrvTabletType failed %v", err)
+		return nil, fmt.Errorf("vt: GetEndPoints failed %v", err)
 	}
 
 	srvs, err := topo.SrvEntries(addrs, "")

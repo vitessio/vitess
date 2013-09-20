@@ -19,8 +19,8 @@ var vtmap = map[string]int{
 type SimpleTopoServ struct {
 }
 
-func (blm *SimpleTopoServ) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
-	return &topo.VtnsAddrs{Entries: []topo.VtnsAddr{
+func (blm *SimpleTopoServ) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	return &topo.EndPoints{Entries: []topo.EndPoint{
 		{Host: "0", NamedPortMap: vtmap},
 		{Host: "1", NamedPortMap: vtmap},
 		{Host: "2", NamedPortMap: vtmap},
@@ -62,7 +62,7 @@ func TestPortError(t *testing.T) {
 type ErrorTopoServ struct {
 }
 
-func (blm *ErrorTopoServ) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
+func (blm *ErrorTopoServ) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	return nil, fmt.Errorf("topo error")
 }
 

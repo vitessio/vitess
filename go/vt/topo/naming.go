@@ -32,21 +32,21 @@ const (
 	DefaultPortName = "_vtocc"
 )
 
-type VtnsAddr struct {
+type EndPoint struct {
 	Uid          uint32         `json:"uid"` // Keep track of which tablet this corresponds to.
 	Host         string         `json:"host"`
 	NamedPortMap map[string]int `json:"named_port_map"`
 }
 
-type VtnsAddrs struct {
-	Entries []VtnsAddr `json:"entries"`
+type EndPoints struct {
+	Entries []EndPoint `json:"entries"`
 }
 
-func NewAddr(uid uint32, host string) *VtnsAddr {
-	return &VtnsAddr{Uid: uid, Host: host, NamedPortMap: make(map[string]int)}
+func NewAddr(uid uint32, host string) *EndPoint {
+	return &EndPoint{Uid: uid, Host: host, NamedPortMap: make(map[string]int)}
 }
 
-func VtnsAddrEquality(left, right *VtnsAddr) bool {
+func EndPointEquality(left, right *EndPoint) bool {
 	if left.Uid != right.Uid {
 		return false
 	}
@@ -68,13 +68,13 @@ func VtnsAddrEquality(left, right *VtnsAddr) bool {
 	return true
 }
 
-// NewVtnsAddrs creates a VtnsAddrs with a pre-allocated slice for Entries.
-func NewVtnsAddrs() *VtnsAddrs {
-	return &VtnsAddrs{Entries: make([]VtnsAddr, 0, 8)}
+// NewEndPoints creates a EndPoints with a pre-allocated slice for Entries.
+func NewEndPoints() *EndPoints {
+	return &EndPoints{Entries: make([]EndPoint, 0, 8)}
 }
 
 func LookupVtName(ts Server, cell, keyspace, shard string, tabletType TabletType, namedPort string) ([]*net.SRV, error) {
-	addrs, err := ts.GetSrvTabletType(cell, keyspace, shard, tabletType)
+	addrs, err := ts.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
 		return nil, fmt.Errorf("LookupVtName(%v,%v,%v,%v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
@@ -86,7 +86,7 @@ func LookupVtName(ts Server, cell, keyspace, shard string, tabletType TabletType
 }
 
 // FIXME(msolomon) merge with zkns
-func SrvEntries(addrs *VtnsAddrs, namedPort string) (srvs []*net.SRV, err error) {
+func SrvEntries(addrs *EndPoints, namedPort string) (srvs []*net.SRV, err error) {
 	srvs = make([]*net.SRV, 0, len(addrs.Entries))
 	var srvErr error
 	for _, entry := range addrs.Entries {

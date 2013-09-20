@@ -261,6 +261,53 @@ func (tee *Tee) DeleteReplicationPath(keyspace, shard, repPath string) error {
 }
 
 //
+// Replication graph management, global.
+//
+
+func (tee *Tee) CreateShardReplication(cell, keyspace, shard string, sr *topo.ShardReplication) error {
+	err := tee.primary.CreateShardReplication(cell, keyspace, shard, sr)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	serr := tee.secondary.CreateShardReplication(cell, keyspace, shard, sr)
+	if serr != nil && serr != topo.ErrNodeExists {
+		// not critical enough to fail
+		log.Warningf("secondary.CreateShardReplication(%v,%v,%v) failed: %v", cell, keyspace, shard, err)
+	}
+	return err
+}
+
+func (tee *Tee) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+	if err := tee.primary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
+		// failed on primary, not updating secondary
+		return err
+	}
+
+	if err := tee.secondary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.UpdateShardReplicationFields(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return nil
+}
+
+func (tee *Tee) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+	return tee.readFrom.GetShardReplication(cell, keyspace, shard)
+}
+
+func (tee *Tee) DeleteShardReplication(cell, keyspace, shard string) error {
+	if err := tee.primary.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return nil
+}
+
+//
 // Serving Graph management, per cell.
 //
 
@@ -268,20 +315,20 @@ func (tee *Tee) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.
 	return tee.readFrom.GetSrvTabletTypesPerShard(cell, keyspace, shard)
 }
 
-func (tee *Tee) UpdateSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.VtnsAddrs) error {
-	if err := tee.primary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs); err != nil {
+func (tee *Tee) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+	if err := tee.primary.UpdateEndPoints(cell, keyspace, shard, tabletType, addrs); err != nil {
 		return err
 	}
 
-	if err := tee.secondary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs); err != nil {
+	if err := tee.secondary.UpdateEndPoints(cell, keyspace, shard, tabletType, addrs); err != nil {
 		// not critical enough to fail
-		log.Warningf("secondary.UpdateSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+		log.Warningf("secondary.UpdateEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
 	return nil
 }
 
-func (tee *Tee) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
-	return tee.readFrom.GetSrvTabletType(cell, keyspace, shard, tabletType)
+func (tee *Tee) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	return tee.readFrom.GetEndPoints(cell, keyspace, shard, tabletType)
 }
 
 func (tee *Tee) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
@@ -332,7 +379,7 @@ func (tee *Tee) GetSrvKeyspaceNames(cell string) ([]string, error) {
 	return tee.readFrom.GetSrvKeyspaceNames(cell)
 }
 
-func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.VtnsAddr) error {
+func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	if err := tee.primary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
 		return err
 	}
