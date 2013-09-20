@@ -18,10 +18,11 @@ class BindVarsProxy(object):
     return dict([(k, self.bind_vars[k]) for k in self.accessed_keys])
 
 
+# convert bind style from %(name)s to :name and export only the
+# variables bound.
 def prepare_query_bind_vars(query, bind_vars):
   bind_vars_proxy = BindVarsProxy(bind_vars)
   try:
-    # convert bind style from %(name)s to :name
     query = query % bind_vars_proxy
   except KeyError as e:
     raise dbexceptions.InterfaceError(e[0], query, bind_vars)
