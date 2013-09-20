@@ -164,30 +164,6 @@ def setup_schema():
   shard_1_replica.mquery(shard_0_master.dbname, create_vt_a)
 
 
-class DBParams(object):
-  addr = None
-  keyspace = None
-  shard = None
-  timeout = None
-  user = None
-  password = None
-  encrypted = False
-  keyfile = None
-  certfile = None
-  
-def get_vt_connection_params(db_key, port="_vtocc"):
-  zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
-                                       "test_nj", 30.0)
-  keyspace, shard, db_type = db_key.split('.')
-  #topo = topology.read_keyspaces(zkocc_client)
-  #addr = topology.get_host_port_by_name(zkocc_client, "%s:%s" % (db_key, port))
-  vt_addr = "%s:%d" % (addr[0][0], addr[0][1])
-  vt_params = DBParams()
-  vt_params.addr = vt_addr
-  vt_params.keyspace = keyspace
-  vt_params.shard = shard
-  vt_params.timeout = 10.0
-  return vt_params.__dict__
 
 def get_master_connection(shard='1'):
   logging.debug("connecting to master with params")
@@ -361,13 +337,26 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
     shard_1_replica.kill_vttablet()
-    print "first select"
     with self.assertRaises(dbexceptions.OperationalError):
       replica_conn._execute("select 1 from vt_insert_test", {})
     proc = shard_1_replica.start_vttablet()
     try:
-      print "second select"
       results = replica_conn._execute("select 1 from vt_insert_test", {})
+    except Exception, e:
+      self.fail("Communication with shard0 replica failed with error %s" % str(e))
+
+  def test_tablet_restart_stream_execute(self):
+    try:
+      replica_conn = get_replica_connection()
+    except Exception, e:
+      self.fail("Connection to shard0 replica failed with error %s" % str(e))
+    stream_cursor = cursor.StreamCursor(replica_conn)
+    shard_1_replica.kill_vttablet()
+    with self.assertRaises(dbexceptions.OperationalError):
+      stream_cursor.execute("select * from vt_insert_test", {})
+    proc = shard_1_replica.start_vttablet()
+    try:
+      stream_cursor.execute("select * from vt_insert_test", {})
     except Exception, e:
       self.fail("Communication with shard0 replica failed with error %s" % str(e))
 
