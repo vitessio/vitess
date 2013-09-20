@@ -48,6 +48,7 @@ ln -snf $VTTOP/py $VTROOT/py-vtdb
 ln -snf $VTTOP/go/cmd/mysqlctl/mysqlctl $VTROOT/bin/mysqlctl
 ln -snf $VTTOP/go/cmd/normalizer/normalizer $VTROOT/bin/normalizer
 ln -snf $VTTOP/go/cmd/vtaction/vtaction $VTROOT/bin/vtaction
+ln -snf $VTTOP/go/cmd/vtbarnacle/vtbarnacle $VTROOT/bin/vtbarnacle
 ln -snf $VTTOP/go/cmd/vtclient2/vtclient2 $VTROOT/bin/vtclient2
 ln -snf $VTTOP/go/cmd/vtctl/vtctl $VTROOT/bin/vtctl
 ln -snf $VTTOP/go/cmd/vtctld/vtctld $VTROOT/bin/vtctld

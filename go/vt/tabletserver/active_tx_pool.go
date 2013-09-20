@@ -73,7 +73,7 @@ func (axp *ActiveTxPool) Open() {
 
 func (axp *ActiveTxPool) Close() {
 	axp.ticks.Stop()
-	for _, v := range axp.pool.GetTimedout(time.Duration(0)) {
+	for _, v := range axp.pool.GetOutdated(time.Duration(0)) {
 		conn := v.(*TxConnection)
 		conn.Close()
 		conn.discard(TX_CLOSE)
@@ -85,7 +85,7 @@ func (axp *ActiveTxPool) WaitForEmpty() {
 }
 
 func (axp *ActiveTxPool) TransactionKiller() {
-	for _, v := range axp.pool.GetTimedout(time.Duration(axp.Timeout())) {
+	for _, v := range axp.pool.GetOutdated(time.Duration(axp.Timeout())) {
 		conn := v.(*TxConnection)
 		log.Infof("killing transaction %d: %#v", conn.transactionId, conn.queries)
 		killStats.Add("Transactions", 1)

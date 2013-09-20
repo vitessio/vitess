@@ -6,45 +6,24 @@ package main
 
 import (
 	"flag"
+	"time"
 
-	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/barnacle"
+	"github.com/youtube/vitess/go/vt/servenv"
+	_ "github.com/youtube/vitess/go/vt/zktopo"
 )
 
-var cell = flag.String("cell", "test_nj", "cell to use")
+var (
+	port       = flag.Int("port", 8085, "serving port")
+	cell       = flag.String("cell", "test_nj", "cell to use")
+	portName   = flag.String("port-name", "vt", "vt port name")
+	retryDelay = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
+	retryCount = flag.Int("retry-count", 10, "retry count")
+)
 
 func main() {
 	flag.Parse()
-	ts := topo.GetServer()
-	defer topo.CloseServers()
-	keyspaces, err := ts.GetKeyspaces()
-	if err != nil {
-		log.Errorf("error: %v", err)
-		return
-	}
-	log.Infof("keyspaces: %v", keyspaces)
-	for _, keyspace := range keyspaces {
-		shards, err := ts.GetShardNames(keyspace)
-		if err != nil {
-			log.Errorf("error: %v", err)
-			return
-		}
-		log.Infof("shards: %v", shards)
-		for _, shard := range shards {
-			typs, err := ts.GetSrvTabletTypesPerShard(*cell, keyspace, shard)
-			if err != nil {
-				log.Errorf("error: %v", err)
-				return
-			}
-			log.Infof("tablet types: %v", typs)
-			for _, typ := range typs {
-				endpoints, err := ts.GetEndPoints(*cell, keyspace, shard, typ)
-				if err != nil {
-					log.Errorf("error: %v", err)
-					return
-				}
-				log.Infof("end points: %v", endpoints)
-			}
-		}
-	}
+	servenv.Init()
+	barnacle.Init(*cell, *portName, *retryDelay, *retryCount)
+	servenv.Run(*port)
 }

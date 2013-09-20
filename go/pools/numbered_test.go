@@ -18,45 +18,61 @@ func TestNumbered(t *testing.T) {
 		t.Errorf("Error %v", err)
 	}
 	if err = p.Register(id, id); err.Error() != "already present" {
-		t.Errorf("Expecting 'already present', received '%v'", err)
+		t.Errorf("want 'already present', got '%v'", err)
 	}
 	var v interface{}
 	if v, err = p.Get(id); err != nil {
 		t.Errorf("Error %v", err)
 	}
 	if v.(int64) != id {
-		t.Errorf("Expecting %v, received %v", id, v.(int64))
+		t.Errorf("want %v, got %v", id, v.(int64))
 	}
 	if v, err = p.Get(id); err.Error() != "in use" {
-		t.Errorf("Expecting 'in use', received '%v'", err)
+		t.Errorf("want 'in use', got '%v'", err)
 	}
 	p.Put(id)
 	if v, err = p.Get(1); err.Error() != "not found" {
-		t.Errorf("Expecting 'not found', received '%v'", err)
+		t.Errorf("want 'not found', got '%v'", err)
 	}
 	p.Unregister(1) // Should not fail
 	p.Unregister(0)
+	// p is now empty
 
 	p.Register(id, id)
 	id++
 	p.Register(id, id)
-	time.Sleep(3e8)
+	time.Sleep(300 * time.Millisecond)
 	id++
 	p.Register(id, id)
-	time.Sleep(1e8)
-	vals := p.GetTimedout(time.Duration(2e8))
+	time.Sleep(100 * time.Millisecond)
+
+	// p has 0, 1, 2 (0 & 1 are aged)
+	vals := p.GetOutdated(200 * time.Millisecond)
 	if len(vals) != 2 {
-		t.Errorf("Expecting 2, received %v", len(vals))
+		t.Errorf("want 2, got %v", len(vals))
 	}
 	for _, v := range vals {
-		p.Unregister(v.(int64))
+		p.Put(v.(int64))
 	}
+	time.Sleep(100 * time.Millisecond)
 
-	if p.Size() != 1 {
-		t.Errorf("Expecting 1, received %v", p.Size())
+	// p has 0, 1, 2 (2 is idle)
+	vals = p.GetIdle(200 * time.Millisecond)
+	if len(vals) != 1 {
+		t.Errorf("want 1, got %v", len(vals))
+	}
+	if vals[0].(int64) != 2 {
+		t.Errorf("want 2, got %v", vals[0])
+	}
+	p.Unregister(vals[0].(int64))
+
+	// p has 0 & 1
+	if p.Size() != 2 {
+		t.Errorf("want 2, got %v", p.Size())
 	}
 	go func() {
-		p.Unregister(2)
+		p.Unregister(0)
+		p.Unregister(1)
 	}()
 	p.WaitForEmpty()
 }

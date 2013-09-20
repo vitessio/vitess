@@ -21,7 +21,7 @@ type TabletConn struct {
 type ErrFunc func() error
 
 // StreamResult is the object used to stream query results from
-// ExecStream.
+// StreamExecute.
 type StreamResult struct {
 	Call   *rpcplus.Call
 	Stream <-chan *mproto.QueryResult
@@ -56,8 +56,8 @@ func (conn *TabletConn) Close() error {
 	return rpcClient.Close()
 }
 
-// ExecDirect executes a non-streaming query on vttablet.
-func (conn *TabletConn) ExecDirect(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
+// Execute executes a non-streaming query on vttablet.
+func (conn *TabletConn) Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
@@ -72,11 +72,11 @@ func (conn *TabletConn) ExecDirect(query string, bindVars map[string]interface{}
 	return qr, nil
 }
 
-// ExecStream exectutes a streaming query on vttablet. It returns a channel that will stream results.
+// StreamExecute exectutes a streaming query on vttablet. It returns a channel that will stream results.
 // It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called
-// immediately after ExecStream returns to check if there were errors sending the call. It should also
+// immediately after StreamExecute returns to check if there were errors sending the call. It should also
 // be called after finishing the iteration over the channel to see if there were other errors.
-func (conn *TabletConn) ExecStream(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
+func (conn *TabletConn) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,

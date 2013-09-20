@@ -54,58 +54,8 @@ func (vtc *VTConn) Close() error {
 	return nil
 }
 
-func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
-	vtc.connsMu.Lock()
-	defer vtc.connsMu.Unlock()
-
-	key := fmt.Sprintf("%s.%s.%s", keyspace, vtc.tabletType, shard)
-	sdc, ok := vtc.shardConns[key]
-	if !ok {
-		sdc = NewShardConn(vtc.balancerMap, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
-		vtc.shardConns[key] = sdc
-	}
-	return sdc
-}
-
-func (vtc *VTConn) prepConnection(keyspace, shard string) (*ShardConn, error) {
-	sdc := vtc.getConnection(keyspace, shard)
-	if vtc.transactionId != 0 {
-		if sdc.InTransaction() {
-			return sdc, nil
-		}
-		if err := sdc.Begin(); err != nil {
-			return nil, err
-		}
-		vtc.transactionConns = append(vtc.transactionConns, sdc)
-	}
-	return sdc, nil
-}
-
-func (vtc *VTConn) execOnShard(query string, bindVars map[string]interface{}, keyspace string, shard string) (qr *mproto.QueryResult, err error) {
-	sdc, err := vtc.prepConnection(keyspace, shard)
-	if err != nil {
-		return nil, err
-	}
-	qr, err = sdc.ExecDirect(query, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	return qr, nil
-}
-
-func appendResult(qr, innerqr *mproto.QueryResult) {
-	if qr.Fields == nil {
-		qr.Fields = innerqr.Fields
-	}
-	qr.RowsAffected += innerqr.RowsAffected
-	if innerqr.InsertId != 0 {
-		qr.InsertId = innerqr.InsertId
-	}
-	qr.Rows = append(qr.Rows, innerqr.Rows...)
-}
-
-// ExecDirect executes a non-streaming query on the specified shards.
-func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, keyspace string, shards []string) (qr *mproto.QueryResult, err error) {
+// Execute executes a non-streaming query on the specified shards.
+func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (qr *mproto.QueryResult, err error) {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
 
@@ -144,8 +94,8 @@ func (vtc *VTConn) ExecDirect(query string, bindVars map[string]interface{}, key
 	return qr, nil
 }
 
-// ExecStream executes a streaming query on vttablet. The retry rules are the same.
-func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}, keyspace string, shards []string, sendReply func(reply interface{})) error {
+// StreamExecute executes a streaming query on vttablet. The retry rules are the same.
+func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, sendReply func(reply interface{}) error) error {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
 
@@ -159,7 +109,7 @@ func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}, key
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sr, errFunc := vtc.getConnection(keyspace, shard).ExecStream(query, bindVars)
+			sr, errFunc := vtc.getConnection(keyspace, shard).StreamExecute(query, bindVars)
 			for qr := range sr {
 				results <- qr
 			}
@@ -173,22 +123,30 @@ func (vtc *VTConn) ExecStream(query string, bindVars map[string]interface{}, key
 		wg.Wait()
 		close(results)
 	}()
+	var replyErr error
 	for innerqr := range results {
-		sendReply(innerqr)
+		// We still need to finish pumping
+		if replyErr != nil {
+			continue
+		}
+		replyErr = sendReply(innerqr)
+	}
+	if replyErr != nil {
+		allErrors.RecordError(replyErr)
 	}
 	return allErrors.Error()
 }
 
 // Begin begins a transaction. The retry rules are the same.
-func (vtc *VTConn) Begin() (err error) {
+func (vtc *VTConn) Begin() (txid int64, err error) {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
 
 	if vtc.transactionId != 0 {
-		return fmt.Errorf("cannot begin: already in a transaction")
+		return 0, fmt.Errorf("cannot begin: already in a transaction")
 	}
 	vtc.transactionId = idGen.Add(1)
-	return nil
+	return vtc.transactionId, nil
 }
 
 // Commit commits the current transaction. There are no retries on this operation.
@@ -225,6 +183,62 @@ func (vtc *VTConn) Rollback() (err error) {
 	vtc.transactionConns = nil
 	vtc.transactionId = 0
 	return nil
+}
+
+func (vtc *VTConn) TransactionId() int64 {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
+	return vtc.transactionId
+}
+
+func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
+	vtc.connsMu.Lock()
+	defer vtc.connsMu.Unlock()
+
+	key := fmt.Sprintf("%s.%s.%s", keyspace, vtc.tabletType, shard)
+	sdc, ok := vtc.shardConns[key]
+	if !ok {
+		sdc = NewShardConn(vtc.balancerMap, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
+		vtc.shardConns[key] = sdc
+	}
+	return sdc
+}
+
+func (vtc *VTConn) prepConnection(keyspace, shard string) (*ShardConn, error) {
+	sdc := vtc.getConnection(keyspace, shard)
+	if vtc.transactionId != 0 {
+		if sdc.InTransaction() {
+			return sdc, nil
+		}
+		if err := sdc.Begin(); err != nil {
+			return nil, err
+		}
+		vtc.transactionConns = append(vtc.transactionConns, sdc)
+	}
+	return sdc, nil
+}
+
+func (vtc *VTConn) execOnShard(query string, bindVars map[string]interface{}, keyspace string, shard string) (qr *mproto.QueryResult, err error) {
+	sdc, err := vtc.prepConnection(keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+	qr, err = sdc.Execute(query, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	return qr, nil
+}
+
+func appendResult(qr, innerqr *mproto.QueryResult) {
+	if qr.Fields == nil {
+		qr.Fields = innerqr.Fields
+	}
+	qr.RowsAffected += innerqr.RowsAffected
+	if innerqr.InsertId != 0 {
+		qr.InsertId = innerqr.InsertId
+	}
+	qr.Rows = append(qr.Rows, innerqr.Rows...)
 }
 
 func unique(in []string) map[string]struct{} {
