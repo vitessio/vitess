@@ -13,6 +13,7 @@ build:
 	cd go/cmd/vt_binlog_player; go build
 	cd go/cmd/vt_binlog_server; go build
 	cd go/cmd/vtaction; go build
+	cd go/cmd/vtbarnacle; go build
 	cd go/cmd/vtclient2; go build
 	cd go/cmd/vtctl; go build
 	cd go/cmd/vtctld; go build
@@ -56,6 +57,7 @@ clean:
 	cd go/cmd/mysqlctl; go clean
 	cd go/cmd/normalizer; go clean
 	cd go/cmd/vtaction; go clean
+	cd go/cmd/vtbarnacle; go clean
 	cd go/cmd/vtclient2; go clean
 	cd go/cmd/vtctl; go clean
 	cd go/cmd/vtocc; go clean
