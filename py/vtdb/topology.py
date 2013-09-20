@@ -9,7 +9,6 @@
 #   2. resolve the full topology of all databases
 #
 
-import json
 import logging
 import random
 
@@ -76,9 +75,9 @@ def get_host_port_by_name(zkocc_client, db_key, encrypted=False):
   if service == '_vtocc' and encrypted:
     encrypted_service = '_vts'
   db_key = parts[0]
-  keyspace, shard, tablet_type = db_key.split('.')
+  ks, shard, tablet_type = db_key.split('.')
   try:
-    data = zkocc_client.get_end_points('local', keyspace, shard, tablet_type)
+    data = zkocc_client.get_end_points('local', ks, shard, tablet_type)
   except zkocc.ZkOccError as e:
     logging.warning('no data for %s: %s', db_key, e)
     return []
