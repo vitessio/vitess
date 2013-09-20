@@ -83,17 +83,17 @@ func (sdc *ShardConn) mustReturn(err error) bool {
 	return inTransaction
 }
 
-// ExecDirect executes a non-streaming query on vttablet. If there are connection errors,
+// Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
-func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) (qr *mproto.QueryResult, err error) {
+func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr *mproto.QueryResult, err error) {
 	for i := 0; i < 2; i++ {
 		if sdc.conn == nil {
 			if err = sdc.connect(); err != nil {
 				return nil, err
 			}
 		}
-		qr, err = sdc.conn.ExecDirect(query, bindVars)
+		qr, err = sdc.conn.Execute(query, bindVars)
 		if sdc.mustReturn(err) {
 			return qr, err
 		}
@@ -101,9 +101,9 @@ func (sdc *ShardConn) ExecDirect(query string, bindVars map[string]interface{}) 
 	return qr, err
 }
 
-// ExecStream executes a streaming query on vttablet. The retry rules are the same.
+// StreamExecute executes a streaming query on vttablet. The retry rules are the same.
 // Calling other functions while streaming is not recommended.
-func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
+func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
 	for i := 0; i < 2; i++ {
 		if sdc.conn == nil {
 			if err := sdc.connect(); err != nil {
@@ -112,7 +112,7 @@ func (sdc *ShardConn) ExecStream(query string, bindVars map[string]interface{}) 
 				return r, func() error { return err }
 			}
 		}
-		results, errFunc = sdc.conn.ExecStream(query, bindVars)
+		results, errFunc = sdc.conn.StreamExecute(query, bindVars)
 		err := errFunc()
 		if sdc.mustReturn(err) {
 			return results, errFunc
