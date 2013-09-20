@@ -34,6 +34,9 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 	if err := fromTS.CreateKeyspace("test_keyspace"); err != nil {
 		t.Fatalf("cannot create keyspace: %v", err)
 	}
+	if err := fromTS.CreateShard("test_keyspace", "0", &topo.Shard{Cells: []string{"test_cell"}}); err != nil {
+		t.Fatalf("cannot create shard: %v", err)
+	}
 	if err := topo.CreateTablet(fromTS, &topo.Tablet{
 		Cell:           "test_cell",
 		Uid:            123,
@@ -107,6 +110,20 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("unexpected shards: %v", shards)
 	}
 	CopyShards(fromTS, toTS, false)
+
+	// check ShardReplication copy
+	sr, err := fromTS.GetShardReplication("test_cell", "test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("fromTS.GetShardReplication failed: %v", err)
+	}
+	CopyShardReplications(fromTS, toTS)
+	sr, err = toTS.GetShardReplication("test_cell", "test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("toTS.GetShardReplication failed: %v", err)
+	}
+	if len(sr.ReplicationLinks) != 1 {
+		t.Fatalf("unexpected ShardReplication: %v", sr)
+	}
 
 	// check tablet copy
 	CopyTablets(fromTS, toTS)

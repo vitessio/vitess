@@ -19,6 +19,7 @@ var toTopo = flag.String("to", "", "topology to copy data to")
 
 var doKeyspaces = flag.Bool("do-keyspaces", false, "copies the keyspace information")
 var doShards = flag.Bool("do-shards", false, "copies the shard information")
+var doShardReplications = flag.Bool("do-shard-replications", false, "copies the shard replication information")
 var doTablets = flag.Bool("do-tablets", false, "copies the tablet information")
 
 var deleteKeyspaceShards = flag.Bool("delete-keyspace-shards", false, "when copying shards, first removes the destination shards (will nuke the replication graph)")
@@ -49,6 +50,9 @@ func main() {
 	}
 	if *doShards {
 		topotools.CopyShards(fromTS, toTS, *deleteKeyspaceShards)
+	}
+	if *doShardReplications {
+		topotools.CopyShardReplications(fromTS, toTS)
 	}
 	if *doTablets {
 		topotools.CopyTablets(fromTS, toTS)
