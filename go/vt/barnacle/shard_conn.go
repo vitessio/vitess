@@ -44,26 +44,6 @@ func NewShardConn(blm *BalancerMap, tabletProtocol, keyspace, shard string, tabl
 	}
 }
 
-func (sdc *ShardConn) connect() error {
-	var lastError error
-	for i := 0; i < sdc.retryCount; i++ {
-		addr, err := sdc.balancer.Get()
-		if err != nil {
-			return err
-		}
-		conn, err := GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
-		if err != nil {
-			lastError = err
-			sdc.balancer.MarkDown(addr)
-			continue
-		}
-		sdc.address = addr
-		sdc.conn = conn
-		return nil
-	}
-	return fmt.Errorf("could not obtain connection to %s.%s.%s, last error: %v", sdc.keyspace, sdc.shard, sdc.tabletType, lastError)
-}
-
 // Close closes the underlying vttablet connection.
 func (sdc *ShardConn) Close() error {
 	if sdc.conn == nil {
