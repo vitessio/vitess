@@ -77,7 +77,18 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
 							rec.RecordError(err)
+							return
 						}
+					}
+
+					si, err := fromTS.GetShard(keyspace, shard)
+					if err != nil {
+						rec.RecordError(err)
+						return
+					}
+
+					if err := toTS.UpdateShard(si); err != nil {
+						rec.RecordError(err)
 					}
 				}(keyspace, shard)
 			}
