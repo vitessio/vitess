@@ -6,6 +6,7 @@ package barnacle
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -89,6 +90,13 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
+		if vtc.transactionId != 0 {
+			errstr := allErrors.Error().Error()
+			// We cannot recover from these errors
+			if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
+				vtc.rollback()
+			}
+		}
 		return nil, allErrors.Error()
 	}
 	return qr, nil
@@ -176,13 +184,16 @@ func (vtc *VTConn) Commit() (err error) {
 func (vtc *VTConn) Rollback() (err error) {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
+	vtc.rollback()
+	return nil
+}
 
+func (vtc *VTConn) rollback() {
 	for _, tConn := range vtc.transactionConns {
 		tConn.Rollback()
 	}
 	vtc.transactionConns = nil
 	vtc.transactionId = 0
-	return nil
 }
 
 func (vtc *VTConn) TransactionId() int64 {
