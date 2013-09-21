@@ -18,27 +18,29 @@ import (
 // of vttablets that belong to the same shard. ShardConn should
 // not be concurrently used across goroutines.
 type ShardConn struct {
-	keyspace   string
-	shard      string
-	tabletType topo.TabletType
-	retryDelay time.Duration
-	retryCount int
-	balancer   *Balancer
-	address    string
-	conn       *TabletConn
+	tabletProtocol string
+	keyspace       string
+	shard          string
+	tabletType     topo.TabletType
+	retryDelay     time.Duration
+	retryCount     int
+	balancer       *Balancer
+	address        string
+	conn           TabletConn
 }
 
 // NewShardConn creates a new ShardConn. It creates or reuses a Balancer from
 // the supplied BalancerMap. retryDelay is as specified by Balancer. retryCount
 // is the max number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(blm *BalancerMap, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
+func NewShardConn(blm *BalancerMap, tabletProtocol, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
 	return &ShardConn{
-		keyspace:   keyspace,
-		shard:      shard,
-		tabletType: tabletType,
-		retryDelay: retryDelay,
-		retryCount: retryCount,
-		balancer:   blm.Balancer(keyspace, shard, tabletType, retryDelay),
+		tabletProtocol: tabletProtocol,
+		keyspace:       keyspace,
+		shard:          shard,
+		tabletType:     tabletType,
+		retryDelay:     retryDelay,
+		retryCount:     retryCount,
+		balancer:       blm.Balancer(keyspace, shard, tabletType, retryDelay),
 	}
 }
 
@@ -49,7 +51,7 @@ func (sdc *ShardConn) connect() error {
 		if err != nil {
 			return err
 		}
-		conn, err := DialTablet(addr, sdc.keyspace, sdc.shard, "", "", false)
+		conn, err := GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
 		if err != nil {
 			lastError = err
 			sdc.balancer.MarkDown(addr)
@@ -166,5 +168,5 @@ func (sdc *ShardConn) Rollback() (err error) {
 }
 
 func (sdc *ShardConn) InTransaction() bool {
-	return sdc.conn != nil && sdc.conn.TransactionId != 0
+	return sdc.conn != nil && sdc.conn.InTransaction()
 }

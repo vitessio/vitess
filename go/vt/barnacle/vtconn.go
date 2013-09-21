@@ -22,6 +22,7 @@ type VTConn struct {
 	mu               sync.Mutex
 	Id               int64
 	balancerMap      *BalancerMap
+	tabletProtocol   string
 	tabletType       topo.TabletType
 	retryDelay       time.Duration
 	retryCount       int
@@ -31,14 +32,15 @@ type VTConn struct {
 	transactionConns []*ShardConn
 }
 
-func NewVTConn(blm *BalancerMap, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *VTConn {
+func NewVTConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *VTConn {
 	return &VTConn{
-		Id:          idGen.Add(1),
-		balancerMap: blm,
-		tabletType:  tabletType,
-		retryDelay:  retryDelay,
-		retryCount:  retryCount,
-		shardConns:  make(map[string]*ShardConn),
+		Id:             idGen.Add(1),
+		balancerMap:    blm,
+		tabletProtocol: tabletProtocol,
+		tabletType:     tabletType,
+		retryDelay:     retryDelay,
+		retryCount:     retryCount,
+		shardConns:     make(map[string]*ShardConn),
 	}
 }
 
@@ -209,7 +211,7 @@ func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
 	key := fmt.Sprintf("%s.%s.%s", keyspace, vtc.tabletType, shard)
 	sdc, ok := vtc.shardConns[key]
 	if !ok {
-		sdc = NewShardConn(vtc.balancerMap, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
+		sdc = NewShardConn(vtc.balancerMap, vtc.tabletProtocol, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
 		vtc.shardConns[key] = sdc
 	}
 	return sdc

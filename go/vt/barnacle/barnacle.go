@@ -22,21 +22,23 @@ var RpcBarnacle *Barnacle
 // Barnacle is the rpc interface to barnacle. Only one instance
 // can be created.
 type Barnacle struct {
-	balancerMap *BalancerMap
-	connections *pools.Numbered
-	retryDelay  time.Duration
-	retryCount  int
+	balancerMap    *BalancerMap
+	tabletProtocol string
+	connections    *pools.Numbered
+	retryDelay     time.Duration
+	retryCount     int
 }
 
-func Init(cell, portName string, retryDelay time.Duration, retryCount int) {
+func Init(cell, tabletProtocol, portName string, retryDelay time.Duration, retryCount int) {
 	if RpcBarnacle != nil {
 		log.Fatalf("Barnacle already initialized")
 	}
 	RpcBarnacle = &Barnacle{
-		balancerMap: NewBalancerMap(topo.GetServer(), cell, portName),
-		connections: pools.NewNumbered(),
-		retryDelay:  retryDelay,
-		retryCount:  retryCount,
+		balancerMap:    NewBalancerMap(topo.GetServer(), cell, portName),
+		tabletProtocol: tabletProtocol,
+		connections:    pools.NewNumbered(),
+		retryDelay:     retryDelay,
+		retryCount:     retryCount,
 	}
 	proto.RegisterAuthenticated(RpcBarnacle)
 }
@@ -44,7 +46,7 @@ func Init(cell, portName string, retryDelay time.Duration, retryCount int) {
 // GetSessionId is the first request sent by the client to begin a session. The returned
 // id should be used for all subsequent communications.
 func (bnc *Barnacle) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
-	vtconn := NewVTConn(bnc.balancerMap, sessionParams.TabletType, bnc.retryDelay, bnc.retryCount)
+	vtconn := NewVTConn(bnc.balancerMap, bnc.tabletProtocol, sessionParams.TabletType, bnc.retryDelay, bnc.retryCount)
 	sessionInfo.SessionId = vtconn.Id
 	bnc.connections.Register(vtconn.Id, vtconn)
 	return nil
