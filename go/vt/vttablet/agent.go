@@ -90,7 +90,7 @@ func InitAgent(
 			// existing connections. "false" indicateds that clients must
 			// re-resolve their endpoint before reconnecting.
 			if newTablet.Type == topo.TYPE_MASTER && oldTablet.Type != topo.TYPE_MASTER {
-				ts.DisallowQueries(false)
+				ts.DisallowQueries()
 			}
 			qrs := ts.LoadCustomRules()
 			if newTablet.KeyRange.IsPartial() {
@@ -109,7 +109,7 @@ func InitAgent(
 				ts.StartRowCacheInvalidation()
 			}
 		} else {
-			ts.DisallowQueries(false)
+			ts.DisallowQueries()
 			ts.StopRowCacheInvalidation()
 			mysqlctl.DisableUpdateStreamService()
 		}

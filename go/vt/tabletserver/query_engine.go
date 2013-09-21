@@ -121,7 +121,7 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []Schem
 	qe.activePool.Open(connFactory)
 }
 
-func (qe *QueryEngine) Close(forRestart bool) {
+func (qe *QueryEngine) Close() {
 	qe.activeTxPool.WaitForEmpty()
 	// Ensure all read locks are released (no more queries being served)
 	qe.mu.Lock()

@@ -429,7 +429,7 @@ primary key (name)
     # tests a failover switching serving to a different replica
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave2.tablet_alias, 'replica'])
     utils.run_vtctl(['ChangeSlaveType', shard_1_slave1.tablet_alias, 'spare'])
-    shard_1_slave2.wait_for_vttablet_state('OPEN')
+    shard_1_slave2.wait_for_vttablet_state('SERVING')
     shard_1_slave1.wait_for_vttablet_state('NOT_SERVING')
 
     # test data goes through again

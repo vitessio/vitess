@@ -180,7 +180,7 @@ func (rowCache *InvalidationProcessor) stopCache(reason string) {
 	rowCache.stopRowCacheInvalidation()
 	if IsCachePoolAvailable() {
 		log.Warningf("Disallowing Query Service as row-cache invalidator cannot run")
-		DisallowQueries(false)
+		DisallowQueries()
 	}
 }
 
