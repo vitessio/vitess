@@ -6,6 +6,7 @@ package barnacle
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -20,6 +21,7 @@ type ShardConn struct {
 	keyspace   string
 	shard      string
 	tabletType topo.TabletType
+	retryDelay time.Duration
 	retryCount int
 	balancer   *Balancer
 	address    string
@@ -34,6 +36,7 @@ func NewShardConn(blm *BalancerMap, keyspace, shard string, tabletType topo.Tabl
 		keyspace:   keyspace,
 		shard:      shard,
 		tabletType: tabletType,
+		retryDelay: retryDelay,
 		retryCount: retryCount,
 		balancer:   blm.Balancer(keyspace, shard, tabletType, retryDelay),
 	}
@@ -132,7 +135,13 @@ func (sdc *ShardConn) Begin() (err error) {
 				return err
 			}
 		}
-		err = sdc.conn.Begin()
+		for i := 0; i < sdc.retryCount; i++ {
+			err = sdc.conn.Begin()
+			if !strings.HasPrefix(err.Error(), "tx_pool_full") {
+				break
+			}
+			time.Sleep(sdc.retryDelay)
+		}
 		if sdc.mustReturn(err) {
 			return err
 		}

@@ -101,11 +101,11 @@ class TestNocache(framework.TestCase):
     try:
       self.env.execute("insert into vtocc_test values(4, null, null, null)")
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: DMLs")
+      self.assertContains(str(e), "not_in_tx: DMLs")
     else:
       self.fail("Did not receive exception")
     vend = self.env.debug_vars()
-    self.assertEqual(vstart.mget("Errors.Fail", 0)+1, vend.Errors.Fail)
+    self.assertEqual(vstart.mget("Errors.NotInTx", 0)+1, vend.Errors.NotInTx)
 
   def test_trailing_comment(self):
     vstart = self.env.debug_vars()
@@ -191,7 +191,7 @@ class TestNocache(framework.TestCase):
     try:
       self.env.conn.commit()
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Transaction")
+      self.assertContains(str(e), "not_in_tx: Transaction")
     else:
       self.fail("Did not receive exception")
     time.sleep(0.1)
@@ -295,7 +295,7 @@ class TestNocache(framework.TestCase):
     try:
       cu.execute("select 1 from dual", {})
     except dbexceptions.DatabaseError as e:
-      self.assertContains(str(e), "error: Transaction")
+      self.assertContains(str(e), "not_in_tx: Transaction")
     else:
       self.fail("Did not receive exception")
 
