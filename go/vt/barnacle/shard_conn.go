@@ -44,17 +44,6 @@ func NewShardConn(blm *BalancerMap, tabletProtocol, keyspace, shard string, tabl
 	}
 }
 
-// Close closes the underlying vttablet connection.
-func (sdc *ShardConn) Close() error {
-	if sdc.conn == nil {
-		return nil
-	}
-	err := sdc.conn.Close()
-	sdc.address = ""
-	sdc.conn = nil
-	return err
-}
-
 func (sdc *ShardConn) canRetry(err error) bool {
 	if err == nil {
 		return false
@@ -189,4 +178,15 @@ func (sdc *ShardConn) Rollback() (err error) {
 
 func (sdc *ShardConn) InTransaction() bool {
 	return sdc.conn != nil && sdc.conn.InTransaction()
+}
+
+// Close closes the underlying vttablet connection.
+func (sdc *ShardConn) Close() error {
+	if sdc.conn == nil {
+		return nil
+	}
+	err := sdc.conn.Close()
+	sdc.address = ""
+	sdc.conn = nil
+	return err
 }
