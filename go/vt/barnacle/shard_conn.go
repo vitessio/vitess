@@ -61,7 +61,7 @@ func (sdc *ShardConn) canRetry(err error) bool {
 		}
 	}
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
-	inTransaction := sdc.InTransaction()
+	inTransaction := (sdc.TransactionId() != 0)
 	sdc.balancer.MarkDown(sdc.address)
 	sdc.Close()
 	return !inTransaction
@@ -132,7 +132,7 @@ return_error:
 
 // Begin begins a transaction. The retry rules are the same.
 func (sdc *ShardConn) Begin() (err error) {
-	if sdc.InTransaction() {
+	if sdc.TransactionId() != 0 {
 		return sdc.wrapError(fmt.Errorf("cannot begin: already in transaction"))
 	}
 	for i := 0; i < sdc.retryCount; i++ {
@@ -162,7 +162,7 @@ func (sdc *ShardConn) Begin() (err error) {
 
 // Commit commits the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Commit() (err error) {
-	if !sdc.InTransaction() {
+	if sdc.TransactionId() == 0 {
 		return sdc.wrapError(fmt.Errorf("cannot commit: not in transaction"))
 	}
 	return sdc.wrapError(sdc.conn.Commit())
@@ -170,14 +170,17 @@ func (sdc *ShardConn) Commit() (err error) {
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Rollback() (err error) {
-	if !sdc.InTransaction() {
+	if sdc.TransactionId() == 0 {
 		return sdc.wrapError(fmt.Errorf("cannot rollback: not in transaction"))
 	}
 	return sdc.wrapError(sdc.conn.Rollback())
 }
 
-func (sdc *ShardConn) InTransaction() bool {
-	return sdc.conn != nil && sdc.conn.InTransaction()
+func (sdc *ShardConn) TransactionId() int64 {
+	if sdc.conn == nil {
+		return 0
+	}
+	return sdc.conn.TransactionId()
 }
 
 // Close closes the underlying vttablet connection.

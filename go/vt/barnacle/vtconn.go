@@ -45,38 +45,42 @@ func NewVTConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletTy
 }
 
 // Execute executes a non-streaming query on the specified shards.
-func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (qr *mproto.QueryResult, err error) {
+func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*mproto.QueryResult, error) {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
 
+	qr := new(mproto.QueryResult)
+	allErrors := new(concurrency.AllErrorRecorder)
 	switch len(shards) {
 	case 0:
 		return new(mproto.QueryResult), nil
 	case 1:
-		return vtc.execOnShard(query, bindVars, keyspace, shards[0])
-	}
-	qr = new(mproto.QueryResult)
-	results := make(chan *mproto.QueryResult, len(shards))
-	allErrors := new(concurrency.AllErrorRecorder)
-	var wg sync.WaitGroup
-	for shard := range unique(shards) {
-		wg.Add(1)
-		go func(shard string) {
-			defer wg.Done()
-			innerqr, err := vtc.execOnShard(query, bindVars, keyspace, shard)
-			if err != nil {
-				allErrors.RecordError(err)
-				return
-			}
-			results <- innerqr
-		}(shard)
-	}
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
-	for innerqr := range results {
-		appendResult(qr, innerqr)
+		// Fast-path for single shard execution
+		var err error
+		qr, err = vtc.execOnShard(query, bindVars, keyspace, shards[0])
+		allErrors.RecordError(err)
+	default:
+		results := make(chan *mproto.QueryResult, len(shards))
+		var wg sync.WaitGroup
+		for shard := range unique(shards) {
+			wg.Add(1)
+			go func(shard string) {
+				defer wg.Done()
+				innerqr, err := vtc.execOnShard(query, bindVars, keyspace, shard)
+				if err != nil {
+					allErrors.RecordError(err)
+					return
+				}
+				results <- innerqr
+			}(shard)
+		}
+		go func() {
+			wg.Wait()
+			close(results)
+		}()
+		for innerqr := range results {
+			appendResult(qr, innerqr)
+		}
 	}
 	if allErrors.HasErrors() {
 		if vtc.transactionId != 0 {
@@ -220,7 +224,7 @@ func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
 func (vtc *VTConn) prepConnection(keyspace, shard string) (*ShardConn, error) {
 	sdc := vtc.getConnection(keyspace, shard)
 	if vtc.transactionId != 0 {
-		if sdc.InTransaction() {
+		if sdc.TransactionId() != 0 {
 			return sdc, nil
 		}
 		if err := sdc.Begin(); err != nil {

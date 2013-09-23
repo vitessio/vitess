@@ -141,7 +141,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 
 	// conn error (in transaction)
 	resetSandbox()
-	sbc = &sandboxConn{mustFailConn: 1, inTransaction: true}
+	sbc = &sandboxConn{mustFailConn: 1, transactionId: 1}
 	testConns["0:1"] = sbc
 	err = f()
 	want = "error: conn, shard: (.0.), address: "
@@ -176,7 +176,7 @@ func TestShardConnBeginOther(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
-	testConns["0:1"] = &sandboxConn{inTransaction: true}
+	testConns["0:1"] = &sandboxConn{transactionId: 1}
 	// call Execute to cause connection to be opened
 	sdc.Execute("query", nil)
 	err := sdc.Begin()
@@ -220,7 +220,7 @@ func TestShardConnCommit(t *testing.T) {
 	}
 
 	// valid commit
-	testConns["0:1"] = &sandboxConn{inTransaction: true}
+	testConns["0:1"] = &sandboxConn{transactionId: 1}
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err = sdc.Commit()
@@ -234,7 +234,7 @@ func TestShardConnCommit(t *testing.T) {
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	sbc.mustFailServer = 1
-	sbc.inTransaction = true
+	sbc.transactionId = 1
 	err = sdc.Commit()
 	want = "error: err, shard: (.0.), address: 0:1"
 	if err == nil || err.Error() != want {
@@ -256,7 +256,7 @@ func TestShardConnRollback(t *testing.T) {
 	}
 
 	// valid rollback
-	testConns["0:1"] = &sandboxConn{inTransaction: true}
+	testConns["0:1"] = &sandboxConn{transactionId: 1}
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err = sdc.Rollback()
@@ -270,7 +270,7 @@ func TestShardConnRollback(t *testing.T) {
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	sbc.mustFailServer = 1
-	sbc.inTransaction = true
+	sbc.transactionId = 1
 	err = sdc.Rollback()
 	want = "error: err, shard: (.0.), address: 0:1"
 	if err == nil || err.Error() != want {

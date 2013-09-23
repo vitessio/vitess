@@ -60,38 +60,84 @@ func testVTConnGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResul
 
 	// two shards
 	resetSandbox()
+	sbc0 := &sandboxConn{mustFailServer: 1}
+	testConns["0:1"] = sbc0
 	sbc1 := &sandboxConn{mustFailServer: 1}
-	testConns["0:1"] = sbc1
-	sbc2 := &sandboxConn{mustFailServer: 1}
-	testConns["1:1"] = sbc2
+	testConns["1:1"] = sbc1
 	_, err = f([]string{"0", "1"})
 	want = "error: err, shard: (.0.), address: 0:1\nerror: err, shard: (.1.), address: 1:1"
 	if err == nil || err.Error() != want {
 		t.Errorf("\nwant\n%s\ngot\n%v", want, err)
 	}
+	if sbc0.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc0.ExecCount)
+	}
 	if sbc1.ExecCount != 1 {
 		t.Errorf("want 1, got %v", sbc1.ExecCount)
 	}
-	if sbc2.ExecCount != 1 {
-		t.Errorf("want 1, got %v", sbc2.ExecCount)
-	}
 
+	// no errors
 	resetSandbox()
+	sbc0 = &sandboxConn{}
+	testConns["0:1"] = sbc0
 	sbc1 = &sandboxConn{}
-	testConns["0:1"] = sbc1
-	sbc2 = &sandboxConn{}
-	testConns["1:1"] = sbc2
+	testConns["1:1"] = sbc1
 	qr, err = f([]string{"0", "1"})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
+	if sbc0.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc0.ExecCount)
+	}
 	if sbc1.ExecCount != 1 {
 		t.Errorf("want 1, got %v", sbc1.ExecCount)
 	}
-	if sbc2.ExecCount != 1 {
-		t.Errorf("want 1, got %v", sbc2.ExecCount)
-	}
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
+	}
+}
+
+func TestVTConnExecuteTx(t *testing.T) {
+	resetSandbox()
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	sbc0 := &sandboxConn{}
+	testConns["0:1"] = sbc0
+	sbc1 := &sandboxConn{mustFailTxPool: 1}
+	testConns["1:1"] = sbc1
+	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	// Instantiate actual connections by executing a query
+	vtc.Execute("query", nil, "", []string{"0", "1"})
+
+	for i := 0; i < 2; i++ {
+		vtc.Begin()
+		vtc.Execute("query", nil, "", []string{"0"})
+		// Shard 0 must be in transaction
+		if sbc0.TransactionId() == 0 {
+			t.Errorf("want non-zer, got 0")
+		}
+		if len(vtc.transactionConns) != 1 {
+			t.Errorf("want 2, got %d", len(vtc.transactionConns))
+		}
+
+		var want string
+		switch i {
+		case 0:
+			sbc1.mustFailTxPool = 3
+			want = "tx_pool_full: err, shard: (.1.), address: 1:1"
+		case 1:
+			sbc1.mustFailNotTx = 1
+			want = "not_in_tx: err, shard: (.1.), address: 1:1"
+		}
+		_, err := vtc.Execute("query1", nil, "", []string{"1"})
+		// all transactions must be rolled back
+		if err == nil || err.Error() != want {
+			t.Errorf("want %s, got %v", want, err)
+		}
+		if sbc0.TransactionId() != 0 {
+			t.Errorf("want 0, got %v", sbc0.TransactionId())
+		}
+		if len(vtc.transactionConns) != 0 {
+			t.Errorf("want 0, got %d", len(vtc.transactionConns))
+		}
 	}
 }
