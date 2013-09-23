@@ -51,7 +51,7 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 
 	switch len(shards) {
 	case 0:
-		return nil, nil
+		return new(mproto.QueryResult), nil
 	case 1:
 		return vtc.execOnShard(query, bindVars, keyspace, shards[0])
 	}
