@@ -1,0 +1,156 @@
+// Copyright 2012, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
+package barnacle
+
+import (
+	"fmt"
+
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/topo"
+)
+
+// sandbox_test.go provides a sandbox for unit testing Barnacle.
+
+func init() {
+	RegisterDialer("sandbox", sandboxDialer)
+}
+
+var (
+	// endPointCounter tracks how often GetEndPoints was called
+	endPointCounter int
+
+	// endPointMustFail specifies how often GetEndPoints must fail before succeeding
+	endPointMustFail int
+
+	// dialerCoun tracks how often sandboxDialer was called
+	dialCounter int
+
+	// dialMustFail specifies how often sandboxDialer must fail before succeeding
+	dialMustFail int
+)
+
+func resetSandbox() {
+	testConns = make(map[string]TabletConn)
+	endPointCounter = 0
+	dialCounter = 0
+	dialMustFail = 0
+}
+
+type sandboxTopo struct {
+}
+
+func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	endPointCounter++
+	if endPointMustFail > 0 {
+		endPointMustFail--
+		return nil, fmt.Errorf("topo error")
+	}
+	return &topo.EndPoints{Entries: []topo.EndPoint{
+		{Host: shard, NamedPortMap: map[string]int{"vt": 1}},
+	}}, nil
+}
+
+var testConns map[string]TabletConn
+
+func sandboxDialer(addr, keyspace, shard, username, password string, encrypted bool) (TabletConn, error) {
+	dialCounter++
+	if dialMustFail > 0 {
+		dialMustFail--
+		return nil, fmt.Errorf("conn error")
+	}
+	tconn := testConns[addr]
+	if tconn == nil {
+		panic(fmt.Sprintf("can't find conn %s", addr))
+	}
+	return tconn, nil
+}
+
+type sandboxConn struct {
+	mustFailRetry  int
+	mustFailFatal  int
+	mustFailServer int
+	mustFailConn   int
+	mustFailTxPool int
+	inTransaction  bool
+	ExecCount      int
+}
+
+func (sbc *sandboxConn) getError() error {
+	if sbc.mustFailRetry > 0 {
+		sbc.mustFailRetry--
+		return rpcplus.ServerError("retry: err")
+	}
+	if sbc.mustFailFatal > 0 {
+		sbc.mustFailFatal--
+		return rpcplus.ServerError("fatal: err")
+	}
+	if sbc.mustFailServer > 0 {
+		sbc.mustFailServer--
+		return rpcplus.ServerError("error: err")
+	}
+	if sbc.mustFailConn > 0 {
+		sbc.mustFailConn--
+		return fmt.Errorf("error: conn")
+	}
+	if sbc.mustFailTxPool > 0 {
+		sbc.mustFailTxPool--
+		return rpcplus.ServerError("tx_pool_full: conn")
+	}
+	return nil
+}
+
+func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
+	sbc.ExecCount++
+	if err := sbc.getError(); err != nil {
+		return nil, err
+	}
+	return singleRowResult, nil
+}
+
+func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
+	sbc.ExecCount++
+	ch := make(chan *mproto.QueryResult, 1)
+	ch <- singleRowResult
+	close(ch)
+	err := sbc.getError()
+	return ch, func() error { return err }
+}
+
+func (sbc *sandboxConn) Begin() error {
+	sbc.ExecCount++
+	return sbc.getError()
+}
+
+func (sbc *sandboxConn) Commit() error {
+	sbc.ExecCount++
+	return sbc.getError()
+}
+
+func (sbc *sandboxConn) Rollback() error {
+	sbc.ExecCount++
+	return sbc.getError()
+}
+
+func (sbc *sandboxConn) InTransaction() bool {
+	return sbc.inTransaction
+}
+
+func (sbc *sandboxConn) Close() error {
+	return nil
+}
+
+var singleRowResult = &mproto.QueryResult{
+	Fields: []mproto.Field{
+		{"id", 3},
+		{"value", 253}},
+	RowsAffected: 1,
+	InsertId:     0,
+	Rows: [][]sqltypes.Value{{
+		{sqltypes.Numeric("1")},
+		{sqltypes.String("foo")},
+	}},
+}

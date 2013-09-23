@@ -5,30 +5,15 @@
 package barnacle
 
 import (
-	"fmt"
 	"testing"
 	"time"
-
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
-var vtmap = map[string]int{
-	"vt": 1,
-}
-
-type SimpleTopoServ struct {
-}
-
-func (blm *SimpleTopoServ) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	return &topo.EndPoints{Entries: []topo.EndPoint{
-		{Host: "0", NamedPortMap: vtmap},
-		{Host: "1", NamedPortMap: vtmap},
-		{Host: "2", NamedPortMap: vtmap},
-	}}, nil
-}
+// This file uses the sandbox_test framework.
 
 func TestSimple(t *testing.T) {
-	blm := NewBalancerMap(new(SimpleTopoServ), "aa", "vt")
+	resetSandbox()
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	blc2 := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	if blc != blc2 {
@@ -48,7 +33,8 @@ func TestSimple(t *testing.T) {
 }
 
 func TestPortError(t *testing.T) {
-	blm := NewBalancerMap(new(SimpleTopoServ), "aa", "noport")
+	resetSandbox()
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "noport")
 	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	got, err := blc.Get()
 	if got != "" {
@@ -59,21 +45,16 @@ func TestPortError(t *testing.T) {
 	}
 }
 
-type ErrorTopoServ struct {
-}
-
-func (blm *ErrorTopoServ) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	return nil, fmt.Errorf("topo error")
-}
-
 func TestTopoError(t *testing.T) {
-	blm := NewBalancerMap(new(ErrorTopoServ), "aa", "vt")
-	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
+	resetSandbox()
+	endPointMustFail = 1
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	blc := blm.Balancer("test_keyspace", "", "master", 1*time.Second)
 	got, err := blc.Get()
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
 	}
-	if err.Error() != "topo error" {
+	if err == nil || err.Error() != "topo error" {
 		t.Errorf("want topo error, got %v", err)
 	}
 }

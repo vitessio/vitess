@@ -85,9 +85,9 @@ func AllowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []SchemaOverride,
 // DisallowQueries can take a long time to return (not indefinite) because
 // it has to wait for queries & transactions to be completed or killed,
 // and also for house keeping goroutines to be terminated.
-func DisallowQueries(forRestart bool) {
+func DisallowQueries() {
 	defer logError()
-	SqlQueryRpcService.disallowQueries(forRestart)
+	SqlQueryRpcService.disallowQueries()
 }
 
 // Reload the schema. If the query service is not running, nothing will happen

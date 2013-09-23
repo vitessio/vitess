@@ -129,7 +129,7 @@ func (axp *ActiveTxPool) Rollback(transactionId int64) {
 func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
 	v, err := axp.pool.Get(transactionId)
 	if err != nil {
-		panic(NewTabletError(FAIL, "Transaction %d: %v", transactionId, err))
+		panic(NewTabletError(NOT_IN_TX, "Transaction %d: %v", transactionId, err))
 	}
 	return v.(*TxConnection)
 }

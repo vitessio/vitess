@@ -121,7 +121,7 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []Schem
 	qe.activePool.Open(connFactory)
 }
 
-func (qe *QueryEngine) Close(forRestart bool) {
+func (qe *QueryEngine) Close() {
 	qe.activeTxPool.WaitForEmpty()
 	// Ensure all read locks are released (no more queries being served)
 	qe.mu.Lock()
@@ -272,7 +272,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		} else if plan.PlanId == sqlparser.PLAN_SET {
 			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
 		} else {
-			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))
+			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
 		}
 	} else {
 		switch plan.PlanId {
@@ -294,7 +294,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 			defer conn.Recycle()
 			reply = qe.execSet(logStats, conn, plan)
 		default:
-			panic(NewTabletError(FAIL, "DMLs not allowed outside of transactions"))
+			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
 		}
 	}
 	if plan.PlanId.IsSelect() {

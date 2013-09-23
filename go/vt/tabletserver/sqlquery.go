@@ -24,28 +24,25 @@ import (
 )
 
 // exclusive transitions can be executed without a lock
-// NOT_SERVING/CLOSED -> CONNECTING
-// CONNECTING -> ABORT
-// ABORT -> CLOSED (exclusive)
-// CONNECTING -> INITIALIZING -> OPEN/NOT_SERVING
-// OPEN -> SHUTTING_DOWN -> CLOSED
+// NOT_SERVING -> CONNECTING
+// CONNECTING -> ABORT -> NOT_SERVING
+// CONNECTING -> INITIALIZING -> SERVING/NOT_SERVING
+// SERVING -> SHUTTING_DOWN -> NOT_SERVING
 const (
 	NOT_SERVING = iota
-	CLOSED
 	CONNECTING
 	ABORT
 	INITIALIZING
-	OPEN
+	SERVING
 	SHUTTING_DOWN
 )
 
 var stateName = map[int64]string{
 	NOT_SERVING:   "NOT_SERVING",
-	CLOSED:        "CLOSED",
 	CONNECTING:    "CONNECTING",
 	ABORT:         "ABORT",
 	INITIALIZING:  "INITIALIZING",
-	OPEN:          "OPEN",
+	SERVING:       "SERVING",
 	SHUTTING_DOWN: "SHUTTING_DOWN",
 }
 
@@ -75,11 +72,10 @@ func NewSqlQuery(config Config) *SqlQuery {
 	sq.qe = NewQueryEngine(config)
 	sq.states = stats.NewStates("", []string{
 		stateName[NOT_SERVING],
-		stateName[CLOSED],
 		stateName[CONNECTING],
 		stateName[ABORT],
 		stateName[INITIALIZING],
-		stateName[OPEN],
+		stateName[SERVING],
 		stateName[SHUTTING_DOWN],
 	}, time.Now(), NOT_SERVING)
 	stats.PublishJSONFunc("Voltron", sq.statsJSON)
@@ -97,14 +93,14 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 	sq.statemu.Lock()
 	v := sq.state.Get()
 	switch v {
-	case CONNECTING, ABORT, OPEN:
+	case CONNECTING, ABORT, SERVING:
 		sq.statemu.Unlock()
 		log.Infof("Ignoring allowQueries request, current state: %v", v)
 		return
 	case INITIALIZING, SHUTTING_DOWN:
 		panic("unreachable")
 	}
-	// state is NOT_SERVING or CLOSED
+	// state is NOT_SERVING
 	sq.setState(CONNECTING)
 	sq.statemu.Unlock()
 
@@ -124,7 +120,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 		}
 		if sq.state.Get() == ABORT {
 			// Exclusive transition. No need to lock statemu.
-			sq.setState(CLOSED)
+			sq.setState(NOT_SERVING)
 			log.Infof("allowQueries aborting")
 			return
 		}
@@ -134,7 +130,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
 	if sq.state.Get() == ABORT {
-		sq.setState(CLOSED)
+		sq.setState(NOT_SERVING)
 		log.Infof("allowQueries aborting")
 		return
 	}
@@ -146,7 +142,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 			sq.setState(NOT_SERVING)
 			return
 		}
-		sq.setState(OPEN)
+		sq.setState(SERVING)
 	}()
 
 	sq.qe.Open(dbconfig, schemaOverrides, qrs)
@@ -155,63 +151,49 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 	log.Infof("Session id: %d", sq.sessionId)
 }
 
-func (sq *SqlQuery) disallowQueries(forRestart bool) {
+func (sq *SqlQuery) disallowQueries() {
 	sq.statemu.Lock()
 	defer sq.statemu.Unlock()
 	switch sq.state.Get() {
 	case CONNECTING:
 		sq.setState(ABORT)
 		return
-	case NOT_SERVING, CLOSED:
-		if forRestart {
-			sq.setState(CLOSED)
-		} else {
-			sq.setState(NOT_SERVING)
-		}
-		return
-	case ABORT:
+	case NOT_SERVING, ABORT:
 		return
 	case INITIALIZING, SHUTTING_DOWN:
 		panic("unreachable")
 	}
-	// state is OPEN
+	// state is SERVING
 	sq.setState(SHUTTING_DOWN)
 	defer func() {
-		if forRestart {
-			sq.setState(CLOSED)
-		} else {
-			sq.setState(NOT_SERVING)
-		}
+		sq.setState(NOT_SERVING)
 	}()
 
 	log.Infof("Stopping query service: %d", sq.sessionId)
-	sq.qe.Close(forRestart)
+	sq.qe.Close()
 	sq.sessionId = 0
 	sq.dbconfig = dbconfigs.DBConfig{}
 }
 
 // checkState checks if we can serve queries. If not, it causes an
 // error whose category is state dependent:
-// OPEN: Everything is allowed.
+// SERVING: Everything is allowed.
 // SHUTTING_DOWN:
 //   SELECT & BEGIN: RETRY errors
 //   DMLs & COMMITS: Allowed
-// CLOSED: RETRY for all.
-// NOT_SERVING: FATAL for all.
+// NOT_SERVING: RETRY for all.
 func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 	switch sq.state.Get() {
 	case NOT_SERVING:
-		panic(NewTabletError(FATAL, "not serving"))
-	case CLOSED:
-		panic(NewTabletError(RETRY, "unavailable"))
+		panic(NewTabletError(RETRY, "not serving"))
 	case CONNECTING, ABORT, INITIALIZING:
-		panic(NewTabletError(FATAL, "initalizing"))
+		panic(NewTabletError(RETRY, "initalizing"))
 	case SHUTTING_DOWN:
 		if !allowShutdown {
 			panic(NewTabletError(RETRY, "unavailable"))
 		}
 	}
-	// state is OPEN
+	// state is SERVING
 	if sessionId == 0 || sessionId != sq.sessionId {
 		panic(NewTabletError(RETRY, "Invalid session Id %v", sessionId))
 	}
@@ -224,7 +206,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	if sessionParams.Shard != sq.dbconfig.Shard {
 		return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
 	}
-	if sq.state.Get() != OPEN {
+	if sq.state.Get() != SERVING {
 		return NewTabletError(FAIL, "Query server is in %s state", stateName[sq.state.Get()])
 	}
 	sessionInfo.SessionId = sq.sessionId
@@ -276,14 +258,14 @@ func (sq *SqlQuery) CloseReserved(session *proto.Session, noOutput *string) (err
 }
 
 func (sq *SqlQuery) InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
-	if sq.state.Get() != OPEN {
+	if sq.state.Get() != SERVING {
 		return
 	}
 	sq.qe.InvalidateForDml(cacheInvalidate)
 }
 
 func (sq *SqlQuery) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	if sq.state.Get() != OPEN {
+	if sq.state.Get() != SERVING {
 		return
 	}
 	sq.qe.InvalidateForDDL(ddlInvalidate)
@@ -339,7 +321,7 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 	sq.checkState(query.SessionId, false)
 
 	sq.qe.StreamExecute(logStats, query, func(reply interface{}) error {
-		if sq.state.Get() != OPEN {
+		if sq.state.Get() != SERVING {
 			return NewTabletError(FAIL, "Query server is in %s state", stateName[sq.state.Get()])
 		}
 		return sendReply(reply)

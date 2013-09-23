@@ -66,7 +66,7 @@ func main() {
 	vttablet.HttpHandleSnapshots(mycnf, tabletAlias.Uid)
 	servenv.OnClose(func() {
 		time.Sleep(5 * time.Millisecond)
-		ts.DisallowQueries(true)
+		ts.DisallowQueries()
 		mysqlctl.DisableUpdateStreamService()
 		topo.CloseServers()
 		vttablet.CloseAgent()

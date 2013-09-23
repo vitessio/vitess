@@ -6,6 +6,7 @@ package barnacle
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ type VTConn struct {
 	mu               sync.Mutex
 	Id               int64
 	balancerMap      *BalancerMap
+	tabletProtocol   string
 	tabletType       topo.TabletType
 	retryDelay       time.Duration
 	retryCount       int
@@ -30,14 +32,15 @@ type VTConn struct {
 	transactionConns []*ShardConn
 }
 
-func NewVTConn(blm *BalancerMap, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *VTConn {
+func NewVTConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *VTConn {
 	return &VTConn{
-		Id:          idGen.Add(1),
-		balancerMap: blm,
-		tabletType:  tabletType,
-		retryDelay:  retryDelay,
-		retryCount:  retryCount,
-		shardConns:  make(map[string]*ShardConn),
+		Id:             idGen.Add(1),
+		balancerMap:    blm,
+		tabletProtocol: tabletProtocol,
+		tabletType:     tabletType,
+		retryDelay:     retryDelay,
+		retryCount:     retryCount,
+		shardConns:     make(map[string]*ShardConn),
 	}
 }
 
@@ -89,6 +92,13 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
+		if vtc.transactionId != 0 {
+			errstr := allErrors.Error().Error()
+			// We cannot recover from these errors
+			if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
+				vtc.rollback()
+			}
+		}
 		return nil, allErrors.Error()
 	}
 	return qr, nil
@@ -176,13 +186,16 @@ func (vtc *VTConn) Commit() (err error) {
 func (vtc *VTConn) Rollback() (err error) {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
+	vtc.rollback()
+	return nil
+}
 
+func (vtc *VTConn) rollback() {
 	for _, tConn := range vtc.transactionConns {
 		tConn.Rollback()
 	}
 	vtc.transactionConns = nil
 	vtc.transactionId = 0
-	return nil
 }
 
 func (vtc *VTConn) TransactionId() int64 {
@@ -198,7 +211,7 @@ func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
 	key := fmt.Sprintf("%s.%s.%s", keyspace, vtc.tabletType, shard)
 	sdc, ok := vtc.shardConns[key]
 	if !ok {
-		sdc = NewShardConn(vtc.balancerMap, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
+		sdc = NewShardConn(vtc.balancerMap, vtc.tabletProtocol, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
 		vtc.shardConns[key] = sdc
 	}
 	return sdc
