@@ -150,21 +150,6 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 
-	// txpool full
-	resetSandbox()
-	sbc = &sandboxConn{mustFailTxPool: 1}
-	testConns["0:1"] = sbc
-	err = f()
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	if dialCounter != 1 {
-		t.Errorf("want 1, got %v", dialCounter)
-	}
-	if sbc.ExecCount != 2 {
-		t.Errorf("want 2, got %v", sbc.ExecCount)
-	}
-
 	// no failures
 	resetSandbox()
 	sbc = &sandboxConn{}
@@ -181,7 +166,8 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	}
 }
 
-func TestShardConnBeginIntx(t *testing.T) {
+func TestShardConnBeginOther(t *testing.T) {
+	// already in transaction
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
@@ -192,9 +178,30 @@ func TestShardConnBeginIntx(t *testing.T) {
 	if err == nil || err.Error() != "cannot begin: already in transaction" {
 		t.Errorf("want cannot begin: already in transaction, got %v", err)
 	}
+
+	// tx_pool_full
+	resetSandbox()
+	sbc := &sandboxConn{mustFailTxPool: 1}
+	testConns["0:1"] = sbc
+	sdc = NewShardConn(blm, "sandbox", "", "0", "", 10*time.Millisecond, 3)
+	startTime := time.Now()
+	err = sdc.Begin()
+	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
+		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))
+	}
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if dialCounter != 1 {
+		t.Errorf("want 1, got %v", dialCounter)
+	}
+	if sbc.ExecCount != 2 {
+		t.Errorf("want 2, got %v", sbc.ExecCount)
+	}
 }
 
 func TestShardConnCommit(t *testing.T) {
+	// not in transaction
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testConns["0:1"] = &sandboxConn{}
@@ -205,6 +212,7 @@ func TestShardConnCommit(t *testing.T) {
 		t.Errorf("want cannot commit: not in transaction, got %v", err)
 	}
 
+	// valid commit
 	testConns["0:1"] = &sandboxConn{inTransaction: true}
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
@@ -213,6 +221,7 @@ func TestShardConnCommit(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 
+	// commit fail
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
@@ -226,6 +235,7 @@ func TestShardConnCommit(t *testing.T) {
 }
 
 func TestShardConnRollback(t *testing.T) {
+	// not in transaction
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testConns["0:1"] = &sandboxConn{}
@@ -236,6 +246,7 @@ func TestShardConnRollback(t *testing.T) {
 		t.Errorf("want cannot rollback: not in transaction, got %v", err)
 	}
 
+	// valid rollback
 	testConns["0:1"] = &sandboxConn{inTransaction: true}
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
@@ -244,6 +255,7 @@ func TestShardConnRollback(t *testing.T) {
 		t.Errorf("want nil, got %v", err)
 	}
 
+	// rollback fail
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
