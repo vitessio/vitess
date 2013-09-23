@@ -44,19 +44,6 @@ func NewVTConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletTy
 	}
 }
 
-// Close closes the underlying ShardConn connections.
-func (vtc *VTConn) Close() error {
-	if vtc.shardConns == nil {
-		return nil
-	}
-	for _, v := range vtc.shardConns {
-		v.Close()
-	}
-	vtc.shardConns = nil
-	vtc.balancerMap = nil
-	return nil
-}
-
 // Execute executes a non-streaming query on the specified shards.
 func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (qr *mproto.QueryResult, err error) {
 	vtc.mu.Lock()
@@ -74,7 +61,7 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 	var wg sync.WaitGroup
 	for shard := range unique(shards) {
 		wg.Add(1)
-		go func() {
+		go func(shard string) {
 			defer wg.Done()
 			innerqr, err := vtc.execOnShard(query, bindVars, keyspace, shard)
 			if err != nil {
@@ -82,7 +69,7 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 				return
 			}
 			results <- innerqr
-		}()
+		}(shard)
 	}
 	go func() {
 		wg.Wait()
@@ -117,7 +104,7 @@ func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, 
 	var wg sync.WaitGroup
 	for shard := range unique(shards) {
 		wg.Add(1)
-		go func() {
+		go func(shard string) {
 			defer wg.Done()
 			sr, errFunc := vtc.getConnection(keyspace, shard).StreamExecute(query, bindVars)
 			for qr := range sr {
@@ -127,7 +114,7 @@ func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, 
 			if err != nil {
 				allErrors.RecordError(err)
 			}
-		}()
+		}(shard)
 	}
 	go func() {
 		wg.Wait()
@@ -202,6 +189,19 @@ func (vtc *VTConn) TransactionId() int64 {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
 	return vtc.transactionId
+}
+
+// Close closes the underlying ShardConn connections.
+func (vtc *VTConn) Close() error {
+	if vtc.shardConns == nil {
+		return nil
+	}
+	for _, v := range vtc.shardConns {
+		v.Close()
+	}
+	vtc.shardConns = nil
+	vtc.balancerMap = nil
+	return nil
 }
 
 func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {

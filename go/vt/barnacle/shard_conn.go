@@ -76,7 +76,7 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr
 			var addr string
 			addr, err = sdc.balancer.Get()
 			if err != nil {
-				return nil, err
+				return nil, sdc.wrapError(err)
 			}
 			var conn TabletConn
 			conn, err = GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
@@ -91,9 +91,9 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr
 		if sdc.canRetry(err) {
 			continue
 		}
-		return qr, err
+		return qr, sdc.wrapError(err)
 	}
-	return qr, err
+	return qr, sdc.wrapError(err)
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
@@ -121,26 +121,26 @@ func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{
 		if sdc.canRetry(err) {
 			continue
 		}
-		return results, errFunc
+		return results, func() error { return sdc.wrapError(err) }
 	}
 
 return_error:
 	r := make(chan *mproto.QueryResult)
 	close(r)
-	return r, func() error { return err }
+	return r, func() error { return sdc.wrapError(err) }
 }
 
 // Begin begins a transaction. The retry rules are the same.
 func (sdc *ShardConn) Begin() (err error) {
 	if sdc.InTransaction() {
-		return fmt.Errorf("cannot begin: already in transaction")
+		return sdc.wrapError(fmt.Errorf("cannot begin: already in transaction"))
 	}
 	for i := 0; i < sdc.retryCount; i++ {
 		if sdc.conn == nil {
 			var addr string
 			addr, err = sdc.balancer.Get()
 			if err != nil {
-				return err
+				return sdc.wrapError(err)
 			}
 			var conn TabletConn
 			conn, err = GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
@@ -155,25 +155,25 @@ func (sdc *ShardConn) Begin() (err error) {
 		if sdc.canRetry(err) {
 			continue
 		}
-		return err
+		return sdc.wrapError(err)
 	}
-	return err
+	return sdc.wrapError(err)
 }
 
 // Commit commits the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Commit() (err error) {
 	if !sdc.InTransaction() {
-		return fmt.Errorf("cannot commit: not in transaction")
+		return sdc.wrapError(fmt.Errorf("cannot commit: not in transaction"))
 	}
-	return sdc.conn.Commit()
+	return sdc.wrapError(sdc.conn.Commit())
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (sdc *ShardConn) Rollback() (err error) {
 	if !sdc.InTransaction() {
-		return fmt.Errorf("cannot rollback: not in transaction")
+		return sdc.wrapError(fmt.Errorf("cannot rollback: not in transaction"))
 	}
-	return sdc.conn.Rollback()
+	return sdc.wrapError(sdc.conn.Rollback())
 }
 
 func (sdc *ShardConn) InTransaction() bool {
@@ -188,5 +188,14 @@ func (sdc *ShardConn) Close() error {
 	err := sdc.conn.Close()
 	sdc.address = ""
 	sdc.conn = nil
-	return err
+	return sdc.wrapError(err)
+}
+
+func (sdc *ShardConn) wrapError(in error) (wrapped error) {
+	if in == nil {
+		return nil
+	}
+	return fmt.Errorf(
+		"%v, shard: (%s.%s.%s), address: %s",
+		in, sdc.keyspace, sdc.shard, sdc.tabletType, sdc.address)
 }
