@@ -5,6 +5,7 @@
 package test
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -66,7 +67,10 @@ func CheckActions(t *testing.T, ts topo.Server) {
 	done := make(chan struct{}, 1)
 	wg.Add(1)
 	go ts.ActionEventLoop(tabletAlias, func(ap, data string) error {
-		if ap != actionPath {
+		// the actionPath sent back to the action processor
+		// is the exact one we have in normal cases,
+		// but for the tee, we add extra information.
+		if ap != actionPath && !strings.HasSuffix(ap, actionPath) {
 			t.Errorf("Bad action path: %v", ap)
 		}
 		if data != "contents1" {

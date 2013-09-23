@@ -388,6 +388,10 @@ func (ti *TabletInfo) ReplicationPath() string {
 	return tabletReplicationPath(ti.Tablet)
 }
 
+func (ti *TabletInfo) Version() int64 {
+	return ti.version
+}
+
 func tabletReplicationPath(tablet *Tablet) string {
 	leaf := TabletAlias{tablet.Cell, tablet.Uid}.String()
 	if tablet.Parent.Uid == NO_TABLET {
