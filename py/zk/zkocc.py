@@ -268,7 +268,14 @@ class FakeZkOccConnection(object):
       data = self.get(keyspace_path)['Data']
       if not data:
         raise ZkOccError("FakeZkOccConnection: empty keyspace: " + keyspace)
-      return json.loads(data)
+      result = json.loads(data)
+      # for convenience, we store the KeyRange as hex, but we need to
+      # decode it here, as BSON RPC sends it as binary.
+      if 'Shards' in result:
+        for shard in result['Shards']:
+          shard['KeyRange']['Start'] = shard['KeyRange']['Start'].decode('hex')
+          shard['KeyRange']['End'] = shard['KeyRange']['End'].decode('hex')
+      return result
     except Exception as e:
       raise ZkOccError('FakeZkOccConnection: invalid keyspace', keyspace, e)
 
