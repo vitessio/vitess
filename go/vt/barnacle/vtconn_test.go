@@ -115,8 +115,8 @@ func TestVTConnExecuteTx(t *testing.T) {
 		if sbc0.TransactionId() == 0 {
 			t.Errorf("want non-zer, got 0")
 		}
-		if len(vtc.transactionConns) != 1 {
-			t.Errorf("want 2, got %d", len(vtc.transactionConns))
+		if len(vtc.commitOrder) != 1 {
+			t.Errorf("want 2, got %d", len(vtc.commitOrder))
 		}
 
 		var want string
@@ -136,8 +136,8 @@ func TestVTConnExecuteTx(t *testing.T) {
 		if sbc0.TransactionId() != 0 {
 			t.Errorf("want 0, got %v", sbc0.TransactionId())
 		}
-		if len(vtc.transactionConns) != 0 {
-			t.Errorf("want 0, got %d", len(vtc.transactionConns))
+		if len(vtc.commitOrder) != 0 {
+			t.Errorf("want 0, got %d", len(vtc.commitOrder))
 		}
 	}
 }

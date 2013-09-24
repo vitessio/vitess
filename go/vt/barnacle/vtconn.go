@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -19,17 +20,20 @@ import (
 var idGen sync2.AtomicInt64
 
 type VTConn struct {
-	mu               sync.Mutex
-	Id               int64
-	balancerMap      *BalancerMap
-	tabletProtocol   string
-	tabletType       topo.TabletType
-	retryDelay       time.Duration
-	retryCount       int
-	shardConns       map[string]*ShardConn
-	transactionId    int64
-	connsMu          sync.Mutex
-	transactionConns []*ShardConn
+	mu             sync.Mutex
+	Id             int64
+	balancerMap    *BalancerMap
+	tabletProtocol string
+	tabletType     topo.TabletType
+	retryDelay     time.Duration
+	retryCount     int
+	shardConns     map[string]*ShardConn
+
+	// Transaction tracking vars
+	transactionId  int64
+	connsMu        sync.Mutex
+	transactionIds map[*ShardConn]int64
+	commitOrder    []*ShardConn
 }
 
 func NewVTConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *VTConn {
@@ -110,7 +114,8 @@ func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, 
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			sr, errFunc := vtc.getConnection(keyspace, shard).StreamExecute(query, bindVars)
+			sdc, _ := vtc.getConnection(keyspace, shard)
+			sr, errFunc := sdc.StreamExecute(query, bindVars)
 			for qr := range sr {
 				results <- qr
 			}
@@ -147,6 +152,7 @@ func (vtc *VTConn) Begin() (txid int64, err error) {
 		return 0, fmt.Errorf("cannot begin: already in a transaction")
 	}
 	vtc.transactionId = idGen.Add(1)
+	vtc.transactionIds = make(map[*ShardConn]int64)
 	return vtc.transactionId, nil
 }
 
@@ -159,7 +165,7 @@ func (vtc *VTConn) Commit() (err error) {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
 	committing := true
-	for _, tConn := range vtc.transactionConns {
+	for _, tConn := range vtc.commitOrder {
 		if !committing {
 			tConn.Rollback()
 			continue
@@ -168,7 +174,8 @@ func (vtc *VTConn) Commit() (err error) {
 			committing = false
 		}
 	}
-	vtc.transactionConns = nil
+	vtc.transactionIds = nil
+	vtc.commitOrder = nil
 	vtc.transactionId = 0
 	return err
 }
@@ -182,10 +189,11 @@ func (vtc *VTConn) Rollback() (err error) {
 }
 
 func (vtc *VTConn) rollback() {
-	for _, tConn := range vtc.transactionConns {
+	for _, tConn := range vtc.commitOrder {
 		tConn.Rollback()
 	}
-	vtc.transactionConns = nil
+	vtc.transactionIds = nil
+	vtc.commitOrder = nil
 	vtc.transactionId = 0
 }
 
@@ -197,6 +205,8 @@ func (vtc *VTConn) TransactionId() int64 {
 
 // Close closes the underlying ShardConn connections.
 func (vtc *VTConn) Close() error {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
 	if vtc.shardConns == nil {
 		return nil
 	}
@@ -208,7 +218,9 @@ func (vtc *VTConn) Close() error {
 	return nil
 }
 
-func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
+// getConnection can fail only if we're in a transaction. Otherwise, it should
+// always succeed.
+func (vtc *VTConn) getConnection(keyspace, shard string) (*ShardConn, error) {
 	vtc.connsMu.Lock()
 	defer vtc.connsMu.Unlock()
 
@@ -218,25 +230,31 @@ func (vtc *VTConn) getConnection(keyspace, shard string) *ShardConn {
 		sdc = NewShardConn(vtc.balancerMap, vtc.tabletProtocol, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
 		vtc.shardConns[key] = sdc
 	}
-	return sdc
-}
-
-func (vtc *VTConn) prepConnection(keyspace, shard string) (*ShardConn, error) {
-	sdc := vtc.getConnection(keyspace, shard)
 	if vtc.transactionId != 0 {
-		if sdc.TransactionId() != 0 {
+		if txid := sdc.TransactionId(); txid != 0 {
+			if txid != vtc.transactionIds[sdc] {
+				// This error will cause the transaction to abort.
+				return nil, sdc.WrapError(fmt.Errorf("not_in_tx: connection is in a different transaction"))
+			}
 			return sdc, nil
 		}
 		if err := sdc.Begin(); err != nil {
 			return nil, err
 		}
-		vtc.transactionConns = append(vtc.transactionConns, sdc)
+		vtc.transactionIds[sdc] = sdc.TransactionId()
+		vtc.commitOrder = append(vtc.commitOrder, sdc)
+		return sdc, nil
+	}
+	// This check is a failsafe. Should never happen.
+	if sdc.TransactionId() != 0 {
+		log.Warningf("Unexpected: connection %#v is in transaction", sdc)
+		sdc.Rollback()
 	}
 	return sdc, nil
 }
 
 func (vtc *VTConn) execOnShard(query string, bindVars map[string]interface{}, keyspace string, shard string) (qr *mproto.QueryResult, err error) {
-	sdc, err := vtc.prepConnection(keyspace, shard)
+	sdc, err := vtc.getConnection(keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
