@@ -58,14 +58,15 @@ func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
 		lockSecond = primary
 	}
 	return &Tee{
-		primary:           primary,
-		secondary:         secondary,
-		readFrom:          primary,
-		readFromSecond:    secondary,
-		lockFirst:         lockFirst,
-		lockSecond:        lockSecond,
-		keyspaceLockPaths: make(map[string]string),
-		shardLockPaths:    make(map[string]string),
+		primary:              primary,
+		secondary:            secondary,
+		readFrom:             primary,
+		readFromSecond:       secondary,
+		lockFirst:            lockFirst,
+		lockSecond:           lockSecond,
+		tabletVersionMapping: make(map[topo.TabletAlias]tabletVersionMapping),
+		keyspaceLockPaths:    make(map[string]string),
+		shardLockPaths:       make(map[string]string),
 	}
 }
 
