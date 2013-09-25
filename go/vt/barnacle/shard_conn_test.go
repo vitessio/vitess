@@ -151,9 +151,12 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	if dialCounter != 1 {
 		t.Errorf("want 1, got %v", dialCounter)
 	}
-	// Rollback before Close. So, count is 2.
 	if sbc.ExecCount != 2 {
 		t.Errorf("want 2, got %v", sbc.ExecCount)
+	}
+	// Ensure one of those ExecCounts was a Rollback
+	if sbc.RollbackCount != 1 {
+		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 
 	// no failures

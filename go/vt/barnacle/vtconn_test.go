@@ -77,6 +77,16 @@ func testVTConnGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResul
 		t.Errorf("want 1, got %v", sbc1.ExecCount)
 	}
 
+	// duplicate shards
+	resetSandbox()
+	sbc = &sandboxConn{}
+	testConns["0:1"] = sbc
+	qr, err = f([]string{"0", "0"})
+	// Should result in only one execution
+	if sbc.ExecCount != 1 {
+		t.Errorf("want 1, got %v", sbc.ExecCount)
+	}
+
 	// no errors
 	resetSandbox()
 	sbc0 = &sandboxConn{}
@@ -95,6 +105,9 @@ func testVTConnGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResul
 	}
 	if qr.RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qr.RowsAffected)
+	}
+	if len(qr.Rows) != 2 {
+		t.Errorf("want 2, got %v", len(qr.Rows))
 	}
 }
 
@@ -200,5 +213,93 @@ func TestVTConnStreamExecuteSendError(t *testing.T) {
 	want := "send error"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
+	}
+}
+
+func TestVTConnBeginFail(t *testing.T) {
+	resetSandbox()
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	sbc := &sandboxConn{}
+	testConns["0:1"] = sbc
+	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	vtc.Begin()
+	_, err := vtc.Begin()
+	want := "cannot begin: already in a transaction"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
+	}
+}
+
+func TestVTConnCommitSuccess(t *testing.T) {
+	resetSandbox()
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	sbc0 := &sandboxConn{}
+	testConns["0:1"] = sbc0
+	sbc1 := &sandboxConn{mustFailTxPool: 1}
+	testConns["1:1"] = sbc1
+	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+
+	vtc.Begin()
+	// Sequence the executes to ensure commit order
+	vtc.Execute("query1", nil, "", []string{"0"})
+	vtc.Execute("query1", nil, "", []string{"1"})
+	sbc0.mustFailServer = 1
+	vtc.Commit()
+	if sbc0.TransactionId() != 0 {
+		t.Errorf("want 0, got %d", sbc0.TransactionId())
+	}
+	if sbc1.TransactionId() != 0 {
+		t.Errorf("want 0, got %d", sbc1.TransactionId())
+	}
+	if sbc0.CommitCount != 1 {
+		t.Errorf("want 1, got %d", sbc0.CommitCount)
+	}
+	if sbc1.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.RollbackCount)
+	}
+}
+
+func TestVTConnCommitFail(t *testing.T) {
+	resetSandbox()
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	sbc0 := &sandboxConn{}
+	testConns["0:1"] = sbc0
+	sbc1 := &sandboxConn{mustFailTxPool: 1}
+	testConns["1:1"] = sbc1
+	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+
+	vtc.Begin()
+	vtc.Execute("query1", nil, "", []string{"0", "1"})
+	if sbc0.TransactionId() == 0 {
+		t.Errorf("want non-zero, got 0")
+	}
+	if sbc1.TransactionId() == 0 {
+		t.Errorf("want non-zero, got 0")
+	}
+	vtc.Commit()
+	if sbc0.TransactionId() != 0 {
+		t.Errorf("want 0, got %d", sbc0.TransactionId())
+	}
+	if sbc1.TransactionId() != 0 {
+		t.Errorf("want 0, got %d", sbc1.TransactionId())
+	}
+	if sbc0.CommitCount != 1 {
+		t.Errorf("want 1, got %d", sbc0.CommitCount)
+	}
+	if sbc1.CommitCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.CommitCount)
+	}
+}
+
+func TestVTConnClose(t *testing.T) {
+	resetSandbox()
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	sbc := &sandboxConn{}
+	testConns["0:1"] = sbc
+	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	vtc.Execute("query1", nil, "", []string{"0"})
+	vtc.Close()
+	if sbc.CloseCount != 1 {
+		t.Errorf("want 1, got %d", sbc.CommitCount)
 	}
 }

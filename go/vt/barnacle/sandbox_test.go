@@ -81,8 +81,13 @@ type sandboxConn struct {
 	mustFailTxPool int
 	mustFailNotTx  int
 
-	// ExecCount is auto-incremented on calls to sandboxConn
-	ExecCount int
+	// These Count vars report how often the corresponding
+	// functions were called.
+	ExecCount     int
+	BeginCount    int
+	CommitCount   int
+	RollbackCount int
+	CloseCount    int
 
 	// TransactionId is auto-generated on Begin
 	transactionId int64
@@ -135,6 +140,7 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 
 func (sbc *sandboxConn) Begin() error {
 	sbc.ExecCount++
+	sbc.BeginCount++
 	err := sbc.getError()
 	if err == nil {
 		sbc.transactionId = transactionId.Add(1)
@@ -144,12 +150,14 @@ func (sbc *sandboxConn) Begin() error {
 
 func (sbc *sandboxConn) Commit() error {
 	sbc.ExecCount++
+	sbc.CommitCount++
 	sbc.transactionId = 0
 	return sbc.getError()
 }
 
 func (sbc *sandboxConn) Rollback() error {
 	sbc.ExecCount++
+	sbc.RollbackCount++
 	sbc.transactionId = 0
 	return sbc.getError()
 }
@@ -158,7 +166,9 @@ func (sbc *sandboxConn) TransactionId() int64 {
 	return sbc.transactionId
 }
 
+// Close does not change ExecCount
 func (sbc *sandboxConn) Close() error {
+	sbc.CloseCount++
 	return nil
 }
 
