@@ -144,16 +144,16 @@ func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, 
 }
 
 // Begin begins a transaction. The retry rules are the same.
-func (vtc *VTConn) Begin() (txid int64, err error) {
+func (vtc *VTConn) Begin() error {
 	vtc.mu.Lock()
 	defer vtc.mu.Unlock()
 
 	if vtc.transactionId != 0 {
-		return 0, fmt.Errorf("cannot begin: already in a transaction")
+		return fmt.Errorf("cannot begin: already in a transaction")
 	}
 	vtc.transactionId = idGen.Add(1)
 	vtc.transactionIds = make(map[*ShardConn]int64)
-	return vtc.transactionId, nil
+	return nil
 }
 
 // Commit commits the current transaction. There are no retries on this operation.

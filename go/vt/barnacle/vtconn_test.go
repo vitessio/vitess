@@ -223,7 +223,7 @@ func TestVTConnBeginFail(t *testing.T) {
 	testConns["0:1"] = sbc
 	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
 	vtc.Begin()
-	_, err := vtc.Begin()
+	err := vtc.Begin()
 	want := "cannot begin: already in a transaction"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
