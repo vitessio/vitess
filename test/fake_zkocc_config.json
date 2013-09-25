@@ -3,8 +3,8 @@
     "Shards": [
       {
         "KeyRange": {
-          "Start": "",
-          "End": ""
+          "Start": "C0",
+          "End": "D0"
         },
         "AddrsByType": null,
         "ReadOnly": false

@@ -336,7 +336,7 @@ class TestZkocc(unittest.TestCase):
     self.assertEqual({
         'Shards': [{
             'AddrsByType': None,
-            'KeyRange': {'End': '', 'Start': ''},
+            'KeyRange': {'End': '\xd0', 'Start': '\xc0'},
             'ReadOnly': False}],
         'TabletTypes': ['rdonly', 'replica', 'master']},
                      keyspace, "keyspace reading is wrong")
