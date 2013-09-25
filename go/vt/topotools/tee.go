@@ -204,9 +204,37 @@ func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (ne
 		delete(tee.tabletVersionMapping, tablet.Alias())
 	}
 	tee.mu.Unlock()
-	if _, err := tee.secondary.UpdateTablet(tablet, existingVersion); err != nil {
+	if newVersion2, serr := tee.secondary.UpdateTablet(tablet, existingVersion); serr != nil {
 		// not critical enough to fail
-		log.Warningf("secondary.UpdateTablet(%v) failed: %v", tablet.Alias(), err)
+		if serr == topo.ErrNoNode {
+			// the tablet doesn't exist on the secondary, let's
+			// just create it
+			if serr = tee.secondary.CreateTablet(tablet.Tablet); serr != nil {
+				log.Warningf("secondary.CreateTablet(%v) failed (after UpdateTablet returned ErrNoNode): %v", tablet.Alias(), serr)
+			} else {
+				log.Infof("secondary.UpdateTablet(%v) failed with ErrNoNode, CreateTablet then worked.", tablet.Alias())
+				ti, gerr := tee.secondary.GetTablet(tablet.Alias())
+				if gerr != nil {
+					log.Warningf("Failed to re-read tablet(%v) after creating it on secondary: %v", tablet.Alias(), gerr)
+				} else {
+					tee.mu.Lock()
+					tee.tabletVersionMapping[tablet.Alias()] = tabletVersionMapping{
+						readFromVersion:       newVersion,
+						readFromSecondVersion: ti.Version(),
+					}
+					tee.mu.Unlock()
+				}
+			}
+		} else {
+			log.Warningf("secondary.UpdateTablet(%v) failed: %v", tablet.Alias(), serr)
+		}
+	} else {
+		tee.mu.Lock()
+		tee.tabletVersionMapping[tablet.Alias()] = tabletVersionMapping{
+			readFromVersion:       newVersion,
+			readFromSecondVersion: newVersion2,
+		}
+		tee.mu.Unlock()
 	}
 	return
 }
