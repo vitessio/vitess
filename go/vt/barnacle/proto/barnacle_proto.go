@@ -13,34 +13,29 @@ import (
 
 // Barcacle defines the interface for tbe rpc service.
 type Barnacle interface {
-	GetSessionId(sessionParams *SessionParams, sessionInfo *SessionInfo) error
+	GetSessionId(sessionParams *SessionParams, session *Session) error
 	Execute(context *rpcproto.Context, query *Query, reply *mproto.QueryResult) error
+	StreamExecute(context *rpcproto.Context, query *Query, sendReply func(interface{}) error) error
+	Begin(context *rpcproto.Context, session *Session, noOutput *string) error
+	Commit(context *rpcproto.Context, session *Session, noOutput *string) error
+	Rollback(context *rpcproto.Context, session *Session, noOutput *string) error
+	CloseSession(context *rpcproto.Context, session *Session, noOutput *string) error
 }
 
 type SessionParams struct {
 	TabletType topo.TabletType
 }
 
-type SessionInfo struct {
+type Session struct {
 	SessionId int64
 }
 
 type Query struct {
 	Sql           string
 	BindVariables map[string]interface{}
-	TransactionId int64
 	SessionId     int64
 	Keyspace      string
 	Shards        []string
-}
-
-type Session struct {
-	TransactionId int64
-	SessionId     int64
-}
-
-type TransactionInfo struct {
-	TransactionId int64
 }
 
 // RegisterAuthenticated registers the server.

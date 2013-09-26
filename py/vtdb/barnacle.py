@@ -48,7 +48,7 @@ def convert_exception(exc, *args):
 # This is shard-unaware and only handles the most basic communication.
 # If something goes wrong, this object should be thrown away and a new one instantiated.
 class TabletConnection(object):
-  transaction_id = 0
+  in_transaction = False
   session_id = 0
   tablet_type = None
   cursorclass = cursor.TabletCursor
@@ -81,7 +81,7 @@ class TabletConnection(object):
       raise convert_exception(e, str(self))
 
   def close(self):
-    self.transaction_id = 0
+    self.in_transaction = False
     self.session_id = 0
     self.client.close()
 
@@ -89,46 +89,43 @@ class TabletConnection(object):
     return self.client.is_closed()
 
   def _make_req(self):
-    return {'TransactionId': self.transaction_id,
-            'SessionId': self.session_id,
+    return {'SessionId': self.session_id,
             'Keyspace': self.keyspace,
             'Shards': [self.shard]}
 
   def begin(self):
-    if self.transaction_id:
+    if self.in_transaction:
       raise dbexceptions.NotSupportedError('Cannot begin: Already in a transaction')
     req = self._make_req()
     try:
       response = self.client.call('Barnacle.Begin', req)
-      self.transaction_id = response.reply['TransactionId']
+      self.in_transaction = True
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def commit(self):
-    if not self.transaction_id:
+    if not self.in_transaction:
       return
 
     req = self._make_req()
-    # transaction_id has to be reset irrespective of outcome.
-    self.transaction_id = 0
+    # in_transaction has to be reset irrespective of outcome.
+    self.in_transaction = False
 
     try:
       response = self.client.call('Barnacle.Commit', req)
-      return response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def rollback(self):
-    if not self.transaction_id:
+    if not self.in_transaction:
       return
 
     req = self._make_req()
-    # transaction_id has to be reset irrespective of outcome.
-    self.transaction_id = 0
+    # in_transaction has to be reset irrespective of outcome.
+    self.in_transaction = False
 
     try:
       response = self.client.call('Barnacle.Rollback', req)
-      return response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 

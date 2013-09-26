@@ -14,7 +14,6 @@ import (
 	"github.com/youtube/vitess/go/pools"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/barnacle/proto"
-	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var RpcBarnacle *Barnacle
@@ -29,12 +28,12 @@ type Barnacle struct {
 	retryCount     int
 }
 
-func Init(cell, tabletProtocol, portName string, retryDelay time.Duration, retryCount int) {
+func Init(blm *BalancerMap, tabletProtocol string, retryDelay time.Duration, retryCount int) {
 	if RpcBarnacle != nil {
 		log.Fatalf("Barnacle already initialized")
 	}
 	RpcBarnacle = &Barnacle{
-		balancerMap:    NewBalancerMap(topo.GetServer(), cell, portName),
+		balancerMap:    blm,
 		tabletProtocol: tabletProtocol,
 		connections:    pools.NewNumbered(),
 		retryDelay:     retryDelay,
@@ -45,9 +44,9 @@ func Init(cell, tabletProtocol, portName string, retryDelay time.Duration, retry
 
 // GetSessionId is the first request sent by the client to begin a session. The returned
 // id should be used for all subsequent communications.
-func (bnc *Barnacle) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
+func (bnc *Barnacle) GetSessionId(sessionParams *proto.SessionParams, session *proto.Session) error {
 	vtconn := NewVTConn(bnc.balancerMap, bnc.tabletProtocol, sessionParams.TabletType, bnc.retryDelay, bnc.retryCount)
-	sessionInfo.SessionId = vtconn.Id
+	session.SessionId = vtconn.Id
 	bnc.connections.Register(vtconn.Id, vtconn)
 	return nil
 }
@@ -77,14 +76,13 @@ func (bnc *Barnacle) StreamExecute(context *rpcproto.Context, query *proto.Query
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (bnc *Barnacle) Begin(context *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) error {
+func (bnc *Barnacle) Begin(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
 	vtconn, err := bnc.connections.Get(session.SessionId)
 	if err != nil {
 		return err
 	}
 	defer bnc.connections.Put(session.SessionId)
-	txInfo.TransactionId, err = vtconn.(*VTConn).Begin()
-	return err
+	return vtconn.(*VTConn).Begin()
 }
 
 // Commit commits a transaction.

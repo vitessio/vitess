@@ -10,6 +10,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -31,6 +32,9 @@ var (
 
 	// dialMustFail specifies how often sandboxDialer must fail before succeeding
 	dialMustFail int
+
+	// transaction id generator
+	transactionId sync2.AtomicInt64
 )
 
 func resetSandbox() {
@@ -75,8 +79,18 @@ type sandboxConn struct {
 	mustFailServer int
 	mustFailConn   int
 	mustFailTxPool int
-	inTransaction  bool
-	ExecCount      int
+	mustFailNotTx  int
+
+	// These Count vars report how often the corresponding
+	// functions were called.
+	ExecCount     int
+	BeginCount    int
+	CommitCount   int
+	RollbackCount int
+	CloseCount    int
+
+	// TransactionId is auto-generated on Begin
+	transactionId int64
 }
 
 func (sbc *sandboxConn) getError() error {
@@ -98,7 +112,11 @@ func (sbc *sandboxConn) getError() error {
 	}
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
-		return rpcplus.ServerError("tx_pool_full: conn")
+		return rpcplus.ServerError("tx_pool_full: err")
+	}
+	if sbc.mustFailNotTx > 0 {
+		sbc.mustFailNotTx--
+		return rpcplus.ServerError("not_in_tx: err")
 	}
 	return nil
 }
@@ -122,24 +140,35 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 
 func (sbc *sandboxConn) Begin() error {
 	sbc.ExecCount++
-	return sbc.getError()
+	sbc.BeginCount++
+	err := sbc.getError()
+	if err == nil {
+		sbc.transactionId = transactionId.Add(1)
+	}
+	return err
 }
 
 func (sbc *sandboxConn) Commit() error {
 	sbc.ExecCount++
+	sbc.CommitCount++
+	sbc.transactionId = 0
 	return sbc.getError()
 }
 
 func (sbc *sandboxConn) Rollback() error {
 	sbc.ExecCount++
+	sbc.RollbackCount++
+	sbc.transactionId = 0
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) InTransaction() bool {
-	return sbc.inTransaction
+func (sbc *sandboxConn) TransactionId() int64 {
+	return sbc.transactionId
 }
 
+// Close does not change ExecCount
 func (sbc *sandboxConn) Close() error {
+	sbc.CloseCount++
 	return nil
 }
 

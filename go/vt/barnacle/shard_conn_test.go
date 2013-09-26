@@ -42,8 +42,9 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	resetSandbox()
 	endPointMustFail = 1
 	err := f()
-	if err == nil || err.Error() != "topo error" {
-		t.Errorf("want topo error, got %v", err)
+	want := "topo error, shard: (.0.), address: "
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 	if endPointCounter != 1 {
 		t.Errorf("want 1, got %v", endPointCounter)
@@ -53,8 +54,9 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	resetSandbox()
 	dialMustFail = 3
 	err = f()
-	if err == nil || err.Error() != "conn error" {
-		t.Errorf("want conn error, got %v", err)
+	want = "conn error, shard: (.0.), address: "
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 	if dialCounter != 3 {
 		t.Errorf("want 3, got %v", dialCounter)
@@ -65,8 +67,9 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	testConns["0:1"] = sbc
 	err = f()
-	if err == nil || err.Error() != "retry: err" {
-		t.Errorf("want retry: errnil, got %v", err)
+	want = "retry: err, shard: (.0.), address: "
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 	if dialCounter != 3 {
 		t.Errorf("want 3, got %v", dialCounter)
@@ -110,8 +113,9 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	sbc = &sandboxConn{mustFailServer: 1}
 	testConns["0:1"] = sbc
 	err = f()
-	if err == nil || err.Error() != "error: err" {
-		t.Errorf("want error: err, got %v", err)
+	want = "error: err, shard: (.0.), address: 0:1"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 	if dialCounter != 1 {
 		t.Errorf("want 1, got %v", dialCounter)
@@ -137,16 +141,21 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 
 	// conn error (in transaction)
 	resetSandbox()
-	sbc = &sandboxConn{mustFailConn: 1, inTransaction: true}
+	sbc = &sandboxConn{mustFailConn: 1, transactionId: 1}
 	testConns["0:1"] = sbc
 	err = f()
-	if err == nil || err.Error() != "error: conn" {
-		t.Errorf("want error: conn, got %v", err)
+	want = "error: conn, shard: (.0.), address: "
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 	if dialCounter != 1 {
 		t.Errorf("want 1, got %v", dialCounter)
 	}
-	if sbc.ExecCount != 1 {
+	if sbc.ExecCount != 2 {
+		t.Errorf("want 2, got %v", sbc.ExecCount)
+	}
+	// Ensure one of those ExecCounts was a Rollback
+	if sbc.RollbackCount != 1 {
 		t.Errorf("want 1, got %v", sbc.ExecCount)
 	}
 
@@ -171,12 +180,13 @@ func TestShardConnBeginOther(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
-	testConns["0:1"] = &sandboxConn{inTransaction: true}
+	testConns["0:1"] = &sandboxConn{transactionId: 1}
 	// call Execute to cause connection to be opened
 	sdc.Execute("query", nil)
 	err := sdc.Begin()
-	if err == nil || err.Error() != "cannot begin: already in transaction" {
-		t.Errorf("want cannot begin: already in transaction, got %v", err)
+	want := "cannot begin: already in transaction, shard: (.0.), address: 0:1"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 
 	// tx_pool_full
@@ -208,12 +218,13 @@ func TestShardConnCommit(t *testing.T) {
 	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err := sdc.Commit()
-	if err == nil || err.Error() != "cannot commit: not in transaction" {
-		t.Errorf("want cannot commit: not in transaction, got %v", err)
+	want := "cannot commit: not in transaction, shard: (.0.), address: 0:1"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 
 	// valid commit
-	testConns["0:1"] = &sandboxConn{inTransaction: true}
+	testConns["0:1"] = &sandboxConn{transactionId: 1}
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err = sdc.Commit()
@@ -227,10 +238,11 @@ func TestShardConnCommit(t *testing.T) {
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	sbc.mustFailServer = 1
-	sbc.inTransaction = true
+	sbc.transactionId = 1
 	err = sdc.Commit()
-	if err == nil || err.Error() != "error: err" {
-		t.Errorf("want error: err, got %v", err)
+	want = "error: err, shard: (.0.), address: 0:1"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 }
 
@@ -242,12 +254,13 @@ func TestShardConnRollback(t *testing.T) {
 	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err := sdc.Rollback()
-	if err == nil || err.Error() != "cannot rollback: not in transaction" {
-		t.Errorf("want cannot rollback: not in transaction, got %v", err)
+	want := "cannot rollback: not in transaction, shard: (.0.), address: 0:1"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 
 	// valid rollback
-	testConns["0:1"] = &sandboxConn{inTransaction: true}
+	testConns["0:1"] = &sandboxConn{transactionId: 1}
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err = sdc.Rollback()
@@ -261,9 +274,10 @@ func TestShardConnRollback(t *testing.T) {
 	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	sbc.mustFailServer = 1
-	sbc.inTransaction = true
+	sbc.transactionId = 1
 	err = sdc.Rollback()
-	if err == nil || err.Error() != "error: err" {
-		t.Errorf("want error: err, got %v", err)
+	want = "error: err, shard: (.0.), address: 0:1"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 }

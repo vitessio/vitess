@@ -28,7 +28,8 @@ type TabletConn interface {
 	Begin() error
 	Commit() error
 	Rollback() error
-	InTransaction() bool
+	// TransactionId returns 0 if there is no transaction.
+	TransactionId() int64
 
 	// Close must be called for releasing resources.
 	Close() error

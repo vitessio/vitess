@@ -32,23 +32,23 @@ func DialTablet(addr, keyspace, shard, username, password string, encrypted bool
 	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
 		return nil, err
 	}
-	conn.SessionId = sessionInfo.SessionId
+	conn.session.SessionId = sessionInfo.SessionId
 	return conn, nil
 }
 
 // TabletBson implements a bson rpcplus implementation for TabletConn
 type TabletBson struct {
 	rpcClient *rpcplus.Client
-	tproto.Session
+	session   tproto.Session
 }
 
 func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
-		TransactionId: conn.TransactionId,
-		ConnectionId:  conn.ConnectionId,
-		SessionId:     conn.SessionId,
+		TransactionId: conn.session.TransactionId,
+		ConnectionId:  conn.session.ConnectionId,
+		SessionId:     conn.session.SessionId,
 	}
 	qr := new(mproto.QueryResult)
 	if err := conn.rpcClient.Call("SqlQuery.Execute", req, qr); err != nil {
@@ -61,9 +61,9 @@ func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interfac
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
-		TransactionId: conn.TransactionId,
-		ConnectionId:  conn.ConnectionId,
-		SessionId:     conn.SessionId,
+		TransactionId: conn.session.TransactionId,
+		ConnectionId:  conn.session.ConnectionId,
+		SessionId:     conn.session.SessionId,
 	}
 	sr := make(chan *mproto.QueryResult, 10)
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
@@ -71,27 +71,27 @@ func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interfac
 }
 
 func (conn *TabletBson) Begin() error {
-	return conn.rpcClient.Call("SqlQuery.Begin", &conn.Session, &conn.TransactionId)
+	return conn.rpcClient.Call("SqlQuery.Begin", &conn.session, &conn.session.TransactionId)
 }
 
 func (conn *TabletBson) Commit() error {
-	defer func() { conn.TransactionId = 0 }()
+	defer func() { conn.session.TransactionId = 0 }()
 	var noOutput string
-	return conn.rpcClient.Call("SqlQuery.Commit", &conn.Session, &noOutput)
+	return conn.rpcClient.Call("SqlQuery.Commit", &conn.session, &noOutput)
 }
 
 func (conn *TabletBson) Rollback() error {
-	defer func() { conn.TransactionId = 0 }()
+	defer func() { conn.session.TransactionId = 0 }()
 	var noOutput string
-	return conn.rpcClient.Call("SqlQuery.Rollback", &conn.Session, &noOutput)
+	return conn.rpcClient.Call("SqlQuery.Rollback", &conn.session, &noOutput)
 }
 
-func (conn *TabletBson) InTransaction() bool {
-	return conn.TransactionId != 0
+func (conn *TabletBson) TransactionId() int64 {
+	return conn.session.TransactionId
 }
 
 func (conn *TabletBson) Close() error {
-	conn.Session = tproto.Session{0, 0, 0}
+	conn.session = tproto.Session{0, 0, 0}
 	rpcClient := conn.rpcClient
 	conn.rpcClient = nil
 	return rpcClient.Close()
