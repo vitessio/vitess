@@ -713,9 +713,9 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 	// - insertTableConcurrency for table inserts from a file
 	//   into an innodb table
 	// - snapshotConcurrency tasks for table inserts / modify tables
-	sems := make(map[string]sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+3)
-	sems["net"] = sync2.NewSemaphore(fetchConcurrency)
-	sems["db"] = sync2.NewSemaphore(snapshotConcurrency)
+	sems := make(map[string]*sync2.Semaphore, len(manifests[0].SchemaDefinition.TableDefinitions)+3)
+	sems["net"] = sync2.NewSemaphore(fetchConcurrency, 0)
+	sems["db"] = sync2.NewSemaphore(snapshotConcurrency, 0)
 
 	// Store the alter table statements for after restore,
 	// and how many jobs we're running on each table
@@ -755,7 +755,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 			}
 			jobCount[td.Name] = new(sync2.AtomicInt32)
 			createDbCmds = append(createDbCmds, createDbCmd)
-			sems["table-"+td.Name] = sync2.NewSemaphore(insertTableConcurrency)
+			sems["table-"+td.Name] = sync2.NewSemaphore(insertTableConcurrency, 0)
 		} else {
 			// views are just created with the right db name
 			// and no data will ever go in them. We create them

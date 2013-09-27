@@ -116,7 +116,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap map[topo.TabletAlias]*t
 			// around in the replication graph, so if we
 			// can't restart it, we just scrap it
 			log.Warningf("Old master %v is not restarting, scrapping it", masterTablet.Alias())
-			if _, err := wr.Scrap(masterTablet.Alias() /*force*/, true /*skipRebuild*/, true); err != nil {
+			if _, err := wr.Scrap(masterTablet.Alias(), true /*force*/, true /*skipRebuild*/); err != nil {
 				log.Warningf("Failed to scrap old master %v: %v", masterTablet.Alias(), err)
 			}
 		}

@@ -18,11 +18,13 @@ import (
 )
 
 var (
-	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
-	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-	qsConfigFile    = flag.String("queryserver-config-file", "", "config file name for the query service")
-	customRules     = flag.String("customrules", "", "custom query rules file")
-	spotCheckRatio  = flag.Float64("spot-check-ratio", 0.0, "rowcache spot check frequency")
+	queryLogHandler    = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
+	txLogHandler       = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
+	qsConfigFile       = flag.String("queryserver-config-file", "", "config file name for the query service")
+	customRules        = flag.String("customrules", "", "custom query rules file")
+	spotCheckRatio     = flag.Float64("spot-check-ratio", 0.0, "rowcache spot check frequency")
+	streamExecThrottle = flag.Int("queryserver-config-stream-exec-throttle", 8, "Maximum number of simultaneous streaming requests that can wait for results")
+	streamWaitTimeout  = flag.Float64("queryserver-config-stream-exec-timeout", 4*60, "Timeout for stream-exec-throttle")
 )
 
 type Config struct {
@@ -38,6 +40,8 @@ type Config struct {
 	IdleTimeout        float64
 	RowCache           []string
 	SpotCheckRatio     float64
+	StreamExecThrottle int
+	StreamWaitTimeout  float64
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -61,6 +65,8 @@ var DefaultQsConfig = Config{
 	StreamBufferSize:   32 * 1024,
 	RowCache:           nil,
 	SpotCheckRatio:     0,
+	StreamExecThrottle: 8,
+	StreamWaitTimeout:  4 * 60,
 }
 
 var SqlQueryRpcService *SqlQuery
@@ -152,6 +158,9 @@ func InitQueryService() {
 		}
 	}
 	qsConfig.SpotCheckRatio = *spotCheckRatio
+	// TODO(liguo): Merge into your CL
+	qsConfig.StreamExecThrottle = *streamExecThrottle
+	qsConfig.StreamWaitTimeout = *streamWaitTimeout
 
 	RegisterQueryService(qsConfig)
 }

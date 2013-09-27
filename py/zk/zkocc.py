@@ -150,9 +150,8 @@ class ZkOccConnection(object):
           logging.warning('zkocc: %s command failed %u times: %s', client_method, attempt, e)
           raise ZkOccError('zkocc %s command failed %u times: %s' % (client_method, attempt, e))
 
-        # try the next server if there is one
-        if self.addr_count > 1:
-          self.dial()
+        # try the next server if there is one, or retry our only server
+        self.dial()
 
   # New API.
 

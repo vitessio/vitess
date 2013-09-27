@@ -1,4 +1,5 @@
 from vtdb import cursor
+from vtdb import dbexceptions
 
 import framework
 
@@ -48,6 +49,7 @@ class TestStream(framework.TestCase):
         self.assertEqual(len(rows), 10000)
         self.check_row_10(rows[10])
 
+    vstart = self.env.debug_vars()
     # select lots of data using a streaming query
     if True:
       for i in xrange(loop_count):
@@ -62,9 +64,15 @@ class TestStream(framework.TestCase):
             self.check_row_10(row)
           count += 1
         self.assertEqual(count, 10000)
+    vend = self.env.debug_vars()
+    self.assertEqual(vstart.mget("Waits.TotalCount", 0)+1, vend.Waits.TotalCount)
+    self.assertEqual(vstart.mget("Waits.Histograms.StreamToken.Count", 0)+1, vend.Waits.Histograms.StreamToken.Count)
 
-      #row = cu.fetchone()
-      #self.assertEqual(row, None)
+
+  def test_streaming_error(self):
+    with self.assertRaises(dbexceptions.DatabaseError):
+      cu = self.env.execute("select count(abcd) from vtocc_big b1",
+                            cursorclass=cursor.StreamCursor)
 
   def check_row_10(self, row):
     # null the dates so they match
