@@ -10,6 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/vt/barnacle"
 	"github.com/youtube/vitess/go/vt/servenv"
+	"github.com/youtube/vitess/go/vt/topo"
 	_ "github.com/youtube/vitess/go/vt/zktopo"
 )
 
@@ -25,6 +26,7 @@ var (
 func main() {
 	flag.Parse()
 	servenv.Init()
-	barnacle.Init(*cell, *tabletProtocol, *portName, *retryDelay, *retryCount)
+	blm := barnacle.NewBalancerMap(topo.GetServer(), *cell, *portName)
+	barnacle.Init(blm, *tabletProtocol, *retryDelay, *retryCount)
 	servenv.Run(*port)
 }
