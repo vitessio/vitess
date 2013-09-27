@@ -16,13 +16,13 @@ import (
 // - a Semaphore to control concurrency
 // - an ErrorRecorder
 type ResourceConstraint struct {
-	semaphore sync2.Semaphore
+	semaphore *sync2.Semaphore
 	wg        sync.WaitGroup
 	FirstErrorRecorder
 }
 
 func NewResourceConstraint(max int) *ResourceConstraint {
-	return &ResourceConstraint{semaphore: sync2.NewSemaphore(max)}
+	return &ResourceConstraint{semaphore: sync2.NewSemaphore(max, 0)}
 }
 
 func (rc *ResourceConstraint) Add(n int) {
@@ -58,12 +58,12 @@ func (rc *ResourceConstraint) ReleaseAndDone() {
 // - a Semaphore map to control multiple concurrencies
 // - an ErrorRecorder
 type MultiResourceConstraint struct {
-	semaphoreMap map[string]sync2.Semaphore
+	semaphoreMap map[string]*sync2.Semaphore
 	wg           sync.WaitGroup
 	FirstErrorRecorder
 }
 
-func NewMultiResourceConstraint(semaphoreMap map[string]sync2.Semaphore) *MultiResourceConstraint {
+func NewMultiResourceConstraint(semaphoreMap map[string]*sync2.Semaphore) *MultiResourceConstraint {
 	return &MultiResourceConstraint{semaphoreMap: semaphoreMap}
 }
 
