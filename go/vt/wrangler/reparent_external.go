@@ -171,6 +171,19 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	return recorder.Error()
 }
 
+func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
+	log.Infof("slaveWasPromoted(%v)", ti.Alias())
+	actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias())
+	if err != nil {
+		return err
+	}
+	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
 	log.Infof("slaveWasRestarted(%v)", ti.Alias())
 	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias(), swrd)
