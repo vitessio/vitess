@@ -97,8 +97,15 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 		ScrapStragglers:      scrapStragglers,
 	}
 
+	// The following two blocks of actions are very likely to time
+	// out for some tablets (one random guy is dead, the old
+	// master is dead, ...). We execute them all in parallel until
+	// we get to wr.actionTimeout(). After this, no other action
+	// with a timeout is executed, so even if we got to the
+	// timeout, we're still good.
+	log.Infof("Making sure all tablets have the right master:")
+
 	// do all the slaves
-	log.Infof("Making sure all slaves are correct:")
 	for _, ti := range slaveTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
@@ -106,11 +113,9 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 			wg.Done()
 		}(ti)
 	}
-	wg.Wait()
 
-	// then do the old master and any straggler, if possible, but
+	// and do the old master and any straggler, if possible, but
 	// do not record errors for these
-	log.Infof("Fixing old master and other stragglers:")
 	for _, ti := range masterTabletMap {
 		wg.Add(1)
 		go func(ti *topo.TabletInfo) {
@@ -118,7 +123,8 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 			if err != nil {
 				// the old master can be annoying if left
 				// around in the replication graph, so if we
-				// can't restart it, we just scrap it
+				// can't restart it, we just scrap it.
+				// We don't rebuild the Shard just yet though.
 				log.Warningf("Old master %v is not restarting, scrapping it: %v", ti.Alias(), err)
 				if _, err := wr.Scrap(ti.Alias(), true /*force*/, true /*skipRebuild*/); err != nil {
 					log.Warningf("Failed to scrap old master %v: %v", ti.Alias(), err)
@@ -138,18 +144,12 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 		log.Warningf("GetReplicationPaths() failed, cannot fix extra paths: %v", err)
 	} else {
 		for _, toplevelAlias := range toplevelAliases {
+			// we only keep our new master
 			if toplevelAlias == masterElectTablet.Alias() {
 				continue
 			}
 
-			// if we can't read the tablet, or if it's not in the
-			// replication graph, we remove the entry.
-			if ti, err := wr.ts.GetTablet(toplevelAlias); err == nil && ti.Tablet.IsInReplicationGraph() {
-				// we can read the entry and it belongs here,
-				// keep it
-				continue
-			}
-
+			// and remove everybody else, regardless
 			log.Infof("Removing stale replication path %v", toplevelAlias.String())
 			if err := topo.DeleteTabletReplicationData(wr.ts, masterElectTablet.Tablet, toplevelAlias.String()); err != nil {
 				log.Warningf("DeleteTabletReplicationData(%v) failed: %v", toplevelAlias.String(), err)

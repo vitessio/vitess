@@ -736,7 +736,7 @@ class TestTabletManager(unittest.TestCase):
     if slave_files != expected_slave_files:
       raise utils.TestError('unexpected zk content: %s instead of expected %s' %
                             ("|".join(slave_files),
-                             "|".join(expected_slave_files_files)))
+                             "|".join(expected_slave_files)))
 
 
   # See if a lag slave can be safely reparent.

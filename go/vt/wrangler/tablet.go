@@ -151,6 +151,9 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 
 // Scrap a tablet. If force is used, we write to topo.Server
 // directly and don't remote-execute the command.
+//
+// If we scrap the master for a shard, we will clear its record
+// from the Shard object (only if that was the right master)
 func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool) (actionPath string, err error) {
 	// load the tablet, see if we'll need to rebuild
 	ti, err := wr.ts.GetTablet(tabletAlias)
@@ -158,6 +161,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 		return "", err
 	}
 	rebuildRequired := ti.Tablet.IsServingType()
+	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
 		err = tm.Scrap(wr.ts, ti.Alias(), force)
@@ -185,14 +189,49 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 		}
 	}
 
+	// update the Shard object if the master was scrapped
+	if wasMaster {
+		actionNode := wr.ai.UpdateShard()
+		lockPath, err := wr.lockShard(ti.Keyspace, ti.Shard, actionNode)
+		if err != nil {
+			return "", err
+		}
+
+		// read the shard with the lock
+		si, err := wr.ts.GetShard(ti.Keyspace, ti.Shard)
+		if err != nil {
+			return "", wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
+		}
+
+		// update it if the right alias is there
+		if si.MasterAlias == tabletAlias {
+			si.MasterAlias = topo.TabletAlias{}
+
+			// write it back
+			if err := wr.ts.UpdateShard(si); err != nil {
+				return "", wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err)
+			}
+		} else {
+			log.Warningf("Scrapping master %v from shard %v/%v but master in Shard object was %v", tabletAlias, ti.Keyspace, ti.Shard, si.MasterAlias)
+		}
+
+		// and unlock
+		if err := wr.unlockShard(ti.Keyspace, ti.Shard, actionNode, lockPath, err); err != nil {
+			return "", err
+		}
+	}
+
 	// and rebuild the original shard / keyspace
-	return "", wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Cell}, true)
+	return "", wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Cell})
 }
 
 // Change the type of tablet and recompute all necessary derived paths in the
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and
-// do not run the remote hooks
+// do not run the remote hooks.
+//
+// Note we don't update the master record in the Shard here, as we can't
+// ChangeType from and out of master anyway.
 func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletType, force bool) error {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
@@ -244,7 +283,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletT
 	}
 
 	if rebuildRequired {
-		if err := wr.RebuildShardGraph(keyspaceToRebuild, shardToRebuild, []string{cellToRebuild}, true); err != nil {
+		if err := wr.RebuildShardGraph(keyspaceToRebuild, shardToRebuild, []string{cellToRebuild}); err != nil {
 			return err
 		}
 	}
@@ -252,13 +291,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletT
 }
 
 // same as ChangeType, but assume we already have the shard lock,
-// and do not have the option to force anything
-// FIXME(alainjobart): doesn't rebuild the Keyspace, as that part has locks,
-// so the local serving graphs will be wrong. To do that, I need to refactor
-// some code, might be a bigger change.
-// Mike says: Updating the shard should be good enough. I'm debating dropping the entire
-// keyspace rollup, since I think that is adding complexity and feels like it might
-// be a premature optimization.
+// and do not have the option to force anything.
 func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo.TabletType) error {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -278,17 +311,10 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.Keyspace, ti.Shard, []string{ti.Cell}, true)
+		err = wr.rebuildShard(ti.Keyspace, ti.Shard, []string{ti.Cell}, false)
 		if err != nil {
 			return err
 		}
-		// FIXME(alainjobart) We already have the lock on one shard, so this is not
-		// possible. But maybe it's not necessary anyway.
-		// We could pass in a shard path we already have the lock on, and skip it?
-		//		err = wr.rebuildKeyspace(ti.Keyspace)
-		//		if err != nil {
-		//			return err
-		//		}
 	}
 	return nil
 }
