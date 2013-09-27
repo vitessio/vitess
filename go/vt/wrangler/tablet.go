@@ -25,13 +25,6 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 	if err := tablet.Complete(); err != nil {
 		return err
 	}
-	if tablet.Parent.IsZero() && tablet.Type.IsSlaveType() {
-		parentAlias, err := wr.getMasterAlias(tablet.Keyspace, tablet.Shard)
-		if err != nil {
-			return err
-		}
-		tablet.Parent = parentAlias
-	}
 
 	if tablet.IsInReplicationGraph() {
 		// create the parent keyspace and shard if needed
@@ -45,17 +38,38 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			}
 		}
 
-		// get the shard, checks KeyRange is the same
+		// get the shard, checks a couple things
 		si, err := wr.ts.GetShard(tablet.Keyspace, tablet.Shard)
 		if err != nil {
-			return fmt.Errorf("Missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
+			return fmt.Errorf("missing parent shard, use -parent option to create it, or CreateKeyspace / CreateShard")
 		}
 		if si.KeyRange != tablet.KeyRange {
-			return fmt.Errorf("Shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
+			return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
+		}
+		if tablet.Type == topo.TYPE_MASTER && !si.MasterAlias.IsZero() && si.MasterAlias != tablet.Alias() && !force {
+			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard)
 		}
 
-		// add the tablet's cell to the shard cell if needed
+		// see if we specified a parent, otherwise get it from the shard
+		if tablet.Parent.IsZero() && tablet.Type.IsSlaveType() {
+			if si.MasterAlias.IsZero() {
+				return fmt.Errorf("trying to create tablet %v in shard %v/%v without a master", tablet.Alias(), tablet.Keyspace, tablet.Shard)
+			}
+			tablet.Parent = si.MasterAlias
+		}
+
+		// See if we need to update the Shard:
+		// - add the tablet's cell to the shard's Cells if needed
+		// - change the master if needed
+		shardUpdateRequired := false
 		if !si.HasCell(tablet.Cell) {
+			shardUpdateRequired = true
+		}
+		if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias() {
+			shardUpdateRequired = true
+		}
+
+		if shardUpdateRequired {
 			actionNode := wr.ai.UpdateShard()
 			lockPath, err := wr.lockShard(tablet.Keyspace, tablet.Shard, actionNode)
 			if err != nil {
@@ -69,9 +83,20 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			}
 
 			// update it
+			wasUpdated := false
 			if !si.HasCell(tablet.Cell) {
 				si.Cells = append(si.Cells, tablet.Cell)
+				wasUpdated = true
+			}
+			if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias() {
+				if !si.MasterAlias.IsZero() && !force {
+					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard))
+				}
+				si.MasterAlias = tablet.Alias()
+				wasUpdated = true
+			}
 
+			if wasUpdated {
 				// write it back
 				if err := wr.ts.UpdateShard(si); err != nil {
 					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, err)
@@ -93,7 +118,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 	err := topo.CreateTablet(wr.ts, tablet)
 	if err != nil && err == topo.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
-		if update {
+		if update || force {
 			oldTablet, err := wr.ts.GetTablet(tablet.Alias())
 			if err != nil {
 				log.Warningf("failed reading tablet %v: %v", tablet.Alias(), err)
