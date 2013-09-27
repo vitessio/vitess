@@ -1,43 +1,55 @@
+// Copyright 2012, Google Inc. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package sync2
 
 // What's in a name? Channels have all you need to emulate a counting
 // semaphore with a boatload of extra functionality. However, in some
 // cases, you just want a familiar API.
-//
-// Additionally there is great debate on how to do this correctly:
-//
-// https://groups.google.com/forum/#!msg/golang-dev/ShqsqvCzkWg/Kg30VPN4QmUJ
-// https://groups.google.com/forum/?fromgroups=#!topic/golang-nuts/Ug1DhZGGqTk
-//
-// http://golang.org/doc/effective_go.html
-//
-// It is looking like there might be a bug in the Effective Go
-// example.  So it is implemented as the discussions suggest to
-// protect against scheduler optimizations.
 
-import ()
+import (
+	"time"
+)
 
-type Semaphore interface {
-	Acquire()
-	Release()
+// Semaphore is a counting semaphore with the option to
+// specify a timeout.
+type Semaphore struct {
+	slots   chan struct{}
+	timeout time.Duration
 }
 
-type semaphore struct {
-	slots chan struct{}
-}
-
-func NewSemaphore(max int) Semaphore {
-	sem := &semaphore{slots: make(chan struct{}, max)}
-	for i := 0; i < max; i++ {
+// NewSemaphore creates a Semaphore. The count parameter must be a positive
+// number. A timeout of zero means that there is no timeout.
+func NewSemaphore(count int, timeout time.Duration) *Semaphore {
+	sem := &Semaphore{
+		slots:   make(chan struct{}, count),
+		timeout: timeout,
+	}
+	for i := 0; i < count; i++ {
 		sem.slots <- struct{}{}
 	}
 	return sem
 }
 
-func (sem *semaphore) Acquire() {
-	<-sem.slots
+// Acquire returns true on successful acquisition, and
+// false on a timeout.
+func (sem *Semaphore) Acquire() bool {
+	if sem.timeout == 0 {
+		<-sem.slots
+		return true
+	}
+	select {
+	case <-sem.slots:
+		return true
+	case <-time.After(sem.timeout):
+		return false
+	}
 }
 
-func (sem *semaphore) Release() {
+// Release releases the acquired semaphore. You must
+// not release more than the number of semaphores you've
+// acquired.
+func (sem *Semaphore) Release() {
 	sem.slots <- struct{}{}
 }

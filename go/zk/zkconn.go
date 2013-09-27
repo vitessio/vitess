@@ -23,7 +23,7 @@ import (
 // account limiting the number of concurrent operations on a zk
 // connection.  Since this applies to any zookeeper connection, this
 // is global.
-var sem sync2.Semaphore
+var sem *sync2.Semaphore
 
 func init() {
 	// The zookeeper C module logs quite a bit of useful information,
@@ -41,7 +41,7 @@ func init() {
 		}
 	}
 
-	sem = sync2.NewSemaphore(maxConcurrency)
+	sem = sync2.NewSemaphore(maxConcurrency, 0)
 }
 
 // ZkConn is a client class that implements zk.Conn using a zookeeper.Conn

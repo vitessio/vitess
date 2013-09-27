@@ -6,6 +6,7 @@ package barnacle
 
 import (
 	"fmt"
+	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
@@ -80,6 +81,7 @@ type sandboxConn struct {
 	mustFailConn   int
 	mustFailTxPool int
 	mustFailNotTx  int
+	mustDelay      time.Duration
 
 	// These Count vars report how often the corresponding
 	// functions were called.
@@ -123,6 +125,9 @@ func (sbc *sandboxConn) getError() error {
 
 func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
 	sbc.ExecCount++
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
@@ -131,6 +136,9 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (
 
 func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
 	sbc.ExecCount++
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
 	ch := make(chan *mproto.QueryResult, 1)
 	ch <- singleRowResult
 	close(ch)
@@ -141,6 +149,9 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 func (sbc *sandboxConn) Begin() error {
 	sbc.ExecCount++
 	sbc.BeginCount++
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
 	err := sbc.getError()
 	if err == nil {
 		sbc.transactionId = transactionId.Add(1)
@@ -152,6 +163,9 @@ func (sbc *sandboxConn) Commit() error {
 	sbc.ExecCount++
 	sbc.CommitCount++
 	sbc.transactionId = 0
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
 	return sbc.getError()
 }
 
@@ -159,6 +173,9 @@ func (sbc *sandboxConn) Rollback() error {
 	sbc.ExecCount++
 	sbc.RollbackCount++
 	sbc.transactionId = 0
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
 	return sbc.getError()
 }
 
