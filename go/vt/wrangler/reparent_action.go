@@ -430,7 +430,7 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *topo.TabletInfo, majo
 	// We rebuild all the cells, as we may have taken tablets in and
 	// out of the graph.
 	log.Infof("rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil)
+	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil, true)
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletInfo, masterElect *topo.TabletInfo) error {
@@ -482,4 +482,23 @@ func slaveTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (slaveMap m
 		}
 	}
 	return
+}
+
+// sortedTabletMap returns two maps:
+// - The slaveMap contains all the non-master non-scrapped hosts.
+//   This can be used as a list of slaves to fix up for reparenting
+// - The masterMap contains all the tablets without parents
+//   (scrapped or not). This can be used to special case
+//   the old master, and any tablet in a weird state, left over, ...
+func sortedTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (map[topo.TabletAlias]*topo.TabletInfo, map[topo.TabletAlias]*topo.TabletInfo) {
+	slaveMap := make(map[topo.TabletAlias]*topo.TabletInfo)
+	masterMap := make(map[topo.TabletAlias]*topo.TabletInfo)
+	for alias, ti := range tabletMap {
+		if ti.Type != topo.TYPE_MASTER && ti.Type != topo.TYPE_SCRAP {
+			slaveMap[alias] = ti
+		} else if ti.Parent.Uid == topo.NO_TABLET {
+			masterMap[alias] = ti
+		}
+	}
+	return slaveMap, masterMap
 }
