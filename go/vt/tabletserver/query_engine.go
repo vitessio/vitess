@@ -39,6 +39,7 @@ type QueryEngine struct {
 	schemaInfo     *SchemaInfo
 	connPool       *ConnectionPool
 	streamConnPool *ConnectionPool
+	streamTokens   *sync2.Semaphore
 	reservedPool   *ReservedPool
 	txPool         *ConnectionPool
 	activeTxPool   *ActiveTxPool
@@ -79,6 +80,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
+	qe.streamTokens = sync2.NewSemaphore(config.StreamExecThrottle, time.Duration(config.StreamWaitTimeout*1e9))
 	qe.reservedPool = NewReservedPool("ReservedPool")
 	qe.txPool = NewConnectionPool("TxPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
 	qe.activeTxPool = NewActiveTxPool("ActiveTxPool", time.Duration(config.TransactionTimeout*1e9))
@@ -753,9 +755,9 @@ func (qe *QueryEngine) fullFetch(logStats *sqlQueryStats, conn PoolConnection, p
 	return result
 }
 
-func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(interface{}) error) error {
+func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(interface{}) error) {
 	sql := qe.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
-	return qe.executeStreamSql(logStats, conn, sql, callback)
+	qe.executeStreamSql(logStats, conn, sql, callback)
 }
 
 func (qe *QueryEngine) generateFinalSql(parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte) string {
@@ -794,17 +796,37 @@ func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, 
 	return result, nil
 }
 
-func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(interface{}) error) error {
+func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(interface{}) error) {
+	waitStart := time.Now()
+	if ok := qe.streamTokens.Acquire(); !ok {
+		panic(NewTabletError(FAIL, "timed out waiting for streaming quota"))
+	}
+	waitTime := time.Now().Sub(waitStart)
+	waitStats.Add("StreamToken", waitTime)
+	// No need create a new log variable for this. Just add to the total
+	// connection wait time.
+	logStats.WaitingForConnection += waitTime
+	var once sync.Once
+	// Failsafe in case of error.
+	defer once.Do(qe.streamTokens.Release)
+
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries += 1
 	logStats.AddRewrittenSql(sql)
 	fetchStart := time.Now()
-	err := conn.ExecuteStreamFetch(sql, callback, int(qe.streamBufferSize.Get()))
+	err := conn.ExecuteStreamFetch(
+		sql,
+		func(qr interface{}) error {
+			// Release semaphore at first callback.
+			once.Do(qe.streamTokens.Release)
+			return callback(qr)
+		},
+		int(qe.streamBufferSize.Get()),
+	)
 	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
 	if err != nil {
-		return NewTabletErrorSql(FAIL, err)
+		panic(NewTabletErrorSql(FAIL, err))
 	}
-	return nil
 }
 
 func rowsAreEqual(row1, row2 []sqltypes.Value) bool {
