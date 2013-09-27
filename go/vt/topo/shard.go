@@ -6,10 +6,12 @@ package topo
 
 import (
 	"fmt"
-	"path"
 	"strings"
 	"sync"
 
+	log "github.com/golang/glog"
+
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -195,50 +197,52 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	return ts.CreateShard(keyspace, name, s)
 }
 
-func tabletAliasesRecursive(ts Server, keyspace, shard, repPath string) ([]TabletAlias, error) {
-	mutex := sync.Mutex{}
-	wg := sync.WaitGroup{}
-	result := make([]TabletAlias, 0, 32)
-	children, err := ts.GetReplicationPaths(keyspace, shard, repPath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, child := range children {
-		wg.Add(1)
-		go func(child TabletAlias) {
-			childPath := path.Join(repPath, child.String())
-			rChildren, subErr := tabletAliasesRecursive(ts, keyspace, shard, childPath)
-			if subErr != nil {
-				// If other processes are deleting
-				// nodes, we need to ignore the
-				// missing nodes.
-				if subErr != ErrNoNode {
-					mutex.Lock()
-					err = subErr
-					mutex.Unlock()
-				}
-			} else {
-				mutex.Lock()
-				result = append(result, child)
-				for _, rChild := range rChildren {
-					result = append(result, rChild)
-				}
-				mutex.Unlock()
-			}
-			wg.Done()
-		}(child)
-	}
-
-	wg.Wait()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 // FindAllTabletAliasesInShard uses the replication graph to find all the
 // tablet aliases in the given shard.
+// It can return ErrPartialResult if some cells were not fetched.
 func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAlias, error) {
-	return tabletAliasesRecursive(ts, keyspace, shard, "")
+	// read the shard information to find the cells
+	si, err := ts.GetShard(keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+
+	resultAsMap := make(map[TabletAlias]bool)
+	if !si.MasterAlias.IsZero() {
+		resultAsMap[si.MasterAlias] = true
+	}
+
+	// read the replication graph in each cell and add all found tablets
+	wg := sync.WaitGroup{}
+	mutex := sync.Mutex{}
+	er := concurrency.AllErrorRecorder{}
+	for _, cell := range si.Cells {
+		wg.Add(1)
+		go func(cell string) {
+			defer wg.Done()
+			sri, err := ts.GetShardReplication(cell, keyspace, shard)
+			if err != nil {
+				er.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+				return
+			}
+
+			mutex.Lock()
+			for _, rl := range sri.ReplicationLinks {
+				resultAsMap[rl.TabletAlias] = true
+				resultAsMap[rl.Parent] = true
+			}
+			mutex.Unlock()
+		}(cell)
+	}
+	wg.Wait()
+	if er.HasErrors() {
+		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, er.Error())
+		return nil, ErrPartialResult
+	}
+
+	result := make([]TabletAlias, 0, len(resultAsMap))
+	for a, _ := range resultAsMap {
+		result = append(result, a)
+	}
+	return result, nil
 }
