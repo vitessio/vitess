@@ -29,14 +29,19 @@ func inCellList(cell string, cells []string) bool {
 
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
-func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
+//
+// NOTE(alainjobart): The updateMaster boolean is going to be removed
+// eventually. We don't want to update the master during rebuild,
+// just during reparent. When all code is converted to updateMaster=false,
+// we're remove the flag.
+func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string, updateMaster bool) error {
 	actionNode := wr.ai.RebuildShard()
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.rebuildShard(keyspace, shard, cells, true)
+	err = wr.rebuildShard(keyspace, shard, cells, updateMaster)
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
@@ -308,7 +313,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 	for _, shard := range shards {
 		wg.Add(1)
 		go func(shard string) {
-			if err := wr.RebuildShardGraph(keyspace, shard, cells); err != nil {
+			if err := wr.RebuildShardGraph(keyspace, shard, cells, false); err != nil {
 				er.RecordError(fmt.Errorf("RebuildShardGraph failed: %v/%v %v", keyspace, shard, err))
 			}
 			wg.Done()

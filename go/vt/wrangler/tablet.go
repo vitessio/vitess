@@ -186,7 +186,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	}
 
 	// and rebuild the original shard / keyspace
-	return "", wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Cell})
+	return "", wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Cell}, true)
 }
 
 // Change the type of tablet and recompute all necessary derived paths in the
@@ -244,7 +244,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletT
 	}
 
 	if rebuildRequired {
-		if err := wr.RebuildShardGraph(keyspaceToRebuild, shardToRebuild, []string{cellToRebuild}); err != nil {
+		if err := wr.RebuildShardGraph(keyspaceToRebuild, shardToRebuild, []string{cellToRebuild}, true); err != nil {
 			return err
 		}
 	}

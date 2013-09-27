@@ -869,7 +869,7 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 
 	for _, zkPath := range zkPaths {
 		keyspace, shard := shardParamToKeyspaceShard(zkPath)
-		if err := wr.RebuildShardGraph(keyspace, shard, cellArray); err != nil {
+		if err := wr.RebuildShardGraph(keyspace, shard, cellArray, false); err != nil {
 			return "", err
 		}
 	}
