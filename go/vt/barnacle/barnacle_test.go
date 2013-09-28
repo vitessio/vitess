@@ -21,6 +21,7 @@ func init() {
 	Init(NewBalancerMap(new(sandboxTopo), "aa", "vt"), "sandbox", 1*time.Second, 10)
 }
 
+// resetBarnacle resets the internal state of RpcBarnacle.
 func resetBarnacle() (sess proto.Session) {
 	resetSandbox()
 	*RpcBarnacle = Barnacle{
@@ -34,6 +35,7 @@ func resetBarnacle() (sess proto.Session) {
 	return
 }
 
+// exec is a convienence wrapper for executing a query.
 func exec(sess proto.Session) (qr mproto.QueryResult, err error) {
 	q := proto.Query{
 		Sql:       "query",
@@ -60,6 +62,7 @@ func TestBarnacleGetSessionId(t *testing.T) {
 	if err != nil {
 		t.Errorf("%v", err)
 	}
+	// Every GetSessionId should issue different numbers.
 	if sess.SessionId == next.SessionId {
 		t.Errorf("want unequal, got equal %d", sess.SessionId)
 	}
@@ -96,6 +99,8 @@ func TestBarnacleSessionConflict(t *testing.T) {
 		default:
 			return
 		}
+		// Trying to issue another command on a session that's
+		// already busy should result in an error.
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("case %d: want %s, got %v", i, want, err)
 		}
@@ -146,11 +151,13 @@ func TestBarnacleTx(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		RpcBarnacle.Begin(nil, &sess, &noOutput)
 		exec(sess)
+		// Ensure low level Begin gets called.
 		if sbc.BeginCount != i+1 {
 			t.Errorf("want 1, got %v", sbc.BeginCount)
 		}
 		switch i {
 		case 0:
+			// Ensure low level Commit gets called.
 			if sbc.CommitCount != 0 {
 				t.Errorf("want 0, got %v", sbc.BeginCount)
 			}
@@ -159,6 +166,7 @@ func TestBarnacleTx(t *testing.T) {
 				t.Errorf("want 1, got %v", sbc.BeginCount)
 			}
 		case 1:
+			// Ensure low level Rollback gets called.
 			if sbc.RollbackCount != 0 {
 				t.Errorf("want 0, got %v", sbc.RollbackCount)
 			}
@@ -175,6 +183,7 @@ func TestBarnacleClose(t *testing.T) {
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
 	exec(sess)
+	// Ensure low level Close gets called.
 	if sbc.CloseCount != 0 {
 		t.Errorf("want 0, got %v", sbc.CloseCount)
 	}
@@ -188,6 +197,7 @@ func TestBarnacleClose(t *testing.T) {
 	}
 	_, err = exec(sess)
 	want := "not found"
+	// Reusing a closed session should result in an error.
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("want %s, got %v", want, err)
 	}
