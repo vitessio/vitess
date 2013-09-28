@@ -798,17 +798,18 @@ func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, 
 
 func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(interface{}) error) {
 	waitStart := time.Now()
-	if ok := qe.streamTokens.Acquire(); !ok {
+	if !qe.streamTokens.Acquire() {
 		panic(NewTabletError(FAIL, "timed out waiting for streaming quota"))
 	}
+	// Guarantee a release in case of unexpected errors.
+	var once sync.Once
+	defer once.Do(qe.streamTokens.Release)
+
 	waitTime := time.Now().Sub(waitStart)
 	waitStats.Add("StreamToken", waitTime)
 	// No need create a new log variable for this. Just add to the total
 	// connection wait time.
 	logStats.WaitingForConnection += waitTime
-	var once sync.Once
-	// Failsafe in case of error.
-	defer once.Do(qe.streamTokens.Release)
 
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries += 1

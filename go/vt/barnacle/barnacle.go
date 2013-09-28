@@ -7,6 +7,7 @@
 package barnacle
 
 import (
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -55,7 +56,7 @@ func (bnc *Barnacle) GetSessionId(sessionParams *proto.SessionParams, session *p
 func (bnc *Barnacle) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
 	vtconn, err := bnc.connections.Get(query.SessionId)
 	if err != nil {
-		return err
+		return fmt.Errorf("query: %s, session %d: %v", query.Sql, query.SessionId, err)
 	}
 	defer bnc.connections.Put(query.SessionId)
 	qr, err := vtconn.(*VTConn).Execute(query.Sql, query.BindVariables, query.Keyspace, query.Shards)
@@ -69,7 +70,7 @@ func (bnc *Barnacle) Execute(context *rpcproto.Context, query *proto.Query, repl
 func (bnc *Barnacle) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(interface{}) error) error {
 	vtconn, err := bnc.connections.Get(query.SessionId)
 	if err != nil {
-		return err
+		return fmt.Errorf("query: %s, session %d: %v", query.Sql, query.SessionId, err)
 	}
 	defer bnc.connections.Put(query.SessionId)
 	return vtconn.(*VTConn).StreamExecute(query.Sql, query.BindVariables, query.Keyspace, query.Shards, sendReply)
@@ -79,7 +80,7 @@ func (bnc *Barnacle) StreamExecute(context *rpcproto.Context, query *proto.Query
 func (bnc *Barnacle) Begin(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
 	vtconn, err := bnc.connections.Get(session.SessionId)
 	if err != nil {
-		return err
+		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer bnc.connections.Put(session.SessionId)
 	return vtconn.(*VTConn).Begin()
@@ -89,7 +90,7 @@ func (bnc *Barnacle) Begin(context *rpcproto.Context, session *proto.Session, no
 func (bnc *Barnacle) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
 	vtconn, err := bnc.connections.Get(session.SessionId)
 	if err != nil {
-		return err
+		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer bnc.connections.Put(session.SessionId)
 	return vtconn.(*VTConn).Commit()
@@ -99,7 +100,7 @@ func (bnc *Barnacle) Commit(context *rpcproto.Context, session *proto.Session, n
 func (bnc *Barnacle) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
 	vtconn, err := bnc.connections.Get(session.SessionId)
 	if err != nil {
-		return err
+		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer bnc.connections.Put(session.SessionId)
 	return vtconn.(*VTConn).Rollback()
@@ -109,7 +110,7 @@ func (bnc *Barnacle) Rollback(context *rpcproto.Context, session *proto.Session,
 func (bnc *Barnacle) CloseSession(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
 	vtconn, err := bnc.connections.Get(session.SessionId)
 	if err != nil {
-		return err
+		return nil
 	}
 	defer bnc.connections.Unregister(session.SessionId)
 	vtconn.(*VTConn).Close()

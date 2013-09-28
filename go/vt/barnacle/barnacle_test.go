@@ -6,6 +6,7 @@ package barnacle
 
 import (
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -92,12 +93,10 @@ func TestBarnacleSessionConflict(t *testing.T) {
 			err = RpcBarnacle.Commit(nil, &sess, &noOutput)
 		case 4:
 			err = RpcBarnacle.Rollback(nil, &sess, &noOutput)
-		case 5:
-			err = RpcBarnacle.CloseSession(nil, &sess, &noOutput)
 		default:
 			return
 		}
-		if err == nil || err.Error() != want {
+		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("case %d: want %s, got %v", i, want, err)
 		}
 		i++
@@ -189,7 +188,7 @@ func TestBarnacleClose(t *testing.T) {
 	}
 	_, err = exec(sess)
 	want := "not found"
-	if err == nil || err.Error() != want {
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("want %s, got %v", want, err)
 	}
 }
