@@ -19,8 +19,11 @@ const (
 	NOT_IN_TX
 )
 
+// Special case MySQL error numbers
 const (
-	DUPLICATE_KEY = 1062 // MySQL error number
+	DUP_ENTRY         = 1062
+	LOCK_WAIT_TIMEOUT = 1205
+	LOCK_DEADLOCK     = 1213
 )
 
 type TabletError struct {
@@ -72,9 +75,12 @@ func (te *TabletError) RecordStats() {
 	case NOT_IN_TX:
 		errorStats.Add("NotInTx", 1)
 	default:
-		if te.SqlError == DUPLICATE_KEY {
+		switch te.SqlError {
+		case DUP_ENTRY:
 			errorStats.Add("DupKey", 1)
-		} else {
+		case LOCK_WAIT_TIMEOUT, LOCK_DEADLOCK:
+			errorStats.Add("Deadlock", 1)
+		default:
 			errorStats.Add("Fail", 1)
 		}
 	}
