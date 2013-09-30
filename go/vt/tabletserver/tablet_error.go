@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/tb"
 )
 
@@ -17,13 +18,6 @@ const (
 	FATAL
 	TX_POOL_FULL
 	NOT_IN_TX
-)
-
-// Special case MySQL error numbers
-const (
-	DUP_ENTRY         = 1062
-	LOCK_WAIT_TIMEOUT = 1205
-	LOCK_DEADLOCK     = 1213
 )
 
 type TabletError struct {
@@ -76,9 +70,9 @@ func (te *TabletError) RecordStats() {
 		errorStats.Add("NotInTx", 1)
 	default:
 		switch te.SqlError {
-		case DUP_ENTRY:
+		case mysql.DUP_ENTRY:
 			errorStats.Add("DupKey", 1)
-		case LOCK_WAIT_TIMEOUT, LOCK_DEADLOCK:
+		case mysql.LOCK_WAIT_TIMEOUT, mysql.LOCK_DEADLOCK:
 			errorStats.Add("Deadlock", 1)
 		default:
 			errorStats.Add("Fail", 1)
