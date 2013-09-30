@@ -126,31 +126,6 @@ func (si *ShardInfo) ShardName() string {
 	return si.shardName
 }
 
-// Rebuild takes all the tablets in the list and puts them in the
-// right place in the shard. Only master tablet is considered.
-func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
-	si.MasterAlias = TabletAlias{}
-	si.KeyRange = key.KeyRange{}
-
-	for i, ti := range shardTablets {
-		switch ti.Type {
-		case TYPE_MASTER:
-			si.MasterAlias = ti.Alias()
-		}
-
-		if i == 0 {
-			// copy the first KeyRange
-			si.KeyRange = ti.KeyRange
-		} else {
-			// verify the subsequent ones
-			if si.KeyRange != ti.KeyRange {
-				return fmt.Errorf("inconsistent KeyRange: %v != %v", si.KeyRange, ti.KeyRange)
-			}
-		}
-	}
-	return nil
-}
-
 // NewShardInfo returns a ShardInfo basing on shard with the
 // keyspace / shard. This function should be only used by Server
 // implementations.

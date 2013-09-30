@@ -424,7 +424,7 @@ func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletI
 	// We rebuild all the cells, as we may have taken tablets in and
 	// out of the graph.
 	log.Infof("rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil, false)
+	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil)
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletInfo, masterElect *topo.TabletInfo) error {
@@ -461,21 +461,6 @@ func restartableTabletMap(slaves map[topo.TabletAlias]*topo.TabletInfo) map[uint
 		}
 	}
 	return tabletMap
-}
-
-func slaveTabletMap(tabletMap map[topo.TabletAlias]*topo.TabletInfo) (slaveMap map[topo.TabletAlias]*topo.TabletInfo, master *topo.TabletInfo, err error) {
-	slaveMap = make(map[topo.TabletAlias]*topo.TabletInfo)
-	for alias, ti := range tabletMap {
-		if ti.Type != topo.TYPE_MASTER && ti.Type != topo.TYPE_SCRAP {
-			slaveMap[alias] = ti
-		} else if ti.Parent.Uid == topo.NO_TABLET {
-			if master != nil {
-				return nil, nil, fmt.Errorf("master tablet conflict in shard %v/%v: %v, %v", master.Keyspace, master.Shard, master.Alias(), ti.Alias())
-			}
-			master = ti
-		}
-	}
-	return
 }
 
 // sortedTabletMap returns two maps:

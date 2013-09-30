@@ -36,7 +36,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 		return err
 	}
 
-	err = wr.rebuildShard(keyspace, shard, cells, false)
+	err = wr.rebuildShard(keyspace, shard, cells)
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
@@ -48,12 +48,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 // This function should only be used with an action lock on the shard
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
-//
-// NOTE(alainjobart): The updateMaster boolean is going to be removed
-// eventually. We don't want to update the master during rebuild,
-// just during reparent. When all code is converted to updateMaster=false,
-// we're remove the flag.
-func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, updateMaster bool) error {
+func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 	log.Infof("rebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
@@ -82,16 +77,6 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, updateM
 		tablets = append(tablets, ti)
 	}
 
-	// Rebuild the rollup data in the replication graph.
-	// There is only MasterAlias left now.
-	if updateMaster {
-		if err = shardInfo.Rebuild(tablets); err != nil {
-			return err
-		}
-		if err = wr.ts.UpdateShard(shardInfo); err != nil {
-			return err
-		}
-	}
 	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
 }
 
