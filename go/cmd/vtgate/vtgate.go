@@ -8,9 +8,9 @@ import (
 	"flag"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/barnacle"
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate"
 	_ "github.com/youtube/vitess/go/vt/zktopo"
 )
 
@@ -26,7 +26,7 @@ var (
 func main() {
 	flag.Parse()
 	servenv.Init()
-	blm := barnacle.NewBalancerMap(topo.GetServer(), *cell, *portName)
-	barnacle.Init(blm, *tabletProtocol, *retryDelay, *retryCount)
+	blm := vtgate.NewBalancerMap(topo.GetServer(), *cell, *portName)
+	vtgate.Init(blm, *tabletProtocol, *retryDelay, *retryCount)
 	servenv.Run(*port)
 }
