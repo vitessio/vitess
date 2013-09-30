@@ -63,13 +63,13 @@ class TopoOccTest(unittest.TestCase):
     # zkocc API test
     utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqual(err, "KeyspaceName[0] = test_keyspace1\n" +
-                          "KeyspaceName[1] = test_keyspace2\n")
+    self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
+                          "KeyspaceNames[1] = test_keyspace2\n")
 
     # vttopo API test
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.vttopo_port_base, trap_output=True)
-    self.assertEqual(err, "KeyspaceName[0] = test_keyspace1\n" +
-                          "KeyspaceName[1] = test_keyspace2\n")
+    self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
+                          "KeyspaceNames[1] = test_keyspace2\n")
 
   def test_get_srv_keyspace(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -84,23 +84,25 @@ class TopoOccTest(unittest.TestCase):
     utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.zkocc_port_base, trap_output=True)
     self.assertEqual(err,
-                     "Partition[master] =\n" +
-                     "Shard[0]={Start: , End: }\n" +
-                     "Partition[rdonly] =\n" +
-                     "Shard[0]={Start: , End: }\n" +
-                     "Partition[replica] =\n" +
-                     "Shard[0]={Start: , End: }\n" +
-                     "TabletType[0] = master\n")
+                     "Partitions[master] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Partitions[rdonly] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Partitions[replica] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Shards[0]={Start: , End: }\n" +
+                     "TabletTypes[0] = master\n")
 
     # vttopo API test
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.vttopo_port_base, trap_output=True)
-    self.assertEqual(err, "Partition[master] =\n" +
-                     "Shard[0]={Start: , End: }\n" +
-                     "Partition[rdonly] =\n" +
-                     "Shard[0]={Start: , End: }\n" +
-                     "Partition[replica] =\n" +
-                     "Shard[0]={Start: , End: }\n" +
-                     "TabletType[0] = master\n")
+    self.assertEqual(err, "Partitions[master] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Partitions[rdonly] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Partitions[replica] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Shards[0]={Start: , End: }\n" +
+                     "TabletTypes[0] = master\n")
 
   def test_get_srv_keyspace_local(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -122,11 +124,11 @@ class TopoOccTest(unittest.TestCase):
     # zkocc API test
     utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqual(err, "Entry[0] = 1 localhost\n")
+    self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
     # vttopo API test
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.vttopo_port_base, trap_output=True)
-    self.assertEqual(err, "Entry[0] = 1 localhost\n")
+    self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
 
 def _format_time(timeFromBson):
