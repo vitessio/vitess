@@ -100,7 +100,7 @@ func getSrvKeyspaceNames(rpcClient *rpcplus.Client, cell string, verbose bool) {
 	}
 	if verbose {
 		for i, entry := range reply.Entries {
-			println(fmt.Sprintf("KeyspaceName[%v] = %v", i, entry))
+			println(fmt.Sprintf("KeyspaceNames[%v] = %v", i, entry))
 		}
 	}
 }
@@ -116,13 +116,16 @@ func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bo
 	}
 	if verbose {
 		for t, p := range reply.Partitions {
-			println(fmt.Sprintf("Partition[%v] =", t))
+			println(fmt.Sprintf("Partitions[%v] =", t))
 			for i, s := range p.Shards {
-				println(fmt.Sprintf("Shard[%v]=%v", i, s.KeyRange.String()))
+				println(fmt.Sprintf("  Shards[%v]=%v", i, s.KeyRange.String()))
 			}
 		}
+		for i, s := range reply.Shards {
+			println(fmt.Sprintf("Shards[%v]=%v", i, s.KeyRange.String()))
+		}
 		for i, t := range reply.TabletTypes {
-			println(fmt.Sprintf("TabletType[%v] = %v", i, t))
+			println(fmt.Sprintf("TabletTypes[%v] = %v", i, t))
 		}
 	}
 }
@@ -140,7 +143,7 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 	}
 	if verbose {
 		for i, e := range reply.Entries {
-			println(fmt.Sprintf("Entry[%v] = %v %v", i, e.Uid, e.Host))
+			println(fmt.Sprintf("Entries[%v] = %v %v", i, e.Uid, e.Host))
 		}
 	}
 }

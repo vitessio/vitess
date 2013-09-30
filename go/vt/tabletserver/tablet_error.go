@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/tb"
 )
 
@@ -17,10 +18,6 @@ const (
 	FATAL
 	TX_POOL_FULL
 	NOT_IN_TX
-)
-
-const (
-	DUPLICATE_KEY = 1062 // MySQL error number
 )
 
 type TabletError struct {
@@ -72,9 +69,12 @@ func (te *TabletError) RecordStats() {
 	case NOT_IN_TX:
 		errorStats.Add("NotInTx", 1)
 	default:
-		if te.SqlError == DUPLICATE_KEY {
+		switch te.SqlError {
+		case mysql.DUP_ENTRY:
 			errorStats.Add("DupKey", 1)
-		} else {
+		case mysql.LOCK_WAIT_TIMEOUT, mysql.LOCK_DEADLOCK:
+			errorStats.Add("Deadlock", 1)
+		default:
 			errorStats.Add("Fail", 1)
 		}
 	}

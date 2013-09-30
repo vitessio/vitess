@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package barnacle
+package vtgate
 
 import (
 	"runtime"
@@ -12,7 +12,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
-	"github.com/youtube/vitess/go/vt/barnacle/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // This file uses the sandbox_test framework.
@@ -21,17 +21,17 @@ func init() {
 	Init(NewBalancerMap(new(sandboxTopo), "aa", "vt"), "sandbox", 1*time.Second, 10)
 }
 
-// resetBarnacle resets the internal state of RpcBarnacle.
-func resetBarnacle() (sess proto.Session) {
+// resetVTGate resets the internal state of RpcVTGate.
+func resetVTGate() (sess proto.Session) {
 	resetSandbox()
-	*RpcBarnacle = Barnacle{
+	*RpcVTGate = VTGate{
 		balancerMap:    NewBalancerMap(new(sandboxTopo), "aa", "vt"),
 		tabletProtocol: "sandbox",
 		connections:    pools.NewNumbered(),
 		retryDelay:     1 * time.Second,
 		retryCount:     10,
 	}
-	RpcBarnacle.GetSessionId(&proto.SessionParams{TabletType: "master"}, &sess)
+	RpcVTGate.GetSessionId(&proto.SessionParams{TabletType: "master"}, &sess)
 	return
 }
 
@@ -42,14 +42,14 @@ func exec(sess proto.Session) (qr mproto.QueryResult, err error) {
 		SessionId: sess.SessionId,
 		Shards:    []string{"0"},
 	}
-	err = RpcBarnacle.Execute(nil, &q, &qr)
+	err = RpcVTGate.Execute(nil, &q, &qr)
 	return
 }
 
-func TestBarnacleGetSessionId(t *testing.T) {
-	resetBarnacle()
+func TestVTGateGetSessionId(t *testing.T) {
+	resetVTGate()
 	var sess proto.Session
-	err := RpcBarnacle.GetSessionId(&proto.SessionParams{TabletType: "master"}, &sess)
+	err := RpcVTGate.GetSessionId(&proto.SessionParams{TabletType: "master"}, &sess)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -58,7 +58,7 @@ func TestBarnacleGetSessionId(t *testing.T) {
 	}
 
 	var next proto.Session
-	err = RpcBarnacle.GetSessionId(&proto.SessionParams{TabletType: "master"}, &next)
+	err = RpcVTGate.GetSessionId(&proto.SessionParams{TabletType: "master"}, &next)
 	if err != nil {
 		t.Errorf("%v", err)
 	}
@@ -68,8 +68,8 @@ func TestBarnacleGetSessionId(t *testing.T) {
 	}
 }
 
-func TestBarnacleSessionConflict(t *testing.T) {
-	sess := resetBarnacle()
+func TestVTGateSessionConflict(t *testing.T) {
+	sess := resetVTGate()
 	sbc := &sandboxConn{mustDelay: 50 * time.Millisecond}
 	testConns["0:1"] = sbc
 	q := proto.Query{
@@ -78,7 +78,7 @@ func TestBarnacleSessionConflict(t *testing.T) {
 		Shards:    []string{"0"},
 	}
 	var qr mproto.QueryResult
-	go RpcBarnacle.Execute(nil, &q, &qr)
+	go RpcVTGate.Execute(nil, &q, &qr)
 	runtime.Gosched()
 	want := "in use"
 	var err error
@@ -87,15 +87,15 @@ func TestBarnacleSessionConflict(t *testing.T) {
 	for {
 		switch i {
 		case 0:
-			err = RpcBarnacle.Execute(nil, &q, nil)
+			err = RpcVTGate.Execute(nil, &q, nil)
 		case 1:
-			err = RpcBarnacle.StreamExecute(nil, &q, nil)
+			err = RpcVTGate.StreamExecute(nil, &q, nil)
 		case 2:
-			err = RpcBarnacle.Begin(nil, &sess, &noOutput)
+			err = RpcVTGate.Begin(nil, &sess, &noOutput)
 		case 3:
-			err = RpcBarnacle.Commit(nil, &sess, &noOutput)
+			err = RpcVTGate.Commit(nil, &sess, &noOutput)
 		case 4:
-			err = RpcBarnacle.Rollback(nil, &sess, &noOutput)
+			err = RpcVTGate.Rollback(nil, &sess, &noOutput)
 		default:
 			return
 		}
@@ -108,8 +108,8 @@ func TestBarnacleSessionConflict(t *testing.T) {
 	}
 }
 
-func TestBarnacleExecute(t *testing.T) {
-	sess := resetBarnacle()
+func TestVTGateExecute(t *testing.T) {
+	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
 	qr, err := exec(sess)
@@ -121,8 +121,8 @@ func TestBarnacleExecute(t *testing.T) {
 	}
 }
 
-func TestBarnacleStreamExecute(t *testing.T) {
-	sess := resetBarnacle()
+func TestVTGateStreamExecute(t *testing.T) {
+	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
 	q := proto.Query{
@@ -131,7 +131,7 @@ func TestBarnacleStreamExecute(t *testing.T) {
 		Shards:    []string{"0"},
 	}
 	var qr mproto.QueryResult
-	err := RpcBarnacle.StreamExecute(nil, &q, func(r interface{}) error {
+	err := RpcVTGate.StreamExecute(nil, &q, func(r interface{}) error {
 		qr = *(r.(*mproto.QueryResult))
 		return nil
 	})
@@ -143,13 +143,13 @@ func TestBarnacleStreamExecute(t *testing.T) {
 	}
 }
 
-func TestBarnacleTx(t *testing.T) {
-	sess := resetBarnacle()
+func TestVTGateTx(t *testing.T) {
+	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
 	var noOutput string
 	for i := 0; i < 2; i++ {
-		RpcBarnacle.Begin(nil, &sess, &noOutput)
+		RpcVTGate.Begin(nil, &sess, &noOutput)
 		exec(sess)
 		// Ensure low level Begin gets called.
 		if sbc.BeginCount != i+1 {
@@ -161,7 +161,7 @@ func TestBarnacleTx(t *testing.T) {
 			if sbc.CommitCount != 0 {
 				t.Errorf("want 0, got %v", sbc.BeginCount)
 			}
-			RpcBarnacle.Commit(nil, &sess, &noOutput)
+			RpcVTGate.Commit(nil, &sess, &noOutput)
 			if sbc.CommitCount != 1 {
 				t.Errorf("want 1, got %v", sbc.BeginCount)
 			}
@@ -170,7 +170,7 @@ func TestBarnacleTx(t *testing.T) {
 			if sbc.RollbackCount != 0 {
 				t.Errorf("want 0, got %v", sbc.RollbackCount)
 			}
-			RpcBarnacle.Rollback(nil, &sess, &noOutput)
+			RpcVTGate.Rollback(nil, &sess, &noOutput)
 			if sbc.RollbackCount != 1 {
 				t.Errorf("want 1, got %v", sbc.RollbackCount)
 			}
@@ -178,8 +178,8 @@ func TestBarnacleTx(t *testing.T) {
 	}
 }
 
-func TestBarnacleClose(t *testing.T) {
-	sess := resetBarnacle()
+func TestVTGateClose(t *testing.T) {
+	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
 	exec(sess)
@@ -188,7 +188,7 @@ func TestBarnacleClose(t *testing.T) {
 		t.Errorf("want 0, got %v", sbc.CloseCount)
 	}
 	var noOutput string
-	err := RpcBarnacle.CloseSession(nil, &sess, &noOutput)
+	err := RpcVTGate.CloseSession(nil, &sess, &noOutput)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
