@@ -41,9 +41,12 @@ class TopoOccTest(unittest.TestCase):
     utils.zkocc_kill(self.zkocc_server)
     utils.vttopo_kill(self.vttopo_server)
 
-  def rebuild(self):
+  def rebuild(self, use_served_types=False):
     utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0', auto_log=True)
-    utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
+    flags = ""
+    if use_served_types:
+      flags = "--use-served-types"
+    utils.run_vtctl('RebuildKeyspaceGraph %s /zk/global/vt/keyspaces/*' % flags, auto_log=True)
 
   def test_get_srv_keyspace_names(self):
     utils.run_vtctl('CreateKeyspace test_keyspace1')
@@ -73,18 +76,31 @@ class TopoOccTest(unittest.TestCase):
     t = tablet.Tablet(tablet_uid=1, cell="nj")
     t.init_tablet("master", "test_keyspace", "0")
     utils.run_vtctl('UpdateTabletAddrs %s -mysql-ip-addr 127.0.0.1:%s -secure-addr 127.0.0.1:%s' % (t.tablet_alias, t.mysql_port, t.port + 500))
-    self.rebuild()
+    self.rebuild(use_served_types=True)
     reply = self.topo.get_srv_keyspace("test_nj", "test_keyspace")
     self.assertEqual(reply['TabletTypes'], ['master'])
 
     # zkocc API test
     utils.prog_compile(['zkclient2'])
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqual(err, "TabletType[0] = master\n")
+    self.assertEqual(err,
+                     "Partition[master] =\n" +
+                     "Shard[0]={Start: , End: }\n" +
+                     "Partition[rdonly] =\n" +
+                     "Shard[0]={Start: , End: }\n" +
+                     "Partition[replica] =\n" +
+                     "Shard[0]={Start: , End: }\n" +
+                     "TabletType[0] = master\n")
 
     # vttopo API test
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.vttopo_port_base, trap_output=True)
-    self.assertEqual(err, "TabletType[0] = master\n")
+    self.assertEqual(err, "Partition[master] =\n" +
+                     "Shard[0]={Start: , End: }\n" +
+                     "Partition[rdonly] =\n" +
+                     "Shard[0]={Start: , End: }\n" +
+                     "Partition[replica] =\n" +
+                     "Shard[0]={Start: , End: }\n" +
+                     "TabletType[0] = master\n")
 
   def test_get_srv_keyspace_local(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
