@@ -25,6 +25,8 @@ func TestRandomness(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		b := NewBalancer(endPoints3, RETRY_DELAY)
 		addr, _ := b.Get()
+		// Ensure that you don't always get the first element
+		// in the balancer.
 		if addr == "0" {
 			continue
 		}
@@ -52,6 +54,7 @@ func TestFindDeleteAddrNode(t *testing.T) {
 		t.Errorf("want 1, got %d", goti)
 	}
 	addrNodes = delAddrNode(addrNodes, 1)
+	// The middle node "1" was deleted.
 	if len(addrNodes) != 2 {
 		t.Errorf("want 2, got %d", len(addrNodes))
 	}
@@ -67,11 +70,13 @@ func endPointsError() ([]string, error) {
 func TestGetAddressesFail(t *testing.T) {
 	b := NewBalancer(endPointsError, RETRY_DELAY)
 	_, err := b.Get()
+	// Ensure that end point errors are returned correctly.
 	if err == nil {
 		t.Errorf("want error")
 	}
 	b.getAddresses = endPoints3
 	_, err = b.Get()
+	// Ensure no error is returned if end point doesn't fail.
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -84,9 +89,11 @@ func TestGetSimple(t *testing.T) {
 		addr, _ := b.Get()
 		addrs = append(addrs, addr)
 	}
+	// Ensure that the same address is not always returned.
 	if addrs[0] == addrs[1] {
 		t.Errorf("ids are equal: %v", addrs[0])
 	}
+	// Ensure that the 4th addres is the first one (round-robin).
 	if addrs[0] != addrs[3] {
 		t.Errorf("ids are not equal: %d, %d", addrs[0], addrs[3])
 	}
@@ -101,6 +108,7 @@ func TestMarkDown(t *testing.T) {
 	b.MarkDown(addr)
 	addr1, _ := b.Get()
 	addr2, _ := b.Get()
+	// Two addresses are marked down. Only one address is avaiilable.
 	if addr1 != addr2 {
 		t.Errorf("ids are not equal: %v, %v", addr1, addr2)
 	}
@@ -108,12 +116,14 @@ func TestMarkDown(t *testing.T) {
 	b.MarkDown(addr)
 	startTime := time.Now()
 	addr, _ = b.Get()
+	// All were marked down. Get should return only after the retry delay.
 	if time.Now().Sub(startTime) < (10 * time.Millisecond) {
 		t.Errorf("want >10ms, got %v", time.Now().Sub(startTime))
 	}
 	if addr == "" {
 		t.Errorf("want non-empty")
 	}
+	// Ensure end points were refreshed, counter should have gone up.
 	if start == counter {
 		t.Errorf("want %v < %v", start, counter)
 	}
@@ -130,11 +140,13 @@ func TestRefresh(t *testing.T) {
 	b := NewBalancer(endPointsMorph, RETRY_DELAY)
 	b.refresh()
 	index := findAddrNode(b.addressNodes, "11")
+	// "11" should be found in the list.
 	if index == -1 {
 		t.Errorf("want other than -1: %v", index)
 	}
 	b.MarkDown("1")
 	b.refresh()
+	// "11" should not be found. It should be "12" now.
 	index = findAddrNode(b.addressNodes, "11")
 	if index != -1 {
 		t.Errorf("want -1, got %v", index)
@@ -144,6 +156,7 @@ func TestRefresh(t *testing.T) {
 		t.Errorf("got other than -1: %v", index)
 	}
 	index = findAddrNode(b.addressNodes, "1")
+	// "1" should be marked down (non-zero timeRetry)
 	if b.addressNodes[index].timeRetry.IsZero() {
 		t.Errorf("want non-zero, got 0")
 	}

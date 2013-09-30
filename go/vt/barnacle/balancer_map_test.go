@@ -16,13 +16,16 @@ func TestSimple(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	blc2 := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
+	// You should get the same balancer every time for a give set of input keys.
 	if blc != blc2 {
 		t.Errorf("Balancers don't match, map is %v", blm.balancers)
 	}
 	blc3 := blm.Balancer("other_keyspace", "0", "master", 1*time.Second)
+	// You should get a different balancer when input keys are different.
 	if blc == blc3 {
 		t.Errorf("Balancers match, map is %v", blm.balancers)
 	}
+	// At least one of the values has to be "0:1"
 	for i := 0; i < 3; i++ {
 		addr, _ := blc.Get()
 		if addr == "0:1" {
@@ -37,6 +40,7 @@ func TestPortError(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "noport")
 	blc := blm.Balancer("test_keyspace", "0", "master", 1*time.Second)
 	got, err := blc.Get()
+	// If the port name doesn't match, you should get an error.
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
 	}
@@ -51,6 +55,7 @@ func TestTopoError(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	blc := blm.Balancer("test_keyspace", "", "master", 1*time.Second)
 	got, err := blc.Get()
+	// If topo serv is down, you should get an error.
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
 	}
