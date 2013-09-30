@@ -395,7 +395,7 @@ func (wr *Wrangler) checkMasterElect(ti *topo.TabletInfo) error {
 	return wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("preflight_serving_type"))
 }
 
-func (wr *Wrangler) finishReparent(oldMaster, masterElect *topo.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {
+func (wr *Wrangler) finishReparent(si *topo.ShardInfo, masterElect *topo.TabletInfo, majorityRestart, leaveMasterReadOnly bool) error {
 	// If the majority of slaves restarted, move ahead.
 	if majorityRestart {
 		if leaveMasterReadOnly {
@@ -414,10 +414,17 @@ func (wr *Wrangler) finishReparent(oldMaster, masterElect *topo.TabletInfo, majo
 		log.Warningf("minority reparent, manual fixes are needed, leaving master-elect read-only, change with: vtctl SetReadWrite %v", masterElect.Alias())
 	}
 
+	// save the new master in the shard info
+	si.MasterAlias = masterElect.Alias()
+	if err := wr.ts.UpdateShard(si); err != nil {
+		log.Errorf("Failed to save new master into shard: %v", err)
+		return err
+	}
+
 	// We rebuild all the cells, as we may have taken tablets in and
 	// out of the graph.
 	log.Infof("rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil, true)
+	return wr.rebuildShard(masterElect.Keyspace, masterElect.Shard, nil, false)
 }
 
 func (wr *Wrangler) breakReplication(slaveMap map[topo.TabletAlias]*topo.TabletInfo, masterElect *topo.TabletInfo) error {
