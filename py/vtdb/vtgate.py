@@ -83,6 +83,7 @@ class TabletConnection(object):
   def close(self):
     self.in_transaction = False
     self.session_id = 0
+    self.client.call('VTGate.CloseSession', {'SessionId': self.session_id})
     self.client.close()
 
   def is_closed(self):
@@ -98,7 +99,7 @@ class TabletConnection(object):
       raise dbexceptions.NotSupportedError('Cannot begin: Already in a transaction')
     req = self._make_req()
     try:
-      response = self.client.call('VTGate.Begin', req)
+      response = self.client.call('VTGate.Begin', {'SessionId': self.session_id})
       self.in_transaction = True
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -112,7 +113,7 @@ class TabletConnection(object):
     self.in_transaction = False
 
     try:
-      response = self.client.call('VTGate.Commit', req)
+      response = self.client.call('VTGate.Commit', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
@@ -125,7 +126,7 @@ class TabletConnection(object):
     self.in_transaction = False
 
     try:
-      response = self.client.call('VTGate.Rollback', req)
+      response = self.client.call('VTGate.Rollback', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
