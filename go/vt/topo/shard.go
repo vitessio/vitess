@@ -174,7 +174,8 @@ func CreateShard(ts Server, keyspace, shard string) error {
 
 // FindAllTabletAliasesInShard uses the replication graph to find all the
 // tablet aliases in the given shard.
-// It can return ErrPartialResult if some cells were not fetched.
+// It can return ErrPartialResult if some cells were not fetched,
+// in which case the result only contains the cells that were fetched.
 func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAlias, error) {
 	// read the shard information to find the cells
 	si, err := ts.GetShard(keyspace, shard)
@@ -210,14 +211,15 @@ func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAli
 		}(cell)
 	}
 	wg.Wait()
+	err = nil
 	if er.HasErrors() {
 		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, er.Error())
-		return nil, ErrPartialResult
+		err = ErrPartialResult
 	}
 
 	result := make([]TabletAlias, 0, len(resultAsMap))
 	for a, _ := range resultAsMap {
 		result = append(result, a)
 	}
-	return result, nil
+	return result, err
 }

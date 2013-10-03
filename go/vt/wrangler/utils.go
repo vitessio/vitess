@@ -13,7 +13,10 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// If error is not nil, the results in the dictionary are incomplete.
+// GetTabletMap tries to read all the tablets in the provided list,
+// and returns them all in a map.
+// If error is topo.ErrPartialResul, the results in the dictionary are
+// incomplete, meaning some tablets couldn't be read.
 func GetTabletMap(ts topo.Server, tabletAliases []topo.TabletAlias) (map[topo.TabletAlias]*topo.TabletInfo, error) {
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
@@ -31,7 +34,7 @@ func GetTabletMap(ts topo.Server, tabletAliases []topo.TabletAlias) (map[topo.Ta
 				log.Warningf("%v: %v", tabletAlias, err)
 				// There can be data races removing nodes - ignore them for now.
 				if err != topo.ErrNoNode {
-					someError = err
+					someError = topo.ErrPartialResult
 				}
 			} else {
 				tabletMap[tabletAlias] = tabletInfo
@@ -43,14 +46,24 @@ func GetTabletMap(ts topo.Server, tabletAliases []topo.TabletAlias) (map[topo.Ta
 	return tabletMap, someError
 }
 
-// If error is not nil, the results in the dictionary are incomplete.
+// GetTabletMapForShard returns the tablets for a shard. It can return
+// topo.ErrPartialResult if it couldn't read all the cells, or all
+// the individual tablets, in which case the map is valid, but partial.
 func GetTabletMapForShard(ts topo.Server, keyspace, shard string) (map[topo.TabletAlias]*topo.TabletInfo, error) {
+	// if we get a partial result, we keep going. It most likely means
+	// a cell is out of commission.
 	aliases, err := topo.FindAllTabletAliasesInShard(ts, keyspace, shard)
-	if err != nil {
+	if err != nil && err != topo.ErrPartialResult {
 		return nil, err
 	}
 
-	return GetTabletMap(ts, aliases)
+	// get the tablets for the cells we were able to reach, forward
+	// topo.ErrPartialResult from FindAllTabletAliasesInShard
+	result, gerr := GetTabletMap(ts, aliases)
+	if gerr == nil && err != nil {
+		gerr = err
+	}
+	return result, gerr
 }
 
 // Return a sorted list of tablets.

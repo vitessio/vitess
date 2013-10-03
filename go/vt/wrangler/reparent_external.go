@@ -39,9 +39,21 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		return fmt.Errorf("master-elect tablet %v is already master", masterElectTabletAlias)
 	}
 
-	// read the tablets, make sure the master elect is known to us
+	// Read the tablets, make sure the master elect is known to us.
+	// Note we will keep going with a partial tablet map, which usually
+	// happens when a cell is not reachable. After these checks, the
+	// guarantees we'll have are:
+	// - global cell is reachable (we just locked and read the shard)
+	// - the local cell that contains the new master is reachable
+	//   (as we're going to check the new master is in the list)
+	// That should be enough.
 	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
-	if err != nil {
+	switch err {
+	case nil:
+		// keep going
+	case topo.ErrPartialResult:
+		log.Warningf("Got topo.ErrPartialResult from GetTabletMapForShard, may need to re-init some tablets")
+	default:
 		return err
 	}
 	masterElectTablet, ok := tabletMap[masterElectTabletAlias]
