@@ -18,6 +18,7 @@ import MySQLdb
 
 import utils
 import tablet
+from vtdb import vtgate
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -131,6 +132,63 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.init_tablet('idle')
     tablet_62344.scrap(force=True)
+
+  def test_vtgate(self):
+    # Start up a master mysql and vttablet
+    utils.run_vtctl('CreateKeyspace -force test_keyspace')
+    utils.run_vtctl('CreateShard -force test_keyspace/0')
+    tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
+    utils.validate_topology()
+
+    # if these statements don't run before the tablet it will wedge waiting for the
+    # db to become accessible. this is more a bug than a feature.
+    tablet_62344.mquery("", ["set global read_only = off"])
+    tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
+                          self._populate_vt_select_test)
+
+    tablet_62344.start_vttablet()
+    gate_proc = utils.vtgate_start()
+
+    try:
+      conn = vtgate.connect("localhost:%s"%(utils.vtgate_port_base), "master", "test_keyspace", "0", 2.0)
+
+      # _execute
+      (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
+      self.assertEqual(count, 4, "want 4, got %d" % (count))
+      self.assertEqual(len(fields), 2, "want 2, got %d" % (len(fields)))
+
+      # _stream_execute
+      (result, count, lastrow, fields) = conn._stream_execute("select * from vt_select_test", {})
+      self.assertEqual(len(fields), 2, "want 2, got %d" % (len(fields)))
+      count = 0
+      while 1:
+        r = conn._stream_next()
+        if not r:
+          break
+        count += 1
+      self.assertEqual(count, 4, "want 4, got %d" % (count))
+
+      # begin-rollback
+      conn.begin()
+      conn._execute("insert into vt_select_test values(:id, :msg)", {"id": 5, "msg": "test4"})
+      conn.rollback()
+      (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
+      self.assertEqual(count, 4, "want 4, got %d" % (count))
+
+      # begin-commit
+      conn.begin()
+      conn._execute("insert into vt_select_test values(:id, :msg)", {"id": 5, "msg": "test4"})
+      conn.commit()
+      (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
+      self.assertEqual(count, 5, "want 5, got %d" % (count))
+
+      # close
+      conn.close()
+    finally:
+      utils.vtgate_kill(gate_proc)
+      tablet_62344.kill_vttablet()
 
   def test_scrap(self):
     # Start up a master mysql and vttablet

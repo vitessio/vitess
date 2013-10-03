@@ -327,6 +327,21 @@ def get_vars(port):
     return None
   return json.loads(data)
 
+def wait_for_vars(name, port):
+  timeout = 5.0
+  while True:
+    v = get_vars(port)
+    if v == None:
+      logging.debug("  %s not answering at /debug/vars, waiting..." % (name))
+    else:
+      break
+
+    logging.debug("sleeping a bit while we wait")
+    time.sleep(0.1)
+    timeout -= 0.1
+    if timeout <= 0:
+      raise TestError("timeout waiting for %s" % (name))
+
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
   global zkocc_port_base
@@ -336,22 +351,7 @@ def zkocc_start(cells=['test_nj'], extra_params=[]):
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
   sp = run_bg(args)
-
-  # wait for vars
-  timeout = 5.0
-  while True:
-    v = get_vars(zkocc_port_base)
-    if v == None:
-      logging.debug("  zkocc not answering at /debug/vars, waiting...")
-    else:
-      break
-
-    logging.debug("sleeping a bit while we wait")
-    time.sleep(0.1)
-    timeout -= 0.1
-    if timeout <= 0:
-      raise TestError("timeout waiting for zkocc")
-
+  wait_for_vars("zkocc", zkocc_port_base)
   return sp
 
 def zkocc_kill(sp):
@@ -368,25 +368,31 @@ def vttopo_start():
           '-stderrthreshold=ERROR',
           ]
   sp = run_bg(args)
-
-  # wait for vars
-  timeout = 5.0
-  while True:
-    v = get_vars(vttopo_port_base)
-    if v == None:
-      logging.debug("  vttopo not answering at /debug/vars, waiting...")
-    else:
-      break
-
-    logging.debug("sleeping a bit while we wait")
-    time.sleep(0.1)
-    timeout -= 0.1
-    if timeout <= 0:
-      raise TestError("timeout waiting for vttopo")
-
+  wait_for_vars("vttopo", vttopo_port_base)
   return sp
 
 def vttopo_kill(sp):
+  kill_sub_process(sp)
+  sp.wait()
+
+# vtgate helpers
+vtgate_port_base = reserve_ports(1)
+def vtgate_start(cell='test_nj', port_name='_vtocc', retry_delay=1, retry_count=1):
+  global vtgate_port_base
+  prog_compile(['vtgate'])
+  args = [vtroot+'/bin/vtgate',
+          '-port', str(vtgate_port_base),
+          '-cell', cell,
+          '-port-name', port_name,
+          '-retry-delay', '%ss' % (str(retry_delay)),
+          '-retry-count', str(retry_count),
+          '-stderrthreshold=ERROR',
+          ]
+  sp = run_bg(args)
+  wait_for_vars("vtgate", vtgate_port_base)
+  return sp
+
+def vtgate_kill(sp):
   kill_sub_process(sp)
   sp.wait()
 
