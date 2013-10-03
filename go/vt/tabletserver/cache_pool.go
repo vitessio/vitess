@@ -54,8 +54,8 @@ func (cache *Cache) Recycle() {
 
 func NewCachePool(name string, commandLine []string, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout}
-	cp.memcacheStats = NewMemcacheStats(cp)
 	if name != "" {
+		cp.memcacheStats = NewMemcacheStats(cp)
 		stats.Publish(name+"Capacity", stats.IntFunc(cp.Capacity))
 		stats.Publish(name+"Available", stats.IntFunc(cp.Available))
 		stats.Publish(name+"MaxCap", stats.IntFunc(cp.MaxCap))

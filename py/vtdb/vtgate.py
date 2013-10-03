@@ -75,7 +75,7 @@ class TabletConnection(object):
 
       self.client.dial()
       params = {'TabletType': self.tablet_type}
-      response = self.client.call('Barnacle.GetSessionId', params)
+      response = self.client.call('VTGate.GetSessionId', params)
       self.session_id = response.reply['SessionId']
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -83,6 +83,7 @@ class TabletConnection(object):
   def close(self):
     self.in_transaction = False
     self.session_id = 0
+    self.client.call('VTGate.CloseSession', {'SessionId': self.session_id})
     self.client.close()
 
   def is_closed(self):
@@ -98,7 +99,7 @@ class TabletConnection(object):
       raise dbexceptions.NotSupportedError('Cannot begin: Already in a transaction')
     req = self._make_req()
     try:
-      response = self.client.call('Barnacle.Begin', req)
+      response = self.client.call('VTGate.Begin', {'SessionId': self.session_id})
       self.in_transaction = True
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -112,7 +113,7 @@ class TabletConnection(object):
     self.in_transaction = False
 
     try:
-      response = self.client.call('Barnacle.Commit', req)
+      response = self.client.call('VTGate.Commit', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
@@ -125,7 +126,7 @@ class TabletConnection(object):
     self.in_transaction = False
 
     try:
-      response = self.client.call('Barnacle.Rollback', req)
+      response = self.client.call('VTGate.Rollback', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
@@ -142,7 +143,7 @@ class TabletConnection(object):
     conversions = []
     results = []
     try:
-      response = self.client.call('Barnacle.Execute', req)
+      response = self.client.call('VTGate.Execute', req)
       reply = response.reply
 
       for field in reply['Fields']:
@@ -173,7 +174,7 @@ class TabletConnection(object):
 
     try:
       req = {'List': query_list}
-      response = self.client.call('Barnacle.ExecuteBatch', req)
+      response = self.client.call('VTGate.ExecuteBatch', req)
       for reply in response.reply['List']:
         fields = []
         conversions = []
@@ -211,7 +212,7 @@ class TabletConnection(object):
     self._stream_result = None
     self._stream_result_index = 0
     try:
-      self.client.stream_call('Barnacle.StreamExecute', req)
+      self.client.stream_call('VTGate.StreamExecute', req)
       first_response = self.client.stream_next()
       reply = first_response.reply
 

@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/schema"
 )
 
-var cacheStats = stats.NewTimings("Cache")
+var cacheStats = stats.NewTimings("Rowcache")
 
 var pack = binary.BigEndian
 
