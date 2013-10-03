@@ -76,7 +76,7 @@ type CacheInvalidator interface {
 
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
-	qe.cachePool = NewCachePool("CachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
+	qe.cachePool = NewCachePool("RowcachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))

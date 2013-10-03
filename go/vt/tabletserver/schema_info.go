@@ -106,7 +106,7 @@ func NewSchemaInfo(queryCacheSize int, reloadTime time.Duration, idleTimeout tim
 	stats.Publish("TableStats", stats.NewMatrixFunc("Table", "Stats", si.getTableStats))
 	stats.Publish("TableInvalidations", stats.CountersFunc(si.getTableInvalidations))
 	stats.Publish("QueryCounts", stats.NewMatrixFunc("Table", "Plan", si.getQueryCount))
-	stats.Publish("QueryTimeNs", stats.NewMatrixFunc("Table", "Plan", si.getQueryTime))
+	stats.Publish("QueryTimesNs", stats.NewMatrixFunc("Table", "Plan", si.getQueryTime))
 	stats.Publish("QueryRowCounts", stats.NewMatrixFunc("Table", "Plan", si.getQueryRowCount))
 	stats.Publish("QueryErrorCounts", stats.NewMatrixFunc("Table", "Plan", si.getQueryErrorCount))
 	http.Handle("/debug/query_plans", si)
