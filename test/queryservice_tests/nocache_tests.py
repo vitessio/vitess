@@ -173,11 +173,11 @@ class TestNocache(framework.TestCase):
     self.env.conn.commit()
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 1)
-    self.assertEqual(vend.TxPoolCapacity, 1)
+    self.assertEqual(vend.TransactionPoolCapacity, 1)
     self.env.execute("set vt_transaction_cap=20")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.TxPool.Capacity, 20)
-    self.assertEqual(vend.TxPoolCapacity, 20)
+    self.assertEqual(vend.TransactionPoolCapacity, 20)
     self.assertEqual(vstart.mget("Errors.TxPoolFull", 0) + 1, vend.Errors.TxPoolFull)
 
   def test_transaction_timeout(self):
@@ -199,12 +199,12 @@ class TestNocache(framework.TestCase):
     self.assertEqual(txlog[4], "kill")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 250000000)
-    self.assertEqual(vend.ActiveTxPoolTimeout, 250000000)
+    self.assertEqual(vend.ActiveTransactionPoolTimeout, 250000000)
     self.assertEqual(vstart.mget("Kills.Transactions", 0)+1, vend.Kills.Transactions)
     self.env.execute("set vt_transaction_timeout=30")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ActiveTxPool.Timeout, 30000000000)
-    self.assertEqual(vend.ActiveTxPoolTimeout, 30000000000)
+    self.assertEqual(vend.ActiveTransactionPoolTimeout, 30000000000)
 
   def test_query_cache(self):
     self.env.execute("set vt_query_cache_size=1")
@@ -319,13 +319,13 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1000000000)
     self.assertEqual(vend.ConnPoolIdleTimeout, 1000000000)
     self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1000000000)
-    self.assertEqual(vend.TxPoolIdleTimeout, 1000000000)
+    self.assertEqual(vend.TransactionPoolIdleTimeout, 1000000000)
     self.env.execute("set vt_idle_timeout=1800")
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.ConnPool.IdleTimeout, 1800000000000)
     self.assertEqual(vend.ConnPoolIdleTimeout, 1800000000000)
     self.assertEqual(vend.Voltron.TxPool.IdleTimeout, 1800000000000)
-    self.assertEqual(vend.TxPoolIdleTimeout, 1800000000000)
+    self.assertEqual(vend.TransactionPoolIdleTimeout, 1800000000000)
 
   def test_consolidation(self):
     vstart = self.env.debug_vars()
