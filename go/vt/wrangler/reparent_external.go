@@ -48,6 +48,9 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	if shardInfo.MasterAlias == masterElectTabletAlias {
 		return fmt.Errorf("master-elect tablet %v is already master", masterElectTabletAlias)
 	}
+	if foundMaster != nil && foundMaster.Alias() == masterElectTabletAlias {
+		return fmt.Errorf("master-elect tablet %v is already the only master in the shard, only a rebuild is required, will happen eventually", masterElectTabletAlias)
+	}
 
 	masterElectTablet, ok := tabletMap[masterElectTabletAlias]
 	if !ok {
