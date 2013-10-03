@@ -82,8 +82,8 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamTokens = sync2.NewSemaphore(config.StreamExecThrottle, time.Duration(config.StreamWaitTimeout*1e9))
 	qe.reservedPool = NewReservedPool("ReservedPool")
-	qe.txPool = NewConnectionPool("TxPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
-	qe.activeTxPool = NewActiveTxPool("ActiveTxPool", time.Duration(config.TransactionTimeout*1e9))
+	qe.txPool = NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
+	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
