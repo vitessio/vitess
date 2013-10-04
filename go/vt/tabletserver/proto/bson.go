@@ -21,7 +21,7 @@ func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, query.Sql)
 
 	bson.EncodePrefix(buf, bson.Object, "BindVariables")
-	query.encodeBindVariablesBson(buf)
+	EncodeBindVariablesBson(buf, query.BindVariables)
 
 	bson.EncodePrefix(buf, bson.Long, "TransactionId")
 	bson.EncodeUint64(buf, uint64(query.TransactionId))
@@ -36,9 +36,9 @@ func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func (query *Query) encodeBindVariablesBson(buf *bytes2.ChunkedWriter) {
+func EncodeBindVariablesBson(buf *bytes2.ChunkedWriter, bindVars map[string]interface{}) {
 	lenWriter := bson.NewLenWriter(buf)
-	for k, v := range query.BindVariables {
+	for k, v := range bindVars {
 		bson.EncodeField(buf, k, v)
 	}
 	buf.WriteByte(0)
@@ -55,7 +55,7 @@ func (query *Query) UnmarshalBson(buf *bytes.Buffer) {
 		case "Sql":
 			query.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":
-			query.decodeBindVariablesBson(buf, kind)
+			query.BindVariables = DecodeBindVariablesBson(buf, kind)
 		case "TransactionId":
 			query.TransactionId = bson.DecodeInt64(buf, kind)
 		case "ConnectionId":
@@ -69,7 +69,7 @@ func (query *Query) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func (query *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
+func DecodeBindVariablesBson(buf *bytes.Buffer, kind byte) (bindVars map[string]interface{}) {
 	switch kind {
 	case bson.Object:
 		// valid
@@ -79,37 +79,38 @@ func (query *Query) decodeBindVariablesBson(buf *bytes.Buffer, kind byte) {
 		panic(bson.NewBsonError("Unexpected data type %v for Query.BindVariables", kind))
 	}
 	bson.Next(buf, 4)
-	query.BindVariables = make(map[string]interface{})
+	bindVars = make(map[string]interface{})
 	for kind := bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
 		key := bson.ReadCString(buf)
 		switch kind {
 		case bson.Number:
 			ui64 := bson.Pack.Uint64(buf.Next(8))
-			query.BindVariables[key] = math.Float64frombits(ui64)
+			bindVars[key] = math.Float64frombits(ui64)
 		case bson.String:
 			l := int(bson.Pack.Uint32(buf.Next(4)))
-			query.BindVariables[key] = buf.Next(l - 1)
+			bindVars[key] = buf.Next(l - 1)
 			buf.ReadByte()
 		case bson.Binary:
 			l := int(bson.Pack.Uint32(buf.Next(4)))
 			buf.ReadByte()
-			query.BindVariables[key] = buf.Next(l)
+			bindVars[key] = buf.Next(l)
 		case bson.Int:
-			query.BindVariables[key] = int32(bson.Pack.Uint32(buf.Next(4)))
+			bindVars[key] = int32(bson.Pack.Uint32(buf.Next(4)))
 		case bson.Long:
-			query.BindVariables[key] = int64(bson.Pack.Uint64(buf.Next(8)))
+			bindVars[key] = int64(bson.Pack.Uint64(buf.Next(8)))
 		case bson.Ulong:
-			query.BindVariables[key] = bson.Pack.Uint64(buf.Next(8))
+			bindVars[key] = bson.Pack.Uint64(buf.Next(8))
 		case bson.Datetime:
 			i64 := int64(bson.Pack.Uint64(buf.Next(8)))
 			// micro->nano->UTC
-			query.BindVariables[key] = time.Unix(0, i64*1e6).UTC()
+			bindVars[key] = time.Unix(0, i64*1e6).UTC()
 		case bson.Null:
-			query.BindVariables[key] = nil
+			bindVars[key] = nil
 		default:
 			panic(bson.NewBsonError("don't know how to handle kind %v yet", kind))
 		}
 	}
+	return
 }
 
 // String prints a readable version of Query, and also truncates
