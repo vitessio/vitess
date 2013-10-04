@@ -129,7 +129,7 @@ func TestVTConnExecuteTxTimeout(t *testing.T) {
 		vtc.Execute("query", nil, "", []string{"0"})
 		// Shard 0 must be in transaction
 		if sbc0.TransactionId() == 0 {
-			t.Errorf("want non-zer, got 0")
+			t.Errorf("want non-zero, got 0")
 		}
 		if len(vtc.commitOrder) != 1 {
 			t.Errorf("want 2, got %d", len(vtc.commitOrder))

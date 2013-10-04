@@ -67,13 +67,27 @@ func endPointsError() ([]string, error) {
 	return nil, fmt.Errorf("expected error")
 }
 
+func endPointsNone() ([]string, error) {
+	return nil, nil
+}
+
 func TestGetAddressesFail(t *testing.T) {
 	b := NewBalancer(endPointsError, RETRY_DELAY)
 	_, err := b.Get()
 	// Ensure that end point errors are returned correctly.
-	if err == nil {
-		t.Errorf("want error")
+	want := "expected error"
+	if err == nil || err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
+
+	b.getAddresses = endPointsNone
+	_, err = b.Get()
+	// Ensure no available addresses is treated as error
+	want = "no available addresses"
+	if err == nil || err.Error() != want {
+		t.Errorf("want nil, got %v", err)
+	}
+
 	b.getAddresses = endPoints3
 	_, err = b.Get()
 	// Ensure no error is returned if end point doesn't fail.
