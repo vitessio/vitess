@@ -36,13 +36,13 @@ func resetVTGate() (sess proto.Session) {
 }
 
 // exec is a convienence wrapper for executing a query.
-func exec(sess proto.Session) (qr mproto.QueryResult, err error) {
-	q := proto.Query{
+func execShard(sess proto.Session) (qr mproto.QueryResult, err error) {
+	q := proto.QueryShard{
 		Sql:       "query",
 		SessionId: sess.SessionId,
 		Shards:    []string{"0"},
 	}
-	err = RpcVTGate.Execute(nil, &q, &qr)
+	err = RpcVTGate.ExecuteShard(nil, &q, &qr)
 	return
 }
 
@@ -72,13 +72,13 @@ func TestVTGateSessionConflict(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{mustDelay: 50 * time.Millisecond}
 	testConns["0:1"] = sbc
-	q := proto.Query{
+	q := proto.QueryShard{
 		Sql:       "query",
 		SessionId: sess.SessionId,
 		Shards:    []string{"0"},
 	}
 	var qr mproto.QueryResult
-	go RpcVTGate.Execute(nil, &q, &qr)
+	go RpcVTGate.ExecuteShard(nil, &q, &qr)
 	runtime.Gosched()
 	want := "in use"
 	var err error
@@ -87,9 +87,9 @@ func TestVTGateSessionConflict(t *testing.T) {
 	for {
 		switch i {
 		case 0:
-			err = RpcVTGate.Execute(nil, &q, nil)
+			err = RpcVTGate.ExecuteShard(nil, &q, nil)
 		case 1:
-			err = RpcVTGate.StreamExecute(nil, &q, nil)
+			err = RpcVTGate.StreamExecuteShard(nil, &q, nil)
 		case 2:
 			err = RpcVTGate.Begin(nil, &sess, &noOutput)
 		case 3:
@@ -108,11 +108,11 @@ func TestVTGateSessionConflict(t *testing.T) {
 	}
 }
 
-func TestVTGateExecute(t *testing.T) {
+func TestVTGateExecuteShard(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	qr, err := exec(sess)
+	qr, err := execShard(sess)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -121,17 +121,17 @@ func TestVTGateExecute(t *testing.T) {
 	}
 }
 
-func TestVTGateStreamExecute(t *testing.T) {
+func TestVTGateStreamExecuteShard(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	q := proto.Query{
+	q := proto.QueryShard{
 		Sql:       "query",
 		SessionId: sess.SessionId,
 		Shards:    []string{"0"},
 	}
 	var qr mproto.QueryResult
-	err := RpcVTGate.StreamExecute(nil, &q, func(r interface{}) error {
+	err := RpcVTGate.StreamExecuteShard(nil, &q, func(r interface{}) error {
 		qr = *(r.(*mproto.QueryResult))
 		return nil
 	})
@@ -150,7 +150,7 @@ func TestVTGateTx(t *testing.T) {
 	var noOutput string
 	for i := 0; i < 2; i++ {
 		RpcVTGate.Begin(nil, &sess, &noOutput)
-		exec(sess)
+		execShard(sess)
 		// Ensure low level Begin gets called.
 		if sbc.BeginCount != i+1 {
 			t.Errorf("want 1, got %v", sbc.BeginCount)
@@ -182,7 +182,7 @@ func TestVTGateClose(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	exec(sess)
+	execShard(sess)
 	// Ensure low level Close gets called.
 	if sbc.CloseCount != 0 {
 		t.Errorf("want 0, got %v", sbc.CloseCount)
@@ -195,7 +195,7 @@ func TestVTGateClose(t *testing.T) {
 	if sbc.CloseCount != 1 {
 		t.Errorf("want 1, got %v", sbc.CloseCount)
 	}
-	_, err = exec(sess)
+	_, err = execShard(sess)
 	want := "not found"
 	// Reusing a closed session should result in an error.
 	if err == nil || !strings.Contains(err.Error(), want) {

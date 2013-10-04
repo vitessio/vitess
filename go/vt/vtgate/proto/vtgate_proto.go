@@ -14,8 +14,8 @@ import (
 // Barcacle defines the interface for tbe rpc service.
 type Barnacle interface {
 	GetSessionId(sessionParams *SessionParams, session *Session) error
-	Execute(context *rpcproto.Context, query *Query, reply *mproto.QueryResult) error
-	StreamExecute(context *rpcproto.Context, query *Query, sendReply func(interface{}) error) error
+	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *mproto.QueryResult) error
+	StreamExecuteShard(context *rpcproto.Context, query *QueryShard, sendReply func(interface{}) error) error
 	Begin(context *rpcproto.Context, session *Session, noOutput *string) error
 	Commit(context *rpcproto.Context, session *Session, noOutput *string) error
 	Rollback(context *rpcproto.Context, session *Session, noOutput *string) error
@@ -30,7 +30,7 @@ type Session struct {
 	SessionId int64
 }
 
-type Query struct {
+type QueryShard struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	SessionId     int64

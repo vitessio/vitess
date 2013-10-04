@@ -143,7 +143,7 @@ class TabletConnection(object):
     conversions = []
     results = []
     try:
-      response = self.client.call('VTGate.Execute', req)
+      response = self.client.call('VTGate.ExecuteShard', req)
       reply = response.reply
 
       for field in reply['Fields']:
@@ -212,7 +212,7 @@ class TabletConnection(object):
     self._stream_result = None
     self._stream_result_index = 0
     try:
-      self.client.stream_call('VTGate.StreamExecute', req)
+      self.client.stream_call('VTGate.StreamExecuteShard', req)
       first_response = self.client.stream_next()
       reply = first_response.reply
 
