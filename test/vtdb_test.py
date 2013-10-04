@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import hmac
+import json
 import logging
 import optparse
 import os
@@ -12,13 +14,13 @@ import unittest
 import tablet
 import utils
 
-from zk import zkocc
 from net import gorpc
 from net import bsonrpc
 from vtdb import cursor
 from vtdb import tablet as tablet3
 from vtdb import vtclient
 from vtdb import dbexceptions
+from zk import zkocc
 
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
@@ -165,15 +167,15 @@ def setup_schema():
 
 
 
-def get_master_connection(shard='1'):
+def get_master_connection(shard='1', user=None, password=None):
   logging.debug("connecting to master with params")
-  master_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "master", 10.0) 
+  master_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "master", 10.0, user=user, password=password)  
   master_conn.connect()
   return master_conn
 
-def get_replica_connection(shard='1'):
-  logging.debug("connecting to replica with params")
-  replica_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "replica", 10.0) 
+def get_replica_connection(shard='1', user=None, password=None):
+  logging.debug("connecting to replica with params %s %s", user, password)
+  replica_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "replica", 10.0, user=user, password=password) 
   replica_conn.connect()
   return replica_conn
 
@@ -415,6 +417,73 @@ class TestFailures(unittest.TestCase):
     shard_1_replica.kill_vttablet()
     shard_1_replica.start_vttablet()
     replica_conn._execute("select 1 from vt_insert_test", {})
+
+  def test_retry_txn_pool_full(self):
+    master_conn = get_master_connection()
+    master_conn._execute("set vt_transaction_cap=1", {})
+    master_conn.begin()
+    with self.assertRaises(dbexceptions.OperationalError):
+      master_conn2 = get_master_connection()
+      master_conn2.begin()
+    master_conn.commit()
+    master_conn._execute("set vt_transaction_cap=20", {})
+    master_conn.begin()
+    master_conn._execute("delete from vt_insert_test", {})
+    master_conn.commit()
+
+class TestAuthentication(unittest.TestCase):
+
+  def setUp(self):
+    shard_1_replica.kill_vttablet()
+    shard_1_replica.start_vttablet(auth=True)
+    credentials_file_name = os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')
+    credentials_file = open(credentials_file_name, 'r')
+    credentials = json.load(credentials_file)
+    self.user = str(credentials.keys()[0])
+    self.password = str(credentials[self.user][0])
+    self.secondary_password = str(credentials[self.user][1])
+
+  def test_correct_credentials(self):
+    try:
+      replica_conn = get_replica_connection(user=self.user, password=self.password)
+      replica_conn.connect()
+    finally:
+      replica_conn.close()
+
+  def test_secondary_credentials(self):
+    try:
+      replica_conn = get_replica_connection(user=self.user, password=self.secondary_password)
+      replica_conn.connect()
+    finally:
+      replica_conn.close()
+
+  def test_incorrect_user(self):
+    with self.assertRaises(dbexceptions.OperationalError):
+      replica_conn = get_replica_connection(user="romek", password="ma raka")
+      replica_conn.connect()
+
+  def test_incorrect_credentials(self):
+    with self.assertRaises(dbexceptions.OperationalError):
+      replica_conn = get_replica_connection(user="romek", password="ma raka")
+      replica_conn.connect()
+
+  def test_challenge_is_used(self):
+    replica_conn = get_replica_connection(user=self.user, password=self.password)
+    replica_conn.connect()
+    challenge = ""
+    proof =  "%s %s" %(self.user, hmac.HMAC(self.password, challenge).hexdigest())
+    self.assertRaises(gorpc.AppError, replica_conn.conn.client.call, 'AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
+
+  def test_only_few_requests_are_allowed(self):
+    replica_conn = get_replica_connection(user=self.user, password=self.password)
+    replica_conn.connect()
+    for i in range(4):
+      try:
+        replica_conn.conn.client.call('AuthenticatorCRAMMD5.GetNewChallenge', "")
+      except gorpc.GoRpcError:
+        break
+    else:
+      self.fail("Too many requests were allowed (%s)." % (i + 1))
 
 
 if __name__ == '__main__':

@@ -23,6 +23,8 @@ def get_vt_connection_params_list(zkocc_client, keyspace, shard, db_type, timeou
     vt_params['addr'] = "%s:%s" % (host, port)
     vt_params['timeout'] = timeout
     vt_params['encrypted'] = encrypted
+    vt_params['user'] = user
+    vt_params['password'] = password
     db_params_list.append(vt_params)
   return db_params_list
 
@@ -33,15 +35,21 @@ def reconnect(method):
       try:
         return method(self, *args, **kargs)
       except (tablet.RetryError, tablet.FatalError, tablet.TxPoolFull) as e:
-        self.close()
         attempt += 1
         if attempt >= self.max_attempts or self.in_txn:
+          self.close()
           raise tablet.FatalError(*e.args)
         if method.__name__ == 'begin':
           time.sleep(BEGIN_RECONNECT_DELAY)
         else:
           time.sleep(RECONNECT_DELAY)
-        self.connect()
+        if not isinstance(e, tablet.TxPoolFull):
+          logging.info("Attempting to reconnect, %d", attempt)
+          self.close()
+          self.connect()
+          logging.info("Successfully reconnected to %s", str(self.conn))
+        else:
+          logging.info("Waiting to retry for tablet.TxPoolFull to %s, attempt %d", str(self.conn), attempt)
   return _run_with_reconnect
 
 # Provide compatibility with the MySQLdb query param style and prune bind_vars
