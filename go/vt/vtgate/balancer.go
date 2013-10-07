@@ -116,7 +116,7 @@ func (blc *Balancer) refresh() error {
 		i++
 	}
 	if len(blc.addressNodes) == 0 {
-		return fmt.Errorf("No available addresses")
+		return fmt.Errorf("no available addresses")
 	}
 	shuffle(blc.addressNodes)
 	return nil
