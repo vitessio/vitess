@@ -11,11 +11,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	log "github.com/golang/glog"
+	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	parser "github.com/youtube/vitess/go/vt/sqlparser"
 )
@@ -208,21 +211,26 @@ func (blp *Blp) ComputeBacklog() int64 {
 //Main entry function for reading and parsing the binlog.
 func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) {
 	var err error
+	var lastRun time.Time
+	count := 0
 	for {
+		count++
+		lastRun = time.Now()
 		err = blp.streamBinlog(sendReply, binlogPrefix)
-		sErr, ok := err.(*BinlogParseError)
-		if ok && sErr.IsEOF() {
-			time.Sleep(1.0 * time.Second)
-			*blp.startPosition = blp.currentPosition.Position
-			continue
+		if err != nil {
+			log.Errorf("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
+			SendError(sendReply, err, blp.currentPosition)
+			return
 		}
-		log.Errorf("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
-		SendError(sendReply, err, blp.currentPosition)
-		return
+		diff := time.Now().Sub(lastRun)
+		if diff < (100 * time.Millisecond) {
+			time.Sleep(100*time.Millisecond - diff)
+		}
+		*blp.startPosition = blp.currentPosition.Position
 	}
 }
 
-func (blp *Blp) handleError(err *error, readErr error) {
+func (blp *Blp) handleError(err *error) {
 	reqIdentifier := blp.currentPosition.String()
 	if x := recover(); x != nil {
 		serr, ok := x.(*BinlogParseError)
@@ -231,53 +239,38 @@ func (blp *Blp) handleError(err *error, readErr error) {
 			panic(x)
 		}
 		*err = NewBinlogParseError(serr.errType, serr.msg)
-		if readErr != nil {
-			*err = NewBinlogParseError(REPLICATION_ERROR, fmt.Sprintf("%v, readErr: %v", serr.Error(), readErr))
-		}
 	}
 }
 
 func (blp *Blp) streamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) (err error) {
-	var readErr error
-	defer blp.handleError(&err, readErr)
-
-	var binlogReader io.Reader
-	blr := NewBinlogReader(binlogPrefix)
-
-	var blrReader, blrWriter *os.File
-	var pipeErr error
-
-	blrReader, blrWriter, pipeErr = os.Pipe()
-	if pipeErr != nil {
-		panic(NewBinlogParseError(CODE_ERROR, pipeErr.Error()))
-	}
-	defer blrWriter.Close()
-	defer blrReader.Close()
-
-	readErrChan := make(chan error, 1)
-	//This reads the binlogs - read end of data pipeline.
-	go blp.getBinlogStream(blrWriter, blr, readErrChan)
-	binlogDecoder := new(BinlogDecoder)
-	binlogReader, err = binlogDecoder.DecodeMysqlBinlog(blrReader)
+	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
-		panic(NewBinlogParseError(REPLICATION_ERROR, err.Error()))
+		return err
 	}
-	//This function monitors the exit of read data pipeline.
-	go func(readErr *error, readErrChan chan error, binlogDecoder *BinlogDecoder) {
-		*readErr = <-readErrChan
-		if *readErr != nil {
-			binlogDecoder.Kill()
-		}
-	}(&readErr, readErrChan, binlogDecoder)
-
-	blp.parseBinlogEvents(sendReply, binlogReader)
-	return nil
+	cmd := exec.Command(
+		path.Join(dir, "bin/mysqlbinlog"),
+		fmt.Sprintf("--start-position=%d", blp.startPosition.MasterPosition),
+		path.Join(path.Dir(binlogPrefix), blp.startPosition.MasterFilename),
+	)
+	binlogReader, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	err = cmd.Start()
+	if err != nil {
+		return err
+	}
+	err = blp.parseBinlogEvents(sendReply, binlogReader)
+	if err != nil {
+		cmd.Process.Kill()
+	}
+	return err
 }
 
 //Main parse loop
-func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogReader io.Reader) {
+func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogReader io.Reader) (err error) {
+	defer blp.handleError(&err)
 	// read over the stream and buffer up the transactions
-	var err error
 	var line []byte
 	bigLine := make([]byte, 0, BINLOG_BLOCK_SIZE)
 	lineReader := bufio.NewReaderSize(binlogReader, BINLOG_BLOCK_SIZE)
@@ -295,7 +288,7 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 		if err != nil {
 			if err == io.EOF {
 				//end of stream
-				panic(NewBinlogParseError(REPLICATION_ERROR, EOF))
+				return nil
 			}
 			panic(NewBinlogParseError(REPLICATION_ERROR, fmt.Sprintf("ReadLine err: , %v", err)))
 		}
@@ -335,6 +328,7 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 			blp.parseEventData(sendReply, event)
 		}
 	}
+	return nil
 }
 
 //Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
