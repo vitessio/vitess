@@ -127,7 +127,6 @@ def setup_tablets():
   shard_0_replica.create_db(shard_0_master.dbname)
   shard_1_master.create_db(shard_0_master.dbname)
   shard_1_replica.create_db(shard_0_master.dbname)
-  setup_schema()
 
   utils.run_vtctl('RebuildKeyspaceGraph %s' % TEST_KEYSPACE, auto_log=True)
 
@@ -150,21 +149,17 @@ def setup_tablets():
   for t in [shard_1_master, shard_1_replica]:
     t.reset_replication()
   utils.run_vtctl('ReparentShard -force test_keyspace/1 ' + shard_1_master.tablet_alias, auto_log=True)
-
-
-  # then get the topology and check it
-
+  setup_schema()
+  shard_0_master.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
+  shard_1_master.vquery("set vt_schema_reload_time=86400", path="test_keyspace/1")
+  shard_0_replica.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
+  shard_1_replica.vquery("set vt_schema_reload_time=86400", path="test_keyspace/1")
 
 def setup_schema():
   shard_0_master.mquery(shard_0_master.dbname, create_vt_insert_test)
   shard_0_master.mquery(shard_0_master.dbname, create_vt_a)
   shard_1_master.mquery(shard_0_master.dbname, create_vt_insert_test)
   shard_1_master.mquery(shard_0_master.dbname, create_vt_a)
-  shard_0_replica.mquery(shard_0_master.dbname, create_vt_insert_test)
-  shard_0_replica.mquery(shard_0_master.dbname, create_vt_a)
-  shard_1_replica.mquery(shard_0_master.dbname, create_vt_insert_test)
-  shard_1_replica.mquery(shard_0_master.dbname, create_vt_a)
-
 
 
 def get_master_connection(shard='1', user=None, password=None):
