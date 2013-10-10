@@ -47,11 +47,6 @@ func TestTablet(t *testing.T) {
 	test.CheckTablet(t, ts)
 }
 
-func TestReplicationPaths(t *testing.T) {
-	ts := newFakeServer(t)
-	test.CheckReplicationPaths(t, ts)
-}
-
 func TestShardReplication(t *testing.T) {
 	ts := newFakeServer(t)
 	test.CheckShardReplication(t, ts)

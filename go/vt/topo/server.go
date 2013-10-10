@@ -145,28 +145,6 @@ type Server interface {
 	GetTabletsByCell(cell string) ([]TabletAlias, error)
 
 	//
-	// Replication graph management, global.
-	//
-	// Uses a path for replication, use "" to get the masters,
-	// /master to get the slaves.
-	//
-
-	// GetReplicationPaths returns the replication paths for the parent path
-	// - get the master(s): GetReplicationPaths(..., "")
-	// - get the slaves: GetReplicationPaths(..., "/nyc-00020100")
-	GetReplicationPaths(keyspace, shard, repPath string) ([]TabletAlias, error)
-
-	// CreateReplicationPath creates a replication path.
-	// Can return ErrNodeExists if it already exists.
-	// DEPRECATED: use topo.CreateTabletReplicationData
-	CreateReplicationPath(keyspace, shard, repPath string) error
-
-	// DeleteReplicationPath removes a replication path.
-	// Can returnErrNoNode if it doesn't exist.
-	// DEPRECATED: use topo.DeleteTabletReplicationData
-	DeleteReplicationPath(keyspace, shard, repPath string) error
-
-	//
 	// Replication graph management, per cell.
 	//
 

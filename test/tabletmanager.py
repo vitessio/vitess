@@ -780,22 +780,18 @@ class TestTabletManager(unittest.TestCase):
     tablet_41983.kill_vttablet()
 
   def _test_reparent_from_outside_check(self, brutal):
-    # make sure the replication graph is fine
-    shard_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0')
-    logging.debug('shard_files: %s' % " ".join(shard_files))
-    if shard_files != ['action', 'actionlog', 'test_nj-0000062044']:
-      raise utils.TestError('unexpected zk content: %s' % " ".join(shard_files))
-
-    slave_files = utils.zk_ls('/zk/global/vt/keyspaces/test_keyspace/shards/0/test_nj-0000062044')
-    logging.debug('slave_files: %s' % " ".join(slave_files))
-    expected_slave_files = ['test_nj-0000041983', 'test_nj-0000062344']
-    if brutal:
-      expected_slave_files = ['test_nj-0000041983']
-    if slave_files != expected_slave_files:
-      raise utils.TestError('unexpected zk content: %s instead of expected %s' %
-                            ("|".join(slave_files),
-                             "|".join(expected_slave_files)))
-
+    # make sure the shard replication graph is fine
+    shard_replication = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    hashed_links = {}
+    for rl in shard_replication['ReplicationLinks']:
+      key = rl['TabletAlias']['Cell'] + "-" + str(rl['TabletAlias']['Uid'])
+      value = rl['Parent']['Cell'] + "-" + str(rl['Parent']['Uid'])
+      hashed_links[key] = value
+    logging.debug("Got replication links: %s", str(hashed_links))
+    expected_links = { 'test_nj-41983': 'test_nj-62044' }
+    if not brutal:
+      expected_links['test_nj-62344'] = 'test_nj-62044'
+    self.assertEqual(expected_links, hashed_links, "Got unexpected links: %s != %s" % (str(expected_links), str(hashed_links)))
 
   # See if a lag slave can be safely reparent.
   def test_reparent_lag_slave(self, shard_id='0'):

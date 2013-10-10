@@ -136,7 +136,7 @@ func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err er
 	if err != nil {
 		return err
 	}
-	err = topo.DeleteTabletReplicationData(wr.ts, tablet.Tablet, tablet.ReplicationPath())
+	err = topo.DeleteTabletReplicationData(wr.ts, tablet.Tablet)
 	if err != nil {
 		return err
 	}

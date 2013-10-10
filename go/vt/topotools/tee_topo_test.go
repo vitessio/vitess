@@ -60,11 +60,6 @@ func TestTablet(t *testing.T) {
 	test.CheckTablet(t, ts)
 }
 
-func TestReplicationPaths(t *testing.T) {
-	ts := newFakeTeeServer(t)
-	test.CheckReplicationPaths(t, ts)
-}
-
 func TestServingGraph(t *testing.T) {
 	ts := newFakeTeeServer(t)
 	test.CheckServingGraph(t, ts)
