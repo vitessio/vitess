@@ -18,12 +18,16 @@ import tablet
 import utils
 from vtdb import update_stream_service
 from vtdb import vtclient
+from zk import zkocc
+
 
 master_tablet = tablet.Tablet(62344)
 replica_tablet = tablet.Tablet(62345)
 master_host = "localhost:%u" % master_tablet.port
 replica_host = "localhost:%u" % replica_tablet.port
-GLOBAL_MASTER_START_POSITION = None
+zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+                                     "test_nj", 30.0)
+master_start_position = None
 
 def _get_master_current_position():
   res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
@@ -82,42 +86,36 @@ def setup_tablets():
   logging.debug("Setting up tablets")
   utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
+  replica_tablet.init_tablet('replica', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph test_keyspace/0')
-  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
   utils.validate_topology()
-
-  setup_schema()
+  master_tablet.create_db('vt_test_keyspace')
   replica_tablet.create_db('vt_test_keyspace')
-  #master_tablet.start_vttablet(auth=True)
+
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
+  zkocc_server = utils.zkocc_start()
+
   master_tablet.start_vttablet()
-
-  replica_tablet.init_tablet('idle', 'test_keyspace', start=True)
-  snapshot_dir = os.path.join(utils.vtdataroot, 'snapshot')
-  utils.run("mkdir -p " + snapshot_dir)
-  utils.run("chmod +w " + snapshot_dir)
-  utils.run_vtctl('Clone -force %s %s' %
-                  (master_tablet.tablet_alias, replica_tablet.tablet_alias))
-
-
-  utils.run_vtctl('Ping test_nj-0000062344')
+  replica_tablet.start_vttablet()
   utils.run_vtctl('SetReadWrite ' + master_tablet.tablet_alias)
   utils.check_db_read_write(62344)
 
-  utils.validate_topology()
-  utils.run_vtctl('Ping test_nj-0000062345')
+  for t in [master_tablet, replica_tablet]:
+    t.reset_replication()
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + master_tablet.tablet_alias, auto_log=True)
 
   # reset counter so tests don't assert
   tablet.Tablet.tablets_running = 0
+  setup_schema()
+  master_tablet.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
+  replica_tablet.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
 
 def setup_schema():
-  master_tablet.create_db('vt_test_keyspace')
-  global GLOBAL_MASTER_START_POSITION
-  GLOBAL_MASTER_START_POSITION = _get_master_current_position()
+  global master_start_position
+  master_start_position = _get_master_current_position()
   master_tablet.mquery('vt_test_keyspace', _create_vt_insert_test)
   master_tablet.mquery('vt_test_keyspace', _create_vt_a)
   master_tablet.mquery('vt_test_keyspace', _create_vt_b)
-  master_tablet.mquery('vt_test_keyspace', _create_vt_c)
-
 
 class TestUpdateStream(unittest.TestCase):
 
@@ -218,7 +216,9 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("Streamed %d transactions before exiting" % txn_count)
 
   def _vtdb_conn(self, host):
-    return vtclient.connect(host, 'test_keyspace', '0', 2)
+    conn = vtclient.VtOCCConnection(zkocc_client, 'test_keyspace', '0', "master", 30)
+    conn.connect()
+    return conn
 
   def _exec_vt_txn(self, host, query_list=None):
     if not query_list:
@@ -283,18 +283,15 @@ class TestUpdateStream(unittest.TestCase):
 
 
   def test_ddl(self):
-    global GLOBAL_MASTER_START_POSITION
-    start_position = GLOBAL_MASTER_START_POSITION
-    logging.debug("run_test_ddl: starting @ %s" % start_position)
+    global master_start_position
+    start_position = master_start_position
+    logging.debug("test_ddl: starting @ %s" % start_position)
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
     binlog_pos, data, err = master_conn.stream_start(start_position)
     if err:
       raise utils.TestError("Update stream returned error '%s'", err)
-
-    if data['Sql'] != _create_vt_insert_test.replace('\n', ''):
-      raise utils.TestError("Test Failed: DDL %s didn't match the original %s" % (data['Sql'], _create_vt_insert_test))
-    logging.debug("Test DDL: PASS")
+    self.assertEqual(data['Sql'], _create_vt_insert_test.replace('\n', ''), "DDL didn't match original")
 
   #This tests the service switch from disable -> enable -> disable
   def test_service_switch(self):
@@ -328,7 +325,7 @@ class TestUpdateStream(unittest.TestCase):
     if not logs_correct:
       self.fail("Flush logs didn't get properly interpreted")
 
-_create_vt_insert_test = '''create table vt_insert_test (
+_create_vt_insert_test = '''create table if not exists vt_insert_test (
 id bigint auto_increment,
 msg varchar(64),
 primary key (id)
@@ -338,7 +335,7 @@ _populate_vt_insert_test = [
     "insert into vt_insert_test (msg) values ('test %s')" % x
     for x in xrange(4)]
 
-_create_vt_a = '''create table vt_a (
+_create_vt_a = '''create table if not exists vt_a (
 eid bigint,
 id int,
 primary key(eid, id)
@@ -348,7 +345,7 @@ def _populate_vt_a(count):
   return ["insert into vt_a (eid, id) values (%d, %d)" % (x, x)
           for x in xrange(count+1) if x >0]
 
-_create_vt_b = '''create table vt_b (
+_create_vt_b = '''create table if not exists vt_b (
 eid bigint,
 name varchar(128),
 foo varbinary(128),
