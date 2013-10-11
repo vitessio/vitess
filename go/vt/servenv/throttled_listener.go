@@ -13,29 +13,21 @@ import (
 // accepted to the specified rate.
 type ThrottledListener struct {
 	net.Listener
-	minDelay   time.Duration
-	lastAccept time.Time
+	minDelay time.Duration
 }
 
 // NewThrottledListener creates a ThrottledListener. maxRate
 // specifies the maximum rate of accepts per second.
 func NewThrottledListener(l net.Listener, maxRate int64) net.Listener {
-	return &ThrottledListener{
-		Listener:   l,
-		minDelay:   time.Duration(1e9 / maxRate),
-		lastAccept: time.Now(),
-	}
+	return &ThrottledListener{l, time.Duration(1e9 / maxRate)}
 }
 
 // Accept accepts a new connection only if the accept rate
 // will not exceed the throttling limit. Otherwise, it waits
 // before accepting.
 func (tln *ThrottledListener) Accept() (c net.Conn, err error) {
-	curDelay := time.Now().Sub(tln.lastAccept)
-	if curDelay < tln.minDelay {
-		time.Sleep(tln.minDelay - curDelay)
-	}
-	c, err = tln.Listener.Accept()
-	tln.lastAccept = time.Now()
-	return c, err
+	// We assume Accept is called in a tight loop.
+	// So we can just sleep for minDelay
+	time.Sleep(tln.minDelay)
+	return tln.Listener.Accept()
 }

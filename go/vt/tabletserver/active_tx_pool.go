@@ -109,6 +109,7 @@ func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_COMMIT)
 	axp.txStats.Add("Completed", time.Now().Sub(conn.startTime))
+	defer axp.txStats.Record("Commit", time.Now())
 	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
 	}
