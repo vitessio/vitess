@@ -52,6 +52,6 @@ func SecureServe(addr string, certFile, keyFile, caFile string) {
 		log.Fatalf("%s", err)
 	}
 	throttled := NewThrottledListener(l, *secureThrottle)
-	cl := proc.Published(throttled, "SecureConns", "SecureAccepts")
+	cl := proc.Published(throttled, "SecureConnections", "SecureAccepts")
 	go http.Serve(cl, nil)
 }
