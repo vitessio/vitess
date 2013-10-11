@@ -9,27 +9,24 @@ import (
 	"time"
 )
 
-type handshaker interface {
-	Handshake() error
-}
-
 // ThrottledListener throttles the number connections
 // accepted to the specified rate.
 type ThrottledListener struct {
 	net.Listener
-	throttle <-chan time.Time
+	minDelay time.Duration
 }
 
 // NewThrottledListener creates a ThrottledListener. maxRate
 // specifies the maximum rate of accepts per second.
 func NewThrottledListener(l net.Listener, maxRate int64) net.Listener {
-	return &ThrottledListener{l, time.Tick(time.Duration(1e9 / maxRate))}
+	return &ThrottledListener{l, time.Duration(1e9 / maxRate)}
 }
 
-// Accept accepts a new connection only if the accept rate
-// will not exceed the throttling limit. Otherwise, it waits
-// before accepting.
+// Accept accepts a new connection, but ensures that the
+// rate does not exceed the specified maxRate.
 func (tln *ThrottledListener) Accept() (c net.Conn, err error) {
-	<-tln.throttle
+	// We assume Accept is called in a tight loop.
+	// So we can just sleep for minDelay
+	time.Sleep(tln.minDelay)
 	return tln.Listener.Accept()
 }
