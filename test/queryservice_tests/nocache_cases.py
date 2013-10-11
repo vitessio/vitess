@@ -39,7 +39,7 @@ cases = [
            'select /* having */ sum(id) from vtocc_a having sum(id) = 3 limit 10001']),
 
     Case(doc='limit',
-         sql='select /* limit */ eid, id from vtocc_a limit %(a)s',
+         sql='select /* limit */ eid, id from vtocc_a limit :a',
          bindings={"a": 1},
          result=[(1L, 1L)],
          rewritten=[
@@ -202,11 +202,11 @@ cases = [
          Case(sql='select * from vtocc_a where eid = 2 and id = 1',
               result=[],
               rewritten=["select * from vtocc_a where eid = 2 and id = 1 limit 10001"]),
-         Case(sql="select %(bv)s from vtocc_a where eid = 2 and id = 1",
+         Case(sql="select :bv from vtocc_a where eid = 2 and id = 1",
               bindings={'bv': 1},
               result=[],
               rewritten=["select 1 from vtocc_a where eid = 2 and id = 1 limit 10001"]),
-         Case(sql="select %(bv)s from vtocc_a where eid = 2 and id = 1",
+         Case(sql="select :bv from vtocc_a where eid = 2 and id = 1",
               bindings={'bv': 'abcd'},
               result=[],
               rewritten=["select 'abcd' from vtocc_a where eid = 2 and id = 1 limit 10001"]),
@@ -277,7 +277,7 @@ cases = [
     MultiCase(
         'bind values',
         ['begin',
-         Case(sql="insert /* bind values */ into vtocc_a(eid, id, name, foo) values (%(eid)s, %(id)s, %(name)s, %(foo)s)",
+         Case(sql="insert /* bind values */ into vtocc_a(eid, id, name, foo) values (:eid, :id, :name, :foo)",
               bindings={"eid": 4, "id": 1, "name": "aaaa", "foo": "cccc"},
               rewritten="insert /* bind values */ into vtocc_a(eid, id, name, foo) values (4, 1, 'aaaa', 'cccc') /* _stream vtocc_a (eid id ) (4 1 )"),
          'commit',
@@ -658,7 +658,7 @@ cases = [
   MultiCase(
       'integer data types',
       ['begin',
-       Case(sql="insert into vtocc_ints values(%(tiny)s, %(tinyu)s, %(small)s, %(smallu)s, %(medium)s, %(mediumu)s, %(normal)s, %(normalu)s, %(big)s, %(bigu)s, %(year)s)",
+       Case(sql="insert into vtocc_ints values(:tiny, :tinyu, :small, :smallu, :medium, :mediumu, :normal, :normalu, :big, :bigu, :year)",
          bindings={"tiny": -128, "tinyu": 255, "small": -32768, "smallu": 65535, "medium": -8388608, "mediumu": 16777215, "normal": -2147483648, "normalu": 4294967295, "big": -9223372036854775808, "bigu": 18446744073709551615, "year": 2012},
          rewritten='insert into vtocc_ints values (-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012) /* _stream vtocc_ints (tiny ) (-128 )'),
        'commit',
@@ -683,7 +683,7 @@ cases = [
   MultiCase(
       'fractional data types',
       ['begin',
-       Case(sql="insert into vtocc_fracts values(%(id)s, %(deci)s, %(num)s, %(f)s, %(d)s)",
+       Case(sql="insert into vtocc_fracts values(:id, :deci, :num, :f, :d)",
          bindings={"id": 1, "deci": Decimal('1.99'), "num": Decimal('2.99'), "f": 3.99, "d": 4.99},
          rewritten="insert into vtocc_fracts values (1, '1.99', '2.99', 3.99, 4.99) /* _stream vtocc_fracts (id ) (1 )"),
        'commit',
@@ -708,7 +708,7 @@ cases = [
   MultiCase(
       'string data types',
       ['begin',
-       Case(sql="insert into vtocc_strings values(%(vb)s, %(c)s, %(vc)s, %(b)s, %(tb)s, %(bl)s, %(ttx)s, %(tx)s, %(en)s, %(s)s)",
+       Case(sql="insert into vtocc_strings values(:vb, :c, :vc, :b, :tb, :bl, :ttx, :tx, :en, :s)",
          bindings={"vb": "a", "c": "b", "vc": "c", "b": "d", "tb": "e", "bl": "f", "ttx": "g", "tx": "h", "en": "a", "s": "a,b"},
          rewritten="insert into vtocc_strings values ('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b') /* _stream vtocc_strings (vb ) ('YQ==' )"),
        'commit',
@@ -733,7 +733,7 @@ cases = [
   MultiCase(
       'misc data types',
       ['begin',
-       Case(sql="insert into vtocc_misc values(%(id)s, %(b)s, %(d)s, %(dt)s, %(t)s)",
+       Case(sql="insert into vtocc_misc values(:id, :b, :d, :dt, :t)",
          bindings={"id": 1, "b": "\x01", "d": "2012-01-01", "dt": "2012-01-01 15:45:45", "t": "15:45:45"},
          rewritten="insert into vtocc_misc values (1, '\1', '2012-01-01', '2012-01-01 15:45:45', '15:45:45') /* _stream vtocc_misc (id ) (1 )"),
        'commit',

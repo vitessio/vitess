@@ -5,8 +5,6 @@
 package wrangler
 
 import (
-	"fmt"
-
 	log "github.com/golang/glog"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -39,17 +37,6 @@ func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNod
 		return actionError
 	}
 	return err
-}
-
-func (wr *Wrangler) getMasterAlias(keyspace, shard string) (topo.TabletAlias, error) {
-	aliases, err := wr.ts.GetReplicationPaths(keyspace, shard, "")
-	if err != nil {
-		return topo.TabletAlias{}, err
-	}
-	if len(aliases) != 1 {
-		return topo.TabletAlias{}, fmt.Errorf("More than one master in shard %v/%v: %v", keyspace, shard, aliases)
-	}
-	return aliases[0], nil
 }
 
 // SetShardServedTypes changes the ServedTypes parameter of a shard.

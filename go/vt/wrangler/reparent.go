@@ -111,19 +111,8 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 		return err
 	}
 
-	slaveTabletMap, foundMaster, err := slaveTabletMap(tabletMap)
-	if err != nil {
-		return err
-	}
-
-	currentMasterTabletAlias := shardInfo.MasterAlias
-	if currentMasterTabletAlias.IsZero() {
-		// There is no master - either it has been scrapped or there is some other degenerate case.
-	} else if currentMasterTabletAlias != foundMaster.Alias() {
-		return fmt.Errorf("master tablet conflict in ShardInfo %v/%v: %v, %v", keyspace, shard, currentMasterTabletAlias, foundMaster)
-	}
-
-	if currentMasterTabletAlias == masterElectTabletAlias && !forceReparentToCurrentMaster {
+	slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
+	if shardInfo.MasterAlias == masterElectTabletAlias && !forceReparentToCurrentMaster {
 		return fmt.Errorf("master-elect tablet %v is already master - specify -force to override", masterElectTabletAlias)
 	}
 
@@ -132,10 +121,10 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 		return fmt.Errorf("master-elect tablet %v not found in replication graph %v/%v %v", masterElectTabletAlias, keyspace, shard, mapKeys(tabletMap))
 	}
 
-	if !currentMasterTabletAlias.IsZero() && !forceReparentToCurrentMaster {
-		err = wr.reparentShardGraceful(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly)
+	if !shardInfo.MasterAlias.IsZero() && !forceReparentToCurrentMaster {
+		err = wr.reparentShardGraceful(shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly)
 	} else {
-		err = wr.reparentShardBrutal(slaveTabletMap, foundMaster, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
+		err = wr.reparentShardBrutal(shardInfo, slaveTabletMap, masterTabletMap, masterElectTablet, leaveMasterReadOnly, forceReparentToCurrentMaster)
 	}
 	if err == nil {
 		// only log if it works, if it fails we'll show the error

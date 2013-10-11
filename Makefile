@@ -46,7 +46,6 @@ integration_test:
 	cd test ; echo "sharded test"; time ./sharded.py $$VT_TEST_FLAGS
 	cd test ; echo "tabletmanager test"; time ./tabletmanager.py $$VT_TEST_FLAGS
 	cd test ; echo "zkocc test"; time ./zkocc_test.py $$VT_TEST_FLAGS
-	cd test ; echo "connection test"; time ./connection_test.py
 	cd test ; echo "updatestream test"; time ./update_stream.py
 	cd test ; echo "rowcache_invalidator test"; time ./rowcache_invalidator.py
 	cd test ; echo "secure test"; time ./secure.py $$VT_TEST_FLAGS

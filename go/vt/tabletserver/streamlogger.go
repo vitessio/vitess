@@ -96,7 +96,7 @@ func (stats *sqlQueryStats) FmtBindVariables(full bool) string {
 	} else {
 		// NOTE(szopa): I am getting rid of potentially large bind
 		// variables.
-		out := make(map[string]interface{})
+		out = make(map[string]interface{})
 		for k, v := range stats.BindVariables {
 			switch val := v.(type) {
 			case string:

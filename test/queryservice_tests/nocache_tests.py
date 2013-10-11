@@ -1,7 +1,8 @@
 import time
 
 from vtdb import dbexceptions
-from vtdb import vtclient
+from vtdb import tablet as tablet_conn
+from vtdb import cursor
 
 import framework
 import nocache_cases
@@ -20,7 +21,7 @@ class TestNocache(framework.TestCase):
     binary_data = '\x00\'\"\b\n\r\t\x1a\\\x00\x0f\xf0\xff'
     self.env.execute("insert into vtocc_test values(4, null, null, '\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\\x00\x0f\xf0\xff')")
     bvar = {'bindata': binary_data}
-    self.env.execute("insert into vtocc_test values(5, null, null, %(bindata)s)", bvar)
+    self.env.execute("insert into vtocc_test values(5, null, null, :bindata)", bvar)
     self.env.conn.commit()
     cu = self.env.execute("select * from vtocc_test where intval=4")
     self.assertEqual(cu.fetchone()[3], binary_data)
@@ -60,6 +61,7 @@ class TestNocache(framework.TestCase):
     # We should have at least one connection
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+2, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Completed.Count", 0)+2, vend.Transactions.Histograms.Completed.Count)
+    self.assertEqual(vstart.mget("TransactionCompletion.Histograms.Commit.Count", 0)+2, vend.TransactionCompletion.Histograms.Commit.Count)
     self.assertEqual(vstart.mget("Queries.TotalCount", 0)+4, vend.Queries.TotalCount)
     self.assertEqual(vstart.mget("Queries.Histograms.INSERT_PK.Count", 0)+1, vend.Queries.Histograms.INSERT_PK.Count)
     self.assertEqual(vstart.mget("Queries.Histograms.DML_PK.Count", 0)+1, vend.Queries.Histograms.DML_PK.Count)
@@ -95,6 +97,7 @@ class TestNocache(framework.TestCase):
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Transactions.TotalCount", 0)+1, vend.Transactions.TotalCount)
     self.assertEqual(vstart.mget("Transactions.Histograms.Aborted.Count", 0)+1, vend.Transactions.Histograms.Aborted.Count)
+    self.assertEqual(vstart.mget("TransactionCompletion.Histograms.Rollback.Count", 0)+1, vend.TransactionCompletion.Histograms.Rollback.Count)
 
   def test_nontx_dml(self):
     vstart = self.env.debug_vars()
@@ -110,17 +113,17 @@ class TestNocache(framework.TestCase):
   def test_trailing_comment(self):
     vstart = self.env.debug_vars()
     bv={'ival': 1}
-    self.env.execute("select * from vtocc_test where intval=%(ival)s", bv)
+    self.env.execute("select * from vtocc_test where intval=:ival", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
     self.assertEqual(vstart.mget("QueryCacheLength", 0)+1, vend.QueryCacheLength)
     # This should not increase the query cache size
-    self.env.execute("select * from vtocc_test where intval=%(ival)s /* trailing comment */", bv)
+    self.env.execute("select * from vtocc_test where intval=:ival /* trailing comment */", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
     self.assertEqual(vstart.mget("QueryCacheLength", 0)+1, vend.QueryCacheLength)
     # This should also not increase the query cache size
-    self.env.execute("select * from vtocc_test where intval=%(ival)s /* trailing comment1 */ /* comment2 */", bv)
+    self.env.execute("select * from vtocc_test where intval=:ival /* trailing comment1 */ /* comment2 */", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
     self.assertEqual(vstart.mget("QueryCacheLength", 0)+1, vend.QueryCacheLength)
@@ -161,7 +164,7 @@ class TestNocache(framework.TestCase):
     co2 = self.env.connect()
     self.env.conn.begin()
     try:
-      cu2 = co2.cursor()
+      cu2 = cursor.TabletCursor(co2)
       co2.begin()
     except dbexceptions.DatabaseError as e:
       self.assertContains(str(e), "tx_pool_full")
@@ -209,8 +212,8 @@ class TestNocache(framework.TestCase):
   def test_query_cache(self):
     self.env.execute("set vt_query_cache_size=1")
     bv={'ival1': 1, 'ival2': 1}
-    self.env.execute("select * from vtocc_test where intval=%(ival1)s", bv)
-    self.env.execute("select * from vtocc_test where intval=%(ival2)s", bv)
+    self.env.execute("select * from vtocc_test where intval=:ival1", bv)
+    self.env.execute("select * from vtocc_test where intval=:ival2", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.QueryCache.Length, 1)
     self.assertEqual(vend.QueryCacheLength, 1)
@@ -219,7 +222,7 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vend.Voltron.QueryCache.Capacity, 1)
     self.assertEqual(vend.QueryCacheCapacity, 1)
     self.env.execute("set vt_query_cache_size=5000")
-    self.env.execute("select * from vtocc_test where intval=%(ival1)s", bv)
+    self.env.execute("select * from vtocc_test where intval=:ival1", bv)
     vend = self.env.debug_vars()
     self.assertEqual(vend.Voltron.QueryCache.Length, 2)
     self.assertEqual(vend.QueryCacheLength, 2)
@@ -280,8 +283,8 @@ class TestNocache(framework.TestCase):
 
   def test_query_timeout(self):
     vstart = self.env.debug_vars()
-    conn = vtclient.connect("localhost:9461", 'test_keyspace', '0', 5)
-    cu = conn.cursor()
+    conn = tablet_conn.connect("localhost:9461", 'test_keyspace', '0', 5)
+    cu = cursor.TabletCursor(conn)
     self.env.execute("set vt_query_timeout=0.25")
     try:
       conn.begin()
@@ -342,26 +345,26 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vstart.mget("Waits.Histograms.Consolidations.Count", 0)+1, vend.Waits.Histograms.Consolidations.Count)
 
   def test_batch(self):
-    queries = ["select * from vtocc_a where id = %(a)s", "select * from vtocc_b where id = %(b)s"]
+    queries = ["select * from vtocc_a where id = :a", "select * from vtocc_b where id = :b"]
     bvars = [{"a":2}, {"b":2}]
     results = self.env.conn._execute_batch(queries, bvars)
     self.assertEqual(results, [([(1L, 2L, 'bcde', 'fghi')], 1, 0, [('eid', 8), ('id', 3), ('name', 253), ('foo', 253)]), ([(1L, 2L)], 1, 0, [('eid', 8), ('id', 3)])])
 
   def test_bind_in_select(self):
     bv = {'bv': 1}
-    cu = self.env.execute('select %(bv)s from vtocc_test', bv)
+    cu = self.env.execute('select :bv from vtocc_test', bv)
     self.assertEqual(cu.description, [('1', 8)])
     bv = {'bv': 'abcd'}
-    cu = self.env.execute('select %(bv)s from vtocc_test', bv)
+    cu = self.env.execute('select :bv from vtocc_test', bv)
     self.assertEqual(cu.description, [('abcd', 253)])
 
   def test_types(self):
     self._verify_mismatch("insert into vtocc_ints(tiny) values('str')")
-    self._verify_mismatch("insert into vtocc_ints(tiny) values(%(str)s)", {"str": "str"})
+    self._verify_mismatch("insert into vtocc_ints(tiny) values(:str)", {"str": "str"})
     self._verify_mismatch("insert into vtocc_ints(tiny) values(1.2)")
-    self._verify_mismatch("insert into vtocc_ints(tiny) values(%(fl)s)", {"fl": 1.2})
+    self._verify_mismatch("insert into vtocc_ints(tiny) values(:fl)", {"fl": 1.2})
     self._verify_mismatch("insert into vtocc_strings(vb) values(1)")
-    self._verify_mismatch("insert into vtocc_strings(vb) values(%(id)s)", {"id": 1})
+    self._verify_mismatch("insert into vtocc_strings(vb) values(:id)", {"id": 1})
     self._verify_error("insert into vtocc_strings(vb) values('12345678901234567')", None, "error: Data too long")
     self._verify_error("insert into vtocc_ints(tiny) values(-129)", None, "error: Out of range")
 
@@ -385,7 +388,7 @@ class TestNocache(framework.TestCase):
   def test_customrules(self):
     bv = {'asdfg': 1}
     try:
-      self.env.execute("select * from vtocc_test where intval=%(asdfg)s", bv)
+      self.env.execute("select * from vtocc_test where intval=:asdfg", bv)
     except dbexceptions.DatabaseError as e:
       self.assertContains(str(e), "error: Query disallowed")
 
@@ -394,7 +397,7 @@ class TestNocache(framework.TestCase):
 
   def test_query_stats(self):
     bv = {'eid': 1}
-    self.env.execute("select eid as query_stats from vtocc_a where eid = %(eid)s", bv)
+    self.env.execute("select eid as query_stats from vtocc_a where eid = :eid", bv)
     self._verify_query_stats(self.env.query_stats(), "select eid as query_stats from vtocc_a where eid = :eid", "vtocc_a", "PASS_SELECT", 1, 2, 0)
     tstartQueryCounts = self._get_vars_query_stats(self.env.debug_vars()["QueryCounts"], "vtocc_a", "PASS_SELECT")
     tstartRowCounts = self._get_vars_query_stats(self.env.debug_vars()["QueryRowCounts"], "vtocc_a", "PASS_SELECT")
@@ -406,7 +409,7 @@ class TestNocache(framework.TestCase):
     self.assertTrue(tstartTimesNs > 0)
 
     try:
-      self.env.execute("select eid as query_stats from vtocc_a where dontexist(eid) = %(eid)s", bv)
+      self.env.execute("select eid as query_stats from vtocc_a where dontexist(eid) = :eid", bv)
     except dbexceptions.DatabaseError:
       pass
     else:

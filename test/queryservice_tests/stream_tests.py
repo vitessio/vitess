@@ -53,8 +53,8 @@ class TestStream(framework.TestCase):
     # select lots of data using a streaming query
     if True:
       for i in xrange(loop_count):
-        cu = self.env.execute("select * from vtocc_big b1, vtocc_big b2",
-                              cursorclass=cursor.StreamCursor)
+        cu = cursor.StreamCursor(self.env.conn)
+        cu.execute("select * from vtocc_big b1, vtocc_big b2", {})
         count = 0
         while True:
           row = cu.fetchone()

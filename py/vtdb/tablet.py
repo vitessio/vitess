@@ -8,7 +8,6 @@ import re
 
 from net import bsonrpc
 from net import gorpc
-from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
 
@@ -34,6 +33,10 @@ class TimeoutError(dbexceptions.OperationalError):
   pass
 
 
+class TxPoolFull(dbexceptions.DatabaseError):
+  pass
+
+
 _errno_pattern = re.compile('\(errno (\d+)\)')
 # Map specific errors to specific classes.
 _errno_map = {
@@ -51,6 +54,8 @@ def convert_exception(exc, *args):
       return RetryError(new_args)
     if msg.startswith('fatal'):
       return FatalError(new_args)
+    if msg.startswith('tx_pool_full'):
+      return TxPoolFull(new_args)
     match = _errno_pattern.search(msg)
     if match:
       mysql_errno = int(match.group(1))
@@ -69,7 +74,6 @@ def convert_exception(exc, *args):
 class TabletConnection(object):
   transaction_id = 0
   session_id = 0
-  cursorclass = cursor.TabletCursor
   _stream_fields = None
   _stream_conversions = None
   _stream_result = None
@@ -159,9 +163,6 @@ class TabletConnection(object):
       return response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
-
-  def cursor(self, cursorclass=None, **kargs):
-    return (cursorclass or self.cursorclass)(self, **kargs)
 
   def _execute(self, sql, bind_variables):
     new_binds = field_types.convert_bind_vars(bind_variables)
@@ -266,6 +267,7 @@ class TabletConnection(object):
       try:
         self._stream_result = self.client.stream_next()
         if self._stream_result is None:
+          self._stream_result_index = None
           return None
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))

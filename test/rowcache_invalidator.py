@@ -21,6 +21,7 @@ from vtdb import vtclient
 import framework
 import tablet
 import utils
+from zk import zkocc
 
 master_tablet = tablet.Tablet(62344)
 replica_tablet = tablet.Tablet(62345)
@@ -28,6 +29,8 @@ replica_tablet = tablet.Tablet(62345)
 master_host = "localhost:%u" % master_tablet.port
 replica_host = "localhost:%u" % replica_tablet.port
 
+zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+                                     "test_nj", 30.0)
 
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
@@ -87,31 +90,36 @@ def setup_tablets():
   logging.debug("Setting up tablets")
   utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
+  replica_tablet.init_tablet('replica', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph test_keyspace/0')
-  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
   utils.validate_topology()
-
-  setup_schema()
+  master_tablet.create_db('vt_test_keyspace')
   replica_tablet.create_db('vt_test_keyspace')
+
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
+
+  zkocc_server = utils.zkocc_start()
+
   master_tablet.start_vttablet(memcache=True)
+  replica_tablet.start_vttablet(memcache=True)
 
-  replica_tablet.init_tablet('idle', 'test_keyspace', start=True, memcache=True)
-  snapshot_dir = os.path.join(utils.vtdataroot, 'snapshot')
-  utils.run("mkdir -p " + snapshot_dir)
-  utils.run("chmod +w " + snapshot_dir)
-  utils.run_vtctl('Clone -force %s %s' %
-                  (master_tablet.tablet_alias, replica_tablet.tablet_alias))
-
-  utils.run_vtctl('Ping test_nj-0000062344')
   utils.run_vtctl('SetReadWrite ' + master_tablet.tablet_alias)
   utils.check_db_read_write(62344)
 
+  for t in [master_tablet, replica_tablet]:
+    t.reset_replication()
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + master_tablet.tablet_alias, auto_log=True)
+
   utils.validate_topology()
-  utils.run_vtctl('Ping test_nj-0000062345')
-  utils.run_vtctl('ChangeSlaveType test_nj-0000062345 replica')
+  # reset counter so tests don't assert
+  tablet.Tablet.tablets_running = 0
+  setup_schema()
+  replica_tablet.kill_vttablet()
+  replica_tablet.start_vttablet(memcache=True)
+  master_tablet.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
+  replica_tablet.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
 
 def setup_schema():
-  master_tablet.create_db('vt_test_keyspace')
   master_tablet.mquery('vt_test_keyspace', create_vt_insert_test)
 
 def perform_insert(count):
@@ -124,7 +132,7 @@ def perform_delete():
 
 class RowCacheInvalidator(unittest.TestCase):
   def setUp(self):
-    perform_insert(100)
+    perform_insert(400)
 
   def tearDown(self):
     perform_delete()
@@ -132,9 +140,7 @@ class RowCacheInvalidator(unittest.TestCase):
   def test_cache_invalidation(self):
     logging.debug("===========test_cache_invalidation=========")
     master_position = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
-    #The sleep is needed here, so the invalidator can catch up and the number can be tested.
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
-    time.sleep(5)
     invalidations = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
     logging.debug("Invalidations %d InvalidatorStats %s" % (invalidations, invalidatorStats['RowcacheInvalidationCheckPoint']))
@@ -215,7 +221,9 @@ class RowCacheInvalidator(unittest.TestCase):
 
 
 def _vtdb_conn(host):
-  return vtclient.connect(host, 'test_keyspace', '0', 2)
+  conn = vtclient.VtOCCConnection(zkocc_client, 'test_keyspace', '0', "master", 30)
+  conn.connect()
+  return conn
 
 def _exec_vt_txn(host, query_list=None):
   if query_list is None:
