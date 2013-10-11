@@ -5,7 +5,6 @@
 package servenv
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -24,7 +23,6 @@ func TestThrottle(t *testing.T) {
 	start := time.Now()
 	for i := 1; i <= 10; i++ {
 		resp, err := http.Get("http://localhost:12345/debug/vars")
-		fmt.Printf("%d\n", i)
 		if err != nil {
 			t.Fatal(err)
 		}
