@@ -173,11 +173,11 @@ class TestCache(framework.TestCase):
 
   def test_types(self):
     self._verify_mismatch("select * from vtocc_cached2 where eid = 'str' and bid = 'str'")
-    self._verify_mismatch("select * from vtocc_cached2 where eid = %(str)s and bid = %(str)s", {"str": "str"})
+    self._verify_mismatch("select * from vtocc_cached2 where eid = :str and bid = :str", {"str": "str"})
     self._verify_mismatch("select * from vtocc_cached2 where eid = 1 and bid = 1")
-    self._verify_mismatch("select * from vtocc_cached2 where eid = %(id)s and bid = %(id)s", {"id": 1})
+    self._verify_mismatch("select * from vtocc_cached2 where eid = :id and bid = :id", {"id": 1})
     self._verify_mismatch("select * from vtocc_cached2 where eid = 1.2 and bid = 1.2")
-    self._verify_mismatch("select * from vtocc_cached2 where eid = %(fl)s and bid = %(fl)s", {"fl": 1.2})
+    self._verify_mismatch("select * from vtocc_cached2 where eid = :fl and bid = :fl", {"fl": 1.2})
 
   def test_stats(self):
     self.env.execute("select * from vtocc_cached2 where eid = 2 and bid = 'foo'")

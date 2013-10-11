@@ -79,6 +79,8 @@ NoneType = type(None)
 
 def convert_bind_vars(bind_variables):
   new_vars = {}
+  if bind_variables is None:
+    return new_vars
   for key, val in bind_variables.iteritems():
     if hasattr(val, '__sql_literal__'):
       new_vars[key] = val.__sql_literal__()
