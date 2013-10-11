@@ -5,11 +5,13 @@
 package wrangler
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
+	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
@@ -59,11 +61,77 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("cannot create slave tablet: %v", err)
 	}
 
+	// First test: reparent to the same master, make sure it works
+	// as expected.
 	if err := wr.ShardExternallyReparented("test_keyspace", "0", topo.TabletAlias{Cell: "cell1", Uid: 123}, false, 80); err == nil {
 		t.Fatalf("ShardExternallyReparented(same master) should have failed")
 	} else {
 		if !strings.Contains(err.Error(), "already master") {
 			t.Fatalf("ShardExternallyReparented(same master) should have failed with an error that contains 'already master' but got: %v", err)
 		}
+	}
+
+	// Second test: reparent to the replica, and pretend the old
+	// master is still good to go.
+	done := make(chan struct{}, 1)
+	go func() {
+		// On the elected master, respond to TABLET_ACTION_SLAVE_WAS_PROMOTED.
+		// We can use HandleAction here as it doesn't use mysqld.
+		f := func(actionPath, data string) error {
+			actionNode, err := tm.ActionNodeFromJson(data, actionPath)
+			if err != nil {
+				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
+			}
+			switch actionNode.Action {
+			case tm.TABLET_ACTION_SLAVE_WAS_PROMOTED:
+				ta := tm.NewTabletActor(nil, ts, topo.TabletAlias{Cell: "cell1", Uid: 234})
+				if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
+					t.Fatalf("HandleAction failed for %v: %v", actionNode.Action, err)
+				}
+			}
+			return nil
+		}
+		ts.ActionEventLoop(topo.TabletAlias{Cell: "cell1", Uid: 234}, f, done)
+	}()
+	go func() {
+		// On the old master, respond to TABLET_ACTION_SLAVE_WAS_RESTARTED.
+		// We cannot use HandleAction as this one uses
+		// TabletActor.mysqld, and that's not a fakeable interface.
+		f := func(actionPath, data string) error {
+			// get the version and info for actionNode
+			tabletAlias, data, version, err := ts.ReadTabletActionPath(actionPath)
+			if err != nil {
+				t.Fatalf("ReadTabletActionPath failed: %v", err)
+			}
+			actionNode, err := tm.ActionNodeFromJson(data, actionPath)
+			if err != nil {
+				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
+			}
+			switch actionNode.Action {
+			case tm.TABLET_ACTION_SLAVE_WAS_RESTARTED:
+				// update the actionNode
+				actionNode.State = tm.ACTION_STATE_RUNNING
+				actionNode.Pid = os.Getpid()
+				newData := tm.ActionNodeToJson(actionNode)
+				if err := ts.UpdateTabletAction(actionPath, newData, version); err != nil {
+					t.Fatalf("UpdateTabletAction failed: %v", err)
+				}
+
+				ta := tm.NewTabletActor(nil, ts, tabletAlias)
+				actionErr := ta.SlaveWasRestarted(actionNode, "2.3.4.5:3306")
+				if err := tm.StoreActionResponse(ts, actionNode, actionPath, actionErr); err != nil {
+					t.Fatalf("StoreActionResponse failed: %v", err)
+				}
+
+				if err := ts.UnblockTabletAction(actionPath); err != nil {
+					t.Fatalf("UnblockTabletAction failed: %v", err)
+				}
+			}
+			return nil
+		}
+		ts.ActionEventLoop(topo.TabletAlias{Cell: "cell1", Uid: 123}, f, done)
+	}()
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", topo.TabletAlias{Cell: "cell1", Uid: 234}, false, 80); err != nil {
+		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
 }

@@ -61,8 +61,8 @@ type TabletActor struct {
 	tabletAlias topo.TabletAlias
 }
 
-func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer topo.Server) *TabletActor {
-	return &TabletActor{mysqld, topoServer, topo.TabletAlias{}}
+func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer topo.Server, tabletAlias topo.TabletAlias) *TabletActor {
+	return &TabletActor{mysqld, topoServer, tabletAlias}
 }
 
 // This function should be protected from unforseen panics, as
@@ -183,11 +183,11 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = ta.slaveWasPromoted(actionNode)
+		err = ta.SlaveWasPromoted(actionNode)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		err = ta.slaveWasRestarted(actionNode)
+		err = ta.SlaveWasRestarted(actionNode, "")
 	case TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case TABLET_ACTION_RESTORE:
@@ -313,7 +313,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
 }
 
-func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
+func (ta *TabletActor) SlaveWasPromoted(actionNode *ActionNode) error {
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
 		return err
@@ -469,7 +469,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	return nil
 }
 
-func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
+func (ta *TabletActor) SlaveWasRestarted(actionNode *ActionNode, masterAddr string) error {
 	swrd := actionNode.args.(*SlaveWasRestartedData)
 
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
@@ -489,9 +489,11 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	}
 
 	// now we can check the reparent actually worked
-	masterAddr, err := ta.mysqld.GetMasterAddr()
-	if err != nil {
-		return err
+	if masterAddr == "" {
+		masterAddr, err = ta.mysqld.GetMasterAddr()
+		if err != nil {
+			return err
+		}
 	}
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
 		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
