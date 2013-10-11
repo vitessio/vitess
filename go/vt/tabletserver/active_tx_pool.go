@@ -43,20 +43,22 @@ const (
 )
 
 type ActiveTxPool struct {
-	pool    *pools.Numbered
-	lastId  sync2.AtomicInt64
-	timeout sync2.AtomicDuration
-	ticks   *timer.Timer
-	txStats *stats.Timings
+	pool            *pools.Numbered
+	lastId          sync2.AtomicInt64
+	timeout         sync2.AtomicDuration
+	ticks           *timer.Timer
+	txStats         *stats.Timings
+	completionStats *stats.Timings
 }
 
 func NewActiveTxPool(name string, timeout time.Duration) *ActiveTxPool {
 	axp := &ActiveTxPool{
-		pool:    pools.NewNumbered(),
-		lastId:  sync2.AtomicInt64(time.Now().UnixNano()),
-		timeout: sync2.AtomicDuration(timeout),
-		ticks:   timer.NewTimer(timeout / 10),
-		txStats: stats.NewTimings("Transactions"),
+		pool:            pools.NewNumbered(),
+		lastId:          sync2.AtomicInt64(time.Now().UnixNano()),
+		timeout:         sync2.AtomicDuration(timeout),
+		ticks:           timer.NewTimer(timeout / 10),
+		txStats:         stats.NewTimings("Transactions"),
+		completionStats: stats.NewTimings("TransactionCompletion"),
 	}
 	stats.Publish(name+"Size", stats.IntFunc(axp.pool.Size))
 	stats.Publish(
@@ -109,7 +111,7 @@ func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_COMMIT)
 	axp.txStats.Add("Completed", time.Now().Sub(conn.startTime))
-	defer axp.txStats.Record("Commit", time.Now())
+	defer axp.completionStats.Record("Commit", time.Now())
 	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
 	}
@@ -120,6 +122,7 @@ func (axp *ActiveTxPool) Rollback(transactionId int64) {
 	conn := axp.Get(transactionId)
 	defer conn.discard(TX_ROLLBACK)
 	axp.txStats.Add("Aborted", time.Now().Sub(conn.startTime))
+	defer axp.completionStats.Record("Rollback", time.Now())
 	if _, err := conn.ExecuteFetch(ROLLBACK, 1, false); err != nil {
 		conn.Close()
 		panic(NewTabletErrorSql(FAIL, err))

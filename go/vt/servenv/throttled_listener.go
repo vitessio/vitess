@@ -22,9 +22,8 @@ func NewThrottledListener(l net.Listener, maxRate int64) net.Listener {
 	return &ThrottledListener{l, time.Duration(1e9 / maxRate)}
 }
 
-// Accept accepts a new connection only if the accept rate
-// will not exceed the throttling limit. Otherwise, it waits
-// before accepting.
+// Accept accepts a new connection, but ensures that te
+// rate does not exceed the specified maxRate.
 func (tln *ThrottledListener) Accept() (c net.Conn, err error) {
 	// We assume Accept is called in a tight loop.
 	// So we can just sleep for minDelay
