@@ -37,6 +37,10 @@ var (
 	// ErrBadVersion is returned by an update function that
 	// failed to update the data because the version was different
 	ErrBadVersion = errors.New("bad node version")
+
+	// ErrPartialResult is returned by a function that could only
+	// get a subset of its results
+	ErrPartialResult = errors.New("partial result")
 )
 
 // topo.Server is the interface used to talk to a persistent

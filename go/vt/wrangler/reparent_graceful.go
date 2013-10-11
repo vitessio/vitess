@@ -6,13 +6,26 @@ package wrangler
 
 import (
 	"fmt"
+	"strings"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTablet, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) error {
+func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly bool) error {
 	// Validate a bunch of assumptions we make about the replication graph.
+	if len(masterTabletMap) != 1 {
+		aliases := make([]string, 0, len(masterTabletMap))
+		for _, v := range masterTabletMap {
+			aliases = append(aliases, v.String())
+		}
+		return fmt.Errorf("I have 0 or multiple masters / scrapped tablets in this shard replication graph, please scrap the non-master ones: %v", strings.Join(aliases, " "))
+	}
+	var masterTablet *topo.TabletInfo
+	for _, v := range masterTabletMap {
+		masterTablet = v
+	}
+
 	if masterTablet.Parent.Uid != topo.NO_TABLET {
 		return fmt.Errorf("master tablet should not have a ParentUid: %v %v", masterTablet.Parent.Uid, masterTablet.Alias())
 	}
@@ -87,7 +100,7 @@ func (wr *Wrangler) reparentShardGraceful(slaveTabletMap map[topo.TabletAlias]*t
 		log.Warningf("scrap demoted master failed: %v", scrapErr)
 	}
 
-	err = wr.finishReparent(masterTablet, masterElectTablet, majorityRestart, leaveMasterReadOnly)
+	err = wr.finishReparent(si, masterElectTablet, majorityRestart, leaveMasterReadOnly)
 	if err != nil {
 		return err
 	}
