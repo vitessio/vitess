@@ -138,7 +138,6 @@ type Blp struct {
 	startPosition    *proto.ReplicationCoordinates
 	currentPosition  *proto.BinlogPosition
 	globalState      *UpdateStream
-	dbmatch          bool
 	blpStats
 }
 
@@ -151,8 +150,6 @@ func NewBlp(startCoordinates *proto.ReplicationCoordinates, updateStream *Update
 	blp.txnLineBuffer = make([]*eventBuffer, 0, MAX_TXN_BATCH)
 	blp.responseStream = make([]*UpdateResponse, 0, MAX_TXN_BATCH)
 	blp.globalState = updateStream
-	// by default assume that the db matches.
-	blp.dbmatch = true
 	return blp
 }
 
@@ -240,8 +237,12 @@ func (blp *Blp) handleError(err *error) {
 }
 
 func (blp *Blp) streamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) (err error) {
+	if blp.globalState.dbname == "" {
+		return NewBinlogParseError(SERVICE_ERROR, "db name was not specified")
+	}
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(
+		blp.globalState.dbname,
 		path.Join(path.Dir(binlogPrefix), blp.startPosition.MasterFilename),
 		blp.startPosition.MasterPosition,
 	)
@@ -314,29 +315,10 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 			event.firstKw = string(bytes.ToLower(bytes.SplitN(event.LogLine, SPACE, 2)[0]))
 
 			// processes statements only for the dbname that it is subscribed to.
-			blp.parseDbChange(event)
 			blp.parseEventData(sendReply, event)
 		}
 	}
 	return nil
-}
-
-// Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
-func (blp *Blp) parseDbChange(event *eventBuffer) {
-	if event.firstKw != USE {
-		return
-	}
-	if blp.globalState.dbname == "" {
-		log.Warningf("dbname is not set, will match all database names")
-		return
-	}
-
-	new_db := string(bytes.TrimSpace(bytes.SplitN(event.LogLine, BINLOG_DB_CHANGE, 2)[1]))
-	if new_db != blp.globalState.dbname {
-		blp.dbmatch = false
-	} else {
-		blp.dbmatch = true
-	}
 }
 
 func (blp *Blp) parsePositionData(line []byte) {
@@ -471,10 +453,6 @@ func (blp *Blp) handleDdlEvent(sendReply SendUpdateStreamResponse, event *eventB
 }
 
 func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEvent *eventBuffer) {
-	if !blp.dbmatch {
-		return
-	}
-
 	commitEvent.Coord.Xid = blp.currentPosition.Xid
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
 	// txn block for DMLs, parse it and send events for a txn

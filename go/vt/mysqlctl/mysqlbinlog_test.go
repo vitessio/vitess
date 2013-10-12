@@ -52,7 +52,7 @@ func TestSuccess(t *testing.T) {
 	defer cleanup(env)
 
 	mbl := &MysqlBinlog{}
-	out, err := mbl.Launch("name", 10)
+	out, err := mbl.Launch("db", "name", 10)
 	if err != nil {
 		panic(err)
 	}
@@ -61,7 +61,7 @@ func TestSuccess(t *testing.T) {
 		panic(err)
 	}
 	got := string(outbytes)
-	want := "success --start-position=10 name\n"
+	want := "success --database=db --start-position=10 name\n"
 	if want != got {
 		t.Errorf("want '%s', got '%s'", want, got)
 	}
@@ -77,7 +77,7 @@ func TestLaunchFail(t *testing.T) {
 	}
 
 	mbl := &MysqlBinlog{}
-	_, err = mbl.Launch("name", 10)
+	_, err = mbl.Launch("db", "name", 10)
 	if err == nil {
 		t.Errorf("want error, got nil")
 	}
@@ -88,7 +88,7 @@ func TestExitFail(t *testing.T) {
 	defer cleanup(env)
 
 	mbl := &MysqlBinlog{}
-	out, err := mbl.Launch("name", 10)
+	out, err := mbl.Launch("db", "name", 10)
 	if err != nil {
 		panic(err)
 	}
@@ -105,7 +105,7 @@ func TestWarning(t *testing.T) {
 	defer cleanup(env)
 
 	mbl := &MysqlBinlog{}
-	out, err := mbl.Launch("name", 10)
+	out, err := mbl.Launch("db", "name", 10)
 	if err != nil {
 		panic(err)
 	}
@@ -117,7 +117,7 @@ func TestWarning(t *testing.T) {
 		t.Error(err)
 	}
 	got := string(warnbytes)
-	want := "WARNING --start-position=10 name"
+	want := "WARNING --database=db --start-position=10 name"
 	if !strings.Contains(got, want) {
 		t.Errorf("want '%s' in '%s'", want, got)
 	}
@@ -128,7 +128,7 @@ func TestError(t *testing.T) {
 	defer cleanup(env)
 
 	mbl := &MysqlBinlog{}
-	out, err := mbl.Launch("name", 10)
+	out, err := mbl.Launch("db", "name", 10)
 	if err != nil {
 		panic(err)
 	}
@@ -140,7 +140,7 @@ func TestError(t *testing.T) {
 		t.Error(err)
 	}
 	got := string(warnbytes)
-	want := "ERROR test: expected --start-position=10 name"
+	want := "ERROR test: expected --database=db --start-position=10 name"
 	if !strings.Contains(got, want) {
 		t.Errorf("want '%s' in '%s'", want, got)
 	}

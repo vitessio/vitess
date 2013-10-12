@@ -21,13 +21,14 @@ type MysqlBinlog struct {
 
 // MysqlBinlog launches mysqlbinlog and returns a ReadCloser into which its output
 // will be piped. The stderr will be redirected to the log.
-func (mbl *MysqlBinlog) Launch(filename string, pos uint64) (stdout io.ReadCloser, err error) {
+func (mbl *MysqlBinlog) Launch(dbname, filename string, pos uint64) (stdout io.ReadCloser, err error) {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return nil, err
 	}
 	mbl.cmd = exec.Command(
 		path.Join(dir, "bin/mysqlbinlog"),
+		fmt.Sprintf("--database=%s", dbname),
 		fmt.Sprintf("--start-position=%d", pos),
 		filename,
 	)
