@@ -15,9 +15,9 @@ import (
 	log "github.com/golang/glog"
 )
 
-const (
+var (
 	rootName = "VT_MYSQL_ROOT"
-	rootPath = "/tmp/binlogtest"
+	rootPath = path.Join(os.TempDir(), "binlogtest")
 )
 
 func setup(cmd string, exitCode int) (env string) {
@@ -27,11 +27,11 @@ func setup(cmd string, exitCode int) (env string) {
 	if err != nil {
 		panic(err)
 	}
-	err = os.Mkdir(rootPath+"/bin", 0755)
+	err = os.Mkdir(path.Join(rootPath, "bin"), 0755)
 	if err != nil {
 		panic(err)
 	}
-	f, err := os.OpenFile(rootPath+"/bin/mysqlbinlog", os.O_WRONLY|os.O_CREATE, 0755)
+	f, err := os.OpenFile(path.Join(rootPath, "bin/mysqlbinlog"), os.O_WRONLY|os.O_CREATE, 0755)
 	if err != nil {
 		panic(err)
 	}
@@ -42,8 +42,8 @@ func setup(cmd string, exitCode int) (env string) {
 
 func cleanup(env string) {
 	os.Setenv(rootName, env)
-	os.Remove(rootPath + "/bin/mysqlbinlog")
-	os.Remove(rootPath + "/bin")
+	os.Remove(path.Join(rootPath, "bin/mysqlbinlog"))
+	os.Remove(path.Join(rootPath, "bin"))
 	os.Remove(rootPath)
 }
 
@@ -71,7 +71,7 @@ func TestLaunchFail(t *testing.T) {
 	env := setup("echo success $*", 0)
 	defer cleanup(env)
 
-	err := os.Chmod(rootPath+"/bin/mysqlbinlog", 0644)
+	err := os.Chmod(path.Join(rootPath, "bin/mysqlbinlog"), 0644)
 	if err != nil {
 		panic(err)
 	}
