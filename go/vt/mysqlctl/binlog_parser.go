@@ -1,6 +1,7 @@
 // Copyright 2012, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
 package mysqlctl
 
 import (
@@ -11,21 +12,17 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path"
 	"strconv"
 	"strings"
 	"time"
 
 	log "github.com/golang/glog"
-	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	parser "github.com/youtube/vitess/go/vt/sqlparser"
 )
 
-/*
-Functionality to parse a binlog log and send event streams to clients.
-*/
+// Functionality to parse a binlog log and send event streams to clients.
 
 const (
 	MAX_TXN_BATCH = 1024
@@ -74,7 +71,7 @@ var (
 	SEMICOLON_BYTE         = []byte(";")
 )
 
-//Api Interface
+// Api Interface
 type UpdateResponse struct {
 	Error string
 	Coord proto.BinlogPosition
@@ -89,7 +86,7 @@ type EventData struct {
 	PkValues   [][]interface{}
 }
 
-//Raw event buffer used to gather data during parsing.
+// Raw event buffer used to gather data during parsing.
 type eventBuffer struct {
 	Coord   proto.BinlogPosition
 	LogLine []byte
@@ -154,7 +151,7 @@ func NewBlp(startCoordinates *proto.ReplicationCoordinates, updateStream *Update
 	blp.txnLineBuffer = make([]*eventBuffer, 0, MAX_TXN_BATCH)
 	blp.responseStream = make([]*UpdateResponse, 0, MAX_TXN_BATCH)
 	blp.globalState = updateStream
-	//by default assume that the db matches.
+	// by default assume that the db matches.
 	blp.dbmatch = true
 	return blp
 }
@@ -208,7 +205,7 @@ func (blp *Blp) ComputeBacklog() int64 {
 	return int64(rp.MasterPosition) - pos
 }
 
-//Main entry function for reading and parsing the binlog.
+// Main entry function for reading and parsing the binlog.
 func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) {
 	var err error
 	var lastRun time.Time
@@ -243,31 +240,24 @@ func (blp *Blp) handleError(err *error) {
 }
 
 func (blp *Blp) streamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) (err error) {
-	dir, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command(
-		path.Join(dir, "bin/mysqlbinlog"),
-		fmt.Sprintf("--start-position=%d", blp.startPosition.MasterPosition),
+	mbl := &MysqlBinlog{}
+	reader, err := mbl.Launch(
 		path.Join(path.Dir(binlogPrefix), blp.startPosition.MasterFilename),
+		blp.startPosition.MasterPosition,
 	)
-	binlogReader, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
-	err = cmd.Start()
+	err = blp.parseBinlogEvents(sendReply, reader)
 	if err != nil {
-		return err
-	}
-	err = blp.parseBinlogEvents(sendReply, binlogReader)
-	if err != nil {
-		cmd.Process.Kill()
+		mbl.Kill()
+	} else {
+		err = mbl.Wait()
 	}
 	return err
 }
 
-//Main parse loop
+// Main parse loop
 func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogReader io.Reader) (err error) {
 	defer blp.handleError(&err)
 	// read over the stream and buffer up the transactions
@@ -287,7 +277,7 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 		line, err = blp.readBlpLine(lineReader, bigLine)
 		if err != nil {
 			if err == io.EOF {
-				//end of stream
+				// end of stream
 				return nil
 			}
 			panic(NewBinlogParseError(REPLICATION_ERROR, fmt.Sprintf("ReadLine err: , %v", err)))
@@ -298,13 +288,13 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 		blp.LineCount++
 
 		if line[0] == '#' {
-			//parse positional data
+			// parse positional data
 			line = bytes.TrimSpace(line)
 			blp.parsePositionData(line)
 		} else {
-			//parse event data
+			// parse event data
 
-			//readAhead is used for reading a log line that is spread across multiple lines and has newlines within it.
+			// readAhead is used for reading a log line that is spread across multiple lines and has newlines within it.
 			if readAhead {
 				event.LogLine = append(event.LogLine, line...)
 			} else {
@@ -323,7 +313,7 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 			event.LogLine = bytes.TrimSpace(event.LogLine)
 			event.firstKw = string(bytes.ToLower(bytes.SplitN(event.LogLine, SPACE, 2)[0]))
 
-			//processes statements only for the dbname that it is subscribed to.
+			// processes statements only for the dbname that it is subscribed to.
 			blp.parseDbChange(event)
 			blp.parseEventData(sendReply, event)
 		}
@@ -331,7 +321,7 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 	return nil
 }
 
-//Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
+// Function to set the dbmatch variable, this parses the "Use <dbname>" statement.
 func (blp *Blp) parseDbChange(event *eventBuffer) {
 	if event.firstKw != USE {
 		return
@@ -351,14 +341,14 @@ func (blp *Blp) parseDbChange(event *eventBuffer) {
 
 func (blp *Blp) parsePositionData(line []byte) {
 	if bytes.HasPrefix(line, BINLOG_POSITION_PREFIX) {
-		//Master Position
+		// Master Position
 		if blp.nextStmtPosition == 0 {
 			return
 		}
 	} else if bytes.Index(line, BINLOG_ROTATE_TO) != -1 {
 		blp.parseRotateEvent(line)
 	} else if bytes.Index(line, BINLOG_END_LOG_POS) != -1 {
-		//Ignore the position data that appears at the start line of binlog.
+		// Ignore the position data that appears at the start line of binlog.
 		if bytes.Index(line, BINLOG_START) != -1 {
 			return
 		}
@@ -405,7 +395,7 @@ func (blp *Blp) parseEventData(sendReply SendUpdateStreamResponse, event *eventB
 			if sqlType == DML {
 				panic(NewBinlogParseError(EVENT_ERROR, fmt.Sprintf("DML outside a txn - len %v, dml '%v'", len(blp.txnLineBuffer), string(event.LogLine))))
 			}
-			//Ignore these often occuring statement types.
+			// Ignore these often occuring statement types.
 			if !IgnoredStatement(event.LogLine) {
 				log.Warningf("Unknown statement '%v'", string(event.LogLine))
 			}
@@ -413,9 +403,7 @@ func (blp *Blp) parseEventData(sendReply SendUpdateStreamResponse, event *eventB
 	}
 }
 
-/*
-Position Parsing Functions.
-*/
+// Position Parsing Functions.
 
 func (blp *Blp) parseMasterPosition(line []byte) {
 	var err error
@@ -456,15 +444,13 @@ func (blp *Blp) parseRotateEvent(line []byte) {
 		panic(NewBinlogParseError(CODE_ERROR, fmt.Sprintf("Error in extracting rotate pos %v from line %s", err, string(line))))
 	}
 
-	//If the file being parsed is a binlog,
-	//then the rotate events only correspond to itself.
+	// If the file being parsed is a binlog,
+	// then the rotate events only correspond to itself.
 	blp.currentPosition.Position.MasterFilename = rotateFilename
 	blp.currentPosition.Position.MasterPosition = rotatePos
 }
 
-/*
-Data event parsing and handling functions.
-*/
+// Data event parsing and handling functions.
 
 func (blp *Blp) handleBeginEvent(event *eventBuffer) {
 	if len(blp.txnLineBuffer) != 0 || blp.inTxn {
@@ -491,11 +477,11 @@ func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEven
 
 	commitEvent.Coord.Xid = blp.currentPosition.Xid
 	blp.txnLineBuffer = append(blp.txnLineBuffer, commitEvent)
-	//txn block for DMLs, parse it and send events for a txn
+	// txn block for DMLs, parse it and send events for a txn
 	var dmlCount uint
 	blp.responseStream, dmlCount = buildTxnResponse(blp.txnLineBuffer)
 
-	//No dml events - no point in sending this.
+	// No dml events - no point in sending this.
 	if dmlCount == 0 {
 		return
 	}
@@ -507,11 +493,9 @@ func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEven
 	blp.TxnCount += 1
 }
 
-/*
-Other utility functions.
-*/
+// Other utility functions.
 
-//This reads a binlog log line.
+// This reads a binlog log line.
 func (blp *Blp) readBlpLine(lineReader *bufio.Reader, bigLine []byte) (line []byte, err error) {
 	for {
 		tempLine, tempErr := lineReader.ReadSlice('\n')
@@ -535,7 +519,7 @@ func (blp *Blp) readBlpLine(lineReader *bufio.Reader, bigLine []byte) (line []by
 	return line, err
 }
 
-//This function streams the raw binlog.
+// This function streams the raw binlog.
 func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader, readErrChan chan error) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -547,7 +531,7 @@ func (blp *Blp) getBinlogStream(writer *os.File, blr *BinlogReader, readErrChan 
 	readErrChan <- nil
 }
 
-//This builds UpdateResponse for each transaction.
+// This builds UpdateResponse for each transaction.
 func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateResponse, dmlCount uint) {
 	var err error
 	var line []byte
@@ -580,17 +564,17 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 
 		sqlType := GetSqlType(event.firstKw)
 		if sqlType == DML {
-			//valid dml
+			// valid dml
 			commentIndex := bytes.Index(line, STREAM_COMMENT_START)
-			//stream comment not found.
+			// stream comment not found.
 			if commentIndex == -1 {
 				if event.firstKw != "insert" {
 					log.Warningf("Invalid DML - doesn't have a valid stream comment : %v", string(line))
 				}
 				dmlBuffer = dmlBuffer[:0]
 				continue
-				//FIXME: track such cases and potentially change them to errors at a later point.
-				//panic(NewBinlogParseError(fmt.Sprintf("Invalid DML, doesn't have a valid stream comment. Sql: %v", string(line))))
+				// FIXME: track such cases and potentially change them to errors at a later point.
+				// panic(NewBinlogParseError(fmt.Sprintf("Invalid DML, doesn't have a valid stream comment. Sql: %v", string(line))))
 			}
 			dmlBuffer = append(dmlBuffer, line)
 			streamComment := string(line[commentIndex+len(STREAM_COMMENT_START):])
@@ -602,8 +586,8 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 			dmlBuffer = dmlBuffer[:0]
 			dmlCount += 1
 		} else {
-			//add as prefixes to the DML from last DML.
-			//start a new dml buffer and keep adding to it.
+			// add as prefixes to the DML from last DML.
+			// start a new dml buffer and keep adding to it.
 			dmlBuffer = append(dmlBuffer, line)
 		}
 	}
@@ -621,19 +605,19 @@ EventNode.Sub[2:] Pk Value lists
 // Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
 // the "null" value is used for auto-increment columns.
 
-//This parese a paricular pk tuple.
+// This parese a paricular pk tuple.
 func parsePkTuple(tokenizer *parser.Tokenizer, autoincIdPtr *uint64) (pkTuple *parser.Node) {
-	//pkTuple is a list of pk value Nodes
+	// pkTuple is a list of pk value Nodes
 	pkTuple = parser.NewSimpleParseNode(parser.NODE_LIST, "")
 	autoincId := *autoincIdPtr
-	//start scanning the list
+	// start scanning the list
 	for tempNode := tokenizer.Scan(); tempNode.Type != ')'; tempNode = tokenizer.Scan() {
 		switch tempNode.Type {
 		case parser.NULL:
 			pkTuple.Push(parser.NewParseNode(parser.NUMBER, []byte(strconv.FormatUint(autoincId, 10))))
 			autoincId++
 		case '-':
-			//handle negative numbers
+			// handle negative numbers
 			t2 := tokenizer.Scan()
 			if t2.Type != parser.NUMBER {
 				panic(NewBinlogParseError(CODE_ERROR, "Illegal stream comment construct, - followed by a non-number"))
@@ -658,7 +642,7 @@ func parsePkTuple(tokenizer *parser.Tokenizer, autoincIdPtr *uint64) (pkTuple *p
 	return pkTuple
 }
 
-//This parses the stream comment.
+// This parses the stream comment.
 func parseStreamComment(dmlComment string, autoincId uint64) (EventNode *parser.Node) {
 	EventNode = parser.NewSimpleParseNode(parser.NODE_LIST, "")
 
@@ -668,14 +652,14 @@ func parseStreamComment(dmlComment string, autoincId uint64) (EventNode *parser.
 
 	node = tokenizer.Scan()
 	if node.Type == parser.ID {
-		//Table Name
+		// Table Name
 		EventNode.Push(node)
 	}
 
 	for node = tokenizer.Scan(); node.Type != ';'; node = tokenizer.Scan() {
 		switch node.Type {
 		case '(':
-			//pkTuple is a list of pk value Nodes
+			// pkTuple is a list of pk value Nodes
 			pkTuple = parsePkTuple(tokenizer, &autoincId)
 			EventNode.Push(pkTuple)
 		default:
@@ -686,7 +670,7 @@ func parseStreamComment(dmlComment string, autoincId uint64) (EventNode *parser.
 	return EventNode
 }
 
-//This builds UpdateResponse from the parsed tree, also handles a multi-row update.
+// This builds UpdateResponse from the parsed tree, also handles a multi-row update.
 func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos proto.BinlogPosition) (response *UpdateResponse) {
 	if eventTree.Len() < 3 {
 		panic(NewBinlogParseError(EVENT_ERROR, fmt.Sprintf("Invalid comment structure, len of tree %v", eventTree.Len())))
@@ -722,14 +706,14 @@ func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos proto.B
 	return response
 }
 
-//Interprets the parsed node and correctly encodes the primary key values.
+// Interprets the parsed node and correctly encodes the primary key values.
 func encodePkValues(pkValues []*parser.Node) (rowPk []interface{}) {
 	for _, pkVal := range pkValues {
 		if pkVal.Type == parser.STRING {
 			rowPk = append(rowPk, string(pkVal.Value))
 		} else if pkVal.Type == parser.NUMBER {
-			//pkVal.Value is a byte array, convert this to string and use strconv to find
-			//the right numberic type.
+			// pkVal.Value is a byte array, convert this to string and use strconv to find
+			// the right numberic type.
 			valstr := string(pkVal.Value)
 			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
 				rowPk = append(rowPk, ival)
@@ -747,7 +731,7 @@ func encodePkValues(pkValues []*parser.Node) (rowPk []interface{}) {
 	return rowPk
 }
 
-//This sends the stream to the client.
+// This sends the stream to the client.
 func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateResponse) (err error) {
 	for _, event := range responseBuf {
 		err = sendReply(event)
@@ -758,7 +742,7 @@ func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateRespons
 	return nil
 }
 
-//This sends the error to the client.
+// This sends the error to the client.
 func SendError(sendReply SendUpdateStreamResponse, inputErr error, blpPos *proto.BinlogPosition) {
 	streamBuf := new(UpdateResponse)
 	streamBuf.Error = inputErr.Error()
@@ -769,7 +753,7 @@ func SendError(sendReply SendUpdateStreamResponse, inputErr error, blpPos *proto
 	_ = sendStream(sendReply, buf)
 }
 
-//This creates the response for COMMIT event.
+// This creates the response for COMMIT event.
 func createCommitEvent(eventBuf *eventBuffer) (streamBuf *UpdateResponse) {
 	streamBuf = new(UpdateResponse)
 	streamBuf.Coord = eventBuf.Coord
@@ -777,7 +761,7 @@ func createCommitEvent(eventBuf *eventBuffer) (streamBuf *UpdateResponse) {
 	return
 }
 
-//This creates the response for DDL event.
+// This creates the response for DDL event.
 func createDdlStream(lineBuffer *eventBuffer) (ddlStream *UpdateResponse) {
 	ddlStream = new(UpdateResponse)
 	ddlStream.Coord = lineBuffer.Coord
