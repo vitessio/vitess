@@ -73,7 +73,6 @@ var (
 
 // Api Interface
 type UpdateResponse struct {
-	Error string
 	Coord proto.BinlogPosition
 	Data  EventData
 }
@@ -203,8 +202,7 @@ func (blp *Blp) ComputeBacklog() int64 {
 }
 
 // Main entry function for reading and parsing the binlog.
-func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) {
-	var err error
+func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix string) (err error) {
 	var lastRun time.Time
 	count := 0
 	for {
@@ -213,8 +211,7 @@ func (blp *Blp) StreamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 		err = blp.streamBinlog(sendReply, binlogPrefix)
 		if err != nil {
 			log.Errorf("StreamBinlog error @ %v, error: %v", blp.currentPosition.String(), err.Error())
-			SendError(sendReply, err, blp.currentPosition)
-			return
+			return err
 		}
 		diff := time.Now().Sub(lastRun)
 		if diff < (100 * time.Millisecond) {
@@ -249,6 +246,7 @@ func (blp *Blp) streamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 	if err != nil {
 		return err
 	}
+	defer reader.Close()
 	err = blp.parseBinlogEvents(sendReply, reader)
 	if err != nil {
 		mbl.Kill()
@@ -718,17 +716,6 @@ func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateRespons
 		}
 	}
 	return nil
-}
-
-// This sends the error to the client.
-func SendError(sendReply SendUpdateStreamResponse, inputErr error, blpPos *proto.BinlogPosition) {
-	streamBuf := new(UpdateResponse)
-	streamBuf.Error = inputErr.Error()
-	if blpPos != nil {
-		streamBuf.Coord = *blpPos
-	}
-	buf := []*UpdateResponse{streamBuf}
-	_ = sendStream(sendReply, buf)
 }
 
 // This creates the response for COMMIT event.

@@ -16,6 +16,7 @@ import MySQLdb
 
 import tablet
 import utils
+from vtdb import dbexceptions
 from vtdb import update_stream_service
 from vtdb import vtclient
 from zk import zkocc
@@ -139,7 +140,7 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("dialing replica update stream service")
     replica_conn.dial()
     try:
-      binlog_pos, data, err = replica_conn.stream_start(start_position)
+      binlog_pos, data = replica_conn.stream_start(start_position)
     except Exception, e:
       logging.debug(str(e))
       if str(e) == "Update stream service is not enabled yet":
@@ -170,13 +171,9 @@ class TestUpdateStream(unittest.TestCase):
     replica_conn.dial()
 
     try:
-      binlog_pos, data, err = replica_conn.stream_start(start_position)
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = replica_conn.stream_start(start_position)
       for i in xrange(10):
-        binlog_pos, data, err = replica_conn.stream_next()
-        if err:
-          raise utils.TestError("Update stream returned error '%s'", err)
+        binlog_pos, data = replica_conn.stream_next()
         if data['SqlType'] == 'COMMIT' and utils.options.verbose == 2:
           logging.debug("Test Service Enabled: Pass")
           break
@@ -194,21 +191,19 @@ class TestUpdateStream(unittest.TestCase):
     disabled_err = False
     txn_count = 0
     try:
-      binlog_pos, data, err = replica_conn.stream_start(start_position)
+      binlog_pos, data = replica_conn.stream_start(start_position)
       utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
       #logging.debug("Sleeping a bit for the spare action to complete")
       #time.sleep(20)
-      while(1):
-        binlog_pos, data, err = replica_conn.stream_next()
-        if err is not None and err == "Fatal Service Error: Disconnecting because the Update Stream service has been disabled":
-          disabled_err = True
-          break
+      while binlog_pos:
+        binlog_pos, data = replica_conn.stream_next()
         if data is not None and data['SqlType'] == 'COMMIT':
           txn_count +=1
 
-      if not disabled_err:
-        logging.error("Test Service Switch: FAIL")
-        return
+      logging.error("Test Service Switch: FAIL")
+      return
+    except dbexceptions.DatabaseError, e:
+      self.assertEqual("Fatal Service Error: Disconnecting because the Update Stream service has been disabled", str(e))
     except Exception, e:
       logging.error("Exception: %s", str(e))
       logging.error("Traceback: %s", traceback.print_exc())
@@ -246,14 +241,10 @@ class TestUpdateStream(unittest.TestCase):
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
     master_tuples = []
-    binlog_pos, data, err = master_conn.stream_start(master_start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
+    binlog_pos, data = master_conn.stream_start(master_start_position)
     master_tuples.append((binlog_pos, data))
     for i in xrange(21):
-      binlog_pos, data, err = master_conn.stream_next()
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = master_conn.stream_next()
       master_tuples.append((binlog_pos, data))
       if data['SqlType'] == 'COMMIT':
         master_txn_count +=1
@@ -261,14 +252,10 @@ class TestUpdateStream(unittest.TestCase):
     replica_tuples = []
     replica_conn = self._get_replica_stream_conn()
     replica_conn.dial()
-    binlog_pos, data, err = replica_conn.stream_start(replica_start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
+    binlog_pos, data = replica_conn.stream_start(replica_start_position)
     replica_tuples.append((binlog_pos, data))
     for i in xrange(21):
-      binlog_pos, data, err = replica_conn.stream_next()
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = replica_conn.stream_next()
       replica_tuples.append((binlog_pos, data))
       if data['SqlType'] == 'COMMIT':
         replica_txn_count +=1
@@ -288,9 +275,7 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("test_ddl: starting @ %s" % start_position)
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
-    binlog_pos, data, err = master_conn.stream_start(start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
+    binlog_pos, data = master_conn.stream_start(start_position)
     self.assertEqual(data['Sql'], _create_vt_insert_test.replace('\n', ''), "DDL didn't match original")
 
   #This tests the service switch from disable -> enable -> disable
@@ -307,15 +292,11 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(master_host, ['delete from vt_a',])
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
-    binlog_pos, data, err = master_conn.stream_start(start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
+    binlog_pos, data = master_conn.stream_start(start_position)
     master_txn_count = 0
     logs_correct = False
     while master_txn_count <=2:
-      binlog_pos, data, err = master_conn.stream_next()
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = master_conn.stream_next()
       if start_position['Position']['MasterFilename'] < binlog_pos['Position']['MasterFilename']:
         logs_correct = True
         logging.debug("Log rotation correctly interpreted")
