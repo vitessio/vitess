@@ -444,9 +444,7 @@ func (blp *Blp) handleBeginEvent(event *eventBuffer) {
 func (blp *Blp) handleDdlEvent(sendReply SendUpdateStreamResponse, event *eventBuffer) {
 	ddlStream := createDdlStream(event)
 	buf := []*UpdateResponse{ddlStream}
-	if err := sendStream(sendReply, buf); err != nil {
-		panic(NewBinlogParseError(CONNECTION_ERROR, fmt.Sprintf("Error in sending event to client %v", err)))
-	}
+	sendStream(sendReply, buf)
 	blp.DdlCount++
 }
 
@@ -462,10 +460,7 @@ func (blp *Blp) handleCommitEvent(sendReply SendUpdateStreamResponse, commitEven
 		return
 	}
 
-	if err := sendStream(sendReply, blp.responseStream); err != nil {
-		panic(NewBinlogParseError(CONNECTION_ERROR, fmt.Sprintf("Error in sending event to client %v", err)))
-	}
-
+	sendStream(sendReply, blp.responseStream)
 	blp.TxnCount += 1
 }
 
@@ -708,14 +703,12 @@ func encodePkValues(pkValues []*parser.Node) (rowPk []interface{}) {
 }
 
 // This sends the stream to the client.
-func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateResponse) (err error) {
+func sendStream(sendReply SendUpdateStreamResponse, responseBuf []*UpdateResponse) {
 	for _, event := range responseBuf {
-		err = sendReply(event)
-		if err != nil {
-			return NewBinlogParseError(CONNECTION_ERROR, fmt.Sprintf("Error in sending reply to client, %v", err))
+		if err := sendReply(event); err != nil {
+			panic(NewBinlogParseError(CONNECTION_ERROR, fmt.Sprintf("Error in sending event to client %v", err)))
 		}
 	}
-	return nil
 }
 
 // This creates the response for COMMIT event.
