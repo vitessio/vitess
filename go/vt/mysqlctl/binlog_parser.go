@@ -265,7 +265,6 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 	lineReader := bufio.NewReaderSize(binlogReader, BINLOG_BLOCK_SIZE)
 	readAhead := false
 	var event *eventBuffer
-	var delimIndex int
 
 	for {
 		if !blp.globalState.isServiceEnabled() {
@@ -300,9 +299,8 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 				event = NewEventBuffer(blp.currentPosition, line)
 			}
 
-			delimIndex = bytes.LastIndex(event.LogLine, BINLOG_DELIMITER)
-			if delimIndex != -1 {
-				event.LogLine = event.LogLine[:delimIndex]
+			if bytes.HasSuffix(event.LogLine, BINLOG_DELIMITER) {
+				event.LogLine = event.LogLine[:len(event.LogLine)-len(BINLOG_DELIMITER)]
 				readAhead = false
 			} else {
 				readAhead = true
