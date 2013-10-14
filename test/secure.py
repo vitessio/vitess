@@ -288,9 +288,11 @@ class TestSecure(unittest.TestCase):
 
     proc1 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
                                           key=cert_dir + "/vt-server-key.pem")
+    # Takes a bit longer for vttablet to serve the pid port
+    time.sleep(1.0)
     proc2 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
                                           key=cert_dir + "/vt-server-key.pem")
-    time.sleep(2.0)
+    time.sleep(1.0)
     proc1.poll()
     if proc1.returncode is None:
       raise utils.TestError("proc1 still running")

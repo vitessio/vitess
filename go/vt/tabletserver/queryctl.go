@@ -111,11 +111,11 @@ func IsCachePoolAvailable() bool {
 }
 
 func InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
-	SqlQueryRpcService.InvalidateForDml(cacheInvalidate)
+	SqlQueryRpcService.invalidateForDml(cacheInvalidate)
 }
 
 func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	SqlQueryRpcService.InvalidateForDDL(ddlInvalidate)
+	SqlQueryRpcService.invalidateForDDL(ddlInvalidate)
 }
 
 func SetQueryRules(qrs *QueryRules) {
