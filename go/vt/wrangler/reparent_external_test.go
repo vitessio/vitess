@@ -5,6 +5,7 @@
 package wrangler
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -16,54 +17,47 @@ import (
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
+// createTestTablet creates the test tablet in the topology.
+// 'uid' has to be between 0 and 99. All the ports will be derived from that.
+func createTestTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletType topo.TabletType, parent topo.TabletAlias) topo.TabletAlias {
+	if uid < 0 || uid > 99 {
+		t.Fatalf("uid has to be between 0 and 99: %v", uid)
+	}
+	state := topo.STATE_READ_ONLY
+	if tabletType == topo.TYPE_MASTER {
+		state = topo.STATE_READ_WRITE
+	}
+	if err := wr.InitTablet(&topo.Tablet{
+		Cell:           cell,
+		Uid:            100 + uid,
+		Parent:         parent,
+		Addr:           fmt.Sprintf("%vhost:%v", cell, 8100+uid),
+		SecureAddr:     fmt.Sprintf("%vhost:%v", cell, 8200+uid),
+		MysqlAddr:      fmt.Sprintf("%vhost:%v", cell, 3300+uid),
+		MysqlIpAddr:    fmt.Sprintf("%v.0.0.1:%v", 100+uid, 3300+uid),
+		Keyspace:       "test_keyspace",
+		Shard:          "0",
+		Type:           tabletType,
+		State:          state,
+		DbNameOverride: "",
+		KeyRange:       key.KeyRange{},
+	}, false, true, false); err != nil {
+		t.Fatalf("cannot create tablet %v: %v", uid, err)
+	}
+	return topo.TabletAlias{cell, 100 + uid}
+}
+
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := New(ts, time.Minute, time.Second)
 
-	// Creating the tablets with createShardAndKeyspace=true
-	// so we don't need to create the keyspace and shard
-	if err := wr.InitTablet(&topo.Tablet{
-		Cell:           "cell1",
-		Uid:            123,
-		Parent:         topo.TabletAlias{},
-		Addr:           "masterhost:8101",
-		SecureAddr:     "masterhost:8102",
-		MysqlAddr:      "masterhost:3306",
-		MysqlIpAddr:    "1.2.3.4:3306",
-		Keyspace:       "test_keyspace",
-		Shard:          "0",
-		Type:           topo.TYPE_MASTER,
-		State:          topo.STATE_READ_WRITE,
-		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
-	}, false, true, false); err != nil {
-		t.Fatalf("cannot create master tablet: %v", err)
-	}
-
-	if err := wr.InitTablet(&topo.Tablet{
-		Cell: "cell1",
-		Uid:  234,
-		Parent: topo.TabletAlias{
-			Cell: "cell1",
-			Uid:  123,
-		},
-		Addr:           "slavehost:8101",
-		SecureAddr:     "slavehost:8102",
-		MysqlAddr:      "slavehost:3306",
-		MysqlIpAddr:    "2.3.4.5:3306",
-		Keyspace:       "test_keyspace",
-		Shard:          "0",
-		Type:           topo.TYPE_REPLICA,
-		State:          topo.STATE_READ_ONLY,
-		DbNameOverride: "",
-		KeyRange:       key.KeyRange{},
-	}, false, false, false); err != nil {
-		t.Fatalf("cannot create slave tablet: %v", err)
-	}
+	// Create a master and a replica
+	masterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	slaveAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, masterAlias)
 
 	// First test: reparent to the same master, make sure it works
 	// as expected.
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", topo.TabletAlias{Cell: "cell1", Uid: 123}, false, 80); err == nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", masterAlias, false, 80); err == nil {
 		t.Fatalf("ShardExternallyReparented(same master) should have failed")
 	} else {
 		if !strings.Contains(err.Error(), "already master") {
@@ -84,14 +78,14 @@ func TestShardExternallyReparented(t *testing.T) {
 			}
 			switch actionNode.Action {
 			case tm.TABLET_ACTION_SLAVE_WAS_PROMOTED:
-				ta := tm.NewTabletActor(nil, ts, topo.TabletAlias{Cell: "cell1", Uid: 234})
+				ta := tm.NewTabletActor(nil, ts, slaveAlias)
 				if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
 					t.Fatalf("HandleAction failed for %v: %v", actionNode.Action, err)
 				}
 			}
 			return nil
 		}
-		ts.ActionEventLoop(topo.TabletAlias{Cell: "cell1", Uid: 234}, f, done)
+		ts.ActionEventLoop(slaveAlias, f, done)
 	}()
 	go func() {
 		// On the old master, respond to TABLET_ACTION_SLAVE_WAS_RESTARTED.
@@ -118,7 +112,7 @@ func TestShardExternallyReparented(t *testing.T) {
 				}
 
 				ta := tm.NewTabletActor(nil, ts, tabletAlias)
-				actionErr := ta.SlaveWasRestarted(actionNode, "2.3.4.5:3306")
+				actionErr := ta.SlaveWasRestarted(actionNode, "101.0.0.1:3301")
 				if err := tm.StoreActionResponse(ts, actionNode, actionPath, actionErr); err != nil {
 					t.Fatalf("StoreActionResponse failed: %v", err)
 				}
@@ -129,9 +123,10 @@ func TestShardExternallyReparented(t *testing.T) {
 			}
 			return nil
 		}
-		ts.ActionEventLoop(topo.TabletAlias{Cell: "cell1", Uid: 123}, f, done)
+		ts.ActionEventLoop(masterAlias, f, done)
 	}()
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", topo.TabletAlias{Cell: "cell1", Uid: 234}, false, 80); err != nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", slaveAlias, false, 80); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
+	close(done)
 }
