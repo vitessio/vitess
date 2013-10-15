@@ -17,7 +17,7 @@ import (
 )
 
 // Barcacle defines the interface for tbe rpc service.
-type Barnacle interface {
+type VTGate interface {
 	GetSessionId(sessionParams *SessionParams, session *Session) error
 	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *mproto.QueryResult) error
 	StreamExecuteShard(context *rpcproto.Context, query *QueryShard, sendReply func(interface{}) error) error
@@ -110,7 +110,7 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Binary, "Keyspace")
 	bson.EncodeString(buf, qrs.Keyspace)
 
-	bson.EncodePrefix(buf, bson.Array, "Rows")
+	bson.EncodePrefix(buf, bson.Array, "Shards")
 	encodeStringsBson(qrs.Shards, buf)
 
 	buf.WriteByte(0)
@@ -173,6 +173,6 @@ func decodeStringsBson(buf *bytes.Buffer, kind byte) (strings []string) {
 }
 
 // RegisterAuthenticated registers the server.
-func RegisterAuthenticated(barnacle Barnacle) {
-	rpcwrap.RegisterAuthenticated(barnacle)
+func RegisterAuthenticated(vtgate VTGate) {
+	rpcwrap.RegisterAuthenticated(vtgate)
 }
