@@ -175,6 +175,13 @@ func TestBuildValue(t *testing.T) {
 	if err == nil {
 		t.Errorf("-1 shouldn't convert into uint64")
 	}
+	i64, err := v.ParseInt64()
+	if i64 != -1 {
+		t.Errorf("want -1, got %d", i64)
+	}
+	if err != nil {
+		t.Errorf("%v", err)
+	}
 	v, err = BuildValue(uint(1))
 	if err != nil {
 		t.Errorf("%v", err)
