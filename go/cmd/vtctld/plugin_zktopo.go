@@ -26,18 +26,7 @@ func init() {
 		return
 	}
 
-	HandleExplorer("/zk/", "zk.html", NewZkExplorer(ts.(*zktopo.Server).GetZConn()))
-
-	// adds links for keyspaces and shards
-	funcMap["keyspace"] = func(keyspace string) template.HTML {
-		return template.HTML("<a href=\"/zk/global/vt/keyspaces/" + keyspace + "\">" + keyspace + "</a>")
-	}
-	funcMap["shard"] = func(keyspace, shard string) template.HTML {
-		return template.HTML("<a href=\"/zk/global/vt/keyspaces/" + keyspace + "/shards/" + shard + "\">" + shard + "</a>")
-	}
-
-	// add toplevel link for zookeeper
-	indexContent.ToplevelLinks["Zookeeper Explorer"] = "/zk"
+	HandleExplorer("zk", "/zk/", "zk.html", NewZkExplorer(ts.(*zktopo.Server).GetZConn()))
 }
 
 type ZkExplorer struct {
@@ -46,6 +35,18 @@ type ZkExplorer struct {
 
 func NewZkExplorer(zconn zk.Conn) *ZkExplorer {
 	return &ZkExplorer{zconn}
+}
+
+func (ex ZkExplorer) GetKeyspacePath(keyspace string) string {
+	return path.Join("/zk/global/vt/keyspaces", keyspace)
+}
+
+func (ex ZkExplorer) GetShardPath(keyspace, shard string) string {
+	return path.Join("/zk/global/vt/keyspaces", keyspace, shard)
+}
+
+func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
+	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUidStr())
 }
 
 func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string) interface{} {

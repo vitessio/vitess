@@ -477,7 +477,13 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 
 	// Remove tablet from the replication graph.
 	if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet, tablet.ReplicationPath()); err != nil && err != topo.ErrNoNode {
-		return err
+		// FIXME(alainjobart) once we don't have replication paths
+		// any more, remove this extra check
+		if err == topo.ErrNotEmpty {
+			log.Infof("Failed to delete master replication path, will be caught later")
+		} else {
+			return err
+		}
 	}
 
 	// now we can check the reparent actually worked

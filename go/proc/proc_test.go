@@ -7,6 +7,7 @@ package proc
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -28,22 +29,30 @@ func TestRestart(t *testing.T) {
 	}
 }
 
-var testPort = "12345"
-
 func testLaunch(t *testing.T) {
 	var err error
+	l, err := net.Listen("tcp", "")
+	if err != nil {
+		t.Fatalf("could not initialize listener: %v", err)
+	}
+	hostport := l.Addr().String()
+	l.Close()
+	_, port, err := net.SplitHostPort(hostport)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	cmd1 := launchServer(t, 1)
+	cmd1 := launchServer(t, port, 1)
 	defer cmd1.Process.Kill()
-	testPid(t, cmd1.Process.Pid)
+	testPid(t, port, cmd1.Process.Pid)
 
-	cmd2 := launchServer(t, 2)
+	cmd2 := launchServer(t, port, 2)
 	defer cmd2.Process.Kill()
 	err = cmd1.Wait()
 	if err != nil {
 		t.Error(err)
 	}
-	testPid(t, cmd2.Process.Pid)
+	testPid(t, port, cmd2.Process.Pid)
 
 	err = syscall.Kill(cmd2.Process.Pid, syscall.SIGTERM)
 	if err != nil {
@@ -55,9 +64,12 @@ func testLaunch(t *testing.T) {
 	}
 }
 
-func launchServer(t *testing.T, num int) *exec.Cmd {
+func launchServer(t *testing.T, port string, num int) *exec.Cmd {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestRestart$")
-	cmd.Env = []string{fmt.Sprintf("SERVER_NUM=%d", num)}
+	cmd.Env = []string{
+		fmt.Sprintf("SERVER_NUM=%d", num),
+		fmt.Sprintf("PORT=%s", port),
+	}
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -68,11 +80,11 @@ func launchServer(t *testing.T, num int) *exec.Cmd {
 	return cmd
 }
 
-func testPid(t *testing.T, want int) {
+func testPid(t *testing.T, port string, want int) {
 	var resp *http.Response
 	var err error
 	for i := 0; i < 20; i++ {
-		resp, err = http.Get(fmt.Sprintf("http://localhost:%s%s", testPort, pidURL))
+		resp, err = http.Get(fmt.Sprintf("http://localhost:%s%s", port, pidURL))
 		if err != nil {
 			if i == 19 {
 				t.Fatal(err)
@@ -81,7 +93,7 @@ func testPid(t *testing.T, want int) {
 				time.Sleep(1000 * time.Millisecond)
 				continue
 			}
-			t.Fatalf("unexpected error on port %v: %v", testPort, err)
+			t.Fatalf("unexpected error on port %v: %v", port, err)
 		}
 		break
 	}
@@ -100,7 +112,7 @@ func testPid(t *testing.T, want int) {
 }
 
 func testServer(t *testing.T, want syscall.Signal) {
-	l, err := Listen(testPort)
+	l, err := Listen(os.Getenv("PORT"))
 	if err != nil {
 		t.Fatalf("could not initialize listener: %v", err)
 	}

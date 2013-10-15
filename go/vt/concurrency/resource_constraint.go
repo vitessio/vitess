@@ -21,6 +21,8 @@ type ResourceConstraint struct {
 	FirstErrorRecorder
 }
 
+// NewResourceConstraint creates a ResourceConstraint with
+// max concurrency.
 func NewResourceConstraint(max int) *ResourceConstraint {
 	return &ResourceConstraint{semaphore: sync2.NewSemaphore(max, 0)}
 }

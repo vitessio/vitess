@@ -11,11 +11,11 @@ import (
 // Assume the master is dead and not coming back. Just push your way
 // forward.  Force means we are reparenting to the same master
 // (assuming the data has been externally synched).
-func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, failedMaster, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly, force bool) error {
+func (wr *Wrangler) reparentShardBrutal(si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly, force bool) error {
 	log.Infof("Skipping ValidateShard - not a graceful situation")
 
 	if _, ok := slaveTabletMap[masterElectTablet.Alias()]; !ok && !force {
-		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias(), failedMaster.Keyspace, failedMaster.Shard, mapKeys(slaveTabletMap))
+		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias(), si.Keyspace(), si.ShardName(), mapKeys(slaveTabletMap))
 	}
 
 	// Check the master-elect and slaves are in good shape when the action
@@ -52,21 +52,24 @@ func (wr *Wrangler) reparentShardBrutal(slaveTabletMap map[topo.TabletAlias]*top
 		return fmt.Errorf("promote slave failed: %v %v", err, masterElectTablet.Alias())
 	}
 
-	// Once the slave is promoted, remove it from our map
+	// Once the slave is promoted, remove it from our maps
 	delete(slaveTabletMap, masterElectTablet.Alias())
+	delete(masterTabletMap, masterElectTablet.Alias())
 
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 
 	if !force {
-		log.Infof("scrap dead master %v", failedMaster.Alias())
-		// The master is dead so execute the action locally instead of
-		// enqueing the scrap action for an arbitrary amount of time.
-		if scrapErr := tm.Scrap(wr.ts, failedMaster.Alias(), false); scrapErr != nil {
-			log.Warningf("scrapping failed master failed: %v", scrapErr)
+		for _, failedMaster := range masterTabletMap {
+			log.Infof("scrap dead master %v", failedMaster.Alias())
+			// The master is dead so execute the action locally instead of
+			// enqueing the scrap action for an arbitrary amount of time.
+			if scrapErr := tm.Scrap(wr.ts, failedMaster.Alias(), false); scrapErr != nil {
+				log.Warningf("scrapping failed master failed: %v", scrapErr)
+			}
 		}
 	}
 
-	err = wr.finishReparent(failedMaster, masterElectTablet, majorityRestart, leaveMasterReadOnly)
+	err = wr.finishReparent(si, masterElectTablet, majorityRestart, leaveMasterReadOnly)
 	if err != nil {
 		return err
 	}

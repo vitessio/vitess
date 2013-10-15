@@ -16,14 +16,19 @@ import MySQLdb
 
 import tablet
 import utils
+from vtdb import dbexceptions
 from vtdb import update_stream_service
 from vtdb import vtclient
+from zk import zkocc
+
 
 master_tablet = tablet.Tablet(62344)
 replica_tablet = tablet.Tablet(62345)
 master_host = "localhost:%u" % master_tablet.port
 replica_host = "localhost:%u" % replica_tablet.port
-GLOBAL_MASTER_START_POSITION = None
+zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+                                     "test_nj", 30.0)
+master_start_position = None
 
 def _get_master_current_position():
   res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
@@ -82,42 +87,36 @@ def setup_tablets():
   logging.debug("Setting up tablets")
   utils.run_vtctl('CreateKeyspace test_keyspace')
   master_tablet.init_tablet('master', 'test_keyspace', '0')
+  replica_tablet.init_tablet('replica', 'test_keyspace', '0')
   utils.run_vtctl('RebuildShardGraph test_keyspace/0')
-  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
   utils.validate_topology()
-
-  setup_schema()
+  master_tablet.create_db('vt_test_keyspace')
   replica_tablet.create_db('vt_test_keyspace')
-  #master_tablet.start_vttablet(auth=True)
+
+  utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
+  zkocc_server = utils.zkocc_start()
+
   master_tablet.start_vttablet()
-
-  replica_tablet.init_tablet('idle', 'test_keyspace', start=True)
-  snapshot_dir = os.path.join(utils.vtdataroot, 'snapshot')
-  utils.run("mkdir -p " + snapshot_dir)
-  utils.run("chmod +w " + snapshot_dir)
-  utils.run_vtctl('Clone -force %s %s' %
-                  (master_tablet.tablet_alias, replica_tablet.tablet_alias))
-
-
-  utils.run_vtctl('Ping test_nj-0000062344')
+  replica_tablet.start_vttablet()
   utils.run_vtctl('SetReadWrite ' + master_tablet.tablet_alias)
   utils.check_db_read_write(62344)
 
-  utils.validate_topology()
-  utils.run_vtctl('Ping test_nj-0000062345')
+  for t in [master_tablet, replica_tablet]:
+    t.reset_replication()
+  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + master_tablet.tablet_alias, auto_log=True)
 
   # reset counter so tests don't assert
   tablet.Tablet.tablets_running = 0
+  setup_schema()
+  master_tablet.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
+  replica_tablet.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
 
 def setup_schema():
-  master_tablet.create_db('vt_test_keyspace')
-  global GLOBAL_MASTER_START_POSITION
-  GLOBAL_MASTER_START_POSITION = _get_master_current_position()
+  global master_start_position
+  master_start_position = _get_master_current_position()
   master_tablet.mquery('vt_test_keyspace', _create_vt_insert_test)
   master_tablet.mquery('vt_test_keyspace', _create_vt_a)
   master_tablet.mquery('vt_test_keyspace', _create_vt_b)
-  master_tablet.mquery('vt_test_keyspace', _create_vt_c)
-
 
 class TestUpdateStream(unittest.TestCase):
 
@@ -141,7 +140,7 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("dialing replica update stream service")
     replica_conn.dial()
     try:
-      binlog_pos, data, err = replica_conn.stream_start(start_position)
+      binlog_pos, data = replica_conn.stream_start(start_position)
     except Exception, e:
       logging.debug(str(e))
       if str(e) == "Update stream service is not enabled yet":
@@ -172,13 +171,9 @@ class TestUpdateStream(unittest.TestCase):
     replica_conn.dial()
 
     try:
-      binlog_pos, data, err = replica_conn.stream_start(start_position)
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = replica_conn.stream_start(start_position)
       for i in xrange(10):
-        binlog_pos, data, err = replica_conn.stream_next()
-        if err:
-          raise utils.TestError("Update stream returned error '%s'", err)
+        binlog_pos, data = replica_conn.stream_next()
         if data['SqlType'] == 'COMMIT' and utils.options.verbose == 2:
           logging.debug("Test Service Enabled: Pass")
           break
@@ -196,21 +191,19 @@ class TestUpdateStream(unittest.TestCase):
     disabled_err = False
     txn_count = 0
     try:
-      binlog_pos, data, err = replica_conn.stream_start(start_position)
+      binlog_pos, data = replica_conn.stream_start(start_position)
       utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
       #logging.debug("Sleeping a bit for the spare action to complete")
       #time.sleep(20)
-      while(1):
-        binlog_pos, data, err = replica_conn.stream_next()
-        if err is not None and err == "Fatal Service Error: Disconnecting because the Update Stream service has been disabled":
-          disabled_err = True
-          break
+      while binlog_pos:
+        binlog_pos, data = replica_conn.stream_next()
         if data is not None and data['SqlType'] == 'COMMIT':
           txn_count +=1
 
-      if not disabled_err:
-        logging.error("Test Service Switch: FAIL")
-        return
+      logging.error("Test Service Switch: FAIL")
+      return
+    except dbexceptions.DatabaseError, e:
+      self.assertEqual("Fatal Service Error: Disconnecting because the Update Stream service has been disabled", str(e))
     except Exception, e:
       logging.error("Exception: %s", str(e))
       logging.error("Traceback: %s", traceback.print_exc())
@@ -218,7 +211,9 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("Streamed %d transactions before exiting" % txn_count)
 
   def _vtdb_conn(self, host):
-    return vtclient.connect(host, 'test_keyspace', '0', 2)
+    conn = vtclient.VtOCCConnection(zkocc_client, 'test_keyspace', '0', "master", 30)
+    conn.connect()
+    return conn
 
   def _exec_vt_txn(self, host, query_list=None):
     if not query_list:
@@ -246,14 +241,10 @@ class TestUpdateStream(unittest.TestCase):
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
     master_tuples = []
-    binlog_pos, data, err = master_conn.stream_start(master_start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
+    binlog_pos, data = master_conn.stream_start(master_start_position)
     master_tuples.append((binlog_pos, data))
     for i in xrange(21):
-      binlog_pos, data, err = master_conn.stream_next()
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = master_conn.stream_next()
       master_tuples.append((binlog_pos, data))
       if data['SqlType'] == 'COMMIT':
         master_txn_count +=1
@@ -261,14 +252,10 @@ class TestUpdateStream(unittest.TestCase):
     replica_tuples = []
     replica_conn = self._get_replica_stream_conn()
     replica_conn.dial()
-    binlog_pos, data, err = replica_conn.stream_start(replica_start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
+    binlog_pos, data = replica_conn.stream_start(replica_start_position)
     replica_tuples.append((binlog_pos, data))
     for i in xrange(21):
-      binlog_pos, data, err = replica_conn.stream_next()
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = replica_conn.stream_next()
       replica_tuples.append((binlog_pos, data))
       if data['SqlType'] == 'COMMIT':
         replica_txn_count +=1
@@ -283,18 +270,13 @@ class TestUpdateStream(unittest.TestCase):
 
 
   def test_ddl(self):
-    global GLOBAL_MASTER_START_POSITION
-    start_position = GLOBAL_MASTER_START_POSITION
-    logging.debug("run_test_ddl: starting @ %s" % start_position)
+    global master_start_position
+    start_position = master_start_position
+    logging.debug("test_ddl: starting @ %s" % start_position)
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
-    binlog_pos, data, err = master_conn.stream_start(start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
-
-    if data['Sql'] != _create_vt_insert_test.replace('\n', ''):
-      raise utils.TestError("Test Failed: DDL %s didn't match the original %s" % (data['Sql'], _create_vt_insert_test))
-    logging.debug("Test DDL: PASS")
+    binlog_pos, data = master_conn.stream_start(start_position)
+    self.assertEqual(data['Sql'], _create_vt_insert_test.replace('\n', ''), "DDL didn't match original")
 
   #This tests the service switch from disable -> enable -> disable
   def test_service_switch(self):
@@ -310,15 +292,11 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(master_host, ['delete from vt_a',])
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
-    binlog_pos, data, err = master_conn.stream_start(start_position)
-    if err:
-      raise utils.TestError("Update stream returned error '%s'", err)
+    binlog_pos, data = master_conn.stream_start(start_position)
     master_txn_count = 0
     logs_correct = False
     while master_txn_count <=2:
-      binlog_pos, data, err = master_conn.stream_next()
-      if err:
-        raise utils.TestError("Update stream returned error '%s'", err)
+      binlog_pos, data = master_conn.stream_next()
       if start_position['Position']['MasterFilename'] < binlog_pos['Position']['MasterFilename']:
         logs_correct = True
         logging.debug("Log rotation correctly interpreted")
@@ -328,7 +306,7 @@ class TestUpdateStream(unittest.TestCase):
     if not logs_correct:
       self.fail("Flush logs didn't get properly interpreted")
 
-_create_vt_insert_test = '''create table vt_insert_test (
+_create_vt_insert_test = '''create table if not exists vt_insert_test (
 id bigint auto_increment,
 msg varchar(64),
 primary key (id)
@@ -338,7 +316,7 @@ _populate_vt_insert_test = [
     "insert into vt_insert_test (msg) values ('test %s')" % x
     for x in xrange(4)]
 
-_create_vt_a = '''create table vt_a (
+_create_vt_a = '''create table if not exists vt_a (
 eid bigint,
 id int,
 primary key(eid, id)
@@ -348,7 +326,7 @@ def _populate_vt_a(count):
   return ["insert into vt_a (eid, id) values (%d, %d)" % (x, x)
           for x in xrange(count+1) if x >0]
 
-_create_vt_b = '''create table vt_b (
+_create_vt_b = '''create table if not exists vt_b (
 eid bigint,
 name varchar(128),
 foo varbinary(128),

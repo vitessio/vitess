@@ -51,17 +51,12 @@ class EventData(object):
 class UpdateStreamResponse(object):
   Coord = None
   Data = None
-  Error = None
 
   def __init__(self, response_dict):
     self.raw_response = response_dict
     self.format()
 
   def format(self):
-    if self.raw_response['Error'] == "":
-      self.Error = None
-    else:
-      self.Error = self.raw_response['Error']
     self.Coord = self.raw_response['Coord']
     self.Data = EventData(self.raw_response['Data']).__dict__
 
@@ -88,17 +83,19 @@ class UpdateStreamConnection(object):
     except:
       logging.exception('gorpc low-level error')
       raise
-    return update_stream_response.Coord, update_stream_response.Data, update_stream_response.Error
+    return update_stream_response.Coord, update_stream_response.Data
 
   def stream_next(self):
     try:
       response = self.client.stream_next()
       if response is None:
-        return None, None, None
+        return None, None
       update_stream_response = UpdateStreamResponse(response.reply)
+    except gorpc.AppError as e:
+      raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
     except:
       logging.exception('gorpc low-level error')
       raise
-    return update_stream_response.Coord, update_stream_response.Data, update_stream_response.Error
+    return update_stream_response.Coord, update_stream_response.Data

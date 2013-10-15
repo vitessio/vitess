@@ -77,13 +77,6 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 		tablets = append(tablets, ti)
 	}
 
-	// Rebuild the rollup data in the replication graph.
-	if err = shardInfo.Rebuild(tablets); err != nil {
-		return err
-	}
-	if err = wr.ts.UpdateShard(shardInfo); err != nil {
-		return err
-	}
 	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
 }
 

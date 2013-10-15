@@ -380,17 +380,13 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 			return nil, err
 		}
 
-		slaveTabletMap, foundMaster, err := slaveTabletMap(tabletMap)
-		if err != nil {
-			return nil, err
-		}
-
+		slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
 		newMasterTablet, err := wr.ts.GetTablet(newParentTabletAlias)
 		if err != nil {
 			return nil, err
 		}
 
-		err = wr.reparentShardGraceful(slaveTabletMap, foundMaster, newMasterTablet /*leaveMasterReadOnly*/, false)
+		err = wr.reparentShardGraceful(shardInfo, slaveTabletMap, masterTabletMap, newMasterTablet /*leaveMasterReadOnly*/, false)
 		if err != nil {
 			return nil, err
 		}

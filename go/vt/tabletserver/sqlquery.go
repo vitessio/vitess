@@ -200,14 +200,14 @@ func (sq *SqlQuery) checkState(sessionId int64, allowShutdown bool) {
 }
 
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
+	if sq.state.Get() != SERVING {
+		return NewTabletError(RETRY, "Query server is in %s state", stateName[sq.state.Get()])
+	}
 	if sessionParams.Keyspace != sq.dbconfig.Keyspace {
 		return NewTabletError(FATAL, "Keyspace mismatch, expecting %v, received %v", sq.dbconfig.Keyspace, sessionParams.Keyspace)
 	}
 	if sessionParams.Shard != sq.dbconfig.Shard {
 		return NewTabletError(FATAL, "Shard mismatch, expecting %v, received %v", sq.dbconfig.Shard, sessionParams.Shard)
-	}
-	if sq.state.Get() != SERVING {
-		return NewTabletError(FAIL, "Query server is in %s state", stateName[sq.state.Get()])
 	}
 	sessionInfo.SessionId = sq.sessionId
 	return nil
@@ -257,14 +257,14 @@ func (sq *SqlQuery) CloseReserved(session *proto.Session, noOutput *string) (err
 	return nil
 }
 
-func (sq *SqlQuery) InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
+func (sq *SqlQuery) invalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
 	if sq.state.Get() != SERVING {
 		return
 	}
 	sq.qe.InvalidateForDml(cacheInvalidate)
 }
 
-func (sq *SqlQuery) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
+func (sq *SqlQuery) invalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	if sq.state.Get() != SERVING {
 		return
 	}
