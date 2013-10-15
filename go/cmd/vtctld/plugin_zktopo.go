@@ -42,7 +42,7 @@ func (ex ZkExplorer) GetKeyspacePath(keyspace string) string {
 }
 
 func (ex ZkExplorer) GetShardPath(keyspace, shard string) string {
-	return path.Join("/zk/global/vt/keyspaces", keyspace, shard)
+	return path.Join("/zk/global/vt/keyspaces", keyspace, "shards", shard)
 }
 
 func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
