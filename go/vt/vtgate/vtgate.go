@@ -52,8 +52,8 @@ func (vtg *VTGate) GetSessionId(sessionParams *proto.SessionParams, session *pro
 	return nil
 }
 
-// Execute executes a non-streaming query.
-func (vtg *VTGate) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
+// ExecuteShard executes a non-streaming query on the specified shards.
+func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QueryShard, reply *mproto.QueryResult) error {
 	vtconn, err := vtg.connections.Get(query.SessionId)
 	if err != nil {
 		return fmt.Errorf("query: %s, session %d: %v", query.Sql, query.SessionId, err)
@@ -66,8 +66,8 @@ func (vtg *VTGate) Execute(context *rpcproto.Context, query *proto.Query, reply 
 	return err
 }
 
-// StreamExecute executes a streaming query.
-func (vtg *VTGate) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(interface{}) error) error {
+// StreamExecuteShard executes a streaming query on the specified shards.
+func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
 	vtconn, err := vtg.connections.Get(query.SessionId)
 	if err != nil {
 		return fmt.Errorf("query: %s, session %d: %v", query.Sql, query.SessionId, err)
