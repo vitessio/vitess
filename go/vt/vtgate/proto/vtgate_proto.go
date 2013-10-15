@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// Barcacle defines the interface for tbe rpc service.
+// VTGate defines the interface for the rpc service.
 type VTGate interface {
 	GetSessionId(sessionParams *SessionParams, session *Session) error
 	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *mproto.QueryResult) error
@@ -110,19 +110,8 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Binary, "Keyspace")
 	bson.EncodeString(buf, qrs.Keyspace)
 
-	bson.EncodePrefix(buf, bson.Array, "Shards")
-	encodeStringsBson(qrs.Shards, buf)
+	bson.EncodeStringArray(buf, "Shards", qrs.Shards)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func encodeStringsBson(strings []string, buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range strings {
-		bson.EncodePrefix(buf, bson.Binary, bson.Itoa(i))
-		bson.EncodeString(buf, v)
-	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
@@ -143,33 +132,12 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "Keyspace":
 			qrs.Keyspace = bson.DecodeString(buf, kind)
 		case "Shards":
-			qrs.Shards = decodeStringsBson(buf, kind)
+			qrs.Shards = bson.DecodeStringArray(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
 		kind = bson.NextByte(buf)
 	}
-}
-
-func decodeStringsBson(buf *bytes.Buffer, kind byte) (strings []string) {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for Query.Row", kind))
-	}
-
-	bson.Next(buf, 4)
-	strings = make([]string, 0, 8)
-	kind = bson.NextByte(buf)
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
-		strings = append(strings, bson.DecodeString(buf, kind))
-		kind = bson.NextByte(buf)
-	}
-	return
 }
 
 // RegisterAuthenticated registers the server.
