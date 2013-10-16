@@ -6,12 +6,12 @@ package wrangler
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -47,17 +47,40 @@ func createTestTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, table
 	return topo.TabletAlias{cell, 100 + uid}
 }
 
+// startFakeTabletActionLoop will start the action loop for a fake tablet,
+// using mysqlDaemon as the backing mysqld.
+func startFakeTabletActionLoop(t *testing.T, wr *Wrangler, tabletAlias topo.TabletAlias, mysqlDaemon mysqlctl.MysqlDaemon, done chan struct{}) {
+	go func() {
+		f := func(actionPath, data string) error {
+			actionNode, err := tm.ActionNodeFromJson(data, actionPath)
+			if err != nil {
+				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
+			}
+			ta := tm.NewTabletActor(nil, mysqlDaemon, wr.ts, tabletAlias)
+			if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
+				// action may just fail for any good reason
+				t.Logf("HandleAction failed for %v: %v", actionNode.Action, err)
+			}
+			return nil
+		}
+		wr.ts.ActionEventLoop(tabletAlias, f, done)
+	}()
+}
+
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := New(ts, time.Minute, time.Second)
 
 	// Create a master and a replica
-	masterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
-	slaveAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, masterAlias)
+	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
+	goodSlaveAlias1 := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
+	goodSlaveAlias2 := createTestTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMasterAlias)
+	badSlaveAlias := createTestTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMasterAlias)
 
 	// First test: reparent to the same master, make sure it works
 	// as expected.
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", masterAlias, false, 80); err == nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", oldMasterAlias, false, 80); err == nil {
 		t.Fatalf("ShardExternallyReparented(same master) should have failed")
 	} else {
 		if !strings.Contains(err.Error(), "already master") {
@@ -68,64 +91,37 @@ func TestShardExternallyReparented(t *testing.T) {
 	// Second test: reparent to the replica, and pretend the old
 	// master is still good to go.
 	done := make(chan struct{}, 1)
-	go func() {
-		// On the elected master, respond to TABLET_ACTION_SLAVE_WAS_PROMOTED.
-		// We can use HandleAction here as it doesn't use mysqld.
-		f := func(actionPath, data string) error {
-			actionNode, err := tm.ActionNodeFromJson(data, actionPath)
-			if err != nil {
-				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
-			}
-			switch actionNode.Action {
-			case tm.TABLET_ACTION_SLAVE_WAS_PROMOTED:
-				ta := tm.NewTabletActor(nil, ts, slaveAlias)
-				if err := ta.HandleAction(actionPath, actionNode.Action, actionNode.ActionGuid, false); err != nil {
-					t.Fatalf("HandleAction failed for %v: %v", actionNode.Action, err)
-				}
-			}
-			return nil
-		}
-		ts.ActionEventLoop(slaveAlias, f, done)
-	}()
-	go func() {
-		// On the old master, respond to TABLET_ACTION_SLAVE_WAS_RESTARTED.
-		// We cannot use HandleAction as this one uses
-		// TabletActor.mysqld, and that's not a fakeable interface.
-		f := func(actionPath, data string) error {
-			// get the version and info for actionNode
-			tabletAlias, data, version, err := ts.ReadTabletActionPath(actionPath)
-			if err != nil {
-				t.Fatalf("ReadTabletActionPath failed: %v", err)
-			}
-			actionNode, err := tm.ActionNodeFromJson(data, actionPath)
-			if err != nil {
-				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
-			}
-			switch actionNode.Action {
-			case tm.TABLET_ACTION_SLAVE_WAS_RESTARTED:
-				// update the actionNode
-				actionNode.State = tm.ACTION_STATE_RUNNING
-				actionNode.Pid = os.Getpid()
-				newData := tm.ActionNodeToJson(actionNode)
-				if err := ts.UpdateTabletAction(actionPath, newData, version); err != nil {
-					t.Fatalf("UpdateTabletAction failed: %v", err)
-				}
 
-				ta := tm.NewTabletActor(nil, ts, tabletAlias)
-				actionErr := ta.SlaveWasRestarted(actionNode, "101.0.0.1:3301")
-				if err := tm.StoreActionResponse(ts, actionNode, actionPath, actionErr); err != nil {
-					t.Fatalf("StoreActionResponse failed: %v", err)
-				}
+	// On the elected master, we will only respond to
+	// TABLET_ACTION_SLAVE_WAS_PROMOTED, no need for a MysqlDaemon
+	startFakeTabletActionLoop(t, wr, newMasterAlias, nil, done)
 
-				if err := ts.UnblockTabletAction(actionPath); err != nil {
-					t.Fatalf("UnblockTabletAction failed: %v", err)
-				}
-			}
-			return nil
-		}
-		ts.ActionEventLoop(masterAlias, f, done)
-	}()
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", slaveAlias, false, 80); err != nil {
+	// On the old master, we will only respond to
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
+	oldMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "101.0.0.1:3301",
+	}
+	startFakeTabletActionLoop(t, wr, oldMasterAlias, oldMasterMysqlDaemon, done)
+
+	// On the good slaves, we will respond to
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
+	goodSlaveMysqlDaemon1 := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "101.0.0.1:3301",
+	}
+	startFakeTabletActionLoop(t, wr, goodSlaveAlias1, goodSlaveMysqlDaemon1, done)
+	goodSlaveMysqlDaemon2 := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "101.0.0.1:3301",
+	}
+	startFakeTabletActionLoop(t, wr, goodSlaveAlias2, goodSlaveMysqlDaemon2, done)
+
+	// On the bad slave, we will respond to
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
+	badSlaveMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "234.0.0.1:3301",
+	}
+	startFakeTabletActionLoop(t, wr, badSlaveAlias, badSlaveMysqlDaemon, done)
+
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias, false, 60); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
 	close(done)

@@ -61,7 +61,7 @@ func main() {
 	topoServer := topo.GetServer()
 	defer topo.CloseServers()
 
-	actor := tabletmanager.NewTabletActor(mysqld, topoServer, topo.TabletAlias{})
+	actor := tabletmanager.NewTabletActor(mysqld, mysqld, topoServer, topo.TabletAlias{})
 
 	// we delegate out startup to the micromanagement server so these actions
 	// will occur after we have obtained our socket.

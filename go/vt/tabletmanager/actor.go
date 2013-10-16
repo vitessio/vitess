@@ -57,12 +57,13 @@ func (rsd *RestartSlaveData) String() string {
 
 type TabletActor struct {
 	mysqld      *mysqlctl.Mysqld
+	mysqlDaemon mysqlctl.MysqlDaemon
 	ts          topo.Server
 	tabletAlias topo.TabletAlias
 }
 
-func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer topo.Server, tabletAlias topo.TabletAlias) *TabletActor {
-	return &TabletActor{mysqld, topoServer, tabletAlias}
+func NewTabletActor(mysqld *mysqlctl.Mysqld, mysqlDaemon mysqlctl.MysqlDaemon, topoServer topo.Server, tabletAlias topo.TabletAlias) *TabletActor {
+	return &TabletActor{mysqld, mysqlDaemon, topoServer, tabletAlias}
 }
 
 // This function should be protected from unforseen panics, as
@@ -490,7 +491,7 @@ func (ta *TabletActor) SlaveWasRestarted(actionNode *ActionNode, masterAddr stri
 
 	// now we can check the reparent actually worked
 	if masterAddr == "" {
-		masterAddr, err = ta.mysqld.GetMasterAddr()
+		masterAddr, err = ta.mysqlDaemon.GetMasterAddr()
 		if err != nil {
 			return err
 		}
