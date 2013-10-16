@@ -57,22 +57,8 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (
 	return qr, nil
 }
 
-func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
-	req := &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: conn.session.TransactionId,
-		ConnectionId:  conn.session.ConnectionId,
-		SessionId:     conn.session.SessionId,
-	}
-	sr := make(chan *mproto.QueryResult, 10)
-	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-	return sr, func() error { return c.Error }
-}
-
 func (conn *TabletBson) ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error) {
-	req := tproto.QueryList{}
-	req.List = make([]tproto.Query, len(queries))
+	req := tproto.QueryList{List: make([]tproto.Query, len(queries))}
 	for _, q := range queries {
 		req.List = append(req.List, tproto.Query{
 			Sql:           q.Query,
@@ -87,6 +73,19 @@ func (conn *TabletBson) ExecuteBatch(queries []TabletQuery) (*tproto.QueryResult
 		return nil, err
 	}
 	return qrs, nil
+}
+
+func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
+	req := &tproto.Query{
+		Sql:           query,
+		BindVariables: bindVars,
+		TransactionId: conn.session.TransactionId,
+		ConnectionId:  conn.session.ConnectionId,
+		SessionId:     conn.session.SessionId,
+	}
+	sr := make(chan *mproto.QueryResult, 10)
+	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
+	return sr, func() error { return c.Error }
 }
 
 func (conn *TabletBson) Begin() error {

@@ -25,14 +25,14 @@ type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
 	Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error)
 
+	// ExecuteBatch executes a group of queries.
+	ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error)
+
 	// StreamExecute exectutes a streaming query on vttablet. It returns a channel that will stream results.
 	// It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called
 	// immediately after StreamExecute returns to check if there were errors sending the call. It should also
 	// be called after finishing the iteration over the channel to see if there were other errors.
 	StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc)
-
-	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error)
 
 	// Transaction support
 	Begin() error

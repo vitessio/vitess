@@ -135,6 +135,21 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (
 	return singleRowResult, nil
 }
 
+func (sbc *sandboxConn) ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error) {
+	sbc.ExecCount++
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
+	if err := sbc.getError(); err != nil {
+		return nil, err
+	}
+	qrl := &tproto.QueryResultList{List: make([]mproto.QueryResult, 0, len(queries))}
+	for _ = range queries {
+		qrl.List = append(qrl.List, *singleRowResult)
+	}
+	return qrl, nil
+}
+
 func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
 	sbc.ExecCount++
 	if sbc.mustDelay != 0 {
@@ -145,17 +160,6 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 	close(ch)
 	err := sbc.getError()
 	return ch, func() error { return err }
-}
-
-func (sbc *sandboxConn) ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error) {
-	sbc.ExecCount++
-	if sbc.mustDelay != 0 {
-		time.Sleep(sbc.mustDelay)
-	}
-	if err := sbc.getError(); err != nil {
-		return nil, err
-	}
-	return nil, nil
 }
 
 func (sbc *sandboxConn) Begin() error {
