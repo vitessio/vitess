@@ -67,7 +67,7 @@ if [ -d $VTROOT/dist/mysql ];
 then
   echo "skipping MySQL build"
 else
-  git clone https://code.google.com/p/google-mysql/ third_party/mysql
+  git clone https://code.google.com/r/sougou-vitess-mysql/ third_party/mysql
   pushd third_party/mysql
   cp client/mysqlbinlog.cc client/vt_mysqlbinlog.cc
   git apply ../mysql.patch
@@ -84,7 +84,7 @@ else
     rm -rf $VTROOT/dist/mysql/sql-bench
   popd
   rm -rf third_party/mysql
-  fi
+fi
 
 
 

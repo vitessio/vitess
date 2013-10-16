@@ -70,7 +70,8 @@ def tearDownModule():
   for t in tablets:
     t.remove_tree()
 
-class TestDbTopo(unittest.TestCase):
+
+class TestVtctld(unittest.TestCase):
 
   @classmethod
   def setUpClass(klass):
@@ -117,6 +118,7 @@ class TestDbTopo(unittest.TestCase):
   def test_not_assigned(self):
     self.assertEqual(len(self.data["Idle"]), 1)
     self.assertEqual(len(self.data["Scrap"]), 1)
+
 
 if __name__ == '__main__':
   utils.main()
