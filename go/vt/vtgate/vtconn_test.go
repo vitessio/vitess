@@ -22,6 +22,19 @@ func TestVTConnExecute(t *testing.T) {
 	})
 }
 
+func TestVTConnExecuteBatch(t *testing.T) {
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	testVTConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
+		vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+		queries := []TabletQuery{{"query", nil}}
+		qrs, err := vtc.ExecuteBatch(queries, "", shards)
+		if err != nil {
+			return nil, err
+		}
+		return &qrs.List[0], err
+	})
+}
+
 func TestVTConnStreamExecute(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testVTConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {

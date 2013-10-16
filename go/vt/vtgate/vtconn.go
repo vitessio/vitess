@@ -14,6 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -57,7 +58,7 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 	allErrors := new(concurrency.AllErrorRecorder)
 	switch len(shards) {
 	case 0:
-		return new(mproto.QueryResult), nil
+		return qr, nil
 	case 1:
 		// Fast-path for single shard execution
 		var err error
@@ -97,6 +98,57 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 		return nil, allErrors.Error()
 	}
 	return qr, nil
+}
+
+// Execute executes a non-streaming query on the specified shards.
+func (vtc *VTConn) ExecuteBatch(queries []TabletQuery, keyspace string, shards []string) (qrs *tproto.QueryResultList, err error) {
+	vtc.mu.Lock()
+	defer vtc.mu.Unlock()
+
+	qrs = &tproto.QueryResultList{List: make([]mproto.QueryResult, len(queries))}
+	allErrors := new(concurrency.AllErrorRecorder)
+	if len(shards) == 0 {
+		return qrs, nil
+	}
+	results := make(chan *tproto.QueryResultList, len(shards))
+	var wg sync.WaitGroup
+	for shard := range unique(shards) {
+		wg.Add(1)
+		go func(shard string) {
+			defer wg.Done()
+			sdc, err := vtc.getConnection(keyspace, shard)
+			if err != nil {
+				allErrors.RecordError(err)
+				return
+			}
+			innerqrs, err := sdc.ExecuteBatch(queries)
+			if err != nil {
+				allErrors.RecordError(err)
+				return
+			}
+			results <- innerqrs
+		}(shard)
+	}
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+	for innerqr := range results {
+		for i := range qrs.List {
+			appendResult(&qrs.List[i], &innerqr.List[i])
+		}
+	}
+	if allErrors.HasErrors() {
+		if vtc.transactionId != 0 {
+			errstr := allErrors.Error().Error()
+			// We cannot recover from these errors
+			if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
+				vtc.rollback()
+			}
+		}
+		return nil, allErrors.Error()
+	}
+	return qrs, nil
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
