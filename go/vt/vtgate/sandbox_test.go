@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -144,6 +145,17 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 	close(ch)
 	err := sbc.getError()
 	return ch, func() error { return err }
+}
+
+func (sbc *sandboxConn) ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error) {
+	sbc.ExecCount++
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
+	if err := sbc.getError(); err != nil {
+		return nil, err
+	}
+	return nil, nil
 }
 
 func (sbc *sandboxConn) Begin() error {

@@ -70,6 +70,25 @@ func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interfac
 	return sr, func() error { return c.Error }
 }
 
+func (conn *TabletBson) ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error) {
+	req := tproto.QueryList{}
+	req.List = make([]tproto.Query, len(queries))
+	for _, q := range queries {
+		req.List = append(req.List, tproto.Query{
+			Sql:           q.Query,
+			BindVariables: q.BindVars,
+			TransactionId: conn.session.TransactionId,
+			ConnectionId:  conn.session.ConnectionId,
+			SessionId:     conn.session.SessionId,
+		})
+	}
+	qrs := new(tproto.QueryResultList)
+	if err := conn.rpcClient.Call("SqlQuery.ExecuteBatch", req, qrs); err != nil {
+		return nil, err
+	}
+	return qrs, nil
+}
+
 func (conn *TabletBson) Begin() error {
 	return conn.rpcClient.Call("SqlQuery.Begin", &conn.session, &conn.session.TransactionId)
 }

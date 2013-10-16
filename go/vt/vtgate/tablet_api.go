@@ -7,7 +7,14 @@ package vtgate
 import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
+
+// TabletQuery represents a query-bindvariables pair.
+type TabletQuery struct {
+	Query    string
+	BindVars map[string]interface{}
+}
 
 // TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
 type TabletDialer func(addr, keyspace, shard, username, password string, encrypted bool) (TabletConn, error)
@@ -23,6 +30,9 @@ type TabletConn interface {
 	// immediately after StreamExecute returns to check if there were errors sending the call. It should also
 	// be called after finishing the iteration over the channel to see if there were other errors.
 	StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc)
+
+	// ExecuteBatch executes a group of queries.
+	ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error)
 
 	// Transaction support
 	Begin() error
