@@ -140,6 +140,11 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
+type BoundQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+}
+
 // RegisterAuthenticated registers the server.
 func RegisterAuthenticated(vtgate VTGate) {
 	rpcwrap.RegisterAuthenticated(vtgate)

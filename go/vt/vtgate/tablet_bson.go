@@ -9,6 +9,7 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 func init() {
@@ -57,12 +58,12 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (
 	return qr, nil
 }
 
-func (conn *TabletBson) ExecuteBatch(queries []TabletQuery) (*tproto.QueryResultList, error) {
+func (conn *TabletBson) ExecuteBatch(queries []proto.BoundQuery) (*tproto.QueryResultList, error) {
 	req := tproto.QueryList{List: make([]tproto.Query, len(queries))}
 	for _, q := range queries {
 		req.List = append(req.List, tproto.Query{
-			Sql:           q.Query,
-			BindVariables: q.BindVars,
+			Sql:           q.Sql,
+			BindVariables: q.BindVariables,
 			TransactionId: conn.session.TransactionId,
 			ConnectionId:  conn.session.ConnectionId,
 			SessionId:     conn.session.SessionId,

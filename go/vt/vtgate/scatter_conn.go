@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 var idGen sync2.AtomicInt64
@@ -105,7 +106,7 @@ func (stc *ScatterConn) Execute(query string, bindVars map[string]interface{}, k
 }
 
 // Execute executes a non-streaming query on the specified shards.
-func (stc *ScatterConn) ExecuteBatch(queries []TabletQuery, keyspace string, shards []string) (qrs *tproto.QueryResultList, err error) {
+func (stc *ScatterConn) ExecuteBatch(queries []proto.BoundQuery, keyspace string, shards []string) (qrs *tproto.QueryResultList, err error) {
 	stc.mu.Lock()
 	defer stc.mu.Unlock()
 
