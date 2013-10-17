@@ -14,6 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -62,6 +63,20 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 	qr, err := scatterConn.(*ScatterConn).Execute(query.Sql, query.BindVariables, query.Keyspace, query.Shards)
 	if err == nil {
 		*reply = *qr
+	}
+	return err
+}
+
+// ExecuteBatchShard executes a group of queries on the specified shards.
+func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *proto.BatchQueryShard, reply *tproto.QueryResultList) error {
+	scatterConn, err := vtg.connections.Get(batchQuery.SessionId)
+	if err != nil {
+		return fmt.Errorf("query: %v, session %d: %v", batchQuery.Queries, batchQuery.SessionId, err)
+	}
+	defer vtg.connections.Put(batchQuery.SessionId)
+	qrs, err := scatterConn.(*ScatterConn).ExecuteBatch(batchQuery.Queries, batchQuery.Keyspace, batchQuery.Shards)
+	if err == nil {
+		*reply = *qrs
 	}
 	return err
 }
