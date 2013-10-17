@@ -120,5 +120,13 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(len(self.data["Scrap"]), 1)
 
 
+  def test_explorer_redirects(self):
+    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
+                     'http://localhost:8080/zk/global/vt/keyspaces/test_keyspace')
+    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=shard&explorer=zk&keyspace=test_keyspace&shard=-80').geturl(),
+                     'http://localhost:8080/zk/global/vt/keyspaces/test_keyspace/shards/-80')
+    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=tablet&explorer=zk&alias=%s' % shard_0_replica.tablet_alias).geturl(),
+                     'http://localhost:8080' + shard_0_replica.zk_tablet_path)
+
 if __name__ == '__main__':
   utils.main()
