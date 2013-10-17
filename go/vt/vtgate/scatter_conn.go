@@ -20,7 +20,9 @@ import (
 
 var idGen sync2.AtomicInt64
 
-type VTConn struct {
+// ScatterConn is used for executing queries across
+// multiple ShardConn connections.
+type ScatterConn struct {
 	mu             sync.Mutex
 	Id             int64
 	balancerMap    *BalancerMap
@@ -37,8 +39,10 @@ type VTConn struct {
 	commitOrder    []*ShardConn
 }
 
-func NewVTConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *VTConn {
-	return &VTConn{
+// NewScatterConn creates a new ScatterConn. All input parameters are passed through
+// for creating the appropriate ShardConn.
+func NewScatterConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ScatterConn {
+	return &ScatterConn{
 		Id:             idGen.Add(1),
 		balancerMap:    blm,
 		tabletProtocol: tabletProtocol,
@@ -50,9 +54,9 @@ func NewVTConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletTy
 }
 
 // Execute executes a non-streaming query on the specified shards.
-func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*mproto.QueryResult, error) {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
+func (stc *ScatterConn) Execute(query string, bindVars map[string]interface{}, keyspace string, shards []string) (*mproto.QueryResult, error) {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
 
 	qr := new(mproto.QueryResult)
 	allErrors := new(concurrency.AllErrorRecorder)
@@ -62,7 +66,7 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 	case 1:
 		// Fast-path for single shard execution
 		var err error
-		qr, err = vtc.execOnShard(query, bindVars, keyspace, shards[0])
+		qr, err = stc.execOnShard(query, bindVars, keyspace, shards[0])
 		allErrors.RecordError(err)
 	default:
 		results := make(chan *mproto.QueryResult, len(shards))
@@ -71,7 +75,7 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 			wg.Add(1)
 			go func(shard string) {
 				defer wg.Done()
-				innerqr, err := vtc.execOnShard(query, bindVars, keyspace, shard)
+				innerqr, err := stc.execOnShard(query, bindVars, keyspace, shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
@@ -88,11 +92,11 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 		}
 	}
 	if allErrors.HasErrors() {
-		if vtc.transactionId != 0 {
+		if stc.transactionId != 0 {
 			errstr := allErrors.Error().Error()
 			// We cannot recover from these errors
 			if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
-				vtc.rollback()
+				stc.rollback()
 			}
 		}
 		return nil, allErrors.Error()
@@ -101,9 +105,9 @@ func (vtc *VTConn) Execute(query string, bindVars map[string]interface{}, keyspa
 }
 
 // Execute executes a non-streaming query on the specified shards.
-func (vtc *VTConn) ExecuteBatch(queries []TabletQuery, keyspace string, shards []string) (qrs *tproto.QueryResultList, err error) {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
+func (stc *ScatterConn) ExecuteBatch(queries []TabletQuery, keyspace string, shards []string) (qrs *tproto.QueryResultList, err error) {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
 
 	qrs = &tproto.QueryResultList{List: make([]mproto.QueryResult, len(queries))}
 	allErrors := new(concurrency.AllErrorRecorder)
@@ -116,7 +120,7 @@ func (vtc *VTConn) ExecuteBatch(queries []TabletQuery, keyspace string, shards [
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			sdc, err := vtc.getConnection(keyspace, shard)
+			sdc, err := stc.getConnection(keyspace, shard)
 			if err != nil {
 				allErrors.RecordError(err)
 				return
@@ -139,11 +143,11 @@ func (vtc *VTConn) ExecuteBatch(queries []TabletQuery, keyspace string, shards [
 		}
 	}
 	if allErrors.HasErrors() {
-		if vtc.transactionId != 0 {
+		if stc.transactionId != 0 {
 			errstr := allErrors.Error().Error()
 			// We cannot recover from these errors
 			if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
-				vtc.rollback()
+				stc.rollback()
 			}
 		}
 		return nil, allErrors.Error()
@@ -152,11 +156,11 @@ func (vtc *VTConn) ExecuteBatch(queries []TabletQuery, keyspace string, shards [
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
-func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, sendReply func(reply interface{}) error) error {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
+func (stc *ScatterConn) StreamExecute(query string, bindVars map[string]interface{}, keyspace string, shards []string, sendReply func(reply interface{}) error) error {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
 
-	if vtc.transactionId != 0 {
+	if stc.transactionId != 0 {
 		return fmt.Errorf("cannot stream in a transaction")
 	}
 	results := make(chan *mproto.QueryResult, len(shards))
@@ -166,7 +170,7 @@ func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, 
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			sdc, _ := vtc.getConnection(keyspace, shard)
+			sdc, _ := stc.getConnection(keyspace, shard)
 			sr, errFunc := sdc.StreamExecute(query, bindVars)
 			for qr := range sr {
 				results <- qr
@@ -196,28 +200,28 @@ func (vtc *VTConn) StreamExecute(query string, bindVars map[string]interface{}, 
 }
 
 // Begin begins a transaction. The retry rules are the same.
-func (vtc *VTConn) Begin() error {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
+func (stc *ScatterConn) Begin() error {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
 
-	if vtc.transactionId != 0 {
+	if stc.transactionId != 0 {
 		return fmt.Errorf("cannot begin: already in a transaction")
 	}
-	vtc.transactionId = idGen.Add(1)
-	vtc.transactionIds = make(map[*ShardConn]int64)
+	stc.transactionId = idGen.Add(1)
+	stc.transactionIds = make(map[*ShardConn]int64)
 	return nil
 }
 
 // Commit commits the current transaction. There are no retries on this operation.
-func (vtc *VTConn) Commit() (err error) {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
+func (stc *ScatterConn) Commit() (err error) {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
 
-	if vtc.transactionId == 0 {
+	if stc.transactionId == 0 {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
 	committing := true
-	for _, tConn := range vtc.commitOrder {
+	for _, tConn := range stc.commitOrder {
 		if !committing {
 			tConn.Rollback()
 			continue
@@ -226,65 +230,65 @@ func (vtc *VTConn) Commit() (err error) {
 			committing = false
 		}
 	}
-	vtc.transactionIds = nil
-	vtc.commitOrder = nil
-	vtc.transactionId = 0
+	stc.transactionIds = nil
+	stc.commitOrder = nil
+	stc.transactionId = 0
 	return err
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
-func (vtc *VTConn) Rollback() (err error) {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
-	vtc.rollback()
+func (stc *ScatterConn) Rollback() (err error) {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
+	stc.rollback()
 	return nil
 }
 
-func (vtc *VTConn) rollback() {
-	for _, tConn := range vtc.commitOrder {
+func (stc *ScatterConn) rollback() {
+	for _, tConn := range stc.commitOrder {
 		tConn.Rollback()
 	}
-	vtc.transactionIds = nil
-	vtc.commitOrder = nil
-	vtc.transactionId = 0
+	stc.transactionIds = nil
+	stc.commitOrder = nil
+	stc.transactionId = 0
 }
 
-func (vtc *VTConn) TransactionId() int64 {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
-	return vtc.transactionId
+func (stc *ScatterConn) TransactionId() int64 {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
+	return stc.transactionId
 }
 
 // Close closes the underlying ShardConn connections.
-func (vtc *VTConn) Close() error {
-	vtc.mu.Lock()
-	defer vtc.mu.Unlock()
-	if vtc.shardConns == nil {
+func (stc *ScatterConn) Close() error {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
+	if stc.shardConns == nil {
 		return nil
 	}
-	for _, v := range vtc.shardConns {
+	for _, v := range stc.shardConns {
 		v.Close()
 	}
-	vtc.shardConns = nil
-	vtc.balancerMap = nil
+	stc.shardConns = nil
+	stc.balancerMap = nil
 	return nil
 }
 
 // getConnection can fail only if we're in a transaction. Otherwise, it should
 // always succeed.
-func (vtc *VTConn) getConnection(keyspace, shard string) (*ShardConn, error) {
-	vtc.connsMu.Lock()
-	defer vtc.connsMu.Unlock()
+func (stc *ScatterConn) getConnection(keyspace, shard string) (*ShardConn, error) {
+	stc.connsMu.Lock()
+	defer stc.connsMu.Unlock()
 
-	key := fmt.Sprintf("%s.%s.%s", keyspace, vtc.tabletType, shard)
-	sdc, ok := vtc.shardConns[key]
+	key := fmt.Sprintf("%s.%s.%s", keyspace, stc.tabletType, shard)
+	sdc, ok := stc.shardConns[key]
 	if !ok {
-		sdc = NewShardConn(vtc.balancerMap, vtc.tabletProtocol, keyspace, shard, vtc.tabletType, vtc.retryDelay, vtc.retryCount)
-		vtc.shardConns[key] = sdc
+		sdc = NewShardConn(stc.balancerMap, stc.tabletProtocol, keyspace, shard, stc.tabletType, stc.retryDelay, stc.retryCount)
+		stc.shardConns[key] = sdc
 	}
-	if vtc.transactionId != 0 {
+	if stc.transactionId != 0 {
 		if txid := sdc.TransactionId(); txid != 0 {
-			if txid != vtc.transactionIds[sdc] {
+			if txid != stc.transactionIds[sdc] {
 				// This error will cause the transaction to abort.
 				return nil, sdc.WrapError(fmt.Errorf("not_in_tx: connection is in a different transaction"))
 			}
@@ -293,8 +297,8 @@ func (vtc *VTConn) getConnection(keyspace, shard string) (*ShardConn, error) {
 		if err := sdc.Begin(); err != nil {
 			return nil, err
 		}
-		vtc.transactionIds[sdc] = sdc.TransactionId()
-		vtc.commitOrder = append(vtc.commitOrder, sdc)
+		stc.transactionIds[sdc] = sdc.TransactionId()
+		stc.commitOrder = append(stc.commitOrder, sdc)
 		return sdc, nil
 	}
 	// This check is a failsafe. Should never happen.
@@ -305,8 +309,8 @@ func (vtc *VTConn) getConnection(keyspace, shard string) (*ShardConn, error) {
 	return sdc, nil
 }
 
-func (vtc *VTConn) execOnShard(query string, bindVars map[string]interface{}, keyspace string, shard string) (qr *mproto.QueryResult, err error) {
-	sdc, err := vtc.getConnection(keyspace, shard)
+func (stc *ScatterConn) execOnShard(query string, bindVars map[string]interface{}, keyspace string, shard string) (qr *mproto.QueryResult, err error) {
+	sdc, err := stc.getConnection(keyspace, shard)
 	if err != nil {
 		return nil, err
 	}
