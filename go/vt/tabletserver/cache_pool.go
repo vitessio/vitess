@@ -123,7 +123,9 @@ func (cp *CachePool) Open() {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.pool = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
-	cp.memcacheStats.Open()
+	if cp.memcacheStats != nil {
+		cp.memcacheStats.Open()
+	}
 }
 
 func (cp *CachePool) startMemcache() {
@@ -158,7 +160,9 @@ func (cp *CachePool) Close() {
 	if cp.pool == nil {
 		return
 	}
-	cp.memcacheStats.Close()
+	if cp.memcacheStats != nil {
+		cp.memcacheStats.Close()
+	}
 	cp.pool.Close()
 	cp.cmd.Process.Kill()
 	cp.pool = nil
