@@ -29,7 +29,7 @@ func (rp *ReservedPool) Open(connFactory CreateConnectionFunc) {
 }
 
 func (rp *ReservedPool) Close() {
-	for _, v := range rp.pool.GetTimedout(time.Duration(0)) {
+	for _, v := range rp.pool.GetOutdated(time.Duration(0)) {
 		conn := v.(*reservedConnection)
 		conn.Close()
 		rp.pool.Unregister(conn.connectionId)

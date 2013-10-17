@@ -22,6 +22,7 @@ go/cmd/topo2topo/topo2topo
 go/cmd/vt_binlog_player/vt_binlog_player
 go/cmd/vt_binlog_server/vt_binlog_server
 go/cmd/vtaction/vtaction
+go/cmd/vtgate/vtgate
 go/cmd/vtclient2/vtclient2
 go/cmd/vtctl/vtctl
 go/cmd/vtctld/vtctld

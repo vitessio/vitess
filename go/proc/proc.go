@@ -39,12 +39,13 @@ func Listen(port string) (l net.Listener, err error) {
 // up will query this URL. If it receives a valid response, it will send a
 // SIGUSR1 signal and attempt to bind to the port the current server is using.
 func Wait() os.Signal {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGTERM, syscall.SIGUSR1)
+
 	http.HandleFunc(pidURL, func(r http.ResponseWriter, req *http.Request) {
 		r.Write(strconv.AppendInt(nil, int64(os.Getpid()), 10))
 	})
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGTERM, syscall.SIGUSR1)
 	return <-c
 }
 

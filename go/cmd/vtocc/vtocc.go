@@ -50,7 +50,7 @@ func main() {
 	log.Infof("starting vtocc %v", *port)
 	servenv.OnClose(func() {
 		time.Sleep(5 * time.Millisecond)
-		ts.DisallowQueries(true)
+		ts.DisallowQueries()
 	})
 	servenv.Run(*port)
 }

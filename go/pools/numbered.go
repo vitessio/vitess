@@ -23,6 +23,7 @@ type numberedWrapper struct {
 	val         interface{}
 	inUse       bool
 	timeCreated time.Time
+	timeUsed    time.Time
 }
 
 func NewNumbered() *Numbered {
@@ -40,7 +41,8 @@ func (nu *Numbered) Register(id int64, val interface{}) error {
 	if _, ok := nu.resources[id]; ok {
 		return errors.New("already present")
 	}
-	nu.resources[id] = &numberedWrapper{val, false, time.Now()}
+	now := time.Now()
+	nu.resources[id] = &numberedWrapper{val, false, now, now}
 	return nil
 }
 
@@ -77,12 +79,13 @@ func (nu *Numbered) Put(id int64) {
 	defer nu.mu.Unlock()
 	if nw, ok := nu.resources[id]; ok {
 		nw.inUse = false
+		nw.timeUsed = time.Now()
 	}
 }
 
-// GetTimedout returns a list of timedout resources, and locks them.
+// GetOutdated returns a list of resources that are older than age, and locks them.
 // It does not return any resources that are already locked.
-func (nu *Numbered) GetTimedout(timeout time.Duration) (vals []interface{}) {
+func (nu *Numbered) GetOutdated(age time.Duration) (vals []interface{}) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	now := time.Now()
@@ -90,7 +93,26 @@ func (nu *Numbered) GetTimedout(timeout time.Duration) (vals []interface{}) {
 		if nw.inUse {
 			continue
 		}
-		if nw.timeCreated.Add(timeout).Sub(now) <= 0 {
+		if nw.timeCreated.Add(age).Sub(now) <= 0 {
+			nw.inUse = true
+			vals = append(vals, nw.val)
+		}
+	}
+	return vals
+}
+
+// GetIdle returns a list of resurces that have been idle for longer
+// than timeout, and locks them. It does not return any resources that
+// are laready locked.
+func (nu *Numbered) GetIdle(timeout time.Duration) (vals []interface{}) {
+	nu.mu.Lock()
+	defer nu.mu.Unlock()
+	now := time.Now()
+	for _, nw := range nu.resources {
+		if nw.inUse {
+			continue
+		}
+		if nw.timeUsed.Add(timeout).Sub(now) <= 0 {
 			nw.inUse = true
 			vals = append(vals, nw.val)
 		}

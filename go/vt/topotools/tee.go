@@ -6,6 +6,7 @@ package topotools
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/golang/glog"
@@ -26,12 +27,27 @@ type Tee struct {
 	primary   topo.Server
 	secondary topo.Server
 
-	readFrom   topo.Server
+	readFrom       topo.Server
+	readFromSecond topo.Server
+
 	lockFirst  topo.Server
 	lockSecond topo.Server
 
+	// protects the variables below this point
+	mu sync.Mutex
+
+	tabletVersionMapping map[topo.TabletAlias]tabletVersionMapping
+
 	keyspaceLockPaths map[string]string
 	shardLockPaths    map[string]string
+}
+
+// when reading a version from 'readFrom', we also read another version
+// from 'readFromSecond', and save the mapping to this map. We only keep one
+// mapping for a given tablet, no need to overdo it
+type tabletVersionMapping struct {
+	readFromVersion       int64
+	readFromSecondVersion int64
 }
 
 func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
@@ -42,13 +58,15 @@ func NewTee(primary, secondary topo.Server, reverseLockOrder bool) *Tee {
 		lockSecond = primary
 	}
 	return &Tee{
-		primary:           primary,
-		secondary:         secondary,
-		readFrom:          primary,
-		lockFirst:         lockFirst,
-		lockSecond:        lockSecond,
-		keyspaceLockPaths: make(map[string]string),
-		shardLockPaths:    make(map[string]string),
+		primary:              primary,
+		secondary:            secondary,
+		readFrom:             primary,
+		readFromSecond:       secondary,
+		lockFirst:            lockFirst,
+		lockSecond:           lockSecond,
+		tabletVersionMapping: make(map[topo.TabletAlias]tabletVersionMapping),
+		keyspaceLockPaths:    make(map[string]string),
+		shardLockPaths:       make(map[string]string),
 	}
 }
 
@@ -176,9 +194,47 @@ func (tee *Tee) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (ne
 		return
 	}
 
-	if _, err := tee.secondary.UpdateTablet(tablet, existingVersion); err != nil {
+	// if we have a mapping between tablet version in first topo
+	// and tablet version in second topo, replace the version number.
+	// if not, this will probably fail and log.
+	tee.mu.Lock()
+	tvm, ok := tee.tabletVersionMapping[tablet.Alias()]
+	if ok && tvm.readFromVersion == existingVersion {
+		existingVersion = tvm.readFromSecondVersion
+		delete(tee.tabletVersionMapping, tablet.Alias())
+	}
+	tee.mu.Unlock()
+	if newVersion2, serr := tee.secondary.UpdateTablet(tablet, existingVersion); serr != nil {
 		// not critical enough to fail
-		log.Warningf("secondary.UpdateTablet(%v) failed: %v", tablet.Alias(), err)
+		if serr == topo.ErrNoNode {
+			// the tablet doesn't exist on the secondary, let's
+			// just create it
+			if serr = tee.secondary.CreateTablet(tablet.Tablet); serr != nil {
+				log.Warningf("secondary.CreateTablet(%v) failed (after UpdateTablet returned ErrNoNode): %v", tablet.Alias(), serr)
+			} else {
+				log.Infof("secondary.UpdateTablet(%v) failed with ErrNoNode, CreateTablet then worked.", tablet.Alias())
+				ti, gerr := tee.secondary.GetTablet(tablet.Alias())
+				if gerr != nil {
+					log.Warningf("Failed to re-read tablet(%v) after creating it on secondary: %v", tablet.Alias(), gerr)
+				} else {
+					tee.mu.Lock()
+					tee.tabletVersionMapping[tablet.Alias()] = tabletVersionMapping{
+						readFromVersion:       newVersion,
+						readFromSecondVersion: ti.Version(),
+					}
+					tee.mu.Unlock()
+				}
+			}
+		} else {
+			log.Warningf("secondary.UpdateTablet(%v) failed: %v", tablet.Alias(), serr)
+		}
+	} else {
+		tee.mu.Lock()
+		tee.tabletVersionMapping[tablet.Alias()] = tabletVersionMapping{
+			readFromVersion:       newVersion,
+			readFromSecondVersion: newVersion2,
+		}
+		tee.mu.Unlock()
 	}
 	return
 }
@@ -221,7 +277,24 @@ func (tee *Tee) ValidateTablet(alias topo.TabletAlias) error {
 }
 
 func (tee *Tee) GetTablet(alias topo.TabletAlias) (*topo.TabletInfo, error) {
-	return tee.readFrom.GetTablet(alias)
+	ti, err := tee.readFrom.GetTablet(alias)
+	if err != nil {
+		return nil, err
+	}
+
+	ti2, err := tee.readFromSecond.GetTablet(alias)
+	if err != nil {
+		// can't read from secondary, so we can's keep version map
+		return ti, nil
+	}
+
+	tee.mu.Lock()
+	tee.tabletVersionMapping[alias] = tabletVersionMapping{
+		readFromVersion:       ti.Version(),
+		readFromSecondVersion: ti2.Version(),
+	}
+	tee.mu.Unlock()
+	return ti, nil
 }
 
 func (tee *Tee) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
@@ -261,6 +334,53 @@ func (tee *Tee) DeleteReplicationPath(keyspace, shard, repPath string) error {
 }
 
 //
+// Replication graph management, global.
+//
+
+func (tee *Tee) CreateShardReplication(cell, keyspace, shard string, sr *topo.ShardReplication) error {
+	err := tee.primary.CreateShardReplication(cell, keyspace, shard, sr)
+	if err != nil && err != topo.ErrNodeExists {
+		return err
+	}
+
+	serr := tee.secondary.CreateShardReplication(cell, keyspace, shard, sr)
+	if serr != nil && serr != topo.ErrNodeExists {
+		// not critical enough to fail
+		log.Warningf("secondary.CreateShardReplication(%v,%v,%v) failed: %v", cell, keyspace, shard, err)
+	}
+	return err
+}
+
+func (tee *Tee) UpdateShardReplicationFields(cell, keyspace, shard string, update func(*topo.ShardReplication) error) error {
+	if err := tee.primary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
+		// failed on primary, not updating secondary
+		return err
+	}
+
+	if err := tee.secondary.UpdateShardReplicationFields(cell, keyspace, shard, update); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.UpdateShardReplicationFields(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return nil
+}
+
+func (tee *Tee) GetShardReplication(cell, keyspace, shard string) (*topo.ShardReplicationInfo, error) {
+	return tee.readFrom.GetShardReplication(cell, keyspace, shard)
+}
+
+func (tee *Tee) DeleteShardReplication(cell, keyspace, shard string) error {
+	if err := tee.primary.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.DeleteShardReplication(cell, keyspace, shard); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return nil
+}
+
+//
 // Serving Graph management, per cell.
 //
 
@@ -268,20 +388,20 @@ func (tee *Tee) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]topo.
 	return tee.readFrom.GetSrvTabletTypesPerShard(cell, keyspace, shard)
 }
 
-func (tee *Tee) UpdateSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.VtnsAddrs) error {
-	if err := tee.primary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs); err != nil {
+func (tee *Tee) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
+	if err := tee.primary.UpdateEndPoints(cell, keyspace, shard, tabletType, addrs); err != nil {
 		return err
 	}
 
-	if err := tee.secondary.UpdateSrvTabletType(cell, keyspace, shard, tabletType, addrs); err != nil {
+	if err := tee.secondary.UpdateEndPoints(cell, keyspace, shard, tabletType, addrs); err != nil {
 		// not critical enough to fail
-		log.Warningf("secondary.UpdateSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
+		log.Warningf("secondary.UpdateEndPoints(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
 	return nil
 }
 
-func (tee *Tee) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
-	return tee.readFrom.GetSrvTabletType(cell, keyspace, shard, tabletType)
+func (tee *Tee) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	return tee.readFrom.GetEndPoints(cell, keyspace, shard, tabletType)
 }
 
 func (tee *Tee) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
@@ -332,7 +452,7 @@ func (tee *Tee) GetSrvKeyspaceNames(cell string) ([]string, error) {
 	return tee.readFrom.GetSrvKeyspaceNames(cell)
 }
 
-func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.VtnsAddr) error {
+func (tee *Tee) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	if err := tee.primary.UpdateTabletEndpoint(cell, keyspace, shard, tabletType, addr); err != nil {
 		return err
 	}
@@ -365,17 +485,22 @@ func (tee *Tee) LockKeyspaceForAction(keyspace, contents string, timeout time.Du
 	}
 
 	// remember both locks, keyed by lockFirst lock path
+	tee.mu.Lock()
 	tee.keyspaceLockPaths[pLockPath] = sLockPath
+	tee.mu.Unlock()
 	return pLockPath, nil
 }
 
 func (tee *Tee) UnlockKeyspaceForAction(keyspace, lockPath, results string) error {
 	// get from map
+	tee.mu.Lock() // not using defer for unlock, to minimize lock time
 	sLockPath, ok := tee.keyspaceLockPaths[lockPath]
 	if !ok {
+		tee.mu.Unlock()
 		return fmt.Errorf("no lockPath %v in keyspaceLockPaths", lockPath)
 	}
 	delete(tee.keyspaceLockPaths, lockPath)
+	tee.mu.Unlock()
 
 	// unlock lockSecond, then lockFirst
 	serr := tee.lockSecond.UnlockKeyspaceForAction(keyspace, sLockPath, results)
@@ -407,17 +532,22 @@ func (tee *Tee) LockShardForAction(keyspace, shard, contents string, timeout tim
 	}
 
 	// remember both locks, keyed by lockFirst lock path
+	tee.mu.Lock()
 	tee.shardLockPaths[pLockPath] = sLockPath
+	tee.mu.Unlock()
 	return pLockPath, nil
 }
 
 func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) error {
 	// get from map
+	tee.mu.Lock() // not using defer for unlock, to minimize lock time
 	sLockPath, ok := tee.shardLockPaths[lockPath]
 	if !ok {
+		tee.mu.Unlock()
 		return fmt.Errorf("no lockPath %v in shardLockPaths", lockPath)
 	}
 	delete(tee.shardLockPaths, lockPath)
+	tee.mu.Unlock()
 
 	// unlock lockSecond, then lockFirst
 	serr := tee.lockSecond.UnlockShardForAction(keyspace, shard, sLockPath, results)
@@ -434,7 +564,7 @@ func (tee *Tee) UnlockShardForAction(keyspace, shard, lockPath, results string) 
 
 //
 // Remote Tablet Actions, local cell.
-// TODO(alainjobart) implement the split
+// We just send these actions through the primary topo.Server.
 //
 
 func (tee *Tee) WriteTabletAction(tabletAlias topo.TabletAlias, contents string) (string, error) {
@@ -451,19 +581,42 @@ func (tee *Tee) PurgeTabletActions(tabletAlias topo.TabletAlias, canBePurged fun
 
 //
 // Supporting the local agent process, local cell.
-// TODO(alainjobart) implement the split
 //
 
 func (tee *Tee) ValidateTabletActions(tabletAlias topo.TabletAlias) error {
-	return tee.primary.ValidateTabletActions(tabletAlias)
+	// if the primary fails, no need to go on
+	if err := tee.primary.ValidateTabletActions(tabletAlias); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.ValidateTabletActions(tabletAlias); err != nil {
+		log.Warningf("secondary.ValidateTabletActions(%v) failed: %v", tabletAlias, err)
+	}
+	return nil
 }
 
 func (tee *Tee) CreateTabletPidNode(tabletAlias topo.TabletAlias, contents string, done chan struct{}) error {
-	return tee.primary.CreateTabletPidNode(tabletAlias, contents, done)
+	// if the primary fails, no need to go on
+	if err := tee.primary.CreateTabletPidNode(tabletAlias, contents, done); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.CreateTabletPidNode(tabletAlias, contents, done); err != nil {
+		log.Warningf("secondary.CreateTabletPidNode(%v) failed: %v", tabletAlias, err)
+	}
+	return nil
 }
 
 func (tee *Tee) ValidateTabletPidNode(tabletAlias topo.TabletAlias) error {
-	return tee.primary.ValidateTabletPidNode(tabletAlias)
+	// if the primary fails, no need to go on
+	if err := tee.primary.ValidateTabletPidNode(tabletAlias); err != nil {
+		return err
+	}
+
+	if err := tee.secondary.ValidateTabletPidNode(tabletAlias); err != nil {
+		log.Warningf("secondary.ValidateTabletPidNode(%v) failed: %v", tabletAlias, err)
+	}
+	return nil
 }
 
 func (tee *Tee) GetSubprocessFlags() []string {
@@ -472,21 +625,66 @@ func (tee *Tee) GetSubprocessFlags() []string {
 }
 
 func (tee *Tee) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
-	tee.primary.ActionEventLoop(tabletAlias, dispatchAction, done)
+	// We run the action loop on both primary and secondary.
+	// We dispatch actions by adding a 'p' or 's'
+	// as the first character of the action.
+	wg := sync.WaitGroup{}
+
+	// loop on primary
+	wg.Add(1)
+	go func() {
+		tee.primary.ActionEventLoop(tabletAlias, func(actionPath, data string) error {
+			return dispatchAction("p"+actionPath, data)
+		}, done)
+		wg.Done()
+	}()
+
+	// loop on secondary
+	wg.Add(1)
+	go func() {
+		tee.secondary.ActionEventLoop(tabletAlias, func(actionPath, data string) error {
+			return dispatchAction("s"+actionPath, data)
+		}, done)
+		wg.Done()
+	}()
+
+	// wait for both
+	wg.Wait()
 }
 
 func (tee *Tee) ReadTabletActionPath(actionPath string) (topo.TabletAlias, string, int64, error) {
+	if actionPath[0] == 'p' {
+		return tee.primary.ReadTabletActionPath(actionPath[1:])
+	} else if actionPath[0] == 's' {
+		return tee.secondary.ReadTabletActionPath(actionPath[1:])
+	}
+	log.Warningf("ReadTabletActionPath(%v): actionPath doesn't start with 'p' or 's', using primary", actionPath)
 	return tee.primary.ReadTabletActionPath(actionPath)
 }
 
 func (tee *Tee) UpdateTabletAction(actionPath, data string, version int64) error {
+	if actionPath[0] == 'p' {
+		return tee.primary.UpdateTabletAction(actionPath[1:], data, version)
+	} else if actionPath[0] == 's' {
+		return tee.secondary.UpdateTabletAction(actionPath[1:], data, version)
+	}
 	return tee.primary.UpdateTabletAction(actionPath, data, version)
 }
 
 func (tee *Tee) StoreTabletActionResponse(actionPath, data string) error {
+	if actionPath[0] == 'p' {
+		return tee.primary.StoreTabletActionResponse(actionPath[1:], data)
+	} else if actionPath[0] == 's' {
+		return tee.secondary.StoreTabletActionResponse(actionPath[1:], data)
+	}
 	return tee.primary.StoreTabletActionResponse(actionPath, data)
 }
 
 func (tee *Tee) UnblockTabletAction(actionPath string) error {
+	if actionPath[0] == 'p' {
+		return tee.primary.UnblockTabletAction(actionPath[1:])
+	} else if actionPath[0] == 's' {
+		return tee.secondary.UnblockTabletAction(actionPath[1:])
+	}
 	return tee.primary.UnblockTabletAction(actionPath)
 }

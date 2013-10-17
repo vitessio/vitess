@@ -12,7 +12,7 @@ cases = [
 
   Case2(doc="PK_EQUAL (null key)",
        query_plan="PK_EQUAL",
-       sql="select * from vtocc_cached2 where eid = 2 and bid = %(bid)s",
+       sql="select * from vtocc_cached2 where eid = 2 and bid = :bid",
        bindings={"bid": None},
        result=[],
        rewritten=[

@@ -11,6 +11,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
 )
 
 // MinKey is smaller than all KeyspaceId (the value really is).
@@ -99,6 +102,37 @@ func ParseKeyRangeParts(start, end string) (KeyRange, error) {
 // Returns true if the KeyRange does not cover the entire space.
 func (kr KeyRange) IsPartial() bool {
 	return !(kr.Start == MinKey && kr.End == MaxKey)
+}
+
+func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	bson.EncodePrefix(buf, bson.Binary, "Start")
+	bson.EncodeString(buf, string(kr.Start))
+
+	bson.EncodePrefix(buf, bson.Binary, "End")
+	bson.EncodeString(buf, string(kr.End))
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "Start":
+			kr.Start = KeyspaceId(bson.DecodeString(buf, kind))
+		case "End":
+			kr.End = KeyspaceId(bson.DecodeString(buf, kind))
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
 }
 
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.

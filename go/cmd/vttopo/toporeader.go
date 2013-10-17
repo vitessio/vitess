@@ -47,9 +47,9 @@ func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.Sr
 	return nil
 }
 
-func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.VtnsAddrs) (err error) {
+func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
 	tr.queryCount.Add(req.Cell, 1)
-	addrs, err := tr.ts.GetSrvTabletType(req.Cell, req.Keyspace, req.Shard, req.TabletType)
+	addrs, err := tr.ts.GetEndPoints(req.Cell, req.Keyspace, req.Shard, req.TabletType)
 	if err != nil {
 		log.Warningf("GetEndPoints(%v,%v,%v,%v) failed: %v", req.Cell, req.Keyspace, req.Shard, req.TabletType, err)
 		tr.errorCount.Add(req.Cell, 1)

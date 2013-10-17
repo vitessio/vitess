@@ -35,6 +35,8 @@ func init() {
 	flag.Float64Var(&qsConfig.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout")
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
+	flag.IntVar(&qsConfig.StreamExecThrottle, "queryserver-config-stream-exec-throttle", DefaultQsConfig.StreamExecThrottle, "Maximum number of simultaneous streaming requests that can wait for results")
+	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-m", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
 	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-s", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
@@ -95,6 +97,8 @@ type Config struct {
 	IdleTimeout        float64
 	RowCache           RowCacheConfig
 	SpotCheckRatio     float64
+	StreamExecThrottle int
+	StreamWaitTimeout  float64
 }
 
 // DefaultQSConfig is the default value for the query service config.
@@ -118,6 +122,8 @@ var DefaultQsConfig = Config{
 	StreamBufferSize:   32 * 1024,
 	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
 	SpotCheckRatio:     0,
+	StreamExecThrottle: 8,
+	StreamWaitTimeout:  4 * 60,
 }
 
 var qsConfig Config
@@ -144,9 +150,9 @@ func AllowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []SchemaOverride,
 // DisallowQueries can take a long time to return (not indefinite) because
 // it has to wait for queries & transactions to be completed or killed,
 // and also for house keeping goroutines to be terminated.
-func DisallowQueries(forRestart bool) {
+func DisallowQueries() {
 	defer logError()
-	SqlQueryRpcService.disallowQueries(forRestart)
+	SqlQueryRpcService.disallowQueries()
 }
 
 // Reload the schema. If the query service is not running, nothing will happen
@@ -164,11 +170,11 @@ func IsCachePoolAvailable() bool {
 }
 
 func InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
-	SqlQueryRpcService.InvalidateForDml(cacheInvalidate)
+	SqlQueryRpcService.invalidateForDml(cacheInvalidate)
 }
 
 func InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
-	SqlQueryRpcService.InvalidateForDDL(ddlInvalidate)
+	SqlQueryRpcService.invalidateForDDL(ddlInvalidate)
 }
 
 func SetQueryRules(qrs *QueryRules) {

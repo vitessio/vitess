@@ -150,9 +150,8 @@ class ZkOccConnection(object):
           logging.warning('zkocc: %s command failed %u times: %s', client_method, attempt, e)
           raise ZkOccError('zkocc %s command failed %u times: %s' % (client_method, attempt, e))
 
-        # try the next server if there is one
-        if self.addr_count > 1:
-          self.dial()
+        # try the next server if there is one, or retry our only server
+        self.dial()
 
   # New API.
 
@@ -268,7 +267,14 @@ class FakeZkOccConnection(object):
       data = self.get(keyspace_path)['Data']
       if not data:
         raise ZkOccError("FakeZkOccConnection: empty keyspace: " + keyspace)
-      return json.loads(data)
+      result = json.loads(data)
+      # for convenience, we store the KeyRange as hex, but we need to
+      # decode it here, as BSON RPC sends it as binary.
+      if 'Shards' in result:
+        for shard in result['Shards']:
+          shard['KeyRange']['Start'] = shard['KeyRange']['Start'].decode('hex')
+          shard['KeyRange']['End'] = shard['KeyRange']['End'].decode('hex')
+      return result
     except Exception as e:
       raise ZkOccError('FakeZkOccConnection: invalid keyspace', keyspace, e)
 

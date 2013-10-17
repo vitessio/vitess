@@ -252,7 +252,7 @@ class TestSecure(unittest.TestCase):
       if not e.args[0][0].startswith('Unexpected EOF in handshake to'):
         raise utils.TestError("Unexpected exception: %s" % str(e))
 
-    sconn = utils.get_vars(shard_0_master.port)["SecureConns"]
+    sconn = utils.get_vars(shard_0_master.port)["SecureConnections"]
     if sconn != 0:
       raise utils.TestError("unexpected conns %s" % sconn)
 
@@ -263,7 +263,7 @@ class TestSecure(unittest.TestCase):
     (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})
     self.assertEqual(results, [(1,),], 'wrong conn._execute output: %s' % str(results))
 
-    sconn = utils.get_vars(shard_0_master.port)["SecureConns"]
+    sconn = utils.get_vars(shard_0_master.port)["SecureConnections"]
     if sconn != 1:
       raise utils.TestError("unexpected conns %s" % sconn)
     saccept = utils.get_vars(shard_0_master.port)["SecureAccepts"]
@@ -288,9 +288,11 @@ class TestSecure(unittest.TestCase):
 
     proc1 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
                                           key=cert_dir + "/vt-server-key.pem")
+    # Takes a bit longer for vttablet to serve the pid port
+    time.sleep(1.0)
     proc2 = shard_0_master.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
                                           key=cert_dir + "/vt-server-key.pem")
-    time.sleep(2.0)
+    time.sleep(1.0)
     proc1.poll()
     if proc1.returncode is None:
       raise utils.TestError("proc1 still running")

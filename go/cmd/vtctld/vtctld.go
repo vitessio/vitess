@@ -8,7 +8,6 @@ import (
 	"html/template"
 	"io"
 	"net/http"
-	"net/url"
 	"path"
 	"reflect"
 	"strings"
@@ -16,6 +15,7 @@ import (
 
 	log "github.com/golang/glog"
 	_ "github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -85,6 +85,10 @@ func Htmlize(data interface{}) string {
 	return b.String()
 }
 
+func link(text, href string) string {
+	return fmt.Sprintf("<a href=%q>%v</a>", href, text)
+}
+
 // Plugins need to overwrite:
 //   keyspace(keyspace)
 //   shard(keyspace, shard)
@@ -115,10 +119,58 @@ var funcMap = template.FuncMap{
 		return template.HTML(b.String())
 	},
 	"keyspace": func(keyspace string) template.HTML {
-		return template.HTML(keyspace)
+		switch len(explorers) {
+		case 0:
+			return template.HTML(keyspace)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(keyspace, explorer.GetKeyspacePath(keyspace)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", keyspace)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, " [%v]", link(name, explorer.GetKeyspacePath(keyspace)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
 	},
 	"shard": func(keyspace, shard string) template.HTML {
-		return template.HTML(shard)
+		switch len(explorers) {
+		case 0:
+			return template.HTML(shard)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(shard, explorer.GetShardPath(keyspace, shard)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", shard)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, ` <span class="topo-link">[%v]</span>`, link(name, explorer.GetShardPath(keyspace, shard)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
+	},
+	"tablet": func(alias topo.TabletAlias, shortname string) template.HTML {
+		switch len(explorers) {
+		case 0:
+			return template.HTML(shortname)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(shortname, explorer.GetTabletPath(alias)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", shortname)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, ` <span class="topo-link">[%v]</span>`, link(name, explorer.GetTabletPath(alias)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
 	},
 }
 
@@ -225,142 +277,6 @@ func httpError(w http.ResponseWriter, format string, err error) {
 	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
 }
 
-type ActionResult struct {
-	Name       string
-	Parameters string
-	Output     string
-	Error      bool
-}
-
-func (ar *ActionResult) error(text string) {
-	ar.Error = true
-	ar.Output = text
-}
-
-// action{Keyspace,Shard,Tablet}Method is a function that performs
-// some action on a Topology object. It should return a message for
-// the user or an empty string in case there's nothing interesting to
-// be communicated.
-type actionKeyspaceMethod func(wr *wrangler.Wrangler, keyspace string, r *http.Request) (output string, err error)
-
-type actionShardMethod func(wr *wrangler.Wrangler, keyspace, shard string, r *http.Request) (output string, err error)
-
-type actionTabletMethod func(wr *wrangler.Wrangler, tabletAlias topo.TabletAlias, r *http.Request) (output string, err error)
-
-// ActionRepository is a repository of actions that can be performed
-// on a {Keyspace,Shard,Tablet}.
-type ActionRepository struct {
-	keyspaceActions map[string]actionKeyspaceMethod
-	shardActions    map[string]actionShardMethod
-	tabletActions   map[string]actionTabletMethod
-	wr              *wrangler.Wrangler
-}
-
-func NewActionRepository(wr *wrangler.Wrangler) *ActionRepository {
-	return &ActionRepository{
-		keyspaceActions: make(map[string]actionKeyspaceMethod),
-		shardActions:    make(map[string]actionShardMethod),
-		tabletActions:   make(map[string]actionTabletMethod),
-		wr:              wr}
-
-}
-
-func (ar *ActionRepository) RegisterKeyspaceAction(name string, method actionKeyspaceMethod) {
-	ar.keyspaceActions[name] = method
-}
-
-func (ar *ActionRepository) RegisterShardAction(name string, method actionShardMethod) {
-	ar.shardActions[name] = method
-}
-
-func (ar *ActionRepository) RegisterTabletAction(name string, method actionTabletMethod) {
-	ar.tabletActions[name] = method
-}
-
-func (ar *ActionRepository) ApplyKeyspaceAction(actionName, keyspace string, r *http.Request) *ActionResult {
-	result := &ActionResult{Name: actionName, Parameters: keyspace}
-
-	action, ok := ar.keyspaceActions[actionName]
-	if !ok {
-		result.error("Unknown keyspace action")
-		return result
-	}
-	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action(ar.wr, keyspace, r)
-	if err != nil {
-		result.error(err.Error())
-		return result
-	}
-	result.Output = output
-	return result
-}
-
-func (ar *ActionRepository) ApplyShardAction(actionName, keyspace, shard string, r *http.Request) *ActionResult {
-	result := &ActionResult{Name: actionName, Parameters: keyspace + "/" + shard}
-
-	action, ok := ar.shardActions[actionName]
-	if !ok {
-		result.error("Unknown shard action")
-		return result
-	}
-	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action(ar.wr, keyspace, shard, r)
-	if err != nil {
-		result.error(err.Error())
-		return result
-	}
-	result.Output = output
-	return result
-}
-
-func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias topo.TabletAlias, r *http.Request) *ActionResult {
-	result := &ActionResult{Name: actionName, Parameters: tabletAlias.String()}
-
-	action, ok := ar.tabletActions[actionName]
-	if !ok {
-		result.error("Unknown tablet action")
-		return result
-	}
-	ar.wr.ResetActionTimeout(wrangler.DefaultActionTimeout)
-	output, err := action(ar.wr, tabletAlias, r)
-	if err != nil {
-		result.error(err.Error())
-		return result
-	}
-	result.Output = output
-	return result
-}
-
-// Populate{Keyspace,Shard,Tablet}Actions populates result with
-// actions that can be performed on its node.
-func (ar ActionRepository) PopulateKeyspaceActions(actions map[string]template.URL, keyspace string) {
-	for name, _ := range ar.keyspaceActions {
-		values := url.Values{}
-		values.Set("action", name)
-		values.Set("keyspace", keyspace)
-		actions[name] = template.URL("/keyspace_actions?" + values.Encode())
-	}
-}
-
-func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL, keyspace, shard string) {
-	for name, _ := range ar.shardActions {
-		values := url.Values{}
-		values.Set("action", name)
-		values.Set("keyspace", keyspace)
-		values.Set("shard", shard)
-		actions[name] = template.URL("/shard_actions?" + values.Encode())
-	}
-}
-
-func (ar ActionRepository) PopulateTabletActions(actions map[string]template.URL, alias string) {
-	for name, _ := range ar.tabletActions {
-		values := url.Values{}
-		values.Set("action", name)
-		values.Set("alias", alias)
-		actions[name] = template.URL("/tablet_actions?" + values.Encode())
-	}
-}
-
 type DbTopologyResult struct {
 	Topology *wrangler.Topology
 	Error    string
@@ -382,7 +298,8 @@ var indexContent = IndexContent{
 
 func main() {
 	flag.Parse()
-
+	servenv.Init()
+	defer servenv.Close()
 	templateLoader = NewTemplateLoader(*templateDir, dummyTemplate, *debug)
 
 	ts := topo.GetServer()
@@ -527,5 +444,5 @@ func main() {
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
-	log.Fatalf("%s", http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
+	servenv.Run(*port)
 }

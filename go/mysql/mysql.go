@@ -7,6 +7,7 @@ package mysql
 /*
 #cgo pkg-config: gomysql
 #include <stdlib.h>
+#include <mysqld_error.h>
 #include "vtmysql.h"
 */
 import "C"
@@ -30,6 +31,12 @@ func init() {
 	// This needs to be called before threads begin to spawn.
 	C.vt_library_init()
 }
+
+const (
+	DUP_ENTRY         = C.ER_DUP_ENTRY
+	LOCK_WAIT_TIMEOUT = C.ER_LOCK_WAIT_TIMEOUT
+	LOCK_DEADLOCK     = C.ER_LOCK_DEADLOCK
+)
 
 type SqlError struct {
 	Num     int

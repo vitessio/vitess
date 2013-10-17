@@ -4,6 +4,7 @@
 
 from itertools import izip
 import logging
+import re
 
 from net import bsonrpc
 from net import gorpc
@@ -12,85 +13,122 @@ from vtdb import dbexceptions
 from vtdb import field_types
 
 
-# A simple, direct connection to the voltron query server.
-# This is shard-unaware and only handles the most basic communication.
-class TabletConnection(object):
-  transaction_id = 0
-  session_id = 0
-  cursorclass = cursor.TabletCursor
+# This failure is operational in the sense that we must teardown the connection to
+# ensure future RPCs are handled correctly.
+class TimeoutError(dbexceptions.OperationalError):
+  pass
 
-  def __init__(self, addr, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+
+_errno_pattern = re.compile('\(errno (\d+)\)')
+# Map specific errors to specific classes.
+_errno_map = {
+    1062: dbexceptions.IntegrityError,
+}
+
+
+def convert_exception(exc, *args):
+  new_args = exc.args + args
+  if isinstance(exc, gorpc.TimeoutError):
+    return TimeoutError(new_args)
+  elif isinstance(exc, gorpc.AppError):
+    msg = str(exc[0]).lower()
+    match = _errno_pattern.search(msg)
+    if match:
+      mysql_errno = int(match.group(1))
+      return _errno_map.get(mysql_errno, dbexceptions.DatabaseError)(new_args)
+    return dbexceptions.DatabaseError(new_args)
+  elif isinstance(exc, gorpc.ProgrammingError):
+    return dbexceptions.ProgrammingError(new_args)
+  elif isinstance(exc, gorpc.GoRpcError):
+    return FatalError(new_args)
+  return exc
+
+
+# A simple, direct connection to the vttablet query server.
+# This is shard-unaware and only handles the most basic communication.
+# If something goes wrong, this object should be thrown away and a new one instantiated.
+class TabletConnection(object):
+  in_transaction = False
+  session_id = 0
+  tablet_type = None
+  cursorclass = cursor.TabletCursor
+  _stream_fields = None
+  _stream_conversions = None
+  _stream_result = None
+  _stream_result_index = None
+
+  def __init__(self, addr, tablet_type, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
+    self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
+  def __str__(self):
+    return '<TabletConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)
+
   def dial(self):
     try:
       if self.session_id:
         self.client.close()
+
       self.client.dial()
-      params = {'Keyspace': self.keyspace, 'Shard': self.shard}
-      response = self.client.call('SqlQuery.GetSessionId', params)
+      params = {'TabletType': self.tablet_type}
+      response = self.client.call('VTGate.GetSessionId', params)
       self.session_id = response.reply['SessionId']
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise convert_exception(e, str(self))
 
   def close(self):
-    self.transaction_id = 0
+    self.in_transaction = False
     self.session_id = 0
+    self.client.call('VTGate.CloseSession', {'SessionId': self.session_id})
     self.client.close()
 
+  def is_closed(self):
+    return self.client.is_closed()
+
   def _make_req(self):
-    return {'TransactionId': self.transaction_id,
-            'ConnectionId': 0,
-            'SessionId': self.session_id}
+    return {'SessionId': self.session_id,
+            'Keyspace': self.keyspace,
+            'Shards': [self.shard]}
 
   def begin(self):
-    if self.transaction_id:
-      raise dbexceptions.NotSupportedError('Nested transactions not supported')
+    if self.in_transaction:
+      raise dbexceptions.NotSupportedError('Cannot begin: Already in a transaction')
     req = self._make_req()
     try:
-      response = self.client.call('SqlQuery.Begin', req)
-      self.transaction_id = response.reply['TransactionId']
+      response = self.client.call('VTGate.Begin', {'SessionId': self.session_id})
+      self.in_transaction = True
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise convert_exception(e, str(self))
 
   def commit(self):
-    if not self.transaction_id:
+    if not self.in_transaction:
       return
 
     req = self._make_req()
-    # NOTE(msolomon) Unset the transaction_id irrespective of the RPC's
-    # response. The intent of commit is that no more statements can be made on
-    # this transaction, so we guarantee that. Transient errors between the
-    # db and the client shouldn't affect this part of the bookkeeping.
-    # Do this after fill_session, since this is a critical part.
-    self.transaction_id = 0
+    # in_transaction has to be reset irrespective of outcome.
+    self.in_transaction = False
 
     try:
-      response = self.client.call('SqlQuery.Commit', req)
-      return response.reply
+      response = self.client.call('VTGate.Commit', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise convert_exception(e, str(self))
 
   def rollback(self):
-    if not self.transaction_id:
+    if not self.in_transaction:
       return
 
     req = self._make_req()
-    # NOTE(msolomon) Unset the transaction_id irrespective of the RPC. If the
-    # RPC fails, the client will still choose a new transaction_id next time
-    # and the tablet server will eventually kill the abandoned transaction on
-    # the server side.
-    self.transaction_id = 0
+    # in_transaction has to be reset irrespective of outcome.
+    self.in_transaction = False
 
     try:
-      response = self.client.call('SqlQuery.Rollback', req)
-      return response.reply
+      response = self.client.call('VTGate.Rollback', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise convert_exception(e, str(self))
 
   def cursor(self, cursorclass=None, **kargs):
     return (cursorclass or self.cursorclass)(self, **kargs)
@@ -105,7 +143,7 @@ class TabletConnection(object):
     conversions = []
     results = []
     try:
-      response = self.client.call('SqlQuery.Execute', req)
+      response = self.client.call('VTGate.ExecuteShard', req)
       reply = response.reply
 
       for field in reply['Fields']:
@@ -118,7 +156,7 @@ class TabletConnection(object):
       rowcount = reply['RowsAffected']
       lastrowid = reply['InsertId']
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise convert_exception(e, str(self), sql, bind_variables)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -136,7 +174,7 @@ class TabletConnection(object):
 
     try:
       req = {'List': query_list}
-      response = self.client.call('SqlQuery.ExecuteBatch', req)
+      response = self.client.call('VTGate.ExecuteBatch', req)
       for reply in response.reply['List']:
         fields = []
         conversions = []
@@ -154,7 +192,7 @@ class TabletConnection(object):
         lastrowid = reply['InsertId']
         rowsets.append((results, rowcount, lastrowid, fields))
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise convert_exception(e, str(self), sql_list, bind_variables_list)
     except:
       logging.exception('gorpc low-level error')
       raise
@@ -169,65 +207,52 @@ class TabletConnection(object):
     req['Sql'] = sql
     req['BindVariables'] = new_binds
 
-    fields = []
-    conversions = []
+    self._stream_fields = []
+    self._stream_conversions = []
+    self._stream_result = None
+    self._stream_result_index = 0
     try:
-      self.client.stream_call('SqlQuery.StreamExecute', req)
+      self.client.stream_call('VTGate.StreamExecuteShard', req)
       first_response = self.client.stream_next()
       reply = first_response.reply
 
       for field in reply['Fields']:
-        fields.append((field['Name'], field['Type']))
-        conversions.append(field_types.conversions.get(field['Type']))
-
+        self._stream_fields.append((field['Name'], field['Type']))
+        self._stream_conversions.append(field_types.conversions.get(field['Type']))
     except gorpc.GoRpcError as e:
-      raise dbexceptions.OperationalError(*e.args)
+      raise convert_exception(e, str(self), sql, bind_variables)
     except:
       logging.exception('gorpc low-level error')
       raise
-    return fields, conversions, None, 0
+    return None, 0, 0, self._stream_fields
 
-  # the calls to _stream_next will have the following states:
-  # conversions, None, 0       (that will trigger asking for one result)
-  # conversions, result, 1     (the next call will just return the 2nd row)
-  # conversions, result, 2
-  # ...
-  # conversions, result, len(result)-1
-  # conversions, None, 0       (that will trigger asking for one more result)
-  # ...
-  # conversions, last result, len(last result)-1
-  #                            (asking for next result will return None)
-  # conversions, None, None    (this is then stable and stays that way)
-  # conversions, None, None
-  #
-  # the StreamCursor in cursor.py is a good implementation of this API.
-  def _stream_next(self, conversions, query_result, index):
+  def _stream_next(self):
+    # Terminating condition
+    if self._stream_result_index is None:
+      return None
 
-    # if index is None, it means we're done (because _stream_next
-    # returned None, see 7 lines below here)
-    if index is None:
-      return None, None, None
-
-    # see if we need to read more
-    if query_result is None:
+    # See if we need to read more or whether we just pop the next row.
+    if self._stream_result is None :
       try:
-        query_result = self.client.stream_next()
-        if query_result is None:
-          return None, None, None
+        self._stream_result = self.client.stream_next()
+        if self._stream_result is None:
+          return None
       except gorpc.GoRpcError as e:
-        raise dbexceptions.OperationalError(*e.args)
+        raise convert_exception(e, str(self))
       except:
         logging.exception('gorpc low-level error')
         raise
 
-    result = tuple(_make_row(query_result.reply['Rows'][index], conversions))
+    row = tuple(_make_row(self._stream_result.reply['Rows'][self._stream_result_index], self._stream_conversions))
 
-    index += 1
-    if index == len(query_result.reply['Rows']):
-      query_result = None
-      index = 0
+    # If we are reading the last row, set us up to read more data.
+    self._stream_result_index += 1
+    if self._stream_result_index == len(self._stream_result.reply['Rows']):
+      self._stream_result = None
+      self._stream_result_index = 0
 
-    return result, query_result, index
+    return row
+
 
 def _make_row(row, conversions):
   converted_row = []
@@ -240,6 +265,7 @@ def _make_row(row, conversions):
       v = field_data
     converted_row.append(v)
   return converted_row
+
 
 def connect(*pargs, **kargs):
   conn = TabletConnection(*pargs, **kargs)

@@ -120,7 +120,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// Find the server list for the source shard in our cell
-	addrs, err := bpc.ts.GetSrvTabletType(bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
+	addrs, err := bpc.ts.GetEndPoints(bpc.cell, bpc.sourceShard.Keyspace, bpc.sourceShard.Shard, topo.TYPE_REPLICA)
 	if err != nil {
 		return fmt.Errorf("can't find any source tablet for %v %v %v: %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA, err)
 	}

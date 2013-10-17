@@ -149,12 +149,10 @@ func ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamRespo
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
-func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) error {
+func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			//Send the error to the client.
-			//panic(x)
-			SendError(sendReply, x.(error), nil)
+			err = x.(error)
 		}
 	}()
 
@@ -181,8 +179,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 	updateStream.actionLock.Unlock()
 	defer updateStream.clientDone()
 
-	blp.StreamBinlog(sendReply, updateStream.binlogPrefix)
-	return nil
+	return blp.StreamBinlog(sendReply, updateStream.binlogPrefix)
 }
 
 func (updateStream *UpdateStream) clientDone() {

@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"encoding/gob"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -84,11 +83,11 @@ func RegisterCacheInvalidator() {
 		return
 	}
 	CacheInvalidationProcessor = NewInvalidationProcessor()
-	CacheInvalidationProcessor.states = estats.NewStates("CacheInvalidationState", []string{
+	CacheInvalidationProcessor.states = estats.NewStates("RowcacheInvalidationState", []string{
 		"Disabled",
 		"Enabled",
 	}, time.Now(), DISABLED)
-	estats.Publish("CacheInvalidationCheckPoint", estats.StringFunc(func() string {
+	estats.Publish("RowcacheInvalidationCheckPoint", estats.StringFunc(func() string {
 		if pos := CacheInvalidationProcessor.currentPosition; pos != nil {
 			return pos.String()
 		}
@@ -180,7 +179,7 @@ func (rowCache *InvalidationProcessor) stopCache(reason string) {
 	rowCache.stopRowCacheInvalidation()
 	if IsCachePoolAvailable() {
 		log.Warningf("Disallowing Query Service as row-cache invalidator cannot run")
-		DisallowQueries(false)
+		DisallowQueries()
 	}
 }
 
@@ -210,25 +209,11 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 }
 
 func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.UpdateResponse) error {
-	position := ""
-	if event.Coord.Valid() {
-		position = event.Coord.String()
-	}
-	if event.Error != "" {
-		log.Errorf("Update stream returned error '%v'", event.Error)
-		// Check if update stream error is fatal, else record it and move on.
-		if strings.HasPrefix(event.Error, mysqlctl.FATAL) {
-			log.Infof("Returning Service Error")
-			return NewInvalidationError(FATAL_ERROR, event.Error, position)
-		}
-		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, event.Error, position))
-		return nil
-	}
-
 	if !event.Coord.Valid() {
 		rowCache.updateErrCounters(NewInvalidationError(INVALID_EVENT, "no error, position is not set", ""))
 		return nil
 	}
+	position := event.Coord.String()
 
 	var err error
 	switch event.Data.SqlType {

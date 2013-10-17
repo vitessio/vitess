@@ -17,7 +17,7 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-var cachedConnStates = stats.NewCounters("CachedConn")
+var cachedConnStates = stats.NewCounters("ZkCachedConn")
 var cachedConnStatesMutex sync.Mutex
 
 func init() {
@@ -70,7 +70,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 	conn, ok := cc.zconnCellMap[zcell]
 	if !ok {
 		conn = &cachedConn{}
-		conn.states = stats.NewStates("CachedConn"+strings.Title(zcell), []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
+		conn.states = stats.NewStates("ZkCachedConn"+strings.Title(zcell), []string{"Disconnected", "Connecting", "Connected"}, time.Now(), DISCONNECTED)
 		cc.zconnCellMap[zcell] = conn
 	}
 	cc.mutex.Unlock()

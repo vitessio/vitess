@@ -59,7 +59,7 @@ func (tr *TopoReader) GetSrvKeyspace(req topo.GetSrvKeyspaceArgs, reply *topo.Sr
 	return
 }
 
-func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.VtnsAddrs) (err error) {
+func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.EndPoints) (err error) {
 	tabletTypePath := zkPathForVtType(req.Cell, req.Keyspace, req.Shard, req.TabletType)
 	zkrReply := &zk.ZkNode{}
 	if err := tr.zkr.Get(&zk.ZkPath{Path: tabletTypePath}, zkrReply); err != nil {
@@ -67,7 +67,7 @@ func (tr *TopoReader) GetEndPoints(req topo.GetEndPointsArgs, reply *topo.VtnsAd
 	}
 	if len(zkrReply.Data) > 0 {
 		if err := json.Unmarshal([]byte(zkrReply.Data), reply); err != nil {
-			return fmt.Errorf("VtnsAddrs unmarshal failed: %v %v", zkrReply.Data, err)
+			return fmt.Errorf("EndPoints unmarshal failed: %v %v", zkrReply.Data, err)
 		}
 	}
 	return nil

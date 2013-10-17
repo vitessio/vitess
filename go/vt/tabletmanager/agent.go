@@ -183,27 +183,15 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 		return nil
 	}
 
-	// Load the shard and see if we are supposed to be serving. We might be a serving type,
-	// but we might be in a transitional state. Only once the shard info is updated do we
-	// put ourselves in the client serving graph.
-	shardInfo, err := agent.ts.GetShard(agent.Tablet().Keyspace, agent.Tablet().Shard)
-	if err != nil {
-		return err
-	}
-
-	if !shardInfo.Contains(agent.Tablet().Tablet) {
-		return nil
-	}
-
 	// Check to see our address is registered in the right place.
-	addr, err := VtnsAddrForTablet(agent.Tablet().Tablet)
+	addr, err := EndPointForTablet(agent.Tablet().Tablet)
 	if err != nil {
 		return err
 	}
 	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
-func VtnsAddrForTablet(tablet *topo.Tablet) (*topo.VtnsAddr, error) {
+func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
 	host, port, err := netutil.SplitHostPort(tablet.Addr)
 	if err != nil {
 		return nil, err

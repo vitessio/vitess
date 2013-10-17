@@ -77,13 +77,6 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 		tablets = append(tablets, ti)
 	}
 
-	// Rebuild the rollup data in the replication graph.
-	if err = shardInfo.Rebuild(tablets); err != nil {
-		return err
-	}
-	if err = wr.ts.UpdateShard(shardInfo); err != nil {
-		return err
-	}
 	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
 }
 
@@ -124,8 +117,8 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 	//
 	// locationAddrsMap is a map:
 	//   key: {cell,keyspace,shard,tabletType}
-	//   value: topo.VtnsAddrs (list of server records)
-	locationAddrsMap := make(map[cellKeyspaceShardType]*topo.VtnsAddrs)
+	//   value: topo.EndPoints (list of server records)
+	locationAddrsMap := make(map[cellKeyspaceShardType]*topo.EndPoints)
 
 	// we keep track of the existingDbTypeLocations we've already looked at
 	knownShardLocations := make(map[cellKeyspaceShard]bool)
@@ -167,13 +160,13 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		location := cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
 		addrs, ok := locationAddrsMap[location]
 		if !ok {
-			addrs = topo.NewVtnsAddrs()
+			addrs = topo.NewEndPoints()
 			locationAddrsMap[location] = addrs
 		}
 
-		entry, err := tm.VtnsAddrForTablet(tablet.Tablet)
+		entry, err := tm.EndPointForTablet(tablet.Tablet)
 		if err != nil {
-			log.Warningf("VtnsAddrForTablet failed for tablet %v: %v", tablet.Alias(), err)
+			log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias(), err)
 			continue
 		}
 		addrs.Entries = append(addrs.Entries, *entry)
@@ -187,9 +180,9 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 	// nodes everywhere we want them
 	for location, addrs := range locationAddrsMap {
 		wg.Add(1)
-		go func(location cellKeyspaceShardType, addrs *topo.VtnsAddrs) {
+		go func(location cellKeyspaceShardType, addrs *topo.EndPoints) {
 			log.Infof("saving serving graph for cell %v shard %v/%v tabletType %v", location.cell, location.keyspace, location.shard, location.tabletType)
-			if err := wr.ts.UpdateSrvTabletType(location.cell, location.keyspace, location.shard, location.tabletType, addrs); err != nil {
+			if err := wr.ts.UpdateEndPoints(location.cell, location.keyspace, location.shard, location.tabletType, addrs); err != nil {
 				rec.RecordError(fmt.Errorf("writing endpoints for cell %v shard %v/%v tabletType %v failed: %v", location.cell, location.keyspace, location.shard, location.tabletType, err))
 			}
 			wg.Done()
@@ -526,7 +519,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 				}
 			}
 			mu.Unlock()
-			err := topo.CreateTabletReplicationPaths(wr.ts, ti.Tablet)
+			err := topo.CreateTabletReplicationData(wr.ts, ti.Tablet)
 			if err != nil {
 				mu.Lock()
 				hasErr = true

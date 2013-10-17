@@ -9,25 +9,29 @@
 #   2. resolve the full topology of all databases
 #
 
-import json
 import logging
 import random
 
-from zk import zkocc
 from vtdb import keyspace
+from zk import zkocc
 
 # keeps a global version of the topology
 __keyspace_map = {}
+
+
 def get_keyspace(name):
   return __keyspace_map[name]
 
+
 def __add_keyspace(ks):
   __keyspace_map[ks.name] = ks
+
 
 # read all the keyspaces, populates __keyspace_map, can call get_keyspace
 # after this step
 def read_keyspaces(zkocc_client):
   read_topology(zkocc_client, read_fqdb_keys=False)
+
 
 # ZK paths look like:
 # /zk/<cell>/vt/keyspaces/<keyspace>/shards/<shard>/<db_type>/<instance_id>
@@ -53,11 +57,11 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
             db_instances = len(get_host_port_by_name(zkocc_client, db_key))
             for db_i in xrange(db_instances):
               fqdb_keys.append('.'.join(db_key_parts + [str(db_i)]))
-
     except Exception:
       logging.exception('error getting or parsing keyspace data for %s',
                         keyspace_name)
   return db_keys, fqdb_keys
+
 
 # db_key is <keyspace>.<shard_name>.<db_type>[:<service>]
 # returns a list of entries to try, which is an array of tuples
@@ -71,9 +75,9 @@ def get_host_port_by_name(zkocc_client, db_key, encrypted=False):
   if service == '_vtocc' and encrypted:
     encrypted_service = '_vts'
   db_key = parts[0]
-  keyspace, shard, tablet_type = db_key.split('.')
+  ks, shard, tablet_type = db_key.split('.')
   try:
-    data = zkocc_client.get_end_points('local', keyspace, shard, tablet_type)
+    data = zkocc_client.get_end_points('local', ks, shard, tablet_type)
   except zkocc.ZkOccError as e:
     logging.warning('no data for %s: %s', db_key, e)
     return []

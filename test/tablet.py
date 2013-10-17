@@ -268,7 +268,7 @@ class Tablet(object):
     utils.run_vtctl(args)
     if start:
       if tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
-        expected_state = "OPEN"
+        expected_state = "SERVING"
       else:
         expected_state = "NOT_SERVING"
       self.start_vttablet(wait_for_state=expected_state, **kwargs)
@@ -280,7 +280,7 @@ class Tablet(object):
   def flush(self):
     utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=utils.devnull, stdout=utils.devnull)
 
-  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="OPEN", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}):
+  def start_vttablet(self, port=None, auth=False, memcache=False, wait_for_state="SERVING", customrules=None, schema_override=None, cert=None, key=None, ca_cert=None, repl_extra_flags={}):
     """
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.

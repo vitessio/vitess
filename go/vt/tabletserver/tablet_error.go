@@ -8,6 +8,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/tb"
 )
 
@@ -16,10 +17,7 @@ const (
 	RETRY
 	FATAL
 	TX_POOL_FULL
-)
-
-const (
-	DUPLICATE_KEY = 1062 // MySQL error number
+	NOT_IN_TX
 )
 
 type TabletError struct {
@@ -54,6 +52,8 @@ func (te *TabletError) Error() string {
 		format = "fatal: %s"
 	case TX_POOL_FULL:
 		format = "tx_pool_full: %s"
+	case NOT_IN_TX:
+		format = "not_in_tx: %s"
 	}
 	return fmt.Sprintf(format, te.Message)
 }
@@ -66,10 +66,15 @@ func (te *TabletError) RecordStats() {
 		errorStats.Add("Fatal", 1)
 	case TX_POOL_FULL:
 		errorStats.Add("TxPoolFull", 1)
+	case NOT_IN_TX:
+		errorStats.Add("NotInTx", 1)
 	default:
-		if te.SqlError == DUPLICATE_KEY {
+		switch te.SqlError {
+		case mysql.DUP_ENTRY:
 			errorStats.Add("DupKey", 1)
-		} else {
+		case mysql.LOCK_WAIT_TIMEOUT, mysql.LOCK_DEADLOCK:
+			errorStats.Add("Deadlock", 1)
+		default:
 			errorStats.Add("Fail", 1)
 		}
 	}

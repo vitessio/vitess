@@ -13,6 +13,7 @@ build:
 	cd go/cmd/vt_binlog_player; go build
 	cd go/cmd/vt_binlog_server; go build
 	cd go/cmd/vtaction; go build
+	cd go/cmd/vtgate; go build
 	cd go/cmd/vtclient2; go build
 	cd go/cmd/vtctl; go build
 	cd go/cmd/vtctld; go build
@@ -45,7 +46,6 @@ integration_test:
 	cd test ; echo "sharded test"; time ./sharded.py $$VT_TEST_FLAGS
 	cd test ; echo "tabletmanager test"; time ./tabletmanager.py $$VT_TEST_FLAGS
 	cd test ; echo "zkocc test"; time ./zkocc_test.py $$VT_TEST_FLAGS
-	cd test ; echo "connection test"; time ./connection_test.py
 	cd test ; echo "updatestream test"; time ./update_stream.py
 	cd test ; echo "rowcache_invalidator test"; time ./rowcache_invalidator.py
 	cd test ; echo "secure test"; time ./secure.py $$VT_TEST_FLAGS
@@ -56,6 +56,7 @@ clean:
 	cd go/cmd/mysqlctl; go clean
 	cd go/cmd/normalizer; go clean
 	cd go/cmd/vtaction; go clean
+	cd go/cmd/vtgate; go clean
 	cd go/cmd/vtclient2; go clean
 	cd go/cmd/vtctl; go clean
 	cd go/cmd/vtocc; go clean

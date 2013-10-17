@@ -5,8 +5,11 @@
 package topo
 
 import (
+	"bytes"
 	"sort"
 
+	"github.com/youtube/vitess/go/bson"
+	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -45,11 +48,151 @@ func NewSrvShard(version int64) *SrvShard {
 	}
 }
 
+func EncodeTabletTypeArray(buf *bytes2.ChunkedWriter, name string, values []TabletType) {
+	if len(values) == 0 {
+		bson.EncodePrefix(buf, bson.Null, name)
+	} else {
+		bson.EncodePrefix(buf, bson.Array, name)
+		lenWriter := bson.NewLenWriter(buf)
+		for i, val := range values {
+			bson.EncodePrefix(buf, bson.Binary, bson.Itoa(i))
+			bson.EncodeString(buf, string(val))
+		}
+		buf.WriteByte(0)
+		lenWriter.RecordLen()
+	}
+}
+
+func DecodeTabletTypeArray(buf *bytes.Buffer, kind byte) []TabletType {
+	switch kind {
+	case bson.Array:
+		// valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for TabletType array", kind))
+	}
+
+	bson.Next(buf, 4)
+	values := make([]TabletType, 0, 8)
+	kind = bson.NextByte(buf)
+	for i := 0; kind != bson.EOO; i++ {
+		if kind != bson.Binary {
+			panic(bson.NewBsonError("Unexpected data type %v for TabletType array", kind))
+		}
+		bson.ExpectIndex(buf, i)
+		values = append(values, TabletType(bson.DecodeString(buf, kind)))
+		kind = bson.NextByte(buf)
+	}
+	return values
+}
+
+func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	bson.EncodePrefix(buf, bson.Object, "KeyRange")
+	ss.KeyRange.MarshalBson(buf)
+
+	EncodeTabletTypeArray(buf, "ServedTypes", ss.ServedTypes)
+
+	EncodeTabletTypeArray(buf, "TabletTypes", ss.TabletTypes)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+
+}
+
+func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "KeyRange":
+			ss.KeyRange.UnmarshalBson(buf)
+		case "ServedTypes":
+			ss.ServedTypes = DecodeTabletTypeArray(buf, kind)
+		case "TabletTypes":
+			ss.TabletTypes = DecodeTabletTypeArray(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+
 // KeyspacePartition represents a continuous set of shards to
 // serve an entire data set.
 type KeyspacePartition struct {
 	// List of non-overlapping continuous shards sorted by range.
 	Shards []SrvShard
+}
+
+func EncodeSrvShardArray(buf *bytes2.ChunkedWriter, name string, values []SrvShard) {
+	if len(values) == 0 {
+		bson.EncodePrefix(buf, bson.Null, name)
+	} else {
+		bson.EncodePrefix(buf, bson.Array, name)
+		lenWriter := bson.NewLenWriter(buf)
+		for i, val := range values {
+			bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
+			val.MarshalBson(buf)
+		}
+		buf.WriteByte(0)
+		lenWriter.RecordLen()
+	}
+}
+
+func DecodeSrvShardArray(buf *bytes.Buffer, kind byte) []SrvShard {
+	switch kind {
+	case bson.Array:
+		// valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for SrvShard array", kind))
+	}
+
+	bson.Next(buf, 4)
+	values := make([]SrvShard, 0, 8)
+	kind = bson.NextByte(buf)
+	for i := 0; kind != bson.EOO; i++ {
+		if kind != bson.Object {
+			panic(bson.NewBsonError("Unexpected data type %v for SrvShard array", kind))
+		}
+		bson.ExpectIndex(buf, i)
+		value := &SrvShard{}
+		value.UnmarshalBson(buf)
+		values = append(values, *value)
+		kind = bson.NextByte(buf)
+	}
+	return values
+}
+
+func (kp *KeyspacePartition) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	EncodeSrvShardArray(buf, "Shards", kp.Shards)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "Shards":
+			kp.Shards = DecodeSrvShardArray(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
 }
 
 // A distilled serving copy of keyspace detail stored in the local
@@ -75,5 +218,79 @@ type SrvKeyspace struct {
 func NewSrvKeyspace(version int64) *SrvKeyspace {
 	return &SrvKeyspace{
 		version: version,
+	}
+}
+
+func EncodeKeyspacePartitionMap(buf *bytes2.ChunkedWriter, name string, values map[TabletType]*KeyspacePartition) {
+	if len(values) == 0 {
+		bson.EncodePrefix(buf, bson.Null, name)
+	} else {
+		bson.EncodePrefix(buf, bson.Object, name)
+		lenWriter := bson.NewLenWriter(buf)
+		for i, val := range values {
+			bson.EncodePrefix(buf, bson.Object, string(i))
+			val.MarshalBson(buf)
+		}
+		buf.WriteByte(0)
+		lenWriter.RecordLen()
+	}
+}
+
+func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*KeyspacePartition {
+	switch kind {
+	case bson.Object:
+		// valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for KeyspacePartition map", kind))
+	}
+
+	bson.Next(buf, 4)
+	values := make(map[TabletType]*KeyspacePartition)
+	kind = bson.NextByte(buf)
+	for kind != bson.EOO {
+		if kind != bson.Object {
+			panic(bson.NewBsonError("Unexpected data type %v for KeyspacePartition map", kind))
+		}
+		key := bson.ReadCString(buf)
+		value := &KeyspacePartition{}
+		value.UnmarshalBson(buf)
+		values[TabletType(key)] = value
+		kind = bson.NextByte(buf)
+	}
+	return values
+}
+
+func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	EncodeKeyspacePartitionMap(buf, "Partitions", sk.Partitions)
+
+	EncodeSrvShardArray(buf, "Shards", sk.Shards)
+
+	EncodeTabletTypeArray(buf, "TabletTypes", sk.TabletTypes)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "Partitions":
+			sk.Partitions = DecodeKeyspacePartitionMap(buf, kind)
+		case "Shards":
+			sk.Shards = DecodeSrvShardArray(buf, kind)
+		case "TabletTypes":
+			sk.TabletTypes = DecodeTabletTypeArray(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
 	}
 }

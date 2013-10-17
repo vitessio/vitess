@@ -12,7 +12,8 @@ import time
 import urllib2
 import MySQLdb as mysql
 
-from vtdb import vtclient
+from vtdb import tablet as tablet_conn
+from vtdb import cursor
 from vtdb import dbexceptions
 
 import framework
@@ -28,14 +29,14 @@ class EnvironmentError(Exception):
 class TestEnv(object):
 
   def connect(self):
-    c = vtclient.connect("localhost:%s" % self.tablet.port, 'test_keyspace', '0', 2)
+    c = tablet_conn.connect("localhost:%s" % self.tablet.port, 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 
   def execute(self, query, binds=None, cursorclass=None):
     if binds is None:
       binds = {}
-    curs = self.conn.cursor(cursorclass=cursorclass)
+    curs = cursor.TabletCursor(self.conn)
     try:
       curs.execute(query, binds)
     except dbexceptions.OperationalError:
@@ -112,17 +113,17 @@ class TestEnv(object):
       }]""")
 
   def run_cases(self, cases):
-    cursor = self.conn.cursor()
+    curs = cursor.TabletCursor(self.conn)
     error_count = 0
     curl = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/querylog'], stdout=open('/tmp/vtocc_streamlog.log', 'w'))
     curl_full = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/querylog?full=true'], stdout=open('/tmp/vtocc_streamlog_full.log', 'w'))
     time.sleep(1)
     for case in cases:
       if isinstance(case, basestring):
-        cursor.execute(case)
+        curs.execute(case)
         continue
       try:
-        failures = case.run(cursor, self.querylog)
+        failures = case.run(curs, self.querylog)
       except Exception:
         print "Exception in", case
         raise
@@ -362,7 +363,7 @@ class VtoccTestEnv(TestEnv):
     shutil.rmtree(self.mysqldir)
 
   def connect(self):
-    c = vtclient.connect("localhost:9461", 'test_keyspace', '0', 2)
+    c = tablet_conn.connect("localhost:9461", 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 

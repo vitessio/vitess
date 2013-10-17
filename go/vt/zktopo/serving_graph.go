@@ -51,7 +51,7 @@ func (zkts *Server) GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]t
 	return result, nil
 }
 
-func (zkts *Server) UpdateSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.VtnsAddrs) error {
+func (zkts *Server) UpdateEndPoints(cell, keyspace, shard string, tabletType topo.TabletType, addrs *topo.EndPoints) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data := jscfg.ToJson(addrs)
 	_, err := zk.CreateRecursive(zkts.zconn, path, data, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -68,7 +68,7 @@ func (zkts *Server) UpdateSrvTabletType(cell, keyspace, shard string, tabletType
 	return err
 }
 
-func (zkts *Server) GetSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.VtnsAddrs, error) {
+func (zkts *Server) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	data, _, err := zkts.zconn.Get(path)
 	if err != nil {
@@ -77,10 +77,10 @@ func (zkts *Server) GetSrvTabletType(cell, keyspace, shard string, tabletType to
 		}
 		return nil, err
 	}
-	result := &topo.VtnsAddrs{}
+	result := &topo.EndPoints{}
 	if len(data) > 0 {
 		if err := json.Unmarshal([]byte(data), result); err != nil {
-			return nil, fmt.Errorf("VtnsAddrs unmarshal failed: %v %v", data, err)
+			return nil, fmt.Errorf("EndPoints unmarshal failed: %v %v", data, err)
 		}
 	}
 	return result, nil
@@ -163,7 +163,7 @@ func (zkts *Server) GetSrvKeyspaceNames(cell string) ([]string, error) {
 
 var skipUpdateErr = fmt.Errorf("skip update")
 
-func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *topo.VtnsAddr) (newValue string, err error) {
+func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr *topo.EndPoint) (newValue string, err error) {
 	if oldStat == nil {
 		// The incoming object doesn't exist - we haven't been placed in the serving
 		// graph yet, so don't update. Assume the next process that rebuilds the graph
@@ -171,12 +171,12 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 		return "", skipUpdateErr
 	}
 
-	var addrs *topo.VtnsAddrs
+	var addrs *topo.EndPoints
 	if oldValue != "" {
-		addrs = &topo.VtnsAddrs{}
+		addrs = &topo.EndPoints{}
 		if len(oldValue) > 0 {
 			if err := json.Unmarshal([]byte(oldValue), addrs); err != nil {
-				return "", fmt.Errorf("VtnsAddrs unmarshal failed: %v %v", oldValue, err)
+				return "", fmt.Errorf("EndPoints unmarshal failed: %v %v", oldValue, err)
 			}
 		}
 
@@ -184,7 +184,7 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 		for i, entry := range addrs.Entries {
 			if entry.Uid == addr.Uid {
 				foundTablet = true
-				if !topo.VtnsAddrEquality(&entry, addr) {
+				if !topo.EndPointEquality(&entry, addr) {
 					addrs.Entries[i] = *addr
 				}
 				break
@@ -195,19 +195,19 @@ func (zkts *Server) updateTabletEndpoint(oldValue string, oldStat zk.Stat, addr 
 			addrs.Entries = append(addrs.Entries, *addr)
 		}
 	} else {
-		addrs = topo.NewVtnsAddrs()
+		addrs = topo.NewEndPoints()
 		addrs.Entries = append(addrs.Entries, *addr)
 	}
 	return jscfg.ToJson(addrs), nil
 }
 
-func (zkts *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.VtnsAddr) error {
+func (zkts *Server) UpdateTabletEndpoint(cell, keyspace, shard string, tabletType topo.TabletType, addr *topo.EndPoint) error {
 	path := zkPathForVtName(cell, keyspace, shard, tabletType)
 	f := func(oldValue string, oldStat zk.Stat) (string, error) {
 		return zkts.updateTabletEndpoint(oldValue, oldStat, addr)
 	}
 	err := zkts.zconn.RetryChange(path, 0, zookeeper.WorldACL(zookeeper.PERM_ALL), f)
-	if err == skipUpdateErr {
+	if err == skipUpdateErr || zookeeper.IsError(err, zookeeper.ZNONODE) {
 		err = nil
 	}
 	return err

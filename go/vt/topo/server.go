@@ -37,6 +37,10 @@ var (
 	// ErrBadVersion is returned by an update function that
 	// failed to update the data because the version was different
 	ErrBadVersion = errors.New("bad node version")
+
+	// ErrPartialResult is returned by a function that could only
+	// get a subset of its results
+	ErrPartialResult = errors.New("partial result")
 )
 
 // topo.Server is the interface used to talk to a persistent
@@ -154,11 +158,35 @@ type Server interface {
 
 	// CreateReplicationPath creates a replication path.
 	// Can return ErrNodeExists if it already exists.
+	// DEPRECATED: use topo.CreateTabletReplicationData
 	CreateReplicationPath(keyspace, shard, repPath string) error
 
 	// DeleteReplicationPath removes a replication path.
 	// Can returnErrNoNode if it doesn't exist.
+	// DEPRECATED: use topo.DeleteTabletReplicationData
 	DeleteReplicationPath(keyspace, shard, repPath string) error
+
+	//
+	// Replication graph management, per cell.
+	//
+
+	// CreateShardReplication creates the ShardReplication object,
+	// assuming it doesn't exist yet.
+	// Can return ErrNodeExists if it already exists.
+	CreateShardReplication(cell, keyspace, shard string, sr *ShardReplication) error
+
+	// UpdateShardReplicationFields updates the current
+	// ShardReplication record with new values
+	// Can return ErrNoNode if the object doesn't exist.
+	UpdateShardReplicationFields(cell, keyspace, shard string, update func(*ShardReplication) error) error
+
+	// GetShardReplication returns the replication data.
+	// Can return ErrNoNode if the object doesn't exist.
+	GetShardReplication(cell, keyspace, shard string) (*ShardReplicationInfo, error)
+
+	// DeleteShardReplication deletes the replication data.
+	// Can return ErrNoNode if the object doesn't exist.
+	DeleteShardReplication(cell, keyspace, shard string) error
 
 	//
 	// Serving Graph management, per cell.
@@ -169,14 +197,14 @@ type Server interface {
 	// Can return ErrNoNode.
 	GetSrvTabletTypesPerShard(cell, keyspace, shard string) ([]TabletType, error)
 
-	// UpdateSrvTabletType updates the serving records for a cell,
+	// UpdateEndPoints updates the serving records for a cell,
 	// keyspace, shard, tabletType.
-	UpdateSrvTabletType(cell, keyspace, shard string, tabletType TabletType, addrs *VtnsAddrs) error
+	UpdateEndPoints(cell, keyspace, shard string, tabletType TabletType, addrs *EndPoints) error
 
-	// GetSrvTabletType returns the VtnsAddrs list of serving addresses
+	// GetEndPoints returns the EndPoints list of serving addresses
 	// for a TabletType inside a shard.
 	// Can return ErrNoNode.
-	GetSrvTabletType(cell, keyspace, shard string, tabletType TabletType) (*VtnsAddrs, error)
+	GetEndPoints(cell, keyspace, shard string, tabletType TabletType) (*EndPoints, error)
 
 	// DeleteSrvTabletType deletes the serving records for a cell,
 	// keyspace, shard, tabletType.
@@ -206,7 +234,7 @@ type Server interface {
 	// already computed serving graph. The update has to be somewhat
 	// atomic, so it requires Server intrisic knowledge.
 	// If the node doesn't exist, it is not updated, this is not an error.
-	UpdateTabletEndpoint(cell, keyspace, shard string, tabletType TabletType, addr *VtnsAddr) error
+	UpdateTabletEndpoint(cell, keyspace, shard string, tabletType TabletType, addr *EndPoint) error
 
 	//
 	// Keyspace and Shard locks for actions, global.

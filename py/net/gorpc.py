@@ -92,10 +92,17 @@ class _GoRpcConn(object):
     if parts.scheme == 'https':
       self.conn = ssl.wrap_socket(self.conn, keyfile=keyfile, certfile=certfile)
     self.conn.sendall('CONNECT %s HTTP/1.0\n\n' % parts.path)
+    data = ''
     while True:
-      data = self.conn.recv(1024)
-      if not data:
+      try:
+        d = self.conn.recv(1024)
+      except socket.error as e:
+        if e.args[0] == errno.EINTR:
+          continue
+        raise
+      if not d:
         raise GoRpcError('Unexpected EOF in handshake to %s:%s %s' % (str(conip), str(conport), parts.path))
+      data += d
       if '\n\n' in data:
         return
 
@@ -188,10 +195,7 @@ class GoRpcClient(object):
 
   def is_closed(self):
     if self.conn:
-      if self.conn.is_closed():
-        return True
-      else:
-        return False
+      return self.conn.is_closed()
     return True
 
   __del__ = close

@@ -6,10 +6,12 @@ package topo
 
 import (
 	"fmt"
-	"path"
 	"strings"
 	"sync"
 
+	log "github.com/golang/glog"
+
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -49,10 +51,6 @@ type Shard struct {
 	// There can be only at most one master, but there may be none. (0)
 	MasterAlias TabletAlias
 
-	// Uids by type - could be a generic map.
-	ReplicaAliases []TabletAlias
-	RdonlyAliases  []TabletAlias
-
 	// This must match the shard name based on our other conventions, but
 	// helpful to have it decomposed here.
 	KeyRange key.KeyRange
@@ -65,33 +63,15 @@ type Shard struct {
 	// SourceShards is the list of shards we're replicating from,
 	// using filtered replication.
 	SourceShards []SourceShard
-}
 
-// Contains returns true if the provided tablet is in the shard serving graph
-func (shard *Shard) Contains(tablet *Tablet) bool {
-	alias := TabletAlias{tablet.Cell, tablet.Uid}
-	switch tablet.Type {
-	case TYPE_MASTER:
-		return shard.MasterAlias == alias
-	case TYPE_REPLICA:
-		for _, replicaAlias := range shard.ReplicaAliases {
-			if replicaAlias == alias {
-				return true
-			}
-		}
-	case TYPE_RDONLY:
-		for _, rdonlyAlias := range shard.RdonlyAliases {
-			if rdonlyAlias == alias {
-				return true
-			}
-		}
-	}
-	return false
+	// Cells is the list of cells that have tablets for this shard.
+	// It is populated at InitTablet time when a tabelt is added
+	// in a cell that is not in the list yet.
+	Cells []string
 }
 
 func newShard() *Shard {
-	return &Shard{ReplicaAliases: make([]TabletAlias, 0, 16),
-		RdonlyAliases: make([]TabletAlias, 0, 16)}
+	return &Shard{}
 }
 
 // ValidateShardName takes a shard name and sanitizes it, and also returns
@@ -118,6 +98,16 @@ func ValidateShardName(shard string) (string, key.KeyRange, error) {
 	return strings.ToUpper(shard), keyRange, nil
 }
 
+// HasCell returns true if the cell is listed in the Cells for the shard.
+func (shard *Shard) HasCell(cell string) bool {
+	for _, c := range shard.Cells {
+		if c == cell {
+			return true
+		}
+	}
+	return false
+}
+
 // ShardInfo is a meta struct that contains metadata to give the data
 // more context and convenience. This is the main way we interact with a shard.
 type ShardInfo struct {
@@ -134,37 +124,6 @@ func (si *ShardInfo) Keyspace() string {
 // ShardName returns the shard name for a shard
 func (si *ShardInfo) ShardName() string {
 	return si.shardName
-}
-
-// Rebuild takes all the tablets in the list and puts them in the
-// right place in the shard. Only serving tablets are considered.
-func (si *ShardInfo) Rebuild(shardTablets []*TabletInfo) error {
-	si.MasterAlias = TabletAlias{}
-	si.ReplicaAliases = make([]TabletAlias, 0, 16)
-	si.RdonlyAliases = make([]TabletAlias, 0, 16)
-	si.KeyRange = key.KeyRange{}
-
-	for i, ti := range shardTablets {
-		switch ti.Type {
-		case TYPE_MASTER:
-			si.MasterAlias = ti.Alias()
-		case TYPE_REPLICA:
-			si.ReplicaAliases = append(si.ReplicaAliases, ti.Alias())
-		case TYPE_RDONLY:
-			si.RdonlyAliases = append(si.RdonlyAliases, ti.Alias())
-		}
-
-		if i == 0 {
-			// copy the first KeyRange
-			si.KeyRange = ti.KeyRange
-		} else {
-			// verify the subsequent ones
-			if si.KeyRange != ti.KeyRange {
-				return fmt.Errorf("inconsistent KeyRange: %v != %v", si.KeyRange, ti.KeyRange)
-			}
-		}
-	}
-	return nil
 }
 
 // NewShardInfo returns a ShardInfo basing on shard with the
@@ -213,50 +172,54 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	return ts.CreateShard(keyspace, name, s)
 }
 
-func tabletAliasesRecursive(ts Server, keyspace, shard, repPath string) ([]TabletAlias, error) {
-	mutex := sync.Mutex{}
-	wg := sync.WaitGroup{}
-	result := make([]TabletAlias, 0, 32)
-	children, err := ts.GetReplicationPaths(keyspace, shard, repPath)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, child := range children {
-		wg.Add(1)
-		go func(child TabletAlias) {
-			childPath := path.Join(repPath, child.String())
-			rChildren, subErr := tabletAliasesRecursive(ts, keyspace, shard, childPath)
-			if subErr != nil {
-				// If other processes are deleting
-				// nodes, we need to ignore the
-				// missing nodes.
-				if subErr != ErrNoNode {
-					mutex.Lock()
-					err = subErr
-					mutex.Unlock()
-				}
-			} else {
-				mutex.Lock()
-				result = append(result, child)
-				for _, rChild := range rChildren {
-					result = append(result, rChild)
-				}
-				mutex.Unlock()
-			}
-			wg.Done()
-		}(child)
-	}
-
-	wg.Wait()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 // FindAllTabletAliasesInShard uses the replication graph to find all the
 // tablet aliases in the given shard.
+// It can return ErrPartialResult if some cells were not fetched,
+// in which case the result only contains the cells that were fetched.
 func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAlias, error) {
-	return tabletAliasesRecursive(ts, keyspace, shard, "")
+	// read the shard information to find the cells
+	si, err := ts.GetShard(keyspace, shard)
+	if err != nil {
+		return nil, err
+	}
+
+	resultAsMap := make(map[TabletAlias]bool)
+	if !si.MasterAlias.IsZero() {
+		resultAsMap[si.MasterAlias] = true
+	}
+
+	// read the replication graph in each cell and add all found tablets
+	wg := sync.WaitGroup{}
+	mutex := sync.Mutex{}
+	er := concurrency.AllErrorRecorder{}
+	for _, cell := range si.Cells {
+		wg.Add(1)
+		go func(cell string) {
+			defer wg.Done()
+			sri, err := ts.GetShardReplication(cell, keyspace, shard)
+			if err != nil {
+				er.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+				return
+			}
+
+			mutex.Lock()
+			for _, rl := range sri.ReplicationLinks {
+				resultAsMap[rl.TabletAlias] = true
+				resultAsMap[rl.Parent] = true
+			}
+			mutex.Unlock()
+		}(cell)
+	}
+	wg.Wait()
+	err = nil
+	if er.HasErrors() {
+		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, er.Error())
+		err = ErrPartialResult
+	}
+
+	result := make([]TabletAlias, 0, len(resultAsMap))
+	for a, _ := range resultAsMap {
+		result = append(result, a)
+	}
+	return result, err
 }
