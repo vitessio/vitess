@@ -16,7 +16,8 @@ import (
 )
 
 var (
-	secureThrottle = flag.Int64("secure-throttle", 64, "Maximum number of secure connection accepts per second")
+	secureThrottle  = flag.Int64("secure-accept-rate", 64, "Maximum number of secure connection accepts per second")
+	secureMaxBuffer = flag.Int("secure-max-buffer", 1500, "Maximum number of secure accepts allowed to accumulate")
 )
 
 // SecureListen obtains a listener that accepts
@@ -51,7 +52,7 @@ func SecureServe(addr string, certFile, keyFile, caFile string) {
 	if err != nil {
 		log.Fatalf("%s", err)
 	}
-	throttled := NewThrottledListener(l, *secureThrottle)
+	throttled := NewThrottledListener(l, *secureThrottle, *secureMaxBuffer)
 	cl := proc.Published(throttled, "SecureConnections", "SecureAccepts")
 	go http.Serve(cl, nil)
 }
