@@ -55,8 +55,7 @@ func EncodeTabletTypeArray(buf *bytes2.ChunkedWriter, name string, values []Tabl
 		bson.EncodePrefix(buf, bson.Array, name)
 		lenWriter := bson.NewLenWriter(buf)
 		for i, val := range values {
-			bson.EncodePrefix(buf, bson.Binary, bson.Itoa(i))
-			bson.EncodeString(buf, string(val))
+			bson.EncodeString(buf, bson.Itoa(i), string(val))
 		}
 		buf.WriteByte(0)
 		lenWriter.RecordLen()
@@ -94,7 +93,6 @@ func (ss *SrvShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	ss.KeyRange.MarshalBson(buf)
 
 	EncodeTabletTypeArray(buf, "ServedTypes", ss.ServedTypes)
-
 	EncodeTabletTypeArray(buf, "TabletTypes", ss.TabletTypes)
 
 	buf.WriteByte(0)

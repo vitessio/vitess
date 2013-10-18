@@ -34,14 +34,9 @@ func (repl *ReplicationCoordinates) String() string {
 func (repl *ReplicationCoordinates) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "MasterFilename")
-	bson.EncodeString(buf, repl.MasterFilename)
-
-	bson.EncodePrefix(buf, bson.Ulong, "MasterPosition")
-	bson.EncodeUint64(buf, repl.MasterPosition)
-
-	bson.EncodePrefix(buf, bson.Binary, "GroupId")
-	bson.EncodeString(buf, repl.GroupId)
+	bson.EncodeString(buf, "MasterFilename", repl.MasterFilename)
+	bson.EncodeUint64(buf, "MasterPosition", repl.MasterPosition)
+	bson.EncodeString(buf, "GroupId", repl.GroupId)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -91,11 +86,8 @@ func (pos *BinlogPosition) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Object, "Position")
 	pos.Position.MarshalBson(buf)
 
-	bson.EncodePrefix(buf, bson.Long, "Timestamp")
-	bson.EncodeUint64(buf, uint64(pos.Timestamp))
-
-	bson.EncodePrefix(buf, bson.Ulong, "Xid")
-	bson.EncodeUint64(buf, pos.Xid)
+	bson.EncodeInt64(buf, "Timestamp", pos.Timestamp)
+	bson.EncodeUint64(buf, "Xid", pos.Xid)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()

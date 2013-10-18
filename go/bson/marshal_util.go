@@ -17,8 +17,7 @@ func EncodeStringArray(buf *bytes2.ChunkedWriter, name string, values []string) 
 		EncodePrefix(buf, Array, name)
 		lenWriter := NewLenWriter(buf)
 		for i, val := range values {
-			EncodePrefix(buf, Binary, Itoa(i))
-			EncodeString(buf, val)
+			EncodeString(buf, Itoa(i), val)
 		}
 		buf.WriteByte(0)
 		lenWriter.RecordLen()

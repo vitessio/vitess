@@ -36,8 +36,7 @@ type SessionParams struct {
 func (spm *SessionParams) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "TabletType")
-	bson.EncodeString(buf, string(spm.TabletType))
+	bson.EncodeString(buf, "TabletType", string(spm.TabletType))
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -66,8 +65,7 @@ type Session struct {
 func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Long, "SessionId")
-	bson.EncodeUint64(buf, uint64(session.SessionId))
+	bson.EncodeInt64(buf, "SessionId", session.SessionId)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -100,18 +98,10 @@ type QueryShard struct {
 func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "Sql")
-	bson.EncodeString(buf, qrs.Sql)
-
-	bson.EncodePrefix(buf, bson.Object, "BindVariables")
-	vproto.EncodeBindVariablesBson(buf, qrs.BindVariables)
-
-	bson.EncodePrefix(buf, bson.Long, "SessionId")
-	bson.EncodeUint64(buf, uint64(qrs.SessionId))
-
-	bson.EncodePrefix(buf, bson.Binary, "Keyspace")
-	bson.EncodeString(buf, qrs.Keyspace)
-
+	bson.EncodeString(buf, "Sql", qrs.Sql)
+	vproto.EncodeBindVariablesBson(buf, "BindVariables", qrs.BindVariables)
+	bson.EncodeInt64(buf, "SessionId", qrs.SessionId)
+	bson.EncodeString(buf, "Keyspace", qrs.Keyspace)
 	bson.EncodeStringArray(buf, "Shards", qrs.Shards)
 
 	buf.WriteByte(0)
@@ -150,11 +140,8 @@ type BoundQuery struct {
 func (bdq *BoundQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "Sql")
-	bson.EncodeString(buf, bdq.Sql)
-
-	bson.EncodePrefix(buf, bson.Object, "BindVariables")
-	vproto.EncodeBindVariablesBson(buf, bdq.BindVariables)
+	bson.EncodeString(buf, "Sql", bdq.Sql)
+	vproto.EncodeBindVariablesBson(buf, "BindVariables", bdq.BindVariables)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -188,22 +175,17 @@ type BatchQueryShard struct {
 func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Array, "Queries")
-	encodeQueriesBson(bqs.Queries, buf)
-
-	bson.EncodePrefix(buf, bson.Long, "SessionId")
-	bson.EncodeUint64(buf, uint64(bqs.SessionId))
-
-	bson.EncodePrefix(buf, bson.Binary, "Keyspace")
-	bson.EncodeString(buf, bqs.Keyspace)
-
+	encodeQueriesBson(bqs.Queries, "Queries", buf)
+	bson.EncodeInt64(buf, "SessionId", bqs.SessionId)
+	bson.EncodeString(buf, "Keyspace", bqs.Keyspace)
 	bson.EncodeStringArray(buf, "Shards", bqs.Shards)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func encodeQueriesBson(queries []BoundQuery, buf *bytes2.ChunkedWriter) {
+func encodeQueriesBson(queries []BoundQuery, key string, buf *bytes2.ChunkedWriter) {
+	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range queries {
 		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))

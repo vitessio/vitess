@@ -12,14 +12,12 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
-func MarshalFieldBson(field Field, buf *bytes2.ChunkedWriter) {
+func MarshalFieldBson(field Field, key string, buf *bytes2.ChunkedWriter) {
+	bson.EncodePrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "Name")
-	bson.EncodeString(buf, field.Name)
-
-	bson.EncodePrefix(buf, bson.Long, "Type")
-	bson.EncodeUint64(buf, uint64(field.Type))
+	bson.EncodeString(buf, "Name", field.Name)
+	bson.EncodeInt64(buf, "Type", field.Type)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -46,50 +44,43 @@ func UnmarshalFieldBson(field *Field, buf *bytes.Buffer) {
 func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Array, "Fields")
-	encodeFieldsBson(qr.Fields, buf)
-
-	bson.EncodePrefix(buf, bson.Long, "RowsAffected")
-	bson.EncodeUint64(buf, uint64(qr.RowsAffected))
-
-	bson.EncodePrefix(buf, bson.Long, "InsertId")
-	bson.EncodeUint64(buf, uint64(qr.InsertId))
-
-	bson.EncodePrefix(buf, bson.Array, "Rows")
-	encodeRowsBson(qr.Rows, buf)
+	encodeFieldsBson(qr.Fields, "Fields", buf)
+	bson.EncodeInt64(buf, "RowsAffected", int64(qr.RowsAffected))
+	bson.EncodeInt64(buf, "InsertId", int64(qr.InsertId))
+	encodeRowsBson(qr.Rows, "Rows", buf)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func encodeFieldsBson(fields []Field, buf *bytes2.ChunkedWriter) {
+func encodeFieldsBson(fields []Field, key string, buf *bytes2.ChunkedWriter) {
+	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range fields {
-		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-		MarshalFieldBson(v, buf)
+		MarshalFieldBson(v, bson.Itoa(i), buf)
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func encodeRowsBson(rows [][]sqltypes.Value, buf *bytes2.ChunkedWriter) {
+func encodeRowsBson(rows [][]sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
+	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range rows {
-		bson.EncodePrefix(buf, bson.Array, bson.Itoa(i))
-		encodeRowBson(v, buf)
+		encodeRowBson(v, bson.Itoa(i), buf)
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func encodeRowBson(row []sqltypes.Value, buf *bytes2.ChunkedWriter) {
+func encodeRowBson(row []sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
+	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range row {
 		if v.IsNull() {
 			bson.EncodePrefix(buf, bson.Null, bson.Itoa(i))
 		} else {
-			bson.EncodePrefix(buf, bson.Binary, bson.Itoa(i))
-			bson.EncodeBinary(buf, v.Raw())
+			bson.EncodeBinary(buf, bson.Itoa(i), v.Raw())
 		}
 	}
 	buf.WriteByte(0)
