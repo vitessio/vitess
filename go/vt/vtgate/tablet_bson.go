@@ -59,7 +59,7 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (
 }
 
 func (conn *TabletBson) ExecuteBatch(queries []proto.BoundQuery) (*tproto.QueryResultList, error) {
-	req := tproto.QueryList{List: make([]tproto.Query, len(queries))}
+	req := tproto.QueryList{List: make([]tproto.Query, 0, len(queries))}
 	for _, q := range queries {
 		req.List = append(req.List, tproto.Query{
 			Sql:           q.Sql,

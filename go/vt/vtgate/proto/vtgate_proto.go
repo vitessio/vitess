@@ -12,6 +12,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	vproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -20,6 +21,7 @@ import (
 type VTGate interface {
 	GetSessionId(sessionParams *SessionParams, session *Session) error
 	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *mproto.QueryResult) error
+	ExecuteBatchShard(context *rpcproto.Context, batchQuery *BatchQueryShard, reply *tproto.QueryResultList) error
 	StreamExecuteShard(context *rpcproto.Context, query *QueryShard, sendReply func(interface{}) error) error
 	Begin(context *rpcproto.Context, session *Session, noOutput *string) error
 	Commit(context *rpcproto.Context, session *Session, noOutput *string) error
