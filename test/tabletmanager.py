@@ -974,5 +974,26 @@ class TestTabletManager(unittest.TestCase):
       raise utils.TestError("proc1 still running")
     tablet_62344.kill_vttablet()
 
+  def test_scrap_and_reinit(self):
+    utils.run_vtctl('CreateKeyspace test_keyspace')
+
+    tablet_62344.create_db('vt_test_keyspace')
+    tablet_62044.create_db('vt_test_keyspace')
+
+    # one master one replica
+    tablet_62344.init_tablet('master', 'test_keyspace', '0')
+    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
+
+    # make sure the replica is in the replication graph
+    before_scrap = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    self.assertEqual(1, len(before_scrap['ReplicationLinks']), 'wrong replication links before: %s' % str(before_scrap))
+
+    # scrap and re-init
+    utils.run_vtctl('ScrapTablet -force ' + tablet_62044.tablet_alias)
+    tablet_62044.init_tablet('replica', 'test_keyspace', '0')
+
+    after_scrap = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links before: %s' % str(after_scrap))
+
 if __name__ == '__main__':
   utils.main()
