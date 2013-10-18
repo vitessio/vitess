@@ -444,5 +444,52 @@ func main() {
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
+	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		explorerName := r.FormValue("explorer")
+		explorer, ok := explorers[explorerName]
+		if !ok {
+			http.Error(w, "bad explorer name", http.StatusBadRequest)
+			return
+		}
+		var target string
+		switch r.FormValue("type") {
+		case "keyspace":
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			target = explorer.GetKeyspacePath(keyspace)
+		case "shard":
+			keyspace, shard := r.FormValue("keyspace"), r.FormValue("shard")
+			if keyspace == "" || shard == "" {
+				http.Error(w, "keyspace and shard are obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			target = explorer.GetShardPath(keyspace, shard)
+
+		case "tablet":
+			aliasName := r.FormValue("alias")
+			if aliasName == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			alias, err := topo.ParseTabletAliasString(aliasName)
+			if err != nil {
+				http.Error(w, "bad tablet alias", http.StatusBadRequest)
+				return
+			}
+			target = explorer.GetTabletPath(alias)
+
+		default:
+			http.Error(w, "bad redirect type", http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+	})
 	servenv.Run(*port)
 }
