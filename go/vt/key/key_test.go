@@ -65,7 +65,7 @@ func TestKeyUint64Sort(t *testing.T) {
 
 	for i, k := range kl {
 		if k != klSorted[i] {
-			t.Errorf("key order error: %v %v", i, k, klSorted[i])
+			t.Errorf("key order error: %d %v %v", i, k, klSorted[i])
 		}
 	}
 }
@@ -84,7 +84,7 @@ func TestKeyStringSort(t *testing.T) {
 
 	for i, k := range kl {
 		if k != klSorted[i] {
-			t.Errorf("key order error: %v %v", i, k, klSorted[i])
+			t.Errorf("key order error: %d %v %v", i, k, klSorted[i])
 		}
 	}
 }

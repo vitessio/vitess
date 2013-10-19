@@ -172,7 +172,7 @@ func (agent *ActionAgent) verifyTopology() error {
 		return fmt.Errorf("agent._tablet is nil")
 	}
 
-	if err := topo.Validate(agent.ts, agent.tabletAlias, ""); err != nil {
+	if err := topo.Validate(agent.ts, agent.tabletAlias); err != nil {
 		// Don't stop, it's not serious enough, this is likely transient.
 		log.Warningf("tablet validate failed: %v %v", agent.tabletAlias, err)
 	}

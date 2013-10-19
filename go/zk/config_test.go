@@ -28,7 +28,7 @@ func TestZkConfig(t *testing.T) {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		t.Errorf("hostname failed: %v")
+		t.Errorf("hostname failed: %v", err)
 	}
 
 	fakeCell := hostname[:2]
@@ -41,11 +41,11 @@ func TestZkConfig(t *testing.T) {
 
 	file, err := os.Create(configPath)
 	if err != nil {
-		t.Errorf("create failed: %v")
+		t.Errorf("create failed: %v", err)
 	}
 	err = json.NewEncoder(file).Encode(configMap)
 	if err != nil {
-		t.Errorf("encode failed: %v")
+		t.Errorf("encode failed: %v", err)
 	}
 	file.Close()
 

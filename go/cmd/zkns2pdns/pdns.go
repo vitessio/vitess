@@ -343,7 +343,7 @@ func main() {
 		go func() {
 			err := http.ListenAndServe(*bindAddr, nil)
 			if err != nil {
-				log.Fatalf("ListenAndServe: ", err)
+				log.Fatalf("ListenAndServe: %s", err)
 			}
 		}()
 	}

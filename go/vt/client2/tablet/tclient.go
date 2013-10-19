@@ -139,7 +139,7 @@ func (conn *Conn) dial() (err error) {
 }
 
 func (conn *Conn) Close() error {
-	conn.Session = tproto.Session{0, 0, 0}
+	conn.Session = tproto.Session{TransactionId: 0, ConnectionId: 0, SessionId: 0}
 	return conn.rpcClient.Close()
 }
 

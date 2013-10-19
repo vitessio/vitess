@@ -143,14 +143,6 @@ func CopyTablets(fromTS, toTS topo.Server) {
 							rec.RecordError(err)
 							return
 						}
-
-						// create the replication paths
-						// for masters only here
-						if ti.Type == topo.TYPE_MASTER {
-							if err = toTS.CreateReplicationPath(ti.Keyspace, ti.Shard, ti.Alias().String()); err != nil && err != topo.ErrNodeExists {
-								rec.RecordError(err)
-							}
-						}
 					}(tabletAlias)
 				}
 			}

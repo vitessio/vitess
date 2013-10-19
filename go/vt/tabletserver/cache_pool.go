@@ -88,7 +88,7 @@ func NewCachePool(name string, commandLine []string, queryTimeout time.Duration,
 			}
 			capacity, err := strconv.Atoi(commandLine[i])
 			if err != nil {
-				log.Fatalf("%V", err)
+				log.Fatalf("%v", err)
 			}
 			if capacity <= 50 {
 				log.Fatalf("insufficient capacity: %d", capacity)
