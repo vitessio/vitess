@@ -43,7 +43,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.Snapshot(tabletAlias, &tm.SnapshotArgs{snapshotConcurrency, serverMode})
+	actionPath, err = wr.ai.Snapshot(tabletAlias, &tm.SnapshotArgs{Concurrency: snapshotConcurrency, ServerMode: serverMode})
 	if err != nil {
 		return
 	}
@@ -89,7 +89,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.SnapshotSourceEnd(tabletAlias, &tm.SnapshotSourceEndArgs{slaveStartRequired, !readWrite})
+	actionPath, err = wr.ai.SnapshotSourceEnd(tabletAlias, &tm.SnapshotSourceEndArgs{SlaveStartRequired: slaveStartRequired, ReadOnly: !readWrite})
 	if err != nil {
 		return
 	}
@@ -123,7 +123,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.ReserveForRestore(dstTabletAlias, &tm.ReserveForRestoreArgs{"", srcTabletAlias})
+	actionPath, err = wr.ai.ReserveForRestore(dstTabletAlias, &tm.ReserveForRestoreArgs{ZkSrcTabletPath: "", SrcTabletAlias: srcTabletAlias})
 	if err != nil {
 		return
 	}
@@ -162,7 +162,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 	}
 
 	// do the work
-	actionPath, err := wr.ai.Restore(dstTabletAlias, &tm.RestoreArgs{"", srcTabletAlias, srcFilePath, "", parentAlias, fetchConcurrency, fetchRetryCount, wasReserved, dontWaitForSlaveStart})
+	actionPath, err := wr.ai.Restore(dstTabletAlias, &tm.RestoreArgs{ZkSrcTabletPath: "", SrcTabletAlias: srcTabletAlias, SrcFilePath: srcFilePath, ZkParentPath: "", ParentAlias: parentAlias, FetchConcurrency: fetchConcurrency, FetchRetryCount: fetchRetryCount, WasReserved: wasReserved, DontWaitForSlaveStart: dontWaitForSlaveStart})
 	if err != nil {
 		return err
 	}

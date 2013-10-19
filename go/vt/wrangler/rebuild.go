@@ -191,7 +191,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 	// Delete any pre-existing paths that were not updated by this process.
 	// That's the existingDbTypeLocations - locationAddrsMap
-	for dbTypeLocation, _ := range existingDbTypeLocations {
+	for dbTypeLocation := range existingDbTypeLocations {
 		if _, ok := locationAddrsMap[dbTypeLocation]; !ok {
 			cell := dbTypeLocation.cell
 			if !inCellList(cell, cells) {
@@ -224,7 +224,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 	//   value: topo.SrvShard
 	// this will create all the SrvShard objects
 	srvShardByPath := make(map[cellKeyspaceShard]*topo.SrvShard)
-	for location, _ := range locationAddrsMap {
+	for location := range locationAddrsMap {
 		// location will be {cell,keyspace,shard,type}
 		srvShardPath := cellKeyspaceShard{location.cell, location.keyspace, location.shard}
 		srvShard, ok := srvShardByPath[srvShardPath]
@@ -363,7 +363,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
 		}
 		tabletTypes := make([]topo.TabletType, 0, len(keyspaceDbTypes))
-		for dbType, _ := range keyspaceDbTypes {
+		for dbType := range keyspaceDbTypes {
 			tabletTypes = append(tabletTypes, dbType)
 		}
 		srvKeyspace.TabletTypes = tabletTypes
@@ -378,7 +378,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 		if srvKeyspace.Shards[len(srvKeyspace.Shards)-1].KeyRange.End != key.MaxKey {
 			return fmt.Errorf("Keyspace does not end with %v", key.MaxKey)
 		}
-		for i, _ := range srvKeyspace.Shards[0 : len(srvKeyspace.Shards)-1] {
+		for i := range srvKeyspace.Shards[0 : len(srvKeyspace.Shards)-1] {
 			if srvKeyspace.Shards[i].KeyRange.End != srvKeyspace.Shards[i+1].KeyRange.Start {
 				return fmt.Errorf("Non-contiguous KeyRange values at shard %v to %v: %v != %v", i, i+1, srvKeyspace.Shards[i].KeyRange.End.Hex(), srvKeyspace.Shards[i+1].KeyRange.Start.Hex())
 			}
@@ -424,7 +424,7 @@ func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceM
 		}
 
 		srvKeyspace.TabletTypes = make([]topo.TabletType, 0, len(keyspaceDbTypes))
-		for dbType, _ := range keyspaceDbTypes {
+		for dbType := range keyspaceDbTypes {
 			srvKeyspace.TabletTypes = append(srvKeyspace.TabletTypes, dbType)
 		}
 
@@ -440,7 +440,7 @@ func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceM
 			if partition.Shards[len(partition.Shards)-1].KeyRange.End != key.MaxKey {
 				return fmt.Errorf("Keyspace partition for %v does not end with %v", tabletType, key.MaxKey)
 			}
-			for i, _ := range partition.Shards[0 : len(partition.Shards)-1] {
+			for i := range partition.Shards[0 : len(partition.Shards)-1] {
 				if partition.Shards[i].KeyRange.End != partition.Shards[i+1].KeyRange.Start {
 					return fmt.Errorf("Non-contiguous KeyRange values for %v at shard %v to %v: %v != %v", tabletType, i, i+1, partition.Shards[i].KeyRange.End.Hex(), partition.Shards[i+1].KeyRange.Start.Hex())
 				}
@@ -530,7 +530,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 	}
 	wg.Wait()
 
-	for keyspace, _ := range keyspacesToRebuild {
+	for keyspace := range keyspacesToRebuild {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()

@@ -655,13 +655,13 @@ func (blServer *BinlogServer) fillAndCheckMasterPosition(startCoordinates *proto
 			return err
 		}
 		if len(qr.Rows) != 1 {
-			return fmt.Errorf("SHOW BINLOG INFO FOR %u failed with %u rows", startCoordinates.GroupId, len(qr.Rows))
+			return fmt.Errorf("SHOW BINLOG INFO FOR %v failed with %d rows", startCoordinates.GroupId, len(qr.Rows))
 		}
 		// row has Log_name, Pos, Server_ID
 		startCoordinates.MasterFilename = qr.Rows[0][0].String()
 		startCoordinates.MasterPosition, err = qr.Rows[0][1].ParseUint64()
 		if err != nil {
-			return fmt.Errorf("SHOW BINLOG INFO FOR %u returned an error parsing Pos: %v", startCoordinates.GroupId, err)
+			return fmt.Errorf("SHOW BINLOG INFO FOR %v returned an error parsing Pos: %v", startCoordinates.GroupId, err)
 		}
 		log.Infof("Resolved binlog position from GroupId %v to %v:%v", startCoordinates.GroupId, startCoordinates.MasterFilename, startCoordinates.MasterPosition)
 	}

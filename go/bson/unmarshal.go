@@ -7,7 +7,6 @@ package bson
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 
@@ -110,7 +109,7 @@ func TopLevelBuilder(val interface{}) (sb *valueBuilder, err error) {
 	ival := reflect.ValueOf(val)
 	// We'll allow one level of indirection
 	if ival.Kind() != reflect.Ptr {
-		return nil, errors.New(fmt.Sprintf("expecting pointer value, received %v", ival.Type()))
+		return nil, fmt.Errorf("expecting pointer value, received %v", ival.Type())
 	}
 	switch actual := ival.Elem(); actual.Kind() {
 	case reflect.Float64, reflect.String, reflect.Bool,
@@ -125,7 +124,7 @@ func TopLevelBuilder(val interface{}) (sb *valueBuilder, err error) {
 		sb.Object() // Allocate memory if necessary
 		return sb, nil
 	}
-	return nil, errors.New(fmt.Sprintf("unrecognized type %v", ival.Type()))
+	return nil, fmt.Errorf("unrecognized type %v", ival.Type())
 }
 
 // Flush handles the final update for map & interface objects.

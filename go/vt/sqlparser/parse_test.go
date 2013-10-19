@@ -42,10 +42,10 @@ func initTables() {
 	a.AddColumn("name", "varchar(10)", SQLZERO, "")
 	a.AddColumn("foo", "varchar(10)", SQLZERO, "")
 	acolumns := []string{"eid", "id", "name", "foo"}
-	a.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, acolumns})
-	a.Indexes = append(a.Indexes, &schema.Index{"a_name", []string{"eid", "name"}, []uint64{1, 1}, a.Indexes[0].Columns})
-	a.Indexes = append(a.Indexes, &schema.Index{"b_name", []string{"name"}, []uint64{3}, a.Indexes[0].Columns})
-	a.Indexes = append(a.Indexes, &schema.Index{"c_name", []string{"name"}, []uint64{2}, a.Indexes[0].Columns})
+	a.Indexes = append(a.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: acolumns})
+	a.Indexes = append(a.Indexes, &schema.Index{Name: "a_name", Columns: []string{"eid", "name"}, Cardinality: []uint64{1, 1}, DataColumns: a.Indexes[0].Columns})
+	a.Indexes = append(a.Indexes, &schema.Index{Name: "b_name", Columns: []string{"name"}, Cardinality: []uint64{3}, DataColumns: a.Indexes[0].Columns})
+	a.Indexes = append(a.Indexes, &schema.Index{Name: "c_name", Columns: []string{"name"}, Cardinality: []uint64{2}, DataColumns: a.Indexes[0].Columns})
 	a.PKColumns = append(a.PKColumns, 0, 1)
 	a.CacheType = schema.CACHE_RW
 	schem["a"] = a
@@ -54,7 +54,7 @@ func initTables() {
 	b.AddColumn("eid", "int", SQLZERO, "")
 	b.AddColumn("id", "int", SQLZERO, "")
 	bcolumns := []string{"eid", "id"}
-	b.Indexes = append(a.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, bcolumns})
+	b.Indexes = append(a.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: bcolumns})
 	b.PKColumns = append(a.PKColumns, 0, 1)
 	b.CacheType = schema.CACHE_NONE
 	schem["b"] = b
@@ -71,10 +71,10 @@ func initTables() {
 	d.AddColumn("foo", "varchar(10)", SQLZERO, "")
 	d.AddColumn("bar", "varchar(10)", SQLZERO, "")
 	dcolumns := []string{"name"}
-	d.Indexes = append(d.Indexes, &schema.Index{"PRIMARY", []string{"name"}, []uint64{1}, dcolumns})
-	d.Indexes = append(d.Indexes, &schema.Index{"d_id", []string{"id"}, []uint64{1}, d.Indexes[0].Columns})
-	d.Indexes = append(d.Indexes, &schema.Index{"d_bar_never", []string{"bar", "foo"}, []uint64{2, 1}, d.Indexes[0].Columns})
-	d.Indexes = append(d.Indexes, &schema.Index{"d_bar", []string{"bar", "foo"}, []uint64{3, 1}, d.Indexes[0].Columns})
+	d.Indexes = append(d.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"name"}, Cardinality: []uint64{1}, DataColumns: dcolumns})
+	d.Indexes = append(d.Indexes, &schema.Index{Name: "d_id", Columns: []string{"id"}, Cardinality: []uint64{1}, DataColumns: d.Indexes[0].Columns})
+	d.Indexes = append(d.Indexes, &schema.Index{Name: "d_bar_never", Columns: []string{"bar", "foo"}, Cardinality: []uint64{2, 1}, DataColumns: d.Indexes[0].Columns})
+	d.Indexes = append(d.Indexes, &schema.Index{Name: "d_bar", Columns: []string{"bar", "foo"}, Cardinality: []uint64{3, 1}, DataColumns: d.Indexes[0].Columns})
 	d.PKColumns = append(d.PKColumns, 0)
 	d.CacheType = schema.CACHE_RW
 	schem["d"] = d
@@ -83,7 +83,7 @@ func initTables() {
 	e.AddColumn("eid", "int", SQLZERO, "")
 	e.AddColumn("id", "int", SQLZERO, "")
 	ecolumns := []string{"eid", "id"}
-	e.Indexes = append(e.Indexes, &schema.Index{"PRIMARY", []string{"eid", "id"}, []uint64{1, 1}, ecolumns})
+	e.Indexes = append(e.Indexes, &schema.Index{Name: "PRIMARY", Columns: []string{"eid", "id"}, Cardinality: []uint64{1, 1}, DataColumns: ecolumns})
 	e.PKColumns = append(a.PKColumns, 0, 1)
 	e.CacheType = schema.CACHE_W
 	schem["e"] = e

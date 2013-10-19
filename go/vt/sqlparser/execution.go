@@ -707,7 +707,7 @@ func (node *Node) getInsertPKColumns(tableInfo *schema.Table) (pkColumnNumbers [
 	}
 	pkIndex := tableInfo.Indexes[0]
 	pkColumnNumbers = make([]int, len(pkIndex.Columns))
-	for i, _ := range pkColumnNumbers {
+	for i := range pkColumnNumbers {
 		pkColumnNumbers[i] = -1
 	}
 	for i, column := range node.Sub {
