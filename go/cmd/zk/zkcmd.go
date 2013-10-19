@@ -391,7 +391,7 @@ func cmdLs(args []string) {
 				}
 				wg.Done()
 			}
-			for i, _ := range children {
+			for i := range children {
 				wg.Add(1)
 				go f(i)
 			}

@@ -75,7 +75,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 		cellMap[alias.Cell] = true
 	}
 
-	for cell, _ := range cellMap {
+	for cell := range cellMap {
 		vtnsRootPath := fmt.Sprintf("/zk/%v/vt/ns/%v", cell, keyspace)
 		zknsRootPath := fmt.Sprintf("/zk/%v/zkns/vt/%v", cell, keyspace)
 
@@ -125,7 +125,7 @@ func (wr *Wrangler) ExportZknsForKeyspace(keyspace string) error {
 		}
 		log.V(6).Infof("staleZknsPaths: %v", staleZknsPaths)
 		prunePaths := make([]string, 0, len(staleZknsPaths))
-		for prunePath, _ := range staleZknsPaths {
+		for prunePath := range staleZknsPaths {
 			prunePaths = append(prunePaths, prunePath)
 		}
 		sort.Strings(prunePaths)

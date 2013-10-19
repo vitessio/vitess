@@ -149,7 +149,7 @@ func (rc *RowCache) decodeRow(b []byte) (row []sqltypes.Value) {
 	rowlen := pack.Uint32(b)
 	data := b[4+rowlen*4:]
 	row = make([]sqltypes.Value, rowlen)
-	for i, _ := range row {
+	for i := range row {
 		length := pack.Uint32(b[4+i*4:])
 		if length == 0xFFFFFFFF {
 			continue

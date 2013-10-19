@@ -100,7 +100,7 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresul
 		}
 	}
 
-	for cell, _ := range cellSet {
+	for cell := range cellSet {
 		aliases, err := wr.ts.GetTabletsByCell(cell)
 		if err != nil {
 			results <- vresult{"GetTabletsByCell(" + cell + ")", err}

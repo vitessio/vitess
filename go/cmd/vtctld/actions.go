@@ -118,7 +118,7 @@ func (ar *ActionRepository) ApplyTabletAction(actionName string, tabletAlias top
 // Populate{Keyspace,Shard,Tablet}Actions populates result with
 // actions that can be performed on its node.
 func (ar ActionRepository) PopulateKeyspaceActions(actions map[string]template.URL, keyspace string) {
-	for name, _ := range ar.keyspaceActions {
+	for name := range ar.keyspaceActions {
 		values := url.Values{}
 		values.Set("action", name)
 		values.Set("keyspace", keyspace)
@@ -127,7 +127,7 @@ func (ar ActionRepository) PopulateKeyspaceActions(actions map[string]template.U
 }
 
 func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL, keyspace, shard string) {
-	for name, _ := range ar.shardActions {
+	for name := range ar.shardActions {
 		values := url.Values{}
 		values.Set("action", name)
 		values.Set("keyspace", keyspace)
@@ -137,7 +137,7 @@ func (ar ActionRepository) PopulateShardActions(actions map[string]template.URL,
 }
 
 func (ar ActionRepository) PopulateTabletActions(actions map[string]template.URL, alias string) {
-	for name, _ := range ar.tabletActions {
+	for name := range ar.tabletActions {
 		values := url.Values{}
 		values.Set("action", name)
 		values.Set("alias", alias)

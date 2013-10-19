@@ -189,7 +189,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 		if masterPosition != nil {
 			demotedMapKey := masterPosition.MapKey()
 			if _, ok := positionMap[demotedMapKey]; !ok {
-				for slaveMapKey, _ := range positionMap {
+				for slaveMapKey := range positionMap {
 					return fmt.Errorf("slave position doesn't match demoted master: %v != %v", demotedMapKey,
 						slaveMapKey)
 				}
@@ -353,7 +353,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.Tabl
 		wg.Done()
 	}
 
-	for i, _ := range slaves {
+	for i := range slaves {
 		wg.Add(1)
 		go f(i)
 	}
