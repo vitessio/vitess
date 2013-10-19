@@ -11,7 +11,9 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // ShardConn represents a load balanced connection to a group
@@ -96,7 +98,34 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr
 	return qr, sdc.WrapError(err)
 }
 
-// StreamExecute executes a streaming query on vttablet. The retry rules are the same.
+// ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
+func (sdc *ShardConn) ExecuteBatch(queries []proto.BoundQuery) (qrs *tproto.QueryResultList, err error) {
+	for i := 0; i < sdc.retryCount; i++ {
+		if sdc.conn == nil {
+			var addr string
+			addr, err = sdc.balancer.Get()
+			if err != nil {
+				return nil, sdc.WrapError(err)
+			}
+			var conn TabletConn
+			conn, err = GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
+			if err != nil {
+				sdc.balancer.MarkDown(addr)
+				continue
+			}
+			sdc.address = addr
+			sdc.conn = conn
+		}
+		qrs, err = sdc.conn.ExecuteBatch(queries)
+		if sdc.canRetry(err) {
+			continue
+		}
+		return qrs, sdc.WrapError(err)
+	}
+	return qrs, sdc.WrapError(err)
+}
+
+// StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
 // Calling other functions while streaming is not recommended.
 func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
 	var err error
@@ -130,7 +159,7 @@ return_error:
 	return r, func() error { return sdc.WrapError(err) }
 }
 
-// Begin begins a transaction. The retry rules are the same.
+// Begin begins a transaction. The retry rules are the same as Execute.
 func (sdc *ShardConn) Begin() (err error) {
 	if sdc.TransactionId() != 0 {
 		return sdc.WrapError(fmt.Errorf("cannot begin: already in transaction"))

@@ -14,6 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -46,73 +47,87 @@ func Init(blm *BalancerMap, tabletProtocol string, retryDelay time.Duration, ret
 // GetSessionId is the first request sent by the client to begin a session. The returned
 // id should be used for all subsequent communications.
 func (vtg *VTGate) GetSessionId(sessionParams *proto.SessionParams, session *proto.Session) error {
-	vtconn := NewVTConn(vtg.balancerMap, vtg.tabletProtocol, sessionParams.TabletType, vtg.retryDelay, vtg.retryCount)
-	session.SessionId = vtconn.Id
-	vtg.connections.Register(vtconn.Id, vtconn)
+	scatterConn := NewScatterConn(vtg.balancerMap, vtg.tabletProtocol, sessionParams.TabletType, vtg.retryDelay, vtg.retryCount)
+	session.SessionId = scatterConn.Id
+	vtg.connections.Register(scatterConn.Id, scatterConn)
 	return nil
 }
 
-// Execute executes a non-streaming query.
-func (vtg *VTGate) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) error {
-	vtconn, err := vtg.connections.Get(query.SessionId)
+// ExecuteShard executes a non-streaming query on the specified shards.
+func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QueryShard, reply *mproto.QueryResult) error {
+	scatterConn, err := vtg.connections.Get(query.SessionId)
 	if err != nil {
 		return fmt.Errorf("query: %s, session %d: %v", query.Sql, query.SessionId, err)
 	}
 	defer vtg.connections.Put(query.SessionId)
-	qr, err := vtconn.(*VTConn).Execute(query.Sql, query.BindVariables, query.Keyspace, query.Shards)
+	qr, err := scatterConn.(*ScatterConn).Execute(query.Sql, query.BindVariables, query.Keyspace, query.Shards)
 	if err == nil {
 		*reply = *qr
 	}
 	return err
 }
 
-// StreamExecute executes a streaming query.
-func (vtg *VTGate) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(interface{}) error) error {
-	vtconn, err := vtg.connections.Get(query.SessionId)
+// ExecuteBatchShard executes a group of queries on the specified shards.
+func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *proto.BatchQueryShard, reply *tproto.QueryResultList) error {
+	scatterConn, err := vtg.connections.Get(batchQuery.SessionId)
+	if err != nil {
+		return fmt.Errorf("query: %v, session %d: %v", batchQuery.Queries, batchQuery.SessionId, err)
+	}
+	defer vtg.connections.Put(batchQuery.SessionId)
+	qrs, err := scatterConn.(*ScatterConn).ExecuteBatch(batchQuery.Queries, batchQuery.Keyspace, batchQuery.Shards)
+	if err == nil {
+		*reply = *qrs
+	}
+	return err
+}
+
+// StreamExecuteShard executes a streaming query on the specified shards.
+func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
+	scatterConn, err := vtg.connections.Get(query.SessionId)
 	if err != nil {
 		return fmt.Errorf("query: %s, session %d: %v", query.Sql, query.SessionId, err)
 	}
 	defer vtg.connections.Put(query.SessionId)
-	return vtconn.(*VTConn).StreamExecute(query.Sql, query.BindVariables, query.Keyspace, query.Shards, sendReply)
+	return scatterConn.(*ScatterConn).StreamExecute(query.Sql, query.BindVariables, query.Keyspace, query.Shards, sendReply)
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
 func (vtg *VTGate) Begin(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	vtconn, err := vtg.connections.Get(session.SessionId)
+	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer vtg.connections.Put(session.SessionId)
-	return vtconn.(*VTConn).Begin()
+	return scatterConn.(*ScatterConn).Begin()
 }
 
 // Commit commits a transaction.
 func (vtg *VTGate) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	vtconn, err := vtg.connections.Get(session.SessionId)
+	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer vtg.connections.Put(session.SessionId)
-	return vtconn.(*VTConn).Commit()
+	return scatterConn.(*ScatterConn).Commit()
 }
 
 // Rollback rolls back a transaction.
 func (vtg *VTGate) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	vtconn, err := vtg.connections.Get(session.SessionId)
+	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer vtg.connections.Put(session.SessionId)
-	return vtconn.(*VTConn).Rollback()
+	return scatterConn.(*ScatterConn).Rollback()
 }
 
 // CloseSession closes the current session and releases all associated resources for the session.
 func (vtg *VTGate) CloseSession(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
-	vtconn, err := vtg.connections.Get(session.SessionId)
+	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return nil
 	}
 	defer vtg.connections.Unregister(session.SessionId)
-	vtconn.(*VTConn).Close()
+	scatterConn.(*ScatterConn).Close()
 	return nil
 }

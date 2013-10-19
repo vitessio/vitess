@@ -143,7 +143,7 @@ class TabletConnection(object):
     conversions = []
     results = []
     try:
-      response = self.client.call('VTGate.Execute', req)
+      response = self.client.call('VTGate.ExecuteShard', req)
       reply = response.reply
 
       for field in reply['Fields']:
@@ -165,16 +165,17 @@ class TabletConnection(object):
   def _execute_batch(self, sql_list, bind_variables_list):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
-      req = self._make_req()
-      req['Sql'] = sql
-      req['BindVariables'] = field_types.convert_bind_vars(bind_vars)
-      query_list.append(req)
+      query = {}
+      query['Sql'] = sql
+      query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
+      query_list.append(query)
 
     rowsets = []
 
     try:
-      req = {'List': query_list}
-      response = self.client.call('VTGate.ExecuteBatch', req)
+      req = self._make_req()
+      req['Queries'] = query_list
+      response = self.client.call('VTGate.ExecuteBatchShard', req)
       for reply in response.reply['List']:
         fields = []
         conversions = []
@@ -212,7 +213,7 @@ class TabletConnection(object):
     self._stream_result = None
     self._stream_result_index = 0
     try:
-      self.client.stream_call('VTGate.StreamExecute', req)
+      self.client.stream_call('VTGate.StreamExecuteShard', req)
       first_response = self.client.stream_next()
       reply = first_response.reply
 

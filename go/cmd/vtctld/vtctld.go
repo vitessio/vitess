@@ -85,6 +85,10 @@ func Htmlize(data interface{}) string {
 	return b.String()
 }
 
+func link(text, href string) string {
+	return fmt.Sprintf("<a href=%q>%v</a>", href, text)
+}
+
 // Plugins need to overwrite:
 //   keyspace(keyspace)
 //   shard(keyspace, shard)
@@ -115,10 +119,58 @@ var funcMap = template.FuncMap{
 		return template.HTML(b.String())
 	},
 	"keyspace": func(keyspace string) template.HTML {
-		return template.HTML(keyspace)
+		switch len(explorers) {
+		case 0:
+			return template.HTML(keyspace)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(keyspace, explorer.GetKeyspacePath(keyspace)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", keyspace)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, " [%v]", link(name, explorer.GetKeyspacePath(keyspace)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
 	},
 	"shard": func(keyspace, shard string) template.HTML {
-		return template.HTML(shard)
+		switch len(explorers) {
+		case 0:
+			return template.HTML(shard)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(shard, explorer.GetShardPath(keyspace, shard)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", shard)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, ` <span class="topo-link">[%v]</span>`, link(name, explorer.GetShardPath(keyspace, shard)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
+	},
+	"tablet": func(alias topo.TabletAlias, shortname string) template.HTML {
+		switch len(explorers) {
+		case 0:
+			return template.HTML(shortname)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(shortname, explorer.GetTabletPath(alias)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", shortname)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, ` <span class="topo-link">[%v]</span>`, link(name, explorer.GetTabletPath(alias)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
 	},
 }
 
@@ -391,6 +443,53 @@ func main() {
 			result.Topology = topology
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
+	})
+	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			httpError(w, "cannot parse form: %s", err)
+			return
+		}
+		explorerName := r.FormValue("explorer")
+		explorer, ok := explorers[explorerName]
+		if !ok {
+			http.Error(w, "bad explorer name", http.StatusBadRequest)
+			return
+		}
+		var target string
+		switch r.FormValue("type") {
+		case "keyspace":
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			target = explorer.GetKeyspacePath(keyspace)
+		case "shard":
+			keyspace, shard := r.FormValue("keyspace"), r.FormValue("shard")
+			if keyspace == "" || shard == "" {
+				http.Error(w, "keyspace and shard are obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			target = explorer.GetShardPath(keyspace, shard)
+
+		case "tablet":
+			aliasName := r.FormValue("alias")
+			if aliasName == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			alias, err := topo.ParseTabletAliasString(aliasName)
+			if err != nil {
+				http.Error(w, "bad tablet alias", http.StatusBadRequest)
+				return
+			}
+			target = explorer.GetTabletPath(alias)
+
+		default:
+			http.Error(w, "bad redirect type", http.StatusBadRequest)
+			return
+		}
+		http.Redirect(w, r, target, http.StatusFound)
 	})
 	servenv.Run(*port)
 }
