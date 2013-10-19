@@ -103,7 +103,7 @@ func dialHTTP(network, address, codecName string, cFactory ClientCodecFactory, a
 		err = errors.New("unexpected HTTP response: " + resp.Status)
 	}
 	conn.Close()
-	return nil, &net.OpError{"dial-http", network + " " + address, nil, err}
+	return nil, &net.OpError{Op: "dial-http", Net: network + " " + address, Addr: nil, Err: err}
 }
 
 type ServerCodecFactory func(conn io.ReadWriteCloser) rpc.ServerCodec

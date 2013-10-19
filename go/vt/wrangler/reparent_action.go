@@ -130,7 +130,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 		var args *tm.SlavePositionReq
 		if masterPosition != nil {
 			// If the master position is known, do our best to wait for replication to catch up.
-			args = &tm.SlavePositionReq{*masterPosition, int(wr.actionTimeout().Seconds())}
+			args = &tm.SlavePositionReq{ReplicationPosition: *masterPosition, WaitTimeout: int(wr.actionTimeout().Seconds())}
 		} else {
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
@@ -147,7 +147,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 			replPos := result.(*mysqlctl.ReplicationPosition)
 			lastDataPos := mysqlctl.ReplicationPosition{MasterLogFile: replPos.MasterLogFileIo,
 				MasterLogPositionIo: replPos.MasterLogPositionIo}
-			args = &tm.SlavePositionReq{lastDataPos, int(wr.actionTimeout().Seconds())}
+			args = &tm.SlavePositionReq{ReplicationPosition: lastDataPos, WaitTimeout: int(wr.actionTimeout().Seconds())}
 		}
 
 		// This option waits for the SQL thread to apply all changes to this instance.

@@ -91,7 +91,7 @@ func (conn *TabletBson) TransactionId() int64 {
 }
 
 func (conn *TabletBson) Close() error {
-	conn.session = tproto.Session{0, 0, 0}
+	conn.session = tproto.Session{TransactionId: 0, ConnectionId: 0, SessionId: 0}
 	rpcClient := conn.rpcClient
 	conn.rpcClient = nil
 	return rpcClient.Close()

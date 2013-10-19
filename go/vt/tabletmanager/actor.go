@@ -299,7 +299,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	}
 
 	// Perform the action.
-	alias := topo.TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
+	alias := topo.TabletAlias{Cell: tablet.Tablet.Cell, Uid: tablet.Tablet.Uid}
 	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false)
 	if err != nil {
