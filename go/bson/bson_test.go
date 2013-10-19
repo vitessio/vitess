@@ -137,7 +137,7 @@ func TestCustom(t *testing.T) {
 		t.Errorf("bytes fail: %s", out.Bytes)
 	}
 	if out.Float64 != 64 {
-		t.Error("float fail: %v", out.Float64)
+		t.Errorf("float fail: %v", out.Float64)
 	}
 	if out.String != "string" {
 		t.Errorf("string fail: %v", out.String)
