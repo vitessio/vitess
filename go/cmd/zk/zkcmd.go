@@ -391,7 +391,7 @@ func cmdLs(args []string) {
 				}
 				wg.Done()
 			}
-			for i, _ := range children {
+			for i := range children {
 				wg.Add(1)
 				go f(i)
 			}
@@ -895,7 +895,7 @@ func cmdZip(args []string) {
 	for item := range items {
 		path, data, stat, err := item.path, item.data, item.stat, item.err
 		if err != nil {
-			log.Fatal("zip: get failed: %v", err)
+			log.Fatalf("zip: get failed: %v", err)
 		}
 		// Skip ephemerals - not sure why you would archive them.
 		if stat.EphemeralOwner() > 0 {
@@ -905,16 +905,16 @@ func cmdZip(args []string) {
 		fi.SetModTime(stat.MTime())
 		f, err := zipWriter.CreateHeader(fi)
 		if err != nil {
-			log.Fatal("zip: create failed: %v", err)
+			log.Fatalf("zip: create failed: %v", err)
 		}
 		_, err = f.Write([]byte(data))
 		if err != nil {
-			log.Fatal("zip: create failed: %v", err)
+			log.Fatalf("zip: create failed: %v", err)
 		}
 	}
 	err = zipWriter.Close()
 	if err != nil {
-		log.Fatal("zip: close failed: %v", err)
+		log.Fatalf("zip: close failed: %v", err)
 	}
 	zipFile.Close()
 }
@@ -944,7 +944,7 @@ func cmdUnzip(args []string) {
 		}
 		data, err := ioutil.ReadAll(rc)
 		if err != nil {
-			log.Fatal("unzip: failed reading archive: %v", err)
+			log.Fatalf("unzip: failed reading archive: %v", err)
 		}
 		zkPath := zf.Name
 		if dstPath != "/" {
@@ -952,11 +952,11 @@ func cmdUnzip(args []string) {
 		}
 		_, err = zk.CreateRecursive(zconn, zkPath, string(data), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil && !zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
-			log.Fatal("unzip: zk create failed: %v", err)
+			log.Fatalf("unzip: zk create failed: %v", err)
 		}
 		_, err = zconn.Set(zkPath, string(data), -1)
 		if err != nil {
-			log.Fatal("unzip: zk set failed: %v", err)
+			log.Fatalf("unzip: zk set failed: %v", err)
 		}
 		rc.Close()
 	}

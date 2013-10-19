@@ -165,7 +165,7 @@ func CreateShard(ts Server, keyspace, shard string) error {
 		}
 	}
 	s.ServedTypes = make([]TabletType, 0, len(servingTypes))
-	for st, _ := range servingTypes {
+	for st := range servingTypes {
 		s.ServedTypes = append(s.ServedTypes, st)
 	}
 
@@ -218,7 +218,7 @@ func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAli
 	}
 
 	result := make([]TabletAlias, 0, len(resultAsMap))
-	for a, _ := range resultAsMap {
+	for a := range resultAsMap {
 		result = append(result, a)
 	}
 	return result, err

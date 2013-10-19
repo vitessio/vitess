@@ -43,7 +43,7 @@ func connect() *rpcplus.Client {
 
 func get(rpcClient *rpcplus.Client, path string, verbose bool) {
 	// it's a get
-	zkPath := &zk.ZkPath{path}
+	zkPath := &zk.ZkPath{Path: path}
 	zkNode := &zk.ZkNode{}
 	if err := rpcClient.Call("ZkReader.Get", zkPath, zkNode); err != nil {
 		log.Fatalf("ZkReader.Get error: %v", err)
@@ -55,7 +55,7 @@ func get(rpcClient *rpcplus.Client, path string, verbose bool) {
 }
 
 func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
-	zkPathV := &zk.ZkPathV{make([]string, len(paths))}
+	zkPathV := &zk.ZkPathV{Paths: make([]string, len(paths))}
 	for i, v := range paths {
 		zkPathV.Paths[i] = v
 	}
@@ -72,7 +72,7 @@ func getv(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 
 func children(rpcClient *rpcplus.Client, paths []string, verbose bool) {
 	for _, v := range paths {
-		zkPath := &zk.ZkPath{v}
+		zkPath := &zk.ZkPath{Path: v}
 		zkNode := &zk.ZkNode{}
 		if err := rpcClient.Call("ZkReader.Children", zkPath, zkNode); err != nil {
 			log.Fatalf("ZkReader.Children error: %v", err)

@@ -138,7 +138,7 @@ func ZkKnownCells(useCache bool) []string {
 	cellAddrMap := getCellAddrMap()
 	result := make([]string, 0, len(cellAddrMap))
 	foundGlobal := false
-	for cell, _ := range cellAddrMap {
+	for cell := range cellAddrMap {
 		// figure out cell name and if it's zkocc
 		isZkoccCell := false
 		name := cell

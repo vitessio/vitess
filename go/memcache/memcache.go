@@ -44,8 +44,8 @@ func newConnection(nc net.Conn) *Connection {
 	return &Connection{
 		conn: nc,
 		buffered: bufio.ReadWriter{
-			bufio.NewReader(nc),
-			bufio.NewWriter(nc),
+			Reader: bufio.NewReader(nc),
+			Writer: bufio.NewWriter(nc),
 		},
 	}
 }

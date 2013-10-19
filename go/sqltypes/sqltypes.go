@@ -303,11 +303,11 @@ var encodeRef = map[byte]byte{
 }
 
 func init() {
-	for i, _ := range SqlEncodeMap {
+	for i := range SqlEncodeMap {
 		SqlEncodeMap[i] = DONTESCAPE
 		SqlDecodeMap[i] = DONTESCAPE
 	}
-	for i, _ := range SqlEncodeMap {
+	for i := range SqlEncodeMap {
 		if to, ok := encodeRef[byte(i)]; ok {
 			SqlEncodeMap[byte(i)] = to
 			SqlDecodeMap[to] = byte(i)

@@ -240,7 +240,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 	// get the existing sources and build a map of sources to remove
 	toRemove := make(map[topo.SourceShard]bool)
 	hadPlayers := false
-	for source, _ := range blm.players {
+	for source := range blm.players {
 		toRemove[source] = true
 		hadPlayers = true
 	}
@@ -253,7 +253,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 	hasPlayers := len(shardInfo.SourceShards) > 0
 
 	// remove all entries from toRemove
-	for source, _ := range toRemove {
+	for source := range toRemove {
 		blm.players[source].Stop()
 		delete(blm.players, source)
 	}

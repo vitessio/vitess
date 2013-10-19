@@ -14,11 +14,13 @@ import (
 	"os/signal"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/tb"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -55,12 +57,13 @@ func (rsd *RestartSlaveData) String() string {
 
 type TabletActor struct {
 	mysqld      *mysqlctl.Mysqld
+	mysqlDaemon mysqlctl.MysqlDaemon
 	ts          topo.Server
 	tabletAlias topo.TabletAlias
 }
 
-func NewTabletActor(mysqld *mysqlctl.Mysqld, topoServer topo.Server) *TabletActor {
-	return &TabletActor{mysqld, topoServer, topo.TabletAlias{}}
+func NewTabletActor(mysqld *mysqlctl.Mysqld, mysqlDaemon mysqlctl.MysqlDaemon, topoServer topo.Server, tabletAlias topo.TabletAlias) *TabletActor {
+	return &TabletActor{mysqld, mysqlDaemon, topoServer, tabletAlias}
 }
 
 // This function should be protected from unforseen panics, as
@@ -181,11 +184,11 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = ta.slaveWasPromoted(actionNode)
+		err = ta.SlaveWasPromoted(actionNode)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		err = ta.slaveWasRestarted(actionNode)
+		err = ta.SlaveWasRestarted(actionNode, "")
 	case TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case TABLET_ACTION_RESTORE:
@@ -299,7 +302,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	}
 
 	// Perform the action.
-	alias := topo.TabletAlias{tablet.Tablet.Cell, tablet.Tablet.Uid}
+	alias := topo.TabletAlias{Cell: tablet.Tablet.Cell, Uid: tablet.Tablet.Uid}
 	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false)
 	if err != nil {
@@ -311,7 +314,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
 }
 
-func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
+func (ta *TabletActor) SlaveWasPromoted(actionNode *ActionNode) error {
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
 		return err
@@ -323,7 +326,7 @@ func (ta *TabletActor) slaveWasPromoted(actionNode *ActionNode) error {
 func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *topo.TabletInfo, actionNode *ActionNode) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != topo.NO_TABLET {
-		if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet, tablet.ReplicationPath()); err != nil && err != topo.ErrNoNode {
+		if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
 			return err
 		}
 	}
@@ -412,7 +415,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	if tablet.Parent != rsd.Parent {
 		log.V(6).Infof("restart with new parent")
 		// Remove tablet from the replication graph.
-		if err = topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet, tablet.ReplicationPath()); err != nil && err != topo.ErrNoNode {
+		if err = topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
 			return err
 		}
 
@@ -467,7 +470,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	return nil
 }
 
-func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
+func (ta *TabletActor) SlaveWasRestarted(actionNode *ActionNode, masterAddr string) error {
 	swrd := actionNode.args.(*SlaveWasRestartedData)
 
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
@@ -476,7 +479,7 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	}
 
 	// Remove tablet from the replication graph.
-	if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet, tablet.ReplicationPath()); err != nil && err != topo.ErrNoNode {
+	if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
 		// FIXME(alainjobart) once we don't have replication paths
 		// any more, remove this extra check
 		if err == topo.ErrNotEmpty {
@@ -487,9 +490,11 @@ func (ta *TabletActor) slaveWasRestarted(actionNode *ActionNode) error {
 	}
 
 	// now we can check the reparent actually worked
-	masterAddr, err := ta.mysqld.GetMasterAddr()
-	if err != nil {
-		return err
+	if masterAddr == "" {
+		masterAddr, err = ta.mysqlDaemon.GetMasterAddr()
+		if err != nil {
+			return err
+		}
 	}
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
 		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
@@ -906,15 +911,9 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 		return err
 	}
 
-	// If you are already scrap, skip deleting the path. It won't
-	// be correct since the Parent will be cleared already.
+	// If you are already scrap, skip updating replication data. It won't
+	// be there anyway.
 	wasAssigned := tablet.IsAssigned()
-	replicationPath := ""
-	if wasAssigned {
-		replicationPath = tablet.ReplicationPath()
-	}
-
-	wasMaster := tablet.Parent.IsZero()
 	tablet.Type = topo.TYPE_SCRAP
 	tablet.Parent = topo.TabletAlias{}
 	// Update the tablet first, since that is canonical.
@@ -933,25 +932,14 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	}
 
 	if wasAssigned {
-		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet, replicationPath)
+		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet)
 		if err != nil {
-			switch err {
-			case topo.ErrNoNode:
-				log.V(6).Infof("no replication path: %v", replicationPath)
+			if err == topo.ErrNoNode {
+				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Cell)
 				err = nil
-			case topo.ErrNotEmpty:
-				// If you are forcing the scrapping of a master, you can't update the
-				// replication graph yet, since other nodes are still under the impression
-				// they are slaved to this tablet.
-				// If the node was not empty, we can't do anything about it - the replication
-				// graph needs to be fixed by reparenting. If the action was forced, assume
-				// the user knows best and squelch the error.
-				if wasMaster && force {
-					err = nil
-				}
 			}
 			if err != nil {
-				log.Warningf("remove replication path failed: %v %v", replicationPath, err)
+				log.Warningf("remove replication data for %v failed: %v", tablet.Alias(), err)
 			}
 		}
 	}
@@ -994,16 +982,32 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 
 	tablet.Type = newType
 	if newType == topo.TYPE_IDLE {
-		if tablet.Parent.Uid == topo.NO_TABLET {
-			// With a master the node cannot be set to idle unless we have already removed all of
-			// the derived paths. The global replication path is a good indication that this has
-			// been resolved.
-			children, err := ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, tablet.ReplicationPath())
-			if err != nil && err != topo.ErrNoNode {
+		if tablet.Parent.IsZero() {
+			si, err := ts.GetShard(tablet.Keyspace, tablet.Shard)
+			if err != nil {
 				return err
 			}
-			if err == nil && len(children) > 0 {
-				return fmt.Errorf("cannot change tablet type %v -> %v - reparent action has not finished %v", tablet.Type, newType, tabletAlias)
+			rec := concurrency.AllErrorRecorder{}
+			wg := sync.WaitGroup{}
+			for _, cell := range si.Cells {
+				wg.Add(1)
+				go func(cell string) {
+					defer wg.Done()
+					sri, err := ts.GetShardReplication(cell, tablet.Keyspace, tablet.Shard)
+					if err != nil {
+						log.Warningf("Cannot check cell %v for extra replication paths, assuming it's good", cell)
+						return
+					}
+					for _, rl := range sri.ReplicationLinks {
+						if rl.Parent == tabletAlias {
+							rec.RecordError(fmt.Errorf("Still have a ReplicationLink in cell %v", cell))
+						}
+					}
+				}(cell)
+			}
+			wg.Wait()
+			if rec.HasErrors() {
+				return rec.Error()
 			}
 		}
 		tablet.Parent = topo.TabletAlias{}

@@ -28,7 +28,7 @@ func CheckActions(t *testing.T, ts topo.Server) {
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Fatalf("CreateTablet: %v", err)
 	}
-	tabletAlias := topo.TabletAlias{cell, 1}
+	tabletAlias := topo.TabletAlias{Cell: cell, Uid: 1}
 
 	actionPath, err := ts.WriteTabletAction(tabletAlias, "contents1")
 	if err != nil {
