@@ -14,7 +14,7 @@ import (
 )
 
 func TestPosParse(t *testing.T) {
-	line := "#131018 22:21:47 server id 41983  end_log_pos 286  group_id 7   Query   thread_id=3     exec_time=0     error_code=0\n"
+	line := "#131018 22:21:47 server id 41983  end_log_pos 286  group_id 7   Query   thread_id=3     exec_time=0     error_code=0"
 	values := posRE.FindStringSubmatch(line)
 	if len(values) != 4 {
 		t.Fatalf("want 4, got %v", len(values))
@@ -29,7 +29,7 @@ func TestPosParse(t *testing.T) {
 		t.Errorf("want 7, got %v", values[3])
 	}
 
-	line = "#131018 22:22:19 server id 41983  end_log_pos 372       Rotate to vt-0000041983-bin.000003  pos: 4\n"
+	line = "#131018 22:22:19 server id 41983  end_log_pos 372       Rotate to vt-0000041983-bin.000003  pos: 4"
 	values = rotateRE.FindStringSubmatch(line)
 	if len(values) != 3 {
 		t.Fatalf("want 3, got %v", len(values))
@@ -42,7 +42,7 @@ func TestPosParse(t *testing.T) {
 	}
 
 	// Check for match even if there's a tab after the file name.
-	line = "#131018 22:22:19 server id 41983  end_log_pos 372       Rotate to vt-0000041983-bin.000003\t  pos: 4\n"
+	line = "#131018 22:22:19 server id 41983  end_log_pos 372       Rotate to vt-0000041983-bin.000003\t  pos: 4"
 	values = rotateRE.FindStringSubmatch(line)
 	if len(values) != 3 {
 		t.Fatalf("want 3, got %v", len(values))
