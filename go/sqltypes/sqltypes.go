@@ -77,7 +77,7 @@ func (v Value) String() string {
 	return hack.String(v.Inner.raw())
 }
 
-// ParseInt64 will parse a Numeric value into a uint64
+// ParseInt64 will parse a Numeric value into a int64
 func (v Value) ParseInt64() (val int64, err error) {
 	if v.Inner == nil {
 		return 0, fmt.Errorf("value is null")
