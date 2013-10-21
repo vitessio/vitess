@@ -44,7 +44,7 @@ func InitAgent(
 	tabletAlias topo.TabletAlias,
 	dbcfgs dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
-	dbConfigsFile, dbCredentialsFile string,
+	dbCredentialsFile string,
 	port, securePort int,
 	mycnfFile, overridesFile string) (err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
@@ -75,7 +75,7 @@ func InitAgent(
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.
-	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbConfigsFile, dbCredentialsFile)
+	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbCredentialsFile)
 	if err != nil {
 		return err
 	}

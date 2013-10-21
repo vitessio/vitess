@@ -24,17 +24,17 @@ type CreateCacheFunc func() (*memcache.Connection, error)
 
 // CachePool re-exposes ResourcePool as a pool of Memcache connection objects.
 type CachePool struct {
-	name          string
-	pool          *pools.ResourcePool
-	maxPrefix     sync2.AtomicInt64
-	cmd           *exec.Cmd
-	commandLine   []string
-	capacity      int
-	port          string
-	idleTimeout   time.Duration
-	DeleteExpiry  uint64
-	memcacheStats *MemcacheStats
-	mu            sync.Mutex
+	name           string
+	pool           *pools.ResourcePool
+	maxPrefix      sync2.AtomicInt64
+	cmd            *exec.Cmd
+	rowCacheConfig RowCacheConfig
+	capacity       int
+	port           string
+	idleTimeout    time.Duration
+	DeleteExpiry   uint64
+	memcacheStats  *MemcacheStats
+	mu             sync.Mutex
 }
 
 // Cache re-exposes memcache.Connection
@@ -52,7 +52,7 @@ func (cache *Cache) Recycle() {
 	}
 }
 
-func NewCachePool(name string, commandLine []string, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
+func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.Duration, idleTimeout time.Duration) *CachePool {
 	cp := &CachePool{name: name, idleTimeout: idleTimeout}
 	if name != "" {
 		cp.memcacheStats = NewMemcacheStats(cp)
@@ -65,36 +65,25 @@ func NewCachePool(name string, commandLine []string, queryTimeout time.Duration,
 	}
 	http.Handle(statsURL, cp)
 
-	if len(commandLine) == 0 {
+	if rowCacheConfig.Binary == "" {
 		return cp
 	}
-	cp.commandLine = commandLine
+	cp.rowCacheConfig = rowCacheConfig
 
 	// Start with memcached defaults
 	cp.capacity = 1024 - 50
 	cp.port = "11211"
-	for i := 0; i < len(commandLine); i++ {
-		switch commandLine[i] {
-		case "-p", "-s":
-			i++
-			if i == len(commandLine) {
-				log.Fatalf("expecting value after -p")
-			}
-			cp.port = commandLine[i]
-		case "-c":
-			i++
-			if i == len(commandLine) {
-				log.Fatalf("expecting value after -c")
-			}
-			capacity, err := strconv.Atoi(commandLine[i])
-			if err != nil {
-				log.Fatalf("%v", err)
-			}
-			if capacity <= 50 {
-				log.Fatalf("insufficient capacity: %d", capacity)
-			}
-			cp.capacity = capacity - 50
+	if rowCacheConfig.Socket != "" {
+		cp.port = rowCacheConfig.Socket
+	}
+	if rowCacheConfig.TcpPort > 0 {
+		cp.port = strconv.Itoa(rowCacheConfig.TcpPort)
+	}
+	if rowCacheConfig.Connections > 0 {
+		if rowCacheConfig.Connections <= 50 {
+			log.Fatalf("insufficient capacity: %d", rowCacheConfig.Connections)
 		}
+		cp.capacity = rowCacheConfig.Connections - 50
 	}
 
 	seconds := uint64(queryTimeout / time.Second)
@@ -107,7 +96,7 @@ func NewCachePool(name string, commandLine []string, queryTimeout time.Duration,
 }
 
 func (cp *CachePool) Open() {
-	if len(cp.commandLine) == 0 {
+	if cp.rowCacheConfig.Binary == "" {
 		log.Infof("rowcache not enabled")
 		return
 	}
@@ -129,7 +118,8 @@ func (cp *CachePool) Open() {
 }
 
 func (cp *CachePool) startMemcache() {
-	cp.cmd = exec.Command(cp.commandLine[0], cp.commandLine[1:]...)
+	commandLine := cp.rowCacheConfig.GetSubprocessFlags()
+	cp.cmd = exec.Command(commandLine[0], commandLine[1:]...)
 	if err := cp.cmd.Start(); err != nil {
 		panic(NewTabletError(FATAL, "can't start memcache: %v", err))
 	}

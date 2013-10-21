@@ -11,6 +11,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/servenv"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
@@ -18,24 +19,25 @@ import (
 
 var (
 	port          = flag.Int("port", 6510, "tcp port to serve on")
-	dbConfigFile  = flag.String("dbconfig", "", "db config file name")
 	overridesFile = flag.String("schema-override", "", "schema overrides file")
 )
 
-var dbconfig = dbconfigs.DBConfig{
-	Host:    "localhost",
-	Uname:   "vt_app",
-	Charset: "utf8",
+var DefaultDBConfig = dbconfigs.DBConfig{
+	ConnectionParams: mysql.ConnectionParams{
+		Host:    "localhost",
+		Uname:   "vt_app",
+		Charset: "utf8",
+	},
 }
 
 var schemaOverrides []ts.SchemaOverride
 
 func main() {
+	dbCredentialsFile := dbconfigs.RegisterAppFlags(DefaultDBConfig)
 	flag.Parse()
 	servenv.Init()
 
-	unmarshalFile(*dbConfigFile, &dbconfig)
-	log.Infof("dbconfig: %s\n", dbconfig)
+	dbConfigs, _ := dbconfigs.Init("", *dbCredentialsFile)
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
@@ -43,7 +45,7 @@ func main() {
 
 	ts.InitQueryService()
 
-	ts.AllowQueries(dbconfig, schemaOverrides, ts.LoadCustomRules())
+	ts.AllowQueries(dbConfigs.App, schemaOverrides, ts.LoadCustomRules())
 
 	log.Infof("starting vtocc %v", *port)
 	servenv.OnClose(func() {

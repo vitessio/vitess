@@ -8,9 +8,9 @@ import (
 	"flag"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
@@ -18,14 +18,71 @@ import (
 )
 
 var (
-	queryLogHandler    = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
-	txLogHandler       = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
-	qsConfigFile       = flag.String("queryserver-config-file", "", "config file name for the query service")
-	customRules        = flag.String("customrules", "", "custom query rules file")
-	spotCheckRatio     = flag.Float64("spot-check-ratio", 0.0, "rowcache spot check frequency")
-	streamExecThrottle = flag.Int("queryserver-config-stream-exec-throttle", 8, "Maximum number of simultaneous streaming requests that can wait for results")
-	streamWaitTimeout  = flag.Float64("queryserver-config-stream-exec-timeout", 4*60, "Timeout for stream-exec-throttle")
+	queryLogHandler = flag.String("query-log-stream-handler", "/debug/querylog", "URL handler for streaming queries log")
+	txLogHandler    = flag.String("transaction-log-stream-handler", "/debug/txlog", "URL handler for streaming transactions log")
+	customRules     = flag.String("customrules", "", "custom query rules file")
 )
+
+func init() {
+	flag.IntVar(&qsConfig.PoolSize, "queryserver-config-pool-size", DefaultQsConfig.PoolSize, "query server pool size")
+	flag.IntVar(&qsConfig.StreamPoolSize, "queryserver-config-stream-pool-size", DefaultQsConfig.StreamPoolSize, "query server stream pool size")
+	flag.IntVar(&qsConfig.TransactionCap, "queryserver-config-transaction-cap", DefaultQsConfig.TransactionCap, "query server transaction cap")
+	flag.Float64Var(&qsConfig.TransactionTimeout, "queryserver-config-transaction-timeout", DefaultQsConfig.TransactionTimeout, "query server transaction timeout")
+	flag.IntVar(&qsConfig.MaxResultSize, "queryserver-config-max-result-size", DefaultQsConfig.MaxResultSize, "query server max result size")
+	flag.IntVar(&qsConfig.StreamBufferSize, "queryserver-config-stream-buffer-size", DefaultQsConfig.StreamBufferSize, "query server stream buffer size")
+	flag.IntVar(&qsConfig.QueryCacheSize, "queryserver-config-query-cache-size", DefaultQsConfig.QueryCacheSize, "query server query cache size")
+	flag.Float64Var(&qsConfig.SchemaReloadTime, "queryserver-config-schema-reload-time", DefaultQsConfig.SchemaReloadTime, "query server schema reload time")
+	flag.Float64Var(&qsConfig.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout")
+	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
+	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
+	flag.IntVar(&qsConfig.StreamExecThrottle, "queryserver-config-stream-exec-throttle", DefaultQsConfig.StreamExecThrottle, "Maximum number of simultaneous streaming requests that can wait for results")
+	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
+	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
+	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-m", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
+	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-s", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
+	flag.IntVar(&qsConfig.RowCache.TcpPort, "rowcache-p", DefaultQsConfig.RowCache.TcpPort, "rowcache tcp port to listen on")
+	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-c", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
+	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-t", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
+	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-k", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
+}
+
+type RowCacheConfig struct {
+	Binary      string
+	Memory      int
+	Socket      string
+	TcpPort     int
+	Connections int
+	Threads     int
+	LockPaged   bool
+}
+
+func (c *RowCacheConfig) GetSubprocessFlags() []string {
+	cmd := []string{}
+	if c.Binary == "" {
+		return cmd
+	}
+	cmd = append(cmd, c.Binary)
+	if c.Memory > 0 {
+		// memory is given in bytes and rowcache expects in MBs
+		cmd = append(cmd, "-m", strconv.Itoa(c.Memory/1000000))
+	}
+	if c.Socket != "" {
+		cmd = append(cmd, "-s", c.Socket)
+	}
+	if c.TcpPort > 0 {
+		cmd = append(cmd, "-p", strconv.Itoa(c.TcpPort))
+	}
+	if c.Connections > 0 {
+		cmd = append(cmd, "-c", strconv.Itoa(c.Connections))
+	}
+	if c.Threads > 0 {
+		cmd = append(cmd, "-t", strconv.Itoa(c.Threads))
+	}
+	if c.LockPaged {
+		cmd = append(cmd, "-k")
+	}
+	return cmd
+}
 
 type Config struct {
 	PoolSize           int
@@ -38,7 +95,7 @@ type Config struct {
 	SchemaReloadTime   float64
 	QueryTimeout       float64
 	IdleTimeout        float64
-	RowCache           []string
+	RowCache           RowCacheConfig
 	SpotCheckRatio     float64
 	StreamExecThrottle int
 	StreamWaitTimeout  float64
@@ -63,20 +120,22 @@ var DefaultQsConfig = Config{
 	QueryTimeout:       0,
 	IdleTimeout:        30 * 60,
 	StreamBufferSize:   32 * 1024,
-	RowCache:           nil,
+	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
 	SpotCheckRatio:     0,
 	StreamExecThrottle: 8,
 	StreamWaitTimeout:  4 * 60,
 }
 
+var qsConfig Config
+
 var SqlQueryRpcService *SqlQuery
 
-func RegisterQueryService(config Config) {
+func RegisterQueryService() {
 	if SqlQueryRpcService != nil {
 		log.Warningf("RPC service already up %v", SqlQueryRpcService)
 		return
 	}
-	SqlQueryRpcService = NewSqlQuery(config)
+	SqlQueryRpcService = NewSqlQuery(qsConfig)
 	proto.RegisterAuthenticated(SqlQueryRpcService)
 	http.HandleFunc("/debug/health", healthCheck)
 }
@@ -150,19 +209,7 @@ func healthCheck(w http.ResponseWriter, r *http.Request) {
 func InitQueryService() {
 	SqlQueryLogger.ServeLogs(*queryLogHandler)
 	TxLogger.ServeLogs(*txLogHandler)
-
-	qsConfig := DefaultQsConfig
-	if *qsConfigFile != "" {
-		if err := jscfg.ReadJson(*qsConfigFile, &qsConfig); err != nil {
-			log.Fatalf("cannot load qsconfig file: %v", err)
-		}
-	}
-	qsConfig.SpotCheckRatio = *spotCheckRatio
-	// TODO(liguo): Merge into your CL
-	qsConfig.StreamExecThrottle = *streamExecThrottle
-	qsConfig.StreamWaitTimeout = *streamWaitTimeout
-
-	RegisterQueryService(qsConfig)
+	RegisterQueryService()
 }
 
 // LoadCustomRules returns custom rules as specified by the command

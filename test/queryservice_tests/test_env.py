@@ -267,18 +267,6 @@ class VtoccTestEnv(TestEnv):
         "-e", "create database vt_test_keyspace ; set global read_only = off"])
     if res != 0:
       raise Exception("Cannot create vt_test_keyspace database")
-    dbconfig = self.mysqldir+"/dbconf.json"
-    with open(dbconfig, 'w') as f:
-      conf = {
-          'charset': 'utf8',
-          'dbname': 'vt_test_keyspace',
-          'host': 'localhost',
-          'unix_socket': self.mysqldir+"/mysql.sock",
-          'uname': 'vt_dba',   # use vt_dba as some tests depend on 'drop'
-          'keyspace': 'test_keyspace',
-          'shard' : '0',
-          }
-      json.dump(conf, f)
 
     self.mysql_conn = self.mysql_connect()
     mcu = self.mysql_conn.cursor()
@@ -310,19 +298,24 @@ class VtoccTestEnv(TestEnv):
     occ_args = [
       self.vtroot+"/bin/vtocc",
       "-port", "9461",
-      "-dbconfig", dbconfig,
       "-customrules", customrules,
       "-schema-override", schema_override,
+      "-db-config-app-charset", "utf8",
+      "-db-config-app-dbname", "vt_test_keyspace",
+      "-db-config-app-host", "localhost",
+      "-db-config-app-unixsocket", self.mysqldir+"/mysql.sock",
+      "-db-config-app-uname", 'vt_dba',   # use vt_dba as some tests depend on 'drop'
+      "-db-config-app-keyspace", "test_keyspace",
+      "-db-config-app-shard", "0"
     ]
     if utils.options.memcache:
       memcache = self.mysqldir+"/memcache.sock"
-      config = self.mysqldir+"/config.json"
-      with open(config, 'w') as f:
-        json.dump({"RowCache": ["memcached", "-s", memcache]}, f)
-      occ_args.extend(["-queryserver-config-file", config])
+      occ_args.extend(["-rowcache-bin", "memcached"])
+      occ_args.extend(["-rowcache-s", memcache])
 
     self.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
-    self.vtocc = subprocess.Popen(occ_args, stderr=self.vtstderr)
+    self.vtstdout = open("/tmp/vtocc_stdout.log", "a+")
+    self.vtocc = subprocess.Popen(occ_args, stdout=self.vtstdout, stderr=self.vtstderr)
     for i in range(30):
       try:
         self.conn = self.connect()
@@ -358,6 +351,8 @@ class VtoccTestEnv(TestEnv):
       self.vtocc.terminate()
     if getattr(self, "vtstderr", None):
       self.vtstderr.close()
+    if getattr(self, "vtstdout", None):
+      self.vtstdout.close()
 
     # stop mysql, delete directory
     subprocess.call([

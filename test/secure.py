@@ -214,10 +214,10 @@ class TestSecure(unittest.TestCase):
     shard_0_slave.start_vttablet(cert=cert_dir + "/vt-server-cert.pem",
                                  key=cert_dir + "/vt-server-key.pem",
                                  repl_extra_flags={
-        'flags': 2048,
-        'ssl_ca': cert_dir + "/ca-cert.pem",
-        'ssl_cert': cert_dir + "/client-cert.pem",
-        'ssl_key': cert_dir + "/client-key.pem",
+        'flags': "2048",
+        'ssl-ca': cert_dir + "/ca-cert.pem",
+        'ssl-cert': cert_dir + "/client-cert.pem",
+        'ssl-key': cert_dir + "/client-key.pem",
         })
 
     # Reparent using SSL

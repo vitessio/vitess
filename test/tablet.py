@@ -292,15 +292,17 @@ class Tablet(object):
     args = [os.path.join(utils.vtroot, 'bin', 'vttablet'),
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
-            '-log_dir', self.tablet_dir,
-            '-db-configs-file', self._write_db_configs_file(repl_extra_flags)]
+            '-log_dir', self.tablet_dir]
+
+    dbconfigs = self._get_db_configs_file(repl_extra_flags)
+    for key1 in dbconfigs:
+      for key2 in dbconfigs[key1]:
+        args.extend(["-db-config-"+key1+"-"+key2, dbconfigs[key1][key2]])
 
     if memcache:
       memcache = os.path.join(self.tablet_dir, "memcache.sock")
-      config = os.path.join(self.tablet_dir, "config.json")
-      with open(config, 'w') as f:
-        json.dump({"RowCache": ["memcached", "-s", memcache]}, f)
-      args.extend(["-queryserver-config-file", config])
+      args.extend(["-rowcache-bin", "memcached"])
+      args.extend(["-rowcache-s", memcache])
 
     if auth:
       args.extend(['-auth-credentials', os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')])
@@ -355,19 +357,14 @@ class Tablet(object):
       if timeout <= 0:
         raise utils.TestError("timeout waiting for state %s" % expected)
 
-  def _write_db_configs_file(self, repl_extra_flags={}):
+  def _get_db_configs_file(self, repl_extra_flags={}):
     config = dict(self.default_db_config)
     if self.keyspace:
       config['app']['dbname'] = self.dbname
       config['dba']['dbname'] = self.dbname
       config['repl']['dbname'] = self.dbname
     config['repl'].update(repl_extra_flags)
-    path = os.path.join(self.tablet_dir, 'db-configs.json')
-
-    with open(path, 'w') as fi:
-      json.dump(config, fi)
-
-    return path
+    return config
 
   def kill_vttablet(self):
     logging.debug("killing vttablet: %s", self.tablet_alias)

@@ -23,7 +23,7 @@ var (
 )
 
 func main() {
-	dbConfigsFile, dbCredentialsFile := dbconfigs.RegisterCommonFlags()
+	dbCredentialsFile := dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 	servenv.Init()
 
@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error reading mycnf file %v", *mycnfFile)
 	}
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbConfigsFile, *dbCredentialsFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbCredentialsFile)
 	if err != nil {
 		log.Warning(err)
 	}
