@@ -989,7 +989,16 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
 
     after_scrap = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
-    self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links before: %s' % str(after_scrap))
+    self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after: %s' % str(after_scrap))
+
+    # manually add a bogus entry to the replication graph, and check
+    # it is removed by ShardReplicationFix
+    utils.run_vtctl('ShardReplicationAdd test_keyspace/0 test_nj-0000066666 test_nj-0000062344', auto_log=True)
+    with_bogus = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    self.assertEqual(2, len(with_bogus['ReplicationLinks']), 'wrong replication links with bogus: %s' % str(with_bogus))
+    utils.run_vtctl('ShardReplicationFix test_nj test_keyspace/0', auto_log=True)
+    after_fix = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after fix: %s' % str(after_fix))
 
 if __name__ == '__main__':
   utils.main()

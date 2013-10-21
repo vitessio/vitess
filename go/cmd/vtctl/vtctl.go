@@ -137,6 +137,15 @@ var commands = []commandGroup{
 			command{"ShardMultiRestore", commandShardMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <keyspace/shard|zk shard path> <source zk path>...",
 				"Restore multi-snapshots on all the tablets of a shard."},
+			command{"ShardReplicationAdd", commandShardReplicationAdd,
+				"<keyspace/shard|zk shard path> <tablet alias|zk tablet path> <parent tablet alias|zk parent tablet path>",
+				"HIDDEN Adds an entry to the replication graph in the given cell"},
+			command{"ShardReplicationRemove", commandShardReplicationRemove,
+				"<keyspace/shard|zk shard path> <tablet alias|zk tablet path>",
+				"HIDDEN Removes an entry to the replication graph in the given cell"},
+			command{"ShardReplicationFix", commandShardReplicationFix,
+				"<cell> <keyspace/shard|zk shard path>",
+				"Walks through a ShardReplication object and fixes the first error it encrounters"},
 		},
 	},
 	commandGroup{
@@ -972,6 +981,40 @@ func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	}
 	err = wr.ShardMultiRestore(keyspace, shard, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
 	return
+}
+
+func commandShardReplicationAdd(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 3 {
+		log.Fatalf("action ShardReplicationAdd requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path> <parent tablet alias|zk parent tablet path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
+	parentAlias := tabletParamToTabletAlias(subFlags.Arg(2))
+	return "", topo.AddShardReplicationRecord(wr.TopoServer(), keyspace, shard, tabletAlias, parentAlias)
+}
+
+func commandShardReplicationRemove(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action ShardReplicationRemove requires <keyspace/shard|zk shard path> <tablet alias|zk tablet path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
+	return "", topo.RemoveShardReplicationRecord(wr.TopoServer(), keyspace, shard, tabletAlias)
+}
+
+func commandShardReplicationFix(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action ShardReplicationRemove requires <cell> <keyspace/shard|zk shard path>")
+	}
+
+	cell := subFlags.Arg(0)
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(1))
+	return "", topo.FixShardReplication(wr.TopoServer(), cell, keyspace, shard)
 }
 
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

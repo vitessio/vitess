@@ -4,6 +4,10 @@
 
 package topo
 
+import (
+	log "github.com/golang/glog"
+)
+
 // ReplicationLink describes a MySQL replication relationship
 type ReplicationLink struct {
 	TabletAlias TabletAlias
@@ -57,4 +61,92 @@ func (sri *ShardReplicationInfo) Keyspace() string {
 
 func (sri *ShardReplicationInfo) Shard() string {
 	return sri.shard
+}
+
+// AddShardReplicationRecord is a low level function to add an
+// entry to the ShardReplication object.
+func AddShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias, parent TabletAlias) error {
+	f := func(sr *ShardReplication) error {
+		// not very efficient, but easy to read
+		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks)+1)
+		found := false
+		for _, link := range sr.ReplicationLinks {
+			if link.TabletAlias == tabletAlias {
+				if found {
+					log.Warningf("Found a second ReplicationLink for tablet %v, deleting it", tabletAlias)
+					continue
+				}
+				found = true
+				if parent.IsZero() {
+					// no master now, we skip the record
+					continue
+				}
+				// update the master
+				link.Parent = parent
+			}
+			links = append(links, link)
+		}
+		if !found && !parent.IsZero() {
+			links = append(links, ReplicationLink{TabletAlias: tabletAlias, Parent: parent})
+		}
+		sr.ReplicationLinks = links
+		return nil
+	}
+	err := ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, f)
+	if err == ErrNoNode {
+		// The ShardReplication object doesn't exist, for some reason,
+		// just create it now.
+		if err := ts.CreateShardReplication(tabletAlias.Cell, keyspace, shard, &ShardReplication{}); err != nil {
+			return err
+		}
+		err = ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, f)
+	}
+	return err
+}
+
+// RemoveShardReplicationRecord is a low level function to remove an
+// entry from the ShardReplication object.
+func RemoveShardReplicationRecord(ts Server, keyspace, shard string, tabletAlias TabletAlias) error {
+	err := ts.UpdateShardReplicationFields(tabletAlias.Cell, keyspace, shard, func(sr *ShardReplication) error {
+		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks))
+		for _, link := range sr.ReplicationLinks {
+			if link.TabletAlias != tabletAlias {
+				links = append(links, link)
+			}
+		}
+		sr.ReplicationLinks = links
+		return nil
+	})
+	return err
+}
+
+// FixShardReplication will fix the first problem it encounters within
+// a ShardReplication object
+func FixShardReplication(ts Server, cell, keyspace, shard string) error {
+	sri, err := ts.GetShardReplication(cell, keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	for _, rl := range sri.ReplicationLinks {
+		ti, err := ts.GetTablet(rl.TabletAlias)
+		if err == ErrNoNode {
+			log.Warningf("Tablet %v is in the replication graph, but does not exist, removing it", rl.TabletAlias)
+			return RemoveShardReplicationRecord(ts, keyspace, shard, rl.TabletAlias)
+		}
+		if err != nil {
+			// unknown error, we probably don't want to continue
+			return err
+		}
+
+		if ti.Type == TYPE_SCRAP {
+			log.Warningf("Tablet %v is in the replication graph, but is scrapped, removing it", rl.TabletAlias)
+			return RemoveShardReplicationRecord(ts, keyspace, shard, rl.TabletAlias)
+		}
+
+		log.Infof("Keeping tablet %v in the replication graph", rl.TabletAlias)
+	}
+
+	log.Infof("All entries in replication graph are valid")
+	return nil
 }

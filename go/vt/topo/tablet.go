@@ -506,60 +506,15 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 	return CreateTabletReplicationData(ts, tablet)
 }
 
+// CreateTabletReplicationData creates the replication graph data for a tablet
 func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 	tabletAlias := tablet.Alias()
 	log.V(6).Infof("CreateTabletReplicationData(%v)", tabletAlias)
 
-	f := func(sr *ShardReplication) error {
-		// not very efficient, but easy to read
-		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks)+1)
-		found := false
-		for _, link := range sr.ReplicationLinks {
-			if link.TabletAlias == tabletAlias {
-				if found {
-					log.Warningf("Found a second ReplicationLink for tablet %v, deleting it", tabletAlias)
-					continue
-				}
-				found = true
-				if tablet.Parent.IsZero() {
-					// no master now, we skip the record
-					continue
-				}
-				// update the master
-				link.Parent = tablet.Parent
-			}
-			links = append(links, link)
-		}
-		if !found && !tablet.Parent.IsZero() {
-			links = append(links, ReplicationLink{TabletAlias: tabletAlias, Parent: tablet.Parent})
-		}
-		sr.ReplicationLinks = links
-		return nil
-	}
-	err := ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, f)
-	if err == ErrNoNode {
-		// The ShardReplication object doesn't exist, for some reason,
-		// just create it now.
-		if err := ts.CreateShardReplication(tablet.Cell, tablet.Keyspace, tablet.Shard, &ShardReplication{}); err != nil {
-			return err
-		}
-		err = ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, f)
-	}
-	return err
+	return AddShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tabletAlias, tablet.Parent)
 }
 
 // DeleteTabletReplicationData deletes replication data.
 func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
-	tabletAlias := tablet.Alias()
-	err := ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, func(sr *ShardReplication) error {
-		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks))
-		for _, link := range sr.ReplicationLinks {
-			if link.TabletAlias != tabletAlias {
-				links = append(links, link)
-			}
-		}
-		sr.ReplicationLinks = links
-		return nil
-	})
-	return err
+	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias())
 }
