@@ -23,7 +23,7 @@ func TestParsing(t *testing.T) {
 func TestPurge(t *testing.T) {
 	logDir := path.Join(os.TempDir(), fmt.Sprintf("%v-%v", os.Args[0], os.Getpid()))
 	if err := os.MkdirAll(logDir, 0777); err != nil {
-		t.Fatal("os.MkdirAll: %v", err)
+		t.Fatalf("os.MkdirAll: %v", err)
 	}
 	defer os.RemoveAll(logDir)
 

@@ -241,7 +241,7 @@ func (blp *Blp) streamBinlog(sendReply SendUpdateStreamResponse, binlogPrefix st
 	reader, err := mbl.Launch(
 		blp.globalState.dbname,
 		path.Join(path.Dir(binlogPrefix), blp.startPosition.MasterFilename),
-		blp.startPosition.MasterPosition,
+		int64(blp.startPosition.MasterPosition),
 	)
 	if err != nil {
 		return err

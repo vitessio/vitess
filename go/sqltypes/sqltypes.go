@@ -77,6 +77,18 @@ func (v Value) String() string {
 	return hack.String(v.Inner.raw())
 }
 
+// ParseInt64 will parse a Numeric value into an int64
+func (v Value) ParseInt64() (val int64, err error) {
+	if v.Inner == nil {
+		return 0, fmt.Errorf("value is null")
+	}
+	n, ok := v.Inner.(Numeric)
+	if !ok {
+		return 0, fmt.Errorf("value is not Numeric")
+	}
+	return strconv.ParseInt(string(n.raw()), 10, 64)
+}
+
 // ParseUint64 will parse a Numeric value into a uint64
 func (v Value) ParseUint64() (val uint64, err error) {
 	if v.Inner == nil {
@@ -291,11 +303,11 @@ var encodeRef = map[byte]byte{
 }
 
 func init() {
-	for i, _ := range SqlEncodeMap {
+	for i := range SqlEncodeMap {
 		SqlEncodeMap[i] = DONTESCAPE
 		SqlDecodeMap[i] = DONTESCAPE
 	}
-	for i, _ := range SqlEncodeMap {
+	for i := range SqlEncodeMap {
 		if to, ok := encodeRef[byte(i)]; ok {
 			SqlEncodeMap[byte(i)] = to
 			SqlDecodeMap[to] = byte(i)

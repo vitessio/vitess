@@ -165,7 +165,7 @@ func (zkr *ZkReader) GetV(req *zk.ZkPathV, reply *zk.ZkNodeV) (err error) {
 	for i, zkPath := range req.Paths {
 		wg.Add(1)
 		go func(i int, zkPath string) {
-			zp := &zk.ZkPath{zkPath}
+			zp := &zk.ZkPath{Path: zkPath}
 			zn := &zk.ZkNode{}
 			err := zkr.get(zp, zn)
 			if err != nil {

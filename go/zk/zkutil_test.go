@@ -219,11 +219,11 @@ func TestResolveWildcardsCell(t *testing.T) {
 	configMap := map[string]string{"ny": "127.0.0.1", "nj": "127.0.0.2"}
 	file, err := os.Create(configPath)
 	if err != nil {
-		t.Errorf("create failed: %v")
+		t.Errorf("create failed: %v", err)
 	}
 	err = json.NewEncoder(file).Encode(configMap)
 	if err != nil {
-		t.Errorf("encode failed: %v")
+		t.Errorf("encode failed: %v", err)
 	}
 	file.Close()
 

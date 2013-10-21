@@ -302,39 +302,7 @@ func (tee *Tee) GetTabletsByCell(cell string) ([]topo.TabletAlias, error) {
 }
 
 //
-// Replication graph management, global.
-//
-
-func (tee *Tee) GetReplicationPaths(keyspace, shard, repPath string) ([]topo.TabletAlias, error) {
-	return tee.readFrom.GetReplicationPaths(keyspace, shard, repPath)
-}
-
-func (tee *Tee) CreateReplicationPath(keyspace, shard, repPath string) error {
-	if err := tee.primary.CreateReplicationPath(keyspace, shard, repPath); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.CreateReplicationPath(keyspace, shard, repPath); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.CreateReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
-	}
-	return nil
-}
-
-func (tee *Tee) DeleteReplicationPath(keyspace, shard, repPath string) error {
-	if err := tee.primary.DeleteReplicationPath(keyspace, shard, repPath); err != nil {
-		return err
-	}
-
-	if err := tee.secondary.DeleteReplicationPath(keyspace, shard, repPath); err != nil {
-		// not critical enough to fail
-		log.Warningf("secondary.DeleteReplicationPath(%v, %v, %v) failed: %v", keyspace, shard, repPath, err)
-	}
-	return nil
-}
-
-//
-// Replication graph management, global.
+// Shard replication graph management, local.
 //
 
 func (tee *Tee) CreateShardReplication(cell, keyspace, shard string, sr *topo.ShardReplication) error {

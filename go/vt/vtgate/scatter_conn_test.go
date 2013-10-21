@@ -10,24 +10,38 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // This file uses the sandbox_test framework.
 
-func TestVTConnExecute(t *testing.T) {
+func TestScatterConnExecute(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
-	testVTConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
-		return vtc.Execute("query", nil, "", shards)
+	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+		return stc.Execute("query", nil, "", shards)
 	})
 }
 
-func TestVTConnStreamExecute(t *testing.T) {
+func TestScatterConnExecuteBatch(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
-	testVTConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+		queries := []proto.BoundQuery{{"query", nil}}
+		qrs, err := stc.ExecuteBatch(queries, "", shards)
+		if err != nil {
+			return nil, err
+		}
+		return &qrs.List[0], err
+	})
+}
+
+func TestScatterConnStreamExecute(t *testing.T) {
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
+		stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
 		qr := new(mproto.QueryResult)
-		err := vtc.StreamExecute("query", nil, "", shards, func(r interface{}) error {
+		err := stc.StreamExecute("query", nil, "", shards, func(r interface{}) error {
 			appendResult(qr, r.(*mproto.QueryResult))
 			return nil
 		})
@@ -35,7 +49,7 @@ func TestVTConnStreamExecute(t *testing.T) {
 	})
 }
 
-func testVTConnGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
+func testScatterConnGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
 	// no shard
 	resetSandbox()
 	qr, err := f(nil)
@@ -115,24 +129,24 @@ func testVTConnGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResul
 	}
 }
 
-func TestVTConnExecuteTxTimeout(t *testing.T) {
+func TestScatterConnExecuteTxTimeout(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc0 := &sandboxConn{}
 	testConns["0:1"] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns["1:1"] = sbc1
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
 
 	for i := 0; i < 2; i++ {
-		vtc.Begin()
-		vtc.Execute("query", nil, "", []string{"0"})
+		stc.Begin()
+		stc.Execute("query", nil, "", []string{"0"})
 		// Shard 0 must be in transaction
 		if sbc0.TransactionId() == 0 {
 			t.Errorf("want non-zero, got 0")
 		}
-		if len(vtc.commitOrder) != 1 {
-			t.Errorf("want 2, got %d", len(vtc.commitOrder))
+		if len(stc.commitOrder) != 1 {
+			t.Errorf("want 2, got %d", len(stc.commitOrder))
 		}
 
 		var want string
@@ -144,7 +158,7 @@ func TestVTConnExecuteTxTimeout(t *testing.T) {
 			sbc1.mustFailNotTx = 1
 			want = "not_in_tx: err, shard: (.1.), address: 1:1"
 		}
-		_, err := vtc.Execute("query1", nil, "", []string{"1"})
+		_, err := stc.Execute("query1", nil, "", []string{"1"})
 		// All transactions must be rolled back.
 		if err == nil || err.Error() != want {
 			t.Errorf("want %s, got %v", want, err)
@@ -152,23 +166,23 @@ func TestVTConnExecuteTxTimeout(t *testing.T) {
 		if sbc0.TransactionId() != 0 {
 			t.Errorf("want 0, got %v", sbc0.TransactionId())
 		}
-		if len(vtc.commitOrder) != 0 {
-			t.Errorf("want 0, got %d", len(vtc.commitOrder))
+		if len(stc.commitOrder) != 0 {
+			t.Errorf("want 0, got %d", len(stc.commitOrder))
 		}
 	}
 }
 
-func TestVTConnExecuteTxChange(t *testing.T) {
+func TestScatterConnExecuteTxChange(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
-	vtc.Begin()
-	vtc.Execute("query", nil, "", []string{"0"})
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc.Begin()
+	stc.Execute("query", nil, "", []string{"0"})
 	sbc.Rollback()
 	sbc.Begin()
-	_, err := vtc.Execute("query", nil, "", []string{"0"})
+	_, err := stc.Execute("query", nil, "", []string{"0"})
 	want := "not_in_tx: connection is in a different transaction, shard: (.0.), address: 0:1"
 	// Ensure that we detect the case where the underlying
 	// connection is in a different
@@ -178,17 +192,17 @@ func TestVTConnExecuteTxChange(t *testing.T) {
 	}
 }
 
-func TestVTConnExecuteUnexpectedTx(t *testing.T) {
+func TestScatterConnExecuteUnexpectedTx(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
 	// This call is to make sure shard_conn points to a real connection.
-	vtc.Execute("query", nil, "", []string{"0"})
+	stc.Execute("query", nil, "", []string{"0"})
 
 	sbc.Begin()
-	_, err := vtc.Execute("query", nil, "", []string{"0"})
+	_, err := stc.Execute("query", nil, "", []string{"0"})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -198,12 +212,12 @@ func TestVTConnExecuteUnexpectedTx(t *testing.T) {
 	}
 }
 
-func TestVTConnStreamExecuteTx(t *testing.T) {
+func TestScatterConnStreamExecuteTx(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
-	vtc.Begin()
-	err := vtc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc.Begin()
+	err := stc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
 		return nil
 	})
 	// No support for streaming in a transaction.
@@ -213,13 +227,13 @@ func TestVTConnStreamExecuteTx(t *testing.T) {
 	}
 }
 
-func TestVTConnStreamExecuteSendError(t *testing.T) {
+func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
-	err := vtc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	err := stc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
@@ -229,14 +243,14 @@ func TestVTConnStreamExecuteSendError(t *testing.T) {
 	}
 }
 
-func TestVTConnBeginFail(t *testing.T) {
+func TestScatterConnBeginFail(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
-	vtc.Begin()
-	err := vtc.Begin()
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc.Begin()
+	err := stc.Begin()
 	// Disallow Begin if we're already in a transaction.
 	want := "cannot begin: already in a transaction"
 	if err == nil || err.Error() != want {
@@ -244,21 +258,21 @@ func TestVTConnBeginFail(t *testing.T) {
 	}
 }
 
-func TestVTConnCommitSuccess(t *testing.T) {
+func TestScatterConnCommitSuccess(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc0 := &sandboxConn{}
 	testConns["0:1"] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns["1:1"] = sbc1
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
 
-	vtc.Begin()
+	stc.Begin()
 	// Sequence the executes to ensure commit order
-	vtc.Execute("query1", nil, "", []string{"0"})
-	vtc.Execute("query1", nil, "", []string{"1"})
+	stc.Execute("query1", nil, "", []string{"0"})
+	stc.Execute("query1", nil, "", []string{"1"})
 	sbc0.mustFailServer = 1
-	vtc.Commit()
+	stc.Commit()
 	if sbc0.TransactionId() != 0 {
 		t.Errorf("want 0, got %d", sbc0.TransactionId())
 	}
@@ -273,17 +287,17 @@ func TestVTConnCommitSuccess(t *testing.T) {
 	}
 }
 
-func TestVTConnBeginRetry(t *testing.T) {
+func TestScatterConnBeginRetry(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc0 := &sandboxConn{}
 	testConns["0:1"] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns["1:1"] = sbc1
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
 
-	vtc.Begin()
-	vtc.Execute("query1", nil, "", []string{"0", "1"})
+	stc.Begin()
+	stc.Execute("query1", nil, "", []string{"0", "1"})
 	if sbc0.TransactionId() == 0 {
 		t.Errorf("want non-zero, got 0")
 	}
@@ -293,7 +307,7 @@ func TestVTConnBeginRetry(t *testing.T) {
 	if sbc1.TransactionId() == 0 {
 		t.Errorf("want non-zero, got 0")
 	}
-	vtc.Commit()
+	stc.Commit()
 	if sbc0.TransactionId() != 0 {
 		t.Errorf("want 0, got %d", sbc0.TransactionId())
 	}
@@ -308,14 +322,14 @@ func TestVTConnBeginRetry(t *testing.T) {
 	}
 }
 
-func TestVTConnClose(t *testing.T) {
+func TestScatterConnClose(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	vtc := NewVTConn(blm, "sandbox", "", 1*time.Millisecond, 3)
-	vtc.Execute("query1", nil, "", []string{"0"})
-	vtc.Close()
+	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc.Execute("query1", nil, "", []string{"0"})
+	stc.Close()
 	if sbc.CloseCount != 1 {
 		t.Errorf("want 1, got %d", sbc.CommitCount)
 	}

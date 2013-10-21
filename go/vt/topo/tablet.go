@@ -6,7 +6,6 @@ package topo
 
 import (
 	"fmt"
-	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -384,21 +383,8 @@ func (ti *TabletInfo) Path() string {
 	return fmt.Sprintf("/zk/%v/vt/tablets/%010d", ti.Cell, ti.Uid)
 }
 
-func (ti *TabletInfo) ReplicationPath() string {
-	return tabletReplicationPath(ti.Tablet)
-}
-
 func (ti *TabletInfo) Version() int64 {
 	return ti.version
-}
-
-func tabletReplicationPath(tablet *Tablet) string {
-	leaf := TabletAlias{tablet.Cell, tablet.Uid}.String()
-	if tablet.Parent.Uid == NO_TABLET {
-		return leaf
-	}
-	// FIXME(alainjobart) assumes one level of replication hierarchy
-	return path.Join(tablet.Parent.String(), leaf)
 }
 
 // Complete validates and normalizes the tablet. If the shard name
@@ -445,7 +431,7 @@ func UpdateTablet(ts Server, tablet *TabletInfo) error {
 	return err
 }
 
-func Validate(ts Server, tabletAlias TabletAlias, tabletReplicationPath string) error {
+func Validate(ts Server, tabletAlias TabletAlias) error {
 	// read the tablet record, make sure it parses
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -459,26 +445,29 @@ func Validate(ts Server, tabletAlias TabletAlias, tabletReplicationPath string) 
 
 	// Some tablets have no information to generate valid replication paths.
 	// We have two cases to handle:
-	// - we are in the replication graph, and should have a replication path
-	//   (first case below)
-	// - we are in scrap mode, but used to be assigned in the graph
-	//   somewhere (second case below)
+	// - we are a slave in the replication graph, and should have
+	// replication data (first case below)
+	// - we are a master, or in scrap mode but used to be assigned
+	// in the graph somewhere (second case below)
 	// Idle tablets are just not in any graph at all, we don't even know
 	// their keyspace / shard to know where to check.
-	if tablet.IsInReplicationGraph() {
+	if tablet.IsInReplicationGraph() && tablet.Type != TYPE_MASTER {
 		if err = ts.ValidateShard(tablet.Keyspace, tablet.Shard); err != nil {
 			return err
 		}
-		rp := tablet.ReplicationPath()
-		if tabletReplicationPath != "" && tabletReplicationPath != rp {
-			return fmt.Errorf("replication path mismatch, tablet expects %v but found %v",
-				rp, tabletReplicationPath)
-		}
 
-		// Check we are in the replication graph
-		_, err = ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, rp)
+		si, err := ts.GetShardReplication(tablet.Cell, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
+		}
+
+		rl, err := si.GetReplicationLink(tabletAlias)
+		if err != nil {
+			return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Cell, err)
+		}
+
+		if rl.Parent != tablet.Parent {
+			return fmt.Errorf("tablet %v has parent %v but has %v in shard replication object", tabletAlias, tablet.Parent, rl.Parent)
 		}
 
 	} else if tablet.IsAssigned() {
@@ -486,11 +475,14 @@ func Validate(ts Server, tabletAlias TabletAlias, tabletReplicationPath string) 
 		// a replication graph doesn't leave a node behind.
 		// However, while an action is running, there is some
 		// time where this might be inconsistent.
-		rp := tablet.ReplicationPath()
-		_, err = ts.GetReplicationPaths(tablet.Keyspace, tablet.Shard, rp)
+		si, err := ts.GetShardReplication(tablet.Cell, tablet.Keyspace, tablet.Shard)
+		if err != nil {
+			return err
+		}
+
+		rl, err := si.GetReplicationLink(tabletAlias)
 		if err != ErrNoNode {
-			return fmt.Errorf("unexpected replication path found(possible pending action?): %v (%v)",
-				rp, tablet.Type)
+			return fmt.Errorf("unexpected replication data found(possible pending action?): %v (%v)", rl, tablet.Type)
 		}
 	}
 
@@ -517,9 +509,6 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 	tabletAlias := tablet.Alias()
 	log.V(6).Infof("CreateTabletReplicationData(%v)", tabletAlias)
-	if err := ts.CreateReplicationPath(tablet.Keyspace, tablet.Shard, tabletReplicationPath(tablet)); err != nil && err != ErrNodeExists {
-		return err
-	}
 
 	f := func(sr *ShardReplication) error {
 		// not very efficient, but easy to read
@@ -559,15 +548,8 @@ func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
 	return err
 }
 
-// DeleteTabletReplicationData deletes both old and new style
-// replication data: we need the path for old style (can be just
-// tablet.ReplicationPath()), and we just use the tablet for new
-// style.
-func DeleteTabletReplicationData(ts Server, tablet *Tablet, replicationPath string) error {
-	if err := ts.DeleteReplicationPath(tablet.Keyspace, tablet.Shard, replicationPath); err != nil {
-		return err
-	}
-
+// DeleteTabletReplicationData deletes replication data.
+func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
 	tabletAlias := tablet.Alias()
 	err := ts.UpdateShardReplicationFields(tablet.Cell, tablet.Keyspace, tablet.Shard, func(sr *ShardReplication) error {
 		links := make([]ReplicationLink, 0, len(sr.ReplicationLinks))
@@ -579,10 +561,5 @@ func DeleteTabletReplicationData(ts Server, tablet *Tablet, replicationPath stri
 		sr.ReplicationLinks = links
 		return nil
 	})
-	if err == ErrNoNode {
-		// if the ShardReplication object doesn not exist, we don't
-		// mind, not mandatory yet
-		err = nil
-	}
 	return err
 }

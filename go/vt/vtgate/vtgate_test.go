@@ -12,6 +12,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -77,6 +78,14 @@ func TestVTGateSessionConflict(t *testing.T) {
 		SessionId: sess.SessionId,
 		Shards:    []string{"0"},
 	}
+	bq := proto.BatchQueryShard{
+		Queries: []proto.BoundQuery{{
+			"query",
+			nil,
+		}},
+		SessionId: sess.SessionId,
+		Shards:    []string{"0"},
+	}
 	var qr mproto.QueryResult
 	go RpcVTGate.ExecuteShard(nil, &q, &qr)
 	runtime.Gosched()
@@ -89,12 +98,14 @@ func TestVTGateSessionConflict(t *testing.T) {
 		case 0:
 			err = RpcVTGate.ExecuteShard(nil, &q, nil)
 		case 1:
-			err = RpcVTGate.StreamExecuteShard(nil, &q, nil)
+			err = RpcVTGate.ExecuteBatchShard(nil, &bq, nil)
 		case 2:
-			err = RpcVTGate.Begin(nil, &sess, &noOutput)
+			err = RpcVTGate.StreamExecuteShard(nil, &q, nil)
 		case 3:
-			err = RpcVTGate.Commit(nil, &sess, &noOutput)
+			err = RpcVTGate.Begin(nil, &sess, &noOutput)
 		case 4:
+			err = RpcVTGate.Commit(nil, &sess, &noOutput)
+		case 5:
 			err = RpcVTGate.Rollback(nil, &sess, &noOutput)
 		default:
 			return
@@ -118,6 +129,34 @@ func TestVTGateExecuteShard(t *testing.T) {
 	}
 	if qr.RowsAffected != 1 {
 		t.Errorf("want 1, got %v", qr.RowsAffected)
+	}
+}
+
+func TestVTGateExecuteBatchShard(t *testing.T) {
+	sess := resetVTGate()
+	testConns["0:1"] = &sandboxConn{}
+	testConns["1:1"] = &sandboxConn{}
+	q := proto.BatchQueryShard{
+		Queries: []proto.BoundQuery{{
+			"query",
+			nil,
+		}, {
+			"query",
+			nil,
+		}},
+		SessionId: sess.SessionId,
+		Shards:    []string{"0", "1"},
+	}
+	qrs := new(tproto.QueryResultList)
+	err := RpcVTGate.ExecuteBatchShard(nil, &q, qrs)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	if len(qrs.List) != 2 {
+		t.Errorf("want 2, got %v", len(qrs.List))
+	}
+	if qrs.List[0].RowsAffected != 2 {
+		t.Errorf("want 2, got %v", qrs.List[0].RowsAffected)
 	}
 }
 

@@ -44,7 +44,7 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		t.Errorf("CreateTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(topo.TabletAlias{cell, 666}); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(topo.TabletAlias{Cell: cell, Uid: 666}); err != topo.ErrNoNode {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
@@ -126,7 +126,7 @@ func CheckPid(t *testing.T, ts topo.Server) {
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Fatalf("CreateTablet: %v", err)
 	}
-	tabletAlias := topo.TabletAlias{cell, 1}
+	tabletAlias := topo.TabletAlias{Cell: cell, Uid: 1}
 
 	done := make(chan struct{}, 1)
 	if err := ts.CreateTabletPidNode(tabletAlias, "contents", done); err != nil {

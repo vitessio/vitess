@@ -83,7 +83,7 @@ func (dc DummyVtClient) Close() {
 
 func (dc DummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
 	dc.stdout.WriteString(string(query) + ";\n")
-	return &proto.QueryResult{nil, 1, 0, nil}, nil
+	return &proto.QueryResult{Fields: nil, RowsAffected: 1, InsertId: 0, Rows: nil}, nil
 }
 
 // DBClient is a real VtClient backed by a mysql connection

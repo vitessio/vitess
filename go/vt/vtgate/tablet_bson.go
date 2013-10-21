@@ -9,6 +9,7 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 func init() {
@@ -57,6 +58,24 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (
 	return qr, nil
 }
 
+func (conn *TabletBson) ExecuteBatch(queries []proto.BoundQuery) (*tproto.QueryResultList, error) {
+	req := tproto.QueryList{List: make([]tproto.Query, 0, len(queries))}
+	for _, q := range queries {
+		req.List = append(req.List, tproto.Query{
+			Sql:           q.Sql,
+			BindVariables: q.BindVariables,
+			TransactionId: conn.session.TransactionId,
+			ConnectionId:  conn.session.ConnectionId,
+			SessionId:     conn.session.SessionId,
+		})
+	}
+	qrs := new(tproto.QueryResultList)
+	if err := conn.rpcClient.Call("SqlQuery.ExecuteBatch", req, qrs); err != nil {
+		return nil, err
+	}
+	return qrs, nil
+}
+
 func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
 	req := &tproto.Query{
 		Sql:           query,
@@ -91,7 +110,7 @@ func (conn *TabletBson) TransactionId() int64 {
 }
 
 func (conn *TabletBson) Close() error {
-	conn.session = tproto.Session{0, 0, 0}
+	conn.session = tproto.Session{TransactionId: 0, ConnectionId: 0, SessionId: 0}
 	rpcClient := conn.rpcClient
 	conn.rpcClient = nil
 	return rpcClient.Close()

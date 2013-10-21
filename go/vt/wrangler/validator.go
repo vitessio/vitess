@@ -100,7 +100,7 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresul
 		}
 	}
 
-	for cell, _ := range cellSet {
+	for cell := range cellSet {
 		aliases, err := wr.ts.GetTabletsByCell(cell)
 		if err != nil {
 			results <- vresult{"GetTabletsByCell(" + cell + ")", err}
@@ -108,7 +108,7 @@ func (wr *Wrangler) validateAllTablets(wg *sync.WaitGroup, results chan<- vresul
 			for _, alias := range aliases {
 				wg.Add(1)
 				go func(alias topo.TabletAlias) {
-					results <- vresult{alias.String(), topo.Validate(wr.ts, alias, "")}
+					results <- vresult{alias.String(), topo.Validate(wr.ts, alias)}
 					wg.Done()
 				}(alias)
 			}
@@ -170,13 +170,9 @@ func (wr *Wrangler) validateShard(keyspace, shard string, pingTablets bool, wg *
 	}
 
 	for _, alias := range aliases {
-		tabletReplicationPath := masterAlias.String()
-		if alias != masterAlias {
-			tabletReplicationPath += "/" + alias.String()
-		}
 		wg.Add(1)
 		go func(alias topo.TabletAlias) {
-			results <- vresult{tabletReplicationPath, topo.Validate(wr.ts, alias, tabletReplicationPath)}
+			results <- vresult{alias.String(), topo.Validate(wr.ts, alias)}
 			wg.Done()
 		}(alias)
 	}

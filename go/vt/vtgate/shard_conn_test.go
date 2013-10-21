@@ -7,6 +7,8 @@ package vtgate
 import (
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // This file uses the sandbox_test framework.
@@ -16,6 +18,16 @@ func TestShardConnExecute(t *testing.T) {
 	testShardConnGeneric(t, func() error {
 		sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
 		_, err := sdc.Execute("query", nil)
+		return err
+	})
+}
+
+func TestShardConnExecuteBatch(t *testing.T) {
+	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
+	testShardConnGeneric(t, func() error {
+		sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+		queries := []proto.BoundQuery{{"query", nil}}
+		_, err := sdc.ExecuteBatch(queries)
 		return err
 	})
 }

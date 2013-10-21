@@ -18,6 +18,15 @@ type ShardReplication struct {
 	ReplicationLinks []ReplicationLink
 }
 
+func (sr *ShardReplication) GetReplicationLink(tabletAlias TabletAlias) (ReplicationLink, error) {
+	for _, rl := range sr.ReplicationLinks {
+		if rl.TabletAlias == tabletAlias {
+			return rl, nil
+		}
+	}
+	return ReplicationLink{}, ErrNoNode
+}
+
 // ShardReplicationInfo is the companion structure for ShardReplication.
 type ShardReplicationInfo struct {
 	*ShardReplication

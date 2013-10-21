@@ -12,7 +12,9 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // sandbox_test.go provides a sandbox for unit testing Barnacle.
@@ -132,6 +134,21 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (
 		return nil, err
 	}
 	return singleRowResult, nil
+}
+
+func (sbc *sandboxConn) ExecuteBatch(queries []proto.BoundQuery) (*tproto.QueryResultList, error) {
+	sbc.ExecCount++
+	if sbc.mustDelay != 0 {
+		time.Sleep(sbc.mustDelay)
+	}
+	if err := sbc.getError(); err != nil {
+		return nil, err
+	}
+	qrl := &tproto.QueryResultList{List: make([]mproto.QueryResult, 0, len(queries))}
+	for _ = range queries {
+		qrl.List = append(qrl.List, *singleRowResult)
+	}
+	return qrl, nil
 }
 
 func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {

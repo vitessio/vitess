@@ -147,28 +147,6 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	}
 	wg.Wait()
 
-	// TODO(alainjobart) remove this section when replication paths
-	// are retired.
-	// check the toplevel replication paths only contains the new master,
-	// try to remove any old tablet aliases that don't make sense anymore
-	toplevelAliases, err := wr.ts.GetReplicationPaths(masterElectTablet.Keyspace, masterElectTablet.Shard, "")
-	if err != nil {
-		log.Warningf("GetReplicationPaths() failed, cannot fix extra paths: %v", err)
-	} else {
-		for _, toplevelAlias := range toplevelAliases {
-			// we only keep our new master
-			if toplevelAlias == masterElectTablet.Alias() {
-				continue
-			}
-
-			// and remove everybody else, regardless
-			log.Infof("Removing stale replication path %v", toplevelAlias.String())
-			if err := topo.DeleteTabletReplicationData(wr.ts, masterElectTablet.Tablet, toplevelAlias.String()); err != nil {
-				log.Warningf("DeleteTabletReplicationData(%v) failed: %v", toplevelAlias.String(), err)
-			}
-		}
-	}
-
 	if !recorder.HasErrors() {
 		return nil
 	}
