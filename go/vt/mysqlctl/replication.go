@@ -361,6 +361,44 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	return
 }
 
+/*
+	mysql> show binlog info for 5\G
+	*************************** 1. row ***************************
+	Log_name: vt-0000041983-bin.000001
+	Pos: 1194
+	Server_ID: 41983
+*/
+func (mysqld *Mysqld) BinlogInfo(groupId, serverId int64) (rp *ReplicationPosition, err error) {
+	// if group id is not known(0), we start from the latest position.
+	if groupId == 0 {
+		return mysqld.MasterStatus()
+	}
+
+	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %d", groupId))
+	if err != nil {
+		return nil, err
+	}
+	if len(qr.Rows) != 1 {
+		return nil, fmt.Errorf("no binlogs")
+	}
+	rp = &ReplicationPosition{}
+	rp.MasterLogFile = qr.Rows[0][0].String()
+	temp, err := qr.Rows[0][1].ParseInt64()
+	if err != nil {
+		return nil, err
+	}
+	rp.MasterLogPosition = uint(temp)
+	dbserverid, err := qr.Rows[0][2].ParseInt64()
+	if err != nil {
+		return nil, err
+	}
+	// If server id is not known (0), we don't check.
+	if serverId != 0 && serverId != dbserverid {
+		return nil, fmt.Errorf("server id %v does not match %v", serverId, dbserverid)
+	}
+	return rp, nil
+}
+
 func (mysqld *Mysqld) WaitForSlave(maxLag int) (err error) {
 	// FIXME(msolomon) verify that slave started based on show slave status;
 	var rowMap map[string]string
