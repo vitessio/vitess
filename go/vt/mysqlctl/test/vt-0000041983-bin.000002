@@ -1,0 +1,37 @@
+/*!40019 SET @@session.max_insert_delayed_threads=0*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+# at 4
+#131018 22:21:08 server id 41983  end_log_pos 106 	Start: binlog v 4, server v 5.1.63-google-log created 131018 22:21:08
+BINLOG '
+xBZiUg//owAAZgAAAGoAAAAAAAQANS4xLjYzLWdvb2dsZS1sb2cAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAGzgNAAgAEgAEBAQEEgAAUwAEGggAAAAICAgC
+'/*!*/;
+# at 106
+#131018 22:21:47 server id 41983  end_log_pos 184  group_id 7 	Query	thread_id=3	exec_time=0	error_code=0
+SET TIMESTAMP=1382160107/*!*/;
+SET @@session.pseudo_thread_id=3/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=1, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=2097152/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C latin1 *//*!*/;
+SET @@session.character_set_client=8,@@session.collation_connection=8,@@session.collation_server=33/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+BEGIN
+/*!*/;
+# at 184
+#131018 22:21:47 server id 41983  end_log_pos 286  group_id 7 	Query	thread_id=3	exec_time=0	error_code=0
+use sougou/*!*/;
+SET TIMESTAMP=1382160107/*!*/;
+insert into a values(1, 'aa')
+/*!*/;
+# at 286
+#131018 22:21:47 server id 41983  end_log_pos 321  group_id 7 	Xid = 17
+COMMIT/*!*/;
+# at 321
+#131018 22:22:19 server id 41983  end_log_pos 372 	Rotate to vt-0000041983-bin.000003  pos: 4
+DELIMITER ;
+# End of log file
+ROLLBACK /* added by mysqlbinlog */;
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;

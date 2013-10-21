@@ -11,6 +11,8 @@ import (
 	"path"
 	"testing"
 	"time"
+
+	"github.com/youtube/vitess/go/sync2"
 )
 
 func TestPosParse(t *testing.T) {
@@ -77,13 +79,14 @@ func TestFileInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	ch := make(chan []byte, 10)
+	var running = sync2.AtomicInt32(1)
 	go func() {
 		for {
-			file.WaitForChange()
+			file.WaitForChange(&running)
 			b := make([]byte, 128)
 			n, err := file.handle.Read(b)
 			if err != nil {
-				t.Error(err)
+				ch <- []byte(err.Error())
 			}
 			file.Set(file.pos + int64(n))
 			ch <- b[:n]
@@ -110,6 +113,13 @@ func TestFileInfo(t *testing.T) {
 	want = "Message3"
 	writer.WriteString(want)
 	writer.Sync()
+	got = string(<-ch)
+	if want != got {
+		t.Errorf("want %v, got %v", want, got)
+	}
+
+	want = "EOF"
+	running.Set(-1)
 	got = string(<-ch)
 	if want != got {
 		t.Errorf("want %v, got %v", want, got)

@@ -1,0 +1,41 @@
+/*!40019 SET @@session.max_insert_delayed_threads=0*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+# at 4
+#131020 21:37:11 server id 41983  end_log_pos 106 	Start: binlog v 4, server v 5.1.63-google-log created 131020 21:37:11
+# Warning: this binlog is either in use or was not closed properly.
+BINLOG '
+d69kUg//owAAZgAAAGoAAAABAAQANS4xLjYzLWdvb2dsZS1sb2cAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAGzgNAAgAEgAEBAQEEgAAUwAEGggAAAAICAgC
+'/*!*/;
+# at 106
+#131020 21:37:35 server id 41983  end_log_pos 184  group_id 15 	Query	thread_id=6	exec_time=0	error_code=0
+SET TIMESTAMP=1382330255/*!*/;
+SET @@session.pseudo_thread_id=6/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=1, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=2097152/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C latin1 *//*!*/;
+SET @@session.character_set_client=8,@@session.collation_connection=8,@@session.collation_server=33/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+BEGIN
+/*!*/;
+# at 184
+#131020 21:37:05 server id 41983  end_log_pos 286  group_id 15 	Query	thread_id=6	exec_time=0	error_code=0
+use sougou/*!*/;
+SET TIMESTAMP=1382330225/*!*/;
+insert into a values(8, 'hh')
+/*!*/;
+# at 286
+#131020 21:37:32 server id 41983  end_log_pos 388  group_id 15 	Query	thread_id=6	exec_time=0	error_code=0
+SET TIMESTAMP=1382330252/*!*/;
+insert into a values(9, 'ii')
+/*!*/;
+# at 388
+#131020 21:37:35 server id 41983  end_log_pos 423  group_id 15 	Xid = 53
+COMMIT/*!*/;
+DELIMITER ;
+# End of log file
+ROLLBACK /* added by mysqlbinlog */;
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;

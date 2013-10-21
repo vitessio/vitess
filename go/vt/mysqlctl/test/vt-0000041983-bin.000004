@@ -1,0 +1,69 @@
+/*!40019 SET @@session.max_insert_delayed_threads=0*/;
+/*!50003 SET @OLD_COMPLETION_TYPE=@@COMPLETION_TYPE,COMPLETION_TYPE=0*/;
+DELIMITER /*!*/;
+# at 4
+#131019 18:28:50 server id 41983  end_log_pos 106 	Start: binlog v 4, server v 5.1.63-google-log created 131019 18:28:50
+BINLOG '
+0jFjUg//owAAZgAAAGoAAAAAAAQANS4xLjYzLWdvb2dsZS1sb2cAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAGzgNAAgAEgAEBAQEEgAAUwAEGggAAAAICAgC
+'/*!*/;
+# at 106
+#131019 18:29:14 server id 41983  end_log_pos 184  group_id 11 	Query	thread_id=5	exec_time=0	error_code=0
+SET TIMESTAMP=1382232554/*!*/;
+SET @@session.pseudo_thread_id=5/*!*/;
+SET @@session.foreign_key_checks=1, @@session.sql_auto_is_null=1, @@session.unique_checks=1, @@session.autocommit=1/*!*/;
+SET @@session.sql_mode=2097152/*!*/;
+SET @@session.auto_increment_increment=1, @@session.auto_increment_offset=1/*!*/;
+/*!\C latin1 *//*!*/;
+SET @@session.character_set_client=8,@@session.collation_connection=8,@@session.collation_server=33/*!*/;
+SET @@session.lc_time_names=0/*!*/;
+SET @@session.collation_database=DEFAULT/*!*/;
+BEGIN
+/*!*/;
+# at 184
+#131019 18:29:14 server id 41983  end_log_pos 286  group_id 11 	Query	thread_id=5	exec_time=0	error_code=0
+use sougou/*!*/;
+SET TIMESTAMP=1382232554/*!*/;
+insert into a
+values(6, 'ff')
+/*!*/;
+# at 286
+#131019 18:29:14 server id 41983  end_log_pos 321  group_id 11 	Xid = 39
+COMMIT/*!*/;
+# at 321
+#131019 23:47:47 server id 41983  end_log_pos 399  group_id 12 	Query	thread_id=5	exec_time=0	error_code=0
+SET TIMESTAMP=1382251667/*!*/;
+BEGIN
+/*!*/;
+# at 399
+#131019 23:47:36 server id 41983  end_log_pos 501  group_id 12 	Query	thread_id=5	exec_time=0	error_code=0
+SET TIMESTAMP=1382251656/*!*/;
+insert into a values(7, 'gg')
+/*!*/;
+# at 501
+#131019 23:47:47 server id 41983  end_log_pos 536  group_id 12 	Xid = 44
+COMMIT/*!*/;
+# at 536
+#131020 21:34:25 server id 41983  end_log_pos 653  group_id 13 	Query	thread_id=6	exec_time=0	error_code=0
+SET TIMESTAMP=1382330065/*!*/;
+alter table a add constraint primary key(id)
+/*!*/;
+# at 653
+#131020 21:35:21 server id 41983  end_log_pos 731  group_id 14 	Query	thread_id=6	exec_time=0	error_code=0
+SET TIMESTAMP=1382330121/*!*/;
+BEGIN
+/*!*/;
+# at 731
+#131020 21:35:21 server id 41983  end_log_pos 840  group_id 14 	Query	thread_id=6	exec_time=0	error_code=0
+SET TIMESTAMP=1382330121/*!*/;
+UPDATE a set data='ggg' where id = 7
+/*!*/;
+# at 840
+#131020 21:35:21 server id 41983  end_log_pos 875  group_id 14 	Xid = 50
+COMMIT/*!*/;
+# at 875
+#131020 21:37:11 server id 41983  end_log_pos 926 	Rotate to vt-0000041983-bin.000005  pos: 4
+DELIMITER ;
+# End of log file
+ROLLBACK /* added by mysqlbinlog */;
+/*!50003 SET COMPLETION_TYPE=@OLD_COMPLETION_TYPE*/;

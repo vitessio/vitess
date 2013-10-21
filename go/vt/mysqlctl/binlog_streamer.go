@@ -51,6 +51,7 @@ var (
 		[]byte("BINLOG"),
 	}
 
+	// statementPrefixes are normal sql statement prefixes.
 	statementPrefixes = map[string]int{
 		"begin":    BL_BEGIN,
 		"commit":   BL_COMMIT,
@@ -127,18 +128,20 @@ func (bls *BinlogStreamer) Stream(file string, pos int64, sendReply SendReplyFun
 	}()
 
 	for {
-		err = bls.run(sendReply)
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			log.Errorf("Stream error @ %#v, error: %v", bls, err)
-			return err
+		if err = bls.run(sendReply); err != nil {
+			goto end
 		}
-		if err = bls.file.WaitForChange(); err != nil {
-			return err
+		if err = bls.file.WaitForChange(&bls.running); err != nil {
+			goto end
 		}
 	}
+
+end:
+	if err == io.EOF {
+		return nil
+	}
+	log.Errorf("Stream error @ %#v, error: %v", bls.file, err)
+	return err
 }
 
 // Stop stops the currently executing Stream if there is one.
@@ -147,6 +150,8 @@ func (bls *BinlogStreamer) Stop() {
 	bls.running.Set(-1)
 }
 
+// run launches mysqlbinlog and starts the stream. It takes care of
+// cleaning up the process when streaming returns.
 func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(bls.dbname, bls.file.name, bls.file.pos)
@@ -163,13 +168,13 @@ func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
 	return err
 }
 
+// parseEvents parses events and transmits them as transactions for the current mysqlbinlog stream.
 func (bls *BinlogStreamer) parseEvents(sendReply SendReplyFunc, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
 	var statements [][]byte
 	for {
 		stmt, err := bls.nextStatement(bufReader)
-		// FIXME(sougou): This looks awkward
 		if stmt == nil {
 			return err
 		}
@@ -200,10 +205,14 @@ func (bls *BinlogStreamer) parseEvents(sendReply SendReplyFunc, reader io.Reader
 	}
 }
 
+// nextStatement returns the next statement encountered in the binlog stream. If there are
+// positional comments, it updates the BinlogStreamer state. It also ignores events that
+// are not material. If it returns nil, it's the end of stream. If err is also nil, then
+// it was due to a normal termination.
 func (bls *BinlogStreamer) nextStatement(bufReader *bufio.Reader) (stmt []byte, err error) {
 eventLoop:
 	for {
-		if bls.running.Get() == -1 {
+		if bls.running.Get() != 1 {
 			return nil, io.EOF
 		}
 		event, err := bls.readEvent(bufReader)
@@ -215,16 +224,14 @@ eventLoop:
 		}
 		values := posRE.FindSubmatch(event)
 		if values != nil {
-			if err = bls.extractPosition(values[1:]); err != nil {
-				return nil, err
-			}
+			bls.blPos.ServerId = mustParseInt64(values[0])
+			bls.file.Set(mustParseInt64(values[1]))
+			bls.blPos.GroupId = mustParseInt64(values[2])
 			continue
 		}
 		values = rotateRE.FindSubmatch(event)
 		if values != nil {
-			if err = bls.handleRotate(values[1:]); err != nil {
-				return nil, err
-			}
+			bls.file.Rotate(string(values[0]), mustParseInt64(values[1]))
 			continue
 		}
 		values = delimRE.FindSubmatch(event)
@@ -239,31 +246,6 @@ eventLoop:
 		}
 		return event, nil
 	}
-}
-
-func (bls *BinlogStreamer) extractPosition(values [][]byte) (err error) {
-	if bls.blPos.ServerId, err = strconv.ParseInt(string(values[0]), 10, 64); err != nil {
-		return err
-	}
-	pos, err := strconv.ParseInt(string(values[1]), 10, 64)
-	if err != nil {
-		return err
-	}
-	bls.file.Set(pos)
-	if bls.blPos.GroupId, err = strconv.ParseInt(string(values[2]), 10, 64); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (bls *BinlogStreamer) handleRotate(values [][]byte) (err error) {
-	pos, err := strconv.ParseInt(string(values[1]), 10, 64)
-	if err != nil {
-		return err
-	}
-	log.Infof("Log rotating: %s, %v", values[0], pos)
-	bls.file.Rotate(string(values[0]), pos)
-	return nil
 }
 
 // readEvent reads a single binlog event. It can be a single comment line,
@@ -315,8 +297,11 @@ func (f *fileInfo) Set(pos int64) {
 	f.pos = pos
 }
 
-func (f *fileInfo) WaitForChange() error {
+func (f *fileInfo) WaitForChange(running *sync2.AtomicInt32) error {
 	for {
+		if running.Get() != 1 {
+			return io.EOF
+		}
 		time.Sleep(100 * time.Millisecond)
 		fi, err := f.handle.Stat()
 		if err != nil {
@@ -335,4 +320,13 @@ func (f *fileInfo) Close() (err error) {
 	err = f.handle.Close()
 	f.handle = nil
 	return err
+}
+
+// mustParseInt64 can be used if you don't expect to fail.
+func mustParseInt64(b []byte) int64 {
+	val, err := strconv.ParseInt(string(b), 10, 64)
+	if err != nil {
+		panic(err)
+	}
+	return val
 }
