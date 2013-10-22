@@ -26,6 +26,16 @@ type Explorer interface {
 	// information about the named shard in the named keyspace.
 	GetShardPath(keyspace, shard string) string
 
+	// GetSrvKeyspacePath returns an explorer path that will
+	// contain information about the named keyspace in the serving
+	// graph for cell.
+	GetSrvKeyspacePath(cell, keyspace string) string
+
+	// GetShardPath returns an explorer path that will contain
+	// information about the named shard in the named keyspace in
+	// the serving graph for cell.
+	GetSrvShardPath(cell, keyspace, shard string) string
+
 	// GetTabletPath returns an explorer path that will contain
 	// information about the tablet named by alias.
 	GetTabletPath(alias topo.TabletAlias) string

@@ -34,6 +34,12 @@ class Vtctld(object):
       raise VtcldError(data)
     return data["Topology"]
 
+  def serving_graph(self):
+    data = json.load(urllib2.urlopen('http://localhost:8080/serving_graph/test_nj?format=json'))
+    if data["Error"]:
+      raise VtctldError(data)
+    return data["ServingGraph"]["Keyspaces"]
+
   def start(self):
     utils.prog_compile(['vtctld'])
     args = [os.path.join(utils.vtroot, 'bin', 'vtctld'), '-debug', '-templates', utils.vttop + '/go/cmd/vtctld/templates']
@@ -109,6 +115,7 @@ class TestVtctld(unittest.TestCase):
 
   def setUp(self):
     self.data = vtctld.dbtopo()
+    self.serving_data = vtctld.serving_graph()
 
   def test_assigned(self):
     logging.debug("test_assigned: %s", str(self.data))
@@ -127,6 +134,12 @@ class TestVtctld(unittest.TestCase):
                      'http://localhost:8080/zk/global/vt/keyspaces/test_keyspace/shards/-80')
     self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=tablet&explorer=zk&alias=%s' % shard_0_replica.tablet_alias).geturl(),
                      'http://localhost:8080' + shard_0_replica.zk_tablet_path)
+
+  def test_serving_graph(self):
+    self.assertItemsEqual(self.serving_data.keys(), ["test_keyspace"])
+    self.assertItemsEqual(self.serving_data["test_keyspace"].keys(), ["-80", "80-"])
+    self.assertItemsEqual(self.serving_data["test_keyspace"]["-80"].keys(), ["master", "replica"])
+    self.assertEqual(len(self.serving_data["test_keyspace"]["-80"]["master"]), 1)
 
 if __name__ == '__main__':
   utils.main()

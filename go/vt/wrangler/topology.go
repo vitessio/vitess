@@ -1,6 +1,8 @@
 package wrangler
 
 import (
+	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -114,11 +116,44 @@ func (ks KeyspaceNodes) HasType(name string) bool {
 
 // TabletNode is the representation of a tablet in the db topology.
 type TabletNode struct {
-	*topo.TabletInfo
+	Host  string
+	Alias topo.TabletAlias
+	Port  int
 }
 
-func (t *TabletNode) ShortName() string {
-	return strings.SplitN(t.Addr, ".", 2)[0]
+func (tn TabletNode) ShortName() string {
+	hostPart := strings.SplitN(tn.Host, ".", 2)[0]
+	if tn.Port == 0 {
+		return hostPart
+	}
+	return fmt.Sprintf("%v:%v", hostPart, tn.Port)
+}
+
+func TabletNodeFromTabletInfo(ti *topo.TabletInfo) (*TabletNode, error) {
+	host, port, err := net.SplitHostPort(ti.Addr)
+	if err != nil {
+		return nil, err
+	}
+	intPort, err := strconv.Atoi(port)
+	if err != nil {
+		return nil, err
+	}
+	return &TabletNode{
+		Host:  host,
+		Port:  intPort,
+		Alias: ti.Alias(),
+	}, nil
+}
+
+func TabletNodeFromEndPoint(ep topo.EndPoint, cell string) *TabletNode {
+	return &TabletNode{
+		Host: ep.Host,
+		Alias: topo.TabletAlias{
+			Uid:  ep.Uid,
+			Cell: cell},
+		Port: ep.NamedPortMap[topo.DefaultPortName],
+	}
+
 }
 
 type Topology struct {
@@ -143,22 +178,67 @@ func (wr *Wrangler) DbTopology() (*Topology, error) {
 	topology := NewTopology()
 
 	for _, ti := range tabletInfos {
-		tablet := &TabletNode{TabletInfo: ti}
-		switch tablet.Type {
+		tablet, err := TabletNodeFromTabletInfo(ti)
+		if err != nil {
+			return nil, err
+		}
+		switch ti.Type {
 		case topo.TYPE_IDLE:
 			topology.Idle = append(topology.Idle, tablet)
 		case topo.TYPE_SCRAP:
 			topology.Scrap = append(topology.Scrap, tablet)
 		default:
-			if _, ok := topology.Assigned[tablet.Keyspace]; !ok {
-				topology.Assigned[tablet.Keyspace] = make(map[string]TabletNodesByType)
+			if _, ok := topology.Assigned[ti.Keyspace]; !ok {
+				topology.Assigned[ti.Keyspace] = make(map[string]TabletNodesByType)
 			}
-			if _, ok := topology.Assigned[tablet.Keyspace][tablet.Shard]; !ok {
-				topology.Assigned[tablet.Keyspace][tablet.Shard] = make(TabletNodesByType)
+			if _, ok := topology.Assigned[ti.Keyspace][ti.Shard]; !ok {
+				topology.Assigned[ti.Keyspace][ti.Shard] = make(TabletNodesByType)
 			}
-			topology.Assigned[tablet.Keyspace][tablet.Shard][string(tablet.Type)] = append(topology.Assigned[tablet.Keyspace][tablet.Shard][string(tablet.Type)], tablet)
+			topology.Assigned[ti.Keyspace][ti.Shard][string(ti.Type)] = append(topology.Assigned[ti.Keyspace][ti.Shard][string(ti.Type)], tablet)
 		}
 
 	}
 	return topology, nil
+}
+
+type ServingGraph struct {
+	Keyspaces map[string]KeyspaceNodes
+	Cell      string
+}
+
+func (wr *Wrangler) ServingGraph(cell string) (*ServingGraph, error) {
+	servingGraph := &ServingGraph{
+		Cell:      cell,
+		Keyspaces: make(map[string]KeyspaceNodes)}
+
+	keyspaces, err := wr.ts.GetSrvKeyspaceNames(cell)
+	if err != nil {
+		return nil, err
+	}
+	for _, keyspace := range keyspaces {
+		servingGraph.Keyspaces[keyspace] = make(map[string]TabletNodesByType)
+
+		shards, err := wr.ts.GetShardNames(keyspace)
+		if err != nil {
+			return nil, err
+		}
+		for _, shard := range shards {
+			servingGraph.Keyspaces[keyspace][shard] = make(TabletNodesByType)
+			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(cell, keyspace, shard)
+			if err != nil {
+				return nil, err
+			}
+			for _, tabletType := range tabletTypes {
+				endPoints, err := wr.ts.GetEndPoints(cell, keyspace, shard, tabletType)
+				if err != nil {
+					return nil, err
+				}
+				for _, endPoint := range endPoints.Entries {
+					servingGraph.Keyspaces[keyspace][shard][string(tabletType)] = append(servingGraph.Keyspaces[keyspace][shard][string(tabletType)], TabletNodeFromEndPoint(endPoint, cell))
+				}
+			}
+		}
+
+	}
+	return servingGraph, nil
 }

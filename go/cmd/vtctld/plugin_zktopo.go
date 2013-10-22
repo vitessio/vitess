@@ -45,6 +45,14 @@ func (ex ZkExplorer) GetShardPath(keyspace, shard string) string {
 	return path.Join("/zk/global/vt/keyspaces", keyspace, "shards", shard)
 }
 
+func (ex ZkExplorer) GetSrvKeyspacePath(cell, keyspace string) string {
+	return path.Join("/zk", cell, "vt/ns", keyspace)
+}
+
+func (ex ZkExplorer) GetSrvShardPath(cell, keyspace, shard string) string {
+	return path.Join("/zk", cell, "/vt/ns", keyspace, shard)
+}
+
 func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
 	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUidStr())
 }

@@ -130,7 +130,25 @@ var funcMap = template.FuncMap{
 			b := new(bytes.Buffer)
 			fmt.Fprintf(b, "%v", keyspace)
 			for name, explorer := range explorers {
-				fmt.Fprintf(b, " [%v]", link(name, explorer.GetKeyspacePath(keyspace)))
+				fmt.Fprintf(b, "&nbsp;[%v]", link(name, explorer.GetKeyspacePath(keyspace)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
+	},
+	"srv_keyspace": func(cell, keyspace string) template.HTML {
+		switch len(explorers) {
+		case 0:
+			return template.HTML(keyspace)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(keyspace, explorer.GetSrvKeyspacePath(cell, keyspace)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", keyspace)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, "&nbsp;[%v]", link(name, explorer.GetSrvKeyspacePath(cell, keyspace)))
 			}
 			return template.HTML(b.String())
 		}
@@ -148,7 +166,25 @@ var funcMap = template.FuncMap{
 			b := new(bytes.Buffer)
 			fmt.Fprintf(b, "%v", shard)
 			for name, explorer := range explorers {
-				fmt.Fprintf(b, ` <span class="topo-link">[%v]</span>`, link(name, explorer.GetShardPath(keyspace, shard)))
+				fmt.Fprintf(b, `&nbsp;<span class="topo-link">[%v]</span>`, link(name, explorer.GetShardPath(keyspace, shard)))
+			}
+			return template.HTML(b.String())
+		}
+		panic("unreachable")
+	},
+	"srv_shard": func(cell, keyspace, shard string) template.HTML {
+		switch len(explorers) {
+		case 0:
+			return template.HTML(shard)
+		case 1:
+			for _, explorer := range explorers {
+				return template.HTML(link(shard, explorer.GetSrvShardPath(cell, keyspace, shard)))
+			}
+		default:
+			b := new(bytes.Buffer)
+			fmt.Fprintf(b, "%v", shard)
+			for name, explorer := range explorers {
+				fmt.Fprintf(b, `&nbsp;<span class="topo-link">[%v]</span>`, link(name, explorer.GetSrvShardPath(cell, keyspace, shard)))
 			}
 			return template.HTML(b.String())
 		}
@@ -166,7 +202,7 @@ var funcMap = template.FuncMap{
 			b := new(bytes.Buffer)
 			fmt.Fprintf(b, "%v", shortname)
 			for name, explorer := range explorers {
-				fmt.Fprintf(b, ` <span class="topo-link">[%v]</span>`, link(name, explorer.GetTabletPath(alias)))
+				fmt.Fprintf(b, `&nbsp;<span class="topo-link">[%v]</span>`, link(name, explorer.GetTabletPath(alias)))
 			}
 			return template.HTML(b.String())
 		}
@@ -282,6 +318,11 @@ type DbTopologyResult struct {
 	Error    string
 }
 
+type ServingGraphResult struct {
+	ServingGraph *wrangler.ServingGraph
+	Error        string
+}
+
 type IndexContent struct {
 	// maps a name to a linked URL
 	ToplevelLinks map[string]string
@@ -293,6 +334,7 @@ var actionRepo *ActionRepository
 var indexContent = IndexContent{
 	ToplevelLinks: map[string]string{
 		"DbTopology Tool": "/dbtopo",
+		"Serving Graph":   "/serving_graph",
 	},
 }
 
@@ -443,6 +485,30 @@ func main() {
 			result.Topology = topology
 		}
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
+	})
+	http.HandleFunc("/serving_graph/", func(w http.ResponseWriter, r *http.Request) {
+		parts := strings.Split(r.RequestURI, "/")
+
+		cell := parts[len(parts)-1]
+		if cell == "" {
+			cells, err := wr.TopoServer().GetKnownCells()
+			if err != nil {
+				httpError(w, "cannot get known cells: %v", err)
+				return
+			} else {
+				templateLoader.ServeTemplate("serving_graph_cells.html", cells, w, r)
+			}
+			return
+		}
+
+		result := ServingGraphResult{}
+		servingGraph, err := wr.ServingGraph(cell)
+		if err != nil {
+			result.Error = err.Error()
+		} else {
+			result.ServingGraph = servingGraph
+		}
+		templateLoader.ServeTemplate("serving_graph.html", result, w, r)
 	})
 	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {

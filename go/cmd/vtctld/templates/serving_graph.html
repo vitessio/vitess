@@ -1,7 +1,7 @@
 <!DOCTYPE HTML>
 <html lang="en">
 <head>
-  <title>DB topology</title>
+  <title>Serving Graph</title>
   <style>
     .keyspace {
       font-family: monospace;
@@ -49,20 +49,21 @@
   {{with .Error}}
     <h1>{{.}}</h1>
   {{end}}
-  {{with .Topology}}
-    <h2>ToC</h2>
-    {{range $keyspace, $shards := .Assigned}}
+  {{with .ServingGraph}}
+    <h1>Serving Graph for {{.Cell}}</h1>
+    <ul>
+    {{range $keyspace, $shards := .Keyspaces}}
       <li><a href="#keyspace_{{$keyspace}}">{{$keyspace}}</a></li>
     {{end}}
-
-    <h1>Assigned</h1>
-    {{range $keyspace, $shards := .Assigned}}
-      <h2 id="#keyspace_{{$keyspace}}">{{keyspace $keyspace}}</h2>
+    </ul>
+    {{ $cell := .Cell}}
+    {{range $keyspace, $shards := .Keyspaces}}
+      <h2 id="#keyspace_{{$keyspace}}">{{srv_keyspace $cell $keyspace}}</h2>
       <table class="keyspace">
 	<thead>
 	  {{ range $i, $shard := $shards.ShardNodes }}
 	  {{if intequal $i 0}}<td class="legend">type</td>{{end}}
-	  <td>{{shard $keyspace $shard.Name}}</td>
+	  <td>{{srv_shard $cell $keyspace $shard.Name}}</td>
 	  {{end}}
 	</thead>
 	<tbody>
@@ -84,18 +85,6 @@
 	</tbody>
       </table>
     {{end}}
-    <h1>Idle</h1>
-    <ul>
-      {{range .Idle}}
-        {{template "tablet.html" .}}
-      {{end}}
-    </ul>
-    <h1>Scrap</h1>
-    <ul>
-    {{range .Scrap}}
-      {{template "tablet.html" .}}
-    {{end}}
-    </ul>
   {{end}}
 
 </body>
