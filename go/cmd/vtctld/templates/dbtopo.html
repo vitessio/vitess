@@ -57,7 +57,7 @@
 
     <h1>Assigned</h1>
     {{range $keyspace, $shards := .Assigned}}
-      <h2 id="#keyspace_{{$keyspace}}">{{keyspace $keyspace}}</h2>
+      <h2><a name="keyspace_{{$keyspace}}"></a>{{keyspace $keyspace}}</h2>
       <table class="keyspace">
 	<thead>
 	  {{ range $i, $shard := $shards.ShardNodes }}

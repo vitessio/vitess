@@ -23,7 +23,7 @@ assigned = [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]
 tablets = assigned + [idle, scrap, shard_0_spare]
 
 
-class VtcldError(Exception): pass
+class VtctldError(Exception): pass
 
 
 class Vtctld(object):
@@ -31,7 +31,7 @@ class Vtctld(object):
   def dbtopo(self):
     data = json.load(urllib2.urlopen('http://localhost:8080/dbtopo?format=json'))
     if data["Error"]:
-      raise VtcldError(data)
+      raise VtctldError(data)
     return data["Topology"]
 
   def serving_graph(self):
@@ -42,7 +42,7 @@ class Vtctld(object):
 
   def start(self):
     utils.prog_compile(['vtctld'])
-    args = [os.path.join(utils.vtroot, 'bin', 'vtctld'), '-debug', '-templates', utils.vttop + '/go/cmd/vtctld/templates']
+    args = [os.path.join(utils.vtroot, 'bin', 'vtctld'), '-debug', '-templates', utils.vttop + '/go/cmd/vtctld/templates', '-log_dir', utils.tmp_root]
     stderr_fd = open(os.path.join(utils.tmp_root, "vtctld.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     return self.proc
