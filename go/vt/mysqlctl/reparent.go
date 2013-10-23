@@ -31,8 +31,8 @@ func (mysqld *Mysqld) DemoteMaster() (*ReplicationPosition, error) {
 // replicationState: info slaves need to reparent themselves
 // waitPosition: slaves can wait for this position when restarting replication
 // timePromoted: this timestamp (unix nanoseconds) is inserted into _vt.replication_log to verify the replication config
-func (mysqld *Mysqld) PromoteSlave(setReadWrite bool) (replicationState *ReplicationState, waitPosition *ReplicationPosition, timePromoted int64, err error) {
-	if err = mysqld.StopSlave(); err != nil {
+func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]string) (replicationState *ReplicationState, waitPosition *ReplicationPosition, timePromoted int64, err error) {
+	if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 		return
 	}
 

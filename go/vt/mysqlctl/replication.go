@@ -22,6 +22,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/hook"
 )
 
 const (
@@ -169,11 +170,23 @@ func (mysqld *Mysqld) WaitForSlaveStart(slaveStartDeadline int) (err error) {
 	return nil
 }
 
-func (mysqld *Mysqld) StartSlave() error {
-	return mysqld.executeSuperQuery("SLAVE START")
+func (mysqld *Mysqld) StartSlave(hookExtraEnv map[string]string) error {
+	if err := mysqld.executeSuperQuery("SLAVE START"); err != nil {
+		return err
+	}
+
+	h := hook.NewSimpleHook("postflight_start_slave")
+	h.ExtraEnv = hookExtraEnv
+	return h.ExecuteOptional()
 }
 
-func (mysqld *Mysqld) StopSlave() error {
+func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
+	h := hook.NewSimpleHook("preflight_stop_slave")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
+		return err
+	}
+
 	return mysqld.executeSuperQuery("SLAVE STOP")
 }
 

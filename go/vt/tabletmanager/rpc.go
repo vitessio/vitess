@@ -98,7 +98,7 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 }
 
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
-	return tm.wrapErr(context, TABLET_ACTION_STOP_SLAVE, args, reply, tm.mysqld.StopSlave())
+	return tm.wrapErr(context, TABLET_ACTION_STOP_SLAVE, args, reply, tm.mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()}))
 }
 
 func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *SlaveList) (err error) {
