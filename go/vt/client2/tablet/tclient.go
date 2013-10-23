@@ -139,7 +139,7 @@ func (conn *Conn) dial() (err error) {
 }
 
 func (conn *Conn) Close() error {
-	conn.Session = tproto.Session{TransactionId: 0, ConnectionId: 0, SessionId: 0}
+	conn.Session = tproto.Session{TransactionId: 0, SessionId: 0}
 	return conn.rpcClient.Close()
 }
 
@@ -148,7 +148,6 @@ func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result
 		Sql:           query,
 		BindVariables: bindVars,
 		TransactionId: conn.TransactionId,
-		ConnectionId:  conn.ConnectionId,
 		SessionId:     conn.SessionId,
 	}
 	if conn.stream {

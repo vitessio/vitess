@@ -14,7 +14,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // sandbox_test.go provides a sandbox for unit testing Barnacle.
@@ -136,7 +135,7 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(queries []proto.BoundQuery) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery) (*tproto.QueryResultList, error) {
 	sbc.ExecCount++
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)

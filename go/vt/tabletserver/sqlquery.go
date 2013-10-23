@@ -331,21 +331,20 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 
 func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	defer handleError(&err, nil)
-	ql := queryList.List
-	if len(ql) == 0 {
+	if len(queryList.Queries) == 0 {
 		panic(NewTabletError(FAIL, "Empty query list"))
 	}
-	sq.checkState(ql[0].SessionId, false)
+	sq.checkState(queryList.SessionId, false)
 	begin_called := false
 	var noOutput string
 	session := proto.Session{
-		TransactionId: ql[0].TransactionId,
-		ConnectionId:  ql[0].ConnectionId,
-		SessionId:     ql[0].SessionId,
+		TransactionId: queryList.TransactionId,
+		ConnectionId:  queryList.ConnectionId,
+		SessionId:     queryList.SessionId,
 	}
-	reply.List = make([]mproto.QueryResult, 0, len(ql))
-	for _, query := range ql {
-		trimmed := strings.ToLower(strings.Trim(query.Sql, " \t\r\n"))
+	reply.List = make([]mproto.QueryResult, 0, len(queryList.Queries))
+	for _, bound := range queryList.Queries {
+		trimmed := strings.ToLower(strings.Trim(bound.Sql, " \t\r\n"))
 		switch trimmed {
 		case "begin":
 			if session.TransactionId != 0 {
@@ -369,9 +368,13 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 			begin_called = false
 			reply.List = append(reply.List, mproto.QueryResult{})
 		default:
-			query.TransactionId = session.TransactionId
-			query.ConnectionId = session.ConnectionId
-			query.SessionId = session.SessionId
+			query := proto.Query{
+				Sql:           bound.Sql,
+				BindVariables: bound.BindVariables,
+				TransactionId: session.TransactionId,
+				ConnectionId:  session.ConnectionId,
+				SessionId:     session.SessionId,
+			}
 			var localReply mproto.QueryResult
 			if err = sq.Execute(context, &query, &localReply); err != nil {
 				if begin_called {

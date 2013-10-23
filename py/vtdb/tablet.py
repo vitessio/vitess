@@ -116,7 +116,6 @@ class TabletConnection(object):
 
   def _make_req(self):
     return {'TransactionId': self.transaction_id,
-            'ConnectionId': 0,
             'SessionId': self.session_id}
 
   def begin(self):
@@ -196,15 +195,16 @@ class TabletConnection(object):
   def _execute_batch(self, sql_list, bind_variables_list):
     query_list = []
     for sql, bind_vars in zip(sql_list, bind_variables_list):
-      req = self._make_req()
-      req['Sql'] = sql
-      req['BindVariables'] = field_types.convert_bind_vars(bind_vars)
-      query_list.append(req)
+      query = {}
+      query['Sql'] = sql
+      query['BindVariables'] = field_types.convert_bind_vars(bind_vars)
+      query_list.append(query)
 
     rowsets = []
 
     try:
-      req = {'List': query_list}
+      req = self._make_req()
+      req['Queries'] = query_list
       response = self.client.call('SqlQuery.ExecuteBatch', req)
       for reply in response.reply['List']:
         fields = []

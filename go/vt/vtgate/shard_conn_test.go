@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // This file uses the sandbox_test framework.
@@ -26,7 +26,7 @@ func TestShardConnExecuteBatch(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testShardConnGeneric(t, func() error {
 		sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
-		queries := []proto.BoundQuery{{"query", nil}}
+		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := sdc.ExecuteBatch(queries)
 		return err
 	})

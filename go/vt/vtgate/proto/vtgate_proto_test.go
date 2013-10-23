@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -189,58 +190,6 @@ type reflectBoundQuery struct {
 	BindVariables map[string]interface{}
 }
 
-type badBoundQuery struct {
-	Extra         int
-	Sql           string
-	BindVariables map[string]interface{}
-}
-
-func TestBoundQuery(t *testing.T) {
-	reflected, err := bson.Marshal(&reflectBoundQuery{
-		Sql:           "query",
-		BindVariables: map[string]interface{}{"val": int64(1)},
-	})
-	if err != nil {
-		t.Error(err)
-	}
-	want := string(reflected)
-
-	custom := BoundQuery{
-		Sql:           "query",
-		BindVariables: map[string]interface{}{"val": int64(1)},
-	}
-	encoded, err := bson.Marshal(&custom)
-	if err != nil {
-		t.Error(err)
-	}
-	got := string(encoded)
-	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
-	}
-
-	var unmarshalled BoundQuery
-	err = bson.Unmarshal(encoded, &unmarshalled)
-	if err != nil {
-		t.Error(err)
-	}
-	if custom.Sql != unmarshalled.Sql {
-		t.Errorf("want %v, got %v", custom.Sql, unmarshalled.Sql)
-	}
-	if custom.BindVariables["val"].(int64) != unmarshalled.BindVariables["val"].(int64) {
-		t.Errorf("want %v, got %v", custom.BindVariables["val"], unmarshalled.BindVariables["val"])
-	}
-
-	unexpected, err := bson.Marshal(&badBoundQuery{})
-	if err != nil {
-		t.Error(err)
-	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
-	}
-}
-
 type reflectBatchQueryShard struct {
 	Queries   []reflectBoundQuery
 	SessionId int64
@@ -272,7 +221,7 @@ func TestBatchQueryShard(t *testing.T) {
 	want := string(reflected)
 
 	custom := BatchQueryShard{
-		Queries: []BoundQuery{{
+		Queries: []tproto.BoundQuery{{
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},

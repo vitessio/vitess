@@ -79,7 +79,7 @@ func TestVTGateSessionConflict(t *testing.T) {
 		Shards:    []string{"0"},
 	}
 	bq := proto.BatchQueryShard{
-		Queries: []proto.BoundQuery{{
+		Queries: []tproto.BoundQuery{{
 			"query",
 			nil,
 		}},
@@ -137,7 +137,7 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 	testConns["0:1"] = &sandboxConn{}
 	testConns["1:1"] = &sandboxConn{}
 	q := proto.BatchQueryShard{
-		Queries: []proto.BoundQuery{{
+		Queries: []tproto.BoundQuery{{
 			"query",
 			nil,
 		}, {
