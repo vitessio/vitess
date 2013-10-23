@@ -162,3 +162,65 @@ func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
 		kind = bson.NextByte(buf)
 	}
 }
+
+func (bdq *BoundQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	bson.EncodeString(buf, "Sql", bdq.Sql)
+	EncodeBindVariablesBson(buf, "BindVariables", bdq.BindVariables)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (bdq *BoundQuery) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "Sql":
+			bdq.Sql = bson.DecodeString(buf, kind)
+		case "BindVariables":
+			bdq.BindVariables = DecodeBindVariablesBson(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+
+func EncodeQueriesBson(queries []BoundQuery, key string, buf *bytes2.ChunkedWriter) {
+	bson.EncodePrefix(buf, bson.Array, key)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, v := range queries {
+		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
+		v.MarshalBson(buf)
+	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func DecodeQueriesBson(buf *bytes.Buffer, kind byte) (queries []BoundQuery) {
+	switch kind {
+	case bson.Array:
+		// valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for Queries", kind))
+	}
+
+	bson.Next(buf, 4)
+	queries = make([]BoundQuery, 0, 8)
+	kind = bson.NextByte(buf)
+	var bdq BoundQuery
+	for i := 0; kind != bson.EOO; i++ {
+		bson.ExpectIndex(buf, i)
+		bdq.UnmarshalBson(buf)
+		queries = append(queries, bdq)
+		kind = bson.NextByte(buf)
+	}
+	return queries
+}

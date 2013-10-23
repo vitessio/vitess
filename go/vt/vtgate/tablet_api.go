@@ -8,7 +8,6 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
@@ -21,7 +20,7 @@ type TabletConn interface {
 	Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(queries []proto.BoundQuery) (*tproto.QueryResultList, error)
+	ExecuteBatch(queries []tproto.BoundQuery) (*tproto.QueryResultList, error)
 
 	// StreamExecute exectutes a streaming query on vttablet. It returns a channel that will stream results.
 	// It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called

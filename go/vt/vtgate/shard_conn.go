@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // ShardConn represents a load balanced connection to a group
@@ -99,7 +98,7 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(queries []proto.BoundQuery) (qrs *tproto.QueryResultList, err error) {
+func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery) (qrs *tproto.QueryResultList, err error) {
 	for i := 0; i < sdc.retryCount; i++ {
 		if sdc.conn == nil {
 			var addr string

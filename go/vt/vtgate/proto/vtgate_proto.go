@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
-	vproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -99,7 +98,7 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeString(buf, "Sql", qrs.Sql)
-	vproto.EncodeBindVariablesBson(buf, "BindVariables", qrs.BindVariables)
+	tproto.EncodeBindVariablesBson(buf, "BindVariables", qrs.BindVariables)
 	bson.EncodeInt64(buf, "SessionId", qrs.SessionId)
 	bson.EncodeString(buf, "Keyspace", qrs.Keyspace)
 	bson.EncodeStringArray(buf, "Shards", qrs.Shards)
@@ -118,7 +117,7 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "Sql":
 			qrs.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":
-			qrs.BindVariables = vproto.DecodeBindVariablesBson(buf, kind)
+			qrs.BindVariables = tproto.DecodeBindVariablesBson(buf, kind)
 		case "SessionId":
 			qrs.SessionId = bson.DecodeInt64(buf, kind)
 		case "Keyspace":
@@ -132,41 +131,8 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-type BoundQuery struct {
-	Sql           string
-	BindVariables map[string]interface{}
-}
-
-func (bdq *BoundQuery) MarshalBson(buf *bytes2.ChunkedWriter) {
-	lenWriter := bson.NewLenWriter(buf)
-
-	bson.EncodeString(buf, "Sql", bdq.Sql)
-	vproto.EncodeBindVariablesBson(buf, "BindVariables", bdq.BindVariables)
-
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func (bdq *BoundQuery) UnmarshalBson(buf *bytes.Buffer) {
-	bson.Next(buf, 4)
-
-	kind := bson.NextByte(buf)
-	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
-		case "Sql":
-			bdq.Sql = bson.DecodeString(buf, kind)
-		case "BindVariables":
-			bdq.BindVariables = vproto.DecodeBindVariablesBson(buf, kind)
-		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
-		}
-		kind = bson.NextByte(buf)
-	}
-}
-
 type BatchQueryShard struct {
-	Queries   []BoundQuery
+	Queries   []tproto.BoundQuery
 	SessionId int64
 	Keyspace  string
 	Shards    []string
@@ -175,22 +141,11 @@ type BatchQueryShard struct {
 func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	encodeQueriesBson(bqs.Queries, "Queries", buf)
+	tproto.EncodeQueriesBson(bqs.Queries, "Queries", buf)
 	bson.EncodeInt64(buf, "SessionId", bqs.SessionId)
 	bson.EncodeString(buf, "Keyspace", bqs.Keyspace)
 	bson.EncodeStringArray(buf, "Shards", bqs.Shards)
 
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
-func encodeQueriesBson(queries []BoundQuery, key string, buf *bytes2.ChunkedWriter) {
-	bson.EncodePrefix(buf, bson.Array, key)
-	lenWriter := bson.NewLenWriter(buf)
-	for i, v := range queries {
-		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-		v.MarshalBson(buf)
-	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
@@ -203,7 +158,7 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Queries":
-			bqs.Queries = decodeQueriesBson(buf, kind)
+			bqs.Queries = tproto.DecodeQueriesBson(buf, kind)
 		case "SessionId":
 			bqs.SessionId = bson.DecodeInt64(buf, kind)
 		case "Keyspace":
@@ -215,29 +170,6 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 		}
 		kind = bson.NextByte(buf)
 	}
-}
-
-func decodeQueriesBson(buf *bytes.Buffer, kind byte) (queries []BoundQuery) {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for Queries", kind))
-	}
-
-	bson.Next(buf, 4)
-	queries = make([]BoundQuery, 0, 8)
-	kind = bson.NextByte(buf)
-	var bdq BoundQuery
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
-		bdq.UnmarshalBson(buf)
-		queries = append(queries, bdq)
-		kind = bson.NextByte(buf)
-	}
-	return queries
 }
 
 // RegisterAuthenticated registers the server.

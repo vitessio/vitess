@@ -10,7 +10,7 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
+	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
 // This file uses the sandbox_test framework.
@@ -27,7 +27,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
-		queries := []proto.BoundQuery{{"query", nil}}
+		queries := []tproto.BoundQuery{{"query", nil}}
 		qrs, err := stc.ExecuteBatch(queries, "", shards)
 		if err != nil {
 			return nil, err

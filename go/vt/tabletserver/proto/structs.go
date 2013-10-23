@@ -25,8 +25,16 @@ type Query struct {
 	SessionId     int64
 }
 
+type BoundQuery struct {
+	Sql           string
+	BindVariables map[string]interface{}
+}
+
 type QueryList struct {
-	List []Query
+	Queries       []BoundQuery
+	TransactionId int64
+	ConnectionId  int64
+	SessionId     int64
 }
 
 type QueryResultList struct {
