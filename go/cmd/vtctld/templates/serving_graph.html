@@ -58,7 +58,7 @@
     </ul>
     {{ $cell := .Cell}}
     {{range $keyspace, $shards := .Keyspaces}}
-      <h2 id="#keyspace_{{$keyspace}}">{{srv_keyspace $cell $keyspace}}</h2>
+      <h2><a name="keyspace_{{$keyspace}}"></a>{{srv_keyspace $cell $keyspace}}</h2>
       <table class="keyspace">
 	<thead>
 	  {{ range $i, $shard := $shards.ShardNodes }}
