@@ -487,7 +487,7 @@ func main() {
 		templateLoader.ServeTemplate("dbtopo.html", result, w, r)
 	})
 	http.HandleFunc("/serving_graph/", func(w http.ResponseWriter, r *http.Request) {
-		parts := strings.Split(r.RequestURI, "/")
+		parts := strings.Split(r.URL.Path, "/")
 
 		cell := parts[len(parts)-1]
 		if cell == "" {
