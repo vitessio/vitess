@@ -17,26 +17,18 @@ import (
 func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "Sql")
-	bson.EncodeString(buf, query.Sql)
-
-	bson.EncodePrefix(buf, bson.Object, "BindVariables")
-	EncodeBindVariablesBson(buf, query.BindVariables)
-
-	bson.EncodePrefix(buf, bson.Long, "TransactionId")
-	bson.EncodeUint64(buf, uint64(query.TransactionId))
-
-	bson.EncodePrefix(buf, bson.Long, "ConnectionId")
-	bson.EncodeUint64(buf, uint64(query.ConnectionId))
-
-	bson.EncodePrefix(buf, bson.Long, "SessionId")
-	bson.EncodeUint64(buf, uint64(query.SessionId))
+	bson.EncodeString(buf, "Sql", query.Sql)
+	EncodeBindVariablesBson(buf, "BindVariables", query.BindVariables)
+	bson.EncodeInt64(buf, "TransactionId", query.TransactionId)
+	bson.EncodeInt64(buf, "ConnectionId", query.ConnectionId)
+	bson.EncodeInt64(buf, "SessionId", query.SessionId)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func EncodeBindVariablesBson(buf *bytes2.ChunkedWriter, bindVars map[string]interface{}) {
+func EncodeBindVariablesBson(buf *bytes2.ChunkedWriter, key string, bindVars map[string]interface{}) {
+	bson.EncodePrefix(buf, bson.Object, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for k, v := range bindVars {
 		bson.EncodeField(buf, k, v)
@@ -143,14 +135,9 @@ func slimit(s string) string {
 func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Long, "TransactionId")
-	bson.EncodeUint64(buf, uint64(session.TransactionId))
-
-	bson.EncodePrefix(buf, bson.Long, "ConnectionId")
-	bson.EncodeUint64(buf, uint64(session.ConnectionId))
-
-	bson.EncodePrefix(buf, bson.Long, "SessionId")
-	bson.EncodeUint64(buf, uint64(session.SessionId))
+	bson.EncodeInt64(buf, "TransactionId", session.TransactionId)
+	bson.EncodeInt64(buf, "ConnectionId", session.ConnectionId)
+	bson.EncodeInt64(buf, "SessionId", session.SessionId)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()

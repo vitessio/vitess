@@ -18,11 +18,8 @@ type RequestBson struct {
 func (req *RequestBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "ServiceMethod")
-	bson.EncodeString(buf, req.ServiceMethod)
-
-	bson.EncodePrefix(buf, bson.Long, "Seq")
-	bson.EncodeUint64(buf, uint64(req.Seq))
+	bson.EncodeString(buf, "ServiceMethod", req.ServiceMethod)
+	bson.EncodeInt64(buf, "Seq", int64(req.Seq))
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -53,14 +50,9 @@ type ResponseBson struct {
 func (resp *ResponseBson) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "ServiceMethod")
-	bson.EncodeString(buf, resp.ServiceMethod)
-
-	bson.EncodePrefix(buf, bson.Long, "Seq")
-	bson.EncodeUint64(buf, uint64(resp.Seq))
-
-	bson.EncodePrefix(buf, bson.Binary, "Error")
-	bson.EncodeString(buf, resp.Error)
+	bson.EncodeString(buf, "ServiceMethod", resp.ServiceMethod)
+	bson.EncodeInt64(buf, "Seq", int64(resp.Seq))
+	bson.EncodeString(buf, "Error", resp.Error)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()

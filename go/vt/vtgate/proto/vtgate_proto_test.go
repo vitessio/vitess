@@ -92,7 +92,7 @@ func TestSession(t *testing.T) {
 		t.Errorf("want %v, got %#v", custom, unmarshalled)
 	}
 
-	unexpected, err := bson.Marshal(&badSessionParams{})
+	unexpected, err := bson.Marshal(&badSession{})
 	if err != nil {
 		t.Error(err)
 	}

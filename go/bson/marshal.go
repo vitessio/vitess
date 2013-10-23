@@ -92,9 +92,9 @@ func MarshalToBuffer(buf *bytes2.ChunkedWriter, val interface{}) (err error) {
 		val := SimpleContainer{v.Interface()}
 		val.MarshalBson(buf)
 	case reflect.Struct:
-		EncodeStruct(buf, v)
+		EncodeStructContent(buf, v)
 	case reflect.Map:
-		EncodeMap(buf, v)
+		EncodeMapContent(buf, v)
 	default:
 		return NewBsonError("Unexpected type %v\n", v.Type())
 	}
@@ -108,48 +108,36 @@ func EncodeField(buf *bytes2.ChunkedWriter, key string, val interface{}) {
 func encodeField(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
 	switch val.Kind() {
 	case reflect.Float64:
-		EncodePrefix(buf, Number, key)
-		EncodeFloat64(buf, val.Float())
+		EncodeFloat64(buf, key, val.Float())
 	case reflect.String:
-		// Encode strings as binary; go strings are not necessarily unicode
-		EncodePrefix(buf, Binary, key)
-		EncodeString(buf, val.String())
+		EncodeString(buf, key, val.String())
 	case reflect.Bool:
-		EncodePrefix(buf, Boolean, key)
-		EncodeBool(buf, val.Bool())
+		EncodeBool(buf, key, val.Bool())
 	case reflect.Int32:
-		EncodePrefix(buf, Int, key)
-		EncodeUint32(buf, uint32(val.Int()))
+		EncodeInt32(buf, key, int32(val.Int()))
 	case reflect.Int, reflect.Int64:
-		EncodePrefix(buf, Long, key)
-		EncodeUint64(buf, uint64(val.Int()))
+		EncodeInt64(buf, key, val.Int())
 	case reflect.Uint, reflect.Uint32, reflect.Uint64:
-		EncodePrefix(buf, Ulong, key)
-		EncodeUint64(buf, val.Uint())
+		EncodeUint64(buf, key, uint64(val.Uint()))
 	case reflect.Struct:
 		if val.Type() == TimeType {
-			EncodePrefix(buf, Datetime, key)
-			EncodeTime(buf, val.Interface().(time.Time))
+			EncodeTime(buf, key, val.Interface().(time.Time))
 		} else {
-			EncodePrefix(buf, Object, key)
-			EncodeStruct(buf, val)
+			EncodeStruct(buf, key, val)
 		}
 	case reflect.Map:
 		if val.IsNil() {
 			EncodePrefix(buf, Null, key)
 		} else {
-			EncodePrefix(buf, Object, key)
-			EncodeMap(buf, val)
+			EncodeMap(buf, key, val)
 		}
 	case reflect.Slice:
 		if val.IsNil() {
 			EncodePrefix(buf, Null, key)
 		} else if val.Type() == BytesType {
-			EncodePrefix(buf, Binary, key)
-			EncodeBinary(buf, val.Interface().([]byte))
+			EncodeBinary(buf, key, val.Interface().([]byte))
 		} else {
-			EncodePrefix(buf, Array, key)
-			EncodeSlice(buf, val)
+			EncodeSlice(buf, key, val)
 		}
 	case reflect.Ptr, reflect.Interface:
 		if val.IsNil() {
@@ -171,18 +159,22 @@ func EncodePrefix(buf *bytes2.ChunkedWriter, etype byte, key string) {
 	b[len(b)-1] = 0
 }
 
-func EncodeFloat64(buf *bytes2.ChunkedWriter, val float64) {
+func EncodeFloat64(buf *bytes2.ChunkedWriter, key string, val float64) {
+	EncodePrefix(buf, Number, key)
 	bits := math.Float64bits(val)
 	putUint64(buf, bits)
 }
 
-func EncodeString(buf *bytes2.ChunkedWriter, val string) {
+func EncodeString(buf *bytes2.ChunkedWriter, key string, val string) {
+	// Encode strings as binary; go strings are not necessarily unicode
+	EncodePrefix(buf, Binary, key)
 	putUint32(buf, uint32(len(val)))
 	buf.WriteByte(0)
 	buf.WriteString(val)
 }
 
-func EncodeBool(buf *bytes2.ChunkedWriter, val bool) {
+func EncodeBool(buf *bytes2.ChunkedWriter, key string, val bool) {
+	EncodePrefix(buf, Boolean, key)
 	if val {
 		buf.WriteByte(1)
 	} else {
@@ -190,26 +182,40 @@ func EncodeBool(buf *bytes2.ChunkedWriter, val bool) {
 	}
 }
 
-func EncodeUint32(buf *bytes2.ChunkedWriter, val uint32) {
-	putUint32(buf, val)
+func EncodeInt32(buf *bytes2.ChunkedWriter, key string, val int32) {
+	EncodePrefix(buf, Int, key)
+	putUint32(buf, uint32(val))
 }
 
-func EncodeUint64(buf *bytes2.ChunkedWriter, val uint64) {
+func EncodeInt64(buf *bytes2.ChunkedWriter, key string, val int64) {
+	EncodePrefix(buf, Long, key)
+	putUint64(buf, uint64(val))
+}
+
+func EncodeUint64(buf *bytes2.ChunkedWriter, key string, val uint64) {
+	EncodePrefix(buf, Ulong, key)
 	putUint64(buf, val)
 }
 
-func EncodeTime(buf *bytes2.ChunkedWriter, val time.Time) {
+func EncodeTime(buf *bytes2.ChunkedWriter, key string, val time.Time) {
+	EncodePrefix(buf, Datetime, key)
 	mtime := val.UnixNano() / 1e6
 	putUint64(buf, uint64(mtime))
 }
 
-func EncodeBinary(buf *bytes2.ChunkedWriter, val []byte) {
+func EncodeBinary(buf *bytes2.ChunkedWriter, key string, val []byte) {
+	EncodePrefix(buf, Binary, key)
 	putUint32(buf, uint32(len(val)))
 	buf.WriteByte(0)
 	buf.Write(val)
 }
 
-func EncodeStruct(buf *bytes2.ChunkedWriter, val reflect.Value) {
+func EncodeStruct(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
+	EncodePrefix(buf, Object, key)
+	EncodeStructContent(buf, val)
+}
+
+func EncodeStructContent(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	// check the Marshaler interface on T
 	if marshaler, ok := val.Interface().(Marshaler); ok {
 		marshaler.MarshalBson(buf)
@@ -239,6 +245,11 @@ func EncodeStruct(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	lenWriter.RecordLen()
 }
 
+func EncodeMap(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
+	EncodePrefix(buf, Object, key)
+	EncodeMapContent(buf, val)
+}
+
 // a map seems to lose the 'CanAddr' property. So if we want
 // to use a custom marshaler with a struct pointer receiver, like:
 //   func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -247,7 +258,7 @@ func EncodeStruct(buf *bytes2.ChunkedWriter, val reflect.Value) {
 // and not:
 //   map[string]PrivateStruct
 // (see unit test)
-func EncodeMap(buf *bytes2.ChunkedWriter, val reflect.Value) {
+func EncodeMapContent(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	lenWriter := NewLenWriter(buf)
 	mt := val.Type()
 	if mt.Key() != reflect.TypeOf("") {
@@ -262,7 +273,8 @@ func EncodeMap(buf *bytes2.ChunkedWriter, val reflect.Value) {
 	lenWriter.RecordLen()
 }
 
-func EncodeSlice(buf *bytes2.ChunkedWriter, val reflect.Value) {
+func EncodeSlice(buf *bytes2.ChunkedWriter, key string, val reflect.Value) {
+	EncodePrefix(buf, Array, key)
 	lenWriter := NewLenWriter(buf)
 	for i := 0; i < val.Len(); i++ {
 		encodeField(buf, Itoa(i), val.Index(i))

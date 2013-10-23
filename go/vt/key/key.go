@@ -107,11 +107,8 @@ func (kr KeyRange) IsPartial() bool {
 func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "Start")
-	bson.EncodeString(buf, string(kr.Start))
-
-	bson.EncodePrefix(buf, bson.Binary, "End")
-	bson.EncodeString(buf, string(kr.End))
+	bson.EncodeString(buf, "Start", string(kr.Start))
+	bson.EncodeString(buf, "End", string(kr.End))
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()

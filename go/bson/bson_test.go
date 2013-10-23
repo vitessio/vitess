@@ -305,8 +305,7 @@ type PrivateStructMap struct {
 func (ps *PrivateStruct) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := NewLenWriter(buf)
 
-	EncodePrefix(buf, Long, "Type")
-	EncodeUint64(buf, ps.veryPrivate)
+	EncodeUint64(buf, "Type", ps.veryPrivate)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()

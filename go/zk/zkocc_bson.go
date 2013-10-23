@@ -16,8 +16,7 @@ import (
 func (zkPath *ZkPath) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "Path")
-	bson.EncodeString(buf, zkPath.Path)
+	bson.EncodeString(buf, "Path", zkPath.Path)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -67,38 +66,17 @@ func (zkPathV *ZkPathV) UnmarshalBson(buf *bytes.Buffer) {
 func (zkStat *ZkStat) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Long, "Czxid")
-	bson.EncodeUint64(buf, uint64(zkStat.czxid))
-
-	bson.EncodePrefix(buf, bson.Long, "Mzxid")
-	bson.EncodeUint64(buf, uint64(zkStat.mzxid))
-
-	bson.EncodePrefix(buf, bson.Datetime, "CTime")
-	bson.EncodeTime(buf, zkStat.cTime)
-
-	bson.EncodePrefix(buf, bson.Datetime, "MTime")
-	bson.EncodeTime(buf, zkStat.mTime)
-
-	bson.EncodePrefix(buf, bson.Int, "Version")
-	bson.EncodeUint32(buf, uint32(zkStat.version))
-
-	bson.EncodePrefix(buf, bson.Int, "CVersion")
-	bson.EncodeUint32(buf, uint32(zkStat.cVersion))
-
-	bson.EncodePrefix(buf, bson.Int, "AVersion")
-	bson.EncodeUint32(buf, uint32(zkStat.aVersion))
-
-	bson.EncodePrefix(buf, bson.Long, "EphemeralOwner")
-	bson.EncodeUint64(buf, uint64(zkStat.ephemeralOwner))
-
-	bson.EncodePrefix(buf, bson.Int, "DataLength")
-	bson.EncodeUint32(buf, uint32(zkStat.dataLength))
-
-	bson.EncodePrefix(buf, bson.Int, "NumChildren")
-	bson.EncodeUint32(buf, uint32(zkStat.numChildren))
-
-	bson.EncodePrefix(buf, bson.Long, "Pzxid")
-	bson.EncodeUint64(buf, uint64(zkStat.pzxid))
+	bson.EncodeInt64(buf, "Czxid", zkStat.czxid)
+	bson.EncodeInt64(buf, "Mzxid", zkStat.mzxid)
+	bson.EncodeTime(buf, "CTime", zkStat.cTime)
+	bson.EncodeTime(buf, "MTime", zkStat.mTime)
+	bson.EncodeInt32(buf, "Version", int32(zkStat.version))
+	bson.EncodeInt32(buf, "CVersion", int32(zkStat.cVersion))
+	bson.EncodeInt32(buf, "AVersion", int32(zkStat.aVersion))
+	bson.EncodeInt64(buf, "EphemeralOwner", zkStat.ephemeralOwner)
+	bson.EncodeInt32(buf, "DataLength", int32(zkStat.dataLength))
+	bson.EncodeInt32(buf, "NumChildren", int32(zkStat.numChildren))
+	bson.EncodeInt64(buf, "Pzxid", zkStat.pzxid)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -143,22 +121,15 @@ func (zkStat *ZkStat) UnmarshalBson(buf *bytes.Buffer) {
 func (zkNode *ZkNode) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	bson.EncodePrefix(buf, bson.Binary, "Path")
-	bson.EncodeString(buf, zkNode.Path)
-
-	bson.EncodePrefix(buf, bson.Binary, "Data")
-	bson.EncodeString(buf, zkNode.Data)
+	bson.EncodeString(buf, "Path", zkNode.Path)
+	bson.EncodeString(buf, "Data", zkNode.Data)
 
 	bson.EncodePrefix(buf, bson.Object, "Stat")
 	zkNode.Stat.MarshalBson(buf)
 
 	bson.EncodeStringArray(buf, "Children", zkNode.Children)
-
-	bson.EncodePrefix(buf, bson.Boolean, "Cached")
-	bson.EncodeBool(buf, zkNode.Cached)
-
-	bson.EncodePrefix(buf, bson.Boolean, "Stale")
-	bson.EncodeBool(buf, zkNode.Stale)
+	bson.EncodeBool(buf, "Cached", zkNode.Cached)
+	bson.EncodeBool(buf, "Stale", zkNode.Stale)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
