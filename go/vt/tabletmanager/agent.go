@@ -251,7 +251,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		tablet.MysqlIpAddr = mysqlIpAddr
 		return nil
 	}
-	if err := agent.ts.UpdateTabletFields(agent.Tablet().Alias(), f); err != nil {
+	if err := agent.ts.UpdateTabletFields(agent.Tablet().GetAlias(), f); err != nil {
 		return err
 	}
 

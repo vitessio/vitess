@@ -227,7 +227,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 	for _, tablet := range tabletMap {
 		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
-			results <- vresult{tablet.Alias().String(), fmt.Errorf("bad mysql addr: %v %v", tablet.MysqlIpAddr, err)}
+			results <- vresult{tablet.GetAlias().String(), fmt.Errorf("bad mysql addr: %v %v", tablet.MysqlIpAddr, err)}
 			continue
 		}
 		tabletIpMap[ipAddr] = tablet.Tablet
@@ -248,9 +248,9 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 
 		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
 		if err != nil {
-			results <- vresult{tablet.Alias().String(), fmt.Errorf("bad mysql addr: %v", err)}
+			results <- vresult{tablet.GetAlias().String(), fmt.Errorf("bad mysql addr: %v", err)}
 		} else if !strInList(slaveAddrs, ipAddr) {
-			results <- vresult{tablet.Alias().String(), fmt.Errorf("slave not replicating: %v %q", ipAddr, slaveAddrs)}
+			results <- vresult{tablet.GetAlias().String(), fmt.Errorf("slave not replicating: %v %q", ipAddr, slaveAddrs)}
 		}
 	}
 }
@@ -262,19 +262,19 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 			defer wg.Done()
 
 			if err := wr.ts.ValidateTabletPidNode(tabletAlias); err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.Hostname(), err)}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.GetHostname(), err)}
 				return
 			}
 
 			actionPath, err := wr.ai.Ping(tabletAlias)
 			if err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.GetHostname())}
 				return
 			}
 
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.GetHostname())}
 			}
 		}(tabletAlias, tabletInfo)
 	}

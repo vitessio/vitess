@@ -35,7 +35,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		ti.Tablet.Type = topo.TYPE_BACKUP
 		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
-		err = wr.ChangeType(ti.Alias(), topo.TYPE_BACKUP, false)
+		err = wr.ChangeType(ti.GetAlias(), topo.TYPE_BACKUP, false)
 	}
 
 	if err != nil {
@@ -71,7 +71,7 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 		ti.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
-		err = wr.ChangeType(ti.Alias(), newType, false)
+		err = wr.ChangeType(ti.GetAlias(), newType, false)
 	}
 	if err != nil {
 		// failure in changing the topology type is probably worse,
@@ -105,7 +105,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 		ti.Tablet.Type = topo.TYPE_MASTER
 		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
-		err = wr.ChangeType(ti.Alias(), originalType, false)
+		err = wr.ChangeType(ti.GetAlias(), originalType, false)
 	}
 
 	return err
@@ -141,7 +141,7 @@ func (wr *Wrangler) UnreserveForRestore(dstTabletAlias topo.TabletAlias) (err er
 		return err
 	}
 
-	return wr.ChangeType(tablet.Alias(), topo.TYPE_IDLE, false)
+	return wr.ChangeType(tablet.GetAlias(), topo.TYPE_IDLE, false)
 }
 
 func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string, dstTabletAlias, parentAlias topo.TabletAlias, fetchConcurrency, fetchRetryCount int, wasReserved, dontWaitForSlaveStart bool) error {

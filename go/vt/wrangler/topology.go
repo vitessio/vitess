@@ -141,7 +141,7 @@ func TabletNodeFromTabletInfo(ti *topo.TabletInfo) (*TabletNode, error) {
 	return &TabletNode{
 		Host:  host,
 		Port:  intPort,
-		Alias: ti.Alias(),
+		Alias: ti.GetAlias(),
 	}, nil
 }
 

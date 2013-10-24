@@ -231,7 +231,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
 	// read the shard to get SourceShards
 	shardInfo, err := blm.ts.GetShard(tablet.Keyspace, tablet.Shard)
 	if err != nil {
-		log.Errorf("Cannot read shard for this tablet: %v", tablet.Alias())
+		log.Errorf("Cannot read shard for this tablet: %v", tablet.GetAlias())
 		return
 	}
 

@@ -91,8 +91,8 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[to
 	}
 
 	// Once the slave is promoted, remove it from our maps
-	delete(slaveTabletMap, masterElectTablet.Alias())
-	delete(masterTabletMap, masterElectTablet.Alias())
+	delete(slaveTabletMap, masterElectTablet.GetAlias())
+	delete(masterTabletMap, masterElectTablet.GetAlias())
 
 	// then fix all the slaves, including the old master
 	return wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, acceptSuccessPercents)
@@ -103,7 +103,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	wg := sync.WaitGroup{}
 
 	swrd := tm.SlaveWasRestartedData{
-		Parent:               masterElectTablet.Alias(),
+		Parent:               masterElectTablet.GetAlias(),
 		ExpectedMasterAddr:   masterElectTablet.MysqlAddr,
 		ExpectedMasterIpAddr: masterElectTablet.MysqlIpAddr,
 		ScrapStragglers:      scrapStragglers,
@@ -137,9 +137,9 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 				// around in the replication graph, so if we
 				// can't restart it, we just scrap it.
 				// We don't rebuild the Shard just yet though.
-				log.Warningf("Old master %v is not restarting, scrapping it: %v", ti.Alias(), err)
-				if _, err := wr.Scrap(ti.Alias(), true /*force*/, true /*skipRebuild*/); err != nil {
-					log.Warningf("Failed to scrap old master %v: %v", ti.Alias(), err)
+				log.Warningf("Old master %v is not restarting, scrapping it: %v", ti.GetAlias(), err)
+				if _, err := wr.Scrap(ti.GetAlias(), true /*force*/, true /*skipRebuild*/); err != nil {
+					log.Warningf("Failed to scrap old master %v: %v", ti.GetAlias(), err)
 				}
 			}
 			wg.Done()
@@ -162,8 +162,8 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 }
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
-	log.Infof("slaveWasPromoted(%v)", ti.Alias())
-	actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias())
+	log.Infof("slaveWasPromoted(%v)", ti.GetAlias())
+	actionPath, err := wr.ai.SlaveWasPromoted(ti.GetAlias())
 	if err != nil {
 		return err
 	}
@@ -175,8 +175,8 @@ func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
-	log.Infof("slaveWasRestarted(%v)", ti.Alias())
-	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias(), swrd)
+	log.Infof("slaveWasRestarted(%v)", ti.GetAlias())
+	actionPath, err := wr.ai.SlaveWasRestarted(ti.GetAlias(), swrd)
 	if err != nil {
 		return err
 	}
