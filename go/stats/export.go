@@ -226,9 +226,9 @@ func (f StringFunc) String() string {
 	return strconv.Quote(f())
 }
 
-type jsonFunc func() string
+type JsonFunc func() string
 
-func (f jsonFunc) String() string {
+func (f JsonFunc) String() string {
 	return f()
 }
 
@@ -236,5 +236,5 @@ func (f jsonFunc) String() string {
 // a JSON string as a variable. The string is sent to
 // expvar as is.
 func PublishJSONFunc(name string, f func() string) {
-	Publish(name, jsonFunc(f))
+	Publish(name, JsonFunc(f))
 }

@@ -39,8 +39,7 @@ type ActionAgent struct {
 	tabletAlias       topo.TabletAlias
 	vtActionBinFile   string // path to vtaction binary
 	MycnfFile         string // my.cnf file
-	DbConfigsFile     string // File that contains db connection configs
-	DbCredentialsFile string // File that contains db connection configs
+	DbCredentialsFile string // File that contains db credentials
 
 	changeCallbacks []TabletChangeCallback
 

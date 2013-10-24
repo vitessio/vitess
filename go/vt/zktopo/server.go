@@ -38,7 +38,7 @@ func NewServer(zconn zk.Conn) *Server {
 
 func init() {
 	zconn := zk.NewMetaConn(false)
-	stats.Publish("ZkMetaConn", zconn)
+	stats.PublishJSONFunc("ZkMetaConn", zconn.String)
 	topo.RegisterServer("zookeeper", NewServer(zconn))
 }
 
