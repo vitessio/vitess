@@ -114,8 +114,9 @@ func (axp *ActiveTxPool) SafeCommit(transactionId int64) (invalidList map[string
 	defer axp.completionStats.Record("Commit", time.Now())
 	if _, err = conn.ExecuteFetch(COMMIT, 1, false); err != nil {
 		conn.Close()
+		return conn.dirtyTables, NewTabletErrorSql(FAIL, err)
 	}
-	return conn.dirtyTables, err
+	return conn.dirtyTables, nil
 }
 
 func (axp *ActiveTxPool) Rollback(transactionId int64) {
