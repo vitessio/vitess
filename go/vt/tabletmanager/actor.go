@@ -495,7 +495,7 @@ func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
 		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
-			return Scrap(ts, tablet.Alias(), false)
+			return Scrap(ts, tablet.GetAlias(), false)
 		} else {
 			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		}
@@ -632,7 +632,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		sr.ParentAlias = tablet.Alias()
+		sr.ParentAlias = tablet.GetAlias()
 		sr.ZkParentPath = tablet.Path() // XXX
 	} else {
 		sr.ParentAlias = tablet.Parent
@@ -753,7 +753,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	if sourceTablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		parentAlias = sourceTablet.Alias()
+		parentAlias = sourceTablet.GetAlias()
 	} else {
 		parentAlias = sourceTablet.Parent
 	}
@@ -812,7 +812,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	if !args.WasReserved {
-		if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.Alias(), sourceTablet.KeyRange); err != nil {
+		if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.GetAlias(), sourceTablet.KeyRange); err != nil {
 			return err
 		}
 	}
@@ -852,7 +852,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
-		sr.ParentAlias = tablet.Alias()
+		sr.ParentAlias = tablet.GetAlias()
 	} else {
 		sr.ParentAlias = tablet.Parent
 	}
@@ -939,7 +939,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 				err = nil
 			}
 			if err != nil {
-				log.Warningf("remove replication data for %v failed: %v", tablet.Alias(), err)
+				log.Warningf("remove replication data for %v failed: %v", tablet.GetAlias(), err)
 			}
 		}
 	}
@@ -948,7 +948,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	// (force mode executes on the vtctl side, not on the vttablet side)
 	if !force {
 		hk := hook.NewSimpleHook("postflight_scrap")
-		configureTabletHook(hk, tablet.Alias())
+		configureTabletHook(hk, tablet.GetAlias())
 		if hookErr := hk.ExecuteOptional(); hookErr != nil {
 			// we don't want to return an error, the server
 			// is already in bad shape probably.

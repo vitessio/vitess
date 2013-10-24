@@ -30,6 +30,9 @@ var (
 
 func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 	var schemaOverrides []ts.SchemaOverride
+	if overridesFile == "" {
+		return schemaOverrides
+	}
 	if err := jscfg.ReadJson(overridesFile, &schemaOverrides); err != nil {
 		log.Warningf("can't read overridesFile %v: %v", overridesFile, err)
 	} else {

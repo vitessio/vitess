@@ -46,14 +46,14 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		if si.KeyRange != tablet.KeyRange {
 			return fmt.Errorf("shard %v/%v has a different KeyRange: %v != %v", tablet.Keyspace, tablet.Shard, si.KeyRange, tablet.KeyRange)
 		}
-		if tablet.Type == topo.TYPE_MASTER && !si.MasterAlias.IsZero() && si.MasterAlias != tablet.Alias() && !force {
+		if tablet.Type == topo.TYPE_MASTER && !si.MasterAlias.IsZero() && si.MasterAlias != tablet.GetAlias() && !force {
 			return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard)
 		}
 
 		// see if we specified a parent, otherwise get it from the shard
 		if tablet.Parent.IsZero() && tablet.Type.IsSlaveType() {
 			if si.MasterAlias.IsZero() {
-				return fmt.Errorf("trying to create tablet %v in shard %v/%v without a master", tablet.Alias(), tablet.Keyspace, tablet.Shard)
+				return fmt.Errorf("trying to create tablet %v in shard %v/%v without a master", tablet.GetAlias(), tablet.Keyspace, tablet.Shard)
 			}
 			tablet.Parent = si.MasterAlias
 		}
@@ -65,7 +65,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		if !si.HasCell(tablet.Cell) {
 			shardUpdateRequired = true
 		}
-		if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias() {
+		if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.GetAlias() {
 			shardUpdateRequired = true
 		}
 
@@ -88,11 +88,11 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 				si.Cells = append(si.Cells, tablet.Cell)
 				wasUpdated = true
 			}
-			if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.Alias() {
+			if tablet.Type == topo.TYPE_MASTER && si.MasterAlias != tablet.GetAlias() {
 				if !si.MasterAlias.IsZero() && !force {
 					return wr.unlockShard(tablet.Keyspace, tablet.Shard, actionNode, lockPath, fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", si.MasterAlias, tablet.Keyspace, tablet.Shard))
 				}
-				si.MasterAlias = tablet.Alias()
+				si.MasterAlias = tablet.GetAlias()
 				wasUpdated = true
 			}
 
@@ -119,14 +119,14 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 	if err != nil && err == topo.ErrNodeExists {
 		// Try to update nicely, but if it fails fall back to force behavior.
 		if update || force {
-			oldTablet, err := wr.ts.GetTablet(tablet.Alias())
+			oldTablet, err := wr.ts.GetTablet(tablet.GetAlias())
 			if err != nil {
-				log.Warningf("failed reading tablet %v: %v", tablet.Alias(), err)
+				log.Warningf("failed reading tablet %v: %v", tablet.GetAlias(), err)
 			} else {
 				if oldTablet.Keyspace == tablet.Keyspace && oldTablet.Shard == tablet.Shard {
 					*(oldTablet.Tablet) = *tablet
 					if err := topo.UpdateTablet(wr.ts, oldTablet); err != nil {
-						log.Warningf("failed updating tablet %v: %v", tablet.Alias(), err)
+						log.Warningf("failed updating tablet %v: %v", tablet.GetAlias(), err)
 						// now fall through the Scrap case
 					} else {
 						if !tablet.IsInReplicationGraph() {
@@ -134,7 +134,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 						}
 
 						if err := topo.CreateTabletReplicationData(wr.ts, tablet); err != nil {
-							log.Warningf("failed updating tablet replication data for %v: %v", tablet.Alias(), err)
+							log.Warningf("failed updating tablet replication data for %v: %v", tablet.GetAlias(), err)
 							// now fall through the Scrap case
 						} else {
 							return nil
@@ -144,13 +144,13 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 			}
 		}
 		if force {
-			if _, err = wr.Scrap(tablet.Alias(), force, false); err != nil {
-				log.Errorf("failed scrapping tablet %v: %v", tablet.Alias(), err)
+			if _, err = wr.Scrap(tablet.GetAlias(), force, false); err != nil {
+				log.Errorf("failed scrapping tablet %v: %v", tablet.GetAlias(), err)
 				return err
 			}
-			if err := wr.ts.DeleteTablet(tablet.Alias()); err != nil {
+			if err := wr.ts.DeleteTablet(tablet.GetAlias()); err != nil {
 				// we ignore this
-				log.Errorf("failed deleting tablet %v: %v", tablet.Alias(), err)
+				log.Errorf("failed deleting tablet %v: %v", tablet.GetAlias(), err)
 			}
 			return topo.CreateTablet(wr.ts, tablet)
 		}
@@ -173,9 +173,9 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
-		err = tm.Scrap(wr.ts, ti.Alias(), force)
+		err = tm.Scrap(wr.ts, ti.GetAlias(), force)
 	} else {
-		actionPath, err = wr.ai.Scrap(ti.Alias())
+		actionPath, err = wr.ai.Scrap(ti.GetAlias())
 	}
 	if err != nil {
 		return "", err
@@ -309,7 +309,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	// change the type
-	actionPath, err := wr.ai.ChangeType(ti.Alias(), dbType)
+	actionPath, err := wr.ai.ChangeType(ti.GetAlias(), dbType)
 	if err != nil {
 		return err
 	}

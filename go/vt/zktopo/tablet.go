@@ -50,7 +50,7 @@ func tabletInfoFromJson(data string, version int64) (*topo.TabletInfo, error) {
 }
 
 func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
-	zkTabletPath := TabletPathForAlias(tablet.Alias())
+	zkTabletPath := TabletPathForAlias(tablet.GetAlias())
 
 	// Create /zk/<cell>/vt/tablets/<uid>
 	_, err := zk.CreateRecursive(zkts.zconn, zkTabletPath, tablet.Json(), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
@@ -79,7 +79,7 @@ func (zkts *Server) CreateTablet(tablet *topo.Tablet) error {
 }
 
 func (zkts *Server) UpdateTablet(tablet *topo.TabletInfo, existingVersion int64) (int64, error) {
-	zkTabletPath := TabletPathForAlias(tablet.Alias())
+	zkTabletPath := TabletPathForAlias(tablet.GetAlias())
 	stat, err := zkts.zconn.Set(zkTabletPath, tablet.Json(), int(existingVersion))
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZBADVERSION) {

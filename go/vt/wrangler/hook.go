@@ -27,7 +27,7 @@ func (wr *Wrangler) ExecuteHook(tabletAlias topo.TabletAlias, hook *hk.Hook) (ho
 
 func (wr *Wrangler) ExecuteTabletInfoHook(ti *topo.TabletInfo, hook *hk.Hook) (hookResult *hk.HookResult, err error) {
 
-	actionPath, err := wr.ai.ExecuteHook(ti.Alias(), hook)
+	actionPath, err := wr.ai.ExecuteHook(ti.GetAlias(), hook)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (wr *Wrangler) ExecuteOptionalTabletInfoHook(ti *topo.TabletInfo, hook *hk.
 	}
 
 	if hr.ExitStatus == hk.HOOK_DOES_NOT_EXIST {
-		log.Infof("Hook %v doesn't exist on tablet %v", hook.Name, ti.Alias())
+		log.Infof("Hook %v doesn't exist on tablet %v", hook.Name, ti.GetAlias())
 		return nil
 	}
 

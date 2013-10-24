@@ -301,15 +301,20 @@ const (
 // Tablet is a pure data struct for information serialized into json
 // and stored into topo.Server
 type Tablet struct {
-	Cell        string            // the cell this tablet is assigned to (doesn't change)
-	Uid         uint32            // the server id for this instance
-	Parent      TabletAlias       // the globally unique alias for our replication parent - zero if this is the global master
-	Addr        string            // host:port for queryserver
-	SecureAddr  string            // host:port for queryserver using encrypted connection
-	MysqlAddr   string            // host:port for the mysql instance
-	MysqlIpAddr string            // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns
-	Tags        map[string]string // contains freeform information about the tablet.
+	Cell        string      // the cell this tablet is assigned to (doesn't change). DEPRECATED: use Alias
+	Uid         uint32      // the server id for this instance. DEPRECATED: use Alias
+	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
+	Addr        string      // host:port for queryserver. DEPRECATED: use Hostname and Portmap
+	SecureAddr  string      // host:port for queryserver using encrypted connection. DEPRECATED: use Hostname and Portmap
+	MysqlAddr   string      // host:port for the mysql instance. DEPRECATED: use Hostname and Portmap
+	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns. DEPRECATED: use IPAddr and Portmap
 
+	Alias    TabletAlias
+	Hostname string
+	IPAddr   string
+	Portmap  map[string]int
+
+	Tags     map[string]string // contains freeform information about the tablet.
 	Keyspace string
 	Shard    string
 	Type     TabletType
@@ -323,6 +328,66 @@ type Tablet struct {
 	KeyRange       key.KeyRange
 }
 
+// FIXME(szopa): All the calls to GetAlias and GetHostname should be
+// replaced with accessing Alias and Hostname once Addr, Cell, and Uid
+// are removed.
+
+func (tablet *Tablet) GetAlias() TabletAlias {
+	if tablet.Alias.IsZero() {
+		return TabletAlias{tablet.Cell, tablet.Uid}
+	}
+	return tablet.Alias
+}
+
+func (tablet *Tablet) GetHostname() string {
+	if tablet.Hostname != "" {
+		return tablet.Hostname
+	}
+	host, _, err := netutil.SplitHostPort(tablet.Addr)
+	if err != nil {
+		panic(err) // should not happen, Addr was checked at creation
+	}
+	return host
+}
+
+// FIXME(szopa): This function should be removed once all tablets
+// contain data in the new fields.
+
+func (tablet *Tablet) backfillData() {
+	if tablet.Alias.IsZero() {
+		tablet.Alias = TabletAlias{Cell: tablet.Cell, Uid: tablet.Uid}
+	}
+	tablet.Portmap = make(map[string]int)
+
+	hostname, vtPort, err := netutil.SplitHostPort(tablet.Addr)
+	if err != nil {
+		log.Errorf("cannot backfill tablet %v: %v", tablet, err)
+		return
+	}
+	tablet.Hostname = hostname
+	tablet.Portmap["vt"] = vtPort
+
+	if tablet.MysqlIpAddr != "" {
+		ip, mysqlPort, err := netutil.SplitHostPort(tablet.MysqlIpAddr)
+		if err != nil {
+			log.Errorf("cannot backfill tablet %v: %v", tablet, err)
+			return
+		}
+
+		tablet.IPAddr = ip
+		tablet.Portmap["mysql"] = mysqlPort
+	}
+
+	if tablet.SecureAddr != "" {
+		_, securePort, err := netutil.SplitHostPort(tablet.SecureAddr)
+		if err != nil {
+			log.Errorf("cannot backfill tablet %v: %v", tablet, err)
+			return
+		}
+		tablet.Portmap["vts"] = securePort
+	}
+}
+
 // DbName is usually implied by keyspace. Having the shard information in the
 // database name complicates mysql replication.
 func (tablet *Tablet) DbName() string {
@@ -333,11 +398,6 @@ func (tablet *Tablet) DbName() string {
 		return ""
 	}
 	return vtDbPrefix + tablet.Keyspace
-}
-
-// export per-tablet functions
-func (tablet *Tablet) Alias() TabletAlias {
-	return TabletAlias{tablet.Cell, tablet.Uid}
 }
 
 func (tablet *Tablet) IsServingType() bool {
@@ -364,14 +424,6 @@ func (tablet *Tablet) String() string {
 
 func (tablet *Tablet) Json() string {
 	return jscfg.ToJson(tablet)
-}
-
-func (tablet *Tablet) Hostname() string {
-	host, _, err := netutil.SplitHostPort(tablet.Addr)
-	if err != nil {
-		panic(err) // should not happen, Addr was checked at creation
-	}
-	return host
 }
 
 type TabletInfo struct {
@@ -493,6 +545,7 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
 func CreateTablet(ts Server, tablet *Tablet) error {
+	tablet.backfillData()
 	// Have the Server create the tablet
 	err := ts.CreateTablet(tablet)
 	if err != nil {
@@ -509,13 +562,12 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 
 // CreateTabletReplicationData creates the replication graph data for a tablet
 func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
-	tabletAlias := tablet.Alias()
-	log.V(6).Infof("CreateTabletReplicationData(%v)", tabletAlias)
+	log.V(6).Infof("CreateTabletReplicationData(%v)", tablet.GetAlias())
 
-	return AddShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tabletAlias, tablet.Parent)
+	return AddShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.GetAlias(), tablet.Parent)
 }
 
 // DeleteTabletReplicationData deletes replication data.
 func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
-	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias())
+	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.GetAlias())
 }

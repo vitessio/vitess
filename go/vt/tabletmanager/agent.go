@@ -39,8 +39,7 @@ type ActionAgent struct {
 	tabletAlias       topo.TabletAlias
 	vtActionBinFile   string // path to vtaction binary
 	MycnfFile         string // my.cnf file
-	DbConfigsFile     string // File that contains db connection configs
-	DbCredentialsFile string // File that contains db connection configs
+	DbCredentialsFile string // File that contains db credentials
 
 	done chan struct{} // closed when we are done.
 
@@ -267,7 +266,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		tablet.MysqlIpAddr = mysqlIpAddr
 		return nil
 	}
-	if err := agent.ts.UpdateTabletFields(agent.Tablet().Alias(), f); err != nil {
+	if err := agent.ts.UpdateTabletFields(agent.Tablet().GetAlias(), f); err != nil {
 		return err
 	}
 

@@ -516,7 +516,7 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	// FIXME(ryszard): This will go away once the commands accepts
 	// named parameters.
 	alias, hostname := subFlags.Arg(0), subFlags.Arg(1)
-	mysqlPort, vtPort := subFlags.Arg(2), subFlags.Arg(3)
+	mysqlPortString, vtPortString := subFlags.Arg(2), subFlags.Arg(3)
 	keyspace, shard := subFlags.Arg(4), subFlags.Arg(5)
 	tabletType := subFlags.Arg(6)
 
@@ -527,18 +527,30 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	// FIXME(ryszard): This wouldn't be necessarry if these were
 	// flags.
 
-	if _, err := strconv.Atoi(mysqlPort); err != nil {
+	mysqlPort, err := strconv.Atoi(mysqlPortString)
+	if err != nil {
 		log.Fatalf("malformed MySQL port %q: %v", mysqlPort, err)
 	}
-	if _, err := strconv.Atoi(vtPort); err != nil {
+	vtPort, err := strconv.Atoi(vtPortString)
+
+	if err != nil {
 		log.Fatalf("malformed VT port %q: %v", vtPort, err)
 	}
 
 	tablet := &topo.Tablet{
-		Cell:           tabletAlias.Cell,
-		Uid:            tabletAlias.Uid,
-		Addr:           net.JoinHostPort(hostname, vtPort),
-		MysqlAddr:      net.JoinHostPort(hostname, mysqlPort),
+		// NOTE(szopa): The following 4 are deprecated.
+		Cell:      tabletAlias.Cell,
+		Uid:       tabletAlias.Uid,
+		Addr:      net.JoinHostPort(hostname, vtPortString),
+		MysqlAddr: net.JoinHostPort(hostname, mysqlPortString),
+
+		Alias:    tabletAlias,
+		Hostname: hostname,
+		Portmap: map[string]int{
+			"vt":    vtPort,
+			"mysql": mysqlPort,
+		},
+
 		Keyspace:       keyspace,
 		Shard:          shard,
 		Type:           parseTabletType(tabletType, topo.AllTabletTypes),

@@ -48,7 +48,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 		ti.Tablet.Type = topo.TYPE_BACKUP
 		err = topo.UpdateTablet(wr.ts, ti)
 	} else {
-		err = wr.ChangeType(ti.Alias(), topo.TYPE_BACKUP, false)
+		err = wr.ChangeType(ti.GetAlias(), topo.TYPE_BACKUP, false)
 	}
 
 	if err != nil {
@@ -64,7 +64,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 			return topo.UpdateTablet(wr.ts, ti)
 		}
 
-		return wr.ChangeType(ti.Alias(), originalType, false)
+		return wr.ChangeType(ti.GetAlias(), originalType, false)
 	}
 
 	return

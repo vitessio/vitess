@@ -33,11 +33,20 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		Addr:        "localhost:3333",
 		MysqlAddr:   "localhost:3334",
 		MysqlIpAddr: "10.11.12.13:3334",
-		Keyspace:    "test_keyspace",
-		Type:        topo.TYPE_MASTER,
-		State:       topo.STATE_READ_WRITE,
-		KeyRange:    newKeyRange("-10"),
-		Tags:        map[string]string{"tag": "value"},
+
+		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
+		Hostname: "localhost",
+		IPAddr:   "10.11.12.13",
+		Portmap: map[string]int{
+			"vt":    3333,
+			"mysql": 3334,
+		},
+
+		Tags:     map[string]string{"tag": "value"},
+		Keyspace: "test_keyspace",
+		Type:     topo.TYPE_MASTER,
+		State:    topo.STATE_READ_WRITE,
+		KeyRange: newKeyRange("-10"),
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
@@ -50,9 +59,9 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
-	ti, err := ts.GetTablet(tablet.Alias())
+	ti, err := ts.GetTablet(tablet.GetAlias())
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias(), err)
+		t.Errorf("GetTablet %v: %v", tablet.GetAlias(), err)
 	}
 	if eq, err := tabletEqual(ti.Tablet, tablet); err != nil {
 		t.Errorf("cannot compare tablets: %v", err)
@@ -68,8 +77,8 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetTabletsByCell: %v", err)
 	}
-	if len(inCell) != 1 || inCell[0] != tablet.Alias() {
-		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias(), inCell)
+	if len(inCell) != 1 || inCell[0] != tablet.GetAlias() {
+		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.GetAlias(), inCell)
 	}
 
 	ti.State = topo.STATE_READ_ONLY
@@ -77,37 +86,37 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		t.Errorf("UpdateTablet: %v", err)
 	}
 
-	ti, err = ts.GetTablet(tablet.Alias())
+	ti, err = ts.GetTablet(tablet.GetAlias())
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias(), err)
+		t.Errorf("GetTablet %v: %v", tablet.GetAlias(), err)
 	}
 	if want := topo.STATE_READ_ONLY; ti.State != want {
 		t.Errorf("ti.State: want %v, got %v", want, ti.State)
 	}
 
-	if err := ts.UpdateTabletFields(tablet.Alias(), func(t *topo.Tablet) error {
+	if err := ts.UpdateTabletFields(tablet.GetAlias(), func(t *topo.Tablet) error {
 		t.State = topo.STATE_READ_WRITE
 		return nil
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
 	}
-	ti, err = ts.GetTablet(tablet.Alias())
+	ti, err = ts.GetTablet(tablet.GetAlias())
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.Alias(), err)
+		t.Errorf("GetTablet %v: %v", tablet.GetAlias(), err)
 	}
 
 	if want := topo.STATE_READ_WRITE; ti.State != want {
 		t.Errorf("ti.State: want %v, got %v", want, ti.State)
 	}
 
-	if err := ts.DeleteTablet(tablet.Alias()); err != nil {
+	if err := ts.DeleteTablet(tablet.GetAlias()); err != nil {
 		t.Errorf("DeleteTablet: %v", err)
 	}
-	if err := ts.DeleteTablet(tablet.Alias()); err != topo.ErrNoNode {
+	if err := ts.DeleteTablet(tablet.GetAlias()); err != topo.ErrNoNode {
 		t.Errorf("DeleteTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(tablet.Alias()); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(tablet.GetAlias()); err != topo.ErrNoNode {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
 
@@ -116,10 +125,17 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 func CheckPid(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	tablet := &topo.Tablet{
-		Cell:     cell,
-		Uid:      1,
+		Cell: cell,
+		Uid:  1,
+		Addr: "localhost:3333",
+
+		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
+		Hostname: "localhost",
+		Portmap: map[string]int{
+			"vt": 3333,
+		},
+
 		Parent:   topo.TabletAlias{},
-		Addr:     "localhost:3333",
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
 		State:    topo.STATE_READ_WRITE,
