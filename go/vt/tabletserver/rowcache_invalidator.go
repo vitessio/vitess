@@ -97,13 +97,13 @@ func RegisterCacheInvalidator() {
 
 func StartRowCacheInvalidation() {
 	if !shouldInvalidatorRun() {
-		log.Warningf("Row-cache invalidator not being enabled, criteria not met")
+		log.Infof("Row-cache invalidator not being enabled, criteria not met")
 		CacheInvalidationProcessor.stopRowCacheInvalidation()
 		return
 	}
 
 	if CacheInvalidationProcessor.isServiceEnabled() {
-		log.Warningf("Row-cache invalidator service is already enabled")
+		log.Infof("Row-cache invalidator service is already enabled")
 		return
 	}
 
