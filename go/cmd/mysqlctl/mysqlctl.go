@@ -165,7 +165,7 @@ func snapshotSourceEndCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args 
 	readWrite := subFlags.Bool("read-write", false, "will make the server read-write")
 	subFlags.Parse(args)
 
-	err := mysqld.SnapshotSourceEnd(*slaveStartRequired, !(*readWrite), true)
+	err := mysqld.SnapshotSourceEnd(*slaveStartRequired, !(*readWrite), true, map[string]string{})
 	if err != nil {
 		log.Fatalf("snapshotsourceend failed: %v", err)
 	}

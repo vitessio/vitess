@@ -163,7 +163,7 @@ func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 	return nil
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *ReplicationPosition, masterAddr string, err error) {
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *ReplicationPosition, masterAddr string, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
 		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")
@@ -180,7 +180,7 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 		mysqld.SetReadOnly(true)
 	}
 	log.Infof("Stop Slave")
-	if err = mysqld.StopSlave(); err != nil {
+	if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 		return
 	}
 
@@ -224,7 +224,7 @@ func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool) (slav
 	return
 }
 
-func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool) (err error) {
+func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool, hookExtraEnv map[string]string) (err error) {
 	// Try to fix mysqld regardless of snapshot success..
 	if err = mysqld.executeSuperQuery("UNLOCK TABLES"); err != nil {
 		return
@@ -232,7 +232,7 @@ func (mysqld *Mysqld) restoreAfterSnapshot(slaveStartRequired, readOnly bool) (e
 
 	// restore original mysqld state that we saved above
 	if slaveStartRequired {
-		if err = mysqld.StartSlave(); err != nil {
+		if err = mysqld.StartSlave(hookExtraEnv); err != nil {
 			return
 		}
 		// this should be quick, but we might as well just wait
@@ -493,7 +493,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	}
 	sd.SortByReverseDataLength()
 
-	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication)
+	slaveStartRequired, readOnly, replicationPosition, myMasterPosition, masterAddr, err := mysqld.prepareToSnapshot(allowHierarchicalReplication, hookExtraEnv)
 	if err != nil {
 		return
 	}
@@ -504,7 +504,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		slaveStartRequired = false
 	}
 	defer func() {
-		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly))
+		err = replaceError(err, mysqld.restoreAfterSnapshot(slaveStartRequired, readOnly, hookExtraEnv))
 	}()
 
 	datafiles := make([]map[key.KeyRange][]SnapshotFile, len(sd.TableDefinitions))

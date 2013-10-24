@@ -220,7 +220,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
 	case TABLET_ACTION_STOP_SLAVE:
-		err = ta.mysqld.StopSlave()
+		err = ta.mysqld.StopSlave(ta.hookExtraEnv())
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
 		err = ta.waitSlavePosition(actionNode)
 	default:
@@ -304,7 +304,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	// Perform the action.
 	alias := topo.TabletAlias{Cell: tablet.Tablet.Cell, Uid: tablet.Tablet.Uid}
 	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
-	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false)
+	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -600,6 +600,10 @@ func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
 	return nil
 }
 
+func (ta *TabletActor) hookExtraEnv() map[string]string {
+	return map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}
+}
+
 func (ta *TabletActor) getSlaves(actionNode *ActionNode) (err error) {
 	slaveList := &SlaveList{}
 	slaveList.Addrs, err = ta.mysqld.FindSlaves()
@@ -623,7 +627,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
+	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -654,7 +658,7 @@ func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
 		return fmt.Errorf("expected snapshot_source type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true)
+	return ta.mysqld.SnapshotSourceEnd(args.SlaveStartRequired, args.ReadOnly, true, ta.hookExtraEnv())
 }
 
 // fetch a json file and parses it
@@ -727,7 +731,7 @@ func BackfillAlias(zkPath string, alias *topo.TabletAlias) error {
 // Can be called remotely
 func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	// first check mysql, no need to go further if we can't restore
-	if err := ta.mysqld.ValidateCloneTarget(map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}); err != nil {
+	if err := ta.mysqld.ValidateCloneTarget(ta.hookExtraEnv()); err != nil {
 		return err
 	}
 	args := actionNode.args.(*ReserveForRestoreArgs)
@@ -818,7 +822,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	// do the work
-	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}); err != nil {
+	if err := ta.mysqld.RestoreFromSnapshot(sm, args.FetchConcurrency, args.FetchRetryCount, args.DontWaitForSlaveStart, ta.hookExtraEnv()); err != nil {
 		log.Errorf("RestoreFromSnapshot failed (%v), scrapping", err)
 		if err := Scrap(ta.ts, ta.tabletAlias, false); err != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromSnapshot: %v", err)
@@ -843,7 +847,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()})
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}

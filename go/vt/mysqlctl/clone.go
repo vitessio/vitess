@@ -275,7 +275,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 		}
 		masterAddr = mysqld.IpAddr()
 	} else {
-		if err = mysqld.StopSlave(); err != nil {
+		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 			return
 		}
 		replicationPosition, err = mysqld.SlaveStatus()
@@ -320,7 +320,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	if serverMode && snapshotErr == nil {
 		log.Infof("server mode snapshot worked, not restarting mysql")
 	} else {
-		if err = mysqld.SnapshotSourceEnd(slaveStartRequired, readOnly /*deleteSnapshot*/, false); err != nil {
+		if err = mysqld.SnapshotSourceEnd(slaveStartRequired, readOnly, false /*deleteSnapshot*/, hookExtraEnv); err != nil {
 			return
 		}
 	}
@@ -335,7 +335,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	return path.Join(SnapshotURLPath, relative), slaveStartRequired, readOnly, nil
 }
 
-func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnapshot bool) error {
+func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnapshot bool, hookExtraEnv map[string]string) error {
 	if deleteSnapshot {
 		// clean out our files
 		log.Infof("removing snapshot links: %v", mysqld.SnapshotDir)
@@ -352,7 +352,7 @@ func (mysqld *Mysqld) SnapshotSourceEnd(slaveStartRequired, readOnly, deleteSnap
 
 	// Restore original mysqld state that we saved above.
 	if slaveStartRequired {
-		if err := mysqld.StartSlave(); err != nil {
+		if err := mysqld.StartSlave(hookExtraEnv); err != nil {
 			return err
 		}
 
