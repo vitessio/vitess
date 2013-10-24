@@ -20,6 +20,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/flagutil"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
@@ -276,6 +277,17 @@ func confirm(prompt string, force bool) bool {
 	return strings.ToLower(strings.TrimSpace(line)) == "yes"
 }
 
+func fmtMapAwkable(m map[string]string) string {
+	pairs := make([]string, len(m))
+	i := 0
+	for k, v := range m {
+		pairs[i] = fmt.Sprintf("%v: %q", k, v)
+		i++
+	}
+	sort.Strings(pairs)
+	return "[" + strings.Join(pairs, " ") + "]"
+}
+
 func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	keyspace := ti.Keyspace
 	shard := ti.Shard
@@ -285,7 +297,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	return fmt.Sprintf("%v %v %v %v %v %v", ti.Path(), keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr)
+	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.Path(), keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr, fmtMapAwkable(ti.Tags))
 }
 
 func fmtAction(action *tm.ActionNode) string {
@@ -487,11 +499,16 @@ func parseTabletType(param string, types []topo.TabletType) topo.TabletType {
 }
 
 func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	dbNameOverride := subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
-	force := subFlags.Bool("force", false, "will overwrite the node if it already exists")
-	parent := subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
-	update := subFlags.Bool("update", false, "perform update if a tablet with provided alias exists")
+	var (
+		dbNameOverride = subFlags.String("db-name-override", "", "override the name of the db used by vttablet")
+		force          = subFlags.Bool("force", false, "will overwrite the node if it already exists")
+		parent         = subFlags.Bool("parent", false, "will create the parent shard and keyspace if they don't exist yet")
+		update         = subFlags.Bool("update", false, "perform update if a tablet with provided alias exists")
+		tags           flagutil.StringMapValue
+	)
+	subFlags.Var(&tags, "tags", "string separated list of key:value pairs used to tag the tablet")
 	subFlags.Parse(args)
+
 	if subFlags.NArg() != 7 && subFlags.NArg() != 8 {
 		log.Fatalf("action InitTablet requires <tablet alias|zk tablet path> <hostname> <mysql port> <vt port> <keyspace> <shard id> <tablet type> [<parent alias|zk parent alias>]")
 	}
@@ -526,6 +543,7 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 		Shard:          shard,
 		Type:           parseTabletType(tabletType, topo.AllTabletTypes),
 		DbNameOverride: *dbNameOverride,
+		Tags:           tags,
 	}
 	if subFlags.NArg() == 8 {
 		tablet.Parent = tabletRepParamToTabletAlias(subFlags.Arg(7))

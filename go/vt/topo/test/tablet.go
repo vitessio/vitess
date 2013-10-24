@@ -7,6 +7,7 @@ package test
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -36,6 +37,7 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		Type:        topo.TYPE_MASTER,
 		State:       topo.STATE_READ_WRITE,
 		KeyRange:    newKeyRange("-10"),
+		Tags:        map[string]string{"tag": "value"},
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
@@ -133,8 +135,20 @@ func CheckPid(t *testing.T, ts topo.Server) {
 		t.Errorf("ts.CreateTabletPidNode: %v", err)
 	}
 
-	if err := ts.ValidateTabletPidNode(tabletAlias); err != nil {
-		t.Errorf("ts.ValidateTabletPidNode: %v", err)
+	// wait for up to ten seconds for the pid to appear
+	timeout := 10
+	for {
+		err := ts.ValidateTabletPidNode(tabletAlias)
+		if err == nil {
+			// exists, we're good
+			break
+		}
+
+		timeout -= 1
+		if timeout == 0 {
+			t.Fatalf("ts.ValidateTabletPidNode: %v", err)
+		}
+		time.Sleep(time.Second)
 	}
 
 	close(done)
