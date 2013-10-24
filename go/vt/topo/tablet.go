@@ -301,13 +301,14 @@ const (
 // Tablet is a pure data struct for information serialized into json
 // and stored into topo.Server
 type Tablet struct {
-	Cell        string      // the cell this tablet is assigned to (doesn't change)
-	Uid         uint32      // the server id for this instance
-	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
-	Addr        string      // host:port for queryserver
-	SecureAddr  string      // host:port for queryserver using encrypted connection
-	MysqlAddr   string      // host:port for the mysql instance
-	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns
+	Cell        string            // the cell this tablet is assigned to (doesn't change)
+	Uid         uint32            // the server id for this instance
+	Parent      TabletAlias       // the globally unique alias for our replication parent - zero if this is the global master
+	Addr        string            // host:port for queryserver
+	SecureAddr  string            // host:port for queryserver using encrypted connection
+	MysqlAddr   string            // host:port for the mysql instance
+	MysqlIpAddr string            // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns
+	Tags        map[string]string // contains freeform information about the tablet.
 
 	Keyspace string
 	Shard    string

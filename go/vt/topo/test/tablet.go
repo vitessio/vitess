@@ -36,6 +36,7 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		Type:        topo.TYPE_MASTER,
 		State:       topo.STATE_READ_WRITE,
 		KeyRange:    newKeyRange("-10"),
+		Tags:        map[string]string{"tag": "value"},
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
