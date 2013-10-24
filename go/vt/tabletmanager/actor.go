@@ -184,11 +184,11 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = ta.SlaveWasPromoted(actionNode)
+		err = slaveWasPromoted(ta.ts, ta.tabletAlias)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		err = ta.SlaveWasRestarted(actionNode, "")
+		err = slaveWasRestarted(ta.ts, ta.mysqlDaemon, ta.tabletAlias, actionNode.args.(*SlaveWasRestartedData))
 	case TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case TABLET_ACTION_RESTORE:
@@ -311,22 +311,22 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	log.Infof("PromoteSlave %v", rsd.String())
 	actionNode.reply = rsd
 
-	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
+	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
 }
 
-func (ta *TabletActor) SlaveWasPromoted(actionNode *ActionNode) error {
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
+func slaveWasPromoted(ts topo.Server, tabletAlias topo.TabletAlias) error {
+	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
 
-	return ta.updateReplicationGraphForPromotedSlave(tablet, actionNode)
+	return updateReplicationGraphForPromotedSlave(ts, tablet)
 }
 
-func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *topo.TabletInfo, actionNode *ActionNode) error {
+func updateReplicationGraphForPromotedSlave(ts topo.Server, tablet *topo.TabletInfo) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != topo.NO_TABLET {
-		if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
+		if err := topo.DeleteTabletReplicationData(ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
 			return err
 		}
 	}
@@ -335,7 +335,7 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *topo.Table
 	tablet.Type = topo.TYPE_MASTER
 	tablet.Parent.Cell = ""
 	tablet.Parent.Uid = topo.NO_TABLET
-	err := topo.UpdateTablet(ta.ts, tablet)
+	err := topo.UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
 	}
@@ -345,7 +345,7 @@ func (ta *TabletActor) updateReplicationGraphForPromotedSlave(tablet *topo.Table
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
+	err = topo.CreateTabletReplicationData(ts, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}
@@ -470,16 +470,14 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	return nil
 }
 
-func (ta *TabletActor) SlaveWasRestarted(actionNode *ActionNode, masterAddr string) error {
-	swrd := actionNode.args.(*SlaveWasRestartedData)
-
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
+func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias, swrd *SlaveWasRestartedData) error {
+	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
 
 	// Remove tablet from the replication graph.
-	if err := topo.DeleteTabletReplicationData(ta.ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
+	if err := topo.DeleteTabletReplicationData(ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
 		// FIXME(alainjobart) once we don't have replication paths
 		// any more, remove this extra check
 		if err == topo.ErrNotEmpty {
@@ -490,18 +488,16 @@ func (ta *TabletActor) SlaveWasRestarted(actionNode *ActionNode, masterAddr stri
 	}
 
 	// now we can check the reparent actually worked
-	if masterAddr == "" {
-		masterAddr, err = ta.mysqlDaemon.GetMasterAddr()
-		if err != nil {
-			return err
-		}
+	masterAddr, err := mysqlDaemon.GetMasterAddr()
+	if err != nil {
+		return err
 	}
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
-		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
+		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
-			return Scrap(ta.ts, tablet.Alias(), false)
+			return Scrap(ts, tablet.Alias(), false)
 		} else {
-			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, ta.tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
+			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		}
 	}
 
@@ -511,14 +507,14 @@ func (ta *TabletActor) SlaveWasRestarted(actionNode *ActionNode, masterAddr stri
 		tablet.Type = topo.TYPE_SPARE
 		tablet.State = topo.STATE_READ_ONLY
 	}
-	err = topo.UpdateTablet(ta.ts, tablet)
+	err = topo.UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
 	}
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
-	err = topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
+	err = topo.CreateTabletReplicationData(ts, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {
 		return err
 	}

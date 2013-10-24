@@ -14,6 +14,20 @@ import (
 	"github.com/youtube/vitess/go/vt/rpc"
 )
 
+// This file contains the RPC methods for the tablet manager.
+// There are multiple kinds of actions:
+// 1 - read-only actions that can be executed in parallel.
+// 2 - read-write actions that change something, and need to take the
+//     action lock (they should Lock and Unlock agent.actionMutex)
+// 3 - read-write actions that also need to reload the tablet state.
+//     (they should use both actionMutex lock and run
+//     agent.afterAction() if the action is successful, using wrapErrForAction)
+// All actions are type 1 unless otherwise noted.
+
+//
+// Utility functions for RPC service
+//
+
 // we keep track of the agent so we can use its tabletAlias, ts, ...
 type TabletManager struct {
 	agent  *ActionAgent
@@ -31,6 +45,7 @@ func (agent *ActionAgent) RegisterQueryService(mysqld *mysqlctl.Mysqld) {
 	rpcwrap.RegisterAuthenticated(TabletManagerRpcService)
 }
 
+// wrapErr is to use with Type 1 and Type 2 actions.
 func (tm *TabletManager) wrapErr(context *rpcproto.Context, name string, args interface{}, reply interface{}, err error) error {
 	if err != nil {
 		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, context.RemoteAddr, err.Error())
@@ -39,6 +54,19 @@ func (tm *TabletManager) wrapErr(context *rpcproto.Context, name string, args in
 	log.Infof("TabletManager.%v(%v)(from %v): %v", name, args, context.RemoteAddr, reply)
 	return nil
 }
+
+// wrapErrForAction is to use with type 3 actions.
+func (tm *TabletManager) wrapErrForAction(context *rpcproto.Context, name string, args interface{}, reply interface{}, reloadSchema bool, err error) error {
+	err = tm.wrapErr(context, name, args, reply, err)
+	if err == nil {
+		tm.agent.afterAction("RPC("+name+")", reloadSchema)
+	}
+	return err
+}
+
+//
+// Various read-only methods
+//
 
 func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) error {
 	*reply = *args
@@ -67,6 +95,10 @@ func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.Unu
 	}
 	return tm.wrapErr(context, TABLET_ACTION_GET_PERMISSIONS, args, reply, err)
 }
+
+//
+// Replication related methods
+//
 
 func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) error {
 	position, err := tm.mysqld.SlaveStatus()
@@ -97,7 +129,12 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 	return tm.wrapErr(context, TABLET_ACTION_MASTER_POSITION, args, reply, err)
 }
 
+// StopSlave is a Type 2 action: takes the action lock, but doesn't
+// update tablet state
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	tm.agent.actionMutex.Lock()
+	defer tm.agent.actionMutex.Unlock()
+
 	return tm.wrapErr(context, TABLET_ACTION_STOP_SLAVE, args, reply, tm.mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()}))
 }
 
@@ -113,4 +150,26 @@ type WaitBlpPositionArgs struct {
 
 func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
 	return tm.wrapErr(context, TABLET_ACTION_WAIT_BLP_POSITION, args, reply, tm.mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout))
+}
+
+//
+// Reparenting related functions
+//
+
+// SlaveWasPromoted is a Type 3 action: takes the action lock, and
+// update tablet state
+func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	tm.agent.actionMutex.Lock()
+	defer tm.agent.actionMutex.Unlock()
+
+	return tm.wrapErrForAction(context, TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, false /*reloadSchema*/, slaveWasPromoted(tm.agent.ts, tm.agent.tabletAlias))
+}
+
+// SlaveWasRestarted is a Type 3 action: takes the action lock, and
+// update tablet state
+func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *SlaveWasRestartedData, reply *rpc.UnusedResponse) error {
+	tm.agent.actionMutex.Lock()
+	defer tm.agent.actionMutex.Unlock()
+
+	return tm.wrapErrForAction(context, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, false /*reloadSchema*/, slaveWasRestarted(tm.agent.ts, tm.mysqld, tm.agent.tabletAlias, args))
 }

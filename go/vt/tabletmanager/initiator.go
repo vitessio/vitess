@@ -23,6 +23,7 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
@@ -220,6 +221,10 @@ func (ai *ActionInitiator) SlaveWasPromoted(tabletAlias topo.TabletAlias) (actio
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_PROMOTED})
 }
 
+func (ai *ActionInitiator) RpcSlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_PROMOTED, rpc.NilRequest, rpc.NilResponse, waitTime)
+}
+
 func (ai *ActionInitiator) RestartSlave(tabletAlias topo.TabletAlias, args *RestartSlaveData) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, args: args})
 }
@@ -233,6 +238,10 @@ type SlaveWasRestartedData struct {
 
 func (ai *ActionInitiator) SlaveWasRestarted(tabletAlias topo.TabletAlias, args *SlaveWasRestartedData) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_RESTARTED, args: args})
+}
+
+func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *SlaveWasRestartedData, waitTime time.Duration) error {
+	return ai.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, rpc.NilResponse, waitTime)
 }
 
 func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {

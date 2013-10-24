@@ -161,24 +161,34 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	return recorder.Error()
 }
 
+var useRpc = false
+
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	log.Infof("slaveWasPromoted(%v)", ti.Alias())
-	actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias())
-	if err != nil {
-		return err
-	}
-	err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-	if err != nil {
-		return err
+	if useRpc {
+		return wr.ai.RpcSlaveWasPromoted(ti, wr.actionTimeout())
+	} else {
+		actionPath, err := wr.ai.SlaveWasPromoted(ti.Alias())
+		if err != nil {
+			return err
+		}
+		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
 	log.Infof("slaveWasRestarted(%v)", ti.Alias())
-	actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias(), swrd)
-	if err != nil {
-		return err
+	if useRpc {
+		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())
+	} else {
+		actionPath, err := wr.ai.SlaveWasRestarted(ti.Alias(), swrd)
+		if err != nil {
+			return err
+		}
+		return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	}
-	return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 }

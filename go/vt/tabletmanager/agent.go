@@ -31,7 +31,7 @@ import (
 
 // Each TabletChangeCallback must be idempotent and "threadsafe".  The
 // agent will execute these in a new goroutine each time a change is
-// triggered.
+// triggered. We won't run two in parallel.
 type TabletChangeCallback func(oldTablet, newTablet topo.Tablet)
 
 type ActionAgent struct {
@@ -42,11 +42,17 @@ type ActionAgent struct {
 	DbConfigsFile     string // File that contains db connection configs
 	DbCredentialsFile string // File that contains db connection configs
 
-	changeCallbacks []TabletChangeCallback
+	done chan struct{} // closed when we are done.
 
-	mutex   sync.Mutex
-	_tablet *topo.TabletInfo // must be accessed with lock - TabletInfo objects are not synchronized.
-	done    chan struct{}    // closed when we are done.
+	// actionMutex is there to run only one action at a time. If
+	// both agent.actionMutex and agent.mutex needs to be taken,
+	// take actionMutex first.
+	actionMutex sync.Mutex // to run only one action at a time
+
+	// mutex is protecting the rest of the members
+	mutex           sync.Mutex
+	changeCallbacks []TabletChangeCallback
+	_tablet         *topo.TabletInfo
 }
 
 func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfFile, dbCredentialsFile string) (*ActionAgent, error) {
@@ -55,8 +61,8 @@ func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfF
 		tabletAlias:       tabletAlias,
 		MycnfFile:         mycnfFile,
 		DbCredentialsFile: dbCredentialsFile,
-		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
 		done:              make(chan struct{}),
+		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
 	}, nil
 }
 
@@ -110,6 +116,9 @@ func (agent *ActionAgent) resolvePaths() error {
 
 // A non-nil return signals that event processing should stop.
 func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
+	agent.actionMutex.Lock()
+	defer agent.actionMutex.Unlock()
+
 	log.Infof("action dispatch %v", actionPath)
 	actionNode, err := ActionNodeFromJson(data, actionPath)
 	if err != nil {
@@ -140,28 +149,35 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 		return vtActionErr
 	}
 
-	log.Infof("agent action completed %v %s", actionPath, stdOut)
+	log.Infof("Agent action completed %v %s", actionPath, stdOut)
+	agent.afterAction(actionPath, actionNode.Action == TABLET_ACTION_APPLY_SCHEMA)
+	return nil
+}
 
-	// Save the old tablet so callbacks can have a better idea of the precise
-	// nature of the transition.
+// afterAction needs to be run after an action may have changed the current
+// state of the tablet.
+func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
+	log.Infof("Executing post-action change callbacks")
+
+	// Save the old tablet so callbacks can have a better idea of
+	// the precise nature of the transition.
 	oldTablet := agent.Tablet().Tablet
 
 	// Actions should have side effects on the tablet, so reload the data.
 	if err := agent.readTablet(); err != nil {
-		log.Warningf("failed rereading tablet after action - services may be inconsistent: %v %v", actionPath, err)
+		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
 	} else {
-		agent.runChangeCallbacks(oldTablet, actionPath)
+		agent.runChangeCallbacks(oldTablet, context)
 	}
 
 	// Maybe invalidate the schema.
 	// This adds a dependency between tabletmanager and tabletserver,
 	// so it's not ideal. But I (alainjobart) think it's better
 	// to have up to date schema in vtocc.
-	if actionNode.Action == TABLET_ACTION_APPLY_SCHEMA {
+	if reloadSchema {
 		tabletserver.ReloadSchema()
 	}
-
-	return nil
+	log.Infof("Done with post-action change callbacks")
 }
 
 func (agent *ActionAgent) verifyTopology() error {
@@ -255,7 +271,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	// Reread in case there were changes
+	// Reread to get the changes we just made
 	if err := agent.readTablet(); err != nil {
 		return err
 	}
