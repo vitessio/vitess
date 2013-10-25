@@ -13,6 +13,7 @@ import (
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/rpc"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // This file contains the RPC methods for the tablet manager.
@@ -105,6 +106,23 @@ func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.Unu
 		*reply = *p
 	}
 	return tm.wrapErr(context, TABLET_ACTION_GET_PERMISSIONS, args, reply, err)
+}
+
+//
+// Various read-write methods
+//
+
+// ChangeType is a Type 3 action: takes the action lock, and
+// update tablet state
+func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
+	beforeLock := time.Now()
+	tm.agent.actionMutex.Lock()
+	defer tm.agent.actionMutex.Unlock()
+	if time.Now().Sub(beforeLock) > rpcTimeout {
+		return fmt.Errorf("server timeout for ChangeType")
+	}
+
+	return tm.wrapErrForAction(context, TABLET_ACTION_CHANGE_TYPE, args, reply, false /*reloadSchema*/, ChangeType(tm.agent.ts, tm.agent.tabletAlias, *args, true /*runHooks*/))
 }
 
 //

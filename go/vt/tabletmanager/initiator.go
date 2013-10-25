@@ -138,6 +138,10 @@ func (ai *ActionInitiator) ChangeType(tabletAlias topo.TabletAlias, dbType topo.
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, args: &dbType})
 }
 
+func (ai *ActionInitiator) RpcChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
+	return ai.rpcCallTablet(tablet, TABLET_ACTION_CHANGE_TYPE, &dbType, rpc.NilResponse, waitTime)
+}
+
 func (ai *ActionInitiator) SetReadOnly(tabletAlias topo.TabletAlias) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SET_RDONLY})
 }

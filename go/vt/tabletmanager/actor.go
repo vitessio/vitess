@@ -275,7 +275,7 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 
 func (ta *TabletActor) changeType(actionNode *ActionNode) error {
 	dbType := actionNode.args.(*topo.TabletType)
-	return ChangeType(ta.ts, ta.tabletAlias, *dbType, true)
+	return ChangeType(ta.ts, ta.tabletAlias, *dbType, true /*runHooks*/)
 }
 
 func (ta *TabletActor) demoteMaster() error {
