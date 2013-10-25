@@ -161,6 +161,9 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	return recorder.Error()
 }
 
+// TODO(alainjobart) remove this flag and keep the useRpc=true code path
+// once the server has been deployed everywhere.
+// Tests pass both with useRpc=false and useRpc=true.
 var useRpc = false
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {

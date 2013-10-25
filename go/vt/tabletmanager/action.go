@@ -24,6 +24,12 @@ import (
 
 const (
 	// FIXME(msolomon) why is ActionState a type, but Action is not?
+
+	//
+	// Tablet actions. These are triggered by ActionNodes or RPCs,
+	// and executed by an agent within vttablet.
+	//
+
 	TABLET_ACTION_PING  = "Ping"
 	TABLET_ACTION_SLEEP = "Sleep"
 
@@ -31,12 +37,24 @@ const (
 	TABLET_ACTION_SET_RDWR    = "SetReadWrite"
 	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
 
-	TABLET_ACTION_DEMOTE_MASTER       = "DemoteMaster"
-	TABLET_ACTION_PROMOTE_SLAVE       = "PromoteSlave"
-	TABLET_ACTION_SLAVE_WAS_PROMOTED  = "SlaveWasPromoted"
-	TABLET_ACTION_RESTART_SLAVE       = "RestartSlave"
+	TABLET_ACTION_DEMOTE_MASTER = "DemoteMaster"
+	TABLET_ACTION_PROMOTE_SLAVE = "PromoteSlave"
+
+	// SlaveWasPromoted tells a tablet this previously slave
+	// tablet is now the master. The tablet will update its
+	// own topology record.
+	TABLET_ACTION_SLAVE_WAS_PROMOTED = "SlaveWasPromoted"
+
+	TABLET_ACTION_RESTART_SLAVE = "RestartSlave"
+
+	// SlaveWasRestarted tells a tablet the mysql master was changed.
+	// The tablet will check it is indeed the case, and update its own
+	// topology record.
 	TABLET_ACTION_SLAVE_WAS_RESTARTED = "SlaveWasRestarted"
-	TABLET_ACTION_STOP_SLAVE          = "StopSlave"
+
+	// StopSlave will stop MySQL replication.
+	TABLET_ACTION_STOP_SLAVE = "StopSlave"
+
 	TABLET_ACTION_BREAK_SLAVES        = "BreakSlaves"
 	TABLET_ACTION_MASTER_POSITION     = "MasterPosition"
 	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
@@ -58,7 +76,11 @@ const (
 	TABLET_ACTION_MULTI_SNAPSHOT      = "MultiSnapshot"
 	TABLET_ACTION_MULTI_RESTORE       = "MultiRestore"
 
-	// Shard actions - involve all tablets in a shard
+	//
+	// Shard actions - involve all tablets in a shard.
+	// These are just descriptive and used for locking / logging.
+	//
+
 	SHARD_ACTION_REPARENT              = "ReparentShard"
 	SHARD_ACTION_EXTERNALLY_REPARENTED = "ShardExternallyReparented"
 	// Recompute derived shard-wise data
@@ -76,7 +98,11 @@ const (
 	// Update the Shard object (Cells, ...)
 	SHARD_ACTION_UPDATE_SHARD = "UpdateShard"
 
-	// Keyspace actions - require very high level locking for consistency
+	//
+	// Keyspace actions - require very high level locking for consistency.
+	// These are just descriptive and used for locking / logging.
+	//
+
 	KEYSPACE_ACTION_REBUILD      = "RebuildKeyspace"
 	KEYSPACE_ACTION_APPLY_SCHEMA = "ApplySchemaKeyspace"
 
