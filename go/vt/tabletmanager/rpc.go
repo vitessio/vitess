@@ -6,6 +6,7 @@ package tabletmanager
 
 import (
 	"fmt"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
@@ -23,6 +24,16 @@ import (
 //     (they should use both actionMutex lock and run
 //     agent.afterAction() if the action is successful, using wrapErrForAction)
 // All actions are type 1 unless otherwise noted.
+
+// rpcTimeout is used for timing out the queries on the server in a
+// reasonable amount of time. The actions are stored in the
+// topo.Server, and if the client goes away, it cleans up the action
+// node, and the server doesn't do the action. In the RPC case, if the
+// client goes away (while waiting on the action mutex), the server
+// won't know, and may still execute the RPC call at a later time.
+// To prevent that, if it takes more than rpcTimeout to take the action mutex,
+// we return an error to the caller.
+const rpcTimeout = time.Second * 30
 
 //
 // Utility functions for RPC service
@@ -132,8 +143,12 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 // StopSlave is a Type 2 action: takes the action lock, but doesn't
 // update tablet state
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	beforeLock := time.Now()
 	tm.agent.actionMutex.Lock()
 	defer tm.agent.actionMutex.Unlock()
+	if time.Now().Sub(beforeLock) > rpcTimeout {
+		return fmt.Errorf("server timeout for StopSlave")
+	}
 
 	return tm.wrapErr(context, TABLET_ACTION_STOP_SLAVE, args, reply, tm.mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()}))
 }
@@ -159,8 +174,12 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBl
 // SlaveWasPromoted is a Type 3 action: takes the action lock, and
 // update tablet state
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	beforeLock := time.Now()
 	tm.agent.actionMutex.Lock()
 	defer tm.agent.actionMutex.Unlock()
+	if time.Now().Sub(beforeLock) > rpcTimeout {
+		return fmt.Errorf("server timeout for SlaveWasPromoted")
+	}
 
 	return tm.wrapErrForAction(context, TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, false /*reloadSchema*/, slaveWasPromoted(tm.agent.ts, tm.agent.tabletAlias))
 }
@@ -168,8 +187,12 @@ func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.U
 // SlaveWasRestarted is a Type 3 action: takes the action lock, and
 // update tablet state
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *SlaveWasRestartedData, reply *rpc.UnusedResponse) error {
+	beforeLock := time.Now()
 	tm.agent.actionMutex.Lock()
 	defer tm.agent.actionMutex.Unlock()
+	if time.Now().Sub(beforeLock) > rpcTimeout {
+		return fmt.Errorf("server timeout for SlaveWasRestarted")
+	}
 
 	return tm.wrapErrForAction(context, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, false /*reloadSchema*/, slaveWasRestarted(tm.agent.ts, tm.mysqld, tm.agent.tabletAlias, args))
 }
