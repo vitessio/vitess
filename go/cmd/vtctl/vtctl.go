@@ -372,21 +372,6 @@ func kquery(ts topo.Server, cell, keyspace, user, password, query string) error 
 	return nil
 }
 
-// parseParams parses an array of strings in the form of a=b
-// into a map.
-func parseParams(args []string) map[string]string {
-	params := make(map[string]string)
-	for _, arg := range args {
-		parts := strings.SplitN(arg, "=", 2)
-		if len(parts) == 1 {
-			params[parts[0]] = ""
-		} else {
-			params[parts[0]] = parts[1]
-		}
-	}
-	return params
-}
-
 // getFileParam returns a string containing either flag is not "",
 // or the content of the file named flagFile
 func getFileParam(flag, flagFile, name string) string {
@@ -855,7 +840,7 @@ func commandExecuteHook(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
-	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: parseParams(subFlags.Args()[2:])}
+	hook := &hk.Hook{Name: subFlags.Arg(1), Parameters: subFlags.Args()[2:]}
 	hr, err := wr.ExecuteHook(tabletAlias, hook)
 	if err == nil {
 		log.Infof(hr.String())

@@ -894,7 +894,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # test a regular program works
-    self._run_hook("test.sh flag1 param1=hello", [
+    self._run_hook("test.sh --flag1 --param1=hello", [
         '"ExitStatus": 0',
         ['"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --flag1\\nPARAM: --param1=hello\\n"',
          '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --param1=hello\\nPARAM: --flag1\\n"',
@@ -903,14 +903,14 @@ class TestTabletManager(unittest.TestCase):
         ])
 
     # test stderr output
-    self._run_hook("test.sh to-stderr", [
+    self._run_hook("test.sh --to-stderr", [
         '"ExitStatus": 0',
         '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --to-stderr\\n"',
         '"Stderr": "ERR: --to-stderr\\n"',
         ])
 
     # test commands that fail
-    self._run_hook("test.sh exit-error", [
+    self._run_hook("test.sh --exit-error", [
         '"ExitStatus": 1',
         '"Stdout": "TABLET_ALIAS: test_nj-0000062344\\nPARAM: --exit-error\\n"',
         '"Stderr": "ERROR: exit status 1\\n"',
