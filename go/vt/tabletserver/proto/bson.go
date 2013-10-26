@@ -12,6 +12,7 @@ import (
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 )
 
 func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -223,4 +224,95 @@ func DecodeQueriesBson(buf *bytes.Buffer, kind byte) (queries []BoundQuery) {
 		kind = bson.NextByte(buf)
 	}
 	return queries
+}
+
+func (ql *QueryList) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	EncodeQueriesBson(ql.Queries, "Queries", buf)
+	bson.EncodeInt64(buf, "TransactionId", ql.TransactionId)
+	bson.EncodeInt64(buf, "ConnectionId", ql.ConnectionId)
+	bson.EncodeInt64(buf, "SessionId", ql.SessionId)
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (ql *QueryList) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "Queries":
+			ql.Queries = DecodeQueriesBson(buf, kind)
+		case "TransactionId":
+			ql.TransactionId = bson.DecodeInt64(buf, kind)
+		case "ConnectionId":
+			ql.ConnectionId = bson.DecodeInt64(buf, kind)
+		case "SessionId":
+			ql.SessionId = bson.DecodeInt64(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+
+func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+	EncodeResultsBson(qrl.List, "List", buf)
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func EncodeResultsBson(results []mproto.QueryResult, key string, buf *bytes2.ChunkedWriter) {
+	bson.EncodePrefix(buf, bson.Array, key)
+	lenWriter := bson.NewLenWriter(buf)
+	for i, v := range results {
+		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
+		v.MarshalBson(buf)
+	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		key := bson.ReadCString(buf)
+		switch key {
+		case "List":
+			qrl.List = DecodeResultsBson(buf, kind)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", key))
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+
+func DecodeResultsBson(buf *bytes.Buffer, kind byte) (results []mproto.QueryResult) {
+	switch kind {
+	case bson.Array:
+		// valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for Queries", kind))
+	}
+
+	bson.Next(buf, 4)
+	results = make([]mproto.QueryResult, 0, 8)
+	kind = bson.NextByte(buf)
+	var result mproto.QueryResult
+	for i := 0; kind != bson.EOO; i++ {
+		bson.ExpectIndex(buf, i)
+		result.UnmarshalBson(buf)
+		results = append(results, result)
+		kind = bson.NextByte(buf)
+	}
+	return results
 }
