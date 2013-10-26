@@ -199,3 +199,80 @@ func TestBoundQuery(t *testing.T) {
 		t.Errorf("want %v, got %v", want, err)
 	}
 }
+
+type reflectQueryList struct {
+	Queries       []BoundQuery
+	TransactionId int64
+	ConnectionId  int64
+	SessionId     int64
+}
+
+type badQueryList struct {
+	Extra         int
+	Queries       []BoundQuery
+	TransactionId int64
+	ConnectionId  int64
+	SessionId     int64
+}
+
+func TestQueryList(t *testing.T) {
+	reflected, err := bson.Marshal(&reflectQueryList{
+		Queries: []BoundQuery{{
+			Sql:           "query",
+			BindVariables: map[string]interface{}{"val": int64(1)},
+		}},
+		TransactionId: 1,
+		ConnectionId:  2,
+		SessionId:     3,
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	want := string(reflected)
+
+	custom := QueryList{
+		Queries: []BoundQuery{{
+			Sql:           "query",
+			BindVariables: map[string]interface{}{"val": int64(1)},
+		}},
+		TransactionId: 1,
+		ConnectionId:  2,
+		SessionId:     3,
+	}
+	encoded, err := bson.Marshal(&custom)
+	if err != nil {
+		t.Error(err)
+	}
+	got := string(encoded)
+	if want != got {
+		t.Errorf("want\n%#v, got\n%#v", want, got)
+	}
+
+	var unmarshalled QueryList
+	err = bson.Unmarshal(encoded, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+	if custom.TransactionId != unmarshalled.TransactionId {
+		t.Errorf("want %v, got %v", custom.TransactionId, unmarshalled.TransactionId)
+	}
+	if custom.SessionId != unmarshalled.SessionId {
+		t.Errorf("want %v, got %v", custom.SessionId, unmarshalled.SessionId)
+	}
+	if custom.Queries[0].Sql != unmarshalled.Queries[0].Sql {
+		t.Errorf("want %v, got %v", custom.Queries[0].Sql, unmarshalled.Queries[0].Sql)
+	}
+	if custom.Queries[0].BindVariables["val"].(int64) != unmarshalled.Queries[0].BindVariables["val"].(int64) {
+		t.Errorf("want %v, got %v", custom.Queries[0].BindVariables["val"], unmarshalled.Queries[0].BindVariables["val"])
+	}
+
+	unexpected, err := bson.Marshal(&badQueryList{})
+	if err != nil {
+		t.Error(err)
+	}
+	err = bson.Unmarshal(unexpected, &unmarshalled)
+	want = "Unrecognized tag Extra"
+	if err == nil || want != err.Error() {
+		t.Errorf("want %v, got %v", want, err)
+	}
+}
