@@ -14,7 +14,7 @@ Development
 
 ``` sh
 cd $WORKSPACE
-sudo apt-get install automake libtool flex bison memcached python-mysqldb libssl-dev # to compile MySQL
+sudo apt-get install automake libtool flex bison memcached python-dev python-mysqldb libssl-dev g++
 git clone git@github.com:youtube/vitess.git src/github.com/youtube/vitess
 cd src/github.com/youtube/vitess
 ./bootstrap.sh
