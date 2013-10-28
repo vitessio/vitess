@@ -36,7 +36,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 		return err
 	}
 
-	err = wr.rebuildShard(keyspace, shard, cells)
+	err = wr.rebuildShard(keyspace, shard, cells, false /*ignorePartialResult*/)
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
@@ -48,7 +48,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 // This function should only be used with an action lock on the shard
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
-func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
+func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignorePartialResult bool) error {
 	log.Infof("rebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
@@ -59,7 +59,11 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string) error {
 
 	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
 	if err != nil {
-		return err
+		if ignorePartialResult && err == topo.ErrPartialResult {
+			log.Warningf("rebuildShard: got topo.ErrPartialResult from GetTabletMapForShard, but skipping error as it was expected")
+		} else {
+			return err
+		}
 	}
 
 	tablets := make([]*topo.TabletInfo, 0, len(tabletMap))

@@ -48,10 +48,12 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	//   (as we're going to check the new master is in the list)
 	// That should be enough.
 	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	partialTopology := false
 	switch err {
 	case nil:
 		// keep going
 	case topo.ErrPartialResult:
+		partialTopology = true
 		log.Warningf("Got topo.ErrPartialResult from GetTabletMapForShard, may need to re-init some tablets")
 	default:
 		return err
@@ -79,7 +81,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	// and rebuild the shard serving graph (but do not change the
 	// master record, we already did it)
 	log.Infof("Rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, nil)
+	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, nil, partialTopology /*ignorePartialResult*/)
 }
 
 func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers bool, acceptSuccessPercents int) error {

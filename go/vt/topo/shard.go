@@ -191,14 +191,14 @@ func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAli
 	// read the replication graph in each cell and add all found tablets
 	wg := sync.WaitGroup{}
 	mutex := sync.Mutex{}
-	er := concurrency.AllErrorRecorder{}
+	rec := concurrency.AllErrorRecorder{}
 	for _, cell := range si.Cells {
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
 			sri, err := ts.GetShardReplication(cell, keyspace, shard)
 			if err != nil {
-				er.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
+				rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 				return
 			}
 
@@ -212,8 +212,8 @@ func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAli
 	}
 	wg.Wait()
 	err = nil
-	if er.HasErrors() {
-		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, er.Error())
+	if rec.HasErrors() {
+		log.Warningf("FindAllTabletAliasesInShard(%v,%v): got partial result: %v", keyspace, shard, rec.Error())
 		err = ErrPartialResult
 	}
 
