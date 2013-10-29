@@ -13,7 +13,9 @@ package fakezk
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +45,36 @@ func NewConn() zk.Conn {
 			children: make(map[string]*stat),
 		},
 		existWatches: make(map[string][]chan zookeeper.Event)}
+}
+
+// NewConnFromFile returns a fake zk.Conn implementation, that is seeded
+// with the json data extracted from the input file.
+func NewConnFromFile(filename string) zk.Conn {
+	result := &zconn{
+		root: &stat{
+			name:     "/",
+			children: make(map[string]*stat),
+		},
+		existWatches: make(map[string][]chan zookeeper.Event)}
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		panic(fmt.Errorf("NewConnFromFile failed to read file %v: %v", filename, err))
+	}
+	values := make(map[string]interface{})
+	if err := json.Unmarshal(data, &values); err != nil {
+		panic(fmt.Errorf("NewConnFromFile failed to json.Unmarshal file %v: %v", filename, err))
+	}
+	for k, v := range values {
+		jv, err := json.Marshal(v)
+		if err != nil {
+			panic(fmt.Errorf("NewConnFromFile failed to json.Marshal value %v: %v", k, err))
+		}
+
+		if _, err := zk.CreateRecursive(result, k, string(jv), 0, nil); err != nil {
+			panic(fmt.Errorf("NewConnFromFile failed to zk.CreateRecursive value %v: %v", k, err))
+		}
+	}
+	return result
 }
 
 func (conn *zconn) Get(zkPath string) (data string, stat zk.Stat, err error) {

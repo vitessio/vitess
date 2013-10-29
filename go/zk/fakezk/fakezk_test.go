@@ -6,6 +6,7 @@ package fakezk
 
 import (
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -227,4 +228,32 @@ func TestSequence(t *testing.T) {
 		t.Errorf("new path: got %q, wanted %q", newPath, wanted)
 	}
 
+}
+
+func TestFromFile(t *testing.T) {
+	conn := NewConnFromFile("test_config.json")
+
+	keyspaces, _, err := conn.Children("/zk/testing/vt/ns")
+	if err != nil {
+		t.Errorf("conn.Children: %v", err)
+	}
+	if len(keyspaces) != 1 || keyspaces[0] != "test_keyspace" {
+		t.Errorf("conn.Children returned bad value: %v", keyspaces)
+	}
+
+	data, _, err := conn.Get("/zk/testing/vt/ns/test_keyspace")
+	if err != nil {
+		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace): %v", err)
+	}
+	if !strings.Contains(data, "TabletTypes") {
+		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace) returned bad value: %v", data)
+	}
+
+	data, _, err = conn.Get("/zk/testing/vt/ns/test_keyspace/0/master")
+	if err != nil {
+		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace/0/master): %v", err)
+	}
+	if !strings.Contains(data, "NamedPortMap") {
+		t.Errorf("conn.Get(/zk/testing/vt/ns/test_keyspace/0/master) returned bad value: %v", data)
+	}
 }
