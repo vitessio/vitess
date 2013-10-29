@@ -71,12 +71,23 @@ func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := New(ts, time.Minute, time.Second)
 
-	// Create a master and a replica
+	// Create am old master, a new master, two good slaves, one bad slave
 	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
 	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
 	goodSlaveAlias1 := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
 	goodSlaveAlias2 := createTestTablet(t, wr, "cell2", 3, topo.TYPE_REPLICA, oldMasterAlias)
 	badSlaveAlias := createTestTablet(t, wr, "cell1", 4, topo.TYPE_REPLICA, oldMasterAlias)
+
+	// Add a new Cell to the Shard, that doesn't map to any read topo cell,
+	// to simulate a data center being unreachable.
+	si, err := ts.GetShard("test_keyspace", "0")
+	if err != nil {
+		t.Fatalf("GetShard failed: %v", err)
+	}
+	si.Cells = append(si.Cells, "cell666")
+	if err := ts.UpdateShard(si); err != nil {
+		t.Fatalf("UpdateShard failed: %v", err)
+	}
 
 	// First test: reparent to the same master, make sure it works
 	// as expected.

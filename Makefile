@@ -31,6 +31,9 @@ build:
 unit_test:
 	go test ./go/...
 
+unit_test_race:
+	go test -race ./go/...
+
 queryservice_test:
 	echo "queryservice test"
 	if [ -e "/usr/bin/memcached" ]; then \

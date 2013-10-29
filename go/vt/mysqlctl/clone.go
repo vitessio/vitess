@@ -53,9 +53,9 @@ func (mysqld *Mysqld) validateCloneSource(serverMode bool, hookExtraEnv map[stri
 	// run a hook to check local things
 	// FIXME(alainjobart) What other parameters do we have to
 	// provide? dbname, host, socket?
-	params := make(map[string]string)
+	params := make([]string, 0, 1)
 	if serverMode {
-		params["server-mode"] = ""
+		params = append(params, "--server-mode")
 	}
 	h := hook.NewHook("preflight_snapshot", params)
 	h.ExtraEnv = hookExtraEnv

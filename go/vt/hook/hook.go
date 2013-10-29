@@ -20,7 +20,7 @@ import (
 
 type Hook struct {
 	Name       string
-	Parameters map[string]string
+	Parameters []string
 	ExtraEnv   map[string]string
 }
 
@@ -41,12 +41,12 @@ const (
 	HOOK_VTROOT_ERROR           = -5
 )
 
-func NewHook(name string, params map[string]string) *Hook {
+func NewHook(name string, params []string) *Hook {
 	return &Hook{Name: name, Parameters: params}
 }
 
 func NewSimpleHook(name string) *Hook {
-	return &Hook{Name: name, Parameters: make(map[string]string)}
+	return &Hook{Name: name}
 }
 
 func (hook *Hook) Execute() (result *HookResult) {
@@ -82,17 +82,9 @@ func (hook *Hook) Execute() (result *HookResult) {
 		return result
 	}
 
-	// build the args, run it
-	args := make([]string, 0, 10)
-	for key, value := range hook.Parameters {
-		if value != "" {
-			args = append(args, "--"+key+"="+value)
-		} else {
-			args = append(args, "--"+key)
-		}
-	}
-	log.Infof("hook: executing hook: %v %v", vthook, strings.Join(args, " "))
-	cmd := exec.Command(vthook, args...)
+	// run it
+	log.Infof("hook: executing hook: %v %v", vthook, strings.Join(hook.Parameters, " "))
+	cmd := exec.Command(vthook, hook.Parameters...)
 	if len(hook.ExtraEnv) > 0 {
 		cmd.Env = os.Environ()
 		for key, value := range hook.ExtraEnv {

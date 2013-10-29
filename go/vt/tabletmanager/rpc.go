@@ -86,22 +86,22 @@ func (tm *TabletManager) rpcWrapper(context *rpcproto.Context, name string, args
 // 4 - read-write actions that need to take the action lock, need to
 //     reload the tablet state, and reload the schema afterwards.
 
-func (tm *TabletManager) type1Wrapper(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
+func (tm *TabletManager) rpcWrap(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
 	return tm.rpcWrapper(context, name, args, reply, f,
 		false /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (tm *TabletManager) type2Wrapper(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
+func (tm *TabletManager) rpcWrapLock(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
 	return tm.rpcWrapper(context, name, args, reply, f,
 		true /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (tm *TabletManager) type3Wrapper(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
+func (tm *TabletManager) rpcWrapLockAction(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
 	return tm.rpcWrapper(context, name, args, reply, f,
 		true /*lock*/, true /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (tm *TabletManager) type4Wrapper(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
+func (tm *TabletManager) rpcWrapLockActionSchema(context *rpcproto.Context, name string, args, reply interface{}, f func() error) error {
 	return tm.rpcWrapper(context, name, args, reply, f,
 		true /*lock*/, true /*runAfterAction*/, true /*reloadSchema*/)
 }
@@ -111,14 +111,14 @@ func (tm *TabletManager) type4Wrapper(context *rpcproto.Context, name string, ar
 //
 
 func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_PING, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_PING, args, reply, func() error {
 		*reply = *args
 		return nil
 	})
 }
 
 func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArgs, reply *mysqlctl.SchemaDefinition) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
 		// read the tablet to get the dbname
 		tablet, err := tm.agent.ts.GetTablet(tm.agent.tabletAlias)
 		if err != nil {
@@ -135,7 +135,7 @@ func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArg
 }
 
 func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.Permissions) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_GET_PERMISSIONS, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_GET_PERMISSIONS, args, reply, func() error {
 		p, err := tm.mysqld.GetPermissions()
 		if err == nil {
 			*reply = *p
@@ -149,7 +149,7 @@ func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.Unu
 //
 
 func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
-	return tm.type3Wrapper(context, TABLET_ACTION_CHANGE_TYPE, args, reply, func() error {
+	return tm.rpcWrapLockAction(context, TABLET_ACTION_CHANGE_TYPE, args, reply, func() error {
 		return ChangeType(tm.agent.ts, tm.agent.tabletAlias, *args, true /*runHooks*/)
 	})
 }
@@ -159,7 +159,7 @@ func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.Tablet
 //
 
 func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_SLAVE_POSITION, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_SLAVE_POSITION, args, reply, func() error {
 		position, err := tm.mysqld.SlaveStatus()
 		if err == nil {
 			*reply = *position
@@ -169,7 +169,7 @@ func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.Unus
 }
 
 func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *SlavePositionReq, reply *mysqlctl.ReplicationPosition) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
 		if err := tm.mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {
 			return err
 		}
@@ -183,7 +183,7 @@ func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *Slav
 }
 
 func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_MASTER_POSITION, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_MASTER_POSITION, args, reply, func() error {
 		position, err := tm.mysqld.MasterStatus()
 		if err == nil {
 			*reply = *position
@@ -193,13 +193,13 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 }
 
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
-	return tm.type2Wrapper(context, TABLET_ACTION_STOP_SLAVE, args, reply, func() error {
+	return tm.rpcWrapLock(context, TABLET_ACTION_STOP_SLAVE, args, reply, func() error {
 		return tm.mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
 	})
 }
 
 func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *SlaveList) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_GET_SLAVES, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
 		reply.Addrs, err = tm.mysqld.FindSlaves()
 		return err
@@ -212,7 +212,7 @@ type WaitBlpPositionArgs struct {
 }
 
 func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
-	return tm.type1Wrapper(context, TABLET_ACTION_WAIT_BLP_POSITION, args, reply, func() error {
+	return tm.rpcWrap(context, TABLET_ACTION_WAIT_BLP_POSITION, args, reply, func() error {
 		return tm.mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout)
 	})
 }
@@ -222,13 +222,13 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBl
 //
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
-	return tm.type3Wrapper(context, TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
+	return tm.rpcWrapLockAction(context, TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
 		return slaveWasPromoted(tm.agent.ts, tm.agent.tabletAlias)
 	})
 }
 
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *SlaveWasRestartedData, reply *rpc.UnusedResponse) error {
-	return tm.type3Wrapper(context, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
+	return tm.rpcWrapLockAction(context, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
 		return slaveWasRestarted(tm.agent.ts, tm.mysqld, tm.agent.tabletAlias, args)
 	})
 }
