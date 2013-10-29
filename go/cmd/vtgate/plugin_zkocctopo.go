@@ -9,8 +9,8 @@ package main
 import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/zk"
 	"github.com/youtube/vitess/go/vt/zktopo"
+	"github.com/youtube/vitess/go/zk"
 )
 
 func init() {

@@ -23,10 +23,22 @@ var (
 	tabletProtocol = flag.String("tablet-protocol", "bson", "how to talk to the vttablets")
 )
 
+var topoReader topo.TopoReader
+
 func main() {
 	flag.Parse()
 	servenv.Init()
-	blm := vtgate.NewBalancerMap(topo.GetServer(), *cell, *portName)
+
+	// For the initial phase vtgate is exposing
+	// topoReader api. This will be subsumed by
+	// vtgate once vtgate's client functions become active.
+	ts := topo.GetServer()
+	defer topo.CloseServers()
+
+	topoReader = NewTopoReader(ts)
+	topo.RegisterTopoReader(topoReader)
+
+	blm := vtgate.NewBalancerMap(ts, *cell, *portName)
 	vtgate.Init(blm, *tabletProtocol, *retryDelay, *retryCount)
 	servenv.Run(*port)
 }

@@ -377,13 +377,14 @@ def vttopo_kill(sp):
 
 # vtgate helpers
 vtgate_port_base = reserve_ports(1)
-def vtgate_start(cell='test_nj', port_name='_vtocc', retry_delay=1, retry_count=1):
+def vtgate_start(cell='test_nj', port_name='_vtocc', retry_delay=1, retry_count=1, topo_impl="zookeeper"):
   global vtgate_port_base
   prog_compile(['vtgate'])
   args = [vtroot+'/bin/vtgate',
           '-port', str(vtgate_port_base),
           '-cell', cell,
           '-port-name', port_name,
+          '-topo_implementation', topo_impl,
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
           '-stderrthreshold=ERROR',

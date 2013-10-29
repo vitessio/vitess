@@ -33,13 +33,13 @@ class TopoOccTest(unittest.TestCase):
   def setUp(self):
     utils.zk_wipe()
     self.zkocc_server = utils.zkocc_start()
-    self.vttopo_server = utils.vttopo_start()
+    self.vtgate_server = utils.vtgate_start()
     self.topo = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base, 'test_nj', 30)
     self.topo.dial()
 
   def tearDown(self):
     utils.zkocc_kill(self.zkocc_server)
-    utils.vttopo_kill(self.vttopo_server)
+    utils.vtgate_kill(self.vtgate_server)
 
   def rebuild(self, use_served_types=False):
     utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0', auto_log=True)
@@ -66,8 +66,8 @@ class TopoOccTest(unittest.TestCase):
     self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
                           "KeyspaceNames[1] = test_keyspace2\n")
 
-    # vttopo API test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.vttopo_port_base, trap_output=True)
+    # vtagte API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.vtgate_port_base, trap_output=True)
     self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
                           "KeyspaceNames[1] = test_keyspace2\n")
 
@@ -93,8 +93,8 @@ class TopoOccTest(unittest.TestCase):
                      "Shards[0]={Start: , End: }\n" +
                      "TabletTypes[0] = master\n")
 
-    # vttopo API test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.vttopo_port_base, trap_output=True)
+    # vtgate API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.vtgate_port_base, trap_output=True)
     self.assertEqual(err, "Partitions[master] =\n" +
                      "  Shards[0]={Start: , End: }\n" +
                      "Partitions[rdonly] =\n" +
@@ -126,8 +126,8 @@ class TopoOccTest(unittest.TestCase):
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.zkocc_port_base, trap_output=True)
     self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
-    # vttopo API test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.vttopo_port_base, trap_output=True)
+    # vtgate API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.vtgate_port_base, trap_output=True)
     self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
 
@@ -135,6 +135,15 @@ def _format_time(timeFromBson):
   (tz, val) = timeFromBson
   t = datetime.datetime.fromtimestamp(val/1000)
   return t.strftime("%Y-%m-%d %H:%M:%S")
+
+
+class TopoZkoccOccTest(TopoOccTest):
+  def setUp(self):
+    utils.zk_wipe()
+    self.zkocc_server = utils.zkocc_start()
+    self.vtgate_server = utils.vtgate_start(topo_impl="zkocc")
+    self.topo = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base, 'test_nj', 30)
+    self.topo.dial()
 
 
 class TestZkocc(unittest.TestCase):
