@@ -43,6 +43,9 @@ func NewShardConn(blm *BalancerMap, tabletProtocol, keyspace, shard string, tabl
 	}
 }
 
+// canRetry determines whether a query can be retried or not.
+// OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
+// TxPoolFull causes a retry and all other errors are non-retry.
 func (sdc *ShardConn) canRetry(err error) bool {
 	if err == nil {
 		return false
