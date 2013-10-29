@@ -33,13 +33,16 @@ class TopoOccTest(unittest.TestCase):
   def setUp(self):
     utils.zk_wipe()
     self.zkocc_server = utils.zkocc_start()
-    self.vtgate_server = utils.vtgate_start()
+    # the default topo implementation for vtgate is zookeeper
+    self.vtgate_zk, self.vtgate_zk_port = utils.vtgate_start()
+    self.vtgate_zkocc, self.vtgate_zkocc_port = utils.vtgate_start(topo_impl="zkocc")
     self.topo = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base, 'test_nj', 30)
     self.topo.dial()
 
   def tearDown(self):
     utils.zkocc_kill(self.zkocc_server)
-    utils.vtgate_kill(self.vtgate_server)
+    utils.vtgate_kill(self.vtgate_zk)
+    utils.vtgate_kill(self.vtgate_zkocc)
 
   def rebuild(self, use_served_types=False):
     utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0', auto_log=True)
@@ -66,10 +69,16 @@ class TopoOccTest(unittest.TestCase):
     self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
                           "KeyspaceNames[1] = test_keyspace2\n")
 
-    # vtagte API test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.vtgate_port_base, trap_output=True)
+    # vtgate zk API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % self.vtgate_zk_port, trap_output=True)
     self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
                           "KeyspaceNames[1] = test_keyspace2\n")
+
+    # vtgate zkocc API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspaceNames test_nj' % self.vtgate_zkocc_port, trap_output=True)
+    self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
+                          "KeyspaceNames[1] = test_keyspace2\n")
+
 
   def test_get_srv_keyspace(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -93,8 +102,8 @@ class TopoOccTest(unittest.TestCase):
                      "Shards[0]={Start: , End: }\n" +
                      "TabletTypes[0] = master\n")
 
-    # vtgate API test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.vtgate_port_base, trap_output=True)
+    # vtgate zk API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % self.vtgate_zk_port, trap_output=True)
     self.assertEqual(err, "Partitions[master] =\n" +
                      "  Shards[0]={Start: , End: }\n" +
                      "Partitions[rdonly] =\n" +
@@ -103,6 +112,18 @@ class TopoOccTest(unittest.TestCase):
                      "  Shards[0]={Start: , End: }\n" +
                      "Shards[0]={Start: , End: }\n" +
                      "TabletTypes[0] = master\n")
+
+    # vtgate zkocc API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % self.vtgate_zkocc_port, trap_output=True)
+    self.assertEqual(err, "Partitions[master] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Partitions[rdonly] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Partitions[replica] =\n" +
+                     "  Shards[0]={Start: , End: }\n" +
+                     "Shards[0]={Start: , End: }\n" +
+                     "TabletTypes[0] = master\n")
+
 
   def test_get_srv_keyspace_local(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -126,8 +147,12 @@ class TopoOccTest(unittest.TestCase):
     out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.zkocc_port_base, trap_output=True)
     self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
-    # vtgate API test
-    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.vtgate_port_base, trap_output=True)
+    # vtgate zk API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % self.vtgate_zk_port, trap_output=True)
+    self.assertEqual(err, "Entries[0] = 1 localhost\n")
+
+    # vtgate zkocc API test
+    out, err = utils.run(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % self.vtgate_zkocc_port, trap_output=True)
     self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
 
@@ -135,15 +160,6 @@ def _format_time(timeFromBson):
   (tz, val) = timeFromBson
   t = datetime.datetime.fromtimestamp(val/1000)
   return t.strftime("%Y-%m-%d %H:%M:%S")
-
-
-class TopoZkoccOccTest(TopoOccTest):
-  def setUp(self):
-    utils.zk_wipe()
-    self.zkocc_server = utils.zkocc_start()
-    self.vtgate_server = utils.vtgate_start(topo_impl="zkocc")
-    self.topo = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base, 'test_nj', 30)
-    self.topo.dial()
 
 
 class TestZkocc(unittest.TestCase):

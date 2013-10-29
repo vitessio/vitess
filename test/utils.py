@@ -358,30 +358,12 @@ def zkocc_kill(sp):
   kill_sub_process(sp)
   sp.wait()
 
-# vttopo helpers
-vttopo_port_base = reserve_ports(1)
-def vttopo_start():
-  global vttopo_port_base
-  prog_compile(['vttopo'])
-  args = [vtroot+'/bin/vttopo',
-          '-port', str(vttopo_port_base),
-          '-stderrthreshold=ERROR',
-          ]
-  sp = run_bg(args)
-  wait_for_vars("vttopo", vttopo_port_base)
-  return sp
-
-def vttopo_kill(sp):
-  kill_sub_process(sp)
-  sp.wait()
-
 # vtgate helpers
-vtgate_port_base = reserve_ports(1)
 def vtgate_start(cell='test_nj', port_name='_vtocc', retry_delay=1, retry_count=1, topo_impl="zookeeper"):
-  global vtgate_port_base
+  port = reserve_ports(1)
   prog_compile(['vtgate'])
   args = [vtroot+'/bin/vtgate',
-          '-port', str(vtgate_port_base),
+          '-port', str(port),
           '-cell', cell,
           '-port-name', port_name,
           '-topo_implementation', topo_impl,
@@ -390,8 +372,8 @@ def vtgate_start(cell='test_nj', port_name='_vtocc', retry_delay=1, retry_count=
           '-stderrthreshold=ERROR',
           ]
   sp = run_bg(args)
-  wait_for_vars("vtgate", vtgate_port_base)
-  return sp
+  wait_for_vars("vtgate", port)
+  return sp, port
 
 def vtgate_kill(sp):
   kill_sub_process(sp)
