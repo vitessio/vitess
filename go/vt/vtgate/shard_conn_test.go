@@ -54,7 +54,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	resetSandbox()
 	endPointMustFail = 1
 	err := f()
-	want := "topo error, shard: (.0.), address: "
+	want := "refresh error: topo error, shard: (.0.), address: "
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}

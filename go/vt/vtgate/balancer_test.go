@@ -75,7 +75,7 @@ func TestGetAddressesFail(t *testing.T) {
 	b := NewBalancer(endPointsError, RETRY_DELAY)
 	_, err := b.Get()
 	// Ensure that end point errors are returned correctly.
-	want := "expected error"
+	want := "refresh error: expected error"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
