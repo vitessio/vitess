@@ -10,6 +10,29 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
+const (
+	ERR_NORMAL = iota
+	ERR_RETRY
+	ERR_FATAL
+	ERR_TX_POOL_FULL
+	ERR_NOT_IN_TX
+)
+
+// ServerError represents an error that was returned from
+// a vttablet server.
+type ServerError struct {
+	Code int
+	Err  string
+}
+
+func (e *ServerError) Error() string { return e.Err }
+
+// OperationalError represents an error due to a failure to
+// communicate with vttablet.
+type OperationalError string
+
+func (e OperationalError) Error() string { return string(e) }
+
 // TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
 type TabletDialer func(addr, keyspace, shard, username, password string, encrypted bool) (TabletConn, error)
 

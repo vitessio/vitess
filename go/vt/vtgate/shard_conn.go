@@ -6,11 +6,9 @@ package vtgate
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcplus"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -49,14 +47,15 @@ func (sdc *ShardConn) canRetry(err error) bool {
 	if err == nil {
 		return false
 	}
-	if _, ok := err.(rpcplus.ServerError); ok {
-		errString := err.Error()
-		if strings.HasPrefix(errString, "tx_pool_full") {
+	if serverError, ok := err.(*ServerError); ok {
+		switch serverError.Code {
+		case ERR_TX_POOL_FULL:
 			// Retry without reconnecting.
 			time.Sleep(sdc.retryDelay)
 			return true
-		}
-		if !strings.HasPrefix(errString, "retry") && !strings.HasPrefix(errString, "fatal") {
+		case ERR_RETRY, ERR_FATAL:
+			// No-op: treat these errors as operational by breaking out of this switch
+		default:
 			// Should not retry for normal server errors.
 			return false
 		}

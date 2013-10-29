@@ -9,7 +9,6 @@ import (
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -66,7 +65,7 @@ func sandboxDialer(addr, keyspace, shard, username, password string, encrypted b
 	dialCounter++
 	if dialMustFail > 0 {
 		dialMustFail--
-		return nil, fmt.Errorf("conn error")
+		return nil, OperationalError(fmt.Sprintf("conn error"))
 	}
 	tconn := testConns[addr]
 	if tconn == nil {
@@ -99,27 +98,27 @@ type sandboxConn struct {
 func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
-		return rpcplus.ServerError("retry: err")
+		return &ServerError{Code: ERR_RETRY, Err: "retry: err"}
 	}
 	if sbc.mustFailFatal > 0 {
 		sbc.mustFailFatal--
-		return rpcplus.ServerError("fatal: err")
+		return &ServerError{Code: ERR_FATAL, Err: "fatal: err"}
 	}
 	if sbc.mustFailServer > 0 {
 		sbc.mustFailServer--
-		return rpcplus.ServerError("error: err")
+		return &ServerError{Code: ERR_NORMAL, Err: "error: err"}
 	}
 	if sbc.mustFailConn > 0 {
 		sbc.mustFailConn--
-		return fmt.Errorf("error: conn")
+		return OperationalError(fmt.Sprintf("error: conn"))
 	}
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
-		return rpcplus.ServerError("tx_pool_full: err")
+		return &ServerError{Code: ERR_TX_POOL_FULL, Err: "tx_pool_full: err"}
 	}
 	if sbc.mustFailNotTx > 0 {
 		sbc.mustFailNotTx--
-		return rpcplus.ServerError("not_in_tx: err")
+		return &ServerError{Code: ERR_NOT_IN_TX, Err: "not_in_tx: err"}
 	}
 	return nil
 }
