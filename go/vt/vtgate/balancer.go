@@ -97,7 +97,7 @@ func (blc *Balancer) MarkDown(address string) {
 func (blc *Balancer) refresh() error {
 	addresses, err := blc.getAddresses()
 	if err != nil {
-		return fmt.Errorf("refresh error: %v", err)
+		return err
 	}
 	// Add new addressNodes
 	for _, address := range addresses {

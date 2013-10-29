@@ -51,13 +51,13 @@ func (blm *BalancerMap) Balancer(keyspace, shard string, tabletType topo.TabletT
 	getAddresses := func() ([]string, error) {
 		endpoints, err := blm.Toposerv.GetEndPoints(blm.Cell, keyspace, shard, tabletType)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("endpoints fetch error: %v", err)
 		}
 		result := make([]string, 0, len(endpoints.Entries))
 		for _, endpoint := range endpoints.Entries {
 			port, ok := endpoint.NamedPortMap[blm.PortName]
 			if !ok {
-				return nil, fmt.Errorf("named port %s not found in %v", blm.PortName, endpoint.NamedPortMap)
+				return nil, fmt.Errorf("endpoints fetch error: named port %s not found in %v", blm.PortName, endpoint.NamedPortMap)
 			}
 			result = append(result, fmt.Sprintf("%s:%d", endpoint.Host, port))
 		}

@@ -44,7 +44,7 @@ func TestPortError(t *testing.T) {
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
 	}
-	want := "refresh error: named port noport not found in map[vt:1]"
+	want := "endpoints fetch error: named port noport not found in map[vt:1]"
 	if err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -60,7 +60,7 @@ func TestTopoError(t *testing.T) {
 	if got != "" {
 		t.Errorf("want empty, got %s", got)
 	}
-	want := "refresh error: topo error"
+	want := "endpoints fetch error: topo error"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
