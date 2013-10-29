@@ -6,7 +6,9 @@ package mysqlctl
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -155,8 +157,9 @@ func TestReadEvent(t *testing.T) {
 	if out != nil {
 		t.Errorf("want nil, got %s", out)
 	}
-	if err.Error() != "err1" {
-		t.Errorf("want err1, got %v", err)
+	want := "read error: err1"
+	if err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 
 	// Error before reading \n
@@ -171,8 +174,9 @@ func TestReadEvent(t *testing.T) {
 	if string(out) != longstr {
 		t.Errorf("want %s, got %s", longstr, out)
 	}
-	if err.Error() != "err1" {
-		t.Errorf("want err1, got %v", err)
+	want = "read error: err1"
+	if err.Error() != want {
+		t.Errorf("want %s, got %v", want, err)
 	}
 
 	// '#' comment
@@ -211,10 +215,10 @@ func TestReadEvent(t *testing.T) {
 		toSend: []byte(longstr),
 	}
 	reader = bufio.NewReaderSize(fkreader, 5)
-	bls = &BinlogStreamer{delim: []byte("/*!*/;\n")}
+	bls = &BinlogStreamer{delim: []byte("/*!*/;")}
 	out, err = bls.readEvent(reader)
-	if string(out) != longstr[:len(longstr)-len(bls.delim)] {
-		t.Errorf("want %s, got %s", longstr[:len(longstr)-len(bls.delim)], out)
+	if string(out) != longstr[:len(longstr)-len(bls.delim)-1] {
+		t.Errorf("want %s, got %s", longstr[:len(longstr)-len(bls.delim)-1], out)
 	}
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -226,10 +230,10 @@ func TestReadEvent(t *testing.T) {
 		toSend: []byte(longstr),
 	}
 	reader = bufio.NewReaderSize(fkreader, 5)
-	bls = &BinlogStreamer{delim: []byte("/*!*/;\n")}
+	bls = &BinlogStreamer{delim: []byte("/*!*/;")}
 	out, err = bls.readEvent(reader)
-	if string(out) != longstr[:len(longstr)-len(bls.delim)-1] {
-		t.Errorf("want %s, got %s", longstr[:len(longstr)-len(bls.delim)-1], out)
+	if string(out) != longstr[:len(longstr)-len(bls.delim)-2] {
+		t.Errorf("want %s, got %s", longstr[:len(longstr)-len(bls.delim)-2], out)
 	}
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -241,12 +245,69 @@ func TestReadEvent(t *testing.T) {
 		toSend: []byte(longstr),
 	}
 	reader = bufio.NewReaderSize(fkreader, 5)
-	bls = &BinlogStreamer{delim: []byte("/*!*/;\n")}
+	bls = &BinlogStreamer{delim: []byte("/*!*/;")}
 	out, err = bls.readEvent(reader)
-	if string(out) != longstr[:len(longstr)-len(bls.delim)-1] {
-		t.Errorf("want %s, got %s", longstr[:len(longstr)-len(bls.delim)-1], out)
+	if string(out) != longstr[:len(longstr)-len(bls.delim)-2] {
+		t.Errorf("want %s, got %s", longstr[:len(longstr)-len(bls.delim)-2], out)
 	}
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
+	}
+}
+
+type transaction struct {
+	Statements []string
+	Position   BinlogPosition
+}
+
+func TestStream(t *testing.T) {
+	env := setup("cat $3", 0)
+	defer cleanup(env)
+
+	var transactions []transaction
+
+	out, err := ioutil.ReadFile("test/expected.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = json.Unmarshal(out, &transactions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	curTransaction := 0
+	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
+	err = bls.Stream("vt-0000041983-bin.000001", 0, func(reply interface{}) error {
+		tx := reply.(*BinlogTransaction)
+		for i, stmt := range tx.Statements {
+			if transactions[curTransaction].Statements[i] != string(stmt) {
+				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i], stmt)
+			}
+		}
+		if transactions[curTransaction].Position != tx.Position {
+			t.Errorf("want %#v, got %#v", transactions[curTransaction].Position, tx.Position)
+		}
+		curTransaction++
+		if curTransaction == len(transactions) {
+			bls.Stop()
+		}
+		// Uncomment the following lines to produce a different set of
+		// expected outputs
+		/*
+			fmt.Printf("{\n\"Statements\": [\n")
+			for i := 0; i < len(tx.Statements); i++ {
+				if i == len(tx.Statements)-1 {
+					fmt.Printf("%#v\n", string(tx.Statements[i]))
+				} else {
+					fmt.Printf("%#v,\n", string(tx.Statements[i]))
+				}
+			}
+			fmt.Printf("],\n")
+			fmt.Printf("\"Position\": {\"GroupId\": %d, \"ServerId\": %d}\n},\n", tx.Position.GroupId, tx.Position.ServerId)
+		*/
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
 	}
 }

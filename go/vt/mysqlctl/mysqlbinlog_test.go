@@ -124,7 +124,7 @@ func TestWarning(t *testing.T) {
 }
 
 func TestError(t *testing.T) {
-	env := setup("echo ERROR test: expected $* 1>&2", 1)
+	env := setup("echo ERROR expected error $* 1>&2", 1)
 	defer cleanup(env)
 
 	mbl := &MysqlBinlog{}
@@ -140,7 +140,7 @@ func TestError(t *testing.T) {
 		t.Error(err)
 	}
 	got := string(warnbytes)
-	want := "ERROR test: expected --database=db --start-position=10 name"
+	want := "ERROR expected error --database=db --start-position=10 name"
 	if !strings.Contains(got, want) {
 		t.Errorf("want '%s' in '%s'", want, got)
 	}

@@ -33,7 +33,7 @@ SET TIMESTAMP=1382330252/*!*/;
 insert into a values(9, 'ii')
 /*!*/;
 # at 388
-#131020 21:37:35 server id 41983  end_log_pos 423  group_id 15 	Xid = 53
+#131020 21:37:35 server id 41983  end_log_pos 1747 group_id 15 	Xid = 53
 COMMIT/*!*/;
 DELIMITER ;
 # End of log file

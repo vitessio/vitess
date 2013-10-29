@@ -156,7 +156,7 @@ func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(bls.dbname, bls.file.name, bls.file.pos)
 	if err != nil {
-		return err
+		return fmt.Errorf("launch error: %v", err)
 	}
 	defer reader.Close()
 	err = bls.parseEvents(sendReply, reader)
@@ -164,6 +164,9 @@ func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
 		mbl.Kill()
 	} else {
 		err = mbl.Wait()
+		if err != nil {
+			err = fmt.Errorf("wait error: %v", err)
+		}
 	}
 	return err
 }
@@ -182,8 +185,9 @@ func (bls *BinlogStreamer) parseEvents(sendReply SendReplyFunc, reader io.Reader
 		switch statementPrefixes[prefix] {
 		case BL_UNRECOGNIZED:
 			return fmt.Errorf("unrecognized: %s", stmt)
-		case BL_BEGIN:
-			// no action
+		// We trust that mysqlbinlog doesn't send DMLs withot a BEGIN
+		case BL_BEGIN, BL_ROLLBACK:
+			statements = nil
 		case BL_DDL:
 			statements = append(statements, stmt)
 			fallthrough
@@ -193,10 +197,8 @@ func (bls *BinlogStreamer) parseEvents(sendReply SendReplyFunc, reader io.Reader
 				Position:   bls.blPos,
 			}
 			if err = sendReply(trans); err != nil {
-				return err
+				return fmt.Errorf("send reply error: %v", err)
 			}
-			statements = nil
-		case BL_ROLLBACK:
 			statements = nil
 		// DML & SET
 		default:
@@ -224,14 +226,14 @@ eventLoop:
 		}
 		values := posRE.FindSubmatch(event)
 		if values != nil {
-			bls.blPos.ServerId = mustParseInt64(values[0])
-			bls.file.Set(mustParseInt64(values[1]))
-			bls.blPos.GroupId = mustParseInt64(values[2])
+			bls.blPos.ServerId = mustParseInt64(values[1])
+			bls.file.Set(mustParseInt64(values[2]))
+			bls.blPos.GroupId = mustParseInt64(values[3])
 			continue
 		}
 		values = rotateRE.FindSubmatch(event)
 		if values != nil {
-			bls.file.Rotate(string(values[0]), mustParseInt64(values[1]))
+			bls.file.Rotate(path.Join(bls.dir, string(values[1])), mustParseInt64(values[2]))
 			continue
 		}
 		values = delimRE.FindSubmatch(event)
@@ -257,14 +259,22 @@ func (bls *BinlogStreamer) readEvent(bufReader *bufio.Reader) (event []byte, err
 		if err == bufio.ErrBufferFull {
 			continue
 		}
-		if err != nil ||
-			bytes.HasPrefix(event, HASH_COMMENT) ||
-			bytes.HasPrefix(event, SLASH_COMMENT) ||
-			bytes.HasPrefix(event, DELIM_STMT) {
-			return bytes.TrimSpace(event), err
+		if err != nil {
+			if err == io.EOF {
+				return event, err
+			}
+			return event, fmt.Errorf("read error: %v", err)
 		}
-		if bytes.HasSuffix(event, bls.delim) {
-			return bytes.TrimSpace(event[:len(event)-len(bls.delim)]), nil
+		// Use a different var than event, because you have to keep
+		// the trailing \n if we continue
+		trimmed := bytes.TrimSpace(event)
+		if bytes.HasPrefix(trimmed, HASH_COMMENT) ||
+			bytes.HasPrefix(trimmed, SLASH_COMMENT) ||
+			bytes.HasPrefix(trimmed, DELIM_STMT) {
+			return trimmed, nil
+		}
+		if bytes.HasSuffix(trimmed, bls.delim) {
+			return bytes.TrimSpace(trimmed[:len(trimmed)-len(bls.delim)]), nil
 		}
 	}
 }
@@ -286,7 +296,7 @@ func (f *fileInfo) Rotate(name string, pos int64) (err error) {
 	}
 	f.handle, err = os.Open(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("open error: %v", err)
 	}
 	f.name = name
 	f.pos = pos
@@ -305,7 +315,7 @@ func (f *fileInfo) WaitForChange(running *sync2.AtomicInt32) error {
 		time.Sleep(100 * time.Millisecond)
 		fi, err := f.handle.Stat()
 		if err != nil {
-			return err
+			return fmt.Errorf("stat error: %v", err)
 		}
 		if fi.Size() != f.pos {
 			return nil
@@ -319,7 +329,7 @@ func (f *fileInfo) Close() (err error) {
 	}
 	err = f.handle.Close()
 	f.handle = nil
-	return err
+	return fmt.Errorf("close error: %v", err)
 }
 
 // mustParseInt64 can be used if you don't expect to fail.
