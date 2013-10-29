@@ -159,6 +159,19 @@ class TestTabletManager(unittest.TestCase):
       self.assertEqual(count, 4, "want 4, got %d" % (count))
       self.assertEqual(len(fields), 2, "want 2, got %d" % (len(fields)))
 
+      # _execute_batch
+      queries = [
+          "select * from vt_select_test where id = :id",
+          "select * from vt_select_test where id = :id",
+      ]
+      bindvars = [
+          {"id": 1},
+          {"id": 2},
+      ]
+      rowsets = conn._execute_batch(queries, bindvars)
+      self.assertEqual(rowsets[0][0][0][0], 1)
+      self.assertEqual(rowsets[1][0][0][0], 2)
+
       # _stream_execute
       (result, count, lastrow, fields) = conn._stream_execute("select * from vt_select_test", {})
       self.assertEqual(len(fields), 2, "want 2, got %d" % (len(fields)))

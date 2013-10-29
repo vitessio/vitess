@@ -386,7 +386,7 @@ def vtgate_start(cell='test_nj', port_name='_vtocc', retry_delay=1, retry_count=
           '-port-name', port_name,
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
-          '-stderrthreshold=ERROR',
+          '-log_dir', tmp_root,
           ]
   sp = run_bg(args)
   wait_for_vars("vtgate", vtgate_port_base)

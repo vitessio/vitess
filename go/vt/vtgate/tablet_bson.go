@@ -58,16 +58,9 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (
 
 func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery) (*tproto.QueryResultList, error) {
 	req := tproto.QueryList{
-		Queries:       make([]tproto.BoundQuery, 0, len(queries)),
+		Queries:       queries,
 		TransactionId: conn.session.TransactionId,
 		SessionId:     conn.session.SessionId,
-	}
-
-	for _, q := range req.Queries {
-		req.Queries = append(req.Queries, tproto.BoundQuery{
-			Sql:           q.Sql,
-			BindVariables: q.BindVariables,
-		})
 	}
 	qrs := new(tproto.QueryResultList)
 	if err := conn.rpcClient.Call("SqlQuery.ExecuteBatch", req, qrs); err != nil {

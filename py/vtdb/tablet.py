@@ -20,7 +20,7 @@ class RetryError(dbexceptions.OperationalError):
   pass
 
 
-# This failure is "permanent" - retying on this host is futile. Push there error
+# This failure is "permanent" - retrying on this host is futile. Push the error
 # up in case the upper layers can gracefully recover by reresolving a suitable
 # endpoint.
 class FatalError(dbexceptions.OperationalError):
