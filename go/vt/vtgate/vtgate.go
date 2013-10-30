@@ -64,6 +64,8 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 	qr, err := scatterConn.(*ScatterConn).Execute(query.Sql, query.BindVariables, query.Keyspace, query.Shards)
 	if err == nil {
 		*reply = *qr
+	} else {
+		log.Errorf("ExecuteShard: %v, query: %#v", err, query)
 	}
 	return err
 }
@@ -78,6 +80,8 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 	qrs, err := scatterConn.(*ScatterConn).ExecuteBatch(batchQuery.Queries, batchQuery.Keyspace, batchQuery.Shards)
 	if err == nil {
 		*reply = *qrs
+	} else {
+		log.Errorf("ExecuteBatchShard: %v, queries: %#v", err, batchQuery)
 	}
 	return err
 }
@@ -89,7 +93,11 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 		return fmt.Errorf("query: %s, session %d: %v", query.Sql, query.SessionId, err)
 	}
 	defer vtg.connections.Put(query.SessionId)
-	return scatterConn.(*ScatterConn).StreamExecute(query.Sql, query.BindVariables, query.Keyspace, query.Shards, sendReply)
+	err = scatterConn.(*ScatterConn).StreamExecute(query.Sql, query.BindVariables, query.Keyspace, query.Shards, sendReply)
+	if err != nil {
+		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
+	}
+	return err
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
@@ -99,7 +107,11 @@ func (vtg *VTGate) Begin(context *rpcproto.Context, session *proto.Session, noOu
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer vtg.connections.Put(session.SessionId)
-	return scatterConn.(*ScatterConn).Begin()
+	err = scatterConn.(*ScatterConn).Begin()
+	if err != nil {
+		log.Errorf("Begin: %v, Session: %#v", err, session)
+	}
+	return err
 }
 
 // Commit commits a transaction.
@@ -109,7 +121,11 @@ func (vtg *VTGate) Commit(context *rpcproto.Context, session *proto.Session, noO
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer vtg.connections.Put(session.SessionId)
-	return scatterConn.(*ScatterConn).Commit()
+	err = scatterConn.(*ScatterConn).Commit()
+	if err != nil {
+		log.Errorf("Commit: %v, Session: %#v", err, session)
+	}
+	return err
 }
 
 // Rollback rolls back a transaction.
@@ -119,7 +135,11 @@ func (vtg *VTGate) Rollback(context *rpcproto.Context, session *proto.Session, n
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
 	}
 	defer vtg.connections.Put(session.SessionId)
-	return scatterConn.(*ScatterConn).Rollback()
+	err = scatterConn.(*ScatterConn).Rollback()
+	if err != nil {
+		log.Errorf("Rollback: %v, Session: %#v", err, session)
+	}
+	return err
 }
 
 // CloseSession closes the current session and releases all associated resources for the session.

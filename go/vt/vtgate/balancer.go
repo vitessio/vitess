@@ -9,6 +9,8 @@ import (
 	"math/rand"
 	"sync"
 	"time"
+
+	log "github.com/golang/glog"
 )
 
 type GetAddressesFunc func() ([]string, error)
@@ -90,6 +92,7 @@ func (blc *Balancer) MarkDown(address string) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 	if index := findAddrNode(blc.addressNodes, address); index != -1 {
+		log.Infof("Marking down %v", address)
 		blc.addressNodes[index].timeRetry = time.Now().Add(blc.retryDelay)
 	}
 }
