@@ -11,6 +11,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -95,13 +96,13 @@ func (conn *TabletBson) Begin() error {
 
 func (conn *TabletBson) Commit() error {
 	defer func() { conn.session.TransactionId = 0 }()
-	var noOutput string
+	var noOutput rpc.UnusedResponse
 	return tabletError(conn.rpcClient.Call("SqlQuery.Commit", &conn.session, &noOutput))
 }
 
 func (conn *TabletBson) Rollback() error {
 	defer func() { conn.session.TransactionId = 0 }()
-	var noOutput string
+	var noOutput rpc.UnusedResponse
 	return tabletError(conn.rpcClient.Call("SqlQuery.Rollback", &conn.session, &noOutput))
 }
 
