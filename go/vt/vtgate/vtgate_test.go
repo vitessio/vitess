@@ -12,6 +12,7 @@ import (
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
+	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -91,7 +92,7 @@ func TestVTGateSessionConflict(t *testing.T) {
 	runtime.Gosched()
 	want := "in use"
 	var err error
-	var noOutput string
+	var noOutput rpc.UnusedResponse
 	i := 0
 	for {
 		switch i {
@@ -186,7 +187,7 @@ func TestVTGateTx(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	var noOutput string
+	var noOutput rpc.UnusedResponse
 	for i := 0; i < 2; i++ {
 		RpcVTGate.Begin(nil, &sess, &noOutput)
 		execShard(sess)
@@ -226,7 +227,7 @@ func TestVTGateClose(t *testing.T) {
 	if sbc.CloseCount != 0 {
 		t.Errorf("want 0, got %v", sbc.CloseCount)
 	}
-	var noOutput string
+	var noOutput rpc.UnusedResponse
 	err := RpcVTGate.CloseSession(nil, &sess, &noOutput)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)

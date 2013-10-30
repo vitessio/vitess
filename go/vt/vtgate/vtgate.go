@@ -14,6 +14,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/pools"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -92,7 +93,7 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
+func (vtg *VTGate) Begin(context *rpcproto.Context, session *proto.Session, noOutput *rpc.UnusedResponse) error {
 	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
@@ -102,7 +103,7 @@ func (vtg *VTGate) Begin(context *rpcproto.Context, session *proto.Session, noOu
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
+func (vtg *VTGate) Commit(context *rpcproto.Context, session *proto.Session, noOutput *rpc.UnusedResponse) error {
 	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
@@ -112,7 +113,7 @@ func (vtg *VTGate) Commit(context *rpcproto.Context, session *proto.Session, noO
 }
 
 // Rollback rolls back a transaction.
-func (vtg *VTGate) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
+func (vtg *VTGate) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *rpc.UnusedResponse) error {
 	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return fmt.Errorf("session %d: %v", session.SessionId, err)
@@ -122,7 +123,7 @@ func (vtg *VTGate) Rollback(context *rpcproto.Context, session *proto.Session, n
 }
 
 // CloseSession closes the current session and releases all associated resources for the session.
-func (vtg *VTGate) CloseSession(context *rpcproto.Context, session *proto.Session, noOutput *string) error {
+func (vtg *VTGate) CloseSession(context *rpcproto.Context, session *proto.Session, noOutput *rpc.UnusedResponse) error {
 	scatterConn, err := vtg.connections.Get(session.SessionId)
 	if err != nil {
 		return nil

@@ -12,6 +12,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -22,10 +23,10 @@ type VTGate interface {
 	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *mproto.QueryResult) error
 	ExecuteBatchShard(context *rpcproto.Context, batchQuery *BatchQueryShard, reply *tproto.QueryResultList) error
 	StreamExecuteShard(context *rpcproto.Context, query *QueryShard, sendReply func(interface{}) error) error
-	Begin(context *rpcproto.Context, session *Session, noOutput *string) error
-	Commit(context *rpcproto.Context, session *Session, noOutput *string) error
-	Rollback(context *rpcproto.Context, session *Session, noOutput *string) error
-	CloseSession(context *rpcproto.Context, session *Session, noOutput *string) error
+	Begin(context *rpcproto.Context, session *Session, noOutput *rpc.UnusedResponse) error
+	Commit(context *rpcproto.Context, session *Session, noOutput *rpc.UnusedResponse) error
+	Rollback(context *rpcproto.Context, session *Session, noOutput *rpc.UnusedResponse) error
+	CloseSession(context *rpcproto.Context, session *Session, noOutput *rpc.UnusedResponse) error
 }
 
 type SessionParams struct {

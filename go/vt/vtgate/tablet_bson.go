@@ -85,7 +85,12 @@ func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interfac
 }
 
 func (conn *TabletBson) Begin() error {
-	return tabletError(conn.rpcClient.Call("SqlQuery.Begin", &conn.session, &conn.session.TransactionId))
+	var txInfo tproto.TransactionInfo
+	err := conn.rpcClient.Call("SqlQuery.Begin", &conn.session, &txInfo)
+	if err == nil {
+		conn.session.TransactionId = txInfo.TransactionId
+	}
+	return tabletError(err)
 }
 
 func (conn *TabletBson) Commit() error {

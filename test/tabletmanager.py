@@ -149,10 +149,10 @@ class TestTabletManager(unittest.TestCase):
                           self._populate_vt_select_test)
 
     tablet_62344.start_vttablet()
-    gate_proc = utils.vtgate_start()
+    gate_proc, gate_port = utils.vtgate_start()
 
     try:
-      conn = vtgate.connect("localhost:%s"%(utils.vtgate_port_base), "master", "test_keyspace", "0", 2.0)
+      conn = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
 
       # _execute
       (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
