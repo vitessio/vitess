@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -22,6 +23,9 @@ func init() {
 }
 
 var (
+	// Use sandmu to access the variables below
+	sandmu sync.Mutex
+
 	// endPointCounter tracks how often GetEndPoints was called
 	endPointCounter int
 
@@ -33,12 +37,16 @@ var (
 
 	// dialMustFail specifies how often sandboxDialer must fail before succeeding
 	dialMustFail int
+)
 
+var (
 	// transaction id generator
 	transactionId sync2.AtomicInt64
 )
 
 func resetSandbox() {
+	sandmu.Lock()
+	defer sandmu.Unlock()
 	testConns = make(map[string]TabletConn)
 	endPointCounter = 0
 	dialCounter = 0
@@ -49,6 +57,8 @@ type sandboxTopo struct {
 }
 
 func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	sandmu.Lock()
+	defer sandmu.Unlock()
 	endPointCounter++
 	if endPointMustFail > 0 {
 		endPointMustFail--
@@ -62,6 +72,8 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 var testConns map[string]TabletConn
 
 func sandboxDialer(addr, keyspace, shard, username, password string, encrypted bool) (TabletConn, error) {
+	sandmu.Lock()
+	defer sandmu.Unlock()
 	dialCounter++
 	if dialMustFail > 0 {
 		dialMustFail--
