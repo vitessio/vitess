@@ -72,7 +72,7 @@ func NewConnFromFile(filename string) zk.Conn {
 
 		// CreateRecursive will work for a leaf node where the parent
 		// doesn't exist, but not for a node in the middle of a tree
-		// taht already exists. So have to use 'Set' as a backup.
+		// that already exists. So have to use 'Set' as a backup.
 		if _, err := zk.CreateRecursive(result, k, string(jv), 0, nil); err != nil {
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				_, err = result.Set(k, string(jv), -1)
