@@ -6,13 +6,14 @@ package zk
 
 import (
 	"fmt"
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
-	"launchpad.net/gozk/zookeeper"
-	"log"
 	"math/rand"
 	"strings"
 	"time"
+
+	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/rpcplus"
+	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"launchpad.net/gozk/zookeeper"
 )
 
 func init() {
@@ -44,7 +45,7 @@ func DialZkocc(addr string, connectTimeout time.Duration) (zkocc *ZkoccConn, err
 		if err == nil {
 			return &ZkoccConn{rpcClient: rpcClient}, nil
 		}
-		log.Printf("zk conn cache: zkocc connection to %v failed: %v", server, err)
+		log.Infof("zk conn cache: zkocc connection to %v failed: %v", server, err)
 	}
 	return nil, fmt.Errorf("zkocc connect failed: %v", addr)
 }

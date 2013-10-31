@@ -6,12 +6,12 @@ package zk
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sync2"
 	"launchpad.net/gozk/zookeeper"
@@ -37,7 +37,7 @@ func init() {
 		var err error
 		maxConcurrency, err = strconv.Atoi(x)
 		if err != nil {
-			log.Printf("invalid ZK_CLIENT_MAX_CONCURRENCY: %v", err)
+			log.Infof("invalid ZK_CLIENT_MAX_CONCURRENCY: %v", err)
 		}
 	}
 
@@ -137,7 +137,7 @@ func resolveZkAddr(zkAddr string) (string, error) {
 	resolved := make([]string, 0, len(parts))
 	for _, part := range parts {
 		if r, err := netutil.ResolveIpAddr(part); err != nil {
-			log.Printf("Cannot resolve %v, will not use it: %v", part, err)
+			log.Infof("cannot resolve %v, will not use it: %v", part, err)
 		} else {
 			resolved = append(resolved, r)
 		}

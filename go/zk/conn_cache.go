@@ -7,12 +7,12 @@ package zk
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -134,10 +134,10 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 				cc.setState(cell, cached, DISCONNECTED)
 			}
 
-			log.Printf("zk conn cache: session for cell %v ended: %v", cell, event)
+			log.Infof("zk conn cache: session for cell %v ended: %v", cell, event)
 			return
 		default:
-			log.Printf("zk conn cache: session for cell %v event: %v", cell, event)
+			log.Infof("zk conn cache: session for cell %v event: %v", cell, event)
 		}
 	}
 }

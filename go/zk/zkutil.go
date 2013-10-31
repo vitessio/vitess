@@ -7,7 +7,6 @@ package zk
 import (
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"path"
 	"sort"
@@ -15,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/golang/glog"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -147,7 +147,7 @@ func ResolveWildcards(zconn Conn, zkPaths []string) ([]string, error) {
 			if err != nil {
 				mu.Lock()
 				if firstError != nil {
-					log.Printf("Multiple error: %v", err)
+					log.Infof("Multiple error: %v", err)
 				} else {
 					firstError = err
 				}
@@ -241,7 +241,7 @@ func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, erro
 						if err != nil {
 							mu.Lock()
 							if firstError != nil {
-								log.Printf("Multiple error: %v", err)
+								log.Infof("Multiple error: %v", err)
 							} else {
 								firstError = err
 							}
@@ -404,13 +404,13 @@ func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{
 				if zookeeper.IsError(err, zookeeper.ZNONODE) {
 					_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
 					if err == nil {
-						log.Printf("WARNING: failed recreating pid node: %v: %v", zkPath, err)
+						log.Warningf("failed recreating pid node: %v: %v", zkPath, err)
 					} else {
-						log.Printf("INFO: recreated pid node: %v", zkPath)
+						log.Infof("recreated pid node: %v", zkPath)
 						continue
 					}
 				} else {
-					log.Printf("WARNING: failed reading pid node: %v", err)
+					log.Warningf("failed reading pid node: %v", err)
 				}
 			} else {
 				select {
@@ -422,13 +422,13 @@ func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{
 						// notification. This seems like buggy behavior, but rather
 						// than race too hard on the node, just wait a bit and see
 						// if the situation resolves itself.
-						log.Printf("WARNING: pid deleted: %v", zkPath)
+						log.Warningf("pid deleted: %v", zkPath)
 					} else {
-						log.Printf("INFO: pid node event: %v", event)
+						log.Infof("pid node event: %v", event)
 					}
 					// break here and wait for a bit before attempting
 				case <-done:
-					log.Printf("INFO: pid watcher stopped on done: %v", zkPath)
+					log.Infof("pid watcher stopped on done: %v", zkPath)
 					return
 				}
 			}
@@ -436,7 +436,7 @@ func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{
 			// No one likes a thundering herd, least of all zookeeper.
 			case <-time.After(5*time.Second + time.Duration(rand.Int63n(55e9))):
 			case <-done:
-				log.Printf("INFO: pid watcher stopped on done: %v", zkPath)
+				log.Infof("pid watcher stopped on done: %v", zkPath)
 				return
 			}
 		}
