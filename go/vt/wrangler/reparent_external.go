@@ -163,38 +163,12 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	return recorder.Error()
 }
 
-// TODO(alainjobart) remove this flag and keep the
-// useRpcReparentExternal=true code path once the server has been
-// deployed everywhere.  Tests pass both with useRpcReparentExternal=false and
-// useRpcReparentExternal=true.
-var useRpcReparentExternal = false
-
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	log.Infof("slaveWasPromoted(%v)", ti.GetAlias())
-	if useRpcReparentExternal {
-		return wr.ai.RpcSlaveWasPromoted(ti, wr.actionTimeout())
-	} else {
-		actionPath, err := wr.ai.SlaveWasPromoted(ti.GetAlias())
-		if err != nil {
-			return err
-		}
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return wr.ai.RpcSlaveWasPromoted(ti, wr.actionTimeout())
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
 	log.Infof("slaveWasRestarted(%v)", ti.GetAlias())
-	if useRpcReparentExternal {
-		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())
-	} else {
-		actionPath, err := wr.ai.SlaveWasRestarted(ti.GetAlias(), swrd)
-		if err != nil {
-			return err
-		}
-		return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-	}
+	return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())
 }

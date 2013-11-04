@@ -234,12 +234,6 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	return "", wr.RebuildShardGraph(ti.Keyspace, ti.Shard, []string{ti.Cell})
 }
 
-// TODO(alainjobart) remove this flag and keep the
-// useRpcChangeType=true code path once the server has been deployed
-// everywhere.  Tests pass both with useRpcChangeType=false and
-// useRpcChangeType=true.
-var useRpcChangeType = false
-
 // Change the type of tablet and recompute all necessary derived paths in the
 // serving graph.
 // force: Bypass the vtaction system and make the data change directly, and
@@ -261,18 +255,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletT
 		// with --force, we do not run any hook
 		err = tm.ChangeType(wr.ts, tabletAlias, dbType, false)
 	} else {
-		if useRpcChangeType {
-			err = wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout())
-		} else {
-			// the remote action will run the hooks
-			var actionPath string
-			actionPath, err = wr.ai.ChangeType(tabletAlias, dbType)
-			// You don't have a choice - you must wait for
-			// completion before rebuilding.
-			if err == nil {
-				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-			}
-		}
+		err = wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout())
 	}
 
 	if err != nil {
@@ -319,19 +302,8 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	// change the type
-	if useRpcChangeType {
-		if err := wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout()); err != nil {
-			return err
-		}
-	} else {
-		actionPath, err := wr.ai.ChangeType(ti.GetAlias(), dbType)
-		if err != nil {
-			return err
-		}
-		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-		if err != nil {
-			return err
-		}
+	if err := wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout()); err != nil {
+		return err
 	}
 
 	// rebuild if necessary
