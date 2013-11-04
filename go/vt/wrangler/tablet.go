@@ -255,7 +255,18 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletT
 		// with --force, we do not run any hook
 		err = tm.ChangeType(wr.ts, tabletAlias, dbType, false)
 	} else {
-		err = wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout())
+		if wr.UseRPCs {
+			err = wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout())
+		} else {
+			// the remote action will run the hooks
+			var actionPath string
+			actionPath, err = wr.ai.ChangeType(tabletAlias, dbType)
+			// You don't have a choice - you must wait for
+			// completion before rebuilding.
+			if err == nil {
+				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+			}
+		}
 	}
 
 	if err != nil {
@@ -302,8 +313,19 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	rebuildRequired := ti.Tablet.IsServingType()
 
 	// change the type
-	if err := wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout()); err != nil {
-		return err
+	if wr.UseRPCs {
+		if err := wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout()); err != nil {
+			return err
+		}
+	} else {
+		actionPath, err := wr.ai.ChangeType(ti.GetAlias(), dbType)
+		if err != nil {
+			return err
+		}
+		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		if err != nil {
+			return err
+		}
 	}
 
 	// rebuild if necessary

@@ -165,10 +165,30 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 
 func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	log.Infof("slaveWasPromoted(%v)", ti.GetAlias())
-	return wr.ai.RpcSlaveWasPromoted(ti, wr.actionTimeout())
+	if wr.UseRPCs {
+		return wr.ai.RpcSlaveWasPromoted(ti, wr.actionTimeout())
+	} else {
+		actionPath, err := wr.ai.SlaveWasPromoted(ti.GetAlias())
+		if err != nil {
+			return err
+		}
+		err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
 	log.Infof("slaveWasRestarted(%v)", ti.GetAlias())
-	return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())
+	if wr.UseRPCs {
+		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())
+	} else {
+		actionPath, err := wr.ai.SlaveWasRestarted(ti.GetAlias(), swrd)
+		if err != nil {
+			return err
+		}
+		return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+	}
 }
