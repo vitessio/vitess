@@ -75,7 +75,7 @@ func (axp *ActiveTxPool) Open() {
 
 func (axp *ActiveTxPool) Close() {
 	axp.ticks.Stop()
-	for _, v := range axp.pool.GetOutdated(time.Duration(0)) {
+	for _, v := range axp.pool.GetOutdated(time.Duration(0), "for closing") {
 		conn := v.(*TxConnection)
 		conn.Close()
 		conn.discard(TX_CLOSE)
@@ -87,7 +87,7 @@ func (axp *ActiveTxPool) WaitForEmpty() {
 }
 
 func (axp *ActiveTxPool) TransactionKiller() {
-	for _, v := range axp.pool.GetOutdated(time.Duration(axp.Timeout())) {
+	for _, v := range axp.pool.GetOutdated(time.Duration(axp.Timeout()), "for rollback") {
 		conn := v.(*TxConnection)
 		log.Infof("killing transaction %d: %#v", conn.transactionId, conn.queries)
 		killStats.Add("Transactions", 1)
@@ -132,7 +132,7 @@ func (axp *ActiveTxPool) Rollback(transactionId int64) {
 
 // You must call Recycle on TxConnection once done.
 func (axp *ActiveTxPool) Get(transactionId int64) (conn *TxConnection) {
-	v, err := axp.pool.Get(transactionId)
+	v, err := axp.pool.Get(transactionId, "for query")
 	if err != nil {
 		panic(NewTabletError(NOT_IN_TX, "Transaction %d: %v", transactionId, err))
 	}

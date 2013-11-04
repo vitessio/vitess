@@ -5,7 +5,6 @@
 package pools
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -22,6 +21,7 @@ type Numbered struct {
 type numberedWrapper struct {
 	val         interface{}
 	inUse       bool
+	purpose     string
 	timeCreated time.Time
 	timeUsed    time.Time
 }
@@ -39,10 +39,14 @@ func (nu *Numbered) Register(id int64, val interface{}) error {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	if _, ok := nu.resources[id]; ok {
-		return errors.New("already present")
+		return fmt.Errorf("already present")
 	}
 	now := time.Now()
-	nu.resources[id] = &numberedWrapper{val, false, now, now}
+	nu.resources[id] = &numberedWrapper{
+		val:         val,
+		timeCreated: now,
+		timeUsed:    now,
+	}
 	return nil
 }
 
@@ -57,19 +61,21 @@ func (nu *Numbered) Unregister(id int64) {
 	}
 }
 
-// Get locks the resource for use. If it cannot be found or
-// is already in use, it returns an error.
-func (nu *Numbered) Get(id int64) (val interface{}, err error) {
+// Get locks the resource for use. It accepts a purpose as a string.
+// If it cannot be found, it returns a "not found" error. If in use,
+// it returns a "in use: purpose" error.
+func (nu *Numbered) Get(id int64, purpose string) (val interface{}, err error) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	nw, ok := nu.resources[id]
 	if !ok {
-		return nil, errors.New("not found")
+		return nil, fmt.Errorf("not found")
 	}
 	if nw.inUse {
-		return nil, errors.New("in use")
+		return nil, fmt.Errorf("in use: %s", nw.purpose)
 	}
 	nw.inUse = true
+	nw.purpose = purpose
 	return nw.val, nil
 }
 
@@ -79,13 +85,14 @@ func (nu *Numbered) Put(id int64) {
 	defer nu.mu.Unlock()
 	if nw, ok := nu.resources[id]; ok {
 		nw.inUse = false
+		nw.purpose = ""
 		nw.timeUsed = time.Now()
 	}
 }
 
 // GetOutdated returns a list of resources that are older than age, and locks them.
 // It does not return any resources that are already locked.
-func (nu *Numbered) GetOutdated(age time.Duration) (vals []interface{}) {
+func (nu *Numbered) GetOutdated(age time.Duration, purpose string) (vals []interface{}) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	now := time.Now()
@@ -95,6 +102,7 @@ func (nu *Numbered) GetOutdated(age time.Duration) (vals []interface{}) {
 		}
 		if nw.timeCreated.Add(age).Sub(now) <= 0 {
 			nw.inUse = true
+			nw.purpose = purpose
 			vals = append(vals, nw.val)
 		}
 	}
@@ -103,8 +111,8 @@ func (nu *Numbered) GetOutdated(age time.Duration) (vals []interface{}) {
 
 // GetIdle returns a list of resurces that have been idle for longer
 // than timeout, and locks them. It does not return any resources that
-// are laready locked.
-func (nu *Numbered) GetIdle(timeout time.Duration) (vals []interface{}) {
+// are already locked.
+func (nu *Numbered) GetIdle(timeout time.Duration, purpose string) (vals []interface{}) {
 	nu.mu.Lock()
 	defer nu.mu.Unlock()
 	now := time.Now()
@@ -114,6 +122,7 @@ func (nu *Numbered) GetIdle(timeout time.Duration) (vals []interface{}) {
 		}
 		if nw.timeUsed.Add(timeout).Sub(now) <= 0 {
 			nw.inUse = true
+			nw.purpose = purpose
 			vals = append(vals, nw.val)
 		}
 	}
