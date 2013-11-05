@@ -15,6 +15,7 @@ package tabletmanager
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
@@ -229,7 +230,7 @@ func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
 }
 
 // bindAddr: the address for the query service advertised by this agent
-func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
+func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	var err error
 	if err = agent.readTablet(); err != nil {
 		return err
@@ -239,31 +240,40 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	bindAddr, err = netutil.ResolveAddr(bindAddr)
+	// find our hostname as fully qualified, and IP
+	hostname, err := netutil.FullyQualifiedHostname()
 	if err != nil {
 		return err
 	}
-	if secureAddr != "" {
-		secureAddr, err = netutil.ResolveAddr(secureAddr)
-		if err != nil {
-			return err
-		}
-	}
-	mysqlAddr, err = netutil.ResolveAddr(mysqlAddr)
+	ipAddrs, err := net.LookupHost(hostname)
 	if err != nil {
 		return err
 	}
-	mysqlIpAddr, err := netutil.ResolveIpAddr(mysqlAddr)
-	if err != nil {
-		return err
-	}
+	ipAddr := ipAddrs[0]
 
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(tablet *topo.Tablet) error {
-		tablet.Addr = bindAddr
-		tablet.SecureAddr = secureAddr
-		tablet.MysqlAddr = mysqlAddr
-		tablet.MysqlIpAddr = mysqlIpAddr
+		// the first four values are for backward compatibility
+		tablet.Addr = fmt.Sprintf("%v:%v", hostname, vtPort)
+		if vtsPort != 0 {
+			tablet.SecureAddr = fmt.Sprintf("%v:%v", hostname, vtsPort)
+		}
+		tablet.MysqlAddr = fmt.Sprintf("%v:%v", hostname, mysqlPort)
+		tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", ipAddr, mysqlPort)
+
+		// new values
+		tablet.Hostname = hostname
+		tablet.IPAddr = ipAddr
+		if tablet.Portmap == nil {
+			tablet.Portmap = make(map[string]int)
+		}
+		tablet.Portmap["mysql"] = mysqlPort
+		tablet.Portmap["vt"] = vtPort
+		if vtsPort != 0 {
+			tablet.Portmap["vts"] = vtsPort
+		} else {
+			delete(tablet.Portmap, "vts")
+		}
 		return nil
 	}
 	if err := agent.ts.UpdateTabletFields(agent.Tablet().GetAlias(), f); err != nil {
@@ -275,10 +285,6 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("agent.Start: cannot get hostname: %v", err)
-	}
 	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
 
 	if err := agent.ts.CreateTabletPidNode(agent.tabletAlias, data, agent.done); err != nil {

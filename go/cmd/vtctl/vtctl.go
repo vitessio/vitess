@@ -57,7 +57,7 @@ var commands = []commandGroup{
 					"Valid <tablet type>:\n" +
 					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
 			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
-				"<tablet alias|zk tablet path> [-addr <addr>] [-secure-addr <secure addr>] [-mysql-addr <mysql-addr>] [-mysql-ip-addr <mysql ip addr]",
+				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-vts-port <vts port>] <tablet alias|zk tablet path> ",
 				"Updates the addresses of a tablet."},
 			command{"ScrapTablet", commandScrapTablet,
 				"[-force] [-skip-rebuild] <tablet alias|zk tablet path>",
@@ -550,59 +550,56 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 }
 
 func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
-	addr := subFlags.String("addr", "", "tablet address (host:port)")
-	secureAddr := subFlags.String("secure-addr", "", "secure tablet address (host:port)")
-	mysqlAddr := subFlags.String("mysql-addr", "", "mysql address (host:port)")
-	mysqlIpAddr := subFlags.String("mysql-ip-addr", "", "tablet address (host:port)")
-
+	hostname := subFlags.String("hostname", "", "fully qualified host name")
+	ipAddr := subFlags.String("ip-addr", "", "IP address")
+	mysqlPort := subFlags.Int("mysql-port", 0, "mysql port")
+	vtPort := subFlags.Int("vt-port", 0, "vt port")
+	vtsPort := subFlags.Int("vts-port", 0, "vts port")
 	subFlags.Parse(args)
 
-	if subFlags.NArg() < 1 {
+	if subFlags.NArg() != 1 {
 		log.Fatalf("action UpdateTabletAddrs requires <tablet alias|zk tablet path>")
 	}
-
-	if *addr != "" {
-		if _, _, err := net.SplitHostPort(*addr); err != nil {
-			log.Fatalf("malformed address: %v: %v", *addr, err)
-		}
-	}
-	if *secureAddr != "" {
-		if _, _, err := net.SplitHostPort(*secureAddr); err != nil {
-			log.Fatalf("malformed address: %v: %v", *secureAddr, err)
-		}
-
-	}
-	if *mysqlAddr != "" {
-		if _, _, err := net.SplitHostPort(*mysqlAddr); err != nil {
-			log.Fatalf("malformed address: %v: %v", *mysqlAddr, err)
-		}
-	}
-
-	if *mysqlIpAddr != "" {
-		ip, _, err := net.SplitHostPort(*mysqlIpAddr)
-		if err != nil {
-			log.Fatalf("malformed address: %v: %v", *mysqlIpAddr, err)
-		}
-		if net.ParseIP(ip) == nil {
-			log.Fatalf("malformed address: %v: %v", *mysqlIpAddr, err)
-		}
+	if *ipAddr != "" && net.ParseIP(*ipAddr) == nil {
+		log.Fatalf("malformed address: %v", *ipAddr)
 	}
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	return "", wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
-		if *addr != "" {
-			tablet.Addr = *addr
+		// update old fields, need both a port and ip for each
+		if *hostname != "" && *vtPort != 0 {
+			tablet.Addr = fmt.Sprintf("%v:%v", *hostname, *vtPort)
 		}
-		if *secureAddr != "" {
-			tablet.SecureAddr = *secureAddr
+		if *hostname != "" && *vtsPort != 0 {
+			tablet.SecureAddr = fmt.Sprintf("%v:%v", *hostname, *vtsPort)
+		}
+		if *hostname != "" && *mysqlPort != 0 {
+			tablet.MysqlAddr = fmt.Sprintf("%v:%v", *hostname, *mysqlPort)
+		}
+		if *ipAddr != "" && *mysqlPort != 0 {
+			tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", *ipAddr, *mysqlPort)
+		}
 
+		// update new fields
+		if *hostname != "" {
+			tablet.Hostname = *hostname
 		}
-		if *mysqlAddr != "" {
-			tablet.MysqlAddr = *mysqlAddr
-
+		if *ipAddr != "" {
+			tablet.IPAddr = *ipAddr
 		}
-		if *mysqlIpAddr != "" {
-			tablet.MysqlIpAddr = *mysqlIpAddr
+		if *vtPort != 0 || *vtsPort != 0 || *mysqlPort != 0 {
+			if tablet.Portmap == nil {
+				tablet.Portmap = make(map[string]int)
+			}
+			if *vtPort != 0 {
+				tablet.Portmap["vt"] = *vtPort
+			}
+			if *vtsPort != 0 {
+				tablet.Portmap["vts"] = *vtsPort
+			}
+			if *mysqlPort != 0 {
+				tablet.Portmap["mysql"] = *mysqlPort
+			}
 		}
 		return nil
 	})
