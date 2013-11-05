@@ -1447,9 +1447,10 @@ func main() {
 	var err error
 
 	found := false
+	actionLowerCase := strings.ToLower(action)
 	for _, group := range commands {
 		for _, cmd := range group.commands {
-			if cmd.name == action {
+			if strings.ToLower(cmd.name) == actionLowerCase {
 				subFlags := flag.NewFlagSet(action, flag.ExitOnError)
 				subFlags.Usage = func() {
 					fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.name, cmd.params)
