@@ -21,10 +21,10 @@ type TabletManager struct {
 var TabletManagerRpcService *TabletManager
 
 func init() {
-	registerQueryServices = append(registerQueryServices, registerGoRpcQueryService)
+	registerQueryServices = append(registerQueryServices, registerBsonQueryService)
 }
 
-func registerGoRpcQueryService(agent *ActionAgent, mysqld *mysqlctl.Mysqld) {
+func registerBsonQueryService(agent *ActionAgent, mysqld *mysqlctl.Mysqld) {
 	if TabletManagerRpcService != nil {
 		log.Warningf("RPC service already up %v", TabletManagerRpcService)
 		return

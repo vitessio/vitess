@@ -17,7 +17,7 @@ const (
 	DefaultLockTimeout   = 30 * time.Second
 )
 
-var tabletManagerProtocol = flag.String("tablet_manager_protocol", "gorpc", "the protocol to use to talk to vttablet")
+var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the protocol to use to talk to vttablet")
 
 type Wrangler struct {
 	ts          topo.Server

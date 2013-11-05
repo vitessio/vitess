@@ -37,13 +37,13 @@ type TabletManagerConn interface {
 	GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.Permissions, error)
 }
 
-type RegisterTabletManagerConn func(topo.Server) TabletManagerConn
+type TabletManagerConnFactory func(topo.Server) TabletManagerConn
 
-var tabletManagerConnFactories = make(map[string]RegisterTabletManagerConn)
+var tabletManagerConnFactories = make(map[string]TabletManagerConnFactory)
 
-func RegisterTabletManagerConnFactory(name string, register RegisterTabletManagerConn) {
+func RegisterTabletManagerConnFactory(name string, factory TabletManagerConnFactory) {
 	if _, ok := tabletManagerConnFactories[name]; ok {
 		log.Fatalf("RegisterTabletManagerConn %s already exists", name)
 	}
-	tabletManagerConnFactories[name] = register
+	tabletManagerConnFactories[name] = factory
 }

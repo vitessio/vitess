@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	RegisterTabletManagerConnFactory("gorpc", func(ts topo.Server) TabletManagerConn {
+	RegisterTabletManagerConnFactory("bson", func(ts topo.Server) TabletManagerConn {
 		return &GoRpcTabletManagerConn{ts}
 	})
 }
