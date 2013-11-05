@@ -19,11 +19,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
@@ -52,11 +51,17 @@ func (e InitiatorError) Error() string {
 }
 
 type ActionInitiator struct {
-	ts topo.Server
+	ts  topo.Server
+	rpc TabletManagerConn
 }
 
-func NewActionInitiator(ts topo.Server) *ActionInitiator {
-	return &ActionInitiator{ts}
+func NewActionInitiator(ts topo.Server, tabletManagerProtocol string) *ActionInitiator {
+	f, ok := tabletManagerConnFactories[tabletManagerProtocol]
+	if !ok {
+		log.Fatalf("No TabletManagerProtocol registered with name %s", tabletManagerProtocol)
+	}
+
+	return &ActionInitiator{ts, f(ts)}
 }
 
 func actionGuid() string {
@@ -78,55 +83,17 @@ func (ai *ActionInitiator) writeTabletAction(tabletAlias topo.TabletAlias, node 
 	return ai.ts.WriteTabletAction(tabletAlias, data)
 }
 
-func (ai *ActionInitiator) rpcCall(tabletAlias topo.TabletAlias, name string, args, reply interface{}, waitTime time.Duration) error {
-	// read the tablet from ZK to get the address to connect to
-	tablet, err := ai.ts.GetTablet(tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	return ai.rpcCallTablet(tablet, name, args, reply, waitTime)
-}
-
-func (ai *ActionInitiator) rpcCallTablet(tablet *topo.TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
-
-	// create the RPC client, using waitTime as the connect
-	// timeout, and starting the overall timeout as well
-	timer := time.After(waitTime)
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr, waitTime)
-	if err != nil {
-		return fmt.Errorf("RPC error for %v: %v", tablet.GetAlias(), err.Error())
-	}
-	defer rpcClient.Close()
-
-	// do the call in the remaining time
-	call := rpcClient.Go("TabletManager."+name, args, reply, nil)
-	select {
-	case <-timer:
-		return fmt.Errorf("Timeout waiting for TabletManager.%v to %v", name, tablet.GetAlias())
-	case <-call.Done:
-		if call.Error != nil {
-			return fmt.Errorf("Remote error for %v: %v", tablet.GetAlias(), call.Error.Error())
-		} else {
-			return nil
-		}
-	}
-}
-
 func (ai *ActionInitiator) Ping(tabletAlias topo.TabletAlias) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_PING})
 }
 
 func (ai *ActionInitiator) RpcPing(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
-	var result string
-	err := ai.rpcCall(tabletAlias, TABLET_ACTION_PING, "payload", &result, waitTime)
+	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
 	}
-	if result != "payload" {
-		return fmt.Errorf("Bad ping result: %v", result)
-	}
-	return nil
+
+	return ai.rpc.Ping(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) Sleep(tabletAlias topo.TabletAlias, duration time.Duration) (actionPath string, err error) {
@@ -138,7 +105,7 @@ func (ai *ActionInitiator) ChangeType(tabletAlias topo.TabletAlias, dbType topo.
 }
 
 func (ai *ActionInitiator) RpcChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
-	return ai.rpcCallTablet(tablet, TABLET_ACTION_CHANGE_TYPE, &dbType, rpc.NilResponse, waitTime)
+	return ai.rpc.ChangeType(tablet, dbType, waitTime)
 }
 
 func (ai *ActionInitiator) SetReadOnly(tabletAlias topo.TabletAlias) (actionPath string, err error) {
@@ -225,7 +192,7 @@ func (ai *ActionInitiator) SlaveWasPromoted(tabletAlias topo.TabletAlias) (actio
 }
 
 func (ai *ActionInitiator) RpcSlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return ai.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_PROMOTED, rpc.NilRequest, rpc.NilResponse, waitTime)
+	return ai.rpc.SlaveWasPromoted(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) RestartSlave(tabletAlias topo.TabletAlias, args *RestartSlaveData) (actionPath string, err error) {
@@ -244,7 +211,7 @@ func (ai *ActionInitiator) SlaveWasRestarted(tabletAlias topo.TabletAlias, args 
 }
 
 func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *SlaveWasRestartedData, waitTime time.Duration) error {
-	return ai.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, rpc.NilResponse, waitTime)
+	return ai.rpc.SlaveWasRestarted(tablet, args, waitTime)
 }
 
 func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
@@ -273,11 +240,12 @@ func (ai *ActionInitiator) StopSlave(tabletAlias topo.TabletAlias) (actionPath s
 }
 
 func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
-	var result string
-	return ai.rpcCall(tabletAlias, TABLET_ACTION_WAIT_BLP_POSITION, &WaitBlpPositionArgs{
-		BlpPosition: blpPosition,
-		WaitTimeout: int(waitTime / time.Second),
-	}, &result, waitTime)
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return ai.rpc.WaitBlpPosition(tablet, blpPosition, waitTime)
 }
 
 type ReserveForRestoreArgs struct {
@@ -322,11 +290,7 @@ func (ai *ActionInitiator) GetSchema(tabletAlias topo.TabletAlias, tables []stri
 }
 
 func (ai *ActionInitiator) RpcGetSchemaTablet(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
-	var sd mysqlctl.SchemaDefinition
-	if err := ai.rpcCallTablet(tablet, TABLET_ACTION_GET_SCHEMA, &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}, &sd, waitTime); err != nil {
-		return nil, err
-	}
-	return &sd, nil
+	return ai.rpc.GetSchemaTablet(tablet, tables, includeViews, waitTime)
 }
 
 func (ai *ActionInitiator) PreflightSchema(tabletAlias topo.TabletAlias, change string) (actionPath string, err error) {
@@ -338,11 +302,12 @@ func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *mysqlct
 }
 
 func (ai *ActionInitiator) RpcGetPermissions(tabletAlias topo.TabletAlias, waitTime time.Duration) (*mysqlctl.Permissions, error) {
-	var p mysqlctl.Permissions
-	if err := ai.rpcCall(tabletAlias, TABLET_ACTION_GET_PERMISSIONS, "", &p, waitTime); err != nil {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
 		return nil, err
 	}
-	return &p, nil
+
+	return ai.rpc.GetPermissions(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) ExecuteHook(tabletAlias topo.TabletAlias, _hook *hook.Hook) (actionPath string, err error) {

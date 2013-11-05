@@ -5,6 +5,7 @@
 package wrangler
 
 import (
+	"flag"
 	"time"
 
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
@@ -15,6 +16,8 @@ const (
 	DefaultActionTimeout = 30 * time.Second
 	DefaultLockTimeout   = 30 * time.Second
 )
+
+var tabletManagerProtocol = flag.String("tablet_manager_protocol", "gorpc", "the protocol to use to talk to vttablet")
 
 type Wrangler struct {
 	ts          topo.Server
@@ -36,7 +39,7 @@ type Wrangler struct {
 //   know that out action will fail. However, automated action will need some time to
 //   arbitrate the locks.
 func New(ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{ts, tm.NewActionInitiator(ts), time.Now().Add(actionTimeout), lockTimeout, true}
+	return &Wrangler{ts, tm.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {
