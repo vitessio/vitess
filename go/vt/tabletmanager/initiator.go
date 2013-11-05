@@ -88,7 +88,6 @@ func (ai *ActionInitiator) rpcCall(tabletAlias topo.TabletAlias, name string, ar
 	return ai.rpcCallTablet(tablet, name, args, reply, waitTime)
 }
 
-// TODO(alainjobart) keep a cache of rpcClient by tabletAlias
 func (ai *ActionInitiator) rpcCallTablet(tablet *topo.TabletInfo, name string, args, reply interface{}, waitTime time.Duration) error {
 
 	// create the RPC client, using waitTime as the connect
