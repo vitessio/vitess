@@ -491,7 +491,7 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 		update         = subFlags.Bool("update", false, "perform update if a tablet with provided alias exists")
 		tags           flagutil.StringMapValue
 	)
-	subFlags.Var(&tags, "tags", "string separated list of key:value pairs used to tag the tablet")
+	subFlags.Var(&tags, "tags", "comma separated list of key:value pairs used to tag the tablet")
 	subFlags.Parse(args)
 
 	if subFlags.NArg() != 7 && subFlags.NArg() != 8 {
