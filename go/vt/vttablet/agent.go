@@ -9,7 +9,6 @@ package vttablet
 
 import (
 	"encoding/json"
-	"fmt"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
@@ -62,13 +61,6 @@ func InitAgent(
 	// Start the binlog player services, not playing at start.
 	binlogPlayerMap = NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
 	RegisterBinlogPlayerMap(binlogPlayerMap)
-
-	// Compute the bind addresses
-	bindAddr := fmt.Sprintf(":%v", port)
-	secureAddr := ""
-	if securePort != 0 {
-		secureAddr = fmt.Sprintf(":%v", securePort)
-	}
 
 	statsType := stats.NewString("TabletType")
 	statsKeyspace := stats.NewString("TabletKeyspace")
@@ -153,7 +145,7 @@ func InitAgent(
 		}
 	})
 
-	if err := agent.Start(bindAddr, secureAddr, mysqld.Addr()); err != nil {
+	if err := agent.Start(mysqld.Port(), port, securePort); err != nil {
 		return err
 	}
 

@@ -29,7 +29,7 @@ func (rp *ReservedPool) Open(connFactory CreateConnectionFunc) {
 }
 
 func (rp *ReservedPool) Close() {
-	for _, v := range rp.pool.GetOutdated(time.Duration(0)) {
+	for _, v := range rp.pool.GetOutdated(time.Duration(0), "for close") {
 		conn := v.(*reservedConnection)
 		conn.Close()
 		rp.pool.Unregister(conn.connectionId)
@@ -55,7 +55,7 @@ func (rp *ReservedPool) CloseConnection(connectionId int64) {
 
 // You must call Recycle on the PoolConnection once done.
 func (rp *ReservedPool) Get(connectionId int64) PoolConnection {
-	v, err := rp.pool.Get(connectionId)
+	v, err := rp.pool.Get(connectionId, "for query")
 	if err != nil {
 		panic(NewTabletError(FAIL, "Error getting connection %d: %v", connectionId, err))
 	}

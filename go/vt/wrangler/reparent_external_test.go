@@ -70,6 +70,7 @@ func startFakeTabletActionLoop(t *testing.T, wr *Wrangler, tabletAlias topo.Tabl
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := New(ts, time.Minute, time.Second)
+	wr.UseRPCs = false
 
 	// Create am old master, a new master, two good slaves, one bad slave
 	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})

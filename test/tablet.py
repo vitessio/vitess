@@ -206,25 +206,16 @@ class Tablet(object):
     finally:
       conn.close()
 
-  def update_addrs(self, addr=None, secure_addr=None, mysql_addr=None, mysql_ip_addr=None):
-    args = ['UpdateTabletAddrs']
-    if addr:
-      args.extend(['-addr', addr])
-
-    if secure_addr:
-      args.extend(['-secure-addr', secure_addr])
-
-    if mysql_addr:
-      args.extend(['-mysql-addr', mysql_addr])
-
-    if mysql_ip_addr:
-      args.extend(['-mysql-ip-addr', mysql_ip_addr])
-
-    args.append(self.tablet_alias)
-
-    if len(args) < 3:
-      return None, None
-
+  def update_addrs(self):
+    args = [
+        'UpdateTabletAddrs',
+        '-hostname', 'localhost',
+        '-ip-addr', '127.0.0.1',
+        '-mysql-port', '%u' % self.mysql_port,
+        '-vt-port', '%u' % self.port,
+        '-vts-port', '%u' % (self.port + 500),
+        self.tablet_alias
+        ]
     return utils.run_vtctl(args)
 
   def scrap(self, force=False, skip_rebuild=False):
