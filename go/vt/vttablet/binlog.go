@@ -225,13 +225,10 @@ func (blm *BinlogPlayerMap) StopAllPlayers() {
 
 // RefreshMap reads the right data from topo.Server and makes sure
 // we're playing the right logs
-func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet) {
+func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
 
-	// read the shard to get SourceShards
-	shardInfo, err := blm.ts.GetShard(tablet.Keyspace, tablet.Shard)
-	if err != nil {
-		log.Errorf("Cannot read shard for this tablet: %v", tablet.GetAlias())
+	if shardInfo == nil {
 		return
 	}
 

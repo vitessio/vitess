@@ -76,9 +76,10 @@ func InitAgent(
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		allowQuery := true
+		var shardInfo *topo.ShardInfo
 		if newTablet.Type == topo.TYPE_MASTER {
 			// read the shard to get SourceShards
-			shardInfo, err := topoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
+			shardInfo, err = topoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
 			if err != nil {
 				log.Errorf("Cannot read shard for this tablet %v: %v", newTablet.GetAlias(), err)
 			} else {
@@ -139,7 +140,7 @@ func InitAgent(
 
 		// See if we need to start or stop any binlog player
 		if newTablet.Type == topo.TYPE_MASTER {
-			binlogPlayerMap.RefreshMap(newTablet)
+			binlogPlayerMap.RefreshMap(newTablet, shardInfo)
 		} else {
 			binlogPlayerMap.StopAllPlayers()
 		}
