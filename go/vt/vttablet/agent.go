@@ -83,7 +83,18 @@ func InitAgent(
 		return err
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
-		if newTablet.IsServingType() {
+		allowQuery := true
+		if newTablet.Type == topo.TYPE_MASTER {
+			// read the shard to get SourceShards
+			shardInfo, err := topoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
+			if err != nil {
+				log.Errorf("Cannot read shard for this tablet %v: %v", newTablet.GetAlias(), err)
+			} else {
+				allowQuery = len(shardInfo.SourceShards) == 0
+			}
+		}
+
+		if newTablet.IsServingType() && allowQuery {
 			if dbcfgs.App.DbName == "" {
 				dbcfgs.App.DbName = newTablet.DbName()
 			}

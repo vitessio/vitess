@@ -34,6 +34,12 @@ import (
 // triggered. We won't run two in parallel.
 type TabletChangeCallback func(oldTablet, newTablet topo.Tablet)
 
+type tabletChangeItem struct {
+	oldTablet topo.Tablet
+	newTablet topo.Tablet
+	context   string
+}
+
 type ActionAgent struct {
 	ts                topo.Server
 	tabletAlias       topo.TabletAlias
@@ -51,6 +57,7 @@ type ActionAgent struct {
 	// mutex is protecting the rest of the members
 	mutex           sync.Mutex
 	changeCallbacks []TabletChangeCallback
+	changeItems     chan tabletChangeItem
 	_tablet         *topo.TabletInfo
 }
 
@@ -62,6 +69,7 @@ func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfF
 		DbCredentialsFile: dbCredentialsFile,
 		done:              make(chan struct{}),
 		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
+		changeItems:       make(chan tabletChangeItem, 100),
 	}, nil
 }
 
@@ -75,11 +83,31 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *topo.Tablet, context str
 	agent.mutex.Lock()
 	// Access directly since we have the lock.
 	newTablet := agent._tablet.Tablet
-	for _, f := range agent.changeCallbacks {
-		log.Infof("running tablet callback: %v %v", context, f)
-		go f(*oldTablet, *newTablet)
-	}
+	agent.changeItems <- tabletChangeItem{oldTablet: *oldTablet, newTablet: *newTablet, context: context}
+	log.Infof("Queued tablet callback: %v", context)
 	agent.mutex.Unlock()
+}
+
+func (agent *ActionAgent) executeCallbacksLoop() {
+	for {
+		select {
+		case changeItem := <-agent.changeItems:
+			var wg sync.WaitGroup
+			agent.mutex.Lock()
+			for _, f := range agent.changeCallbacks {
+				log.Infof("Running tablet callback: %v %v", changeItem.context, f)
+				wg.Add(1)
+				go func(f TabletChangeCallback, oldTablet, newTablet topo.Tablet) {
+					defer wg.Done()
+					f(oldTablet, newTablet)
+				}(f, changeItem.oldTablet, changeItem.newTablet)
+			}
+			agent.mutex.Unlock()
+			wg.Wait()
+		case <-agent.done:
+			return
+		}
+	}
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -297,6 +325,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 	agent.runChangeCallbacks(oldTablet, "Start")
 
 	go agent.actionEventLoop()
+	go agent.executeCallbacksLoop()
 	return nil
 }
 

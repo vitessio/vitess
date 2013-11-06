@@ -19,7 +19,6 @@ build:
 	cd go/cmd/vtctld; go build
 	cd go/cmd/vtocc; go build
 	cd go/cmd/vttablet; go build
-	cd go/cmd/vttopo; go build
 	cd go/cmd/zk; go build
 	cd go/cmd/zkclient2; go build
 	cd go/cmd/zkctl; go build
@@ -64,7 +63,6 @@ clean:
 	cd go/cmd/vtctl; go clean
 	cd go/cmd/vtocc; go clean
 	cd go/cmd/vttablet; go clean
-	cd go/cmd/vttopo; go clean
 	cd go/cmd/zk; go clean
 	cd go/cmd/zkctl; go clean
 	cd go/cmd/zkocc; go clean
