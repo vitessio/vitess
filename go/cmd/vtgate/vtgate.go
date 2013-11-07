@@ -23,7 +23,7 @@ var (
 	tabletProtocol = flag.String("tablet-protocol", "bson", "how to talk to the vttablets")
 )
 
-var topoReader topo.TopoReader
+var topoReader *TopoReader
 
 func main() {
 	flag.Parse()
