@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"path"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
@@ -36,9 +37,10 @@ import (
 type TabletChangeCallback func(oldTablet, newTablet topo.Tablet)
 
 type tabletChangeItem struct {
-	oldTablet topo.Tablet
-	newTablet topo.Tablet
-	context   string
+	oldTablet  topo.Tablet
+	newTablet  topo.Tablet
+	context    string
+	queuedTime time.Time
 }
 
 type ActionAgent struct {
@@ -84,7 +86,7 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *topo.Tablet, context str
 	agent.mutex.Lock()
 	// Access directly since we have the lock.
 	newTablet := agent._tablet.Tablet
-	agent.changeItems <- tabletChangeItem{oldTablet: *oldTablet, newTablet: *newTablet, context: context}
+	agent.changeItems <- tabletChangeItem{oldTablet: *oldTablet, newTablet: *newTablet, context: context, queuedTime: time.Now()}
 	log.Infof("Queued tablet callback: %v", context)
 	agent.mutex.Unlock()
 }
@@ -96,7 +98,7 @@ func (agent *ActionAgent) executeCallbacksLoop() {
 			var wg sync.WaitGroup
 			agent.mutex.Lock()
 			for _, f := range agent.changeCallbacks {
-				log.Infof("Running tablet callback: %v %v", changeItem.context, f)
+				log.Infof("Running tablet callback after %v: %v %v", time.Now().Sub(changeItem.queuedTime), changeItem.context, f)
 				wg.Add(1)
 				go func(f TabletChangeCallback, oldTablet, newTablet topo.Tablet) {
 					defer wg.Done()
