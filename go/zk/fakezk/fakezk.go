@@ -239,7 +239,9 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 	}
 	for _, watch := range node.childrenWatches {
 		watch <- childrenEvent
+		close(watch)
 	}
+	node.childrenWatches = nil
 
 	node.cversion++
 
