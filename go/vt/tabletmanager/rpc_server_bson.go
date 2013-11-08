@@ -150,7 +150,7 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBl
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
-		return slaveWasPromoted(tm.agent.ts, tm.agent.tabletAlias)
+		return slaveWasPromoted(tm.agent.ts, tm.mysqld, tm.agent.tabletAlias)
 	})
 }
 

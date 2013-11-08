@@ -184,7 +184,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = slaveWasPromoted(ta.ts, ta.tabletAlias)
+		err = slaveWasPromoted(ta.ts, ta.mysqlDaemon, ta.tabletAlias)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
@@ -314,7 +314,15 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
 }
 
-func slaveWasPromoted(ts topo.Server, tabletAlias topo.TabletAlias) error {
+func slaveWasPromoted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias) error {
+	// We first check we don't have a master any more.
+	// If we do, it probably means we're not *the* master, and something
+	// is really wrong.
+	masterAddr, err := mysqlDaemon.GetMasterAddr()
+	if err != mysqlctl.ErrNotSlave {
+		return fmt.Errorf("new master is a slave: %v %v", masterAddr, err)
+	}
+
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
