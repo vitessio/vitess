@@ -115,7 +115,7 @@ func (cc *ConnCache) newZookeeperConn(zkAddr, zcell string) (Conn, error) {
 func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan zookeeper.Event) {
 	for event := range session {
 		switch event.State {
-		case zookeeper.STATE_EXPIRED_SESSION:
+		case zookeeper.STATE_EXPIRED_SESSION, zookeeper.STATE_CONNECTING:
 			conn.Close()
 			fallthrough
 		case zookeeper.STATE_CLOSED:
