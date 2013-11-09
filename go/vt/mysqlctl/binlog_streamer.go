@@ -100,9 +100,9 @@ type BinlogStreamer struct {
 	delim []byte
 }
 
-// SendReplyFunc is used to send binlog events.
+// sendTransactionFunc is used to send binlog events.
 // reply is of type BinlogTransaction.
-type SendReplyFunc func(reply interface{}) error
+type sendTransactionFunc func(trans *BinlogTransaction) error
 
 // NewBinlogStreamer creates a BinlogStreamer. dbname specifes
 // the db to stream events for, and binlogPrefix is as defined
@@ -114,8 +114,8 @@ func NewBinlogStreamer(dbname, binlogPrefix string) *BinlogStreamer {
 	}
 }
 
-// Stream starts streaming binlog events from file & pos by repeatedly calling sendReply.
-func (bls *BinlogStreamer) Stream(file string, pos int64, sendReply SendReplyFunc) (err error) {
+// Stream starts streaming binlog events from file & pos by repeatedly calling sendTransaction.
+func (bls *BinlogStreamer) Stream(file string, pos int64, sendTransaction sendTransactionFunc) (err error) {
 	if !bls.running.CompareAndSwap(0, 1) {
 		return fmt.Errorf("already streaming or stopped.")
 	}
@@ -128,7 +128,7 @@ func (bls *BinlogStreamer) Stream(file string, pos int64, sendReply SendReplyFun
 	}()
 
 	for {
-		if err = bls.run(sendReply); err != nil {
+		if err = bls.run(sendTransaction); err != nil {
 			goto end
 		}
 		if err = bls.file.WaitForChange(&bls.running); err != nil {
@@ -152,14 +152,14 @@ func (bls *BinlogStreamer) Stop() {
 
 // run launches mysqlbinlog and starts the stream. It takes care of
 // cleaning up the process when streaming returns.
-func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
+func (bls *BinlogStreamer) run(sendTransaction sendTransactionFunc) (err error) {
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(bls.dbname, bls.file.name, bls.file.pos)
 	if err != nil {
 		return fmt.Errorf("launch error: %v", err)
 	}
 	defer reader.Close()
-	err = bls.parseEvents(sendReply, reader)
+	err = bls.parseEvents(sendTransaction, reader)
 	if err != nil {
 		mbl.Kill()
 	} else {
@@ -172,7 +172,7 @@ func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
 }
 
 // parseEvents parses events and transmits them as transactions for the current mysqlbinlog stream.
-func (bls *BinlogStreamer) parseEvents(sendReply SendReplyFunc, reader io.Reader) (err error) {
+func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
 	var statements [][]byte
@@ -196,7 +196,7 @@ func (bls *BinlogStreamer) parseEvents(sendReply SendReplyFunc, reader io.Reader
 				Statements: statements,
 				Position:   bls.blPos,
 			}
-			if err = sendReply(trans); err != nil {
+			if err = sendTransaction(trans); err != nil {
 				return fmt.Errorf("send reply error: %v", err)
 			}
 			statements = nil

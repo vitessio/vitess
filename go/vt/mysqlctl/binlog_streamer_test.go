@@ -277,8 +277,7 @@ func TestStream(t *testing.T) {
 
 	curTransaction := 0
 	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
-	err = bls.Stream("vt-0000041983-bin.000001", 0, func(reply interface{}) error {
-		tx := reply.(*BinlogTransaction)
+	err = bls.Stream("vt-0000041983-bin.000001", 0, func(tx *BinlogTransaction) error {
 		for i, stmt := range tx.Statements {
 			if transactions[curTransaction].Statements[i] != string(stmt) {
 				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i], stmt)
