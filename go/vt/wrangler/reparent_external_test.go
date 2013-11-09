@@ -72,7 +72,7 @@ func TestShardExternallyReparented(t *testing.T) {
 	wr := New(ts, time.Minute, time.Second)
 	wr.UseRPCs = false
 
-	// Create am old master, a new master, two good slaves, one bad slave
+	// Create an old master, a new master, two good slaves, one bad slave
 	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
 	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
 	goodSlaveAlias1 := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
@@ -153,4 +153,14 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
 	close(done)
+
+	// Now double-check the serving graph is good.
+	// Should only have one good replica left.
+	addrs, err := ts.GetEndPoints("cell1", "test_keyspace", "0", topo.TYPE_REPLICA)
+	if err != nil {
+		t.Fatalf("GetEndPoints failed at the end: %v", err)
+	}
+	if len(addrs.Entries) != 1 {
+		t.Fatalf("GetEndPoints has too many entries: %v", addrs)
+	}
 }
