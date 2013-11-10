@@ -20,7 +20,6 @@ import (
 )
 
 // Valid statement types in the binlogs.
-// TODO(sougou): Drop BL prefix once binlog_parser is deleted.
 const (
 	BL_UNRECOGNIZED = iota
 	BL_BEGIN
@@ -76,8 +75,13 @@ var (
 
 // TODO: Move to proto once finalized
 type BinlogTransaction struct {
-	Statements [][]byte
+	Statements []Statement
 	Position   BinlogPosition
+}
+
+type Statement struct {
+	Typ int
+	Sql []byte
 }
 
 type BinlogPosition struct {
@@ -175,21 +179,21 @@ func (bls *BinlogStreamer) run(sendTransaction sendTransactionFunc) (err error) 
 func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
-	var statements [][]byte
+	var statements []Statement
 	for {
-		stmt, err := bls.nextStatement(bufReader)
-		if stmt == nil {
+		sql, err := bls.nextStatement(bufReader)
+		if sql == nil {
 			return err
 		}
-		prefix := string(bytes.ToLower(bytes.SplitN(stmt, SPACE, 2)[0]))
-		switch statementPrefixes[prefix] {
+		prefix := string(bytes.ToLower(bytes.SplitN(sql, SPACE, 2)[0]))
+		switch typ := statementPrefixes[prefix]; typ {
 		case BL_UNRECOGNIZED:
-			return fmt.Errorf("unrecognized: %s", stmt)
-		// We trust that mysqlbinlog doesn't send DMLs withot a BEGIN
+			return fmt.Errorf("unrecognized: %s", sql)
+		// We trust that mysqlbinlog doesn't send BL_DMLs withot a BL_BEGIN
 		case BL_BEGIN, BL_ROLLBACK:
 			statements = nil
 		case BL_DDL:
-			statements = append(statements, stmt)
+			statements = append(statements, Statement{Typ: typ, Sql: sql})
 			fallthrough
 		case BL_COMMIT:
 			trans := &BinlogTransaction{
@@ -200,9 +204,9 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 				return fmt.Errorf("send reply error: %v", err)
 			}
 			statements = nil
-		// DML & SET
+		// BL_DML & BL_SET
 		default:
-			statements = append(statements, stmt)
+			statements = append(statements, Statement{Typ: typ, Sql: sql})
 		}
 	}
 }
