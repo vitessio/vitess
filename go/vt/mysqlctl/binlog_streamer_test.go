@@ -283,7 +283,10 @@ func TestStream(t *testing.T) {
 	err = bls.Stream("vt-0000041983-bin.000001", 0, func(tx *BinlogTransaction) error {
 		for i, stmt := range tx.Statements {
 			if transactions[curTransaction].Statements[i].Sql != string(stmt.Sql) {
-				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i], stmt)
+				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i].Sql, stmt.Sql)
+			}
+			if transactions[curTransaction].Statements[i].Typ != stmt.Typ {
+				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Typ, stmt.Typ)
 			}
 		}
 		if transactions[curTransaction].Position != tx.Position {
