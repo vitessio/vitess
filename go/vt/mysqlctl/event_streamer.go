@@ -72,7 +72,7 @@ func (evs *EventStreamer) TransactionToEvent(trans *BinlogTransaction) error {
 	var timestamp int64
 	var insertid int64
 	for _, stmt := range trans.Statements {
-		switch stmt.Typ {
+		switch stmt.Category {
 		case BL_SET:
 			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_TIMESTAMP) {
 				if timestamp, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_TIMESTAMP):]), 10, 64); err != nil {

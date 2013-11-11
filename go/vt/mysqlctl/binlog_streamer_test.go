@@ -257,8 +257,8 @@ func TestReadEvent(t *testing.T) {
 
 type transaction struct {
 	Statements []struct {
-		Typ int
-		Sql string
+		Category int
+		Sql      string
 	}
 	Position BinlogPosition
 }
@@ -285,8 +285,8 @@ func TestStream(t *testing.T) {
 			if transactions[curTransaction].Statements[i].Sql != string(stmt.Sql) {
 				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i].Sql, stmt.Sql)
 			}
-			if transactions[curTransaction].Statements[i].Typ != stmt.Typ {
-				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Typ, stmt.Typ)
+			if transactions[curTransaction].Statements[i].Category != stmt.Category {
+				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Category, stmt.Category)
 			}
 		}
 		if transactions[curTransaction].Position != tx.Position {
@@ -301,7 +301,7 @@ func TestStream(t *testing.T) {
 		/*
 			fmt.Printf("{\n\"Statements\": [\n")
 			for i := 0; i < len(tx.Statements); i++ {
-				fmt.Printf(`{"Typ": %d, "Sql": %#v}`, tx.Statements[i].Typ, string(tx.Statements[i].Sql))
+				fmt.Printf(`{"Category": %d, "Sql": %#v}`, tx.Statements[i].Category, string(tx.Statements[i].Sql))
 				if i == len(tx.Statements)-1 {
 					fmt.Printf("\n")
 				} else {

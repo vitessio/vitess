@@ -80,8 +80,8 @@ type BinlogTransaction struct {
 }
 
 type Statement struct {
-	Typ int
-	Sql []byte
+	Category int
+	Sql      []byte
 }
 
 type BinlogPosition struct {
@@ -186,14 +186,14 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 			return err
 		}
 		prefix := string(bytes.ToLower(bytes.SplitN(sql, SPACE, 2)[0]))
-		switch typ := statementPrefixes[prefix]; typ {
+		switch category := statementPrefixes[prefix]; category {
 		case BL_UNRECOGNIZED:
 			return fmt.Errorf("unrecognized: %s", sql)
 		// We trust that mysqlbinlog doesn't send BL_DMLs withot a BL_BEGIN
 		case BL_BEGIN, BL_ROLLBACK:
 			statements = nil
 		case BL_DDL:
-			statements = append(statements, Statement{Typ: typ, Sql: sql})
+			statements = append(statements, Statement{Category: category, Sql: sql})
 			fallthrough
 		case BL_COMMIT:
 			trans := &BinlogTransaction{
@@ -206,7 +206,7 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 			statements = nil
 		// BL_DML & BL_SET
 		default:
-			statements = append(statements, Statement{Typ: typ, Sql: sql})
+			statements = append(statements, Statement{Category: category, Sql: sql})
 		}
 	}
 }
