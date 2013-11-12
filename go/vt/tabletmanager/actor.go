@@ -25,7 +25,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
 // The actor applies individual commands to execute an action read
@@ -630,10 +629,8 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
 		sr.ParentAlias = tablet.GetAlias()
-		sr.ZkParentPath = tablet.Path() // XXX
 	} else {
 		sr.ParentAlias = tablet.Parent
-		sr.ZkParentPath = zktopo.TabletPathForAlias(tablet.Parent) // XXX
 	}
 	actionNode.reply = sr
 	return nil
@@ -704,22 +701,6 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo
 	return topo.CreateTabletReplicationData(ta.ts, tablet.Tablet)
 }
 
-// FIXME(alainjobart) remove after migration
-func BackfillAlias(zkPath string, alias *topo.TabletAlias) error {
-	if alias.IsZero() && zkPath != "" {
-		zkPathParts := strings.Split(zkPath, "/")
-		if len(zkPathParts) != 6 || zkPathParts[0] != "" || zkPathParts[1] != "zk" || zkPathParts[3] != "vt" || zkPathParts[4] != "tablets" {
-			return fmt.Errorf("Invalid tablet path: %v", zkPath)
-		}
-		a, err := topo.ParseTabletAliasString(zkPathParts[2] + "-" + zkPathParts[5])
-		if err != nil {
-			return err
-		}
-		*alias = a
-	}
-	return nil
-}
-
 // Reserve a tablet for restore.
 // Can be called remotely
 func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
@@ -728,7 +709,6 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 		return err
 	}
 	args := actionNode.args.(*ReserveForRestoreArgs)
-	BackfillAlias(args.ZkSrcTabletPath, &args.SrcTabletAlias)
 
 	// read our current tablet, verify its state
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
@@ -766,8 +746,6 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 // Put tablet into the replication graph as a spare.
 func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	args := actionNode.args.(*RestoreArgs)
-	BackfillAlias(args.ZkSrcTabletPath, &args.SrcTabletAlias)
-	BackfillAlias(args.ZkParentPath, &args.ParentAlias)
 
 	// read our current tablet, verify its state
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)

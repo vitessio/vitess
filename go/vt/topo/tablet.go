@@ -431,11 +431,6 @@ type TabletInfo struct {
 	*Tablet
 }
 
-// FIXME(alainjobart) when switch to topo.Server this will become useless
-func (ti *TabletInfo) Path() string {
-	return fmt.Sprintf("/zk/%v/vt/tablets/%010d", ti.Cell, ti.Uid)
-}
-
 func (ti *TabletInfo) Version() int64 {
 	return ti.version
 }

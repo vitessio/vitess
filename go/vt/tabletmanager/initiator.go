@@ -24,7 +24,6 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/zktopo"
 )
 
 // The actor applies individual commands to execute an action read from a node
@@ -126,7 +125,6 @@ type SnapshotArgs struct {
 }
 
 type SnapshotReply struct {
-	ZkParentPath string // XXX
 	ParentAlias  topo.TabletAlias
 	ManifestPath string
 
@@ -249,20 +247,16 @@ func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosi
 }
 
 type ReserveForRestoreArgs struct {
-	ZkSrcTabletPath string // XXX
-	SrcTabletAlias  topo.TabletAlias
+	SrcTabletAlias topo.TabletAlias
 }
 
 func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias topo.TabletAlias, args *ReserveForRestoreArgs) (actionPath string, err error) {
-	args.ZkSrcTabletPath = zktopo.TabletPathForAlias(args.SrcTabletAlias) // XXX
 	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESERVE_FOR_RESTORE, args: args})
 }
 
 type RestoreArgs struct {
-	ZkSrcTabletPath       string // XXX
 	SrcTabletAlias        topo.TabletAlias
 	SrcFilePath           string
-	ZkParentPath          string // XXX
 	ParentAlias           topo.TabletAlias
 	FetchConcurrency      int
 	FetchRetryCount       int
@@ -271,8 +265,6 @@ type RestoreArgs struct {
 }
 
 func (ai *ActionInitiator) Restore(dstTabletAlias topo.TabletAlias, args *RestoreArgs) (actionPath string, err error) {
-	args.ZkSrcTabletPath = zktopo.TabletPathForAlias(args.SrcTabletAlias) // XXX
-	args.ZkParentPath = zktopo.TabletPathForAlias(args.ParentAlias)       // XXX
 	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESTORE, args: args})
 }
 
