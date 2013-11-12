@@ -256,8 +256,11 @@ func TestReadEvent(t *testing.T) {
 }
 
 type transaction struct {
-	Statements []string
-	Position   BinlogPosition
+	Statements []struct {
+		Category int
+		Sql      string
+	}
+	Position BinlogPosition
 }
 
 func TestStream(t *testing.T) {
@@ -277,11 +280,13 @@ func TestStream(t *testing.T) {
 
 	curTransaction := 0
 	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
-	err = bls.Stream("vt-0000041983-bin.000001", 0, func(reply interface{}) error {
-		tx := reply.(*BinlogTransaction)
+	err = bls.Stream("vt-0000041983-bin.000001", 0, func(tx *BinlogTransaction) error {
 		for i, stmt := range tx.Statements {
-			if transactions[curTransaction].Statements[i] != string(stmt) {
-				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i], stmt)
+			if transactions[curTransaction].Statements[i].Sql != string(stmt.Sql) {
+				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i].Sql, stmt.Sql)
+			}
+			if transactions[curTransaction].Statements[i].Category != stmt.Category {
+				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Category, stmt.Category)
 			}
 		}
 		if transactions[curTransaction].Position != tx.Position {
@@ -292,14 +297,15 @@ func TestStream(t *testing.T) {
 			bls.Stop()
 		}
 		// Uncomment the following lines to produce a different set of
-		// expected outputs
+		// expected outputs. You'll need to massage the file a bit afterwards.
 		/*
 			fmt.Printf("{\n\"Statements\": [\n")
 			for i := 0; i < len(tx.Statements); i++ {
+				fmt.Printf(`{"Category": %d, "Sql": %#v}`, tx.Statements[i].Category, string(tx.Statements[i].Sql))
 				if i == len(tx.Statements)-1 {
-					fmt.Printf("%#v\n", string(tx.Statements[i]))
+					fmt.Printf("\n")
 				} else {
-					fmt.Printf("%#v,\n", string(tx.Statements[i]))
+					fmt.Printf(",\n")
 				}
 			}
 			fmt.Printf("],\n")
