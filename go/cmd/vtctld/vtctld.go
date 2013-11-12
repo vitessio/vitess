@@ -606,7 +606,24 @@ func main() {
 				return
 			}
 			target = explorer.GetTabletPath(alias)
+		case "replication":
+			keyspace := r.FormValue("keyspace")
+			if keyspace == "" {
+				http.Error(w, "keyspace is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			cell := r.FormValue("cell")
+			if cell == "" {
+				http.Error(w, "cell is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
 
+			shard := r.FormValue("shard")
+			if shard == "" {
+				http.Error(w, "shard is obligatory for this redirect", http.StatusBadRequest)
+				return
+			}
+			target = explorer.GetReplicationSlaves(cell, keyspace, shard)
 		default:
 			http.Error(w, "bad redirect type", http.StatusBadRequest)
 			return

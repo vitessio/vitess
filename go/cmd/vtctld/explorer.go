@@ -44,6 +44,10 @@ type Explorer interface {
 	// GetTabletPath returns an explorer path that will contain
 	// information about the tablet named by alias.
 	GetTabletPath(alias topo.TabletAlias) string
+
+	// GetReplicationSlaves returns an explorer path that contains
+	// replication slaves for the named cell, keyspace, and shard.
+	GetReplicationSlaves(cell, keyspace, shard string) string
 }
 
 // HandleExplorer serves explorer under url, using a template named

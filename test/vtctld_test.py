@@ -142,6 +142,9 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=srv_type&explorer=zk&keyspace=test_keyspace&shard=-80&tablet_type=replica&cell=test_nj').geturl(),
                      'http://localhost:8080/zk/test_nj/vt/ns/test_keyspace/-80/replica')
 
+    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=replication&explorer=zk&keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
+                     'http://localhost:8080/zk/test_nj/vt/replication/test_keyspace/-80')
+
 
   def test_serving_graph(self):
     self.assertItemsEqual(self.serving_data.keys(), ["test_keyspace"])
