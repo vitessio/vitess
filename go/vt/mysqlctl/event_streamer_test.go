@@ -5,6 +5,7 @@
 package mysqlctl
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -81,5 +82,106 @@ func TestEventErrors(t *testing.T) {
 		if ecase.want != err.Error() {
 			t.Errorf("want %s, got %v", ecase.want, err)
 		}
+	}
+}
+
+func TestDMLEvent(t *testing.T) {
+	trans := &BinlogTransaction{
+		Statements: []Statement{
+			{
+				Category: BL_SET,
+				Sql:      []byte("SET TIMESTAMP=1"),
+			}, {
+				Category: BL_SET,
+				Sql:      []byte("SET INSERT_ID=10"),
+			}, {
+				Category: BL_DML,
+				Sql:      []byte("query /* _stream vtocc_e (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
+			},
+		},
+		Position: BinlogPosition{
+			GroupId:  20,
+			ServerId: 30,
+		},
+	}
+	evs := &EventStreamer{
+		sendEvent: func(event interface{}) error {
+			switch e := event.(type) {
+			case *DMLEvent:
+				want := `&mysqlctl.DMLEvent{TableName:"vtocc_e", PkColNames:[]string{"eid", "id", "name"}, PkValues:[][]interface {}{[]interface {}{10, -1, "name"}, []interface {}{11, 0xffffffffffffffff, "name"}}, Timestamp:1}`
+				got := fmt.Sprintf("%#v", e)
+				if want != got {
+					t.Errorf("want %s, got %s", want, got)
+				}
+			case *BinlogPosition:
+				want := `&mysqlctl.BinlogPosition{GroupId:20, ServerId:30}`
+				got := fmt.Sprintf("%#v", e)
+				if want != got {
+					t.Errorf("want %s, got %s", want, got)
+				}
+			default:
+				t.Errorf("unexppected: %#v", e)
+			}
+			return nil
+		},
+	}
+	err := evs.transactionToEvent(trans)
+	if err != nil {
+		t.Error(err)
+	}
+	if evs.DmlCount != 1 {
+		t.Errorf("want 1, got %d", evs.DmlCount)
+	}
+	if evs.TransactionCount != 1 {
+		t.Errorf("want 1, got %d", evs.TransactionCount)
+	}
+}
+
+func TestDDLEvent(t *testing.T) {
+	trans := &BinlogTransaction{
+		Statements: []Statement{
+			{
+				Category: BL_SET,
+				Sql:      []byte("SET TIMESTAMP=1"),
+			}, {
+				Category: BL_DDL,
+				Sql:      []byte("DDL"),
+			},
+		},
+		Position: BinlogPosition{
+			GroupId:  20,
+			ServerId: 30,
+		},
+	}
+	evs := &EventStreamer{
+		sendEvent: func(event interface{}) error {
+			switch e := event.(type) {
+			case *DDLEvent:
+				want := `&mysqlctl.DDLEvent{Sql:"DDL", Timestamp:1}`
+				got := fmt.Sprintf("%#v", e)
+				if want != got {
+					t.Errorf("want %s, got %s", want, got)
+				}
+			case *BinlogPosition:
+				want := `&mysqlctl.BinlogPosition{GroupId:20, ServerId:30}`
+				got := fmt.Sprintf("%#v", e)
+				if want != got {
+					t.Errorf("want %s, got %s", want, got)
+				}
+			default:
+				t.Errorf("unexppected: %#v", e)
+			}
+			return nil
+		},
+	}
+	err := evs.transactionToEvent(trans)
+	if err != nil {
+		t.Error(err)
+	}
+	if evs.DdlCount != 1 {
+		t.Errorf("want 1, got %d", evs.DdlCount)
+	}
+	if evs.TransactionCount != 1 {
+		t.Errorf("want 1, got %d", evs.TransactionCount)
 	}
 }

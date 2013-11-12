@@ -91,6 +91,7 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 			if err != nil {
 				return fmt.Errorf("%v: %s", err, stmt.Sql)
 			}
+			dmlEvent.Timestamp = timestamp
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
