@@ -20,7 +20,6 @@ import (
 )
 
 // Valid statement types in the binlogs.
-// TODO(sougou): Drop BL prefix once binlog_parser is deleted.
 const (
 	BL_UNRECOGNIZED = iota
 	BL_BEGIN
@@ -76,8 +75,13 @@ var (
 
 // TODO: Move to proto once finalized
 type BinlogTransaction struct {
-	Statements [][]byte
+	Statements []Statement
 	Position   BinlogPosition
+}
+
+type Statement struct {
+	Category int
+	Sql      []byte
 }
 
 type BinlogPosition struct {
@@ -100,9 +104,9 @@ type BinlogStreamer struct {
 	delim []byte
 }
 
-// SendReplyFunc is used to send binlog events.
+// sendTransactionFunc is used to send binlog events.
 // reply is of type BinlogTransaction.
-type SendReplyFunc func(reply interface{}) error
+type sendTransactionFunc func(trans *BinlogTransaction) error
 
 // NewBinlogStreamer creates a BinlogStreamer. dbname specifes
 // the db to stream events for, and binlogPrefix is as defined
@@ -114,8 +118,8 @@ func NewBinlogStreamer(dbname, binlogPrefix string) *BinlogStreamer {
 	}
 }
 
-// Stream starts streaming binlog events from file & pos by repeatedly calling sendReply.
-func (bls *BinlogStreamer) Stream(file string, pos int64, sendReply SendReplyFunc) (err error) {
+// Stream starts streaming binlog events from file & pos by repeatedly calling sendTransaction.
+func (bls *BinlogStreamer) Stream(file string, pos int64, sendTransaction sendTransactionFunc) (err error) {
 	if !bls.running.CompareAndSwap(0, 1) {
 		return fmt.Errorf("already streaming or stopped.")
 	}
@@ -128,7 +132,7 @@ func (bls *BinlogStreamer) Stream(file string, pos int64, sendReply SendReplyFun
 	}()
 
 	for {
-		if err = bls.run(sendReply); err != nil {
+		if err = bls.run(sendTransaction); err != nil {
 			goto end
 		}
 		if err = bls.file.WaitForChange(&bls.running); err != nil {
@@ -152,14 +156,14 @@ func (bls *BinlogStreamer) Stop() {
 
 // run launches mysqlbinlog and starts the stream. It takes care of
 // cleaning up the process when streaming returns.
-func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
+func (bls *BinlogStreamer) run(sendTransaction sendTransactionFunc) (err error) {
 	mbl := &MysqlBinlog{}
 	reader, err := mbl.Launch(bls.dbname, bls.file.name, bls.file.pos)
 	if err != nil {
 		return fmt.Errorf("launch error: %v", err)
 	}
 	defer reader.Close()
-	err = bls.parseEvents(sendReply, reader)
+	err = bls.parseEvents(sendTransaction, reader)
 	if err != nil {
 		mbl.Kill()
 	} else {
@@ -172,37 +176,37 @@ func (bls *BinlogStreamer) run(sendReply SendReplyFunc) (err error) {
 }
 
 // parseEvents parses events and transmits them as transactions for the current mysqlbinlog stream.
-func (bls *BinlogStreamer) parseEvents(sendReply SendReplyFunc, reader io.Reader) (err error) {
+func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
-	var statements [][]byte
+	var statements []Statement
 	for {
-		stmt, err := bls.nextStatement(bufReader)
-		if stmt == nil {
+		sql, err := bls.nextStatement(bufReader)
+		if sql == nil {
 			return err
 		}
-		prefix := string(bytes.ToLower(bytes.SplitN(stmt, SPACE, 2)[0]))
-		switch statementPrefixes[prefix] {
+		prefix := string(bytes.ToLower(bytes.SplitN(sql, SPACE, 2)[0]))
+		switch category := statementPrefixes[prefix]; category {
 		case BL_UNRECOGNIZED:
-			return fmt.Errorf("unrecognized: %s", stmt)
-		// We trust that mysqlbinlog doesn't send DMLs withot a BEGIN
+			return fmt.Errorf("unrecognized: %s", sql)
+		// We trust that mysqlbinlog doesn't send BL_DMLs withot a BL_BEGIN
 		case BL_BEGIN, BL_ROLLBACK:
 			statements = nil
 		case BL_DDL:
-			statements = append(statements, stmt)
+			statements = append(statements, Statement{Category: category, Sql: sql})
 			fallthrough
 		case BL_COMMIT:
 			trans := &BinlogTransaction{
 				Statements: statements,
 				Position:   bls.blPos,
 			}
-			if err = sendReply(trans); err != nil {
+			if err = sendTransaction(trans); err != nil {
 				return fmt.Errorf("send reply error: %v", err)
 			}
 			statements = nil
-		// DML & SET
+		// BL_DML & BL_SET
 		default:
-			statements = append(statements, stmt)
+			statements = append(statements, Statement{Category: category, Sql: sql})
 		}
 	}
 }

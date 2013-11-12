@@ -7,7 +7,6 @@ package mysqlctl
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -48,15 +47,12 @@ var SqlKwMap = map[string]string{
 }
 
 var (
-	STREAM_COMMENT_START   = []byte("/* _stream ")
 	BINLOG_DELIMITER       = []byte("/*!*/;")
 	BINLOG_POSITION_PREFIX = []byte("# at ")
 	BINLOG_ROTATE_TO       = []byte("Rotate to ")
 	BINLOG_BEGIN           = []byte("BEGIN")
 	BINLOG_COMMIT          = []byte("COMMIT")
 	BINLOG_ROLLBACK        = []byte("ROLLBACK")
-	BINLOG_SET_TIMESTAMP   = []byte("SET TIMESTAMP=")
-	BINLOG_SET_INSERT      = []byte("SET INSERT_ID=")
 	BINLOG_END_LOG_POS     = []byte("end_log_pos ")
 	BINLOG_XID             = []byte("Xid = ")
 	BINLOG_GROUP_ID        = []byte("group_id ")
@@ -547,9 +543,12 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 			}
 			dmlBuffer = append(dmlBuffer, line)
 			streamComment := string(line[commentIndex+len(STREAM_COMMENT_START):])
-			eventNodeTree = parseStreamComment(streamComment, autoincId)
+			eventNodeTree, err = parseStreamComment(streamComment)
+			if err != nil {
+				panic(err)
+			}
 			dmlType = GetDmlType(event.firstKw)
-			response := createUpdateResponse(eventNodeTree, dmlType, event.Coord)
+			response, _ := createUpdateResponse(eventNodeTree, dmlType, event.Coord, autoincId)
 			txnResponseList = append(txnResponseList, response)
 			autoincId = 0
 			dmlBuffer = dmlBuffer[:0]
@@ -564,83 +563,8 @@ func buildTxnResponse(trxnLineBuffer []*eventBuffer) (txnResponseList []*UpdateR
 	return
 }
 
-/*
-Functions that parse the stream comment.
-The _stream comment is extracted into a tree node with the following structure.
-EventNode.Sub[0] table name
-EventNode.Sub[1] Pk column names
-EventNode.Sub[2:] Pk Value lists
-*/
-// Example query: insert into vtocc_e(foo) values ('foo') /* _stream vtocc_e (eid id name ) (null 1 'bmFtZQ==' ); */
-// the "null" value is used for auto-increment columns.
-
-// This parese a paricular pk tuple.
-func parsePkTuple(tokenizer *parser.Tokenizer, autoincIdPtr *uint64) (pkTuple *parser.Node) {
-	// pkTuple is a list of pk value Nodes
-	pkTuple = parser.NewSimpleParseNode(parser.NODE_LIST, "")
-	autoincId := *autoincIdPtr
-	// start scanning the list
-	for tempNode := tokenizer.Scan(); tempNode.Type != ')'; tempNode = tokenizer.Scan() {
-		switch tempNode.Type {
-		case parser.NULL:
-			pkTuple.Push(parser.NewParseNode(parser.NUMBER, []byte(strconv.FormatUint(autoincId, 10))))
-			autoincId++
-		case '-':
-			// handle negative numbers
-			t2 := tokenizer.Scan()
-			if t2.Type != parser.NUMBER {
-				panic(NewBinlogParseError(CODE_ERROR, "Illegal stream comment construct, - followed by a non-number"))
-			}
-			t2.Value = append(tempNode.Value, t2.Value...)
-			pkTuple.Push(t2)
-		case parser.ID, parser.NUMBER:
-			pkTuple.Push(tempNode)
-		case parser.STRING:
-			b := tempNode.Value
-			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(b)))
-			numDecoded, err := base64.StdEncoding.Decode(decoded, b)
-			if err != nil {
-				panic(NewBinlogParseError(CODE_ERROR, "Error in base64 decoding pkValue"))
-			}
-			tempNode.Value = decoded[:numDecoded]
-			pkTuple.Push(tempNode)
-		default:
-			panic(NewBinlogParseError(EVENT_ERROR, fmt.Sprintf("Error in parsing stream comment: illegal node type %v %v", tempNode.Type, string(tempNode.Value))))
-		}
-	}
-	return pkTuple
-}
-
-// This parses the stream comment.
-func parseStreamComment(dmlComment string, autoincId uint64) (EventNode *parser.Node) {
-	EventNode = parser.NewSimpleParseNode(parser.NODE_LIST, "")
-
-	tokenizer := parser.NewStringTokenizer(dmlComment)
-	var node *parser.Node
-	var pkTuple *parser.Node
-
-	node = tokenizer.Scan()
-	if node.Type == parser.ID {
-		// Table Name
-		EventNode.Push(node)
-	}
-
-	for node = tokenizer.Scan(); node.Type != ';'; node = tokenizer.Scan() {
-		switch node.Type {
-		case '(':
-			// pkTuple is a list of pk value Nodes
-			pkTuple = parsePkTuple(tokenizer, &autoincId)
-			EventNode.Push(pkTuple)
-		default:
-			panic(NewBinlogParseError(EVENT_ERROR, fmt.Sprintf("Error in parsing stream comment: illegal node type %v %v", node.Type, string(node.Value))))
-		}
-	}
-
-	return EventNode
-}
-
 // This builds UpdateResponse from the parsed tree, also handles a multi-row update.
-func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos proto.BinlogPosition) (response *UpdateResponse) {
+func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos proto.BinlogPosition, autoincId uint64) (response *UpdateResponse, newid uint64) {
 	if eventTree.Len() < 3 {
 		panic(NewBinlogParseError(EVENT_ERROR, fmt.Sprintf("Invalid comment structure, len of tree %v", eventTree.Len())))
 	}
@@ -669,35 +593,13 @@ func createUpdateResponse(eventTree *parser.Node, dmlType string, blpPos proto.B
 		if node.Len() != pkColLen {
 			panic(NewBinlogParseError(EVENT_ERROR, "Error in the stream comment, length of pk values doesn't match column names."))
 		}
-		rowPk = encodePkValues(node.Sub)
+		rowPk, _, err := encodePkValues(node.Sub, int64(autoincId))
+		if err != nil {
+			panic(err)
+		}
 		response.Data.PkValues = append(response.Data.PkValues, rowPk)
 	}
-	return response
-}
-
-// Interprets the parsed node and correctly encodes the primary key values.
-func encodePkValues(pkValues []*parser.Node) (rowPk []interface{}) {
-	for _, pkVal := range pkValues {
-		if pkVal.Type == parser.STRING {
-			rowPk = append(rowPk, string(pkVal.Value))
-		} else if pkVal.Type == parser.NUMBER {
-			// pkVal.Value is a byte array, convert this to string and use strconv to find
-			// the right numberic type.
-			valstr := string(pkVal.Value)
-			if ival, err := strconv.ParseInt(valstr, 0, 64); err == nil {
-				rowPk = append(rowPk, ival)
-			} else if uval, err := strconv.ParseUint(valstr, 0, 64); err == nil {
-				rowPk = append(rowPk, uval)
-			} else if fval, err := strconv.ParseFloat(valstr, 64); err == nil {
-				rowPk = append(rowPk, fval)
-			} else {
-				panic(NewBinlogParseError(CODE_ERROR, fmt.Sprintf("Error in encoding pkValues %v", err)))
-			}
-		} else {
-			panic(NewBinlogParseError(CODE_ERROR, "Error in encoding pkValues - Unsupported type"))
-		}
-	}
-	return rowPk
+	return response, autoincId
 }
 
 // This sends the stream to the client.
