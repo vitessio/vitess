@@ -90,7 +90,7 @@ class TestTabletManager(unittest.TestCase):
   def _test_sanity(self):
     # Start up a master mysql and vttablet
     utils.run_vtctl('CreateKeyspace -force test_keyspace')
-    utils.run_vtctl('CreateShard -force test_keyspace/0')
+    utils.run_vtctl('createshard -force test_keyspace/0')
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
     utils.run_vtctl('RebuildShardGraph test_keyspace/0')
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
@@ -481,7 +481,7 @@ class TestTabletManager(unittest.TestCase):
 
     # we expect this action with a short wait time to fail. this isn't the best
     # and has some potential for flakiness.
-    utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -wait-time 2s WaitForAction ' + action_path)
+    utils.run_vtctl('-wait-time 2s WaitForAction ' + action_path, expect_fail=True)
 
     # wait until the background sleep action is done, otherwise there will be
     # a leftover vtaction whose result may overwrite running actions
@@ -545,13 +545,13 @@ class TestTabletManager(unittest.TestCase):
 
     # Perform a reparent operation - the Validate part will try to ping
     # the master and fail somewhat quickly
-    stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias)
+    stdout, stderr = utils.run_vtctl('-wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, expect_fail=True)
     logging.debug("Failed ReparentShard output:\n" + stderr)
     if 'ValidateShard verification failed: timed out during validate' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
     # Should timeout and fail
-    stdout, stderr = utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias)
+    stdout, stderr = utils.run_vtctl('-wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias, expect_fail=True)
     logging.debug("Failed ScrapTablet output:\n" + stderr)
     if 'deadline exceeded' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
@@ -570,8 +570,8 @@ class TestTabletManager(unittest.TestCase):
     # Force the scrap action in zk even though tablet is not accessible.
     tablet_62344.scrap(force=True)
 
-    utils.run_fail(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr ChangeSlaveType -force %s idle' %
-                   tablet_62344.tablet_alias)
+    utils.run_vtctl('ChangeSlaveType -force %s idle' %
+                    tablet_62344.tablet_alias, expect_fail=True)
 
     # Remove pending locks (make this the force option to ReparentShard?)
     utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
@@ -777,6 +777,11 @@ class TestTabletManager(unittest.TestCase):
       tablet_62344.scrap(force=True)
       # we have some automated tools that do this too, so it's good to simulate
       utils.run(utils.vtroot+'/bin/zk rm -rf ' + tablet_62344.zk_tablet_path)
+
+    # try to pretend the wrong host is the master, should fail
+    stdout, stderr = utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_41983.tablet_alias, auto_log=True, expect_fail=True)
+    if not "new master is a slave" in stderr:
+      self.fail('Unexpected error message in output: %v' % stderr)
 
     # update zk with the new graph
     utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_62044.tablet_alias, auto_log=True)

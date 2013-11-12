@@ -15,10 +15,12 @@ package tabletmanager
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/netutil"
@@ -33,6 +35,13 @@ import (
 // agent will execute these in a new goroutine each time a change is
 // triggered. We won't run two in parallel.
 type TabletChangeCallback func(oldTablet, newTablet topo.Tablet)
+
+type tabletChangeItem struct {
+	oldTablet  topo.Tablet
+	newTablet  topo.Tablet
+	context    string
+	queuedTime time.Time
+}
 
 type ActionAgent struct {
 	ts                topo.Server
@@ -51,6 +60,7 @@ type ActionAgent struct {
 	// mutex is protecting the rest of the members
 	mutex           sync.Mutex
 	changeCallbacks []TabletChangeCallback
+	changeItems     chan tabletChangeItem
 	_tablet         *topo.TabletInfo
 }
 
@@ -62,6 +72,7 @@ func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfF
 		DbCredentialsFile: dbCredentialsFile,
 		done:              make(chan struct{}),
 		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
+		changeItems:       make(chan tabletChangeItem, 100),
 	}, nil
 }
 
@@ -75,11 +86,31 @@ func (agent *ActionAgent) runChangeCallbacks(oldTablet *topo.Tablet, context str
 	agent.mutex.Lock()
 	// Access directly since we have the lock.
 	newTablet := agent._tablet.Tablet
-	for _, f := range agent.changeCallbacks {
-		log.Infof("running tablet callback: %v %v", context, f)
-		go f(*oldTablet, *newTablet)
-	}
+	agent.changeItems <- tabletChangeItem{oldTablet: *oldTablet, newTablet: *newTablet, context: context, queuedTime: time.Now()}
+	log.Infof("Queued tablet callback: %v", context)
 	agent.mutex.Unlock()
+}
+
+func (agent *ActionAgent) executeCallbacksLoop() {
+	for {
+		select {
+		case changeItem := <-agent.changeItems:
+			var wg sync.WaitGroup
+			agent.mutex.Lock()
+			for _, f := range agent.changeCallbacks {
+				log.Infof("Running tablet callback after %v: %v %v", time.Now().Sub(changeItem.queuedTime), changeItem.context, f)
+				wg.Add(1)
+				go func(f TabletChangeCallback, oldTablet, newTablet topo.Tablet) {
+					defer wg.Done()
+					f(oldTablet, newTablet)
+				}(f, changeItem.oldTablet, changeItem.newTablet)
+			}
+			agent.mutex.Unlock()
+			wg.Wait()
+		case <-agent.done:
+			return
+		}
+	}
 }
 
 func (agent *ActionAgent) readTablet() error {
@@ -229,7 +260,7 @@ func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
 }
 
 // bindAddr: the address for the query service advertised by this agent
-func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
+func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 	var err error
 	if err = agent.readTablet(); err != nil {
 		return err
@@ -239,31 +270,40 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	bindAddr, err = netutil.ResolveAddr(bindAddr)
+	// find our hostname as fully qualified, and IP
+	hostname, err := netutil.FullyQualifiedHostname()
 	if err != nil {
 		return err
 	}
-	if secureAddr != "" {
-		secureAddr, err = netutil.ResolveAddr(secureAddr)
-		if err != nil {
-			return err
-		}
-	}
-	mysqlAddr, err = netutil.ResolveAddr(mysqlAddr)
+	ipAddrs, err := net.LookupHost(hostname)
 	if err != nil {
 		return err
 	}
-	mysqlIpAddr, err := netutil.ResolveIpAddr(mysqlAddr)
-	if err != nil {
-		return err
-	}
+	ipAddr := ipAddrs[0]
 
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(tablet *topo.Tablet) error {
-		tablet.Addr = bindAddr
-		tablet.SecureAddr = secureAddr
-		tablet.MysqlAddr = mysqlAddr
-		tablet.MysqlIpAddr = mysqlIpAddr
+		// the first four values are for backward compatibility
+		tablet.Addr = fmt.Sprintf("%v:%v", hostname, vtPort)
+		if vtsPort != 0 {
+			tablet.SecureAddr = fmt.Sprintf("%v:%v", hostname, vtsPort)
+		}
+		tablet.MysqlAddr = fmt.Sprintf("%v:%v", hostname, mysqlPort)
+		tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", ipAddr, mysqlPort)
+
+		// new values
+		tablet.Hostname = hostname
+		tablet.IPAddr = ipAddr
+		if tablet.Portmap == nil {
+			tablet.Portmap = make(map[string]int)
+		}
+		tablet.Portmap["mysql"] = mysqlPort
+		tablet.Portmap["vt"] = vtPort
+		if vtsPort != 0 {
+			tablet.Portmap["vts"] = vtsPort
+		} else {
+			delete(tablet.Portmap, "vts")
+		}
 		return nil
 	}
 	if err := agent.ts.UpdateTabletFields(agent.Tablet().GetAlias(), f); err != nil {
@@ -275,10 +315,6 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 		return err
 	}
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("agent.Start: cannot get hostname: %v", err)
-	}
 	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
 
 	if err := agent.ts.CreateTabletPidNode(agent.tabletAlias, data, agent.done); err != nil {
@@ -297,6 +333,7 @@ func (agent *ActionAgent) Start(bindAddr, secureAddr, mysqlAddr string) error {
 	agent.runChangeCallbacks(oldTablet, "Start")
 
 	go agent.actionEventLoop()
+	go agent.executeCallbacksLoop()
 	return nil
 }
 

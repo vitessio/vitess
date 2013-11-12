@@ -285,7 +285,8 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 		}
 		*err = terr
 		terr.RecordStats()
-		if terr.ErrorType == RETRY || terr.SqlError == mysql.DUP_ENTRY { // suppress these errors in logs
+		// suppress these errors in logs
+		if terr.ErrorType == RETRY || terr.ErrorType == TX_POOL_FULL || terr.SqlError == mysql.DUP_ENTRY {
 			return
 		}
 		log.Errorf("%s: %v", terr.Message, query)

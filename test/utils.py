@@ -380,7 +380,7 @@ def vtgate_kill(sp):
   sp.wait()
 
 # vtctl helpers
-def run_vtctl(clargs, log_level='', auto_log=False, **kwargs):
+def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
   prog_compile(['vtctl'])
   args = [vtroot+'/bin/vtctl', '-log_dir', tmp_root]
 
@@ -400,6 +400,8 @@ def run_vtctl(clargs, log_level='', auto_log=False, **kwargs):
   else:
     cmd = args + clargs
 
+  if expect_fail:
+    return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
 
 # vtclient2 helpers

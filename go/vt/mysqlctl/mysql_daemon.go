@@ -18,12 +18,16 @@ type MysqlDaemon interface {
 // FakeMysqlDaemon implements MysqlDaemon and allows the user to fake
 // everything.
 type FakeMysqlDaemon struct {
-	// will be returned by GetMasterAddr(). Set to "" to return an error.
+	// will be returned by GetMasterAddr(). Set to "" to return
+	// ErrNotSlave, or to "ERROR" to return an error.
 	MasterAddr string
 }
 
 func (fmd *FakeMysqlDaemon) GetMasterAddr() (string, error) {
 	if fmd.MasterAddr == "" {
+		return "", ErrNotSlave
+	}
+	if fmd.MasterAddr == "ERROR" {
 		return "", fmt.Errorf("FakeMysqlDaemon.GetMasterAddr returns an error")
 	}
 	return fmd.MasterAddr, nil

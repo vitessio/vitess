@@ -16,6 +16,12 @@
       "master"
     ]
   },
+  "/zk/testing": {
+  },
+  "/zk/testing/vt": {
+  },
+  "/zk/testing/vt/ns": {
+  },
   "/zk/testing/vt/ns/test_keyspace/0/master": {
     "Entries": [
       {

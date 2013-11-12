@@ -184,7 +184,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = slaveWasPromoted(ta.ts, ta.tabletAlias)
+		err = slaveWasPromoted(ta.ts, ta.mysqlDaemon, ta.tabletAlias)
 	case TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
@@ -314,7 +314,15 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
 }
 
-func slaveWasPromoted(ts topo.Server, tabletAlias topo.TabletAlias) error {
+func slaveWasPromoted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias) error {
+	// We first check we don't have a master any more.
+	// If we do, it probably means we're not *the* master, and something
+	// is really wrong.
+	masterAddr, err := mysqlDaemon.GetMasterAddr()
+	if err != mysqlctl.ErrNotSlave {
+		return fmt.Errorf("new master is a slave: %v %v", masterAddr, err)
+	}
+
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -476,18 +484,7 @@ func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 		return err
 	}
 
-	// Remove tablet from the replication graph.
-	if err := topo.DeleteTabletReplicationData(ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
-		// FIXME(alainjobart) once we don't have replication paths
-		// any more, remove this extra check
-		if err == topo.ErrNotEmpty {
-			log.Infof("Failed to delete master replication path, will be caught later")
-		} else {
-			return err
-		}
-	}
-
-	// now we can check the reparent actually worked
+	// check the reparent actually worked
 	masterAddr, err := mysqlDaemon.GetMasterAddr()
 	if err != nil {
 		return err
@@ -512,7 +509,7 @@ func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 		return err
 	}
 
-	// Insert the new tablet location in the replication graph now that
+	// Update the new tablet location in the replication graph now that
 	// we've updated the tablet.
 	err = topo.CreateTabletReplicationData(ts, tablet.Tablet)
 	if err != nil && err != topo.ErrNodeExists {

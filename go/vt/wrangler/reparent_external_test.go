@@ -70,8 +70,9 @@ func startFakeTabletActionLoop(t *testing.T, wr *Wrangler, tabletAlias topo.Tabl
 func TestShardExternallyReparented(t *testing.T) {
 	ts := zktopo.NewTestServer(t, []string{"cell1", "cell2"})
 	wr := New(ts, time.Minute, time.Second)
+	wr.UseRPCs = false
 
-	// Create am old master, a new master, two good slaves, one bad slave
+	// Create an old master, a new master, two good slaves, one bad slave
 	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
 	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
 	goodSlaveAlias1 := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
@@ -103,9 +104,13 @@ func TestShardExternallyReparented(t *testing.T) {
 	// master is still good to go.
 	done := make(chan struct{}, 1)
 
-	// On the elected master, we will only respond to
-	// TABLET_ACTION_SLAVE_WAS_PROMOTED, no need for a MysqlDaemon
-	startFakeTabletActionLoop(t, wr, newMasterAlias, nil, done)
+	// On the elected master, we will respond to
+	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon
+	// that returns no master
+	newMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "",
+	}
+	startFakeTabletActionLoop(t, wr, newMasterAlias, newMasterMysqlDaemon, done)
 
 	// On the old master, we will only respond to
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
@@ -132,8 +137,30 @@ func TestShardExternallyReparented(t *testing.T) {
 	}
 	startFakeTabletActionLoop(t, wr, badSlaveAlias, badSlaveMysqlDaemon, done)
 
+	// This tests a bad case; the new designated master is a slave!!
+	t.Logf("ShardExternallyReparented(slave) expecting an error")
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", goodSlaveAlias1, false, 60); err == nil {
+		t.Fatalf("ShardExternallyReparented(slave) should have failed")
+	} else {
+		if !strings.Contains(err.Error(), "new master is a slave") {
+			t.Fatalf("ShardExternallyReparented(slave) should have failed with an error that contains 'new master is a slave' but got: %v", err)
+		}
+	}
+
+	// This tests the good case, where everything works as planned
+	t.Logf("ShardExternallyReparented(new master) expecting success")
 	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias, false, 60); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
 	close(done)
+
+	// Now double-check the serving graph is good.
+	// Should only have one good replica left.
+	addrs, err := ts.GetEndPoints("cell1", "test_keyspace", "0", topo.TYPE_REPLICA)
+	if err != nil {
+		t.Fatalf("GetEndPoints failed at the end: %v", err)
+	}
+	if len(addrs.Entries) != 1 {
+		t.Fatalf("GetEndPoints has too many entries: %v", addrs)
+	}
 }

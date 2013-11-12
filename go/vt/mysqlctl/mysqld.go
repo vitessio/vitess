@@ -377,6 +377,10 @@ func deleteTopDir(dir string) (removalErr error) {
 	return
 }
 
+func (mysqld *Mysqld) Port() int {
+	return mysqld.config.MysqlPort
+}
+
 func (mysqld *Mysqld) Addr() string {
 	hostname := netutil.FullyQualifiedHostnameOrPanic()
 	return fmt.Sprintf("%v:%v", hostname, mysqld.config.MysqlPort)

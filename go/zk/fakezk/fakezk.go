@@ -70,8 +70,16 @@ func NewConnFromFile(filename string) zk.Conn {
 			panic(fmt.Errorf("NewConnFromFile failed to json.Marshal value %v: %v", k, err))
 		}
 
+		// CreateRecursive will work for a leaf node where the parent
+		// doesn't exist, but not for a node in the middle of a tree
+		// that already exists. So have to use 'Set' as a backup.
 		if _, err := zk.CreateRecursive(result, k, string(jv), 0, nil); err != nil {
-			panic(fmt.Errorf("NewConnFromFile failed to zk.CreateRecursive value %v: %v", k, err))
+			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
+				_, err = result.Set(k, string(jv), -1)
+			}
+			if err != nil {
+				panic(fmt.Errorf("NewConnFromFile failed to zk.CreateRecursive value %v: %v", k, err))
+			}
 		}
 	}
 	return result
@@ -231,7 +239,9 @@ func (conn *zconn) Create(zkPath, value string, flags int, aclv []zookeeper.ACL)
 	}
 	for _, watch := range node.childrenWatches {
 		watch <- childrenEvent
+		close(watch)
 	}
+	node.childrenWatches = nil
 
 	node.cversion++
 

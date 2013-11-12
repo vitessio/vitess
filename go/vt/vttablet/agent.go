@@ -9,7 +9,6 @@ package vttablet
 
 import (
 	"encoding/json"
-	"fmt"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
@@ -63,13 +62,6 @@ func InitAgent(
 	binlogPlayerMap = NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
 	RegisterBinlogPlayerMap(binlogPlayerMap)
 
-	// Compute the bind addresses
-	bindAddr := fmt.Sprintf(":%v", port)
-	secureAddr := ""
-	if securePort != 0 {
-		secureAddr = fmt.Sprintf(":%v", securePort)
-	}
-
 	statsType := stats.NewString("TabletType")
 	statsKeyspace := stats.NewString("TabletKeyspace")
 	statsShard := stats.NewString("TabletShard")
@@ -83,7 +75,19 @@ func InitAgent(
 		return err
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
-		if newTablet.IsServingType() {
+		allowQuery := true
+		var shardInfo *topo.ShardInfo
+		if newTablet.Type == topo.TYPE_MASTER {
+			// read the shard to get SourceShards
+			shardInfo, err = topoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
+			if err != nil {
+				log.Errorf("Cannot read shard for this tablet %v: %v", newTablet.GetAlias(), err)
+			} else {
+				allowQuery = len(shardInfo.SourceShards) == 0
+			}
+		}
+
+		if newTablet.IsServingType() && allowQuery {
 			if dbcfgs.App.DbName == "" {
 				dbcfgs.App.DbName = newTablet.DbName()
 			}
@@ -136,13 +140,13 @@ func InitAgent(
 
 		// See if we need to start or stop any binlog player
 		if newTablet.Type == topo.TYPE_MASTER {
-			binlogPlayerMap.RefreshMap(newTablet)
+			binlogPlayerMap.RefreshMap(newTablet, shardInfo)
 		} else {
 			binlogPlayerMap.StopAllPlayers()
 		}
 	})
 
-	if err := agent.Start(bindAddr, secureAddr, mysqld.Addr()); err != nil {
+	if err := agent.Start(mysqld.Port(), port, securePort); err != nil {
 		return err
 	}
 

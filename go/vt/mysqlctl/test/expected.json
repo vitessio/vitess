@@ -1,82 +1,82 @@
 [
 {
 "Statements": [
-"SET TIMESTAMP=1382160043",
-"create database sougou"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382160043"},
+{"Category": 5, "Sql": "create database sougou"}
 ],
 "Position": {"GroupId": 5, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382160061",
-"create table a(id int, data varchar(128))"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382160061"},
+{"Category": 5, "Sql": "create table a(id int, data varchar(128))"}
 ],
 "Position": {"GroupId": 6, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382160107",
-"insert into a values(1, 'aa')"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382160107"},
+{"Category": 4, "Sql": "insert into a values(1, 'aa')"}
 ],
 "Position": {"GroupId": 7, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382231680",
-"insert into a values(2, 'bb')",
-"SET TIMESTAMP=1382231687",
-"insert into a values(3, 'cc')"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382231680"},
+{"Category": 4, "Sql": "insert into a values(2, 'bb')"},
+{"Category": 6, "Sql": "SET TIMESTAMP=1382231687"},
+{"Category": 4, "Sql": "insert into a values(3, 'cc')"}
 ],
 "Position": {"GroupId": 8, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382231687",
-"insert into a values(4, 'dd')"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382231687"},
+{"Category": 4, "Sql": "insert into a values(4, 'dd')"}
 ],
 "Position": {"GroupId": 9, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382231687",
-"insert into a values(5, 'ee')"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382231687"},
+{"Category": 4, "Sql": "insert into a values(5, 'ee')"}
 ],
 "Position": {"GroupId": 10, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382232554",
-"insert into a\nvalues(6, 'ff')"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382232554"},
+{"Category": 4, "Sql": "insert into a\nvalues(6, 'ff')"}
 ],
 "Position": {"GroupId": 11, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382251656",
-"insert into a values(7, 'gg')"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382251656"},
+{"Category": 4, "Sql": "insert into a values(7, 'gg')"}
 ],
 "Position": {"GroupId": 12, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382330065",
-"alter table a add constraint primary key(id)"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382330065"},
+{"Category": 5, "Sql": "alter table a add constraint primary key(id)"}
 ],
 "Position": {"GroupId": 13, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382330121",
-"UPDATE a set data='ggg' where id = 7"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382330121"},
+{"Category": 4, "Sql": "UPDATE a set data='ggg' where id = 7"}
 ],
 "Position": {"GroupId": 14, "ServerId": 41983}
 },
 {
 "Statements": [
-"SET TIMESTAMP=1382330225",
-"insert into a values(8, 'hh')",
-"SET TIMESTAMP=1382330252",
-"insert into a values(9, 'ii')"
+{"Category": 6, "Sql": "SET TIMESTAMP=1382330225"},
+{"Category": 4, "Sql": "insert into a values(8, 'hh')"},
+{"Category": 6, "Sql": "SET TIMESTAMP=1382330252"},
+{"Category": 4, "Sql": "insert into a values(9, 'ii')"}
 ],
 "Position": {"GroupId": 15, "ServerId": 41983}
 }

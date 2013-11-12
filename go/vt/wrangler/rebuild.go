@@ -129,10 +129,16 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 	for _, tablet := range tablets {
 		// only look at tablets in the cells we want to rebuild
-		// we also include masters from everywhere, so we can
-		// write the right aliases
 		if !inCellList(tablet.Tablet.Cell, cells) {
 			continue
+		}
+
+		// if the tablet doesn't have the right master, ignore it
+		if tablet.Type != topo.TYPE_MASTER {
+			if tablet.Parent != shardInfo.MasterAlias {
+				log.Warningf("Tablet %v doesn't have the right master (it has %v expecting %v), skipping it", tablet.GetAlias(), tablet.Parent, shardInfo.MasterAlias)
+				continue
+			}
 		}
 
 		// this is {cell,keyspace,shard}
