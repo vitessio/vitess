@@ -61,6 +61,10 @@ func (ex ZkExplorer) GetTabletPath(alias topo.TabletAlias) string {
 	return path.Join("/zk", alias.Cell, "vt/tablets", alias.TabletUidStr())
 }
 
+func (ex ZkExplorer) GetReplicationSlaves(cell, keyspace, shard string) string {
+	return path.Join("/zk", cell, "vt/replication", keyspace, shard)
+}
+
 func (ex ZkExplorer) HandlePath(actionRepo *ActionRepository, zkPath string) interface{} {
 	result := NewZkResult(zkPath)
 
