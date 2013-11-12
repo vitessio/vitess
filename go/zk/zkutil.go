@@ -403,7 +403,7 @@ func CreatePidNode(zconn Conn, zkPath string, contents string, done chan struct{
 			if err != nil {
 				if zookeeper.IsError(err, zookeeper.ZNONODE) {
 					_, err = zconn.Create(zkPath, contents, zookeeper.EPHEMERAL, zookeeper.WorldACL(zookeeper.PERM_ALL))
-					if err == nil {
+					if err != nil {
 						log.Warningf("failed recreating pid node: %v: %v", zkPath, err)
 					} else {
 						log.Infof("recreated pid node: %v", zkPath)
