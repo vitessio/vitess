@@ -18,8 +18,8 @@ type TopoReader struct {
 func NewTopoReader(ts topo.Server) *TopoReader {
 	return &TopoReader{
 		ts:         ts,
-		queryCount: stats.NewCounters("VtTopoQueryCount"),
-		errorCount: stats.NewCounters("VtTopoErrorCount"),
+		queryCount: stats.NewCounters("TopoReaderRpcQueryCount"),
+		errorCount: stats.NewCounters("TopoReaderRpcErrorCount"),
 	}
 }
 
