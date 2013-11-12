@@ -60,14 +60,14 @@ func NewEventStreamer(dbname, binlogPrefix, file string, pos int64, sendEvent se
 }
 
 func (evs *EventStreamer) Stream() error {
-	return evs.bls.Stream(evs.file, evs.pos, evs.TransactionToEvent)
+	return evs.bls.Stream(evs.file, evs.pos, evs.transactionToEvent)
 }
 
 func (evs *EventStreamer) Stop() {
 	evs.bls.Stop()
 }
 
-func (evs *EventStreamer) TransactionToEvent(trans *BinlogTransaction) error {
+func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 	var err error
 	var timestamp int64
 	var insertid int64
@@ -76,11 +76,11 @@ func (evs *EventStreamer) TransactionToEvent(trans *BinlogTransaction) error {
 		case BL_SET:
 			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_TIMESTAMP) {
 				if timestamp, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_TIMESTAMP):]), 10, 64); err != nil {
-					return fmt.Errorf("error parsing %s: %v", stmt.Sql, err)
+					return fmt.Errorf("%v: %s", err, stmt.Sql)
 				}
 			} else if bytes.HasPrefix(stmt.Sql, BINLOG_SET_INSERT) {
 				if insertid, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_INSERT):]), 10, 64); err != nil {
-					return fmt.Errorf("error parsing %s: %v", stmt.Sql, err)
+					return fmt.Errorf("%v: %s", err, stmt.Sql)
 				}
 			} else {
 				return fmt.Errorf("unrecognized: %s", stmt.Sql)
@@ -89,8 +89,9 @@ func (evs *EventStreamer) TransactionToEvent(trans *BinlogTransaction) error {
 			var dmlEvent *DMLEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
-				return fmt.Errorf("error parsing %s: %v", stmt.Sql, err)
+				return fmt.Errorf("%v: %s", err, stmt.Sql)
 			}
+			dmlEvent.Timestamp = timestamp
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
@@ -126,7 +127,7 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *D
 	pkColNames := make([]string, 0, pkColNamesNode.Len())
 	for _, pkCol := range pkColNamesNode.Sub {
 		if pkCol.Type != sqlparser.ID {
-			return nil, insertid, fmt.Errorf("expecting columnt name: %v", string(pkCol.Value))
+			return nil, insertid, fmt.Errorf("expecting column name: %v", string(pkCol.Value))
 		}
 		pkColNames = append(pkColNames, string(pkCol.Value))
 	}
@@ -141,7 +142,7 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *D
 	for _, node := range eventTree.Sub[2:] {
 		rowPk = rowPk[:0]
 		if node.Len() != pkColLen {
-			return nil, insertid, fmt.Errorf("lenght mismatch in values")
+			return nil, insertid, fmt.Errorf("length mismatch in values")
 		}
 		rowPk, insertid, err = encodePkValues(node.Sub, insertid)
 		if err != nil {
@@ -168,7 +169,7 @@ func parseStreamComment(dmlComment string) (EventNode *sqlparser.Node, err error
 
 	node := tokenizer.Scan()
 	if node.Type != sqlparser.ID {
-		return nil, fmt.Errorf("expecting table name")
+		return nil, fmt.Errorf("expecting table name in stream comment")
 	}
 	EventNode.Push(node)
 
@@ -200,7 +201,7 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err 
 			// handle negative numbers
 			t2 := tokenizer.Scan()
 			if t2.Type != sqlparser.NUMBER {
-				return nil, fmt.Errorf("expecing number after -")
+				return nil, fmt.Errorf("expecing number after '-'")
 			}
 			t2.Value = append(tempNode.Value, t2.Value...)
 			pkTuple.Push(t2)
@@ -211,12 +212,12 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err 
 			decoded := make([]byte, base64.StdEncoding.DecodedLen(len(b)))
 			numDecoded, err := base64.StdEncoding.Decode(decoded, b)
 			if err != nil {
-				return nil, fmt.Errorf("could not decode string: %v", err)
+				return nil, err
 			}
 			tempNode.Value = decoded[:numDecoded]
 			pkTuple.Push(tempNode)
 		default:
-			return nil, fmt.Errorf("unexpected token: %v, %v", tempNode.Type, string(tempNode.Value))
+			return nil, fmt.Errorf("unexpected token: '%v'", string(tempNode.Value))
 		}
 	}
 	return pkTuple, nil
@@ -235,16 +236,14 @@ func encodePkValues(pkValues []*sqlparser.Node, insertid int64) (rowPk []interfa
 				rowPk = append(rowPk, ival)
 			} else if uval, err := strconv.ParseUint(valstr, 0, 64); err == nil {
 				rowPk = append(rowPk, uval)
-			} else if fval, err := strconv.ParseFloat(valstr, 64); err == nil {
-				rowPk = append(rowPk, fval)
 			} else {
-				return nil, insertid, fmt.Errorf("parsing error: %v", err)
+				return nil, insertid, err
 			}
 		} else if pkVal.Type == sqlparser.NULL {
 			rowPk = append(rowPk, insertid)
 			insertid++
 		} else {
-			return nil, insertid, fmt.Errorf("unexpected token: %v, %v", pkVal.Type, string(pkVal.Value))
+			return nil, insertid, fmt.Errorf("unexpected token: '%v'", string(pkVal.Value))
 		}
 	}
 	return rowPk, insertid, nil
