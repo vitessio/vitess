@@ -12,7 +12,7 @@ This is an incomplete list of Vitess features.
 ### Clients:
 
 * A Python DBAPI 2.0 compliant client interface.
-* A go database/sql compliant client interface.
+* A go client interface.
 * Simple [BSON](http://http://bsonspec.org/) based protocol with SASL
   authentication.
 
@@ -24,7 +24,7 @@ requests.
 * Connection pooling.
 * SQL parser: Although very close, the vtocc SQL parser is not SQL-92
   compliant. It has left out constructs that are deemed uncommon or
-  OLTP-unfriendly. It should, however, allow most queries a used by a
+  OLTP-unfriendly. It should, however, allow most queries used by a
   well-behaved web application.
 * Query rewrite and sanitation (adding limits, avoiding non-deterministic updates).
 * Query consolidation: reuse the results of an in-flight query to any
@@ -33,8 +33,7 @@ requests.
 * Row cache: the mysql buffer cache is optimized for range scans over
   indices and tables, particularly when data is densely
   packed. Unfortunately, it’s not good for random access tables. The
-  rowcache allows you to designate certain tables for random
-  access. For such cases, it will maintain row based caches (using
+  rowcache will instead maintain row based caches (using
   [memcached](http://memcached.org/) as its backend) and keep them
   consistent by fielding all DMLs that could potentially affect them.
 * DML annotation: Every DML is rewritten to include a comment field at
@@ -43,8 +42,6 @@ requests.
 * Integrated query killer for queries that take too long to return
   data.
 * Discard idle backend connections to avoid offline db errors.
-* A consistent row cache and the ability to rewrite queries to
-  maximize utilization of the row cache.
 * Transaction management: Ability to limit the number of concurrent
   transactions and manage deadlines.
 	  
