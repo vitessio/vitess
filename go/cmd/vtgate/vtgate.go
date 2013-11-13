@@ -35,10 +35,12 @@ func main() {
 	ts := topo.GetServer()
 	defer topo.CloseServers()
 
-	topoReader = NewTopoReader(ts)
+	rts := vtgate.NewResilientSrvTopoServer(ts)
+
+	topoReader = NewTopoReader(rts)
 	topo.RegisterTopoReader(topoReader)
 
-	blm := vtgate.NewBalancerMap(ts, *cell, *portName)
+	blm := vtgate.NewBalancerMap(rts, *cell, *portName)
 	vtgate.Init(blm, *tabletProtocol, *retryDelay, *retryCount)
 	servenv.Run(*port)
 }

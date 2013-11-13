@@ -12,15 +12,10 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// SubsetTopoServ is a subset of topo.Server
-type SubsetTopoServ interface {
-	GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error)
-}
-
 // BalancerMap builds and maintains a map from cell.keyspace.dbtype.shard to
 // Balancers.
 type BalancerMap struct {
-	Toposerv  SubsetTopoServ
+	Toposerv  SrvTopoServer
 	Cell      string
 	PortName  string
 	mu        sync.Mutex
@@ -30,7 +25,7 @@ type BalancerMap struct {
 // NewBalancerMap builds a new BalancerMap. Each BalancerMap is dedicated to a
 // cell. serv is the TopoServ used to fetch the list of tablets when needed.
 // The Balancers will be built using the namedPort from each tablet info.
-func NewBalancerMap(serv SubsetTopoServ, cell, namedPort string) *BalancerMap {
+func NewBalancerMap(serv SrvTopoServer, cell, namedPort string) *BalancerMap {
 	return &BalancerMap{
 		Toposerv:  serv,
 		Cell:      cell,

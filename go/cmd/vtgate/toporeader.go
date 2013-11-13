@@ -4,18 +4,19 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate"
 )
 
 type TopoReader struct {
 	// the server to get data from
-	ts topo.Server
+	ts vtgate.SrvTopoServer
 
 	// stats
 	queryCount *stats.Counters
 	errorCount *stats.Counters
 }
 
-func NewTopoReader(ts topo.Server) *TopoReader {
+func NewTopoReader(ts vtgate.SrvTopoServer) *TopoReader {
 	return &TopoReader{
 		ts:         ts,
 		queryCount: stats.NewCounters("TopoReaderRpcQueryCount"),
