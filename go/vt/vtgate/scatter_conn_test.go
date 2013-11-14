@@ -18,7 +18,7 @@ import (
 func TestScatterConnExecute(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+		stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 		return stc.Execute("query", nil, "", shards)
 	})
 }
@@ -26,7 +26,7 @@ func TestScatterConnExecute(t *testing.T) {
 func TestScatterConnExecuteBatch(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+		stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		qrs, err := stc.ExecuteBatch(queries, "", shards)
 		if err != nil {
@@ -39,7 +39,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 func TestScatterConnStreamExecute(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+		stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 		qr := new(mproto.QueryResult)
 		err := stc.StreamExecute("query", nil, "", shards, func(r interface{}) error {
 			appendResult(qr, r.(*mproto.QueryResult))
@@ -136,7 +136,7 @@ func TestScatterConnExecuteTxTimeout(t *testing.T) {
 	testConns["0:1"] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns["1:1"] = sbc1
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 
 	for i := 0; i < 2; i++ {
 		stc.Begin()
@@ -177,7 +177,7 @@ func TestScatterConnExecuteTxChange(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 	stc.Begin()
 	stc.Execute("query", nil, "", []string{"0"})
 	sbc.Rollback()
@@ -197,7 +197,7 @@ func TestScatterConnExecuteUnexpectedTx(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 	// This call is to make sure shard_conn points to a real connection.
 	stc.Execute("query", nil, "", []string{"0"})
 
@@ -215,7 +215,7 @@ func TestScatterConnExecuteUnexpectedTx(t *testing.T) {
 func TestScatterConnStreamExecuteTx(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 	stc.Begin()
 	err := stc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
 		return nil
@@ -232,7 +232,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 	err := stc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
 		return fmt.Errorf("send error")
 	})
@@ -248,7 +248,7 @@ func TestScatterConnBeginFail(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 	stc.Begin()
 	err := stc.Begin()
 	// Disallow Begin if we're already in a transaction.
@@ -265,7 +265,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	testConns["0:1"] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns["1:1"] = sbc1
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 
 	stc.Begin()
 	// Sequence the executes to ensure commit order
@@ -294,7 +294,7 @@ func TestScatterConnBeginRetry(t *testing.T) {
 	testConns["0:1"] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns["1:1"] = sbc1
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 
 	stc.Begin()
 	stc.Execute("query1", nil, "", []string{"0", "1"})
@@ -327,7 +327,7 @@ func TestScatterConnClose(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	stc := NewScatterConn(blm, "sandbox", "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
 	stc.Execute("query1", nil, "", []string{"0"})
 	stc.Close()
 	if sbc.CloseCount != 1 {

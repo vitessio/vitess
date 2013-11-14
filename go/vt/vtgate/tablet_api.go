@@ -5,6 +5,8 @@
 package vtgate
 
 import (
+	"flag"
+
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -16,6 +18,10 @@ const (
 	ERR_FATAL
 	ERR_TX_POOL_FULL
 	ERR_NOT_IN_TX
+)
+
+var (
+	tabletProtocol = flag.String("tablet-protocol", "bson", "how to talk to the vttablets")
 )
 
 // ServerError represents an error that was returned from
@@ -66,6 +72,8 @@ type ErrFunc func() error
 
 var dialers = make(map[string]TabletDialer)
 
+// RegisterDialer is meant to be used by TabletDialer implementations
+// to self register.
 func RegisterDialer(name string, dialer TabletDialer) {
 	if _, ok := dialers[name]; ok {
 		log.Fatalf("Dialer %s already exists", name)
@@ -73,6 +81,7 @@ func RegisterDialer(name string, dialer TabletDialer) {
 	dialers[name] = dialer
 }
 
-func GetDialer(name string) TabletDialer {
-	return dialers[name]
+// GetDialer returns the dialer to use, described by the command line flag
+func GetDialer() TabletDialer {
+	return dialers[*tabletProtocol]
 }

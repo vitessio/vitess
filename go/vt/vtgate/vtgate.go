@@ -24,23 +24,21 @@ var RpcVTGate *VTGate
 // VTGate is the rpc interface to vtgate. Only one instance
 // can be created.
 type VTGate struct {
-	balancerMap    *BalancerMap
-	tabletProtocol string
-	connections    *pools.Numbered
-	retryDelay     time.Duration
-	retryCount     int
+	balancerMap *BalancerMap
+	connections *pools.Numbered
+	retryDelay  time.Duration
+	retryCount  int
 }
 
-func Init(blm *BalancerMap, tabletProtocol string, retryDelay time.Duration, retryCount int) {
+func Init(blm *BalancerMap, retryDelay time.Duration, retryCount int) {
 	if RpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
 	}
 	RpcVTGate = &VTGate{
-		balancerMap:    blm,
-		tabletProtocol: tabletProtocol,
-		connections:    pools.NewNumbered(),
-		retryDelay:     retryDelay,
-		retryCount:     retryCount,
+		balancerMap: blm,
+		connections: pools.NewNumbered(),
+		retryDelay:  retryDelay,
+		retryCount:  retryCount,
 	}
 	proto.RegisterAuthenticated(RpcVTGate)
 }
@@ -48,7 +46,7 @@ func Init(blm *BalancerMap, tabletProtocol string, retryDelay time.Duration, ret
 // GetSessionId is the first request sent by the client to begin a session. The returned
 // id should be used for all subsequent communications.
 func (vtg *VTGate) GetSessionId(sessionParams *proto.SessionParams, session *proto.Session) error {
-	scatterConn := NewScatterConn(vtg.balancerMap, vtg.tabletProtocol, sessionParams.TabletType, vtg.retryDelay, vtg.retryCount)
+	scatterConn := NewScatterConn(vtg.balancerMap, sessionParams.TabletType, vtg.retryDelay, vtg.retryCount)
 	session.SessionId = scatterConn.Id
 	vtg.connections.Register(scatterConn.Id, scatterConn)
 	return nil

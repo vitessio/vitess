@@ -23,14 +23,13 @@ var idGen sync2.AtomicInt64
 // ScatterConn is used for executing queries across
 // multiple ShardConn connections.
 type ScatterConn struct {
-	mu             sync.Mutex
-	Id             int64
-	balancerMap    *BalancerMap
-	tabletProtocol string
-	tabletType     topo.TabletType
-	retryDelay     time.Duration
-	retryCount     int
-	shardConns     map[string]*ShardConn
+	mu          sync.Mutex
+	Id          int64
+	balancerMap *BalancerMap
+	tabletType  topo.TabletType
+	retryDelay  time.Duration
+	retryCount  int
+	shardConns  map[string]*ShardConn
 
 	// Transaction tracking vars
 	transactionId  int64
@@ -41,15 +40,14 @@ type ScatterConn struct {
 
 // NewScatterConn creates a new ScatterConn. All input parameters are passed through
 // for creating the appropriate ShardConn.
-func NewScatterConn(blm *BalancerMap, tabletProtocol string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ScatterConn {
+func NewScatterConn(blm *BalancerMap, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ScatterConn {
 	return &ScatterConn{
-		Id:             idGen.Add(1),
-		balancerMap:    blm,
-		tabletProtocol: tabletProtocol,
-		tabletType:     tabletType,
-		retryDelay:     retryDelay,
-		retryCount:     retryCount,
-		shardConns:     make(map[string]*ShardConn),
+		Id:          idGen.Add(1),
+		balancerMap: blm,
+		tabletType:  tabletType,
+		retryDelay:  retryDelay,
+		retryCount:  retryCount,
+		shardConns:  make(map[string]*ShardConn),
 	}
 }
 
@@ -283,7 +281,7 @@ func (stc *ScatterConn) getConnection(keyspace, shard string) (*ShardConn, error
 	key := fmt.Sprintf("%s.%s.%s", keyspace, stc.tabletType, shard)
 	sdc, ok := stc.shardConns[key]
 	if !ok {
-		sdc = NewShardConn(stc.balancerMap, stc.tabletProtocol, keyspace, shard, stc.tabletType, stc.retryDelay, stc.retryCount)
+		sdc = NewShardConn(stc.balancerMap, keyspace, shard, stc.tabletType, stc.retryDelay, stc.retryCount)
 		stc.shardConns[key] = sdc
 	}
 	if stc.transactionId != 0 {

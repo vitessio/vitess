@@ -17,29 +17,27 @@ import (
 // of vttablets that belong to the same shard. ShardConn should
 // not be concurrently used across goroutines.
 type ShardConn struct {
-	tabletProtocol string
-	keyspace       string
-	shard          string
-	tabletType     topo.TabletType
-	retryDelay     time.Duration
-	retryCount     int
-	balancer       *Balancer
-	address        string
-	conn           TabletConn
+	keyspace   string
+	shard      string
+	tabletType topo.TabletType
+	retryDelay time.Duration
+	retryCount int
+	balancer   *Balancer
+	address    string
+	conn       TabletConn
 }
 
 // NewShardConn creates a new ShardConn. It creates or reuses a Balancer from
 // the supplied BalancerMap. retryDelay is as specified by Balancer. retryCount
 // is the max number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(blm *BalancerMap, tabletProtocol, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
+func NewShardConn(blm *BalancerMap, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
 	return &ShardConn{
-		tabletProtocol: tabletProtocol,
-		keyspace:       keyspace,
-		shard:          shard,
-		tabletType:     tabletType,
-		retryDelay:     retryDelay,
-		retryCount:     retryCount,
-		balancer:       blm.Balancer(keyspace, shard, tabletType, retryDelay),
+		keyspace:   keyspace,
+		shard:      shard,
+		tabletType: tabletType,
+		retryDelay: retryDelay,
+		retryCount: retryCount,
+		balancer:   blm.Balancer(keyspace, shard, tabletType, retryDelay),
 	}
 }
 
@@ -82,7 +80,7 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr
 				return nil, sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue
@@ -109,7 +107,7 @@ func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery) (qrs *tproto.Que
 				return nil, sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue
@@ -138,7 +136,7 @@ func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{
 				goto return_error
 			}
 			var conn TabletConn
-			conn, err = GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue
@@ -173,7 +171,7 @@ func (sdc *ShardConn) Begin() (err error) {
 				return sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer(sdc.tabletProtocol)(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue

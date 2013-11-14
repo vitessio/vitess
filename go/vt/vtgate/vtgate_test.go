@@ -5,6 +5,7 @@
 package vtgate
 
 import (
+	"flag"
 	"runtime"
 	"strings"
 	"testing"
@@ -20,18 +21,18 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	Init(NewBalancerMap(new(sandboxTopo), "aa", "vt"), "sandbox", 1*time.Second, 10)
+	flag.Set("tablet-protocol", "sandbox")
+	Init(NewBalancerMap(new(sandboxTopo), "aa", "vt"), 1*time.Second, 10)
 }
 
 // resetVTGate resets the internal state of RpcVTGate.
 func resetVTGate() (sess proto.Session) {
 	resetSandbox()
 	*RpcVTGate = VTGate{
-		balancerMap:    NewBalancerMap(new(sandboxTopo), "aa", "vt"),
-		tabletProtocol: "sandbox",
-		connections:    pools.NewNumbered(),
-		retryDelay:     1 * time.Second,
-		retryCount:     10,
+		balancerMap: NewBalancerMap(new(sandboxTopo), "aa", "vt"),
+		connections: pools.NewNumbered(),
+		retryDelay:  1 * time.Second,
+		retryCount:  10,
 	}
 	RpcVTGate.GetSessionId(&proto.SessionParams{TabletType: "master"}, &sess)
 	return

@@ -15,12 +15,11 @@ import (
 )
 
 var (
-	port           = flag.Int("port", 8085, "serving port")
-	cell           = flag.String("cell", "test_nj", "cell to use")
-	portName       = flag.String("port-name", "vt", "vt port name")
-	retryDelay     = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
-	retryCount     = flag.Int("retry-count", 10, "retry count")
-	tabletProtocol = flag.String("tablet-protocol", "bson", "how to talk to the vttablets")
+	port       = flag.Int("port", 8085, "serving port")
+	cell       = flag.String("cell", "test_nj", "cell to use")
+	portName   = flag.String("port-name", "vt", "vt port name")
+	retryDelay = flag.Duration("retry-delay", 200*time.Millisecond, "retry delay")
+	retryCount = flag.Int("retry-count", 10, "retry count")
 )
 
 var topoReader *TopoReader
@@ -41,6 +40,6 @@ func main() {
 	topo.RegisterTopoReader(topoReader)
 
 	blm := vtgate.NewBalancerMap(rts, *cell, *portName)
-	vtgate.Init(blm, *tabletProtocol, *retryDelay, *retryCount)
+	vtgate.Init(blm, *retryDelay, *retryCount)
 	servenv.Run(*port)
 }

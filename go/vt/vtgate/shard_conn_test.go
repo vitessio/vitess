@@ -16,7 +16,7 @@ import (
 func TestShardConnExecute(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 		_, err := sdc.Execute("query", nil)
 		return err
 	})
@@ -25,7 +25,7 @@ func TestShardConnExecute(t *testing.T) {
 func TestShardConnExecuteBatch(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		_, err := sdc.ExecuteBatch(queries)
 		return err
@@ -35,7 +35,7 @@ func TestShardConnExecuteBatch(t *testing.T) {
 func TestShardConnExecuteStream(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 		_, errfunc := sdc.StreamExecute("query", nil)
 		return errfunc()
 	})
@@ -44,7 +44,7 @@ func TestShardConnExecuteStream(t *testing.T) {
 func TestShardConnBegin(t *testing.T) {
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testShardConnGeneric(t, func() error {
-		sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+		sdc := NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 		return sdc.Begin()
 	})
 }
@@ -204,7 +204,7 @@ func TestShardConnBeginOther(t *testing.T) {
 	// already in transaction
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
-	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+	sdc := NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 	testConns["0:1"] = &sandboxConn{transactionId: 1}
 	// call Execute to cause connection to be opened
 	sdc.Execute("query", nil)
@@ -219,7 +219,7 @@ func TestShardConnBeginOther(t *testing.T) {
 	resetSandbox()
 	sbc := &sandboxConn{mustFailTxPool: 1}
 	testConns["0:1"] = sbc
-	sdc = NewShardConn(blm, "sandbox", "", "0", "", 10*time.Millisecond, 3)
+	sdc = NewShardConn(blm, "", "0", "", 10*time.Millisecond, 3)
 	startTime := time.Now()
 	err = sdc.Begin()
 	// If transaction pool is full, Begin should wait and retry.
@@ -244,7 +244,7 @@ func TestShardConnCommit(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testConns["0:1"] = &sandboxConn{}
-	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+	sdc := NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err := sdc.Commit()
 	// Commit should fail if we're not in a transaction.
@@ -255,7 +255,7 @@ func TestShardConnCommit(t *testing.T) {
 
 	// valid commit
 	testConns["0:1"] = &sandboxConn{transactionId: 1}
-	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+	sdc = NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err = sdc.Commit()
 	if err != nil {
@@ -265,7 +265,7 @@ func TestShardConnCommit(t *testing.T) {
 	// commit fail
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+	sdc = NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	sbc.mustFailServer = 1
 	sbc.transactionId = 1
@@ -282,7 +282,7 @@ func TestShardConnRollback(t *testing.T) {
 	resetSandbox()
 	blm := NewBalancerMap(new(sandboxTopo), "aa", "vt")
 	testConns["0:1"] = &sandboxConn{}
-	sdc := NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+	sdc := NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err := sdc.Rollback()
 	// Rollback should fail if we're not in a transaction.
@@ -293,7 +293,7 @@ func TestShardConnRollback(t *testing.T) {
 
 	// valid rollback
 	testConns["0:1"] = &sandboxConn{transactionId: 1}
-	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+	sdc = NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	err = sdc.Rollback()
 	if err != nil {
@@ -303,7 +303,7 @@ func TestShardConnRollback(t *testing.T) {
 	// rollback fail
 	sbc := &sandboxConn{}
 	testConns["0:1"] = sbc
-	sdc = NewShardConn(blm, "sandbox", "", "0", "", 1*time.Millisecond, 3)
+	sdc = NewShardConn(blm, "", "0", "", 1*time.Millisecond, 3)
 	sdc.Execute("query", nil)
 	sbc.mustFailServer = 1
 	sbc.transactionId = 1
