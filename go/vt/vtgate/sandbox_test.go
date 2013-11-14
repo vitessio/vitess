@@ -56,6 +56,14 @@ func resetSandbox() {
 type sandboxTopo struct {
 }
 
+func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	panic(fmt.Errorf("not implemented"))
+}
+
+func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+	panic(fmt.Errorf("not implemented"))
+}
+
 func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	sandmu.Lock()
 	defer sandmu.Unlock()
