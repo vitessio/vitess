@@ -5,6 +5,7 @@
 package bsonrpc
 
 import (
+	"crypto/tls"
 	"io"
 	"time"
 
@@ -85,12 +86,12 @@ func (sc *ServerCodec) Close() error {
 	return sc.rwc.Close()
 }
 
-func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Client, error) {
-	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec, connectTimeout)
+func DialHTTP(network, address string, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {
+	return rpcwrap.DialHTTP(network, address, codecName, NewClientCodec, connectTimeout, config)
 }
 
-func DialAuthHTTP(network, address, user, password string, connectTimeout time.Duration) (*rpc.Client, error) {
-	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec, connectTimeout)
+func DialAuthHTTP(network, address, user, password string, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {
+	return rpcwrap.DialAuthHTTP(network, address, user, password, codecName, NewClientCodec, connectTimeout, config)
 }
 
 func ServeRPC() {

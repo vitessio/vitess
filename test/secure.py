@@ -12,6 +12,7 @@ import unittest
 
 from vtdb import tablet as tablet3
 from vtdb import topology
+from vtdb import vtgate
 from zk import zkocc
 
 import utils
@@ -270,13 +271,25 @@ class TestSecure(unittest.TestCase):
     if saccept == 0:
       raise utils.TestError("unexpected accepts %s" % saccept)
 
-
     # trigger a time out on a secure connection, see what exception we get
     try:
       conn._execute("select sleep(100) from dual", {})
       raise utils.TestError("No timeout exception")
     except tablet3.TimeoutError as e:
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
+
+    # start a vtgate to connect to that tablet
+    gate_proc, gate_port = utils.vtgate_start(port_name='_vts', tablet_bson_encrypted=True)
+    conn = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
+
+    # _execute
+    (result, count, lastrow, fields) = conn._execute("select 1 from dual", {})
+    logging.debug("Got result: %s", str(result))
+    self.assertEqual(count, 1, "want 1, got %d" % (count))
+    self.assertEqual(len(fields), 1, "want 1, got %d" % (len(fields)))
+
+    conn.close()
+    utils.vtgate_kill(gate_proc)
 
     # kill everything
     utils.kill_sub_process(zkocc_server)

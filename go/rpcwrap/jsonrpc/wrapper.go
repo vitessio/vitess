@@ -5,6 +5,7 @@
 package jsonrpc
 
 import (
+	"crypto/tls"
 	"time"
 
 	rpc "github.com/youtube/vitess/go/rpcplus"
@@ -12,8 +13,8 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap"
 )
 
-func DialHTTP(network, address string, connectTimeout time.Duration) (*rpc.Client, error) {
-	return rpcwrap.DialHTTP(network, address, "json", oldjson.NewClientCodec, connectTimeout)
+func DialHTTP(network, address string, connectTimeout time.Duration, config *tls.Config) (*rpc.Client, error) {
+	return rpcwrap.DialHTTP(network, address, "json", oldjson.NewClientCodec, connectTimeout, config)
 }
 
 func ServeRPC() {

@@ -8,6 +8,8 @@ import (
 	"flag"
 	"time"
 
+	log "github.com/golang/glog"
+
 	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate"
@@ -41,5 +43,6 @@ func main() {
 
 	blm := vtgate.NewBalancerMap(rts, *cell, *portName)
 	vtgate.Init(blm, *retryDelay, *retryCount)
+	log.Infof("vtgate listening to port %v", *port)
 	servenv.Run(*port)
 }

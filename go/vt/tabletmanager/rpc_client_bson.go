@@ -29,7 +29,7 @@ func (client *GoRpcTabletManagerConn) rpcCallTablet(tablet *topo.TabletInfo, nam
 	// create the RPC client, using waitTime as the connect
 	// timeout, and starting the overall timeout as well
 	timer := time.After(waitTime)
-	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr, waitTime)
+	rpcClient, err := bsonrpc.DialHTTP("tcp", tablet.Addr, waitTime, nil)
 	if err != nil {
 		return fmt.Errorf("RPC error for %v: %v", tablet.GetAlias(), err.Error())
 	}

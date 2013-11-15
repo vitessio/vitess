@@ -5,6 +5,7 @@
 package vtgate
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"strings"
@@ -27,13 +28,18 @@ func init() {
 }
 
 func DialTablet(addr, keyspace, shard string) (TabletConn, error) {
-	// FIXME(sougou/shrutip): Add encrypted support
+	var config *tls.Config
+	if *tabletBsonEncrypted {
+		config = &tls.Config{}
+		config.InsecureSkipVerify = true
+	}
+
 	conn := new(TabletBson)
 	var err error
 	if *tabletBsonUsername != "" {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, 0)
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, 0, config)
 	} else {
-		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, 0)
+		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, 0, config)
 	}
 	if err != nil {
 		return nil, tabletError(err)

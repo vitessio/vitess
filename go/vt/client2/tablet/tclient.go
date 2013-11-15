@@ -121,9 +121,9 @@ func (conn *Conn) dial() (err error) {
 	}
 
 	if useAuth {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.dbi.Host, user, password, 0)
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.dbi.Host, user, password, 0, nil)
 	} else {
-		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.dbi.Host, 0)
+		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.dbi.Host, 0, nil)
 	}
 
 	if err != nil {

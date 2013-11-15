@@ -41,7 +41,7 @@ func DialZkocc(addr string, connectTimeout time.Duration) (zkocc *ZkoccConn, err
 	for _, index := range perm {
 		server := servers[index]
 
-		rpcClient, err := bsonrpc.DialHTTP("tcp", server, connectTimeout)
+		rpcClient, err := bsonrpc.DialHTTP("tcp", server, connectTimeout, nil)
 		if err == nil {
 			return &ZkoccConn{rpcClient: rpcClient}, nil
 		}
