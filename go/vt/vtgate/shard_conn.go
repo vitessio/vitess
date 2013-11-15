@@ -80,7 +80,7 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr
 				return nil, sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue
@@ -107,7 +107,7 @@ func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery) (qrs *tproto.Que
 				return nil, sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue
@@ -136,7 +136,7 @@ func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{
 				goto return_error
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue
@@ -171,7 +171,7 @@ func (sdc *ShardConn) Begin() (err error) {
 				return sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard, "", "", false)
+			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
 			if err != nil {
 				sdc.balancer.MarkDown(addr)
 				continue

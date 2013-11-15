@@ -79,7 +79,7 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 
 var testConns map[string]TabletConn
 
-func sandboxDialer(addr, keyspace, shard, username, password string, encrypted bool) (TabletConn, error) {
+func sandboxDialer(addr, keyspace, shard string) (TabletConn, error) {
 	sandmu.Lock()
 	defer sandmu.Unlock()
 	dialCounter++

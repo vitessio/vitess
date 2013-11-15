@@ -5,6 +5,7 @@
 package vtgate
 
 import (
+	"flag"
 	"fmt"
 	"strings"
 
@@ -15,16 +16,22 @@ import (
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
+var (
+	tabletBsonUsername  = flag.String("tablet-bson-username", "", "user to use for bson rpc connections")
+	tabletBsonPassword  = flag.String("tablet-bson-password", "", "password to use for bson rpc connections (ignored if username is empty)")
+	tabletBsonEncrypted = flag.Bool("tablet-bson-encrypted", false, "use encryption to talk to vttablet")
+)
+
 func init() {
 	RegisterDialer("bson", DialTablet)
 }
 
-func DialTablet(addr, keyspace, shard, username, password string, encrypted bool) (TabletConn, error) {
+func DialTablet(addr, keyspace, shard string) (TabletConn, error) {
 	// FIXME(sougou/shrutip): Add encrypted support
 	conn := new(TabletBson)
 	var err error
-	if username != "" {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, username, password, 0)
+	if *tabletBsonUsername != "" {
+		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, 0)
 	} else {
 		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", addr, 0)
 	}

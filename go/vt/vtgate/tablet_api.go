@@ -40,7 +40,7 @@ type OperationalError string
 func (e OperationalError) Error() string { return string(e) }
 
 // TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
-type TabletDialer func(addr, keyspace, shard, username, password string, encrypted bool) (TabletConn, error)
+type TabletDialer func(addr, keyspace, shard string) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
