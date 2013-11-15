@@ -11,6 +11,7 @@ from net import gorpc
 from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
+from vtdb import tablet
 
 
 # This failure is operational in the sense that we must teardown the connection to
@@ -40,7 +41,7 @@ def convert_exception(exc, *args):
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):
-    return FatalError(new_args)
+    return tablet.FatalError(new_args)
   return exc
 
 
