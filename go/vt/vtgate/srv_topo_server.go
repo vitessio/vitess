@@ -39,13 +39,16 @@ type ResilientSrvTopoServer struct {
 // based on the provided SrvTopoServer.
 func NewResilientSrvTopoServer(base SrvTopoServer) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
-		Toposerv: base,
+		Toposerv:              base,
+		svrKeyspaceNamesCache: make(map[string][]string),
+		srvKeyspaceCache:      make(map[string]*topo.SrvKeyspace),
+		srvEndPointsCache:     make(map[string]*topo.EndPoints),
 	}
 }
 
 func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string, error) {
 	key := cell
-	result, err := server.GetSrvKeyspaceNames(cell)
+	result, err := server.Toposerv.GetSrvKeyspaceNames(cell)
 	if err != nil {
 		server.mu.Lock()
 		result = server.svrKeyspaceNamesCache[key]
@@ -67,7 +70,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 
 func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
 	key := cell + ":" + keyspace
-	result, err := server.GetSrvKeyspace(cell, keyspace)
+	result, err := server.Toposerv.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
 		server.mu.Lock()
 		result = server.srvKeyspaceCache[key]
@@ -89,7 +92,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 
 func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	key := cell + ":" + keyspace + ":" + shard + ":" + string(tabletType)
-	result, err := server.GetEndPoints(cell, keyspace, shard, tabletType)
+	result, err := server.Toposerv.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
 		server.mu.Lock()
 		result = server.srvEndPointsCache[key]
