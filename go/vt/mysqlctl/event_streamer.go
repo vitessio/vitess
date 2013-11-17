@@ -38,8 +38,6 @@ type sendEventFunc func(event interface{}) error
 
 type EventStreamer struct {
 	bls       *BinlogStreamer
-	file      string
-	pos       int64
 	sendEvent sendEventFunc
 
 	// Stats
@@ -50,17 +48,15 @@ type EventStreamer struct {
 	DmlErrors        int64
 }
 
-func NewEventStreamer(dbname, binlogPrefix, file string, pos int64, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname, binlogPrefix string) *EventStreamer {
 	return &EventStreamer{
-		bls:       NewBinlogStreamer(dbname, binlogPrefix),
-		file:      file,
-		pos:       pos,
-		sendEvent: sendEvent,
+		bls: NewBinlogStreamer(dbname, binlogPrefix),
 	}
 }
 
-func (evs *EventStreamer) Stream() error {
-	return evs.bls.Stream(evs.file, evs.pos, evs.transactionToEvent)
+func (evs *EventStreamer) Stream(file string, pos int64, sendEvent sendEventFunc) error {
+	evs.sendEvent = sendEvent
+	return evs.bls.Stream(file, pos, evs.transactionToEvent)
 }
 
 func (evs *EventStreamer) Stop() {

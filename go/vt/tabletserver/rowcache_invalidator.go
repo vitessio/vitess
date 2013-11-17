@@ -7,6 +7,7 @@ package tabletserver
 import (
 	"encoding/gob"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -60,7 +61,7 @@ type InvalidationProcessor struct {
 	stateLock       sync.Mutex
 	inTxn           bool
 	dmlBuffer       []*proto.DmlType
-	receiveEvent    mysqlctl.SendUpdateStreamResponse
+	receiveEvent    func(reply interface{}) error
 	encBuf          []byte
 }
 
@@ -194,10 +195,15 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		return
 	}
 
-	startPosition := &cproto.BinlogPosition{Position: *replPos}
+	groupid, err := strconv.Atoi(replPos.GroupId)
+	if err != nil {
+		rErr := NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Cannot determine replication position %v", err), "")
+		rowCache.updateErrCounters(rErr)
+		rowCache.stopCache(rErr.Error())
+		return
+	}
 
-	log.Infof("Starting @ %v", startPosition.String())
-	req := &mysqlctl.UpdateStreamRequest{StartPosition: *startPosition}
+	req := &mysqlctl.BinlogPosition{GroupId: int64(groupid)}
 	err = mysqlctl.ServeUpdateStream(req, rowCache.receiveEvent)
 	if err != nil {
 		log.Errorf("mysqlctl.ServeUpdateStream returned err '%v'", err.Error())
