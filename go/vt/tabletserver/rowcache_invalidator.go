@@ -61,7 +61,7 @@ type InvalidationProcessor struct {
 	stateLock       sync.Mutex
 	inTxn           bool
 	dmlBuffer       []*proto.DmlType
-	receiveEvent    func(reply interface{}) error
+	receiveEvent    func(reply *mysqlctl.StreamEvent) error
 	encBuf          []byte
 }
 
@@ -71,7 +71,7 @@ func NewInvalidationProcessor() *InvalidationProcessor {
 	invalidator := &InvalidationProcessor{}
 	invalidator.dmlBuffer = make([]*proto.DmlType, 10)
 
-	invalidator.receiveEvent = func(response interface{}) error {
+	invalidator.receiveEvent = func(response *mysqlctl.StreamEvent) error {
 		return invalidator.invalidateEvent(response)
 	}
 	gob.Register(cproto.BinlogPosition{})
@@ -195,6 +195,7 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		return
 	}
 
+	// TODO(sougou): change GroupId to be int64
 	groupid, err := strconv.Atoi(replPos.GroupId)
 	if err != nil {
 		rErr := NewInvalidationError(FATAL_ERROR, fmt.Sprintf("Cannot determine replication position %v", err), "")

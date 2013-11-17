@@ -138,7 +138,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendRep
 	log.Infof("ServeUpdateStream starting @ %v", rp)
 
 	evs := NewEventStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
-	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply interface{}) error {
+	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *StreamEvent) error {
 		if !updateStream.isEnabled() {
 			evs.Stop()
 			return nil
