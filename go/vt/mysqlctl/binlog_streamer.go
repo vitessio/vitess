@@ -88,6 +88,10 @@ type BinlogPosition struct {
 	GroupId, ServerId int64
 }
 
+func (blp *BinlogPosition) String() string {
+	return fmt.Sprintf("%d:%d", blp.GroupId, blp.ServerId)
+}
+
 // BinlogStreamer streamer streams binlog events grouped
 // by transactions.
 type BinlogStreamer struct {
@@ -201,6 +205,9 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 				Position:   bls.blPos,
 			}
 			if err = sendTransaction(trans); err != nil {
+				if err == io.EOF {
+					return err
+				}
 				return fmt.Errorf("send reply error: %v", err)
 			}
 			statements = nil
@@ -237,7 +244,10 @@ eventLoop:
 		}
 		values = rotateRE.FindSubmatch(event)
 		if values != nil {
-			bls.file.Rotate(path.Join(bls.dir, string(values[1])), mustParseInt64(values[2]))
+			err = bls.file.Rotate(path.Join(bls.dir, string(values[1])), mustParseInt64(values[2]))
+			if err != nil {
+				return nil, err
+			}
 			continue
 		}
 		values = delimRE.FindSubmatch(event)
@@ -291,19 +301,40 @@ type fileInfo struct {
 }
 
 func (f *fileInfo) Init(name string, pos int64) error {
-	return f.Rotate(name, pos)
+	err := f.Rotate(name, pos)
+	if err != nil {
+		return err
+	}
+	// Make sure the current file hasn't rotated.
+	next := nextFileName(name)
+	fi, _ := os.Stat(next)
+	if fi == nil {
+		// Assume next file doesn't exist
+		return nil
+	}
+
+	// Next file exists. Check if current file size matches position
+	fi, err = f.handle.Stat()
+	if err != nil {
+		return err
+	}
+	if fi.Size() <= pos {
+		// The file has rotated
+		return f.Rotate(next, 4)
+	}
+	return nil
 }
 
 func (f *fileInfo) Rotate(name string, pos int64) (err error) {
 	if f.handle != nil {
 		f.handle.Close()
 	}
+	f.name = name
+	f.pos = pos
 	f.handle, err = os.Open(name)
 	if err != nil {
 		return fmt.Errorf("open error: %v", err)
 	}
-	f.name = name
-	f.pos = pos
 	return nil
 }
 
@@ -334,6 +365,17 @@ func (f *fileInfo) Close() (err error) {
 	err = f.handle.Close()
 	f.handle = nil
 	return fmt.Errorf("close error: %v", err)
+}
+
+func nextFileName(name string) string {
+	newname := []byte(name)
+	index := len(newname) - 1
+	for newname[index] == '9' && index > 0 {
+		newname[index] = '0'
+		index--
+	}
+	newname[index] += 1
+	return string(newname)
 }
 
 // mustParseInt64 can be used if you don't expect to fail.

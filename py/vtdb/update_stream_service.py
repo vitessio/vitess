@@ -7,30 +7,24 @@ from net import gorpc
 from net import bsonrpc
 from vtdb import dbexceptions
 
-class ReplicationCoordinates(object):
-  MasterFilename = None
-  MasterPosition = None
-  GroupId        = None
-
-  def __init__(self, master_filename, master_position, group_id):
-    self.MasterFilename = master_filename
-    self.MasterPosition = master_position
-    self.GroupId = group_id
-
 class Coord(object):
-  Position = None
-  Timestamp = None
-  Xid = None
+  GroupId = None
+  ServerId = None
 
-  def __init__(self, master_filename, master_position, group_id=None):
-    self.Position = ReplicationCoordinates(master_filename, master_position, group_id).__dict__
+  def __init__(self, group_id, server_id = None):
+    self.GroupId = group_id
+    self.ServerId = server_id
 
 
 class EventData(object):
-  SqlType = None
+  Cateory = None
   TableName = None
+  PkColNames = None
+  PkValues = None
   Sql = None
-  PkRows = None
+  Timestamp = None
+  GroupId = None
+  ServerId = None
 
   def __init__(self, raw_response):
     for key, val in raw_response.iteritems():
@@ -47,19 +41,6 @@ class EventData(object):
       pk_row = [(col_name, col_value) for col_name, col_value in izip(raw_response['PkColNames'], pkList)]
       self.PkRows.append(pk_row)
 
-
-class UpdateStreamResponse(object):
-  Coord = None
-  Data = None
-
-  def __init__(self, response_dict):
-    self.raw_response = response_dict
-    self.format()
-
-  def format(self):
-    self.Coord = self.raw_response['Coord']
-    self.Data = EventData(self.raw_response['Data']).__dict__
-
 class UpdateStreamConnection(object):
   def __init__(self, addr, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted, keyfile, certfile)
@@ -71,26 +52,24 @@ class UpdateStreamConnection(object):
     self.client.close()
 
   def stream_start(self, start_position):
-    req = {'StartPosition':start_position}
-
     try:
-      self.client.stream_call('UpdateStream.ServeUpdateStream', req)
-      first_response = self.client.stream_next()
-      update_stream_response = UpdateStreamResponse(first_response.reply)
-
+      self.client.stream_call('UpdateStream.ServeUpdateStream', start_position)
+      response = self.client.stream_next()
+      if response is None:
+        return None
+      return EventData(response.reply).__dict__
     except gorpc.GoRpcError as e:
       raise dbexceptions.OperationalError(*e.args)
     except:
       logging.exception('gorpc low-level error')
       raise
-    return update_stream_response.Coord, update_stream_response.Data
 
   def stream_next(self):
     try:
       response = self.client.stream_next()
       if response is None:
-        return None, None
-      update_stream_response = UpdateStreamResponse(response.reply)
+        return None
+      return EventData(response.reply).__dict__
     except gorpc.AppError as e:
       raise dbexceptions.DatabaseError(*e.args)
     except gorpc.GoRpcError as e:
@@ -98,4 +77,3 @@ class UpdateStreamConnection(object):
     except:
       logging.exception('gorpc low-level error')
       raise
-    return update_stream_response.Coord, update_stream_response.Data

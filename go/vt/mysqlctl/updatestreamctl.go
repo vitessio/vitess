@@ -6,9 +6,11 @@ package mysqlctl
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -26,9 +28,42 @@ type UpdateStream struct {
 
 	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
+	states         *stats.States
 	mysqld         *Mysqld
 	stateWaitGroup sync.WaitGroup
 	dbname         string
+	streams        streamList
+}
+
+type streamList struct {
+	sync.Mutex
+	streams map[*EventStreamer]bool
+}
+
+func (sl *streamList) Init() {
+	sl.Lock()
+	sl.streams = make(map[*EventStreamer]bool)
+	sl.Unlock()
+}
+
+func (sl *streamList) Add(e *EventStreamer) {
+	sl.Lock()
+	sl.streams[e] = true
+	sl.Unlock()
+}
+
+func (sl *streamList) Delete(e *EventStreamer) {
+	sl.Lock()
+	delete(sl.streams, e)
+	sl.Unlock()
+}
+
+func (sl *streamList) Stop() {
+	sl.Lock()
+	for stream := range sl.streams {
+		stream.Stop()
+	}
+	sl.Unlock()
 }
 
 var UpdateStreamRpcService *UpdateStream
@@ -39,6 +74,10 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 	}
 
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
+	UpdateStreamRpcService.states = stats.NewStates("UpdateStreamState", []string{
+		"Disabled",
+		"Enabled",
+	}, time.Now(), DISABLED)
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
 }
 
@@ -58,7 +97,7 @@ func DisableUpdateStreamService() {
 	UpdateStreamRpcService.disable()
 }
 
-func ServeUpdateStream(req *BinlogPosition, sendReply sendEventFunc) error {
+func ServeUpdateStream(req *BinlogPosition, sendReply func(reply interface{}) error) error {
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
@@ -93,8 +132,10 @@ func (updateStream *UpdateStream) enable(dbcfgs dbconfigs.DBConfigs) {
 	}
 
 	updateStream.state.Set(ENABLED)
+	updateStream.states.SetState(ENABLED)
 	updateStream.mysqld = NewMysqld(updateStream.mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	updateStream.dbname = dbcfgs.App.DbName
+	updateStream.streams.Init()
 	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)
 }
 
@@ -106,6 +147,8 @@ func (updateStream *UpdateStream) disable() {
 	}
 
 	updateStream.state.Set(DISABLED)
+	updateStream.states.SetState(DISABLED)
+	updateStream.streams.Stop()
 	updateStream.stateWaitGroup.Wait()
 	log.Infof("Update Stream Disabled")
 }
@@ -114,7 +157,7 @@ func (updateStream *UpdateStream) isEnabled() bool {
 	return updateStream.state.Get() == ENABLED
 }
 
-func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendReply sendEventFunc) (err error) {
+func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendReply func(reply interface{}) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
@@ -138,11 +181,10 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendRep
 	log.Infof("ServeUpdateStream starting @ %v", rp)
 
 	evs := NewEventStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
+	updateStream.streams.Add(evs)
+	defer updateStream.streams.Delete(evs)
+
 	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *StreamEvent) error {
-		if !updateStream.isEnabled() {
-			evs.Stop()
-			return nil
-		}
 		return sendReply(reply)
 	})
 }

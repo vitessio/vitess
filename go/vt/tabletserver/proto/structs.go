@@ -57,11 +57,7 @@ type TransactionInfo struct {
 
 type DmlType struct {
 	Table string
-	Keys  []interface{}
-}
-
-type CacheInvalidate struct {
-	Dmls []DmlType
+	Keys  []string
 }
 
 type DDLInvalidate struct {

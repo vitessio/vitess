@@ -97,6 +97,9 @@ func TestDMLEvent(t *testing.T) {
 			}, {
 				Category: BL_DML,
 				Sql:      []byte("query /* _stream vtocc_e (eid id namevent)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
+			}, {
+				Category: BL_DML,
+				Sql:      []byte("query"),
 			},
 		},
 		Position: BinlogPosition{
@@ -109,6 +112,12 @@ func TestDMLEvent(t *testing.T) {
 			switch event.Category {
 			case "DML":
 				want := `&{DML vtocc_e [eid id namevent] [[10 -1 name] [11 18446744073709551615 name]]  1 0 0}`
+				got := fmt.Sprintf("%v", event)
+				if want != got {
+					t.Errorf("want %s, got %s", want, got)
+				}
+			case "ERR":
+				want := `&{ERR  [] [] query 1 0 0}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
@@ -129,7 +138,7 @@ func TestDMLEvent(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if evs.DmlCount != 1 {
+	if evs.DmlCount != 2 {
 		t.Errorf("want 1, got %d", evs.DmlCount)
 	}
 	if evs.TransactionCount != 1 {

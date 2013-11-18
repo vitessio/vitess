@@ -128,6 +128,29 @@ func TestFileInfo(t *testing.T) {
 	}
 }
 
+func TestNewName(t *testing.T) {
+	want := "0002"
+	got := nextFileName("0001")
+	if want != got {
+		t.Errorf("want %s, got %s", want, got)
+	}
+	want = "0010"
+	got = nextFileName("0009")
+	if want != got {
+		t.Errorf("want %s, got %s", want, got)
+	}
+	want = "0100"
+	got = nextFileName("0099")
+	if want != got {
+		t.Errorf("want %s, got %s", want, got)
+	}
+	want = ":000"
+	got = nextFileName("9999")
+	if want != got {
+		t.Errorf("want %s, got %s", want, got)
+	}
+}
+
 type fakeReader struct {
 	toSend []byte
 	err    error
@@ -311,6 +334,21 @@ func TestStream(t *testing.T) {
 			fmt.Printf("],\n")
 			fmt.Printf("\"Position\": {\"GroupId\": %d, \"ServerId\": %d}\n},\n", tx.Position.GroupId, tx.Position.ServerId)
 		*/
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+// TestRoration should not hang
+func TestRotation(t *testing.T) {
+	env := setup("cat $3", 0)
+	defer cleanup(env)
+
+	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
+	err := bls.Stream("vt-0000041983-bin.000004", 2682, func(tx *BinlogTransaction) error {
+		bls.Stop()
 		return nil
 	})
 	if err != nil {

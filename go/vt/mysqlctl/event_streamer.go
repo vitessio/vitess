@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"encoding/base64"
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -22,7 +21,7 @@ var (
 )
 
 type StreamEvent struct {
-	// Category can be "DML", "DDL" or "POS"
+	// Category can be "DML", "DDL", "ERR" or "POS"
 	Category string
 
 	// DML
@@ -30,10 +29,10 @@ type StreamEvent struct {
 	PkColNames []string
 	PkValues   [][]interface{}
 
-	// DDL
+	// DDL or ERR
 	Sql string
 
-	// Timestamp is set for DML and DDL
+	// Timestamp is set for DML, DDL or ERR
 	Timestamp int64
 
 	// POS
@@ -117,8 +116,8 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *StreamEvent, newinsertid int64, err error) {
 	commentIndex := bytes.LastIndex(sql, STREAM_COMMENT_START)
 	if commentIndex == -1 {
-		log.Errorf("DML has no stream comment: %s", sql)
 		evs.DmlErrors++
+		return &StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
 	}
 	streamComment := string(sql[commentIndex+len(STREAM_COMMENT_START):])
 	eventTree, err := parseStreamComment(streamComment)
