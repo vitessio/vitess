@@ -9,7 +9,7 @@ Features
 
 This is an incomplete list of Vitess features.
 
-### Clients:
+### Clients
 
 * A Python DBAPI 2.0 compliant client interface.
 * A go client interface.
