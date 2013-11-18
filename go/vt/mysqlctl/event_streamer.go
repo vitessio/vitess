@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"encoding/base64"
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -21,25 +20,29 @@ var (
 	STREAM_COMMENT_START = []byte("/* _stream ")
 )
 
-type DMLEvent struct {
+type StreamEvent struct {
+	// Category can be "DML", "DDL", "ERR" or "POS"
+	Category string
+
+	// DML
 	TableName  string
 	PkColNames []string
 	PkValues   [][]interface{}
-	Timestamp  int64
-}
 
-type DDLEvent struct {
-	Sql       string
+	// DDL or ERR
+	Sql string
+
+	// Timestamp is set for DML, DDL or ERR
 	Timestamp int64
+
+	// POS
+	GroupId, ServerId int64
 }
 
-// event can be *DMLEvent, *DDLEvent or *BinlogPosition
-type sendEventFunc func(event interface{}) error
+type sendEventFunc func(event *StreamEvent) error
 
 type EventStreamer struct {
 	bls       *BinlogStreamer
-	file      string
-	pos       int64
 	sendEvent sendEventFunc
 
 	// Stats
@@ -50,17 +53,15 @@ type EventStreamer struct {
 	DmlErrors        int64
 }
 
-func NewEventStreamer(dbname, binlogPrefix, file string, pos int64, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(dbname, binlogPrefix string) *EventStreamer {
 	return &EventStreamer{
-		bls:       NewBinlogStreamer(dbname, binlogPrefix),
-		file:      file,
-		pos:       pos,
-		sendEvent: sendEvent,
+		bls: NewBinlogStreamer(dbname, binlogPrefix),
 	}
 }
 
-func (evs *EventStreamer) Stream() error {
-	return evs.bls.Stream(evs.file, evs.pos, evs.transactionToEvent)
+func (evs *EventStreamer) Stream(file string, pos int64, sendEvent sendEventFunc) error {
+	evs.sendEvent = sendEvent
+	return evs.bls.Stream(file, pos, evs.transactionToEvent)
 }
 
 func (evs *EventStreamer) Stop() {
@@ -86,7 +87,7 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 				return fmt.Errorf("unrecognized: %s", stmt.Sql)
 			}
 		case BL_DML:
-			var dmlEvent *DMLEvent
+			var dmlEvent *StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
 				return fmt.Errorf("%v: %s", err, stmt.Sql)
@@ -97,24 +98,26 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 			}
 			evs.DmlCount++
 		case BL_DDL:
-			if err = evs.sendEvent(&DDLEvent{Sql: string(stmt.Sql), Timestamp: timestamp}); err != nil {
+			ddlEvent := &StreamEvent{Category: "DDL", Sql: string(stmt.Sql), Timestamp: timestamp}
+			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
 			}
 			evs.DdlCount++
 		}
 	}
-	if err = evs.sendEvent(&trans.Position); err != nil {
+	posEvent := &StreamEvent{Category: "POS", GroupId: trans.Position.GroupId, ServerId: trans.Position.ServerId}
+	if err = evs.sendEvent(posEvent); err != nil {
 		return err
 	}
 	evs.TransactionCount++
 	return nil
 }
 
-func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *DMLEvent, newinsertid int64, err error) {
+func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *StreamEvent, newinsertid int64, err error) {
 	commentIndex := bytes.LastIndex(sql, STREAM_COMMENT_START)
 	if commentIndex == -1 {
-		log.Errorf("DML has no stream comment: %s", sql)
 		evs.DmlErrors++
+		return &StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
 	}
 	streamComment := string(sql[commentIndex+len(STREAM_COMMENT_START):])
 	eventTree, err := parseStreamComment(streamComment)
@@ -133,7 +136,8 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *D
 	}
 	pkColLen := pkColNamesNode.Len()
 
-	dmlEvent = new(DMLEvent)
+	dmlEvent = new(StreamEvent)
+	dmlEvent.Category = "DML"
 	dmlEvent.TableName = tableName
 	dmlEvent.PkColNames = pkColNames
 	dmlEvent.PkValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))

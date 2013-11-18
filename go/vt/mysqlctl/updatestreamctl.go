@@ -5,7 +5,6 @@ package mysqlctl
 
 import (
 	"fmt"
-	"path"
 	"sync"
 	"time"
 
@@ -25,28 +24,53 @@ const (
 )
 
 type UpdateStream struct {
-	mycnf          *Mycnf
-	tabletType     string
+	mycnf *Mycnf
+
+	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
 	states         *stats.States
-	actionLock     sync.Mutex
-	binlogPrefix   string
-	logsDir        string
 	mysqld         *Mysqld
 	stateWaitGroup sync.WaitGroup
 	dbname         string
+	streams        streamList
 }
 
-type UpdateStreamRequest struct {
-	StartPosition proto.BinlogPosition
+type streamList struct {
+	sync.Mutex
+	streams map[*EventStreamer]bool
+}
+
+func (sl *streamList) Init() {
+	sl.Lock()
+	sl.streams = make(map[*EventStreamer]bool)
+	sl.Unlock()
+}
+
+func (sl *streamList) Add(e *EventStreamer) {
+	sl.Lock()
+	sl.streams[e] = true
+	sl.Unlock()
+}
+
+func (sl *streamList) Delete(e *EventStreamer) {
+	sl.Lock()
+	delete(sl.streams, e)
+	sl.Unlock()
+}
+
+func (sl *streamList) Stop() {
+	sl.Lock()
+	for stream := range sl.streams {
+		stream.Stop()
+	}
+	sl.Unlock()
 }
 
 var UpdateStreamRpcService *UpdateStream
 
 func RegisterUpdateStreamService(mycnf *Mycnf) {
 	if UpdateStreamRpcService != nil {
-		//log.Warningf("Update Stream service already initialized")
-		return
+		panic("Update Stream service already initialized")
 	}
 
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
@@ -63,149 +87,118 @@ func logError() {
 	}
 }
 
-func dbcfgsCorrect(tabletType string, dbcfgs dbconfigs.DBConfigs) bool {
-	switch tabletType {
-	case "master":
-		if dbcfgs.Dba.UnixSocket != "" {
-			return true
-		}
-	case "replica", "rdonly", "batch":
-		if dbcfgs.Dba.UnixSocket != "" && dbcfgs.Repl.UnixSocket != "" {
-			return true
-		}
-	}
-	return false
-}
-
-func EnableUpdateStreamService(tabletType string, dbcfgs dbconfigs.DBConfigs) {
+func EnableUpdateStreamService(dbcfgs dbconfigs.DBConfigs) {
 	defer logError()
-	UpdateStreamRpcService.actionLock.Lock()
-	defer UpdateStreamRpcService.actionLock.Unlock()
-
-	if !dbcfgsCorrect(tabletType, dbcfgs) {
-		log.Warningf("missing/incomplete db configs file, cannot enable update stream service")
-		return
-	}
-
-	if UpdateStreamRpcService.mycnf.BinLogPath == "" {
-		log.Warningf("Update stream service requires binlogs enabled")
-		return
-	}
-
-	if UpdateStreamRpcService.isServiceEnabled() {
-		log.Warningf("Update stream service is already enabled")
-		return
-	}
-
-	UpdateStreamRpcService.setState(ENABLED)
-
-	UpdateStreamRpcService.mysqld = NewMysqld(UpdateStreamRpcService.mycnf, dbcfgs.Dba, dbcfgs.Repl)
-	UpdateStreamRpcService.dbname = dbcfgs.App.DbName
-	log.Infof("dbcfgs.App.DbName %v DbName %v", dbcfgs.App.DbName, UpdateStreamRpcService.dbname)
-	log.Infof("mycnf.BinLogPath %v mycnf.RelayLogPath %v", UpdateStreamRpcService.mycnf.BinLogPath, UpdateStreamRpcService.mycnf.RelayLogPath)
-	UpdateStreamRpcService.tabletType = tabletType
-	UpdateStreamRpcService.binlogPrefix = UpdateStreamRpcService.mycnf.BinLogPath
-	UpdateStreamRpcService.logsDir = path.Dir(UpdateStreamRpcService.binlogPrefix)
-
-	log.Infof("Update Stream enabled, logsDir %v", UpdateStreamRpcService.logsDir)
+	UpdateStreamRpcService.enable(dbcfgs)
 }
 
 func DisableUpdateStreamService() {
-	//If the service is already disabled, just return
-	if !UpdateStreamRpcService.isServiceEnabled() {
-		return
-	}
-	UpdateStreamRpcService.actionLock.Lock()
-	defer UpdateStreamRpcService.actionLock.Unlock()
-	disableUpdateStreamService()
-	log.Infof("Update Stream Disabled")
-}
-
-func IsUpdateStreamEnabled() bool {
-	return UpdateStreamRpcService.isServiceEnabled()
-}
-
-func disableUpdateStreamService() {
 	defer logError()
-
-	UpdateStreamRpcService.setState(DISABLED)
-	UpdateStreamRpcService.stateWaitGroup.Wait()
+	UpdateStreamRpcService.disable()
 }
 
-func (updateStream *UpdateStream) isServiceEnabled() bool {
-	return updateStream.state.Get() == ENABLED
-}
-
-func (updateStream *UpdateStream) setState(state int64) {
-	updateStream.state.Set(state)
-	updateStream.states.SetState(state)
-}
-
-func LogsDir() string {
-	return UpdateStreamRpcService.logsDir
-}
-
-func ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) error {
+func ServeUpdateStream(req *BinlogPosition, sendReply func(reply interface{}) error) error {
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
-func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, sendReply SendUpdateStreamResponse) (err error) {
-	defer func() {
-		if x := recover(); x != nil {
-			err = x.(error)
-		}
-	}()
-
-	if !updateStream.isServiceEnabled() {
-		log.Warningf("Unable to serve client request: Update stream service is not enabled yet")
-		return fmt.Errorf("Update stream service is not enabled yet")
-	}
-
-	if !IsStartPositionValid(&req.StartPosition) {
-		return fmt.Errorf("Invalid start position, cannot serve the stream")
-	}
-	log.Infof("ServeUpdateStream starting @ %v", req.StartPosition.String())
-
-	startCoordinates := &req.StartPosition.Position
-	blp := NewBlp(startCoordinates, updateStream)
-
-	//locate the relay filename and position based on the masterPosition map
-	if !IsMasterPositionValid(startCoordinates) {
-		return fmt.Errorf("Invalid start position %v", req.StartPosition)
-	}
-
-	updateStream.actionLock.Lock()
-	updateStream.stateWaitGroup.Add(1)
-	updateStream.actionLock.Unlock()
-	defer updateStream.clientDone()
-
-	return blp.StreamBinlog(sendReply, updateStream.binlogPrefix)
-}
-
-func (updateStream *UpdateStream) clientDone() {
-	updateStream.stateWaitGroup.Done()
-}
-
-func (updateStream *UpdateStream) getReplicationPosition() (*proto.ReplicationCoordinates, error) {
-	rp, err := updateStream.mysqld.MasterStatus()
-	if err != nil {
-		return nil, err
-	}
-	return proto.NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition), rp.MasterLogGroupId), nil
+func IsUpdateStreamEnabled() bool {
+	return UpdateStreamRpcService.isEnabled()
 }
 
 func GetReplicationPosition() (*proto.ReplicationCoordinates, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
-func IsMasterPositionValid(startCoordinates *proto.ReplicationCoordinates) bool {
-	if startCoordinates.MasterFilename == "" || startCoordinates.MasterPosition <= 0 {
-		return false
+func (updateStream *UpdateStream) enable(dbcfgs dbconfigs.DBConfigs) {
+	updateStream.actionLock.Lock()
+	defer updateStream.actionLock.Unlock()
+	if updateStream.isEnabled() {
+		return
 	}
-	return true
+
+	if dbcfgs.Dba.UnixSocket == "" {
+		log.Errorf("Missing dba socket connection, cannot enable update stream service")
+		return
+	}
+
+	if dbcfgs.App.DbName == "" {
+		log.Errorf("Missing db name, cannot enable update stream service")
+		return
+	}
+
+	if updateStream.mycnf.BinLogPath == "" {
+		log.Errorf("Update stream service requires binlogs enabled")
+		return
+	}
+
+	updateStream.state.Set(ENABLED)
+	updateStream.states.SetState(ENABLED)
+	updateStream.mysqld = NewMysqld(updateStream.mycnf, dbcfgs.Dba, dbcfgs.Repl)
+	updateStream.dbname = dbcfgs.App.DbName
+	updateStream.streams.Init()
+	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)
 }
 
-func IsStartPositionValid(startPos *proto.BinlogPosition) bool {
-	startCoord := &startPos.Position
-	return IsMasterPositionValid(startCoord)
+func (updateStream *UpdateStream) disable() {
+	updateStream.actionLock.Lock()
+	defer updateStream.actionLock.Unlock()
+	if !updateStream.isEnabled() {
+		return
+	}
+
+	updateStream.state.Set(DISABLED)
+	updateStream.states.SetState(DISABLED)
+	updateStream.streams.Stop()
+	updateStream.stateWaitGroup.Wait()
+	log.Infof("Update Stream Disabled")
+}
+
+func (updateStream *UpdateStream) isEnabled() bool {
+	return updateStream.state.Get() == ENABLED
+}
+
+func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendReply func(reply interface{}) error) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			err = x.(error)
+		}
+	}()
+
+	updateStream.actionLock.Lock()
+	if !updateStream.isEnabled() {
+		updateStream.actionLock.Unlock()
+		log.Errorf("Unable to serve client request: Update stream service is not enabled")
+		return fmt.Errorf("update stream service is not enabled")
+	}
+	updateStream.stateWaitGroup.Add(1)
+	updateStream.actionLock.Unlock()
+	defer updateStream.stateWaitGroup.Done()
+
+	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId, req.ServerId)
+	if err != nil {
+		return fmt.Errorf("error computing start position: %v", err)
+	}
+	log.Infof("ServeUpdateStream starting @ %v", rp)
+
+	evs := NewEventStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
+	updateStream.streams.Add(evs)
+	defer updateStream.streams.Delete(evs)
+
+	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *StreamEvent) error {
+		return sendReply(reply)
+	})
+}
+
+func (updateStream *UpdateStream) getReplicationPosition() (*proto.ReplicationCoordinates, error) {
+	updateStream.actionLock.Lock()
+	defer updateStream.actionLock.Unlock()
+	if !updateStream.isEnabled() {
+		return nil, fmt.Errorf("update stream service is not enabled")
+	}
+
+	rp, err := updateStream.mysqld.MasterStatus()
+	if err != nil {
+		return nil, err
+	}
+	return proto.NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition), rp.MasterLogGroupId), nil
 }

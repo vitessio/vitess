@@ -170,18 +170,18 @@ class RowCacheInvalidator(unittest.TestCase):
     master_position = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
     #The sleep is needed here, so the invalidator can catch up and the number can be tested.
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
-    time.sleep(5)
+    time.sleep(2)
     inv_count1 = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     replica_tablet.mquery('vt_test_keyspace', "stop slave")
     perform_insert(100)
     # EOF is returned after 30s, sleeping a bit more to ensure we catch the EOF
     # and can test replication stop effectively.
-    time.sleep(35)
+    time.sleep(2)
     replica_tablet.mquery('vt_test_keyspace', "start slave")
     master_position = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
     #The sleep is needed here, so the invalidator can catch up and the number can be tested.
     replica_tablet.mquery('vt_test_keyspace', "select MASTER_POS_WAIT('%s', %d)" % (master_position[0][0], master_position[0][1]), 5)
-    time.sleep(10)
+    time.sleep(2)
     invalidatorStats = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
     logging.debug("invalidatorStats %s" % invalidatorStats['RowcacheInvalidationCheckPoint'])
     inv_count2 = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']

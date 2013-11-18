@@ -32,7 +32,7 @@ master_start_position = None
 
 def _get_master_current_position():
   res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
-  start_position = update_stream_service.Coord(res[0][0], res[0][1])
+  start_position = update_stream_service.Coord(int(res[0][4]))
   return start_position.__dict__
 
 
@@ -44,9 +44,7 @@ def _get_repl_current_position():
   cursor.execute('show master status')
   res = cursor.fetchall()
   slave_dict = res[0]
-  master_log = slave_dict['File']
-  master_pos = slave_dict['Position']
-  start_position = update_stream_service.Coord(master_log, master_pos)
+  start_position = update_stream_service.Coord(slave_dict['Group_ID'])
   return start_position.__dict__
 
 
@@ -140,10 +138,10 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("dialing replica update stream service")
     replica_conn.dial()
     try:
-      binlog_pos, data = replica_conn.stream_start(start_position)
+      data = replica_conn.stream_start(start_position)
     except Exception, e:
       logging.debug(str(e))
-      if str(e) == "Update stream service is not enabled yet":
+      if str(e) == "update stream service is not enabled":
         logging.debug("Test Service Disabled: Pass")
       else:
         self.fail("Test Service Disabled: Fail - did not throw the correct exception")
@@ -171,10 +169,10 @@ class TestUpdateStream(unittest.TestCase):
     replica_conn.dial()
 
     try:
-      binlog_pos, data = replica_conn.stream_start(start_position)
+      data = replica_conn.stream_start(start_position)
       for i in xrange(10):
-        binlog_pos, data = replica_conn.stream_next()
-        if data['SqlType'] == 'COMMIT' and utils.options.verbose == 2:
+        data = replica_conn.stream_next()
+        if data['Category'] == 'DML' and utils.options.verbose == 2:
           logging.debug("Test Service Enabled: Pass")
           break
     except Exception, e:
@@ -191,15 +189,14 @@ class TestUpdateStream(unittest.TestCase):
     disabled_err = False
     txn_count = 0
     try:
-      binlog_pos, data = replica_conn.stream_start(start_position)
+      data = replica_conn.stream_start(start_position)
       utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'spare'])
       #logging.debug("Sleeping a bit for the spare action to complete")
       #time.sleep(20)
-      while binlog_pos:
-        binlog_pos, data = replica_conn.stream_next()
-        if data is not None and data['SqlType'] == 'COMMIT':
+      while data:
+        data = replica_conn.stream_next()
+        if data is not None and data['Category'] == 'POS':
           txn_count +=1
-
       logging.error("Test Service Switch: FAIL")
       return
     except dbexceptions.DatabaseError, e:
@@ -240,31 +237,31 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(master_host, ['delete from vt_b',])
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
-    master_tuples = []
-    binlog_pos, data = master_conn.stream_start(master_start_position)
-    master_tuples.append((binlog_pos, data))
+    master_events = []
+    data = master_conn.stream_start(master_start_position)
+    master_events.append(data)
     for i in xrange(21):
-      binlog_pos, data = master_conn.stream_next()
-      master_tuples.append((binlog_pos, data))
-      if data['SqlType'] == 'COMMIT':
+      data = master_conn.stream_next()
+      master_events.append(data)
+      if data['Category'] == 'POS':
         master_txn_count +=1
         break
-    replica_tuples = []
+    replica_events = []
     replica_conn = self._get_replica_stream_conn()
     replica_conn.dial()
-    binlog_pos, data = replica_conn.stream_start(replica_start_position)
-    replica_tuples.append((binlog_pos, data))
+    data = replica_conn.stream_start(replica_start_position)
+    replica_events.append(data)
     for i in xrange(21):
-      binlog_pos, data = replica_conn.stream_next()
-      replica_tuples.append((binlog_pos, data))
-      if data['SqlType'] == 'COMMIT':
+      data = replica_conn.stream_next()
+      replica_events.append(data)
+      if data['Category'] == 'POS':
         replica_txn_count +=1
         break
-    if len(master_tuples) != len(replica_tuples):
-      logging.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_tuples, replica_tuples))
-    for master_val, replica_val in zip(master_tuples, replica_tuples):
-      master_data = master_val[1]
-      replica_data = replica_val[1]
+    if len(master_events) != len(replica_events):
+      logging.debug("Test Failed - # of records mismatch, master %s replica %s" % (master_events, replica_events))
+    for master_val, replica_val in zip(master_events, replica_events):
+      master_data = master_val
+      replica_data = replica_val
       self.assertEqual(master_data, replica_data, "Test failed, data mismatch - master '%s' and replica position '%s'" % (master_data, replica_data))
     logging.debug("Test Writes: PASS")
 
@@ -275,8 +272,8 @@ class TestUpdateStream(unittest.TestCase):
     logging.debug("test_ddl: starting @ %s" % start_position)
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
-    binlog_pos, data = master_conn.stream_start(start_position)
-    self.assertEqual(data['Sql'], _create_vt_insert_test.replace('\n', ''), "DDL didn't match original")
+    data = master_conn.stream_start(start_position)
+    self.assertEqual(data['Sql'], _create_vt_insert_test, "DDL didn't match original")
 
   #This tests the service switch from disable -> enable -> disable
   def test_service_switch(self):
@@ -292,17 +289,17 @@ class TestUpdateStream(unittest.TestCase):
     self._exec_vt_txn(master_host, ['delete from vt_a',])
     master_conn = self._get_master_stream_conn()
     master_conn.dial()
-    binlog_pos, data = master_conn.stream_start(start_position)
+    data = master_conn.stream_start(start_position)
     master_txn_count = 0
     logs_correct = False
     while master_txn_count <=2:
-      binlog_pos, data = master_conn.stream_next()
-      if start_position['Position']['MasterFilename'] < binlog_pos['Position']['MasterFilename']:
-        logs_correct = True
-        logging.debug("Log rotation correctly interpreted")
-        break
-      if data['SqlType'] == 'COMMIT':
+      data = master_conn.stream_next()
+      if data['Category'] == 'POS':
         master_txn_count +=1
+        if start_position['GroupId'] < data['GroupId']:
+          logs_correct = True
+          logging.debug("Log rotation correctly interpreted")
+          break
     if not logs_correct:
       self.fail("Flush logs didn't get properly interpreted")
 

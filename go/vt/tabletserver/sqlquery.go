@@ -257,11 +257,11 @@ func (sq *SqlQuery) CloseReserved(session *proto.Session, noOutput *string) (err
 	return nil
 }
 
-func (sq *SqlQuery) invalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
+func (sq *SqlQuery) invalidateForDml(dml *proto.DmlType) {
 	if sq.state.Get() != SERVING {
 		return
 	}
-	sq.qe.InvalidateForDml(cacheInvalidate)
+	sq.qe.InvalidateForDml(dml)
 }
 
 func (sq *SqlQuery) invalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {

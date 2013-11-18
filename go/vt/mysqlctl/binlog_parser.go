@@ -263,7 +263,7 @@ func (blp *Blp) parseBinlogEvents(sendReply SendUpdateStreamResponse, binlogRead
 	var event *eventBuffer
 
 	for {
-		if !blp.globalState.isServiceEnabled() {
+		if !blp.globalState.isEnabled() {
 			panic(NewBinlogParseError(SERVICE_ERROR, "Disconnecting because the Update Stream service has been disabled"))
 		}
 		line = line[:0]

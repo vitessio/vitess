@@ -336,31 +336,29 @@ func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query
 	qe.fullStreamFetch(logStats, conn, fullQuery, query.BindVariables, nil, nil, sendReply)
 }
 
-func (qe *QueryEngine) InvalidateForDml(cacheInvalidate *proto.CacheInvalidate) {
+func (qe *QueryEngine) InvalidateForDml(dml *proto.DmlType) {
 	if qe.cachePool.IsClosed() {
 		return
 	}
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
 
-	for _, dml := range cacheInvalidate.Dmls {
-		invalidations := int64(0)
-		tableInfo := qe.schemaInfo.GetTable(dml.Table)
-		if tableInfo == nil {
-			panic(NewTabletError(FAIL, "Table %s not found", dml.Table))
-		}
-		if tableInfo.CacheType == schema.CACHE_NONE {
-			break
-		}
-		for _, val := range dml.Keys {
-			newKey := validateKey(tableInfo, val.(string))
-			if newKey != "" {
-				tableInfo.Cache.Delete(newKey)
-			}
-			invalidations++
-		}
-		tableInfo.invalidations.Add(invalidations)
+	invalidations := int64(0)
+	tableInfo := qe.schemaInfo.GetTable(dml.Table)
+	if tableInfo == nil {
+		panic(NewTabletError(FAIL, "Table %s not found", dml.Table))
 	}
+	if tableInfo.CacheType == schema.CACHE_NONE {
+		return
+	}
+	for _, val := range dml.Keys {
+		newKey := validateKey(tableInfo, val)
+		if newKey != "" {
+			tableInfo.Cache.Delete(newKey)
+		}
+		invalidations++
+	}
+	tableInfo.invalidations.Add(invalidations)
 }
 
 func (qe *QueryEngine) InvalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {

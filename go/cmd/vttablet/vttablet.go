@@ -56,9 +56,6 @@ func main() {
 	mysqlctl.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	ts.RegisterCacheInvalidator()
-
-	// Depends on both query and updateStream.
 	if err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *mycnfFile, *overridesFile); err != nil {
 		log.Fatal(err)
 	}
