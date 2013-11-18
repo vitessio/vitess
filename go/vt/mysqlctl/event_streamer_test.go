@@ -46,20 +46,20 @@ var eventErrorCases = []eventErrorCase{
 		want:     `unexpected token: '(': query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */`,
 	}, {
 		Category: BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id namevent)  (null 'aaa' 'bmFtZQ==' ); */",
-		want:     `illegal base64 data at input byte 0: query /* _stream vtocc_e (eid id namevent)  (null 'aaa' 'bmFtZQ==' ); */`,
+		Sql:      "query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
+		want:     `illegal base64 data at input byte 0: query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */`,
 	}, {
 		Category: BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id namevent)  (null 'bmFtZQ==' ); */",
-		want:     `length mismatch in values: query /* _stream vtocc_e (eid id namevent)  (null 'bmFtZQ==' ); */`,
+		Sql:      "query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */",
+		want:     `length mismatch in values: query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */`,
 	}, {
 		Category: BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id namevent)  (null 1.1 'bmFtZQ==' ); */",
-		want:     `strconv.ParseUint: parsing "1.1": invalid syntax: query /* _stream vtocc_e (eid id namevent)  (null 1.1 'bmFtZQ==' ); */`,
+		Sql:      "query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */",
+		want:     `strconv.ParseUint: parsing "1.1": invalid syntax: query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */`,
 	}, {
 		Category: BL_DML,
-		Sql:      "query /* _stream vtocc_e (eid id namevent)  (null a 'bmFtZQ==' ); */",
-		want:     `unexpected token: 'a': query /* _stream vtocc_e (eid id namevent)  (null a 'bmFtZQ==' ); */`,
+		Sql:      "query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */",
+		want:     `unexpected token: 'a': query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */`,
 	},
 }
 
@@ -96,7 +96,7 @@ func TestDMLEvent(t *testing.T) {
 				Sql:      []byte("SET INSERT_ID=10"),
 			}, {
 				Category: BL_DML,
-				Sql:      []byte("query /* _stream vtocc_e (eid id namevent)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
+				Sql:      []byte("query /* _stream vtocc_e (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
 			}, {
 				Category: BL_DML,
 				Sql:      []byte("query"),
@@ -111,7 +111,7 @@ func TestDMLEvent(t *testing.T) {
 		sendEvent: func(event *StreamEvent) error {
 			switch event.Category {
 			case "DML":
-				want := `&{DML vtocc_e [eid id namevent] [[10 -1 name] [11 18446744073709551615 name]]  1 0 0}`
+				want := `&{DML vtocc_e [eid id name] [[10 -1 name] [11 18446744073709551615 name]]  1 0 0}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
