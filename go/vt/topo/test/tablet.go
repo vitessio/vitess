@@ -59,9 +59,9 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		t.Errorf("GetTablet(666): %v", err)
 	}
 
-	ti, err := ts.GetTablet(tablet.GetAlias())
+	ti, err := ts.GetTablet(tablet.Alias)
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.GetAlias(), err)
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
 	if eq, err := tabletEqual(ti.Tablet, tablet); err != nil {
 		t.Errorf("cannot compare tablets: %v", err)
@@ -77,8 +77,8 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Errorf("GetTabletsByCell: %v", err)
 	}
-	if len(inCell) != 1 || inCell[0] != tablet.GetAlias() {
-		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.GetAlias(), inCell)
+	if len(inCell) != 1 || inCell[0] != tablet.Alias {
+		t.Errorf("GetTabletsByCell: want [%v], got %v", tablet.Alias, inCell)
 	}
 
 	ti.State = topo.STATE_READ_ONLY
@@ -86,37 +86,37 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		t.Errorf("UpdateTablet: %v", err)
 	}
 
-	ti, err = ts.GetTablet(tablet.GetAlias())
+	ti, err = ts.GetTablet(tablet.Alias)
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.GetAlias(), err)
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
 	if want := topo.STATE_READ_ONLY; ti.State != want {
 		t.Errorf("ti.State: want %v, got %v", want, ti.State)
 	}
 
-	if err := ts.UpdateTabletFields(tablet.GetAlias(), func(t *topo.Tablet) error {
+	if err := ts.UpdateTabletFields(tablet.Alias, func(t *topo.Tablet) error {
 		t.State = topo.STATE_READ_WRITE
 		return nil
 	}); err != nil {
 		t.Errorf("UpdateTabletFields: %v", err)
 	}
-	ti, err = ts.GetTablet(tablet.GetAlias())
+	ti, err = ts.GetTablet(tablet.Alias)
 	if err != nil {
-		t.Errorf("GetTablet %v: %v", tablet.GetAlias(), err)
+		t.Errorf("GetTablet %v: %v", tablet.Alias, err)
 	}
 
 	if want := topo.STATE_READ_WRITE; ti.State != want {
 		t.Errorf("ti.State: want %v, got %v", want, ti.State)
 	}
 
-	if err := ts.DeleteTablet(tablet.GetAlias()); err != nil {
+	if err := ts.DeleteTablet(tablet.Alias); err != nil {
 		t.Errorf("DeleteTablet: %v", err)
 	}
-	if err := ts.DeleteTablet(tablet.GetAlias()); err != topo.ErrNoNode {
+	if err := ts.DeleteTablet(tablet.Alias); err != topo.ErrNoNode {
 		t.Errorf("DeleteTablet(again): %v", err)
 	}
 
-	if _, err := ts.GetTablet(tablet.GetAlias()); err != topo.ErrNoNode {
+	if _, err := ts.GetTablet(tablet.Alias); err != topo.ErrNoNode {
 		t.Errorf("GetTablet: expected error, tablet was deleted: %v", err)
 	}
 

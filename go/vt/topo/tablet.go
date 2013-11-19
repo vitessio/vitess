@@ -352,10 +352,6 @@ func (tablet *Tablet) MysqlIpAddr() string {
 	return fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
 }
 
-func (tablet *Tablet) GetAlias() TabletAlias {
-	return tablet.Alias
-}
-
 func (tablet *Tablet) GetHostname() string {
 	return tablet.Hostname
 }
@@ -528,12 +524,12 @@ func CreateTablet(ts Server, tablet *Tablet) error {
 
 // CreateTabletReplicationData creates the replication graph data for a tablet
 func CreateTabletReplicationData(ts Server, tablet *Tablet) error {
-	log.V(6).Infof("CreateTabletReplicationData(%v)", tablet.GetAlias())
+	log.V(6).Infof("CreateTabletReplicationData(%v)", tablet.Alias)
 
-	return AddShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.GetAlias(), tablet.Parent)
+	return AddShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias, tablet.Parent)
 }
 
 // DeleteTabletReplicationData deletes replication data.
 func DeleteTabletReplicationData(ts Server, tablet *Tablet) error {
-	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.GetAlias())
+	return RemoveShardReplicationRecord(ts, tablet.Keyspace, tablet.Shard, tablet.Alias)
 }

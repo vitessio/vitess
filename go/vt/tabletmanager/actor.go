@@ -490,7 +490,7 @@ func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
 		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
-			return Scrap(ts, tablet.GetAlias(), false)
+			return Scrap(ts, tablet.Alias, false)
 		} else {
 			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		}
@@ -627,7 +627,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		sr.ParentAlias = tablet.GetAlias()
+		sr.ParentAlias = tablet.Alias
 	} else {
 		sr.ParentAlias = tablet.Parent
 	}
@@ -729,7 +729,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	if sourceTablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		parentAlias = sourceTablet.GetAlias()
+		parentAlias = sourceTablet.Alias
 	} else {
 		parentAlias = sourceTablet.Parent
 	}
@@ -786,7 +786,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	}
 
 	if !args.WasReserved {
-		if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.GetAlias(), sourceTablet.KeyRange); err != nil {
+		if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.Alias, sourceTablet.KeyRange); err != nil {
 			return err
 		}
 	}
@@ -826,7 +826,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
-		sr.ParentAlias = tablet.GetAlias()
+		sr.ParentAlias = tablet.Alias
 	} else {
 		sr.ParentAlias = tablet.Parent
 	}
@@ -922,7 +922,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	// (force mode executes on the vtctl side, not on the vttablet side)
 	if !force {
 		hk := hook.NewSimpleHook("postflight_scrap")
-		configureTabletHook(hk, tablet.GetAlias())
+		configureTabletHook(hk, tablet.Alias)
 		if hookErr := hk.ExecuteOptional(); hookErr != nil {
 			// we don't want to return an error, the server
 			// is already in bad shape probably.

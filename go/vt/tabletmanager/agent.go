@@ -290,7 +290,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 		}
 		return nil
 	}
-	if err := agent.ts.UpdateTabletFields(agent.Tablet().GetAlias(), f); err != nil {
+	if err := agent.ts.UpdateTabletFields(agent.Tablet().Alias, f); err != nil {
 		return err
 	}
 

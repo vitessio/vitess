@@ -69,13 +69,13 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignoreP
 	tablets := make([]*topo.TabletInfo, 0, len(tabletMap))
 	for _, ti := range tabletMap {
 		if ti.Keyspace != shardInfo.Keyspace() || ti.Shard != shardInfo.ShardName() {
-			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.GetAlias(), keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
+			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.Alias, keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
 		}
 		if !ti.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
 			if ti.Parent.Uid != topo.NO_TABLET {
-				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.GetAlias())
+				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Alias)
 			}
 		}
 		tablets = append(tablets, ti)
@@ -136,7 +136,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 		// if the tablet doesn't have the right master, ignore it
 		if tablet.Type != topo.TYPE_MASTER {
 			if tablet.Parent != shardInfo.MasterAlias {
-				log.Warningf("Tablet %v doesn't have the right master (it has %v expecting %v), skipping it", tablet.GetAlias(), tablet.Parent, shardInfo.MasterAlias)
+				log.Warningf("Tablet %v doesn't have the right master (it has %v expecting %v), skipping it", tablet.Alias, tablet.Parent, shardInfo.MasterAlias)
 				continue
 			}
 		}
@@ -176,7 +176,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 		entry, err := tm.EndPointForTablet(tablet.Tablet)
 		if err != nil {
-			log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.GetAlias(), err)
+			log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
 			continue
 		}
 		addrs.Entries = append(addrs.Entries, *entry)

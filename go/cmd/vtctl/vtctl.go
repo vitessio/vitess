@@ -297,7 +297,7 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	if shard == "" {
 		shard = "<null>"
 	}
-	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.GetAlias(), keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr, fmtMapAwkable(ti.Tags))
+	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.Alias, keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr, fmtMapAwkable(ti.Tags))
 }
 
 func fmtAction(action *tm.ActionNode) string {
