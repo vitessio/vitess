@@ -22,14 +22,14 @@ import (
 
 func init() {
 	flag.Set("tablet-protocol", "sandbox")
-	Init(NewBalancerMap(new(sandboxTopo), "aa", "vt"), 1*time.Second, 10)
+	Init(NewBalancerMap(new(sandboxTopo), "aa"), 1*time.Second, 10)
 }
 
 // resetVTGate resets the internal state of RpcVTGate.
 func resetVTGate() (sess proto.Session) {
 	resetSandbox()
 	*RpcVTGate = VTGate{
-		balancerMap: NewBalancerMap(new(sandboxTopo), "aa", "vt"),
+		balancerMap: NewBalancerMap(new(sandboxTopo), "aa"),
 		connections: pools.NewNumbered(),
 		retryDelay:  1 * time.Second,
 		retryCount:  10,
@@ -74,7 +74,7 @@ func TestVTGateGetSessionId(t *testing.T) {
 func TestVTGateSessionConflict(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{mustDelay: 50 * time.Millisecond}
-	testConns["0:1"] = sbc
+	testConns[0] = sbc
 	q := proto.QueryShard{
 		Sql:       "query",
 		SessionId: sess.SessionId,
@@ -124,7 +124,7 @@ func TestVTGateSessionConflict(t *testing.T) {
 func TestVTGateExecuteShard(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
-	testConns["0:1"] = sbc
+	testConns[0] = sbc
 	qr, err := execShard(sess)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
@@ -136,8 +136,8 @@ func TestVTGateExecuteShard(t *testing.T) {
 
 func TestVTGateExecuteBatchShard(t *testing.T) {
 	sess := resetVTGate()
-	testConns["0:1"] = &sandboxConn{}
-	testConns["1:1"] = &sandboxConn{}
+	testConns[0] = &sandboxConn{}
+	testConns[1] = &sandboxConn{}
 	q := proto.BatchQueryShard{
 		Queries: []tproto.BoundQuery{{
 			"query",
@@ -165,7 +165,7 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 func TestVTGateStreamExecuteShard(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
-	testConns["0:1"] = sbc
+	testConns[0] = sbc
 	q := proto.QueryShard{
 		Sql:       "query",
 		SessionId: sess.SessionId,
@@ -187,7 +187,7 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 func TestVTGateTx(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
-	testConns["0:1"] = sbc
+	testConns[0] = sbc
 	var noOutput rpc.UnusedResponse
 	for i := 0; i < 2; i++ {
 		RpcVTGate.Begin(nil, &sess, &noOutput)
@@ -222,7 +222,7 @@ func TestVTGateTx(t *testing.T) {
 func TestVTGateClose(t *testing.T) {
 	sess := resetVTGate()
 	sbc := &sandboxConn{}
-	testConns["0:1"] = sbc
+	testConns[0] = sbc
 	execShard(sess)
 	// Ensure low level Close gets called.
 	if sbc.CloseCount != 0 {

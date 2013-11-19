@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -27,11 +28,15 @@ func init() {
 	RegisterDialer("bson", DialTablet)
 }
 
-func DialTablet(addr, keyspace, shard string) (TabletConn, error) {
+func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error) {
+	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
+		addr = fmt.Sprintf("%v:%v", endPoint.Host, endPoint.NamedPortMap["_vts"])
 		config = &tls.Config{}
 		config.InsecureSkipVerify = true
+	} else {
+		addr = fmt.Sprintf("%v:%v", endPoint.Host, endPoint.NamedPortMap["_vtocc"])
 	}
 
 	conn := new(TabletBson)
