@@ -279,7 +279,7 @@ class TestSecure(unittest.TestCase):
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
 
     # start a vtgate to connect to that tablet
-    gate_proc, gate_port = utils.vtgate_start(port_name='_vts', tablet_bson_encrypted=True)
+    gate_proc, gate_port = utils.vtgate_start(tablet_bson_encrypted=True)
     conn = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
 
     # _execute

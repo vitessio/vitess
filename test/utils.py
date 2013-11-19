@@ -359,13 +359,12 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtgate helpers
-def vtgate_start(cell='test_nj', port_name='_vtocc', retry_delay=1, retry_count=1, topo_impl="zookeeper", tablet_bson_encrypted=False):
+def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl="zookeeper", tablet_bson_encrypted=False):
   port = reserve_ports(1)
   prog_compile(['vtgate'])
   args = [vtroot+'/bin/vtgate',
           '-port', str(port),
           '-cell', cell,
-          '-port-name', port_name,
           '-topo_implementation', topo_impl,
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
