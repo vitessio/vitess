@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	srvTopoCacheTtl = flag.Duration("-srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
+	srvTopoCacheTTL = flag.Duration("-srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 )
 
 // SrvTopoServer is a subset of topo.Server that only contains the serving
@@ -75,7 +75,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	server.mu.Lock()
 	entry, ok := server.svrKeyspaceNamesCache[key]
 	server.mu.Unlock()
-	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTtl {
+	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTTL {
 		return entry.value, nil
 	}
 
@@ -108,7 +108,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	server.mu.Lock()
 	entry, ok := server.srvKeyspaceCache[key]
 	server.mu.Unlock()
-	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTtl {
+	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTTL {
 		return entry.value, nil
 	}
 
@@ -141,7 +141,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	server.mu.Lock()
 	entry, ok := server.endPointsCache[key]
 	server.mu.Unlock()
-	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTtl {
+	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTTL {
 		return entry.value, nil
 	}
 

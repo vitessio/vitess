@@ -148,6 +148,8 @@ func getEndPoints(rpcClient *rpcplus.Client, cell, keyspace, shard, tabletType s
 	}
 }
 
+// qps is a function used by tests to run a zkocc load check.
+// It will get zk paths as fast as possible and display the QPS.
 func qps(paths []string) {
 	var count sync2.AtomicInt32
 	for _, path := range paths {
@@ -170,6 +172,8 @@ func qps(paths []string) {
 	}
 }
 
+// qps2 is a function used by tests to run a vtgate load check.
+// It will get the same srvKeyspaces as fast as possible and display the QPS.
 func qps2(cell string, keyspaces []string) {
 	var count sync2.AtomicInt32
 	for _, keyspace := range keyspaces {
