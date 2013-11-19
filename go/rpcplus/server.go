@@ -159,7 +159,7 @@ type methodType struct {
 	numCalls    uint
 }
 
-func (m methodType) TakesContext() bool {
+func (m *methodType) TakesContext() bool {
 	return m.ContextType != nil
 }
 
@@ -564,7 +564,7 @@ func (server *Server) ServeCodecWithContext(codec ServerCodec, context interface
 	codec.Close()
 }
 
-func (mtype methodType) prepareContext(context interface{}) reflect.Value {
+func (mtype *methodType) prepareContext(context interface{}) reflect.Value {
 	if contextv := reflect.ValueOf(context); contextv.IsValid() {
 		return contextv
 	}
