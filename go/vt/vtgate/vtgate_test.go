@@ -5,7 +5,6 @@
 package vtgate
 
 import (
-	"flag"
 	"runtime"
 	"strings"
 	"testing"
@@ -21,7 +20,6 @@ import (
 // This file uses the sandbox_test framework.
 
 func init() {
-	flag.Set("tablet-protocol", "sandbox")
 	Init(NewBalancerMap(new(sandboxTopo), "aa"), 1*time.Second, 10)
 }
 

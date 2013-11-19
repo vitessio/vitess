@@ -5,6 +5,7 @@
 package vtgate
 
 import (
+	"flag"
 	"fmt"
 	"strconv"
 	"sync"
@@ -21,6 +22,7 @@ import (
 
 func init() {
 	RegisterDialer("sandbox", sandboxDialer)
+	flag.Set("tablet-protocol", "sandbox")
 }
 
 var (
