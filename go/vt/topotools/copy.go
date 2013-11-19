@@ -7,6 +7,7 @@
 package topotools
 
 import (
+	"fmt"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -31,7 +32,7 @@ func CopyKeyspaces(fromTS, toTS topo.Server) {
 				if err == topo.ErrNodeExists {
 					log.Warningf("keyspace %v already exists", keyspace)
 				} else {
-					rec.RecordError(err)
+					rec.RecordError(fmt.Errorf("Failed to create keyspace %v: %v", keyspace, err))
 				}
 			}
 		}(keyspace)
@@ -57,13 +58,13 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 			defer wg.Done()
 			shards, err := fromTS.GetShardNames(keyspace)
 			if err != nil {
-				rec.RecordError(err)
+				rec.RecordError(fmt.Errorf("GetShardNames(%v) failed: %v", keyspace, err))
 				return
 			}
 
 			if deleteKeyspaceShards {
 				if err := toTS.DeleteKeyspaceShards(keyspace); err != nil {
-					rec.RecordError(err)
+					rec.RecordError(fmt.Errorf("DeleteKeyspaceShards(%v) failed: %v", keyspace, err))
 					return
 				}
 			}
@@ -76,19 +77,19 @@ func CopyShards(fromTS, toTS topo.Server, deleteKeyspaceShards bool) {
 						if err == topo.ErrNodeExists {
 							log.Warningf("shard %v/%v already exists", keyspace, shard)
 						} else {
-							rec.RecordError(err)
+							rec.RecordError(fmt.Errorf("CreateShard(%v, %v) failed: %v", keyspace, shard, err))
 							return
 						}
 					}
 
 					si, err := fromTS.GetShard(keyspace, shard)
 					if err != nil {
-						rec.RecordError(err)
+						rec.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
 						return
 					}
 
 					if err := toTS.UpdateShard(si); err != nil {
-						rec.RecordError(err)
+						rec.RecordError(fmt.Errorf("UpdateShard(%v, %v) failed: %v", keyspace, shard, err))
 					}
 				}(keyspace, shard)
 			}
@@ -115,7 +116,7 @@ func CopyTablets(fromTS, toTS topo.Server) {
 			defer wg.Done()
 			tabletAliases, err := fromTS.GetTabletsByCell(cell)
 			if err != nil {
-				rec.RecordError(err)
+				rec.RecordError(fmt.Errorf("GetTabletsByCell(%v) failed: %v", cell, err))
 			} else {
 				for _, tabletAlias := range tabletAliases {
 					wg.Add(1)
@@ -125,7 +126,7 @@ func CopyTablets(fromTS, toTS topo.Server) {
 						// read the source tablet
 						ti, err := fromTS.GetTablet(tabletAlias)
 						if err != nil {
-							rec.RecordError(err)
+							rec.RecordError(fmt.Errorf("GetTablet(%v) failed: %v", tabletAlias, err))
 							return
 						}
 
@@ -140,7 +141,7 @@ func CopyTablets(fromTS, toTS topo.Server) {
 							})
 						}
 						if err != nil {
-							rec.RecordError(err)
+							rec.RecordError(fmt.Errorf("CreateTablet(%v) failed: %v", tabletAlias, err))
 							return
 						}
 					}(tabletAlias)
@@ -170,7 +171,7 @@ func CopyShardReplications(fromTS, toTS topo.Server) {
 			defer wg.Done()
 			shards, err := fromTS.GetShardNames(keyspace)
 			if err != nil {
-				rec.RecordError(err)
+				rec.RecordError(fmt.Errorf("GetShardNames(%v) failed: %v", keyspace, err))
 				return
 			}
 
@@ -182,14 +183,14 @@ func CopyShardReplications(fromTS, toTS topo.Server) {
 					// read the source shard to get the cells
 					si, err := fromTS.GetShard(keyspace, shard)
 					if err != nil {
-						rec.RecordError(err)
+						rec.RecordError(fmt.Errorf("GetShard(%v, %v) failed: %v", keyspace, shard, err))
 						return
 					}
 
 					for _, cell := range si.Cells {
 						sri, err := fromTS.GetShardReplication(cell, keyspace, shard)
 						if err != nil {
-							rec.RecordError(err)
+							rec.RecordError(fmt.Errorf("GetShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 							continue
 						}
 
@@ -202,10 +203,10 @@ func CopyShardReplications(fromTS, toTS topo.Server) {
 								*oldSR = *sri.ShardReplication
 								return nil
 							}); err != nil {
-								rec.RecordError(err)
+								rec.RecordError(fmt.Errorf("UpdateShardReplicationFields(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 							}
 						default:
-							rec.RecordError(err)
+							rec.RecordError(fmt.Errorf("CreateShardReplication(%v, %v, %v) failed: %v", cell, keyspace, shard, err))
 						}
 					}
 				}(keyspace, shard)
