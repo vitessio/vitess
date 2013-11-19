@@ -10,6 +10,7 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 const (
@@ -40,7 +41,7 @@ type OperationalError string
 func (e OperationalError) Error() string { return string(e) }
 
 // TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
-type TabletDialer func(addr, keyspace, shard string) (TabletConn, error)
+type TabletDialer func(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.

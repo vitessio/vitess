@@ -17,19 +17,16 @@ import (
 type BalancerMap struct {
 	Toposerv  SrvTopoServer
 	Cell      string
-	PortName  string
 	mu        sync.Mutex
 	balancers map[string]*Balancer
 }
 
 // NewBalancerMap builds a new BalancerMap. Each BalancerMap is dedicated to a
 // cell. serv is the TopoServ used to fetch the list of tablets when needed.
-// The Balancers will be built using the namedPort from each tablet info.
-func NewBalancerMap(serv SrvTopoServer, cell, namedPort string) *BalancerMap {
+func NewBalancerMap(serv SrvTopoServer, cell string) *BalancerMap {
 	return &BalancerMap{
 		Toposerv:  serv,
 		Cell:      cell,
-		PortName:  namedPort,
 		balancers: make(map[string]*Balancer, 256),
 	}
 }
@@ -43,20 +40,12 @@ func (blm *BalancerMap) Balancer(keyspace, shard string, tabletType topo.TabletT
 	if ok {
 		return blc
 	}
-	getAddresses := func() ([]string, error) {
+	getAddresses := func() (*topo.EndPoints, error) {
 		endpoints, err := blm.Toposerv.GetEndPoints(blm.Cell, keyspace, shard, tabletType)
 		if err != nil {
 			return nil, fmt.Errorf("endpoints fetch error: %v", err)
 		}
-		result := make([]string, 0, len(endpoints.Entries))
-		for _, endpoint := range endpoints.Entries {
-			port, ok := endpoint.NamedPortMap[blm.PortName]
-			if !ok {
-				return nil, fmt.Errorf("endpoints fetch error: named port %s not found in %v", blm.PortName, endpoint.NamedPortMap)
-			}
-			result = append(result, fmt.Sprintf("%s:%d", endpoint.Host, port))
-		}
-		return result, nil
+		return endpoints, nil
 	}
 	return blm.set(key, NewBalancer(getAddresses, retryDelay))
 }

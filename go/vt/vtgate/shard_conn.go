@@ -23,7 +23,7 @@ type ShardConn struct {
 	retryDelay time.Duration
 	retryCount int
 	balancer   *Balancer
-	address    string
+	endPoint   topo.EndPoint
 	conn       TabletConn
 }
 
@@ -63,7 +63,7 @@ func (sdc *ShardConn) canRetry(err error) bool {
 	}
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
 	inTransaction := (sdc.TransactionId() != 0)
-	sdc.balancer.MarkDown(sdc.address)
+	sdc.balancer.MarkDown(sdc.endPoint.Uid)
 	sdc.Close()
 	return !inTransaction
 }
@@ -74,18 +74,18 @@ func (sdc *ShardConn) canRetry(err error) bool {
 func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr *mproto.QueryResult, err error) {
 	for i := 0; i < sdc.retryCount; i++ {
 		if sdc.conn == nil {
-			var addr string
-			addr, err = sdc.balancer.Get()
+			var endPoint topo.EndPoint
+			endPoint, err = sdc.balancer.Get()
 			if err != nil {
 				return nil, sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
+			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
 			if err != nil {
-				sdc.balancer.MarkDown(addr)
+				sdc.balancer.MarkDown(endPoint.Uid)
 				continue
 			}
-			sdc.address = addr
+			sdc.endPoint = endPoint
 			sdc.conn = conn
 		}
 		qr, err = sdc.conn.Execute(query, bindVars)
@@ -101,18 +101,18 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr
 func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery) (qrs *tproto.QueryResultList, err error) {
 	for i := 0; i < sdc.retryCount; i++ {
 		if sdc.conn == nil {
-			var addr string
-			addr, err = sdc.balancer.Get()
+			var endPoint topo.EndPoint
+			endPoint, err = sdc.balancer.Get()
 			if err != nil {
 				return nil, sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
+			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
 			if err != nil {
-				sdc.balancer.MarkDown(addr)
+				sdc.balancer.MarkDown(endPoint.Uid)
 				continue
 			}
-			sdc.address = addr
+			sdc.endPoint = endPoint
 			sdc.conn = conn
 		}
 		qrs, err = sdc.conn.ExecuteBatch(queries)
@@ -130,18 +130,18 @@ func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{
 	var err error
 	for i := 0; i < sdc.retryCount; i++ {
 		if sdc.conn == nil {
-			var addr string
-			addr, err = sdc.balancer.Get()
+			var endPoint topo.EndPoint
+			endPoint, err = sdc.balancer.Get()
 			if err != nil {
 				goto return_error
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
+			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
 			if err != nil {
-				sdc.balancer.MarkDown(addr)
+				sdc.balancer.MarkDown(endPoint.Uid)
 				continue
 			}
-			sdc.address = addr
+			sdc.endPoint = endPoint
 			sdc.conn = conn
 		}
 		results, errFunc = sdc.conn.StreamExecute(query, bindVars)
@@ -165,18 +165,18 @@ func (sdc *ShardConn) Begin() (err error) {
 	}
 	for i := 0; i < sdc.retryCount; i++ {
 		if sdc.conn == nil {
-			var addr string
-			addr, err = sdc.balancer.Get()
+			var endPoint topo.EndPoint
+			endPoint, err = sdc.balancer.Get()
 			if err != nil {
 				return sdc.WrapError(err)
 			}
 			var conn TabletConn
-			conn, err = GetDialer()(addr, sdc.keyspace, sdc.shard)
+			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
 			if err != nil {
-				sdc.balancer.MarkDown(addr)
+				sdc.balancer.MarkDown(endPoint.Uid)
 				continue
 			}
-			sdc.address = addr
+			sdc.endPoint = endPoint
 			sdc.conn = conn
 		}
 		err = sdc.conn.Begin()
@@ -220,7 +220,7 @@ func (sdc *ShardConn) Close() error {
 		sdc.conn.Rollback()
 	}
 	err := sdc.conn.Close()
-	sdc.address = ""
+	sdc.endPoint = topo.EndPoint{}
 	sdc.conn = nil
 	return sdc.WrapError(err)
 }
@@ -231,6 +231,6 @@ func (sdc *ShardConn) WrapError(in error) (wrapped error) {
 		return nil
 	}
 	return fmt.Errorf(
-		"%v, shard: (%s.%s.%s), address: %s",
-		in, sdc.keyspace, sdc.shard, sdc.tabletType, sdc.address)
+		"%v, shard: (%s.%s.%s), host: %s",
+		in, sdc.keyspace, sdc.shard, sdc.tabletType, sdc.endPoint.Host)
 }

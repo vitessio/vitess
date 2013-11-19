@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -47,7 +48,7 @@ var (
 func resetSandbox() {
 	sandmu.Lock()
 	defer sandmu.Unlock()
-	testConns = make(map[string]TabletConn)
+	testConns = make(map[uint32]TabletConn)
 	endPointCounter = 0
 	dialCounter = 0
 	dialMustFail = 0
@@ -72,14 +73,18 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 		endPointMustFail--
 		return nil, fmt.Errorf("topo error")
 	}
+	uid, err := strconv.Atoi(shard)
+	if err != nil {
+		panic(err)
+	}
 	return &topo.EndPoints{Entries: []topo.EndPoint{
-		{Host: shard, NamedPortMap: map[string]int{"vt": 1}},
+		{Uid: uint32(uid), Host: shard, NamedPortMap: map[string]int{"vt": 1}},
 	}}, nil
 }
 
-var testConns map[string]TabletConn
+var testConns map[uint32]TabletConn
 
-func sandboxDialer(addr, keyspace, shard string) (TabletConn, error) {
+func sandboxDialer(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error) {
 	sandmu.Lock()
 	defer sandmu.Unlock()
 	dialCounter++
@@ -87,9 +92,9 @@ func sandboxDialer(addr, keyspace, shard string) (TabletConn, error) {
 		dialMustFail--
 		return nil, OperationalError(fmt.Sprintf("conn error"))
 	}
-	tconn := testConns[addr]
+	tconn := testConns[endPoint.Uid]
 	if tconn == nil {
-		panic(fmt.Sprintf("can't find conn %s", addr))
+		panic(fmt.Sprintf("can't find conn %v", endPoint.Uid))
 	}
 	return tconn, nil
 }
