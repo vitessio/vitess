@@ -180,7 +180,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 		if _, ok := positionMap[mapKey]; !ok {
 			positionMap[mapKey] = make([]uint32, 0, 32)
 		}
-		positionMap[mapKey] = append(positionMap[mapKey], ctx.tablet.Uid)
+		positionMap[mapKey] = append(positionMap[mapKey], ctx.tablet.Alias.Uid)
 	}
 
 	if len(positionMap) == 1 {
@@ -455,7 +455,7 @@ func restartableTabletMap(slaves map[topo.TabletAlias]*topo.TabletInfo) map[uint
 	tabletMap := make(map[uint32]*topo.TabletInfo)
 	for _, ti := range slaves {
 		if ti.Type != topo.TYPE_LAG {
-			tabletMap[ti.Uid] = ti
+			tabletMap[ti.Alias.Uid] = ti
 		} else {
 			log.Infof("skipping reparent action for tablet %v %v", ti.Type, ti.GetAlias())
 		}

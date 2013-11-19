@@ -105,9 +105,9 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	wg := sync.WaitGroup{}
 
 	swrd := tm.SlaveWasRestartedData{
-		Parent:               masterElectTablet.GetAlias(),
-		ExpectedMasterAddr:   masterElectTablet.MysqlAddr,
-		ExpectedMasterIpAddr: masterElectTablet.MysqlIpAddr,
+		Parent:               masterElectTablet.Alias,
+		ExpectedMasterAddr:   masterElectTablet.MysqlAddr(),
+		ExpectedMasterIpAddr: masterElectTablet.MysqlIpAddr(),
 		ScrapStragglers:      scrapStragglers,
 	}
 

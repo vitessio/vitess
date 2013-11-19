@@ -244,7 +244,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, shardInfo *topo.Shard
 
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
-		blm.addPlayer(tablet.Cell, tablet.KeyRange, sourceShard)
+		blm.addPlayer(tablet.Alias.Cell, tablet.KeyRange, sourceShard)
 		delete(toRemove, sourceShard)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0

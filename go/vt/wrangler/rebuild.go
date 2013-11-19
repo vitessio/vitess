@@ -129,7 +129,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 	for _, tablet := range tablets {
 		// only look at tablets in the cells we want to rebuild
-		if !inCellList(tablet.Tablet.Cell, cells) {
+		if !inCellList(tablet.Tablet.Alias.Cell, cells) {
 			continue
 		}
 
@@ -143,18 +143,18 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 		// this is {cell,keyspace,shard}
 		// we'll get the children to find the existing types
-		shardLocation := cellKeyspaceShard{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard}
+		shardLocation := cellKeyspaceShard{tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard}
 		// only need to do this once per cell
 		if !knownShardLocations[shardLocation] {
-			log.Infof("Getting tablet types on cell %v for %v/%v", tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
-			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
+			log.Infof("Getting tablet types on cell %v for %v/%v", tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard)
+			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			if err != nil {
 				if err != topo.ErrNoNode {
 					return err
 				}
 			} else {
 				for _, tabletType := range tabletTypes {
-					existingDbTypeLocations[cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard, tabletType}] = true
+					existingDbTypeLocations[cellKeyspaceShardType{tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard, tabletType}] = true
 				}
 			}
 			knownShardLocations[shardLocation] = true
@@ -167,7 +167,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 			continue
 		}
 
-		location := cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
+		location := cellKeyspaceShardType{tablet.Tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
 		addrs, ok := locationAddrsMap[location]
 		if !ok {
 			addrs = topo.NewEndPoints()

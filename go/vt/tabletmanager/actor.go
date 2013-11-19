@@ -301,8 +301,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	}
 
 	// Perform the action.
-	alias := topo.TabletAlias{Cell: tablet.Tablet.Cell, Uid: tablet.Tablet.Uid}
-	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
+	rsd := &RestartSlaveData{Parent: tablet.Alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false, ta.hookExtraEnv())
 	if err != nil {
 		return err
@@ -619,7 +618,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
+	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -782,7 +781,7 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 
 	// read & unpack the manifest
 	sm := new(mysqlctl.SnapshotManifest)
-	if err := fetchAndParseJsonFile(sourceTablet.Addr, args.SrcFilePath, sm); err != nil {
+	if err := fetchAndParseJsonFile(sourceTablet.Addr(), args.SrcFilePath, sm); err != nil {
 		return err
 	}
 
@@ -818,7 +817,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr(), false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -855,7 +854,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 		if e != nil {
 			return e
 		}
-		sourceAddrs[i] = &url.URL{Host: t.Addr, Path: "/" + t.DbName()}
+		sourceAddrs[i] = &url.URL{Host: t.Addr(), Path: "/" + t.DbName()}
 	}
 
 	// change type to restore, no change to replication graph
@@ -910,11 +909,11 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet)
 		if err != nil {
 			if err == topo.ErrNoNode {
-				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Cell)
+				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
 				err = nil
 			}
 			if err != nil {
-				log.Warningf("remove replication data for %v failed: %v", tablet.GetAlias(), err)
+				log.Warningf("remove replication data for %v failed: %v", tablet.Alias, err)
 			}
 		}
 	}

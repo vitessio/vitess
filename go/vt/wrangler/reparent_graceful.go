@@ -34,7 +34,7 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 		return fmt.Errorf("master tablet should not be type: %v %v", masterTablet.Type, masterTablet.GetAlias())
 	}
 
-	if masterTablet.Uid == masterElectTablet.Uid {
+	if masterTablet.Alias.Uid == masterElectTablet.Alias.Uid {
 		return fmt.Errorf("master tablet should not match master elect - this must be forced: %v", masterTablet.GetAlias())
 	}
 
@@ -47,7 +47,7 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 	}
 
 	// Make sure all tablets have the right parent and reasonable positions.
-	err := wr.checkSlaveReplication(slaveTabletMap, masterTablet.Uid)
+	err := wr.checkSlaveReplication(slaveTabletMap, masterTablet.Alias.Uid)
 	if err != nil {
 		return err
 	}

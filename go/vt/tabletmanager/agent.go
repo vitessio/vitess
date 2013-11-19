@@ -234,28 +234,21 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	if err != nil {
 		return err
 	}
-	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
+	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
 func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
-	host, port, err := netutil.SplitHostPort(tablet.Addr)
-	if err != nil {
+	entry := topo.NewAddr(tablet.Alias.Uid, tablet.Hostname)
+	if err := tablet.ValidatePortmap(); err != nil {
 		return nil, err
 	}
-	entry := topo.NewAddr(tablet.Uid, host)
-	entry.NamedPortMap["_vtocc"] = port
-	if tablet.SecureAddr != "" {
-		host, port, err = netutil.SplitHostPort(tablet.SecureAddr)
-		if err != nil {
-			return nil, err
-		}
+	entry.NamedPortMap = map[string]int{
+		"_vtocc": tablet.Portmap["vt"],
+		"_mysql": tablet.Portmap["mysql"],
+	}
+	if port, ok := tablet.Portmap["vts"]; ok {
 		entry.NamedPortMap["_vts"] = port
 	}
-	host, port, err = netutil.SplitHostPort(tablet.MysqlAddr)
-	if err != nil {
-		return nil, err
-	}
-	entry.NamedPortMap["_mysql"] = port
 	return entry, nil
 }
 
@@ -283,15 +276,6 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 	// Update bind addr for mysql and query service in the tablet node.
 	f := func(tablet *topo.Tablet) error {
-		// the first four values are for backward compatibility
-		tablet.Addr = fmt.Sprintf("%v:%v", hostname, vtPort)
-		if vtsPort != 0 {
-			tablet.SecureAddr = fmt.Sprintf("%v:%v", hostname, vtsPort)
-		}
-		tablet.MysqlAddr = fmt.Sprintf("%v:%v", hostname, mysqlPort)
-		tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", ipAddr, mysqlPort)
-
-		// new values
 		tablet.Hostname = hostname
 		tablet.IPAddr = ipAddr
 		if tablet.Portmap == nil {

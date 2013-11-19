@@ -523,12 +523,6 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	}
 
 	tablet := &topo.Tablet{
-		// NOTE(szopa): The following 4 are deprecated.
-		Cell:      tabletAlias.Cell,
-		Uid:       tabletAlias.Uid,
-		Addr:      net.JoinHostPort(hostname, vtPortString),
-		MysqlAddr: net.JoinHostPort(hostname, mysqlPortString),
-
 		Alias:    tabletAlias,
 		Hostname: hostname,
 		Portmap: map[string]int{
@@ -566,21 +560,6 @@ func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	return "", wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
-		// update old fields, need both a port and ip for each
-		if *hostname != "" && *vtPort != 0 {
-			tablet.Addr = fmt.Sprintf("%v:%v", *hostname, *vtPort)
-		}
-		if *hostname != "" && *vtsPort != 0 {
-			tablet.SecureAddr = fmt.Sprintf("%v:%v", *hostname, *vtsPort)
-		}
-		if *hostname != "" && *mysqlPort != 0 {
-			tablet.MysqlAddr = fmt.Sprintf("%v:%v", *hostname, *mysqlPort)
-		}
-		if *ipAddr != "" && *mysqlPort != 0 {
-			tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", *ipAddr, *mysqlPort)
-		}
-
-		// update new fields
 		if *hostname != "" {
 			tablet.Hostname = *hostname
 		}

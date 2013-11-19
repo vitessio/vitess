@@ -12,7 +12,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -301,18 +300,15 @@ const (
 // Tablet is a pure data struct for information serialized into json
 // and stored into topo.Server
 type Tablet struct {
-	Cell        string      // the cell this tablet is assigned to (doesn't change). DEPRECATED: use Alias
-	Uid         uint32      // the server id for this instance. DEPRECATED: use Alias
-	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
-	Addr        string      // host:port for queryserver. DEPRECATED: use Hostname and Portmap
-	SecureAddr  string      // host:port for queryserver using encrypted connection. DEPRECATED: use Hostname and Portmap
-	MysqlAddr   string      // host:port for the mysql instance. DEPRECATED: use Hostname and Portmap
-	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns. DEPRECATED: use IPAddr and Portmap
+	Parent TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
 
 	Alias    TabletAlias
 	Hostname string
 	IPAddr   string
-	Portmap  map[string]int
+
+	// Named port names. Currently supported ports: vt, vts,
+	// mysql.
+	Portmap map[string]int
 
 	Tags     map[string]string // contains freeform information about the tablet.
 	Keyspace string
@@ -332,60 +328,36 @@ type Tablet struct {
 // replaced with accessing Alias and Hostname once Addr, Cell, and Uid
 // are removed.
 
-func (tablet *Tablet) GetAlias() TabletAlias {
-	if tablet.Alias.IsZero() {
-		return TabletAlias{tablet.Cell, tablet.Uid}
+// ValidatePortmap returns an error if the tablet's portmap doesn't
+// contain all the necessary ports for the tablet to be fully
+// operational.
+func (tablet *Tablet) ValidatePortmap() error {
+	for _, name := range []string{"vt", "mysql"} {
+		if _, ok := tablet.Portmap[name]; !ok {
+			return fmt.Errorf("no %v port available", name)
+		}
 	}
+	return nil
+}
+
+func (tablet *Tablet) Addr() string {
+	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vt"])
+}
+
+func (tablet *Tablet) MysqlAddr() string {
+	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["mysql"])
+}
+
+func (tablet *Tablet) MysqlIpAddr() string {
+	return fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
+}
+
+func (tablet *Tablet) GetAlias() TabletAlias {
 	return tablet.Alias
 }
 
 func (tablet *Tablet) GetHostname() string {
-	if tablet.Hostname != "" {
-		return tablet.Hostname
-	}
-	host, _, err := netutil.SplitHostPort(tablet.Addr)
-	if err != nil {
-		panic(err) // should not happen, Addr was checked at creation
-	}
-	return host
-}
-
-// FIXME(szopa): This function should be removed once all tablets
-// contain data in the new fields.
-
-func (tablet *Tablet) backfillData() {
-	if tablet.Alias.IsZero() {
-		tablet.Alias = TabletAlias{Cell: tablet.Cell, Uid: tablet.Uid}
-	}
-	tablet.Portmap = make(map[string]int)
-
-	hostname, vtPort, err := netutil.SplitHostPort(tablet.Addr)
-	if err != nil {
-		log.Errorf("cannot backfill tablet %v: %v", tablet, err)
-		return
-	}
-	tablet.Hostname = hostname
-	tablet.Portmap["vt"] = vtPort
-
-	if tablet.MysqlIpAddr != "" {
-		ip, mysqlPort, err := netutil.SplitHostPort(tablet.MysqlIpAddr)
-		if err != nil {
-			log.Errorf("cannot backfill tablet %v: %v", tablet, err)
-			return
-		}
-
-		tablet.IPAddr = ip
-		tablet.Portmap["mysql"] = mysqlPort
-	}
-
-	if tablet.SecureAddr != "" {
-		_, securePort, err := netutil.SplitHostPort(tablet.SecureAddr)
-		if err != nil {
-			log.Errorf("cannot backfill tablet %v: %v", tablet, err)
-			return
-		}
-		tablet.Portmap["vts"] = securePort
-	}
+	return tablet.Hostname
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the
@@ -419,7 +391,7 @@ func (tablet *Tablet) IsAssigned() bool {
 }
 
 func (tablet *Tablet) String() string {
-	return fmt.Sprintf("Tablet{%v}", tablet.Uid)
+	return fmt.Sprintf("Tablet{%v}", tablet.Alias)
 }
 
 func (tablet *Tablet) Json() string {
@@ -504,14 +476,14 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 			return err
 		}
 
-		si, err := ts.GetShardReplication(tablet.Cell, tablet.Keyspace, tablet.Shard)
+		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
 		}
 
 		rl, err := si.GetReplicationLink(tabletAlias)
 		if err != nil {
-			return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Cell, err)
+			return fmt.Errorf("tablet %v not found in cell %v shard replication: %v", tabletAlias, tablet.Alias.Cell, err)
 		}
 
 		if rl.Parent != tablet.Parent {
@@ -523,7 +495,7 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 		// a replication graph doesn't leave a node behind.
 		// However, while an action is running, there is some
 		// time where this might be inconsistent.
-		si, err := ts.GetShardReplication(tablet.Cell, tablet.Keyspace, tablet.Shard)
+		si, err := ts.GetShardReplication(tablet.Alias.Cell, tablet.Keyspace, tablet.Shard)
 		if err != nil {
 			return err
 		}
@@ -540,7 +512,6 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
 func CreateTablet(ts Server, tablet *Tablet) error {
-	tablet.backfillData()
 	// Have the Server create the tablet
 	err := ts.CreateTablet(tablet)
 	if err != nil {

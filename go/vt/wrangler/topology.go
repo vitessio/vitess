@@ -2,7 +2,6 @@ package wrangler
 
 import (
 	"fmt"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -130,18 +129,13 @@ func (tn TabletNode) ShortName() string {
 }
 
 func TabletNodeFromTabletInfo(ti *topo.TabletInfo) (*TabletNode, error) {
-	host, port, err := net.SplitHostPort(ti.Addr)
-	if err != nil {
-		return nil, err
-	}
-	intPort, err := strconv.Atoi(port)
-	if err != nil {
+	if err := ti.ValidatePortmap(); err != nil {
 		return nil, err
 	}
 	return &TabletNode{
-		Host:  host,
-		Port:  intPort,
-		Alias: ti.GetAlias(),
+		Host:  ti.Hostname,
+		Port:  ti.Portmap["vt"],
+		Alias: ti.Alias,
 	}, nil
 }
 
