@@ -266,7 +266,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysql
 			// ValidateSchemaShard only does the serving types.
 			// We do everything in the replication graph
 			// but LAG. This seems fine for now.
-			log.Infof("Skipping tablet %v as it is LAG", ti.GetAlias())
+			log.Infof("Skipping tablet %v as it is LAG", ti.Alias)
 			continue
 		}
 
@@ -288,7 +288,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysql
 	// quick check for errors
 	for _, status := range statusArray {
 		if status.lastError != nil {
-			return nil, fmt.Errorf("Error getting schema on tablet %v: %v", status.ti.GetAlias(), status.lastError)
+			return nil, fmt.Errorf("Error getting schema on tablet %v: %v", status.ti.Alias, status.lastError)
 		}
 	}
 
@@ -305,12 +305,12 @@ func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, prefligh
 	// BeforeSchema. If not, we shouldn't proceed
 	log.Infof("Checking schema on all tablets")
 	for _, status := range statusArray {
-		diffs := mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.GetAlias().String(), status.beforeSchema)
+		diffs := mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.GetAlias(), strings.Join(diffs, "\n"))
+				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))
 			} else {
-				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.GetAlias(), strings.Join(diffs, "\n"))
+				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Alias, strings.Join(diffs, "\n"))
 			}
 		}
 	}
@@ -325,47 +325,47 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 	// apply the schema change to all replica / slave tablets
 	for _, status := range statusArray {
 		// if already applied, we skip this guy
-		diffs := mysqlctl.DiffSchemaToArray("after", preflight.AfterSchema, status.ti.GetAlias().String(), status.beforeSchema)
+		diffs := mysqlctl.DiffSchemaToArray("after", preflight.AfterSchema, status.ti.Alias.String(), status.beforeSchema)
 		if len(diffs) == 0 {
-			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.GetAlias())
+			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.Alias)
 			continue
 		}
 
 		// make sure the before schema matches
-		diffs = mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.GetAlias().String(), status.beforeSchema)
+		diffs = mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
-				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.GetAlias(), strings.Join(diffs, "\n"))
+				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))
 			} else {
-				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.GetAlias(), strings.Join(diffs, "\n"))
+				return nil, fmt.Errorf("Tablet %v has inconsistent schema: %v", status.ti.Alias, strings.Join(diffs, "\n"))
 			}
 		}
 
 		// take this guy out of the serving graph if necessary
-		ti, err := wr.ts.GetTablet(status.ti.GetAlias())
+		ti, err := wr.ts.GetTablet(status.ti.Alias)
 		if err != nil {
 			return nil, err
 		}
 		typeChangeRequired := ti.Tablet.IsServingType()
 		if typeChangeRequired {
 			// note we want to update the serving graph there
-			err = wr.changeTypeInternal(ti.GetAlias(), topo.TYPE_SCHEMA_UPGRADE)
+			err = wr.changeTypeInternal(ti.Alias, topo.TYPE_SCHEMA_UPGRADE)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		// apply the schema change
-		log.Infof("Applying schema change to slave %v in complex mode", status.ti.GetAlias())
+		log.Infof("Applying schema change to slave %v in complex mode", status.ti.Alias)
 		sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
-		_, err = wr.ApplySchema(status.ti.GetAlias(), sc)
+		_, err = wr.ApplySchema(status.ti.Alias, sc)
 		if err != nil {
 			return nil, err
 		}
 
 		// put this guy back into the serving graph
 		if typeChangeRequired {
-			err = wr.changeTypeInternal(ti.GetAlias(), ti.Tablet.Type)
+			err = wr.changeTypeInternal(ti.Alias, ti.Tablet.Type)
 			if err != nil {
 				return nil, err
 			}

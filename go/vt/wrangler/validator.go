@@ -6,7 +6,6 @@ package wrangler
 
 import (
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -225,12 +224,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 
 	tabletIpMap := make(map[string]*topo.Tablet)
 	for _, tablet := range tabletMap {
-		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
-		if err != nil {
-			results <- vresult{tablet.GetAlias().String(), fmt.Errorf("bad mysql addr: %v %v", tablet.MysqlIpAddr, err)}
-			continue
-		}
-		tabletIpMap[ipAddr] = tablet.Tablet
+		tabletIpMap[tablet.IPAddr] = tablet.Tablet
 	}
 
 	// See if every slave is in the replication graph.
@@ -246,11 +240,8 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 			continue
 		}
 
-		ipAddr, _, err := net.SplitHostPort(tablet.MysqlIpAddr)
-		if err != nil {
-			results <- vresult{tablet.GetAlias().String(), fmt.Errorf("bad mysql addr: %v", err)}
-		} else if !strInList(slaveAddrs, ipAddr) {
-			results <- vresult{tablet.GetAlias().String(), fmt.Errorf("slave not replicating: %v %q", ipAddr, slaveAddrs)}
+		if !strInList(slaveAddrs, tablet.IPAddr) {
+			results <- vresult{tablet.Alias.String(), fmt.Errorf("slave not replicating: %v %q", tablet.IPAddr, slaveAddrs)}
 		}
 	}
 }
@@ -262,19 +253,19 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 			defer wg.Done()
 
 			if err := wr.ts.ValidateTabletPidNode(tabletAlias); err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.GetHostname(), err)}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.Hostname, err)}
 				return
 			}
 
 			actionPath, err := wr.ai.Ping(tabletAlias)
 			if err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.GetHostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname)}
 				return
 			}
 
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.GetHostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname)}
 			}
 		}(tabletAlias, tabletInfo)
 	}

@@ -197,7 +197,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", shardInfo.MasterAlias)
 	}
 
-	actionPath, err := wr.ai.SlavePosition(ti.GetAlias())
+	actionPath, err := wr.ai.SlavePosition(ti.Alias)
 	if err != nil {
 		return err
 	}
@@ -208,9 +208,9 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	}
 	pos := result.(*mysqlctl.ReplicationPosition)
 
-	log.Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr, pos.MapKey())
+	log.Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), pos.MapKey())
 
-	actionPath, err = wr.ai.ReparentPosition(masterTi.GetAlias(), pos)
+	actionPath, err = wr.ai.ReparentPosition(masterTi.Alias, pos)
 	if err != nil {
 		return err
 	}
@@ -220,11 +220,11 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	}
 	rsd := result.(*tm.RestartSlaveData)
 
-	log.Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr, rsd.ReplicationState.ReplicationPosition.MapKey())
+	log.Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.MysqlAddr(), rsd.ReplicationState.ReplicationPosition.MapKey())
 	// An orphan is already in the replication graph but it is
 	// disconnected, hence we have to force this action.
 	rsd.Force = ti.Type == topo.TYPE_LAG_ORPHAN
-	actionPath, err = wr.ai.RestartSlave(ti.GetAlias(), rsd)
+	actionPath, err = wr.ai.RestartSlave(ti.Alias, rsd)
 	if err != nil {
 		return err
 	}

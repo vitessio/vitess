@@ -81,7 +81,7 @@ func InitAgent(
 			// read the shard to get SourceShards
 			shardInfo, err = topoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
 			if err != nil {
-				log.Errorf("Cannot read shard for this tablet %v: %v", newTablet.GetAlias(), err)
+				log.Errorf("Cannot read shard for this tablet %v: %v", newTablet.Alias, err)
 			} else {
 				allowQuery = len(shardInfo.SourceShards) == 0
 			}

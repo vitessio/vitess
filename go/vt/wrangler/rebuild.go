@@ -69,13 +69,13 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignoreP
 	tablets := make([]*topo.TabletInfo, 0, len(tabletMap))
 	for _, ti := range tabletMap {
 		if ti.Keyspace != shardInfo.Keyspace() || ti.Shard != shardInfo.ShardName() {
-			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.GetAlias(), keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
+			return fmt.Errorf("CRITICAL: tablet %v is in replication graph for shard %v/%v but belongs to shard %v:%v (maybe remove its replication path in shard %v/%v)", ti.Alias, keyspace, shard, ti.Keyspace, ti.Shard, keyspace, shard)
 		}
 		if !ti.IsInReplicationGraph() {
 			// only valid case is a scrapped master in the
 			// catastrophic reparent case
 			if ti.Parent.Uid != topo.NO_TABLET {
-				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.GetAlias())
+				log.Warningf("Tablet %v should not be in the replication graph, please investigate (it will be ignored in the rebuild)", ti.Alias)
 			}
 		}
 		tablets = append(tablets, ti)
@@ -129,32 +129,32 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 	for _, tablet := range tablets {
 		// only look at tablets in the cells we want to rebuild
-		if !inCellList(tablet.Tablet.Cell, cells) {
+		if !inCellList(tablet.Tablet.Alias.Cell, cells) {
 			continue
 		}
 
 		// if the tablet doesn't have the right master, ignore it
 		if tablet.Type != topo.TYPE_MASTER {
 			if tablet.Parent != shardInfo.MasterAlias {
-				log.Warningf("Tablet %v doesn't have the right master (it has %v expecting %v), skipping it", tablet.GetAlias(), tablet.Parent, shardInfo.MasterAlias)
+				log.Warningf("Tablet %v doesn't have the right master (it has %v expecting %v), skipping it", tablet.Alias, tablet.Parent, shardInfo.MasterAlias)
 				continue
 			}
 		}
 
 		// this is {cell,keyspace,shard}
 		// we'll get the children to find the existing types
-		shardLocation := cellKeyspaceShard{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard}
+		shardLocation := cellKeyspaceShard{tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard}
 		// only need to do this once per cell
 		if !knownShardLocations[shardLocation] {
-			log.Infof("Getting tablet types on cell %v for %v/%v", tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
-			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard)
+			log.Infof("Getting tablet types on cell %v for %v/%v", tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard)
+			tabletTypes, err := wr.ts.GetSrvTabletTypesPerShard(tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard)
 			if err != nil {
 				if err != topo.ErrNoNode {
 					return err
 				}
 			} else {
 				for _, tabletType := range tabletTypes {
-					existingDbTypeLocations[cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Tablet.Keyspace, tablet.Shard, tabletType}] = true
+					existingDbTypeLocations[cellKeyspaceShardType{tablet.Tablet.Alias.Cell, tablet.Tablet.Keyspace, tablet.Shard, tabletType}] = true
 				}
 			}
 			knownShardLocations[shardLocation] = true
@@ -167,7 +167,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 			continue
 		}
 
-		location := cellKeyspaceShardType{tablet.Tablet.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
+		location := cellKeyspaceShardType{tablet.Tablet.Alias.Cell, tablet.Keyspace, tablet.Shard, tablet.Type}
 		addrs, ok := locationAddrsMap[location]
 		if !ok {
 			addrs = topo.NewEndPoints()
@@ -176,7 +176,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 		entry, err := tm.EndPointForTablet(tablet.Tablet)
 		if err != nil {
-			log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.GetAlias(), err)
+			log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
 			continue
 		}
 		addrs.Entries = append(addrs.Entries, *entry)

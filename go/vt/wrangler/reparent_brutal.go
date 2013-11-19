@@ -14,8 +14,8 @@ import (
 func (wr *Wrangler) reparentShardBrutal(si *topo.ShardInfo, slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, leaveMasterReadOnly, force bool) error {
 	log.Infof("Skipping ValidateShard - not a graceful situation")
 
-	if _, ok := slaveTabletMap[masterElectTablet.GetAlias()]; !ok && !force {
-		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.GetAlias(), si.Keyspace(), si.ShardName(), mapKeys(slaveTabletMap))
+	if _, ok := slaveTabletMap[masterElectTablet.Alias]; !ok && !force {
+		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, si.Keyspace(), si.ShardName(), mapKeys(slaveTabletMap))
 	}
 
 	// Check the master-elect and slaves are in good shape when the action
@@ -38,7 +38,7 @@ func (wr *Wrangler) reparentShardBrutal(si *topo.ShardInfo, slaveTabletMap, mast
 			return err
 		}
 	} else {
-		log.Infof("forcing reparent to same master %v", masterElectTablet.GetAlias())
+		log.Infof("forcing reparent to same master %v", masterElectTablet.Alias)
 		err := wr.breakReplication(slaveTabletMap, masterElectTablet)
 		if err != nil {
 			return err
@@ -49,21 +49,21 @@ func (wr *Wrangler) reparentShardBrutal(si *topo.ShardInfo, slaveTabletMap, mast
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master-elect is dead.
 		// We need to classify certain errors as temporary and retry.
-		return fmt.Errorf("promote slave failed: %v %v", err, masterElectTablet.GetAlias())
+		return fmt.Errorf("promote slave failed: %v %v", err, masterElectTablet.Alias)
 	}
 
 	// Once the slave is promoted, remove it from our maps
-	delete(slaveTabletMap, masterElectTablet.GetAlias())
-	delete(masterTabletMap, masterElectTablet.GetAlias())
+	delete(slaveTabletMap, masterElectTablet.Alias)
+	delete(masterTabletMap, masterElectTablet.Alias)
 
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 
 	if !force {
 		for _, failedMaster := range masterTabletMap {
-			log.Infof("scrap dead master %v", failedMaster.GetAlias())
+			log.Infof("scrap dead master %v", failedMaster.Alias)
 			// The master is dead so execute the action locally instead of
 			// enqueing the scrap action for an arbitrary amount of time.
-			if scrapErr := tm.Scrap(wr.ts, failedMaster.GetAlias(), false); scrapErr != nil {
+			if scrapErr := tm.Scrap(wr.ts, failedMaster.Alias, false); scrapErr != nil {
 				log.Warningf("scrapping failed master failed: %v", scrapErr)
 			}
 		}

@@ -27,27 +27,27 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 	}
 
 	if masterTablet.Parent.Uid != topo.NO_TABLET {
-		return fmt.Errorf("master tablet should not have a ParentUid: %v %v", masterTablet.Parent.Uid, masterTablet.GetAlias())
+		return fmt.Errorf("master tablet should not have a ParentUid: %v %v", masterTablet.Parent.Uid, masterTablet.Alias)
 	}
 
 	if masterTablet.Type != topo.TYPE_MASTER {
-		return fmt.Errorf("master tablet should not be type: %v %v", masterTablet.Type, masterTablet.GetAlias())
+		return fmt.Errorf("master tablet should not be type: %v %v", masterTablet.Type, masterTablet.Alias)
 	}
 
-	if masterTablet.Uid == masterElectTablet.Uid {
-		return fmt.Errorf("master tablet should not match master elect - this must be forced: %v", masterTablet.GetAlias())
+	if masterTablet.Alias.Uid == masterElectTablet.Alias.Uid {
+		return fmt.Errorf("master tablet should not match master elect - this must be forced: %v", masterTablet.Alias)
 	}
 
-	if _, ok := slaveTabletMap[masterElectTablet.GetAlias()]; !ok {
-		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.GetAlias(), masterTablet.Keyspace, masterTablet.Shard, mapKeys(slaveTabletMap))
+	if _, ok := slaveTabletMap[masterElectTablet.Alias]; !ok {
+		return fmt.Errorf("master elect tablet not in replication graph %v %v/%v %v", masterElectTablet.Alias, masterTablet.Keyspace, masterTablet.Shard, mapKeys(slaveTabletMap))
 	}
 
 	if err := wr.ValidateShard(masterTablet.Keyspace, masterTablet.Shard, true); err != nil {
-		return fmt.Errorf("ValidateShard verification failed: %v, if the master is dead, run: vtctl ScrapTablet -force %v", err, masterTablet.GetAlias())
+		return fmt.Errorf("ValidateShard verification failed: %v, if the master is dead, run: vtctl ScrapTablet -force %v", err, masterTablet.Alias)
 	}
 
 	// Make sure all tablets have the right parent and reasonable positions.
-	err := wr.checkSlaveReplication(slaveTabletMap, masterTablet.Uid)
+	err := wr.checkSlaveReplication(slaveTabletMap, masterTablet.Alias.Uid)
 	if err != nil {
 		return err
 	}
@@ -63,25 +63,25 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 		// FIXME(msolomon) This suggests that the master is dead and we
 		// need to take steps. We could either pop a prompt, or make
 		// retrying the action painless.
-		return fmt.Errorf("demote master failed: %v, if the master is dead, run: vtctl -force ScrapTablet %v", err, masterTablet.GetAlias())
+		return fmt.Errorf("demote master failed: %v, if the master is dead, run: vtctl -force ScrapTablet %v", err, masterTablet.Alias)
 	}
 
 	log.Infof("check slaves %v/%v", masterTablet.Keyspace, masterTablet.Shard)
 	restartableSlaveTabletMap := restartableTabletMap(slaveTabletMap)
 	err = wr.checkSlaveConsistency(restartableSlaveTabletMap, masterPosition)
 	if err != nil {
-		return fmt.Errorf("check slave consistency failed %v, demoted master is still read only, run: vtctl SetReadWrite %v", err, masterTablet.GetAlias())
+		return fmt.Errorf("check slave consistency failed %v, demoted master is still read only, run: vtctl SetReadWrite %v", err, masterTablet.Alias)
 	}
 
 	rsd, err := wr.promoteSlave(masterElectTablet)
 	if err != nil {
 		// FIXME(msolomon) This suggests that the master-elect is dead.
 		// We need to classify certain errors as temporary and retry.
-		return fmt.Errorf("promote slave failed: %v, demoted master is still read only: vtctl SetReadWrite %v", err, masterTablet.GetAlias())
+		return fmt.Errorf("promote slave failed: %v, demoted master is still read only: vtctl SetReadWrite %v", err, masterTablet.Alias)
 	}
 
 	// Once the slave is promoted, remove it from our map
-	delete(slaveTabletMap, masterElectTablet.GetAlias())
+	delete(slaveTabletMap, masterElectTablet.Alias)
 
 	majorityRestart, restartSlaveErr := wr.restartSlaves(slaveTabletMap, rsd)
 
@@ -90,8 +90,8 @@ func (wr *Wrangler) reparentShardGraceful(si *topo.ShardInfo, slaveTabletMap, ma
 	//
 	// FIXME(msolomon) We could reintroduce it and reparent it and use
 	// it as new replica.
-	log.Infof("scrap demoted master %v", masterTablet.GetAlias())
-	scrapActionPath, scrapErr := wr.ai.Scrap(masterTablet.GetAlias())
+	log.Infof("scrap demoted master %v", masterTablet.Alias)
+	scrapActionPath, scrapErr := wr.ai.Scrap(masterTablet.Alias)
 	if scrapErr == nil {
 		scrapErr = wr.ai.WaitForCompletion(scrapActionPath, wr.actionTimeout())
 	}

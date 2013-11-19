@@ -301,8 +301,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	}
 
 	// Perform the action.
-	alias := topo.TabletAlias{Cell: tablet.Tablet.Cell, Uid: tablet.Tablet.Uid}
-	rsd := &RestartSlaveData{Parent: alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
+	rsd := &RestartSlaveData{Parent: tablet.Alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false, ta.hookExtraEnv())
 	if err != nil {
 		return err
@@ -491,7 +490,7 @@ func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
 		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
-			return Scrap(ts, tablet.GetAlias(), false)
+			return Scrap(ts, tablet.Alias, false)
 		} else {
 			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		}
@@ -619,7 +618,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr, false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
+	filename, slaveStartRequired, readOnly, err := ta.mysqld.CreateSnapshot(tablet.DbName(), tablet.Addr(), false, args.Concurrency, args.ServerMode, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -628,7 +627,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		sr.ParentAlias = tablet.GetAlias()
+		sr.ParentAlias = tablet.Alias
 	} else {
 		sr.ParentAlias = tablet.Parent
 	}
@@ -730,7 +729,7 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 	if sourceTablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
-		parentAlias = sourceTablet.GetAlias()
+		parentAlias = sourceTablet.Alias
 	} else {
 		parentAlias = sourceTablet.Parent
 	}
@@ -782,12 +781,12 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 
 	// read & unpack the manifest
 	sm := new(mysqlctl.SnapshotManifest)
-	if err := fetchAndParseJsonFile(sourceTablet.Addr, args.SrcFilePath, sm); err != nil {
+	if err := fetchAndParseJsonFile(sourceTablet.Addr(), args.SrcFilePath, sm); err != nil {
 		return err
 	}
 
 	if !args.WasReserved {
-		if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.GetAlias(), sourceTablet.KeyRange); err != nil {
+		if err := ta.changeTypeToRestore(tablet, sourceTablet, parentTablet.Alias, sourceTablet.KeyRange); err != nil {
 			return err
 		}
 	}
@@ -818,7 +817,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr, false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.Addr(), false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
@@ -827,7 +826,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
-		sr.ParentAlias = tablet.GetAlias()
+		sr.ParentAlias = tablet.Alias
 	} else {
 		sr.ParentAlias = tablet.Parent
 	}
@@ -855,7 +854,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 		if e != nil {
 			return e
 		}
-		sourceAddrs[i] = &url.URL{Host: t.Addr, Path: "/" + t.DbName()}
+		sourceAddrs[i] = &url.URL{Host: t.Addr(), Path: "/" + t.DbName()}
 	}
 
 	// change type to restore, no change to replication graph
@@ -910,11 +909,11 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 		err = topo.DeleteTabletReplicationData(ts, tablet.Tablet)
 		if err != nil {
 			if err == topo.ErrNoNode {
-				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Cell)
+				log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
 				err = nil
 			}
 			if err != nil {
-				log.Warningf("remove replication data for %v failed: %v", tablet.GetAlias(), err)
+				log.Warningf("remove replication data for %v failed: %v", tablet.Alias, err)
 			}
 		}
 	}
@@ -923,7 +922,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	// (force mode executes on the vtctl side, not on the vttablet side)
 	if !force {
 		hk := hook.NewSimpleHook("postflight_scrap")
-		configureTabletHook(hk, tablet.GetAlias())
+		configureTabletHook(hk, tablet.Alias)
 		if hookErr := hk.ExecuteOptional(); hookErr != nil {
 			// we don't want to return an error, the server
 			// is already in bad shape probably.
