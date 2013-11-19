@@ -22,7 +22,7 @@ var usage = `
 Queries the zkocc zookeeper cache, for test purposes. In get mode, if more
 than one value is asked for, will use getv.
 `
-var mode = flag.String("mode", "get", "which operation to run on the node (get, children, qps)")
+var mode = flag.String("mode", "get", "which operation to run on the node (get, children, qps, qps2)")
 var server = flag.String("server", "localhost:3801", "zkocc server to dial")
 
 func init() {
@@ -170,6 +170,28 @@ func qps(paths []string) {
 	}
 }
 
+func qps2(cell string, keyspaces []string) {
+	var count sync2.AtomicInt32
+	for _, keyspace := range keyspaces {
+		for i := 0; i < 100; i++ {
+			go func() {
+				rpcClient := connect()
+				for true {
+					getSrvKeyspace(rpcClient, cell, keyspace, false)
+					count.Add(1)
+				}
+			}()
+		}
+	}
+
+	ticker := time.NewTicker(time.Second)
+	for _ = range ticker.C {
+		c := count.Get()
+		count.Set(0)
+		println(fmt.Sprintf("QPS = %v", c))
+	}
+}
+
 func main() {
 	flag.Parse()
 	args := flag.Args()
@@ -216,6 +238,9 @@ func main() {
 
 	} else if *mode == "qps" {
 		qps(args)
+
+	} else if *mode == "qps2" {
+		qps2(args[0], args[1:])
 
 	} else {
 		flag.Usage()

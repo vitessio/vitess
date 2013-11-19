@@ -5,11 +5,17 @@
 package vtgate
 
 import (
+	"flag"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/vt/topo"
+)
+
+var (
+	srvTopoCacheTtl = flag.Duration("-srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 )
 
 // SrvTopoServer is a subset of topo.Server that only contains the serving
@@ -23,16 +29,32 @@ type SrvTopoServer interface {
 }
 
 // ResilientSrvTopoServer is an implementation of SrvTopoServer based
-// on another SrvTopoServer that uses a cache to return the last known
-// value of the data if there is an error.
+// on another SrvTopoServer that uses a cache for two purposes:
+// - limit the QPS to the underlying SrvTopoServer
+// - return the last known value of the data if there is an error
 type ResilientSrvTopoServer struct {
 	Toposerv SrvTopoServer
 
 	// mutex protects the cache
 	mu                    sync.Mutex
-	svrKeyspaceNamesCache map[string][]string
-	srvKeyspaceCache      map[string]*topo.SrvKeyspace
-	srvEndPointsCache     map[string]*topo.EndPoints
+	svrKeyspaceNamesCache map[string]svrKeyspaceNamesEntry
+	srvKeyspaceCache      map[string]svrKeyspaceEntry
+	endPointsCache        map[string]endPointsEntry
+}
+
+type svrKeyspaceNamesEntry struct {
+	insertionTime time.Time
+	value         []string
+}
+
+type svrKeyspaceEntry struct {
+	insertionTime time.Time
+	value         *topo.SrvKeyspace
+}
+
+type endPointsEntry struct {
+	insertionTime time.Time
+	value         *topo.EndPoints
 }
 
 // NewResilientSrvTopoServer creates a new ResilientSrvTopoServer
@@ -40,74 +62,107 @@ type ResilientSrvTopoServer struct {
 func NewResilientSrvTopoServer(base SrvTopoServer) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
 		Toposerv:              base,
-		svrKeyspaceNamesCache: make(map[string][]string),
-		srvKeyspaceCache:      make(map[string]*topo.SrvKeyspace),
-		srvEndPointsCache:     make(map[string]*topo.EndPoints),
+		svrKeyspaceNamesCache: make(map[string]svrKeyspaceNamesEntry),
+		srvKeyspaceCache:      make(map[string]svrKeyspaceEntry),
+		endPointsCache:        make(map[string]endPointsEntry),
 	}
 }
 
 func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	// try the cache first
 	key := cell
+	now := time.Now()
+	server.mu.Lock()
+	entry, ok := server.svrKeyspaceNamesCache[key]
+	server.mu.Unlock()
+	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTtl {
+		return entry.value, nil
+	}
+
+	// not in cache or too old, get the real value
 	result, err := server.Toposerv.GetSrvKeyspaceNames(cell)
 	if err != nil {
-		server.mu.Lock()
-		result = server.svrKeyspaceNamesCache[key]
-		server.mu.Unlock()
-		if result != nil {
+		if ok {
 			log.Warningf("GetSrvKeyspaceNames(%v) failed: %v (returning cached value)", cell, err)
-			return result, nil
+			return entry.value, nil
 		} else {
 			log.Warningf("GetSrvKeyspaceNames(%v) failed: %v (no cached value, returning error)", cell, err)
 			return nil, err
 		}
 	}
 
+	// save the last value in the cache
 	server.mu.Lock()
-	server.svrKeyspaceNamesCache[key] = result
+	server.svrKeyspaceNamesCache[key] = svrKeyspaceNamesEntry{
+		insertionTime: now,
+		value:         result,
+	}
 	server.mu.Unlock()
 	return result, nil
 }
 
 func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+	// try the cache first
 	key := cell + ":" + keyspace
+	now := time.Now()
+	server.mu.Lock()
+	entry, ok := server.srvKeyspaceCache[key]
+	server.mu.Unlock()
+	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTtl {
+		return entry.value, nil
+	}
+
+	// not in cache or too old, get the real value
 	result, err := server.Toposerv.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
-		server.mu.Lock()
-		result = server.srvKeyspaceCache[key]
-		server.mu.Unlock()
-		if result != nil {
+		if ok {
 			log.Warningf("GetSrvKeyspace(%v, %v) failed: %v (returning cached value)", cell, keyspace, err)
-			return result, nil
+			return entry.value, nil
 		} else {
 			log.Warningf("GetSrvKeyspace(%v, %v) failed: %v (no cached value, returning error)", cell, keyspace, err)
 			return nil, err
 		}
 	}
 
+	// save the last value in the cache
 	server.mu.Lock()
-	server.srvKeyspaceCache[key] = result
+	server.srvKeyspaceCache[key] = svrKeyspaceEntry{
+		insertionTime: time.Now(),
+		value:         result,
+	}
 	server.mu.Unlock()
 	return result, nil
 }
 
 func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
+	// try the cache first
 	key := cell + ":" + keyspace + ":" + shard + ":" + string(tabletType)
+	now := time.Now()
+	server.mu.Lock()
+	entry, ok := server.endPointsCache[key]
+	server.mu.Unlock()
+	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTtl {
+		return entry.value, nil
+	}
+
+	// not in cache or too old, get the real value
 	result, err := server.Toposerv.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
-		server.mu.Lock()
-		result = server.srvEndPointsCache[key]
-		server.mu.Unlock()
-		if result != nil {
+		if ok {
 			log.Warningf("GetEndPoints(%v, %v%, v, %v) failed: %v (returning cached value)", cell, keyspace, shard, tabletType, err)
-			return result, nil
+			return entry.value, nil
 		} else {
 			log.Warningf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, returning error)", cell, keyspace, shard, tabletType, err)
 			return nil, err
 		}
 	}
 
+	// save the last value in the cache
 	server.mu.Lock()
-	server.srvEndPointsCache[key] = result
+	server.endPointsCache[key] = endPointsEntry{
+		insertionTime: time.Now(),
+		value:         result,
+	}
 	server.mu.Unlock()
 	return result, nil
 }

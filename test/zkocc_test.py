@@ -349,17 +349,46 @@ class TestZkocc(unittest.TestCase):
       self.fail('not enough time in Connected state: %s' %v['ZkReader']['test_nj']['State']['DurationConnected'])
 
     # some checks on performance / stats
-    # a typical workstation will do 15k QPS, check we have more than 3k
+    # a typical workstation will do 45-47k QPS, check we have more than 15k
     rpcCalls = v['ZkReader']['RpcCalls']
-    if rpcCalls < 30000:
-      self.fail('QPS is too low: %u < 30000' % rpcCalls / 10)
+    if rpcCalls < 150000:
+      self.fail('QPS is too low: %u < 15000' % (rpcCalls / 10))
+    else:
+      logging.debug("Recorded qps: %u", rpcCalls / 10)
     cacheReads = v['ZkReader']['test_nj']['CacheReads']
-    if cacheReads < 30000:
-      self.fail('Cache QPS is too low: %u < 30000' % cacheReads / 10)
+    if cacheReads < 150000:
+      self.fail('Cache QPS is too low: %u < 15000' % (cacheReads / 10))
     totalCacheReads = v['ZkReader']['total']['CacheReads']
     self.assertEqual(cacheReads, totalCacheReads, 'Rollup stats are wrong')
     self.assertEqual(v['ZkReader']['UnknownCellErrors'], 0, 'unexpected UnknownCellErrors')
     utils.zkocc_kill(zkocc_14850)
+
+  def test_vtgate_qps(self):
+    # create the topology
+    utils.run_vtctl('CreateKeyspace test_keyspace')
+    t = tablet.Tablet(tablet_uid=1, cell="nj")
+    t.init_tablet("master", "test_keyspace", "0")
+    t.update_addrs()
+    utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
+    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+
+    # start vtgate and the qps-er
+    vtgate_proc, vtgate_port = utils.vtgate_start()
+    qpser = utils.run_bg(utils.vtroot+'/bin/zkclient2 -server localhost:%u -mode qps2 test_nj test_keyspace' % vtgate_port)
+    time.sleep(10)
+    utils.kill_sub_process(qpser)
+
+    # get the vtgate vars, make sure we have what we need
+    v = utils.get_vars(vtgate_port)
+
+    # some checks on performance / stats
+    # a typical workstation will do 38-40k QPS, check we have more than 15k
+    rpcCalls = v['TopoReaderRpcQueryCount']['test_nj']
+    if rpcCalls < 150000:
+      self.fail('QPS is too low: %u < 15000' % (rpcCalls / 10))
+    else:
+      logging.debug("Recorded qps: %u", rpcCalls / 10)
+    utils.vtgate_kill(vtgate_proc)
 
   def test_fake_zkocc_connection(self):
     fkc = zkocc.FakeZkOccConnection.from_data_path("testing", "fake_zkocc_config.json")
