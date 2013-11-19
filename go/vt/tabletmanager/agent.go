@@ -242,6 +242,8 @@ func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
 	if err := tablet.ValidatePortmap(); err != nil {
 		return nil, err
 	}
+
+	// TODO(szopa): Rename _vtocc to vt.
 	entry.NamedPortMap = map[string]int{
 		"_vtocc": tablet.Portmap["vt"],
 		"_mysql": tablet.Portmap["mysql"],

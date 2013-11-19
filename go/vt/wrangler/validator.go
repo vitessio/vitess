@@ -253,19 +253,19 @@ func (wr *Wrangler) pingTablets(tabletMap map[topo.TabletAlias]*topo.TabletInfo,
 			defer wg.Done()
 
 			if err := wr.ts.ValidateTabletPidNode(tabletAlias); err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.GetHostname(), err)}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("no pid node on %v: %v", tabletInfo.Hostname, err)}
 				return
 			}
 
 			actionPath, err := wr.ai.Ping(tabletAlias)
 			if err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.GetHostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname)}
 				return
 			}
 
 			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 			if err != nil {
-				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.GetHostname())}
+				results <- vresult{tabletAlias.String(), fmt.Errorf("%v: %v %v", actionPath, err, tabletInfo.Hostname)}
 			}
 		}(tabletAlias, tabletInfo)
 	}

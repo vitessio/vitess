@@ -324,10 +324,6 @@ type Tablet struct {
 	KeyRange       key.KeyRange
 }
 
-// FIXME(szopa): All the calls to GetAlias and GetHostname should be
-// replaced with accessing Alias and Hostname once Addr, Cell, and Uid
-// are removed.
-
 // ValidatePortmap returns an error if the tablet's portmap doesn't
 // contain all the necessary ports for the tablet to be fully
 // operational.
@@ -350,10 +346,6 @@ func (tablet *Tablet) MysqlAddr() string {
 
 func (tablet *Tablet) MysqlIpAddr() string {
 	return fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
-}
-
-func (tablet *Tablet) GetHostname() string {
-	return tablet.Hostname
 }
 
 // DbName is usually implied by keyspace. Having the shard information in the
