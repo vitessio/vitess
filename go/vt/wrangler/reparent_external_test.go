@@ -27,24 +27,27 @@ func createTestTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, table
 	if tabletType == topo.TYPE_MASTER {
 		state = topo.STATE_READ_WRITE
 	}
-	if err := wr.InitTablet(&topo.Tablet{
-		Cell:           cell,
-		Uid:            100 + uid,
-		Parent:         parent,
-		Addr:           fmt.Sprintf("%vhost:%v", cell, 8100+uid),
-		SecureAddr:     fmt.Sprintf("%vhost:%v", cell, 8200+uid),
-		MysqlAddr:      fmt.Sprintf("%vhost:%v", cell, 3300+uid),
-		MysqlIpAddr:    fmt.Sprintf("%v.0.0.1:%v", 100+uid, 3300+uid),
+	tablet := &topo.Tablet{
+		Parent:   parent,
+		Alias:    topo.TabletAlias{Cell: cell, Uid: uid},
+		Hostname: fmt.Sprintf("%vhost", cell),
+		Portmap: map[string]int{
+			"vt":    8100 + int(uid),
+			"mysql": 3300 + int(uid),
+			"vts":   8200 + int(uid),
+		},
+		IPAddr:         fmt.Sprintf("%v.0.0.1", 100+uid),
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           tabletType,
 		State:          state,
 		DbNameOverride: "",
 		KeyRange:       key.KeyRange{},
-	}, false, true, false); err != nil {
+	}
+	if err := wr.InitTablet(tablet, false, true, false); err != nil {
 		t.Fatalf("cannot create tablet %v: %v", uid, err)
 	}
-	return topo.TabletAlias{cell, 100 + uid}
+	return tablet.Alias
 }
 
 // startFakeTabletActionLoop will start the action loop for a fake tablet,

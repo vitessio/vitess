@@ -16,10 +16,14 @@ import (
 func CheckActions(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	tablet := &topo.Tablet{
-		Cell:     cell,
-		Uid:      1,
+		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
+		Hostname: "localhost",
+		IPAddr:   "10.11.12.13",
+		Portmap: map[string]int{
+			"vt":    3333,
+			"mysql": 3334,
+		},
 		Parent:   topo.TabletAlias{},
-		Addr:     "localhost:3333",
 		Keyspace: "test_keyspace",
 		Type:     topo.TYPE_MASTER,
 		State:    topo.STATE_READ_WRITE,

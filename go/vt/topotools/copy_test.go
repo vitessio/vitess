@@ -38,13 +38,18 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 		t.Fatalf("cannot create shard: %v", err)
 	}
 	if err := topo.CreateTablet(fromTS, &topo.Tablet{
-		Cell:           "test_cell",
-		Uid:            123,
-		Parent:         topo.TabletAlias{},
-		Addr:           "masterhost:8101",
-		SecureAddr:     "masterhost:8102",
-		MysqlAddr:      "masterhost:3306",
-		MysqlIpAddr:    "1.2.3.4:3306",
+		Alias: topo.TabletAlias{
+			Cell: "test_cell",
+			Uid:  123,
+		},
+		Hostname: "masterhost",
+		Parent:   topo.TabletAlias{},
+		IPAddr:   "1.2.3.4",
+		Portmap: map[string]int{
+			"vt":    8101,
+			"vts":   8102,
+			"mysql": 3306,
+		},
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           topo.TYPE_MASTER,
@@ -55,16 +60,22 @@ func createSetup(t *testing.T) (topo.Server, topo.Server) {
 		t.Fatalf("cannot create master tablet: %v", err)
 	}
 	if err := topo.CreateTablet(fromTS, &topo.Tablet{
-		Cell: "test_cell",
-		Uid:  234,
+		Alias: topo.TabletAlias{
+			Cell: "test_cell",
+			Uid:  234,
+		},
+		IPAddr: "2.3.4.5",
+		Portmap: map[string]int{
+			"vt":    8101,
+			"vts":   8102,
+			"mysql": 3306,
+		},
+		Hostname: "slavehost",
+
 		Parent: topo.TabletAlias{
 			Cell: "test_cell",
 			Uid:  123,
 		},
-		Addr:           "slavehost:8101",
-		SecureAddr:     "slavehost:8102",
-		MysqlAddr:      "slavehost:3306",
-		MysqlIpAddr:    "2.3.4.5:3306",
 		Keyspace:       "test_keyspace",
 		Shard:          "0",
 		Type:           topo.TYPE_REPLICA,
