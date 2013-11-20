@@ -71,11 +71,10 @@ func NewResilientSrvTopoServer(base SrvTopoServer) *ResilientSrvTopoServer {
 func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string, error) {
 	// try the cache first
 	key := cell
-	now := time.Now()
 	server.mu.Lock()
 	entry, ok := server.svrKeyspaceNamesCache[key]
 	server.mu.Unlock()
-	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTTL {
+	if ok && time.Now().Sub(entry.insertionTime) < *srvTopoCacheTTL {
 		return entry.value, nil
 	}
 
@@ -94,7 +93,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	// save the last value in the cache
 	server.mu.Lock()
 	server.svrKeyspaceNamesCache[key] = svrKeyspaceNamesEntry{
-		insertionTime: now,
+		insertionTime: time.Now(),
 		value:         result,
 	}
 	server.mu.Unlock()
@@ -104,11 +103,10 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
 	// try the cache first
 	key := cell + ":" + keyspace
-	now := time.Now()
 	server.mu.Lock()
 	entry, ok := server.srvKeyspaceCache[key]
 	server.mu.Unlock()
-	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTTL {
+	if ok && time.Now().Sub(entry.insertionTime) < *srvTopoCacheTTL {
 		return entry.value, nil
 	}
 
@@ -137,11 +135,10 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
 	// try the cache first
 	key := cell + ":" + keyspace + ":" + shard + ":" + string(tabletType)
-	now := time.Now()
 	server.mu.Lock()
 	entry, ok := server.endPointsCache[key]
 	server.mu.Unlock()
-	if ok && now.Sub(entry.insertionTime) < *srvTopoCacheTTL {
+	if ok && time.Now().Sub(entry.insertionTime) < *srvTopoCacheTTL {
 		return entry.value, nil
 	}
 
