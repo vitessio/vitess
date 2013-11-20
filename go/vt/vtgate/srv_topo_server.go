@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	srvTopoCacheTTL = flag.Duration("-srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
+	srvTopoCacheTTL = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 )
 
 // SrvTopoServer is a subset of topo.Server that only contains the serving
@@ -104,7 +104,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	result, err := server.Toposerv.GetSrvKeyspaceNames(cell)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
-			log.Warningf("GetSrvKeyspaceNames(%v) failed: %v (no cached value, returning error)", cell, err)
+			log.Errorf("GetSrvKeyspaceNames(%v) failed: %v (no cached value, returning error)", cell, err)
 			return nil, err
 		} else {
 			log.Warningf("GetSrvKeyspaceNames(%v) failed: %v (returning cached value)", cell, err)
@@ -144,7 +144,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	result, err := server.Toposerv.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
-			log.Warningf("GetSrvKeyspace(%v, %v) failed: %v (no cached value, returning error)", cell, keyspace, err)
+			log.Errorf("GetSrvKeyspace(%v, %v) failed: %v (no cached value, returning error)", cell, keyspace, err)
 			return nil, err
 		} else {
 			log.Warningf("GetSrvKeyspace(%v, %v) failed: %v (returning cached value)", cell, keyspace, err)
@@ -184,7 +184,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	result, err := server.Toposerv.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
-			log.Warningf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, returning error)", cell, keyspace, shard, tabletType, err)
+			log.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, returning error)", cell, keyspace, shard, tabletType, err)
 			return nil, err
 		} else {
 			log.Warningf("GetEndPoints(%v, %v%, v, %v) failed: %v (returning cached value)", cell, keyspace, shard, tabletType, err)
