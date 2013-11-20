@@ -19,6 +19,12 @@ var (
 	srvTopoCacheTTL = flag.Duration("srv_topo_cache_ttl", 1*time.Second, "how long to use cached entries for topology")
 )
 
+const (
+	queryCategory  = "query"
+	cachedCategory = "cached"
+	errorCategory  = "error"
+)
+
 // SrvTopoServer is a subset of topo.Server that only contains the serving
 // graph read-only calls used by clients to resolve serving addresses.
 type SrvTopoServer interface {
@@ -35,11 +41,7 @@ type SrvTopoServer interface {
 // - return the last known value of the data if there is an error
 type ResilientSrvTopoServer struct {
 	topoServer SrvTopoServer
-
-	// stats for the cache layer
-	queryCount  *stats.Counters
-	cachedCount *stats.Counters
-	errorCount  *stats.Counters
+	counts     *stats.Counters
 
 	// mu protects the cache map itself, not the individual values
 	// in the cache.
@@ -78,10 +80,7 @@ type endPointsEntry struct {
 func NewResilientSrvTopoServer(base SrvTopoServer) *ResilientSrvTopoServer {
 	return &ResilientSrvTopoServer{
 		topoServer: base,
-
-		queryCount:  stats.NewCounters("ResilientSrvTopoServerQueryCount"),
-		cachedCount: stats.NewCounters("ResilientSrvTopoServerCachedCount"),
-		errorCount:  stats.NewCounters("ResilientSrvTopoServerErrorCount"),
+		counts:     stats.NewCounters("ResilientSrvTopoServerCounts"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),
@@ -90,7 +89,7 @@ func NewResilientSrvTopoServer(base SrvTopoServer) *ResilientSrvTopoServer {
 }
 
 func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string, error) {
-	server.queryCount.Add(cell, 1)
+	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
 	key := cell
@@ -117,11 +116,11 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 	result, err := server.topoServer.GetSrvKeyspaceNames(cell)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
-			server.errorCount.Add(cell, 1)
+			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetSrvKeyspaceNames(%v) failed: %v (no cached value, returning error)", cell, err)
 			return nil, err
 		} else {
-			server.cachedCount.Add(cell, 1)
+			server.counts.Add(cachedCategory, 1)
 			log.Warningf("GetSrvKeyspaceNames(%v) failed: %v (returning cached value)", cell, err)
 			return entry.value, nil
 		}
@@ -134,7 +133,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspaceNames(cell string) ([]string
 }
 
 func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
-	server.queryCount.Add(cell, 1)
+	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
 	key := cell + ":" + keyspace
@@ -161,11 +160,11 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 	result, err := server.topoServer.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
-			server.errorCount.Add(cell, 1)
+			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetSrvKeyspace(%v, %v) failed: %v (no cached value, returning error)", cell, keyspace, err)
 			return nil, err
 		} else {
-			server.cachedCount.Add(cell, 1)
+			server.counts.Add(cachedCategory, 1)
 			log.Warningf("GetSrvKeyspace(%v, %v) failed: %v (returning cached value)", cell, keyspace, err)
 			return entry.value, nil
 		}
@@ -178,7 +177,7 @@ func (server *ResilientSrvTopoServer) GetSrvKeyspace(cell, keyspace string) (*to
 }
 
 func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
-	server.queryCount.Add(cell, 1)
+	server.counts.Add(queryCategory, 1)
 
 	// find the entry in the cache, add it if not there
 	key := cell + ":" + keyspace + ":" + shard + ":" + string(tabletType)
@@ -205,11 +204,11 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	result, err := server.topoServer.GetEndPoints(cell, keyspace, shard, tabletType)
 	if err != nil {
 		if entry.insertionTime.IsZero() {
-			server.errorCount.Add(cell, 1)
+			server.counts.Add(errorCategory, 1)
 			log.Errorf("GetEndPoints(%v, %v, %v, %v) failed: %v (no cached value, returning error)", cell, keyspace, shard, tabletType, err)
 			return nil, err
 		} else {
-			server.cachedCount.Add(cell, 1)
+			server.counts.Add(cachedCategory, 1)
 			log.Warningf("GetEndPoints(%v, %v%, v, %v) failed: %v (returning cached value)", cell, keyspace, shard, tabletType, err)
 			return entry.value, nil
 		}
