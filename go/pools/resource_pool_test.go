@@ -485,3 +485,32 @@ func TestSlowCreateFail(t *testing.T) {
 		t.Errorf("Expecting 2, received %d", available)
 	}
 }
+
+func TestNil(t *testing.T) {
+	var p *ResourcePool
+	p.Close()
+	if !p.IsClosed() {
+		t.Errorf("want true, got false")
+	}
+	_, err := p.Get()
+	if err != CLOSED_ERR {
+		t.Errorf("want %v, got %v", CLOSED_ERR, nil)
+	}
+	_, err = p.TryGet()
+	if err != CLOSED_ERR {
+		t.Errorf("want %v, got %v", CLOSED_ERR, nil)
+	}
+	err = p.SetCapacity(1)
+	if err == nil {
+		t.Errorf("got no error")
+	}
+	p.SetIdleTimeout(0)
+	got := p.StatsJSON()
+	if got != "{}" {
+		t.Errorf("want {}, got %s", got)
+	}
+	c, a, mx, wc, wt, it := p.Stats()
+	if c != 0 || a != 0 || mx != 0 || wc != 0 || wt != 0 || it != 0 {
+		t.Errorf("want zeroes, got %v %v %v %v %v %v", c, a, mx, wc, wt, it)
+	}
+}
