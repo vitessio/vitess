@@ -74,6 +74,9 @@ func (rp *ResourcePool) Close() {
 }
 
 func (rp *ResourcePool) IsClosed() (closed bool) {
+	if rp == nil {
+		return true
+	}
 	return rp.capacity.Get() == 0
 }
 
@@ -92,6 +95,9 @@ func (rp *ResourcePool) TryGet() (resource Resource, err error) {
 }
 
 func (rp *ResourcePool) get(wait bool) (resource Resource, err error) {
+	if rp == nil {
+		return nil, CLOSED_ERR
+	}
 	// Fetch
 	var wrapper resourceWrapper
 	var ok bool
@@ -129,6 +135,9 @@ func (rp *ResourcePool) get(wait bool) (resource Resource, err error) {
 // you will need to call Put(nil) instead of returning the closed resource.
 // The will eventually cause a new resource to be created in its place.
 func (rp *ResourcePool) Put(resource Resource) {
+	if rp == nil {
+		panic(CLOSED_ERR)
+	}
 	var wrapper resourceWrapper
 	if resource != nil {
 		wrapper = resourceWrapper{resource, time.Now()}
@@ -147,7 +156,7 @@ func (rp *ResourcePool) Put(resource Resource) {
 // number of resources are returned to the pool.
 // A SetCapacity of 0 is equivalent to closing the ResourcePool.
 func (rp *ResourcePool) SetCapacity(capacity int) error {
-	if capacity < 0 || capacity > cap(rp.resources) {
+	if rp == nil || capacity < 0 || capacity > cap(rp.resources) {
 		return fmt.Errorf("capacity %d is out of range", capacity)
 	}
 
@@ -191,10 +200,16 @@ func (rp *ResourcePool) recordWait(start time.Time) {
 }
 
 func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
+	if rp == nil {
+		return
+	}
 	rp.idleTimeout.Set(idleTimeout)
 }
 
 func (rp *ResourcePool) StatsJSON() string {
+	if rp == nil {
+		return "{}"
+	}
 	c, a, mx, wc, wt, it := rp.Stats()
 	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v}`, c, a, mx, wc, int64(wt), int64(it))
 }
@@ -204,25 +219,43 @@ func (rp *ResourcePool) Stats() (capacity, available, maxCap, waitCount int64, w
 }
 
 func (rp *ResourcePool) Capacity() int64 {
+	if rp == nil {
+		return 0
+	}
 	return rp.capacity.Get()
 }
 
 func (rp *ResourcePool) Available() int64 {
+	if rp == nil {
+		return 0
+	}
 	return int64(len(rp.resources))
 }
 
 func (rp *ResourcePool) MaxCap() int64 {
+	if rp == nil {
+		return 0
+	}
 	return int64(cap(rp.resources))
 }
 
 func (rp *ResourcePool) WaitCount() int64 {
+	if rp == nil {
+		return 0
+	}
 	return rp.waitCount.Get()
 }
 
 func (rp *ResourcePool) WaitTime() time.Duration {
+	if rp == nil {
+		return 0
+	}
 	return rp.waitTime.Get()
 }
 
 func (rp *ResourcePool) IdleTimeout() time.Duration {
+	if rp == nil {
+		return 0
+	}
 	return rp.idleTimeout.Get()
 }
