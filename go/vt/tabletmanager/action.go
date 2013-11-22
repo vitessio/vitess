@@ -168,10 +168,7 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
 		node.args = &SlavePositionReq{}
 		node.reply = &mysqlctl.ReplicationPosition{}
-	case TABLET_ACTION_WAIT_BLP_POSITION:
-		node.args = &WaitBlpPositionArgs{}
 	case TABLET_ACTION_SCRAP:
-	case TABLET_ACTION_GET_SCHEMA:
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		node.args = new(string)
 		node.reply = &mysqlctl.SchemaChangeResult{}
@@ -218,6 +215,12 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:
 		node.args = &ApplySchemaKeyspaceArgs{}
+
+	case TABLET_ACTION_GET_SCHEMA:
+	case TABLET_ACTION_GET_PERMISSIONS:
+	case TABLET_ACTION_WAIT_BLP_POSITION:
+		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
+
 	default:
 		return nil, fmt.Errorf("unrecognized action: %v", node.Action)
 	}

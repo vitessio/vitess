@@ -272,7 +272,7 @@ func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath strin
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SCRAP})
 }
 
-func (ai *ActionInitiator) RpcGetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
+func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
 	return ai.rpc.GetSchema(tablet, tables, includeViews, waitTime)
 }
 
@@ -284,7 +284,7 @@ func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *mysqlct
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, args: sc})
 }
 
-func (ai *ActionInitiator) RpcGetPermissions(tabletAlias topo.TabletAlias, waitTime time.Duration) (*mysqlctl.Permissions, error) {
+func (ai *ActionInitiator) GetPermissions(tabletAlias topo.TabletAlias, waitTime time.Duration) (*mysqlctl.Permissions, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err

@@ -16,7 +16,7 @@ import (
 )
 
 func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*mysqlctl.Permissions, error) {
-	return wr.ai.RpcGetPermissions(tabletAlias, wr.actionTimeout())
+	return wr.ai.GetPermissions(tabletAlias, wr.actionTimeout())
 }
 
 // helper method to asynchronously diff a permissions
