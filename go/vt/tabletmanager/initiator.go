@@ -216,12 +216,12 @@ func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slaveP
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, args: slavePos})
 }
 
-func (ai *ActionInitiator) MasterPosition(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_MASTER_POSITION})
+func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	return ai.rpc.MasterPosition(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) SlavePosition(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SLAVE_POSITION})
+func (ai *ActionInitiator) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	return ai.rpc.SlavePosition(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
