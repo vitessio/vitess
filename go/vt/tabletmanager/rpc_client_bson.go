@@ -49,6 +49,10 @@ func (client *GoRpcTabletManagerConn) rpcCallTablet(tablet *topo.TabletInfo, nam
 	}
 }
 
+//
+// Various read-only methods
+//
+
 func (client *GoRpcTabletManagerConn) Ping(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	var result string
 	err := client.rpcCallTablet(tablet, TABLET_ACTION_PING, "payload", &result, waitTime)
@@ -59,25 +63,6 @@ func (client *GoRpcTabletManagerConn) Ping(tablet *topo.TabletInfo, waitTime tim
 		return fmt.Errorf("Bad ping result: %v", result)
 	}
 	return nil
-}
-
-func (client *GoRpcTabletManagerConn) ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_CHANGE_TYPE, &dbType, rpc.NilResponse, waitTime)
-}
-
-func (client *GoRpcTabletManagerConn) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_PROMOTED, rpc.NilRequest, rpc.NilResponse, waitTime)
-}
-
-func (client *GoRpcTabletManagerConn) SlaveWasRestarted(tablet *topo.TabletInfo, args *SlaveWasRestartedData, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, rpc.NilResponse, waitTime)
-}
-
-func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_BLP_POSITION, &WaitBlpPositionArgs{
-		BlpPosition: blpPosition,
-		WaitTimeout: int(waitTime / time.Second),
-	}, rpc.NilResponse, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
@@ -94,4 +79,70 @@ func (client *GoRpcTabletManagerConn) GetPermissions(tablet *topo.TabletInfo, wa
 		return nil, err
 	}
 	return &p, nil
+}
+
+//
+// Various read-write methods
+//
+
+func (client *GoRpcTabletManagerConn) ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_CHANGE_TYPE, &dbType, rpc.NilResponse, waitTime)
+}
+
+//
+// Replication related methods
+//
+
+func (client *GoRpcTabletManagerConn) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	var rp mysqlctl.ReplicationPosition
+	if err := client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_POSITION, "", &rp, waitTime); err != nil {
+		return nil, err
+	}
+	return &rp, nil
+}
+
+func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_SLAVE_POSITION, &SlavePositionReq{
+		ReplicationPosition: *replicationPosition,
+		WaitTimeout:         int(waitTime / time.Second),
+	}, rpc.NilResponse, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	var rp mysqlctl.ReplicationPosition
+	if err := client.rpcCallTablet(tablet, TABLET_ACTION_MASTER_POSITION, "", &rp, waitTime); err != nil {
+		return nil, err
+	}
+	return &rp, nil
+}
+
+func (client *GoRpcTabletManagerConn) StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_STOP_SLAVE, "", rpc.NilResponse, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error) {
+	var sl SlaveList
+	if err := client.rpcCallTablet(tablet, TABLET_ACTION_GET_SLAVES, "", &sl, waitTime); err != nil {
+		return nil, err
+	}
+	return &sl, nil
+}
+
+func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_BLP_POSITION, &WaitBlpPositionArgs{
+		BlpPosition: blpPosition,
+		WaitTimeout: int(waitTime / time.Second),
+	}, rpc.NilResponse, waitTime)
+}
+
+//
+// Reparenting related functions
+//
+
+func (client *GoRpcTabletManagerConn) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_PROMOTED, rpc.NilRequest, rpc.NilResponse, waitTime)
+}
+
+func (client *GoRpcTabletManagerConn) SlaveWasRestarted(tablet *topo.TabletInfo, args *SlaveWasRestartedData, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, rpc.NilResponse, waitTime)
 }
