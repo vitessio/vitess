@@ -22,11 +22,7 @@ func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, inc
 		return nil, err
 	}
 
-	return wr.GetSchemaTablet(ti, tables, includeViews)
-}
-
-func (wr *Wrangler) GetSchemaTablet(tablet *topo.TabletInfo, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
-	return wr.ai.RpcGetSchemaTablet(tablet, tables, includeViews, wr.actionTimeout())
+	return wr.ai.RpcGetSchema(ti, tables, includeViews, wr.actionTimeout())
 }
 
 // helper method to asynchronously diff a schema
@@ -279,7 +275,7 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysql
 	for _, status := range statusArray {
 		wg.Add(1)
 		go func(status *TabletStatus) {
-			status.beforeSchema, status.lastError = wr.GetSchemaTablet(status.ti, nil, false)
+			status.beforeSchema, status.lastError = wr.ai.RpcGetSchema(status.ti, nil, false, wr.actionTimeout())
 			wg.Done()
 		}(status)
 	}

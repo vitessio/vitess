@@ -272,17 +272,8 @@ func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath strin
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SCRAP})
 }
 
-type GetSchemaArgs struct {
-	Tables       []string
-	IncludeViews bool
-}
-
-func (ai *ActionInitiator) GetSchema(tabletAlias topo.TabletAlias, tables []string, includeViews bool) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_GET_SCHEMA, args: &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}})
-}
-
-func (ai *ActionInitiator) RpcGetSchemaTablet(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
-	return ai.rpc.GetSchemaTablet(tablet, tables, includeViews, waitTime)
+func (ai *ActionInitiator) RpcGetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
+	return ai.rpc.GetSchema(tablet, tables, includeViews, waitTime)
 }
 
 func (ai *ActionInitiator) PreflightSchema(tabletAlias topo.TabletAlias, change string) (actionPath string, err error) {

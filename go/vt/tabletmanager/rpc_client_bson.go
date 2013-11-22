@@ -80,7 +80,7 @@ func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, b
 	}, rpc.NilResponse, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) GetSchemaTablet(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
+func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
 	var sd mysqlctl.SchemaDefinition
 	if err := client.rpcCallTablet(tablet, TABLET_ACTION_GET_SCHEMA, &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}, &sd, waitTime); err != nil {
 		return nil, err

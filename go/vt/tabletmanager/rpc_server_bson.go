@@ -44,6 +44,11 @@ func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) er
 	})
 }
 
+type GetSchemaArgs struct {
+	Tables       []string
+	IncludeViews bool
+}
+
 func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArgs, reply *mysqlctl.SchemaDefinition) error {
 	return tm.rpcWrap(context.RemoteAddr, TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
 		// read the tablet to get the dbname

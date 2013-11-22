@@ -194,8 +194,6 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.restore(actionNode)
 	case TABLET_ACTION_SCRAP:
 		err = ta.scrap()
-	case TABLET_ACTION_GET_SCHEMA:
-		err = ta.getSchema(actionNode)
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		err = ta.preflightSchema(actionNode)
 	case TABLET_ACTION_APPLY_SCHEMA:
@@ -222,6 +220,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.mysqld.StopSlave(ta.hookExtraEnv())
 	case TABLET_ACTION_WAIT_SLAVE_POSITION:
 		err = ta.waitSlavePosition(actionNode)
+	case TABLET_ACTION_GET_SCHEMA:
+		err = TabletActorError("Operation " + actionNode.Action + "  only supported as RPC")
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
 	}
@@ -519,24 +519,6 @@ func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 
 func (ta *TabletActor) scrap() error {
 	return Scrap(ta.ts, ta.tabletAlias, false)
-}
-
-func (ta *TabletActor) getSchema(actionNode *ActionNode) error {
-	gsa := actionNode.args.(*GetSchemaArgs)
-
-	// read the tablet to get the dbname
-	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	// and get the schema
-	sd, err := ta.mysqld.GetSchema(tablet.DbName(), gsa.Tables, gsa.IncludeViews)
-	if err != nil {
-		return err
-	}
-	actionNode.reply = sd
-	return nil
 }
 
 func (ta *TabletActor) preflightSchema(actionNode *ActionNode) error {
