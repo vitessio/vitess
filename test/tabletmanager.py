@@ -546,7 +546,7 @@ class TestTabletManager(unittest.TestCase):
     # the master and fail somewhat quickly
     stdout, stderr = utils.run_vtctl('-wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, expect_fail=True)
     logging.debug("Failed ReparentShard output:\n" + stderr)
-    if 'ValidateShard verification failed: timed out during validate' not in stderr:
+    if 'ValidateShard verification failed: some validation errors' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
     # Should timeout and fail

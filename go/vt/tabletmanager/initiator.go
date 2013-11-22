@@ -228,8 +228,8 @@ func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, replicatio
 	return ai.rpc.WaitSlavePosition(tablet, replicationPosition, waitTime)
 }
 
-func (ai *ActionInitiator) StopSlave(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_STOP_SLAVE})
+func (ai *ActionInitiator) StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.StopSlave(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
@@ -296,8 +296,8 @@ type SlaveList struct {
 	Addrs []string
 }
 
-func (ai *ActionInitiator) GetSlaves(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_GET_SLAVES})
+func (ai *ActionInitiator) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error) {
+	return ai.rpc.GetSlaves(tablet, waitTime)
 }
 
 func (ai *ActionInitiator) ReparentShard(tabletAlias topo.TabletAlias) *ActionNode {

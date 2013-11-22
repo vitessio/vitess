@@ -156,7 +156,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.args = &RestartSlaveData{}
 	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
 		node.args = &SlaveWasRestartedData{}
-	case TABLET_ACTION_STOP_SLAVE:
 	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_REPARENT_POSITION:
 		node.args = &mysqlctl.ReplicationPosition{}
@@ -171,8 +170,6 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_EXECUTE_HOOK:
 		node.args = &hook.Hook{}
 		node.reply = &hook.HookResult{}
-	case TABLET_ACTION_GET_SLAVES:
-		node.reply = &SlaveList{}
 
 	case TABLET_ACTION_SNAPSHOT:
 		node.args = &SnapshotArgs{}
@@ -211,7 +208,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 
 	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
-		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_WAIT_BLP_POSITION:
+		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
+		TABLET_ACTION_GET_SLAVES, TABLET_ACTION_WAIT_BLP_POSITION:
 		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
 
 	default:

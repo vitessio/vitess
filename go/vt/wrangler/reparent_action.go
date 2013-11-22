@@ -181,10 +181,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 func (wr *Wrangler) stopSlaves(tabletMap map[topo.TabletAlias]*topo.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *topo.TabletInfo) {
-		actionPath, err := wr.ai.StopSlave(ti.Alias)
-		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-		}
+		err := wr.ai.StopSlave(ti, wr.actionTimeout())
 		if err != nil {
 			log.V(6).Infof("StopSlave failed: %v", err)
 		}
