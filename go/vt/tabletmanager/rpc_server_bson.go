@@ -100,6 +100,11 @@ func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.Unus
 	})
 }
 
+type SlavePositionReq struct {
+	ReplicationPosition mysqlctl.ReplicationPosition
+	WaitTimeout         int // seconds, zero to wait indefinitely
+}
+
 func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *SlavePositionReq, reply *mysqlctl.ReplicationPosition) error {
 	return tm.rpcWrap(context.RemoteAddr, TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
 		if err := tm.mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {

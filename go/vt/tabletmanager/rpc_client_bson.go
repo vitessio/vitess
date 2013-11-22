@@ -101,11 +101,15 @@ func (client *GoRpcTabletManagerConn) SlavePosition(tablet *topo.TabletInfo, wai
 	return &rp, nil
 }
 
-func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_SLAVE_POSITION, &SlavePositionReq{
+func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	var rp mysqlctl.ReplicationPosition
+	if err := client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_SLAVE_POSITION, &SlavePositionReq{
 		ReplicationPosition: *replicationPosition,
 		WaitTimeout:         int(waitTime / time.Second),
-	}, rpc.NilResponse, waitTime)
+	}, &rp, waitTime); err != nil {
+		return nil, err
+	}
+	return &rp, nil
 }
 
 func (client *GoRpcTabletManagerConn) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {

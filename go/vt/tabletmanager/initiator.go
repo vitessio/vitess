@@ -224,13 +224,8 @@ func (ai *ActionInitiator) SlavePosition(tabletAlias topo.TabletAlias) (actionPa
 	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SLAVE_POSITION})
 }
 
-type SlavePositionReq struct {
-	ReplicationPosition mysqlctl.ReplicationPosition
-	WaitTimeout         int // seconds, zero to wait indefinitely
-}
-
-func (ai *ActionInitiator) WaitSlavePosition(tabletAlias topo.TabletAlias, args *SlavePositionReq) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_WAIT_SLAVE_POSITION, args: args})
+func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	return ai.rpc.WaitSlavePosition(tablet, replicationPosition, waitTime)
 }
 
 func (ai *ActionInitiator) StopSlave(tabletAlias topo.TabletAlias) (actionPath string, err error) {

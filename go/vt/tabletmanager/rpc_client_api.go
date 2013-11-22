@@ -43,7 +43,7 @@ type TabletManagerConn interface {
 
 	// WaitSlavePosition asks the tablet to wait until it reaches that
 	// position in mysql replication
-	WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) error
+	WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
 
 	// MasterPosition returns the tablet's master position
 	MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)

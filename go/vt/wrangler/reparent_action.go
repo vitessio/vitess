@@ -127,10 +127,10 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 			calls <- ctx
 		}()
 
-		var args *tm.SlavePositionReq
+		var args *mysqlctl.ReplicationPosition
 		if masterPosition != nil {
 			// If the master position is known, do our best to wait for replication to catch up.
-			args = &tm.SlavePositionReq{ReplicationPosition: *masterPosition, WaitTimeout: int(wr.actionTimeout().Seconds())}
+			args = masterPosition
 		} else {
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
@@ -145,23 +145,19 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 				return
 			}
 			replPos := result.(*mysqlctl.ReplicationPosition)
-			lastDataPos := mysqlctl.ReplicationPosition{MasterLogFile: replPos.MasterLogFileIo,
-				MasterLogPositionIo: replPos.MasterLogPositionIo}
-			args = &tm.SlavePositionReq{ReplicationPosition: lastDataPos, WaitTimeout: int(wr.actionTimeout().Seconds())}
+			args = &mysqlctl.ReplicationPosition{
+				MasterLogFile:       replPos.MasterLogFileIo,
+				MasterLogPositionIo: replPos.MasterLogPositionIo,
+			}
 		}
 
 		// This option waits for the SQL thread to apply all changes to this instance.
-		actionPath, err := wr.ai.WaitSlavePosition(ti.Alias, args)
+		rp, err := wr.ai.WaitSlavePosition(ti, args, wr.actionTimeout())
 		if err != nil {
 			ctx.err = err
 			return
 		}
-		result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
-		if err != nil {
-			ctx.err = err
-			return
-		}
-		ctx.position = result.(*mysqlctl.ReplicationPosition)
+		ctx.position = rp
 	}
 
 	for _, tablet := range tabletMap {

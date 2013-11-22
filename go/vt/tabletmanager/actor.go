@@ -218,9 +218,9 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.snapshotSourceEnd(actionNode)
 	case TABLET_ACTION_STOP_SLAVE:
 		err = ta.mysqld.StopSlave(ta.hookExtraEnv())
-	case TABLET_ACTION_WAIT_SLAVE_POSITION:
-		err = ta.waitSlavePosition(actionNode)
-	case TABLET_ACTION_GET_SCHEMA:
+
+	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
+		TABLET_ACTION_WAIT_SLAVE_POSITION, TABLET_ACTION_WAIT_BLP_POSITION:
 		err = TabletActorError("Operation " + actionNode.Action + "  only supported as RPC")
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
@@ -394,16 +394,6 @@ func (ta *TabletActor) reparentPosition(actionNode *ActionNode) error {
 	log.V(6).Infof("reparentPosition %v", rsd.String())
 	actionNode.reply = rsd
 	return nil
-}
-
-func (ta *TabletActor) waitSlavePosition(actionNode *ActionNode) error {
-	slavePos := actionNode.args.(*SlavePositionReq)
-	log.V(6).Infof("WaitSlavePosition %#v", *slavePos)
-	if err := ta.mysqld.WaitMasterPos(&slavePos.ReplicationPosition, slavePos.WaitTimeout); err != nil {
-		return err
-	}
-
-	return ta.slavePosition(actionNode)
 }
 
 func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
