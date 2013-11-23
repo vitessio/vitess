@@ -60,7 +60,6 @@ type SqlQuery struct {
 	// where you don't want the state to change from the time you've read it.
 	statemu sync.Mutex
 	state   sync2.AtomicInt64
-	states  *stats.States
 
 	qe        *QueryEngine
 	sessionId int64
@@ -70,14 +69,6 @@ type SqlQuery struct {
 func NewSqlQuery(config Config) *SqlQuery {
 	sq := &SqlQuery{}
 	sq.qe = NewQueryEngine(config)
-	sq.states = stats.NewStates("", []string{
-		stateName[NOT_SERVING],
-		stateName[CONNECTING],
-		stateName[ABORT],
-		stateName[INITIALIZING],
-		stateName[SERVING],
-		stateName[SHUTTING_DOWN],
-	}, time.Now(), NOT_SERVING)
 	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
 	return sq
@@ -86,7 +77,6 @@ func NewSqlQuery(config Config) *SqlQuery {
 func (sq *SqlQuery) setState(state int64) {
 	log.Infof("SqlQuery state: %v -> %v", stateName[sq.state.Get()], stateName[state])
 	sq.state.Set(state)
-	sq.states.SetState(state)
 }
 
 func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
@@ -396,10 +386,7 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 func (sq *SqlQuery) statsJSON() string {
 	buf := bytes.NewBuffer(make([]byte, 0, 128))
 	fmt.Fprintf(buf, "{")
-	// TODO(alainjobart) when no monitoring depends on 'State',
-	// remove it (use 'States.Current' instead)
 	fmt.Fprintf(buf, "\n \"State\": \"%v\",", stateName[sq.state.Get()])
-	fmt.Fprintf(buf, "\n \"States\": %v,", sq.states.String())
 	fmt.Fprintf(buf, "\n \"CachePool\": %v,", sq.qe.cachePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"QueryCache\": %v,", sq.qe.schemaInfo.queries.StatsJSON())
 	fmt.Fprintf(buf, "\n \"SchemaReloadTime\": %v,", int64(sq.qe.schemaInfo.reloadTime))

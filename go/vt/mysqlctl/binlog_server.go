@@ -29,6 +29,11 @@ const (
 	BINLOG_SERVER_ENABLED
 )
 
+var blsStateNames = map[int]string{
+	BINLOG_SERVER_DISABLED: "Disabled",
+	BINLOG_SERVER_ENABLED:  "Enabled",
+}
+
 var (
 	KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
 	USER_ID             = []byte("user_id")
@@ -61,7 +66,6 @@ type BinlogServer struct {
 	mysqld   *Mysqld
 	blsStats *blsStats
 	state    sync2.AtomicInt64
-	states   *stats.States
 
 	// interrupted is used to stop the serving clients when the service
 	// gets interrupted. It is created when the service is enabled.
@@ -720,17 +724,15 @@ func (blServer *BinlogServer) isServiceEnabled() bool {
 
 func (blServer *BinlogServer) setState(state int64) {
 	blServer.state.Set(state)
-	blServer.states.SetState(state)
 }
 
 func NewBinlogServer(mysqld *Mysqld) *BinlogServer {
 	binlogServer := new(BinlogServer)
 	binlogServer.mysqld = mysqld
 	binlogServer.blsStats = newBlsStats()
-	binlogServer.states = stats.NewStates("BinlogServerState", []string{
-		"Disabled",
-		"Enabled",
-	}, time.Now(), BINLOG_SERVER_DISABLED)
+	stats.Publish("BinlogServerState", stats.StringFunc(func() string {
+		return blsStateNames[binlogServer.state.Get()]
+	}))
 	return binlogServer
 }
 
