@@ -30,12 +30,11 @@ const (
 )
 
 var (
-	KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
-	USER_ID             = []byte("user_id")
-	END_COMMENT         = []byte("*/")
-	_VT                 = []byte("_vt.")
-	HEARTBEAT           = []byte("heartbeat")
-	ADMIN               = []byte("admin")
+	USER_ID     = []byte("user_id")
+	END_COMMENT = []byte("*/")
+	_VT         = []byte("_vt.")
+	HEARTBEAT   = []byte("heartbeat")
+	ADMIN       = []byte("admin")
 )
 
 type blsStats struct {

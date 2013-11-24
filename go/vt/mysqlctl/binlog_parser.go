@@ -59,7 +59,6 @@ var (
 	BINLOG_START           = []byte("Start: binlog")
 	BINLOG_DB_CHANGE       = []byte(USE)
 	POS                    = []byte(" pos: ")
-	SPACE                  = []byte(" ")
 	COMMENT                = []byte("/*!")
 	SET_SESSION_VAR        = []byte("SET @@session")
 	DELIMITER              = []byte("DELIMITER ")
