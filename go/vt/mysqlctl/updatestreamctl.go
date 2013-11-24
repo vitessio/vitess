@@ -35,24 +35,28 @@ type UpdateStream struct {
 	streams        streamList
 }
 
+type streamer interface {
+	Stop()
+}
+
 type streamList struct {
 	sync.Mutex
-	streams map[*EventStreamer]bool
+	streams map[streamer]bool
 }
 
 func (sl *streamList) Init() {
 	sl.Lock()
-	sl.streams = make(map[*EventStreamer]bool)
+	sl.streams = make(map[streamer]bool)
 	sl.Unlock()
 }
 
-func (sl *streamList) Add(e *EventStreamer) {
+func (sl *streamList) Add(e streamer) {
 	sl.Lock()
 	sl.streams[e] = true
 	sl.Unlock()
 }
 
-func (sl *streamList) Delete(e *EventStreamer) {
+func (sl *streamList) Delete(e streamer) {
 	sl.Lock()
 	delete(sl.streams, e)
 	sl.Unlock()

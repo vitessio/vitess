@@ -15,11 +15,11 @@ import (
 var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
 var SPACE = []byte(" ")
 
-// KeyspaceIdFilterFunc returns a function that calls sendReply only if statements
+// KeyrangeFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
-// bls.Stream(file, pos, KeyspaceIdFilterFunc(sendTransaction))
-func KeyspaceIdFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+// bls.Stream(file, pos, KeyrangeFilterFunc(sendTransaction))
+func KeyrangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *BinlogTransaction) error {
 		matched := false
 		filtered := make([]Statement, 0, len(reply.Statements))

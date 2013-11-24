@@ -16,7 +16,7 @@ var testKeyrange = key.KeyRange{
 	End:   key.KeyspaceId(key.Uint64Key(10).String()),
 }
 
-func TestKeyspaceIdFilterPass(t *testing.T) {
+func TestKeyrangeFilterPass(t *testing.T) {
 	input := BinlogTransaction{
 		Statements: []Statement{
 			{
@@ -35,7 +35,7 @@ func TestKeyspaceIdFilterPass(t *testing.T) {
 		},
 	}
 	var got string
-	f := KeyspaceIdFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -46,7 +46,7 @@ func TestKeyspaceIdFilterPass(t *testing.T) {
 	}
 }
 
-func TestKeyspaceIdFilterSkip(t *testing.T) {
+func TestKeyrangeFilterSkip(t *testing.T) {
 	input := BinlogTransaction{
 		Statements: []Statement{
 			{
@@ -62,7 +62,7 @@ func TestKeyspaceIdFilterSkip(t *testing.T) {
 		},
 	}
 	var got string
-	f := KeyspaceIdFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -73,7 +73,7 @@ func TestKeyspaceIdFilterSkip(t *testing.T) {
 	}
 }
 
-func TestKeyspaceIdFilterDDL(t *testing.T) {
+func TestKeyrangeFilterDDL(t *testing.T) {
 	input := BinlogTransaction{
 		Statements: []Statement{
 			{
@@ -89,7 +89,7 @@ func TestKeyspaceIdFilterDDL(t *testing.T) {
 		},
 	}
 	var got string
-	f := KeyspaceIdFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -100,7 +100,7 @@ func TestKeyspaceIdFilterDDL(t *testing.T) {
 	}
 }
 
-func TestKeyspaceIdFilterMalformed(t *testing.T) {
+func TestKeyrangeFilterMalformed(t *testing.T) {
 	input := BinlogTransaction{
 		Statements: []Statement{
 			{
@@ -122,7 +122,7 @@ func TestKeyspaceIdFilterMalformed(t *testing.T) {
 		},
 	}
 	var got string
-	f := KeyspaceIdFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
