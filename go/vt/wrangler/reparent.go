@@ -197,24 +197,17 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 		return fmt.Errorf("master %v and potential slave not in same keyspace/shard", shardInfo.MasterAlias)
 	}
 
-	actionPath, err := wr.ai.SlavePosition(ti.Alias)
+	pos, err := wr.ai.SlavePosition(ti, wr.actionTimeout())
 	if err != nil {
 		return err
 	}
-
-	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
-	if err != nil {
-		return err
-	}
-	pos := result.(*mysqlctl.ReplicationPosition)
-
 	log.Infof("slave tablet position: %v %v %v", tabletAlias, ti.MysqlAddr(), pos.MapKey())
 
-	actionPath, err = wr.ai.ReparentPosition(masterTi.Alias, pos)
+	actionPath, err := wr.ai.ReparentPosition(masterTi.Alias, pos)
 	if err != nil {
 		return err
 	}
-	result, err = wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
 	if err != nil {
 		return err
 	}

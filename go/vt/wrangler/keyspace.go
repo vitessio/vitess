@@ -196,17 +196,24 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 	for _, si := range shards {
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
+			defer wg.Done()
 			log.Infof("Gathering master position for %v", si.MasterAlias)
-			pos, err := wr.getMasterPosition(si.MasterAlias)
+			ti, err := wr.ts.GetTablet(si.MasterAlias)
 			if err != nil {
 				rec.RecordError(err)
-			} else {
-				log.Infof("Got master position for %v", si.MasterAlias)
-				mu.Lock()
-				result[si] = pos
-				mu.Unlock()
+				return
 			}
-			wg.Done()
+
+			pos, err := wr.ai.MasterPosition(ti, wr.actionTimeout())
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+
+			log.Infof("Got master position for %v", si.MasterAlias)
+			mu.Lock()
+			result[si] = pos
+			mu.Unlock()
 		}(si)
 	}
 	wg.Wait()

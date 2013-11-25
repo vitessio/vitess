@@ -171,8 +171,6 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.changeType(actionNode)
 	case TABLET_ACTION_DEMOTE_MASTER:
 		err = ta.demoteMaster()
-	case TABLET_ACTION_MASTER_POSITION:
-		err = ta.masterPosition(actionNode)
 	case TABLET_ACTION_MULTI_SNAPSHOT:
 		err = ta.multiSnapshot(actionNode)
 	case TABLET_ACTION_MULTI_RESTORE:
@@ -200,27 +198,23 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		err = ta.applySchema(actionNode)
 	case TABLET_ACTION_EXECUTE_HOOK:
 		err = ta.executeHook(actionNode)
-	case TABLET_ACTION_GET_SLAVES:
-		err = ta.getSlaves(actionNode)
 	case TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
 	case TABLET_ACTION_SET_RDWR:
 		err = ta.setReadOnly(false)
 	case TABLET_ACTION_SLEEP:
 		err = ta.sleep(actionNode)
-	case TABLET_ACTION_SLAVE_POSITION:
-		err = ta.slavePosition(actionNode)
 	case TABLET_ACTION_REPARENT_POSITION:
 		err = ta.reparentPosition(actionNode)
 	case TABLET_ACTION_SNAPSHOT:
 		err = ta.snapshot(actionNode)
 	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
-	case TABLET_ACTION_STOP_SLAVE:
-		err = ta.mysqld.StopSlave(ta.hookExtraEnv())
 
 	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
-		TABLET_ACTION_WAIT_SLAVE_POSITION, TABLET_ACTION_WAIT_BLP_POSITION:
+		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
+		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
+		TABLET_ACTION_GET_SLAVES, TABLET_ACTION_WAIT_BLP_POSITION:
 		err = TabletActorError("Operation " + actionNode.Action + "  only supported as RPC")
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
@@ -356,26 +350,6 @@ func updateReplicationGraphForPromotedSlave(ts topo.Server, tablet *topo.TabletI
 		return err
 	}
 
-	return nil
-}
-
-func (ta *TabletActor) masterPosition(actionNode *ActionNode) error {
-	position, err := ta.mysqld.MasterStatus()
-	if err != nil {
-		return err
-	}
-	log.V(6).Infof("MasterPosition %#v", *position)
-	actionNode.reply = position
-	return nil
-}
-
-func (ta *TabletActor) slavePosition(actionNode *ActionNode) error {
-	position, err := ta.mysqld.SlaveStatus()
-	if err != nil {
-		return err
-	}
-	log.V(6).Infof("SlavePosition %#v", *position)
-	actionNode.reply = position
 	return nil
 }
 
@@ -565,16 +539,6 @@ func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
 
 func (ta *TabletActor) hookExtraEnv() map[string]string {
 	return map[string]string{"TABLET_ALIAS": ta.tabletAlias.String()}
-}
-
-func (ta *TabletActor) getSlaves(actionNode *ActionNode) (err error) {
-	slaveList := &SlaveList{}
-	slaveList.Addrs, err = ta.mysqld.FindSlaves()
-	if err != nil {
-		return err
-	}
-	actionNode.reply = slaveList
-	return nil
 }
 
 // Operate on a backup tablet. Shutdown mysqld and copy the data files aside.
