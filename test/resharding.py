@@ -285,10 +285,10 @@ primary key (name)
       if v == None:
         logging.debug("  vttablet not answering at /debug/vars, waiting...")
       else:
-        if 'BinlogServerState' not in v:
+        if 'UpdateStreamState' not in v:
           logging.debug("  vttablet not exporting BinlogServerState, waiting...")
         else:
-          s = v['BinlogServerState']['Current']
+          s = v['UpdateStreamState']['Current']
           if s != expected:
             logging.debug("  vttablet's binlog server in state %s != %s", s, expected)
           else:
@@ -390,7 +390,6 @@ primary key (name)
 
     # wait for tablet's binlog server service to be enabled after snapshot,
     # and check all the others while we're at it
-    self._wait_for_binlog_server_state(shard_1_master, "Disabled")
     self._wait_for_binlog_server_state(shard_1_slave1, "Enabled")
 
     # perform the restore.

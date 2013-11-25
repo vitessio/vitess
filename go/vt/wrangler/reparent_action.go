@@ -21,23 +21,6 @@ type rpcContext struct {
 	err      error
 }
 
-// These functions reimplement a few actions that were originally
-// implemented as direct RPCs.  This gives a consistent, if not slower
-// mechanism for performing critical actions. It also leaves more
-// centralized debug information in TopologyServer when a failure occurs.
-
-func (wr *Wrangler) getMasterPosition(tabletAlias topo.TabletAlias) (*mysqlctl.ReplicationPosition, error) {
-	actionPath, err := wr.ai.MasterPosition(tabletAlias)
-	if err != nil {
-		return nil, err
-	}
-	result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
-	if err != nil {
-		return nil, err
-	}
-	return result.(*mysqlctl.ReplicationPosition), nil
-}
-
 // Check all the tablets replication positions to find if some
 // will have a problem, and suggest a fix for them.
 func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.TabletInfo, masterTabletUid uint32) error {
@@ -72,15 +55,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 				return
 			}
 
-			actionPath, err := wr.ai.SlavePosition(tablet.Alias)
-			if err != nil {
-				mutex.Lock()
-				lastError = err
-				mutex.Unlock()
-				log.Errorf("  error asking tablet %v for slave position: %v", tablet.Alias, err)
-				return
-			}
-			result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
+			replPos, err := wr.ai.SlavePosition(tablet, wr.actionTimeout())
 			if err != nil {
 				mutex.Lock()
 				lastError = err
@@ -94,7 +69,6 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 			}
 
 			if !masterIsDead {
-				replPos := result.(*mysqlctl.ReplicationPosition)
 				var dur time.Duration = time.Duration(uint(time.Second) * replPos.SecondsBehindMaster)
 				if dur > wr.actionTimeout() {
 					err = fmt.Errorf("slave is too far behind to complete reparent in time (%v>%v), either increase timeout using 'vtctl -wait-time XXX ReparentShard ...' or scrap tablet %v", dur, wr.actionTimeout(), tablet.Alias)
@@ -134,17 +108,11 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 		} else {
 			// In the case where a master is down, look for the last bit of data copied and wait
 			// for that to apply. That gives us a chance to wait for all data.
-			actionPath, err := wr.ai.SlavePosition(ti.Alias)
+			replPos, err := wr.ai.SlavePosition(ti, wr.actionTimeout())
 			if err != nil {
 				ctx.err = err
 				return
 			}
-			result, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
-			if err != nil {
-				ctx.err = err
-				return
-			}
-			replPos := result.(*mysqlctl.ReplicationPosition)
 			args = &mysqlctl.ReplicationPosition{
 				MasterLogFile:       replPos.MasterLogFileIo,
 				MasterLogPositionIo: replPos.MasterLogPositionIo,
@@ -213,10 +181,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 func (wr *Wrangler) stopSlaves(tabletMap map[topo.TabletAlias]*topo.TabletInfo) error {
 	errs := make(chan error, len(tabletMap))
 	f := func(ti *topo.TabletInfo) {
-		actionPath, err := wr.ai.StopSlave(ti.Alias)
-		if err == nil {
-			err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
-		}
+		err := wr.ai.StopSlave(ti, wr.actionTimeout())
 		if err != nil {
 			log.V(6).Infof("StopSlave failed: %v", err)
 		}
@@ -251,23 +216,11 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*m
 		ti := tablets[idx]
 		ctx := &rpcContext{tablet: ti}
 		calls[idx] = ctx
-
-		var actionPath string
 		if ti.Type == topo.TYPE_MASTER {
-			actionPath, ctx.err = wr.ai.MasterPosition(ti.Alias)
+			ctx.position, ctx.err = wr.ai.MasterPosition(ti, wr.actionTimeout())
 		} else if ti.IsSlaveType() {
-			actionPath, ctx.err = wr.ai.SlavePosition(ti.Alias)
+			ctx.position, ctx.err = wr.ai.SlavePosition(ti, wr.actionTimeout())
 		}
-
-		if ctx.err != nil {
-			return
-		}
-
-		var result interface{}
-		if result, ctx.err = wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout()); ctx.err != nil {
-			return
-		}
-		ctx.position = result.(*mysqlctl.ReplicationPosition)
 	}
 
 	for i, tablet := range tablets {
@@ -311,7 +264,7 @@ func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*mysqlctl.ReplicationPosi
 	if err != nil {
 		return nil, err
 	}
-	return wr.getMasterPosition(ti.Alias)
+	return wr.ai.MasterPosition(ti, wr.actionTimeout())
 }
 
 func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *tm.RestartSlaveData, err error) {

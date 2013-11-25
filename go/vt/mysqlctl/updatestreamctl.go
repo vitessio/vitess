@@ -11,6 +11,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -37,24 +38,33 @@ type UpdateStream struct {
 	streams        streamList
 }
 
+type KeyrangeRequest struct {
+	StartPosition BinlogPosition
+	Keyrange      key.KeyRange
+}
+
+type streamer interface {
+	Stop()
+}
+
 type streamList struct {
 	sync.Mutex
-	streams map[*EventStreamer]bool
+	streams map[streamer]bool
 }
 
 func (sl *streamList) Init() {
 	sl.Lock()
-	sl.streams = make(map[*EventStreamer]bool)
+	sl.streams = make(map[streamer]bool)
 	sl.Unlock()
 }
 
-func (sl *streamList) Add(e *EventStreamer) {
+func (sl *streamList) Add(e streamer) {
 	sl.Lock()
 	sl.streams[e] = true
 	sl.Unlock()
 }
 
-func (sl *streamList) Delete(e *EventStreamer) {
+func (sl *streamList) Delete(e streamer) {
 	sl.Lock()
 	delete(sl.streams, e)
 	sl.Unlock()
@@ -183,9 +193,44 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendRep
 	updateStream.streams.Add(evs)
 	defer updateStream.streams.Delete(evs)
 
+	// Calls cascade like this: BinlogStreamer->func(*StreamEvent)->sendReply
 	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *StreamEvent) error {
 		return sendReply(reply)
 	})
+}
+
+func (updateStream *UpdateStream) StreamKeyrange(req *KeyrangeRequest, sendReply func(reply interface{}) error) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			err = x.(error)
+		}
+	}()
+
+	updateStream.actionLock.Lock()
+	if !updateStream.isEnabled() {
+		updateStream.actionLock.Unlock()
+		log.Errorf("Unable to serve client request: Update stream service is not enabled")
+		return fmt.Errorf("update stream service is not enabled")
+	}
+	updateStream.stateWaitGroup.Add(1)
+	updateStream.actionLock.Unlock()
+	defer updateStream.stateWaitGroup.Done()
+
+	rp, err := updateStream.mysqld.BinlogInfo(req.StartPosition.GroupId, req.StartPosition.ServerId)
+	if err != nil {
+		return fmt.Errorf("error computing start position: %v", err)
+	}
+	log.Infof("ServeUpdateStream starting @ %v", rp)
+
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
+	updateStream.streams.Add(bls)
+	defer updateStream.streams.Delete(bls)
+
+	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*BinlogTransaction)->sendReply
+	f := KeyrangeFilterFunc(req.Keyrange, func(reply *BinlogTransaction) error {
+		return sendReply(reply)
+	})
+	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
 }
 
 func (updateStream *UpdateStream) getReplicationPosition() (*proto.ReplicationCoordinates, error) {

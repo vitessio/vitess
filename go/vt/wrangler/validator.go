@@ -10,7 +10,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -194,24 +193,18 @@ func strInList(sl []string, s string) bool {
 }
 
 func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map[topo.TabletAlias]*topo.TabletInfo, results chan<- vresult) {
-	_, ok := tabletMap[shardInfo.MasterAlias]
+	masterTablet, ok := tabletMap[shardInfo.MasterAlias]
 	if !ok {
 		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("master not in tablet map")}
 		return
 	}
 
-	actionPath, err := wr.ai.GetSlaves(shardInfo.MasterAlias)
+	slaveList, err := wr.ai.GetSlaves(masterTablet, wr.actionTimeout())
 	if err != nil {
 		results <- vresult{shardInfo.MasterAlias.String(), err}
 		return
 	}
-	sa, err := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
-	if err != nil {
-		results <- vresult{shardInfo.MasterAlias.String(), err}
-		return
-	}
-	slaveAddrs := sa.(*tm.SlaveList).Addrs
-	if len(slaveAddrs) == 0 {
+	if len(slaveList.Addrs) == 0 {
 		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("no slaves found")}
 		return
 	}
@@ -228,7 +221,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 	}
 
 	// See if every slave is in the replication graph.
-	for _, slaveAddr := range slaveAddrs {
+	for _, slaveAddr := range slaveList.Addrs {
 		if tabletIpMap[slaveAddr] == nil {
 			results <- vresult{shardInfo.Keyspace() + "/" + shardInfo.ShardName(), fmt.Errorf("slave not in replication graph: %v (mysql instance without vttablet?)", slaveAddr)}
 		}
@@ -240,8 +233,8 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 			continue
 		}
 
-		if !strInList(slaveAddrs, tablet.IPAddr) {
-			results <- vresult{tablet.Alias.String(), fmt.Errorf("slave not replicating: %v %q", tablet.IPAddr, slaveAddrs)}
+		if !strInList(slaveList.Addrs, tablet.IPAddr) {
+			results <- vresult{tablet.Alias.String(), fmt.Errorf("slave not replicating: %v %q", tablet.IPAddr, slaveList.Addrs)}
 		}
 	}
 }

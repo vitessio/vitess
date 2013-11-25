@@ -142,8 +142,6 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	if !usePreviousServer {
 		newServerIndex := rand.Intn(len(addrs.Entries))
 		startPosition.Addr = fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
-		startPosition.Position.MasterFilename = ""
-		startPosition.Position.MasterPosition = 0
 		log.Infof("%v: Connecting to different server: %s", bpc, startPosition.Addr)
 	}
 
@@ -155,7 +153,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	}
 
 	// Create the player.
-	player, err := mysqlctl.NewBinlogPlayer(vtClient, overlap, bpc.sourceShard.Uid, startPosition, nil /*tables*/, 1 /*txnBatch*/, 30*time.Second /*maxTxnInterval*/, false /*execDdl*/)
+	player, err := mysqlctl.NewBinlogPlayer(vtClient, overlap, bpc.sourceShard.Uid, startPosition)
 	if err != nil {
 		return fmt.Errorf("can't create player: %v", err)
 	}
