@@ -98,7 +98,7 @@ class TabletConnection(object):
   def begin(self):
     if self.in_transaction:
       raise dbexceptions.NotSupportedError('Cannot begin: Already in a transaction')
-    self._make_req()
+
     try:
       self.client.call('VTGate.Begin', {'SessionId': self.session_id})
       self.in_transaction = True
@@ -109,7 +109,6 @@ class TabletConnection(object):
     if not self.in_transaction:
       return
 
-    self._make_req()
     # in_transaction has to be reset irrespective of outcome.
     self.in_transaction = False
 
@@ -122,7 +121,6 @@ class TabletConnection(object):
     if not self.in_transaction:
       return
 
-    self._make_req()
     # in_transaction has to be reset irrespective of outcome.
     self.in_transaction = False
 
