@@ -127,17 +127,6 @@ func InitAgent(
 		statsKeyRangeStart.Set(string(newTablet.KeyRange.Start.Hex()))
 		statsKeyRangeEnd.Set(string(newTablet.KeyRange.End.Hex()))
 
-		// BinlogServer is only enabled for replicas
-		if newTablet.Type == topo.TYPE_REPLICA {
-			if !mysqlctl.IsBinlogServerEnabled(binlogServer) {
-				mysqlctl.EnableBinlogServerService(binlogServer, dbcfgs.App.DbName)
-			}
-		} else {
-			if mysqlctl.IsBinlogServerEnabled(binlogServer) {
-				mysqlctl.DisableBinlogServerService(binlogServer)
-			}
-		}
-
 		// See if we need to start or stop any binlog player
 		if newTablet.Type == topo.TYPE_MASTER {
 			binlogPlayerMap.RefreshMap(newTablet, shardInfo)

@@ -663,7 +663,7 @@ func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
 			break
 		}
 
-		cmd := fmt.Sprintf("SELECT last_eof_group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", bp.Uid)
+		cmd := fmt.Sprintf("SELECT group_id FROM _vt.blp_checkpoint WHERE source_shard_uid=%v", bp.Uid)
 		qr, err := mysqld.fetchSuperQuery(cmd)
 		if err != nil {
 			return err

@@ -106,7 +106,7 @@ const (
 	SnapshotURLPath             = "/snapshot"
 
 	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (source_shard_uid, addr, master_filename, master_position, group_id, txn_timestamp, time_updated) 
-	                          values (%v, '%v', '%v', %v, '%v', unix_timestamp(), %v)`
+	                          values (%v, '%v', '', 0, '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -894,8 +894,6 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
 				manifestIndex,
 				manifest.Source.Addr,
-				manifest.Source.MasterState.ReplicationPosition.MasterLogFile,
-				manifest.Source.MasterState.ReplicationPosition.MasterLogPosition,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
 				time.Now().Unix())
 			queries = append(queries, insertRecovery)

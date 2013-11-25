@@ -18,9 +18,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
@@ -29,22 +27,13 @@ import (
 	"github.com/youtube/vitess/go/vt/servenv"
 )
 
-const (
-	TXN_BATCH        = 10
-	MAX_TXN_INTERVAL = 30
-)
-
 var (
-	uid            = flag.Uint("uid", 0, "id of the blp_checkpoint row")
-	start          = flag.String("start", "", "keyrange start to use in hex")
-	end            = flag.String("end", "", "keyrange end to use in hex")
-	port           = flag.Int("port", 0, "port for the server")
-	txnBatch       = flag.Int("txn-batch", TXN_BATCH, "transaction batch size")
-	maxTxnInterval = flag.Int("max-txn-interval", MAX_TXN_INTERVAL, "max txn interval")
-	dbConfigFile   = flag.String("db-config-file", "", "json file for db credentials")
-	debug          = flag.Bool("debug", true, "run a debug version - prints the sql statements rather than executing them")
-	tables         = flag.String("tables", "", "tables to play back")
-	execDdl        = flag.Bool("exec-ddl", false, "execute ddl")
+	uid          = flag.Uint("uid", 0, "id of the blp_checkpoint row")
+	start        = flag.String("start", "", "keyrange start to use in hex")
+	end          = flag.String("end", "", "keyrange end to use in hex")
+	port         = flag.Int("port", 0, "port for the server")
+	dbConfigFile = flag.String("db-config-file", "", "json file for db credentials")
+	debug        = flag.Bool("debug", true, "run a debug version - prints the sql statements rather than executing them")
 )
 
 func readDbConfig(dbConfigFile string) (*mysql.ConnectionParams, error) {
@@ -80,14 +69,6 @@ func main() {
 		log.Fatalf("Cannot read db config file: %v", err)
 	}
 
-	var t []string
-	if *tables != "" {
-		t = strings.Split(*tables, ",")
-		for i, table := range t {
-			t[i] = strings.TrimSpace(table)
-		}
-	}
-
 	interrupted := make(chan struct{})
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGTERM)
@@ -110,7 +91,7 @@ func main() {
 	if *debug {
 		vtClient = mysqlctl.NewDummyVtClient()
 	}
-	blp, err := mysqlctl.NewBinlogPlayer(vtClient, keyRange, uint32(*uid), brs, t, *txnBatch, time.Duration(*maxTxnInterval)*time.Second, *execDdl)
+	blp, err := mysqlctl.NewBinlogPlayer(vtClient, keyRange, uint32(*uid), brs)
 	if err != nil {
 		log.Fatalf("error in initializing binlog player: %v", err)
 	}

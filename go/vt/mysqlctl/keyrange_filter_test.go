@@ -67,7 +67,7 @@ func TestKeyrangeFilterSkip(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := ""
+	want := `position: <1, 0> `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -127,7 +127,7 @@ func TestKeyrangeFilterMalformed(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := ""
+	want := `position: <1, 0> `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}

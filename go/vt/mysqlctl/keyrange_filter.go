@@ -57,10 +57,11 @@ func KeyrangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) se
 				matched = true
 			}
 		}
-		if !matched {
-			return nil
+		if matched {
+			reply.Statements = filtered
+		} else {
+			reply.Statements = nil
 		}
-		reply.Statements = filtered
 		return sendReply(reply)
 	}
 }
