@@ -153,6 +153,7 @@ func CheckPid(t *testing.T, ts topo.Server) {
 		if timeout == 0 {
 			t.Fatalf("ts.ValidateTabletPidNode: %v", err)
 		}
+		t.Logf("Waiting for ValidateTabletPidNode to succeed %v/30", timeout)
 		time.Sleep(time.Second)
 	}
 
