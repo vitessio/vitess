@@ -51,25 +51,37 @@ func CheckActions(t *testing.T, ts topo.Server) {
 		t.Errorf("WaitForTabletAction returned %v", err)
 	}
 
-	wg := sync.WaitGroup{}
-
 	// wait for the result in one thread
-	wg.Add(1)
+	wg1 := sync.WaitGroup{}
+	wg1.Add(1)
 	go func() {
+		defer wg1.Done()
 		interrupted := make(chan struct{}, 1)
-		result, err := ts.WaitForTabletAction(actionPath, time.Second*10, interrupted)
-		if err != nil {
-			t.Errorf("WaitForTabletAction returned %v", err)
+		var err error
+		for i := 0; i <= 30; i++ {
+			var result string
+			result, err = ts.WaitForTabletAction(actionPath, time.Second, interrupted)
+			if err == topo.ErrTimeout {
+				// we waited for one second, didn't see the
+				// result, try again up to 30 seconds.
+				t.Logf("WaitForTabletAction timed out at try %v/30", i)
+				continue
+			}
+			if err != nil {
+				t.Errorf("WaitForTabletAction returned: %v", err)
+			}
+			if result != "contents3" {
+				t.Errorf("WaitForTabletAction returned bad result: %v", result)
+			}
+			return
 		}
-		if result != "contents3" {
-			t.Errorf("WaitForTabletAction returned bad result: %v", result)
-		}
-		wg.Done()
+		t.Errorf("WaitForTabletAction timed out: %v", err)
 	}()
 
 	// process the action in another thread
 	done := make(chan struct{}, 1)
-	wg.Add(1)
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
 	go ts.ActionEventLoop(tabletAlias, func(ap, data string) error {
 		// the actionPath sent back to the action processor
 		// is the exact one we have in normal cases,
@@ -101,9 +113,13 @@ func CheckActions(t *testing.T, ts topo.Server) {
 			t.Errorf("UnblockTabletAction failed: %v", err)
 		}
 
-		wg.Done()
+		wg2.Done()
 		return nil
 	}, done)
+
+	// first wait for the processing to be done, then close the
+	// action loop, then wait for the response to be received.
+	wg2.Wait()
 	close(done)
-	wg.Wait()
+	wg1.Wait()
 }
