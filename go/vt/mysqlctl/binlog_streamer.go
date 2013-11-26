@@ -76,7 +76,7 @@ var (
 // TODO: Move to proto once finalized
 type BinlogTransaction struct {
 	Statements []Statement
-	Position   BinlogPosition
+	GroupId    string
 }
 
 type Statement struct {
@@ -84,11 +84,11 @@ type Statement struct {
 	Sql      []byte
 }
 
-type BinlogPosition struct {
+type binlogPosition struct {
 	GroupId, ServerId int64
 }
 
-func (blp *BinlogPosition) String() string {
+func (blp *binlogPosition) String() string {
 	return fmt.Sprintf("%d:%d", blp.GroupId, blp.ServerId)
 }
 
@@ -104,7 +104,7 @@ type BinlogStreamer struct {
 
 	// file, blPos & delim are updated during streaming.
 	file  fileInfo
-	blPos BinlogPosition
+	blPos binlogPosition
 	delim []byte
 }
 
@@ -202,7 +202,7 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 		case BL_COMMIT:
 			trans := &BinlogTransaction{
 				Statements: statements,
-				Position:   bls.blPos,
+				GroupId:    strconv.Itoa(int(bls.blPos.GroupId)),
 			}
 			if err = sendTransaction(trans); err != nil {
 				if err == io.EOF {

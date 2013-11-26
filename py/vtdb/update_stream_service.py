@@ -24,7 +24,6 @@ class EventData(object):
   Sql = None
   Timestamp = None
   GroupId = None
-  ServerId = None
 
   def __init__(self, raw_response):
     for key, val in raw_response.iteritems():
@@ -53,7 +52,7 @@ class UpdateStreamConnection(object):
 
   def stream_start(self, start_position):
     try:
-      self.client.stream_call('UpdateStream.ServeUpdateStream', start_position)
+      self.client.stream_call('UpdateStream.ServeUpdateStream', {"GroupId": start_position})
       response = self.client.stream_next()
       if response is None:
         return None
