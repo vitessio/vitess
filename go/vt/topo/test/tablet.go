@@ -140,8 +140,8 @@ func CheckPid(t *testing.T, ts topo.Server) {
 		t.Errorf("ts.CreateTabletPidNode: %v", err)
 	}
 
-	// wait for up to ten seconds for the pid to appear
-	timeout := 10
+	// wait for up to 30 seconds for the pid to appear
+	timeout := 30
 	for {
 		err := ts.ValidateTabletPidNode(tabletAlias)
 		if err == nil {
