@@ -9,6 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
+	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/key"
@@ -18,11 +19,11 @@ import (
 /* API and config for UpdateStream Service */
 
 const (
-	DISABLED = iota
+	DISABLED int64 = iota
 	ENABLED
 )
 
-var usStateNames = map[int]string{
+var usStateNames = map[int64]string{
 	ENABLED:  "Enabled",
 	DISABLED: "Disabled",
 }
@@ -87,7 +88,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
 	stats.Publish("UpdateStreamState", stats.StringFunc(func() string {
-		return usStateNames[binlogServer.state.Get()]
+		return usStateNames[UpdateStreamRpcService.state.Get()]
 	}))
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
 }

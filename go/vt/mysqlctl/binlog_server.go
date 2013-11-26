@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	BINLOG_SERVER_DISABLED = iota
+	BINLOG_SERVER_DISABLED int64 = iota
 	BINLOG_SERVER_ENABLED
 )
 
-var blsStateNames = map[int]string{
+var blsStateNames = map[int64]string{
 	BINLOG_SERVER_DISABLED: "Disabled",
 	BINLOG_SERVER_ENABLED:  "Enabled",
 }
