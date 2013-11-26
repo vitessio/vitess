@@ -6,11 +6,9 @@ package mysqlctl
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
-	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/key"
@@ -24,12 +22,16 @@ const (
 	ENABLED
 )
 
+var usStateNames = map[int]string{
+	ENABLED:  "Enabled",
+	DISABLED: "Disabled",
+}
+
 type UpdateStream struct {
 	mycnf *Mycnf
 
 	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
-	states         *stats.States
 	mysqld         *Mysqld
 	stateWaitGroup sync.WaitGroup
 	dbname         string
@@ -84,10 +86,9 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 	}
 
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
-	UpdateStreamRpcService.states = stats.NewStates("UpdateStreamState", []string{
-		"Disabled",
-		"Enabled",
-	}, time.Now(), DISABLED)
+	stats.Publish("UpdateStreamState", stats.StringFunc(func() string {
+		return usStateNames[binlogServer.state.Get()]
+	}))
 	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
 }
 
@@ -142,7 +143,6 @@ func (updateStream *UpdateStream) enable(dbcfgs dbconfigs.DBConfigs) {
 	}
 
 	updateStream.state.Set(ENABLED)
-	updateStream.states.SetState(ENABLED)
 	updateStream.mysqld = NewMysqld(updateStream.mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	updateStream.dbname = dbcfgs.App.DbName
 	updateStream.streams.Init()
@@ -157,7 +157,6 @@ func (updateStream *UpdateStream) disable() {
 	}
 
 	updateStream.state.Set(DISABLED)
-	updateStream.states.SetState(DISABLED)
 	updateStream.streams.Stop()
 	updateStream.stateWaitGroup.Wait()
 	log.Infof("Update Stream Disabled")

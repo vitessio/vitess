@@ -1,4 +1,4 @@
-# Copyright 2012, Google Inc. All rights reserved.
+# Copyright 2013 Google Inc. All Rights Reserved.
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
@@ -98,9 +98,9 @@ class TabletConnection(object):
   def begin(self):
     if self.in_transaction:
       raise dbexceptions.NotSupportedError('Cannot begin: Already in a transaction')
-    req = self._make_req()
+
     try:
-      response = self.client.call('VTGate.Begin', {'SessionId': self.session_id})
+      self.client.call('VTGate.Begin', {'SessionId': self.session_id})
       self.in_transaction = True
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
@@ -109,12 +109,11 @@ class TabletConnection(object):
     if not self.in_transaction:
       return
 
-    req = self._make_req()
     # in_transaction has to be reset irrespective of outcome.
     self.in_transaction = False
 
     try:
-      response = self.client.call('VTGate.Commit', {'SessionId': self.session_id})
+      self.client.call('VTGate.Commit', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
@@ -122,12 +121,11 @@ class TabletConnection(object):
     if not self.in_transaction:
       return
 
-    req = self._make_req()
     # in_transaction has to be reset irrespective of outcome.
     self.in_transaction = False
 
     try:
-      response = self.client.call('VTGate.Rollback', {'SessionId': self.session_id})
+      self.client.call('VTGate.Rollback', {'SessionId': self.session_id})
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
@@ -234,10 +232,11 @@ class TabletConnection(object):
       return None
 
     # See if we need to read more or whether we just pop the next row.
-    if self._stream_result is None :
+    if self._stream_result is None:
       try:
         self._stream_result = self.client.stream_next()
         if self._stream_result is None:
+          self._stream_result_index = None
           return None
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))

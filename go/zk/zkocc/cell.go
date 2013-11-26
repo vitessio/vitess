@@ -18,17 +18,13 @@ import (
 
 // a zkCell object represents a zookeeper cell, with a cache and a connection
 // to the real cell.
-
-var baseTimeout = flag.Duration("base-timeout", 30*time.Second,
-	"zookeeper base time out")
-var connectTimeout = flag.Duration("connect-timeout", 30*time.Second,
-	"zookeeper connection time out")
-var reconnectInterval = flag.Int("reconnect-interval", 3,
-	"how many seconds to wait between reconnect attempts")
-var refreshInterval = flag.Duration("cache-refresh-interval", 1*time.Second,
-	"how many seconds to wait between cache refreshes")
-var refreshCount = flag.Int("cache-refresh-count", 10,
-	"how many entries to refresh at every tick")
+var (
+	baseTimeout       = flag.Duration("base-timeout", 30*time.Second, "zookeeper base time out")
+	connectTimeout    = flag.Duration("connect-timeout", 30*time.Second, "zookeeper connection time out")
+	reconnectInterval = flag.Int("reconnect-interval", 3, "how many seconds to wait between reconnect attempts")
+	refreshInterval   = flag.Duration("cache-refresh-interval", 1*time.Second, "how many seconds to wait between cache refreshes")
+	refreshCount      = flag.Int("cache-refresh-count", 10, "how many entries to refresh at every tick")
+)
 
 // Our state. We need this to be independent as we want to decorelate the
 // connection from what clients are asking for.
@@ -58,6 +54,14 @@ const (
 	CELL_BACKOFF
 )
 
+var stateNames = map[int64]string{
+	CELL_DISCONNECTED: "Disconnected",
+
+	CELL_CONNECTING: "Connecting",
+	CELL_CONNECTED:  "Connected",
+	CELL_BACKOFF:    "BackOff",
+}
+
 type zkCell struct {
 	// set at creation
 	cellName string
@@ -71,20 +75,19 @@ type zkCell struct {
 	state   int64
 	ready   *sync.Cond // will be signaled at connection time
 	lastErr error      // last connection error
-	states  *stats.States
 }
 
 func newZkCell(name, zkaddr string, zkrstats *zkrStats) *zkCell {
 	result := &zkCell{cellName: name, zkAddr: zkaddr, zcache: newZkCache(), zkrStats: zkrstats}
 	result.ready = sync.NewCond(&result.mutex)
-	result.states = stats.NewStates("Zcell"+name, []string{"Disconnected", "Connecting", "Connected", "BackOff"}, time.Now(), CELL_DISCONNECTED)
+	stats.Publish("Zcell"+name, stats.StringFunc(func() string {
+
+		result.mutex.Lock()
+		defer result.mutex.Unlock()
+		return stateNames[result.state]
+	}))
 	go result.backgroundRefresher()
 	return result
-}
-
-func (zcell *zkCell) setState(state int64) {
-	zcell.state = state
-	zcell.states.SetState(state)
 }
 
 // background routine to initiate a connection sequence
@@ -100,7 +103,7 @@ func (zcell *zkCell) connect() {
 		zcell.mutex.Unlock()
 		return
 	}
-	zcell.setState(CELL_CONNECTING)
+	zcell.state = CELL_CONNECTING
 	zcell.mutex.Unlock()
 
 	// now connect
@@ -117,12 +120,12 @@ func (zcell *zkCell) connect() {
 	}
 	if err == nil {
 		log.Infof("zk cell conn: cell %v connected", zcell.cellName)
-		zcell.setState(CELL_CONNECTED)
+		zcell.state = CELL_CONNECTED
 		zcell.lastErr = nil
 
 	} else {
 		log.Infof("zk cell conn: cell %v connection failed: %v", zcell.cellName, err)
-		zcell.setState(CELL_BACKOFF)
+		zcell.state = CELL_BACKOFF
 		zcell.lastErr = err
 
 		go func() {
@@ -132,7 +135,7 @@ func (zcell *zkCell) connect() {
 
 			// switch back to DISCONNECTED, and trigger a connect
 			zcell.mutex.Lock()
-			zcell.setState(CELL_DISCONNECTED)
+			zcell.state = CELL_DISCONNECTED
 			zcell.mutex.Unlock()
 			zcell.connect()
 		}()
@@ -170,7 +173,7 @@ func (zcell *zkCell) handleSessionEvents(session <-chan zookeeper.Event) {
 			fallthrough
 		case zookeeper.STATE_CLOSED:
 			zcell.mutex.Lock()
-			zcell.setState(CELL_DISCONNECTED)
+			zcell.state = CELL_DISCONNECTED
 			zcell.zconn = nil
 			zcell.zcache.markForRefresh()
 			// for a closed connection, no backoff at first retry

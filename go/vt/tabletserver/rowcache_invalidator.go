@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -19,26 +18,29 @@ import (
 )
 
 const (
-	RCINV_DISABLED = iota
+	RCINV_DISABLED int64 = iota
 	RCINV_ENABLED
 	RCINV_SHUTTING_DOWN
 )
 
+var rcinvStateNames = map[int64]string{
+	RCINV_DISABLED:      "Disabled",
+	RCINV_ENABLED:       "Enabled",
+	RCINV_SHUTTING_DOWN: "ShuttingDown",
+}
+
 type InvalidationProcessor struct {
 	currentPosition mysqlctl.BinlogPosition
 	state           sync2.AtomicInt64
-	states          *stats.States
 }
 
 var CacheInvalidationProcessor *InvalidationProcessor
 
 func init() {
 	CacheInvalidationProcessor = new(InvalidationProcessor)
-	CacheInvalidationProcessor.states = stats.NewStates("RowcacheInvalidationState", []string{
-		"Disabled",
-		"Enabled",
-		"ShuttingDown",
-	}, time.Now(), RCINV_DISABLED)
+	stats.Publish("RowcacheInvalidationState", stats.StringFunc(func() string {
+		return rcinvStateNames[CacheInvalidationProcessor.state.Get()]
+	}))
 	stats.Publish("RowcacheInvalidationCheckPoint", stats.StringFunc(func() string {
 		if CacheInvalidationProcessor.currentPosition.GroupId != 0 {
 			return CacheInvalidationProcessor.currentPosition.String()
@@ -59,7 +61,6 @@ func (rowCache *InvalidationProcessor) stopRowCacheInvalidation() {
 	if !rowCache.state.CompareAndSwap(RCINV_ENABLED, RCINV_SHUTTING_DOWN) {
 		log.Infof("Rowcache invalidator is not enabled")
 	}
-	rowCache.states.SetState(RCINV_SHUTTING_DOWN)
 }
 
 func (rowCache *InvalidationProcessor) runInvalidationLoop() {
@@ -71,10 +72,9 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		log.Infof("Rowcache invalidator already running")
 		return
 	}
-	rowCache.states.SetState(RCINV_ENABLED)
+
 	defer func() {
 		rowCache.state.Set(RCINV_DISABLED)
-		rowCache.states.SetState(RCINV_DISABLED)
 		DisallowQueries()
 	}()
 

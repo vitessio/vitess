@@ -233,7 +233,9 @@ func (zkr *ZkReader) statsJSON() string {
 		fmt.Fprintf(b, "\"NodeNotFoundErrors\": %v,", mapNodeNotFoundErrors[name])
 		fmt.Fprintf(b, "\"OtherErrors\": %v,", mapOtherErrors[name])
 		fmt.Fprintf(b, "\"StaleReads\": %v,", mapStaleReads[name])
-		fmt.Fprintf(b, "\"State\": %v,", zcell.states.String())
+		zcell.mutex.Lock()
+		fmt.Fprintf(b, "\"State\": %v,", stateNames[zcell.state])
+		zcell.mutex.Unlock()
 		fmt.Fprintf(b, "\"ZkReads\": %v", mapZkReads[name])
 		fmt.Fprintf(b, "}")
 		zkReads += mapZkReads[name]

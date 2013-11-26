@@ -17,8 +17,10 @@ import (
 	"launchpad.net/gozk/zookeeper"
 )
 
-var cachedConnStates = stats.NewCounters("ZkCachedConn")
-var cachedConnStatesMutex sync.Mutex
+var (
+	cachedConnStates      = stats.NewCounters("ZkCachedConn")
+	cachedConnStatesMutex sync.Mutex
+)
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
