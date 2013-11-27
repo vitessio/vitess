@@ -14,23 +14,21 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-
-//	"launchpad.net/gozk/zookeeper"
 )
 
 const (
 	DEFAULT_BASE_TIMEOUT = 5 * time.Second
 )
 
-var zkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
-var localCell = flag.String("zk.local-cell", "",
-	"closest zk cell used for /zk/local paths")
-var localAddrs = flag.String("zk.local-addrs", "",
-	"list of zookeeper servers (host:port, ...)")
-var globalAddrs = flag.String("zk.global-addrs", "",
-	"list of global zookeeper servers (host:port, ...)")
-var baseTimeout = flag.Duration("zk.base-timeout", DEFAULT_BASE_TIMEOUT,
-	"zk or zkocc base timeout (see zkconn.go and zkoccconn.go)")
+var (
+	zkConfigPaths = []string{"/etc/zookeeper/zk_client.json"}
+
+	localCell      = flag.String("zk.local-cell", "", "closest zk cell used for /zk/local paths")
+	localAddrs     = flag.String("zk.local-addrs", "", "list of zookeeper servers (host:port, ...)")
+	globalAddrs    = flag.String("zk.global-addrs", "", "list of global zookeeper servers (host:port, ...)")
+	baseTimeout    = flag.Duration("zk.base-timeout", DEFAULT_BASE_TIMEOUT, "zk or zkocc base timeout (see zkconn.go and zkoccconn.go)")
+	connectTimeout = flag.Duration("zk.connect-timeout", 30*time.Second, "zk connect timeout")
+)
 
 // Read the cell from -zk.local-cell, or the environment ZK_CLIENT_LOCAL_CELL
 // or guess the cell by the hostname. This is either the first two characters
