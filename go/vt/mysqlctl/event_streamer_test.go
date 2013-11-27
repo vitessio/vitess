@@ -102,28 +102,25 @@ func TestDMLEvent(t *testing.T) {
 				Sql:      []byte("query"),
 			},
 		},
-		Position: BinlogPosition{
-			GroupId:  20,
-			ServerId: 30,
-		},
+		GroupId: "20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *StreamEvent) error {
 			switch event.Category {
 			case "DML":
-				want := `&{DML vtocc_e [eid id name] [[10 -1 name] [11 18446744073709551615 name]]  1 0 0}`
+				want := `&{DML vtocc_e [eid id name] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
 				}
 			case "ERR":
-				want := `&{ERR  [] [] query 1 0 0}`
+				want := `&{ERR  [] [] query 1 }`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
 				}
 			case "POS":
-				want := `&{POS  [] []  0 20 30}`
+				want := `&{POS  [] []  0 20}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
@@ -157,22 +154,19 @@ func TestDDLEvent(t *testing.T) {
 				Sql:      []byte("DDL"),
 			},
 		},
-		Position: BinlogPosition{
-			GroupId:  20,
-			ServerId: 30,
-		},
+		GroupId: "20",
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *StreamEvent) error {
 			switch event.Category {
 			case "DDL":
-				want := `&{DDL  [] [] DDL 1 0 0}`
+				want := `&{DDL  [] [] DDL 1 }`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
 				}
 			case "POS":
-				want := `&{POS  [] []  0 20 30}`
+				want := `&{POS  [] []  0 20}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)

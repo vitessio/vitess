@@ -111,6 +111,8 @@ func InitAgent(
 				}
 			}
 			ts.AllowQueries(dbcfgs.App, schemaOverrides, qrs)
+			// Disable before enabling to force existing streams to stop.
+			mysqlctl.DisableUpdateStreamService()
 			mysqlctl.EnableUpdateStreamService(dbcfgs)
 			if newTablet.Type != topo.TYPE_MASTER {
 				ts.StartRowCacheInvalidation()

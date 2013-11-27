@@ -36,7 +36,7 @@ type StreamEvent struct {
 	Timestamp int64
 
 	// POS
-	GroupId, ServerId int64
+	GroupId string
 }
 
 type sendEventFunc func(event *StreamEvent) error
@@ -105,7 +105,7 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 			evs.DdlCount++
 		}
 	}
-	posEvent := &StreamEvent{Category: "POS", GroupId: trans.Position.GroupId, ServerId: trans.Position.ServerId}
+	posEvent := &StreamEvent{Category: "POS", GroupId: trans.GroupId}
 	if err = evs.sendEvent(posEvent); err != nil {
 		return err
 	}

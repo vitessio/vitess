@@ -7,7 +7,6 @@ package tabletserver
 import (
 	"fmt"
 	"io"
-	"strconv"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
@@ -30,8 +29,9 @@ var rcinvStateNames = map[int64]string{
 }
 
 type InvalidationProcessor struct {
-	currentPosition mysqlctl.BinlogPosition
-	state           sync2.AtomicInt64
+	GroupId string
+	state   sync2.AtomicInt64
+	states  *stats.States
 }
 
 var CacheInvalidationProcessor *InvalidationProcessor
@@ -42,10 +42,8 @@ func init() {
 		return rcinvStateNames[CacheInvalidationProcessor.state.Get()]
 	}))
 	stats.Publish("RowcacheInvalidationCheckPoint", stats.StringFunc(func() string {
-		if CacheInvalidationProcessor.currentPosition.GroupId != 0 {
-			return CacheInvalidationProcessor.currentPosition.String()
-		}
-		return ""
+		// TODO(sougou): resolve possible data race here.
+		return CacheInvalidationProcessor.GroupId
 	}))
 }
 
@@ -84,15 +82,8 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		return
 	}
 
-	// TODO(sougou): change GroupId to be int64
-	groupid, err := strconv.Atoi(replPos.GroupId)
-	if err != nil {
-		log.Errorf("Rowcache invalidator could not start: could not read group id: %v", err)
-		return
-	}
-
 	log.Infof("Starting rowcache invalidator")
-	req := &mysqlctl.BinlogPosition{GroupId: int64(groupid)}
+	req := &mysqlctl.UpdateStreamRequest{GroupId: replPos.GroupId}
 	err = mysqlctl.ServeUpdateStream(req, func(reply interface{}) error {
 		return rowCache.processEvent(reply.(*mysqlctl.StreamEvent))
 	})
@@ -115,8 +106,7 @@ func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.StreamEvent)
 		log.Errorf("Unrecognized: %s", event.Sql)
 		errorStats.Add("Invalidation", 1)
 	case "POS":
-		rowCache.currentPosition.GroupId = event.GroupId
-		rowCache.currentPosition.ServerId = event.ServerId
+		rowCache.GroupId = event.GroupId
 	default:
 		panic(fmt.Errorf("unknown event: %#v", event))
 	}

@@ -127,23 +127,8 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	if len(addrs.Entries) == 0 {
 		return fmt.Errorf("empty source tablet list for %v %v %v", bpc.cell, bpc.sourceShard.String(), topo.TYPE_REPLICA)
 	}
-
-	// if the server we were using before is in the list, just keep using it
-	usePreviousServer := false
-	for _, addr := range addrs.Entries {
-		vtAddr := fmt.Sprintf("%v:%v", addr.Host, addr.NamedPortMap["_vtocc"])
-		if vtAddr == startPosition.Addr {
-			log.Infof("%v: Previous server %s still healthy, using it", bpc, vtAddr)
-			usePreviousServer = true
-		}
-	}
-
-	// if we can't use the previous server, pick a new one randomly
-	if !usePreviousServer {
-		newServerIndex := rand.Intn(len(addrs.Entries))
-		startPosition.Addr = fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
-		log.Infof("%v: Connecting to different server: %s", bpc, startPosition.Addr)
-	}
+	newServerIndex := rand.Intn(len(addrs.Entries))
+	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
 
 	// the data we have to replicate is the intersection of the
 	// source keyrange and our keyrange
@@ -152,13 +137,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	// Create the player.
-	player, err := mysqlctl.NewBinlogPlayer(vtClient, overlap, bpc.sourceShard.Uid, startPosition)
-	if err != nil {
-		return fmt.Errorf("can't create player: %v", err)
-	}
-
-	// Run player loop until it's done.
+	player := mysqlctl.NewBinlogPlayer(vtClient, addr, overlap, startPosition)
 	return player.ApplyBinlogEvents(bpc.interrupted)
 }
 

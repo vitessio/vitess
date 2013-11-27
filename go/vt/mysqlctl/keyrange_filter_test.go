@@ -30,9 +30,7 @@ func TestKeyrangeFilterPass(t *testing.T) {
 				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
 			},
 		},
-		Position: BinlogPosition{
-			GroupId: 1,
-		},
+		GroupId: "1",
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
@@ -40,7 +38,7 @@ func TestKeyrangeFilterPass(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml2 /* EMD keyspace_id:2 */"> position: <1, 0> `
+	want := `statement: <6, "set1"> statement: <4, "dml2 /* EMD keyspace_id:2 */"> position: "1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -57,9 +55,7 @@ func TestKeyrangeFilterSkip(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
 			},
 		},
-		Position: BinlogPosition{
-			GroupId: 1,
-		},
+		GroupId: "1",
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
@@ -67,7 +63,7 @@ func TestKeyrangeFilterSkip(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: <1, 0> `
+	want := `position: "1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -84,9 +80,7 @@ func TestKeyrangeFilterDDL(t *testing.T) {
 				Sql:      []byte("ddl"),
 			},
 		},
-		Position: BinlogPosition{
-			GroupId: 1,
-		},
+		GroupId: "1",
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
@@ -94,7 +88,7 @@ func TestKeyrangeFilterDDL(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <5, "ddl"> position: <1, 0> `
+	want := `statement: <6, "set1"> statement: <5, "ddl"> position: "1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -117,9 +111,7 @@ func TestKeyrangeFilterMalformed(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
 			},
 		},
-		Position: BinlogPosition{
-			GroupId: 1,
-		},
+		GroupId: "1",
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
@@ -127,7 +119,7 @@ func TestKeyrangeFilterMalformed(t *testing.T) {
 		return nil
 	})
 	f(&input)
-	want := `position: <1, 0> `
+	want := `position: "1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
@@ -138,6 +130,6 @@ func bltToString(tx *BinlogTransaction) string {
 	for _, statement := range tx.Statements {
 		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, statement.Sql)
 	}
-	result += fmt.Sprintf("position: <%d, %d> ", tx.Position.GroupId, tx.Position.ServerId)
+	result += fmt.Sprintf("position: \"%s\" ", tx.GroupId)
 	return result
 }

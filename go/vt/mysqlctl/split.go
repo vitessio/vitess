@@ -104,9 +104,6 @@ import (
 const (
 	partialSnapshotManifestFile = "partial_snapshot_manifest.json"
 	SnapshotURLPath             = "/snapshot"
-
-	INSERT_INTO_RECOVERY = `insert into _vt.blp_checkpoint (source_shard_uid, addr, master_filename, master_position, group_id, txn_timestamp, time_updated) 
-	                          values (%v, '%v', '', 0, '%v', unix_timestamp(), %v)`
 )
 
 // replaceError replaces original with recent if recent is not nil,
@@ -891,9 +888,9 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 			queries = append(queries, "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED")
 		}
 		for manifestIndex, manifest := range manifests {
-			insertRecovery := fmt.Sprintf(INSERT_INTO_RECOVERY,
+			insertRecovery := fmt.Sprintf(
+				`insert into _vt.blp_checkpoint (source_shard_uid, group_id, time_updated) values (%v, %v, %v)`,
 				manifestIndex,
-				manifest.Source.Addr,
 				manifest.Source.MasterState.ReplicationPosition.MasterLogGroupId,
 				time.Now().Unix())
 			queries = append(queries, insertRecovery)

@@ -51,6 +51,7 @@ func readDbConfig(dbConfigFile string) (*mysql.ConnectionParams, error) {
 	return dbConfig, nil
 }
 
+// TODO: Either write a test for this tool or delete it.
 func main() {
 	flag.Parse()
 	servenv.Init()
@@ -91,10 +92,7 @@ func main() {
 	if *debug {
 		vtClient = mysqlctl.NewDummyVtClient()
 	}
-	blp, err := mysqlctl.NewBinlogPlayer(vtClient, keyRange, uint32(*uid), brs)
-	if err != nil {
-		log.Fatalf("error in initializing binlog player: %v", err)
-	}
+	blp := mysqlctl.NewBinlogPlayer(vtClient, fmt.Sprintf("localhost:%d", *port), keyRange, brs)
 	err = blp.ApplyBinlogEvents(interrupted)
 	if err != nil {
 		log.Errorf("Error in applying binlog events, err %v", err)
