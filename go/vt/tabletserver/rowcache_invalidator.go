@@ -31,7 +31,6 @@ var rcinvStateNames = map[int64]string{
 type InvalidationProcessor struct {
 	GroupId string
 	state   sync2.AtomicInt64
-	states  *stats.States
 }
 
 var CacheInvalidationProcessor *InvalidationProcessor
