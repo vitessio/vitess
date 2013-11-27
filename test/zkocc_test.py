@@ -343,10 +343,8 @@ class TestZkocc(unittest.TestCase):
 
     # get the zkocc vars, make sure we have what we need
     v = utils.get_vars(utils.zkocc_port_base)
-    if v['ZkReader']['test_nj']['State']['Current'] != 'Connected':
-      raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State']['Current'])
-    if v['ZkReader']['test_nj']['State']['DurationConnected'] < 9e9:
-      self.fail('not enough time in Connected state: %s' %v['ZkReader']['test_nj']['State']['DurationConnected'])
+    if v['ZkReader']['test_nj']['State'] != 'Connected':
+      raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State'])
 
     # some checks on performance / stats
     # a typical workstation will do 45-47k QPS, check we have more than 15k
@@ -391,7 +389,7 @@ class TestZkocc(unittest.TestCase):
     utils.vtgate_kill(vtgate_proc)
 
   def test_fake_zkocc_connection(self):
-    fkc = zkocc.FakeZkOccConnection.from_data_path("testing", "fake_zkocc_config.json")
+    fkc = zkocc.FakeZkOccConnection.from_data_path("testing", "test/fake_zkocc_config.json")
     fkc.replace_zk_data("3306", "3310")
     fkc.replace_zk_data("127.0.0.1", "my.cool.hostname")
 

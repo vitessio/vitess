@@ -336,7 +336,7 @@ class Tablet(object):
         if 'Voltron' not in v:
           logging.debug("  vttablet %s not exporting Voltron, waiting...", self.tablet_alias)
         else:
-          s = v['Voltron']['States']['Current']
+          s = v["TabletStateName"]
           if s != expected:
             logging.debug("  vttablet %s in state %s != %s", self.tablet_alias, s, expected)
           else:
