@@ -97,11 +97,12 @@ def tearDownModule():
                    ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
   shard_0_master.kill_vttablet()
   shard_0_replica.kill_vttablet()
   shard_1_master.kill_vttablet()
   shard_1_replica.kill_vttablet()
+
+  utils.zk_teardown()
 
   utils.kill_sub_processes()
   utils.remove_tmp_files()

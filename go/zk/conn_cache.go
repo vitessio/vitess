@@ -106,7 +106,7 @@ func (cc *ConnCache) ConnForPath(zkPath string) (cn Conn, err error) {
 }
 
 func (cc *ConnCache) newZookeeperConn(zkAddr, zcell string) (Conn, error) {
-	conn, session, err := DialZk(zkAddr, *baseTimeout)
+	conn, session, err := DialZkTimeout(zkAddr, *baseTimeout, *connectTimeout)
 	if err != nil {
 		return nil, err
 	}
