@@ -13,7 +13,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 /* API and config for UpdateStream Service */
@@ -40,8 +39,8 @@ type UpdateStream struct {
 }
 
 type KeyrangeRequest struct {
-	StartPosition BinlogPosition
-	Keyrange      key.KeyRange
+	GroupId  string
+	Keyrange key.KeyRange
 }
 
 type streamer interface {
@@ -109,7 +108,7 @@ func DisableUpdateStreamService() {
 	UpdateStreamRpcService.disable()
 }
 
-func ServeUpdateStream(req *BinlogPosition, sendReply func(reply interface{}) error) error {
+func ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply interface{}) error) error {
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
@@ -117,7 +116,7 @@ func IsUpdateStreamEnabled() bool {
 	return UpdateStreamRpcService.isEnabled()
 }
 
-func GetReplicationPosition() (*proto.ReplicationCoordinates, error) {
+func GetReplicationPosition() (string, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
@@ -167,7 +166,11 @@ func (updateStream *UpdateStream) isEnabled() bool {
 	return updateStream.state.Get() == ENABLED
 }
 
-func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendReply func(reply interface{}) error) (err error) {
+type UpdateStreamRequest struct {
+	GroupId string
+}
+
+func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
@@ -184,7 +187,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *BinlogPosition, sendRep
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId, req.ServerId)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
 	if err != nil {
 		return fmt.Errorf("error computing start position: %v", err)
 	}
@@ -217,7 +220,7 @@ func (updateStream *UpdateStream) StreamKeyrange(req *KeyrangeRequest, sendReply
 	updateStream.actionLock.Unlock()
 	defer updateStream.stateWaitGroup.Done()
 
-	rp, err := updateStream.mysqld.BinlogInfo(req.StartPosition.GroupId, req.StartPosition.ServerId)
+	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
 	if err != nil {
 		return fmt.Errorf("error computing start position: %v", err)
 	}
@@ -234,16 +237,16 @@ func (updateStream *UpdateStream) StreamKeyrange(req *KeyrangeRequest, sendReply
 	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
 }
 
-func (updateStream *UpdateStream) getReplicationPosition() (*proto.ReplicationCoordinates, error) {
+func (updateStream *UpdateStream) getReplicationPosition() (string, error) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if !updateStream.isEnabled() {
-		return nil, fmt.Errorf("update stream service is not enabled")
+		return "", fmt.Errorf("update stream service is not enabled")
 	}
 
 	rp, err := updateStream.mysqld.MasterStatus()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	return proto.NewReplicationCoordinates(rp.MasterLogFile, uint64(rp.MasterLogPosition), rp.MasterLogGroupId), nil
+	return rp.MasterLogGroupId, nil
 }

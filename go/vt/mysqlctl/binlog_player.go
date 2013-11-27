@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"time"
 
 	log "github.com/golang/glog"
@@ -19,25 +18,13 @@ import (
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
-	cproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var (
-	SLOW_TXN_THRESHOLD        = time.Duration(100 * time.Millisecond)
-	ROLLBACK                  = "rollback"
+	SLOW_QUERY_THRESHOLD      = time.Duration(100 * time.Millisecond)
 	BLPL_STREAM_COMMENT_START = []byte("/* _stream ")
 	BLPL_SPACE                = []byte(" ")
-	UPDATE_RECOVERY           = "update _vt.blp_checkpoint set group_id='%v', txn_timestamp=unix_timestamp(), time_updated=%v where source_shard_uid=%v"
-	SELECT_FROM_RECOVERY      = "select addr, group_id from _vt.blp_checkpoint where source_shard_uid=%v"
 )
-
-// binlogRecoveryState is the checkpoint data we read / save into
-// _vt.blp_checkpoint table
-type binlogRecoveryState struct {
-	Uid      uint32
-	Addr     string
-	Position BinlogPosition
-}
 
 // VtClient is a high level interface to the database
 type VtClient interface {
@@ -119,7 +106,7 @@ func (dc *DBClient) Connect() error {
 }
 
 func (dc *DBClient) Begin() error {
-	_, err := dc.dbConn.ExecuteFetch(cproto.BEGIN, 1, false)
+	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
 	if err != nil {
 		log.Errorf("BEGIN failed w/ error %v", err)
 		dc.handleError(err)
@@ -128,7 +115,7 @@ func (dc *DBClient) Begin() error {
 }
 
 func (dc *DBClient) Commit() error {
-	_, err := dc.dbConn.ExecuteFetch(cproto.COMMIT, 1, false)
+	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
 	if err != nil {
 		log.Errorf("COMMIT failed w/ error %v", err)
 		dc.dbConn.Close()
@@ -137,7 +124,7 @@ func (dc *DBClient) Commit() error {
 }
 
 func (dc *DBClient) Rollback() error {
-	_, err := dc.dbConn.ExecuteFetch(ROLLBACK, 1, false)
+	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
 	if err != nil {
 		log.Errorf("ROLLBACK failed w/ error %v", err)
 		dc.dbConn.Close()
@@ -200,45 +187,34 @@ func (bs *blplStats) statsJSON() string {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	// filters for replication
-	keyRange key.KeyRange
-
-	// saved position in _vt.blp_checkpoint
-	uid           uint32
-	recoveryState binlogRecoveryState
-
-	// MySQL client
-	dbClient VtClient
-
-	// runtime stats
+	addr      string
+	dbClient  VtClient
+	keyRange  key.KeyRange
+	blpPos    BlpPosition
 	blplStats *blplStats
 }
 
-func NewBinlogPlayer(dbClient VtClient, keyRange key.KeyRange, uid uint32, startPosition *binlogRecoveryState) (*BinlogPlayer, error) {
-	if err := startPositionValid(startPosition); err != nil {
-		return nil, err
-	}
+func NewBinlogPlayer(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *BlpPosition) *BinlogPlayer {
 	return &BinlogPlayer{
-		keyRange:      keyRange,
-		uid:           uid,
-		recoveryState: *startPosition,
-		dbClient:      dbClient,
-		blplStats:     NewBlplStats(),
-	}, nil
+		addr:      addr,
+		dbClient:  dbClient,
+		keyRange:  keyRange,
+		blpPos:    *startPosition,
+		blplStats: NewBlplStats(),
+	}
 }
 
 func (blp *BinlogPlayer) StatsJSON() string {
 	return blp.blplStats.statsJSON()
 }
 
-func (blp *BinlogPlayer) writeRecoveryPosition(currentPosition BinlogPosition) error {
-	blp.recoveryState.Position = currentPosition
-	// We only write group id for now. Once the table is fixed, we
-	// should write server id also.
-	updateRecovery := fmt.Sprintf(UPDATE_RECOVERY,
-		currentPosition.GroupId,
+func (blp *BinlogPlayer) writeRecoveryPosition(groupId string) error {
+	blp.blpPos.GroupId = groupId
+	updateRecovery := fmt.Sprintf(
+		"update _vt.blp_checkpoint set group_id='%v', time_updated=%v where source_shard_uid=%v",
+		groupId,
 		time.Now().Unix(),
-		blp.uid)
+		blp.blpPos.Uid)
 
 	qr, err := blp.exec(updateRecovery)
 	if err != nil {
@@ -250,18 +226,10 @@ func (blp *BinlogPlayer) writeRecoveryPosition(currentPosition BinlogPosition) e
 	return nil
 }
 
-func startPositionValid(startPos *binlogRecoveryState) error {
-	if startPos.Addr == "" {
-		return fmt.Errorf("invalid connection params, empty Addr")
-	}
-	if startPos.Position.GroupId == 0 {
-		return fmt.Errorf("invalid start coordinates, need GroupId or MasterFilename+MasterPosition")
-	}
-	return nil
-}
-
-func ReadStartPosition(dbClient VtClient, uid uint32) (*binlogRecoveryState, error) {
-	selectRecovery := fmt.Sprintf(SELECT_FROM_RECOVERY, uid)
+func ReadStartPosition(dbClient VtClient, uid uint32) (*BlpPosition, error) {
+	selectRecovery := fmt.Sprintf(
+		"select group_id from _vt.blp_checkpoint where source_shard_uid=%v",
+		uid)
 	qr, err := dbClient.ExecuteFetch(selectRecovery, 1, true)
 	if err != nil {
 		return nil, fmt.Errorf("error %v in selecting from recovery table %v", err, selectRecovery)
@@ -269,14 +237,9 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*binlogRecoveryState, err
 	if qr.RowsAffected != 1 {
 		return nil, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
-	group_id, err := strconv.ParseInt(qr.Rows[0][1].String(), 0, 64)
-	if err != nil || group_id == 0 {
-		return nil, fmt.Errorf("error decoding group id: %v", err)
-	}
-	return &binlogRecoveryState{
-		Uid:      uid,
-		Addr:     qr.Rows[0][0].String(),
-		Position: BinlogPosition{GroupId: group_id},
+	return &BlpPosition{
+		Uid:     uid,
+		GroupId: qr.Rows[0][0].String(),
 	}, nil
 }
 
@@ -285,7 +248,7 @@ func (blp *BinlogPlayer) processTransaction(tx *BinlogTransaction) (ok bool, err
 	if err = blp.dbClient.Begin(); err != nil {
 		return false, fmt.Errorf("failed query BEGIN, err: %s", err)
 	}
-	if err = blp.writeRecoveryPosition(tx.Position); err != nil {
+	if err = blp.writeRecoveryPosition(tx.GroupId); err != nil {
 		return false, err
 	}
 	for _, stmt := range tx.Statements {
@@ -315,7 +278,7 @@ func (blp *BinlogPlayer) exec(sql string) (*proto.QueryResult, error) {
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
 	blp.blplStats.queryCount.Add("QueryCount", 1)
 	blp.blplStats.queryTime.Record("QueryTime", queryStartTime)
-	if time.Now().Sub(queryStartTime) > SLOW_TXN_THRESHOLD {
+	if time.Now().Sub(queryStartTime) > SLOW_QUERY_THRESHOLD {
 		log.Infof("SLOW QUERY '%s'", sql)
 	}
 	return qr, err
@@ -325,13 +288,13 @@ func (blp *BinlogPlayer) exec(sql string) (*proto.QueryResult, error) {
 // and processes the events.
 func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
-		blp.uid,
+		blp.blpPos.Uid,
 		blp.keyRange.Start.Hex(),
 		blp.keyRange.End.Hex(),
-		blp.recoveryState.Position,
-		blp.recoveryState.Addr,
+		blp.blpPos.GroupId,
+		blp.addr,
 	)
-	rpcClient, err := rpcplus.DialHTTP("tcp", blp.recoveryState.Addr)
+	rpcClient, err := rpcplus.DialHTTP("tcp", blp.addr)
 	defer rpcClient.Close()
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
@@ -340,8 +303,8 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 
 	responseChan := make(chan *BinlogTransaction)
 	req := &KeyrangeRequest{
-		Keyrange:      blp.keyRange,
-		StartPosition: blp.recoveryState.Position,
+		Keyrange: blp.keyRange,
+		GroupId:  blp.blpPos.GroupId,
 	}
 	resp := rpcClient.StreamGo("UpdateStream.StreamKeyrange", req, responseChan)
 

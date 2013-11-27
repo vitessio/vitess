@@ -31,9 +31,7 @@ zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
 master_start_position = None
 
 def _get_master_current_position():
-  res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
-  start_position = update_stream_service.Coord(int(res[0][4]))
-  return start_position.__dict__
+  return str(utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')[0][4])
 
 
 def _get_repl_current_position():
@@ -43,9 +41,7 @@ def _get_repl_current_position():
   cursor = MySQLdb.cursors.DictCursor(conn)
   cursor.execute('show master status')
   res = cursor.fetchall()
-  slave_dict = res[0]
-  start_position = update_stream_service.Coord(slave_dict['Group_ID'])
-  return start_position.__dict__
+  return str(res[0]['Group_ID'])
 
 
 def setUpModule():
@@ -296,7 +292,7 @@ class TestUpdateStream(unittest.TestCase):
       data = master_conn.stream_next()
       if data['Category'] == 'POS':
         master_txn_count +=1
-        if start_position['GroupId'] < data['GroupId']:
+        if int(start_position) < int(data['GroupId']):
           logs_correct = True
           logging.debug("Log rotation correctly interpreted")
           break

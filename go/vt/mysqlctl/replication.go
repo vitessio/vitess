@@ -360,13 +360,17 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	if len(qr.Rows) != 1 {
 		return nil, ErrNotMaster
 	}
+	if len(qr.Rows[0]) < 5 {
+		return nil, fmt.Errorf("this db does not support group id")
+	}
 	rp = &ReplicationPosition{}
 	rp.MasterLogFile = qr.Rows[0][0].String()
 	temp, err := strconv.ParseUint(qr.Rows[0][1].String(), 10, 0)
-	rp.MasterLogPosition = uint(temp)
-	if len(qr.Rows[0]) >= 5 {
-		rp.MasterLogGroupId = qr.Rows[0][4].String()
+	if err != nil {
+		return nil, err
 	}
+	rp.MasterLogPosition = uint(temp)
+	rp.MasterLogGroupId = qr.Rows[0][4].String()
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
 	rp.MasterLogFileIo = rp.MasterLogFile
@@ -381,13 +385,8 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	Pos: 1194
 	Server_ID: 41983
 */
-func (mysqld *Mysqld) BinlogInfo(groupId, serverId int64) (rp *ReplicationPosition, err error) {
-	// if group id is not known(0), we start from the latest position.
-	if groupId == 0 {
-		return mysqld.MasterStatus()
-	}
-
-	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %d", groupId))
+func (mysqld *Mysqld) BinlogInfo(groupId string) (rp *ReplicationPosition, err error) {
+	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %s", groupId))
 	if err != nil {
 		return nil, err
 	}
@@ -401,14 +400,11 @@ func (mysqld *Mysqld) BinlogInfo(groupId, serverId int64) (rp *ReplicationPositi
 		return nil, err
 	}
 	rp.MasterLogPosition = uint(temp)
-	dbserverid, err := qr.Rows[0][2].ParseInt64()
-	if err != nil {
-		return nil, err
-	}
-	// If server id is not known (0), we don't check.
-	if serverId != 0 && serverId != dbserverid {
-		return nil, fmt.Errorf("server id %v does not match %v", serverId, dbserverid)
-	}
+	rp.MasterLogGroupId = groupId
+	// On the master, the SQL position and IO position are at
+	// necessarily the same point.
+	rp.MasterLogFileIo = rp.MasterLogFile
+	rp.MasterLogPositionIo = rp.MasterLogPosition
 	return rp, nil
 }
 

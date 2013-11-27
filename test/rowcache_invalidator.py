@@ -39,26 +39,6 @@ primary key (id)
 ) Engine=InnoDB'''
 
 
-def _get_master_current_position():
-  res = utils.mysql_query(62344, 'vt_test_keyspace', 'show master status')
-  start_position = update_stream_service.Coord(res[0][0], res[0][1])
-  return start_position.__dict__
-
-
-def _get_repl_current_position():
-  conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='%s/vt_%010d/mysql.sock' % (utils.vtdataroot, 62345),
-                         db='vt_test_keyspace')
-  cursor = MySQLdb.cursors.DictCursor(conn)
-  cursor.execute('show master status')
-  res = cursor.fetchall()
-  slave_dict = res[0]
-  master_log = slave_dict['File']
-  master_pos = slave_dict['Position']
-  start_position = update_stream_service.Coord(master_log, master_pos)
-  return start_position.__dict__
-
-
 def setUpModule():
   utils.zk_setup()
 
@@ -236,12 +216,7 @@ def _exec_vt_txn(host, query_list=None):
   vtdb_conn.commit()
 
 def main():
-  vt_mysqlbinlog =  os.environ.get('VT_MYSQL_ROOT') + '/bin/vt_mysqlbinlog'
-  if not os.path.isfile(vt_mysqlbinlog):
-    sys.exit("%s is not present, please install it and then re-run the test" % vt_mysqlbinlog)
-
   print "Note: This is a slow test, has a couple of sleeps in it to simulate proper state changes"
-
   utils.main()
 
 if __name__ == '__main__':

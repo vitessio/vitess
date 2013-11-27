@@ -283,7 +283,7 @@ type transaction struct {
 		Category int
 		Sql      string
 	}
-	Position BinlogPosition
+	GroupId string
 }
 
 func TestStream(t *testing.T) {
@@ -312,8 +312,8 @@ func TestStream(t *testing.T) {
 				t.Errorf("want %d, got %d", transactions[curTransaction].Statements[i].Category, stmt.Category)
 			}
 		}
-		if transactions[curTransaction].Position != tx.Position {
-			t.Errorf("want %#v, got %#v", transactions[curTransaction].Position, tx.Position)
+		if transactions[curTransaction].GroupId != tx.GroupId {
+			t.Errorf("want %#v, got %#v", transactions[curTransaction].GroupId, tx.GroupId)
 		}
 		curTransaction++
 		if curTransaction == len(transactions) {
@@ -332,7 +332,7 @@ func TestStream(t *testing.T) {
 				}
 			}
 			fmt.Printf("],\n")
-			fmt.Printf("\"Position\": {\"GroupId\": %d, \"ServerId\": %d}\n},\n", tx.Position.GroupId, tx.Position.ServerId)
+			fmt.Printf("\"GroupId\": \"%s\"\n},\n", tx.GroupId)
 		*/
 		return nil
 	})

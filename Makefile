@@ -10,8 +10,6 @@ build:
 	cd go/cmd/mysqlctl; go build
 	cd go/cmd/normalizer; go build
 	cd go/cmd/topo2topo; go build
-	cd go/cmd/vt_binlog_player; go build
-	cd go/cmd/vt_binlog_server; go build
 	cd go/cmd/vtaction; go build
 	cd go/cmd/vtgate; go build
 	cd go/cmd/vtclient2; go build

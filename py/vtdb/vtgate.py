@@ -72,7 +72,7 @@ class TabletConnection(object):
   def dial(self):
     try:
       if self.session_id:
-        self.client.close()
+        self.close()
 
       self.client.dial()
       params = {'TabletType': self.tablet_type}
@@ -82,9 +82,10 @@ class TabletConnection(object):
       raise convert_exception(e, str(self))
 
   def close(self):
+    session_id = self.session_id
     self.in_transaction = False
     self.session_id = 0
-    self.client.call('VTGate.CloseSession', {'SessionId': self.session_id})
+    self.client.call('VTGate.CloseSession', {'SessionId': session_id})
     self.client.close()
 
   def is_closed(self):
