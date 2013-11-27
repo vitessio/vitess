@@ -494,8 +494,6 @@ class TestTabletManager(unittest.TestCase):
     # first the query engine States
     v = utils.get_vars(tablet_62344.port)
     logging.debug("vars: %s" % str(v))
-    if v['Voltron']['States']['DurationSERVING'] < 10e9:
-      raise utils.TestError('not enough time in Open state', v['Voltron']['States']['DurationSERVING'])
     # then the Zookeeper connections
     if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
       raise utils.TestError('invalid zk test_nj state: ', v['ZkMetaConn']['test_nj']['Current'])
