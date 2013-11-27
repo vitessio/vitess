@@ -6,11 +6,11 @@ package mysqlctl
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"strconv"
 	"time"
 
-	"encoding/base64"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 

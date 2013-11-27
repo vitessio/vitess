@@ -75,14 +75,14 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		DisallowQueries()
 	}()
 
-	replPos, err := mysqlctl.GetReplicationPosition()
+	groupId, err := mysqlctl.GetReplicationPosition()
 	if err != nil {
 		log.Errorf("Rowcache invalidator could not start: cannot determine replication position: %v", err)
 		return
 	}
 
 	log.Infof("Starting rowcache invalidator")
-	req := &mysqlctl.UpdateStreamRequest{GroupId: replPos.GroupId}
+	req := &mysqlctl.UpdateStreamRequest{GroupId: groupId}
 	err = mysqlctl.ServeUpdateStream(req, func(reply interface{}) error {
 		return rowCache.processEvent(reply.(*mysqlctl.StreamEvent))
 	})

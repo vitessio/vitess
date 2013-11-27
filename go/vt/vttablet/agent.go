@@ -23,7 +23,6 @@ import (
 
 var (
 	agent           *tm.ActionAgent
-	binlogServer    *mysqlctl.BinlogServer
 	binlogPlayerMap *BinlogPlayerMap
 )
 
@@ -53,10 +52,6 @@ func InitAgent(
 
 	topoServer := topo.GetServer()
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
-
-	// Start the binlog server service, disabled at start.
-	binlogServer = mysqlctl.NewBinlogServer(mysqld)
-	mysqlctl.RegisterBinlogServerService(binlogServer)
 
 	// Start the binlog player services, not playing at start.
 	binlogPlayerMap = NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
@@ -150,9 +145,6 @@ func InitAgent(
 func CloseAgent() {
 	if agent != nil {
 		agent.Stop()
-	}
-	if binlogServer != nil {
-		mysqlctl.DisableBinlogServerService(binlogServer)
 	}
 	if binlogPlayerMap != nil {
 		binlogPlayerMap.StopAllPlayers()
