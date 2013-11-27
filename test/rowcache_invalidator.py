@@ -166,7 +166,7 @@ class RowCacheInvalidator(unittest.TestCase):
     logging.debug("invalidatorStats %s" % invalidatorStats['RowcacheInvalidationCheckPoint'])
     inv_count2 = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/table_stats" % replica_host)))['Totals']['Invalidations']
     logging.debug("invalidator count1 %d count2 %d" % (inv_count1, inv_count2))
-    self.assertEqual(invalidatorStats["RowcacheInvalidationState"]["Current"], "Enabled", "Row-cache invalidator should be enabled")
+    self.assertEqual(invalidatorStats["RowcacheInvalidationState"], "Enabled", "Row-cache invalidator should be enabled")
     self.assertTrue(inv_count2 - inv_count1 > 0, "invalidator was able to restart after a small pause in replication")
 
 
@@ -197,7 +197,7 @@ class RowCacheInvalidator(unittest.TestCase):
     invStats_after = framework.MultiDict(json.load(urllib2.urlopen("http://%s/debug/vars" % replica_host)))
     logging.debug("Tablet Replica->Spare\n\tBefore: Invalidations: %d InvalidatorStats %s\n\tAfter: Invalidations: %d InvalidatorStats %s" % (inv_before, invStats_before['RowcacheInvalidationCheckPoint'], inv_after, invStats_after['RowcacheInvalidationCheckPoint']))
     self.assertEqual(inv_after, 0, "Row-cache invalidator should be disabled, no invalidations")
-    self.assertEqual(invStats_after["RowcacheInvalidationState"]["Current"], "Disabled", "Row-cache invalidator should be disabled")
+    self.assertEqual(invStats_after["RowcacheInvalidationState"], "Disabled", "Row-cache invalidator should be disabled")
 
 
 def _vtdb_conn(host):

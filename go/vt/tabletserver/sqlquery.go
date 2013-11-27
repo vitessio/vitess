@@ -71,6 +71,9 @@ func NewSqlQuery(config Config) *SqlQuery {
 	sq.qe = NewQueryEngine(config)
 	stats.PublishJSONFunc("Voltron", sq.statsJSON)
 	stats.Publish("TabletState", stats.IntFunc(sq.state.Get))
+	stats.Publish("TabletStateName", stats.StringFunc(func() string {
+		return stateName[sq.state.Get()]
+	}))
 	return sq
 }
 

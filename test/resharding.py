@@ -288,7 +288,7 @@ primary key (name)
         if 'UpdateStreamState' not in v:
           logging.debug("  vttablet not exporting BinlogServerState, waiting...")
         else:
-          s = v['UpdateStreamState']['Current']
+          s = v['UpdateStreamState']
           if s != expected:
             logging.debug("  vttablet's binlog server in state %s != %s", s, expected)
           else:

@@ -325,7 +325,11 @@ def get_vars(port):
     f.close()
   except:
     return None
-  return json.loads(data)
+  try:
+    return json.loads(data)
+  except ValueError:
+    print data
+    raise
 
 def wait_for_vars(name, port):
   timeout = 5.0
