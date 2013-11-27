@@ -156,9 +156,6 @@ def kill_sub_processes():
             os.kill(pid, signal.SIGTERM)
       except OSError as e:
         logging.debug("kill_sub_processes: %s", str(e))
-  # temporary hack until we figure it out
-  logging.debug("===== killing any remaining vt_mysqlbinlog process just to be sure...")
-  os.system("killall -q vt_mysqlbinlog")
 
 def kill_sub_process(proc):
   pid = proc.pid

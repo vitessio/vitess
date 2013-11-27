@@ -216,12 +216,7 @@ def _exec_vt_txn(host, query_list=None):
   vtdb_conn.commit()
 
 def main():
-  vt_mysqlbinlog =  os.environ.get('VT_MYSQL_ROOT') + '/bin/vt_mysqlbinlog'
-  if not os.path.isfile(vt_mysqlbinlog):
-    sys.exit("%s is not present, please install it and then re-run the test" % vt_mysqlbinlog)
-
   print "Note: This is a slow test, has a couple of sleeps in it to simulate proper state changes"
-
   utils.main()
 
 if __name__ == '__main__':

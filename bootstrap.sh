@@ -69,19 +69,16 @@ then
 else
   git clone https://code.google.com/r/sougou-vitess-mysql/ third_party/mysql
   pushd third_party/mysql
-  cp client/mysqlbinlog.cc client/vt_mysqlbinlog.cc
-  git apply ../mysql.patch
   set -e
-  enable_minimal="--enable-minimal"
+  git apply ../mysql.patch
+  export VT_MYSQL_ROOT=$VTROOT/dist/mysql
   source google/env.inc
-  source ../mysql-compile.inc 2>&1 | tee log
-
-  VT_MYSQL_ROOT=$VTROOT/dist/mysql
+  source google/compile.inc
 
 # Install
   make -s install #DESTDIR=$VTROOT/dist/mysql
-  rm -rf $VTROOT/dist/mysql/mysql-test && \
-    rm -rf $VTROOT/dist/mysql/sql-bench
+  rm -rf $VTROOT/dist/mysql/mysql-test
+  rm -rf $VTROOT/dist/mysql/sql-bench
   popd
   rm -rf third_party/mysql
 fi
