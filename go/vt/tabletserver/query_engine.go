@@ -61,10 +61,13 @@ type CompiledPlan struct {
 }
 
 // stats are globals to allow anybody to set them
-var queryStats, waitStats *stats.Timings
-var killStats, errorStats *stats.Counters
-var resultStats *stats.Histogram
-var spotCheckCount *stats.Int
+var (
+	queryStats, waitStats *stats.Timings
+	killStats, errorStats *stats.Counters
+	resultStats           *stats.Histogram
+	spotCheckCount        *stats.Int
+	QPSRates              *stats.Rates
+)
 
 var resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
 
@@ -92,7 +95,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	queryStats = stats.NewTimings("Queries")
-	stats.NewRates("QPS", queryStats, 15, 60e9)
+	QPSRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
 	errorStats = stats.NewCounters("Errors")
