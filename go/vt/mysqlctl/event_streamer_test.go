@@ -7,6 +7,8 @@ package mysqlctl
 import (
 	"fmt"
 	"testing"
+
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 type eventErrorCase struct {
@@ -17,47 +19,47 @@ type eventErrorCase struct {
 
 var eventErrorCases = []eventErrorCase{
 	{
-		Category: BL_SET,
+		Category: proto.BL_SET,
 		Sql:      "abcd",
 		want:     `unrecognized: abcd`,
 	}, {
-		Category: BL_SET,
+		Category: proto.BL_SET,
 		Sql:      "SET TIMESTAMP=abcd",
 		want:     `strconv.ParseInt: parsing "abcd": invalid syntax: SET TIMESTAMP=abcd`,
 	}, {
-		Category: BL_SET,
+		Category: proto.BL_SET,
 		Sql:      "SET INSERT_ID=abcd",
 		want:     `strconv.ParseInt: parsing "abcd": invalid syntax: SET INSERT_ID=abcd`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream 10 (eid id name ) (null 1 'bmFtZQ==' ); */",
 		want:     `expecting table name in stream comment: query /* _stream 10 (eid id name ) (null 1 'bmFtZQ==' ); */`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e eid id name ) (null 1 'bmFtZQ==' ); */",
 		want:     `expecting '(': query /* _stream vtocc_e eid id name ) (null 1 'bmFtZQ==' ); */`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */",
 		want:     `expecting column name: 10: query /* _stream vtocc_e (10 id name ) (null 1 'bmFtZQ==' ); */`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */",
 		want:     `unexpected token: '(': query /* _stream vtocc_e (eid id name  (null 1 'bmFtZQ==' ); */`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */",
 		want:     `illegal base64 data at input byte 0: query /* _stream vtocc_e (eid id name)  (null 'aaa' 'bmFtZQ==' ); */`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */",
 		want:     `length mismatch in values: query /* _stream vtocc_e (eid id name)  (null 'bmFtZQ==' ); */`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */",
 		want:     `strconv.ParseUint: parsing "1.1": invalid syntax: query /* _stream vtocc_e (eid id name)  (null 1.1 'bmFtZQ==' ); */`,
 	}, {
-		Category: BL_DML,
+		Category: proto.BL_DML,
 		Sql:      "query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */",
 		want:     `unexpected token: 'a': query /* _stream vtocc_e (eid id name)  (null a 'bmFtZQ==' ); */`,
 	},
@@ -65,13 +67,13 @@ var eventErrorCases = []eventErrorCase{
 
 func TestEventErrors(t *testing.T) {
 	evs := &EventStreamer{
-		sendEvent: func(event *StreamEvent) error {
+		sendEvent: func(event *proto.StreamEvent) error {
 			return nil
 		},
 	}
 	for _, ecase := range eventErrorCases {
-		trans := &BinlogTransaction{
-			Statements: []Statement{
+		trans := &proto.BinlogTransaction{
+			Statements: []proto.Statement{
 				{
 					Category: ecase.Category,
 					Sql:      []byte(ecase.Sql),
@@ -86,26 +88,26 @@ func TestEventErrors(t *testing.T) {
 }
 
 func TestDMLEvent(t *testing.T) {
-	trans := &BinlogTransaction{
-		Statements: []Statement{
+	trans := &proto.BinlogTransaction{
+		Statements: []proto.Statement{
 			{
-				Category: BL_SET,
+				Category: proto.BL_SET,
 				Sql:      []byte("SET TIMESTAMP=1"),
 			}, {
-				Category: BL_SET,
+				Category: proto.BL_SET,
 				Sql:      []byte("SET INSERT_ID=10"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("query /* _stream vtocc_e (eid id name)  (null -1 'bmFtZQ==' ) (null 18446744073709551615 'bmFtZQ==' ); */"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("query"),
 			},
 		},
 		GroupId: "20",
 	}
 	evs := &EventStreamer{
-		sendEvent: func(event *StreamEvent) error {
+		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DML":
 				want := `&{DML vtocc_e [eid id name] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
@@ -144,20 +146,20 @@ func TestDMLEvent(t *testing.T) {
 }
 
 func TestDDLEvent(t *testing.T) {
-	trans := &BinlogTransaction{
-		Statements: []Statement{
+	trans := &proto.BinlogTransaction{
+		Statements: []proto.Statement{
 			{
-				Category: BL_SET,
+				Category: proto.BL_SET,
 				Sql:      []byte("SET TIMESTAMP=1"),
 			}, {
-				Category: BL_DDL,
+				Category: proto.BL_DDL,
 				Sql:      []byte("DDL"),
 			},
 		},
 		GroupId: "20",
 	}
 	evs := &EventStreamer{
-		sendEvent: func(event *StreamEvent) error {
+		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DDL":
 				want := `&{DDL  [] [] DDL 1 }`

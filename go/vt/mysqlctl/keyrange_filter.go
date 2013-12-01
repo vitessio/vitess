@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
@@ -20,17 +21,17 @@ var SPACE = []byte(" ")
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyrangeFilterFunc(sendTransaction))
 func KeyrangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
-	return func(reply *BinlogTransaction) error {
+	return func(reply *proto.BinlogTransaction) error {
 		matched := false
-		filtered := make([]Statement, 0, len(reply.Statements))
+		filtered := make([]proto.Statement, 0, len(reply.Statements))
 		for _, statement := range reply.Statements {
 			switch statement.Category {
-			case BL_SET:
+			case proto.BL_SET:
 				filtered = append(filtered, statement)
-			case BL_DDL:
+			case proto.BL_DDL:
 				filtered = append(filtered, statement)
 				matched = true
-			case BL_DML:
+			case proto.BL_DML:
 				keyspaceIndex := bytes.LastIndex(statement.Sql, KEYSPACE_ID_COMMENT)
 				if keyspaceIndex == -1 {
 					// TODO(sougou): increment error counter
