@@ -389,7 +389,7 @@ class TestZkocc(unittest.TestCase):
     utils.vtgate_kill(vtgate_proc)
 
   def test_fake_zkocc_connection(self):
-    fkc = zkocc.FakeZkOccConnection.from_data_path("testing", "test/fake_zkocc_config.json")
+    fkc = zkocc.FakeZkOccConnection.from_data_path("testing", "fake_zkocc_config.json")
     fkc.replace_zk_data("3306", "3310")
     fkc.replace_zk_data("127.0.0.1", "my.cool.hostname")
 
