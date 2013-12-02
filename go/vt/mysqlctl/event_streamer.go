@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 )
 
@@ -20,26 +21,7 @@ var (
 	STREAM_COMMENT_START = []byte("/* _stream ")
 )
 
-type StreamEvent struct {
-	// Category can be "DML", "DDL", "ERR" or "POS"
-	Category string
-
-	// DML
-	TableName  string
-	PkColNames []string
-	PkValues   [][]interface{}
-
-	// DDL or ERR
-	Sql string
-
-	// Timestamp is set for DML, DDL or ERR
-	Timestamp int64
-
-	// POS
-	GroupId string
-}
-
-type sendEventFunc func(event *StreamEvent) error
+type sendEventFunc func(event *proto.StreamEvent) error
 
 type EventStreamer struct {
 	bls       *BinlogStreamer
@@ -68,13 +50,13 @@ func (evs *EventStreamer) Stop() {
 	evs.bls.Stop()
 }
 
-func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
+func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) error {
 	var err error
 	var timestamp int64
 	var insertid int64
 	for _, stmt := range trans.Statements {
 		switch stmt.Category {
-		case BL_SET:
+		case proto.BL_SET:
 			if bytes.HasPrefix(stmt.Sql, BINLOG_SET_TIMESTAMP) {
 				if timestamp, err = strconv.ParseInt(string(stmt.Sql[len(BINLOG_SET_TIMESTAMP):]), 10, 64); err != nil {
 					return fmt.Errorf("%v: %s", err, stmt.Sql)
@@ -86,8 +68,8 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 			} else {
 				return fmt.Errorf("unrecognized: %s", stmt.Sql)
 			}
-		case BL_DML:
-			var dmlEvent *StreamEvent
+		case proto.BL_DML:
+			var dmlEvent *proto.StreamEvent
 			dmlEvent, insertid, err = evs.buildDMLEvent(stmt.Sql, insertid)
 			if err != nil {
 				return fmt.Errorf("%v: %s", err, stmt.Sql)
@@ -97,15 +79,15 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 				return err
 			}
 			evs.DmlCount++
-		case BL_DDL:
-			ddlEvent := &StreamEvent{Category: "DDL", Sql: string(stmt.Sql), Timestamp: timestamp}
+		case proto.BL_DDL:
+			ddlEvent := &proto.StreamEvent{Category: "DDL", Sql: string(stmt.Sql), Timestamp: timestamp}
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
 			}
 			evs.DdlCount++
 		}
 	}
-	posEvent := &StreamEvent{Category: "POS", GroupId: trans.GroupId}
+	posEvent := &proto.StreamEvent{Category: "POS", GroupId: trans.GroupId}
 	if err = evs.sendEvent(posEvent); err != nil {
 		return err
 	}
@@ -113,11 +95,11 @@ func (evs *EventStreamer) transactionToEvent(trans *BinlogTransaction) error {
 	return nil
 }
 
-func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *StreamEvent, newinsertid int64, err error) {
+func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *proto.StreamEvent, newinsertid int64, err error) {
 	commentIndex := bytes.LastIndex(sql, STREAM_COMMENT_START)
 	if commentIndex == -1 {
 		evs.DmlErrors++
-		return &StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
+		return &proto.StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
 	}
 	streamComment := string(sql[commentIndex+len(STREAM_COMMENT_START):])
 	eventTree, err := parseStreamComment(streamComment)
@@ -136,7 +118,7 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *S
 	}
 	pkColLen := pkColNamesNode.Len()
 
-	dmlEvent = new(StreamEvent)
+	dmlEvent = new(proto.StreamEvent)
 	dmlEvent.Category = "DML"
 	dmlEvent.TableName = tableName
 	dmlEvent.PkColNames = pkColNames

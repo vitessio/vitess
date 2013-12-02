@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 func TestPosParse(t *testing.T) {
@@ -303,7 +304,7 @@ func TestStream(t *testing.T) {
 
 	curTransaction := 0
 	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
-	err = bls.Stream("vt-0000041983-bin.000001", 0, func(tx *BinlogTransaction) error {
+	err = bls.Stream("vt-0000041983-bin.000001", 0, func(tx *proto.BinlogTransaction) error {
 		for i, stmt := range tx.Statements {
 			if transactions[curTransaction].Statements[i].Sql != string(stmt.Sql) {
 				t.Errorf("want %s, got %s", transactions[curTransaction].Statements[i].Sql, stmt.Sql)
@@ -347,7 +348,7 @@ func TestRotation(t *testing.T) {
 	defer cleanup(env)
 
 	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
-	err := bls.Stream("vt-0000041983-bin.000004", 2682, func(tx *BinlogTransaction) error {
+	err := bls.Stream("vt-0000041983-bin.000004", 2682, func(tx *proto.BinlogTransaction) error {
 		bls.Stop()
 		return nil
 	})
