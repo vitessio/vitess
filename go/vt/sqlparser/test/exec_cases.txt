@@ -957,7 +957,7 @@ select * from d where bar = 'foo'
   "SetValue": null
 }
 
-# index override
+# index override (use)
 select * from d use index(d_bar_never) where bar = 'foo'
 {
   "PlanId": "PASS_SELECT",
@@ -965,6 +965,30 @@ select * from d use index(d_bar_never) where bar = 'foo'
   "TableName": "d",
   "FieldQuery": "select * from d use index (d_bar_never) where 1 != 1",
   "FullQuery": "select * from d use index (d_bar_never) where bar = 'foo' limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# index override (force)
+select * from d force index(d_bar_never) where bar = 'foo'
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "HAS_HINTS",
+  "TableName": "d",
+  "FieldQuery": "select * from d force index (d_bar_never) where 1 != 1",
+  "FullQuery": "select * from d force index (d_bar_never) where bar = 'foo' limit :_vtMaxResultSize",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",

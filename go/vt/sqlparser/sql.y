@@ -101,7 +101,7 @@ const (
 
 %left <node> UNION MINUS EXCEPT INTERSECT
 %left <node> ','
-%left <node> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE
+%left <node> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <node> ON
 %left <node> AND OR
 %right <node> NOT
@@ -425,6 +425,10 @@ index_hint_list:
 		$$ = NewSimpleParseNode(USE, "use")
   }
 | USE INDEX '(' column_list ')'
+  {
+    $$.Push($4)
+  }
+| FORCE INDEX '(' column_list ')'
   {
     $$.Push($4)
   }

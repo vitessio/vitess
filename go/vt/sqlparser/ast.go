@@ -156,9 +156,9 @@ func FormatNode(buf *TrackedBuffer, node *Node) {
 			buf.Fprintf(" as %v", node.At(1).At(0))
 		}
 		buf.Fprintf("%v", node.At(2))
-	case USE:
+	case USE, FORCE:
 		if node.Len() != 0 {
-			buf.Fprintf(" use index %v", node.At(0))
+			buf.Fprintf(" %s index %v", node.Value, node.At(0))
 		}
 	case WHERE, HAVING:
 		if node.Len() > 0 {
