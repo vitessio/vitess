@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -130,7 +131,7 @@ func (tn TabletNode) ShortName() string {
 
 func TabletNodeFromTabletInfo(ti *topo.TabletInfo) (*TabletNode, error) {
 	if err := ti.ValidatePortmap(); err != nil {
-		return nil, err
+		log.Errorf("ValidatePortmap(%v): %v", ti.Alias, err)
 	}
 	return &TabletNode{
 		Host:  ti.Hostname,
