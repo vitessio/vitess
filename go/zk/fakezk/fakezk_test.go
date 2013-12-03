@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
 )
@@ -231,7 +232,7 @@ func TestSequence(t *testing.T) {
 }
 
 func TestFromFile(t *testing.T) {
-	conn := NewConnFromFile("test_config.json")
+	conn := NewConnFromFile(testfiles.Locate("fakezk_test_config.json"))
 
 	keyspaces, _, err := conn.Children("/zk/testing/vt/ns")
 	if err != nil {
