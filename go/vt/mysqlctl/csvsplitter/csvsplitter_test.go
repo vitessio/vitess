@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -16,7 +17,7 @@ type pair struct {
 func TestCSVSplitter(t *testing.T) {
 	// mean.csv was generated using "select keyspaced_id,
 	// tablename.* into outfile".
-	file, err := os.Open("mean.csv")
+	file, err := os.Open(testfiles.Locate("csvsplitter_mean.csv"))
 	if err != nil {
 		t.Fatalf("Cannot open mean.csv: %v", err)
 	}
