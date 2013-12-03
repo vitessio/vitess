@@ -121,8 +121,8 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *p
 	dmlEvent = new(proto.StreamEvent)
 	dmlEvent.Category = "DML"
 	dmlEvent.TableName = tableName
-	dmlEvent.PkColNames = pkColNames
-	dmlEvent.PkValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))
+	dmlEvent.PKColNames = pkColNames
+	dmlEvent.PKValues = make([][]interface{}, 0, len(eventTree.Sub[2:]))
 
 	rowPk := make([]interface{}, pkColLen)
 	for _, node := range eventTree.Sub[2:] {
@@ -130,11 +130,11 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *p
 		if node.Len() != pkColLen {
 			return nil, insertid, fmt.Errorf("length mismatch in values")
 		}
-		rowPk, insertid, err = encodePkValues(node.Sub, insertid)
+		rowPk, insertid, err = encodePKValues(node.Sub, insertid)
 		if err != nil {
 			return nil, insertid, err
 		}
-		dmlEvent.PkValues = append(dmlEvent.PkValues, rowPk)
+		dmlEvent.PKValues = append(dmlEvent.PKValues, rowPk)
 	}
 	return dmlEvent, insertid, nil
 	return
@@ -210,7 +210,7 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer) (pkTuple *sqlparser.Node, err 
 }
 
 // Interprets the parsed node and correctly encodes the primary key values.
-func encodePkValues(pkValues []*sqlparser.Node, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
+func encodePKValues(pkValues []*sqlparser.Node, insertid int64) (rowPk []interface{}, newinsertid int64, err error) {
 	for _, pkVal := range pkValues {
 		if pkVal.Type == sqlparser.STRING {
 			rowPk = append(rowPk, string(pkVal.Value))
