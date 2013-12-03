@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
@@ -293,7 +294,7 @@ func TestStream(t *testing.T) {
 
 	var transactions []transaction
 
-	out, err := ioutil.ReadFile("test/expected.json")
+	out, err := ioutil.ReadFile(testfiles.Locate("mysqlctl_test/expected.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +304,7 @@ func TestStream(t *testing.T) {
 	}
 
 	curTransaction := 0
-	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
+	bls := NewBinlogStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"))
 	err = bls.Stream("vt-0000041983-bin.000001", 0, func(tx *proto.BinlogTransaction) error {
 		for i, stmt := range tx.Statements {
 			if transactions[curTransaction].Statements[i].Sql != string(stmt.Sql) {
@@ -347,7 +348,7 @@ func TestRotation(t *testing.T) {
 	env := setup("cat $3", 0)
 	defer cleanup(env)
 
-	bls := NewBinlogStreamer("db", "test/vt-0000041983-bin")
+	bls := NewBinlogStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"))
 	err := bls.Stream("vt-0000041983-bin.000004", 2682, func(tx *proto.BinlogTransaction) error {
 		bls.Stop()
 		return nil
