@@ -14,7 +14,7 @@ import (
 )
 
 func TestZkConfig(t *testing.T) {
-	configPath := fmt.Sprintf("./.zk-test-conf-%v", time.Now().UnixNano())
+	configPath := fmt.Sprintf("%v/.zk-test-conf-%v", os.TempDir(), time.Now().UnixNano())
 	defer func() {
 		os.Remove(configPath)
 	}()

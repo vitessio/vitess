@@ -209,7 +209,7 @@ func TestResolveWildcards(t *testing.T) {
 
 func TestResolveWildcardsCell(t *testing.T) {
 	// create the ZK config
-	configPath := fmt.Sprintf("./.zk-test-conf-%v", time.Now().UnixNano())
+	configPath := fmt.Sprintf("%v/.zk-test-conf-%v", os.TempDir(), time.Now().UnixNano())
 	defer func() {
 		os.Remove(configPath)
 	}()
