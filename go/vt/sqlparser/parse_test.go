@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/testfiles"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/schema"
 )
@@ -96,7 +97,7 @@ func tableGetter(name string) (*schema.Table, bool) {
 
 func TestExec(t *testing.T) {
 	initTables()
-	for tcase := range iterateJSONFile("test/exec_cases.txt") {
+	for tcase := range iterateJSONFile("exec_cases.txt") {
 		plan, err := ExecParse(tcase.input, tableGetter)
 		var out string
 		if err != nil {
@@ -124,7 +125,7 @@ var actionToString = map[int]string{
 }
 
 func TestDDL(t *testing.T) {
-	for tcase := range iterateFile("test/ddl_cases.txt") {
+	for tcase := range iterateFile("ddl_cases.txt") {
 		plan := DDLParse(tcase.input)
 		expected := make(map[string]interface{})
 		err := json.Unmarshal([]byte(tcase.output), &expected)
@@ -146,7 +147,7 @@ func matchString(t *testing.T, line int, expected interface{}, actual string) {
 }
 
 func TestParse(t *testing.T) {
-	for tcase := range iterateFile("test/parse_pass.sql") {
+	for tcase := range iterateFile("parse_pass.sql") {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
@@ -184,7 +185,7 @@ func TestRouting(t *testing.T) {
 	bindVariables["c"] = "c"
 	bindVariables["d"] = "d"
 	bindVariables["e"] = "e"
-	for tcase := range iterateFile("test/routing_cases.txt") {
+	for tcase := range iterateFile("routing_cases.txt") {
 		if tcase.output == "" {
 			tcase.output = tcase.input
 		}
@@ -210,6 +211,7 @@ type testCase struct {
 }
 
 func iterateFile(name string) (testCaseIterator chan testCase) {
+	name = testfiles.Locate("sqlparser_test/" + name)
 	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
 	if err != nil {
 		panic(fmt.Sprintf("Could not open file %s", name))
@@ -245,6 +247,7 @@ func iterateFile(name string) (testCaseIterator chan testCase) {
 }
 
 func iterateJSONFile(name string) (testCaseIterator chan testCase) {
+	name = testfiles.Locate("sqlparser_test/" + name)
 	fd, err := os.OpenFile(name, os.O_RDONLY, 0)
 	if err != nil {
 		panic(fmt.Sprintf("Could not open file %s", name))
