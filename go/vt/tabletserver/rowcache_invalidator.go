@@ -116,9 +116,9 @@ func (rowCache *InvalidationProcessor) processEvent(event *myproto.StreamEvent) 
 func (rowCache *InvalidationProcessor) handleDmlEvent(event *myproto.StreamEvent) {
 	dml := new(proto.DmlType)
 	dml.Table = event.TableName
-	dml.Keys = make([]string, 0, len(event.PkValues))
-	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PkColNames))
-	for _, pkTuple := range event.PkValues {
+	dml.Keys = make([]string, 0, len(event.PKValues))
+	sqlTypeKeys := make([]sqltypes.Value, 0, len(event.PKColNames))
+	for _, pkTuple := range event.PKValues {
 		sqlTypeKeys = sqlTypeKeys[:0]
 		for _, pkVal := range pkTuple {
 			key, err := sqltypes.BuildValue(pkVal)
