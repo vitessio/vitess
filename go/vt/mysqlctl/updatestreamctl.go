@@ -1,6 +1,7 @@
 // Copyright 2012, Google Inc. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
+
 package mysqlctl
 
 import (
@@ -8,11 +9,10 @@ import (
 	"sync"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 /* API and config for UpdateStream Service */
@@ -36,11 +36,6 @@ type UpdateStream struct {
 	stateWaitGroup sync.WaitGroup
 	dbname         string
 	streams        streamList
-}
-
-type KeyrangeRequest struct {
-	GroupId  string
-	Keyrange key.KeyRange
 }
 
 type streamer interface {
@@ -89,7 +84,7 @@ func RegisterUpdateStreamService(mycnf *Mycnf) {
 	stats.Publish("UpdateStreamState", stats.StringFunc(func() string {
 		return usStateNames[UpdateStreamRpcService.state.Get()]
 	}))
-	rpcwrap.RegisterAuthenticated(UpdateStreamRpcService)
+	proto.RegisterAuthenticated(UpdateStreamRpcService)
 }
 
 func logError() {
@@ -108,7 +103,7 @@ func DisableUpdateStreamService() {
 	UpdateStreamRpcService.disable()
 }
 
-func ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply interface{}) error) error {
+func ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply interface{}) error) error {
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
@@ -166,11 +161,7 @@ func (updateStream *UpdateStream) isEnabled() bool {
 	return updateStream.state.Get() == ENABLED
 }
 
-type UpdateStreamRequest struct {
-	GroupId string
-}
-
-func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
+func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
@@ -197,13 +188,13 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *UpdateStreamRequest, se
 	updateStream.streams.Add(evs)
 	defer updateStream.streams.Delete(evs)
 
-	// Calls cascade like this: BinlogStreamer->func(*StreamEvent)->sendReply
-	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *StreamEvent) error {
+	// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
+	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *proto.StreamEvent) error {
 		return sendReply(reply)
 	})
 }
 
-func (updateStream *UpdateStream) StreamKeyrange(req *KeyrangeRequest, sendReply func(reply interface{}) error) (err error) {
+func (updateStream *UpdateStream) StreamKeyrange(req *proto.KeyrangeRequest, sendReply func(reply interface{}) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
@@ -230,8 +221,8 @@ func (updateStream *UpdateStream) StreamKeyrange(req *KeyrangeRequest, sendReply
 	updateStream.streams.Add(bls)
 	defer updateStream.streams.Delete(bls)
 
-	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*BinlogTransaction)->sendReply
-	f := KeyrangeFilterFunc(req.Keyrange, func(reply *BinlogTransaction) error {
+	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	f := KeyrangeFilterFunc(req.Keyrange, func(reply *proto.BinlogTransaction) error {
 		return sendReply(reply)
 	})
 	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)

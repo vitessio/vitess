@@ -60,6 +60,7 @@ var keywords = map[string]int{
 	"cross":         CROSS,
 	"natural":       NATURAL,
 	"use":           USE,
+	"force":         FORCE,
 	"on":            ON,
 	"into":          INTO,
 

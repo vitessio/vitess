@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var testKeyrange = key.KeyRange{
@@ -17,23 +18,23 @@ var testKeyrange = key.KeyRange{
 }
 
 func TestKeyrangeFilterPass(t *testing.T) {
-	input := BinlogTransaction{
-		Statements: []Statement{
+	input := proto.BinlogTransaction{
+		Statements: []proto.Statement{
 			{
-				Category: BL_SET,
+				Category: proto.BL_SET,
 				Sql:      []byte("set1"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
 			},
 		},
 		GroupId: "1",
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -45,20 +46,20 @@ func TestKeyrangeFilterPass(t *testing.T) {
 }
 
 func TestKeyrangeFilterSkip(t *testing.T) {
-	input := BinlogTransaction{
-		Statements: []Statement{
+	input := proto.BinlogTransaction{
+		Statements: []proto.Statement{
 			{
-				Category: BL_SET,
+				Category: proto.BL_SET,
 				Sql:      []byte("set1"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
 			},
 		},
 		GroupId: "1",
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -70,20 +71,20 @@ func TestKeyrangeFilterSkip(t *testing.T) {
 }
 
 func TestKeyrangeFilterDDL(t *testing.T) {
-	input := BinlogTransaction{
-		Statements: []Statement{
+	input := proto.BinlogTransaction{
+		Statements: []proto.Statement{
 			{
-				Category: BL_SET,
+				Category: proto.BL_SET,
 				Sql:      []byte("set1"),
 			}, {
-				Category: BL_DDL,
+				Category: proto.BL_DDL,
 				Sql:      []byte("ddl"),
 			},
 		},
 		GroupId: "1",
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -95,26 +96,26 @@ func TestKeyrangeFilterDDL(t *testing.T) {
 }
 
 func TestKeyrangeFilterMalformed(t *testing.T) {
-	input := BinlogTransaction{
-		Statements: []Statement{
+	input := proto.BinlogTransaction{
+		Statements: []proto.Statement{
 			{
-				Category: BL_SET,
+				Category: proto.BL_SET,
 				Sql:      []byte("set1"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("ddl"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("dml1 /* EMD keyspace_id:20*/"),
 			}, {
-				Category: BL_DML,
+				Category: proto.BL_DML,
 				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
 			},
 		},
 		GroupId: "1",
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *BinlogTransaction) error {
+	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -125,7 +126,7 @@ func TestKeyrangeFilterMalformed(t *testing.T) {
 	}
 }
 
-func bltToString(tx *BinlogTransaction) string {
+func bltToString(tx *proto.BinlogTransaction) string {
 	result := ""
 	for _, statement := range tx.Statements {
 		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, statement.Sql)

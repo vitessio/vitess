@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -82,9 +83,9 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 	}
 
 	log.Infof("Starting rowcache invalidator")
-	req := &mysqlctl.UpdateStreamRequest{GroupId: groupId}
+	req := &myproto.UpdateStreamRequest{GroupId: groupId}
 	err = mysqlctl.ServeUpdateStream(req, func(reply interface{}) error {
-		return rowCache.processEvent(reply.(*mysqlctl.StreamEvent))
+		return rowCache.processEvent(reply.(*myproto.StreamEvent))
 	})
 	if err != nil {
 		log.Errorf("mysqlctl.ServeUpdateStream returned err '%v'", err.Error())
@@ -92,7 +93,7 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 	log.Infof("Rowcache invalidator stopped")
 }
 
-func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.StreamEvent) error {
+func (rowCache *InvalidationProcessor) processEvent(event *myproto.StreamEvent) error {
 	if rowCache.state.Get() != RCINV_ENABLED {
 		return io.EOF
 	}
@@ -112,7 +113,7 @@ func (rowCache *InvalidationProcessor) processEvent(event *mysqlctl.StreamEvent)
 	return nil
 }
 
-func (rowCache *InvalidationProcessor) handleDmlEvent(event *mysqlctl.StreamEvent) {
+func (rowCache *InvalidationProcessor) handleDmlEvent(event *myproto.StreamEvent) {
 	dml := new(proto.DmlType)
 	dml.Table = event.TableName
 	dml.Keys = make([]string, 0, len(event.PkValues))
