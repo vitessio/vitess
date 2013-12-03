@@ -19,8 +19,8 @@ class Coord(object):
 class EventData(object):
   Cateory = None
   TableName = None
-  PkColNames = None
-  PkValues = None
+  PKColNames = None
+  PKValues = None
   Sql = None
   Timestamp = None
   GroupId = None
@@ -29,15 +29,15 @@ class EventData(object):
     for key, val in raw_response.iteritems():
       self.__dict__[key] = val
     self.PkRows = []
-    del self.__dict__['PkColNames']
-    del self.__dict__['PkValues']
+    del self.__dict__['PKColNames']
+    del self.__dict__['PKValues']
 
-    if not raw_response['PkColNames']:
+    if not raw_response['PKColNames']:
       return
-    for pkList in raw_response['PkValues']:
+    for pkList in raw_response['PKValues']:
       if not pkList:
         continue
-      pk_row = [(col_name, col_value) for col_name, col_value in izip(raw_response['PkColNames'], pkList)]
+      pk_row = [(col_name, col_value) for col_name, col_value in izip(raw_response['PKColNames'], pkList)]
       self.PkRows.append(pk_row)
 
 class UpdateStreamConnection(object):

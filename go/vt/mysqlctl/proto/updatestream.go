@@ -26,7 +26,7 @@ type UpdateStream interface {
 	StreamKeyrange(req *KeyrangeRequest, sendReply func(reply interface{}) error) (err error)
 }
 
-// RegisterAuthenticated regiesters a varaiable that satisfies the UpdateStream interface
+// RegisterAuthenticated registers a variable that satisfies the UpdateStream interface
 // as an rpc service that requires authentication.
 func RegisterAuthenticated(service UpdateStream) {
 	rpcwrap.RegisterAuthenticated(service)
