@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/logutil"
 )
 
 var (
@@ -111,7 +111,7 @@ func TestWarning(t *testing.T) {
 	}
 	ioutil.ReadAll(out)
 	mbl.Wait()
-	log.Flush()
+	logutil.Flush()
 	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "mysqlctl.test.WARNING"))
 	if err != nil {
 		t.Error(err)
@@ -134,7 +134,7 @@ func TestError(t *testing.T) {
 	}
 	ioutil.ReadAll(out)
 	mbl.Wait()
-	log.Flush()
+	logutil.Flush()
 	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "mysqlctl.test.ERROR"))
 	if err != nil {
 		t.Error(err)
