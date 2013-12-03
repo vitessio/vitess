@@ -14,10 +14,11 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
-	"github.com/youtube/vitess/go/mysql/proto"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var (
@@ -33,7 +34,7 @@ type VtClient interface {
 	Commit() error
 	Rollback() error
 	Close()
-	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error)
+	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error)
 }
 
 // DummyVtClient is a VtClient that writes to a writer instead of executing
@@ -67,9 +68,9 @@ func (dc DummyVtClient) Close() {
 	return
 }
 
-func (dc DummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *proto.QueryResult, err error) {
+func (dc DummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error) {
 	dc.stdout.WriteString(string(query) + ";\n")
-	return &proto.QueryResult{Fields: nil, RowsAffected: 1, InsertId: 0, Rows: nil}, nil
+	return &mproto.QueryResult{Fields: nil, RowsAffected: 1, InsertId: 0, Rows: nil}, nil
 }
 
 // DBClient is a real VtClient backed by a mysql connection
@@ -139,14 +140,14 @@ func (dc *DBClient) Close() {
 	}
 }
 
-func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error) {
+func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
 	if err != nil {
 		log.Errorf("ExecuteFetch failed w/ error %v", err)
 		dc.handleError(err)
 		return nil, err
 	}
-	qr := proto.QueryResult(*mqr)
+	qr := mproto.QueryResult(*mqr)
 	return &qr, nil
 }
 
@@ -243,7 +244,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*BlpPosition, error) {
 	}, nil
 }
 
-func (blp *BinlogPlayer) processTransaction(tx *BinlogTransaction) (ok bool, err error) {
+func (blp *BinlogPlayer) processTransaction(tx *proto.BinlogTransaction) (ok bool, err error) {
 	txnStartTime := time.Now()
 	if err = blp.dbClient.Begin(); err != nil {
 		return false, fmt.Errorf("failed query BEGIN, err: %s", err)
@@ -273,7 +274,7 @@ func (blp *BinlogPlayer) processTransaction(tx *BinlogTransaction) (ok bool, err
 	return true, nil
 }
 
-func (blp *BinlogPlayer) exec(sql string) (*proto.QueryResult, error) {
+func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 	queryStartTime := time.Now()
 	qr, err := blp.dbClient.ExecuteFetch(sql, 0, false)
 	blp.blplStats.queryCount.Add("QueryCount", 1)
@@ -301,8 +302,8 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		return fmt.Errorf("error dialing binlog server: %v", err)
 	}
 
-	responseChan := make(chan *BinlogTransaction)
-	req := &KeyrangeRequest{
+	responseChan := make(chan *proto.BinlogTransaction)
+	req := &proto.KeyrangeRequest{
 		Keyrange: blp.keyRange,
 		GroupId:  blp.blpPos.GroupId,
 	}

@@ -17,17 +17,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
-)
-
-// Valid statement types in the binlogs.
-const (
-	BL_UNRECOGNIZED = iota
-	BL_BEGIN
-	BL_COMMIT
-	BL_ROLLBACK
-	BL_DML
-	BL_DDL
-	BL_SET
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var (
@@ -52,18 +42,18 @@ var (
 
 	// statementPrefixes are normal sql statement prefixes.
 	statementPrefixes = map[string]int{
-		"begin":    BL_BEGIN,
-		"commit":   BL_COMMIT,
-		"rollback": BL_ROLLBACK,
-		"insert":   BL_DML,
-		"update":   BL_DML,
-		"delete":   BL_DML,
-		"create":   BL_DDL,
-		"alter":    BL_DDL,
-		"drop":     BL_DDL,
-		"truncate": BL_DDL,
-		"rename":   BL_DDL,
-		"set":      BL_SET,
+		"begin":    proto.BL_BEGIN,
+		"commit":   proto.BL_COMMIT,
+		"rollback": proto.BL_ROLLBACK,
+		"insert":   proto.BL_DML,
+		"update":   proto.BL_DML,
+		"delete":   proto.BL_DML,
+		"create":   proto.BL_DDL,
+		"alter":    proto.BL_DDL,
+		"drop":     proto.BL_DDL,
+		"truncate": proto.BL_DDL,
+		"rename":   proto.BL_DDL,
+		"set":      proto.BL_SET,
 	}
 
 	// Misc vars.
@@ -72,17 +62,6 @@ var (
 	DELIM_STMT    = []byte("DELIMITER")
 	DEFAULT_DELIM = []byte(";")
 )
-
-// TODO: Move to proto once finalized
-type BinlogTransaction struct {
-	Statements []Statement
-	GroupId    string
-}
-
-type Statement struct {
-	Category int
-	Sql      []byte
-}
 
 type binlogPosition struct {
 	GroupId, ServerId int64
@@ -109,8 +88,8 @@ type BinlogStreamer struct {
 }
 
 // sendTransactionFunc is used to send binlog events.
-// reply is of type BinlogTransaction.
-type sendTransactionFunc func(trans *BinlogTransaction) error
+// reply is of type proto.BinlogTransaction.
+type sendTransactionFunc func(trans *proto.BinlogTransaction) error
 
 // NewBinlogStreamer creates a BinlogStreamer. dbname specifes
 // the db to stream events for, and binlogPrefix is as defined
@@ -183,7 +162,7 @@ func (bls *BinlogStreamer) run(sendTransaction sendTransactionFunc) (err error) 
 func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, reader io.Reader) (err error) {
 	bls.delim = DEFAULT_DELIM
 	bufReader := bufio.NewReader(reader)
-	var statements []Statement
+	var statements []proto.Statement
 	for {
 		sql, err := bls.nextStatement(bufReader)
 		if sql == nil {
@@ -191,16 +170,16 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 		}
 		prefix := string(bytes.ToLower(bytes.SplitN(sql, SPACE, 2)[0]))
 		switch category := statementPrefixes[prefix]; category {
-		case BL_UNRECOGNIZED:
+		case proto.BL_UNRECOGNIZED:
 			return fmt.Errorf("unrecognized: %s", sql)
-		// We trust that mysqlbinlog doesn't send BL_DMLs withot a BL_BEGIN
-		case BL_BEGIN, BL_ROLLBACK:
+		// We trust that mysqlbinlog doesn't send proto.BL_DMLs withot a proto.BL_BEGIN
+		case proto.BL_BEGIN, proto.BL_ROLLBACK:
 			statements = nil
-		case BL_DDL:
-			statements = append(statements, Statement{Category: category, Sql: sql})
+		case proto.BL_DDL:
+			statements = append(statements, proto.Statement{Category: category, Sql: sql})
 			fallthrough
-		case BL_COMMIT:
-			trans := &BinlogTransaction{
+		case proto.BL_COMMIT:
+			trans := &proto.BinlogTransaction{
 				Statements: statements,
 				GroupId:    strconv.Itoa(int(bls.blPos.GroupId)),
 			}
@@ -211,9 +190,9 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 				return fmt.Errorf("send reply error: %v", err)
 			}
 			statements = nil
-		// BL_DML & BL_SET
+		// proto.BL_DML & proto.BL_SET
 		default:
-			statements = append(statements, Statement{Category: category, Sql: sql})
+			statements = append(statements, proto.Statement{Category: category, Sql: sql})
 		}
 	}
 }
