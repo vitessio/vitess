@@ -27,6 +27,12 @@ func tabletEqual(left, right *topo.Tablet) (bool, error) {
 func CheckTablet(t *testing.T, ts topo.Server) {
 	cell := getLocalCell(t, ts)
 	tablet := &topo.Tablet{
+		Cell:        cell,
+		Uid:         1,
+		Addr:        "localhost:3333",
+		MysqlAddr:   "localhost:3334",
+		MysqlIpAddr: "10.11.12.13:3334",
+
 		Alias:    topo.TabletAlias{Cell: cell, Uid: 1},
 		Hostname: "localhost",
 		IPAddr:   "10.11.12.13",
