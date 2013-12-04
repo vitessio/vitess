@@ -21,7 +21,6 @@ func (query *Query) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "Sql", query.Sql)
 	EncodeBindVariablesBson(buf, "BindVariables", query.BindVariables)
 	bson.EncodeInt64(buf, "TransactionId", query.TransactionId)
-	bson.EncodeInt64(buf, "ConnectionId", query.ConnectionId)
 	bson.EncodeInt64(buf, "SessionId", query.SessionId)
 
 	buf.WriteByte(0)
@@ -51,8 +50,6 @@ func (query *Query) UnmarshalBson(buf *bytes.Buffer) {
 			query.BindVariables = DecodeBindVariablesBson(buf, kind)
 		case "TransactionId":
 			query.TransactionId = bson.DecodeInt64(buf, kind)
-		case "ConnectionId":
-			query.ConnectionId = bson.DecodeInt64(buf, kind)
 		case "SessionId":
 			query.SessionId = bson.DecodeInt64(buf, kind)
 		default:
@@ -137,7 +134,6 @@ func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
 	bson.EncodeInt64(buf, "TransactionId", session.TransactionId)
-	bson.EncodeInt64(buf, "ConnectionId", session.ConnectionId)
 	bson.EncodeInt64(buf, "SessionId", session.SessionId)
 
 	buf.WriteByte(0)
@@ -153,8 +149,6 @@ func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
 		switch key {
 		case "TransactionId":
 			session.TransactionId = bson.DecodeInt64(buf, kind)
-		case "ConnectionId":
-			session.ConnectionId = bson.DecodeInt64(buf, kind)
 		case "SessionId":
 			session.SessionId = bson.DecodeInt64(buf, kind)
 		default:
@@ -231,7 +225,6 @@ func (ql *QueryList) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 	EncodeQueriesBson(ql.Queries, "Queries", buf)
 	bson.EncodeInt64(buf, "TransactionId", ql.TransactionId)
-	bson.EncodeInt64(buf, "ConnectionId", ql.ConnectionId)
 	bson.EncodeInt64(buf, "SessionId", ql.SessionId)
 
 	buf.WriteByte(0)
@@ -249,8 +242,6 @@ func (ql *QueryList) UnmarshalBson(buf *bytes.Buffer) {
 			ql.Queries = DecodeQueriesBson(buf, kind)
 		case "TransactionId":
 			ql.TransactionId = bson.DecodeInt64(buf, kind)
-		case "ConnectionId":
-			ql.ConnectionId = bson.DecodeInt64(buf, kind)
 		case "SessionId":
 			ql.SessionId = bson.DecodeInt64(buf, kind)
 		default:

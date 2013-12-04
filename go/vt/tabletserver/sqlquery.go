@@ -216,7 +216,7 @@ func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, txI
 	defer handleError(&err, logStats)
 	sq.checkState(session.SessionId, false)
 
-	txInfo.TransactionId = sq.qe.Begin(logStats, session.ConnectionId)
+	txInfo.TransactionId = sq.qe.Begin(logStats)
 	return nil
 }
 
@@ -237,20 +237,6 @@ func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, 
 	sq.checkState(session.SessionId, true)
 
 	sq.qe.Rollback(logStats, session.TransactionId)
-	return nil
-}
-
-func (sq *SqlQuery) CreateReserved(session *proto.Session, connectionInfo *proto.ConnectionInfo) (err error) {
-	defer handleError(&err, nil)
-	sq.checkState(session.SessionId, false)
-	connectionInfo.ConnectionId = sq.qe.CreateReserved()
-	return nil
-}
-
-func (sq *SqlQuery) CloseReserved(session *proto.Session, noOutput *string) (err error) {
-	defer handleError(&err, nil)
-	sq.checkState(session.SessionId, false)
-	sq.qe.CloseReserved(session.ConnectionId)
 	return nil
 }
 
@@ -312,9 +298,6 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 	if query.TransactionId != 0 {
 		return NewTabletError(FAIL, "Transactions not supported with streaming")
 	}
-	if query.ConnectionId != 0 {
-		return NewTabletError(FAIL, "Persistent connections not supported with streaming")
-	}
 
 	sq.checkState(query.SessionId, false)
 
@@ -337,7 +320,6 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 	var noOutput string
 	session := proto.Session{
 		TransactionId: queryList.TransactionId,
-		ConnectionId:  queryList.ConnectionId,
 		SessionId:     queryList.SessionId,
 	}
 	reply.List = make([]mproto.QueryResult, 0, len(queryList.Queries))
@@ -370,7 +352,6 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 				Sql:           bound.Sql,
 				BindVariables: bound.BindVariables,
 				TransactionId: session.TransactionId,
-				ConnectionId:  session.ConnectionId,
 				SessionId:     session.SessionId,
 			}
 			var localReply mproto.QueryResult
@@ -403,8 +384,7 @@ func (sq *SqlQuery) statsJSON() string {
 	fmt.Fprintf(buf, "\n \"ActiveTxPool\": %v,", sq.qe.activeTxPool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"ActivePool\": %v,", sq.qe.activePool.StatsJSON())
 	fmt.Fprintf(buf, "\n \"MaxResultSize\": %v,", sq.qe.maxResultSize.Get())
-	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v,", sq.qe.streamBufferSize.Get())
-	fmt.Fprintf(buf, "\n \"ReservedPool\": %v", sq.qe.reservedPool.StatsJSON())
+	fmt.Fprintf(buf, "\n \"StreamBufferSize\": %v", sq.qe.streamBufferSize.Get())
 	fmt.Fprintf(buf, "\n}")
 	return buf.String()
 }

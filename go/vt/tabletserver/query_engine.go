@@ -40,7 +40,6 @@ type QueryEngine struct {
 	connPool       *ConnectionPool
 	streamConnPool *ConnectionPool
 	streamTokens   *sync2.Semaphore
-	reservedPool   *ReservedPool
 	txPool         *ConnectionPool
 	activeTxPool   *ActiveTxPool
 	activePool     *ActivePool
@@ -57,7 +56,6 @@ type CompiledPlan struct {
 	*ExecPlan
 	BindVars      map[string]interface{}
 	TransactionId int64
-	ConnectionId  int64
 }
 
 // stats are globals to allow anybody to set them
@@ -84,7 +82,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamTokens = sync2.NewSemaphore(config.StreamExecThrottle, time.Duration(config.StreamWaitTimeout*1e9))
-	qe.reservedPool = NewReservedPool("ReservedPool")
 	qe.txPool = NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
 	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
@@ -120,7 +117,6 @@ func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []Schem
 	log.Infof("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
-	qe.reservedPool.Open(connFactory)
 	qe.txPool.Open(connFactory)
 	qe.activeTxPool.Open()
 	qe.activePool.Open(connFactory)
@@ -136,20 +132,17 @@ func (qe *QueryEngine) Close() {
 	qe.schemaInfo.Close()
 	qe.activeTxPool.Close()
 	qe.txPool.Close()
-	qe.reservedPool.Close()
 	qe.streamConnPool.Close()
 	qe.connPool.Close()
 	qe.cachePool.Close()
 }
 
-func (qe *QueryEngine) Begin(logStats *sqlQueryStats, connectionId int64) (transactionId int64) {
+func (qe *QueryEngine) Begin(logStats *sqlQueryStats) (transactionId int64) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
 
 	var conn PoolConnection
-	if connectionId != 0 {
-		conn = qe.reservedPool.Get(connectionId)
-	} else if conn = qe.txPool.TryGet(); conn == nil {
+	if conn = qe.txPool.TryGet(); conn == nil {
 		panic(NewTabletError(TX_POOL_FULL, "Transaction pool connection limit exceeded"))
 	}
 	transactionId, err := qe.activeTxPool.SafeBegin(conn)
@@ -194,20 +187,6 @@ func (qe *QueryEngine) Rollback(logStats *sqlQueryStats, transactionId int64) {
 	qe.activeTxPool.Rollback(transactionId)
 }
 
-func (qe *QueryEngine) CreateReserved() (connectionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
-	return qe.reservedPool.CreateConnection()
-}
-
-func (qe *QueryEngine) CloseReserved(connectionId int64) {
-	qe.mu.RLock()
-	defer qe.mu.RUnlock()
-
-	qe.reservedPool.CloseConnection(connectionId)
-}
-
 func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (reply *mproto.QueryResult) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
@@ -242,7 +221,12 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		return qe.execDDL(logStats, query.Sql)
 	}
 
-	plan := &CompiledPlan{query.Sql, basePlan, query.BindVariables, query.TransactionId, query.ConnectionId}
+	plan := &CompiledPlan{
+		Query:         query.Sql,
+		ExecPlan:      basePlan,
+		BindVars:      query.BindVariables,
+		TransactionId: query.TransactionId,
+	}
 	if query.TransactionId != 0 {
 		// Need upfront connection for DMLs and transactions
 		conn := qe.activeTxPool.Get(query.TransactionId)
@@ -268,16 +252,6 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 			reply = qe.execDMLSubquery(logStats, conn, plan, invalidator)
 		default: // select or set in a transaction, just count as select
 			reply = qe.execDirect(logStats, plan, conn)
-		}
-	} else if plan.ConnectionId != 0 {
-		conn := qe.reservedPool.Get(plan.ConnectionId)
-		defer conn.Recycle()
-		if plan.PlanId.IsSelect() {
-			reply = qe.execDirect(logStats, plan, conn)
-		} else if plan.PlanId == sqlparser.PLAN_SET {
-			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
-		} else {
-			panic(NewTabletError(NOT_IN_TX, "DMLs not allowed outside of transactions"))
 		}
 	} else {
 		switch plan.PlanId {

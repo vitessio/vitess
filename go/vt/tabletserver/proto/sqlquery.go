@@ -22,9 +22,6 @@ type SqlQuery interface {
 	Commit(context *rpcproto.Context, session *Session, noOutput *string) error
 	Rollback(context *rpcproto.Context, session *Session, noOutput *string) error
 
-	CreateReserved(session *Session, connectionInfo *ConnectionInfo) error
-	CloseReserved(session *Session, noOutput *string) error
-
 	Execute(context *rpcproto.Context, query *Query, reply *mproto.QueryResult) error
 	StreamExecute(context *rpcproto.Context, query *Query, sendReply func(reply interface{}) error) error
 	ExecuteBatch(context *rpcproto.Context, queryList *QueryList, reply *QueryResultList) error

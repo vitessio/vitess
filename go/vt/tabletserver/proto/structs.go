@@ -20,9 +20,8 @@ type SessionInfo struct {
 type Query struct {
 	Sql           string
 	BindVariables map[string]interface{}
-	TransactionId int64
-	ConnectionId  int64
 	SessionId     int64
+	TransactionId int64
 }
 
 type BoundQuery struct {
@@ -32,9 +31,8 @@ type BoundQuery struct {
 
 type QueryList struct {
 	Queries       []BoundQuery
-	TransactionId int64
-	ConnectionId  int64
 	SessionId     int64
+	TransactionId int64
 }
 
 type QueryResultList struct {
@@ -42,13 +40,8 @@ type QueryResultList struct {
 }
 
 type Session struct {
-	TransactionId int64
-	ConnectionId  int64
 	SessionId     int64
-}
-
-type ConnectionInfo struct {
-	ConnectionId int64
+	TransactionId int64
 }
 
 type TransactionInfo struct {
