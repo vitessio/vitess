@@ -300,7 +300,13 @@ const (
 // Tablet is a pure data struct for information serialized into json
 // and stored into topo.Server
 type Tablet struct {
-	Parent TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
+	Cell        string      // the cell this tablet is assigned to (doesn't change). DEPRECATED: use Alias
+	Uid         uint32      // the server id for this instance. DEPRECATED: use Alias
+	Parent      TabletAlias // the globally unique alias for our replication parent - zero if this is the global master
+	Addr        string      // host:port for queryserver. DEPRECATED: use Hostname and Portmap
+	SecureAddr  string      // host:port for queryserver using encrypted connection. DEPRECATED: use Hostname and Portmap
+	MysqlAddr   string      // host:port for the mysql instance. DEPRECATED: use Hostname and Portmap
+	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns. DEPRECATED: use IPAddr and Portmap
 
 	Alias    TabletAlias
 	Hostname string
@@ -336,15 +342,17 @@ func (tablet *Tablet) ValidatePortmap() error {
 	return nil
 }
 
-func (tablet *Tablet) Addr() string {
+// Rename the next 3 methods when we retire the extra tablet fields
+
+func (tablet *Tablet) GetAddr() string {
 	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vt"])
 }
 
-func (tablet *Tablet) MysqlAddr() string {
+func (tablet *Tablet) GetMysqlAddr() string {
 	return fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["mysql"])
 }
 
-func (tablet *Tablet) MysqlIpAddr() string {
+func (tablet *Tablet) GetMysqlIpAddr() string {
 	return fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
 }
 
@@ -500,6 +508,22 @@ func Validate(ts Server, tabletAlias TabletAlias) error {
 // CreateTablet creates a new tablet and all associated paths for the
 // replication graph.
 func CreateTablet(ts Server, tablet *Tablet) error {
+	// Backfill data
+	tablet.Cell = tablet.Alias.Cell
+	tablet.Uid = tablet.Alias.Uid
+	if tablet.Hostname != "" && tablet.Portmap["vt"] != 0 {
+		tablet.Addr = fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vt"])
+	}
+	if tablet.Hostname != "" && tablet.Portmap["vts"] != 0 {
+		tablet.SecureAddr = fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["vts"])
+	}
+	if tablet.Hostname != "" && tablet.Portmap["mysql"] != 0 {
+		tablet.MysqlAddr = fmt.Sprintf("%v:%v", tablet.Hostname, tablet.Portmap["mysql"])
+	}
+	if tablet.IPAddr != "" && tablet.Portmap["mysql"] != 0 {
+		tablet.MysqlIpAddr = fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["mysql"])
+	}
+
 	// Have the Server create the tablet
 	err := ts.CreateTablet(tablet)
 	if err != nil {

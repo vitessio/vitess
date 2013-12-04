@@ -30,7 +30,7 @@ func (wr *Wrangler) GetVersion(tabletAlias topo.TabletAlias) (string, error) {
 	}
 
 	// build the url, get debug/vars
-	resp, err := http.Get("http://" + tablet.Addr() + "/debug/vars")
+	resp, err := http.Get("http://" + tablet.GetAddr() + "/debug/vars")
 	if err != nil {
 		return "", err
 	}
