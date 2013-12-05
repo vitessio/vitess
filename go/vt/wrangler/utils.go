@@ -53,7 +53,7 @@ func GetTabletMapForShard(ts topo.Server, keyspace, shard string) (map[topo.Tabl
 	return GetTabletMapForShardByCell(ts, keyspace, shard, nil)
 }
 
-// GetTabletMapForShard returns the tablets for a shard. It can return
+// GetTabletMapForShardByCell returns the tablets for a shard. It can return
 // topo.ErrPartialResult if it couldn't read all the cells, or all
 // the individual tablets, in which case the map is valid, but partial.
 func GetTabletMapForShardByCell(ts topo.Server, keyspace, shard string, cells []string) (map[topo.TabletAlias]*topo.TabletInfo, error) {
