@@ -15,18 +15,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func inCellList(cell string, cells []string) bool {
-	if len(cells) == 0 {
-		return true
-	}
-	for _, c := range cells {
-		if c == cell {
-			return true
-		}
-	}
-	return false
-}
-
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
@@ -57,7 +45,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignoreP
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	tabletMap, err := GetTabletMapForShardByCell(wr.ts, keyspace, shard, cells)
 	if err != nil {
 		if ignorePartialResult && err == topo.ErrPartialResult {
 			log.Warningf("rebuildShard: got topo.ErrPartialResult from GetTabletMapForShard, but skipping error as it was expected")
@@ -129,7 +117,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 	for _, tablet := range tablets {
 		// only look at tablets in the cells we want to rebuild
-		if !inCellList(tablet.Tablet.Alias.Cell, cells) {
+		if !topo.InCellList(tablet.Tablet.Alias.Cell, cells) {
 			continue
 		}
 
@@ -204,7 +192,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 	for dbTypeLocation := range existingDbTypeLocations {
 		if _, ok := locationAddrsMap[dbTypeLocation]; !ok {
 			cell := dbTypeLocation.cell
-			if !inCellList(cell, cells) {
+			if !topo.InCellList(cell, cells) {
 				continue
 			}
 

@@ -172,11 +172,33 @@ func CreateShard(ts Server, keyspace, shard string) error {
 	return ts.CreateShard(keyspace, name, s)
 }
 
+// InCellList returns true if the cell list is empty,
+// or if the passed cell is in the cell list.
+func InCellList(cell string, cells []string) bool {
+	if len(cells) == 0 {
+		return true
+	}
+	for _, c := range cells {
+		if c == cell {
+			return true
+		}
+	}
+	return false
+}
+
 // FindAllTabletAliasesInShard uses the replication graph to find all the
 // tablet aliases in the given shard.
 // It can return ErrPartialResult if some cells were not fetched,
 // in which case the result only contains the cells that were fetched.
 func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAlias, error) {
+	return FindAllTabletAliasesInShardByCell(ts, keyspace, shard, nil)
+}
+
+// FindAllTabletAliasesInShard uses the replication graph to find all the
+// tablet aliases in the given shard.
+// It can return ErrPartialResult if some cells were not fetched,
+// in which case the result only contains the cells that were fetched.
+func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells []string) ([]TabletAlias, error) {
 	// read the shard information to find the cells
 	si, err := ts.GetShard(keyspace, shard)
 	if err != nil {
@@ -193,6 +215,9 @@ func FindAllTabletAliasesInShard(ts Server, keyspace, shard string) ([]TabletAli
 	mutex := sync.Mutex{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, cell := range si.Cells {
+		if !InCellList(cell, cells) {
+			continue
+		}
 		wg.Add(1)
 		go func(cell string) {
 			defer wg.Done()
