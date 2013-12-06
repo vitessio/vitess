@@ -245,10 +245,14 @@ func (conn *ZkConn) Delete(path string, version int) (err error) {
 	return conn.conn.Delete(path, version)
 }
 
+// Close will close the connection asynchronously.
+// It will never fail, even though closing the connection might fail in the background.
+// Accessing this ZkConn after Close has been called will panic.
 func (conn *ZkConn) Close() error {
-	sem.Acquire()
-	defer sem.Release()
-	return conn.conn.Close()
+	c := conn.conn
+	conn.conn = nil
+	go c.Close()
+	return nil
 }
 
 func (conn *ZkConn) RetryChange(path string, flags int, acl []zookeeper.ACL, changeFunc ChangeFunc) error {

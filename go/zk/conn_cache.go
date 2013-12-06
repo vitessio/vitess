@@ -115,10 +115,11 @@ func (cc *ConnCache) newZookeeperConn(zkAddr, zcell string) (Conn, error) {
 }
 
 func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan zookeeper.Event) {
+	closeRequired := false
 	for event := range session {
 		switch event.State {
 		case zookeeper.STATE_EXPIRED_SESSION, zookeeper.STATE_CONNECTING:
-			conn.Close()
+			closeRequired = true
 			fallthrough
 		case zookeeper.STATE_CLOSED:
 			var cached *cachedConn
@@ -132,7 +133,12 @@ func (cc *ConnCache) handleSessionEvents(cell string, conn Conn, session <-chan 
 			// (that will trigger a re-dial next time
 			// we ask for a variable)
 			if cached != nil {
+				cached.mutex.Lock()
+				if closeRequired {
+					cached.zconn.Close()
+				}
 				cached.zconn = nil
+				cached.mutex.Unlock()
 				cc.setState(cell, cached, DISCONNECTED)
 			}
 
