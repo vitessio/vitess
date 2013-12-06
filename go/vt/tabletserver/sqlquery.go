@@ -300,13 +300,7 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 	}
 
 	sq.checkState(query.SessionId, false)
-
-	sq.qe.StreamExecute(logStats, query, func(reply interface{}) error {
-		if sq.state.Get() != SERVING {
-			return NewTabletError(FAIL, "Query server is in %s state", stateName[sq.state.Get()])
-		}
-		return sendReply(reply)
-	})
+	sq.qe.StreamExecute(logStats, query, sendReply)
 	return nil
 }
 
