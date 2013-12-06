@@ -35,7 +35,6 @@ func init() {
 	flag.Float64Var(&qsConfig.QueryTimeout, "queryserver-config-query-timeout", DefaultQsConfig.QueryTimeout, "query server query timeout")
 	flag.Float64Var(&qsConfig.IdleTimeout, "queryserver-config-idle-timeout", DefaultQsConfig.IdleTimeout, "query server idle timeout")
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
-	flag.IntVar(&qsConfig.StreamExecThrottle, "queryserver-config-stream-exec-throttle", DefaultQsConfig.StreamExecThrottle, "Maximum number of simultaneous streaming requests that can wait for results")
 	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
 	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-m", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
@@ -97,7 +96,6 @@ type Config struct {
 	IdleTimeout        float64
 	RowCache           RowCacheConfig
 	SpotCheckRatio     float64
-	StreamExecThrottle int
 	StreamWaitTimeout  float64
 }
 
@@ -122,7 +120,6 @@ var DefaultQsConfig = Config{
 	StreamBufferSize:   32 * 1024,
 	RowCache:           RowCacheConfig{Memory: -1, TcpPort: -1, Connections: -1, Threads: -1},
 	SpotCheckRatio:     0,
-	StreamExecThrottle: 8,
 	StreamWaitTimeout:  4 * 60,
 }
 
