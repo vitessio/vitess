@@ -137,12 +137,6 @@ func TestDMLEvent(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if evs.DmlCount != 2 {
-		t.Errorf("want 1, got %d", evs.DmlCount)
-	}
-	if evs.TransactionCount != 1 {
-		t.Errorf("want 1, got %d", evs.TransactionCount)
-	}
 }
 
 func TestDDLEvent(t *testing.T) {
@@ -182,11 +176,5 @@ func TestDDLEvent(t *testing.T) {
 	err := evs.transactionToEvent(trans)
 	if err != nil {
 		t.Error(err)
-	}
-	if evs.DdlCount != 1 {
-		t.Errorf("want 1, got %d", evs.DdlCount)
-	}
-	if evs.TransactionCount != 1 {
-		t.Errorf("want 1, got %d", evs.TransactionCount)
 	}
 }

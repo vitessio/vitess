@@ -301,6 +301,11 @@ primary key (name)
         self.fail("timeout waiting for binlog server state %s" % expected)
     logging.debug("tablet %s binlog service is in state %s", tablet.tablet_alias, expected)
 
+  def _check_binlog_server_vars(self, tablet, timeout=5.0):
+    v = utils.get_vars(tablet.port)
+    self.assertTrue("UpdateStreamKeyrangeStatements" in v)
+    self.assertTrue("UpdateStreamKeyrangeTransactions" in v)
+
   def _wait_for_binlog_player_count(self, tablet, expected, timeout=5.0):
     while True:
       v = utils.get_vars(tablet.port)
@@ -405,6 +410,9 @@ primary key (name)
     # check the binlog players are running
     self._wait_for_binlog_player_count(shard_2_master, 1)
     self._wait_for_binlog_player_count(shard_3_master, 1)
+
+    # check that binlog server exported the stats vars
+    self._check_binlog_server_vars(shard_1_slave1)
 
     # testing filtered replication: insert a bunch of data on shard 1,
     # check we get most of it after a few seconds, wait for binlog server

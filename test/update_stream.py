@@ -178,6 +178,8 @@ class TestUpdateStream(unittest.TestCase):
     v = utils.get_vars(replica_tablet.port)
     if v['UpdateStreamState'] != 'Enabled':
       self.fail("Update stream service should be 'Enabled' but is '%s'" % v['UpdateStreamState'])
+    self.assertTrue('DML' in v['UpdateStreamEvents'])
+    self.assertTrue('POS' in v['UpdateStreamEvents'])
 
     logging.debug("Testing enable -> disable switch starting @ %s" % start_position)
     replica_conn = self._get_replica_stream_conn()

@@ -34,20 +34,20 @@ func KeyrangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) se
 			case proto.BL_DML:
 				keyspaceIndex := bytes.LastIndex(statement.Sql, KEYSPACE_ID_COMMENT)
 				if keyspaceIndex == -1 {
-					// TODO(sougou): increment error counter
+					updateStreamErrors.Add("KeyrangeStream", 1)
 					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 					continue
 				}
 				idstart := keyspaceIndex + len(KEYSPACE_ID_COMMENT)
 				idend := bytes.Index(statement.Sql[idstart:], SPACE)
 				if idend == -1 {
-					// TODO(sougou): increment error counter
+					updateStreamErrors.Add("KeyrangeStream", 1)
 					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 					continue
 				}
 				id, err := strconv.ParseUint(string(statement.Sql[idstart:idstart+idend]), 10, 64)
 				if err != nil {
-					// TODO(sougou): increment error counter
+					updateStreamErrors.Add("KeyrangeStream", 1)
 					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 					continue
 				}

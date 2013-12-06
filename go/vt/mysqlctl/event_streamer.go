@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -26,13 +25,6 @@ type sendEventFunc func(event *proto.StreamEvent) error
 type EventStreamer struct {
 	bls       *BinlogStreamer
 	sendEvent sendEventFunc
-
-	// Stats
-	TimeStarted      time.Time
-	TransactionCount int64
-	DmlCount         int64
-	DdlCount         int64
-	DmlErrors        int64
 }
 
 func NewEventStreamer(dbname, binlogPrefix string) *EventStreamer {
@@ -78,27 +70,23 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 			if err = evs.sendEvent(dmlEvent); err != nil {
 				return err
 			}
-			evs.DmlCount++
 		case proto.BL_DDL:
 			ddlEvent := &proto.StreamEvent{Category: "DDL", Sql: string(stmt.Sql), Timestamp: timestamp}
 			if err = evs.sendEvent(ddlEvent); err != nil {
 				return err
 			}
-			evs.DdlCount++
 		}
 	}
 	posEvent := &proto.StreamEvent{Category: "POS", GroupId: trans.GroupId}
 	if err = evs.sendEvent(posEvent); err != nil {
 		return err
 	}
-	evs.TransactionCount++
 	return nil
 }
 
 func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *proto.StreamEvent, newinsertid int64, err error) {
 	commentIndex := bytes.LastIndex(sql, STREAM_COMMENT_START)
 	if commentIndex == -1 {
-		evs.DmlErrors++
 		return &proto.StreamEvent{Category: "ERR", Sql: string(sql)}, insertid, nil
 	}
 	streamComment := string(sql[commentIndex+len(STREAM_COMMENT_START):])

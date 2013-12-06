@@ -27,6 +27,14 @@ var usStateNames = map[int64]string{
 	DISABLED: "Disabled",
 }
 
+var (
+	streamCount          = stats.NewCounters("UpdateStreamStreamCount")
+	updateStreamErrors   = stats.NewCounters("UpdateStreamErrors")
+	updateStreamEvents   = stats.NewCounters("UpdateStreamEvents")
+	keyrangeStatements   = stats.NewInt("UpdateStreamKeyrangeStatements")
+	keyrangeTransactions = stats.NewInt("UpdateStreamKeyrangeTransactions")
+)
+
 type UpdateStream struct {
 	mycnf *Mycnf
 
@@ -171,7 +179,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	updateStream.actionLock.Lock()
 	if !updateStream.isEnabled() {
 		updateStream.actionLock.Unlock()
-		log.Errorf("Unable to serve client request: Update stream service is not enabled")
+		log.Errorf("Unable to serve client request: update stream service is not enabled")
 		return fmt.Errorf("update stream service is not enabled")
 	}
 	updateStream.stateWaitGroup.Add(1)
@@ -180,8 +188,11 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 
 	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
 	if err != nil {
+		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
 	}
+	streamCount.Add("Updates", 1)
+	defer streamCount.Add("Updates", -1)
 	log.Infof("ServeUpdateStream starting @ %v", rp)
 
 	evs := NewEventStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
@@ -190,6 +201,11 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 
 	// Calls cascade like this: BinlogStreamer->func(*proto.StreamEvent)->sendReply
 	return evs.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), func(reply *proto.StreamEvent) error {
+		if reply.Category == "ERR" {
+			updateStreamErrors.Add("UpdateStream", 1)
+		} else {
+			updateStreamEvents.Add(reply.Category, 1)
+		}
 		return sendReply(reply)
 	})
 }
@@ -213,8 +229,11 @@ func (updateStream *UpdateStream) StreamKeyrange(req *proto.KeyrangeRequest, sen
 
 	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
 	if err != nil {
+		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
 	}
+	streamCount.Add("Keyrange", 1)
+	defer streamCount.Add("Keyrange", -1)
 	log.Infof("ServeUpdateStream starting @ %v", rp)
 
 	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
@@ -223,6 +242,8 @@ func (updateStream *UpdateStream) StreamKeyrange(req *proto.KeyrangeRequest, sen
 
 	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := KeyrangeFilterFunc(req.Keyrange, func(reply *proto.BinlogTransaction) error {
+		keyrangeStatements.Add(int64(len(reply.Statements)))
+		keyrangeTransactions.Add(1)
 		return sendReply(reply)
 	})
 	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)

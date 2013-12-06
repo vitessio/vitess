@@ -30,7 +30,7 @@ var rcinvStateNames = map[int64]string{
 }
 
 type InvalidationProcessor struct {
-	GroupId string
+	GroupId sync2.AtomicString
 	state   sync2.AtomicInt64
 }
 
@@ -42,8 +42,7 @@ func init() {
 		return rcinvStateNames[CacheInvalidationProcessor.state.Get()]
 	}))
 	stats.Publish("RowcacheInvalidationCheckPoint", stats.StringFunc(func() string {
-		// TODO(sougou): resolve possible data race here.
-		return CacheInvalidationProcessor.GroupId
+		return CacheInvalidationProcessor.GroupId.Get()
 	}))
 }
 
@@ -106,7 +105,7 @@ func (rowCache *InvalidationProcessor) processEvent(event *myproto.StreamEvent) 
 		log.Errorf("Unrecognized: %s", event.Sql)
 		errorStats.Add("Invalidation", 1)
 	case "POS":
-		rowCache.GroupId = event.GroupId
+		rowCache.GroupId.Set(event.GroupId)
 	default:
 		panic(fmt.Errorf("unknown event: %#v", event))
 	}
