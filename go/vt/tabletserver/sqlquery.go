@@ -263,7 +263,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 		if !ok {
 			log.Errorf("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic for %v", x, query)
-			errorStats.Add("Panic", 1)
+			internalErrors.Add("Panic", 1)
 			return
 		}
 		*err = terr

@@ -103,7 +103,7 @@ func (rowCache *InvalidationProcessor) processEvent(event *myproto.StreamEvent) 
 		rowCache.handleDmlEvent(event)
 	case "ERR":
 		log.Errorf("Unrecognized: %s", event.Sql)
-		errorStats.Add("Invalidation", 1)
+		internalErrors.Add("Invalidation", 1)
 	case "POS":
 		rowCache.GroupId.Set(event.GroupId)
 	default:
@@ -123,7 +123,7 @@ func (rowCache *InvalidationProcessor) handleDmlEvent(event *myproto.StreamEvent
 			key, err := sqltypes.BuildValue(pkVal)
 			if err != nil {
 				log.Errorf("Error building invalidation key for %#v: '%v'", event, err)
-				errorStats.Add("Invalidation", 1)
+				internalErrors.Add("Invalidation", 1)
 				return
 			}
 			sqlTypeKeys = append(sqlTypeKeys, key)

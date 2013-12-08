@@ -59,11 +59,15 @@ type CompiledPlan struct {
 
 // stats are globals to allow anybody to set them
 var (
-	queryStats, waitStats *stats.Timings
-	killStats, errorStats *stats.Counters
-	resultStats           *stats.Histogram
-	spotCheckCount        *stats.Int
-	QPSRates              *stats.Rates
+	queryStats     *stats.Timings
+	waitStats      *stats.Timings
+	killStats      *stats.Counters
+	infoErrors     *stats.Counters
+	errorStats     *stats.Counters
+	internalErrors *stats.Counters
+	resultStats    *stats.Histogram
+	spotCheckCount *stats.Int
+	QPSRates       *stats.Rates
 )
 
 var resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
@@ -93,7 +97,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 	QPSRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
+	infoErrors = stats.NewCounters("InfoErrors")
 	errorStats = stats.NewCounters("Errors")
+	internalErrors = stats.NewCounters("InternalErrors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
 	stats.Publish("SpotCheckRatio", stats.FloatFunc(func() float64 {
 		return float64(qe.spotCheckFreq.Get()) / SPOT_CHECK_MULTIPLIER
@@ -535,7 +541,7 @@ func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow
 	}
 	log.Warningf("query: %v", plan.FullQuery)
 	log.Warningf("mismatch for: %v\ncache: %v\ndb:    %v", pk, rcresult.Row, dbrow)
-	errorStats.Add("Mismatch", 1)
+	internalErrors.Add("Mismatch", 1)
 }
 
 // execDirect always sends the query to mysql

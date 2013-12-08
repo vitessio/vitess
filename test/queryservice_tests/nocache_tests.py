@@ -79,7 +79,7 @@ class TestNocache(framework.TestCase):
     finally:
       self.env.conn.rollback()
     vend = self.env.debug_vars()
-    self.assertEqual(vstart.mget("Errors.DupKey", 0)+1, vend.Errors.DupKey)
+    self.assertEqual(vstart.mget("InfoErrors.DupKey", 0)+1, vend.InfoErrors.DupKey)
 
   def test_rollback(self):
     vstart = self.env.debug_vars()
