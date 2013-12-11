@@ -258,6 +258,9 @@ func (conn *Connection) lastError(query string) error {
 }
 
 func BuildValue(bytes []byte, fieldType uint32) sqltypes.Value {
+	if bytes == nil {
+		return sqltypes.NULL
+	}
 	switch fieldType {
 	case C.MYSQL_TYPE_DECIMAL, C.MYSQL_TYPE_FLOAT, C.MYSQL_TYPE_DOUBLE, C.MYSQL_TYPE_NEWDECIMAL:
 		return sqltypes.MakeFractional(bytes)
