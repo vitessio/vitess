@@ -50,6 +50,9 @@
     <h1>{{.}}</h1>
   {{end}}
   {{with .Topology}}
+    {{if .Partial}}
+      <p><i><b>Warning:</b> This is a partial topology result, some cells are unavailable.</i></p>
+    {{end}}
     <h2>ToC</h2>
     {{range $keyspace, $shards := .Assigned}}
       <li><a href="#keyspace_{{$keyspace}}">{{$keyspace}}</a></li>

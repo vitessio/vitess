@@ -155,6 +155,7 @@ type Topology struct {
 	Assigned map[string]KeyspaceNodes
 	Idle     []*TabletNode
 	Scrap    []*TabletNode
+	Partial  bool
 }
 
 func NewTopology() *Topology {
@@ -166,11 +167,20 @@ func NewTopology() *Topology {
 }
 
 func (wr *Wrangler) DbTopology() (*Topology, error) {
+	partial := false
 	tabletInfos, err := GetAllTabletsAccrossCells(wr.ts)
-	if err != nil {
+	switch err {
+	case nil:
+		// we're good, no error
+	case topo.ErrPartialResult:
+		// we got a partial result
+		partial = true
+	default:
+		// we got no result at all
 		return nil, err
 	}
 	topology := NewTopology()
+	topology.Partial = partial
 
 	for _, ti := range tabletInfos {
 		tablet, err := TabletNodeFromTabletInfo(ti)

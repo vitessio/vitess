@@ -110,7 +110,7 @@ class TestVtctld(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/80- ' + shard_1_master.tablet_alias, auto_log=True)
 
 
-  # run checks now before we start the tablets
+    # run checks now before we start the tablets
     utils.validate_topology()
 
   def setUp(self):
@@ -126,6 +126,9 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(len(self.data["Idle"]), 1)
     self.assertEqual(len(self.data["Scrap"]), 1)
 
+  def test_partial(self):
+    utils.pause("You can now run a browser and connect to http://localhost:8080 to manually check topology")
+    self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
     self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),

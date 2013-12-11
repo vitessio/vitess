@@ -15,7 +15,7 @@ import (
 
 // GetTabletMap tries to read all the tablets in the provided list,
 // and returns them all in a map.
-// If error is topo.ErrPartialResul, the results in the dictionary are
+// If error is topo.ErrPartialResult, the results in the dictionary are
 // incomplete, meaning some tablets couldn't be read.
 func GetTabletMap(ts topo.Server, tabletAliases []topo.TabletAlias) (map[topo.TabletAlias]*topo.TabletInfo, error) {
 	wg := sync.WaitGroup{}
@@ -93,7 +93,7 @@ func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 
 	tabletMap, err := GetTabletMap(ts, aliases)
 	if err != nil {
-		// we got another error than ZNONODE
+		// we got another error than topo.ErrNoNode
 		return nil, err
 	}
 	tablets := make([]*topo.TabletInfo, 0, len(aliases))
@@ -101,7 +101,7 @@ func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 		tabletInfo, ok := tabletMap[tabletAlias]
 		if !ok {
 			// tablet disappeared on us (GetTabletMap ignores
-			// ZNONODE), just echo a warning
+			// topo.ErrNoNode), just echo a warning
 			log.Warningf("failed to load tablet %v", tabletAlias)
 		} else {
 			tablets = append(tablets, tabletInfo)
@@ -112,35 +112,35 @@ func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 }
 
 // GetAllTabletsAccrossCells returns all tablets from known cells.
+// If it returns topo.ErrPartialResult, then the list is valid, but partial.
 func GetAllTabletsAccrossCells(ts topo.Server) ([]*topo.TabletInfo, error) {
 	cells, err := ts.GetKnownCells()
 	if err != nil {
 		return nil, err
 	}
 
-	results := make(chan []*topo.TabletInfo)
-	errors := make(chan error)
-	for _, cell := range cells {
-		go func(cell string) {
-			tablets, err := GetAllTablets(ts, cell)
-			if err != nil && err != topo.ErrNoNode {
-				errors <- err
-				return
-			}
-			results <- tablets
-		}(cell)
+	results := make([][]*topo.TabletInfo, len(cells))
+	errors := make([]error, len(cells))
+	wg := sync.WaitGroup{}
+	wg.Add(len(cells))
+	for i, cell := range cells {
+		go func(i int, cell string) {
+			results[i], errors[i] = GetAllTablets(ts, cell)
+			wg.Done()
+		}(i, cell)
 	}
+	wg.Wait()
 
+	err = nil
 	allTablets := make([]*topo.TabletInfo, 0)
-	for _ = range cells {
-		select {
-		case tablets := <-results:
-			allTablets = append(allTablets, tablets...)
-		case err := <-errors:
-			return nil, err
+	for i, _ := range cells {
+		if errors[i] == nil {
+			allTablets = append(allTablets, results[i]...)
+		} else {
+			err = topo.ErrPartialResult
 		}
 	}
-	return allTablets, nil
+	return allTablets, err
 }
 
 // Copy keys from from map m into a new slice with the type specified
