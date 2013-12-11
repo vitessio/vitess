@@ -163,24 +163,23 @@ func NewTopology() *Topology {
 		Assigned: make(map[string]KeyspaceNodes),
 		Idle:     make([]*TabletNode, 0),
 		Scrap:    make([]*TabletNode, 0),
+		Partial:  false,
 	}
 }
 
 func (wr *Wrangler) DbTopology() (*Topology, error) {
-	partial := false
+	topology := NewTopology()
 	tabletInfos, err := GetAllTabletsAccrossCells(wr.ts)
 	switch err {
 	case nil:
 		// we're good, no error
 	case topo.ErrPartialResult:
 		// we got a partial result
-		partial = true
+		topology.Partial = true
 	default:
 		// we got no result at all
 		return nil, err
 	}
-	topology := NewTopology()
-	topology.Partial = partial
 
 	for _, ti := range tabletInfos {
 		tablet, err := TabletNodeFromTabletInfo(ti)
