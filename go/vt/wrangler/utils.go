@@ -73,6 +73,16 @@ func GetTabletMapForShardByCell(ts topo.Server, keyspace, shard string, cells []
 	return result, gerr
 }
 
+// Search within a tablet map for tablets
+func FindTabletByIPAddrAndPort(tabletMap map[topo.TabletAlias]*topo.TabletInfo, addr, portName string, port int) (topo.TabletAlias, error) {
+	for alias, ti := range tabletMap {
+		if ti.IPAddr == addr && ti.Portmap[portName] == port {
+			return alias, nil
+		}
+	}
+	return topo.TabletAlias{}, topo.ErrNoNode
+}
+
 // Return a sorted list of tablets.
 func GetAllTablets(ts topo.Server, cell string) ([]*topo.TabletInfo, error) {
 	aliases, err := ts.GetTabletsByCell(cell)

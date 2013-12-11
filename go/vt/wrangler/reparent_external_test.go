@@ -93,6 +93,34 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("UpdateShard failed: %v", err)
 	}
 
+	// Slightly unrelated test: make sure we can find the tablets
+	// even with a datacenter being down.
+	tabletMap, err := GetTabletMapForShardByCell(ts, "test_keyspace", "0", []string{"cell1"})
+	if err != nil {
+		t.Fatalf("GetTabletMapForShardByCell should have worked but got: %v", err)
+	}
+	master, err := FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
+	if err != nil || master != oldMasterAlias {
+		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
+	}
+	slave1, err := FindTabletByIPAddrAndPort(tabletMap, "102.0.0.1", "vt", 8102)
+	if err != nil || slave1 != goodSlaveAlias1 {
+		t.Fatalf("FindTabletByIPAddrAndPort(slave1) failed: %v %v", err, master)
+	}
+	slave2, err := FindTabletByIPAddrAndPort(tabletMap, "103.0.0.1", "vt", 8103)
+	if err != topo.ErrNoNode {
+		t.Fatalf("FindTabletByIPAddrAndPort(slave2) worked: %v %v", err, slave2)
+	}
+
+	tabletMap, err = GetTabletMapForShard(ts, "test_keyspace", "0")
+	if err != topo.ErrPartialResult {
+		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
+	}
+	master, err = FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
+	if err != nil || master != oldMasterAlias {
+		t.Fatalf("FindTabletByIPAddrAndPort(master) failed: %v %v", err, master)
+	}
+
 	// First test: reparent to the same master, make sure it works
 	// as expected.
 	if err := wr.ShardExternallyReparented("test_keyspace", "0", oldMasterAlias, false, 80); err == nil {
