@@ -67,10 +67,6 @@ type binlogPosition struct {
 	GroupId, ServerId int64
 }
 
-func (blp *binlogPosition) String() string {
-	return fmt.Sprintf("%d:%d", blp.GroupId, blp.ServerId)
-}
-
 // BinlogStreamer streamer streams binlog events grouped
 // by transactions.
 type BinlogStreamer struct {
@@ -125,10 +121,11 @@ func (bls *BinlogStreamer) Stream(file string, pos int64, sendTransaction sendTr
 
 end:
 	if err == io.EOF {
+		log.Infof("Stream ended @ %#v", bls.file)
 		return nil
 	}
 	log.Errorf("Stream error @ %#v, error: %v", bls.file, err)
-	return err
+	return fmt.Errorf("stream error @ %#v, error: %v", bls.file, err)
 }
 
 // Stop stops the currently executing Stream if there is one.

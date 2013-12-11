@@ -39,7 +39,6 @@ type QueryEngine struct {
 	schemaInfo     *SchemaInfo
 	connPool       *ConnectionPool
 	streamConnPool *ConnectionPool
-	streamTokens   *sync2.Semaphore
 	txPool         *ConnectionPool
 	activeTxPool   *ActiveTxPool
 	activePool     *ActivePool
@@ -60,11 +59,15 @@ type CompiledPlan struct {
 
 // stats are globals to allow anybody to set them
 var (
-	queryStats, waitStats *stats.Timings
-	killStats, errorStats *stats.Counters
-	resultStats           *stats.Histogram
-	spotCheckCount        *stats.Int
-	QPSRates              *stats.Rates
+	queryStats     *stats.Timings
+	waitStats      *stats.Timings
+	killStats      *stats.Counters
+	infoErrors     *stats.Counters
+	errorStats     *stats.Counters
+	internalErrors *stats.Counters
+	resultStats    *stats.Histogram
+	spotCheckCount *stats.Int
+	QPSRates       *stats.Rates
 )
 
 var resultBuckets = []int64{0, 1, 5, 10, 50, 100, 500, 1000, 5000, 10000}
@@ -81,7 +84,6 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
 	qe.streamConnPool = NewConnectionPool("StreamConnPool", config.StreamPoolSize, time.Duration(config.IdleTimeout*1e9))
-	qe.streamTokens = sync2.NewSemaphore(config.StreamExecThrottle, time.Duration(config.StreamWaitTimeout*1e9))
 	qe.txPool = NewConnectionPool("TransactionPool", config.TransactionCap, time.Duration(config.IdleTimeout*1e9)) // connections in pool has to be > transactionCap
 	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
@@ -95,7 +97,9 @@ func NewQueryEngine(config Config) *QueryEngine {
 	QPSRates = stats.NewRates("QPS", queryStats, 15, 60*time.Second)
 	waitStats = stats.NewTimings("Waits")
 	killStats = stats.NewCounters("Kills")
+	infoErrors = stats.NewCounters("InfoErrors")
 	errorStats = stats.NewCounters("Errors")
+	internalErrors = stats.NewCounters("InternalErrors")
 	resultStats = stats.NewHistogram("Results", resultBuckets)
 	stats.Publish("SpotCheckRatio", stats.FloatFunc(func() float64 {
 		return float64(qe.spotCheckFreq.Get()) / SPOT_CHECK_MULTIPLIER
@@ -537,7 +541,7 @@ func (qe *QueryEngine) recheckLater(plan *CompiledPlan, rcresult RCResult, dbrow
 	}
 	log.Warningf("query: %v", plan.FullQuery)
 	log.Warningf("mismatch for: %v\ncache: %v\ndb:    %v", pk, rcresult.Row, dbrow)
-	errorStats.Add("Mismatch", 1)
+	internalErrors.Add("Mismatch", 1)
 }
 
 // execDirect always sends the query to mysql
@@ -772,33 +776,11 @@ func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, 
 }
 
 func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(interface{}) error) {
-	waitStart := time.Now()
-	if !qe.streamTokens.Acquire() {
-		panic(NewTabletError(FAIL, "timed out waiting for streaming quota"))
-	}
-	// Guarantee a release in case of unexpected errors.
-	var once sync.Once
-	defer once.Do(qe.streamTokens.Release)
-
-	waitTime := time.Now().Sub(waitStart)
-	waitStats.Add("StreamToken", waitTime)
-	// No need create a new log variable for this. Just add to the total
-	// connection wait time.
-	logStats.WaitingForConnection += waitTime
-
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries += 1
 	logStats.AddRewrittenSql(sql)
 	fetchStart := time.Now()
-	err := conn.ExecuteStreamFetch(
-		sql,
-		func(qr interface{}) error {
-			// Release semaphore at first callback.
-			once.Do(qe.streamTokens.Release)
-			return callback(qr)
-		},
-		int(qe.streamBufferSize.Get()),
-	)
+	err := conn.ExecuteStreamFetch(sql, callback, int(qe.streamBufferSize.Get()))
 	logStats.MysqlResponseTime += time.Now().Sub(fetchStart)
 	if err != nil {
 		panic(NewTabletErrorSql(FAIL, err))

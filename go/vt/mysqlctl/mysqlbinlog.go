@@ -37,7 +37,6 @@ func (mbl *MysqlBinlog) Launch(dbname, filename string, pos int64) (stdout io.Re
 		return nil, err
 	}
 	mbl.cmd.Stderr = &logWrapper{}
-	// TODO(sougou): redirect stderr to log
 	err = mbl.cmd.Start()
 	if err != nil {
 		stdout.Close()

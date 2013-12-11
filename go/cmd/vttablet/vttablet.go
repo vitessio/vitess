@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
+	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet"
@@ -28,6 +29,8 @@ var (
 	cert       = flag.String("cert", "", "cert file")
 	key        = flag.String("key", "", "key file")
 	caCert     = flag.String("ca-cert", "", "ca-cert file")
+
+	agent *tm.ActionAgent
 )
 
 func main() {
@@ -56,7 +59,9 @@ func main() {
 	mysqlctl.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	if err := vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *mycnfFile, *overridesFile); err != nil {
+	var blp *vttablet.BinlogPlayerMap
+	agent, blp, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *mycnfFile, *overridesFile)
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -66,7 +71,8 @@ func main() {
 		ts.DisallowQueries()
 		mysqlctl.DisableUpdateStreamService()
 		topo.CloseServers()
-		vttablet.CloseAgent()
+		agent.Stop()
+		blp.StopAllPlayers()
 	})
 	servenv.RunSecure(*port, *securePort, *cert, *key, *caCert)
 }

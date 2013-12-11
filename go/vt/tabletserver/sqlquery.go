@@ -263,7 +263,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 		if !ok {
 			log.Errorf("Uncaught panic for %v:\n%v\n%s", query, x, tb.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic for %v", x, query)
-			errorStats.Add("Panic", 1)
+			internalErrors.Add("Panic", 1)
 			return
 		}
 		*err = terr
@@ -300,13 +300,7 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 	}
 
 	sq.checkState(query.SessionId, false)
-
-	sq.qe.StreamExecute(logStats, query, func(reply interface{}) error {
-		if sq.state.Get() != SERVING {
-			return NewTabletError(FAIL, "Query server is in %s state", stateName[sq.state.Get()])
-		}
-		return sendReply(reply)
-	})
+	sq.qe.StreamExecute(logStats, query, sendReply)
 	return nil
 }
 

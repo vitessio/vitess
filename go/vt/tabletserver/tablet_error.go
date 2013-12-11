@@ -61,9 +61,9 @@ func (te *TabletError) Error() string {
 func (te *TabletError) RecordStats() {
 	switch te.ErrorType {
 	case RETRY:
-		errorStats.Add("Retry", 1)
+		infoErrors.Add("Retry", 1)
 	case FATAL:
-		errorStats.Add("Fatal", 1)
+		infoErrors.Add("Fatal", 1)
 	case TX_POOL_FULL:
 		errorStats.Add("TxPoolFull", 1)
 	case NOT_IN_TX:
@@ -71,7 +71,7 @@ func (te *TabletError) RecordStats() {
 	default:
 		switch te.SqlError {
 		case mysql.DUP_ENTRY:
-			errorStats.Add("DupKey", 1)
+			infoErrors.Add("DupKey", 1)
 		case mysql.LOCK_WAIT_TIMEOUT, mysql.LOCK_DEADLOCK:
 			errorStats.Add("Deadlock", 1)
 		default:
@@ -89,7 +89,7 @@ func handleError(err *error, logStats *sqlQueryStats) {
 		if !ok {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
 			*err = NewTabletError(FAIL, "%v: uncaught panic", x)
-			errorStats.Add("Panic", 1)
+			internalErrors.Add("Panic", 1)
 			return
 		}
 		*err = terr

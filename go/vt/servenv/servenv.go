@@ -123,9 +123,6 @@ func exportBinaryVersion() error {
 	mtime := fileInfo.ModTime().Format(time.RFC3339)
 	version := mtime + " " + md5sum
 	stats.NewString("BinaryVersion").Set(version)
-	// rexport this value for varz scraper
-	// TODO(sougou): remove after varz migration
-	stats.NewString("Version").Set(version)
 	return nil
 }
 

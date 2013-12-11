@@ -21,11 +21,6 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-var (
-	agent           *tm.ActionAgent
-	binlogPlayerMap *BinlogPlayerMap
-)
-
 func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 	var schemaOverrides []ts.SchemaOverride
 	if overridesFile == "" {
@@ -47,7 +42,7 @@ func InitAgent(
 	mycnf *mysqlctl.Mycnf,
 	dbCredentialsFile string,
 	port, securePort int,
-	mycnfFile, overridesFile string) (err error) {
+	mycnfFile, overridesFile string) (agent *tm.ActionAgent, binlogPlayerMap *BinlogPlayerMap, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
@@ -67,7 +62,7 @@ func InitAgent(
 	// modifications to this tablet.
 	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbCredentialsFile)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		allowQuery := true
@@ -133,20 +128,11 @@ func InitAgent(
 	})
 
 	if err := agent.Start(mysqld.Port(), port, securePort); err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	// register the RPC services from the agent
 	agent.RegisterQueryService(mysqld)
 
-	return nil
-}
-
-func CloseAgent() {
-	if agent != nil {
-		agent.Stop()
-	}
-	if binlogPlayerMap != nil {
-		binlogPlayerMap.StopAllPlayers()
-	}
+	return agent, binlogPlayerMap, nil
 }

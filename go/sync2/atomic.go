@@ -5,6 +5,7 @@
 package sync2
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -79,4 +80,35 @@ func (d *AtomicDuration) Get() time.Duration {
 
 func (d *AtomicDuration) CompareAndSwap(oldval, newval time.Duration) (swapped bool) {
 	return atomic.CompareAndSwapInt64((*int64)(d), int64(oldval), int64(newval))
+}
+
+// AtomicString gives you atomic-style APIs for string, but
+// it's only a convenience wrapper that uses a mutex. So, it's
+// not as efficient as the rest of the atomic types.
+type AtomicString struct {
+	mu  sync.Mutex
+	str string
+}
+
+func (s *AtomicString) Set(str string) {
+	s.mu.Lock()
+	s.str = str
+	s.mu.Unlock()
+}
+
+func (s *AtomicString) Get() string {
+	s.mu.Lock()
+	str := s.str
+	s.mu.Unlock()
+	return str
+}
+
+func (s *AtomicString) CompareAndSwap(oldval, newval string) (swqpped bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.str == oldval {
+		s.str = newval
+		return true
+	}
+	return false
 }
