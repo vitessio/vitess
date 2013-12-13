@@ -303,7 +303,7 @@ func (tl *TemplateLoader) ServeTemplate(templateName string, data interface{}, w
 			return
 		}
 		if err := tmpl.Execute(w, data); err != nil {
-			httpError(w, "error executing template", err)
+			httpError(w, "error executing template: %v", err)
 		}
 	}
 }

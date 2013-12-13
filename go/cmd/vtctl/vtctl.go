@@ -32,9 +32,11 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-var noWaitForAction = flag.Bool("no-wait", false, "don't wait for action completion, detach")
-var waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
-var lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
+var (
+	noWaitForAction = flag.Bool("no-wait", false, "don't wait for action completion, detach")
+	waitTime        = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	lockWaitTimeout = flag.Duration("lock-wait-timeout", 0, "time to wait for a lock before starting an action")
+)
 
 type command struct {
 	name   string
