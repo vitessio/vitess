@@ -426,6 +426,8 @@ primary key (name)
     logging.debug("Checking no data was sent the wrong way")
     self._check_lots_not_present(1000)
 
+    utils.pause("Good time to test vtworker for diffs")
+
     # start a thread to insert data into shard_1 in the background
     # with current time, and monitor the delay
     insert_thread_1 = InsertThread(shard_1_master, "insert_low", 10000, 0x9000000000000000)

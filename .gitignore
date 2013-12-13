@@ -26,6 +26,7 @@ go/cmd/vtctl/vtctl
 go/cmd/vtctld/vtctld
 go/cmd/vtocc/vtocc
 go/cmd/vttablet/vttablet
+go/cmd/vtworker/vtworker
 go/cmd/zk/zk
 go/cmd/zkclient2/zkclient2
 go/cmd/zkctl/zkctl
