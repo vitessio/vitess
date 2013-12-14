@@ -133,9 +133,12 @@ func initInteractiveMode(wr *wrangler.Wrangler) {
 	diffsTemplate := loadTemplate("diffs", diffsHTML)
 	splitDiffTemplate := loadTemplate("splitdiff", splitDiffHTML)
 
+	// toplevel menu
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		executeTemplate(w, indexTemplate, nil)
 	})
+
+	// diffs menu and functions
 	http.HandleFunc("/diffs", func(w http.ResponseWriter, r *http.Request) {
 		executeTemplate(w, diffsTemplate, nil)
 	})
@@ -148,8 +151,8 @@ func initInteractiveMode(wr *wrangler.Wrangler) {
 		shard := r.FormValue("shard")
 
 		if keyspace == "" || shard == "" {
+			// display the list of possible shards to chose from
 			result := make(map[string]interface{})
-
 			shards, err := shardsWithSources(wr)
 			if err != nil {
 				result["Error"] = err.Error()
@@ -159,7 +162,8 @@ func initInteractiveMode(wr *wrangler.Wrangler) {
 
 			executeTemplate(w, splitDiffTemplate, result)
 		} else {
-			wrk := worker.NewSplitDiffWorker(wr, keyspace, shard)
+			// start the diff job
+			wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
 			if _, err := setAndStartWorker(wrk); err != nil {
 				httpError(w, "cannot set worker: %s", err)
 				return

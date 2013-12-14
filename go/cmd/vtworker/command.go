@@ -59,7 +59,7 @@ func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 		log.Fatalf("command SplitDiff requires <keyspace/shard|zk shard path>")
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return worker.NewSplitDiffWorker(wr, keyspace, shard)
+	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
 }
 
 func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {

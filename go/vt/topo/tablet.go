@@ -155,6 +155,10 @@ const (
 	// from a snapshot.  idle -> restore -> spare
 	TYPE_RESTORE = TabletType("restore")
 
+	// A tablet that is running a checker process. It is probably
+	// lagging in replication.
+	TYPE_CHECKER = TabletType("checker")
+
 	// a machine with data that needs to be wiped
 	TYPE_SCRAP = TabletType("scrap")
 )
@@ -187,6 +191,7 @@ var SlaveTabletTypes = []TabletType{
 	TYPE_BACKUP,
 	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
+	TYPE_CHECKER,
 }
 
 // IsTypeInList returns true if the given type is in the list.
@@ -218,9 +223,9 @@ func MakeStringTypeList(types []TabletType) []string {
 // without changes to the replication graph
 func IsTrivialTypeChange(oldTabletType, newTabletType TabletType) bool {
 	switch oldTabletType {
-	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
+	case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
 		switch newTabletType {
-		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE:
+		case TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_SPARE, TYPE_LAG, TYPE_LAG_ORPHAN, TYPE_BACKUP, TYPE_SNAPSHOT_SOURCE, TYPE_EXPERIMENTAL, TYPE_SCHEMA_UPGRADE, TYPE_CHECKER:
 			return true
 		}
 	case TYPE_SCRAP:
@@ -276,10 +281,10 @@ func IsInReplicationGraph(tt TabletType) bool {
 // and actively replicating?
 // MASTER is not obviously (only support one level replication graph)
 // IDLE and SCRAP are not either
-// BACKUP, RESTORE, LAG_ORPHAN may or may not be, but we don't know for sure
+// BACKUP, RESTORE, LAG_ORPHAN, TYPE_CHECKER may or may not be, but we don't know for sure
 func IsSlaveType(tt TabletType) bool {
 	switch tt {
-	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN:
+	case TYPE_MASTER, TYPE_IDLE, TYPE_SCRAP, TYPE_BACKUP, TYPE_RESTORE, TYPE_LAG_ORPHAN, TYPE_CHECKER:
 		return false
 	}
 	return true

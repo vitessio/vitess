@@ -30,6 +30,7 @@ import (
 )
 
 var (
+	cell = flag.String("cell", "", "cell to pick servers from")
 	port = flag.Int("port", 8080, "port for the status / interactive mode")
 )
 
