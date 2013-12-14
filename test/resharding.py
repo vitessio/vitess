@@ -20,6 +20,7 @@ shard_0_replica = tablet.Tablet()
 shard_1_master = tablet.Tablet()
 shard_1_slave1 = tablet.Tablet()
 shard_1_slave2 = tablet.Tablet()
+shard_1_rdonly = tablet.Tablet()
 
 # split shards
 # range 80 - C0
@@ -29,6 +30,7 @@ shard_2_replica2 = tablet.Tablet()
 # range C0 - ""
 shard_3_master = tablet.Tablet()
 shard_3_replica = tablet.Tablet()
+shard_3_rdonly = tablet.Tablet()
 
 
 def setUpModule():
@@ -41,11 +43,13 @@ def setUpModule():
         shard_1_master.init_mysql(),
         shard_1_slave1.init_mysql(),
         shard_1_slave2.init_mysql(),
+        shard_1_rdonly.init_mysql(),
         shard_2_master.init_mysql(),
         shard_2_replica1.init_mysql(),
         shard_2_replica2.init_mysql(),
         shard_3_master.init_mysql(),
         shard_3_replica.init_mysql(),
+        shard_3_rdonly.init_mysql(),
         ]
     utils.wait_procs(setup_procs)
   except:
@@ -63,11 +67,13 @@ def tearDownModule():
       shard_1_master.teardown_mysql(),
       shard_1_slave1.teardown_mysql(),
       shard_1_slave2.teardown_mysql(),
+      shard_1_rdonly.teardown_mysql(),
       shard_2_master.teardown_mysql(),
       shard_2_replica1.teardown_mysql(),
       shard_2_replica2.teardown_mysql(),
       shard_3_master.teardown_mysql(),
       shard_3_replica.teardown_mysql(),
+      shard_3_rdonly.teardown_mysql(),
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -80,11 +86,13 @@ def tearDownModule():
   shard_1_master.remove_tree()
   shard_1_slave1.remove_tree()
   shard_1_slave2.remove_tree()
+  shard_1_rdonly.remove_tree()
   shard_2_master.remove_tree()
   shard_2_replica1.remove_tree()
   shard_2_replica2.remove_tree()
   shard_3_master.remove_tree()
   shard_3_replica.remove_tree()
+  shard_3_rdonly.remove_tree()
 
 
 # InsertThread will insert a value into the timestamps table, and then
@@ -236,6 +244,7 @@ primary key (name)
     self._check_value(shard_2_replica2, 'resharding1', 2, 'msg2', 0x9000000000000000)
     self._check_value(shard_3_master, 'resharding1', 2, 'msg2', 0x9000000000000000, should_be_here=False)
     self._check_value(shard_3_replica, 'resharding1', 2, 'msg2', 0x9000000000000000, should_be_here=False)
+    self._check_value(shard_3_rdonly, 'resharding1', 2, 'msg2', 0x9000000000000000, should_be_here=False)
 
     # check second value is in the right shard too
     self._check_value(shard_2_master, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
@@ -243,6 +252,7 @@ primary key (name)
     self._check_value(shard_2_replica2, 'resharding1', 3, 'msg3', 0xD000000000000000, should_be_here=False)
     self._check_value(shard_3_master, 'resharding1', 3, 'msg3', 0xD000000000000000)
     self._check_value(shard_3_replica, 'resharding1', 3, 'msg3', 0xD000000000000000)
+    self._check_value(shard_3_rdonly, 'resharding1', 3, 'msg3', 0xD000000000000000)
 
   def _insert_lots(self, count, base=0):
     for i in xrange(count):
@@ -336,6 +346,7 @@ primary key (name)
     shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
     shard_1_slave1.init_tablet('replica', 'test_keyspace', '80-')
     shard_1_slave2.init_tablet('spare', 'test_keyspace', '80-')
+    shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
     utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
 
@@ -347,6 +358,7 @@ primary key (name)
     shard_1_master.create_db('vt_test_keyspace')
     shard_1_slave1.create_db('vt_test_keyspace')
     shard_1_slave2.create_db('vt_test_keyspace')
+    shard_1_rdonly.create_db('vt_test_keyspace')
 
     # start the tablets
     shard_0_master.start_vttablet()
@@ -354,6 +366,7 @@ primary key (name)
     shard_1_master.start_vttablet()
     shard_1_slave1.start_vttablet()
     shard_1_slave2.start_vttablet(wait_for_state='NOT_SERVING') # spare
+    shard_1_rdonly.start_vttablet()
 
     # reparent to make the tablets work
     utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
@@ -369,6 +382,7 @@ primary key (name)
     shard_2_replica2.init_tablet('spare', 'test_keyspace', '80-C0')
     shard_3_master.init_tablet( 'master',  'test_keyspace', 'C0-')
     shard_3_replica.init_tablet('spare', 'test_keyspace', 'C0-')
+    shard_3_rdonly.init_tablet('rdonly', 'test_keyspace', 'C0-')
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
@@ -377,6 +391,7 @@ primary key (name)
     shard_2_replica2.start_vttablet(wait_for_state='NOT_SERVING')
     shard_3_master.start_vttablet(wait_for_state='CONNECTING')
     shard_3_replica.start_vttablet(wait_for_state='NOT_SERVING')
+    shard_3_rdonly.start_vttablet(wait_for_state='CONNECTING')
 
     utils.run_vtctl('ReparentShard -force test_keyspace/80-C0 ' + shard_2_master.tablet_alias, auto_log=True)
     utils.run_vtctl('ReparentShard -force test_keyspace/C0- ' + shard_3_master.tablet_alias, auto_log=True)
@@ -388,7 +403,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,replica')
+                             'TabletTypes: master,rdonly,replica')
 
     # take the snapshot for the split
     utils.run_vtctl('MultiSnapshot --spec=80-C0- %s keyspace_id' % (shard_1_slave1.tablet_alias), auto_log=True)
@@ -454,7 +469,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,replica')
+                             'TabletTypes: master,rdonly,replica')
 
     # then serve replica from the split shards
     utils.run_vtctl('MigrateServedTypes test_keyspace/80- replica', auto_log=True)
@@ -462,7 +477,7 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
-                             'TabletTypes: master,replica')
+                             'TabletTypes: master,rdonly,replica')
 
     # move replica back and forth
     utils.run_vtctl('MigrateServedTypes -reverse test_keyspace/80- replica', auto_log=True)
@@ -470,13 +485,13 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,replica')
+                             'TabletTypes: master,rdonly,replica')
     utils.run_vtctl('MigrateServedTypes test_keyspace/80- replica', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
-                             'TabletTypes: master,replica')
+                             'TabletTypes: master,rdonly,replica')
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
@@ -506,7 +521,7 @@ primary key (name)
                              'Partitions(master): -80 80-C0 C0-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
-                             'TabletTypes: master,replica')
+                             'TabletTypes: master,rdonly,replica')
 
     # check the binlog players are gone now
     self._wait_for_binlog_player_count(shard_2_master, 0)
@@ -514,8 +529,9 @@ primary key (name)
 
     # kill everything
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_slave1,
-              shard_1_slave2, shard_2_master, shard_2_replica1,
-              shard_2_replica2, shard_3_master, shard_3_replica]:
+              shard_1_slave2, shard_1_rdonly, shard_2_master, shard_2_replica1,
+              shard_2_replica2, shard_3_master, shard_3_replica,
+              shard_3_rdonly]:
       t.kill_vttablet()
 
   def _check_srv_keyspace(self, cell, keyspace, expected):
@@ -531,8 +547,8 @@ primary key (name)
     result += "TabletTypes: " + ",".join(sorted(ks['TabletTypes']))
     logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
     self.assertEqual(expected, result,
-                     "Mismatch in srv keyspace for cell %s keyspace %s" % (
-                     cell, keyspace))
+                     "Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (
+                     cell, keyspace, expected, result))
 
 if __name__ == '__main__':
   utils.main()

@@ -8,8 +8,6 @@ functions for long running actions. 'vtworker' binary will use these.
 */
 package worker
 
-import ()
-
 // Worker is the base interface for all long running workers.
 type Worker interface {
 	// StatusAsHTML returns the current worker status in HTML

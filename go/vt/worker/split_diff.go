@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -151,18 +152,19 @@ func (sdw *SplitDiffWorker) init() error {
 // - mark them all as 'checker' pointing back to us
 
 func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
-	endPoints, err := sdw.wr.TopoServer().GetEndPoints(sdw.cell, sdw.keyspace, sdw.shard, topo.TYPE_RDONLY)
+	endPoints, err := sdw.wr.TopoServer().GetEndPoints(sdw.cell, sdw.keyspace, shard, topo.TYPE_RDONLY)
 	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", sdw.cell, sdw.keyspace, sdw.shard, err)
+		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", sdw.cell, sdw.keyspace, shard, err)
 	}
 	if len(endPoints.Entries) == 0 {
-		return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", sdw.cell, sdw.keyspace, sdw.shard)
+		return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", sdw.cell, sdw.keyspace, shard)
 	}
 
 	tabletAlias := topo.TabletAlias{
 		Cell: sdw.cell,
 		Uid:  endPoints.Entries[0].Uid,
 	}
+	log.Infof("Changing tablet %v to 'checker'", tabletAlias)
 	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
 		return topo.TabletAlias{}, err
 	}
