@@ -14,11 +14,14 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/servenv"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -46,7 +49,32 @@ func installSignalHandlers() {
 	}()
 }
 
-var wrk worker.Worker
+var (
+	// mutex is protecting all the following variables
+	currentWorkerMutex sync.Mutex
+	currentWorker      worker.Worker
+	currentDone        chan struct{}
+)
+
+func setAndStartWorker(wrk worker.Worker) (chan struct{}, error) {
+	currentWorkerMutex.Lock()
+	defer currentWorkerMutex.Unlock()
+	if currentWorker != nil {
+		return nil, fmt.Errorf("A worker is already in progress: %v", currentWorker)
+	}
+
+	currentWorker = wrk
+	currentDone = make(chan struct{})
+
+	// one go function runs the worker, closes 'done' when done
+	go func() {
+		log.Infof("Starting worker...")
+		wrk.Run()
+		close(currentDone)
+	}()
+
+	return currentDone, nil
+}
 
 func main() {
 	flag.Parse()
@@ -63,10 +91,11 @@ func main() {
 	wr := wrangler.New(ts, 30*time.Second, 30*time.Second)
 	if len(args) == 0 {
 		// interactive mode, initialize the web UI to chose a command
-		initInteractiveMode()
+		initInteractiveMode(wr)
 	} else {
 		runCommand(wr, args)
 	}
+	initStatusHandling()
 
 	servenv.Run(*port)
 }

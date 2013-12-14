@@ -85,18 +85,13 @@ func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {
 }
 
 func runCommand(wr *wrangler.Wrangler, args []string) {
-	wrk = commandWorker(wr, args)
+	wrk := commandWorker(wr, args)
+	done, err := setAndStartWorker(wrk)
+	if err != nil {
+		log.Fatalf("Cannot set worker: %v", err)
+	}
 
-	done := make(chan struct{})
-
-	// one go function runs the worker, closes 'done' when done
-	go func() {
-		log.Infof("Starting worker...")
-		wrk.Run()
-		close(done)
-	}()
-
-	// one go function displays the status every second
+	// a go routine displays the status every second
 	go func() {
 		timer := time.Tick(time.Second)
 		for {

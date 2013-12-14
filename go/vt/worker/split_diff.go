@@ -2,10 +2,6 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*
-'worker' package contains the framework, utility methods and core
-functions for long running actions. 'vtworker' binary will use these.
-*/
 package worker
 
 import (
@@ -21,7 +17,7 @@ const (
 	// all the states for the worker
 	stateNotSarted = "not started"
 	stateInit      = "initializing"
-	stateRunning   = "running"
+	stateSleeping  = "sleeping"
 	stateDone      = "done"
 	stateError     = "error"
 )
@@ -33,7 +29,7 @@ type SplitDiffWorker struct {
 	keyspace string
 	shard    string
 
-	// protected by the mutex
+	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
 	state string
 
@@ -42,6 +38,9 @@ type SplitDiffWorker struct {
 
 	// populated during stateInit
 	shardInfo *topo.ShardInfo
+
+	// populated during sleep
+	sleepTime int
 }
 
 // NewSplitDiff returns a new SplitDiffWorker object.
@@ -71,12 +70,15 @@ func (sdw *SplitDiffWorker) recordError(err error) {
 func (sdw *SplitDiffWorker) StatusAsHTML() string {
 	sdw.mu.Lock()
 	defer sdw.mu.Unlock()
-	result := "<b>Working on:</b> " + sdw.keyspace + "/" + sdw.shard + "<br></br>\n"
-	result += "<b>State:</b> " + sdw.state + "<br></br>\n"
+	result := "<b>Working on:</b> " + sdw.keyspace + "/" + sdw.shard + "</br>\n"
+	result += "<b>State:</b> " + sdw.state + "</br>\n"
 	switch sdw.state {
+	case stateSleeping:
+		result += fmt.Sprintf("<b>Sleeping</b>: %v</br>\n", sdw.sleepTime)
 	case stateError:
-		result += "<b>Error</b>: " + sdw.err.Error() + "<br></br>\n"
+		result += "<b>Error</b>: " + sdw.err.Error() + "</br>\n"
 	}
+
 	return result
 }
 
@@ -86,6 +88,8 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	result := "Working on: " + sdw.keyspace + "/" + sdw.shard + "\n"
 	result += "State: " + sdw.state + "\n"
 	switch sdw.state {
+	case stateSleeping:
+		result += fmt.Sprintf("Sleeping: %v\n", sdw.sleepTime)
 	case stateError:
 		result += "Error: " + sdw.err.Error() + "\n"
 	}
@@ -114,8 +118,11 @@ func (sdw *SplitDiffWorker) Run() {
 	}
 
 	// second state: dummy sleep
-	sdw.setState(stateRunning)
+	sdw.setState(stateSleeping)
 	for i := 0; i < 10; i++ {
+		sdw.mu.Lock()
+		sdw.sleepTime = i
+		sdw.mu.Unlock()
 		time.Sleep(time.Second)
 		if sdw.CheckInterrupted() {
 			return
