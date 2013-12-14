@@ -16,25 +16,54 @@ import (
 )
 
 type command struct {
-	name   string
+	Name   string
 	method func(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker
 	params string
-	help   string // if help is empty, won't list the command
+	Help   string // if help is empty, won't list the command
 }
 
 type commandGroup struct {
-	name     string
-	commands []command
+	Name        string
+	Description string
+	Commands    []command
 }
 
 var commands = []commandGroup{
 	commandGroup{
-		"Diffs", []command{
+		"Diffs",
+		"Workers comparing and validating data.",
+		[]command{
 			command{"SplitDiff", commandSplitDiff,
 				"<keyspace/shard|zk shard path>",
 				"Diffs a rdonly destination shard against its SourceShards"},
 		},
 	},
+}
+
+func init() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nThe global optional parameters are:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nThe commands are listed below, sorted by group. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+		for _, group := range commands {
+			fmt.Fprintf(os.Stderr, "%v: %v\n", group.Name, group.Description)
+			for _, cmd := range group.Commands {
+				fmt.Fprintf(os.Stderr, "  %v %v\n", cmd.Name, cmd.params)
+			}
+			fmt.Fprintf(os.Stderr, "\n")
+		}
+	}
+}
+
+func addCommand(groupName string, c command) {
+	for i, group := range commands {
+		if group.Name == groupName {
+			commands[i].Commands = append(commands[i].Commands, c)
+			return
+		}
+	}
+	panic(fmt.Errorf("Trying to add to missing group %v", groupName))
 }
 
 func shardParamToKeyspaceShard(param string) (string, string) {
@@ -67,12 +96,12 @@ func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {
 
 	actionLowerCase := strings.ToLower(action)
 	for _, group := range commands {
-		for _, cmd := range group.commands {
-			if strings.ToLower(cmd.name) == actionLowerCase {
+		for _, cmd := range group.Commands {
+			if strings.ToLower(cmd.Name) == actionLowerCase {
 				subFlags := flag.NewFlagSet(action, flag.ExitOnError)
 				subFlags.Usage = func() {
-					fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.name, cmd.params)
-					fmt.Fprintf(os.Stderr, "%s\n\n", cmd.help)
+					fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.Name, cmd.params)
+					fmt.Fprintf(os.Stderr, "%s\n\n", cmd.Help)
 					subFlags.PrintDefaults()
 				}
 				return cmd.method(wr, subFlags, args[1:])

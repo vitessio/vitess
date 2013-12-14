@@ -23,18 +23,24 @@ const indexHTML = `
 </head>
 <body>
   <h1>Worker Action Index</h1>
-    <li><a href="/diffs">Diffs</a>: shows a list of all the possible diffs to run.</li>
+    {{range $i, $group := . }}
+      <li><a href="/{{$group.Name}}">{{$group.Name}}</a>: {{$group.Description}}.</li>
+    {{end}}
 </body>
 `
 
-const diffsHTML = `
+const subIndexHTML = `
+{{$name := .Name}}
 <!DOCTYPE html>
 <head>
-  <title>Worker Diff Action Index</title>
+  <title>{{$name}} Index</title>
 </head>
 <body>
-  <h1>Worker Diff Action Index</h1>
-    <li><a href="/diffs/splitdiff">Split Diff</a>: runs a diff for a shard that uses filtered replication.</li>
+  <h1>{{$name}} Index</h1>
+    <p>{{.Description}}</p>
+    {{range $i, $cmd := .Commands }}
+      <li><a href="{{$name}}/{{$cmd.Name}}">{{$cmd.Name}}</a>: {{$cmd.Help}}.</li>
+    {{end}}
 </body>
 `
 
@@ -50,7 +56,7 @@ const splitDiffHTML = `
       <b>Error:</b> {{.Error}}</br>
     {{else}}
       {{range $i, $si := .Shards}}
-        <li><a href="/diffs/splitdiff?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
+        <li><a href="/Diffs/SplitDiff?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
       {{end}}
     {{end}}
 </body>
@@ -130,19 +136,23 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 
 func initInteractiveMode(wr *wrangler.Wrangler) {
 	indexTemplate := loadTemplate("index", indexHTML)
-	diffsTemplate := loadTemplate("diffs", diffsHTML)
+	subIndexTemplate := loadTemplate("subIndex", subIndexHTML)
 	splitDiffTemplate := loadTemplate("splitdiff", splitDiffHTML)
 
 	// toplevel menu
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		executeTemplate(w, indexTemplate, nil)
+		executeTemplate(w, indexTemplate, commands)
 	})
 
-	// diffs menu and functions
-	http.HandleFunc("/diffs", func(w http.ResponseWriter, r *http.Request) {
-		executeTemplate(w, diffsTemplate, nil)
-	})
-	http.HandleFunc("/diffs/splitdiff", func(w http.ResponseWriter, r *http.Request) {
+	// command group menus
+	for _, cg := range commands {
+		http.HandleFunc("/"+cg.Name, func(w http.ResponseWriter, r *http.Request) {
+			executeTemplate(w, subIndexTemplate, cg)
+		})
+	}
+
+	// SplitDiff
+	http.HandleFunc("/Diffs/SplitDiff", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			httpError(w, "cannot parse form: %s", err)
 			return
