@@ -31,7 +31,7 @@ type commandGroup struct {
 var commands = []commandGroup{
 	commandGroup{
 		"Diffs",
-		"Workers comparing and validating data.",
+		"Workers comparing and validating data",
 		[]command{
 			command{"SplitDiff", commandSplitDiff,
 				"<keyspace/shard|zk shard path>",
