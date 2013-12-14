@@ -7,8 +7,6 @@ package main
 import (
 	"html/template"
 	"net/http"
-
-	log "github.com/golang/glog"
 )
 
 const idleHTML = `
@@ -41,15 +39,8 @@ const workerHTML = `
 `
 
 func initStatusHandling() {
-
-	idleTemplate, err := template.New("idle").Parse(idleHTML)
-	if err != nil {
-		log.Fatalf("Cannot parse idle template: %v", err)
-	}
-	workerTemplate, err := template.New("worker").Parse(workerHTML)
-	if err != nil {
-		log.Fatalf("Cannot parse worker template: %v", err)
-	}
+	idleTemplate := loadTemplate("idle", idleHTML)
+	workerTemplate := loadTemplate("worker", workerHTML)
 
 	http.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		currentWorkerMutex.Lock()
@@ -59,9 +50,7 @@ func initStatusHandling() {
 
 		// no worker -> we serve the idle template
 		if wrk == nil {
-			if err := idleTemplate.Execute(w, nil); err != nil {
-				httpError(w, "error executing template", err)
-			}
+			executeTemplate(w, idleTemplate, nil)
 			return
 		}
 
@@ -74,9 +63,7 @@ func initStatusHandling() {
 			data["Done"] = true
 		default:
 		}
-		if err := workerTemplate.Execute(w, data); err != nil {
-			httpError(w, "error executing template", err)
-		}
+		executeTemplate(w, workerTemplate, data)
 	})
 
 	http.HandleFunc("/reset", func(w http.ResponseWriter, r *http.Request) {

@@ -61,6 +61,20 @@ func httpError(w http.ResponseWriter, format string, err error) {
 	http.Error(w, fmt.Sprintf(format, err), http.StatusInternalServerError)
 }
 
+func loadTemplate(name, contents string) *template.Template {
+	t, err := template.New(name).Parse(contents)
+	if err != nil {
+		log.Fatalf("Cannot parse %v template: %v", name, err)
+	}
+	return t
+}
+
+func executeTemplate(w http.ResponseWriter, t *template.Template, data interface{}) {
+	if err := t.Execute(w, data); err != nil {
+		httpError(w, "error executing template", err)
+	}
+}
+
 // shardsWithSources returns all the shards that have SourceShards set.
 func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 	keyspaces, err := wr.TopoServer().GetKeyspaces()
@@ -115,28 +129,15 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 }
 
 func initInteractiveMode(wr *wrangler.Wrangler) {
-	indexTemplate, err := template.New("index").Parse(indexHTML)
-	if err != nil {
-		log.Fatalf("Cannot parse index template: %v", err)
-	}
-	diffsTemplate, err := template.New("diffs").Parse(diffsHTML)
-	if err != nil {
-		log.Fatalf("Cannot parse diffs template: %v", err)
-	}
-	splitDiffTemplate, err := template.New("splitdiff").Parse(splitDiffHTML)
-	if err != nil {
-		log.Fatalf("Cannot parse diffs template: %v", err)
-	}
+	indexTemplate := loadTemplate("index", indexHTML)
+	diffsTemplate := loadTemplate("diffs", diffsHTML)
+	splitDiffTemplate := loadTemplate("splitdiff", splitDiffHTML)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if err := indexTemplate.Execute(w, nil); err != nil {
-			httpError(w, "error executing template", err)
-		}
+		executeTemplate(w, indexTemplate, nil)
 	})
 	http.HandleFunc("/diffs", func(w http.ResponseWriter, r *http.Request) {
-		if err := diffsTemplate.Execute(w, nil); err != nil {
-			httpError(w, "error executing template", err)
-		}
+		executeTemplate(w, diffsTemplate, nil)
 	})
 	http.HandleFunc("/diffs/splitdiff", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -156,9 +157,7 @@ func initInteractiveMode(wr *wrangler.Wrangler) {
 				result["Shards"] = shards
 			}
 
-			if err := splitDiffTemplate.Execute(w, result); err != nil {
-				httpError(w, "error executing template", err)
-			}
+			executeTemplate(w, splitDiffTemplate, result)
 		} else {
 			wrk := worker.NewSplitDiffWorker(wr, keyspace, shard)
 			if _, err := setAndStartWorker(wrk); err != nil {
