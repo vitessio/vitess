@@ -207,7 +207,9 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 
 	resultAsMap := make(map[TabletAlias]bool)
 	if !si.MasterAlias.IsZero() {
-		resultAsMap[si.MasterAlias] = true
+		if InCellList(si.MasterAlias.Cell, cells) {
+			resultAsMap[si.MasterAlias] = true
+		}
 	}
 
 	// read the replication graph in each cell and add all found tablets
@@ -230,7 +232,9 @@ func FindAllTabletAliasesInShardByCell(ts Server, keyspace, shard string, cells 
 			mutex.Lock()
 			for _, rl := range sri.ReplicationLinks {
 				resultAsMap[rl.TabletAlias] = true
-				resultAsMap[rl.Parent] = true
+				if InCellList(rl.Parent.Cell, cells) {
+					resultAsMap[rl.Parent] = true
+				}
 			}
 			mutex.Unlock()
 		}(cell)
