@@ -46,9 +46,10 @@ type tabletChangeItem struct {
 type ActionAgent struct {
 	ts                topo.Server
 	tabletAlias       topo.TabletAlias
-	vtActionBinFile   string // path to vtaction binary
-	MycnfFile         string // my.cnf file
-	DbCredentialsFile string // File that contains db credentials
+	vtActionBinFile   string           // path to vtaction binary
+	MycnfFile         string           // my.cnf file
+	DbCredentialsFile string           // File that contains db credentials
+	BinlogPlayerMap   *BinlogPlayerMap // optional
 
 	done chan struct{} // closed when we are done.
 
@@ -334,6 +335,9 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 func (agent *ActionAgent) Stop() {
 	close(agent.done)
+	if agent.BinlogPlayerMap != nil {
+		agent.BinlogPlayerMap.StopAllPlayers()
+	}
 }
 
 func (agent *ActionAgent) actionEventLoop() {

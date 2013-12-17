@@ -42,15 +42,11 @@ func InitAgent(
 	mycnf *mysqlctl.Mycnf,
 	dbCredentialsFile string,
 	port, securePort int,
-	mycnfFile, overridesFile string) (agent *tm.ActionAgent, binlogPlayerMap *BinlogPlayerMap, err error) {
+	mycnfFile, overridesFile string) (agent *tm.ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
 	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
-
-	// Start the binlog player services, not playing at start.
-	binlogPlayerMap = NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
-	RegisterBinlogPlayerMap(binlogPlayerMap)
 
 	statsType := stats.NewString("TabletType")
 	statsKeyspace := stats.NewString("TabletKeyspace")
@@ -58,12 +54,17 @@ func InitAgent(
 	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
 	statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
 
-	// Action agent listens to changes in zookeeper and makes
-	// modifications to this tablet.
 	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbCredentialsFile)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+
+	// Start the binlog player services, not playing at start.
+	agent.BinlogPlayerMap = tm.NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
+	tm.RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
+
+	// Action agent listens to changes in zookeeper and makes
+	// modifications to this tablet.
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		allowQuery := true
 		var shardInfo *topo.ShardInfo
@@ -121,18 +122,18 @@ func InitAgent(
 
 		// See if we need to start or stop any binlog player
 		if newTablet.Type == topo.TYPE_MASTER {
-			binlogPlayerMap.RefreshMap(newTablet, shardInfo)
+			agent.BinlogPlayerMap.RefreshMap(newTablet, shardInfo)
 		} else {
-			binlogPlayerMap.StopAllPlayers()
+			agent.BinlogPlayerMap.StopAllPlayers()
 		}
 	})
 
 	if err := agent.Start(mysqld.Port(), port, securePort); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// register the RPC services from the agent
 	agent.RegisterQueryService(mysqld)
 
-	return agent, binlogPlayerMap, nil
+	return agent, nil
 }
