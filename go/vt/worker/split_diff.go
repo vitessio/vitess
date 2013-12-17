@@ -7,6 +7,7 @@ package worker
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -267,6 +268,14 @@ func (sdw *SplitDiffWorker) findTargets() error {
 
 func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.setState(stateSynchronizeReplication)
+
+	// stop the master binlog replication, get its current position
+	_, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	wrangler.RecordStartBlpAction(sdw.cleaner, sdw.shardInfo.MasterAlias, 30*time.Second)
+
 	return nil
 }
 

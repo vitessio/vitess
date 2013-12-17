@@ -241,6 +241,28 @@ func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosi
 	return ai.rpc.WaitBlpPosition(tablet, blpPosition, waitTime)
 }
 
+type BlpPositionList struct {
+	Entries []mysqlctl.BlpPosition
+}
+
+func (ai *ActionInitiator) StopBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) (*BlpPositionList, error) {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	return ai.rpc.StopBlp(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) StartBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return ai.rpc.StartBlp(tablet, waitTime)
+}
+
 type ReserveForRestoreArgs struct {
 	SrcTabletAlias topo.TabletAlias
 }

@@ -7,6 +7,7 @@ package wrangler
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
@@ -98,6 +99,10 @@ func (cleaner *Cleaner) GetActionByName(name, target string) (CleanerAction, err
 	return nil, topo.ErrNoNode
 }
 
+//
+// ChangeSlaveTypeAction CleanerAction
+//
+
 // ChangeSlaveTypeAction will change a server type to another type
 type ChangeSlaveTypeAction struct {
 	TabletAlias topo.TabletAlias
@@ -131,4 +136,30 @@ func FindChangeSlaveTypeActionByTarget(cleaner *Cleaner, tabletAlias topo.Tablet
 // CleanUp is part of CleanerAction interface.
 func (csta ChangeSlaveTypeAction) CleanUp(wr *Wrangler) error {
 	return wr.ChangeType(csta.TabletAlias, csta.TabletType, false)
+}
+
+//
+// StartBlpAction CleanerAction
+//
+
+// StartBlpAction will restart binlog replication on a server
+type StartBlpAction struct {
+	TabletAlias topo.TabletAlias
+	WaitTime    time.Duration
+}
+
+const StartBlpActionName = "StartBlpAction"
+
+// RecordStartBlpAction records a new StartBlpAction
+// into the specified Cleaner
+func RecordStartBlpAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, waitTime time.Duration) {
+	cleaner.Record(StartBlpActionName, tabletAlias.String(), &StartBlpAction{
+		TabletAlias: tabletAlias,
+		WaitTime:    waitTime,
+	})
+}
+
+// CleanUp is part of CleanerAction interface.
+func (sba StartBlpAction) CleanUp(wr *Wrangler) error {
+	return wr.ActionInitiator().StartBlp(sba.TabletAlias, sba.WaitTime)
 }

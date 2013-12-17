@@ -156,10 +156,6 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBl
 	})
 }
 
-type BlpPositionList struct {
-	Entries []mysqlctl.BlpPosition
-}
-
 func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *BlpPositionList) error {
 	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_STOP_BLP, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
