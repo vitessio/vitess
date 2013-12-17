@@ -112,6 +112,13 @@ func TestShardExternallyReparented(t *testing.T) {
 		t.Fatalf("FindTabletByIPAddrAndPort(slave2) worked: %v %v", err, slave2)
 	}
 
+	// Make sure the master is not exported in other cells
+	tabletMap, err = GetTabletMapForShardByCell(ts, "test_keyspace", "0", []string{"cell2"})
+	master, err = FindTabletByIPAddrAndPort(tabletMap, "100.0.0.1", "vt", 8100)
+	if err != topo.ErrNoNode {
+		t.Fatalf("FindTabletByIPAddrAndPort(master) worked in cell2: %v %v", err, master)
+	}
+
 	tabletMap, err = GetTabletMapForShard(ts, "test_keyspace", "0")
 	if err != topo.ErrPartialResult {
 		t.Fatalf("GetTabletMapForShard should have returned ErrPartialResult but got: %v", err)
