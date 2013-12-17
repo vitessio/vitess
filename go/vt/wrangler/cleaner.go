@@ -99,6 +99,26 @@ func (cleaner *Cleaner) GetActionByName(name, target string) (CleanerAction, err
 	return nil, topo.ErrNoNode
 }
 
+// RemoveActionByName removes an action from the cleaner list
+func (cleaner *Cleaner) RemoveActionByName(name, target string) error {
+	cleaner.mu.Lock()
+	defer cleaner.mu.Unlock()
+	for i, action := range cleaner.actions {
+		if action.name == name && action.target == target {
+			newActions := make([]cleanerActionReference, 0, len(cleaner.actions)-1)
+			if i > 0 {
+				newActions = append(newActions, cleaner.actions[0:i]...)
+			}
+			if i < len(cleaner.actions)-1 {
+				newActions = append(newActions, cleaner.actions[i+1:len(cleaner.actions)]...)
+			}
+			cleaner.actions = newActions
+			return nil
+		}
+	}
+	return topo.ErrNoNode
+}
+
 //
 // ChangeSlaveTypeAction CleanerAction
 //

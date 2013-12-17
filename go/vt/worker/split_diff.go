@@ -249,32 +249,41 @@ func (sdw *SplitDiffWorker) findTargets() error {
 }
 
 // synchronizeReplication phase:
-// - ask the master of the destination shard to pause filtered replication,
+// 1 - ask the master of the destination shard to pause filtered replication,
 //   and return the source binlog positions
 //   (add a cleanup task to restart filtered replication on master)
-// - stop all the source 'checker' at a binlog position higher than the
+// 2 - stop all the source 'checker' at a binlog position higher than the
 //   destination master. Get that new list of positions.
 //   (add a cleanup task to restart binlog replication on them, and change
 //    the existing ChangeSlaveType cleanup action to 'spare' type)
-// - ask the master of the destination shard to resume filtered replication
+// 3 - ask the master of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
-// - wait until the destination checker is equal or passed that master binlog
+// 4 - wait until the destination checker is equal or passed that master binlog
 //   position, and stop its replication.
 //   (add a cleanup task to restart binlog replication on it, and change
 //    the existing ChangeSlaveType cleanup action to 'spare' type)
-// - restart filtered replication on destination master.
+// 5 - restart filtered replication on destination master.
 //   (remove the cleanup task that does the same)
 // At this point, all checker instances are stopped at the same point.
 
 func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.setState(stateSynchronizeReplication)
 
-	// stop the master binlog replication, get its current position
+	// 1 - stop the master binlog replication, get its current position
 	_, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
 		return err
 	}
 	wrangler.RecordStartBlpAction(sdw.cleaner, sdw.shardInfo.MasterAlias, 30*time.Second)
+
+	// 5 - restart filtered replication on destination master
+	err = sdw.wr.ActionInitiator().StartBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
+	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
+		log.Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
+	}
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
