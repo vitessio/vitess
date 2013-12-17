@@ -336,7 +336,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 func (agent *ActionAgent) Stop() {
 	close(agent.done)
 	if agent.BinlogPlayerMap != nil {
-		agent.BinlogPlayerMap.StopAllPlayers()
+		agent.BinlogPlayerMap.StopAllPlayersAndReset()
 	}
 }
 

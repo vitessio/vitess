@@ -124,7 +124,7 @@ func InitAgent(
 		if newTablet.Type == topo.TYPE_MASTER {
 			agent.BinlogPlayerMap.RefreshMap(newTablet, shardInfo)
 		} else {
-			agent.BinlogPlayerMap.StopAllPlayers()
+			agent.BinlogPlayerMap.StopAllPlayersAndReset()
 		}
 	})
 

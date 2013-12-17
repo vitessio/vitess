@@ -139,6 +139,18 @@ func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, b
 	}, rpc.NilResponse, waitTime)
 }
 
+func (client *GoRpcTabletManagerConn) StopBlp(tablet *topo.TabletInfo, waitTime time.Duration) (*BlpPositionList, error) {
+	var bpl BlpPositionList
+	if err := client.rpcCallTablet(tablet, TABLET_ACTION_STOP_BLP, "", &bpl, waitTime); err != nil {
+		return nil, err
+	}
+	return &bpl, nil
+}
+
+func (client *GoRpcTabletManagerConn) StartBlp(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_START_BLP, "", rpc.NilResponse, waitTime)
+}
+
 //
 // Reparenting related functions
 //

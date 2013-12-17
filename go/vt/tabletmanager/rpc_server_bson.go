@@ -5,6 +5,8 @@
 package tabletmanager
 
 import (
+	"fmt"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
@@ -151,6 +153,35 @@ type WaitBlpPositionArgs struct {
 func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrap(context.RemoteAddr, TABLET_ACTION_WAIT_BLP_POSITION, args, reply, func() error {
 		return tm.mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout)
+	})
+}
+
+type BlpPositionList struct {
+	Entries []mysqlctl.BlpPosition
+}
+
+func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *BlpPositionList) error {
+	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_STOP_BLP, args, reply, func() error {
+		if tm.agent.BinlogPlayerMap == nil {
+			return fmt.Errorf("No BinlogPlayerMap configured")
+		}
+		tm.agent.BinlogPlayerMap.Stop()
+		positions, err := tm.agent.BinlogPlayerMap.BlpPositionList()
+		if err != nil {
+			return err
+		}
+		*reply = *positions
+		return nil
+	})
+}
+
+func (tm *TabletManager) StartBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_START_BLP, args, reply, func() error {
+		if tm.agent.BinlogPlayerMap == nil {
+			return fmt.Errorf("No BinlogPlayerMap configured")
+		}
+		tm.agent.BinlogPlayerMap.Start()
+		return nil
 	})
 }
 

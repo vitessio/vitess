@@ -40,6 +40,9 @@ type BinlogPlayerController struct {
 
 	// interrupted is the channel to close to stop the playback
 	interrupted chan struct{}
+
+	// done is the channel to wait for to be sure the player is done
+	done chan struct{}
 }
 
 func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) *BinlogPlayerController {
@@ -50,7 +53,6 @@ func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams,
 		cell:        cell,
 		keyRange:    keyRange,
 		sourceShard: sourceShard,
-		interrupted: make(chan struct{}, 1),
 	}
 	return blc
 }
@@ -60,13 +62,29 @@ func (bpc *BinlogPlayerController) String() string {
 }
 
 func (bpc *BinlogPlayerController) Start() {
-	log.Infof("%v: Starting binlog player", bpc)
+	if bpc.interrupted != nil {
+		log.Warningf("%v: already started", bpc)
+		return
+	}
+	log.Infof("%v: starting binlog player", bpc)
+	bpc.interrupted = make(chan struct{}, 1)
+	bpc.done = make(chan struct{}, 1)
 	go bpc.Loop()
 }
 
 func (bpc *BinlogPlayerController) Stop() {
-	log.Infof("%v: Stopping binlog player", bpc)
+	if bpc.interrupted == nil {
+		log.Warningf("%v: not started", bpc)
+		return
+	}
+	log.Infof("%v: stopping binlog player", bpc)
 	close(bpc.interrupted)
+	select {
+	case <-bpc.done:
+		bpc.interrupted = nil
+		bpc.done = nil
+		return
+	}
 }
 
 func (bpc *BinlogPlayerController) Loop() {
@@ -82,7 +100,8 @@ func (bpc *BinlogPlayerController) Loop() {
 		time.Sleep(5 * time.Second)
 	}
 
-	log.Infof("%v: Exited main binlog player loop", bpc)
+	log.Infof("%v: exited main binlog player loop", bpc)
+	close(bpc.done)
 }
 
 func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
@@ -96,7 +115,7 @@ func (bpc *BinlogPlayerController) DisableSuperToSetTimestamp() {
 func (bpc *BinlogPlayerController) Iteration() (err error) {
 	defer func() {
 		if x := recover(); x != nil {
-			log.Errorf("%v: Caught panic: %v", bpc, x)
+			log.Errorf("%v: caught panic: %v", bpc, x)
 			err = fmt.Errorf("panic: %v", x)
 		}
 	}()
@@ -141,16 +160,28 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	return player.ApplyBinlogEvents(bpc.interrupted)
 }
 
-// BinlogPlayerMap controls all the players
+func (bpc *BinlogPlayerController) BlpPosition(vtClient *mysqlctl.DBClient) (*mysqlctl.BlpPosition, error) {
+	return mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+}
+
+// BinlogPlayerMap controls all the players.
+// It can be stopped and restarted.
 type BinlogPlayerMap struct {
+	// Immutable, set at construction time
 	ts       topo.Server
 	dbConfig mysql.ConnectionParams
 	mysqld   *mysqlctl.Mysqld
 
-	// This mutex protects the map
+	// This mutex protects the map and the state
 	mu      sync.Mutex
 	players map[topo.SourceShard]*BinlogPlayerController
+	state   int64
 }
+
+const (
+	BPM_STATE_RUNNING int64 = iota
+	BPM_STATE_STOPPED
+)
 
 func NewBinlogPlayerMap(ts topo.Server, dbConfig mysql.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
@@ -158,6 +189,7 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig mysql.ConnectionParams, mysqld 
 		dbConfig: dbConfig,
 		mysqld:   mysqld,
 		players:  make(map[topo.SourceShard]*BinlogPlayerController),
+		state:    BPM_STATE_RUNNING,
 	}
 }
 
@@ -182,30 +214,36 @@ func (blm *BinlogPlayerMap) addPlayer(cell string, keyRange key.KeyRange, source
 
 	bpc = NewBinlogPlayerController(blm.ts, &blm.dbConfig, blm.mysqld, cell, keyRange, sourceShard)
 	blm.players[sourceShard] = bpc
-	bpc.Start()
+	if blm.state == BPM_STATE_RUNNING {
+		bpc.Start()
+	}
 }
 
-func (blm *BinlogPlayerMap) StopAllPlayers() {
+// StopAllPlayersAndReset stops all the binlog players, and reset the map of
+// players.
+func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 	hadPlayers := false
 	blm.mu.Lock()
 	for _, bpc := range blm.players {
-		bpc.Stop()
+		if blm.state == BPM_STATE_RUNNING {
+			bpc.Stop()
+		}
 		hadPlayers = true
 	}
 	blm.players = make(map[topo.SourceShard]*BinlogPlayerController)
 	blm.mu.Unlock()
 
 	if hadPlayers {
-		blm.EnableSuperToSetTimestamp()
+		blm.enableSuperToSetTimestamp()
 	}
 }
 
 // RefreshMap reads the right data from topo.Server and makes sure
-// we're playing the right logs
+// we're playing the right logs.
 func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, shardInfo *topo.ShardInfo) {
 	log.Infof("Refreshing map of binlog players")
-
 	if shardInfo == nil {
+		log.Warningf("Could not read shardInfo, not changing anything")
 		return
 	}
 
@@ -235,16 +273,70 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, shardInfo *topo.Shard
 	blm.mu.Unlock()
 
 	if hadPlayers && !hasPlayers {
-		blm.EnableSuperToSetTimestamp()
+		blm.enableSuperToSetTimestamp()
 	}
 }
 
 // After this is called, the clients will need super privileges
 // to set timestamp
-func (blm *BinlogPlayerMap) EnableSuperToSetTimestamp() {
+func (blm *BinlogPlayerMap) enableSuperToSetTimestamp() {
 	if err := blm.mysqld.ExecuteMysqlCommand("set @@global.super_to_set_timestamp = 1"); err != nil {
 		log.Warningf("Cannot set super_to_set_timestamp=1: %v", err)
 	} else {
 		log.Info("Successfully set super_to_set_timestamp=1")
 	}
+}
+
+// Stop stops the current players, but does not remove them from the map.
+// Call 'Start' to restart the playback.
+func (blm *BinlogPlayerMap) Stop() {
+	blm.mu.Lock()
+	defer blm.mu.Unlock()
+	if blm.state == BPM_STATE_STOPPED {
+		log.Warningf("BinlogPlayerMap already stopped")
+		return
+	}
+	log.Infof("Stopping map of binlog players")
+	for _, bpc := range blm.players {
+		bpc.Stop()
+	}
+	blm.state = BPM_STATE_STOPPED
+}
+
+// Start restarts the current players
+func (blm *BinlogPlayerMap) Start() {
+	blm.mu.Lock()
+	defer blm.mu.Unlock()
+	if blm.state == BPM_STATE_RUNNING {
+		log.Warningf("BinlogPlayerMap already started")
+		return
+	}
+	log.Infof("Starting map of binlog players")
+	for _, bpc := range blm.players {
+		bpc.Start()
+	}
+	blm.state = BPM_STATE_RUNNING
+}
+
+// BlpPositionList returns the current position of all the players
+func (blm *BinlogPlayerMap) BlpPositionList() (*BlpPositionList, error) {
+	// create a db connection for this purpose
+	vtClient := mysqlctl.NewDbClient(&blm.dbConfig)
+	if err := vtClient.Connect(); err != nil {
+		return nil, fmt.Errorf("can't connect to database: %v", err)
+	}
+	defer vtClient.Close()
+
+	result := &BlpPositionList{}
+	blm.mu.Lock()
+	defer blm.mu.Unlock()
+	for _, bpc := range blm.players {
+		blp, err := bpc.BlpPosition(vtClient)
+		if err != nil {
+			return nil, fmt.Errorf("can't read current position for %v: %v", bpc, err)
+		}
+
+		result.Entries = append(result.Entries, *blp)
+	}
+	return result, nil
 }

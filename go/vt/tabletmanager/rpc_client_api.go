@@ -58,6 +58,13 @@ type TabletManagerConn interface {
 	// position in replication
 	WaitBlpPosition(tablet *topo.TabletInfo, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error
 
+	// StopBlp asks the tablet to stop all its binlog players,
+	// and returns the current position for all of them
+	StopBlp(tablet *topo.TabletInfo, waitTime time.Duration) (*BlpPositionList, error)
+
+	// StartBlp asks the tablet to restart its binlog players
+	StartBlp(tablet *topo.TabletInfo, waitTime time.Duration) error
+
 	//
 	// Reparenting related functions
 	//
