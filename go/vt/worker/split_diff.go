@@ -35,6 +35,7 @@ type SplitDiffWorker struct {
 	cell     string
 	keyspace string
 	shard    string
+	cleaner  *wrangler.Cleaner
 
 	// all subsequent fields are protected by the mutex
 	mu    sync.Mutex
@@ -63,6 +64,7 @@ func NewSplitDiffWorker(wr *wrangler.Wrangler, cell, keyspace, shard string) Wor
 		cell:     cell,
 		keyspace: keyspace,
 		shard:    shard,
+		cleaner:  &wrangler.Cleaner{},
 
 		state: stateNotSarted,
 	}
@@ -116,50 +118,59 @@ func (sdw *SplitDiffWorker) CheckInterrupted() bool {
 	return false
 }
 
+// Run is mostly a wrapper to run the cleanup at the end.
 func (sdw *SplitDiffWorker) Run() {
+	var err error
+	if err = sdw.run(); err != nil {
+		sdw.recordError(err)
+	}
+
+	sdw.setState(stateCleanUp)
+	cerr := sdw.cleaner.CleanUp(sdw.wr)
+	if cerr != nil {
+		if err != nil {
+			log.Errorf("CleanUp failed in addition to job error: %v", cerr)
+		} else {
+			sdw.recordError(cerr)
+			err = cerr
+		}
+	}
+	if err == nil {
+		sdw.setState(stateDone)
+	}
+}
+
+func (sdw *SplitDiffWorker) run() error {
 	// first state: read what we need to do
 	if err := sdw.init(); err != nil {
-		sdw.recordError(err)
-		return
+		return err
 	}
 	if sdw.CheckInterrupted() {
-		return
+		return topo.ErrInterrupted
 	}
 
 	// second state: find targets
 	if err := sdw.findTargets(); err != nil {
-		sdw.recordError(err)
-		return
+		return err
 	}
 	if sdw.CheckInterrupted() {
-		return
+		return topo.ErrInterrupted
 	}
 
 	// third phase: synchronize replication
 	if err := sdw.synchronizeReplication(); err != nil {
-		sdw.recordError(err)
-		return
+		return err
 	}
 	if sdw.CheckInterrupted() {
-		return
+		return topo.ErrInterrupted
 	}
 
 	// fourth phase: diff
 	if err := sdw.diff(); err != nil {
-		sdw.recordError(err)
-		return
-	}
-	if sdw.CheckInterrupted() {
-		return
+		return err
 	}
 
-	// fifth phase: cleanup
-	if err := sdw.cleanup(); err != nil {
-		sdw.recordError(err)
-		return
-	}
-
-	sdw.setState(stateDone)
+	return nil
 }
 
 // init phase:
@@ -206,6 +217,11 @@ func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
 		return topo.TabletAlias{}, err
 	}
+
+	// Record a clean-up action to take the tablet back to rdonly.
+	// We will alter this one later on and let the tablet go back to
+	// 'spare' if we have stopped replication for too long on it.
+	wrangler.RecordChangeSlaveTypeAction(sdw.cleaner, tabletAlias, topo.TYPE_RDONLY)
 	return tabletAlias, nil
 }
 
@@ -234,13 +250,19 @@ func (sdw *SplitDiffWorker) findTargets() error {
 // synchronizeReplication phase:
 // - ask the master of the destination shard to pause filtered replication,
 //   and return the source binlog positions
+//   (add a cleanup task to restart filtered replication on master)
 // - stop all the source 'checker' at a binlog position higher than the
 //   destination master. Get that new list of positions.
+//   (add a cleanup task to restart binlog replication on them, and change
+//    the existing ChangeSlaveType cleanup action to 'spare' type)
 // - ask the master of the destination shard to resume filtered replication
 //   up to the new list of positions, and return its binlog position.
 // - wait until the destination checker is equal or passed that master binlog
 //   position, and stop its replication.
+//   (add a cleanup task to restart binlog replication on it, and change
+//    the existing ChangeSlaveType cleanup action to 'spare' type)
 // - restart filtered replication on destination master.
+//   (remove the cleanup task that does the same)
 // At this point, all checker instances are stopped at the same point.
 
 func (sdw *SplitDiffWorker) synchronizeReplication() error {
@@ -304,14 +326,5 @@ func (sdw *SplitDiffWorker) diff() error {
 		sdw.diffLog("Schema match, good.")
 	}
 
-	return nil
-}
-
-// cleanup phase:
-// - restart replication on checkers
-// - convert the checkers back to spare
-
-func (sdw *SplitDiffWorker) cleanup() error {
-	sdw.setState(stateCleanUp)
 	return nil
 }
