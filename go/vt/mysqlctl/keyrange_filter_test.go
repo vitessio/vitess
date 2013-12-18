@@ -31,7 +31,7 @@ func TestKeyrangeFilterPass(t *testing.T) {
 				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
 			},
 		},
-		GroupId: "1",
+		GroupId: 1,
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
@@ -56,7 +56,7 @@ func TestKeyrangeFilterSkip(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
 			},
 		},
-		GroupId: "1",
+		GroupId: 1,
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
@@ -81,7 +81,7 @@ func TestKeyrangeFilterDDL(t *testing.T) {
 				Sql:      []byte("ddl"),
 			},
 		},
-		GroupId: "1",
+		GroupId: 1,
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
@@ -112,7 +112,7 @@ func TestKeyrangeFilterMalformed(t *testing.T) {
 				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
 			},
 		},
-		GroupId: "1",
+		GroupId: 1,
 	}
 	var got string
 	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
@@ -131,6 +131,6 @@ func bltToString(tx *proto.BinlogTransaction) string {
 	for _, statement := range tx.Statements {
 		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, statement.Sql)
 	}
-	result += fmt.Sprintf("position: \"%s\" ", tx.GroupId)
+	result += fmt.Sprintf("position: \"%v\" ", tx.GroupId)
 	return result
 }

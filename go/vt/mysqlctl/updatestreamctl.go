@@ -119,7 +119,7 @@ func IsUpdateStreamEnabled() bool {
 	return UpdateStreamRpcService.isEnabled()
 }
 
-func GetReplicationPosition() (string, error) {
+func GetReplicationPosition() (int64, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
@@ -249,16 +249,16 @@ func (updateStream *UpdateStream) StreamKeyrange(req *proto.KeyrangeRequest, sen
 	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
 }
 
-func (updateStream *UpdateStream) getReplicationPosition() (string, error) {
+func (updateStream *UpdateStream) getReplicationPosition() (int64, error) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if !updateStream.isEnabled() {
-		return "", fmt.Errorf("update stream service is not enabled")
+		return 0, fmt.Errorf("update stream service is not enabled")
 	}
 
 	rp, err := updateStream.mysqld.MasterStatus()
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 	return rp.MasterLogGroupId, nil
 }

@@ -42,7 +42,7 @@ type ReplicationPosition struct {
 	//   and Exec_Master_Group_ID from 'show slave status'.
 	MasterLogFile     string
 	MasterLogPosition uint
-	MasterLogGroupId  string
+	MasterLogGroupId  int64
 
 	// MasterLogFileIo and MasterLogPositionIo are the position on the logs
 	// that have been downloaded from the master (IO position),
@@ -259,7 +259,7 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *
 		return
 	}
 
-	reparentTime, err = strconv.ParseInt(qr.Rows[0][0].String(), 10, 64)
+	reparentTime, err = qr.Rows[0][0].ParseInt64()
 	if err != nil {
 		err = fmt.Errorf("bad reparent time: %v %v %v", slavePosition.MapKey(), qr.Rows[0][0], err)
 		return
@@ -331,7 +331,7 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 	pos.MasterLogPosition = uint(temp)
 	temp, _ = strconv.ParseUint(fields["Read_Master_Log_Pos"], 10, 0)
 	pos.MasterLogPositionIo = uint(temp)
-	pos.MasterLogGroupId = fields["Exec_Master_Group_ID"]
+	pos.MasterLogGroupId, _ = strconv.ParseInt(fields["Exec_Master_Group_ID"], 10, 0)
 
 	if fields["Slave_IO_Running"] == "Yes" && fields["Slave_SQL_Running"] == "Yes" {
 		temp, _ = strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
@@ -365,12 +365,15 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	}
 	rp = &ReplicationPosition{}
 	rp.MasterLogFile = qr.Rows[0][0].String()
-	temp, err := strconv.ParseUint(qr.Rows[0][1].String(), 10, 0)
+	utemp, err := qr.Rows[0][1].ParseUint64()
 	if err != nil {
 		return nil, err
 	}
-	rp.MasterLogPosition = uint(temp)
-	rp.MasterLogGroupId = qr.Rows[0][4].String()
+	rp.MasterLogPosition = uint(utemp)
+	rp.MasterLogGroupId, err = qr.Rows[0][4].ParseInt64()
+	if err != nil {
+		return nil, err
+	}
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
 	rp.MasterLogFileIo = rp.MasterLogFile
@@ -385,8 +388,8 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	Pos: 1194
 	Server_ID: 41983
 */
-func (mysqld *Mysqld) BinlogInfo(groupId string) (rp *ReplicationPosition, err error) {
-	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %s", groupId))
+func (mysqld *Mysqld) BinlogInfo(groupId int64) (rp *ReplicationPosition, err error) {
+	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %v", groupId))
 	if err != nil {
 		return nil, err
 	}
@@ -395,12 +398,15 @@ func (mysqld *Mysqld) BinlogInfo(groupId string) (rp *ReplicationPosition, err e
 	}
 	rp = &ReplicationPosition{}
 	rp.MasterLogFile = qr.Rows[0][0].String()
-	temp, err := qr.Rows[0][1].ParseInt64()
+	temp, err := qr.Rows[0][1].ParseUint64()
 	if err != nil {
 		return nil, err
 	}
 	rp.MasterLogPosition = uint(temp)
-	rp.MasterLogGroupId = groupId
+	rp.MasterLogGroupId, err = qr.Rows[0][1].ParseInt64()
+	if err != nil {
+		return nil, err
+	}
 	// On the master, the SQL position and IO position are at
 	// necessarily the same point.
 	rp.MasterLogFileIo = rp.MasterLogFile
@@ -649,7 +655,7 @@ func (mysqld *Mysqld) ValidateSnapshotPath() error {
 
 type BlpPosition struct {
 	Uid     uint32
-	GroupId string
+	GroupId int64
 }
 
 func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
@@ -667,9 +673,12 @@ func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
 		if len(qr.Rows) != 1 {
 			return fmt.Errorf("WaitBlpPos(%v) returned unexpected row count: %v", bp.Uid, len(qr.Rows))
 		}
-		var groupId string
+		var groupId int64
 		if !qr.Rows[0][0].IsNull() {
-			groupId = qr.Rows[0][0].String()
+			groupId, err = qr.Rows[0][0].ParseInt64()
+			if err != nil {
+				return err
+			}
 		}
 		if groupId == bp.GroupId {
 			return nil

@@ -50,9 +50,9 @@ class UpdateStreamConnection(object):
   def close(self):
     self.client.close()
 
-  def stream_start(self, start_position):
+  def stream_start(self, group_id):
     try:
-      self.client.stream_call('UpdateStream.ServeUpdateStream', {"GroupId": start_position})
+      self.client.stream_call('UpdateStream.ServeUpdateStream', {"GroupId": group_id})
       response = self.client.stream_next()
       if response is None:
         return None

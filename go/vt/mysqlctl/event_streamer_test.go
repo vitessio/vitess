@@ -104,19 +104,19 @@ func TestDMLEvent(t *testing.T) {
 				Sql:      []byte("query"),
 			},
 		},
-		GroupId: "20",
+		GroupId: 20,
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DML":
-				want := `&{DML vtocc_e [eid id name] [[10 -1 name] [11 18446744073709551615 name]]  1 }`
+				want := `&{DML vtocc_e [eid id name] [[10 -1 name] [11 18446744073709551615 name]]  1 0}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
 				}
 			case "ERR":
-				want := `&{ERR  [] [] query 1 }`
+				want := `&{ERR  [] [] query 1 0}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)
@@ -150,13 +150,13 @@ func TestDDLEvent(t *testing.T) {
 				Sql:      []byte("DDL"),
 			},
 		},
-		GroupId: "20",
+		GroupId: 20,
 	}
 	evs := &EventStreamer{
 		sendEvent: func(event *proto.StreamEvent) error {
 			switch event.Category {
 			case "DDL":
-				want := `&{DDL  [] [] DDL 1 }`
+				want := `&{DDL  [] [] DDL 1 0}`
 				got := fmt.Sprintf("%v", event)
 				if want != got {
 					t.Errorf("want %s, got %s", want, got)

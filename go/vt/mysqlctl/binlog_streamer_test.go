@@ -285,7 +285,7 @@ type transaction struct {
 		Category int
 		Sql      string
 	}
-	GroupId string
+	GroupId int64
 }
 
 func TestStream(t *testing.T) {

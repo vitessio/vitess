@@ -209,10 +209,10 @@ func (blp *BinlogPlayer) StatsJSON() string {
 	return blp.blplStats.statsJSON()
 }
 
-func (blp *BinlogPlayer) writeRecoveryPosition(groupId string) error {
+func (blp *BinlogPlayer) writeRecoveryPosition(groupId int64) error {
 	blp.blpPos.GroupId = groupId
 	updateRecovery := fmt.Sprintf(
-		"update _vt.blp_checkpoint set group_id='%v', time_updated=%v where source_shard_uid=%v",
+		"update _vt.blp_checkpoint set group_id=%v, time_updated=%v where source_shard_uid=%v",
 		groupId,
 		time.Now().Unix(),
 		blp.blpPos.Uid)
@@ -238,9 +238,13 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*BlpPosition, error) {
 	if qr.RowsAffected != 1 {
 		return nil, fmt.Errorf("checkpoint information not available in db for %v", uid)
 	}
+	temp, err := qr.Rows[0][0].ParseInt64()
+	if err != nil {
+		return nil, err
+	}
 	return &BlpPosition{
 		Uid:     uid,
-		GroupId: qr.Rows[0][0].String(),
+		GroupId: temp,
 	}, nil
 }
 

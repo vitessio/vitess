@@ -11,12 +11,12 @@ import (
 
 // UpdateStreamRequest is used to make a request for ServeUpdateStream.
 type UpdateStreamRequest struct {
-	GroupId string
+	GroupId int64
 }
 
 // KeyrangeRequest is used to make a request for StreamKeyrange.
 type KeyrangeRequest struct {
-	GroupId  string
+	GroupId  int64
 	Keyrange key.KeyRange
 }
 

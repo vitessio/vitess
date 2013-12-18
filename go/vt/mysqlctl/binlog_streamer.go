@@ -178,7 +178,7 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 		case proto.BL_COMMIT:
 			trans := &proto.BinlogTransaction{
 				Statements: statements,
-				GroupId:    strconv.Itoa(int(bls.blPos.GroupId)),
+				GroupId:    bls.blPos.GroupId,
 			}
 			if err = sendTransaction(trans); err != nil {
 				if err == io.EOF {
