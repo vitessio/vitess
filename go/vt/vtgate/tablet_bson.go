@@ -128,11 +128,11 @@ func (conn *TabletBson) TransactionId() int64 {
 	return conn.session.TransactionId
 }
 
-func (conn *TabletBson) Close() error {
+func (conn *TabletBson) Close() {
 	conn.session = tproto.Session{TransactionId: 0, SessionId: 0}
 	rpcClient := conn.rpcClient
 	conn.rpcClient = nil
-	return tabletError(rpcClient.Close())
+	tabletError(rpcClient.Close())
 }
 
 func tabletError(err error) error {

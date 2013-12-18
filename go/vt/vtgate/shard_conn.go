@@ -212,17 +212,16 @@ func (sdc *ShardConn) TransactionId() int64 {
 }
 
 // Close closes the underlying vttablet connection.
-func (sdc *ShardConn) Close() error {
+func (sdc *ShardConn) Close() {
 	if sdc.conn == nil {
-		return nil
+		return
 	}
 	if sdc.TransactionId() != 0 {
 		sdc.conn.Rollback()
 	}
-	err := sdc.conn.Close()
+	sdc.conn.Close()
 	sdc.endPoint = topo.EndPoint{}
 	sdc.conn = nil
-	return sdc.WrapError(err)
 }
 
 // WrapError adds the connection context to an error.

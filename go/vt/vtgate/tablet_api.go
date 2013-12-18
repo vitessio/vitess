@@ -66,7 +66,7 @@ type TabletConn interface {
 	TransactionId() int64
 
 	// Close must be called for releasing resources.
-	Close() error
+	Close()
 }
 
 type ErrFunc func() error
