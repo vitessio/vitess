@@ -226,9 +226,8 @@ func (sbc *sandboxConn) TransactionId() int64 {
 }
 
 // Close does not change ExecCount
-func (sbc *sandboxConn) Close() error {
+func (sbc *sandboxConn) Close() {
 	sbc.CloseCount++
-	return nil
 }
 
 var singleRowResult = &mproto.QueryResult{
