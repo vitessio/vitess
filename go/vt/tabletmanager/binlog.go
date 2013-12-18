@@ -16,6 +16,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -70,6 +71,25 @@ func (bpc *BinlogPlayerController) Start() {
 	bpc.interrupted = make(chan struct{}, 1)
 	bpc.done = make(chan struct{}, 1)
 	go bpc.Loop()
+}
+
+// TODO(alainjobart): implement these two methods the rigth way.
+// For now, StartUntil will just start, and WaitForStop will just stop.
+
+func (bpc *BinlogPlayerController) StartUntil(groupId int64) error {
+	if bpc.interrupted != nil {
+		return fmt.Errorf("%v: already started", bpc)
+	}
+	log.Infof("%v: starting binlog player until %v", bpc, groupId)
+	bpc.interrupted = make(chan struct{}, 1)
+	bpc.done = make(chan struct{}, 1)
+	go bpc.Loop()
+	return nil
+}
+
+func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error {
+	bpc.Stop()
+	return nil
 }
 
 func (bpc *BinlogPlayerController) Stop() {
@@ -339,4 +359,50 @@ func (blm *BinlogPlayerMap) BlpPositionList() (*BlpPositionList, error) {
 		result.Entries = append(result.Entries, *blp)
 	}
 	return result, nil
+}
+
+// RunUntil will run all the players until they reach the given position.
+// Holds the map lock during that exercise, shouldn't take long at all.
+func (blm *BinlogPlayerMap) RunUntil(blpPositionList *BlpPositionList, waitTimeout time.Duration) error {
+	// lock and check state
+	blm.mu.Lock()
+	defer blm.mu.Unlock()
+	if blm.state != BPM_STATE_STOPPED {
+		return fmt.Errorf("RunUntil: player not stopped: %v", blm.state)
+	}
+	log.Infof("Starting map of binlog players until position")
+
+	// find the exact stop position for all players, to be sure
+	// we're not doing anything wrong
+	groupIds := make(map[uint32]int64)
+	for _, bpc := range blm.players {
+		pos, err := blpPositionList.FindBlpPositionById(bpc.sourceShard.Uid)
+		if err != nil {
+			return fmt.Errorf("No binlog position passed in for player Uid %v", bpc.sourceShard.Uid)
+		}
+		groupIds[bpc.sourceShard.Uid] = pos.GroupId
+	}
+
+	// start all the players giving them where to stop
+	for _, bpc := range blm.players {
+		if err := bpc.StartUntil(groupIds[bpc.sourceShard.Uid]); err != nil {
+			return err
+		}
+	}
+
+	// wait for all players to be stopped, or timeout
+	wg := sync.WaitGroup{}
+	rec := concurrency.AllErrorRecorder{}
+	for _, bpc := range blm.players {
+		wg.Add(1)
+		go func(bpc *BinlogPlayerController) {
+			if err := bpc.WaitForStop(waitTimeout); err != nil {
+				rec.RecordError(err)
+			}
+			wg.Done()
+		}(bpc)
+	}
+	wg.Wait()
+
+	return rec.Error()
 }

@@ -182,7 +182,7 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBl
 }
 
 func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *BlpPositionList) error {
-	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_STOP_BLP, args, reply, func() error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_STOP_BLP, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")
 		}
@@ -197,12 +197,33 @@ func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequ
 }
 
 func (tm *TabletManager) StartBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
-	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_START_BLP, args, reply, func() error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_START_BLP, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")
 		}
 		tm.agent.BinlogPlayerMap.Start()
 		return nil
+	})
+}
+
+type RunBlpUntilArgs struct {
+	BlpPositionList *BlpPositionList
+	WaitTimeout     time.Duration
+}
+
+func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUntilArgs, reply *mysqlctl.ReplicationPosition) error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_RUN_BLP_UNTIL, args, reply, func() error {
+		if tm.agent.BinlogPlayerMap == nil {
+			return fmt.Errorf("No BinlogPlayerMap configured")
+		}
+		if err := tm.agent.BinlogPlayerMap.RunUntil(args.BlpPositionList, args.WaitTimeout); err != nil {
+			return err
+		}
+		position, err := tm.mysqld.MasterStatus()
+		if err == nil {
+			*reply = *position
+		}
+		return err
 	})
 }
 

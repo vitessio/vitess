@@ -72,6 +72,10 @@ type TabletManagerConn interface {
 	// StartBlp asks the tablet to restart its binlog players
 	StartBlp(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// RunBlpUntil asks the tablet to restart its binlog players until
+	// it reaches the given positions, if not there yet.
+	RunBlpUntil(tablet *topo.TabletInfo, positions *BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
+
 	//
 	// Reparenting related functions
 	//

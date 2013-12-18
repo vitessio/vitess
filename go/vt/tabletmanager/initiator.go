@@ -263,6 +263,15 @@ type BlpPositionList struct {
 	Entries []mysqlctl.BlpPosition
 }
 
+func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*mysqlctl.BlpPosition, error) {
+	for _, pos := range bpl.Entries {
+		if pos.Uid == id {
+			return &pos, nil
+		}
+	}
+	return nil, topo.ErrNoNode
+}
+
 func (ai *ActionInitiator) StopBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) (*BlpPositionList, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -279,6 +288,15 @@ func (ai *ActionInitiator) StartBlp(tabletAlias topo.TabletAlias, waitTime time.
 	}
 
 	return ai.rpc.StartBlp(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	return ai.rpc.RunBlpUntil(tablet, positions, waitTime)
 }
 
 type ReserveForRestoreArgs struct {

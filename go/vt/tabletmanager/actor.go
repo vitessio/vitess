@@ -216,7 +216,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
 		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,
 		TABLET_ACTION_GET_SLAVES, TABLET_ACTION_WAIT_BLP_POSITION,
-		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP:
+		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP,
+		TABLET_ACTION_RUN_BLP_UNTIL:
 		err = TabletActorError("Operation " + actionNode.Action + "  only supported as RPC")
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
