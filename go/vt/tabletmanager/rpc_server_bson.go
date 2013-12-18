@@ -6,6 +6,7 @@ package tabletmanager
 
 import (
 	"fmt"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
@@ -134,6 +135,30 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_STOP_SLAVE, args, reply, func() error {
 		return tm.mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
+	})
+}
+
+type StopSlaveMinimumArgs struct {
+	GroupdId int64
+	WaitTime time.Duration
+}
+
+func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopSlaveMinimumArgs, reply *mysqlctl.ReplicationPosition) error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, func() error {
+		if err := tm.mysqld.WaitForMinimumReplicationPosition(args.GroupdId, args.WaitTime); err != nil {
+			return err
+		}
+		position, err := tm.mysqld.SlaveStatus()
+		if err == nil {
+			*reply = *position
+		}
+		return err
+	})
+}
+
+func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_START_SLAVE, args, reply, func() error {
+		return tm.mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
 	})
 }
 

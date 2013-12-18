@@ -318,6 +318,20 @@ func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout int) er
 	return nil
 }
 
+func (mysqld *Mysqld) WaitForMinimumReplicationPosition(groupId int64, waitTimeout time.Duration) (err error) {
+	for remaining := waitTimeout; remaining > 0; remaining -= time.Second {
+		pos, err := mysqld.SlaveStatus()
+		if err != nil {
+			return err
+		}
+		if pos.MasterLogGroupId >= groupId {
+			return nil
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("Time out waiting for group_id %v", groupId)
+}
+
 func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 	fields, err := mysqld.slaveStatus()
 	if err != nil {

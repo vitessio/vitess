@@ -51,6 +51,13 @@ type TabletManagerConn interface {
 	// StopSlave stops the mysql replication
 	StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
 
+	// StopSlaveMinimum stops the mysql replication after it reaches
+	// the provided minimum point
+	StopSlaveMinimum(tablet *topo.TabletInfo, groupId int64, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
+
+	// StartSlave starts the mysql replication
+	StartSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
+
 	// GetSlaves returns the addresses of the slaves
 	GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error)
 

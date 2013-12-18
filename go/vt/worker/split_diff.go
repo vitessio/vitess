@@ -12,6 +12,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -266,15 +267,50 @@ func (sdw *SplitDiffWorker) findTargets() error {
 //   (remove the cleanup task that does the same)
 // At this point, all checker instances are stopped at the same point.
 
+func findBlpPositionById(id uint32, list *tm.BlpPositionList) (*mysqlctl.BlpPosition, error) {
+	for _, pos := range list.Entries {
+		if pos.Uid == id {
+			return &pos, nil
+		}
+	}
+	return nil, topo.ErrNoNode
+}
+
 func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.setState(stateSynchronizeReplication)
 
 	// 1 - stop the master binlog replication, get its current position
-	_, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
+	blpPositionList, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
 		return err
 	}
 	wrangler.RecordStartBlpAction(sdw.cleaner, sdw.shardInfo.MasterAlias, 30*time.Second)
+
+	// 2 - stop all the source 'checker' at a binlog position
+	//     higher than the destination master
+	sourcePositions := make([]*mysqlctl.ReplicationPosition, len(sdw.shardInfo.SourceShards))
+	for i, ss := range sdw.shardInfo.SourceShards {
+		// find where we should be stopping
+		pos, err := findBlpPositionById(ss.Uid, blpPositionList)
+		if err != nil {
+			return fmt.Errorf("No binlog position on the master for Uid %v", ss.Uid)
+		}
+
+		// stop replication
+		sourcePositions[i], err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GroupId, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("Cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GroupId, err)
+		}
+
+		// change the cleaner actions from ChangeSlaveType(rdonly)
+		// to StartSlave() + ChangeSlaveType(spare)
+		wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.sourceAliases[i], 30*time.Second)
+		action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.sourceAliases[i])
+		if err != nil {
+			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
+		}
+		action.TabletType = topo.TYPE_SPARE
+	}
 
 	// 5 - restart filtered replication on destination master
 	err = sdw.wr.ActionInitiator().StartBlp(sdw.shardInfo.MasterAlias, 30*time.Second)

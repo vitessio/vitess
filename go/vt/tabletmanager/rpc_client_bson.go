@@ -124,6 +124,21 @@ func (client *GoRpcTabletManagerConn) StopSlave(tablet *topo.TabletInfo, waitTim
 	return client.rpcCallTablet(tablet, TABLET_ACTION_STOP_SLAVE, "", rpc.NilResponse, waitTime)
 }
 
+func (client *GoRpcTabletManagerConn) StopSlaveMinimum(tablet *topo.TabletInfo, groupId int64, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	var pos mysqlctl.ReplicationPosition
+	if err := client.rpcCallTablet(tablet, TABLET_ACTION_STOP_SLAVE_MINIMUM, &StopSlaveMinimumArgs{
+		GroupdId: groupId,
+		WaitTime: waitTime,
+	}, &pos, waitTime); err != nil {
+		return nil, err
+	}
+	return &pos, nil
+}
+
+func (client *GoRpcTabletManagerConn) StartSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return client.rpcCallTablet(tablet, TABLET_ACTION_START_SLAVE, "", rpc.NilResponse, waitTime)
+}
+
 func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error) {
 	var sl SlaveList
 	if err := client.rpcCallTablet(tablet, TABLET_ACTION_GET_SLAVES, "", &sl, waitTime); err != nil {
