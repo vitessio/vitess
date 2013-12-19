@@ -6,10 +6,12 @@ package worker
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
@@ -93,6 +95,9 @@ func (sdw *SplitDiffWorker) StatusAsHTML() string {
 	switch sdw.state {
 	case stateError:
 		result += "<b>Error</b>: " + sdw.err.Error() + "</br>\n"
+	case stateDone:
+		result += "<b>Success</b>:</br>\n"
+		result += strings.Join(sdw.diffLogs, "</br>\n")
 	}
 
 	return result
@@ -106,6 +111,9 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	switch sdw.state {
 	case stateError:
 		result += "Error: " + sdw.err.Error() + "\n"
+	case stateDone:
+		result += "Success:\n"
+		result += strings.Join(sdw.diffLogs, "\n")
 	}
 	return result
 }
@@ -384,8 +392,8 @@ func (sdw *SplitDiffWorker) diff() error {
 		return rec.Error()
 	}
 
-	// TODO(alainjobart) Checking against each source may be overkill, if all
-	// sources have the same schema?
+	// TODO(alainjobart) Checking against each source may be
+	// overkill, if all sources have the same schema?
 	sdw.diffLog("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
 	for i, sourceSchemaDefinition := range sdw.sourceSchemaDefinitions {
@@ -397,6 +405,44 @@ func (sdw *SplitDiffWorker) diff() error {
 	} else {
 		sdw.diffLog("Schema match, good.")
 	}
+
+	// run the diffs, 8 at a time
+	sdw.diffLog("Running the diffs...")
+	sem := sync2.NewSemaphore(1, 0)
+	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
+		wg.Add(1)
+		go func(tableDefinition mysqlctl.TableDefinition) {
+			defer wg.Done()
+			sem.Acquire()
+			defer sem.Release()
+
+			log.Infof("Starting the diff on table %v", tableDefinition.Name)
+			if len(sdw.sourceAliases) != 1 {
+				sdw.diffLog("Don't support more than one source for table: " + tableDefinition.Name)
+				return
+			}
+
+			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition)
+			if err != nil {
+				sdw.diffLog("FullTableScan(source) failed: " + err.Error())
+				return
+			}
+			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition)
+			if err != nil {
+				sdw.diffLog("FullTableScan(destination) failed: " + err.Error())
+				return
+			}
+
+			differ := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
+			err = differ.Go()
+			if err != nil {
+				sdw.diffLog("Differ.Go failed: " + err.Error())
+			}
+			sourceQueryResultReader.Close()
+			destinationQueryResultReader.Close()
+		}(tableDefinition)
+	}
+	wg.Wait()
 
 	return nil
 }
