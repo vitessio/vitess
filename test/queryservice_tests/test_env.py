@@ -311,7 +311,7 @@ class VtoccTestEnv(TestEnv):
     if utils.options.memcache:
       memcache = self.mysqldir+"/memcache.sock"
       occ_args.extend(["-rowcache-bin", "memcached"])
-      occ_args.extend(["-rowcache-s", memcache])
+      occ_args.extend(["-rowcache-socket", memcache])
 
     self.vtstderr = open("/tmp/vtocc_stderr.log", "a+")
     self.vtstdout = open("/tmp/vtocc_stdout.log", "a+")
