@@ -86,7 +86,7 @@ func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
-	log.Infof("SQL query for %v: %v", tabletAlias, sql)
+	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
 	req := &tproto.Query{
 		Sql:           sql,
 		BindVariables: make(map[string]interface{}),

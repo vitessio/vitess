@@ -3,13 +3,19 @@ package servenv
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/proc"
 )
 
 var (
 	onCloseHooks hooks
+
+	// filled in when calling Run or RunSecure
+	ListeningUrl url.URL
 )
 
 // Run starts listening for RPC and HTTP requests on the given port,
@@ -37,12 +43,25 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 		log.Infof("listening on secure port %v", securePort)
 		SecureServe(fmt.Sprintf(":%d", securePort), cert, key, caCert)
 	}
+	host, err := netutil.FullyQualifiedHostname()
+	if err != nil {
+		host, err = os.Hostname()
+		if err != nil {
+			log.Fatal("os.Hostname() failed: %v", err)
+		}
+	}
+	ListeningUrl = url.URL{
+		Scheme: "http",
+		Host:   fmt.Sprintf("%v:%v", host, port),
+		Path:   "/",
+	}
 	proc.Wait()
 	Close()
 }
 
 // Close runs any registered exit hooks in parallel.
 func Close() {
+	ListeningUrl = url.URL{}
 	onCloseHooks.Fire()
 }
 

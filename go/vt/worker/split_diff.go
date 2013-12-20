@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/servenv"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -207,7 +208,6 @@ func (sdw *SplitDiffWorker) init() error {
 // - find one rdonly per source shard
 // - find one rdonly in destination shard
 // - mark them all as 'checker' pointing back to us
-// TODO(alainjobart) add a tag pointing back to us to the checker instances
 
 func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	endPoints, err := sdw.wr.TopoServer().GetEndPoints(sdw.cell, sdw.keyspace, shard, topo.TYPE_RDONLY)
@@ -226,6 +226,18 @@ func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
 		return topo.TabletAlias{}, err
 	}
+	ourUrl := servenv.ListeningUrl.String()
+	log.Infof("Adding tag[worker]=%v to tablet %v", ourUrl, tabletAlias)
+	if err := sdw.wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
+		if tablet.Tags == nil {
+			tablet.Tags = make(map[string]string)
+		}
+		tablet.Tags["worker"] = ourUrl
+		return nil
+	}); err != nil {
+		return topo.TabletAlias{}, err
+	}
+	wrangler.RecordTabletTagAction(sdw.cleaner, tabletAlias, "worker", "")
 
 	// Record a clean-up action to take the tablet back to rdonly.
 	// We will alter this one later on and let the tablet go back to
