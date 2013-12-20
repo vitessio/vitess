@@ -338,7 +338,7 @@ func (wr *Wrangler) restartSlave(ti *topo.TabletInfo, rsd *tm.RestartSlaveData) 
 func (wr *Wrangler) checkMasterElect(ti *topo.TabletInfo) error {
 	// Check the master-elect is fit for duty - call out for hardware checks.
 	// if the server was already serving live traffic, it's probably good
-	if ti.IsServingType() {
+	if ti.IsInServingGraph() {
 		return nil
 	}
 	return wr.ExecuteOptionalTabletInfoHook(ti, hook.NewSimpleHook("preflight_serving_type"))

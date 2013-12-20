@@ -176,6 +176,7 @@ var AllTabletTypes = []TabletType{TYPE_IDLE,
 	TYPE_BACKUP,
 	TYPE_SNAPSHOT_SOURCE,
 	TYPE_RESTORE,
+	TYPE_CHECKER,
 	TYPE_SCRAP,
 }
 
@@ -255,10 +256,19 @@ func IsValidTypeChange(oldTabletType, newTabletType TabletType) bool {
 	return true
 }
 
-// IsServingType returns if a tablet appears in the serving graph
-func IsServingType(tt TabletType) bool {
+// IsInServingGraph returns if a tablet appears in the serving graph
+func IsInServingGraph(tt TabletType) bool {
 	switch tt {
 	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH:
+		return true
+	}
+	return false
+}
+
+// IsRunningQueryService returns if a tablet is running the query service
+func IsRunningQueryService(tt TabletType) bool {
+	switch tt {
+	case TYPE_MASTER, TYPE_REPLICA, TYPE_RDONLY, TYPE_BATCH, TYPE_CHECKER:
 		return true
 	}
 	return false
@@ -373,8 +383,12 @@ func (tablet *Tablet) DbName() string {
 	return vtDbPrefix + tablet.Keyspace
 }
 
-func (tablet *Tablet) IsServingType() bool {
-	return IsServingType(tablet.Type)
+func (tablet *Tablet) IsInServingGraph() bool {
+	return IsInServingGraph(tablet.Type)
+}
+
+func (tablet *Tablet) IsRunningQueryService() bool {
+	return IsRunningQueryService(tablet.Type)
 }
 
 func (tablet *Tablet) IsInReplicationGraph() bool {

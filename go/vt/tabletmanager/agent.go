@@ -226,7 +226,7 @@ func (agent *ActionAgent) verifyTopology() error {
 }
 
 func (agent *ActionAgent) verifyServingAddrs() error {
-	if !agent.Tablet().IsServingType() {
+	if !agent.Tablet().IsRunningQueryService() {
 		return nil
 	}
 

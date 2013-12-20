@@ -886,7 +886,7 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 	if runHooks {
 		// Only run the preflight_serving_type hook when
 		// transitioning from non-serving to serving.
-		if !topo.IsServingType(tablet.Type) && topo.IsServingType(newType) {
+		if !topo.IsInServingGraph(tablet.Type) && topo.IsInServingGraph(newType) {
 			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
 				return err
 			}

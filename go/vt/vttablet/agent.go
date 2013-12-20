@@ -78,7 +78,7 @@ func InitAgent(
 			}
 		}
 
-		if (newTablet.IsServingType() || newTablet.Type == topo.TYPE_CHECKER) && allowQuery {
+		if newTablet.IsRunningQueryService() && allowQuery {
 			if dbcfgs.App.DbName == "" {
 				dbcfgs.App.DbName = newTablet.DbName()
 			}

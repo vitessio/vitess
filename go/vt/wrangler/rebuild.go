@@ -148,10 +148,10 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 			knownShardLocations[shardLocation] = true
 		}
 
-		// Check IsServingType after we have populated existingDbTypeLocations
-		// so we properly prune data if the definition of serving type
-		// changes.
-		if !tablet.IsServingType() {
+		// Check IsInServingGraph after we have populated
+		// existingDbTypeLocations so we properly prune data
+		// if the definition of serving type changes.
+		if !tablet.IsInServingGraph() {
 			continue
 		}
 
@@ -327,7 +327,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 			if err != nil {
 				return err
 			}
-			if !ti.IsServingType() {
+			if !ti.IsInServingGraph() {
 				continue
 			}
 

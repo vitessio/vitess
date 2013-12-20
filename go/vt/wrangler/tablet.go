@@ -169,7 +169,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	if err != nil {
 		return "", err
 	}
-	rebuildRequired := ti.Tablet.IsServingType()
+	rebuildRequired := ti.Tablet.IsInServingGraph()
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
@@ -249,7 +249,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletT
 	if err != nil {
 		return err
 	}
-	rebuildRequired := ti.Tablet.IsServingType()
+	rebuildRequired := ti.Tablet.IsInServingGraph()
 
 	if force {
 		// with --force, we do not run any hook
@@ -287,7 +287,7 @@ func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletT
 		if err != nil {
 			return err
 		}
-		if ti.Tablet.IsServingType() {
+		if ti.Tablet.IsInServingGraph() {
 			rebuildRequired = true
 			keyspaceToRebuild = ti.Keyspace
 			shardToRebuild = ti.Shard
@@ -310,7 +310,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	if err != nil {
 		return err
 	}
-	rebuildRequired := ti.Tablet.IsServingType()
+	rebuildRequired := ti.Tablet.IsInServingGraph()
 
 	// change the type
 	if wr.UseRPCs {

@@ -342,7 +342,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		if err != nil {
 			return nil, err
 		}
-		typeChangeRequired := ti.Tablet.IsServingType()
+		typeChangeRequired := ti.Tablet.IsInServingGraph()
 		if typeChangeRequired {
 			// note we want to update the serving graph there
 			err = wr.changeTypeInternal(ti.Alias, topo.TYPE_SCHEMA_UPGRADE)
