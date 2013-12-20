@@ -41,7 +41,7 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 	if err != nil {
 		host, err = os.Hostname()
 		if err != nil {
-			log.Fatal("os.Hostname() failed: %v", err)
+			log.Fatalf("os.Hostname() failed: %v", err)
 		}
 	}
 	ListeningURL = url.URL{
