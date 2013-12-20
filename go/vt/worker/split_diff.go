@@ -217,15 +217,13 @@ func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	if len(endPoints.Entries) == 0 {
 		return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", sdw.cell, sdw.keyspace, shard)
 	}
-
 	tabletAlias := topo.TabletAlias{
 		Cell: sdw.cell,
 		Uid:  endPoints.Entries[0].Uid,
 	}
-	log.Infof("Changing tablet %v to 'checker'", tabletAlias)
-	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
-		return topo.TabletAlias{}, err
-	}
+
+	// We add the tag before calling ChangeSlaveType, so the destination
+	// vttablet reloads the worker URL when it reloads the tablet.
 	ourURL := servenv.ListeningURL.String()
 	log.Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
 	if err := sdw.wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
@@ -237,7 +235,15 @@ func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	}); err != nil {
 		return topo.TabletAlias{}, err
 	}
-	wrangler.RecordTabletTagAction(sdw.cleaner, tabletAlias, "worker", "")
+	// we remove the tag *before* calling ChangeSlaveType back, so
+	// we need to record this tag change after the change slave
+	// type change in the cleaner.
+	defer wrangler.RecordTabletTagAction(sdw.cleaner, tabletAlias, "worker", "")
+
+	log.Infof("Changing tablet %v to 'checker'", tabletAlias)
+	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
+		return topo.TabletAlias{}, err
+	}
 
 	// Record a clean-up action to take the tablet back to rdonly.
 	// We will alter this one later on and let the tablet go back to
