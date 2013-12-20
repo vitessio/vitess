@@ -672,6 +672,19 @@ type BlpPosition struct {
 	GroupId int64
 }
 
+type BlpPositionList struct {
+	Entries []BlpPosition
+}
+
+func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*BlpPosition, error) {
+	for _, pos := range bpl.Entries {
+		if pos.Uid == id {
+			return &pos, nil
+		}
+	}
+	return nil, fmt.Errorf("BlpPosition for id %v not found", id)
+}
+
 func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
 	timeOut := time.Now().Add(time.Duration(waitTimeout) * time.Second)
 	for {

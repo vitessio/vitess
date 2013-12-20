@@ -154,8 +154,8 @@ func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, b
 	}, rpc.NilResponse, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) StopBlp(tablet *topo.TabletInfo, waitTime time.Duration) (*BlpPositionList, error) {
-	var bpl BlpPositionList
+func (client *GoRpcTabletManagerConn) StopBlp(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.BlpPositionList, error) {
+	var bpl mysqlctl.BlpPositionList
 	if err := client.rpcCallTablet(tablet, TABLET_ACTION_STOP_BLP, "", &bpl, waitTime); err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (client *GoRpcTabletManagerConn) StartBlp(tablet *topo.TabletInfo, waitTime
 	return client.rpcCallTablet(tablet, TABLET_ACTION_START_BLP, "", rpc.NilResponse, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, positions *BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
 	var pos mysqlctl.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, TABLET_ACTION_RUN_BLP_UNTIL, &RunBlpUntilArgs{
 		BlpPositionList: positions,

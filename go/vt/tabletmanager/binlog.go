@@ -339,7 +339,7 @@ func (blm *BinlogPlayerMap) Start() {
 }
 
 // BlpPositionList returns the current position of all the players
-func (blm *BinlogPlayerMap) BlpPositionList() (*BlpPositionList, error) {
+func (blm *BinlogPlayerMap) BlpPositionList() (*mysqlctl.BlpPositionList, error) {
 	// create a db connection for this purpose
 	vtClient := mysqlctl.NewDbClient(&blm.dbConfig)
 	if err := vtClient.Connect(); err != nil {
@@ -347,7 +347,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() (*BlpPositionList, error) {
 	}
 	defer vtClient.Close()
 
-	result := &BlpPositionList{}
+	result := &mysqlctl.BlpPositionList{}
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
 	for _, bpc := range blm.players {
@@ -363,7 +363,7 @@ func (blm *BinlogPlayerMap) BlpPositionList() (*BlpPositionList, error) {
 
 // RunUntil will run all the players until they reach the given position.
 // Holds the map lock during that exercise, shouldn't take long at all.
-func (blm *BinlogPlayerMap) RunUntil(blpPositionList *BlpPositionList, waitTimeout time.Duration) error {
+func (blm *BinlogPlayerMap) RunUntil(blpPositionList *mysqlctl.BlpPositionList, waitTimeout time.Duration) error {
 	// lock and check state
 	blm.mu.Lock()
 	defer blm.mu.Unlock()
