@@ -272,8 +272,10 @@ func (result *Result) Next() (row []interface{}) {
 	}
 	row = make([]interface{}, len(result.qr.Rows[result.index]))
 	for i, v := range result.qr.Rows[result.index] {
-		if !v.IsNull() {
-			row[i] = convert(int(result.qr.Fields[i].Type), v.String())
+		var err error
+		row[i], err = mproto.Convert(result.qr.Fields[i].Type, v)
+		if err != nil {
+			panic(err) // unexpected
 		}
 	}
 	result.index++
@@ -324,8 +326,10 @@ func (sr *StreamResult) Next() (row []interface{}) {
 
 	row = make([]interface{}, len(sr.qr.Rows[sr.index]))
 	for i, v := range sr.qr.Rows[sr.index] {
-		if !v.IsNull() {
-			row[i] = convert(int(sr.columns.Fields[i].Type), v.String())
+		var err error
+		row[i], err = mproto.Convert(sr.columns.Fields[i].Type, v)
+		if err != nil {
+			panic(err) // unexpected
 		}
 	}
 

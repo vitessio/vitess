@@ -5,17 +5,74 @@
 package proto
 
 import (
+	"strconv"
+
 	"github.com/youtube/vitess/go/sqltypes"
 )
 
+// These numbers should exactly match values defined in dist/mysql-5.1.52/include/mysql/mysql_com.h
+const (
+	VT_DECIMAL     = 0
+	VT_TINY        = 1
+	VT_SHORT       = 2
+	VT_LONG        = 3
+	VT_FLOAT       = 4
+	VT_DOUBLE      = 5
+	VT_NULL        = 6
+	VT_TIMESTAMP   = 7
+	VT_LONGLONG    = 8
+	VT_INT24       = 9
+	VT_DATE        = 10
+	VT_TIME        = 11
+	VT_DATETIME    = 12
+	VT_YEAR        = 13
+	VT_NEWDATE     = 14
+	VT_VARCHAR     = 15
+	VT_BIT         = 16
+	VT_NEWDECIMAL  = 246
+	VT_ENUM        = 247
+	VT_SET         = 248
+	VT_TINY_BLOB   = 249
+	VT_MEDIUM_BLOB = 250
+	VT_LONG_BLOB   = 251
+	VT_BLOB        = 252
+	VT_VAR_STRING  = 253
+	VT_STRING      = 254
+	VT_GEOMETRY    = 255
+)
+
+// Field described a column returned by mysql
 type Field struct {
 	Name string
 	Type int64
 }
 
+// QueryResult is the structure returned by the mysql library.
+// When transmitted over the wire, the Rows all come back as strings
+// and lose their original sqltypes. use Fields.Type to convert
+// them back if needed, using the following functions.
 type QueryResult struct {
 	Fields       []Field
 	RowsAffected uint64
 	InsertId     uint64
 	Rows         [][]sqltypes.Value
+}
+
+// Convert takes a type and a value, and returns the type:
+// - int64 for integer number types that fit in 64 bits
+//   (signed or unsigned are all converted to signed)
+// - float64 for floating point values that fit in a float
+// - []byte for everything else
+func Convert(mysqlType int64, val sqltypes.Value) (interface{}, error) {
+	if val.IsNull() {
+		return nil, nil
+	}
+
+	switch mysqlType {
+	case VT_TINY, VT_SHORT, VT_LONG, VT_LONGLONG, VT_INT24:
+		return strconv.ParseInt(val.String(), 0, 64)
+	case VT_FLOAT, VT_DOUBLE:
+		return strconv.ParseFloat(val.String(), 64)
+	}
+	return val.Raw(), nil
 }

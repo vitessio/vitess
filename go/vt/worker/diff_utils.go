@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
@@ -270,26 +269,25 @@ func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 		for i := 0; i < rd.pkFieldCount; i++ {
 			// note this is correct, but can be seriously optimized
 			fieldType := rd.left.FieldType(i)
-			lv := mysql.BuildValue(left[i].Raw(), uint32(fieldType))
-			rv := mysql.BuildValue(right[i].Raw(), uint32(fieldType))
-
-			if lv.IsNumeric() {
-				ln, err := lv.ParseInt64()
-				if err != nil {
-					return dr, err
-				}
-				rn, err := rv.ParseInt64()
-				if err != nil {
-					return dr, err
-				}
-				if ln < rn {
+			lv, err := mproto.Convert(fieldType, left[i])
+			if err != nil {
+				return dr, err
+			}
+			rv, err := mproto.Convert(fieldType, right[i])
+			if err != nil {
+				return dr, err
+			}
+			switch l := lv.(type) {
+			case int64:
+				r := rv.(int64)
+				if l < r {
 					if dr.extraRowsLeft < 10 {
 						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
 					}
 					dr.extraRowsLeft++
 					advanceLeft = true
 					break
-				} else if ln > rn {
+				} else if l > r {
 					if dr.extraRowsRight < 10 {
 						log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
 					}
@@ -297,8 +295,26 @@ func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 					advanceRight = true
 					break
 				}
-			} else if lv.IsString() {
-				c := bytes.Compare(left[i].Raw(), right[i].Raw())
+			case float64:
+				r := rv.(float64)
+				if l < r {
+					if dr.extraRowsLeft < 10 {
+						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
+					}
+					dr.extraRowsLeft++
+					advanceLeft = true
+					break
+				} else if l > r {
+					if dr.extraRowsRight < 10 {
+						log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
+					}
+					dr.extraRowsRight++
+					advanceRight = true
+					break
+				}
+			case []byte:
+				r := rv.([]byte)
+				c := bytes.Compare(l, r)
 				if c < 0 {
 					if dr.extraRowsLeft < 10 {
 						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
@@ -314,14 +330,15 @@ func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 					advanceRight = true
 					break
 				}
-			} else {
-				return dr, fmt.Errorf("Fractional types not supported in primary keys for diffs")
+			default:
+				return dr, fmt.Errorf("Unsuported type %T returned by mysql.proto.Convert", l)
 			}
 		}
 	}
 }
 
-// return the index of the first different fields, or -1 if both rows are the same
+// RowsEqual returns the index of the first different fields, or -1 if
+// both rows are the same
 func RowsEqual(left, right []sqltypes.Value) int {
 	for i, l := range left {
 		if !bytes.Equal(l.Raw(), right[i].Raw()) {
