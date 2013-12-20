@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"time"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -200,11 +201,18 @@ func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.Tabl
 
 // DiffReport has the stats for a diff job
 type DiffReport struct {
-	processedRows  int
+	// general stats
+	processedRows int
+
+	// stats about the diff
 	matchingRows   int
 	mismatchedRows int
 	extraRowsLeft  int
 	extraRowsRight int
+
+	// QPS variables and stats
+	startingTime  time.Time
+	processingQPS int
 }
 
 // HasDifferences returns true if the diff job recorded any difference
@@ -212,9 +220,19 @@ func (dr *DiffReport) HasDifferences() bool {
 	return dr.mismatchedRows > 0 || dr.extraRowsLeft > 0 || dr.extraRowsRight > 0
 }
 
+// ComputeQPS fills in processingQPS
+func (dr *DiffReport) ComputeQPS() {
+	if dr.processedRows > 0 {
+		dr.processingQPS = int(time.Duration(dr.processedRows) * time.Second / time.Now().Sub(dr.startingTime))
+	}
+}
+
 // Go runs the diff. If there is no error, it will drain both sides.
 // If an error occurs, it will just return it and stop.
 func (rd *RowDiffer) Go() (dr DiffReport, err error) {
+
+	dr.startingTime = time.Now()
+	defer dr.ComputeQPS()
 
 	var left []sqltypes.Value
 	var right []sqltypes.Value

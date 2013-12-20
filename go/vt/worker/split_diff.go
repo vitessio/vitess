@@ -226,13 +226,13 @@ func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
 		return topo.TabletAlias{}, err
 	}
-	ourUrl := servenv.ListeningUrl.String()
-	log.Infof("Adding tag[worker]=%v to tablet %v", ourUrl, tabletAlias)
+	ourURL := servenv.ListeningURL.String()
+	log.Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
 	if err := sdw.wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
 		if tablet.Tags == nil {
 			tablet.Tags = make(map[string]string)
 		}
-		tablet.Tags["worker"] = ourUrl
+		tablet.Tags["worker"] = ourURL
 		return nil
 	}); err != nil {
 		return topo.TabletAlias{}, err
@@ -467,7 +467,7 @@ func (sdw *SplitDiffWorker) diff() error {
 				if report.HasDifferences() {
 					sdw.diffLog(fmt.Sprintf("Table %v has differences: %v", tableDefinition.Name, report))
 				} else {
-					sdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed)", tableDefinition.Name, report.processedRows))
+					sdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS))
 				}
 			}
 		}(tableDefinition)

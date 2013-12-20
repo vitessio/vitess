@@ -15,7 +15,7 @@ var (
 	onCloseHooks hooks
 
 	// filled in when calling Run or RunSecure
-	ListeningUrl url.URL
+	ListeningURL url.URL
 )
 
 // Run starts listening for RPC and HTTP requests on the given port,
@@ -37,12 +37,6 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 		log.Fatal(err)
 	}
 
-	go http.Serve(l, nil)
-
-	if securePort != 0 {
-		log.Infof("listening on secure port %v", securePort)
-		SecureServe(fmt.Sprintf(":%d", securePort), cert, key, caCert)
-	}
 	host, err := netutil.FullyQualifiedHostname()
 	if err != nil {
 		host, err = os.Hostname()
@@ -50,10 +44,17 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 			log.Fatal("os.Hostname() failed: %v", err)
 		}
 	}
-	ListeningUrl = url.URL{
+	ListeningURL = url.URL{
 		Scheme: "http",
 		Host:   fmt.Sprintf("%v:%v", host, port),
 		Path:   "/",
+	}
+
+	go http.Serve(l, nil)
+
+	if securePort != 0 {
+		log.Infof("listening on secure port %v", securePort)
+		SecureServe(fmt.Sprintf(":%d", securePort), cert, key, caCert)
 	}
 	proc.Wait()
 	Close()
@@ -61,8 +62,8 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 
 // Close runs any registered exit hooks in parallel.
 func Close() {
-	ListeningUrl = url.URL{}
 	onCloseHooks.Fire()
+	ListeningURL = url.URL{}
 }
 
 // OnClose registers f to be run at the end of the app lifecycle. All
