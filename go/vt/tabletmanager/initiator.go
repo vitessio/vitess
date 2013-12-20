@@ -232,6 +232,24 @@ func (ai *ActionInitiator) StopSlave(tablet *topo.TabletInfo, waitTime time.Dura
 	return ai.rpc.StopSlave(tablet, waitTime)
 }
 
+func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, groupId int64, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	return ai.rpc.StopSlaveMinimum(tablet, groupId, waitTime)
+}
+
+func (ai *ActionInitiator) StartSlave(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return ai.rpc.StartSlave(tablet, waitTime)
+}
+
 func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -243,6 +261,15 @@ func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosi
 
 type BlpPositionList struct {
 	Entries []mysqlctl.BlpPosition
+}
+
+func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*mysqlctl.BlpPosition, error) {
+	for _, pos := range bpl.Entries {
+		if pos.Uid == id {
+			return &pos, nil
+		}
+	}
+	return nil, topo.ErrNoNode
 }
 
 func (ai *ActionInitiator) StopBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) (*BlpPositionList, error) {
@@ -261,6 +288,15 @@ func (ai *ActionInitiator) StartBlp(tabletAlias topo.TabletAlias, waitTime time.
 	}
 
 	return ai.rpc.StartBlp(tablet, waitTime)
+}
+
+func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+	tablet, err := ai.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	return ai.rpc.RunBlpUntil(tablet, positions, waitTime)
 }
 
 type ReserveForRestoreArgs struct {

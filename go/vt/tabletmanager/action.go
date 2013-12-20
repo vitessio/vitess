@@ -55,6 +55,13 @@ const (
 	// StopSlave will stop MySQL replication.
 	TABLET_ACTION_STOP_SLAVE = "StopSlave"
 
+	// StopSlave will stop MySQL replication after it reaches a
+	// minimum point.
+	TABLET_ACTION_STOP_SLAVE_MINIMUM = "StopSlaveMinimum"
+
+	// StartSlave will start MySQL replication.
+	TABLET_ACTION_START_SLAVE = "StartSlave"
+
 	TABLET_ACTION_BREAK_SLAVES        = "BreakSlaves"
 	TABLET_ACTION_MASTER_POSITION     = "MasterPosition"
 	TABLET_ACTION_REPARENT_POSITION   = "ReparentPosition"
@@ -63,6 +70,7 @@ const (
 	TABLET_ACTION_WAIT_BLP_POSITION   = "WaitBlpPosition"
 	TABLET_ACTION_STOP_BLP            = "StopBlp"
 	TABLET_ACTION_START_BLP           = "StartBlp"
+	TABLET_ACTION_RUN_BLP_UNTIL       = "RunBlpUntil"
 	TABLET_ACTION_SCRAP               = "Scrap"
 	TABLET_ACTION_GET_SCHEMA          = "GetSchema"
 	TABLET_ACTION_PREFLIGHT_SCHEMA    = "PreflightSchema"
@@ -211,8 +219,10 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
+		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,
 		TABLET_ACTION_GET_SLAVES, TABLET_ACTION_WAIT_BLP_POSITION,
-		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP:
+		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP,
+		TABLET_ACTION_RUN_BLP_UNTIL:
 		return nil, fmt.Errorf("rpc-only action: %v", node.Action)
 
 	default:

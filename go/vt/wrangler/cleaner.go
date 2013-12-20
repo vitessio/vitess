@@ -159,6 +159,32 @@ func (csta ChangeSlaveTypeAction) CleanUp(wr *Wrangler) error {
 }
 
 //
+// StartSlaveAction CleanerAction
+//
+
+// StartSlaveAction will restart binlog replication on a server
+type StartSlaveAction struct {
+	TabletAlias topo.TabletAlias
+	WaitTime    time.Duration
+}
+
+const StartSlaveActionName = "StartSlaveAction"
+
+// RecordStartSlaveAction records a new StartSlaveAction
+// into the specified Cleaner
+func RecordStartSlaveAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, waitTime time.Duration) {
+	cleaner.Record(StartSlaveActionName, tabletAlias.String(), &StartSlaveAction{
+		TabletAlias: tabletAlias,
+		WaitTime:    waitTime,
+	})
+}
+
+// CleanUp is part of CleanerAction interface.
+func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
+	return wr.ActionInitiator().StartSlave(sba.TabletAlias, sba.WaitTime)
+}
+
+//
 // StartBlpAction CleanerAction
 //
 

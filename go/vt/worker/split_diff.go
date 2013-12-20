@@ -12,6 +12,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -121,10 +122,7 @@ func (sdw *SplitDiffWorker) CheckInterrupted() bool {
 
 // Run is mostly a wrapper to run the cleanup at the end.
 func (sdw *SplitDiffWorker) Run() {
-	var err error
-	if err = sdw.run(); err != nil {
-		sdw.recordError(err)
-	}
+	err := sdw.run()
 
 	sdw.setState(stateCleanUp)
 	cerr := sdw.cleaner.CleanUp(sdw.wr)
@@ -132,13 +130,14 @@ func (sdw *SplitDiffWorker) Run() {
 		if err != nil {
 			log.Errorf("CleanUp failed in addition to job error: %v", cerr)
 		} else {
-			sdw.recordError(cerr)
 			err = cerr
 		}
 	}
-	if err == nil {
-		sdw.setState(stateDone)
+	if err != nil {
+		sdw.recordError(err)
+		return
 	}
+	sdw.setState(stateDone)
 }
 
 func (sdw *SplitDiffWorker) run() error {
@@ -270,13 +269,68 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.setState(stateSynchronizeReplication)
 
 	// 1 - stop the master binlog replication, get its current position
-	_, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
+	log.Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
+	blpPositionList, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
 		return err
 	}
 	wrangler.RecordStartBlpAction(sdw.cleaner, sdw.shardInfo.MasterAlias, 30*time.Second)
 
+	// 2 - stop all the source 'checker' at a binlog position
+	//     higher than the destination master
+	stopPositionList := tm.BlpPositionList{
+		Entries: make([]mysqlctl.BlpPosition, len(sdw.shardInfo.SourceShards)),
+	}
+	for i, ss := range sdw.shardInfo.SourceShards {
+		// find where we should be stopping
+		pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
+		if err != nil {
+			return fmt.Errorf("No binlog position on the master for Uid %v", ss.Uid)
+		}
+
+		// stop replication
+		log.Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GroupId)
+		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GroupId, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("Cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GroupId, err)
+		}
+		stopPositionList.Entries[i].Uid = ss.Uid
+		stopPositionList.Entries[i].GroupId = stoppedAt.MasterLogGroupId
+
+		// change the cleaner actions from ChangeSlaveType(rdonly)
+		// to StartSlave() + ChangeSlaveType(spare)
+		wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.sourceAliases[i], 30*time.Second)
+		action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.sourceAliases[i])
+		if err != nil {
+			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
+		}
+		action.TabletType = topo.TYPE_SPARE
+	}
+
+	// 3 - ask the master of the destination shard to resume filtered
+	//     replication up to the new list of positions
+	log.Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
+	masterPos, err := sdw.wr.ActionInitiator().RunBlpUntil(sdw.shardInfo.MasterAlias, &stopPositionList, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	// 4 - wait until the destination checker is equal or passed
+	//     that master binlog position, and stop its replication.
+	log.Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGroupId)
+	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos.MasterLogGroupId, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.destinationAlias, 30*time.Second)
+	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
+	if err != nil {
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
+	}
+	action.TabletType = topo.TYPE_SPARE
+
 	// 5 - restart filtered replication on destination master
+	log.Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	err = sdw.wr.ActionInitiator().StartBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		log.Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)

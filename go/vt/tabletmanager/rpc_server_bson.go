@@ -6,6 +6,7 @@ package tabletmanager
 
 import (
 	"fmt"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
@@ -137,6 +138,30 @@ func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRe
 	})
 }
 
+type StopSlaveMinimumArgs struct {
+	GroupdId int64
+	WaitTime time.Duration
+}
+
+func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopSlaveMinimumArgs, reply *mysqlctl.ReplicationPosition) error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, func() error {
+		if err := tm.mysqld.WaitForMinimumReplicationPosition(args.GroupdId, args.WaitTime); err != nil {
+			return err
+		}
+		position, err := tm.mysqld.SlaveStatus()
+		if err == nil {
+			*reply = *position
+		}
+		return err
+	})
+}
+
+func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_START_SLAVE, args, reply, func() error {
+		return tm.mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
+	})
+}
+
 func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *SlaveList) error {
 	return tm.rpcWrap(context.RemoteAddr, TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
@@ -157,7 +182,7 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBl
 }
 
 func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *BlpPositionList) error {
-	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_STOP_BLP, args, reply, func() error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_STOP_BLP, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")
 		}
@@ -172,12 +197,33 @@ func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequ
 }
 
 func (tm *TabletManager) StartBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
-	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_START_BLP, args, reply, func() error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_START_BLP, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")
 		}
 		tm.agent.BinlogPlayerMap.Start()
 		return nil
+	})
+}
+
+type RunBlpUntilArgs struct {
+	BlpPositionList *BlpPositionList
+	WaitTimeout     time.Duration
+}
+
+func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUntilArgs, reply *mysqlctl.ReplicationPosition) error {
+	return tm.rpcWrapLock(context.RemoteAddr, TABLET_ACTION_RUN_BLP_UNTIL, args, reply, func() error {
+		if tm.agent.BinlogPlayerMap == nil {
+			return fmt.Errorf("No BinlogPlayerMap configured")
+		}
+		if err := tm.agent.BinlogPlayerMap.RunUntil(args.BlpPositionList, args.WaitTimeout); err != nil {
+			return err
+		}
+		position, err := tm.mysqld.MasterStatus()
+		if err == nil {
+			*reply = *position
+		}
+		return err
 	})
 }
 
