@@ -50,7 +50,8 @@ func orderedColumns(tableDefinition *mysqlctl.TableDefinition) []string {
 }
 
 // FullTableScan returns a QueryResultReader that gets all the rows from a table
-// that match the supplied KeyRange
+// that match the supplied KeyRange, ordered by Primary Key. The returned
+// columns are ordered with the Primary Key columns in front.
 func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange) (*QueryResultReader, error) {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
@@ -124,6 +125,7 @@ type RowReader struct {
 	currentIndex      int
 }
 
+// NewRowReader returns a RowReader based on the QueryResultReader
 func NewRowReader(queryResultReader *QueryResultReader) *RowReader {
 	return &RowReader{
 		queryResultReader: queryResultReader,
@@ -151,26 +153,13 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	return result, nil
 }
 
-// FieldType returns the type of the i-th column
-func (rr *RowReader) FieldType(i int) int64 {
-	return rr.queryResultReader.Fields[i].Type
+// Fields returns the types for the rows
+func (rr *RowReader) Fields() []mproto.Field {
+	return rr.queryResultReader.Fields
 }
 
-type RowDiffer struct {
-	left         *RowReader
-	right        *RowReader
-	pkFieldCount int
-}
-
-func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.TableDefinition) *RowDiffer {
-	return &RowDiffer{
-		left:         NewRowReader(left),
-		right:        NewRowReader(right),
-		pkFieldCount: len(tableDefinition.PrimaryKeyColumns),
-	}
-}
-
-func drain(rr *RowReader) (int, error) {
+// Drain will empty the RowReader and return how many rows we got
+func (rr *RowReader) Drain() (int, error) {
 	count := 0
 	for {
 		row, err := rr.Next()
@@ -184,6 +173,24 @@ func drain(rr *RowReader) (int, error) {
 	}
 }
 
+// RowDiffer will consume rows on both sides, and compare them.
+// It assumes left and right are sorted by ascending primary key.
+type RowDiffer struct {
+	left         *RowReader
+	right        *RowReader
+	pkFieldCount int
+}
+
+// NewRowDiffer returns a new RowDiffer
+func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.TableDefinition) *RowDiffer {
+	return &RowDiffer{
+		left:         NewRowReader(left),
+		right:        NewRowReader(right),
+		pkFieldCount: len(tableDefinition.PrimaryKeyColumns),
+	}
+}
+
+// DiffReport has the stats for a diff job
 type DiffReport struct {
 	processedRows  int
 	matchingRows   int
@@ -192,10 +199,13 @@ type DiffReport struct {
 	extraRowsRight int
 }
 
+// HasDifferences returns true if the diff job recorded any difference
 func (dr *DiffReport) HasDifferences() bool {
 	return dr.mismatchedRows > 0 || dr.extraRowsLeft > 0 || dr.extraRowsRight > 0
 }
 
+// Go runs the diff. If there is no error, it will drain both sides.
+// If an error occurs, it will just return it and stop.
 func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 
 	var left []sqltypes.Value
@@ -226,7 +236,7 @@ func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 			}
 
 			// drain right, update count
-			if count, err := drain(rd.right); err != nil {
+			if count, err := rd.right.Drain(); err != nil {
 				return dr, err
 			} else {
 				dr.extraRowsRight += 1 + count
@@ -236,7 +246,7 @@ func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 		if right == nil {
 			// no more rows from the right
 			// we know we have rows from left, drain, update count
-			if count, err := drain(rd.left); err != nil {
+			if count, err := rd.left.Drain(); err != nil {
 				return dr, err
 			} else {
 				dr.extraRowsLeft += 1 + count
@@ -266,74 +276,35 @@ func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 		}
 
 		// have to find the 'smallest' raw and advance it
-		for i := 0; i < rd.pkFieldCount; i++ {
-			// note this is correct, but can be seriously optimized
-			fieldType := rd.left.FieldType(i)
-			lv, err := mproto.Convert(fieldType, left[i])
-			if err != nil {
-				return dr, err
-			}
-			rv, err := mproto.Convert(fieldType, right[i])
-			if err != nil {
-				return dr, err
-			}
-			switch l := lv.(type) {
-			case int64:
-				r := rv.(int64)
-				if l < r {
-					if dr.extraRowsLeft < 10 {
-						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
-					}
-					dr.extraRowsLeft++
-					advanceLeft = true
-					break
-				} else if l > r {
-					if dr.extraRowsRight < 10 {
-						log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
-					}
-					dr.extraRowsRight++
-					advanceRight = true
-					break
-				}
-			case float64:
-				r := rv.(float64)
-				if l < r {
-					if dr.extraRowsLeft < 10 {
-						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
-					}
-					dr.extraRowsLeft++
-					advanceLeft = true
-					break
-				} else if l > r {
-					if dr.extraRowsRight < 10 {
-						log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
-					}
-					dr.extraRowsRight++
-					advanceRight = true
-					break
-				}
-			case []byte:
-				r := rv.([]byte)
-				c := bytes.Compare(l, r)
-				if c < 0 {
-					if dr.extraRowsLeft < 10 {
-						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
-					}
-					dr.extraRowsLeft++
-					advanceLeft = true
-					break
-				} else if c > 0 {
-					if dr.extraRowsRight < 10 {
-						log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
-					}
-					dr.extraRowsRight++
-					advanceRight = true
-					break
-				}
-			default:
-				return dr, fmt.Errorf("Unsuported type %T returned by mysql.proto.Convert", l)
-			}
+		c, err := CompareRows(rd.left.Fields(), rd.pkFieldCount, left, right)
+		if err != nil {
+			return dr, err
 		}
+		if c < 0 {
+			if dr.extraRowsLeft < 10 {
+				log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
+			}
+			dr.extraRowsLeft++
+			advanceLeft = true
+			continue
+		} else if c > 0 {
+			if dr.extraRowsRight < 10 {
+				log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
+			}
+			dr.extraRowsRight++
+			advanceRight = true
+			continue
+		}
+
+		// After looking at primary keys more carefully,
+		// they're the same. Logging a regular difference
+		// then, and advancing both.
+		if dr.mismatchedRows < 10 {
+			log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, left, right)
+		}
+		dr.mismatchedRows++
+		advanceLeft = true
+		advanceRight = true
 	}
 }
 
@@ -346,4 +317,44 @@ func RowsEqual(left, right []sqltypes.Value) int {
 		}
 	}
 	return -1
+}
+
+// CompareRows returns:
+// -1 if left is smaller than right
+// 0 if left and right are equal
+// +1 if left is bigger than right
+func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
+	for i := 0; i < compareCount; i++ {
+		fieldType := fields[i].Type
+		lv, err := mproto.Convert(fieldType, left[i])
+		if err != nil {
+			return 0, err
+		}
+		rv, err := mproto.Convert(fieldType, right[i])
+		if err != nil {
+			return 0, err
+		}
+		switch l := lv.(type) {
+		case int64:
+			r := rv.(int64)
+			if l < r {
+				return -1, nil
+			} else if l > r {
+				return 1, nil
+			}
+		case float64:
+			r := rv.(float64)
+			if l < r {
+				return -1, nil
+			} else if l > r {
+				return 1, nil
+			}
+		case []byte:
+			r := rv.([]byte)
+			return bytes.Compare(l, r), nil
+		default:
+			return 0, fmt.Errorf("Unsuported type %T returned by mysql.proto.Convert", l)
+		}
+	}
+	return 0, nil
 }

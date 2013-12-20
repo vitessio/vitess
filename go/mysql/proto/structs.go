@@ -59,6 +59,7 @@ type QueryResult struct {
 }
 
 // Convert takes a type and a value, and returns the type:
+// - nil for NULL value
 // - int64 for integer number types that fit in 64 bits
 //   (signed or unsigned are all converted to signed)
 // - float64 for floating point values that fit in a float
