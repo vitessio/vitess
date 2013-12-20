@@ -182,12 +182,20 @@ type RowDiffer struct {
 }
 
 // NewRowDiffer returns a new RowDiffer
-func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.TableDefinition) *RowDiffer {
+func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.TableDefinition) (*RowDiffer, error) {
+	if len(left.Fields) != len(right.Fields) {
+		return nil, fmt.Errorf("Cannot diff inputs with different types")
+	}
+	for i, field := range left.Fields {
+		if field.Type != right.Fields[i].Type {
+			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, right.Fields[i].Type)
+		}
+	}
 	return &RowDiffer{
 		left:         NewRowReader(left),
 		right:        NewRowReader(right),
 		pkFieldCount: len(tableDefinition.PrimaryKeyColumns),
-	}
+	}, nil
 }
 
 // DiffReport has the stats for a diff job

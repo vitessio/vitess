@@ -431,7 +431,7 @@ func (sdw *SplitDiffWorker) diff() error {
 
 			log.Infof("Starting the diff on table %v", tableDefinition.Name)
 			if len(sdw.sourceAliases) != 1 {
-				sdw.diffLog("Don't support more than one source for table: " + tableDefinition.Name)
+				sdw.diffLog("Don't support more than one source for table yet: " + tableDefinition.Name)
 				return
 			}
 
@@ -440,19 +440,26 @@ func (sdw *SplitDiffWorker) diff() error {
 				sdw.diffLog("Source shard doesn't overlap with destination????: " + err.Error())
 				return
 			}
-
 			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap)
 			if err != nil {
 				sdw.diffLog("FullTableScan(source) failed: " + err.Error())
 				return
 			}
+			defer sourceQueryResultReader.Close()
+
 			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{})
 			if err != nil {
 				sdw.diffLog("FullTableScan(destination) failed: " + err.Error())
 				return
 			}
+			defer destinationQueryResultReader.Close()
 
-			differ := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
+			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
+			if err != nil {
+				sdw.diffLog("NewRowDiffer() failed: " + err.Error())
+				return
+			}
+
 			report, err := differ.Go()
 			if err != nil {
 				sdw.diffLog("Differ.Go failed: " + err.Error())
@@ -463,8 +470,6 @@ func (sdw *SplitDiffWorker) diff() error {
 					sdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed)", tableDefinition.Name, report.processedRows))
 				}
 			}
-			sourceQueryResultReader.Close()
-			destinationQueryResultReader.Close()
 		}(tableDefinition)
 	}
 	wg.Wait()
