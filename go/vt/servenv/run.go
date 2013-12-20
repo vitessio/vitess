@@ -57,6 +57,7 @@ func RunSecure(port int, securePort int, cert, key, caCert string) {
 		SecureServe(fmt.Sprintf(":%d", securePort), cert, key, caCert)
 	}
 	proc.Wait()
+	l.Close()
 	Close()
 }
 
