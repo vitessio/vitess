@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -422,12 +423,18 @@ func (sdw *SplitDiffWorker) diff() error {
 				return
 			}
 
-			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition)
+			overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
+			if err != nil {
+				sdw.diffLog("Source shard doesn't overlap with destination????: " + err.Error())
+				return
+			}
+
+			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap)
 			if err != nil {
 				sdw.diffLog("FullTableScan(source) failed: " + err.Error())
 				return
 			}
-			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition)
+			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{})
 			if err != nil {
 				sdw.diffLog("FullTableScan(destination) failed: " + err.Error())
 				return

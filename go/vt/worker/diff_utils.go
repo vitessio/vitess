@@ -10,10 +10,12 @@ import (
 	"strings"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	rpc "github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sqltypes"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -48,7 +50,8 @@ func orderedColumns(tableDefinition *mysqlctl.TableDefinition) []string {
 }
 
 // FullTableScan returns a QueryResultReader that gets all the rows from a table
-func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition) (*QueryResultReader, error) {
+// that match the supplied KeyRange
+func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange) (*QueryResultReader, error) {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -65,7 +68,23 @@ func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition
 		return nil, err
 	}
 
-	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+	where := ""
+	if keyRange.Start != key.MinKey {
+		if keyRange.End != key.MaxKey {
+			// have start & end
+			where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", keyRange.Start.Hex(), keyRange.End.Hex())
+		} else {
+			// have start only
+			where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", keyRange.Start.Hex())
+		}
+	} else {
+		if keyRange.End != key.MaxKey {
+			// have end only
+			where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", keyRange.End.Hex())
+		}
+	}
+
+	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v: %v", tabletAlias, sql)
 	req := &tproto.Query{
 		Sql:           sql,
@@ -133,6 +152,11 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 	return result, nil
 }
 
+// FieldType returns the type of the i-th column
+func (rr *RowReader) FieldType(i int) int64 {
+	return rr.currentResult.Fields[i].Type
+}
+
 type RowDiffer struct {
 	left         *RowReader
 	right        *RowReader
@@ -148,6 +172,11 @@ func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.Tabl
 }
 
 func (rd *RowDiffer) Go() error {
+
+	matchingRows := 0
+	mismatchedRows := 0
+	extraRowsLeft := 0
+	extraRowsRight := 0
 
 	var err error
 	var left []sqltypes.Value
@@ -193,6 +222,7 @@ func (rd *RowDiffer) Go() error {
 		if f == -1 {
 			// rows are the same, next
 			log.Errorf("Same row: %v == %v", left, right)
+			matchingRows++
 			advanceLeft = true
 			advanceRight = true
 			continue
@@ -201,31 +231,54 @@ func (rd *RowDiffer) Go() error {
 		if f >= rd.pkFieldCount {
 			// rows have the same primary key, only content is different
 			log.Errorf("Different content in same PK: %v != %v", left, right)
+			mismatchedRows++
 			advanceLeft = true
 			advanceRight = true
 			continue
 		}
 
 		// have to find the 'smallest' raw and advance it
-		// let's say the PK is an int64... for now
 		for i := 0; i < rd.pkFieldCount; i++ {
-			li, lerr := left[i].ParseInt64()
-			ri, rerr := right[i].ParseInt64()
-			log.Infof("Parse li=%v and ri=%v: %v %v", li, ri, lerr, rerr)
-			if lerr != nil {
-				return lerr
-			}
-			if rerr != nil {
-				return rerr
-			}
-			if li < ri {
-				log.Errorf("Extra row on left: %v", left)
-				advanceLeft = true
-				break
-			} else if li > ri {
-				log.Errorf("Extra row on right: %v", right)
-				advanceRight = true
-				break
+			// note this is correct, but can be seriously optimized
+			fieldType := rd.left.FieldType(i)
+			lv := mysql.BuildValue(left[i].Raw(), uint32(fieldType))
+			rv := mysql.BuildValue(right[i].Raw(), uint32(fieldType))
+
+			if lv.IsNumeric() {
+				ln, err := lv.ParseInt64()
+				if err != nil {
+					return err
+				}
+				rn, err := rv.ParseInt64()
+				if err != nil {
+					return err
+				}
+				if ln < rn {
+					log.Errorf("Extra row on left: %v", left)
+					extraRowLeft++
+					advanceLeft = true
+					break
+				} else if ln > rn {
+					log.Errorf("Extra row on right: %v", right)
+					extraRowRight++
+					advanceRight = true
+					break
+				}
+			} else if lv.IsString() {
+				c := bytes.Compare(left[i].Raw(), right[i].Raw())
+				if c < 0 {
+					log.Errorf("Extra row on left: %v", left)
+					extraRowLeft++
+					advanceLeft = true
+					break
+				} else if c > 0 {
+					log.Errorf("Extra row on right: %v", right)
+					extraRowRight++
+					advanceRight = true
+					break
+				}
+			} else {
+				return fmt.Errorf("Fractional types not supported in primary keys for diffs")
 			}
 		}
 	}
