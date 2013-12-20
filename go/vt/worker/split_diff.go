@@ -409,7 +409,7 @@ func (sdw *SplitDiffWorker) diff() error {
 
 	// run the diffs, 8 at a time
 	sdw.diffLog("Running the diffs...")
-	sem := sync2.NewSemaphore(1, 0)
+	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
 		go func(tableDefinition mysqlctl.TableDefinition) {
@@ -441,9 +441,15 @@ func (sdw *SplitDiffWorker) diff() error {
 			}
 
 			differ := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
-			err = differ.Go()
+			report, err := differ.Go()
 			if err != nil {
 				sdw.diffLog("Differ.Go failed: " + err.Error())
+			} else {
+				if report.HasDifferences() {
+					sdw.diffLog(fmt.Sprintf("Table %v has differences: %v", tableDefinition.Name, report))
+				} else {
+					sdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed)", tableDefinition.Name, report.processedRows))
+				}
 			}
 			sourceQueryResultReader.Close()
 			destinationQueryResultReader.Close()

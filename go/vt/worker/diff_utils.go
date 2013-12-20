@@ -24,6 +24,7 @@ import (
 // QueryResultReader will stream rows towards the output channel.
 type QueryResultReader struct {
 	Output chan *mproto.QueryResult
+	Fields []mproto.Field
 	client *rpc.Client
 	call   *rpc.Call
 }
@@ -100,10 +101,10 @@ func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition
 	if !ok {
 		return nil, fmt.Errorf("Cannot read Fields for query: %v", sql)
 	}
-	log.Infof("Read columns %v for table %v", cols, tableDefinition.Name)
 
 	return &QueryResultReader{
 		Output: sr,
+		Fields: cols.Fields,
 		client: rpcClient,
 		call:   call,
 	}, nil
@@ -145,7 +146,6 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 			return nil, nil
 		}
 		rr.currentIndex = 0
-		log.Infof("Read one batch: %v", rr.currentResult)
 	}
 	result := rr.currentResult.Rows[rr.currentIndex]
 	rr.currentIndex++
@@ -154,7 +154,7 @@ func (rr *RowReader) Next() ([]sqltypes.Value, error) {
 
 // FieldType returns the type of the i-th column
 func (rr *RowReader) FieldType(i int) int64 {
-	return rr.currentResult.Fields[i].Type
+	return rr.queryResultReader.Fields[i].Type
 }
 
 type RowDiffer struct {
@@ -171,14 +171,34 @@ func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.Tabl
 	}
 }
 
-func (rd *RowDiffer) Go() error {
+func drain(rr *RowReader) (int, error) {
+	count := 0
+	for {
+		row, err := rr.Next()
+		if err != nil {
+			return 0, err
+		}
+		if row == nil {
+			return count, nil
+		}
+		count++
+	}
+}
 
-	matchingRows := 0
-	mismatchedRows := 0
-	extraRowsLeft := 0
-	extraRowsRight := 0
+type DiffReport struct {
+	processedRows  int
+	matchingRows   int
+	mismatchedRows int
+	extraRowsLeft  int
+	extraRowsRight int
+}
 
-	var err error
+func (dr *DiffReport) HasDifferences() bool {
+	return dr.mismatchedRows > 0 || dr.extraRowsLeft > 0 || dr.extraRowsRight > 0
+}
+
+func (rd *RowDiffer) Go() (dr DiffReport, err error) {
+
 	var left []sqltypes.Value
 	var right []sqltypes.Value
 	advanceLeft := true
@@ -187,42 +207,49 @@ func (rd *RowDiffer) Go() error {
 		if advanceLeft {
 			left, err = rd.left.Next()
 			if err != nil {
-				return err
+				return
 			}
-			log.Infof("Read left row: %v", left)
 			advanceLeft = false
 		}
 		if advanceRight {
 			right, err = rd.right.Next()
 			if err != nil {
-				return err
+				return
 			}
-			log.Infof("Read right row: %v", right)
 			advanceRight = false
 		}
+		dr.processedRows++
 		if left == nil {
 			// no more rows from the left
 			if right == nil {
 				// no more rows from right either, we're done
-				return nil
+				return
 			}
 
-			// drain right, return count
-			return fmt.Errorf("more rows on right")
+			// drain right, update count
+			if count, err := drain(rd.right); err != nil {
+				return dr, err
+			} else {
+				dr.extraRowsRight += 1 + count
+			}
+			return
 		}
 		if right == nil {
 			// no more rows from the right
-			// we know we have rows from left, drain, return count
-			return fmt.Errorf("more rows on left")
+			// we know we have rows from left, drain, update count
+			if count, err := drain(rd.left); err != nil {
+				return dr, err
+			} else {
+				dr.extraRowsLeft += 1 + count
+			}
+			return
 		}
 
 		// we have both left and right, compare
 		f := RowsEqual(left, right)
-		log.Infof("Compare returned %v", f)
 		if f == -1 {
 			// rows are the same, next
-			log.Errorf("Same row: %v == %v", left, right)
-			matchingRows++
+			dr.matchingRows++
 			advanceLeft = true
 			advanceRight = true
 			continue
@@ -230,8 +257,10 @@ func (rd *RowDiffer) Go() error {
 
 		if f >= rd.pkFieldCount {
 			// rows have the same primary key, only content is different
-			log.Errorf("Different content in same PK: %v != %v", left, right)
-			mismatchedRows++
+			if dr.mismatchedRows < 10 {
+				log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, left, right)
+			}
+			dr.mismatchedRows++
 			advanceLeft = true
 			advanceRight = true
 			continue
@@ -247,43 +276,49 @@ func (rd *RowDiffer) Go() error {
 			if lv.IsNumeric() {
 				ln, err := lv.ParseInt64()
 				if err != nil {
-					return err
+					return dr, err
 				}
 				rn, err := rv.ParseInt64()
 				if err != nil {
-					return err
+					return dr, err
 				}
 				if ln < rn {
-					log.Errorf("Extra row on left: %v", left)
-					extraRowLeft++
+					if dr.extraRowsLeft < 10 {
+						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
+					}
+					dr.extraRowsLeft++
 					advanceLeft = true
 					break
 				} else if ln > rn {
-					log.Errorf("Extra row on right: %v", right)
-					extraRowRight++
+					if dr.extraRowsRight < 10 {
+						log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
+					}
+					dr.extraRowsRight++
 					advanceRight = true
 					break
 				}
 			} else if lv.IsString() {
 				c := bytes.Compare(left[i].Raw(), right[i].Raw())
 				if c < 0 {
-					log.Errorf("Extra row on left: %v", left)
-					extraRowLeft++
+					if dr.extraRowsLeft < 10 {
+						log.Errorf("Extra row %v on left: %v", dr.extraRowsLeft, left)
+					}
+					dr.extraRowsLeft++
 					advanceLeft = true
 					break
 				} else if c > 0 {
-					log.Errorf("Extra row on right: %v", right)
-					extraRowRight++
+					if dr.extraRowsRight < 10 {
+						log.Errorf("Extra row %v on right: %v", dr.extraRowsRight, right)
+					}
+					dr.extraRowsRight++
 					advanceRight = true
 					break
 				}
 			} else {
-				return fmt.Errorf("Fractional types not supported in primary keys for diffs")
+				return dr, fmt.Errorf("Fractional types not supported in primary keys for diffs")
 			}
 		}
 	}
-
-	return nil
 }
 
 // return the index of the first different fields, or -1 if both rows are the same
