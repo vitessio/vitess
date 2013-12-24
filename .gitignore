@@ -1,6 +1,9 @@
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
 *.py[cod]
 
+# For mac users
+.DS_Store
+
 # Produced by yacc
 *.output
 
