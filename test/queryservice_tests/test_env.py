@@ -150,7 +150,7 @@ class VttabletTestEnv(TestEnv):
     if self.vtroot is None:
       raise EnvironmentError("VTROOT not defined")
 
-    framework.execute('go build', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
+    framework.execute('go install', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
 
     utils.wait_procs([self.tablet.init_mysql()])
     self.tablet.mquery("", ["create database vt_test_keyspace", "set global read_only = off"])
@@ -247,8 +247,8 @@ class VtoccTestEnv(TestEnv):
 
     utils.setup()
 
-    framework.execute('go build', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/vtocc')
-    framework.execute('go build', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
+    framework.execute('go install', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/vtocc')
+    framework.execute('go install', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
 
     # start mysql
     res = subprocess.call([

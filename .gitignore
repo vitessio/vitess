@@ -1,37 +1,15 @@
 # Compiled Object files, Static and Dynamic libs (Shared Objects)
-*.o
-*.a
-*.so
 *.py[cod]
 
-# Architecture specific extensions/prefixes
-*.[568vq]
-[568vq].out
-
-*.out
+# Produced by yacc
 *.output
+
+# vim files
 *.swp
 tags
-.DS_Store
+
+# cbson & other C build dirs
 **/build
 
+# mysql build dirs
 third_party/mysql
-go/cmd/mysqlctl/mysqlctl
-go/cmd/normalizer/normalizer
-go/cmd/topo2topo/topo2topo
-go/cmd/vtaction/vtaction
-go/cmd/vtgate/vtgate
-go/cmd/vtclient2/vtclient2
-go/cmd/vtctl/vtctl
-go/cmd/vtctld/vtctld
-go/cmd/vtocc/vtocc
-go/cmd/vttablet/vttablet
-go/cmd/vtworker/vtworker
-go/cmd/zk/zk
-go/cmd/zkclient2/zkclient2
-go/cmd/zkctl/zkctl
-go/cmd/zkns2pdns/zkns2pdns
-go/cmd/zkocc/zkocc
-test/goloadgen/goloadgen
-
-go/logfile/tfile*

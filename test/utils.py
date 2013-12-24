@@ -245,7 +245,7 @@ def prog_compile(names):
     if options.no_build:
       logging.debug('Skipping build of %s', name)
     else:
-      run('go build', cwd=vttop+'/go/cmd/'+name)
+      run('go install', cwd=vttop+'/go/cmd/'+name)
 
 # background zk process
 # (note the zkocc addresses will only work with an extra zkocc process)
