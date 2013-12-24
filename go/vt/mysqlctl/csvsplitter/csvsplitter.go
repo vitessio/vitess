@@ -62,5 +62,4 @@ func (r KeyspaceCSVReader) ReadRecord() (keyspaceId key.KeyspaceId, line []byte,
 			}
 		}
 	}
-	panic("unreachable")
 }

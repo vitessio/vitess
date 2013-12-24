@@ -9,9 +9,10 @@ package bytes2
 
 import (
 	"fmt"
-	"github.com/youtube/vitess/go/hack"
 	"io"
 	"unicode/utf8"
+
+	"github.com/youtube/vitess/go/hack"
 )
 
 // ChunkedWriter has the same interface as bytes.Buffer's write functions.
@@ -85,7 +86,6 @@ func (cw *ChunkedWriter) WriteString(p string) (n int, err error) {
 		lastbuf = make([]byte, 0, cap(cw.bufs[0]))
 		cw.bufs = append(cw.bufs, lastbuf)
 	}
-	return n, nil
 }
 
 func (cw *ChunkedWriter) Reserve(n int) (b []byte) {

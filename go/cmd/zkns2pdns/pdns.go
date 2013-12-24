@@ -231,7 +231,6 @@ func parseReq(line []byte) (*pdnsReq, error) {
 	default:
 		return nil, errBadLine
 	}
-	panic("unreachable")
 }
 
 // PDNS will query for "ANY" no matter what record type the client

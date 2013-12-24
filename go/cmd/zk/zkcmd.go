@@ -780,7 +780,6 @@ func getPathData(filePath string) (string, error) {
 		}
 		return "", err
 	}
-	panic("unreachable")
 }
 
 func setPathData(filePath, data string) error {
@@ -793,7 +792,6 @@ func setPathData(filePath, data string) error {
 	} else {
 		return ioutil.WriteFile(filePath, []byte(data), 0666)
 	}
-	panic("unreachable")
 }
 
 func fileCp(srcPath, dstPath string) {

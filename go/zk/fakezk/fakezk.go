@@ -483,7 +483,7 @@ func (st stat) fprintRecursive(level int, buf *bytes.Buffer) {
 	}
 }
 
-func (conn zconn) String() string {
+func (conn *zconn) String() string {
 	b := new(bytes.Buffer)
 	conn.root.fprintRecursive(0, b)
 	return b.String()

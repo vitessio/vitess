@@ -199,7 +199,6 @@ func (server *UmgmtServer) Serve() error {
 		delete(server.connMap, conn)
 		server.Unlock()
 	}
-	return nil
 }
 
 func (server *UmgmtServer) Addr() net.Addr {

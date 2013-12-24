@@ -95,7 +95,6 @@ func (tm *Timer) run(keephouse func()) {
 		}
 		keephouse()
 	}
-	panic("unreachable")
 }
 
 // SetInterval changes the wait interval.

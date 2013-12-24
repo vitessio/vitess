@@ -215,7 +215,6 @@ func (tkn *Tokenizer) Scan() (parseNode *Node) {
 			return NewSimpleParseNode(LEX_ERROR, fmt.Sprintf("Unexpected character '%c'", ch))
 		}
 	}
-	return NewSimpleParseNode(LEX_ERROR, "Internal Error")
 }
 
 func (tkn *Tokenizer) skipBlank() {

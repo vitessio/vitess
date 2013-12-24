@@ -135,7 +135,7 @@ func TestGetSimple(t *testing.T) {
 	}
 	// Ensure that the 4th addres is the first one (round-robin).
 	if endPoints[0].Uid != endPoints[3].Uid {
-		t.Errorf("ids are not equal: %d, %d", endPoints[0], endPoints[3])
+		t.Errorf("ids are not equal: %v, %v", endPoints[0], endPoints[3])
 	}
 }
 

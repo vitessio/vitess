@@ -66,7 +66,6 @@ func (tracker *matchtracker) matchComments() (pos int) {
 		tracker.skipBlanks()
 		lastpos = tracker.index
 	}
-	panic("unreachable")
 }
 
 func (tracker *matchtracker) mustMatch(required byte) {

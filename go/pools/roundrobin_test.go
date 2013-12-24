@@ -91,7 +91,7 @@ func TestPoolFail(t *testing.T) {
 	p.Open(FailFactory)
 	defer p.Close()
 	if _, err := p.Get(); err.Error() != "Failed" {
-		t.Errorf("Expecting Failed, received %c", err)
+		t.Errorf("Expecting Failed, received %v", err)
 	}
 }
 

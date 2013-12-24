@@ -43,7 +43,7 @@ func TestTopoError(t *testing.T) {
 	got, err := blc.Get()
 	// If topo serv is down, you should get an error.
 	if got.Host != "" {
-		t.Errorf("want empty, got %s", got)
+		t.Errorf("want empty, got %v", got)
 	}
 	want := "endpoints fetch error: topo error"
 	if err == nil || err.Error() != want {

@@ -106,8 +106,6 @@ func (vtc *VtConn) Exec(query string, bindVars map[string]interface{}) (db.Resul
 			log.Warningf("vt: error dialing on exec %v", vtc.Conn.dbi.Host)
 		}
 	}
-
-	panic("unreachable")
 }
 
 func (vtc *VtConn) Begin() (db.Tx, error) {
@@ -136,7 +134,6 @@ func (vtc *VtConn) Begin() (db.Tx, error) {
 			log.Warningf("vt: error dialing on begin %v", vtc.Conn.dbi.Host)
 		}
 	}
-	panic("unreachable")
 }
 
 func (vtc *VtConn) Commit() (err error) {
