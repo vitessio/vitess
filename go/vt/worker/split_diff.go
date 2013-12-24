@@ -189,7 +189,7 @@ func (sdw *SplitDiffWorker) init() error {
 		return fmt.Errorf("Shard %v/%v has no source shard", sdw.keyspace, sdw.shard)
 	}
 	if sdw.shardInfo.MasterAlias.IsZero() {
-		return fmt.Errorf("Shard %v/%v has no master")
+		return fmt.Errorf("Shard %v/%v has no master", sdw.keyspace, sdw.shard)
 	}
 
 	return nil

@@ -101,7 +101,6 @@ func (z *reader) Read(p []byte) (int, error) {
 			return have, z.err
 		}
 	}
-	panic("Unreachable")
 }
 
 // Close closes the Reader. It does not close the underlying io.Reader.

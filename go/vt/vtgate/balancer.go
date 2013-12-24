@@ -84,7 +84,6 @@ outer:
 		time.Sleep(blc.retryDelay + (1 * time.Millisecond))
 		blc.mu.Lock()
 	}
-	panic("unreachable")
 }
 
 // MarkDown marks the specified address down. Such addresses

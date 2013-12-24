@@ -216,7 +216,7 @@ func TestBindVarStruct(t *testing.T) {
 		t.Errorf("expecting false, received true")
 	}
 	if qr.bindVarConds[1].op != QR_NOOP {
-		t.Errorf("exepecting NOOP, received %s", qr.bindVarConds[1])
+		t.Errorf("exepecting NOOP, received %v", qr.bindVarConds[1])
 	}
 	if qr.bindVarConds[1].value != nil {
 		t.Errorf("expecting nil, received %#v", qr.bindVarConds[1].value)

@@ -127,7 +127,6 @@ func (rr *RoundRobin) get(wait bool) (resource Resource, err error) {
 			return resource, err
 		}
 	}
-	panic("unreachable")
 }
 
 func (rr *RoundRobin) recordWait(start time.Time) {

@@ -125,7 +125,6 @@ func (evs *EventStreamer) buildDMLEvent(sql []byte, insertid int64) (dmlEvent *p
 		dmlEvent.PKValues = append(dmlEvent.PKValues, rowPk)
 	}
 	return dmlEvent, insertid, nil
-	return
 }
 
 /*

@@ -455,7 +455,7 @@ func TestCreateFail(t *testing.T) {
 	p := NewResourcePool(FailFactory, 5, 5, time.Second)
 	defer p.Close()
 	if _, err := p.Get(); err.Error() != "Failed" {
-		t.Errorf("Expecting Failed, received %c", err)
+		t.Errorf("Expecting Failed, received %v", err)
 	}
 	stats := p.StatsJSON()
 	expected := `{"Capacity": 5, "Available": 5, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000}`
