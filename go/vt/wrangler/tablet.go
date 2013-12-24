@@ -169,7 +169,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	if err != nil {
 		return "", err
 	}
-	rebuildRequired := ti.Tablet.IsServingType()
+	rebuildRequired := ti.Tablet.IsInServingGraph()
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
@@ -235,72 +235,77 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 }
 
 // Change the type of tablet and recompute all necessary derived paths in the
-// serving graph.
-// force: Bypass the vtaction system and make the data change directly, and
-// do not run the remote hooks.
+// serving graph. If force is true, it will bypass the vtaction
+// system and make the data change directly, and not run the remote
+// hooks.
 //
-// Note we don't update the master record in the Shard here, as we can't
-// ChangeType from and out of master anyway.
-func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletType, force bool) error {
+// Note we don't update the master record in the Shard here, as we
+// can't ChangeType from and out of master anyway.
+func (wr *Wrangler) ChangeType(tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) error {
+	rebuildRequired, cell, keyspace, shard, err := wr.ChangeTypeNoRebuild(tabletAlias, tabletType, force)
+	if err != nil {
+		return err
+	}
+	if rebuildRequired {
+		return wr.RebuildShardGraph(keyspace, shard, []string{cell})
+	}
+	return nil
+}
+
+// ChangeTypeNoRebuild changes a tablet's type, and returns whether
+// there's a shard that should be rebuilt, along with its cell,
+// keyspace, and shard. If force is true, it will bypass the vtaction
+// system and make the data change directly, and not run the remote
+// hooks.
+//
+// Note we don't update the master record in the Shard here, as we
+// can't ChangeType from and out of master anyway.
+func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType topo.TabletType, force bool) (rebuildRequired bool, cell, keyspace, shard string, err error) {
 	// Load tablet to find keyspace and shard assignment.
 	// Don't load after the ChangeType which might have unassigned
 	// the tablet.
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
-		return err
+		return false, "", "", "", err
 	}
-	rebuildRequired := ti.Tablet.IsServingType()
 
 	if force {
-		// with --force, we do not run any hook
-		err = tm.ChangeType(wr.ts, tabletAlias, dbType, false)
+		if err := tm.ChangeType(wr.ts, tabletAlias, tabletType, false); err != nil {
+			return false, "", "", "", err
+		}
 	} else {
 		if wr.UseRPCs {
-			err = wr.ai.RpcChangeType(ti, dbType, wr.actionTimeout())
+			if err := wr.ai.RpcChangeType(ti, tabletType, wr.actionTimeout()); err != nil {
+				return false, "", "", "", err
+			}
+
 		} else {
 			// the remote action will run the hooks
-			var actionPath string
-			actionPath, err = wr.ai.ChangeType(tabletAlias, dbType)
+			actionPath, err := wr.ai.ChangeType(tabletAlias, tabletType)
+			if err != nil {
+				return false, "", "", "", err
+			}
+
 			// You don't have a choice - you must wait for
 			// completion before rebuilding.
-			if err == nil {
-				err = wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
+			if err := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+				return false, "", "", "", err
 			}
 		}
 	}
 
-	if err != nil {
-		return err
-	}
-
-	// we rebuild if the tablet was serving, or if it is now
-	var keyspaceToRebuild string
-	var shardToRebuild string
-	var cellToRebuild string
-	if rebuildRequired {
-		keyspaceToRebuild = ti.Keyspace
-		shardToRebuild = ti.Shard
-		cellToRebuild = ti.Alias.Cell
-	} else {
+	if !ti.Tablet.IsInServingGraph() {
 		// re-read the tablet, see if we become serving
-		ti, err := wr.ts.GetTablet(tabletAlias)
+		ti, err = wr.ts.GetTablet(tabletAlias)
 		if err != nil {
-			return err
+			return false, "", "", "", err
 		}
-		if ti.Tablet.IsServingType() {
-			rebuildRequired = true
-			keyspaceToRebuild = ti.Keyspace
-			shardToRebuild = ti.Shard
-			cellToRebuild = ti.Alias.Cell
+		if !ti.Tablet.IsInServingGraph() {
+			return false, "", "", "", nil
 		}
 	}
+	return true, ti.Alias.Cell, ti.Keyspace, ti.Shard, nil
 
-	if rebuildRequired {
-		if err := wr.RebuildShardGraph(keyspaceToRebuild, shardToRebuild, []string{cellToRebuild}); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // same as ChangeType, but assume we already have the shard lock,
@@ -310,7 +315,7 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 	if err != nil {
 		return err
 	}
-	rebuildRequired := ti.Tablet.IsServingType()
+	rebuildRequired := ti.Tablet.IsInServingGraph()
 
 	// change the type
 	if wr.UseRPCs {

@@ -28,7 +28,7 @@ type StreamEvent struct {
 	Timestamp int64
 
 	// POS
-	GroupId string
+	GroupId int64
 }
 
 func (ste *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -39,7 +39,7 @@ func (ste *StreamEvent) MarshalBson(buf *bytes2.ChunkedWriter) {
 	MarshalPKValuesBson(buf, "PKValues", ste.PKValues)
 	bson.EncodeString(buf, "Sql", ste.Sql)
 	bson.EncodeInt64(buf, "Timestamp", ste.Timestamp)
-	bson.EncodeString(buf, "GroupId", ste.GroupId)
+	bson.EncodeInt64(buf, "GroupId", ste.GroupId)
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
@@ -84,7 +84,7 @@ func (ste *StreamEvent) UnmarshalBson(buf *bytes.Buffer) {
 		case "Timestamp":
 			ste.Timestamp = bson.DecodeInt64(buf, kind)
 		case "GroupId":
-			ste.GroupId = bson.DecodeString(buf, kind)
+			ste.GroupId = bson.DecodeInt64(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}

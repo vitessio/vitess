@@ -14,6 +14,6 @@ CREATE TABLE _vt.reparent_log (
 
 CREATE TABLE _vt.blp_checkpoint (
   source_shard_uid int(10) unsigned NOT NULL,
-  group_id varchar(255) default NULL,
-  time_updated int(10) unsigned NOT NULL,
+  group_id bigint default NULL,
+  time_updated bigint unsigned NOT NULL,
   PRIMARY KEY (source_shard_uid));

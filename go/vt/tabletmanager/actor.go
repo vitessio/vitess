@@ -214,8 +214,10 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
+		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,
 		TABLET_ACTION_GET_SLAVES, TABLET_ACTION_WAIT_BLP_POSITION,
-		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP:
+		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP,
+		TABLET_ACTION_RUN_BLP_UNTIL:
 		err = TabletActorError("Operation " + actionNode.Action + "  only supported as RPC")
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
@@ -884,7 +886,7 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 	if runHooks {
 		// Only run the preflight_serving_type hook when
 		// transitioning from non-serving to serving.
-		if !topo.IsServingType(tablet.Type) && topo.IsServingType(newType) {
+		if !topo.IsInServingGraph(tablet.Type) && topo.IsInServingGraph(newType) {
 			if err := hook.NewSimpleHook("preflight_serving_type").ExecuteOptional(); err != nil {
 				return err
 			}

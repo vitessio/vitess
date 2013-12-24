@@ -13,13 +13,13 @@ import (
 
 type reflectBinlogTransaction struct {
 	Statements []reflectStatement
-	GroupId    string
+	GroupId    int64
 }
 
 type badBinlogTransaction struct {
 	Extra      int
 	Statements []reflectStatement
-	GroupId    string
+	GroupId    int64
 }
 
 type reflectStatement struct {
@@ -35,7 +35,7 @@ func TestBinlogTransaction(t *testing.T) {
 				Sql:      []byte("sql"),
 			},
 		},
-		GroupId: "gid",
+		GroupId: 123,
 	})
 	if err != nil {
 		t.Error(err)
@@ -49,7 +49,7 @@ func TestBinlogTransaction(t *testing.T) {
 				Sql:      []byte("sql"),
 			},
 		},
-		GroupId: "gid",
+		GroupId: 123,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {

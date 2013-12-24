@@ -26,7 +26,7 @@ const (
 // the binlog.
 type BinlogTransaction struct {
 	Statements []Statement
-	GroupId    string
+	GroupId    int64
 }
 
 // Statement represents one statement as read from the binlog.
@@ -38,7 +38,7 @@ type Statement struct {
 func (blt *BinlogTransaction) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 	MarshalStatementsBson(buf, "Statements", blt.Statements)
-	bson.EncodeString(buf, "GroupId", blt.GroupId)
+	bson.EncodeInt64(buf, "GroupId", blt.GroupId)
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
@@ -64,7 +64,7 @@ func (blt *BinlogTransaction) UnmarshalBson(buf *bytes.Buffer) {
 		case "Statements":
 			blt.Statements = UnmarshalStatementsBson(buf, kind)
 		case "GroupId":
-			blt.GroupId = bson.DecodeString(buf, kind)
+			blt.GroupId = bson.DecodeInt64(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}

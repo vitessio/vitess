@@ -6,12 +6,16 @@ package worker
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -92,6 +96,9 @@ func (sdw *SplitDiffWorker) StatusAsHTML() string {
 	switch sdw.state {
 	case stateError:
 		result += "<b>Error</b>: " + sdw.err.Error() + "</br>\n"
+	case stateDone:
+		result += "<b>Success</b>:</br>\n"
+		result += strings.Join(sdw.diffLogs, "</br>\n")
 	}
 
 	return result
@@ -105,6 +112,9 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	switch sdw.state {
 	case stateError:
 		result += "Error: " + sdw.err.Error() + "\n"
+	case stateDone:
+		result += "Success:\n"
+		result += strings.Join(sdw.diffLogs, "\n")
 	}
 	return result
 }
@@ -121,10 +131,7 @@ func (sdw *SplitDiffWorker) CheckInterrupted() bool {
 
 // Run is mostly a wrapper to run the cleanup at the end.
 func (sdw *SplitDiffWorker) Run() {
-	var err error
-	if err = sdw.run(); err != nil {
-		sdw.recordError(err)
-	}
+	err := sdw.run()
 
 	sdw.setState(stateCleanUp)
 	cerr := sdw.cleaner.CleanUp(sdw.wr)
@@ -132,13 +139,14 @@ func (sdw *SplitDiffWorker) Run() {
 		if err != nil {
 			log.Errorf("CleanUp failed in addition to job error: %v", cerr)
 		} else {
-			sdw.recordError(cerr)
 			err = cerr
 		}
 	}
-	if err == nil {
-		sdw.setState(stateDone)
+	if err != nil {
+		sdw.recordError(err)
+		return
 	}
+	sdw.setState(stateDone)
 }
 
 func (sdw *SplitDiffWorker) run() error {
@@ -199,7 +207,6 @@ func (sdw *SplitDiffWorker) init() error {
 // - find one rdonly per source shard
 // - find one rdonly in destination shard
 // - mark them all as 'checker' pointing back to us
-// TODO(alainjobart) add a tag pointing back to us to the checker instances
 
 func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	endPoints, err := sdw.wr.TopoServer().GetEndPoints(sdw.cell, sdw.keyspace, shard, topo.TYPE_RDONLY)
@@ -209,11 +216,29 @@ func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
 	if len(endPoints.Entries) == 0 {
 		return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", sdw.cell, sdw.keyspace, shard)
 	}
-
 	tabletAlias := topo.TabletAlias{
 		Cell: sdw.cell,
 		Uid:  endPoints.Entries[0].Uid,
 	}
+
+	// We add the tag before calling ChangeSlaveType, so the destination
+	// vttablet reloads the worker URL when it reloads the tablet.
+	ourURL := servenv.ListeningURL.String()
+	log.Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
+	if err := sdw.wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
+		if tablet.Tags == nil {
+			tablet.Tags = make(map[string]string)
+		}
+		tablet.Tags["worker"] = ourURL
+		return nil
+	}); err != nil {
+		return topo.TabletAlias{}, err
+	}
+	// we remove the tag *before* calling ChangeSlaveType back, so
+	// we need to record this tag change after the change slave
+	// type change in the cleaner.
+	defer wrangler.RecordTabletTagAction(sdw.cleaner, tabletAlias, "worker", "")
+
 	log.Infof("Changing tablet %v to 'checker'", tabletAlias)
 	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
 		return topo.TabletAlias{}, err
@@ -270,13 +295,68 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 	sdw.setState(stateSynchronizeReplication)
 
 	// 1 - stop the master binlog replication, get its current position
-	_, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
+	log.Infof("Stopping master binlog replication on %v", sdw.shardInfo.MasterAlias)
+	blpPositionList, err := sdw.wr.ActionInitiator().StopBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err != nil {
 		return err
 	}
 	wrangler.RecordStartBlpAction(sdw.cleaner, sdw.shardInfo.MasterAlias, 30*time.Second)
 
+	// 2 - stop all the source 'checker' at a binlog position
+	//     higher than the destination master
+	stopPositionList := mysqlctl.BlpPositionList{
+		Entries: make([]mysqlctl.BlpPosition, len(sdw.shardInfo.SourceShards)),
+	}
+	for i, ss := range sdw.shardInfo.SourceShards {
+		// find where we should be stopping
+		pos, err := blpPositionList.FindBlpPositionById(ss.Uid)
+		if err != nil {
+			return fmt.Errorf("No binlog position on the master for Uid %v", ss.Uid)
+		}
+
+		// stop replication
+		log.Infof("Stopping slave[%v] %v at a minimum of %v", i, sdw.sourceAliases[i], pos.GroupId)
+		stoppedAt, err := sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.sourceAliases[i], pos.GroupId, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("Cannot stop slave %v at right binlog position %v: %v", sdw.sourceAliases[i], pos.GroupId, err)
+		}
+		stopPositionList.Entries[i].Uid = ss.Uid
+		stopPositionList.Entries[i].GroupId = stoppedAt.MasterLogGroupId
+
+		// change the cleaner actions from ChangeSlaveType(rdonly)
+		// to StartSlave() + ChangeSlaveType(spare)
+		wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.sourceAliases[i], 30*time.Second)
+		action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.sourceAliases[i])
+		if err != nil {
+			return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.sourceAliases[i], err)
+		}
+		action.TabletType = topo.TYPE_SPARE
+	}
+
+	// 3 - ask the master of the destination shard to resume filtered
+	//     replication up to the new list of positions
+	log.Infof("Restarting master %v until it catches up to %v", sdw.shardInfo.MasterAlias, stopPositionList)
+	masterPos, err := sdw.wr.ActionInitiator().RunBlpUntil(sdw.shardInfo.MasterAlias, &stopPositionList, 30*time.Second)
+	if err != nil {
+		return err
+	}
+
+	// 4 - wait until the destination checker is equal or passed
+	//     that master binlog position, and stop its replication.
+	log.Infof("Waiting for destination checker %v to catch up to %v", sdw.destinationAlias, masterPos.MasterLogGroupId)
+	_, err = sdw.wr.ActionInitiator().StopSlaveMinimum(sdw.destinationAlias, masterPos.MasterLogGroupId, 30*time.Second)
+	if err != nil {
+		return err
+	}
+	wrangler.RecordStartSlaveAction(sdw.cleaner, sdw.destinationAlias, 30*time.Second)
+	action, err := wrangler.FindChangeSlaveTypeActionByTarget(sdw.cleaner, sdw.destinationAlias)
+	if err != nil {
+		return fmt.Errorf("cannot find ChangeSlaveType action for %v: %v", sdw.destinationAlias, err)
+	}
+	action.TabletType = topo.TYPE_SPARE
+
 	// 5 - restart filtered replication on destination master
+	log.Infof("Restarting filtered replication on master %v", sdw.shardInfo.MasterAlias)
 	err = sdw.wr.ActionInitiator().StartBlp(sdw.shardInfo.MasterAlias, 30*time.Second)
 	if err := sdw.cleaner.RemoveActionByName(wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String()); err != nil {
 		log.Warningf("Cannot find cleaning action %v/%v: %v", wrangler.StartBlpActionName, sdw.shardInfo.MasterAlias.String(), err)
@@ -330,8 +410,8 @@ func (sdw *SplitDiffWorker) diff() error {
 		return rec.Error()
 	}
 
-	// TODO(alainjobart) Checking against each source may be overkill, if all
-	// sources have the same schema?
+	// TODO(alainjobart) Checking against each source may be
+	// overkill, if all sources have the same schema?
 	sdw.diffLog("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
 	for i, sourceSchemaDefinition := range sdw.sourceSchemaDefinitions {
@@ -343,6 +423,61 @@ func (sdw *SplitDiffWorker) diff() error {
 	} else {
 		sdw.diffLog("Schema match, good.")
 	}
+
+	// run the diffs, 8 at a time
+	sdw.diffLog("Running the diffs...")
+	sem := sync2.NewSemaphore(8, 0)
+	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
+		wg.Add(1)
+		go func(tableDefinition mysqlctl.TableDefinition) {
+			defer wg.Done()
+			sem.Acquire()
+			defer sem.Release()
+
+			log.Infof("Starting the diff on table %v", tableDefinition.Name)
+			if len(sdw.sourceAliases) != 1 {
+				sdw.diffLog("Don't support more than one source for table yet: " + tableDefinition.Name)
+				return
+			}
+
+			overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.shardInfo.SourceShards[0].KeyRange)
+			if err != nil {
+				sdw.diffLog("Source shard doesn't overlap with destination????: " + err.Error())
+				return
+			}
+			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap)
+			if err != nil {
+				sdw.diffLog("FullTableScan(source) failed: " + err.Error())
+				return
+			}
+			defer sourceQueryResultReader.Close()
+
+			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{})
+			if err != nil {
+				sdw.diffLog("FullTableScan(destination) failed: " + err.Error())
+				return
+			}
+			defer destinationQueryResultReader.Close()
+
+			differ, err := NewRowDiffer(sourceQueryResultReader, destinationQueryResultReader, &tableDefinition)
+			if err != nil {
+				sdw.diffLog("NewRowDiffer() failed: " + err.Error())
+				return
+			}
+
+			report, err := differ.Go()
+			if err != nil {
+				sdw.diffLog("Differ.Go failed: " + err.Error())
+			} else {
+				if report.HasDifferences() {
+					sdw.diffLog(fmt.Sprintf("Table %v has differences: %v", tableDefinition.Name, report))
+				} else {
+					sdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS))
+				}
+			}
+		}(tableDefinition)
+	}
+	wg.Wait()
 
 	return nil
 }

@@ -23,11 +23,12 @@ const (
 )
 
 type TableDefinition struct {
-	Name       string   // the table name
-	Schema     string   // the SQL to run to create the table
-	Columns    []string // the columns in the order that will be used to dump and load the data
-	Type       string   // TABLE_BASE_TABLE or TABLE_VIEW
-	DataLength uint64   // how much space the data file takes.
+	Name              string   // the table name
+	Schema            string   // the SQL to run to create the table
+	Columns           []string // the columns in the order that will be used to dump and load the data
+	PrimaryKeyColumns []string // the columns used by the primary key, in order
+	Type              string   // TABLE_BASE_TABLE or TABLE_VIEW
+	DataLength        uint64   // how much space the data file takes.
 }
 
 // helper methods for sorting
@@ -222,11 +223,14 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		sd.TableDefinitions[i].Name = tableName
 		sd.TableDefinitions[i].Schema = norm
 
-		columns, err := mysqld.GetColumns(dbName, tableName)
+		sd.TableDefinitions[i].Columns, err = mysqld.GetColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
-		sd.TableDefinitions[i].Columns = columns
+		sd.TableDefinitions[i].PrimaryKeyColumns, err = mysqld.GetPrimaryKeyColumns(dbName, tableName)
+		if err != nil {
+			return nil, err
+		}
 		sd.TableDefinitions[i].Type = tableType
 		sd.TableDefinitions[i].DataLength = dataLength
 	}
@@ -252,6 +256,57 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 	}
 	return columns, nil
 
+}
+
+// GetPrimaryKeyColumns returns the primary key columns of table.
+func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
+	conn, err := mysqld.createConnection()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("show index from %v.%v", dbName, table), 100, true)
+	if err != nil {
+		return nil, err
+	}
+	keyNameIndex := -1
+	seqInIndexIndex := -1
+	columnNameIndex := -1
+	for i, field := range qr.Fields {
+		switch field.Name {
+		case "Key_name":
+			keyNameIndex = i
+		case "Seq_in_index":
+			seqInIndexIndex = i
+		case "Column_name":
+			columnNameIndex = i
+		}
+	}
+	if keyNameIndex == -1 || seqInIndexIndex == -1 || columnNameIndex == -1 {
+		return nil, fmt.Errorf("Unknown columns in 'show index' result: %v", qr.Fields)
+	}
+
+	columns := make([]string, 0, 5)
+	var expectedIndex int64 = 1
+	for _, row := range qr.Rows {
+		// skip non-primary keys
+		if row[keyNameIndex].String() != "PRIMARY" {
+			continue
+		}
+
+		// check the Seq_in_index is always increasing
+		seqInIndex, err := row[seqInIndexIndex].ParseInt64()
+		if err != nil {
+			return nil, err
+		}
+		if seqInIndex != expectedIndex {
+			return nil, fmt.Errorf("Unexpected index: %v != %v", seqInIndex, expectedIndex)
+		}
+		expectedIndex++
+
+		columns = append(columns, row[columnNameIndex].String())
+	}
+	return columns, err
 }
 
 type SchemaChange struct {

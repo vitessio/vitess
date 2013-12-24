@@ -37,12 +37,12 @@ func init() {
 	flag.Float64Var(&qsConfig.SpotCheckRatio, "queryserver-config-spot-check-ratio", DefaultQsConfig.SpotCheckRatio, "query server rowcache spot check frequency")
 	flag.Float64Var(&qsConfig.StreamWaitTimeout, "queryserver-config-stream-exec-timeout", DefaultQsConfig.StreamWaitTimeout, "Timeout for stream-exec-throttle")
 	flag.StringVar(&qsConfig.RowCache.Binary, "rowcache-bin", DefaultQsConfig.RowCache.Binary, "rowcache binary file")
-	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-m", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
-	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-s", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
-	flag.IntVar(&qsConfig.RowCache.TcpPort, "rowcache-p", DefaultQsConfig.RowCache.TcpPort, "rowcache tcp port to listen on")
-	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-c", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
-	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-t", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
-	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-k", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
+	flag.IntVar(&qsConfig.RowCache.Memory, "rowcache-memory", DefaultQsConfig.RowCache.Memory, "rowcache max memory usage in MB")
+	flag.StringVar(&qsConfig.RowCache.Socket, "rowcache-socket", DefaultQsConfig.RowCache.Socket, "rowcache socket path to listen on")
+	flag.IntVar(&qsConfig.RowCache.TcpPort, "rowcache-port", DefaultQsConfig.RowCache.TcpPort, "rowcache tcp port to listen on")
+	flag.IntVar(&qsConfig.RowCache.Connections, "rowcache-connections", DefaultQsConfig.RowCache.Connections, "rowcache max simultaneous connections")
+	flag.IntVar(&qsConfig.RowCache.Threads, "rowcache-threads", DefaultQsConfig.RowCache.Threads, "rowcache number of threads")
+	flag.BoolVar(&qsConfig.RowCache.LockPaged, "rowcache-lock-paged", DefaultQsConfig.RowCache.LockPaged, "whether rowcache locks down paged memory")
 }
 
 type RowCacheConfig struct {

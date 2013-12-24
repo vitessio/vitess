@@ -159,6 +159,71 @@ func (csta ChangeSlaveTypeAction) CleanUp(wr *Wrangler) error {
 }
 
 //
+// TabletTagAction CleanerAction
+//
+
+// TabletTagAction will add / remove a tag to a tablet. If Value is
+// empty, will remove the tag.
+type TabletTagAction struct {
+	TabletAlias topo.TabletAlias
+	Name        string
+	Value       string
+}
+
+const TabletTagActionName = "TabletTagAction"
+
+// RecordTabletTagAction records a new TabletTagAction
+// into the specified Cleaner
+func RecordTabletTagAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, name, value string) {
+	cleaner.Record(TabletTagActionName, tabletAlias.String(), &TabletTagAction{
+		TabletAlias: tabletAlias,
+		Name:        name,
+		Value:       value,
+	})
+}
+
+// CleanUp is part of CleanerAction interface.
+func (tta TabletTagAction) CleanUp(wr *Wrangler) error {
+	return wr.TopoServer().UpdateTabletFields(tta.TabletAlias, func(tablet *topo.Tablet) error {
+		if tablet.Tags == nil {
+			tablet.Tags = make(map[string]string)
+		}
+		if tta.Value != "" {
+			tablet.Tags[tta.Name] = tta.Value
+		} else {
+			delete(tablet.Tags, tta.Name)
+		}
+		return nil
+	})
+}
+
+//
+// StartSlaveAction CleanerAction
+//
+
+// StartSlaveAction will restart binlog replication on a server
+type StartSlaveAction struct {
+	TabletAlias topo.TabletAlias
+	WaitTime    time.Duration
+}
+
+const StartSlaveActionName = "StartSlaveAction"
+
+// RecordStartSlaveAction records a new StartSlaveAction
+// into the specified Cleaner
+func RecordStartSlaveAction(cleaner *Cleaner, tabletAlias topo.TabletAlias, waitTime time.Duration) {
+	cleaner.Record(StartSlaveActionName, tabletAlias.String(), &StartSlaveAction{
+		TabletAlias: tabletAlias,
+		WaitTime:    waitTime,
+	})
+}
+
+// CleanUp is part of CleanerAction interface.
+func (sba StartSlaveAction) CleanUp(wr *Wrangler) error {
+	return wr.ActionInitiator().StartSlave(sba.TabletAlias, sba.WaitTime)
+}
+
+//
 // StartBlpAction CleanerAction
 //
 

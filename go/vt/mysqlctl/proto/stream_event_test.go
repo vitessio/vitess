@@ -18,7 +18,7 @@ type reflectStreamEvent struct {
 	PKValues   [][]interface{}
 	Sql        string
 	Timestamp  int64
-	GroupId    string
+	GroupId    int64
 }
 
 type badStreamEvent struct {
@@ -29,7 +29,7 @@ type badStreamEvent struct {
 	PKValues   [][]interface{}
 	Sql        string
 	Timestamp  int64
-	GroupId    string
+	GroupId    int64
 }
 
 func TestStreamEvent(t *testing.T) {
@@ -47,7 +47,7 @@ func TestStreamEvent(t *testing.T) {
 		},
 		Sql:       "str7",
 		Timestamp: 3,
-		GroupId:   "str8",
+		GroupId:   8,
 	})
 	if err != nil {
 		t.Error(err)
@@ -68,7 +68,7 @@ func TestStreamEvent(t *testing.T) {
 		},
 		Sql:       "str7",
 		Timestamp: 3,
-		GroupId:   "str8",
+		GroupId:   8,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {

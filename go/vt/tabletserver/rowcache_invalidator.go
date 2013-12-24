@@ -30,7 +30,7 @@ var rcinvStateNames = map[int64]string{
 }
 
 type InvalidationProcessor struct {
-	GroupId sync2.AtomicString
+	GroupId sync2.AtomicInt64
 	state   sync2.AtomicInt64
 }
 
@@ -41,7 +41,7 @@ func init() {
 	stats.Publish("RowcacheInvalidationState", stats.StringFunc(func() string {
 		return rcinvStateNames[CacheInvalidationProcessor.state.Get()]
 	}))
-	stats.Publish("RowcacheInvalidationCheckPoint", stats.StringFunc(func() string {
+	stats.Publish("RowcacheInvalidationCheckPoint", stats.IntFunc(func() int64 {
 		return CacheInvalidationProcessor.GroupId.Get()
 	}))
 }
