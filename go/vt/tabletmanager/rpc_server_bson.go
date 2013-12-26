@@ -105,7 +105,7 @@ func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.Unus
 
 type SlavePositionReq struct {
 	ReplicationPosition mysqlctl.ReplicationPosition
-	WaitTimeout         int // seconds, zero to wait indefinitely
+	WaitTimeout         time.Duration // pass in zero to wait indefinitely
 }
 
 func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *SlavePositionReq, reply *mysqlctl.ReplicationPosition) error {
@@ -172,7 +172,7 @@ func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRe
 
 type WaitBlpPositionArgs struct {
 	BlpPosition mysqlctl.BlpPosition
-	WaitTimeout int
+	WaitTimeout time.Duration
 }
 
 func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {

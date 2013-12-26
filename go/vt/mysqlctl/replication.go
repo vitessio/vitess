@@ -300,9 +300,16 @@ func parseReplicationPosition(rpos string) (filename string, pos uint, err error
 	return
 }
 
-func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout int) error {
+func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout time.Duration) error {
+	var timeToWait int
+	if waitTimeout > 0 {
+		timeToWait = int(waitTimeout / time.Second)
+		if timeToWait == 0 {
+			timeToWait = 1
+		}
+	}
 	cmd := fmt.Sprintf("SELECT MASTER_POS_WAIT('%v', %v, %v)",
-		rp.MasterLogFile, rp.MasterLogPosition, waitTimeout)
+		rp.MasterLogFile, rp.MasterLogPosition, timeToWait)
 	qr, err := mysqld.fetchSuperQuery(cmd)
 	if err != nil {
 		return err
@@ -685,8 +692,8 @@ func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*BlpPosition, error)
 	return nil, fmt.Errorf("BlpPosition for id %v not found", id)
 }
 
-func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout int) error {
-	timeOut := time.Now().Add(time.Duration(waitTimeout) * time.Second)
+func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout time.Duration) error {
+	timeOut := time.Now().Add(waitTimeout)
 	for {
 		if time.Now().After(timeOut) {
 			break

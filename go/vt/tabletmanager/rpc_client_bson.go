@@ -106,7 +106,7 @@ func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo,
 	var rp mysqlctl.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_SLAVE_POSITION, &SlavePositionReq{
 		ReplicationPosition: *replicationPosition,
-		WaitTimeout:         int(waitTime / time.Second),
+		WaitTimeout:         waitTime,
 	}, &rp, waitTime); err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, b
 	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_BLP_POSITION, &WaitBlpPositionArgs{
 		BlpPosition: blpPosition,
-		WaitTimeout: int(waitTime / time.Second),
+		WaitTimeout: waitTime,
 	}, &noOutput, waitTime)
 }
 
