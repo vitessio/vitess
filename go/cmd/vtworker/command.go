@@ -6,6 +6,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -16,10 +17,11 @@ import (
 )
 
 type command struct {
-	Name   string
-	method func(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker
-	params string
-	Help   string // if help is empty, won't list the command
+	Name        string
+	method      func(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker
+	interactive func(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request)
+	params      string
+	Help        string // if help is empty, won't list the command
 }
 
 type commandGroup struct {
@@ -32,11 +34,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Diffs",
 		"Workers comparing and validating data",
-		[]command{
-			command{"SplitDiff", commandSplitDiff,
-				"<keyspace/shard|zk shard path>",
-				"Diffs a rdonly destination shard against its SourceShards"},
-		},
+		[]command{},
 	},
 }
 
@@ -80,15 +78,6 @@ func shardParamToKeyspaceShard(param string) (string, string) {
 		log.Fatalf("Invalid shard path: %v", param)
 	}
 	return zkPathParts[0], zkPathParts[1]
-}
-
-func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
-	subFlags.Parse(args)
-	if subFlags.NArg() != 1 {
-		log.Fatalf("command SplitDiff requires <keyspace/shard|zk shard path>")
-	}
-	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
 }
 
 func commandWorker(wr *wrangler.Wrangler, args []string) worker.Worker {

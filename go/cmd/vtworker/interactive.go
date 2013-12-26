@@ -12,7 +12,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
@@ -40,24 +39,6 @@ const subIndexHTML = `
     <p>{{.Description}}</p>
     {{range $i, $cmd := .Commands }}
       <li><a href="{{$name}}/{{$cmd.Name}}">{{$cmd.Name}}</a>: {{$cmd.Help}}.</li>
-    {{end}}
-</body>
-`
-
-const splitDiffHTML = `
-<!DOCTYPE html>
-<head>
-  <title>Split Diff Action</title>
-</head>
-<body>
-  <h1>Split Diff Action</h1>
-
-    {{if .Error}}
-      <b>Error:</b> {{.Error}}</br>
-    {{else}}
-      {{range $i, $si := .Shards}}
-        <li><a href="/Diffs/SplitDiff?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
-      {{end}}
     {{end}}
 </body>
 `
@@ -137,7 +118,6 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 func initInteractiveMode(wr *wrangler.Wrangler) {
 	indexTemplate := loadTemplate("index", indexHTML)
 	subIndexTemplate := loadTemplate("subIndex", subIndexHTML)
-	splitDiffTemplate := loadTemplate("splitdiff", splitDiffHTML)
 
 	// toplevel menu
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -149,38 +129,13 @@ func initInteractiveMode(wr *wrangler.Wrangler) {
 		http.HandleFunc("/"+cg.Name, func(w http.ResponseWriter, r *http.Request) {
 			executeTemplate(w, subIndexTemplate, cg)
 		})
+
+		for _, c := range cg.Commands {
+			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
+				c.interactive(wr, w, r)
+			})
+		}
 	}
 
-	// SplitDiff
-	http.HandleFunc("/Diffs/SplitDiff", func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			httpError(w, "cannot parse form: %s", err)
-			return
-		}
-		keyspace := r.FormValue("keyspace")
-		shard := r.FormValue("shard")
-
-		if keyspace == "" || shard == "" {
-			// display the list of possible shards to chose from
-			result := make(map[string]interface{})
-			shards, err := shardsWithSources(wr)
-			if err != nil {
-				result["Error"] = err.Error()
-			} else {
-				result["Shards"] = shards
-			}
-
-			executeTemplate(w, splitDiffTemplate, result)
-		} else {
-			// start the diff job
-			wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
-			if _, err := setAndStartWorker(wrk); err != nil {
-				httpError(w, "cannot set worker: %s", err)
-				return
-			}
-
-			http.Redirect(w, r, "/status", http.StatusTemporaryRedirect)
-		}
-	})
 	log.Infof("Interactive mode ready")
 }
