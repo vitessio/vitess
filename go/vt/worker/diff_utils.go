@@ -29,6 +29,48 @@ type QueryResultReader struct {
 	call   *rpc.Call
 }
 
+// NewQueryResultReaderForTablet creates a new QueryResultReader for
+// the provided tablet / sql query
+func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias, sql string) (*QueryResultReader, error) {
+	tablet, err := ts.GetTablet(tabletAlias)
+	if err != nil {
+		return nil, err
+	}
+
+	addr := fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["vt"])
+	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, 0, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var sessionInfo tproto.SessionInfo
+	if err := rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: tablet.Keyspace, Shard: tablet.Shard}, &sessionInfo); err != nil {
+		return nil, err
+	}
+
+	req := &tproto.Query{
+		Sql:           sql,
+		BindVariables: make(map[string]interface{}),
+		TransactionId: 0,
+		SessionId:     sessionInfo.SessionId,
+	}
+	sr := make(chan *mproto.QueryResult, 1000)
+	call := rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
+
+	// read the columns, or grab the error
+	cols, ok := <-sr
+	if !ok {
+		return nil, fmt.Errorf("Cannot read Fields for query: %v", sql)
+	}
+
+	return &QueryResultReader{
+		Output: sr,
+		Fields: cols.Fields,
+		client: rpcClient,
+		call:   call,
+	}, nil
+}
+
 // orderedColumns returns the list of columns:
 // - first the primary key columns in the right order
 // - then the rest of the columns
@@ -54,22 +96,6 @@ func orderedColumns(tableDefinition *mysqlctl.TableDefinition) []string {
 // that match the supplied KeyRange, ordered by Primary Key. The returned
 // columns are ordered with the Primary Key columns in front.
 func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange) (*QueryResultReader, error) {
-	tablet, err := ts.GetTablet(tabletAlias)
-	if err != nil {
-		return nil, err
-	}
-
-	addr := fmt.Sprintf("%v:%v", tablet.IPAddr, tablet.Portmap["vt"])
-	rpcClient, err := bsonrpc.DialHTTP("tcp", addr, 0, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	var sessionInfo tproto.SessionInfo
-	if err := rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: tablet.Keyspace, Shard: tablet.Shard}, &sessionInfo); err != nil {
-		return nil, err
-	}
-
 	where := ""
 	if keyRange.Start != key.MinKey {
 		if keyRange.End != key.MaxKey {
@@ -88,27 +114,7 @@ func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
-	req := &tproto.Query{
-		Sql:           sql,
-		BindVariables: make(map[string]interface{}),
-		TransactionId: 0,
-		SessionId:     sessionInfo.SessionId,
-	}
-	sr := make(chan *mproto.QueryResult, 1000)
-	call := rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-
-	// read the columns, or grab the error
-	cols, ok := <-sr
-	if !ok {
-		return nil, fmt.Errorf("Cannot read Fields for query: %v", sql)
-	}
-
-	return &QueryResultReader{
-		Output: sr,
-		Fields: cols.Fields,
-		client: rpcClient,
-		call:   call,
-	}, nil
+	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
 }
 
 func (qrr *QueryResultReader) Error() error {
@@ -174,31 +180,6 @@ func (rr *RowReader) Drain() (int, error) {
 	}
 }
 
-// RowDiffer will consume rows on both sides, and compare them.
-// It assumes left and right are sorted by ascending primary key.
-type RowDiffer struct {
-	left         *RowReader
-	right        *RowReader
-	pkFieldCount int
-}
-
-// NewRowDiffer returns a new RowDiffer
-func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.TableDefinition) (*RowDiffer, error) {
-	if len(left.Fields) != len(right.Fields) {
-		return nil, fmt.Errorf("Cannot diff inputs with different types")
-	}
-	for i, field := range left.Fields {
-		if field.Type != right.Fields[i].Type {
-			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, right.Fields[i].Type)
-		}
-	}
-	return &RowDiffer{
-		left:         NewRowReader(left),
-		right:        NewRowReader(right),
-		pkFieldCount: len(tableDefinition.PrimaryKeyColumns),
-	}, nil
-}
-
 // DiffReport has the stats for a diff job
 type DiffReport struct {
 	// general stats
@@ -225,6 +206,83 @@ func (dr *DiffReport) ComputeQPS() {
 	if dr.processedRows > 0 {
 		dr.processingQPS = int(time.Duration(dr.processedRows) * time.Second / time.Now().Sub(dr.startingTime))
 	}
+}
+
+// RowsEqual returns the index of the first different fields, or -1 if
+// both rows are the same
+func RowsEqual(left, right []sqltypes.Value) int {
+	for i, l := range left {
+		if !bytes.Equal(l.Raw(), right[i].Raw()) {
+			return i
+		}
+	}
+	return -1
+}
+
+// CompareRows returns:
+// -1 if left is smaller than right
+// 0 if left and right are equal
+// +1 if left is bigger than right
+func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
+	for i := 0; i < compareCount; i++ {
+		fieldType := fields[i].Type
+		lv, err := mproto.Convert(fieldType, left[i])
+		if err != nil {
+			return 0, err
+		}
+		rv, err := mproto.Convert(fieldType, right[i])
+		if err != nil {
+			return 0, err
+		}
+		switch l := lv.(type) {
+		case int64:
+			r := rv.(int64)
+			if l < r {
+				return -1, nil
+			} else if l > r {
+				return 1, nil
+			}
+		case float64:
+			r := rv.(float64)
+			if l < r {
+				return -1, nil
+			} else if l > r {
+				return 1, nil
+			}
+		case []byte:
+			r := rv.([]byte)
+			return bytes.Compare(l, r), nil
+		default:
+			return 0, fmt.Errorf("Unsuported type %T returned by mysql.proto.Convert", l)
+		}
+	}
+	return 0, nil
+}
+
+// RowDiffer will consume rows on both sides, and compare them.
+// It assumes left and right are sorted by ascending primary key.
+// it will record errors if extra rows exist on either side.
+type RowDiffer struct {
+	left         *RowReader
+	right        *RowReader
+	pkFieldCount int
+}
+
+// NewRowDiffer returns a new RowDiffer
+func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.TableDefinition) (*RowDiffer, error) {
+	if len(left.Fields) != len(right.Fields) {
+		return nil, fmt.Errorf("Cannot diff inputs with different types")
+	}
+	for i, field := range left.Fields {
+		if field.Type != right.Fields[i].Type {
+			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, right.Fields[i].Type)
+		}
+	}
+	return &RowDiffer{
+		left:         NewRowReader(left),
+		right:        NewRowReader(right),
+		pkFieldCount: len(tableDefinition.PrimaryKeyColumns),
+	}, nil
 }
 
 // Go runs the diff. If there is no error, it will drain both sides.
@@ -334,53 +392,131 @@ func (rd *RowDiffer) Go() (dr DiffReport, err error) {
 	}
 }
 
-// RowsEqual returns the index of the first different fields, or -1 if
-// both rows are the same
-func RowsEqual(left, right []sqltypes.Value) int {
-	for i, l := range left {
-		if !bytes.Equal(l.Raw(), right[i].Raw()) {
-			return i
-		}
-	}
-	return -1
+// RowSubsetDiffer will consume rows on both sides, and compare them.
+// It assumes superset and subset are sorted by ascending primary key.
+// It will record errors in DiffReport.extraRowsRight if extra rows
+// exist on the subset side, and DiffReport.extraRowsLeft will
+// always be zero.
+type RowSubsetDiffer struct {
+	superset     *RowReader
+	subset       *RowReader
+	pkFieldCount int
 }
 
-// CompareRows returns:
-// -1 if left is smaller than right
-// 0 if left and right are equal
-// +1 if left is bigger than right
-func CompareRows(fields []mproto.Field, compareCount int, left, right []sqltypes.Value) (int, error) {
-	for i := 0; i < compareCount; i++ {
-		fieldType := fields[i].Type
-		lv, err := mproto.Convert(fieldType, left[i])
-		if err != nil {
-			return 0, err
-		}
-		rv, err := mproto.Convert(fieldType, right[i])
-		if err != nil {
-			return 0, err
-		}
-		switch l := lv.(type) {
-		case int64:
-			r := rv.(int64)
-			if l < r {
-				return -1, nil
-			} else if l > r {
-				return 1, nil
-			}
-		case float64:
-			r := rv.(float64)
-			if l < r {
-				return -1, nil
-			} else if l > r {
-				return 1, nil
-			}
-		case []byte:
-			r := rv.([]byte)
-			return bytes.Compare(l, r), nil
-		default:
-			return 0, fmt.Errorf("Unsuported type %T returned by mysql.proto.Convert", l)
+// NewRowSubsetDiffer returns a new RowSubsetDiffer
+func NewRowSubsetDiffer(superset, subset *QueryResultReader, pkFieldCount int) (*RowSubsetDiffer, error) {
+	if len(superset.Fields) != len(subset.Fields) {
+		return nil, fmt.Errorf("Cannot diff inputs with different types")
+	}
+	for i, field := range superset.Fields {
+		if field.Type != subset.Fields[i].Type {
+			return nil, fmt.Errorf("Cannot diff inputs with different types: field %v types are %v and %v", i, field.Type, subset.Fields[i].Type)
 		}
 	}
-	return 0, nil
+	return &RowSubsetDiffer{
+		superset:     NewRowReader(superset),
+		subset:       NewRowReader(subset),
+		pkFieldCount: pkFieldCount,
+	}, nil
+}
+
+// Go runs the diff. If there is no error, it will drain both sides.
+// If an error occurs, it will just return it and stop.
+func (rd *RowSubsetDiffer) Go() (dr DiffReport, err error) {
+
+	dr.startingTime = time.Now()
+	defer dr.ComputeQPS()
+
+	var superset []sqltypes.Value
+	var subset []sqltypes.Value
+	advanceSuperset := true
+	advanceSubset := true
+	for {
+		if advanceSuperset {
+			superset, err = rd.superset.Next()
+			if err != nil {
+				return
+			}
+			advanceSuperset = false
+		}
+		if advanceSubset {
+			subset, err = rd.subset.Next()
+			if err != nil {
+				return
+			}
+			advanceSubset = false
+		}
+		dr.processedRows++
+		if superset == nil {
+			// no more rows from the superset
+			if subset == nil {
+				// no more rows from subset either, we're done
+				return
+			}
+
+			// drain subset, update count
+			if count, err := rd.subset.Drain(); err != nil {
+				return dr, err
+			} else {
+				dr.extraRowsRight += 1 + count
+			}
+			return
+		}
+		if subset == nil {
+			// no more rows from the subset
+			// we know we have rows from superset, drain
+			if _, err := rd.superset.Drain(); err != nil {
+				return dr, err
+			}
+			return
+		}
+
+		// we have both superset and subset, compare
+		f := RowsEqual(superset, subset)
+		if f == -1 {
+			// rows are the same, next
+			dr.matchingRows++
+			advanceSuperset = true
+			advanceSubset = true
+			continue
+		}
+
+		if f >= rd.pkFieldCount {
+			// rows have the same primary key, only content is different
+			if dr.mismatchedRows < 10 {
+				log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, superset, subset)
+			}
+			dr.mismatchedRows++
+			advanceSuperset = true
+			advanceSubset = true
+			continue
+		}
+
+		// have to find the 'smallest' raw and advance it
+		c, err := CompareRows(rd.superset.Fields(), rd.pkFieldCount, superset, subset)
+		if err != nil {
+			return dr, err
+		}
+		if c < 0 {
+			advanceSuperset = true
+			continue
+		} else if c > 0 {
+			if dr.extraRowsRight < 10 {
+				log.Errorf("Extra row %v on subset: %v", dr.extraRowsRight, subset)
+			}
+			dr.extraRowsRight++
+			advanceSubset = true
+			continue
+		}
+
+		// After looking at primary keys more carefully,
+		// they're the same. Logging a regular difference
+		// then, and advancing both.
+		if dr.mismatchedRows < 10 {
+			log.Errorf("Different content %v in same PK: %v != %v", dr.mismatchedRows, superset, subset)
+		}
+		dr.mismatchedRows++
+		advanceSuperset = true
+		advanceSubset = true
+	}
 }

@@ -96,6 +96,9 @@ func (sdw *SplitDiffWorker) StatusAsHTML() string {
 	switch sdw.state {
 	case stateError:
 		result += "<b>Error</b>: " + sdw.err.Error() + "</br>\n"
+	case stateDiff:
+		result += "<b>Running</b>:</br>\n"
+		result += strings.Join(sdw.diffLogs, "</br>\n")
 	case stateDone:
 		result += "<b>Success</b>:</br>\n"
 		result += strings.Join(sdw.diffLogs, "</br>\n")
@@ -112,6 +115,9 @@ func (sdw *SplitDiffWorker) StatusAsText() string {
 	switch sdw.state {
 	case stateError:
 		result += "Error: " + sdw.err.Error() + "\n"
+	case stateDiff:
+		result += "Running:\n"
+		result += strings.Join(sdw.diffLogs, "\n")
 	case stateDone:
 		result += "Success:\n"
 		result += strings.Join(sdw.diffLogs, "\n")
