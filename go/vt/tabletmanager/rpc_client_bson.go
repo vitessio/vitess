@@ -86,7 +86,8 @@ func (client *GoRpcTabletManagerConn) GetPermissions(tablet *topo.TabletInfo, wa
 //
 
 func (client *GoRpcTabletManagerConn) ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_CHANGE_TYPE, &dbType, rpc.NilResponse, waitTime)
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, TABLET_ACTION_CHANGE_TYPE, &dbType, &noOutput, waitTime)
 }
 
 //
@@ -121,7 +122,8 @@ func (client *GoRpcTabletManagerConn) MasterPosition(tablet *topo.TabletInfo, wa
 }
 
 func (client *GoRpcTabletManagerConn) StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_STOP_SLAVE, "", rpc.NilResponse, waitTime)
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, TABLET_ACTION_STOP_SLAVE, "", &noOutput, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) StopSlaveMinimum(tablet *topo.TabletInfo, groupId int64, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
@@ -136,7 +138,8 @@ func (client *GoRpcTabletManagerConn) StopSlaveMinimum(tablet *topo.TabletInfo, 
 }
 
 func (client *GoRpcTabletManagerConn) StartSlave(tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_START_SLAVE, "", rpc.NilResponse, waitTime)
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, TABLET_ACTION_START_SLAVE, "", &noOutput, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error) {
@@ -148,10 +151,11 @@ func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTim
 }
 
 func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
 	return client.rpcCallTablet(tablet, TABLET_ACTION_WAIT_BLP_POSITION, &WaitBlpPositionArgs{
 		BlpPosition: blpPosition,
 		WaitTimeout: int(waitTime / time.Second),
-	}, rpc.NilResponse, waitTime)
+	}, &noOutput, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) StopBlp(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.BlpPositionList, error) {
@@ -163,7 +167,8 @@ func (client *GoRpcTabletManagerConn) StopBlp(tablet *topo.TabletInfo, waitTime 
 }
 
 func (client *GoRpcTabletManagerConn) StartBlp(tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_START_BLP, "", rpc.NilResponse, waitTime)
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, TABLET_ACTION_START_BLP, "", &noOutput, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
@@ -182,9 +187,11 @@ func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, posit
 //
 
 func (client *GoRpcTabletManagerConn) SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_PROMOTED, rpc.NilRequest, rpc.NilResponse, waitTime)
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_PROMOTED, "", &noOutput, waitTime)
 }
 
 func (client *GoRpcTabletManagerConn) SlaveWasRestarted(tablet *topo.TabletInfo, args *SlaveWasRestartedData, waitTime time.Duration) error {
-	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, rpc.NilResponse, waitTime)
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, TABLET_ACTION_SLAVE_WAS_RESTARTED, args, &noOutput, waitTime)
 }
