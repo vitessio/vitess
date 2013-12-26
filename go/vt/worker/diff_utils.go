@@ -208,6 +208,10 @@ func (dr *DiffReport) ComputeQPS() {
 	}
 }
 
+func (dr *DiffReport) String() string {
+	return fmt.Sprintf("DiffReport{%v processed, %v matching, %v mismatched, %v extra left, %v extra right, %v q/s}", dr.processedRows, dr.matchingRows, dr.mismatchedRows, dr.extraRowsLeft, dr.extraRowsRight, dr.processingQPS)
+}
+
 // RowsEqual returns the index of the first different fields, or -1 if
 // both rows are the same
 func RowsEqual(left, right []sqltypes.Value) int {

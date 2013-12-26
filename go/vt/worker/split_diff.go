@@ -477,7 +477,7 @@ func (sdw *SplitDiffWorker) diff() error {
 				sdw.diffLog("Differ.Go failed: " + err.Error())
 			} else {
 				if report.HasDifferences() {
-					sdw.diffLog(fmt.Sprintf("Table %v has differences: %v", tableDefinition.Name, report))
+					sdw.diffLog(fmt.Sprintf("Table %v has differences: %v", tableDefinition.Name, report.String()))
 				} else {
 					sdw.diffLog(fmt.Sprintf("Table %v checks out (%v rows processed, %v qps)", tableDefinition.Name, report.processedRows, report.processingQPS))
 				}
