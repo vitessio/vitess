@@ -6,9 +6,12 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
+	"sync"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -40,6 +43,59 @@ func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
+}
+
+// shardsWithSources returns all the shards that have SourceShards set.
+func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
+	keyspaces, err := wr.TopoServer().GetKeyspaces()
+	if err != nil {
+		return nil, err
+	}
+
+	wg := sync.WaitGroup{}
+	mu := sync.Mutex{} // protects result
+	result := make([]map[string]string, 0, len(keyspaces))
+	rec := concurrency.AllErrorRecorder{}
+	for _, keyspace := range keyspaces {
+		wg.Add(1)
+		go func(keyspace string) {
+			defer wg.Done()
+			shards, err := wr.TopoServer().GetShardNames(keyspace)
+			if err != nil {
+				rec.RecordError(err)
+				return
+			}
+			for _, shard := range shards {
+				wg.Add(1)
+				go func(keyspace, shard string) {
+					defer wg.Done()
+					si, err := wr.TopoServer().GetShard(keyspace, shard)
+					if err != nil {
+						rec.RecordError(err)
+						return
+					}
+
+					if len(si.SourceShards) > 0 {
+						mu.Lock()
+						result = append(result, map[string]string{
+							"Keyspace": keyspace,
+							"Shard":    shard,
+						})
+						mu.Unlock()
+					}
+				}(keyspace, shard)
+			}
+		}(keyspace)
+	}
+	wg.Wait()
+
+	if rec.HasErrors() {
+		return nil, rec.Error()
+	}
+	if len(result) == 0 {
+		return nil, fmt.Errorf("There are no shards with SourceShards")
+	}
+	return result, nil
 }
 
 func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
