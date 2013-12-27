@@ -441,6 +441,12 @@ primary key (name)
     logging.debug("Checking no data was sent the wrong way")
     self._check_lots_not_present(1000)
 
+    # use the vtworker checker to compare the data
+    logging.debug("Running vtworker SplitDiff")
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/C0-'], auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias, 'rdonly'], auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', shard_3_rdonly.tablet_alias, 'rdonly'], auto_log=True)
+
     utils.pause("Good time to test vtworker for diffs")
 
     # start a thread to insert data into shard_1 in the background
@@ -500,6 +506,12 @@ primary key (name)
     self._insert_lots(3000, base=2000)
     logging.debug("Checking 80 percent of data was sent fairly quickly")
     self._check_lots_timeout(3000, 80, 10, base=2000)
+
+    # use the vtworker checker to compare the data again
+    logging.debug("Running vtworker SplitDiff")
+    utils.run_vtworker(['-cell', 'test_nj', 'SplitDiff', 'test_keyspace/C0-'], auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', shard_1_rdonly.tablet_alias, 'rdonly'], auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', shard_3_rdonly.tablet_alias, 'rdonly'], auto_log=True)
 
     # going to migrate the master now, check the delays
     monitor_thread_1.done = True

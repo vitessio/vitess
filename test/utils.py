@@ -406,6 +406,31 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs)
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
 
+# vtworker helpers
+def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
+  prog_compile(['vtworker'])
+  args = [vtroot+'/bin/vtworker', '-log_dir', tmp_root]
+
+  if auto_log:
+    if options.verbose == 2:
+      log_level='INFO'
+    elif options.verbose == 1:
+      log_level='WARNING'
+    else:
+      log_level='ERROR'
+
+  if log_level:
+    args.append('--stderrthreshold=%s' % log_level)
+
+  if isinstance(clargs, str):
+    cmd = " ".join(args) + ' ' + clargs
+  else:
+    cmd = args + clargs
+
+  if expect_fail:
+    return run_fail(cmd, **kwargs)
+  return run(cmd, **kwargs)
+
 # vtclient2 helpers
 # driver is one of:
 # - vttablet (default), vttablet-streaming
