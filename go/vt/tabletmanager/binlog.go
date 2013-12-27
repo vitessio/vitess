@@ -44,6 +44,9 @@ type BinlogPlayerController struct {
 
 	// done is the channel to wait for to be sure the player is done
 	done chan struct{}
+
+	// stopAtGroupId contains the stopping point for this player, if any
+	stopAtGroupId int64
 }
 
 func NewBinlogPlayerController(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld, cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) *BinlogPlayerController {
@@ -62,6 +65,7 @@ func (bpc *BinlogPlayerController) String() string {
 	return "BinlogPlayerController(" + bpc.sourceShard.String() + ")"
 }
 
+// Start will start the player in the background and run forever
 func (bpc *BinlogPlayerController) Start() {
 	if bpc.interrupted != nil {
 		log.Warningf("%v: already started", bpc)
@@ -70,12 +74,11 @@ func (bpc *BinlogPlayerController) Start() {
 	log.Infof("%v: starting binlog player", bpc)
 	bpc.interrupted = make(chan struct{}, 1)
 	bpc.done = make(chan struct{}, 1)
+	bpc.stopAtGroupId = 0 // run forever
 	go bpc.Loop()
 }
 
-// TODO(alainjobart): implement these two methods the rigth way.
-// For now, StartUntil will just start, and WaitForStop will just stop.
-
+// StartUntil will start the Player until we reach the given groupId
 func (bpc *BinlogPlayerController) StartUntil(groupId int64) error {
 	if bpc.interrupted != nil {
 		return fmt.Errorf("%v: already started", bpc)
@@ -83,13 +86,27 @@ func (bpc *BinlogPlayerController) StartUntil(groupId int64) error {
 	log.Infof("%v: starting binlog player until %v", bpc, groupId)
 	bpc.interrupted = make(chan struct{}, 1)
 	bpc.done = make(chan struct{}, 1)
+	bpc.stopAtGroupId = groupId
 	go bpc.Loop()
 	return nil
 }
 
+// WaitForStop will wait until the player is stopped. Use this after StartUntil.
 func (bpc *BinlogPlayerController) WaitForStop(waitTimeout time.Duration) error {
-	bpc.Stop()
-	return nil
+	if bpc.interrupted == nil {
+		log.Warningf("%v: not started", bpc)
+		return fmt.Errorf("WaitForStop called but player not started")
+	}
+	timer := time.After(waitTimeout)
+	select {
+	case <-bpc.done:
+		bpc.interrupted = nil
+		bpc.done = nil
+		return nil
+	case <-timer:
+		bpc.Stop()
+		return fmt.Errorf("WaitForStop timeout, stopping current player")
+	}
 }
 
 func (bpc *BinlogPlayerController) Stop() {
@@ -176,7 +193,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 	}
 
-	player := mysqlctl.NewBinlogPlayer(vtClient, addr, overlap, startPosition)
+	player := mysqlctl.NewBinlogPlayer(vtClient, addr, overlap, startPosition, bpc.stopAtGroupId)
 	return player.ApplyBinlogEvents(bpc.interrupted)
 }
 

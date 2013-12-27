@@ -188,20 +188,26 @@ func (bs *blplStats) statsJSON() string {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	addr      string
-	dbClient  VtClient
-	keyRange  key.KeyRange
-	blpPos    BlpPosition
-	blplStats *blplStats
+	addr          string
+	dbClient      VtClient
+	keyRange      key.KeyRange
+	blpPos        BlpPosition
+	stopAtGroupId int64
+	blplStats     *blplStats
 }
 
-func NewBinlogPlayer(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *BlpPosition) *BinlogPlayer {
+// NewBinlogPlayer returns a new BinlogPlayer pointing at the server
+// replicating the provided keyrange, starting at the startPosition.GroupId,
+// and updating _vt.blp_checkpoint with uid=startPosition.Uid.
+// If stopAtGroupId != 0, it will stop when reaching that GroupId.
+func NewBinlogPlayer(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *BlpPosition, stopAtGroupId int64) *BinlogPlayer {
 	return &BinlogPlayer{
-		addr:      addr,
-		dbClient:  dbClient,
-		keyRange:  keyRange,
-		blpPos:    *startPosition,
-		blplStats: NewBlplStats(),
+		addr:          addr,
+		dbClient:      dbClient,
+		keyRange:      keyRange,
+		blpPos:        *startPosition,
+		stopAtGroupId: stopAtGroupId,
+		blplStats:     NewBlplStats(),
 	}
 }
 
@@ -290,7 +296,10 @@ func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 }
 
 // ApplyBinlogEvents makes a gob rpc request to BinlogServer
-// and processes the events.
+// and processes the events. It will return nil if 'interrupted'
+// was closed, or if we reached the stopping point.
+// It will return io.EOF if the server stops sending us updates.
+// It may return any other error it encounters.
 func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
 		blp.blpPos.Uid,
@@ -299,6 +308,17 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		blp.blpPos.GroupId,
 		blp.addr,
 	)
+	if blp.stopAtGroupId > 0 {
+		// we need to stop at some point
+		// sanity check the point
+		if blp.blpPos.GroupId > blp.stopAtGroupId {
+			return fmt.Errorf("starting point %v greater than stopping point %v", blp.blpPos.GroupId, blp.stopAtGroupId)
+		} else if blp.blpPos.GroupId == blp.stopAtGroupId {
+			log.Infof("Not starting BinlogPlayer, we're already at the desired position %v", blp.stopAtGroupId)
+			return nil
+		}
+		log.Infof("Will stop player when reaching %v", blp.stopAtGroupId)
+	}
 	rpcClient, err := rpcplus.DialHTTP("tcp", blp.addr)
 	defer rpcClient.Close()
 	if err != nil {
@@ -326,6 +346,10 @@ processLoop:
 					return fmt.Errorf("Error in processing binlog event %v", err)
 				}
 				if ok {
+					if blp.stopAtGroupId > 0 && blp.blpPos.GroupId >= blp.stopAtGroupId {
+						log.Infof("Reached stopping position, done playing logs")
+						return nil
+					}
 					break
 				}
 				log.Infof("Retrying txn")
