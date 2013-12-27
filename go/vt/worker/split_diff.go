@@ -15,7 +15,6 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/servenv"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -213,57 +212,12 @@ func (sdw *SplitDiffWorker) init() error {
 // - find one rdonly per source shard
 // - find one rdonly in destination shard
 // - mark them all as 'checker' pointing back to us
-
-func (sdw *SplitDiffWorker) findTarget(shard string) (topo.TabletAlias, error) {
-	endPoints, err := sdw.wr.TopoServer().GetEndPoints(sdw.cell, sdw.keyspace, shard, topo.TYPE_RDONLY)
-	if err != nil {
-		return topo.TabletAlias{}, fmt.Errorf("GetEndPoints(%v,%v,%v,rdonly) failed: %v", sdw.cell, sdw.keyspace, shard, err)
-	}
-	if len(endPoints.Entries) == 0 {
-		return topo.TabletAlias{}, fmt.Errorf("No endpoint to chose from in (%v,%v/%v)", sdw.cell, sdw.keyspace, shard)
-	}
-	tabletAlias := topo.TabletAlias{
-		Cell: sdw.cell,
-		Uid:  endPoints.Entries[0].Uid,
-	}
-
-	// We add the tag before calling ChangeSlaveType, so the destination
-	// vttablet reloads the worker URL when it reloads the tablet.
-	ourURL := servenv.ListeningURL.String()
-	log.Infof("Adding tag[worker]=%v to tablet %v", ourURL, tabletAlias)
-	if err := sdw.wr.TopoServer().UpdateTabletFields(tabletAlias, func(tablet *topo.Tablet) error {
-		if tablet.Tags == nil {
-			tablet.Tags = make(map[string]string)
-		}
-		tablet.Tags["worker"] = ourURL
-		return nil
-	}); err != nil {
-		return topo.TabletAlias{}, err
-	}
-	// we remove the tag *before* calling ChangeSlaveType back, so
-	// we need to record this tag change after the change slave
-	// type change in the cleaner.
-	defer wrangler.RecordTabletTagAction(sdw.cleaner, tabletAlias, "worker", "")
-
-	log.Infof("Changing tablet %v to 'checker'", tabletAlias)
-	sdw.wr.ResetActionTimeout(30 * time.Second)
-	if err := sdw.wr.ChangeType(tabletAlias, topo.TYPE_CHECKER, false /*force*/); err != nil {
-		return topo.TabletAlias{}, err
-	}
-
-	// Record a clean-up action to take the tablet back to rdonly.
-	// We will alter this one later on and let the tablet go back to
-	// 'spare' if we have stopped replication for too long on it.
-	wrangler.RecordChangeSlaveTypeAction(sdw.cleaner, tabletAlias, topo.TYPE_RDONLY)
-	return tabletAlias, nil
-}
-
 func (sdw *SplitDiffWorker) findTargets() error {
 	sdw.setState(stateSDFindTargets)
 
 	// find an appropriate endpoint in destination shard
 	var err error
-	sdw.destinationAlias, err = sdw.findTarget(sdw.shard)
+	sdw.destinationAlias, err = findChecker(sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, sdw.shard)
 	if err != nil {
 		return err
 	}
@@ -271,7 +225,7 @@ func (sdw *SplitDiffWorker) findTargets() error {
 	// find an appropriate endpoint in the source shards
 	sdw.sourceAliases = make([]topo.TabletAlias, len(sdw.shardInfo.SourceShards))
 	for i, ss := range sdw.shardInfo.SourceShards {
-		sdw.sourceAliases[i], err = sdw.findTarget(ss.Shard)
+		sdw.sourceAliases[i], err = findChecker(sdw.wr, sdw.cleaner, sdw.cell, sdw.keyspace, ss.Shard)
 		if err != nil {
 			return err
 		}
