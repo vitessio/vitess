@@ -65,6 +65,7 @@ def binary_path(name):
   return os.path.join(vtroot, 'bin', name)
 
 # topology server management: we use zookeeper in all the tests
+topo_server_implementation = 'zookeeper'
 hostname = socket.gethostname()
 zk_port_base = reserve_ports(3)
 zkocc_port_base = reserve_ports(3)

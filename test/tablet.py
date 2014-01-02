@@ -316,14 +316,15 @@ class Tablet(object):
     stderr_fd.close()
 
     # wait for zookeeper PID just to be sure we have it
-    utils.run(environment.binary_path('zk')+' wait -e ' + self.zk_pid, stdout=utils.devnull)
+    if environment.topo_server_implementation == 'zookeeper':
+      utils.run(environment.binary_path('zk')+' wait -e ' + self.zk_pid, stdout=utils.devnull)
 
     # wait for query service to be in the right state
     self.wait_for_vttablet_state(wait_for_state, port=port)
 
     return self.proc
 
-  def wait_for_vttablet_state(self, expected, timeout=5.0, port=None):
+  def wait_for_vttablet_state(self, expected, timeout=30.0, port=None):
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:
