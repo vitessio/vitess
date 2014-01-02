@@ -45,10 +45,10 @@ def run(args, raise_on_error=True, **kargs):
   stdout, stderr = proc.communicate()
   if proc.returncode:
     if raise_on_error:
-      raise Exception('Command failed: ' + args.join(' ') + ':\n' + stdout +
+      raise Exception('Command failed: ' + ' '.join(args) + ':\n' + stdout +
                       stderr)
     else:
-      logging.error('Command failed: %s:\n%s%s', args.join(' '), stdout, stderr)
+      logging.error('Command failed: %s:\n%s%s', ' '.join(args), stdout, stderr)
 
 # compile command line programs, only once
 compiled_progs = []

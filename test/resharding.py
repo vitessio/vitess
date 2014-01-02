@@ -4,6 +4,7 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+import json
 import logging
 import threading
 import time
@@ -290,7 +291,7 @@ primary key (name)
       self._check_value(shard_3_replica, 'resharding1', 10000 + base + i, 'msg-range1-%u' % i, 0xA000000000000000 + base + i, should_be_here=False)
       self._check_value(shard_2_replica2, 'resharding1', 20000 + base + i, 'msg-range2-%u' % i, 0xE000000000000000 + base + i, should_be_here=False)
 
-  def _wait_for_binlog_server_state(self, tablet, expected, timeout=5.0):
+  def _wait_for_binlog_server_state(self, tablet, expected, timeout=30.0):
     while True:
       v = utils.get_vars(tablet.port)
       if v == None:
@@ -317,7 +318,7 @@ primary key (name)
     self.assertTrue("UpdateStreamKeyrangeStatements" in v)
     self.assertTrue("UpdateStreamKeyrangeTransactions" in v)
 
-  def _wait_for_binlog_player_count(self, tablet, expected, timeout=5.0):
+  def _wait_for_binlog_player_count(self, tablet, expected, timeout=30.0):
     while True:
       v = utils.get_vars(tablet.port)
       if v == None:
@@ -553,11 +554,9 @@ primary key (name)
       t.kill_vttablet()
 
   def _check_srv_keyspace(self, cell, keyspace, expected):
-    if environment.topo_server_implementation != 'zookeeper':
-      logging.debug('Skipping zk calls on non-zk topology')
-      return
-
-    ks = utils.zk_cat_json('/zk/%s/vt/ns/%s' % (cell, keyspace))
+    stdout, stderr = utils.run_vtctl(['GetSrvKeyspace', cell, keyspace],
+                                     trap_output=True, auto_log=True)
+    ks = json.loads(stdout)
     result = ""
     for tablet_type in sorted(ks['Partitions'].keys()):
       result += "Partitions(%s):" % tablet_type

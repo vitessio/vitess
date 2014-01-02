@@ -21,6 +21,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/flagutil"
+	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/client2"
 	hk "github.com/youtube/vitess/go/vt/hook"
@@ -229,6 +230,16 @@ var commands = []commandGroup{
 			command{"ValidatePermissionsKeyspace", commandValidatePermissionsKeyspace,
 				"<keyspace name|zk keyspace path>",
 				"Validate the master permissions from shard 0 match all the other tablets in the keyspace."},
+		},
+	},
+	commandGroup{
+		"Serving Graph", []command{
+			command{"GetSrvKeyspace", commandGetSrvKeyspace,
+				"<cell> <keyspace>",
+				"Outputs the json version of SrvKeyspace to stdout."},
+			command{"GetSrvShard", commandGetSrvShard,
+				"<cell> <keyspace/shard|zk shard path>",
+				"Outputs the json version of SrvShard to stdout."},
 		},
 	},
 }
@@ -1396,6 +1407,33 @@ func commandValidatePermissionsKeyspace(wr *wrangler.Wrangler, subFlags *flag.Fl
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
 	return "", wr.ValidatePermissionsKeyspace(keyspace)
+}
+
+func commandGetSrvKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action GetSrvKeyspace requires <cell> <keyspace>")
+	}
+
+	srvKeyspace, err := wr.TopoServer().GetSrvKeyspace(subFlags.Arg(0), subFlags.Arg(1))
+	if err == nil {
+		fmt.Println(jscfg.ToJson(srvKeyspace))
+	}
+	return "", err
+}
+
+func commandGetSrvShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action GetSrvShard requires <cell> <keyspace/shard|zk shard path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(1))
+	srvShard, err := wr.TopoServer().GetSrvShard(subFlags.Arg(0), keyspace, shard)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(srvShard))
+	}
+	return "", err
 }
 
 // signal handling, centralized here
