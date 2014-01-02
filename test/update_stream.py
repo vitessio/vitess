@@ -14,6 +14,7 @@ import unittest
 
 import MySQLdb
 
+import environment
 import tablet
 import utils
 from vtdb import dbexceptions
@@ -36,7 +37,7 @@ def _get_master_current_position():
 
 def _get_repl_current_position():
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket=os.path.join(utils.vtdataroot, 'vt_%010d/mysql.sock' % 62345),
+                         unix_socket=os.path.join(environment.vtdataroot, 'vt_%010d/mysql.sock' % 62345),
                          db='vt_test_keyspace')
   cursor = MySQLdb.cursors.DictCursor(conn)
   cursor.execute('show master status')

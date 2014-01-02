@@ -5,6 +5,7 @@ import os
 import unittest
 import urllib2
 
+import environment
 import tablet
 import utils
 
@@ -41,9 +42,8 @@ class Vtctld(object):
     return data["ServingGraph"]["Keyspaces"]
 
   def start(self):
-    utils.prog_compile(['vtctld'])
-    args = [os.path.join(utils.vtroot, 'bin', 'vtctld'), '-debug', '-templates', utils.vttop + '/go/cmd/vtctld/templates', '-log_dir', utils.tmp_root]
-    stderr_fd = open(os.path.join(utils.tmp_root, "vtctld.stderr"), "w")
+    args = [environment.binary_path('vtctld'), '-debug', '-templates', environment.vttop + '/go/cmd/vtctld/templates', '-log_dir', environment.tmproot]
+    stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     return self.proc
 

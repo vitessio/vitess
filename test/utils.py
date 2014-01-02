@@ -16,15 +16,11 @@ import urllib
 
 import MySQLdb
 
-import tablet
+import environment
 
 options = None
 devnull = open('/dev/null', 'w')
-vttop = os.environ['VTTOP']
-vtroot = os.environ['VTROOT']
-vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 hostname = socket.gethostname()
-vtportstart = int(os.environ.get('VTPORTSTART', '6700'))
 
 class TestError(Exception):
   pass
@@ -32,15 +28,7 @@ class TestError(Exception):
 class Break(Exception):
   pass
 
-# tmp files management: all under /vt/tmp
-tmp_root = os.path.join(vtdataroot, 'tmp')
-def setup():
-  try:
-    os.makedirs(tmp_root)
-  except OSError:
-    # directory already exists
-    pass
-setup()
+environment.setup()
 
 class LoggingStream(object):
   def __init__(self):
@@ -116,7 +104,7 @@ def main(mod=None):
 
 def remove_tmp_files():
   try:
-    shutil.rmtree(tmp_root)
+    shutil.rmtree(environment.tmproot)
   except OSError as e:
     logging.debug("remove_tmp_files: %s", str(e))
 
@@ -124,28 +112,21 @@ def pause(prompt):
   if options.debug:
     raw_input(prompt)
 
-# port management: reserve count consecutive ports, returns the first one
-def reserve_ports(count):
-  global vtportstart
-  result = vtportstart
-  vtportstart += count
-  return result
-
 # sub-process management
 pid_map = {}
 already_killed = []
 def _add_proc(proc):
   pid_map[proc.pid] = proc
-  with open(tmp_root+'/test-pids', 'a') as f:
+  with open(environment.tmproot+'/test-pids', 'a') as f:
     print >> f, proc.pid, os.path.basename(proc.args[0])
 
 def kill_sub_processes():
   for proc in pid_map.values():
     if proc.pid and proc.returncode is None:
       proc.kill()
-  if not os.path.exists(tmp_root+'/test-pids'):
+  if not os.path.exists(environment.tmproot+'/test-pids'):
     return
-  with open(tmp_root+'/test-pids') as f:
+  with open(environment.tmproot+'/test-pids') as f:
     for line in f:
       try:
         parts = line.strip().split()
@@ -235,29 +216,16 @@ def run_procs(cmds, raise_on_error=True):
     procs.append(run_bg(cmd))
   wait_procs(procs, raise_on_error=raise_on_error)
 
-# compile command line programs
-compiled_progs = []
-def prog_compile(names):
-  for name in names:
-    if name in compiled_progs:
-      continue
-    compiled_progs.append(name)
-    if options.no_build:
-      logging.debug('Skipping build of %s', name)
-    else:
-      run('go install', cwd=vttop+'/go/cmd/'+name)
-
 # background zk process
 # (note the zkocc addresses will only work with an extra zkocc process)
-zk_port_base = reserve_ports(3)
-zkocc_port_base = reserve_ports(3)
+zk_port_base = environment.reserve_ports(3)
+zkocc_port_base = environment.reserve_ports(3)
 def zk_setup(add_bad_host=False):
   global zk_port_base
   global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  prog_compile(['zkctl', 'zk'])
-  run('%s/bin/zkctl -log_dir %s -zk.cfg 1@%s:%s init' % (vtroot, tmp_root, hostname, zk_ports))
-  config = tmp_root+'/test-zk-client-conf.json'
+  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_path('zkctl'), environment.tmproot, hostname, zk_ports))
+  config = environment.tmproot+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
     ca_server = 'localhost:%u' % (zk_port_base+2)
     if add_bad_host:
@@ -272,24 +240,24 @@ def zk_setup(add_bad_host=False):
                        'global:_zkocc': 'localhost:%u'%(zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
   os.putenv('ZK_CLIENT_CONFIG', config)
-  run(vtroot+'/bin/zk touch -p /zk/test_nj/vt')
-  run(vtroot+'/bin/zk touch -p /zk/test_ny/vt')
-  run(vtroot+'/bin/zk touch -p /zk/test_ca/vt')
+  run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt')
+  run(environment.binary_path('zk')+' touch -p /zk/test_ny/vt')
+  run(environment.binary_path('zk')+' touch -p /zk/test_ca/vt')
 
 def zk_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s/bin/zkctl -log_dir %s -zk.cfg 1@%s:%s teardown' % (vtroot, tmp_root, hostname, zk_ports), raise_on_error=False)
+  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_path('zkctl'), environment.tmproot, hostname, zk_ports), raise_on_error=False)
 
 def zk_wipe():
   # Work around safety check on recursive delete.
-  run(vtroot+'/bin/zk rm -rf /zk/test_nj/vt/*')
-  run(vtroot+'/bin/zk rm -rf /zk/test_ny/vt/*')
-  run(vtroot+'/bin/zk rm -rf /zk/global/vt/*')
+  run(environment.binary_path('zk')+' rm -rf /zk/test_nj/vt/*')
+  run(environment.binary_path('zk')+' rm -rf /zk/test_ny/vt/*')
+  run(environment.binary_path('zk')+' rm -rf /zk/global/vt/*')
 
-  run(vtroot+'/bin/zk rm -f /zk/test_nj/vt')
-  run(vtroot+'/bin/zk rm -f /zk/test_ny/vt')
-  run(vtroot+'/bin/zk rm -f /zk/global/vt')
+  run(environment.binary_path('zk')+' rm -f /zk/test_nj/vt')
+  run(environment.binary_path('zk')+' rm -f /zk/test_ny/vt')
+  run(environment.binary_path('zk')+' rm -f /zk/global/vt')
 
 def validate_topology(ping_tablets=False):
   if ping_tablets:
@@ -298,11 +266,11 @@ def validate_topology(ping_tablets=False):
     run_vtctl('Validate')
 
 def zk_ls(path):
-  out, err = run(vtroot+'/bin/zk ls '+path, trap_output=True)
+  out, err = run(environment.binary_path('zk')+' ls '+path, trap_output=True)
   return sorted(out.splitlines())
 
 def zk_cat(path):
-  out, err = run(vtroot+'/bin/zk cat '+path, trap_output=True)
+  out, err = run(environment.binary_path('zk')+' cat '+path, trap_output=True)
   return out
 
 def zk_cat_json(path):
@@ -346,8 +314,7 @@ def wait_for_vars(name, port):
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
   global zkocc_port_base
-  prog_compile(['zkocc'])
-  args = [vtroot+'/bin/zkocc',
+  args = [environment.binary_path('zkocc'),
           '-port', str(zkocc_port_base),
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
@@ -361,15 +328,14 @@ def zkocc_kill(sp):
 
 # vtgate helpers
 def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl="zookeeper", tablet_bson_encrypted=False):
-  port = reserve_ports(1)
-  prog_compile(['vtgate'])
-  args = [vtroot+'/bin/vtgate',
+  port = environment.reserve_ports(1)
+  args = [environment.binary_path('vtgate'),
           '-port', str(port),
           '-cell', cell,
           '-topo_implementation', topo_impl,
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
-          '-log_dir', tmp_root,
+          '-log_dir', environment.tmproot,
           ]
   if tablet_bson_encrypted:
     args.append('-tablet-bson-encrypted')
@@ -383,8 +349,7 @@ def vtgate_kill(sp):
 
 # vtctl helpers
 def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  prog_compile(['vtctl'])
-  args = [vtroot+'/bin/vtctl', '-log_dir', tmp_root]
+  args = [environment.binary_path('vtctl'), '-log_dir', environment.tmproot]
 
   if auto_log:
     if options.verbose == 2:
@@ -408,8 +373,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs)
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  prog_compile(['vtworker'])
-  args = [vtroot+'/bin/vtworker', '-log_dir', tmp_root]
+  args = [environment.binary_path('vtworker'), '-log_dir', environment.tmproot]
 
   if auto_log:
     if options.verbose == 2:
@@ -439,7 +403,6 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
 # path is either: keyspace/shard for vttablet* or zk path for vtdb*
 def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=None,
               verbose=False, raise_on_error=True):
-  prog_compile(['vtclient2'])
   if (user is None) != (password is None):
     raise TypeError("you should provide either both or none of user and password")
 
@@ -450,7 +413,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
   if user is not None:
     server = "%s:%s@%s" % (user, password, server)
 
-  cmdline = [vtroot+'/bin/vtclient2', '-server', server]
+  cmdline = [environment.binary_path('vtclient2'), '-server', server]
   if bindvars:
     cmdline.extend(['-bindvars', bindvars])
   if driver:
@@ -464,7 +427,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
 # mysql helpers
 def mysql_query(uid, dbname, query):
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, uid),
+                         unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid),
                          db=dbname)
   cursor = conn.cursor()
   cursor.execute(query)
@@ -475,7 +438,7 @@ def mysql_query(uid, dbname, query):
 
 def mysql_write_query(uid, dbname, query):
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, uid),
+                         unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid),
                          db=dbname)
   cursor = conn.cursor()
   conn.begin()
@@ -488,7 +451,7 @@ def mysql_write_query(uid, dbname, query):
 
 def check_db_var(uid, name, value):
   conn = MySQLdb.Connect(user='vt_dba',
-                         unix_socket='%s/vt_%010d/mysql.sock' % (vtdataroot, uid))
+                         unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid))
   cursor = conn.cursor()
   cursor.execute("show variables like '%s'" % name)
   row = cursor.fetchone()

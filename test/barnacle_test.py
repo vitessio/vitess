@@ -6,6 +6,7 @@ import shutil
 import sys
 import unittest
 
+import environment
 import utils
 import tablet
 
@@ -56,7 +57,7 @@ def tearDownModule():
   tablet_41983.remove_tree()
   tablet_31981.remove_tree()
 
-  path = os.path.join(utils.vtdataroot, 'snapshot')
+  path = os.path.join(environment.vtdataroot, 'snapshot')
   try:
     shutil.rmtree(path)
   except OSError as e:

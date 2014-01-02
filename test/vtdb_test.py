@@ -11,6 +11,7 @@ import time
 import traceback
 import unittest
 
+import environment
 import tablet
 import utils
 
@@ -432,7 +433,7 @@ class TestAuthentication(unittest.TestCase):
   def setUp(self):
     shard_1_replica.kill_vttablet()
     shard_1_replica.start_vttablet(auth=True)
-    credentials_file_name = os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')
+    credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')
     credentials_file = open(credentials_file_name, 'r')
     credentials = json.load(credentials_file)
     self.user = str(credentials.keys()[0])

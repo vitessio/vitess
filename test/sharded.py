@@ -7,6 +7,7 @@ from vtdb import tablet as tablet3
 from vtdb import topology
 from zk import zkocc
 
+import environment
 import tablet
 import utils
 
@@ -211,7 +212,7 @@ class TestSharded(unittest.TestCase):
 
     # and create zkns on this complex keyspace, make sure a few files are created
     utils.run_vtctl('ExportZknsForKeyspace test_keyspace')
-    out, err = utils.run(utils.vtroot+'/bin/zk ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
+    out, err = utils.run(environment.binary_path('zk')+' ls -R /zk/test_nj/zk?s/vt/test_keysp*', trap_output=True)
     lines = out.splitlines()
     for base in ['-80', '80-']:
       for db_type in ['master', 'replica']:

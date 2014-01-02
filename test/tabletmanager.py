@@ -16,6 +16,7 @@ import unittest
 
 import MySQLdb
 
+import environment
 import utils
 import tablet
 from vtdb import vtgate
@@ -62,7 +63,7 @@ def tearDownModule():
   tablet_41983.remove_tree()
   tablet_31981.remove_tree()
 
-  path = os.path.join(utils.vtdataroot, 'snapshot')
+  path = os.path.join(environment.vtdataroot, 'snapshot')
   try:
     shutil.rmtree(path)
   except OSError as e:
@@ -78,7 +79,7 @@ class TestTabletManager(unittest.TestCase):
 
   def _check_db_addr(self, db_addr, expected_addr):
     # Run in the background to capture output.
-    proc = utils.run_bg(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
+    proc = utils.run_bg(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' --alsologtostderr -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
     stdout = proc.communicate()[0].strip()
     self.assertEqual(stdout, expected_addr, 'wrong zk address for %s: %s expected: %s' % (db_addr, stdout, expected_addr))
 
@@ -263,7 +264,7 @@ class TestTabletManager(unittest.TestCase):
     utils.pause("%s finished" % snapshot_cmd)
 
     call(["touch", "/tmp/vtSimulateFetchFailures"])
-    err = tablet_62044.mysqlctl('-port %u -mysql-port %u restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (tablet_62044.port, tablet_62044.mysql_port, restore_flags, utils.vtdataroot)).wait()
+    err = tablet_62044.mysqlctl('-port %u -mysql-port %u restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (tablet_62044.port, tablet_62044.mysql_port, restore_flags, environment.vtdataroot)).wait()
     if err != 0:
       self.fail('mysqlctl restore failed')
 
@@ -383,12 +384,12 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('idle', start=True)
 
     # small test to make sure the directory validation works
-    snapshot_dir = os.path.join(utils.vtdataroot, 'snapshot')
+    snapshot_dir = os.path.join(environment.vtdataroot, 'snapshot')
     utils.run("rm -rf %s" % snapshot_dir)
     utils.run("mkdir -p %s" % snapshot_dir)
     utils.run("chmod -w %s" % snapshot_dir)
-    out, err = utils.run('%s/bin/vtctl -log_dir %s --alsologtostderr Clone -force %s %s %s' %
-                         (utils.vtroot, utils.tmp_root,
+    out, err = utils.run('%s -log_dir %s --alsologtostderr Clone -force %s %s %s' %
+                         (environment.binary_path('vtctl'), environment.tmproot,
                           clone_flags, tablet_62344.tablet_alias,
                           tablet_62044.tablet_alias),
                          trap_output=True, raise_on_error=False)
@@ -445,10 +446,10 @@ class TestTabletManager(unittest.TestCase):
 
     utils.run_vtctl('MultiSnapshot --force --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- %s id' % tablet_62344.tablet_alias)
 
-    if os.path.exists(os.path.join(utils.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
+    if os.path.exists(os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
       raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
     for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
-      path = os.path.join(utils.vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
+      path = os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
       with gzip.open(path) as f:
         if len(f.readlines()) != 2:
           raise utils.TestError("Data looks wrong in %s" % path)
@@ -554,7 +555,7 @@ class TestTabletManager(unittest.TestCase):
       raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
     # Should interrupt and fail
-    sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
+    sp = utils.run_bg(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
     # Need time for the process to start before killing it.
     time.sleep(3.0)
     os.kill(sp.pid, signal.SIGINT)
@@ -662,7 +663,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_31981.kill_vttablet()
 
     # Test address correction.
-    new_port = utils.reserve_ports(1)
+    new_port = environment.reserve_ports(1)
     tablet_62044.start_vttablet(port=new_port)
     # Wait a moment for address to reregister.
     time.sleep(1.0)
@@ -773,7 +774,7 @@ class TestTabletManager(unittest.TestCase):
     if brutal:
       tablet_62344.scrap(force=True)
       # we have some automated tools that do this too, so it's good to simulate
-      utils.run(utils.vtroot+'/bin/zk rm -rf ' + tablet_62344.zk_tablet_path)
+      utils.run(environment.binary_path('zk')+' rm -rf ' + tablet_62344.zk_tablet_path)
 
     # try to pretend the wrong host is the master, should fail
     stdout, stderr = utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_41983.tablet_alias, auto_log=True, expect_fail=True)
@@ -896,7 +897,7 @@ class TestTabletManager(unittest.TestCase):
     raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
-    out, err = utils.run(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
+    out, err = utils.run(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' --alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
     for expected in expectedStrings:
       self._check_string_in_hook_result(err, expected)
 
@@ -954,7 +955,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # start a 'vtctl Sleep' command in the background
-    sp = utils.run_bg(utils.vtroot+'/bin/vtctl -log_dir '+utils.tmp_root+' --alsologtostderr Sleep %s 60s' %
+    sp = utils.run_bg(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' --alsologtostderr Sleep %s 60s' %
                       tablet_62344.tablet_alias,
                       stdout=PIPE, stderr=PIPE)
 

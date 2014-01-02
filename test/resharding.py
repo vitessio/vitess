@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 
+import environment
 import utils
 import tablet
 
@@ -469,7 +470,7 @@ primary key (name)
     self._check_lots_timeout(1000, 80, 5, base=1000)
 
     # now serve rdonly from the split shards
-    utils.run_fail(utils.vtroot+'/bin/vtctl MigrateServedTypes test_keyspace/80- master')
+    utils.run_fail(environment.binary_path('vtctl')+' MigrateServedTypes test_keyspace/80- master')
     utils.run_vtctl('MigrateServedTypes test_keyspace/80- rdonly', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +

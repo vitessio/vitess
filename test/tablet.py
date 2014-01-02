@@ -11,6 +11,7 @@ warnings.simplefilter("ignore")
 
 import MySQLdb
 
+import environment
 import utils
 
 tablet_cell_map = {
@@ -41,8 +42,8 @@ class Tablet(object):
 
   def __init__(self, tablet_uid=None, port=None, mysql_port=None, cell=None):
     self.tablet_uid = tablet_uid or (Tablet.default_uid + Tablet.seq)
-    self.port = port or (utils.reserve_ports(1))
-    self.mysql_port = mysql_port or (utils.reserve_ports(1))
+    self.port = port or (environment.reserve_ports(1))
+    self.mysql_port = mysql_port or (environment.reserve_ports(1))
     Tablet.seq += 1
 
     if cell:
@@ -61,17 +62,14 @@ class Tablet(object):
     self.zk_pid = self.zk_tablet_path + '/pid'
 
   def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None):
-    utils.prog_compile(['mysqlctl'])
-
-
     env = None
     if extra_my_cnf:
       env = os.environ.copy()
       env['EXTRA_MY_CNF'] = extra_my_cnf
 
-    return utils.run_bg(os.path.join(utils.vtroot, 'bin', 'mysqlctl') +
+    return utils.run_bg(environment.binary_path('mysqlctl') +
                         ' -log_dir %s -tablet-uid %u %s' %
-                        (utils.tmp_root, self.tablet_uid, cmd),
+                        (environment.tmproot, self.tablet_uid, cmd),
                         env=env)
 
   def init_mysql(self, extra_my_cnf=None):
@@ -87,7 +85,7 @@ class Tablet(object):
     return self.mysqlctl('teardown -force', quiet=True)
 
   def remove_tree(self):
-    path = '%s/vt_%010d' % (utils.vtdataroot, self.tablet_uid)
+    path = '%s/vt_%010d' % (environment.vtdataroot, self.tablet_uid)
     try:
       shutil.rmtree(path)
     except OSError as e:
@@ -96,7 +94,7 @@ class Tablet(object):
 
   def mysql_connection_parameters(self, dbname, user='vt_dba'):
     return dict(user=user,
-                unix_socket='%s/vt_%010d/mysql.sock' % (utils.vtdataroot, self.tablet_uid),
+                unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, self.tablet_uid),
                 db=dbname)
 
   def connect(self, dbname='', user='vt_dba'):
@@ -266,7 +264,7 @@ class Tablet(object):
 
   @property
   def tablet_dir(self):
-    return "%s/vt_%010d" % (utils.vtdataroot, self.tablet_uid)
+    return "%s/vt_%010d" % (environment.vtdataroot, self.tablet_uid)
 
   def flush(self):
     utils.run(['curl', '-s', '-N', 'http://localhost:%s/debug/flushlogs' % (self.port)], stderr=utils.devnull, stdout=utils.devnull)
@@ -276,11 +274,8 @@ class Tablet(object):
     Starts a vttablet process, and returns it.
     The process is also saved in self.proc, so it's easy to kill as well.
     """
-    utils.prog_compile(['vtaction',
-                        'vttablet',
-                        ])
-
-    args = [os.path.join(utils.vtroot, 'bin', 'vttablet'),
+    environment.prog_compile('vtaction')
+    args = [environment.binary_path('vttablet'),
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
             '-log_dir', self.tablet_dir]
@@ -296,7 +291,7 @@ class Tablet(object):
       args.extend(["-rowcache-socket", memcache])
 
     if auth:
-      args.extend(['-auth-credentials', os.path.join(utils.vttop, 'test', 'test_data', 'authcredentials_test.json')])
+      args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
 
     if customrules:
       args.extend(['-customrules', customrules])
@@ -305,7 +300,7 @@ class Tablet(object):
       args.extend(['-schema-override', schema_override])
 
     if cert:
-      self.secure_port = utils.reserve_ports(1)
+      self.secure_port = environment.reserve_ports(1)
       args.extend(['-secure-port', '%s' % self.secure_port,
                    '-cert', cert,
                    '-key', key])
@@ -320,7 +315,7 @@ class Tablet(object):
     stderr_fd.close()
 
     # wait for zookeeper PID just to be sure we have it
-    utils.run(utils.vtroot+'/bin/zk wait -e ' + self.zk_pid, stdout=utils.devnull)
+    utils.run(environment.binary_path('zk')+' wait -e ' + self.zk_pid, stdout=utils.devnull)
 
     # wait for query service to be in the right state
     self.wait_for_vttablet_state(wait_for_state, port=port)

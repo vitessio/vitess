@@ -18,6 +18,7 @@ from vtdb import dbexceptions
 
 import framework
 import cases_framework
+import environment
 import tablet
 import utils
 
@@ -241,7 +242,7 @@ class VtoccTestEnv(TestEnv):
     if self.vtroot is None:
       raise EnvironmentError("VTROOT not defined")
     try:
-      os.makedirs(utils.tmp_root)
+      os.makedirs(environment.tmproot)
     except OSError:
       pass
 

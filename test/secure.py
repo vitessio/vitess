@@ -15,6 +15,7 @@ from vtdb import topology
 from vtdb import vtgate
 from zk import zkocc
 
+import environment
 import utils
 import tablet
 
@@ -22,7 +23,7 @@ import tablet
 shard_0_master = tablet.Tablet()
 shard_0_slave = tablet.Tablet()
 
-cert_dir = utils.tmp_root + "/certs"
+cert_dir = environment.tmproot + "/certs"
 
 def openssl(cmd):
   result = subprocess.call(["openssl"] + cmd, stderr=utils.devnull)
