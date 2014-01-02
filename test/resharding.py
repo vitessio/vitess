@@ -397,7 +397,10 @@ primary key (name)
     utils.run_vtctl('ReparentShard -force test_keyspace/80-C0 ' + shard_2_master.tablet_alias, auto_log=True)
     utils.run_vtctl('ReparentShard -force test_keyspace/C0- ' + shard_3_master.tablet_alias, auto_log=True)
 
-    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/-80', auto_log=True)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/80-', auto_log=True)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/80-C0', auto_log=True)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/C0-', auto_log=True)
 
     utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',

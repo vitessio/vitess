@@ -324,7 +324,7 @@ class Tablet(object):
 
     return self.proc
 
-  def wait_for_vttablet_state(self, expected, timeout=30.0, port=None):
+  def wait_for_vttablet_state(self, expected, timeout=60.0, port=None):
     while True:
       v = utils.get_vars(port or self.port)
       if v == None:
