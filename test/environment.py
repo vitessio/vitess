@@ -1,7 +1,9 @@
 #!/usr/bin/python
 
+import json
 import logging
 import os
+import socket
 import subprocess
 
 # vttop is the toplevel of the vitess source tree
@@ -34,6 +36,20 @@ def reserve_ports(count):
   vtportstart += count
   return result
 
+# simple run command, cannot use utils.run to avoid circular dependencies
+def run(args, raise_on_error=True, **kargs):
+  proc = subprocess.Popen(args,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE,
+                          **kargs)
+  stdout, stderr = proc.communicate()
+  if proc.returncode:
+    if raise_on_error:
+      raise Exception('Command failed: ' + args.join(' ') + ':\n' + stdout +
+                      stderr)
+    else:
+      logging.error('Command failed: %s:\n%s%s', args.join(' '), stdout, stderr)
+
 # compile command line programs, only once
 compiled_progs = []
 def prog_compile(name):
@@ -41,15 +57,62 @@ def prog_compile(name):
     return
   compiled_progs.append(name)
   logging.debug('Compiling %s', name)
-  proc = subprocess.Popen(['go', 'install'],
-                          stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE,
-                          cwd=os.path.join(vttop, 'go', 'cmd', name))
-  stdout, stderr = proc.communicate()
-  if proc.returncode:
-    raise Exception('Cannot compile ' + name)
+  run(['go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
 
 # binary management: returns the full path for a binary
 def binary_path(name):
   prog_compile(name)
   return os.path.join(vtroot, 'bin', name)
+
+# topology server management: we use zookeeper in all the tests
+hostname = socket.gethostname()
+zk_port_base = reserve_ports(3)
+zkocc_port_base = reserve_ports(3)
+def topo_server_setup():
+  global zk_port_base
+  global zkocc_port_base
+  zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
+  run([binary_path('zkctl'),
+       '-log_dir', tmproot,
+       '-zk.cfg', '1@%s:%s' % (hostname, zk_ports),
+       'init'])
+  config = tmproot+'/test-zk-client-conf.json'
+  with open(config, 'w') as f:
+    ca_server = 'localhost:%u' % (zk_port_base+2)
+    zk_cell_mapping = {'test_nj': 'localhost:%u'%(zk_port_base+2),
+                       'test_ny': 'localhost:%u'%(zk_port_base+2),
+                       'test_ca': ca_server,
+                       'global': 'localhost:%u'%(zk_port_base+2),
+                       'test_nj:_zkocc': 'localhost:%u,localhost:%u,localhost:%u'%(zkocc_port_base,zkocc_port_base+1,zkocc_port_base+2),
+                       'test_ny:_zkocc': 'localhost:%u'%(zkocc_port_base),
+                       'test_ca:_zkocc': 'localhost:%u'%(zkocc_port_base),
+                       'global:_zkocc': 'localhost:%u'%(zkocc_port_base),}
+    json.dump(zk_cell_mapping, f)
+  os.putenv('ZK_CLIENT_CONFIG', config)
+  run([binary_path('zk'), 'touch', '-p', '/zk/test_nj/vt'])
+  run([binary_path('zk'), 'touch', '-p', '/zk/test_ny/vt'])
+  run([binary_path('zk'), 'touch', '-p', '/zk/test_ca/vt'])
+
+def topo_server_teardown():
+  global zk_port_base
+  zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
+  run([binary_path('zkctl'),
+       '-log_dir', tmproot,
+       '-zk.cfg', '1@%s:%s' % (hostname, zk_ports),
+       'teardown'], raise_on_error=False)
+
+def topo_server_wipe():
+  # Work around safety check on recursive delete.
+  run([binary_path('zk'), 'rm', '-rf', '/zk/test_nj/vt/*'])
+  run([binary_path('zk'), 'rm', '-rf', '/zk/test_ny/vt/*'])
+  run([binary_path('zk'), 'rm', '-rf', '/zk/global/vt/*'])
+
+  run([binary_path('zk'), 'rm', '-f', '/zk/test_nj/vt'])
+  run([binary_path('zk'), 'rm', '-f', '/zk/test_ny/vt'])
+  run([binary_path('zk'), 'rm', '-f', '/zk/global/vt'])
+
+def topo_server_flags():
+  return ['-topo_implementation', 'zookeeper']
+
+def tablet_manager_protocol_flags():
+  return ['-tablet_manager_protocol', 'bson']

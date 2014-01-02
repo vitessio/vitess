@@ -350,6 +350,8 @@ def vtgate_kill(sp):
 # vtctl helpers
 def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
   args = [environment.binary_path('vtctl'), '-log_dir', environment.tmproot]
+  args.extend(environment.topo_server_flags())
+  args.extend(environment.tablet_manager_protocol_flags())
 
   if auto_log:
     if options.verbose == 2:

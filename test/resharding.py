@@ -36,7 +36,7 @@ shard_3_rdonly = tablet.Tablet()
 
 def setUpModule():
   try:
-    utils.zk_setup()
+    environment.topo_server_setup()
 
     setup_procs = [
         shard_0_master.init_mysql(),
@@ -78,7 +78,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
+  environment.topo_server_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -349,9 +349,9 @@ primary key (name)
     shard_1_slave2.init_tablet('spare', 'test_keyspace', '80-')
     shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
-    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
-
-    utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/test_keyspace', auto_log=True)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/-80', auto_log=True)
+    utils.run_vtctl('RebuildShardGraph test_keyspace/80-', auto_log=True)
+    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # create databases so vttablet can start behaving normally
     shard_0_master.create_db('vt_test_keyspace')

@@ -279,6 +279,7 @@ class Tablet(object):
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
             '-log_dir', self.tablet_dir]
+    args.extend(environment.topo_server_flags())
 
     dbconfigs = self._get_db_configs_file(repl_extra_flags)
     for key1 in dbconfigs:
