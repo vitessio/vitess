@@ -320,7 +320,8 @@ class Tablet(object):
       utils.run(environment.binary_path('zk')+' wait -e ' + self.zk_pid, stdout=utils.devnull)
 
     # wait for query service to be in the right state
-    self.wait_for_vttablet_state(wait_for_state, port=port)
+    if wait_for_state:
+      self.wait_for_vttablet_state(wait_for_state, port=port)
 
     return self.proc
 

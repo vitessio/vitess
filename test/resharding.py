@@ -354,20 +354,17 @@ primary key (name)
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # create databases so vttablet can start behaving normally
-    shard_0_master.create_db('vt_test_keyspace')
-    shard_0_replica.create_db('vt_test_keyspace')
-    shard_1_master.create_db('vt_test_keyspace')
-    shard_1_slave1.create_db('vt_test_keyspace')
-    shard_1_slave2.create_db('vt_test_keyspace')
-    shard_1_rdonly.create_db('vt_test_keyspace')
+    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_rdonly]:
+      t.create_db('vt_test_keyspace')
+      t.start_vttablet(wait_for_state=None)
 
-    # start the tablets
-    shard_0_master.start_vttablet()
-    shard_0_replica.start_vttablet()
-    shard_1_master.start_vttablet()
-    shard_1_slave1.start_vttablet()
-    shard_1_slave2.start_vttablet(wait_for_state='NOT_SERVING') # spare
-    shard_1_rdonly.start_vttablet()
+    # wait for the tablets
+    shard_0_master.wait_for_vttablet_state('SERVING')
+    shard_0_replica.wait_for_vttablet_state('SERVING')
+    shard_1_master.wait_for_vttablet_state('SERVING')
+    shard_1_slave1.wait_for_vttablet_state('SERVING')
+    shard_1_slave2.wait_for_vttablet_state('NOT_SERVING') # spare
+    shard_1_rdonly.wait_for_vttablet_state('SERVING')
 
     # reparent to make the tablets work
     utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' + shard_0_master.tablet_alias, auto_log=True)
@@ -387,12 +384,15 @@ primary key (name)
 
     # start vttablet on the split shards (no db created,
     # so they're all not serving)
-    shard_2_master.start_vttablet(wait_for_state='CONNECTING')
-    shard_2_replica1.start_vttablet(wait_for_state='NOT_SERVING')
-    shard_2_replica2.start_vttablet(wait_for_state='NOT_SERVING')
-    shard_3_master.start_vttablet(wait_for_state='CONNECTING')
-    shard_3_replica.start_vttablet(wait_for_state='NOT_SERVING')
-    shard_3_rdonly.start_vttablet(wait_for_state='CONNECTING')
+    for t in [shard_2_master, shard_2_replica1, shard_2_replica2,
+              shard_3_master, shard_3_replica, shard_3_rdonly]:
+      t.start_vttablet(wait_for_state=None)
+    shard_2_master.wait_for_vttablet_state('CONNECTING')
+    shard_2_replica1.wait_for_vttablet_state('NOT_SERVING')
+    shard_2_replica2.wait_for_vttablet_state('NOT_SERVING')
+    shard_3_master.wait_for_vttablet_state('CONNECTING')
+    shard_3_replica.wait_for_vttablet_state('NOT_SERVING')
+    shard_3_rdonly.wait_for_vttablet_state('CONNECTING')
 
     utils.run_vtctl('ReparentShard -force test_keyspace/80-C0 ' + shard_2_master.tablet_alias, auto_log=True)
     utils.run_vtctl('ReparentShard -force test_keyspace/C0- ' + shard_3_master.tablet_alias, auto_log=True)
@@ -472,8 +472,10 @@ primary key (name)
     logging.debug("Checking 80 percent of data was sent quickly")
     self._check_lots_timeout(1000, 80, 5, base=1000)
 
+    # check we can't migrate the master just yet
+    utils.run_vtctl('MigrateServedTypes test_keyspace/80- master', expect_fail=True)
+
     # now serve rdonly from the split shards
-    utils.run_fail(environment.binary_path('vtctl')+' MigrateServedTypes test_keyspace/80- master')
     utils.run_vtctl('MigrateServedTypes test_keyspace/80- rdonly', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
@@ -551,6 +553,10 @@ primary key (name)
       t.kill_vttablet()
 
   def _check_srv_keyspace(self, cell, keyspace, expected):
+    if environment.topo_server_implementation != 'zookeeper':
+      logging.debug('Skipping zk calls on non-zk topology')
+      return
+
     ks = utils.zk_cat_json('/zk/%s/vt/ns/%s' % (cell, keyspace))
     result = ""
     for tablet_type in sorted(ks['Partitions'].keys()):
