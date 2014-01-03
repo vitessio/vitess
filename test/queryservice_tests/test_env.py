@@ -145,7 +145,7 @@ class VttabletTestEnv(TestEnv):
 
   def setUp(self):
     utils.zk_setup()
-    utils.setup()
+    environment.setup()
     if self.vttop is None:
       raise EnvironmentError("VTTOP not defined")
     if self.vtroot is None:
@@ -246,7 +246,7 @@ class VtoccTestEnv(TestEnv):
     except OSError:
       pass
 
-    utils.setup()
+    environment.setup()
 
     framework.execute('go install', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/vtocc')
     framework.execute('go install', verbose=utils.options.verbose, cwd=self.vttop+'/go/cmd/mysqlctl')
@@ -361,8 +361,11 @@ class VtoccTestEnv(TestEnv):
         "-tablet-uid",  self.tabletuid,
         "teardown", "-force"
         ])
-    shutil.rmtree(self.mysqldir)
-
+    try:
+      shutil.rmtree(self.mysqldir)
+    except:
+      pass
+    
   def connect(self):
     c = tablet_conn.connect("localhost:9461", 'test_keyspace', '0', 2)
     c.max_attempts = 1
