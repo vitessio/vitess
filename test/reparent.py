@@ -116,7 +116,7 @@ class TestReparent(unittest.TestCase):
     # the master and fail somewhat quickly
     stdout, stderr = utils.run_vtctl('-wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, expect_fail=True)
     logging.debug("Failed ReparentShard output:\n" + stderr)
-    if 'ValidateShard verification failed: some validation errors' not in stderr:
+    if 'ValidateShard verification failed' not in stderr:
       raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
 
     # Should timeout and fail
@@ -126,7 +126,13 @@ class TestReparent(unittest.TestCase):
       raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
     # Should interrupt and fail
-    sp = utils.run_bg(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' -wait-time 10s ScrapTablet ' + tablet_62344.tablet_alias, stdout=PIPE, stderr=PIPE)
+    args = [environment.binary_path('vtctl'),
+            '-log_dir', environment.tmproot,
+            '-wait-time', '10s']
+    args.extend(environment.topo_server_flags())
+    args.extend(environment.tablet_manager_protocol_flags())
+    args.extend(['ScrapTablet', tablet_62344.tablet_alias])
+    sp = utils.run_bg(args, stdout=PIPE, stderr=PIPE)
     # Need time for the process to start before killing it.
     time.sleep(3.0)
     os.kill(sp.pid, signal.SIGINT)
@@ -184,15 +190,17 @@ class TestReparent(unittest.TestCase):
 
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
-    shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
-    self.assertEqual(shard['Cells'], ['test_nj'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
+    if environment.topo_server_implementation == 'zookeeper':
+      shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+      self.assertEqual(shard['Cells'], ['test_nj'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Create a few slaves for testing reparenting.
     tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True)
     tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
-    self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
+    if environment.topo_server_implementation == 'zookeeper':
+      shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+      self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Recompute the shard layout node - until you do that, it might not be valid.
     utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
@@ -339,7 +347,8 @@ class TestReparent(unittest.TestCase):
     if brutal:
       tablet_62344.scrap(force=True)
       # we have some automated tools that do this too, so it's good to simulate
-      utils.run(environment.binary_path('zk')+' rm -rf ' + tablet_62344.zk_tablet_path)
+      if environment.topo_server_implementation == 'zookeeper':
+        utils.run(environment.binary_path('zk')+' rm -rf ' + tablet_62344.zk_tablet_path)
 
     # try to pretend the wrong host is the master, should fail
     stdout, stderr = utils.run_vtctl('ShardExternallyReparented -scrap-stragglers test_keyspace/0 %s' % tablet_41983.tablet_alias, auto_log=True, expect_fail=True)
@@ -361,6 +370,8 @@ class TestReparent(unittest.TestCase):
     tablet_41983.kill_vttablet()
 
   def _test_reparent_from_outside_check(self, brutal):
+    if environment.topo_server_implementation != 'zookeeper':
+      return
     # make sure the shard replication graph is fine
     shard_replication = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
     hashed_links = {}
