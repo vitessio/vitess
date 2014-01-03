@@ -5,12 +5,12 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
-import gzip
+import json
 import logging
 import os
 import shutil
 import signal
-from subprocess import PIPE, call
+from subprocess import PIPE
 import time
 import unittest
 
@@ -19,7 +19,6 @@ import MySQLdb
 import environment
 import utils
 import tablet
-from vtdb import vtgate
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
@@ -28,7 +27,7 @@ tablet_31981 = tablet.Tablet(31981)
 
 def setUpModule():
   try:
-    utils.zk_setup(add_bad_host=True)
+    environment.topo_server_setup()
 
     # start mysql instance external to the test
     setup_procs = [
@@ -54,7 +53,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
+  environment.topo_server_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -66,16 +65,19 @@ def tearDownModule():
 class TestReparent(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
-    utils.zk_wipe()
+    environment.topo_server_wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
       t.clean_dbs()
 
-  def _check_db_addr(self, db_addr, expected_addr):
-    # Run in the background to capture output.
-    proc = utils.run_bg(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' --alsologtostderr -zk.local-cell=test_nj Resolve ' + db_addr, stdout=PIPE)
-    stdout = proc.communicate()[0].strip()
-    self.assertEqual(stdout, expected_addr, 'wrong zk address for %s: %s expected: %s' % (db_addr, stdout, expected_addr))
+  def _check_db_addr(self, shard, db_type, expected_addr):
+    stdout, stderr = utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_keyspace/'+shard, db_type],
+                                     trap_output=True, auto_log=True)
+    ep = json.loads(stdout)
+    self.assertEqual(len(ep['entries']), 1 , 'Wrong number of entries: %s' % str(ep))
+    enpoint = ep['entries'][0]
+    addr = '%s:%u' % (enpoint['host'], enpoint['named_port_map']['_vtocc'])
+    self.assertEqual(addr, expected_addr, 'Unexpected address: %s != %s from %s' % (addr, expected_addr, str(ep)))
 
   def test_reparent_down_master(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -109,7 +111,7 @@ class TestReparent(unittest.TestCase):
     tablet_62344.shutdown_mysql().wait()
 
     expected_addr = utils.hostname + ':' + str(tablet_62344.port)
-    self._check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
+    self._check_db_addr('0', 'master', expected_addr)
 
     # Perform a reparent operation - the Validate part will try to ping
     # the master and fail somewhat quickly
@@ -149,7 +151,7 @@ class TestReparent(unittest.TestCase):
 
     utils.validate_topology()
     expected_addr = utils.hostname + ':' + str(tablet_62044.port)
-    self._check_db_addr('test_keyspace.0.master:_vtocc', expected_addr)
+    self._check_db_addr('0', 'master', expected_addr)
 
     utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias, 'idle'])
 
@@ -205,7 +207,7 @@ class TestReparent(unittest.TestCase):
     utils.validate_topology(ping_tablets=True)
 
     expected_addr = utils.hostname + ':' + str(tablet_62344.port)
-    self._check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+    self._check_db_addr(shard_id, 'master', expected_addr)
 
     # Convert two replica to spare. That should leave only one node serving traffic,
     # but still needs to appear in the replication graph.
@@ -213,7 +215,7 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['ChangeSlaveType', tablet_31981.tablet_alias, 'spare'])
     utils.validate_topology()
     expected_addr = utils.hostname + ':' + str(tablet_62044.port)
-    self._check_db_addr('test_keyspace.%s.replica:_vtocc' % shard_id, expected_addr)
+    self._check_db_addr(shard_id, 'replica', expected_addr)
 
     # Run this to make sure it succeeds.
     utils.run_vtctl('ShardReplicationPositions test_keyspace/%s' % shard_id, stdout=utils.devnull)
@@ -224,7 +226,7 @@ class TestReparent(unittest.TestCase):
     utils.validate_topology()
 
     expected_addr = utils.hostname + ':' + str(tablet_62044.port)
-    self._check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+    self._check_db_addr(shard_id, 'master', expected_addr)
 
     tablet_62344.kill_vttablet()
     tablet_62044.kill_vttablet()
@@ -238,7 +240,7 @@ class TestReparent(unittest.TestCase):
     time.sleep(1.0)
 
     expected_addr = utils.hostname + ':' + str(new_port)
-    self._check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+    self._check_db_addr(shard_id, 'master', expected_addr)
 
     tablet_62044.kill_vttablet()
 
@@ -272,7 +274,7 @@ class TestReparent(unittest.TestCase):
     utils.validate_topology(ping_tablets=True)
 
     expected_addr = utils.hostname + ':' + str(tablet_62344.port)
-    self._check_db_addr('test_keyspace.%s.master:_vtocc' % shard_id, expected_addr)
+    self._check_db_addr(shard_id, 'master', expected_addr)
 
     # Kill one tablet so we seem offline
     tablet_31981.kill_vttablet()

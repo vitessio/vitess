@@ -240,6 +240,9 @@ var commands = []commandGroup{
 			command{"GetSrvShard", commandGetSrvShard,
 				"<cell> <keyspace/shard|zk shard path>",
 				"Outputs the json version of SrvShard to stdout."},
+			command{"GetEndPoints", commandGetEndPoints,
+				"<cell> <keyspace/shard|zk shard path> <tablet type>",
+				"Outputs the json version of EndPoints to stdout."},
 		},
 	},
 }
@@ -1432,6 +1435,21 @@ func commandGetSrvShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	srvShard, err := wr.TopoServer().GetSrvShard(subFlags.Arg(0), keyspace, shard)
 	if err == nil {
 		fmt.Println(jscfg.ToJson(srvShard))
+	}
+	return "", err
+}
+
+func commandGetEndPoints(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 3 {
+		log.Fatalf("action GetEndPoints requires <cell> <keyspace/shard|zk shard path> <tablet type>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(1))
+	tabletType := topo.TabletType(subFlags.Arg(2))
+	endPoints, err := wr.TopoServer().GetEndPoints(subFlags.Arg(0), keyspace, shard, tabletType)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(endPoints))
 	}
 	return "", err
 }
