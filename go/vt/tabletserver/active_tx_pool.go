@@ -211,7 +211,7 @@ func (txc *TxConnection) discard(conclusion string) {
 
 func (txc *TxConnection) Format(params url.Values) string {
 	return fmt.Sprintf(
-		"%v\t%v\t%v\t%v\t%v\t%v\t\n",
+		"%v\t%v\t%v\t%f\t%v\t%v\t\n",
 		txc.transactionId,
 		txc.startTime,
 		txc.endTime,
