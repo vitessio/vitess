@@ -3,6 +3,7 @@
 import logging
 import unittest
 
+import environment
 import utils
 import tablet
 
@@ -17,7 +18,7 @@ shard_1_replica1 = tablet.Tablet()
 
 def setUpModule():
   try:
-    utils.zk_setup()
+    environment.topo_server_setup()
 
     setup_procs = [
         shard_0_master.init_mysql(),
@@ -48,7 +49,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
+  environment.topo_server_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -95,23 +96,20 @@ class TestSchema(unittest.TestCase):
     # run checks now before we start the tablets
     utils.validate_topology()
 
-    # create databases
-    shard_0_master.create_db('vt_test_keyspace')
-    shard_0_replica1.create_db('vt_test_keyspace')
-    shard_0_replica2.create_db('vt_test_keyspace')
-    shard_0_rdonly.create_db('vt_test_keyspace')
-    shard_0_backup.create_db('vt_test_keyspace')
-    shard_1_master.create_db('vt_test_keyspace')
-    shard_1_replica1.create_db('vt_test_keyspace')
+    # create databases, start the tablets
+    for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
+              shard_0_rdonly, shard_0_backup, shard_1_master, shard_1_replica1]:
+      t.create_db('vt_test_keyspace')
+      t.start_vttablet(wait_for_state=None)
 
-    # start the tablets
-    shard_0_master.start_vttablet()
-    shard_0_replica1.start_vttablet()
-    shard_0_replica2.start_vttablet()
-    shard_0_rdonly.start_vttablet()
-    shard_0_backup.start_vttablet(wait_for_state="NOT_SERVING")
-    shard_1_master.start_vttablet()
-    shard_1_replica1.start_vttablet()
+    # wait for the tablets to start
+    shard_0_master.wait_for_vttablet_state('SERVING')
+    shard_0_replica1.wait_for_vttablet_state('SERVING')
+    shard_0_replica2.wait_for_vttablet_state('SERVING')
+    shard_0_rdonly.wait_for_vttablet_state('SERVING')
+    shard_0_backup.wait_for_vttablet_state('NOT_SERVING')
+    shard_1_master.wait_for_vttablet_state('SERVING')
+    shard_1_replica1.wait_for_vttablet_state('SERVING')
 
     # make sure all replication is good
     for t in [shard_0_master, shard_0_replica1, shard_0_replica2,
@@ -181,7 +179,8 @@ class TestSchema(unittest.TestCase):
     if err.find('ApplySchemaKeyspace Shard 1 has inconsistent schema') == -1:
       self.fail('Unexpected ApplySchemaKeyspace output: %s' % err)
 
-    utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/action')
+    if environment.topo_server_implementation == 'zookeeper':
+      utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/action')
 
     # shard 1: catch it up with simple updates
     utils.run_vtctl(['ApplySchemaShard',
@@ -231,22 +230,23 @@ class TestSchema(unittest.TestCase):
     self._check_tables(shard_1_replica1, 4)
 
     # now test action log pruning
-    oldLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
-    oldCount = len(oldLines)
-    logging.debug("I have %u actionlog before", oldCount)
-    if oldCount <= 5:
-      self.fail('Not enough actionlog before: %u' % oldCount)
+    if environment.topo_server_implementation == 'zookeeper':
+      oldLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
+      oldCount = len(oldLines)
+      logging.debug("I have %u actionlog before", oldCount)
+      if oldCount <= 5:
+        self.fail('Not enough actionlog before: %u' % oldCount)
 
-    utils.run_vtctl('PruneActionLogs -keep-count=5 /zk/*/vt/tablets/*/actionlog', auto_log=True)
+      utils.run_vtctl('PruneActionLogs -keep-count=5 /zk/*/vt/tablets/*/actionlog', auto_log=True)
 
-    newLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
-    newCount = len(newLines)
-    logging.debug("I have %u actionlog after", newCount)
+      newLines = utils.zk_ls(shard_0_replica1.zk_tablet_path+'/actionlog')
+      newCount = len(newLines)
+      logging.debug("I have %u actionlog after", newCount)
 
-    self.assertEqual(newCount, 5, 'Unexpected actionlog count after: %u' % newCount)
-    if oldLines[-5:] != newLines:
-      self.fail('Unexpected actionlog values:\n%s\n%s' %
-                (' '.join(oldLines[-5:]), ' '.join(newLines)))
+      self.assertEqual(newCount, 5, 'Unexpected actionlog count after: %u' % newCount)
+      if oldLines[-5:] != newLines:
+        self.fail('Unexpected actionlog values:\n%s\n%s' %
+                  (' '.join(oldLines[-5:]), ' '.join(newLines)))
 
     utils.pause("Look at schema now!")
 
