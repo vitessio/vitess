@@ -14,8 +14,6 @@ from subprocess import PIPE
 import time
 import unittest
 
-import MySQLdb
-
 import environment
 import utils
 import tablet
@@ -70,14 +68,16 @@ class TestReparent(unittest.TestCase):
       t.reset_replication()
       t.clean_dbs()
 
-  def _check_db_addr(self, shard, db_type, expected_addr):
+  def _check_db_addr(self, shard, db_type, expected_port):
     stdout, stderr = utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_keyspace/'+shard, db_type],
                                      trap_output=True, auto_log=True)
     ep = json.loads(stdout)
     self.assertEqual(len(ep['entries']), 1 , 'Wrong number of entries: %s' % str(ep))
-    enpoint = ep['entries'][0]
-    addr = '%s:%u' % (enpoint['host'], enpoint['named_port_map']['_vtocc'])
-    self.assertEqual(addr, expected_addr, 'Unexpected address: %s != %s from %s' % (addr, expected_addr, str(ep)))
+    port = ep['entries'][0]['named_port_map']['_vtocc']
+    self.assertEqual(port, expected_port, 'Unexpected port: %u != %u from %s' % (port, expected_port, str(ep)))
+    host = ep['entries'][0]['host']
+    if not host.startswith(utils.hostname):
+      self.fail('Invalid hostname %s was expecting something starting with %s' % host, utils.hostname)
 
   def test_reparent_down_master(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -110,8 +110,7 @@ class TestReparent(unittest.TestCase):
     tablet_62344.kill_vttablet()
     tablet_62344.shutdown_mysql().wait()
 
-    expected_addr = utils.hostname + ':' + str(tablet_62344.port)
-    self._check_db_addr('0', 'master', expected_addr)
+    self._check_db_addr('0', 'master', tablet_62344.port)
 
     # Perform a reparent operation - the Validate part will try to ping
     # the master and fail somewhat quickly
@@ -144,14 +143,14 @@ class TestReparent(unittest.TestCase):
                     tablet_62344.tablet_alias, expect_fail=True)
 
     # Remove pending locks (make this the force option to ReparentShard?)
-    utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
+    if environment.topo_server_implementation == 'zookeeper':
+      utils.run_vtctl('PurgeActions /zk/global/vt/keyspaces/test_keyspace/shards/0/action')
 
     # Re-run reparent operation, this shoud now proceed unimpeded.
     utils.run_vtctl('-wait-time 1m ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, auto_log=True)
 
     utils.validate_topology()
-    expected_addr = utils.hostname + ':' + str(tablet_62044.port)
-    self._check_db_addr('0', 'master', expected_addr)
+    self._check_db_addr('0', 'master', tablet_62044.port)
 
     utils.run_vtctl(['ChangeSlaveType', '-force', tablet_62344.tablet_alias, 'idle'])
 
@@ -206,16 +205,14 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
     utils.validate_topology(ping_tablets=True)
 
-    expected_addr = utils.hostname + ':' + str(tablet_62344.port)
-    self._check_db_addr(shard_id, 'master', expected_addr)
+    self._check_db_addr(shard_id, 'master', tablet_62344.port)
 
     # Convert two replica to spare. That should leave only one node serving traffic,
     # but still needs to appear in the replication graph.
     utils.run_vtctl(['ChangeSlaveType', tablet_41983.tablet_alias, 'spare'])
     utils.run_vtctl(['ChangeSlaveType', tablet_31981.tablet_alias, 'spare'])
     utils.validate_topology()
-    expected_addr = utils.hostname + ':' + str(tablet_62044.port)
-    self._check_db_addr(shard_id, 'replica', expected_addr)
+    self._check_db_addr(shard_id, 'replica', tablet_62044.port)
 
     # Run this to make sure it succeeds.
     utils.run_vtctl('ShardReplicationPositions test_keyspace/%s' % shard_id, stdout=utils.devnull)
@@ -225,8 +222,7 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias), auto_log=True)
     utils.validate_topology()
 
-    expected_addr = utils.hostname + ':' + str(tablet_62044.port)
-    self._check_db_addr(shard_id, 'master', expected_addr)
+    self._check_db_addr(shard_id, 'master', tablet_62044.port)
 
     tablet_62344.kill_vttablet()
     tablet_62044.kill_vttablet()
@@ -239,8 +235,7 @@ class TestReparent(unittest.TestCase):
     # Wait a moment for address to reregister.
     time.sleep(1.0)
 
-    expected_addr = utils.hostname + ':' + str(new_port)
-    self._check_db_addr(shard_id, 'master', expected_addr)
+    self._check_db_addr(shard_id, 'master', new_port)
 
     tablet_62044.kill_vttablet()
 
@@ -273,8 +268,7 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/%s %s' % (shard_id, tablet_62344.tablet_alias))
     utils.validate_topology(ping_tablets=True)
 
-    expected_addr = utils.hostname + ':' + str(tablet_62344.port)
-    self._check_db_addr(shard_id, 'master', expected_addr)
+    self._check_db_addr(shard_id, 'master', tablet_62344.port)
 
     # Kill one tablet so we seem offline
     tablet_31981.kill_vttablet()
