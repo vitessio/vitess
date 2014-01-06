@@ -207,16 +207,6 @@ class TestTabletManager(unittest.TestCase):
     utils.validate_topology()
 
 
-  _create_vt_insert_test = '''create table vt_insert_test (
-  id bigint auto_increment,
-  msg varchar(64),
-  primary key (id)
-  ) Engine=InnoDB'''
-
-  _populate_vt_insert_test = [
-      "insert into vt_insert_test (msg) values ('test %s')" % x
-      for x in xrange(4)]
-
   _create_vt_select_test = '''create table vt_select_test (
   id bigint auto_increment,
   msg varchar(64),

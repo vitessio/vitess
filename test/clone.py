@@ -82,16 +82,6 @@ class TestTabletManager(unittest.TestCase):
       "insert into vt_insert_test (msg) values ('test %s')" % x
       for x in xrange(4)]
 
-  _create_vt_select_test = '''create table vt_select_test (
-  id bigint auto_increment,
-  msg varchar(64),
-  primary key (id)
-  ) Engine=InnoDB'''
-
-  _populate_vt_select_test = [
-      "insert into vt_select_test (msg) values ('test %s')" % x
-      for x in xrange(4)]
-
 
   def _test_mysqlctl_clone(server_mode):
     if server_mode:
