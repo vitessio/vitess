@@ -32,6 +32,7 @@ integration_test:
 	cd test ; echo "schema test"; time ./schema.py $$VT_TEST_FLAGS
 	cd test ; echo "sharded test"; time ./sharded.py $$VT_TEST_FLAGS
 	cd test ; echo "tabletmanager test"; time ./tabletmanager.py $$VT_TEST_FLAGS
+	cd test ; echo "clone test"; time ./clone.py $$VT_TEST_FLAGS
 	cd test ; echo "reparent test"; time ./reparent.py $$VT_TEST_FLAGS
 	cd test ; echo "zkocc test"; time ./zkocc_test.py $$VT_TEST_FLAGS
 	cd test ; echo "updatestream test"; time ./update_stream.py
