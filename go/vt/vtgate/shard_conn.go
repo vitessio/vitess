@@ -41,6 +41,36 @@ func NewShardConn(blm *BalancerMap, keyspace, shard string, tabletType topo.Tabl
 	}
 }
 
+// withRetry sets up the connection and exexutes the action. If there are connection errors,
+// it retries retryCount times before failing. It does not retry if the connection is in
+// the middle of a transaction.
+func (sdc *ShardConn) withRetry(action func() error) error {
+	var err error
+	for i := 0; i < sdc.retryCount; i++ {
+		if sdc.conn == nil {
+			var endPoint topo.EndPoint
+			endPoint, err = sdc.balancer.Get()
+			if err != nil {
+				return sdc.WrapError(err)
+			}
+			var conn TabletConn
+			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
+			if err != nil {
+				sdc.balancer.MarkDown(endPoint.Uid)
+				continue
+			}
+			sdc.endPoint = endPoint
+			sdc.conn = conn
+		}
+		err = action()
+		if sdc.canRetry(err) {
+			continue
+		}
+		return sdc.WrapError(err)
+	}
+	return sdc.WrapError(err)
+}
+
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
 // TxPoolFull causes a retry and all other errors are non-retry.
@@ -72,90 +102,38 @@ func (sdc *ShardConn) canRetry(err error) bool {
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
 func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr *mproto.QueryResult, err error) {
-	for i := 0; i < sdc.retryCount; i++ {
-		if sdc.conn == nil {
-			var endPoint topo.EndPoint
-			endPoint, err = sdc.balancer.Get()
-			if err != nil {
-				return nil, sdc.WrapError(err)
-			}
-			var conn TabletConn
-			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
-			if err != nil {
-				sdc.balancer.MarkDown(endPoint.Uid)
-				continue
-			}
-			sdc.endPoint = endPoint
-			sdc.conn = conn
-		}
-		qr, err = sdc.conn.Execute(query, bindVars)
-		if sdc.canRetry(err) {
-			continue
-		}
-		return qr, sdc.WrapError(err)
-	}
-	return qr, sdc.WrapError(err)
+	err = sdc.withRetry(func() error {
+		var innerErr error
+		qr, innerErr = sdc.conn.Execute(query, bindVars)
+		return innerErr
+	})
+	return qr, err
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
 func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery) (qrs *tproto.QueryResultList, err error) {
-	for i := 0; i < sdc.retryCount; i++ {
-		if sdc.conn == nil {
-			var endPoint topo.EndPoint
-			endPoint, err = sdc.balancer.Get()
-			if err != nil {
-				return nil, sdc.WrapError(err)
-			}
-			var conn TabletConn
-			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
-			if err != nil {
-				sdc.balancer.MarkDown(endPoint.Uid)
-				continue
-			}
-			sdc.endPoint = endPoint
-			sdc.conn = conn
-		}
-		qrs, err = sdc.conn.ExecuteBatch(queries)
-		if sdc.canRetry(err) {
-			continue
-		}
-		return qrs, sdc.WrapError(err)
-	}
-	return qrs, sdc.WrapError(err)
+	err = sdc.withRetry(func() error {
+		var innerErr error
+		qrs, innerErr = sdc.conn.ExecuteBatch(queries)
+		return innerErr
+	})
+	return qrs, err
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
 // Calling other functions while streaming is not recommended.
 func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
-	var err error
-	for i := 0; i < sdc.retryCount; i++ {
-		if sdc.conn == nil {
-			var endPoint topo.EndPoint
-			endPoint, err = sdc.balancer.Get()
-			if err != nil {
-				goto return_error
-			}
-			var conn TabletConn
-			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
-			if err != nil {
-				sdc.balancer.MarkDown(endPoint.Uid)
-				continue
-			}
-			sdc.endPoint = endPoint
-			sdc.conn = conn
-		}
-		results, errFunc = sdc.conn.StreamExecute(query, bindVars)
-		err = errFunc()
-		if sdc.canRetry(err) {
-			continue
-		}
-		return results, func() error { return sdc.WrapError(err) }
+	err := sdc.withRetry(func() error {
+		var innerErrFunc ErrFunc
+		results, innerErrFunc = sdc.conn.StreamExecute(query, bindVars)
+		return innerErrFunc()
+	})
+	if results == nil {
+		r := make(chan *mproto.QueryResult)
+		close(r)
+		results = r
 	}
-
-return_error:
-	r := make(chan *mproto.QueryResult)
-	close(r)
-	return r, func() error { return sdc.WrapError(err) }
+	return results, func() error { return err }
 }
 
 // Begin begins a transaction. The retry rules are the same as Execute.
@@ -163,29 +141,9 @@ func (sdc *ShardConn) Begin() (err error) {
 	if sdc.TransactionId() != 0 {
 		return sdc.WrapError(fmt.Errorf("cannot begin: already in transaction"))
 	}
-	for i := 0; i < sdc.retryCount; i++ {
-		if sdc.conn == nil {
-			var endPoint topo.EndPoint
-			endPoint, err = sdc.balancer.Get()
-			if err != nil {
-				return sdc.WrapError(err)
-			}
-			var conn TabletConn
-			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
-			if err != nil {
-				sdc.balancer.MarkDown(endPoint.Uid)
-				continue
-			}
-			sdc.endPoint = endPoint
-			sdc.conn = conn
-		}
-		err = sdc.conn.Begin()
-		if sdc.canRetry(err) {
-			continue
-		}
-		return sdc.WrapError(err)
-	}
-	return sdc.WrapError(err)
+	return sdc.withRetry(func() error {
+		return sdc.conn.Begin()
+	})
 }
 
 // Commit commits the current transaction. There are no retries on this operation.
