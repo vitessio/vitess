@@ -372,6 +372,12 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs)
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
 
+# run_vtctl_json runs the provided vtctl command and returns the result
+# parsed as json
+def run_vtctl_json(clargs):
+    stdout, stderr = run_vtctl(clargs, trap_output=True, auto_log=True)
+    return json.loads(stdout)
+
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
   args = [environment.binary_path('vtworker'), '-log_dir', environment.tmproot]

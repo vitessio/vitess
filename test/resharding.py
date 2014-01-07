@@ -4,7 +4,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import json
 import logging
 import threading
 import time
@@ -554,9 +553,7 @@ primary key (name)
       t.kill_vttablet()
 
   def _check_srv_keyspace(self, cell, keyspace, expected):
-    stdout, stderr = utils.run_vtctl(['GetSrvKeyspace', cell, keyspace],
-                                     trap_output=True, auto_log=True)
-    ks = json.loads(stdout)
+    ks = utils.run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
     result = ""
     for tablet_type in sorted(ks['Partitions'].keys()):
       result += "Partitions(%s):" % tablet_type

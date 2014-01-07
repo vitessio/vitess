@@ -120,6 +120,9 @@ var commands = []commandGroup{
 			command{"CreateShard", commandCreateShard,
 				"[-force] [-parent] <keyspace/shard|zk shard path>",
 				"Creates the given shard"},
+			command{"GetShard", commandGetShard,
+				"<keyspace/shard|zk shard path>",
+				"Outputs the json version of Shard to stdout."},
 			command{"RebuildShardGraph", commandRebuildShardGraph,
 				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
@@ -243,6 +246,13 @@ var commands = []commandGroup{
 			command{"GetEndPoints", commandGetEndPoints,
 				"<cell> <keyspace/shard|zk shard path> <tablet type>",
 				"Outputs the json version of EndPoints to stdout."},
+		},
+	},
+	commandGroup{
+		"Replication Graph", []command{
+			command{"GetShardReplication", commandGetShardReplication,
+				"<cell> <keyspace/shard|zk shard path>",
+				"Outputs the json version of ShardReplication to stdout."},
 		},
 	},
 }
@@ -883,6 +893,20 @@ func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	return "", err
 }
 
+func commandGetShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action GetShard requires <keyspace/shard|zk shard path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	shardInfo, err := wr.TopoServer().GetShard(keyspace, shard)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(shardInfo))
+	}
+	return "", err
+}
+
 func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	cells := subFlags.String("cells", "", "comma separated list of cells to update")
 	subFlags.Parse(args)
@@ -1450,6 +1474,20 @@ func commandGetEndPoints(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	endPoints, err := wr.TopoServer().GetEndPoints(subFlags.Arg(0), keyspace, shard, tabletType)
 	if err == nil {
 		fmt.Println(jscfg.ToJson(endPoints))
+	}
+	return "", err
+}
+
+func commandGetShardReplication(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action GetShardReplication requires <cell> <keyspace/shard|zk shard path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(1))
+	shardReplication, err := wr.TopoServer().GetShardReplication(subFlags.Arg(0), keyspace, shard)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(shardReplication))
 	}
 	return "", err
 }

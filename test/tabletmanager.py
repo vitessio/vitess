@@ -7,7 +7,6 @@ warnings.simplefilter("ignore")
 
 import logging
 import os
-import shutil
 import signal
 from subprocess import PIPE
 import time
@@ -59,12 +58,6 @@ def tearDownModule():
   tablet_62044.remove_tree()
   tablet_41983.remove_tree()
   tablet_31981.remove_tree()
-
-  path = os.path.join(environment.vtdataroot, 'snapshot')
-  try:
-    shutil.rmtree(path)
-  except OSError as e:
-    logging.debug("removing snapshot %s: %s", path, str(e))
 
 class TestTabletManager(unittest.TestCase):
   def tearDown(self):
@@ -243,7 +236,8 @@ class TestTabletManager(unittest.TestCase):
 
     # we expect this action with a short wait time to fail. this isn't the best
     # and has some potential for flakiness.
-    utils.run_vtctl('-wait-time 2s WaitForAction ' + action_path, expect_fail=True)
+    utils.run_vtctl('-wait-time 2s WaitForAction ' + action_path,
+                    expect_fail=True)
 
     # wait until the background sleep action is done, otherwise there will be
     # a leftover vtaction whose result may overwrite running actions
@@ -252,20 +246,25 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl('-wait-time 20s WaitForAction ' + action_path,
                     auto_log=True)
 
-    # extra small test: we ran for a while, get the states we were in,
-    # make sure they're accounted for properly
-    # first the query engine States
-    v = utils.get_vars(tablet_62344.port)
-    logging.debug("vars: %s" % str(v))
-    # then the Zookeeper connections
-    if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
-      raise utils.TestError('invalid zk test_nj state: ', v['ZkMetaConn']['test_nj']['Current'])
-    if v['ZkMetaConn']['global']['Current'] != 'Connected':
-      raise utils.TestError('invalid zk global state: ', v['ZkMetaConn']['global']['Current'])
-    if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
-      raise utils.TestError('not enough time in Connected state', v['ZkMetaConn']['test_nj']['DurationConnected'])
-    if v['TabletType'] != 'master':
-      raise utils.TestError('TabletType not exported correctly')
+    if environment.topo_server_implementation == 'zookeeper':
+      # extra small test: we ran for a while, get the states we were in,
+      # make sure they're accounted for properly
+      # first the query engine States
+      v = utils.get_vars(tablet_62344.port)
+      logging.debug("vars: %s" % str(v))
+
+      # then the Zookeeper connections
+      if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
+        raise utils.TestError('invalid zk test_nj state: ',
+                              v['ZkMetaConn']['test_nj']['Current'])
+      if v['ZkMetaConn']['global']['Current'] != 'Connected':
+        raise utils.TestError('invalid zk global state: ',
+                              v['ZkMetaConn']['global']['Current'])
+      if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
+        raise utils.TestError('not enough time in Connected state',
+                              v['ZkMetaConn']['test_nj']['DurationConnected'])
+      if v['TabletType'] != 'master':
+        raise utils.TestError('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
 
@@ -281,7 +280,9 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.start_vttablet(auth=True)
     utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
 
-    err, out = tablet_62344.vquery('select * from vt_select_test', path='test_keyspace/0', user='ala', password=r'ma kota')
+    err, out = tablet_62344.vquery('select * from vt_select_test',
+                                   path='test_keyspace/0',
+                                   user='ala', password=r'ma kota')
     logging.debug("Got rows: " + out)
     if 'Row count: ' not in out:
       raise utils.TestError("query didn't go through: %s, %s" % (err, out))
@@ -300,7 +301,7 @@ class TestTabletManager(unittest.TestCase):
     raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
-    out, err = utils.run(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' --alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
+    out, err = utils.run_vtctl('--alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
     for expected in expectedStrings:
       self._check_string_in_hook_result(err, expected)
 
@@ -400,23 +401,27 @@ class TestTabletManager(unittest.TestCase):
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
 
     # make sure the replica is in the replication graph
-    before_scrap = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    before_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
+                                         'test_keyspace/0'])
     self.assertEqual(1, len(before_scrap['ReplicationLinks']), 'wrong replication links before: %s' % str(before_scrap))
 
     # scrap and re-init
     utils.run_vtctl('ScrapTablet -force ' + tablet_62044.tablet_alias)
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
 
-    after_scrap = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    after_scrap = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
+                                        'test_keyspace/0'])
     self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after: %s' % str(after_scrap))
 
     # manually add a bogus entry to the replication graph, and check
     # it is removed by ShardReplicationFix
     utils.run_vtctl('ShardReplicationAdd test_keyspace/0 test_nj-0000066666 test_nj-0000062344', auto_log=True)
-    with_bogus = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    with_bogus = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
+                                        'test_keyspace/0'])
     self.assertEqual(2, len(with_bogus['ReplicationLinks']), 'wrong replication links with bogus: %s' % str(with_bogus))
     utils.run_vtctl('ShardReplicationFix test_nj test_keyspace/0', auto_log=True)
-    after_fix = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    after_fix = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
+                                        'test_keyspace/0'])
     self.assertEqual(1, len(after_scrap['ReplicationLinks']), 'wrong replication links after fix: %s' % str(after_fix))
 
 if __name__ == '__main__':

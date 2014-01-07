@@ -5,7 +5,6 @@ import warnings
 # the "IF EXISTS" clause. Squelch these warnings.
 warnings.simplefilter("ignore")
 
-import json
 import logging
 import os
 import shutil
@@ -69,9 +68,7 @@ class TestReparent(unittest.TestCase):
       t.clean_dbs()
 
   def _check_db_addr(self, shard, db_type, expected_port):
-    stdout, stderr = utils.run_vtctl(['GetEndPoints', 'test_nj', 'test_keyspace/'+shard, db_type],
-                                     trap_output=True, auto_log=True)
-    ep = json.loads(stdout)
+    ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/'+shard, db_type])
     self.assertEqual(len(ep['entries']), 1 , 'Wrong number of entries: %s' % str(ep))
     port = ep['entries'][0]['named_port_map']['_vtocc']
     self.assertEqual(port, expected_port, 'Unexpected port: %u != %u from %s' % (port, expected_port, str(ep)))
@@ -191,7 +188,7 @@ class TestReparent(unittest.TestCase):
     # Start up a master mysql and vttablet
     tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
     if environment.topo_server_implementation == 'zookeeper':
-      shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
       self.assertEqual(shard['Cells'], ['test_nj'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Create a few slaves for testing reparenting.
@@ -199,7 +196,7 @@ class TestReparent(unittest.TestCase):
     tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True)
     tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
     if environment.topo_server_implementation == 'zookeeper':
-      shard = utils.zk_cat_json('/zk/global/vt/keyspaces/test_keyspace/shards/' + shard_id)
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
       self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Recompute the shard layout node - until you do that, it might not be valid.
@@ -373,7 +370,8 @@ class TestReparent(unittest.TestCase):
     if environment.topo_server_implementation != 'zookeeper':
       return
     # make sure the shard replication graph is fine
-    shard_replication = utils.zk_cat_json('/zk/test_nj/vt/replication/test_keyspace/0')
+    shard_replication = utils.run_vtctl_json(['GetShardReplication', 'test_nj',
+                                              'test_keyspace/0'])
     hashed_links = {}
     for rl in shard_replication['ReplicationLinks']:
       key = rl['TabletAlias']['Cell'] + "-" + str(rl['TabletAlias']['Uid'])
