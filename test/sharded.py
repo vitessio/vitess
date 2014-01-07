@@ -94,24 +94,17 @@ class TestSharded(unittest.TestCase):
     shard_1_master.init_tablet( 'master',  'test_keyspace', '80-')
     shard_1_replica.init_tablet('replica', 'test_keyspace', '80-')
 
-    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
-
-    utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
+    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # run checks now before we start the tablets
     utils.validate_topology()
 
-    # create databases
-    shard_0_master.create_db('vt_test_keyspace')
-    shard_0_replica.create_db('vt_test_keyspace')
-    shard_1_master.create_db('vt_test_keyspace')
-    shard_1_replica.create_db('vt_test_keyspace')
-
-    # start the tablets
-    shard_0_master.start_vttablet()
-    shard_0_replica.start_vttablet()
-    shard_1_master.start_vttablet()
-    shard_1_replica.start_vttablet()
+    # create databases, start the tablets, wait for them to start
+    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+      t.create_db('vt_test_keyspace')
+      t.start_vttablet(wait_for_state=None)
+    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+      t.wait_for_vttablet_state('SERVING')
 
     # apply the schema on the first shard through vtctl, so all tablets
     # are the same (replication is not enabled yet, so allow_replication=false
@@ -263,10 +256,8 @@ class TestSharded(unittest.TestCase):
         self.fail('unexpected exception: ' + str(e))
 
     utils.kill_sub_process(zkocc_server)
-    shard_0_master.kill_vttablet()
-    shard_0_replica.kill_vttablet()
-    shard_1_master.kill_vttablet()
-    shard_1_replica.kill_vttablet()
+    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
+                         shard_1_replica])
 
 if __name__ == '__main__':
   utils.main()

@@ -98,10 +98,8 @@ def tearDownModule():
                    ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  shard_0_master.kill_vttablet()
-  shard_0_replica.kill_vttablet()
-  shard_1_master.kill_vttablet()
-  shard_1_replica.kill_vttablet()
+  tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
+                       shard_1_replica])
 
   utils.zk_teardown()
 
@@ -134,10 +132,10 @@ def setup_tablets():
 
   zkocc_server = utils.zkocc_start()
 
-  shard_0_master.start_vttablet()
-  shard_0_replica.start_vttablet()
-  shard_1_master.start_vttablet()
-  shard_1_replica.start_vttablet()
+  for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+    t.start_vttablet(wait_for_state=None)
+  for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+    t.wait_for_vttablet_state('SERVING')
 
   utils.run_vtctl('SetReadWrite ' + shard_0_master.tablet_alias)
   utils.run_vtctl('SetReadWrite ' + shard_1_master.tablet_alias)

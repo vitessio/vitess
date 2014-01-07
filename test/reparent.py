@@ -86,12 +86,16 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
+    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True, wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True)
-    tablet_41983.init_tablet('replica', 'test_keyspace', '0', start=True)
-    tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True)
+    tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True, wait_for_start=False)
+    tablet_41983.init_tablet('replica', 'test_keyspace', '0', start=True, wait_for_start=False)
+    tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True, wait_for_start=False)
+
+    # wait for all tablets to start
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state("SERVING")
 
     # Recompute the shard layout node - until you do that, it might not be valid.
     utils.run_vtctl('RebuildShardGraph test_keyspace/0')
@@ -161,9 +165,7 @@ class TestReparent(unittest.TestCase):
     if '0000062344 <null> <null> idle' not in idle_tablets:
       raise utils.TestError('idle tablet not found', idle_tablets)
 
-    tablet_62044.kill_vttablet()
-    tablet_41983.kill_vttablet()
-    tablet_31981.kill_vttablet()
+    tablet.kill_tablets([tablet_62044, tablet_41983, tablet_31981])
 
     # so the other tests don't have any surprise
     tablet_62344.start_mysql().wait()
@@ -192,9 +194,11 @@ class TestReparent(unittest.TestCase):
       self.assertEqual(shard['Cells'], ['test_nj'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
 
     # Create a few slaves for testing reparenting.
-    tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+    tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    for t in [tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state("SERVING")
     if environment.topo_server_implementation == 'zookeeper':
       shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/'+shard_id])
       self.assertEqual(shard['Cells'], ['test_nj', 'test_ny'], 'wrong list of cell in Shard: %s' % str(shard['Cells']))
@@ -229,10 +233,7 @@ class TestReparent(unittest.TestCase):
 
     self._check_db_addr(shard_id, 'master', tablet_62044.port)
 
-    tablet_62344.kill_vttablet()
-    tablet_62044.kill_vttablet()
-    tablet_41983.kill_vttablet()
-    tablet_31981.kill_vttablet()
+    tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983, tablet_31981])
 
     # Test address correction.
     new_port = environment.reserve_ports(1)
@@ -256,12 +257,16 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
+    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True, wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
-    tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
+    tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_41983.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+
+    # wait for all tablets to start
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state("SERVING")
 
     # Recompute the shard layout node - until you do that, it might not be valid.
     utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
@@ -281,9 +286,7 @@ class TestReparent(unittest.TestCase):
     # Perform a graceful reparent operation.
     utils.run_vtctl('ReparentShard test_keyspace/%s %s' % (shard_id, tablet_62044.tablet_alias))
 
-    tablet_62344.kill_vttablet()
-    tablet_62044.kill_vttablet()
-    tablet_41983.kill_vttablet()
+    tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983])
 
 
   # assume a different entity is doing the reparent, and telling us it was done
@@ -301,12 +304,16 @@ class TestReparent(unittest.TestCase):
       t.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
+    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True, wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
-    tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True)
-    tablet_41983.init_tablet('replica', 'test_keyspace', '0', start=True)
-    tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True)
+    tablet_62044.init_tablet('replica', 'test_keyspace', '0', start=True, wait_for_start=False)
+    tablet_41983.init_tablet('replica', 'test_keyspace', '0', start=True, wait_for_start=False)
+    tablet_31981.init_tablet('replica', 'test_keyspace', '0', start=True, wait_for_start=False)
+
+    # wait for all tablets to start
+    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+      t.wait_for_vttablet_state("SERVING")
 
     # Reparent as a starting point
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
@@ -361,10 +368,7 @@ class TestReparent(unittest.TestCase):
 
     self._test_reparent_from_outside_check(brutal)
 
-    tablet_31981.kill_vttablet()
-    tablet_62344.kill_vttablet()
-    tablet_62044.kill_vttablet()
-    tablet_41983.kill_vttablet()
+    tablet.kill_tablets([tablet_31981, tablet_62344, tablet_62044, tablet_41983])
 
   def _test_reparent_from_outside_check(self, brutal):
     if environment.topo_server_implementation != 'zookeeper':
@@ -404,12 +408,17 @@ class TestReparent(unittest.TestCase):
     tablet_31981.create_db('vt_test_keyspace')
 
     # Start up a master mysql and vttablet
-    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True)
+    tablet_62344.init_tablet('master', 'test_keyspace', shard_id, start=True, wait_for_start=False)
 
     # Create a few slaves for testing reparenting.
-    tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True)
-    tablet_41983.init_tablet('lag', 'test_keyspace', shard_id, start=True)
+    tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_31981.init_tablet('replica', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+    tablet_41983.init_tablet('lag', 'test_keyspace', shard_id, start=True, wait_for_start=False)
+
+    # wait for all tablets to start
+    for t in [tablet_62344, tablet_62044, tablet_31981]:
+      t.wait_for_vttablet_state("SERVING")
+    tablet_41983.wait_for_vttablet_state("NOT_SERVING")
 
     # Recompute the shard layout node - until you do that, it might not be valid.
     utils.run_vtctl('RebuildShardGraph test_keyspace/' + shard_id)
@@ -444,10 +453,7 @@ class TestReparent(unittest.TestCase):
 
     utils.pause("check lag reparent")
 
-    tablet_62344.kill_vttablet()
-    tablet_62044.kill_vttablet()
-    tablet_41983.kill_vttablet()
-    tablet_31981.kill_vttablet()
+    tablet.kill_tablets([tablet_62344, tablet_62044, tablet_41983, tablet_31981])
 
 
 if __name__ == '__main__':

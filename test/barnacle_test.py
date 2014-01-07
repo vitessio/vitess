@@ -81,7 +81,6 @@ class TestBarnacle(unittest.TestCase):
     utils.run_vtctl('CreateKeyspace -force test_keyspace')
     utils.run_vtctl('CreateShard -force test_keyspace/0')
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
     utils.validate_topology()
 

@@ -19,8 +19,6 @@ from vtdb import vtgate
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
-tablet_41983 = tablet.Tablet(41983)
-tablet_31981 = tablet.Tablet(31981)
 
 def setUpModule():
   try:
@@ -35,8 +33,6 @@ def setUpModule():
     setup_procs = [
         tablet_62344.init_mysql(),
         tablet_62044.init_mysql(),
-        tablet_41983.init_mysql(),
-        tablet_31981.init_mysql(),
         ]
     utils.wait_procs(setup_procs)
   except:
@@ -50,8 +46,6 @@ def tearDownModule():
   teardown_procs = [
       tablet_62344.teardown_mysql(),
       tablet_62044.teardown_mysql(),
-      tablet_41983.teardown_mysql(),
-      tablet_31981.teardown_mysql(),
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -61,14 +55,12 @@ def tearDownModule():
 
   tablet_62344.remove_tree()
   tablet_62044.remove_tree()
-  tablet_41983.remove_tree()
-  tablet_31981.remove_tree()
 
 class TestTabletManager(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server_wipe()
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    for t in [tablet_62344, tablet_62044]:
       t.reset_replication()
       t.clean_dbs()
 
@@ -82,7 +74,6 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl('CreateKeyspace -force test_keyspace')
     utils.run_vtctl('createshard -force test_keyspace/0')
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
     utils.validate_topology()
 
@@ -128,7 +119,6 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl('CreateKeyspace -force test_keyspace')
     utils.run_vtctl('CreateShard -force test_keyspace/0')
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace')
     utils.validate_topology()
 
