@@ -64,7 +64,7 @@ def tearDownModule():
   except OSError as e:
     logging.debug("removing snapshot %s: %s", path, str(e))
 
-class TestTabletManager(unittest.TestCase):
+class TestClone(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server_wipe()

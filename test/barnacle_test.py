@@ -63,7 +63,7 @@ def tearDownModule():
   except OSError as e:
     logging.debug("removing snapshot %s: %s", path, str(e))
 
-class TestTabletManager(unittest.TestCase):
+class TestBarnacle(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     utils.zk_wipe()

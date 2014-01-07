@@ -364,9 +364,13 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True)
 
     # start a 'vtctl Sleep' command in the background
-    sp = utils.run_bg(environment.binary_path('vtctl')+' -log_dir '+environment.tmproot+' --alsologtostderr Sleep %s 60s' %
-                      tablet_62344.tablet_alias,
-                      stdout=PIPE, stderr=PIPE)
+    args = [environment.binary_path('vtctl'),
+            '-log_dir', environment.tmproot,
+            '--alsologtostderr']
+    args.extend(environment.topo_server_flags())
+    args.extend(environment.tablet_manager_protocol_flags())
+    args.extend(['Sleep', tablet_62344.tablet_alias, '60s'])
+    sp = utils.run_bg(args, stdout=PIPE, stderr=PIPE)
 
     # wait for it to start, and let's kill it
     time.sleep(2.0)
@@ -389,8 +393,12 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     proc1 = tablet_62344.start_vttablet()
     proc2 = tablet_62344.start_vttablet()
-    time.sleep(2.0)
-    proc1.poll()
+    for timeout in xrange(20):
+      logging.info("Sleeping waiting for first process to die")
+      time.sleep(1.0)
+      proc1.poll()
+      if proc1.returncode is not None:
+        break
     if proc1.returncode is None:
       raise utils.TestError("proc1 still running")
     tablet_62344.kill_vttablet()
