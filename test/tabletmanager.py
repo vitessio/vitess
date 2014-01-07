@@ -24,7 +24,12 @@ tablet_31981 = tablet.Tablet(31981)
 
 def setUpModule():
   try:
-    utils.zk_setup(add_bad_host=True)
+    if environment.topo_server_implementation == 'zookeeper':
+      # this is a one-off test to make sure our zookeeper implementation
+      # behaves with a server that is not DNS-resolveable
+      environment.topo_server_setup(add_bad_host=True)
+    else:
+      environment.topo_server_setup()
 
     # start mysql instance external to the test
     setup_procs = [
@@ -50,7 +55,7 @@ def tearDownModule():
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
+  environment.topo_server_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -62,7 +67,7 @@ def tearDownModule():
 class TestTabletManager(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
-    utils.zk_wipe()
+    environment.topo_server_wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
       t.clean_dbs()

@@ -69,7 +69,7 @@ topo_server_implementation = 'zookeeper'
 hostname = socket.gethostname()
 zk_port_base = reserve_ports(3)
 zkocc_port_base = reserve_ports(3)
-def topo_server_setup():
+def topo_server_setup(add_bad_host=False):
   global zk_port_base
   global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
@@ -80,6 +80,8 @@ def topo_server_setup():
   config = tmproot+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
     ca_server = 'localhost:%u' % (zk_port_base+2)
+    if add_bad_host:
+      ca_server += ',does.not.exists:1234'
     zk_cell_mapping = {'test_nj': 'localhost:%u'%(zk_port_base+2),
                        'test_ny': 'localhost:%u'%(zk_port_base+2),
                        'test_ca': ca_server,
