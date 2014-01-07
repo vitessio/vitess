@@ -225,7 +225,7 @@ class Tablet(object):
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, **kwargs):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, wait_for_start=True, **kwargs):
     self.keyspace = keyspace
     self.shard = shard
 
@@ -256,7 +256,9 @@ class Tablet(object):
     args.append(tablet_type)
     utils.run_vtctl(args)
     if start:
-      if tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
+      if not wait_for_start:
+        expected_state = None
+      elif tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
         expected_state = "SERVING"
       else:
         expected_state = "NOT_SERVING"
@@ -367,3 +369,15 @@ class Tablet(object):
   def check_vttablet_count(klass):
     if Tablet.tablets_running > 0:
       raise utils.TestError("This test is not killing all its vttablets")
+
+def kill_tablets(tablets):
+  for t in tablets:
+    logging.debug("killing vttablet: %s", t.tablet_alias)
+    if t.proc is not None:
+      Tablet.tablets_running -= 1
+      t.proc.terminate()
+
+  for t in tablets:
+    if t.proc is not None:
+      t.proc.wait()
+      t.proc = None

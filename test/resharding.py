@@ -349,8 +349,6 @@ primary key (name)
     shard_1_slave2.init_tablet('spare', 'test_keyspace', '80-')
     shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
-    utils.run_vtctl('RebuildShardGraph test_keyspace/-80', auto_log=True)
-    utils.run_vtctl('RebuildShardGraph test_keyspace/80-', auto_log=True)
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # create databases so vttablet can start behaving normally
@@ -396,11 +394,6 @@ primary key (name)
 
     utils.run_vtctl('ReparentShard -force test_keyspace/80-C0 ' + shard_2_master.tablet_alias, auto_log=True)
     utils.run_vtctl('ReparentShard -force test_keyspace/C0- ' + shard_3_master.tablet_alias, auto_log=True)
-
-    utils.run_vtctl('RebuildShardGraph test_keyspace/-80', auto_log=True)
-    utils.run_vtctl('RebuildShardGraph test_keyspace/80-', auto_log=True)
-    utils.run_vtctl('RebuildShardGraph test_keyspace/80-C0', auto_log=True)
-    utils.run_vtctl('RebuildShardGraph test_keyspace/C0-', auto_log=True)
 
     utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace', auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
@@ -546,11 +539,10 @@ primary key (name)
     self._wait_for_binlog_player_count(shard_3_master, 0)
 
     # kill everything
-    for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_slave1,
-              shard_1_slave2, shard_1_rdonly, shard_2_master, shard_2_replica1,
-              shard_2_replica2, shard_3_master, shard_3_replica,
-              shard_3_rdonly]:
-      t.kill_vttablet()
+    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
+                         shard_1_slave1, shard_1_slave2, shard_1_rdonly,
+                         shard_2_master, shard_2_replica1, shard_2_replica2,
+                         shard_3_master, shard_3_replica, shard_3_rdonly])
 
   def _check_srv_keyspace(self, cell, keyspace, expected):
     ks = utils.run_vtctl_json(['GetSrvKeyspace', cell, keyspace])

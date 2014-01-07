@@ -46,11 +46,10 @@ class TopoOccTest(unittest.TestCase):
     utils.vtgate_kill(self.vtgate_zkocc)
 
   def rebuild(self, use_served_types=False):
-    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/0', auto_log=True)
     flags = ""
     if use_served_types:
       flags = "--use-served-types"
-    utils.run_vtctl('RebuildKeyspaceGraph %s /zk/global/vt/keyspaces/*' % flags, auto_log=True)
+    utils.run_vtctl('RebuildKeyspaceGraph %s test_keyspace' % flags, auto_log=True)
 
   def test_get_srv_keyspace_names(self):
     utils.run_vtctl('CreateKeyspace test_keyspace1')
@@ -364,7 +363,6 @@ class TestZkocc(unittest.TestCase):
     t = tablet.Tablet(tablet_uid=1, cell="nj")
     t.init_tablet("master", "test_keyspace", "0")
     t.update_addrs()
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # start vtgate and the qps-er

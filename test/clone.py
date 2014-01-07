@@ -18,8 +18,6 @@ import tablet
 
 tablet_62344 = tablet.Tablet(62344)
 tablet_62044 = tablet.Tablet(62044)
-tablet_41983 = tablet.Tablet(41983)
-tablet_31981 = tablet.Tablet(31981)
 
 def setUpModule():
   try:
@@ -29,8 +27,6 @@ def setUpModule():
     setup_procs = [
         tablet_62344.init_mysql(),
         tablet_62044.init_mysql(),
-        tablet_41983.init_mysql(),
-        tablet_31981.init_mysql(),
         ]
     utils.wait_procs(setup_procs)
   except:
@@ -44,8 +40,6 @@ def tearDownModule():
   teardown_procs = [
       tablet_62344.teardown_mysql(),
       tablet_62044.teardown_mysql(),
-      tablet_41983.teardown_mysql(),
-      tablet_31981.teardown_mysql(),
       ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -55,8 +49,6 @@ def tearDownModule():
 
   tablet_62344.remove_tree()
   tablet_62044.remove_tree()
-  tablet_41983.remove_tree()
-  tablet_31981.remove_tree()
 
   path = os.path.join(environment.vtdataroot, 'snapshot')
   try:
@@ -68,7 +60,7 @@ class TestClone(unittest.TestCase):
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server_wipe()
-    for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
+    for t in [tablet_62344, tablet_62044]:
       t.reset_replication()
       t.clean_dbs()
 
@@ -198,8 +190,7 @@ class TestClone(unittest.TestCase):
       tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
       utils.validate_topology()
 
-    tablet_62344.kill_vttablet()
-    tablet_62044.kill_vttablet()
+    tablet.kill_tablets([tablet_62344, tablet_62044])
 
   # Subsumed by vtctl_clone* tests.
   def _test_vtctl_snapshot_restore(self):
@@ -256,8 +247,7 @@ class TestClone(unittest.TestCase):
 
     utils.validate_topology()
 
-    tablet_62344.kill_vttablet()
-    tablet_62044.kill_vttablet()
+    tablet.kill_tablets([tablet_62344, tablet_62044])
 
   def test_vtctl_clone(self):
     self._test_vtctl_clone(server_mode=False)
