@@ -24,8 +24,19 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 		return err
 	}
 
-	err = wr.rebuildShard(keyspace, shard, cells, false /*ignorePartialResult*/)
+	err = wr.rebuildShard(keyspace, shard, rebuildShardOptions{Cells: cells, IgnorePartialResult: false})
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+// rebuildShardOptions are options for rebuildShard
+type rebuildShardOptions struct {
+	// Cells that should be rebuilt. If nil, rebuild in all cells.
+	Cells []string
+	// It is OK to ignore topo.ErrPartialResult (which may mean
+	// that some cell is unavailable.
+	IgnorePartialResult bool
+	// If true, call GetShardCritical instead of GetShard.
+	Critical bool
 }
 
 // Update shard file with new master, replicas, etc.
@@ -36,7 +47,7 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 // This function should only be used with an action lock on the shard
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
-func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignorePartialResult bool) error {
+func (wr *Wrangler) rebuildShard(keyspace, shard string, options rebuildShardOptions) error {
 	log.Infof("rebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
@@ -45,9 +56,9 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignoreP
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShardByCell(wr.ts, keyspace, shard, cells)
+	tabletMap, err := GetTabletMapForShardByCell(wr.ts, keyspace, shard, options.Cells)
 	if err != nil {
-		if ignorePartialResult && err == topo.ErrPartialResult {
+		if options.IgnorePartialResult && err == topo.ErrPartialResult {
 			log.Warningf("rebuildShard: got topo.ErrPartialResult from GetTabletMapForShard, but skipping error as it was expected")
 		} else {
 			return err
@@ -69,7 +80,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignoreP
 		tablets = append(tablets, ti)
 	}
 
-	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
+	return wr.rebuildShardSrvGraph(shardInfo, tablets, options.Cells)
 }
 
 // the following types are used as locations in the serving graph
