@@ -93,6 +93,10 @@ func (zkts *Server) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	return topo.NewShardInfo(keyspace, shard, s), nil
 }
 
+func (zkts *Server) GetShardCritical(keyspace, shard string) (*topo.ShardInfo, error) {
+	return zkts.GetShard(keyspace, shard)
+}
+
 func (zkts *Server) GetShardNames(keyspace string) ([]string, error) {
 	shardsPath := path.Join(globalKeyspacesPath, keyspace, "shards")
 	children, _, err := zkts.zconn.Children(shardsPath)

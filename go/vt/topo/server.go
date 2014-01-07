@@ -98,9 +98,18 @@ type Server interface {
 	// ValidateShard performs routine checks on the shard.
 	ValidateShard(keyspace, shard string) error
 
-	// GetShard reads a shard and returns it.
+	// GetShard reads a shard and returns it. This returns an
+	// object stored in the global cell, and a topology
+	// implementation may choose to return a value from some sort
+	// of cache. If you need stronger consistency guarantees,
+	// please use GetShardCritical.
+	//
 	// Can return ErrNoNode
 	GetShard(keyspace, shard string) (si *ShardInfo, err error)
+
+	// GetShardCritical is like GetShard, but it always returns
+	// consistent data.
+	GetShardCritical(keyspace, shard string) (si *ShardInfo, err error)
 
 	// GetShardNames returns the known shards in a keyspace.
 	// Can return ErrNoNode if the keyspace wasn't created,

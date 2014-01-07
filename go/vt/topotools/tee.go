@@ -167,6 +167,10 @@ func (tee *Tee) GetShard(keyspace, shard string) (si *topo.ShardInfo, err error)
 	return tee.readFrom.GetShard(keyspace, shard)
 }
 
+func (tee *Tee) GetShardCritical(keyspace, shard string) (si *topo.ShardInfo, err error) {
+	return tee.readFrom.GetShardCritical(keyspace, shard)
+}
+
 func (tee *Tee) GetShardNames(keyspace string) ([]string, error) {
 	return tee.readFrom.GetShardNames(keyspace)
 }
