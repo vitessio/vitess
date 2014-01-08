@@ -24,7 +24,7 @@ func TestTee(t *testing.T) {
 	var _ topo.Server = tee
 
 	// create a keyspace, make sure it is on both sides
-	if err := tee.CreateKeyspace("keyspace2"); err != nil {
+	if err := tee.CreateKeyspace("keyspace2", &topo.Keyspace{}); err != nil {
 		t.Fatalf("tee.CreateKeyspace(keyspace2) failed: %v", err)
 	}
 	teeKeyspaces, err := tee.GetKeyspaces()

@@ -70,7 +70,18 @@ type Server interface {
 
 	// CreateKeyspace creates the given keyspace, assuming it doesn't exist
 	// yet. Can return ErrNodeExists if it already exists.
-	CreateKeyspace(keyspace string) error
+	CreateKeyspace(keyspace string, value *Keyspace) error
+
+	// UpdateKeyspace unconditionnally updates the keyspace information
+	// pointed at by ki.keyspace to the *ki value.
+	// This will only be called with a lock on the keyspace.
+	// Can return ErrNoNode if the keyspace doesn't exist yet.
+	UpdateKeyspace(ki *KeyspaceInfo) error
+
+	// GetKeyspace reads a keyspace and returns it. This returns an
+	// object stored in the global cell.
+	// Can return ErrNoNode
+	GetKeyspace(keyspace string) (*KeyspaceInfo, error)
 
 	// GetKeyspaces returns the known keyspaces. They shall be sorted.
 	GetKeyspaces() ([]string, error)
@@ -105,7 +116,7 @@ type Server interface {
 	// please use GetShardCritical.
 	//
 	// Can return ErrNoNode
-	GetShard(keyspace, shard string) (si *ShardInfo, err error)
+	GetShard(keyspace, shard string) (*ShardInfo, error)
 
 	// GetShardCritical is like GetShard, but it always returns
 	// consistent data.

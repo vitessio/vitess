@@ -11,7 +11,7 @@ import (
 )
 
 func CheckShard(t *testing.T, ts topo.Server) {
-	if err := ts.CreateKeyspace("test_keyspace"); err != nil {
+	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Fatalf("CreateKeyspace: %v", err)
 	}
 

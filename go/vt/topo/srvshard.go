@@ -209,6 +209,10 @@ type SrvKeyspace struct {
 	// May not have a server for every shard, but we have some.
 	TabletTypes []TabletType
 
+	// Copied from Keyspace
+	ShardingColumnName string
+	ShardingColumnType ShardingColumnType
+
 	// For atomic updates
 	version int64
 }

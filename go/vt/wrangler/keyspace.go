@@ -44,6 +44,50 @@ func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *tm.ActionNode, l
 	return err
 }
 
+func (wr *Wrangler) SetKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType topo.ShardingColumnType, force bool) error {
+	actionNode := wr.ai.SetKeyspaceShardingInfo()
+	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
+	if err != nil {
+		return err
+	}
+
+	err = wr.setKeyspaceShardingInfo(keyspace, shardingColumnName, shardingColumnType, force)
+	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
+
+}
+
+func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType topo.ShardingColumnType, force bool) error {
+	ki, err := wr.ts.GetKeyspace(keyspace)
+	if err != nil {
+		// Temporary change: we try to keep going even if node
+		// doesn't exist
+		if err != topo.ErrNoNode {
+			return err
+		}
+		ki = topo.NewKeyspaceInfo(keyspace, &topo.Keyspace{})
+	}
+
+	if ki.ShardingColumnName != "" && ki.ShardingColumnName != shardingColumnName {
+		if force {
+			log.Warningf("Forcing keyspace ShardingColumnName change from %v to %v", ki.ShardingColumnName, shardingColumnName)
+		} else {
+			return fmt.Errorf("Cannot change ShardingColumnName from %v to %v (use -force to override)", ki.ShardingColumnName, shardingColumnName)
+		}
+	}
+
+	if ki.ShardingColumnType != topo.SCT_UNSET && ki.ShardingColumnType != shardingColumnType {
+		if force {
+			log.Warningf("Forcing keyspace ShardingColumnType change from %v to %v", ki.ShardingColumnType, shardingColumnType)
+		} else {
+			return fmt.Errorf("Cannot change ShardingColumnType from %v to %v (use -force to override)", ki.ShardingColumnType, shardingColumnType)
+		}
+	}
+
+	ki.ShardingColumnName = shardingColumnName
+	ki.ShardingColumnType = shardingColumnType
+	return wr.ts.UpdateKeyspace(ki)
+}
+
 func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.TabletType, reverse bool) error {
 	// we cannot migrate a master back, since when master migration
 	// is done, the source shards are dead

@@ -340,7 +340,9 @@ primary key (name)
     logging.debug("tablet %s binlog player has %d players", tablet.tablet_alias, expected)
 
   def test_resharding(self):
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl('CreateKeyspace --sharding_column_name bad_column --sharding_column_type bytes test_keyspace')
+    utils.run_vtctl('SetKeyspaceShardingInfo test_keyspace keyspace_id uint64', expect_fail=True)
+    utils.run_vtctl('SetKeyspaceShardingInfo -force test_keyspace keyspace_id uint64')
 
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
     shard_0_replica.init_tablet('replica', 'test_keyspace', '-80')
@@ -559,6 +561,8 @@ primary key (name)
     self.assertEqual(expected, result,
                      "Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (
                      cell, keyspace, expected, result))
+    self.assertEqual('keyspace_id', ks.get('ShardingColumnName'), "Got wrong ShardingColumnName in SrvKeyspace: %s" % str(ks))
+    self.assertEqual('uint64', ks.get('ShardingColumnType'), "Got wrong ShardingColumnType in SrvKeyspace: %s" % str(ks))
 
 if __name__ == '__main__':
   utils.main()
