@@ -51,7 +51,17 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, options rebuildShardOpt
 	log.Infof("rebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+
+	var (
+		shardInfo *topo.ShardInfo
+		err       error
+	)
+	if options.Critical {
+		shardInfo, err = wr.ts.GetShardCritical(keyspace, shard)
+	} else {
+		shardInfo, err = wr.ts.GetShard(keyspace, shard)
+	}
+
 	if err != nil {
 		return err
 	}
