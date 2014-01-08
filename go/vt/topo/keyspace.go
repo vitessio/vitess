@@ -4,40 +4,11 @@
 
 package topo
 
-// This file contains keyspace utility functions
-
-// ShardingColumnType represents the type of the sharding key.
-type ShardingColumnType string
-
-const (
-	// unset - no sharding for this keyspace
-	SCT_UNSET = ShardingColumnType("")
-
-	// uint64 - a uint64 value is used for sharding key
-	// this is represented as 'unsigned bigint' in mysql
-	SCT_UINT64 = ShardingColumnType("uint64")
-
-	// bytes - a string of bytes is used for sharding key
-	// this is represented as 'varbinary' in mysql
-	SCT_BYTES = ShardingColumnType("bytes")
+import (
+	"github.com/youtube/vitess/go/vt/key"
 )
 
-var AllShardingColumnTypes = []ShardingColumnType{
-	SCT_UNSET,
-	SCT_UINT64,
-	SCT_BYTES,
-}
-
-// IsShardingColumnTypeInList returns true if the given type is in the list.
-// Use it with AllShardingColumnTypes for instance.
-func IsShardingColumnTypeInList(columnType ShardingColumnType, types []ShardingColumnType) bool {
-	for _, t := range types {
-		if columnType == t {
-			return true
-		}
-	}
-	return false
-}
+// This file contains keyspace utility functions
 
 type Keyspace struct {
 	// name of the column used for sharding
@@ -45,8 +16,8 @@ type Keyspace struct {
 	ShardingColumnName string
 
 	// type of the column used for sharding
-	// SCT_UNSET if the keyspace is not sharded
-	ShardingColumnType ShardingColumnType
+	// KIT_UNSET if the keyspace is not sharded
+	ShardingColumnType key.KeyspaceIdType
 }
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
