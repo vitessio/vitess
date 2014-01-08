@@ -158,7 +158,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Keyspaces", []command{
 			command{"CreateKeyspace", commandCreateKeyspace,
-				"[-force] <keyspace name|zk keyspace path>",
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
 			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
 				"[-force] <keyspace name|zk keyspace path> <column name> <column type>",
