@@ -880,7 +880,7 @@ func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	if *parent {
-		if err := wr.TopoServer().CreateKeyspace(keyspace); err != nil && err != topo.ErrNodeExists {
+		if err := wr.TopoServer().CreateKeyspace(keyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
 			return "", err
 		}
 	}
@@ -1069,14 +1069,25 @@ func commandShardReplicationFix(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 }
 
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	shardingColumnName := subFlags.String("sharding_column_name", "", "column to use for sharding operations")
+	shardingColumnType := subFlags.String("sharding_column_type", "", "type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
+
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("action CreateKeyspace requires <keyspace name|zk keyspace path>")
 	}
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
-	err := wr.TopoServer().CreateKeyspace(keyspace)
+	ct := topo.ShardingColumnType(*shardingColumnType)
+	if !topo.IsShardingColumnTypeInList(ct, topo.AllShardingColumnTypes) {
+		log.Fatalf("invalid sharding_column_type")
+	}
+	ki := &topo.Keyspace{
+		ShardingColumnName: *shardingColumnName,
+		ShardingColumnType: ct,
+	}
+	err := wr.TopoServer().CreateKeyspace(keyspace, ki)
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil

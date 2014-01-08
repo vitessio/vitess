@@ -5,10 +5,12 @@
 package zktopo
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"sort"
 
+	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/zk"
 	"launchpad.net/gozk/zookeeper"
@@ -22,7 +24,7 @@ const (
 	globalKeyspacesPath = "/zk/global/vt/keyspaces"
 )
 
-func (zkts *Server) CreateKeyspace(keyspace string) error {
+func (zkts *Server) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
 	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
 	pathList := []string{
 		keyspacePath,
@@ -32,8 +34,12 @@ func (zkts *Server) CreateKeyspace(keyspace string) error {
 	}
 
 	alreadyExists := false
-	for _, zkPath := range pathList {
-		_, err := zk.CreateRecursive(zkts.zconn, zkPath, "", 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+	for i, zkPath := range pathList {
+		c := ""
+		if i == 0 {
+			c = jscfg.ToJson(value)
+		}
+		_, err := zk.CreateRecursive(zkts.zconn, zkPath, c, 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
 		if err != nil {
 			if zookeeper.IsError(err, zookeeper.ZNODEEXISTS) {
 				alreadyExists = true
@@ -46,6 +52,35 @@ func (zkts *Server) CreateKeyspace(keyspace string) error {
 		return topo.ErrNodeExists
 	}
 	return nil
+}
+
+func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo) error {
+	keyspacePath := path.Join(globalKeyspacesPath, ki.KeyspaceName())
+	_, err := zkts.zconn.Set(keyspacePath, jscfg.ToJson(ki.Keyspace), -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+	}
+	return err
+}
+
+func (zkts *Server) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
+	keyspacePath := path.Join(globalKeyspacesPath, keyspace)
+	data, _, err := zkts.zconn.Get(keyspacePath)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return nil, err
+	}
+
+	k := &topo.Keyspace{}
+	if err = json.Unmarshal([]byte(data), k); err != nil {
+		return nil, fmt.Errorf("bad keyspace data %v", err)
+	}
+
+	return topo.NewKeyspaceInfo(keyspace, k), nil
 }
 
 func (zkts *Server) GetKeyspaces() ([]string, error) {

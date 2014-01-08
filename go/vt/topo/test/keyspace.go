@@ -19,10 +19,10 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("len(GetKeyspaces()) != 0: %v", keyspaces)
 	}
 
-	if err := ts.CreateKeyspace("test_keyspace"); err != nil {
+	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
-	if err := ts.CreateKeyspace("test_keyspace"); err != topo.ErrNodeExists {
+	if err := ts.CreateKeyspace("test_keyspace", &topo.Keyspace{}); err != topo.ErrNodeExists {
 		t.Errorf("CreateKeyspace(again) is not ErrNodeExists: %v", err)
 	}
 
@@ -34,7 +34,7 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace"}, keyspaces)
 	}
 
-	if err := ts.CreateKeyspace("test_keyspace2"); err != nil {
+	if err := ts.CreateKeyspace("test_keyspace2", &topo.Keyspace{ShardingColumnName: "user_id", ShardingColumnType: topo.SCT_UINT64}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
 	keyspaces, err = ts.GetKeyspaces()
@@ -43,5 +43,27 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	}
 	if len(keyspaces) != 2 || keyspaces[0] != "test_keyspace" || keyspaces[1] != "test_keyspace2" {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace", "test_keyspace2"}, keyspaces)
+	}
+
+	ki, err := ts.GetKeyspace("test_keyspace2")
+	if err != nil {
+		t.Fatalf("GetKeyspace: %v", err)
+	}
+	if ki.ShardingColumnName != "user_id" || ki.ShardingColumnType != topo.SCT_UINT64 {
+		t.Errorf("GetKeyspace: want user_id/uint64, got %v/%v", ki.ShardingColumnName, ki.ShardingColumnType)
+	}
+
+	ki.ShardingColumnName = "other_id"
+	ki.ShardingColumnType = topo.SCT_BYTES
+	err = ts.UpdateKeyspace(ki)
+	if err != nil {
+		t.Fatalf("UpdateKeyspace: %v", err)
+	}
+	ki, err = ts.GetKeyspace("test_keyspace2")
+	if err != nil {
+		t.Fatalf("GetKeyspace: %v", err)
+	}
+	if ki.ShardingColumnName != "other_id" || ki.ShardingColumnType != topo.SCT_BYTES {
+		t.Errorf("GetKeyspace: want other_id/bytes, got %v/%v", ki.ShardingColumnName, ki.ShardingColumnType)
 	}
 }
