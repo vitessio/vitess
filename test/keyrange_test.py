@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import struct
 import unittest
 import utils
 
@@ -10,12 +11,35 @@ from vtdb import keyrange
 # This unittest tests the computation of task map
 # and where clauses for streaming queries.
 
+pkid_pack = struct.Struct('!Q').pack
+int_shard_kid_map = {('', '10'):[1, 100, 1000, 100000, 527875958493693904, 626750931627689502, 345387386794260318, 332484755310826578],
+                   ('10', '20'):[1842642426274125671, 1326307661227634652, 1761124146422844620, 1661669973250483744],
+                   ('20', '30'):[3361397649937244239, 3303511690915522723, 2444880764308344533, 2973657788686139039],
+                   ('30', '40'):[3821005920507858605, 4575089859165626432, 3607090456016432961, 3979558375123453425],
+                   ('40', '50'):[5129057445097465905, 5464969577815708398, 5190676584475132364, 5762096070688827561],
+                   ('50', '60'):[6419540613918919447, 6867152356089593986, 6601838130703675400, 6132605084892127391],
+                   ('60', '70'):[7251511061270371980, 7395364497868053835, 7814586147633440734, 7968977924086033834],
+                   ('70', '80'):[8653665459643609079, 8419099072545971426, 9020726671664230611, 9064594986161620444],
+                   ('80', '90'):[9767889778372766922, 9742070682920810358, 10296850775085416642, 9537430901666854108],
+                   ('90', 'a0'):[10440455099304929791, 11454183276974683945, 11185910247776122031, 10460396697869122981],
+                   ('a0', 'b0'):[11935085245138597119, 12115696589214223782, 12639360876311033978, 12548906240535188165],
+                   ('b0', 'c0'):[13379616110062597001, 12826553979133932576, 13288572810772383281, 13471801046560785347],
+                   ('c0', 'd0'):[14394342688314745188, 14639660031570920207, 14646353412066152016, 14186650213447467187],
+                   ('d0', 'e0'):[15397348460895960623, 16014223083986915239, 15058390871463382185, 15811857963302932363],
+                   ('e0', 'f0'):[17275711019497396001, 16979796627403646478, 16635982235308289704, 16906674090344806032],
+                   ('f0', ''):[18229242992218358675, 17623451135465171527, 18333015752598164958, 17775908119782706671],
+                   }
+
+# str_shard_kid_map is derived from int_shard_kid_map
+# by generating bin-packed strings from the int keyspace_id values.
+str_shard_kid_map = dict([(shard_name, [pkid_pack(kid) for kid in kid_list]) for shard_name, kid_list in int_shard_kid_map.iteritems()])
+
 class TestKeyrange(unittest.TestCase):
   def test_incorrect_tasks(self):
     global_shard_count = 16
     with self.assertRaises(dbexceptions.ProgrammingError):
       stm = keyrange.create_streaming_task_map(4, global_shard_count)
-  
+
   def test_keyranges_for_tasks(self):
     for global_shard_count in (16,32,64):
       num_tasks = global_shard_count
@@ -32,25 +56,8 @@ class TestKeyrange(unittest.TestCase):
       self.assertEqual(len(stm.keyrange_list), num_tasks)
 
   # This tests that the where clause and bind_vars generated for each shard
-  # against a few sample values. 
-  def test_bind_values_for_keyrange_list(self):
-    shard_kid_map = {('', '0x10'):[527875958493693904, 626750931627689502, 345387386794260318, 332484755310826578],
-                   ('0x10', '0x20'):[1842642426274125671, 1326307661227634652, 1761124146422844620, 1661669973250483744],
-                   ('0x20', '0x30'):[3361397649937244239, 3303511690915522723, 2444880764308344533, 2973657788686139039],
-                   ('0x30', '0x40'):[3821005920507858605, 4575089859165626432, 3607090456016432961, 3979558375123453425],
-                   ('0x40', '0x50'):[5129057445097465905, 5464969577815708398, 5190676584475132364, 5762096070688827561],
-                   ('0x50', '0x60'):[6419540613918919447, 6867152356089593986, 6601838130703675400, 6132605084892127391],
-                   ('0x60', '0x70'):[7251511061270371980, 7395364497868053835, 7814586147633440734, 7968977924086033834],
-                   ('0x70', '0x80'):[8653665459643609079, 8419099072545971426, 9020726671664230611, 9064594986161620444],
-                   ('0x80', '0x90'):[9767889778372766922, 9742070682920810358, 10296850775085416642, 9537430901666854108],
-                   ('0x90', '0xa0'):[10440455099304929791, 11454183276974683945, 11185910247776122031, 10460396697869122981],
-                   ('0xa0', '0xb0'):[11935085245138597119, 12115696589214223782, 12639360876311033978, 12548906240535188165],
-                   ('0xb0', '0xc0'):[13379616110062597001, 12826553979133932576, 13288572810772383281, 13471801046560785347],
-                   ('0xc0', '0xd0'):[14394342688314745188, 14639660031570920207, 14646353412066152016, 14186650213447467187],
-                   ('0xd0', '0xe0'):[15397348460895960623, 16014223083986915239, 15058390871463382185, 15811857963302932363],
-                   ('0xe0', '0xf0'):[17275711019497396001, 16979796627403646478, 16635982235308289704, 16906674090344806032],
-                   ('0xf0', ''):[18229242992218358675, 17623451135465171527, 18333015752598164958, 17775908119782706671],
-                   }
+  # against a few sample values where keyspace_id is an int column.  
+  def test_bind_values_for_int_keyspace(self):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
       where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr)
@@ -63,7 +70,7 @@ class TestKeyrange(unittest.TestCase):
           self.assertNotEqual(where_clause.find('>='), -1)
           self.assertNotEqual(where_clause.find('>='), -1)
           self.assertNotEqual(where_clause.find('AND'), -1)
-      kid_list = shard_kid_map[kr]
+      kid_list = int_shard_kid_map[kr]
       for keyspace_id in kid_list:
         if len(bind_vars.keys()) == 1:
           if kr[0] == '':
@@ -73,6 +80,36 @@ class TestKeyrange(unittest.TestCase):
         else:
           self.assertGreaterEqual(keyspace_id, bind_vars['keyspace_id0'])
           self.assertLess(keyspace_id, bind_vars['keyspace_id1'])
+
+
+  # This tests that the where clause and bind_vars generated for each shard
+  # against a few sample values where keyspace_id is a str column. 
+  # mysql will use the hex function on string keyspace column
+  # and use byte comparison. Since the exact function is not available,
+  # the test emulates that by using keyspace_id.encode('hex').
+  def test_bind_values_for_str_keyspace(self):
+    stm = keyrange.create_streaming_task_map(16, 16)
+    for i, kr in enumerate(stm.keyrange_list):
+      where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange.KEYSPACE_ID_TYPE_STR)
+      if len(bind_vars.keys()) == 1:
+        if kr[0] == '':
+          self.assertNotEqual(where_clause.find('<'), -1)
+        else:
+          self.assertNotEqual(where_clause.find('>='), -1)
+      else:
+          self.assertNotEqual(where_clause.find('>='), -1)
+          self.assertNotEqual(where_clause.find('>='), -1)
+          self.assertNotEqual(where_clause.find('AND'), -1)
+      kid_list = str_shard_kid_map[kr]
+      for keyspace_id in kid_list:
+        if len(bind_vars.keys()) == 1:
+          if kr[0] == '':
+            self.assertLess(keyspace_id.encode('hex'), bind_vars['keyspace_id0'])
+          else:
+            self.assertGreaterEqual(keyspace_id.encode('hex'), bind_vars['keyspace_id0'])
+        else:
+          self.assertGreaterEqual(keyspace_id.encode('hex'), bind_vars['keyspace_id0'])
+          self.assertLess(keyspace_id.encode('hex'), bind_vars['keyspace_id1'])
 
 if __name__ == '__main__':
   utils.main()
