@@ -42,7 +42,7 @@ class Vtctld(object):
     return data["ServingGraph"]["Keyspaces"]
 
   def start(self):
-    args = [environment.binary_path('vtctld'), '-debug', '-templates', environment.vttop + '/go/cmd/vtctld/templates', '-log_dir', environment.tmproot]
+    args = [environment.binary_path('vtctld'), '-debug', '-templates', environment.vttop + '/go/cmd/vtctld/templates', '-log_dir', environment.vtlogroot]
     stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     return self.proc

@@ -69,7 +69,7 @@ class Tablet(object):
 
     return utils.run_bg(environment.binary_path('mysqlctl') +
                         ' -log_dir %s -tablet-uid %u %s' %
-                        (environment.tmproot, self.tablet_uid, cmd),
+                        (environment.vtlogroot, self.tablet_uid, cmd),
                         env=env)
 
   def init_mysql(self, extra_my_cnf=None):
@@ -280,7 +280,7 @@ class Tablet(object):
     args = [environment.binary_path('vttablet'),
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
-            '-log_dir', self.tablet_dir]
+            '-log_dir', environment.vtlogroot]
     args.extend(environment.topo_server_flags())
 
     dbconfigs = self._get_db_configs_file(repl_extra_flags)
