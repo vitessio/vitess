@@ -24,7 +24,8 @@ class StreamingTaskMap(object):
     span = (max_key_hex - min_key_hex)/self.num_tasks
     for i in xrange(self.num_tasks):
       kr += span
-      kr_chunks.append(hex(kr))
+      #kr_chunks.append(hex(kr).split('0x')[1])
+      kr_chunks.append('%x' % kr)
     kr_chunks[-1] = ''
     self.keyrange_list = [(kr_chunks[i], kr_chunks[i+1]) for i in xrange(len(kr_chunks) - 1)]
 
@@ -35,7 +36,7 @@ def create_streaming_task_map(num_tasks, global_shard_count):
   # global_shard_count is a configurable value controlled for resharding.
   if num_tasks < global_shard_count:
     raise dbexceptions.ProgrammingError("Tasks %d cannot be less than number of shards %d" % (num_tasks, global_shard_count))
-  
+
   stm = StreamingTaskMap(num_tasks)
   stm.compute_kr_list()
   return stm
@@ -44,40 +45,81 @@ def create_streaming_task_map(num_tasks, global_shard_count):
 # We abbreviate the keyranges for ease of use.
 # To obtain true value for comparison with keyspace id,
 # create true hex value for that keyrange by right padding and conversion.
-def _true_keyspace_id_value(kr_value):
+def _true_int_kr_value(kr_value):
   if kr_value == '':
     return None
-  if kr_value.startswith('0x'):
-    kr_value = kr_value.split('0x')[1]
-  true_hex_val = kr_value + (16-len(kr_value))*'0'
-  return int(true_hex_val, base=16)
+  kr_value = kr_value + (16-len(kr_value))*'0'
+  if not kr_value.startswith('0x'):
+    kr_value = '0x' + kr_value
+  return int(kr_value, base=16)
+
+
+MIN_KEY = ''
+MAX_KEY = ''
+
+KEYSPACE_ID_TYPE_NONE = 0
+KEYSPACE_ID_TYPE_INT = 1
+KEYSPACE_ID_TYPE_STR = 2
 
 
 # Compute the where clause and bind_vars for a given keyrange.
-def create_where_clause_for_keyrange(keyrange, col_name='keyspace_id'):
-  kr_min = None
-  kr_max = None
+def create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=KEYSPACE_ID_TYPE_INT):
   if isinstance(keyrange, str):
     keyrange = keyrange.split('-')
 
-  if (isinstance(keyrange, tuple) or isinstance(keyrange, list)) and len(keyrange) == 2:
-    kr_min = _true_keyspace_id_value(keyrange[0])
-    kr_max = _true_keyspace_id_value(keyrange[1])
+  if not isinstance(keyrange, tuple) and not isinstance(keyrange, list) or len(keyrange) != 2:
+    raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)
+
+  if keyspace_col_type == KEYSPACE_ID_TYPE_INT:
+    return _create_where_clause_for_int_keyspace(keyrange, keyspace_col_name)
+  elif keyspace_col_type == KEYSPACE_ID_TYPE_STR:
+    return _create_where_clause_for_str_keyspace(keyrange, keyspace_col_name)
   else:
-    raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)	
+    raise dbexceptions.ProgrammingError("Illegal type for keyspace_col_type %d" % keyspace_col_type)
+
+# This creates the where clause and bind_vars if keyspace_id col is a str.
+# The comparison is done using mysql hex function and byte level comparison
+# with the keyrange values.
+def _create_where_clause_for_str_keyspace(keyrange, keyspace_col_name):
+  kr_min = keyrange[0].strip()
+  kr_max = keyrange[1].strip()
+
+  where_clause = ''
+  bind_vars = {}
+  i = 0
+  if kr_min != MIN_KEY:
+    bind_name = "%s%d" % (keyspace_col_name, i)
+    where_clause = "hex(%s) >= " % keyspace_col_name + "%(" + bind_name + ")s"
+    i += 1
+    bind_vars[bind_name] = kr_min
+  if kr_max != MAX_KEY:
+    if where_clause != '':
+      where_clause += ' AND '
+    bind_name = "%s%d" % (keyspace_col_name, i)
+    where_clause += "hex(%s) < " % keyspace_col_name + "%(" + bind_name + ")s"
+    bind_vars[bind_name] = kr_max
+  return where_clause, bind_vars
+
+
+# This creates the where clause and bind_vars if keyspace_id col is a int.
+# The comparison is done using numeric comparison on the int values hence
+# the true 64 bit int values are generated for the keyrange values in the bind_vars.
+def _create_where_clause_for_int_keyspace(keyrange, keyspace_col_name):
+  kr_min = _true_int_kr_value(keyrange[0])
+  kr_max = _true_int_kr_value(keyrange[1])
 
   where_clause = ''
   bind_vars = {}
   i = 0
   if kr_min is not None:
-    bind_name = "%s%d" % (col_name, i)
-    where_clause = "%s >= " % col_name + "%(" + bind_name + ")s"
+    bind_name = "%s%d" % (keyspace_col_name, i)
+    where_clause = "%s >= " % keyspace_col_name + "%(" + bind_name + ")s"
     i += 1
-    bind_vars[bind_name] = kr_min 
+    bind_vars[bind_name] = kr_min
   if kr_max is not None:
     if where_clause != '':
       where_clause += ' AND '
-    bind_name = "%s%d" % (col_name, i)
-    where_clause += "%s < " % col_name + "%(" + bind_name + ")s"
-    bind_vars[bind_name] = kr_max 
+    bind_name = "%s%d" % (keyspace_col_name, i)
+    where_clause += "%s < " % keyspace_col_name + "%(" + bind_name + ")s"
+    bind_vars[bind_name] = kr_max
   return where_clause, bind_vars
