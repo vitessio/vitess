@@ -59,7 +59,17 @@ func (zkts *Server) UpdateKeyspace(ki *topo.KeyspaceInfo) error {
 	_, err := zkts.zconn.Set(keyspacePath, jscfg.ToJson(ki.Keyspace), -1)
 	if err != nil {
 		if zookeeper.IsError(err, zookeeper.ZNONODE) {
-			err = topo.ErrNoNode
+			// The code should be:
+			//   err = topo.ErrNoNode
+			// Temporary code until we have Keyspace object
+			// everywhere:
+			_, err = zkts.zconn.Create(keyspacePath, jscfg.ToJson(ki.Keyspace), 0, zookeeper.WorldACL(zookeeper.PERM_ALL))
+			if err != nil {
+				if zookeeper.IsError(err, zookeeper.ZNONODE) {
+					// the directory doesn't even exist
+					err = topo.ErrNoNode
+				}
+			}
 		}
 	}
 	return err

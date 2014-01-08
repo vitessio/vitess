@@ -160,6 +160,9 @@ var commands = []commandGroup{
 			command{"CreateKeyspace", commandCreateKeyspace,
 				"[-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
+			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
+				"[-force] <keyspace name|zk keyspace path> <column name> <column type>",
+				"Updates the sharding info for a keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
 				"[-cells=a,b] [-use-served-types] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
@@ -1072,7 +1075,6 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	shardingColumnName := subFlags.String("sharding_column_name", "", "column to use for sharding operations")
 	shardingColumnType := subFlags.String("sharding_column_type", "", "type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
-
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("action CreateKeyspace requires <keyspace name|zk keyspace path>")
@@ -1093,6 +1095,22 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 		err = nil
 	}
 	return "", err
+}
+
+func commandSetKeyspaceShardingInfo(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	force := subFlags.Bool("force", false, "will update the fields even if they're already set, use with care")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 3 {
+		log.Fatalf("action SetKeyspaceShardingInfo requires <keyspace name|zk keyspace path> <column name> <column type>")
+	}
+
+	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
+	ct := topo.ShardingColumnType(subFlags.Arg(2))
+	if !topo.IsShardingColumnTypeInList(ct, topo.AllShardingColumnTypes) {
+		log.Fatalf("invalid sharding_column_type")
+	}
+
+	return "", wr.SetKeyspaceShardingInfo(keyspace, subFlags.Arg(1), ct, *force)
 }
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

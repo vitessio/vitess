@@ -446,6 +446,13 @@ func (ai *ActionInitiator) RebuildKeyspace() *ActionNode {
 	}
 }
 
+func (ai *ActionInitiator) SetKeyspaceShardingInfo() *ActionNode {
+	return &ActionNode{
+		Action:     KEYSPACE_ACTION_SET_SHARDING_INFO,
+		ActionGuid: actionGuid(),
+	}
+}
+
 // parameters are stored for debug purposes
 type ApplySchemaKeyspaceArgs struct {
 	Change string

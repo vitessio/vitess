@@ -301,6 +301,17 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, useSer
 // copies in each cell.
 func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTypes bool) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
+
+	ki, err := wr.ts.GetKeyspace(keyspace)
+	if err != nil {
+		// Temporary change: we try to keep going even if node
+		// doesn't exist
+		if err != topo.ErrNoNode {
+			return err
+		}
+		ki = topo.NewKeyspaceInfo(keyspace, &topo.Keyspace{})
+	}
+
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
@@ -353,7 +364,9 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 			}
 
 			srvKeyspaceMap[keyspaceLocation] = &topo.SrvKeyspace{
-				Shards: make([]topo.SrvShard, 0, 16),
+				Shards:             make([]topo.SrvShard, 0, 16),
+				ShardingColumnName: ki.ShardingColumnName,
+				ShardingColumnType: ki.ShardingColumnType,
 			}
 		}
 	}
