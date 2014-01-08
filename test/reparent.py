@@ -128,7 +128,7 @@ class TestReparent(unittest.TestCase):
 
     # Should interrupt and fail
     args = [environment.binary_path('vtctl'),
-            '-log_dir', environment.tmproot,
+            '-log_dir', environment.vtlogroot,
             '-wait-time', '10s']
     args.extend(environment.topo_server_flags())
     args.extend(environment.tablet_manager_protocol_flags())

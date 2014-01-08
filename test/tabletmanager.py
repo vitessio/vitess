@@ -355,7 +355,7 @@ class TestTabletManager(unittest.TestCase):
 
     # start a 'vtctl Sleep' command in the background
     args = [environment.binary_path('vtctl'),
-            '-log_dir', environment.tmproot,
+            '-log_dir', environment.vtlogroot,
             '--alsologtostderr']
     args.extend(environment.topo_server_flags())
     args.extend(environment.tablet_manager_protocol_flags())

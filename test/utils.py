@@ -223,7 +223,7 @@ def zk_setup(add_bad_host=False):
   global zk_port_base
   global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_path('zkctl'), environment.tmproot, hostname, zk_ports))
+  run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_path('zkctl'), environment.vtlogroot, hostname, zk_ports))
   config = environment.tmproot+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
     ca_server = 'localhost:%u' % (zk_port_base+2)
@@ -246,7 +246,7 @@ def zk_setup(add_bad_host=False):
 def zk_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
-  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_path('zkctl'), environment.tmproot, hostname, zk_ports), raise_on_error=False)
+  run('%s -log_dir %s -zk.cfg 1@%s:%s teardown' % (environment.binary_path('zkctl'), environment.vtlogroot, hostname, zk_ports), raise_on_error=False)
 
 def zk_wipe():
   # Work around safety check on recursive delete.
@@ -333,7 +333,7 @@ def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, t
           '-cell', cell,
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
-          '-log_dir', environment.tmproot,
+          '-log_dir', environment.vtlogroot,
           ]
   if topo_impl:
     args.extend(['-topo_implementation', topo_impl])
@@ -351,7 +351,7 @@ def vtgate_kill(sp):
 
 # vtctl helpers
 def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtctl'), '-log_dir', environment.tmproot]
+  args = [environment.binary_path('vtctl'), '-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server_flags())
   args.extend(environment.tablet_manager_protocol_flags())
 
@@ -383,7 +383,7 @@ def run_vtctl_json(clargs):
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtworker'), '-log_dir', environment.tmproot]
+  args = [environment.binary_path('vtworker'), '-log_dir', environment.vtlogroot]
 
   if auto_log:
     if options.verbose == 2:
