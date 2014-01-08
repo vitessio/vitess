@@ -1081,13 +1081,13 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	}
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
-	ct := topo.ShardingColumnType(*shardingColumnType)
-	if !topo.IsShardingColumnTypeInList(ct, topo.AllShardingColumnTypes) {
+	kit := key.KeyspaceIdType(*shardingColumnType)
+	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
 		log.Fatalf("invalid sharding_column_type")
 	}
 	ki := &topo.Keyspace{
 		ShardingColumnName: *shardingColumnName,
-		ShardingColumnType: ct,
+		ShardingColumnType: kit,
 	}
 	err := wr.TopoServer().CreateKeyspace(keyspace, ki)
 	if *force && err == topo.ErrNodeExists {
@@ -1105,12 +1105,12 @@ func commandSetKeyspaceShardingInfo(wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	}
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
-	ct := topo.ShardingColumnType(subFlags.Arg(2))
-	if !topo.IsShardingColumnTypeInList(ct, topo.AllShardingColumnTypes) {
+	kit := key.KeyspaceIdType(subFlags.Arg(2))
+	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
 		log.Fatalf("invalid sharding_column_type")
 	}
 
-	return "", wr.SetKeyspaceShardingInfo(keyspace, subFlags.Arg(1), ct, *force)
+	return "", wr.SetKeyspaceShardingInfo(keyspace, subFlags.Arg(1), kit, *force)
 }
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -10,6 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	tm "github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -44,7 +45,7 @@ func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *tm.ActionNode, l
 	return err
 }
 
-func (wr *Wrangler) SetKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType topo.ShardingColumnType, force bool) error {
+func (wr *Wrangler) SetKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType key.KeyspaceIdType, force bool) error {
 	actionNode := wr.ai.SetKeyspaceShardingInfo()
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
@@ -56,7 +57,7 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(keyspace, shardingColumnName string,
 
 }
 
-func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType topo.ShardingColumnType, force bool) error {
+func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType key.KeyspaceIdType, force bool) error {
 	ki, err := wr.ts.GetKeyspace(keyspace)
 	if err != nil {
 		// Temporary change: we try to keep going even if node
@@ -75,7 +76,7 @@ func (wr *Wrangler) setKeyspaceShardingInfo(keyspace, shardingColumnName string,
 		}
 	}
 
-	if ki.ShardingColumnType != topo.SCT_UNSET && ki.ShardingColumnType != shardingColumnType {
+	if ki.ShardingColumnType != key.KIT_UNSET && ki.ShardingColumnType != shardingColumnType {
 		if force {
 			log.Warningf("Forcing keyspace ShardingColumnType change from %v to %v", ki.ShardingColumnType, shardingColumnType)
 		} else {
