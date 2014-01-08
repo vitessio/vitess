@@ -198,7 +198,7 @@ class VttabletTestEnv(TestEnv):
         self.conn = self.connect()
         self.txlogger = subprocess.Popen(['curl', '-s', '-N', 'http://localhost:9461/debug/txlog'], stdout=open('/tmp/vtocc_txlog.log', 'w'))
         self.txlog = framework.Tailer(open('/tmp/vtocc_txlog.log'), flush=self.tablet.flush)
-        self.log = framework.Tailer(open(os.path.join(self.tablet.tablet_dir, 'vttablet.INFO')), flush=self.tablet.flush)
+        self.log = framework.Tailer(open(os.path.join(environment.vtlogroot, 'vttablet.INFO')), flush=self.tablet.flush)
         querylog_file = '/tmp/vtocc_streamlog_%s.log' % self.tablet.port
         utils.run_bg(['curl', '-s', '-N', 'http://localhost:9461/debug/querylog?full=true'], stdout=open(querylog_file, 'w'))
         time.sleep(1)
