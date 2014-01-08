@@ -152,7 +152,6 @@ func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias topo.TabletAlias, args 
 }
 
 type MultiSnapshotArgs struct {
-	KeyName          string
 	KeyRanges        []key.KeyRange
 	Tables           []string
 	Concurrency      int

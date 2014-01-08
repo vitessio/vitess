@@ -405,7 +405,7 @@ primary key (name)
                              'TabletTypes: master,rdonly,replica')
 
     # take the snapshot for the split
-    utils.run_vtctl('MultiSnapshot --spec=80-C0- %s keyspace_id' % (shard_1_slave1.tablet_alias), auto_log=True)
+    utils.run_vtctl('MultiSnapshot --spec=80-C0- %s' % (shard_1_slave1.tablet_alias), auto_log=True)
 
     # wait for tablet's binlog server service to be enabled after snapshot,
     # and check all the others while we're at it

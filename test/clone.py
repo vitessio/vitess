@@ -268,7 +268,7 @@ class TestClone(unittest.TestCase):
   ) Engine=InnoDB''' % i for i in range(6)]
 
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace test_keyspace')
+    utils.run_vtctl('CreateKeyspace --sharding_column_name id --sharding_column_type uint64 test_keyspace')
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     utils.run_vtctl('RebuildShardGraph test_keyspace/0')
@@ -279,7 +279,7 @@ class TestClone(unittest.TestCase):
 
     tablet_62344.start_vttablet()
 
-    utils.run_vtctl('MultiSnapshot --force --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- %s id' % tablet_62344.tablet_alias)
+    utils.run_vtctl('MultiSnapshot --force --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- %s' % tablet_62344.tablet_alias)
 
     if os.path.exists(os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
       raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
