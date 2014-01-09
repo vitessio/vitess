@@ -28,6 +28,17 @@ class BaseCursor(object):
     self.description = None
     self.lastrowid = None
 
+    sql_check = sql.strip().lower()
+    if sql_check == 'begin':
+      self.connection.begin()
+      return
+    elif sql_check == 'commit':
+      self.connection.commit()
+      return
+    elif sql_check == 'rollback':
+      self.connection.rollback()
+      return
+
     self.results, self.rowcount, self.lastrowid, self.description = self.connection._execute(sql, bind_variables, **kargs)
     self.index = 0
     return self.rowcount
@@ -119,6 +130,7 @@ class StreamCursor(object):
   connection = None
   description = None
   index = None
+  fetchmany_done = False
 
   def __init__(self, connection):
     self.connection = connection
@@ -130,7 +142,7 @@ class StreamCursor(object):
   # for instance, a key value for shard mapping
   def execute(self, sql, bind_variables, **kargs):
     self.description = None
-    _, _, _, self.description = self.connection._stream_execute(sql, bind_variables, **kargs)
+    x, y, z, self.description = self.connection._stream_execute(sql, bind_variables, **kargs)
     self.index = 0
     return 0
 
@@ -141,16 +153,20 @@ class StreamCursor(object):
     self.index += 1
     return self.connection._stream_next()
 
-  # fetchmany can be called until it returns no rows. Returning less rows
-  # than what we asked for is also an indication we ran out. But the cursor
-  # may not know that.
+   # fetchmany can be called until it returns no rows. Returning less rows
+   # than what we asked for is also an indication we ran out, but the cursor
+   # API in PEP249 is silent about that.
   def fetchmany(self, size=None):
     if size is None:
       size = self.arraysize
     result = []
+    if self.fetchmany_done:
+      self.fetchmany_done = False
+      return result
     for i in xrange(size):
       row = self.fetchone()
       if row is None:
+        self.fetchmany_done = True
         break
       result.append(row)
     return result

@@ -87,10 +87,10 @@ class ZkOccConnection(object):
   # addrs is a comma separated list of server:ip pairs.
   def __init__(self, addrs, local_cell, timeout, user=None, password=None):
     self.timeout = timeout
-    addrs_array = addrs.split(',')
-    random.shuffle(addrs_array)
-    self.addr_count = len(addrs_array)
-    self.addrs = itertools.cycle(addrs_array)
+    self._input_addrs = addrs.split(',')
+    random.shuffle(self._input_addrs)
+    self.addr_count = len(self._input_addrs)
+    self.addrs = itertools.cycle(self._input_addrs)
     self.local_cell = local_cell
 
     if bool(user) != bool(password):
@@ -129,7 +129,8 @@ class ZkOccConnection(object):
         pass
 
     self.simple_conn = None
-    raise ZkOccError("Cannot dial to any server")
+    raise ZkOccError("Cannot dial to any server, tried: %s" %
+                     list(sorted(self._input_addrs)))
 
   def close(self):
     if self.simple_conn:
