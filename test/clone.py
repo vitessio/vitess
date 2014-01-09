@@ -77,17 +77,17 @@ class TestClone(unittest.TestCase):
 
   def _test_mysqlctl_clone(server_mode):
     if server_mode:
-      snapshot_cmd = "snapshotsourcestart -concurrency=8"
-      restore_flags = "-dont-wait-for-slave-start"
+      snapshot_cmd = ['snapshotsourcestart', '-concurrency=8']
+      restore_flags = ['-dont-wait-for-slave-start']
     else:
-      snapshot_cmd = "snapshot -concurrency=5"
-      restore_flags = ""
+      snapshot_cmd = ['snapshot', '-concurrency=5']
+      restore_flags = []
 
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace snapshot_test')
+    utils.run_vtctl(['CreateKeyspace', 'snapshot_test'])
 
     tablet_62344.init_tablet('master', 'snapshot_test', '0')
-    utils.run_vtctl('RebuildShardGraph snapshot_test/0')
+    utils.run_vtctl(['RebuildShardGraph', 'snapshot_test/0'])
     utils.validate_topology()
 
     tablet_62344.populate('vt_snapshot_test', self._create_vt_insert_test,
@@ -95,21 +95,29 @@ class TestClone(unittest.TestCase):
 
     tablet_62344.start_vttablet()
 
-    err = tablet_62344.mysqlctl('-port %u -mysql-port %u %s vt_snapshot_test' % (tablet_62344.port, tablet_62344.mysql_port, snapshot_cmd)).wait()
+    err = tablet_62344.mysqlctl(snapshot_cmd + ['vt_snapshot_test'],
+                                with_ports=True).wait()
     if err != 0:
-      self.fail('mysqlctl %s failed' % snapshot_cmd)
+      self.fail('mysqlctl %s failed' % str(snapshot_cmd))
 
-    utils.pause("%s finished" % snapshot_cmd)
+    utils.pause("%s finished" % str(snapshot_cmd))
 
     call(["touch", "/tmp/vtSimulateFetchFailures"])
-    err = tablet_62044.mysqlctl('-port %u -mysql-port %u restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s/snapshot/vt_0000062344/snapshot_manifest.json' % (tablet_62044.port, tablet_62044.mysql_port, restore_flags, environment.vtdataroot)).wait()
+    err = tablet_62044.mysqlctl(['restore',
+                                 '-fetch-concurrency=2',
+                                 '-fetch-retry-count=4'] +
+                                restore_flags +
+                                [environment.vtdataroot + '/snapshot/vt_0000062344/snapshot_manifest.json'],
+                                with_ports=True).wait()
     if err != 0:
       self.fail('mysqlctl restore failed')
 
     tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
 
     if server_mode:
-      err = tablet_62344.mysqlctl('-port %u -mysql-port %u snapshotsourceend -read-write vt_snapshot_test' % (tablet_62344.port, tablet_62344.mysql_port)).wait()
+      err = tablet_62344.mysqlctl(['snapshotsourceend',
+                                   '-read-write',
+                                   'vt_snapshot_test'], with_ports=True).wait()
       if err != 0:
         self.fail('mysqlctl snapshotsourceend failed')
 
@@ -128,17 +136,17 @@ class TestClone(unittest.TestCase):
 
   def _test_vtctl_snapshot_restore(self, server_mode):
     if server_mode:
-      snapshot_flags = '-server-mode -concurrency=8'
-      restore_flags = '-dont-wait-for-slave-start'
+      snapshot_flags = ['-server-mode', '-concurrency=8']
+      restore_flags = ['-dont-wait-for-slave-start']
     else:
-      snapshot_flags = '-concurrency=4'
-      restore_flags = ''
+      snapshot_flags = ['-concurrency=4']
+      restore_flags = []
 
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace snapshot_test')
+    utils.run_vtctl(['CreateKeyspace', 'snapshot_test'])
 
     tablet_62344.init_tablet('master', 'snapshot_test', '0')
-    utils.run_vtctl('RebuildShardGraph snapshot_test/0')
+    utils.run_vtctl(['RebuildShardGraph', 'snapshot_test/0'])
     utils.validate_topology()
 
     tablet_62344.populate('vt_snapshot_test', self._create_vt_insert_test,
@@ -149,7 +157,8 @@ class TestClone(unittest.TestCase):
     tablet_62344.start_vttablet()
 
     # Need to force snapshot since this is a master db.
-    out, err = utils.run_vtctl('Snapshot -force %s %s ' % (snapshot_flags, tablet_62344.tablet_alias), trap_output=True)
+    out, err = utils.run_vtctl(['Snapshot', '-force'] + snapshot_flags +
+                               [tablet_62344.tablet_alias], trap_output=True)
     results = {}
     for name in ['Manifest', 'ParentAlias', 'SlaveStartRequired', 'ReadOnly', 'OriginalType']:
       sepPos = err.find(name + ": ")
@@ -175,9 +184,13 @@ class TestClone(unittest.TestCase):
 
     # do not specify a MANIFEST, see if 'default' works
     call(["touch", "/tmp/vtSimulateFetchFailures"])
-    utils.run_vtctl('Restore -fetch-concurrency=2 -fetch-retry-count=4 %s %s default %s %s' %
-                    (restore_flags, tablet_62344.tablet_alias,
-                     tablet_62044.tablet_alias, results['ParentAlias']), auto_log=True)
+    utils.run_vtctl(['Restore',
+                     '-fetch-concurrency=2',
+                     '-fetch-retry-count=4'] +
+                    restore_flags +
+                    [tablet_62344.tablet_alias, 'default',
+                     tablet_62044.tablet_alias, results['ParentAlias']],
+                    auto_log=True)
     utils.pause("restore finished")
 
     tablet_62044.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
@@ -186,7 +199,8 @@ class TestClone(unittest.TestCase):
 
     # in server_mode, get the server out of it and check it
     if server_mode:
-      utils.run_vtctl('SnapshotSourceEnd %s %s' % (tablet_62344.tablet_alias, results['OriginalType']), auto_log=True)
+      utils.run_vtctl(['SnapshotSourceEnd', tablet_62344.tablet_alias,
+                       results['OriginalType']], auto_log=True)
       tablet_62344.assert_table_count('vt_snapshot_test', 'vt_insert_test', 4)
       utils.validate_topology()
 
@@ -207,10 +221,10 @@ class TestClone(unittest.TestCase):
       clone_flags = []
 
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace snapshot_test')
+    utils.run_vtctl(['CreateKeyspace', 'snapshot_test'])
 
     tablet_62344.init_tablet('master', 'snapshot_test', '0')
-    utils.run_vtctl('RebuildShardGraph snapshot_test/0')
+    utils.run_vtctl(['RebuildShardGraph', 'snapshot_test/0'])
     utils.validate_topology()
 
     tablet_62344.populate('vt_snapshot_test', self._create_vt_insert_test,
@@ -268,10 +282,13 @@ class TestClone(unittest.TestCase):
   ) Engine=InnoDB''' % i for i in range(6)]
 
     # Start up a master mysql and vttablet
-    utils.run_vtctl('CreateKeyspace --sharding_column_name id --sharding_column_type uint64 test_keyspace')
+    utils.run_vtctl(['CreateKeyspace',
+                     '--sharding_column_name', 'id',
+                     '--sharding_column_type', 'uint64',
+                     'test_keyspace'])
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
     utils.validate_topology()
 
     tablet_62344.populate('vt_test_keyspace', create,
@@ -279,7 +296,7 @@ class TestClone(unittest.TestCase):
 
     tablet_62344.start_vttablet()
 
-    utils.run_vtctl('MultiSnapshot --force --tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3 --spec=-0000000000000003- %s' % tablet_62344.tablet_alias)
+    utils.run_vtctl(['MultiSnapshot', '--force', '--tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3', '--spec=-0000000000000003-', tablet_62344.tablet_alias])
 
     if os.path.exists(os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
       raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")

@@ -61,28 +61,33 @@ class Tablet(object):
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
-  def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None):
+  def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None, with_ports=False):
     env = None
     if extra_my_cnf:
       env = os.environ.copy()
       env['EXTRA_MY_CNF'] = extra_my_cnf
+    ports_params = []
+    if with_ports:
+      ports_params = ['-port', str(self.port),
+                      '-mysql-port', str(self.mysql_port)]
 
-    return utils.run_bg(environment.binary_path('mysqlctl') +
-                        ' -log_dir %s -tablet-uid %u %s' %
-                        (environment.vtlogroot, self.tablet_uid, cmd),
-                        env=env)
+    return utils.run_bg([environment.binary_path('mysqlctl'),
+                         '-log_dir', environment.vtlogroot,
+                         '-tablet-uid', str(self.tablet_uid)] +
+                        ports_params + cmd, env=env)
 
   def init_mysql(self, extra_my_cnf=None):
-    return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port), quiet=True, extra_my_cnf=extra_my_cnf)
+    return self.mysqlctl(['init'], quiet=True, extra_my_cnf=extra_my_cnf,
+                         with_ports=True)
 
   def start_mysql(self):
-    return self.mysqlctl('-port %u -mysql-port %u start' % (self.port, self.mysql_port), quiet=True)
+    return self.mysqlctl(['start'], quiet=True, with_ports=True)
 
   def shutdown_mysql(self):
-    return self.mysqlctl('-port %u -mysql-port %u shutdown' % (self.port, self.mysql_port), quiet=True)
+    return self.mysqlctl(['shutdown'], quiet=True, with_ports=True)
 
   def teardown_mysql(self):
-    return self.mysqlctl('teardown -force', quiet=True)
+    return self.mysqlctl(['teardown', '-force'], quiet=True)
 
   def remove_tree(self):
     path = '%s/vt_%010d' % (environment.vtdataroot, self.tablet_uid)
