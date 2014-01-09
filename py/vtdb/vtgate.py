@@ -85,7 +85,11 @@ class TabletConnection(object):
     session_id = self.session_id
     self.in_transaction = False
     self.session_id = 0
-    self.client.call('VTGate.CloseSession', {'SessionId': session_id})
+    try:
+      self.client.call('VTGate.CloseSession', {'SessionId': session_id})
+    except gorpc.GoRpcError:
+      # ignore the exception as it raises if connection is broken
+      pass
     self.client.close()
 
   def is_closed(self):

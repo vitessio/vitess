@@ -1,3 +1,7 @@
+# Copyright 2012, Google Inc. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can
+# be found in the LICENSE file.
+
 import logging
 import time
 
@@ -6,25 +10,24 @@ from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import tablet
 from vtdb import topology
+from vtdb import vtgate
 
 RECONNECT_DELAY = 0.002 # 2 ms
 BEGIN_RECONNECT_DELAY = 0.2 # 200 ms
-MAX_RETRY_ATTEMPTS = 10
+MAX_RETRY_ATTEMPTS = 2
 
-def get_vt_connection_params_list(zkocc_client, keyspace, shard, db_type, timeout, encrypted, user, password):
+def get_vt_connection_params_list(zkocc_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
   db_params_list = []
   db_key = "%s.%s.%s" % (keyspace, shard, db_type)
-  # the list of end_points is randomly shuffled
-  end_points = topology.get_host_port_by_name(zkocc_client, db_key+":_vtocc", encrypted)
-  for host, port, encrypted in end_points:
+  for host, port, encrypted in topology.get_host_port_by_name(zkocc_client, db_key+":_vtocc", encrypted, vtgate_protocol, vtgate_addrs):
     vt_params = dict()
     vt_params['keyspace'] = keyspace
     vt_params['shard'] = shard
     vt_params['addr'] = "%s:%s" % (host, port)
     vt_params['timeout'] = timeout
     vt_params['encrypted'] = encrypted
-    vt_params['user'] = user
-    vt_params['password'] = password
+    if vtgate_protocol != 'v0':
+      vt_params['tablet_type'] = db_type
     db_params_list.append(vt_params)
   return db_params_list
 
@@ -56,7 +59,7 @@ def reconnect(method):
 class VtOCCConnection(object):
   cursorclass = cursor.TabletCursor
 
-  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, zkocc_client, keyspace, shard, db_type, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None, vtgate_protocol='v0', vtgate_addrs=[]):
     self.zkocc_client = zkocc_client
     self.keyspace = keyspace
     self.shard = str(shard)
@@ -67,10 +70,15 @@ class VtOCCConnection(object):
     self.encrypted = encrypted
     self.keyfile = keyfile
     self.certfile = certfile
+    self.vtgate_protocol = vtgate_protocol
+    self.vtgate_addrs = vtgate_addrs
     self.conn = None
     self.max_attempts = MAX_RETRY_ATTEMPTS
     self.conn_db_params = None
     self.in_txn = False
+
+  def __str__(self):
+    return str(self.conn)
 
   @property
   def db_params(self):
@@ -82,7 +90,7 @@ class VtOCCConnection(object):
 
   def connect(self):
     db_key = "%s.%s.%s" % (self.keyspace, self.shard, self.db_type)
-    db_params_list = get_vt_connection_params_list(self.zkocc_client, self.keyspace, self.shard, self.db_type, self.timeout, self.encrypted, self.user, self.password)
+    db_params_list = get_vt_connection_params_list(self.zkocc_client, self.keyspace, self.shard, self.db_type, self.timeout, self.encrypted, self.user, self.password, self.vtgate_protocol, self.vtgate_addrs)
     if not db_params_list:
       raise dbexceptions.OperationalError("empty db params list - no db instance available for key %s" % db_key)
     db_exception = None
@@ -90,7 +98,12 @@ class VtOCCConnection(object):
     for params in db_params_list:
       try:
         db_params = params.copy()
-        self.conn = tablet.TabletConnection(**db_params)
+        if self.vtgate_protocol == 'v0':
+          self.conn = tablet.TabletConnection(**db_params)
+        elif self.vtgate_protocol == 'v1bson':
+          self.conn = vtgate.TabletConnection(**db_params)
+        else:
+          raise dbexceptions.OperationalError('unknown vtgate protocol: %s' % self.vtgate_protocol)
         self.conn.dial()
         self.conn_db_params = db_params
         return self.conn
