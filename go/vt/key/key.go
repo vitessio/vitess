@@ -16,6 +16,10 @@ import (
 	"github.com/youtube/vitess/go/bytes2"
 )
 
+//
+// KeyspaceId definitions
+//
+
 // MinKey is smaller than all KeyspaceId (the value really is).
 var MinKey = KeyspaceId("")
 
@@ -40,6 +44,10 @@ func (kid *KeyspaceId) UnmarshalJSON(data []byte) (err error) {
 	*kid, err = HexKeyspaceId(data[1 : len(data)-1]).Unhex()
 	return err
 }
+
+//
+// Uint64Key definitions
+//
 
 // Uint64Key is a uint64 that can be converted into a KeyspaceId.
 type Uint64Key uint64
@@ -66,6 +74,48 @@ func (hkid HexKeyspaceId) Unhex() (KeyspaceId, error) {
 	}
 	return KeyspaceId(string(b)), nil
 }
+
+//
+// KeyspaceIdType definitions
+//
+
+// KeyspaceIdType represents the type of the KeyspaceId.
+// Usually we don't care, but some parts of the code will need that info.
+type KeyspaceIdType string
+
+const (
+	// unset - no type for this KeyspaceId
+	KIT_UNSET = KeyspaceIdType("")
+
+	// uint64 - a uint64 value is used
+	// this is represented as 'unsigned bigint' in mysql
+	KIT_UINT64 = KeyspaceIdType("uint64")
+
+	// bytes - a string of bytes is used
+	// this is represented as 'varbinary' in mysql
+	KIT_BYTES = KeyspaceIdType("bytes")
+)
+
+var AllKeyspaceIdTypes = []KeyspaceIdType{
+	KIT_UNSET,
+	KIT_UINT64,
+	KIT_BYTES,
+}
+
+// IsKeyspaceIdTypeInList returns true if the given type is in the list.
+// Use it with AllKeyspaceIdTypes for instance.
+func IsKeyspaceIdTypeInList(typ KeyspaceIdType, types []KeyspaceIdType) bool {
+	for _, t := range types {
+		if typ == t {
+			return true
+		}
+	}
+	return false
+}
+
+//
+// KeyRange definitions
+//
 
 // KeyRange is an interval of KeyspaceId values. It contains Start,
 // but excludes End. In other words, it is: [Start, End[
@@ -166,6 +216,10 @@ func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
 	return result, nil
 }
 
+//
+// KeyspaceIdArray definitions
+//
+
 // KeyspaceIdArray is an array of KeyspaceId that can be sorted
 type KeyspaceIdArray []KeyspaceId
 
@@ -180,6 +234,10 @@ func (p KeyspaceIdArray) Swap(i, j int) {
 }
 
 func (p KeyspaceIdArray) Sort() { sort.Sort(p) }
+
+//
+// KeyRangeArray definitions
+//
 
 // KeyRangeArray is an array of KeyRange that can be sorted
 type KeyRangeArray []KeyRange

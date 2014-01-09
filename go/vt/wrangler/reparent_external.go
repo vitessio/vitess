@@ -30,8 +30,9 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 }
 
 func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool, acceptSuccessPercents int) error {
-	// read the shard, make sure the master is not already good
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	// read the shard, make sure the master is not already good.
+	// critical read, we want up to date info (and the shard is locked).
+	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
 	if err != nil {
 		return err
 	}

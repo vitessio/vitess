@@ -211,7 +211,7 @@ type SrvKeyspace struct {
 
 	// Copied from Keyspace
 	ShardingColumnName string
-	ShardingColumnType ShardingColumnType
+	ShardingColumnType key.KeyspaceIdType
 
 	// For atomic updates
 	version int64
