@@ -39,4 +39,5 @@ integration_test:
 	cd test ; echo "rowcache_invalidator test"; time ./rowcache_invalidator.py
 	cd test ; echo "secure test"; time ./secure.py $$VT_TEST_FLAGS
 	cd test ; echo "resharding test"; time ./resharding.py $$VT_TEST_FLAGS
+	cd test ; echo "resharding_bytes test"; time ./resharding_bytes.py $$VT_TEST_FLAGS
 	cd test ; echo "vtdb test"; time ./vtdb_test.py $$VT_TEST_FLAGS
