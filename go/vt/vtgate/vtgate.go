@@ -43,15 +43,6 @@ func Init(blm *BalancerMap, retryDelay time.Duration, retryCount int) {
 	proto.RegisterAuthenticated(RpcVTGate)
 }
 
-// GetSessionId is the first request sent by the client to begin a session. The returned
-// id should be used for all subsequent communications.
-func (vtg *VTGate) GetSessionId(sessionParams *proto.SessionParams, session *proto.Session) error {
-	scatterConn := NewScatterConn(vtg.balancerMap, sessionParams.TabletType, vtg.retryDelay, vtg.retryCount)
-	session.SessionId = scatterConn.Id
-	vtg.connections.Register(scatterConn.Id, scatterConn)
-	return nil
-}
-
 // ExecuteShard executes a non-streaming query on the specified shards.
 func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QueryShard, reply *mproto.QueryResult) error {
 	scatterConn, err := vtg.connections.Get(query.SessionId, "for query")
@@ -138,15 +129,4 @@ func (vtg *VTGate) Rollback(context *rpcproto.Context, session *proto.Session, n
 		log.Errorf("Rollback: %v, Session: %#v", err, session)
 	}
 	return err
-}
-
-// CloseSession closes the current session and releases all associated resources for the session.
-func (vtg *VTGate) CloseSession(context *rpcproto.Context, session *proto.Session, noOutput *rpc.UnusedResponse) error {
-	scatterConn, err := vtg.connections.Get(session.SessionId, "for close")
-	if err != nil {
-		return nil
-	}
-	defer vtg.connections.Unregister(session.SessionId)
-	scatterConn.(*ScatterConn).Close()
-	return nil
 }
