@@ -4,8 +4,6 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import sys
-
 import resharding
 import utils
 
@@ -13,4 +11,4 @@ import utils
 # varbinary keyspace_id
 if __name__ == '__main__':
   resharding.keyspace_id_type = "bytes"
-  utils.main(sys.modules['resharding'])
+  utils.main(resharding)
