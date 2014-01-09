@@ -33,13 +33,19 @@ func (r KeyspaceCSVReader) ReadRecord() (keyspaceId key.KeyspaceId, line []byte,
 		return key.MinKey, nil, err
 	}
 	if r.numberColumn {
+		// the line starts with:
+		// NNNN,
+		// so remove the comma
 		kid, err := strconv.ParseUint(k[:len(k)-1], 10, 64)
 		if err != nil {
 			return key.MinKey, nil, err
 		}
 		keyspaceId = key.Uint64Key(kid).KeyspaceId()
 	} else {
-		keyspaceId, err = key.HexKeyspaceId(k[:len(k)-1]).Unhex()
+		// the line starts with:
+		// "HHHH",
+		// so remove the quotes and comma
+		keyspaceId, err = key.HexKeyspaceId(k[1 : len(k)-2]).Unhex()
 		if err != nil {
 			return key.MinKey, nil, err
 		}
