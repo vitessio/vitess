@@ -385,6 +385,11 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName string, keyT
 		"KeyspaceIdColumnName": keyName,
 		"TableOutputPath":      filename,
 	}
+	numberColumn := true
+	if keyType == key.KIT_BYTES {
+		numberColumn = false
+		queryParams["KeyspaceIdColumnName"] = "HEX(" + keyName + ")"
+	}
 	sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
 	if err != nil {
 		return nil, err
@@ -416,7 +421,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName string, keyT
 		hasherWriters[kr] = w
 	}
 
-	splitter := csvsplitter.NewKeyspaceCSVReader(file, ',')
+	splitter := csvsplitter.NewKeyspaceCSVReader(file, ',', numberColumn)
 	for {
 		keyspaceId, line, err := splitter.ReadRecord()
 		if err == io.EOF {
