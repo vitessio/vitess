@@ -57,9 +57,9 @@ def _true_int_kr_value(kr_value):
 MIN_KEY = ''
 MAX_KEY = ''
 
-KEYSPACE_ID_TYPE_NONE = 0
-KEYSPACE_ID_TYPE_INT = 1
-KEYSPACE_ID_TYPE_STR = 2
+KEYSPACE_ID_TYPE_NONE = ""
+KEYSPACE_ID_TYPE_INT = "uint64"
+KEYSPACE_ID_TYPE_STR = "bytes"
 
 
 # Compute the where clause and bind_vars for a given keyrange.
