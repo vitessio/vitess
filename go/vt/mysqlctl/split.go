@@ -376,7 +376,7 @@ func (nhw *namedHasherWriter) SnapshotFiles() ([]SnapshotFile, error) {
 	return nhw.snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
@@ -384,6 +384,11 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSo
 		"Columns":              strings.Join(td.Columns, ", "),
 		"KeyspaceIdColumnName": keyName,
 		"TableOutputPath":      filename,
+	}
+	numberColumn := true
+	if keyType == key.KIT_BYTES {
+		numberColumn = false
+		queryParams["KeyspaceIdColumnName"] = "HEX(" + keyName + ")"
 	}
 	sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
 	if err != nil {
@@ -416,7 +421,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSo
 		hasherWriters[kr] = w
 	}
 
-	splitter := csvsplitter.NewKeyspaceCSVReader(file, ',')
+	splitter := csvsplitter.NewKeyspaceCSVReader(file, ',', numberColumn)
 	for {
 		keyspaceId, line, err := splitter.ReadRecord()
 		if err == io.EOF {
@@ -446,7 +451,7 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName, mainCloneSo
 	return snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
+func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
@@ -511,7 +516,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			// we just skip views here
 			return nil
 		}
-		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
+		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, keyType, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
 		if err != nil {
 			return
 		}

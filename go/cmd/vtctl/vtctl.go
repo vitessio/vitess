@@ -105,7 +105,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...",
 				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
 			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path> <key name>",
+				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <dst tablet alias|destination zk path> <source zk path>...",
@@ -835,8 +835,8 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
 	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
-	if subFlags.NArg() != 2 {
-		log.Fatalf("action MultiSnapshot requires <src tablet alias|zk src tablet path> <key name>")
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action MultiSnapshot requires <src tablet alias|zk src tablet path>")
 	}
 
 	shards, err := key.ParseShardingSpec(*spec)
@@ -849,7 +849,7 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	}
 
 	source := tabletParamToTabletAlias(subFlags.Arg(0))
-	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, subFlags.Arg(1), *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
+	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
 
 	if err == nil {
 		log.Infof("manifest locations: %v", filenames)

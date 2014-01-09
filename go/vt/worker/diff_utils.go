@@ -92,24 +92,51 @@ func orderedColumns(tableDefinition *mysqlctl.TableDefinition) []string {
 	return result
 }
 
+// uint64FromKeyspaceId returns a 64 bits hex number as a string
+// (in the form of 0x0123456789abcdef) from the provided keyspaceId
+func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
+	hex := string(keyspaceId.Hex())
+	return "0x" + hex + strings.Repeat("0", 16-len(hex))
+}
+
 // FullTableScan returns a QueryResultReader that gets all the rows from a table
 // that match the supplied KeyRange, ordered by Primary Key. The returned
 // columns are ordered with the Primary Key columns in front.
-func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange) (*QueryResultReader, error) {
+func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
-	if keyRange.Start != key.MinKey {
-		if keyRange.End != key.MaxKey {
-			// have start & end
-			where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", keyRange.Start.Hex(), keyRange.End.Hex())
+	switch keyspaceIdType {
+	case key.KIT_UINT64:
+		if keyRange.Start != key.MinKey {
+			if keyRange.End != key.MaxKey {
+				// have start & end
+				where = fmt.Sprintf("WHERE keyspace_id >= %v AND keyspace_id < %v ", uint64FromKeyspaceId(keyRange.Start), uint64FromKeyspaceId(keyRange.End))
+			} else {
+				// have start only
+				where = fmt.Sprintf("WHERE keyspace_id >= %v ", uint64FromKeyspaceId(keyRange.Start))
+			}
 		} else {
-			// have start only
-			where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", keyRange.Start.Hex())
+			if keyRange.End != key.MaxKey {
+				// have end only
+				where = fmt.Sprintf("WHERE keyspace_id < %v ", uint64FromKeyspaceId(keyRange.End))
+			}
 		}
-	} else {
-		if keyRange.End != key.MaxKey {
-			// have end only
-			where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", keyRange.End.Hex())
+	case key.KIT_BYTES:
+		if keyRange.Start != key.MinKey {
+			if keyRange.End != key.MaxKey {
+				// have start & end
+				where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' AND HEX(keyspace_id) < '%v' ", keyRange.Start.Hex(), keyRange.End.Hex())
+			} else {
+				// have start only
+				where = fmt.Sprintf("WHERE HEX(keyspace_id) >= '%v' ", keyRange.Start.Hex())
+			}
+		} else {
+			if keyRange.End != key.MaxKey {
+				// have end only
+				where = fmt.Sprintf("WHERE HEX(keyspace_id) < '%v' ", keyRange.End.Hex())
+			}
 		}
+	default:
+		return nil, fmt.Errorf("Unsupported KeyspaceIdType: %v", keyspaceIdType)
 	}
 
 	sql := fmt.Sprintf("SELECT %v FROM %v %vORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, where, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))

@@ -10,13 +10,19 @@ import (
 )
 
 type KeyspaceCSVReader struct {
-	reader *bufio.Reader
-	delim  byte
-	buf    *bytes.Buffer
+	reader       *bufio.Reader
+	delim        byte
+	numberColumn bool
+	buf          *bytes.Buffer
 }
 
-func NewKeyspaceCSVReader(r io.Reader, delim byte) *KeyspaceCSVReader {
-	return &KeyspaceCSVReader{reader: bufio.NewReader(r), delim: delim, buf: bytes.NewBuffer(make([]byte, 0, 1024))}
+func NewKeyspaceCSVReader(r io.Reader, delim byte, numberColumn bool) *KeyspaceCSVReader {
+	return &KeyspaceCSVReader{
+		reader:       bufio.NewReader(r),
+		delim:        delim,
+		numberColumn: numberColumn,
+		buf:          bytes.NewBuffer(make([]byte, 0, 1024)),
+	}
 }
 
 // ReadRecord returns a keyspaceId and a line from which it was
@@ -26,11 +32,18 @@ func (r KeyspaceCSVReader) ReadRecord() (keyspaceId key.KeyspaceId, line []byte,
 	if err != nil {
 		return key.MinKey, nil, err
 	}
-	kid, err := strconv.ParseUint(k[:len(k)-1], 10, 64)
-	if err != nil {
-		return key.MinKey, nil, err
+	if r.numberColumn {
+		kid, err := strconv.ParseUint(k[:len(k)-1], 10, 64)
+		if err != nil {
+			return key.MinKey, nil, err
+		}
+		keyspaceId = key.Uint64Key(kid).KeyspaceId()
+	} else {
+		keyspaceId, err = key.HexKeyspaceId(k[:len(k)-1]).Unhex()
+		if err != nil {
+			return key.MinKey, nil, err
+		}
 	}
-	keyspaceId = key.Uint64Key(kid).KeyspaceId()
 
 	defer r.buf.Reset()
 
