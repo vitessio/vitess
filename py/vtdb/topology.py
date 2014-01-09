@@ -59,7 +59,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   # validate step
   if len(keyspace_list) == 0:
     logging.exception('zkocc returned empty keyspace list')
-    raise Exception('zkocc returned empty keysapce list')
+    raise Exception('zkocc returned empty keyspace list')
   for keyspace_name in keyspace_list:
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
