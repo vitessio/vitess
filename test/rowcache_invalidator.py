@@ -7,13 +7,9 @@ warnings.simplefilter("ignore")
 
 import json
 import logging
-import os
-import sys
 import time
 import unittest
 import urllib2
-
-import MySQLdb
 
 from vtdb import vtclient
 
