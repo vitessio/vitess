@@ -123,10 +123,7 @@ func (stc *ScatterConn) StreamExecute(query string, bindVars map[string]interfac
 
 // Commit commits the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Commit(session *SafeSession) (err error) {
-	stc.mu.Lock()
-	defer stc.mu.Unlock()
-
-	if !session.InTransaction {
+	if !session.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
 	committing := true
@@ -140,22 +137,17 @@ func (stc *ScatterConn) Commit(session *SafeSession) (err error) {
 			committing = false
 		}
 	}
-	session.InTransaction = false
-	session.ShardSessions = nil
+	session.Reset()
 	return err
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
 func (stc *ScatterConn) Rollback(session *SafeSession) (err error) {
-	stc.mu.Lock()
-	defer stc.mu.Unlock()
-
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
 		go sdc.Rollback(shardSession.TransactionId)
 	}
-	session.InTransaction = false
-	session.ShardSessions = nil
+	session.Reset()
 	return nil
 }
 
@@ -182,6 +174,7 @@ func (stc *ScatterConn) multiGo(keyspace string, tabletType topo.TabletType, sha
 	allErrors = new(concurrency.AllErrorRecorder)
 	results := make(chan interface{}, len(shards))
 	var wg sync.WaitGroup
+	// We need the shards to be unique.
 	for shard := range unique(shards) {
 		wg.Add(1)
 		go func(shard string) {
@@ -204,7 +197,7 @@ func (stc *ScatterConn) multiGo(keyspace string, tabletType topo.TabletType, sha
 		// If we want to rollback, we have to do it before closing results
 		// so that the session is updated to be not InTransaction.
 		if allErrors.HasErrors() {
-			if session.InTransaction {
+			if session.InTransaction() {
 				errstr := allErrors.Error().Error()
 				// We cannot recover from these errors
 				if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
@@ -231,9 +224,13 @@ func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.Ta
 }
 
 func (stc *ScatterConn) updateSession(sdc *ShardConn, keyspace, shard string, tabletType topo.TabletType, session *SafeSession) (transactionId int64, err error) {
-	if !session.InTransaction {
+	if !session.InTransaction() {
 		return 0, nil
 	}
+	// No need to protect ourselves from the race condition between
+	// Find and Append. The higher level functions ensure that no
+	// duplicate (keyspace, shard, tabletType) tuples can execute
+	// this at the same time.
 	transactionId = session.Find(keyspace, shard, tabletType)
 	if transactionId != 0 {
 		return transactionId, nil

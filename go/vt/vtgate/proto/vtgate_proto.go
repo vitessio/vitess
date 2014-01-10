@@ -18,8 +18,8 @@ import (
 
 // VTGate defines the interface for the rpc service.
 type VTGate interface {
-	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *mproto.QueryResult) error
-	ExecuteBatchShard(context *rpcproto.Context, batchQuery *BatchQueryShard, reply *tproto.QueryResultList) error
+	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *QueryResult) error
+	ExecuteBatchShard(context *rpcproto.Context, batchQuery *BatchQueryShard, reply *QueryResultList) error
 	StreamExecuteShard(context *rpcproto.Context, query *QueryShard, sendReply func(interface{}) error) error
 	Begin(context *rpcproto.Context, inSession, outSession *Session) error
 	Commit(context *rpcproto.Context, inSession, outSession *Session) error
@@ -141,6 +141,7 @@ type QueryShard struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
+	TabletType    topo.TabletType
 	Shards        []string
 	Sessn         *Session
 }
@@ -151,6 +152,7 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "Sql", qrs.Sql)
 	tproto.EncodeBindVariablesBson(buf, "BindVariables", qrs.BindVariables)
 	bson.EncodeString(buf, "Keyspace", qrs.Keyspace)
+	bson.EncodeString(buf, "TabletType", string(qrs.TabletType))
 	bson.EncodeStringArray(buf, "Shards", qrs.Shards)
 
 	if qrs.Sessn != nil {
@@ -175,6 +177,8 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 			qrs.BindVariables = tproto.DecodeBindVariablesBson(buf, kind)
 		case "Keyspace":
 			qrs.Keyspace = bson.DecodeString(buf, kind)
+		case "TabletType":
+			qrs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Shards":
 			qrs.Shards = bson.DecodeStringArray(buf, kind)
 		case "Sessn":
@@ -235,10 +239,11 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 }
 
 type BatchQueryShard struct {
-	Queries  []tproto.BoundQuery
-	Keyspace string
-	Shards   []string
-	Sessn    *Session
+	Queries    []tproto.BoundQuery
+	Keyspace   string
+	TabletType topo.TabletType
+	Shards     []string
+	Sessn      *Session
 }
 
 func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -246,6 +251,7 @@ func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 	tproto.EncodeQueriesBson(bqs.Queries, "Queries", buf)
 	bson.EncodeString(buf, "Keyspace", bqs.Keyspace)
+	bson.EncodeString(buf, "TabletType", string(bqs.TabletType))
 	bson.EncodeStringArray(buf, "Shards", bqs.Shards)
 
 	if bqs.Sessn != nil {
@@ -268,6 +274,8 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 			bqs.Queries = tproto.DecodeQueriesBson(buf, kind)
 		case "Keyspace":
 			bqs.Keyspace = bson.DecodeString(buf, kind)
+		case "TabletType":
+			bqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Shards":
 			bqs.Shards = bson.DecodeStringArray(buf, kind)
 		case "Sessn":
