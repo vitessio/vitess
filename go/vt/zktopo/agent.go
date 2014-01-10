@@ -51,6 +51,10 @@ func (zkts *Server) GetSubprocessFlags() []string {
 	return zk.GetZkSubprocessFlags()
 }
 
+// handleActionQueue will set the watch on the action queue,
+// or return an error if it can't.
+// It will also process all pending actions, until it can't read one
+// or one fails. No error is returned for action failures.
 func (zkts *Server) handleActionQueue(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error) (<-chan zookeeper.Event, error) {
 	zkActionPath := TabletActionPathForAlias(tabletAlias)
 
@@ -73,6 +77,7 @@ func (zkts *Server) handleActionQueue(tabletAlias topo.TabletAlias, dispatchActi
 				// more complex.
 				log.Warningf("remove invalid event from action queue: %v", child)
 				zkts.zconn.Delete(actionPath, -1)
+				continue
 			}
 
 			data, _, err := zkts.zconn.Get(actionPath)
@@ -91,23 +96,22 @@ func (zkts *Server) handleActionQueue(tabletAlias topo.TabletAlias, dispatchActi
 
 func (zkts *Server) ActionEventLoop(tabletAlias topo.TabletAlias, dispatchAction func(actionPath, data string) error, done chan struct{}) {
 	for {
-		// Process any pending actions when we startup, before we start listening
-		// for events.
+		// Process any pending actions when we startup, before
+		// we start listening for events.
 		watch, err := zkts.handleActionQueue(tabletAlias, dispatchAction)
 		if err != nil {
-			log.Warningf("action queue failed: %v", err)
+			log.Warningf("failed to set the watch on action queue, will try again in 5 seconds: %v", err)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		// FIXME(msolomon) Add a skewing timer here to guarantee we wakeup
-		// periodically even if events are missed?
 		select {
 		case event := <-watch:
 			if !event.Ok() {
-				// NOTE(msolomon) The zk meta conn will reconnect automatically, or
-				// error out. At this point, there isn't much to do.
-				log.Warningf("zookeeper not OK: %v", event)
+				// NOTE(msolomon) The zk meta conn will
+				// reconnect automatically, or error out.
+				// At this point, there isn't much to do.
+				log.Warningf("zookeeper not OK: %v, will try again in 5 seconds", event)
 				time.Sleep(5 * time.Second)
 			}
 			// Otherwise, just handle the queue above.
