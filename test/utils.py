@@ -334,7 +334,7 @@ def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, t
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
           '-log_dir', environment.vtlogroot,
-          ]
+          ] + environment.vtgate_protocol_flags()
   if topo_impl:
     args.extend(['-topo_implementation', topo_impl])
   else:
