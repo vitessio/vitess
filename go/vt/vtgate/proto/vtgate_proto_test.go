@@ -5,76 +5,61 @@
 package proto
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/youtube/vitess/go/bson"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-type reflectSessionParams struct {
-	TabletType topo.TabletType
-}
-
-type badSessionParams struct {
-	Extra      int
-	TabletType topo.TabletType
-}
-
-func TestSessionParams(t *testing.T) {
-	reflected, err := bson.Marshal(&reflectSessionParams{topo.TabletType("master")})
-	if err != nil {
-		t.Error(err)
-	}
-	want := string(reflected)
-
-	custom := SessionParams{topo.TabletType("master")}
-	encoded, err := bson.Marshal(&custom)
-	if err != nil {
-		t.Error(err)
-	}
-	got := string(encoded)
-	if want != got {
-		t.Errorf("want\n%#v, got\n%#v", want, got)
-	}
-
-	var unmarshalled SessionParams
-	err = bson.Unmarshal(encoded, &unmarshalled)
-	if err != nil {
-		t.Error(err)
-	}
-	if custom != unmarshalled {
-		t.Errorf("want %v, got %#v", custom, unmarshalled)
-	}
-
-	unexpected, err := bson.Marshal(&badSessionParams{})
-	if err != nil {
-		t.Error(err)
-	}
-	err = bson.Unmarshal(unexpected, &unmarshalled)
-	want = "Unrecognized tag Extra"
-	if err == nil || want != err.Error() {
-		t.Errorf("want %v, got %v", want, err)
-	}
-}
-
 type reflectSession struct {
-	SessionId int64
+	InTransaction bool
+	ShardSessions []*ShardSession
 }
 
 type badSession struct {
-	Extra     int
-	SessionId int64
+	Extra         int
+	InTransaction bool
+	ShardSessions []*ShardSession
 }
 
 func TestSession(t *testing.T) {
-	reflected, err := bson.Marshal(&reflectSession{1})
+	reflected, err := bson.Marshal(&reflectSession{
+		InTransaction: true,
+		ShardSessions: []*ShardSession{{
+			Keyspace:      "a",
+			Shard:         "0",
+			TabletType:    topo.TabletType("replica"),
+			TransactionId: 1,
+		}, {
+			Keyspace:      "b",
+			Shard:         "1",
+			TabletType:    topo.TabletType("master"),
+			TransactionId: 2,
+		}},
+	})
 	if err != nil {
 		t.Error(err)
 	}
 	want := string(reflected)
 
-	custom := Session{1}
+	custom := Session{
+		InTransaction: true,
+		ShardSessions: []*ShardSession{{
+			Keyspace:      "a",
+			Shard:         "0",
+			TabletType:    topo.TabletType("replica"),
+			TransactionId: 1,
+		}, {
+			Keyspace:      "b",
+			Shard:         "1",
+			TabletType:    topo.TabletType("master"),
+			TransactionId: 2,
+		}},
+	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
 		t.Error(err)
@@ -89,8 +74,8 @@ func TestSession(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if custom != unmarshalled {
-		t.Errorf("want %v, got %#v", custom, unmarshalled)
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
 	unexpected, err := bson.Marshal(&badSession{})
@@ -107,27 +92,42 @@ func TestSession(t *testing.T) {
 type reflectQueryShard struct {
 	Sql           string
 	BindVariables map[string]interface{}
-	SessionId     int64
 	Keyspace      string
+	TabletType    topo.TabletType
 	Shards        []string
+	Sessn         *Session
 }
 
 type badQueryShard struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
-	SessionId     int64
 	Keyspace      string
+	TabletType    topo.TabletType
 	Shards        []string
+	Sessn         *Session
 }
 
 func TestQueryShard(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectQueryShard{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
-		SessionId:     1,
 		Keyspace:      "keyspace",
+		TabletType:    topo.TabletType("replica"),
 		Shards:        []string{"shard1", "shard2"},
+		Sessn: &Session{InTransaction: true,
+			ShardSessions: []*ShardSession{{
+				Keyspace:      "a",
+				Shard:         "0",
+				TabletType:    topo.TabletType("replica"),
+				TransactionId: 1,
+			}, {
+				Keyspace:      "b",
+				Shard:         "1",
+				TabletType:    topo.TabletType("master"),
+				TransactionId: 2,
+			}},
+		},
 	})
 	if err != nil {
 		t.Error(err)
@@ -137,9 +137,22 @@ func TestQueryShard(t *testing.T) {
 	custom := QueryShard{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
-		SessionId:     1,
 		Keyspace:      "keyspace",
+		TabletType:    topo.TabletType("replica"),
 		Shards:        []string{"shard1", "shard2"},
+		Sessn: &Session{InTransaction: true,
+			ShardSessions: []*ShardSession{{
+				Keyspace:      "a",
+				Shard:         "0",
+				TabletType:    topo.TabletType("replica"),
+				TransactionId: 1,
+			}, {
+				Keyspace:      "b",
+				Shard:         "1",
+				TabletType:    topo.TabletType("master"),
+				TransactionId: 2,
+			}},
+		},
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -155,23 +168,8 @@ func TestQueryShard(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if custom.Sql != unmarshalled.Sql {
-		t.Errorf("want %v, got %v", custom.Sql, unmarshalled.Sql)
-	}
-	if custom.SessionId != unmarshalled.SessionId {
-		t.Errorf("want %v, got %v", custom.SessionId, unmarshalled.SessionId)
-	}
-	if custom.Keyspace != unmarshalled.Keyspace {
-		t.Errorf("want %v, got %v", custom.Keyspace, unmarshalled.Keyspace)
-	}
-	if custom.BindVariables["val"].(int64) != unmarshalled.BindVariables["val"].(int64) {
-		t.Errorf("want %v, got %v", custom.BindVariables["val"], unmarshalled.BindVariables["val"])
-	}
-	if custom.Shards[0] != unmarshalled.Shards[0] {
-		t.Errorf("want %v, got %v", custom.Shards[0], unmarshalled.Shards[0])
-	}
-	if custom.Shards[1] != unmarshalled.Shards[1] {
-		t.Errorf("want %v, got %v", custom.Shards[1], unmarshalled.Shards[1])
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
 	unexpected, err := bson.Marshal(&badQueryShard{})
@@ -185,24 +183,98 @@ func TestQueryShard(t *testing.T) {
 	}
 }
 
+func TestQueryResult(t *testing.T) {
+	// We can't do the reflection test because bson
+	// doesn't do it correctly for embedded fields.
+	want := "\\\x01\x00\x00" +
+		"\x04Fields\x00*\x00\x00\x00\x030\x00\"\x00\x00\x00" +
+		"\x05Name\x00\x04\x00\x00\x00\x00name" +
+		"\x12Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+		"\x12RowsAffected\x00\x02\x00\x00\x00\x00\x00\x00\x00" +
+		"\x12InsertId\x00\x03\x00\x00\x00\x00\x00\x00\x00" +
+		"\x04Rows\x00 \x00\x00\x00" +
+		"\x040\x00\x18\x00\x00\x00" +
+		"\x050\x00\x01\x00\x00\x00\x001" +
+		"\x051\x00\x02\x00\x00\x00\x00aa" +
+		"\x00\x00" +
+		"\x03Sessn\x00\xd0\x00\x00\x00" +
+		"\bInTransaction\x00\x01" +
+		"\x04ShardSessions\x00\xac\x00\x00\x00" +
+		"\x030\x00Q\x00\x00\x00" +
+		"\x05Keyspace\x00\x01\x00\x00\x00\x00a" +
+		"\x05Shard\x00\x01\x00\x00\x00\x000" +
+		"\x05TabletType\x00\a\x00\x00\x00\x00replica" +
+		"\x12TransactionId\x00\x01\x00\x00\x00\x00\x00\x00\x00" +
+		"\x00" +
+		"\x031\x00P\x00\x00\x00" +
+		"\x05Keyspace\x00\x01\x00\x00\x00\x00b" +
+		"\x05Shard\x00\x01\x00\x00\x00\x001" +
+		"\x05TabletType\x00\x06\x00\x00\x00\x00master" +
+		"\x12TransactionId\x00\x02\x00\x00\x00\x00\x00\x00\x00" +
+		"\x00\x00\x00\x00"
+
+	custom := QueryResult{
+		QueryResult: mproto.QueryResult{
+			Fields:       []mproto.Field{{"name", 1}},
+			RowsAffected: 2,
+			InsertId:     3,
+			Rows: [][]sqltypes.Value{
+				{{sqltypes.String("1")}, {sqltypes.String("aa")}},
+			},
+		},
+		Sessn: &Session{InTransaction: true,
+			ShardSessions: []*ShardSession{{
+				Keyspace:      "a",
+				Shard:         "0",
+				TabletType:    topo.TabletType("replica"),
+				TransactionId: 1,
+			}, {
+				Keyspace:      "b",
+				Shard:         "1",
+				TabletType:    topo.TabletType("master"),
+				TransactionId: 2,
+			}},
+		},
+	}
+	encoded, err := bson.Marshal(&custom)
+	if err != nil {
+		t.Error(err)
+	}
+	got := string(encoded)
+	if want != got {
+		t.Errorf("want\n%#v, got\n%#v", want, got)
+	}
+
+	var unmarshalled QueryResult
+	err = bson.Unmarshal(encoded, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+	}
+}
+
 type reflectBoundQuery struct {
 	Sql           string
 	BindVariables map[string]interface{}
 }
 
 type reflectBatchQueryShard struct {
-	Queries   []reflectBoundQuery
-	SessionId int64
-	Keyspace  string
-	Shards    []string
+	Queries    []reflectBoundQuery
+	Keyspace   string
+	TabletType topo.TabletType
+	Shards     []string
+	Sessn      *Session
 }
 
 type badBatchQueryShard struct {
-	Extra     int
-	Queries   []reflectBoundQuery
-	SessionId int64
-	Keyspace  string
-	Shards    []string
+	Extra      int
+	Queries    []reflectBoundQuery
+	Keyspace   string
+	TabletType topo.TabletType
+	Shards     []string
+	Sessn      *Session
 }
 
 func TestBatchQueryShard(t *testing.T) {
@@ -211,9 +283,21 @@ func TestBatchQueryShard(t *testing.T) {
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
-		SessionId: 1,
-		Keyspace:  "keyspace",
-		Shards:    []string{"shard1", "shard2"},
+		Keyspace: "keyspace",
+		Shards:   []string{"shard1", "shard2"},
+		Sessn: &Session{InTransaction: true,
+			ShardSessions: []*ShardSession{{
+				Keyspace:      "a",
+				Shard:         "0",
+				TabletType:    topo.TabletType("replica"),
+				TransactionId: 1,
+			}, {
+				Keyspace:      "b",
+				Shard:         "1",
+				TabletType:    topo.TabletType("master"),
+				TransactionId: 2,
+			}},
+		},
 	})
 	if err != nil {
 		t.Error(err)
@@ -225,9 +309,21 @@ func TestBatchQueryShard(t *testing.T) {
 			Sql:           "query",
 			BindVariables: map[string]interface{}{"val": int64(1)},
 		}},
-		SessionId: 1,
-		Keyspace:  "keyspace",
-		Shards:    []string{"shard1", "shard2"},
+		Keyspace: "keyspace",
+		Shards:   []string{"shard1", "shard2"},
+		Sessn: &Session{InTransaction: true,
+			ShardSessions: []*ShardSession{{
+				Keyspace:      "a",
+				Shard:         "0",
+				TabletType:    topo.TabletType("replica"),
+				TransactionId: 1,
+			}, {
+				Keyspace:      "b",
+				Shard:         "1",
+				TabletType:    topo.TabletType("master"),
+				TransactionId: 2,
+			}},
+		},
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -243,23 +339,8 @@ func TestBatchQueryShard(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if custom.Queries[0].Sql != unmarshalled.Queries[0].Sql {
-		t.Errorf("want %v, got %v", custom.Queries[0].Sql, unmarshalled.Queries[0].Sql)
-	}
-	if custom.SessionId != unmarshalled.SessionId {
-		t.Errorf("want %v, got %v", custom.SessionId, unmarshalled.SessionId)
-	}
-	if custom.Keyspace != unmarshalled.Keyspace {
-		t.Errorf("want %v, got %v", custom.Keyspace, unmarshalled.Keyspace)
-	}
-	if custom.Queries[0].BindVariables["val"].(int64) != unmarshalled.Queries[0].BindVariables["val"].(int64) {
-		t.Errorf("want %v, got %v", custom.Queries[0].BindVariables["val"], unmarshalled.Queries[0].BindVariables["val"])
-	}
-	if custom.Shards[0] != unmarshalled.Shards[0] {
-		t.Errorf("want %v, got %v", custom.Shards[0], unmarshalled.Shards[0])
-	}
-	if custom.Shards[1] != unmarshalled.Shards[1] {
-		t.Errorf("want %v, got %v", custom.Shards[1], unmarshalled.Shards[1])
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
 	}
 
 	unexpected, err := bson.Marshal(&badBatchQueryShard{})
@@ -274,10 +355,11 @@ func TestBatchQueryShard(t *testing.T) {
 }
 
 type badTypeBatchQueryShard struct {
-	Queries   string
-	SessionId int64
-	Keyspace  string
-	Shards    []string
+	Queries    string
+	Keyspace   string
+	TabletType topo.TabletType
+	Shards     []string
+	Sessn      *Session
 }
 
 func TestBatchQueryShardBadType(t *testing.T) {
