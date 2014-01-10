@@ -294,9 +294,12 @@ class Tablet(object):
         args.extend(["-db-config-"+key1+"-"+key2, dbconfigs[key1][key2]])
 
     if memcache:
-      memcache = os.path.join(self.tablet_dir, "memcache.sock")
-      args.extend(["-rowcache-bin", "memcached"])
-      args.extend(["-rowcache-socket", memcache])
+      if os.path.exists(environment.vtroot + "/bin/memcached"):
+        args.extend(["-rowcache-bin", environment.vtroot + "/bin/memcached"])
+      else:
+        args.extend(["-rowcache-bin", "memcached"])
+      memcache_socket = os.path.join(self.tablet_dir, "memcache.sock")
+      args.extend(["-rowcache-socket", memcache_socket])
 
     if auth:
       args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
