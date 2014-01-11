@@ -4,11 +4,11 @@ import os
 import time
 
 from net import gorpc
-from vtdb import cursor
+from vtdb import sharded_cursor
 from vtdb import dbapi
 from vtdb import dbexceptions
 from vtdb import keyspace
-from vtdb import tablet3
+from vtdb import tablet
 from zk import zkns_query
 from zk import zkocc
 
@@ -40,7 +40,7 @@ class ShardedClient(object):
   max_attempts = 2
   reconnect_delay = 0.005
 
-  cursorclass = cursor.ShardedCursor
+  cursorclass = sharded_cursor.ShardedCursor
 
   def __init__(self, zkocc_client, keyspace_name, db_type, use_streaming, timeout, user, password, dbname):
     self.zkocc_client = zkocc_client
@@ -61,7 +61,7 @@ class ShardedClient(object):
     name_path = os.path.join(keyspace.ZK_KEYSPACE_PATH, self.keyspace_name, shard_name, self.db_type)
     addrs = zkns_query.lookup_name(zkocc_client, name_path)
     for addr in addrs:
-      tablet_conn = tablet3.TabletConnection(addr, self.keyspace_name, shard_name, self.timeout, self.user, self.password)
+      tablet_conn = tablet.TabletConnection(addr, self.keyspace_name, shard_name, self.timeout, self.user, self.password)
       try:
         tablet_conn.dial()
         self.conns[shard_idx] = tablet_conn
@@ -164,11 +164,11 @@ class ShardedClient(object):
       except dbexceptions.OperationalError as e:
         # Tear down regardless of the precise failure.
         self.conns[shard_idx] = None
-        if isinstance(e, tablet3.TimeoutError):
+        if isinstance(e, tablet.TimeoutError):
           # On any timeout let the error bubble up and just redial next time.
           raise e
 
-        if isinstance(e, tablet3.RetryError):
+        if isinstance(e, tablet.RetryError):
           # Give the tablet a moment to restart itself. This isn't
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
@@ -194,11 +194,11 @@ class ShardedClient(object):
       except dbexceptions.OperationalError as e:
         # Tear down regardless of the precise failure.
         self.conns[shard_idx] = None
-        if isinstance(e, tablet3.TimeoutError):
+        if isinstance(e, tablet.TimeoutError):
           # On any timeout let the error bubble up and just redial next time.
           raise e
 
-        if isinstance(e, tablet3.RetryError):
+        if isinstance(e, tablet.RetryError):
           # Give the tablet a moment to restart itself. This isn't
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
@@ -226,11 +226,11 @@ class ShardedClient(object):
       except dbexceptions.OperationalError as e:
         # Tear down regardless of the precise failure.
         self.conns[shard_idx] = None
-        if isinstance(e, tablet3.TimeoutError):
+        if isinstance(e, tablet.TimeoutError):
           # On any timeout let the error bubble up and just redial next time.
           raise e
 
-        if isinstance(e, tablet3.RetryError):
+        if isinstance(e, tablet.RetryError):
           # Give the tablet a moment to restart itself. This isn't
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
@@ -250,11 +250,11 @@ class ShardedClient(object):
       except dbexceptions.OperationalError as e:
         # Tear down regardless of the precise failure.
         self.conns[shard_idx] = None
-        if isinstance(e, tablet3.TimeoutError):
+        if isinstance(e, tablet.TimeoutError):
           # On any timeout let the error bubble up and just redial next time.
           raise e
 
-        if isinstance(e, tablet3.RetryError):
+        if isinstance(e, tablet.RetryError):
           # Give the tablet a moment to restart itself. This isn't
           # strictly necessary since there is a significant chance you
           # will end up talking to another host.
