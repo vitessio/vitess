@@ -57,22 +57,22 @@ def _true_int_kr_value(kr_value):
 MIN_KEY = ''
 MAX_KEY = ''
 
-KEYSPACE_ID_TYPE_NONE = ""
-KEYSPACE_ID_TYPE_INT = "uint64"
-KEYSPACE_ID_TYPE_STR = "bytes"
+KIT_UNSET = ""
+KIT_UINT64 = "uint64"
+KIT_BYTES = "bytes"
 
 
 # Compute the where clause and bind_vars for a given keyrange.
-def create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=KEYSPACE_ID_TYPE_INT):
+def create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=KIT_UINT64):
   if isinstance(keyrange, str):
     keyrange = keyrange.split('-')
 
   if not isinstance(keyrange, tuple) and not isinstance(keyrange, list) or len(keyrange) != 2:
     raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)
 
-  if keyspace_col_type == KEYSPACE_ID_TYPE_INT:
+  if keyspace_col_type == KIT_UINT64:
     return _create_where_clause_for_int_keyspace(keyrange, keyspace_col_name)
-  elif keyspace_col_type == KEYSPACE_ID_TYPE_STR:
+  elif keyspace_col_type == KIT_BYTES:
     return _create_where_clause_for_str_keyspace(keyrange, keyspace_col_name)
   else:
     raise dbexceptions.ProgrammingError("Illegal type for keyspace_col_type %d" % keyspace_col_type)
