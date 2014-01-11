@@ -90,7 +90,7 @@ class TestKeyrange(unittest.TestCase):
   def test_bind_values_for_str_keyspace(self):
     stm = keyrange.create_streaming_task_map(16, 16)
     for i, kr in enumerate(stm.keyrange_list):
-      where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange.KEYSPACE_ID_TYPE_STR)
+      where_clause, bind_vars = keyrange.create_where_clause_for_keyrange(kr, keyspace_col_type=keyrange.KIT_BYTES)
       if len(bind_vars.keys()) == 1:
         if kr[0] == '':
           self.assertNotEqual(where_clause.find('<'), -1)
