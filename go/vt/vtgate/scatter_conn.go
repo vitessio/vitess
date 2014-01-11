@@ -52,15 +52,27 @@ func NewScatterConn(serv SrvTopoServer, cell string, retryDelay time.Duration, r
 }
 
 // Execute executes a non-streaming query on the specified shards.
-func (stc *ScatterConn) Execute(query string, bindVars map[string]interface{}, keyspace string, tabletType topo.TabletType, shards []string, session *SafeSession) (*proto.QueryResult, error) {
-	results, allErrors := stc.multiGo(keyspace, tabletType, shards, session, func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-		innerqr, err := sdc.Execute(query, bindVars, transactionId)
-		if err != nil {
-			return err
-		}
-		sResults <- innerqr
-		return nil
-	})
+func (stc *ScatterConn) Execute(
+	query string,
+	bindVars map[string]interface{},
+	keyspace string,
+	shards []string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+) (*proto.QueryResult, error) {
+	results, allErrors := stc.multiGo(
+		keyspace,
+		shards,
+		tabletType,
+		session,
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			innerqr, err := sdc.Execute(query, bindVars, transactionId)
+			if err != nil {
+				return err
+			}
+			sResults <- innerqr
+			return nil
+		})
 
 	qr := new(proto.QueryResult)
 	for innerqr := range results {
@@ -74,15 +86,26 @@ func (stc *ScatterConn) Execute(query string, bindVars map[string]interface{}, k
 }
 
 // ExecuteBatch executes a batch of non-streaming queries on the specified shards.
-func (stc *ScatterConn) ExecuteBatch(queries []tproto.BoundQuery, keyspace string, tabletType topo.TabletType, shards []string, session *SafeSession) (qrs *proto.QueryResultList, err error) {
-	results, allErrors := stc.multiGo(keyspace, tabletType, shards, session, func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-		innerqrs, err := sdc.ExecuteBatch(queries, transactionId)
-		if err != nil {
-			return err
-		}
-		sResults <- innerqrs
-		return nil
-	})
+func (stc *ScatterConn) ExecuteBatch(
+	queries []tproto.BoundQuery,
+	keyspace string,
+	shards []string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+) (qrs *proto.QueryResultList, err error) {
+	results, allErrors := stc.multiGo(
+		keyspace,
+		shards,
+		tabletType,
+		session,
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			innerqrs, err := sdc.ExecuteBatch(queries, transactionId)
+			if err != nil {
+				return err
+			}
+			sResults <- innerqrs
+			return nil
+		})
 
 	qrs = &proto.QueryResultList{}
 	qrs.List = make([]mproto.QueryResult, len(queries))
@@ -99,14 +122,27 @@ func (stc *ScatterConn) ExecuteBatch(queries []tproto.BoundQuery, keyspace strin
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
-func (stc *ScatterConn) StreamExecute(query string, bindVars map[string]interface{}, keyspace string, tabletType topo.TabletType, shards []string, session *SafeSession, sendReply func(reply interface{}) error) error {
-	results, allErrors := stc.multiGo(keyspace, tabletType, shards, session, func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-		sr, errFunc := sdc.StreamExecute(query, bindVars, transactionId)
-		for qr := range sr {
-			sResults <- qr
-		}
-		return errFunc()
-	})
+func (stc *ScatterConn) StreamExecute(
+	query string,
+	bindVars map[string]interface{},
+	keyspace string,
+	shards []string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+	sendReply func(reply interface{}) error,
+) error {
+	results, allErrors := stc.multiGo(
+		keyspace,
+		shards,
+		tabletType,
+		session,
+		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
+			sr, errFunc := sdc.StreamExecute(query, bindVars, transactionId)
+			for qr := range sr {
+				sResults <- qr
+			}
+			return errFunc()
+		})
 	var replyErr error
 	for innerqr := range results {
 		// We still need to finish pumping
@@ -170,7 +206,13 @@ func (stc *ScatterConn) Close() error {
 // If there are any unrecoverable errors during a transaction, multiGo
 // rolls back the transaction for all shards.
 // The action function must match the shardActionFunc signature.
-func (stc *ScatterConn) multiGo(keyspace string, tabletType topo.TabletType, shards []string, session *SafeSession, action shardActionFunc) (rResults <-chan interface{}, allErrors *concurrency.AllErrorRecorder) {
+func (stc *ScatterConn) multiGo(
+	keyspace string,
+	shards []string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+	action shardActionFunc,
+) (rResults <-chan interface{}, allErrors *concurrency.AllErrorRecorder) {
 	allErrors = new(concurrency.AllErrorRecorder)
 	results := make(chan interface{}, len(shards))
 	var wg sync.WaitGroup
@@ -223,7 +265,12 @@ func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.Ta
 	return sdc
 }
 
-func (stc *ScatterConn) updateSession(sdc *ShardConn, keyspace, shard string, tabletType topo.TabletType, session *SafeSession) (transactionId int64, err error) {
+func (stc *ScatterConn) updateSession(
+	sdc *ShardConn,
+	keyspace, shard string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+) (transactionId int64, err error) {
 	if !session.InTransaction() {
 		return 0, nil
 	}

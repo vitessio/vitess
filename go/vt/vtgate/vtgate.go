@@ -34,7 +34,13 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 
 // ExecuteShard executes a non-streaming query on the specified shards.
 func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
-	qr, err := vtg.scatterConn.Execute(query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Shards, NewSafeSession(query.Sessn))
+	qr, err := vtg.scatterConn.Execute(
+		query.Sql,
+		query.BindVariables,
+		query.Keyspace,
+		query.Shards,
+		query.TabletType,
+		NewSafeSession(query.Sessn))
 	if err == nil {
 		*reply = *qr
 	} else {
@@ -46,7 +52,12 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
 func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
-	qrs, err := vtg.scatterConn.ExecuteBatch(batchQuery.Queries, batchQuery.Keyspace, batchQuery.TabletType, batchQuery.Shards, NewSafeSession(batchQuery.Sessn))
+	qrs, err := vtg.scatterConn.ExecuteBatch(
+		batchQuery.Queries,
+		batchQuery.Keyspace,
+		batchQuery.Shards,
+		batchQuery.TabletType,
+		NewSafeSession(batchQuery.Sessn))
 	if err == nil {
 		*reply = *qrs
 	} else {
@@ -58,7 +69,13 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 
 // StreamExecuteShard executes a streaming query on the specified shards.
 func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
-	err := vtg.scatterConn.StreamExecute(query.Sql, query.BindVariables, query.Keyspace, query.TabletType, query.Shards, NewSafeSession(query.Sessn), sendReply)
+	err := vtg.scatterConn.StreamExecute(
+		query.Sql,
+		query.BindVariables,
+		query.Keyspace,
+		query.Shards,
+		query.TabletType,
+		NewSafeSession(query.Sessn), sendReply)
 	if err != nil {
 		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
 	}
