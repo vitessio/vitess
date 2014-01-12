@@ -55,6 +55,7 @@ func resetSandbox() {
 	endPointCounter = 0
 	dialCounter = 0
 	dialMustFail = 0
+	transactionId.Set(0)
 }
 
 // sandboxTopo satisfies the SrvTopoServer interface
