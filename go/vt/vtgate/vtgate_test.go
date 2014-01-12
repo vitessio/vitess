@@ -66,7 +66,6 @@ func TestVTGateExecuteShard(t *testing.T) {
 	RpcVTGate.Begin(nil, nil, q.Sessn)
 	RpcVTGate.ExecuteShard(nil, &q, qr)
 	RpcVTGate.Rollback(nil, q.Sessn, nil)
-	// Wait for rollbacks to schedule
 	runtime.Gosched()
 	if sbc.RollbackCount != 1 {
 		t.Errorf("want 1, got %d", sbc.RollbackCount)

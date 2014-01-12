@@ -118,11 +118,11 @@ type sandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount     int
-	BeginCount    int
-	CommitCount   int
-	RollbackCount int
-	CloseCount    int
+	ExecCount     sync2.AtomicInt64
+	BeginCount    sync2.AtomicInt64
+	CommitCount   sync2.AtomicInt64
+	RollbackCount sync2.AtomicInt64
+	CloseCount    sync2.AtomicInt64
 }
 
 func (sbc *sandboxConn) getError() error {
@@ -154,7 +154,7 @@ func (sbc *sandboxConn) getError() error {
 }
 
 func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*proto.QueryResult, error) {
-	sbc.ExecCount++
+	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -165,7 +165,7 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, t
 }
 
 func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*proto.QueryResultList, error) {
-	sbc.ExecCount++
+	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -181,7 +181,7 @@ func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 }
 
 func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *proto.QueryResult, ErrFunc) {
-	sbc.ExecCount++
+	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -193,8 +193,8 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 }
 
 func (sbc *sandboxConn) Begin() (int64, error) {
-	sbc.ExecCount++
-	sbc.BeginCount++
+	sbc.ExecCount.Add(1)
+	sbc.BeginCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -206,8 +206,8 @@ func (sbc *sandboxConn) Begin() (int64, error) {
 }
 
 func (sbc *sandboxConn) Commit(transactionId int64) error {
-	sbc.ExecCount++
-	sbc.CommitCount++
+	sbc.ExecCount.Add(1)
+	sbc.CommitCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -215,8 +215,8 @@ func (sbc *sandboxConn) Commit(transactionId int64) error {
 }
 
 func (sbc *sandboxConn) Rollback(transactionId int64) error {
-	sbc.ExecCount++
-	sbc.RollbackCount++
+	sbc.ExecCount.Add(1)
+	sbc.RollbackCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -225,7 +225,7 @@ func (sbc *sandboxConn) Rollback(transactionId int64) error {
 
 // Close does not change ExecCount
 func (sbc *sandboxConn) Close() {
-	sbc.CloseCount++
+	sbc.CloseCount.Add(1)
 }
 
 func (sbc *sandboxConn) EndPoint() topo.EndPoint {
