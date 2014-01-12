@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // sandbox_test.go provides a sandbox for unit testing Barnacle.
@@ -56,6 +57,7 @@ func resetSandbox() {
 	dialMustFail = 0
 }
 
+// sandboxTopo satisfies the SrvTopoServer interface
 type sandboxTopo struct {
 }
 
@@ -98,10 +100,13 @@ func sandboxDialer(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, 
 	if tconn == nil {
 		panic(fmt.Sprintf("can't find conn %v", endPoint.Uid))
 	}
+	tconn.(*sandboxConn).endPoint = endPoint
 	return tconn, nil
 }
 
+// sandboxConn satisfies the TabletConn interface
 type sandboxConn struct {
+	endPoint       topo.EndPoint
 	mustFailRetry  int
 	mustFailFatal  int
 	mustFailServer int
@@ -117,9 +122,6 @@ type sandboxConn struct {
 	CommitCount   int
 	RollbackCount int
 	CloseCount    int
-
-	// TransactionId is auto-generated on Begin
-	transactionId int64
 }
 
 func (sbc *sandboxConn) getError() error {
@@ -150,7 +152,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*proto.QueryResult, error) {
 	sbc.ExecCount++
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -161,7 +163,7 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*proto.QueryResultList, error) {
 	sbc.ExecCount++
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -169,60 +171,55 @@ func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery) (*tproto.Query
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	qrl := &tproto.QueryResultList{List: make([]mproto.QueryResult, 0, len(queries))}
+	qrl := &proto.QueryResultList{}
+	qrl.List = make([]mproto.QueryResult, 0, len(queries))
 	for _ = range queries {
-		qrl.List = append(qrl.List, *singleRowResult)
+		qrl.List = append(qrl.List, singleRowResult.QueryResult)
 	}
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *proto.QueryResult, ErrFunc) {
 	sbc.ExecCount++
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
-	ch := make(chan *mproto.QueryResult, 1)
+	ch := make(chan *proto.QueryResult, 1)
 	ch <- singleRowResult
 	close(ch)
 	err := sbc.getError()
 	return ch, func() error { return err }
 }
 
-func (sbc *sandboxConn) Begin() error {
+func (sbc *sandboxConn) Begin() (int64, error) {
 	sbc.ExecCount++
 	sbc.BeginCount++
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	err := sbc.getError()
-	if err == nil {
-		sbc.transactionId = transactionId.Add(1)
+	if err != nil {
+		return 0, err
 	}
-	return err
+	return transactionId.Add(1), nil
 }
 
-func (sbc *sandboxConn) Commit() error {
+func (sbc *sandboxConn) Commit(transactionId int64) error {
 	sbc.ExecCount++
 	sbc.CommitCount++
-	sbc.transactionId = 0
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) Rollback() error {
+func (sbc *sandboxConn) Rollback(transactionId int64) error {
 	sbc.ExecCount++
 	sbc.RollbackCount++
-	sbc.transactionId = 0
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	return sbc.getError()
-}
-
-func (sbc *sandboxConn) TransactionId() int64 {
-	return sbc.transactionId
 }
 
 // Close does not change ExecCount
@@ -230,14 +227,20 @@ func (sbc *sandboxConn) Close() {
 	sbc.CloseCount++
 }
 
-var singleRowResult = &mproto.QueryResult{
-	Fields: []mproto.Field{
-		{"id", 3},
-		{"value", 253}},
-	RowsAffected: 1,
-	InsertId:     0,
-	Rows: [][]sqltypes.Value{{
-		{sqltypes.Numeric("1")},
-		{sqltypes.String("foo")},
-	}},
+func (sbc *sandboxConn) EndPoint() topo.EndPoint {
+	return sbc.endPoint
+}
+
+var singleRowResult = &proto.QueryResult{
+	QueryResult: mproto.QueryResult{
+		Fields: []mproto.Field{
+			{"id", 3},
+			{"value", 253}},
+		RowsAffected: 1,
+		InsertId:     0,
+		Rows: [][]sqltypes.Value{{
+			{sqltypes.Numeric("1")},
+			{sqltypes.String("foo")},
+		}},
+	},
 }

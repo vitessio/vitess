@@ -7,6 +7,7 @@
 package vtgate
 
 import (
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
@@ -84,8 +85,13 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
 func (vtg *VTGate) Begin(context *rpcproto.Context, inSession, outSession *proto.Session) error {
-	inSession.InTransaction = true
+	if inSession.InTransaction {
+		err := fmt.Errorf("Already in transaction")
+		log.Errorf("Begin: %v", err)
+		return err
+	}
 	*outSession = *inSession
+	outSession.InTransaction = true
 	return nil
 }
 
