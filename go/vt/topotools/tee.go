@@ -91,16 +91,33 @@ func (tee *Tee) GetKnownCells() ([]string, error) {
 // Keyspace management, global.
 //
 
-func (tee *Tee) CreateKeyspace(keyspace string) error {
-	if err := tee.primary.CreateKeyspace(keyspace); err != nil {
+func (tee *Tee) CreateKeyspace(keyspace string, value *topo.Keyspace) error {
+	if err := tee.primary.CreateKeyspace(keyspace, value); err != nil {
 		return err
 	}
 
 	// this is critical enough that we want to fail
-	if err := tee.secondary.CreateKeyspace(keyspace); err != nil {
+	if err := tee.secondary.CreateKeyspace(keyspace, value); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (tee *Tee) UpdateKeyspace(ki *topo.KeyspaceInfo) error {
+	if err := tee.primary.UpdateKeyspace(ki); err != nil {
+		// failed on primary, not updating secondary
+		return err
+	}
+
+	if err := tee.secondary.UpdateKeyspace(ki); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.UpdateKeyspace(%v) failed: %v", ki.KeyspaceName(), err)
+	}
+	return nil
+}
+
+func (tee *Tee) GetKeyspace(keyspace string) (*topo.KeyspaceInfo, error) {
+	return tee.readFrom.GetKeyspace(keyspace)
 }
 
 func (tee *Tee) GetKeyspaces() ([]string, error) {
@@ -163,8 +180,12 @@ func (tee *Tee) ValidateShard(keyspace, shard string) error {
 	return nil
 }
 
-func (tee *Tee) GetShard(keyspace, shard string) (si *topo.ShardInfo, err error) {
+func (tee *Tee) GetShard(keyspace, shard string) (*topo.ShardInfo, error) {
 	return tee.readFrom.GetShard(keyspace, shard)
+}
+
+func (tee *Tee) GetShardCritical(keyspace, shard string) (*topo.ShardInfo, error) {
+	return tee.readFrom.GetShardCritical(keyspace, shard)
 }
 
 func (tee *Tee) GetShardNames(keyspace string) ([]string, error) {

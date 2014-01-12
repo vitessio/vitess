@@ -49,7 +49,8 @@ type SplitDiffWorker struct {
 	err error
 
 	// populated during stateSDInit, read-only after that
-	shardInfo *topo.ShardInfo
+	keyspaceInfo *topo.KeyspaceInfo
+	shardInfo    *topo.ShardInfo
 
 	// populated during stateSDFindTargets, read-only after that
 	sourceAliases    []topo.TabletAlias
@@ -193,6 +194,10 @@ func (sdw *SplitDiffWorker) init() error {
 	sdw.setState(stateSDInit)
 
 	var err error
+	sdw.keyspaceInfo, err = sdw.wr.TopoServer().GetKeyspace(sdw.keyspace)
+	if err != nil {
+		return fmt.Errorf("Cannot read keyspace %v: %v", sdw.keyspace, err)
+	}
 	sdw.shardInfo, err = sdw.wr.TopoServer().GetShard(sdw.keyspace, sdw.shard)
 	if err != nil {
 		return fmt.Errorf("Cannot read shard %v/%v: %v", sdw.keyspace, sdw.shard, err)
@@ -406,14 +411,14 @@ func (sdw *SplitDiffWorker) diff() error {
 				sdw.diffLog("Source shard doesn't overlap with destination????: " + err.Error())
 				return
 			}
-			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap)
+			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.diffLog("FullTableScan(source) failed: " + err.Error())
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{})
+			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
 				sdw.diffLog("FullTableScan(destination) failed: " + err.Error())
 				return

@@ -30,8 +30,9 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 }
 
 func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool, acceptSuccessPercents int) error {
-	// read the shard, make sure the master is not already good
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	// read the shard, make sure the master is not already good.
+	// critical read, we want up to date info (and the shard is locked).
+	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
 	if err != nil {
 		return err
 	}
@@ -81,7 +82,8 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 	// and rebuild the shard serving graph (but do not change the
 	// master record, we already did it)
 	log.Infof("Rebuilding shard serving graph data")
-	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard, nil, partialTopology /*ignorePartialResult*/)
+	return wr.rebuildShard(masterElectTablet.Keyspace, masterElectTablet.Shard,
+		rebuildShardOptions{IgnorePartialResult: partialTopology, Critical: true})
 }
 
 func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers bool, acceptSuccessPercents int) error {

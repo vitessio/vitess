@@ -18,6 +18,9 @@ vtdataroot = os.environ.get('VTDATAROOT', '/vt')
 # tmproot is the temporary place to put all test files
 tmproot = os.path.join(vtdataroot, 'tmp')
 
+# vtlogroot is where to put all the log files
+vtlogroot = tmproot
+
 # where to start allocating ports from
 vtportstart = int(os.environ.get('VTPORTSTART', '6700'))
 
@@ -69,17 +72,19 @@ topo_server_implementation = 'zookeeper'
 hostname = socket.gethostname()
 zk_port_base = reserve_ports(3)
 zkocc_port_base = reserve_ports(3)
-def topo_server_setup():
+def topo_server_setup(add_bad_host=False):
   global zk_port_base
   global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
   run([binary_path('zkctl'),
-       '-log_dir', tmproot,
+       '-log_dir', vtlogroot,
        '-zk.cfg', '1@%s:%s' % (hostname, zk_ports),
        'init'])
   config = tmproot+'/test-zk-client-conf.json'
   with open(config, 'w') as f:
     ca_server = 'localhost:%u' % (zk_port_base+2)
+    if add_bad_host:
+      ca_server += ',does.not.exists:1234'
     zk_cell_mapping = {'test_nj': 'localhost:%u'%(zk_port_base+2),
                        'test_ny': 'localhost:%u'%(zk_port_base+2),
                        'test_ca': ca_server,
@@ -98,7 +103,7 @@ def topo_server_teardown():
   global zk_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
   run([binary_path('zkctl'),
-       '-log_dir', tmproot,
+       '-log_dir', vtlogroot,
        '-zk.cfg', '1@%s:%s' % (hostname, zk_ports),
        'teardown'], raise_on_error=False)
 
@@ -117,3 +122,7 @@ def topo_server_flags():
 
 def tablet_manager_protocol_flags():
   return ['-tablet_manager_protocol', 'bson']
+
+def vtgate_protocol_flags():
+  return ['-tablet-protocol', 'bson']
+

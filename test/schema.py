@@ -90,7 +90,6 @@ class TestSchema(unittest.TestCase):
     shard_1_master.init_tablet(  'master',  'test_keyspace', '1')
     shard_1_replica1.init_tablet('replica', 'test_keyspace', '1')
 
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # run checks now before we start the tablets
@@ -250,13 +249,9 @@ class TestSchema(unittest.TestCase):
 
     utils.pause("Look at schema now!")
 
-    shard_0_master.kill_vttablet()
-    shard_0_replica1.kill_vttablet()
-    shard_0_replica2.kill_vttablet()
-    shard_0_rdonly.kill_vttablet()
-    shard_0_backup.kill_vttablet()
-    shard_1_master.kill_vttablet()
-    shard_1_replica1.kill_vttablet()
+    tablet.kill_tablets([shard_0_master, shard_0_replica1, shard_0_replica2,
+                         shard_0_rdonly, shard_0_backup, shard_1_master,
+                         shard_1_replica1])
 
 if __name__ == '__main__':
   utils.main()

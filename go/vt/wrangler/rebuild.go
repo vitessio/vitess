@@ -24,8 +24,19 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 		return err
 	}
 
-	err = wr.rebuildShard(keyspace, shard, cells, false /*ignorePartialResult*/)
+	err = wr.rebuildShard(keyspace, shard, rebuildShardOptions{Cells: cells, IgnorePartialResult: false})
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
+}
+
+// rebuildShardOptions are options for rebuildShard
+type rebuildShardOptions struct {
+	// Cells that should be rebuilt. If nil, rebuild in all cells.
+	Cells []string
+	// It is OK to ignore topo.ErrPartialResult (which may mean
+	// that some cell is unavailable.
+	IgnorePartialResult bool
+	// If true, call GetShardCritical instead of GetShard.
+	Critical bool
 }
 
 // Update shard file with new master, replicas, etc.
@@ -36,18 +47,28 @@ func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) er
 // This function should only be used with an action lock on the shard
 // - otherwise the consistency of the serving graph data can't be
 // guaranteed.
-func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignorePartialResult bool) error {
+func (wr *Wrangler) rebuildShard(keyspace, shard string, options rebuildShardOptions) error {
 	log.Infof("rebuildShard %v/%v", keyspace, shard)
 
 	// read the existing shard info. It has to exist.
-	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+
+	var (
+		shardInfo *topo.ShardInfo
+		err       error
+	)
+	if options.Critical {
+		shardInfo, err = wr.ts.GetShardCritical(keyspace, shard)
+	} else {
+		shardInfo, err = wr.ts.GetShard(keyspace, shard)
+	}
+
 	if err != nil {
 		return err
 	}
 
-	tabletMap, err := GetTabletMapForShardByCell(wr.ts, keyspace, shard, cells)
+	tabletMap, err := GetTabletMapForShardByCell(wr.ts, keyspace, shard, options.Cells)
 	if err != nil {
-		if ignorePartialResult && err == topo.ErrPartialResult {
+		if options.IgnorePartialResult && err == topo.ErrPartialResult {
 			log.Warningf("rebuildShard: got topo.ErrPartialResult from GetTabletMapForShard, but skipping error as it was expected")
 		} else {
 			return err
@@ -69,7 +90,7 @@ func (wr *Wrangler) rebuildShard(keyspace, shard string, cells []string, ignoreP
 		tablets = append(tablets, ti)
 	}
 
-	return wr.rebuildShardSrvGraph(shardInfo, tablets, cells)
+	return wr.rebuildShardSrvGraph(shardInfo, tablets, options.Cells)
 }
 
 // the following types are used as locations in the serving graph
@@ -280,6 +301,17 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, useSer
 // copies in each cell.
 func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTypes bool) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
+
+	ki, err := wr.ts.GetKeyspace(keyspace)
+	if err != nil {
+		// Temporary change: we try to keep going even if node
+		// doesn't exist
+		if err != topo.ErrNoNode {
+			return err
+		}
+		ki = topo.NewKeyspaceInfo(keyspace, &topo.Keyspace{})
+	}
+
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return err
@@ -332,7 +364,9 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 			}
 
 			srvKeyspaceMap[keyspaceLocation] = &topo.SrvKeyspace{
-				Shards: make([]topo.SrvShard, 0, 16),
+				Shards:             make([]topo.SrvShard, 0, 16),
+				ShardingColumnName: ki.ShardingColumnName,
+				ShardingColumnType: ki.ShardingColumnType,
 			}
 		}
 	}

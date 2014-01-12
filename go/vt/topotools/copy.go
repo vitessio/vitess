@@ -28,7 +28,14 @@ func CopyKeyspaces(fromTS, toTS topo.Server) {
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := toTS.CreateKeyspace(keyspace); err != nil {
+
+			k, err := fromTS.GetKeyspace(keyspace)
+			if err != nil {
+				rec.RecordError(fmt.Errorf("GetKeyspace(%v): %v", keyspace, err))
+				return
+			}
+
+			if err := toTS.CreateKeyspace(keyspace, k.Keyspace); err != nil {
 				if err == topo.ErrNodeExists {
 					log.Warningf("keyspace %v already exists", keyspace)
 				} else {

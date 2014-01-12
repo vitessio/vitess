@@ -29,7 +29,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 	if tablet.IsInReplicationGraph() {
 		// create the parent keyspace and shard if needed
 		if createShardAndKeyspace {
-			if err := wr.ts.CreateKeyspace(tablet.Keyspace); err != nil && err != topo.ErrNodeExists {
+			if err := wr.ts.CreateKeyspace(tablet.Keyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
 				return err
 			}
 
@@ -335,7 +335,10 @@ func (wr *Wrangler) changeTypeInternal(tabletAlias topo.TabletAlias, dbType topo
 
 	// rebuild if necessary
 	if rebuildRequired {
-		err = wr.rebuildShard(ti.Keyspace, ti.Shard, []string{ti.Alias.Cell}, false /*ignorePartialResult*/)
+		err = wr.rebuildShard(ti.Keyspace, ti.Shard, rebuildShardOptions{
+			Cells:               []string{ti.Alias.Cell},
+			IgnorePartialResult: false,
+		})
 		if err != nil {
 			return err
 		}

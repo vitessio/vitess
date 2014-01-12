@@ -19,6 +19,19 @@ from zk import zkocc
 __keyspace_map = {}
 
 
+def read_and_get_keyspace(zkocc_client, name):
+  ks = None
+  try:
+    ks = __keyspace_map[name]
+  except KeyError:
+    ks = keyspace.read_keyspace(zkocc_client, name)
+    if ks is not None:
+      __add_keyspace(ks)
+    else:
+      raise
+  return ks
+
+
 def get_keyspace(name):
   return __keyspace_map[name]
 
@@ -43,6 +56,10 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
   fqdb_keys = []
   db_keys = []
   keyspace_list = zkocc_client.get_srv_keyspace_names('local')
+  # validate step
+  if len(keyspace_list) == 0:
+    logging.exception('zkocc returned empty keyspace list')
+    raise Exception('zkocc returned empty keyspace list')
   for keyspace_name in keyspace_list:
     try:
       ks = keyspace.read_keyspace(zkocc_client, keyspace_name)
@@ -66,12 +83,25 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
 # db_key is <keyspace>.<shard_name>.<db_type>[:<service>]
 # returns a list of entries to try, which is an array of tuples
 # (host, port, encrypted)
-def get_host_port_by_name(zkocc_client, db_key, encrypted=False):
+def get_host_port_by_name(zkocc_client, db_key, encrypted=False, vtgate_protocol='v0', vtgate_addrs=None):
   parts = db_key.split(':')
   if len(parts) == 2:
     service = parts[1]
   else:
     service = '_mysql'
+
+  host_port_list = []
+  encrypted_host_port_list = []
+  # use given vtgate addrs if vtgate is enabled and requested as service
+  if vtgate_addrs is None:
+    vtgate_addrs = []
+  if vtgate_protocol != 'v0' and service != '_mysql':
+    for addr in vtgate_addrs:
+      host_port = addr.split(':')
+      host_port_list.append((host_port[0], long(host_port[1]), service == '_vts'))
+    random.shuffle(host_port_list)
+    return host_port_list
+
   if service == '_vtocc' and encrypted:
     encrypted_service = '_vts'
   db_key = parts[0]
@@ -85,8 +115,8 @@ def get_host_port_by_name(zkocc_client, db_key, encrypted=False):
     logging.warning('failed to get or parse topo data %s (%s): %s', db_key, e,
                     data)
     return []
-  host_port_list = []
-  encrypted_host_port_list = []
+  if 'Entries' not in data:
+    raise Exception('zkocc returned: %s' % str(data))
   for entry in data['Entries']:
     if service in entry['NamedPortMap']:
       host_port = (entry['Host'], entry['NamedPortMap'][service],

@@ -69,5 +69,7 @@ def read_keyspace(zkocc_client, keyspace_name):
       raise dbexceptions.OperationalError('invalid empty keyspace',
                                           keyspace_name)
     return Keyspace(keyspace_name, data)
+  except dbexceptions.OperationalError as e:
+    raise e
   except Exception as e:
     raise dbexceptions.OperationalError('invalid keyspace', keyspace_name, e)

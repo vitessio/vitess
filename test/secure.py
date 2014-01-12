@@ -174,8 +174,6 @@ def setUpModule():
     shard_0_master.init_tablet('master',  'test_keyspace', '0')
     shard_0_slave.init_tablet('replica',  'test_keyspace', '0')
 
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0', auto_log=True)
-
     utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     # create databases so vttablet can start behaving normally

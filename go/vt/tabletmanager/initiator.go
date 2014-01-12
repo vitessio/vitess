@@ -152,7 +152,6 @@ func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias topo.TabletAlias, args 
 }
 
 type MultiSnapshotArgs struct {
-	KeyName          string
 	KeyRanges        []key.KeyRange
 	Tables           []string
 	Concurrency      int
@@ -442,6 +441,13 @@ func (ai *ActionInitiator) UpdateShard() *ActionNode {
 func (ai *ActionInitiator) RebuildKeyspace() *ActionNode {
 	return &ActionNode{
 		Action:     KEYSPACE_ACTION_REBUILD,
+		ActionGuid: actionGuid(),
+	}
+}
+
+func (ai *ActionInitiator) SetKeyspaceShardingInfo() *ActionNode {
+	return &ActionNode{
+		Action:     KEYSPACE_ACTION_SET_SHARDING_INFO,
 		ActionGuid: actionGuid(),
 	}
 }

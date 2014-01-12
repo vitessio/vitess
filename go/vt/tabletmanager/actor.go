@@ -751,12 +751,16 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
+	ki, err := ta.ts.GetKeyspace(tablet.Keyspace)
+	if err != nil {
+		return err
+	}
 
 	if tablet.Type != topo.TYPE_BACKUP {
 		return fmt.Errorf("expected backup type, not %v: %v", tablet.Type, ta.tabletAlias)
 	}
 
-	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), args.KeyName, tablet.GetAddr(), false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
+	filenames, err := ta.mysqld.CreateMultiSnapshot(args.KeyRanges, tablet.DbName(), ki.ShardingColumnName, ki.ShardingColumnType, tablet.GetAddr(), false, args.Concurrency, args.Tables, args.SkipSlaveRestart, args.MaximumFilesize, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}

@@ -4,7 +4,44 @@
 
 package topo
 
+import (
+	"github.com/youtube/vitess/go/vt/key"
+)
+
 // This file contains keyspace utility functions
+
+type Keyspace struct {
+	// name of the column used for sharding
+	// empty if the keyspace is not sharded
+	ShardingColumnName string
+
+	// type of the column used for sharding
+	// KIT_UNSET if the keyspace is not sharded
+	ShardingColumnType key.KeyspaceIdType
+}
+
+// KeyspaceInfo is a meta struct that contains metadata to give the
+// data more context and convenience. This is the main way we interact
+// with a keyspace.
+type KeyspaceInfo struct {
+	keyspace string
+	*Keyspace
+}
+
+// KeyspaceName returns the keyspace name
+func (ki *KeyspaceInfo) KeyspaceName() string {
+	return ki.keyspace
+}
+
+// NewKeyspaceInfo returns a KeyspaceInfo basing on keyspace with the
+// keyspace / keyspace. This function should be only used by Server
+// implementations.
+func NewKeyspaceInfo(keyspace string, value *Keyspace) *KeyspaceInfo {
+	return &KeyspaceInfo{
+		keyspace: keyspace,
+		Keyspace: value,
+	}
+}
 
 // FindAllShardsInKeyspace reads and returns all the existing shards in
 // a keyspace. It doesn't take any lock.

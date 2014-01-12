@@ -105,7 +105,7 @@ var commands = []commandGroup{
 				"[-force] [-concurrency=4] [-fetch-concurrency=3] [-fetch-retry-count=3] [-server-mode] <src tablet alias|zk src tablet path> <dst tablet alias|zk dst tablet path> ...",
 				"This performs Snapshot and then Restore on all the targets in parallel. The advantage of having separate actions is that one snapshot can be used for many restores, and it's then easier to spread them over time."},
 			command{"MultiSnapshot", commandMultiSnapshot,
-				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path> <key name>",
+				"[-force] [-concurrency=8] [-skip-slave-restart] [-maximum-file-size=134217728] -spec='-' -tables='' <tablet alias|zk tablet path>",
 				"Locks mysqld and copy compressed data aside."},
 			command{"MultiRestore", commandMultiRestore,
 				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <dst tablet alias|destination zk path> <source zk path>...",
@@ -120,6 +120,9 @@ var commands = []commandGroup{
 			command{"CreateShard", commandCreateShard,
 				"[-force] [-parent] <keyspace/shard|zk shard path>",
 				"Creates the given shard"},
+			command{"GetShard", commandGetShard,
+				"<keyspace/shard|zk shard path>",
+				"Outputs the json version of Shard to stdout."},
 			command{"RebuildShardGraph", commandRebuildShardGraph,
 				"[-cells=a,b] <zk shard path> ... (/zk/global/vt/keyspaces/<keyspace>/shards/<shard>)",
 				"Rebuild the replication graph and shard serving data in zk. This may trigger an update to all connected clients."},
@@ -155,8 +158,11 @@ var commands = []commandGroup{
 	commandGroup{
 		"Keyspaces", []command{
 			command{"CreateKeyspace", commandCreateKeyspace,
-				"[-force] <keyspace name|zk keyspace path>",
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
+			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
+				"[-force] <keyspace name|zk keyspace path> <column name> <column type>",
+				"Updates the sharding info for a keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
 				"[-cells=a,b] [-use-served-types] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
@@ -243,6 +249,13 @@ var commands = []commandGroup{
 			command{"GetEndPoints", commandGetEndPoints,
 				"<cell> <keyspace/shard|zk shard path> <tablet type>",
 				"Outputs the json version of EndPoints to stdout."},
+		},
+	},
+	commandGroup{
+		"Replication Graph", []command{
+			command{"GetShardReplication", commandGetShardReplication,
+				"<cell> <keyspace/shard|zk shard path>",
+				"Outputs the json version of ShardReplication to stdout."},
 		},
 	},
 }
@@ -822,8 +835,8 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	skipSlaveRestart := subFlags.Bool("skip-slave-restart", false, "after the snapshot is done, do not restart slave replication")
 	maximumFilesize := subFlags.Uint64("maximum-file-size", 128*1024*1024, "the maximum size for an uncompressed data file")
 	subFlags.Parse(args)
-	if subFlags.NArg() != 2 {
-		log.Fatalf("action MultiSnapshot requires <src tablet alias|zk src tablet path> <key name>")
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action MultiSnapshot requires <src tablet alias|zk src tablet path>")
 	}
 
 	shards, err := key.ParseShardingSpec(*spec)
@@ -836,7 +849,7 @@ func commandMultiSnapshot(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []
 	}
 
 	source := tabletParamToTabletAlias(subFlags.Arg(0))
-	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, subFlags.Arg(1), *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
+	filenames, parentAlias, err := wr.MultiSnapshot(shards, source, *concurrency, tables, *force, *skipSlaveRestart, *maximumFilesize)
 
 	if err == nil {
 		log.Infof("manifest locations: %v", filenames)
@@ -870,7 +883,7 @@ func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	if *parent {
-		if err := wr.TopoServer().CreateKeyspace(keyspace); err != nil && err != topo.ErrNodeExists {
+		if err := wr.TopoServer().CreateKeyspace(keyspace, &topo.Keyspace{}); err != nil && err != topo.ErrNodeExists {
 			return "", err
 		}
 	}
@@ -879,6 +892,20 @@ func commandCreateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("shard %v/%v already exists (ignoring error with -force)", keyspace, shard)
 		err = nil
+	}
+	return "", err
+}
+
+func commandGetShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action GetShard requires <keyspace/shard|zk shard path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	shardInfo, err := wr.TopoServer().GetShard(keyspace, shard)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(shardInfo))
 	}
 	return "", err
 }
@@ -1045,6 +1072,8 @@ func commandShardReplicationFix(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 }
 
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	shardingColumnName := subFlags.String("sharding_column_name", "", "column to use for sharding operations")
+	shardingColumnType := subFlags.String("sharding_column_type", "", "type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
@@ -1052,12 +1081,36 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	}
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
-	err := wr.TopoServer().CreateKeyspace(keyspace)
+	kit := key.KeyspaceIdType(*shardingColumnType)
+	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
+		log.Fatalf("invalid sharding_column_type")
+	}
+	ki := &topo.Keyspace{
+		ShardingColumnName: *shardingColumnName,
+		ShardingColumnType: kit,
+	}
+	err := wr.TopoServer().CreateKeyspace(keyspace, ki)
 	if *force && err == topo.ErrNodeExists {
 		log.Infof("keyspace %v already exists (ignoring error with -force)", keyspace)
 		err = nil
 	}
 	return "", err
+}
+
+func commandSetKeyspaceShardingInfo(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	force := subFlags.Bool("force", false, "will update the fields even if they're already set, use with care")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 3 {
+		log.Fatalf("action SetKeyspaceShardingInfo requires <keyspace name|zk keyspace path> <column name> <column type>")
+	}
+
+	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
+	kit := key.KeyspaceIdType(subFlags.Arg(2))
+	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
+		log.Fatalf("invalid sharding_column_type")
+	}
+
+	return "", wr.SetKeyspaceShardingInfo(keyspace, subFlags.Arg(1), kit, *force)
 }
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1450,6 +1503,20 @@ func commandGetEndPoints(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	endPoints, err := wr.TopoServer().GetEndPoints(subFlags.Arg(0), keyspace, shard, tabletType)
 	if err == nil {
 		fmt.Println(jscfg.ToJson(endPoints))
+	}
+	return "", err
+}
+
+func commandGetShardReplication(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action GetShardReplication requires <cell> <keyspace/shard|zk shard path>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(1))
+	shardReplication, err := wr.TopoServer().GetShardReplication(subFlags.Arg(0), keyspace, shard)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(shardReplication))
 	}
 	return "", err
 }

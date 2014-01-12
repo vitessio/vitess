@@ -61,28 +61,33 @@ class Tablet(object):
     self.zk_tablet_path = '/zk/test_%s/vt/tablets/%010d' % (self.cell, self.tablet_uid)
     self.zk_pid = self.zk_tablet_path + '/pid'
 
-  def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None):
+  def mysqlctl(self, cmd, quiet=False, extra_my_cnf=None, with_ports=False):
     env = None
     if extra_my_cnf:
       env = os.environ.copy()
       env['EXTRA_MY_CNF'] = extra_my_cnf
+    ports_params = []
+    if with_ports:
+      ports_params = ['-port', str(self.port),
+                      '-mysql-port', str(self.mysql_port)]
 
-    return utils.run_bg(environment.binary_path('mysqlctl') +
-                        ' -log_dir %s -tablet-uid %u %s' %
-                        (environment.tmproot, self.tablet_uid, cmd),
-                        env=env)
+    return utils.run_bg([environment.binary_path('mysqlctl'),
+                         '-log_dir', environment.vtlogroot,
+                         '-tablet-uid', str(self.tablet_uid)] +
+                        ports_params + cmd, env=env)
 
   def init_mysql(self, extra_my_cnf=None):
-    return self.mysqlctl('-port %u -mysql-port %u init' % (self.port, self.mysql_port), quiet=True, extra_my_cnf=extra_my_cnf)
+    return self.mysqlctl(['init'], quiet=True, extra_my_cnf=extra_my_cnf,
+                         with_ports=True)
 
   def start_mysql(self):
-    return self.mysqlctl('-port %u -mysql-port %u start' % (self.port, self.mysql_port), quiet=True)
+    return self.mysqlctl(['start'], quiet=True, with_ports=True)
 
   def shutdown_mysql(self):
-    return self.mysqlctl('-port %u -mysql-port %u shutdown' % (self.port, self.mysql_port), quiet=True)
+    return self.mysqlctl(['shutdown'], quiet=True, with_ports=True)
 
   def teardown_mysql(self):
-    return self.mysqlctl('teardown -force', quiet=True)
+    return self.mysqlctl(['teardown', '-force'], quiet=True)
 
   def remove_tree(self):
     path = '%s/vt_%010d' % (environment.vtdataroot, self.tablet_uid)
@@ -225,7 +230,7 @@ class Tablet(object):
     args.append(self.tablet_alias)
     utils.run_vtctl(args, auto_log=True)
 
-  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, **kwargs):
+  def init_tablet(self, tablet_type, keyspace=None, shard=None, force=True, start=False, dbname=None, parent=True, wait_for_start=True, **kwargs):
     self.keyspace = keyspace
     self.shard = shard
 
@@ -256,7 +261,9 @@ class Tablet(object):
     args.append(tablet_type)
     utils.run_vtctl(args)
     if start:
-      if tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
+      if not wait_for_start:
+        expected_state = None
+      elif tablet_type == 'master' or tablet_type == 'replica' or tablet_type == 'rdonly' or tablet_type == 'batch':
         expected_state = "SERVING"
       else:
         expected_state = "NOT_SERVING"
@@ -278,7 +285,7 @@ class Tablet(object):
     args = [environment.binary_path('vttablet'),
             '-port', '%s' % (port or self.port),
             '-tablet-path', self.tablet_alias,
-            '-log_dir', self.tablet_dir]
+            '-log_dir', environment.vtlogroot]
     args.extend(environment.topo_server_flags())
 
     dbconfigs = self._get_db_configs_file(repl_extra_flags)
@@ -287,9 +294,12 @@ class Tablet(object):
         args.extend(["-db-config-"+key1+"-"+key2, dbconfigs[key1][key2]])
 
     if memcache:
-      memcache = os.path.join(self.tablet_dir, "memcache.sock")
-      args.extend(["-rowcache-bin", "memcached"])
-      args.extend(["-rowcache-socket", memcache])
+      if os.path.exists(environment.vtroot + "/bin/memcached"):
+        args.extend(["-rowcache-bin", environment.vtroot + "/bin/memcached"])
+      else:
+        args.extend(["-rowcache-bin", "memcached"])
+      memcache_socket = os.path.join(self.tablet_dir, "memcache.sock")
+      args.extend(["-rowcache-socket", memcache_socket])
 
     if auth:
       args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
@@ -367,3 +377,15 @@ class Tablet(object):
   def check_vttablet_count(klass):
     if Tablet.tablets_running > 0:
       raise utils.TestError("This test is not killing all its vttablets")
+
+def kill_tablets(tablets):
+  for t in tablets:
+    logging.debug("killing vttablet: %s", t.tablet_alias)
+    if t.proc is not None:
+      Tablet.tablets_running -= 1
+      t.proc.terminate()
+
+  for t in tablets:
+    if t.proc is not None:
+      t.proc.wait()
+      t.proc = None

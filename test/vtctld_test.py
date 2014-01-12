@@ -42,7 +42,7 @@ class Vtctld(object):
     return data["ServingGraph"]["Keyspaces"]
 
   def start(self):
-    args = [environment.binary_path('vtctld'), '-debug', '-templates', environment.vttop + '/go/cmd/vtctld/templates', '-log_dir', environment.tmproot]
+    args = [environment.binary_path('vtctld'), '-debug', '-templates', environment.vttop + '/go/cmd/vtctld/templates', '-log_dir', environment.vtlogroot]
     stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     return self.proc
@@ -91,8 +91,7 @@ class TestVtctld(unittest.TestCase):
     idle.init_tablet('idle')
     scrap.init_tablet('idle')
 
-    utils.run_vtctl('RebuildShardGraph /zk/global/vt/keyspaces/test_keyspace/shards/*', auto_log=True)
-    utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
+    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
 
     for t in assigned:
       t.create_db('vt_test_keyspace')

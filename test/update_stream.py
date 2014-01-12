@@ -70,8 +70,7 @@ def tearDownModule():
 
   utils.zk_teardown()
   tablet.Tablet.tablets_running = 2
-  master_tablet.kill_vttablet()
-  replica_tablet.kill_vttablet()
+  tablet.kill_tablets([master_tablet, replica_tablet])
   utils.kill_sub_processes()
   utils.remove_tmp_files()
   master_tablet.remove_tree()
