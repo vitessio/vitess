@@ -21,7 +21,7 @@ func NewSafeSession(sessn *proto.Session) *SafeSession {
 }
 
 func (session *SafeSession) InTransaction() bool {
-	if session == nil {
+	if session == nil || session.Session == nil {
 		return false
 	}
 	session.mu.Lock()

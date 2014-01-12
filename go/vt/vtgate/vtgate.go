@@ -7,11 +7,11 @@
 package vtgate
 
 import (
-	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -80,31 +80,24 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 	if err != nil {
 		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return sendReply(&proto.QueryResult{Sessn: query.Sessn})
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(context *rpcproto.Context, inSession, outSession *proto.Session) error {
-	if inSession.InTransaction {
-		err := fmt.Errorf("Already in transaction")
-		log.Errorf("Begin: %v", err)
-		return err
-	}
-	*outSession = *inSession
+func (vtg *VTGate) Begin(context *rpcproto.Context, noInput *rpc.UnusedRequest, outSession *proto.Session) error {
 	outSession.InTransaction = true
 	return nil
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(context *rpcproto.Context, inSession, outSession *proto.Session) error {
-	err := vtg.scatterConn.Commit(NewSafeSession(inSession))
-	*outSession = *inSession
-	return err
+func (vtg *VTGate) Commit(context *rpcproto.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+	return vtg.scatterConn.Commit(NewSafeSession(inSession))
 }
 
 // Rollback rolls back a transaction.
-func (vtg *VTGate) Rollback(context *rpcproto.Context, inSession, outSession *proto.Session) error {
-	err := vtg.scatterConn.Rollback(NewSafeSession(inSession))
-	*outSession = *inSession
-	return err
+func (vtg *VTGate) Rollback(context *rpcproto.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+	return vtg.scatterConn.Rollback(NewSafeSession(inSession))
 }
