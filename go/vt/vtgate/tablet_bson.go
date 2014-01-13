@@ -25,10 +25,6 @@ var (
 	tabletBsonEncrypted = flag.Bool("tablet-bson-encrypted", false, "use encryption to talk to vttablet")
 )
 
-const (
-	CONN_CLOSED = OperationalError("vttablet: Connection Closed")
-)
-
 func init() {
 	RegisterDialer("bson", DialTablet)
 }

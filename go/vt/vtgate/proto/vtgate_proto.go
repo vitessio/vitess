@@ -144,7 +144,7 @@ type QueryShard struct {
 	Keyspace      string
 	TabletType    topo.TabletType
 	Shards        []string
-	Sessn         *Session
+	Session       *Session
 }
 
 func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -156,9 +156,9 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "TabletType", string(qrs.TabletType))
 	bson.EncodeStringArray(buf, "Shards", qrs.Shards)
 
-	if qrs.Sessn != nil {
-		bson.EncodePrefix(buf, bson.Object, "Sessn")
-		qrs.Sessn.MarshalBson(buf)
+	if qrs.Session != nil {
+		bson.EncodePrefix(buf, bson.Object, "Session")
+		qrs.Session.MarshalBson(buf)
 	}
 
 	buf.WriteByte(0)
@@ -182,9 +182,9 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 			qrs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Shards":
 			qrs.Shards = bson.DecodeStringArray(buf, kind)
-		case "Sessn":
-			qrs.Sessn = new(Session)
-			qrs.Sessn.UnmarshalBson(buf)
+		case "Session":
+			qrs.Session = new(Session)
+			qrs.Session.UnmarshalBson(buf)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -194,7 +194,7 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 
 type QueryResult struct {
 	mproto.QueryResult
-	Sessn *Session
+	Session *Session
 }
 
 func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -205,9 +205,9 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeInt64(buf, "InsertId", int64(qr.InsertId))
 	mproto.EncodeRowsBson(qr.Rows, "Rows", buf)
 
-	if qr.Sessn != nil {
-		bson.EncodePrefix(buf, bson.Object, "Sessn")
-		qr.Sessn.MarshalBson(buf)
+	if qr.Session != nil {
+		bson.EncodePrefix(buf, bson.Object, "Session")
+		qr.Session.MarshalBson(buf)
 	}
 
 	buf.WriteByte(0)
@@ -229,9 +229,9 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 			qr.InsertId = bson.DecodeUint64(buf, kind)
 		case "Rows":
 			qr.Rows = mproto.DecodeRowsBson(buf, kind)
-		case "Sessn":
-			qr.Sessn = new(Session)
-			qr.Sessn.UnmarshalBson(buf)
+		case "Session":
+			qr.Session = new(Session)
+			qr.Session.UnmarshalBson(buf)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -244,7 +244,7 @@ type BatchQueryShard struct {
 	Keyspace   string
 	TabletType topo.TabletType
 	Shards     []string
-	Sessn      *Session
+	Session    *Session
 }
 
 func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -255,9 +255,9 @@ func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "TabletType", string(bqs.TabletType))
 	bson.EncodeStringArray(buf, "Shards", bqs.Shards)
 
-	if bqs.Sessn != nil {
-		bson.EncodePrefix(buf, bson.Object, "Sessn")
-		bqs.Sessn.MarshalBson(buf)
+	if bqs.Session != nil {
+		bson.EncodePrefix(buf, bson.Object, "Session")
+		bqs.Session.MarshalBson(buf)
 	}
 
 	buf.WriteByte(0)
@@ -279,9 +279,9 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 			bqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Shards":
 			bqs.Shards = bson.DecodeStringArray(buf, kind)
-		case "Sessn":
-			bqs.Sessn = new(Session)
-			bqs.Sessn.UnmarshalBson(buf)
+		case "Session":
+			bqs.Session = new(Session)
+			bqs.Session.UnmarshalBson(buf)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -291,7 +291,7 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 
 type QueryResultList struct {
 	tproto.QueryResultList
-	Sessn *Session
+	Session *Session
 }
 
 func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -299,9 +299,9 @@ func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 	tproto.EncodeResultsBson(qrl.List, "List", buf)
 
-	if qrl.Sessn != nil {
-		bson.EncodePrefix(buf, bson.Object, "Sessn")
-		qrl.Sessn.MarshalBson(buf)
+	if qrl.Session != nil {
+		bson.EncodePrefix(buf, bson.Object, "Session")
+		qrl.Session.MarshalBson(buf)
 	}
 
 	buf.WriteByte(0)
@@ -317,9 +317,9 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 		switch key {
 		case "List":
 			qrl.List = tproto.DecodeResultsBson(buf, kind)
-		case "Sessn":
-			qrl.Sessn = new(Session)
-			qrl.Sessn.UnmarshalBson(buf)
+		case "Session":
+			qrl.Session = new(Session)
+			qrl.Session.UnmarshalBson(buf)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}

@@ -95,7 +95,7 @@ type reflectQueryShard struct {
 	Keyspace      string
 	TabletType    topo.TabletType
 	Shards        []string
-	Sessn         *Session
+	Session       *Session
 }
 
 type badQueryShard struct {
@@ -105,7 +105,7 @@ type badQueryShard struct {
 	Keyspace      string
 	TabletType    topo.TabletType
 	Shards        []string
-	Sessn         *Session
+	Session       *Session
 }
 
 func TestQueryShard(t *testing.T) {
@@ -115,7 +115,7 @@ func TestQueryShard(t *testing.T) {
 		Keyspace:      "keyspace",
 		TabletType:    topo.TabletType("replica"),
 		Shards:        []string{"shard1", "shard2"},
-		Sessn: &Session{InTransaction: true,
+		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
 				Shard:         "0",
@@ -140,7 +140,7 @@ func TestQueryShard(t *testing.T) {
 		Keyspace:      "keyspace",
 		TabletType:    topo.TabletType("replica"),
 		Shards:        []string{"shard1", "shard2"},
-		Sessn: &Session{InTransaction: true,
+		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
 				Shard:         "0",
@@ -186,7 +186,7 @@ func TestQueryShard(t *testing.T) {
 func TestQueryResult(t *testing.T) {
 	// We can't do the reflection test because bson
 	// doesn't do it correctly for embedded fields.
-	want := "\\\x01\x00\x00" +
+	want := "^\x01\x00\x00" +
 		"\x04Fields\x00*\x00\x00\x00\x030\x00\"\x00\x00\x00" +
 		"\x05Name\x00\x04\x00\x00\x00\x00name" +
 		"\x12Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
@@ -194,10 +194,10 @@ func TestQueryResult(t *testing.T) {
 		"\x12InsertId\x00\x03\x00\x00\x00\x00\x00\x00\x00" +
 		"\x04Rows\x00 \x00\x00\x00" +
 		"\x040\x00\x18\x00\x00\x00" +
-		"\x050\x00\x01\x00\x00\x00\x001" +
-		"\x051\x00\x02\x00\x00\x00\x00aa" +
+		"\x050\x00\x01\x00\x00\x00" +
+		"\x001\x051\x00\x02\x00\x00\x00\x00aa" +
 		"\x00\x00" +
-		"\x03Sessn\x00\xd0\x00\x00\x00" +
+		"\x03Session\x00\xd0\x00\x00\x00" +
 		"\bInTransaction\x00\x01" +
 		"\x04ShardSessions\x00\xac\x00\x00\x00" +
 		"\x030\x00Q\x00\x00\x00" +
@@ -222,7 +222,7 @@ func TestQueryResult(t *testing.T) {
 				{{sqltypes.String("1")}, {sqltypes.String("aa")}},
 			},
 		},
-		Sessn: &Session{InTransaction: true,
+		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
 				Shard:         "0",
@@ -265,7 +265,7 @@ type reflectBatchQueryShard struct {
 	Keyspace   string
 	TabletType topo.TabletType
 	Shards     []string
-	Sessn      *Session
+	Session    *Session
 }
 
 type badBatchQueryShard struct {
@@ -274,7 +274,7 @@ type badBatchQueryShard struct {
 	Keyspace   string
 	TabletType topo.TabletType
 	Shards     []string
-	Sessn      *Session
+	Session    *Session
 }
 
 func TestBatchQueryShard(t *testing.T) {
@@ -285,7 +285,7 @@ func TestBatchQueryShard(t *testing.T) {
 		}},
 		Keyspace: "keyspace",
 		Shards:   []string{"shard1", "shard2"},
-		Sessn: &Session{InTransaction: true,
+		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
 				Shard:         "0",
@@ -311,7 +311,7 @@ func TestBatchQueryShard(t *testing.T) {
 		}},
 		Keyspace: "keyspace",
 		Shards:   []string{"shard1", "shard2"},
-		Sessn: &Session{InTransaction: true,
+		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
 				Shard:         "0",
@@ -359,7 +359,7 @@ type badTypeBatchQueryShard struct {
 	Keyspace   string
 	TabletType topo.TabletType
 	Shards     []string
-	Sessn      *Session
+	Session    *Session
 }
 
 func TestBatchQueryShardBadType(t *testing.T) {

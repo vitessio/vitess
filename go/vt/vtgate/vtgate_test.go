@@ -36,13 +36,13 @@ func TestVTGateExecuteShard(t *testing.T) {
 	if !reflect.DeepEqual(singleRowResult, qr) {
 		t.Errorf("want \n%#v, got \n%#v", singleRowResult, qr)
 	}
-	if qr.Sessn != nil {
-		t.Errorf("want nil, got %#v\n", qr.Sessn)
+	if qr.Session != nil {
+		t.Errorf("want nil, got %#v\n", qr.Session)
 	}
 
-	q.Sessn = new(proto.Session)
-	RpcVTGate.Begin(nil, nil, q.Sessn)
-	if !q.Sessn.InTransaction {
+	q.Session = new(proto.Session)
+	RpcVTGate.Begin(nil, nil, q.Session)
+	if !q.Session.InTransaction {
 		t.Errorf("want true, got false")
 	}
 	RpcVTGate.ExecuteShard(nil, &q, qr)
@@ -53,19 +53,19 @@ func TestVTGateExecuteShard(t *testing.T) {
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(want, q.Sessn) {
-		t.Errorf("want \n%#v, got \n%#v", want, q.Sessn)
+	if !reflect.DeepEqual(want, q.Session) {
+		t.Errorf("want \n%#v, got \n%#v", want, q.Session)
 	}
 
-	RpcVTGate.Commit(nil, q.Sessn, nil)
+	RpcVTGate.Commit(nil, q.Session, nil)
 	if sbc.CommitCount != 1 {
 		t.Errorf("want 1, got %d", sbc.CommitCount)
 	}
 
-	q.Sessn = new(proto.Session)
-	RpcVTGate.Begin(nil, nil, q.Sessn)
+	q.Session = new(proto.Session)
+	RpcVTGate.Begin(nil, nil, q.Session)
 	RpcVTGate.ExecuteShard(nil, &q, qr)
-	RpcVTGate.Rollback(nil, q.Sessn, nil)
+	RpcVTGate.Rollback(nil, q.Session, nil)
 	runtime.Gosched()
 	if sbc.RollbackCount != 1 {
 		t.Errorf("want 1, got %d", sbc.RollbackCount)
@@ -97,15 +97,15 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 	if qrl.List[0].RowsAffected != 2 {
 		t.Errorf("want 2, got %v", qrl.List[0].RowsAffected)
 	}
-	if qrl.Sessn != nil {
-		t.Errorf("want nil, got %#v\n", qrl.Sessn)
+	if qrl.Session != nil {
+		t.Errorf("want nil, got %#v\n", qrl.Session)
 	}
 
-	q.Sessn = new(proto.Session)
-	RpcVTGate.Begin(nil, nil, q.Sessn)
+	q.Session = new(proto.Session)
+	RpcVTGate.Begin(nil, nil, q.Session)
 	err = RpcVTGate.ExecuteBatchShard(nil, &q, qrl)
-	if len(q.Sessn.ShardSessions) != 2 {
-		t.Errorf("want 2, got %d", len(q.Sessn.ShardSessions))
+	if len(q.Session.ShardSessions) != 2 {
+		t.Errorf("want 2, got %d", len(q.Session.ShardSessions))
 	}
 }
 
@@ -130,9 +130,9 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", want, qrs)
 	}
 
-	q.Sessn = new(proto.Session)
+	q.Session = new(proto.Session)
 	qrs = nil
-	RpcVTGate.Begin(nil, nil, q.Sessn)
+	RpcVTGate.Begin(nil, nil, q.Session)
 	err = RpcVTGate.StreamExecuteShard(nil, &q, func(r interface{}) error {
 		qrs = append(qrs, *(r.(*proto.QueryResult)))
 		return nil
@@ -140,7 +140,7 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 	want = []proto.QueryResult{{
 		QueryResult: singleRowResult.QueryResult,
 	}, {
-		Sessn: &proto.Session{
+		Session: &proto.Session{
 			InTransaction: true,
 			ShardSessions: []*proto.ShardSession{{
 				Shard:         "0",

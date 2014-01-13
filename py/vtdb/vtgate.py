@@ -111,11 +111,11 @@ class TabletConnection(object):
 
   def _add_session(self, req):
     if self.session:
-      req['Sessn'] = self.session
+      req['Session'] = self.session
 
   def _update_session(self, response):
-    if 'Sessn' in response.reply:
-      self.session = response.reply['Sessn']
+    if 'Session' in response.reply:
+      self.session = response.reply['Session']
 
   def _execute(self, sql, bind_variables):
     new_binds = field_types.convert_bind_vars(bind_variables)
@@ -241,8 +241,8 @@ class TabletConnection(object):
           self._stream_result_index = None
           return None
         # A session message, if any comes separately with no rows
-        if 'Sessn' in self._stream_result.reply:
-          self.session = self._stream_result.reply['Sessn']
+        if 'Session' in self._stream_result.reply:
+          self.session = self._stream_result.reply['Session']
           self._stream_result = None
           continue
       except gorpc.GoRpcError as e:

@@ -21,6 +21,10 @@ const (
 	ERR_NOT_IN_TX
 )
 
+const (
+	CONN_CLOSED = OperationalError("vttablet: Connection Closed")
+)
+
 var (
 	tabletProtocol = flag.String("tablet-protocol", "bson", "how to talk to the vttablets")
 )

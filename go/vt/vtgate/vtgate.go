@@ -41,13 +41,13 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 		query.Keyspace,
 		query.Shards,
 		query.TabletType,
-		NewSafeSession(query.Sessn))
+		NewSafeSession(query.Session))
 	if err == nil {
 		*reply = *qr
 	} else {
 		log.Errorf("ExecuteShard: %v, query: %#v", err, query)
 	}
-	reply.Sessn = query.Sessn
+	reply.Session = query.Session
 	return err
 }
 
@@ -58,13 +58,13 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 		batchQuery.Keyspace,
 		batchQuery.Shards,
 		batchQuery.TabletType,
-		NewSafeSession(batchQuery.Sessn))
+		NewSafeSession(batchQuery.Session))
 	if err == nil {
 		*reply = *qrs
 	} else {
 		log.Errorf("ExecuteBatchShard: %v, queries: %#v", err, batchQuery)
 	}
-	reply.Sessn = batchQuery.Sessn
+	reply.Session = batchQuery.Session
 	return err
 }
 
@@ -76,15 +76,15 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 		query.Keyspace,
 		query.Shards,
 		query.TabletType,
-		NewSafeSession(query.Sessn), sendReply)
+		NewSafeSession(query.Session), sendReply)
 	if err != nil {
 		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
 	}
 	if err != nil {
 		return err
 	}
-	if query.Sessn != nil {
-		return sendReply(&proto.QueryResult{Sessn: query.Sessn})
+	if query.Session != nil {
+		return sendReply(&proto.QueryResult{Session: query.Session})
 	}
 	return nil
 }
