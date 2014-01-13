@@ -383,7 +383,9 @@ def run_vtctl_json(clargs):
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtworker'), '-log_dir', environment.vtlogroot]
+  args = [environment.binary_path('vtworker'),
+          '-log_dir', environment.vtlogroot,
+          '-port', str(environment.reserve_ports(1))]
 
   if auto_log:
     if options.verbose == 2:
@@ -392,15 +394,10 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
       log_level='WARNING'
     else:
       log_level='ERROR'
-
   if log_level:
     args.append('--stderrthreshold=%s' % log_level)
 
-  if isinstance(clargs, str):
-    cmd = " ".join(args) + ' ' + clargs
-  else:
-    cmd = args + clargs
-
+  cmd = args + clargs
   if expect_fail:
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)
