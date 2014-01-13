@@ -164,13 +164,13 @@ def setup_schema():
 
 def get_master_connection(shard='1', user=None, password=None):
   logging.debug("connecting to master with params")
-  master_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "master", 10.0, user=user, password=password)  
+  master_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "master", 10.0, user=user, password=password)
   master_conn.connect()
   return master_conn
 
 def get_replica_connection(shard='1', user=None, password=None):
   logging.debug("connecting to replica with params %s %s", user, password)
-  replica_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "replica", 10.0, user=user, password=password) 
+  replica_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "replica", 10.0, user=user, password=password)
   replica_conn.connect()
   return replica_conn
 
@@ -459,7 +459,7 @@ class TestAuthentication(unittest.TestCase):
 
   def test_incorrect_credentials(self):
     with self.assertRaises(dbexceptions.OperationalError):
-      replica_conn = get_replica_connection(user="romek", password="ma raka")
+      replica_conn = get_replica_connection(user=self.user, password="ma raka")
       replica_conn.connect()
 
   def test_challenge_is_used(self):
