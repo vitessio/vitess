@@ -125,7 +125,7 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	want := []proto.QueryResult{{QueryResult: singleRowResult.QueryResult}, {}}
+	want := []proto.QueryResult{{QueryResult: singleRowResult.QueryResult}}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%#v, got \n%#v", want, qrs)
 	}

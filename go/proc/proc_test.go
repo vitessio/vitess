@@ -89,7 +89,7 @@ func testPid(t *testing.T, port string, want int) {
 			if i == 19 {
 				t.Fatal(err)
 			}
-			if strings.Contains(err.Error(), "connection refused") {
+			if strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "EOF") {
 				time.Sleep(1000 * time.Millisecond)
 				continue
 			}

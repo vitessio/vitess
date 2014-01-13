@@ -83,7 +83,10 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 	if err != nil {
 		return err
 	}
-	return sendReply(&proto.QueryResult{Sessn: query.Sessn})
+	if query.Sessn != nil {
+		return sendReply(&proto.QueryResult{Sessn: query.Sessn})
+	}
+	return nil
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
