@@ -272,16 +272,16 @@ class TestTabletManager(unittest.TestCase):
 
       # then the Zookeeper connections
       if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
-        raise utils.TestError('invalid zk test_nj state: ',
-                              v['ZkMetaConn']['test_nj']['Current'])
+        self.fail('invalid zk test_nj state: %s' %
+                  v['ZkMetaConn']['test_nj']['Current'])
       if v['ZkMetaConn']['global']['Current'] != 'Connected':
-        raise utils.TestError('invalid zk global state: ',
-                              v['ZkMetaConn']['global']['Current'])
+        self.fail('invalid zk global state: %s' %
+                  v['ZkMetaConn']['global']['Current'])
       if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
-        raise utils.TestError('not enough time in Connected state',
-                              v['ZkMetaConn']['test_nj']['DurationConnected'])
+        self.fail('not enough time in Connected state: %u',
+                  v['ZkMetaConn']['test_nj']['DurationConnected'])
       if v['TabletType'] != 'master':
-        raise utils.TestError('TabletType not exported correctly')
+        self.fail('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
 
@@ -302,7 +302,7 @@ class TestTabletManager(unittest.TestCase):
                                    user='ala', password=r'ma kota')
     logging.debug("Got rows: " + out)
     if 'Row count: ' not in out:
-      raise utils.TestError("query didn't go through: %s, %s" % (err, out))
+      self.fail("query didn't go through: %s, %s" % (err, out))
 
     tablet_62344.kill_vttablet()
     # TODO(szopa): Test that non-authenticated queries do not pass
@@ -315,7 +315,7 @@ class TestTabletManager(unittest.TestCase):
       if exp in text:
         return
     logging.warning("ExecuteHook output:\n%s", text)
-    raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
+    self.fail("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
     out, err = utils.run_vtctl('--alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
@@ -391,7 +391,7 @@ class TestTabletManager(unittest.TestCase):
 
     # check the vtctl command got the right remote error back
     if "vtaction interrupted by signal" not in err:
-      raise utils.TestError("cannot find expected output in error:", err)
+      self.fail("cannot find expected output in error: " + err)
     logging.debug("vtaction was interrupted correctly:\n" + err)
 
     tablet_62344.kill_vttablet()
@@ -412,7 +412,7 @@ class TestTabletManager(unittest.TestCase):
       if proc1.returncode is not None:
         break
     if proc1.returncode is None:
-      raise utils.TestError("proc1 still running")
+      self.fail("proc1 still running")
     tablet_62344.kill_vttablet()
 
   def test_scrap_and_reinit(self):

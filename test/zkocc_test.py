@@ -211,10 +211,10 @@ class TestZkocc(unittest.TestCase):
     bad_zkocc_client = zkocc.ZkOccConnection("localhost:%u,localhost:%u" % (bad_port+2, bad_port), "test_nj", 30)
     try:
       bad_zkocc_client.dial()
-      raise utils.TestError('exception expected')
+      self.fail('exception expected')
     except zkocc.ZkOccError as e:
-      if str(e) != "Cannot dial to any server":
-        raise
+      if not str(e).startswith("Cannot dial to any server, tried: "):
+        self.fail('unexpected exception: %s' % str(e))
     level = logging.getLogger().getEffectiveLevel()
     logging.getLogger().setLevel(logging.ERROR)
 
@@ -223,8 +223,8 @@ class TestZkocc(unittest.TestCase):
       bad_zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
       self.fail('exception expected')
     except zkocc.ZkOccError as e:
-      if str(e) != "Cannot dial to any server":
-        raise
+      if not str(e).startswith("Cannot dial to any server, tried: "):
+        self.fail('unexpected exception: %s' % str(e))
 
     logging.getLogger().setLevel(level)
 
@@ -303,7 +303,7 @@ class TestZkocc(unittest.TestCase):
       elif line == "/zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=true)\n":
         stale = True
       else:
-        raise utils.TestError('unexpected line: ', line)
+        self.fail('unexpected line: %s' % line)
       if state == 0:
         if stale:
           state = 1
@@ -325,8 +325,8 @@ class TestZkocc(unittest.TestCase):
       zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
       self.fail('exception expected')
     except zkocc.ZkOccError as e:
-      if str(e) != "Cannot dial to any server":
-        raise
+      if not str(e).startswith("Cannot dial to any server, tried: "):
+        self.fail('unexpected exception: %s', str(e))
     logging.getLogger().setLevel(level)
 
   def test_zkocc_qps(self):
@@ -340,7 +340,7 @@ class TestZkocc(unittest.TestCase):
     # get the zkocc vars, make sure we have what we need
     v = utils.get_vars(utils.zkocc_port_base)
     if v['ZkReader']['test_nj']['State'] != 'Connected':
-      raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State'])
+      self.fail('invalid zk global state: ' + v['ZkReader']['test_nj']['State'])
 
     # some checks on performance / stats
     # a typical workstation will do 45-47k QPS, check we have more than 15k
