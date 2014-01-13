@@ -165,21 +165,21 @@ class TestClone(unittest.TestCase):
       if sepPos != -1:
         results[name] = err[sepPos+len(name)+2:].splitlines()[0]
     if "Manifest" not in results:
-      raise utils.TestError("Snapshot didn't echo Manifest file", err)
+      self.fail("Snapshot didn't echo Manifest file: %s" % str(err))
     if "ParentAlias" not in results:
-      raise utils.TestError("Snapshot didn't echo ParentAlias", err)
+      self.fail("Snapshot didn't echo ParentAlias: %s" % str(err))
     utils.pause("snapshot finished: " + results['Manifest'] + " " + results['ParentAlias'])
     if server_mode:
       if "SlaveStartRequired" not in results:
-        raise utils.TestError("Snapshot didn't echo SlaveStartRequired", err)
+        self.fail("Snapshot didn't echo SlaveStartRequired: %s" % err)
       if "ReadOnly" not in results:
-        raise utils.TestError("Snapshot didn't echo ReadOnly", err)
+        self.fail("Snapshot didn't echo ReadOnly %s" % err)
       if "OriginalType" not in results:
-        raise utils.TestError("Snapshot didn't echo OriginalType", err)
+        self.fail("Snapshot didn't echo OriginalType: %s" % err)
       if (results['SlaveStartRequired'] != 'false' or
           results['ReadOnly'] != 'true' or
           results['OriginalType'] != 'master'):
-        raise utils.TestError("Bad values returned by Snapshot", err)
+        self.fail("Bad values returned by Snapshot: %s" % err)
     tablet_62044.init_tablet('idle', start=True)
 
     # do not specify a MANIFEST, see if 'default' works
@@ -244,9 +244,9 @@ class TestClone(unittest.TestCase):
                                 tablet_62044.tablet_alias],
                                log_level='INFO', expect_fail=True)
     if "Cannot validate snapshot directory" not in err:
-      raise utils.TestError("expected validation error", err)
+      self.fail("expected validation error: %s" % err)
     if "Un-reserved test_nj-0000062044" not in err:
-      raise utils.TestError("expected Un-reserved", err)
+      self.fail("expected Un-reserved: %s" % err)
     logging.debug("Failed Clone output: " + err)
     utils.run("chmod +w %s" % snapshot_dir)
 
@@ -299,12 +299,12 @@ class TestClone(unittest.TestCase):
     utils.run_vtctl(['MultiSnapshot', '--force', '--tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3', '--spec=-0000000000000003-', tablet_62344.tablet_alias])
 
     if os.path.exists(os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
-      raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
+      self.fail("Table vt_insert_test_4 wasn't supposed to be dumped.")
     for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
       path = os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
       with gzip.open(path) as f:
         if len(f.readlines()) != 2:
-          raise utils.TestError("Data looks wrong in %s" % path)
+          self.fail("Data looks wrong in %s" % path)
 
     tablet_62344.kill_vttablet()
 
