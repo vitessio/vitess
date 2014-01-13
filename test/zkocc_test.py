@@ -211,7 +211,7 @@ class TestZkocc(unittest.TestCase):
     bad_zkocc_client = zkocc.ZkOccConnection("localhost:%u,localhost:%u" % (bad_port+2, bad_port), "test_nj", 30)
     try:
       bad_zkocc_client.dial()
-      raise utils.TestError('exception expected')
+      self.fail('exception expected')
     except zkocc.ZkOccError as e:
       if not str(e).startswith("Cannot dial to any server, tried: "):
         self.fail('unexpected exception: %s' % str(e))
@@ -340,7 +340,7 @@ class TestZkocc(unittest.TestCase):
     # get the zkocc vars, make sure we have what we need
     v = utils.get_vars(utils.zkocc_port_base)
     if v['ZkReader']['test_nj']['State'] != 'Connected':
-      raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State'])
+      self.fail('invalid zk global state: ' + v['ZkReader']['test_nj']['State'])
 
     # some checks on performance / stats
     # a typical workstation will do 45-47k QPS, check we have more than 15k

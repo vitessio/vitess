@@ -172,7 +172,7 @@ class TestUpdateStream(unittest.TestCase):
           logging.debug("Test Service Enabled: Pass")
           break
     except Exception, e:
-      raise utils.TestError("Exception in getting stream from replica: %s\n Traceback %s",str(e), traceback.print_exc())
+      self.fail("Exception in getting stream from replica: %s\n Traceback %s" % (str(e), traceback.print_exc()))
     thd.join(timeout=30)
 
     v = utils.get_vars(replica_tablet.port)
@@ -202,7 +202,7 @@ class TestUpdateStream(unittest.TestCase):
     except Exception, e:
       logging.error("Exception: %s", str(e))
       logging.error("Traceback: %s", traceback.print_exc())
-      raise utils.TestError("Update stream returned error '%s'", str(e))
+      self.fail("Update stream returned error '%s'" % str(e))
     logging.debug("Streamed %d transactions before exiting" % txn_count)
 
   def _vtdb_conn(self, host):

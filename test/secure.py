@@ -232,29 +232,29 @@ class TestSecure(unittest.TestCase):
 
     shard_0_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vts")
     if len(shard_0_master_addrs) != 1:
-      raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts", got: %s' % " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
     if shard_0_master_addrs[0][2] != True:
-      raise utils.TestError('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts" is not encrypted')
+      self.fail('topology.get_host_port_by_name failed for "test_keyspace.0.master:_vts" is not encrypted')
     logging.debug("shard 0 master addrs: %s", " ".join(["%s:%u(%s)" % (h, p, str(e)) for (h, p, e) in shard_0_master_addrs]))
 
     # make sure asking for optionally secure connections works too
     auto_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.0.master:_vtocc", encrypted=True)
     if auto_addrs != shard_0_master_addrs:
-      raise utils.TestError('topology.get_host_port_by_name doesn\'t resolve encrypted addresses properly: %s != %s' % (str(shard_0_master_addrs), str(auto_addrs)))
+      self.fail('topology.get_host_port_by_name doesn\'t resolve encrypted addresses properly: %s != %s' % (str(shard_0_master_addrs), str(auto_addrs)))
 
     # try to connect with regular client
     try:
       conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
                                       "test_keyspace", "0", 10.0)
       conn.dial()
-      raise utils.TestError("No exception raised to secure port")
+      self.fail("No exception raised to secure port")
     except tablet3.FatalError as e:
       if not e.args[0][0].startswith('Unexpected EOF in handshake to'):
-        raise utils.TestError("Unexpected exception: %s" % str(e))
+        self.fail("Unexpected exception: %s" % str(e))
 
     sconn = utils.get_vars(shard_0_master.port)["SecureConnections"]
     if sconn != 0:
-      raise utils.TestError("unexpected conns %s" % sconn)
+      self.fail("unexpected conns %s" % sconn)
 
     # connect to encrypted port
     conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
@@ -265,15 +265,15 @@ class TestSecure(unittest.TestCase):
 
     sconn = utils.get_vars(shard_0_master.port)["SecureConnections"]
     if sconn != 1:
-      raise utils.TestError("unexpected conns %s" % sconn)
+      self.fail("unexpected conns %s" % sconn)
     saccept = utils.get_vars(shard_0_master.port)["SecureAccepts"]
     if saccept == 0:
-      raise utils.TestError("unexpected accepts %s" % saccept)
+      self.fail("unexpected accepts %s" % saccept)
 
     # trigger a time out on a secure connection, see what exception we get
     try:
       conn._execute("select sleep(100) from dual", {})
-      raise utils.TestError("No timeout exception")
+      self.fail("No timeout exception")
     except tablet3.TimeoutError as e:
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
 
@@ -307,7 +307,7 @@ class TestSecure(unittest.TestCase):
     time.sleep(1.0)
     proc1.poll()
     if proc1.returncode is None:
-      raise utils.TestError("proc1 still running")
+      self.fail("proc1 still running")
     shard_0_master.kill_vttablet()
     utils.kill_sub_process(zkocc_server)
     logging.debug("Done here")
