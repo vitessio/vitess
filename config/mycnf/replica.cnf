@@ -11,8 +11,3 @@ master-info-file = {{.MasterInfoFile}}
 log-slave-updates
 
 #slave_compressed_protocol
-
-# Specific to vt to enable RBR and cache invalidation
-# vt_enable_binlog_splitter_rbr = 1
-# vt_shard_key_range_start = {{.StartKey}}
-# vt_shard_key_range_end = {{.EndKey}}
