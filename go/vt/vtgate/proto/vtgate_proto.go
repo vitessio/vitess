@@ -142,8 +142,8 @@ type QueryShard struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	TabletType    topo.TabletType
 	Shards        []string
+	TabletType    topo.TabletType
 	Session       *Session
 }
 
@@ -153,8 +153,8 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	bson.EncodeString(buf, "Sql", qrs.Sql)
 	tproto.EncodeBindVariablesBson(buf, "BindVariables", qrs.BindVariables)
 	bson.EncodeString(buf, "Keyspace", qrs.Keyspace)
-	bson.EncodeString(buf, "TabletType", string(qrs.TabletType))
 	bson.EncodeStringArray(buf, "Shards", qrs.Shards)
+	bson.EncodeString(buf, "TabletType", string(qrs.TabletType))
 
 	if qrs.Session != nil {
 		bson.EncodePrefix(buf, bson.Object, "Session")
@@ -242,8 +242,8 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 type BatchQueryShard struct {
 	Queries    []tproto.BoundQuery
 	Keyspace   string
-	TabletType topo.TabletType
 	Shards     []string
+	TabletType topo.TabletType
 	Session    *Session
 }
 
@@ -252,8 +252,8 @@ func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 	tproto.EncodeQueriesBson(bqs.Queries, "Queries", buf)
 	bson.EncodeString(buf, "Keyspace", bqs.Keyspace)
-	bson.EncodeString(buf, "TabletType", string(bqs.TabletType))
 	bson.EncodeStringArray(buf, "Shards", bqs.Shards)
+	bson.EncodeString(buf, "TabletType", string(bqs.TabletType))
 
 	if bqs.Session != nil {
 		bson.EncodePrefix(buf, bson.Object, "Session")
@@ -275,10 +275,10 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 			bqs.Queries = tproto.DecodeQueriesBson(buf, kind)
 		case "Keyspace":
 			bqs.Keyspace = bson.DecodeString(buf, kind)
-		case "TabletType":
-			bqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Shards":
 			bqs.Shards = bson.DecodeStringArray(buf, kind)
+		case "TabletType":
+			bqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
 		case "Session":
 			bqs.Session = new(Session)
 			bqs.Session.UnmarshalBson(buf)

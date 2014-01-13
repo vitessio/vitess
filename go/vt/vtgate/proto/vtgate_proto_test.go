@@ -93,8 +93,8 @@ type reflectQueryShard struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	TabletType    topo.TabletType
 	Shards        []string
+	TabletType    topo.TabletType
 	Session       *Session
 }
 
@@ -103,8 +103,8 @@ type badQueryShard struct {
 	Sql           string
 	BindVariables map[string]interface{}
 	Keyspace      string
-	TabletType    topo.TabletType
 	Shards        []string
+	TabletType    topo.TabletType
 	Session       *Session
 }
 
@@ -113,8 +113,8 @@ func TestQueryShard(t *testing.T) {
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
-		TabletType:    topo.TabletType("replica"),
 		Shards:        []string{"shard1", "shard2"},
+		TabletType:    topo.TabletType("replica"),
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -138,8 +138,8 @@ func TestQueryShard(t *testing.T) {
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
 		Keyspace:      "keyspace",
-		TabletType:    topo.TabletType("replica"),
 		Shards:        []string{"shard1", "shard2"},
+		TabletType:    topo.TabletType("replica"),
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{
 				Keyspace:      "a",
@@ -263,8 +263,8 @@ type reflectBoundQuery struct {
 type reflectBatchQueryShard struct {
 	Queries    []reflectBoundQuery
 	Keyspace   string
-	TabletType topo.TabletType
 	Shards     []string
+	TabletType topo.TabletType
 	Session    *Session
 }
 
@@ -272,8 +272,8 @@ type badBatchQueryShard struct {
 	Extra      int
 	Queries    []reflectBoundQuery
 	Keyspace   string
-	TabletType topo.TabletType
 	Shards     []string
+	TabletType topo.TabletType
 	Session    *Session
 }
 
@@ -357,8 +357,8 @@ func TestBatchQueryShard(t *testing.T) {
 type badTypeBatchQueryShard struct {
 	Queries    string
 	Keyspace   string
-	TabletType topo.TabletType
 	Shards     []string
+	TabletType topo.TabletType
 	Session    *Session
 }
 
