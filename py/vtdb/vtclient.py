@@ -26,6 +26,8 @@ def get_vt_connection_params_list(zkocc_client, keyspace, shard, db_type, timeou
     vt_params['addr'] = "%s:%s" % (host, port)
     vt_params['timeout'] = timeout
     vt_params['encrypted'] = encrypted
+    vt_params['user'] = user
+    vt_params['password'] = password
     if vtgate_protocol != 'v0':
       vt_params['tablet_type'] = db_type
     db_params_list.append(vt_params)
