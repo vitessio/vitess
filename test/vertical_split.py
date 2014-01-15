@@ -133,6 +133,13 @@ index by_msg (msg)
     utils.run_vtctl(['MultiSnapshot', '--tables=moving1,moving2,view1',
                      source_rdonly.tablet_alias], auto_log=True)
 
+    # perform the restore.
+    utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+                     'destination_keyspace/0', source_rdonly.tablet_alias],
+                    auto_log=True)
+
+    utils.pause("Good time to test vtworker for diffs")
+
     # kill everything
     tablet.kill_tablets([source_master, source_replica, source_rdonly,
                          destination_master, destination_replica,
