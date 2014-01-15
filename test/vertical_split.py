@@ -130,14 +130,28 @@ index by_msg (msg)
     logging.info("Checking %u values from %s/%s starting at %u", count, dbname,
                  table, first)
     rows = tablet.mquery(dbname, 'select id, msg from %s where id>=%u order by id limit %u' % (table, first, count))
-    self.assertEqual(count, len(rows), "got worng number of rows: %u != %u" %
-                     (count, len(rows)))
+    self.assertEqual(count, len(rows), "got wrong number of rows: %u != %u" %
+                     (len(rows), count))
     for i in xrange(count):
-      self.assertEqual(rows[i][0], first + i, "invalid id[%u]: %u != %u" %
-                       (i, rows[i][0], first + i))
-      self.assertEqual(rows[i][1], 'value %u' % (first + i),
-                       "invalid msg[%u]: '%s' != 'value %u'" %
-                       (i, rows[i][1], first + i))
+      self.assertEqual(first + i, rows[i][0], "invalid id[%u]: %u != %u" %
+                       (i, first + i, rows[i][0]))
+      self.assertEqual('value %u' % (first + i), rows[i][1],
+                       "invalid msg[%u]: 'value %u' != '%s'" %
+                       (i, first + i, rows[i][1]))
+
+  def _check_values_timeout(self, tablet, dbname, table, first, count,
+                            timeout=30):
+    while True:
+      try:
+        self._check_values(tablet, dbname, table, first, count)
+        return
+      except:
+        timeout -= 1
+        if timeout == 0:
+          raise
+        logging.debug("Sleeping for 1s waiting for data in %s/%s", dbname,
+                      table)
+        time.sleep(1)
 
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace',
@@ -210,6 +224,15 @@ index by_msg (msg)
                        moving2_first, 100)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
                        moving1_first, 100)
+
+    # add values to source, make sure they're replicated
+    moving1_first_add1 = self._insert_values('moving1', 100)
+    staying1_first_add1 = self._insert_values('staying1', 100)
+    moving2_first_add1 = self._insert_values('moving2', 100)
+    self._check_values_timeout(destination_master, 'vt_destination_keyspace',
+                               'moving1', moving1_first_add1, 100)
+    self._check_values_timeout(destination_master, 'vt_destination_keyspace',
+                               'moving2', moving2_first_add1, 100)
 
     utils.pause("Good time to test vtworker for diffs")
 

@@ -5,8 +5,13 @@
 package mysqlctl
 
 import (
+	"bytes"
+
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
+
+var STREAM_COMMENT = []byte("/* _stream ")
 
 // TablesFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified tables. The resulting function can be
@@ -24,9 +29,27 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 				filtered = append(filtered, statement)
 				matched = true
 			case proto.BL_DML:
-				// TODO(alainjobart) implement filtering
-				filtered = append(filtered, statement)
-				matched = true
+				tableIndex := bytes.LastIndex(statement.Sql, STREAM_COMMENT)
+				if tableIndex == -1 {
+					updateStreamErrors.Add("TablesStream", 1)
+					log.Errorf("Error parsing table name: %s", string(statement.Sql))
+					continue
+				}
+				tableStart := tableIndex + len(STREAM_COMMENT)
+				tableEnd := bytes.Index(statement.Sql[tableStart:], SPACE)
+				if tableEnd == -1 {
+					updateStreamErrors.Add("TablesStream", 1)
+					log.Errorf("Error parsing table name: %s", string(statement.Sql))
+					continue
+				}
+				tableName := string(statement.Sql[tableStart : tableStart+tableEnd])
+				for _, t := range tables {
+					if t == tableName {
+						filtered = append(filtered, statement)
+						matched = true
+						break
+					}
+				}
 			}
 		}
 		if matched {
