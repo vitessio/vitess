@@ -33,6 +33,8 @@ var (
 	updateStreamEvents   = stats.NewCounters("UpdateStreamEvents")
 	keyrangeStatements   = stats.NewInt("UpdateStreamKeyrangeStatements")
 	keyrangeTransactions = stats.NewInt("UpdateStreamKeyrangeTransactions")
+	tablesStatements     = stats.NewInt("UpdateStreamTablesStatements")
+	tablesTransactions   = stats.NewInt("UpdateStreamTablesTransactions")
 )
 
 type UpdateStream struct {
@@ -242,6 +244,45 @@ func (updateStream *UpdateStream) StreamKeyrange(req *proto.KeyrangeRequest, sen
 
 	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := KeyrangeFilterFunc(req.Keyrange, func(reply *proto.BinlogTransaction) error {
+		keyrangeStatements.Add(int64(len(reply.Statements)))
+		keyrangeTransactions.Add(1)
+		return sendReply(reply)
+	})
+	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
+}
+
+func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply interface{}) error) (err error) {
+	defer func() {
+		if x := recover(); x != nil {
+			err = x.(error)
+		}
+	}()
+
+	updateStream.actionLock.Lock()
+	if !updateStream.isEnabled() {
+		updateStream.actionLock.Unlock()
+		log.Errorf("Unable to serve client request: Update stream service is not enabled")
+		return fmt.Errorf("update stream service is not enabled")
+	}
+	updateStream.stateWaitGroup.Add(1)
+	updateStream.actionLock.Unlock()
+	defer updateStream.stateWaitGroup.Done()
+
+	rp, err := updateStream.mysqld.BinlogInfo(req.GroupId)
+	if err != nil {
+		log.Errorf("Unable to serve client request: error computing start position: %v", err)
+		return fmt.Errorf("error computing start position: %v", err)
+	}
+	streamCount.Add("Tables", 1)
+	defer streamCount.Add("Tables", -1)
+	log.Infof("ServeUpdateStream starting @ %v", rp)
+
+	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
+	updateStream.streams.Add(bls)
+	defer updateStream.streams.Delete(bls)
+
+	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)

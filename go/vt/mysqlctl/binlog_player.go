@@ -191,20 +191,36 @@ type BinlogPlayer struct {
 	addr          string
 	dbClient      VtClient
 	keyRange      key.KeyRange
+	tables        []string
 	blpPos        BlpPosition
 	stopAtGroupId int64
 	blplStats     *blplStats
 }
 
-// NewBinlogPlayer returns a new BinlogPlayer pointing at the server
+// NewBinlogPlayerKeyRange returns a new BinlogPlayer pointing at the server
 // replicating the provided keyrange, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayer(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *BlpPosition, stopAtGroupId int64) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *BlpPosition, stopAtGroupId int64) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:          addr,
 		dbClient:      dbClient,
 		keyRange:      keyRange,
+		blpPos:        *startPosition,
+		stopAtGroupId: stopAtGroupId,
+		blplStats:     NewBlplStats(),
+	}
+}
+
+// NewBinlogPlayerTables returns a new BinlogPlayer pointing at the server
+// replicating the provided tables, starting at the startPosition.GroupId,
+// and updating _vt.blp_checkpoint with uid=startPosition.Uid.
+// If stopAtGroupId != 0, it will stop when reaching that GroupId.
+func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *BlpPosition, stopAtGroupId int64) *BinlogPlayer {
+	return &BinlogPlayer{
+		addr:          addr,
+		dbClient:      dbClient,
+		tables:        tables,
 		blpPos:        *startPosition,
 		stopAtGroupId: stopAtGroupId,
 		blplStats:     NewBlplStats(),
@@ -301,13 +317,22 @@ func (blp *BinlogPlayer) exec(sql string) (*mproto.QueryResult, error) {
 // It will return io.EOF if the server stops sending us updates.
 // It may return any other error it encounters.
 func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
-	log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
-		blp.blpPos.Uid,
-		blp.keyRange.Start.Hex(),
-		blp.keyRange.End.Hex(),
-		blp.blpPos.GroupId,
-		blp.addr,
-	)
+	if len(blp.tables) > 0 {
+		log.Infof("BinlogPlayer client %v for tables %v starting @ '%v', server: %v",
+			blp.blpPos.Uid,
+			blp.tables,
+			blp.blpPos.GroupId,
+			blp.addr,
+		)
+	} else {
+		log.Infof("BinlogPlayer client %v for keyrange '%v-%v' starting @ '%v', server: %v",
+			blp.blpPos.Uid,
+			blp.keyRange.Start.Hex(),
+			blp.keyRange.End.Hex(),
+			blp.blpPos.GroupId,
+			blp.addr,
+		)
+	}
 	if blp.stopAtGroupId > 0 {
 		// we need to stop at some point
 		// sanity check the point
@@ -327,11 +352,20 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 	}
 
 	responseChan := make(chan *proto.BinlogTransaction)
-	req := &proto.KeyrangeRequest{
-		Keyrange: blp.keyRange,
-		GroupId:  blp.blpPos.GroupId,
+	var resp *rpcplus.Call
+	if len(blp.tables) > 0 {
+		req := &proto.TablesRequest{
+			Tables:  blp.tables,
+			GroupId: blp.blpPos.GroupId,
+		}
+		resp = rpcClient.StreamGo("UpdateStream.StreamTables", req, responseChan)
+	} else {
+		req := &proto.KeyrangeRequest{
+			Keyrange: blp.keyRange,
+			GroupId:  blp.blpPos.GroupId,
+		}
+		resp = rpcClient.StreamGo("UpdateStream.StreamKeyrange", req, responseChan)
 	}
-	resp := rpcClient.StreamGo("UpdateStream.StreamKeyrange", req, responseChan)
 
 processLoop:
 	for {

@@ -186,15 +186,22 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	newServerIndex := rand.Intn(len(addrs.Entries))
 	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
 
-	// the data we have to replicate is the intersection of the
-	// source keyrange and our keyrange
-	overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
-	if err != nil {
-		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
-	}
+	// check which kind of replication we're doing, table or keyspace
+	if len(bpc.sourceShard.Tables) > 0 {
+		// tables, just get them
+		player := mysqlctl.NewBinlogPlayerTables(vtClient, addr, bpc.sourceShard.Tables, startPosition, bpc.stopAtGroupId)
+		return player.ApplyBinlogEvents(bpc.interrupted)
+	} else {
+		// the data we have to replicate is the intersection of the
+		// source keyrange and our keyrange
+		overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
+		if err != nil {
+			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
+		}
 
-	player := mysqlctl.NewBinlogPlayer(vtClient, addr, overlap, startPosition, bpc.stopAtGroupId)
-	return player.ApplyBinlogEvents(bpc.interrupted)
+		player := mysqlctl.NewBinlogPlayerKeyRange(vtClient, addr, overlap, startPosition, bpc.stopAtGroupId)
+		return player.ApplyBinlogEvents(bpc.interrupted)
+	}
 }
 
 func (bpc *BinlogPlayerController) BlpPosition(vtClient *mysqlctl.DBClient) (*mysqlctl.BlpPosition, error) {

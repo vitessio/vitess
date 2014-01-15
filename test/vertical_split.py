@@ -137,7 +137,7 @@ index by_msg (msg)
     # perform the restore.
     utils.run_vtctl(['ShardMultiRestore',
                      '--strategy' ,'populateBlpCheckpoint',
-                     '--tables', 'moving1,moving2,view1',
+                     '--tables', 'moving1,moving2',
                      'destination_keyspace/0', source_rdonly.tablet_alias],
                     auto_log=True)
 
