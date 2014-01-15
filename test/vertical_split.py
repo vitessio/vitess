@@ -10,6 +10,9 @@ import struct
 import time
 import unittest
 
+from zk import zkocc
+from vtdb import vtclient
+
 import environment
 import utils
 import tablet
@@ -69,10 +72,19 @@ def tearDownModule():
   destination_rdonly.remove_tree()
 
 class TestVerticalSplit(unittest.TestCase):
+  def setUp(self):
+    self.vtgate_server, self.vtgate_port = utils.vtgate_start()
+    self.vtgate_client = zkocc.ZkOccConnection("localhost:%u"%self.vtgate_port,
+                                               "test_nj", 30.0)
+    self.insert_index = 0
+
+  def tearDown(self):
+    self.vtgate_client.close()
+    utils.vtgate_kill(self.vtgate_server)
 
   def _create_source_schema(self):
     create_table_template = '''create table %s(
-id bigint auto_increment,
+id bigint not null,
 msg varchar(64),
 primary key (id),
 index by_msg (msg)
@@ -85,11 +97,47 @@ index by_msg (msg)
                        '-sql=' + create_table_template % (t),
                        'source_keyspace'],
                       auto_log=True)
+      # Two schema updates in the same second are not properly processed.
+      # So sleep a little bit between updates. This is crazy.
+      time.sleep(1)
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
                      '-sql=' + create_view_template % ('view1', 'moving1'),
                      'source_keyspace'],
                     auto_log=True)
+
+  def _vtdb_conn(self):
+    conn = vtclient.VtOCCConnection(self.vtgate_client, 'source_keyspace', '0',
+                                    'master', 30)
+    conn.connect()
+    return conn
+
+  # insert some values in the source master db, return the first id used
+  def _insert_values(self, table, count):
+    result = self.insert_index
+    conn = self._vtdb_conn()
+    cursor = conn.cursor()
+    for i in xrange(count):
+      conn.begin()
+      cursor.execute("insert into %s (id, msg) values(%u, 'value %u')" % (
+          table, self.insert_index, self.insert_index), {})
+      conn.commit()
+      self.insert_index += 1
+    conn.close()
+    return result
+
+  def _check_values(self, tablet, dbname, table, first, count):
+    logging.info("Checking %u values from %s/%s starting at %u", count, dbname,
+                 table, first)
+    rows = tablet.mquery(dbname, 'select id, msg from %s where id>=%u order by id limit %u' % (table, first, count))
+    self.assertEqual(count, len(rows), "got worng number of rows: %u != %u" %
+                     (count, len(rows)))
+    for i in xrange(count):
+      self.assertEqual(rows[i][0], first + i, "invalid id[%u]: %u != %u" %
+                       (i, rows[i][0], first + i))
+      self.assertEqual(rows[i][1], 'value %u' % (first + i),
+                       "invalid msg[%u]: '%s' != 'value %u'" %
+                       (i, rows[i][1], first + i))
 
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace',
@@ -126,8 +174,22 @@ index by_msg (msg)
     utils.run_vtctl(['ReparentShard', '-force', 'destination_keyspace/0',
                      destination_master.tablet_alias], auto_log=True)
 
-    # create the schema on the source keyspace
+    # create the schema on the source keyspace, add some values
     self._create_source_schema()
+    moving1_first = self._insert_values('moving1', 100)
+    moving2_first = self._insert_values('moving2', 100)
+    staying1_first = self._insert_values('staying1', 100)
+    staying2_first = self._insert_values('staying2', 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'moving1',
+                       moving1_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'moving2',
+                       moving2_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'staying1',
+                       staying1_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'staying2',
+                       staying2_first, 100)
+    self._check_values(source_master, 'vt_source_keyspace', 'view1',
+                       moving1_first, 100)
 
     # take the snapshot for the split
     utils.run_vtctl(['MultiSnapshot',
@@ -140,6 +202,14 @@ index by_msg (msg)
                      '--tables', 'moving1,moving2',
                      'destination_keyspace/0', source_rdonly.tablet_alias],
                     auto_log=True)
+
+    # check values are present
+    self._check_values(destination_master, 'vt_destination_keyspace', 'moving1',
+                       moving1_first, 100)
+    self._check_values(destination_master, 'vt_destination_keyspace', 'moving2',
+                       moving2_first, 100)
+    self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
+                       moving1_first, 100)
 
     utils.pause("Good time to test vtworker for diffs")
 
