@@ -158,7 +158,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Keyspaces", []command{
 			command{"CreateKeyspace", commandCreateKeyspace,
-				"[-sharding_column_name=name] [-sharding_column_type=type] [-force] <keyspace name|zk keyspace path>",
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-served-from=tablettype1:ks1,tablettype2,ks2,...] [-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
 			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
 				"[-force] <keyspace name|zk keyspace path> <column name> <column type>",
@@ -1080,6 +1080,8 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	shardingColumnName := subFlags.String("sharding_column_name", "", "column to use for sharding operations")
 	shardingColumnType := subFlags.String("sharding_column_type", "", "type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
+	var servedFrom flagutil.StringMapValue
+	subFlags.Var(&servedFrom, "served-from", "comma separated list of dbtype:keyspace pairs used to serve traffic")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("action CreateKeyspace requires <keyspace name|zk keyspace path>")
@@ -1093,6 +1095,16 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	ki := &topo.Keyspace{
 		ShardingColumnName: *shardingColumnName,
 		ShardingColumnType: kit,
+	}
+	if len(servedFrom) > 0 {
+		ki.ServedFrom = make(map[topo.TabletType]string, len(servedFrom))
+		for name, value := range servedFrom {
+			tt := topo.TabletType(name)
+			if !topo.IsInServingGraph(tt) {
+				log.Fatalf("Cannot use tablet type that is not in serving graph: %v", tt)
+			}
+			ki.ServedFrom[tt] = value
+		}
 	}
 	err := wr.TopoServer().CreateKeyspace(keyspace, ki)
 	if *force && err == topo.ErrNodeExists {

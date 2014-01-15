@@ -367,6 +367,7 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 				Shards:             make([]topo.SrvShard, 0, 16),
 				ShardingColumnName: ki.ShardingColumnName,
 				ShardingColumnType: ki.ShardingColumnType,
+				ServedFrom:         ki.ServedFrom,
 			}
 		}
 	}
