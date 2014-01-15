@@ -31,8 +31,8 @@ var (
 	streamCount          = stats.NewCounters("UpdateStreamStreamCount")
 	updateStreamErrors   = stats.NewCounters("UpdateStreamErrors")
 	updateStreamEvents   = stats.NewCounters("UpdateStreamEvents")
-	keyrangeStatements   = stats.NewInt("UpdateStreamKeyrangeStatements")
-	keyrangeTransactions = stats.NewInt("UpdateStreamKeyrangeTransactions")
+	keyrangeStatements   = stats.NewInt("UpdateStreamKeyRangeStatements")
+	keyrangeTransactions = stats.NewInt("UpdateStreamKeyRangeTransactions")
 	tablesStatements     = stats.NewInt("UpdateStreamTablesStatements")
 	tablesTransactions   = stats.NewInt("UpdateStreamTablesTransactions")
 )
@@ -212,7 +212,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	})
 }
 
-func (updateStream *UpdateStream) StreamKeyrange(req *proto.KeyrangeRequest, sendReply func(reply interface{}) error) (err error) {
+func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
@@ -234,16 +234,16 @@ func (updateStream *UpdateStream) StreamKeyrange(req *proto.KeyrangeRequest, sen
 		log.Errorf("Unable to serve client request: error computing start position: %v", err)
 		return fmt.Errorf("error computing start position: %v", err)
 	}
-	streamCount.Add("Keyrange", 1)
-	defer streamCount.Add("Keyrange", -1)
+	streamCount.Add("KeyRange", 1)
+	defer streamCount.Add("KeyRange", -1)
 	log.Infof("ServeUpdateStream starting @ %v", rp)
 
 	bls := NewBinlogStreamer(updateStream.dbname, updateStream.mycnf.BinLogPath)
 	updateStream.streams.Add(bls)
 	defer updateStream.streams.Delete(bls)
 
-	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
-	f := KeyrangeFilterFunc(req.Keyrange, func(reply *proto.BinlogTransaction) error {
+	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	f := KeyRangeFilterFunc(req.KeyRange, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)
 		return sendReply(reply)
@@ -281,7 +281,7 @@ func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendRep
 	updateStream.streams.Add(bls)
 	defer updateStream.streams.Delete(bls)
 
-	// Calls cascade like this: BinlogStreamer->KeyrangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
+	// Calls cascade like this: BinlogStreamer->KeyRangeFilterFunc->func(*proto.BinlogTransaction)->sendReply
 	f := TablesFilterFunc(req.Tables, func(reply *proto.BinlogTransaction) error {
 		keyrangeStatements.Add(int64(len(reply.Statements)))
 		keyrangeTransactions.Add(1)

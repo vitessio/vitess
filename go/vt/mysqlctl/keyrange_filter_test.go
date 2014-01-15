@@ -12,12 +12,12 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-var testKeyrange = key.KeyRange{
+var testKeyRange = key.KeyRange{
 	Start: key.KeyspaceId(key.Uint64Key(0).String()),
 	End:   key.KeyspaceId(key.Uint64Key(10).String()),
 }
 
-func TestKeyrangeFilterPass(t *testing.T) {
+func TestKeyRangeFilterPass(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -34,7 +34,7 @@ func TestKeyrangeFilterPass(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -45,7 +45,7 @@ func TestKeyrangeFilterPass(t *testing.T) {
 	}
 }
 
-func TestKeyrangeFilterSkip(t *testing.T) {
+func TestKeyRangeFilterSkip(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -59,7 +59,7 @@ func TestKeyrangeFilterSkip(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -70,7 +70,7 @@ func TestKeyrangeFilterSkip(t *testing.T) {
 	}
 }
 
-func TestKeyrangeFilterDDL(t *testing.T) {
+func TestKeyRangeFilterDDL(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -84,7 +84,7 @@ func TestKeyrangeFilterDDL(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -95,7 +95,7 @@ func TestKeyrangeFilterDDL(t *testing.T) {
 	}
 }
 
-func TestKeyrangeFilterMalformed(t *testing.T) {
+func TestKeyRangeFilterMalformed(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -115,7 +115,7 @@ func TestKeyrangeFilterMalformed(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyrangeFilterFunc(testKeyrange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})

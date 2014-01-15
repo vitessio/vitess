@@ -360,11 +360,11 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		}
 		resp = rpcClient.StreamGo("UpdateStream.StreamTables", req, responseChan)
 	} else {
-		req := &proto.KeyrangeRequest{
-			Keyrange: blp.keyRange,
+		req := &proto.KeyRangeRequest{
+			KeyRange: blp.keyRange,
 			GroupId:  blp.blpPos.GroupId,
 		}
-		resp = rpcClient.StreamGo("UpdateStream.StreamKeyrange", req, responseChan)
+		resp = rpcClient.StreamGo("UpdateStream.StreamKeyRange", req, responseChan)
 	}
 
 processLoop:

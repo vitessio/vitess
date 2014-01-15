@@ -186,7 +186,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	newServerIndex := rand.Intn(len(addrs.Entries))
 	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
 
-	// check which kind of replication we're doing, table or keyspace
+	// check which kind of replication we're doing, tables or keyrange
 	if len(bpc.sourceShard.Tables) > 0 {
 		// tables, just get them
 		player := mysqlctl.NewBinlogPlayerTables(vtClient, addr, bpc.sourceShard.Tables, startPosition, bpc.stopAtGroupId)

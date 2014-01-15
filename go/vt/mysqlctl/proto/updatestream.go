@@ -14,10 +14,10 @@ type UpdateStreamRequest struct {
 	GroupId int64
 }
 
-// KeyrangeRequest is used to make a request for StreamKeyrange.
-type KeyrangeRequest struct {
+// KeyRangeRequest is used to make a request for StreamKeyRange.
+type KeyRangeRequest struct {
 	GroupId  int64
-	Keyrange key.KeyRange
+	KeyRange key.KeyRange
 }
 
 // TablesRequest is used to make a request for StreamTables.
@@ -29,7 +29,7 @@ type TablesRequest struct {
 // UpdateStream defines the rpc API for the update stream service.
 type UpdateStream interface {
 	ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply interface{}) error) (err error)
-	StreamKeyrange(req *KeyrangeRequest, sendReply func(reply interface{}) error) (err error)
+	StreamKeyRange(req *KeyRangeRequest, sendReply func(reply interface{}) error) (err error)
 	StreamTables(req *TablesRequest, sendReply func(reply interface{}) error) (err error)
 }
 

@@ -16,11 +16,11 @@ import (
 var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")
 var SPACE = []byte(" ")
 
-// KeyrangeFilterFunc returns a function that calls sendReply only if statements
+// KeyRangeFilterFunc returns a function that calls sendReply only if statements
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
-// bls.Stream(file, pos, KeyrangeFilterFunc(sendTransaction))
-func KeyrangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+// bls.Stream(file, pos, KeyRangeFilterFunc(sendTransaction))
+func KeyRangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
 	return func(reply *proto.BinlogTransaction) error {
 		matched := false
 		filtered := make([]proto.Statement, 0, len(reply.Statements))
@@ -34,20 +34,20 @@ func KeyrangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) se
 			case proto.BL_DML:
 				keyspaceIndex := bytes.LastIndex(statement.Sql, KEYSPACE_ID_COMMENT)
 				if keyspaceIndex == -1 {
-					updateStreamErrors.Add("KeyrangeStream", 1)
+					updateStreamErrors.Add("KeyRangeStream", 1)
 					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 					continue
 				}
 				idstart := keyspaceIndex + len(KEYSPACE_ID_COMMENT)
 				idend := bytes.Index(statement.Sql[idstart:], SPACE)
 				if idend == -1 {
-					updateStreamErrors.Add("KeyrangeStream", 1)
+					updateStreamErrors.Add("KeyRangeStream", 1)
 					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 					continue
 				}
 				id, err := strconv.ParseUint(string(statement.Sql[idstart:idstart+idend]), 10, 64)
 				if err != nil {
-					updateStreamErrors.Add("KeyrangeStream", 1)
+					updateStreamErrors.Add("KeyRangeStream", 1)
 					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 					continue
 				}

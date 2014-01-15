@@ -366,8 +366,8 @@ primary key (name)
 
   def _check_binlog_server_vars(self, tablet, timeout=5.0):
     v = utils.get_vars(tablet.port)
-    self.assertTrue("UpdateStreamKeyrangeStatements" in v)
-    self.assertTrue("UpdateStreamKeyrangeTransactions" in v)
+    self.assertTrue("UpdateStreamKeyRangeStatements" in v)
+    self.assertTrue("UpdateStreamKeyRangeTransactions" in v)
 
   def _wait_for_binlog_player_count(self, tablet, expected, timeout=30.0):
     while True:
