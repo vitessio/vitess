@@ -223,9 +223,8 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 				rec.RecordError(err)
 				return
 			}
-			log.Infof("Master %v is read-only", si.MasterAlias)
-
 			rec.RecordError(wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()))
+			log.Infof("Master %v is now read-only", si.MasterAlias)
 		}(si)
 	}
 	wg.Wait()
@@ -417,6 +416,169 @@ func (wr *Wrangler) migrateServedTypes(sourceShards, destinationShards []*topo.S
 	// replication.
 	if servedType == topo.TYPE_MASTER {
 		if err := wr.makeMastersReadWrite(destinationShards); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.TabletType, reverse bool) error {
+	// we cannot migrate a master back
+	if reverse && servedType == topo.TYPE_MASTER {
+		return fmt.Errorf("Cannot migrate master back to %v/%v", keyspace, shard)
+	}
+
+	// read the destination keyspace, check it
+	ki, err := wr.ts.GetKeyspace(keyspace)
+	if err != nil {
+		return err
+	}
+	if len(ki.ServedFrom) == 0 {
+		return fmt.Errorf("Destination keyspace %v is not a vertical split target", keyspace)
+	}
+
+	// read the destination shard, check it
+	si, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+	if len(si.SourceShards) != 1 || len(si.SourceShards[0].Tables) == 0 {
+		return fmt.Errorf("Destination shard %v/%v is not a vertical split target", keyspace, shard)
+	}
+
+	// check the migration is valid
+	foundType := false
+	for tt, _ := range ki.ServedFrom {
+		if tt == servedType {
+			foundType = true
+		}
+	}
+	if foundType == reverse {
+		return fmt.Errorf("Supplied type cannot be migrated")
+	}
+	if servedType == topo.TYPE_MASTER && len(ki.ServedFrom) > 1 {
+		return fmt.Errorf("Cannot migrate master into %v/%v until everything else is migrated", keyspace, shard)
+	}
+
+	// lock the keyspace and shard
+	actionNode := wr.ai.MigrateServedFrom(servedType)
+	keyspaceLockPath, err := wr.lockKeyspace(keyspace, actionNode)
+	if err != nil {
+		log.Errorf("Failed to lock destination keyspace %v", keyspace)
+		return err
+	}
+	shardLockPath, err := wr.lockShard(keyspace, shard, actionNode)
+	if err != nil {
+		log.Errorf("Failed to lock destination shard %v/%v", keyspace, shard)
+		wr.unlockKeyspace(keyspace, actionNode, keyspaceLockPath, nil)
+		return err
+	}
+
+	// record the action error and all unlock errors
+	rec := concurrency.AllErrorRecorder{}
+
+	// execute the migration
+	rec.RecordError(wr.migrateServedFrom(ki, si, servedType, reverse))
+
+	rec.RecordError(wr.unlockShard(keyspace, shard, actionNode, shardLockPath, nil))
+	rec.RecordError(wr.unlockKeyspace(keyspace, actionNode, keyspaceLockPath, nil))
+
+	// rebuild the keyspace serving graph if there was no error
+	if rec.Error() == nil {
+		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, true))
+	}
+
+	return rec.Error()
+}
+
+func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo, servedType topo.TabletType, reverse bool) error {
+
+	// re-read and update keyspace info record
+	var err error
+	ki, err = wr.ts.GetKeyspace(ki.KeyspaceName())
+	if err != nil {
+		return err
+	}
+	if reverse {
+		if _, ok := ki.ServedFrom[servedType]; ok {
+			return fmt.Errorf("Destination Keyspace %s is not serving type %v", ki.KeyspaceName(), servedType)
+		}
+		ki.ServedFrom[servedType] = si.SourceShards[0].Keyspace
+	} else {
+		if _, ok := ki.ServedFrom[servedType]; !ok {
+			return fmt.Errorf("Destination Keyspace %s is already serving type %v", ki.KeyspaceName(), servedType)
+		}
+		delete(ki.ServedFrom, servedType)
+	}
+
+	// re-read and check the destination shard
+	si, err = wr.ts.GetShard(si.Keyspace(), si.ShardName())
+	if err != nil {
+		return err
+	}
+	if len(si.SourceShards) != 1 {
+		return fmt.Errorf("Destination shard %v/%v is not a vertical split target", si.Keyspace(), si.ShardName())
+	}
+
+	// read the source shard, we'll need its master
+	sourceShard, err := wr.ts.GetShard(si.SourceShards[0].Keyspace, si.SourceShards[0].Shard)
+	if err != nil {
+		return err
+	}
+
+	// For master type migration, need to:
+	// - switch the source shard to read-only
+	// - gather the replication point
+	// - wait for filtered replication to catch up before we continue
+	// - disable filtered replication after the fact
+	if servedType == topo.TYPE_MASTER {
+		// set master to read-only
+		actionPath, err := wr.ai.SetReadOnly(sourceShard.MasterAlias)
+		if err != nil {
+			return err
+		}
+		if err := wr.ai.WaitForCompletion(actionPath, wr.actionTimeout()); err != nil {
+			return err
+		}
+
+		// get the position
+		ti, err := wr.ts.GetTablet(sourceShard.MasterAlias)
+		if err != nil {
+			return err
+		}
+		masterPosition, err := wr.ai.MasterPosition(ti, wr.actionTimeout())
+		if err != nil {
+			return err
+		}
+
+		// wait for it
+		if err := wr.ai.WaitBlpPosition(si.MasterAlias, mysqlctl.BlpPosition{
+			Uid:     0,
+			GroupId: masterPosition.MasterLogGroupId,
+		}, wr.actionTimeout()); err != nil {
+			return err
+		}
+
+		// and clear the shard record
+		si.SourceShards = nil
+	}
+
+	// All is good, we can save the keyspace and shard (if needed) now
+	if err = wr.ts.UpdateKeyspace(ki); err != nil {
+		return err
+	}
+	if servedType == topo.TYPE_MASTER {
+		if err := wr.ts.UpdateShard(si); err != nil {
+			return err
+		}
+	}
+
+	// And tell the new shards masters they can now be read-write.
+	// Invoking a remote action will also make the tablet stop filtered
+	// replication.
+	if servedType == topo.TYPE_MASTER {
+		if err := wr.makeMastersReadWrite([]*topo.ShardInfo{si}); err != nil {
 			return err
 		}
 	}

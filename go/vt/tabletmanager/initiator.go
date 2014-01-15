@@ -469,6 +469,21 @@ func (ai *ActionInitiator) ApplySchemaKeyspace(change string, simple bool) *Acti
 	}
 }
 
+// parameters are stored for debug purposes
+type MigrateServedFromArgs struct {
+	ServedType topo.TabletType
+}
+
+func (ai *ActionInitiator) MigrateServedFrom(servedType topo.TabletType) *ActionNode {
+	return &ActionNode{
+		Action:     KEYSPACE_ACTION_MIGRATE_SERVED_FROM,
+		ActionGuid: actionGuid(),
+		args: &MigrateServedFromArgs{
+			ServedType: servedType,
+		},
+	}
+}
+
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
 	_, err := WaitForCompletion(ai.ts, actionPath, waitTime)
 	return err

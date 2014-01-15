@@ -248,6 +248,9 @@ index by_msg (msg)
     self._check_values(destination_master, 'vt_destination_keyspace', 'view1',
                        moving1_first, 100)
 
+    # check the binlog players is running
+    destination_master.wait_for_binlog_player_count(1)
+
     # add values to source, make sure they're replicated
     moving1_first_add1 = self._insert_values('moving1', 100)
     staying1_first_add1 = self._insert_values('staying1', 100)
@@ -258,6 +261,38 @@ index by_msg (msg)
                                'moving2', moving2_first_add1, 100)
 
     utils.pause("Good time to test vtworker for diffs")
+
+    # check we can't migrate the master just yet
+    utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
+                    expect_fail=True)
+
+    # now serve rdonly from the destination shards
+    utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'rdonly'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
+                             'ServedFrom(replica): source_keyspace\n')
+
+    # then serve replica from the destination shards
+    utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
+
+    # move replica back and forth
+    utils.run_vtctl(['MigrateServedFrom', '-reverse', 'destination_keyspace/0', 'replica'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
+                             'ServedFrom(replica): source_keyspace\n')
+    utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
+                    auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
+
+    # then serve master from the destination shards
+    utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
+                    auto_log=True)
+    self._check_srv_keyspace('')
+
+    # check the binlog player is gone now
+    destination_master.wait_for_binlog_player_count(0)
 
     # kill everything
     tablet.kill_tablets([source_master, source_replica, source_rdonly,
