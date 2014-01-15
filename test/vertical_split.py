@@ -153,6 +153,25 @@ index by_msg (msg)
                       table)
         time.sleep(1)
 
+  def _check_srv_keyspace(self, expected):
+    cell = 'test_nj'
+    keyspace = 'destination_keyspace'
+    ks = utils.run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
+    result = ""
+    for served_from in sorted(ks['ServedFrom'].keys()):
+      result += "ServedFrom(%s): %s\n" % (served_from,
+                                          ks['ServedFrom'][served_from])
+    logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
+    self.assertEqual(expected, result,
+                     "Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (
+                     cell, keyspace, expected, result))
+    self.assertEqual('', ks.get('ShardingColumnName'),
+                     "Got wrong ShardingColumnName in SrvKeyspace: %s" %
+                     str(ks))
+    self.assertEqual('', ks.get('ShardingColumnType'),
+                     "Got wrong ShardingColumnType in SrvKeyspace: %s" %
+                     str(ks))
+
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace',
                      'source_keyspace'])
@@ -169,6 +188,9 @@ index by_msg (msg)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'source_keyspace'], auto_log=True)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'destination_keyspace'],
                     auto_log=True)
+    self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
+                             'ServedFrom(rdonly): source_keyspace\n' +
+                             'ServedFrom(replica): source_keyspace\n')
 
     # create databases so vttablet can start behaving normally
     for t in [source_master, source_replica, source_rdonly]:
