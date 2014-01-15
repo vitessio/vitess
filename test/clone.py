@@ -269,44 +269,5 @@ class TestClone(unittest.TestCase):
   def test_vtctl_clone_server(self):
     self._test_vtctl_clone(server_mode=True)
 
-  # this test is useful to validate the table specification code works.
-  # it will be replaced soon by a vertical split test in resharding.
-  def test_multisnapshot_vtctl(self):
-    populate = sum([[
-      "insert into vt_insert_test_%s (msg) values ('test %s')" % (i, x)
-      for x in xrange(4)] for i in range(6)], [])
-    create = ['''create table vt_insert_test_%s (
-  id bigint auto_increment,
-  msg varchar(64),
-  primary key (id)
-  ) Engine=InnoDB''' % i for i in range(6)]
-
-    # Start up a master mysql and vttablet
-    utils.run_vtctl(['CreateKeyspace',
-                     '--sharding_column_name', 'id',
-                     '--sharding_column_type', 'uint64',
-                     'test_keyspace'])
-
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
-    utils.validate_topology()
-
-    tablet_62344.populate('vt_test_keyspace', create,
-                          populate)
-
-    tablet_62344.start_vttablet()
-
-    utils.run_vtctl(['MultiSnapshot', '--force', '--tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3', '--spec=-0000000000000003-', tablet_62344.tablet_alias])
-
-    if os.path.exists(os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
-      self.fail("Table vt_insert_test_4 wasn't supposed to be dumped.")
-    for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
-      path = os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
-      with gzip.open(path) as f:
-        if len(f.readlines()) != 2:
-          self.fail("Data looks wrong in %s" % path)
-
-    tablet_62344.kill_vttablet()
-
 if __name__ == '__main__':
   utils.main()
