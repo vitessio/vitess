@@ -33,10 +33,13 @@ type SourceShard struct {
 	// the source shard
 	Shard string
 
-	// the source shard keyrange
+	// The source shard keyrange
+	// If partial, len(Tables) has to be zero
 	KeyRange key.KeyRange
 
-	// we could add other filtering information, like table list, ...
+	// The source table list to replicate
+	// If non-empty, KeyRange must not be partial (must be KeyRange{})
+	Tables []string
 }
 
 func (source *SourceShard) String() string {

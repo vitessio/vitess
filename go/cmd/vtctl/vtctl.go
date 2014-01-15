@@ -142,7 +142,7 @@ var commands = []commandGroup{
 				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
 				"Sets a given shard's served types. Does not rebuild any serving graph."},
 			command{"ShardMultiRestore", commandShardMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <keyspace/shard|zk shard path> <source zk path>...",
+				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] [-tables=<table1>,<table2>,...] <keyspace/shard|zk shard path> <source zk path>...",
 				"Restore multi-snapshots on all the tablets of a shard."},
 			command{"ShardReplicationAdd", commandShardReplicationAdd,
 				"<keyspace/shard|zk shard path> <tablet alias|zk tablet path> <parent tablet alias|zk parent tablet path>",
@@ -1023,6 +1023,7 @@ func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
 	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
+	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	subFlags.Parse(args)
 
 	if subFlags.NArg() < 2 {
@@ -1033,7 +1034,11 @@ func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	for i := 1; i < subFlags.NArg(); i++ {
 		sources[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
 	}
-	err = wr.ShardMultiRestore(keyspace, shard, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
+	var tableArray []string
+	if *tables != "" {
+		tableArray = strings.Split(*tables, ",")
+	}
+	err = wr.ShardMultiRestore(keyspace, shard, sources, tableArray, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
 	return
 }
 

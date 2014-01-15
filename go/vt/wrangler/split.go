@@ -5,6 +5,7 @@
 package wrangler
 
 import (
+	"fmt"
 	"sync"
 
 	log "github.com/golang/glog"
@@ -110,7 +111,13 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 	return reply.ManifestPaths, reply.ParentAlias, nil
 }
 
-func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, tables []string, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+
+	// check parameters
+	if len(tables) > 0 && len(sources) > 1 {
+		return fmt.Errorf("ShardMultiRestore can only handle one source when tables are specified")
+	}
+
 	// lock the shard to perform the changes we need done
 	actionNode := wr.ai.ShardMultiRestore(&tm.MultiRestoreArgs{
 		SrcTabletAliases:       sources,
@@ -124,7 +131,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 		return err
 	}
 
-	mrErr := wr.shardMultiRestore(keyspace, shard, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
+	mrErr := wr.shardMultiRestore(keyspace, shard, sources, tables, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
 	err = wr.unlockShard(keyspace, shard, actionNode, lockPath, mrErr)
 	if err != nil {
 		return err
@@ -157,7 +164,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 	return rec.Error()
 }
 
-func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, tables []string, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
@@ -181,6 +188,7 @@ func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.Tab
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
 			KeyRange: ti.KeyRange,
+			Tables:   tables,
 		}
 		i++
 	}

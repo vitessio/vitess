@@ -130,11 +130,14 @@ index by_msg (msg)
     self._create_source_schema()
 
     # take the snapshot for the split
-    utils.run_vtctl(['MultiSnapshot', '--tables=moving1,moving2,view1',
+    utils.run_vtctl(['MultiSnapshot',
+                     '--tables', 'moving1,moving2,view1',
                      source_rdonly.tablet_alias], auto_log=True)
 
     # perform the restore.
-    utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
+    utils.run_vtctl(['ShardMultiRestore',
+                     '--strategy' ,'populateBlpCheckpoint',
+                     '--tables', 'moving1,moving2,view1',
                      'destination_keyspace/0', source_rdonly.tablet_alias],
                     auto_log=True)
 
