@@ -12,6 +12,7 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
+	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -27,11 +28,15 @@ type VTGate interface {
 	Rollback(context *rpcproto.Context, inSession *Session, noOutput *rpc.UnusedResponse) error
 }
 
+// Session represents the session state. It keeps track of
+// the shards on which transactions are in progress, along
+// with the corresponding tranaction ids.
 type Session struct {
 	InTransaction bool
 	ShardSessions []*ShardSession
 }
 
+// ShardSession represents the session state for a shard.
 type ShardSession struct {
 	Keyspace      string
 	Shard         string
@@ -39,6 +44,7 @@ type ShardSession struct {
 	TransactionId int64
 }
 
+// MarshalBson marshals Session into buf.
 func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -60,6 +66,7 @@ func encodeShardSessionsBson(shardSessions []*ShardSession, key string, buf *byt
 	lenWriter.RecordLen()
 }
 
+// MarshalBson marshals ShardSession into buf.
 func (shardSession *ShardSession) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -72,6 +79,7 @@ func (shardSession *ShardSession) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
+// UnmarshalBson unmarshals Session from buf.
 func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
@@ -116,6 +124,7 @@ func decodeShardSessionsBson(buf *bytes.Buffer, kind byte) []*ShardSession {
 	return shardSessions
 }
 
+// UnmarshalBson unmarshals ShardSession from buf.
 func (shardSession *ShardSession) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
@@ -138,6 +147,8 @@ func (shardSession *ShardSession) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
+// QueryShard represents a query request for the
+// specified list of shards.
 type QueryShard struct {
 	Sql           string
 	BindVariables map[string]interface{}
@@ -147,6 +158,7 @@ type QueryShard struct {
 	Session       *Session
 }
 
+// MarshalBson marshals QueryShard into buf.
 func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -165,6 +177,7 @@ func (qrs *QueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
+// UnmarshalBson unmarshals QueryShard from buf.
 func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
@@ -192,11 +205,23 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
+// QueryResult is mproto.QueryResult+Session (for now).
 type QueryResult struct {
-	mproto.QueryResult
-	Session *Session
+	Fields       []mproto.Field
+	RowsAffected uint64
+	InsertId     uint64
+	Rows         [][]sqltypes.Value
+	Session      *Session
 }
 
+func PopulateQueryResult(in *mproto.QueryResult, out *QueryResult) {
+	out.Fields = in.Fields
+	out.RowsAffected = in.RowsAffected
+	out.InsertId = in.InsertId
+	out.Rows = in.Rows
+}
+
+// MarshalBson marshals QueryResult into buf.
 func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -214,6 +239,7 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
+// UnmarshalBson unmarshals QueryResult from buf.
 func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
@@ -239,6 +265,8 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
+// BatchQueryShard represents a batch query request
+// for the specified shards.
 type BatchQueryShard struct {
 	Queries    []tproto.BoundQuery
 	Keyspace   string
@@ -247,6 +275,7 @@ type BatchQueryShard struct {
 	Session    *Session
 }
 
+// MarshalBson marshals BatchQueryShard into buf.
 func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -264,6 +293,7 @@ func (bqs *BatchQueryShard) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
+// UnmarshalBson unmarshals BatchQueryShard from buf.
 func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
@@ -289,11 +319,13 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
+// QueryResultList is mproto.QueryResultList+Session
 type QueryResultList struct {
-	tproto.QueryResultList
+	List    []mproto.QueryResult
 	Session *Session
 }
 
+// MarshalBson marshals QueryResultList into buf.
 func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -308,6 +340,7 @@ func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
+// UnmarshalBson unmarshals QueryResultList from buf.
 func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 

@@ -59,7 +59,7 @@ func (stc *ScatterConn) Execute(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-) (*proto.QueryResult, error) {
+) (*mproto.QueryResult, error) {
 	results, allErrors := stc.multiGo(
 		keyspace,
 		shards,
@@ -74,10 +74,10 @@ func (stc *ScatterConn) Execute(
 			return nil
 		})
 
-	qr := new(proto.QueryResult)
+	qr := new(mproto.QueryResult)
 	for innerqr := range results {
-		innerqr := innerqr.(*proto.QueryResult)
-		appendResult(&qr.QueryResult, &innerqr.QueryResult)
+		innerqr := innerqr.(*mproto.QueryResult)
+		appendResult(qr, innerqr)
 	}
 	if allErrors.HasErrors() {
 		return nil, allErrors.Error()
@@ -92,7 +92,7 @@ func (stc *ScatterConn) ExecuteBatch(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-) (qrs *proto.QueryResultList, err error) {
+) (qrs *tproto.QueryResultList, err error) {
 	results, allErrors := stc.multiGo(
 		keyspace,
 		shards,
@@ -107,10 +107,10 @@ func (stc *ScatterConn) ExecuteBatch(
 			return nil
 		})
 
-	qrs = &proto.QueryResultList{}
+	qrs = &tproto.QueryResultList{}
 	qrs.List = make([]mproto.QueryResult, len(queries))
 	for innerqr := range results {
-		innerqr := innerqr.(*proto.QueryResultList)
+		innerqr := innerqr.(*tproto.QueryResultList)
 		for i := range qrs.List {
 			appendResult(&qrs.List[i], &innerqr.List[i])
 		}
@@ -149,7 +149,7 @@ func (stc *ScatterConn) StreamExecute(
 		if replyErr != nil {
 			continue
 		}
-		replyErr = sendReply(innerqr.(*proto.QueryResult))
+		replyErr = sendReply(innerqr.(*mproto.QueryResult))
 	}
 	if replyErr != nil {
 		allErrors.RecordError(replyErr)

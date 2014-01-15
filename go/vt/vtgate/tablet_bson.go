@@ -11,12 +11,12 @@ import (
 	"strings"
 	"sync"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 var (
@@ -67,7 +67,7 @@ func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, err
 	return conn, nil
 }
 
-func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*proto.QueryResult, error) {
+func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -80,14 +80,14 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}, t
 		TransactionId: transactionId,
 		SessionId:     conn.sessionId,
 	}
-	qr := new(proto.QueryResult)
+	qr := new(mproto.QueryResult)
 	if err := conn.rpcClient.Call("SqlQuery.Execute", req, qr); err != nil {
 		return nil, tabletError(err)
 	}
 	return qr, nil
 }
 
-func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*proto.QueryResultList, error) {
+func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -99,18 +99,18 @@ func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 		TransactionId: transactionId,
 		SessionId:     conn.sessionId,
 	}
-	qrs := new(proto.QueryResultList)
+	qrs := new(tproto.QueryResultList)
 	if err := conn.rpcClient.Call("SqlQuery.ExecuteBatch", req, qrs); err != nil {
 		return nil, tabletError(err)
 	}
 	return qrs, nil
 }
 
-func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *proto.QueryResult, ErrFunc) {
+func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		sr := make(chan *proto.QueryResult, 1)
+		sr := make(chan *mproto.QueryResult, 1)
 		close(sr)
 		return sr, func() error { return CONN_CLOSED }
 	}
@@ -121,7 +121,7 @@ func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interfac
 		TransactionId: transactionId,
 		SessionId:     conn.sessionId,
 	}
-	sr := make(chan *proto.QueryResult, 10)
+	sr := make(chan *mproto.QueryResult, 10)
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
 	return sr, func() error { return tabletError(c.Error) }
 }

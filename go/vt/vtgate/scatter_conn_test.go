@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
@@ -18,37 +19,37 @@ import (
 // This file uses the sandbox_test framework.
 
 func TestScatterConnExecute(t *testing.T) {
-	testScatterConnGeneric(t, func(shards []string) (*proto.QueryResult, error) {
+	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 		return stc.Execute("query", nil, "", shards, "", nil)
 	})
 }
 
 func TestScatterConnExecuteBatch(t *testing.T) {
-	testScatterConnGeneric(t, func(shards []string) (*proto.QueryResult, error) {
+	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 		queries := []tproto.BoundQuery{{"query", nil}}
 		qrs, err := stc.ExecuteBatch(queries, "", shards, "", nil)
 		if err != nil {
 			return nil, err
 		}
-		return &proto.QueryResult{QueryResult: qrs.List[0]}, err
+		return &qrs.List[0], err
 	})
 }
 
 func TestScatterConnStreamExecute(t *testing.T) {
-	testScatterConnGeneric(t, func(shards []string) (*proto.QueryResult, error) {
+	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
-		qr := new(proto.QueryResult)
+		qr := new(mproto.QueryResult)
 		err := stc.StreamExecute("query", nil, "", shards, "", nil, func(r interface{}) error {
-			appendResult(&qr.QueryResult, &r.(*proto.QueryResult).QueryResult)
+			appendResult(qr, r.(*mproto.QueryResult))
 			return nil
 		})
 		return qr, err
 	})
 }
 
-func testScatterConnGeneric(t *testing.T, f func(shards []string) (*proto.QueryResult, error)) {
+func testScatterConnGeneric(t *testing.T, f func(shards []string) (*mproto.QueryResult, error)) {
 	// no shard
 	resetSandbox()
 	qr, err := f(nil)

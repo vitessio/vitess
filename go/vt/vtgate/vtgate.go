@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -43,7 +44,7 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 		query.TabletType,
 		NewSafeSession(query.Session))
 	if err == nil {
-		*reply = *qr
+		proto.PopulateQueryResult(qr, reply)
 	} else {
 		log.Errorf("ExecuteShard: %v, query: %#v", err, query)
 	}
@@ -60,7 +61,7 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 		batchQuery.TabletType,
 		NewSafeSession(batchQuery.Session))
 	if err == nil {
-		*reply = *qrs
+		reply.List = qrs.List
 	} else {
 		log.Errorf("ExecuteBatchShard: %v, queries: %#v", err, batchQuery)
 	}
@@ -76,7 +77,12 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 		query.Keyspace,
 		query.Shards,
 		query.TabletType,
-		NewSafeSession(query.Session), sendReply)
+		NewSafeSession(query.Session),
+		func(mreply interface{}) error {
+			reply := new(proto.QueryResult)
+			proto.PopulateQueryResult(mreply.(*mproto.QueryResult), reply)
+			return sendReply(reply)
+		})
 	if err != nil {
 		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
 	}

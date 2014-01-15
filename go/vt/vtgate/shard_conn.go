@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // ShardConn represents a load balanced connection to a group
@@ -56,7 +56,7 @@ func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType t
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
-func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (qr *proto.QueryResult, err error) {
+func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (qr *mproto.QueryResult, err error) {
 	err = sdc.withRetry(func(conn TabletConn) error {
 		var innerErr error
 		qr, innerErr = conn.Execute(query, bindVars, transactionId)
@@ -66,7 +66,7 @@ func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}, tra
 }
 
 // ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (qrs *proto.QueryResultList, err error) {
+func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (qrs *tproto.QueryResultList, err error) {
 	err = sdc.withRetry(func(conn TabletConn) error {
 		var innerErr error
 		qrs, innerErr = conn.ExecuteBatch(queries, transactionId)
@@ -76,7 +76,7 @@ func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId in
 }
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (results <-chan *proto.QueryResult, errFunc ErrFunc) {
+func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
 	var usedConn TabletConn
 	var erFunc ErrFunc
 	err := sdc.withRetry(func(conn TabletConn) error {

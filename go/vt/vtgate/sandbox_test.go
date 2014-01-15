@@ -16,7 +16,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
-	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // sandbox_test.go provides a sandbox for unit testing Barnacle.
@@ -153,7 +152,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*proto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -164,7 +163,7 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, t
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*proto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -172,20 +171,20 @@ func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	qrl := &proto.QueryResultList{}
+	qrl := &tproto.QueryResultList{}
 	qrl.List = make([]mproto.QueryResult, 0, len(queries))
 	for _ = range queries {
-		qrl.List = append(qrl.List, singleRowResult.QueryResult)
+		qrl.List = append(qrl.List, *singleRowResult)
 	}
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *proto.QueryResult, ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
-	ch := make(chan *proto.QueryResult, 1)
+	ch := make(chan *mproto.QueryResult, 1)
 	ch <- singleRowResult
 	close(ch)
 	err := sbc.getError()
@@ -232,16 +231,14 @@ func (sbc *sandboxConn) EndPoint() topo.EndPoint {
 	return sbc.endPoint
 }
 
-var singleRowResult = &proto.QueryResult{
-	QueryResult: mproto.QueryResult{
-		Fields: []mproto.Field{
-			{"id", 3},
-			{"value", 253}},
-		RowsAffected: 1,
-		InsertId:     0,
-		Rows: [][]sqltypes.Value{{
-			{sqltypes.Numeric("1")},
-			{sqltypes.String("foo")},
-		}},
-	},
+var singleRowResult = &mproto.QueryResult{
+	Fields: []mproto.Field{
+		{"id", 3},
+		{"value", 253}},
+	RowsAffected: 1,
+	InsertId:     0,
+	Rows: [][]sqltypes.Value{{
+		{sqltypes.Numeric("1")},
+		{sqltypes.String("foo")},
+	}},
 }

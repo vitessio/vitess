@@ -214,13 +214,11 @@ func TestQueryResult(t *testing.T) {
 		"\x00\x00\x00\x00"
 
 	custom := QueryResult{
-		QueryResult: mproto.QueryResult{
-			Fields:       []mproto.Field{{"name", 1}},
-			RowsAffected: 2,
-			InsertId:     3,
-			Rows: [][]sqltypes.Value{
-				{{sqltypes.String("1")}, {sqltypes.String("aa")}},
-			},
+		Fields:       []mproto.Field{{"name", 1}},
+		RowsAffected: 2,
+		InsertId:     3,
+		Rows: [][]sqltypes.Value{
+			{{sqltypes.String("1")}, {sqltypes.String("aa")}},
 		},
 		Session: &Session{InTransaction: true,
 			ShardSessions: []*ShardSession{{

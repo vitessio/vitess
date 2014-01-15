@@ -33,7 +33,9 @@ func TestVTGateExecuteShard(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	if !reflect.DeepEqual(singleRowResult, qr) {
+	wantqr := new(proto.QueryResult)
+	proto.PopulateQueryResult(singleRowResult, wantqr)
+	if !reflect.DeepEqual(wantqr, qr) {
 		t.Errorf("want \n%#v, got \n%#v", singleRowResult, qr)
 	}
 	if qr.Session != nil {
@@ -46,15 +48,15 @@ func TestVTGateExecuteShard(t *testing.T) {
 		t.Errorf("want true, got false")
 	}
 	RpcVTGate.ExecuteShard(nil, &q, qr)
-	want := &proto.Session{
+	wantSession := &proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
 			Shard:         "0",
 			TransactionId: 1,
 		}},
 	}
-	if !reflect.DeepEqual(want, q.Session) {
-		t.Errorf("want \n%#v, got \n%#v", want, q.Session)
+	if !reflect.DeepEqual(wantSession, q.Session) {
+		t.Errorf("want \n%#v, got \n%#v", wantSession, q.Session)
 	}
 
 	RpcVTGate.Commit(nil, q.Session, nil)
@@ -117,15 +119,17 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 		Sql:    "query",
 		Shards: []string{"0"},
 	}
-	var qrs []proto.QueryResult
+	var qrs []*proto.QueryResult
 	err := RpcVTGate.StreamExecuteShard(nil, &q, func(r interface{}) error {
-		qrs = append(qrs, *(r.(*proto.QueryResult)))
+		qrs = append(qrs, r.(*proto.QueryResult))
 		return nil
 	})
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
-	want := []proto.QueryResult{{QueryResult: singleRowResult.QueryResult}}
+	row := new(proto.QueryResult)
+	proto.PopulateQueryResult(singleRowResult, row)
+	want := []*proto.QueryResult{row}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%#v, got \n%#v", want, qrs)
 	}
@@ -134,20 +138,21 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 	qrs = nil
 	RpcVTGate.Begin(nil, nil, q.Session)
 	err = RpcVTGate.StreamExecuteShard(nil, &q, func(r interface{}) error {
-		qrs = append(qrs, *(r.(*proto.QueryResult)))
+		qrs = append(qrs, r.(*proto.QueryResult))
 		return nil
 	})
-	want = []proto.QueryResult{{
-		QueryResult: singleRowResult.QueryResult,
-	}, {
-		Session: &proto.Session{
-			InTransaction: true,
-			ShardSessions: []*proto.ShardSession{{
-				Shard:         "0",
-				TransactionId: 1,
-			}},
+	want = []*proto.QueryResult{
+		row,
+		&proto.QueryResult{
+			Session: &proto.Session{
+				InTransaction: true,
+				ShardSessions: []*proto.ShardSession{{
+					Shard:         "0",
+					TransactionId: 1,
+				}},
+			},
 		},
-	}}
+	}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%#v, got \n%#v", want, qrs)
 	}
