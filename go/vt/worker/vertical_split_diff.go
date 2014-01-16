@@ -374,8 +374,25 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 		return rec.Error()
 	}
 
+	// Remove the tables we don't need from the source schema
+	newSourceTableDefinitions := make([]mysqlctl.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
+	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
+		found := false
+		for _, t := range vsdw.shardInfo.SourceShards[0].Tables {
+			if t == tableDefinition.Name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.Infof("Removing table %v from source schema", tableDefinition.Name)
+			continue
+		}
+		newSourceTableDefinitions = append(newSourceTableDefinitions, tableDefinition)
+	}
+	vsdw.sourceSchemaDefinition.TableDefinitions = newSourceTableDefinitions
+
 	// Check the schema
-	// TODO(alainjobart): only diff a subset of the schema
 	vsdw.diffLog("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
 	mysqlctl.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
@@ -389,18 +406,6 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	vsdw.diffLog("Running the diffs...")
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
-		found := false
-		for _, t := range vsdw.shardInfo.SourceShards[0].Tables {
-			if t == tableDefinition.Name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			log.Infof("Skipping non-replicated table %v", tableDefinition.Name)
-			continue
-		}
-
 		wg.Add(1)
 		go func(tableDefinition mysqlctl.TableDefinition) {
 			defer wg.Done()
