@@ -385,7 +385,7 @@ class TestTabletManager(unittest.TestCase):
     sp = utils.run_bg(args, stdout=PIPE, stderr=PIPE)
 
     # wait for it to start, and let's kill it
-    time.sleep(2.0)
+    time.sleep(4.0)
     utils.run(['pkill', 'vtaction'])
     out, err = sp.communicate()
 

@@ -410,7 +410,7 @@ primary key (name)
     shard_1_slave2.init_tablet('spare', 'test_keyspace', '80-')
     shard_1_rdonly.init_tablet('rdonly', 'test_keyspace', '80-')
 
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace', auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # create databases so vttablet can start behaving normally
     for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_slave1,
@@ -427,10 +427,10 @@ primary key (name)
     shard_1_rdonly.wait_for_vttablet_state('SERVING')
 
     # reparent to make the tablets work
-    utils.run_vtctl('ReparentShard -force test_keyspace/-80 ' +
-                    shard_0_master.tablet_alias, auto_log=True)
-    utils.run_vtctl('ReparentShard -force test_keyspace/80- ' +
-                    shard_1_master.tablet_alias, auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/-80',
+                     shard_0_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
+                     shard_1_master.tablet_alias], auto_log=True)
 
     # create the tables
     self._create_schema()
@@ -456,12 +456,12 @@ primary key (name)
     shard_3_replica.wait_for_vttablet_state('NOT_SERVING')
     shard_3_rdonly.wait_for_vttablet_state('CONNECTING')
 
-    utils.run_vtctl('ReparentShard -force test_keyspace/80-C0 ' +
-                    shard_2_master.tablet_alias, auto_log=True)
-    utils.run_vtctl('ReparentShard -force test_keyspace/C0- ' +
-                    shard_3_master.tablet_alias, auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-C0',
+                     shard_2_master.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/C0-',
+                     shard_3_master.tablet_alias], auto_log=True)
 
-    utils.run_vtctl('RebuildKeyspaceGraph -use-served-types test_keyspace',
+    utils.run_vtctl(['RebuildKeyspaceGraph', '-use-served-types', 'test_keyspace'],
                     auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
@@ -470,8 +470,8 @@ primary key (name)
                              'TabletTypes: master,rdonly,replica')
 
     # take the snapshot for the split
-    utils.run_vtctl('MultiSnapshot --spec=80-C0- %s' %
-                    (shard_1_slave1.tablet_alias), auto_log=True)
+    utils.run_vtctl(['MultiSnapshot', '--spec=80-C0-',
+                     shard_1_slave1.tablet_alias], auto_log=True)
 
     # wait for tablet's binlog server service to be enabled after snapshot,
     # and check all the others while we're at it
@@ -489,7 +489,7 @@ primary key (name)
     self._check_startup_values()
 
     # check the schema too
-    utils.run_vtctl('ValidateSchemaKeyspace test_keyspace', auto_log=True)
+    utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'], auto_log=True)
 
     # check the binlog players are running
     self._wait_for_binlog_player_count(shard_2_master, 1)
@@ -543,11 +543,11 @@ primary key (name)
     self._check_lots_timeout(1000, 80, 5, base=1000)
 
     # check we can't migrate the master just yet
-    utils.run_vtctl('MigrateServedTypes test_keyspace/80- master',
+    utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     expect_fail=True)
 
     # now serve rdonly from the split shards
-    utils.run_vtctl('MigrateServedTypes test_keyspace/80- rdonly',
+    utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'rdonly'],
                     auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
@@ -556,7 +556,7 @@ primary key (name)
                              'TabletTypes: master,rdonly,replica')
 
     # then serve replica from the split shards
-    utils.run_vtctl('MigrateServedTypes test_keyspace/80- replica',
+    utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
@@ -565,14 +565,14 @@ primary key (name)
                              'TabletTypes: master,rdonly,replica')
 
     # move replica back and forth
-    utils.run_vtctl('MigrateServedTypes -reverse test_keyspace/80- replica',
+    utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica')
-    utils.run_vtctl('MigrateServedTypes test_keyspace/80- replica',
+    utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
@@ -613,7 +613,7 @@ primary key (name)
                   monitor_thread_2.lag_sum / monitor_thread_2.sample_count)
 
     # then serve master from the split shards
-    utils.run_vtctl('MigrateServedTypes test_keyspace/80- master',
+    utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True)
     self._check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-C0 C0-\n' +
