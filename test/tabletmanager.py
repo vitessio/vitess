@@ -16,6 +16,7 @@ import unittest
 import environment
 import utils
 import tablet
+from vtdb import dbexceptions
 from vtdb import vtgate
 
 tablet_62344 = tablet.Tablet(62344)
@@ -176,6 +177,13 @@ class TestTabletManager(unittest.TestCase):
     conn.commit()
     (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
     self.assertEqual(count, 5, "want 5, got %d" % (count))
+
+    # error on dml. We still need to get a transaction id
+    conn.begin()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      conn._execute("insert into vt_select_test values(:id, :msg)", {"id": 5, "msg": "test4"})
+    self.assertTrue(conn.session["ShardSessions"][0]["TransactionId"] != 0)
+    conn.commit()
 
     # interleaving
     conn2 = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)

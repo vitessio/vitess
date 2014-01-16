@@ -46,10 +46,11 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 	if err == nil {
 		proto.PopulateQueryResult(qr, reply)
 	} else {
+		reply.Error = err.Error()
 		log.Errorf("ExecuteShard: %v, query: %#v", err, query)
 	}
 	reply.Session = query.Session
-	return err
+	return nil
 }
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
@@ -63,10 +64,11 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 	if err == nil {
 		reply.List = qrs.List
 	} else {
+		reply.Error = err.Error()
 		log.Errorf("ExecuteBatchShard: %v, queries: %#v", err, batchQuery)
 	}
 	reply.Session = batchQuery.Session
-	return err
+	return nil
 }
 
 // StreamExecuteShard executes a streaming query on the specified shards.
@@ -86,13 +88,10 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 	if err != nil {
 		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
 	}
-	if err != nil {
-		return err
-	}
 	if query.Session != nil {
-		return sendReply(&proto.QueryResult{Session: query.Session})
+		sendReply(&proto.QueryResult{Session: query.Session})
 	}
-	return nil
+	return err
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.

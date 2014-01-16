@@ -135,6 +135,8 @@ class TabletConnection(object):
       response = self.client.call('VTGate.ExecuteShard', req)
       self._update_session(response)
       reply = response.reply
+      if 'Error' in response.reply:
+        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteShard')
 
       for field in reply['Fields']:
         fields.append((field['Name'], field['Type']))
@@ -172,6 +174,8 @@ class TabletConnection(object):
       self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchShard', req)
       self._update_session(response)
+      if 'Error' in response.reply:
+        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatchShard')
       for reply in response.reply['List']:
         fields = []
         conversions = []

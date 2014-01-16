@@ -212,6 +212,7 @@ type QueryResult struct {
 	InsertId     uint64
 	Rows         [][]sqltypes.Value
 	Session      *Session
+	Error        string
 }
 
 func PopulateQueryResult(in *mproto.QueryResult, out *QueryResult) {
@@ -233,6 +234,10 @@ func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	if qr.Session != nil {
 		bson.EncodePrefix(buf, bson.Object, "Session")
 		qr.Session.MarshalBson(buf)
+	}
+
+	if qr.Error != "" {
+		bson.EncodeString(buf, "Error", qr.Error)
 	}
 
 	buf.WriteByte(0)
@@ -258,6 +263,8 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		case "Session":
 			qr.Session = new(Session)
 			qr.Session.UnmarshalBson(buf)
+		case "Error":
+			qr.Error = bson.DecodeString(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -323,6 +330,7 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 type QueryResultList struct {
 	List    []mproto.QueryResult
 	Session *Session
+	Error   string
 }
 
 // MarshalBson marshals QueryResultList into buf.
@@ -334,6 +342,10 @@ func (qrl *QueryResultList) MarshalBson(buf *bytes2.ChunkedWriter) {
 	if qrl.Session != nil {
 		bson.EncodePrefix(buf, bson.Object, "Session")
 		qrl.Session.MarshalBson(buf)
+	}
+
+	if qrl.Error != "" {
+		bson.EncodeString(buf, "Error", qrl.Error)
 	}
 
 	buf.WriteByte(0)
@@ -353,6 +365,8 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 		case "Session":
 			qrl.Session = new(Session)
 			qrl.Session.UnmarshalBson(buf)
+		case "Error":
+			qrl.Error = bson.DecodeString(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}

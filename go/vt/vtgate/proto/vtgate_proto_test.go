@@ -15,6 +15,21 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
+var commonSession = Session{
+	InTransaction: true,
+	ShardSessions: []*ShardSession{{
+		Keyspace:      "a",
+		Shard:         "0",
+		TabletType:    topo.TabletType("replica"),
+		TransactionId: 1,
+	}, {
+		Keyspace:      "b",
+		Shard:         "1",
+		TabletType:    topo.TabletType("master"),
+		TransactionId: 2,
+	}},
+}
+
 type reflectSession struct {
 	InTransaction bool
 	ShardSessions []*ShardSession
@@ -46,20 +61,7 @@ func TestSession(t *testing.T) {
 	}
 	want := string(reflected)
 
-	custom := Session{
-		InTransaction: true,
-		ShardSessions: []*ShardSession{{
-			Keyspace:      "a",
-			Shard:         "0",
-			TabletType:    topo.TabletType("replica"),
-			TransactionId: 1,
-		}, {
-			Keyspace:      "b",
-			Shard:         "1",
-			TabletType:    topo.TabletType("master"),
-			TransactionId: 2,
-		}},
-	}
+	custom := commonSession
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
 		t.Error(err)
@@ -115,19 +117,7 @@ func TestQueryShard(t *testing.T) {
 		Keyspace:      "keyspace",
 		Shards:        []string{"shard1", "shard2"},
 		TabletType:    topo.TabletType("replica"),
-		Session: &Session{InTransaction: true,
-			ShardSessions: []*ShardSession{{
-				Keyspace:      "a",
-				Shard:         "0",
-				TabletType:    topo.TabletType("replica"),
-				TransactionId: 1,
-			}, {
-				Keyspace:      "b",
-				Shard:         "1",
-				TabletType:    topo.TabletType("master"),
-				TransactionId: 2,
-			}},
-		},
+		Session:       &commonSession,
 	})
 	if err != nil {
 		t.Error(err)
@@ -140,19 +130,7 @@ func TestQueryShard(t *testing.T) {
 		Keyspace:      "keyspace",
 		Shards:        []string{"shard1", "shard2"},
 		TabletType:    topo.TabletType("replica"),
-		Session: &Session{InTransaction: true,
-			ShardSessions: []*ShardSession{{
-				Keyspace:      "a",
-				Shard:         "0",
-				TabletType:    topo.TabletType("replica"),
-				TransactionId: 1,
-			}, {
-				Keyspace:      "b",
-				Shard:         "1",
-				TabletType:    topo.TabletType("master"),
-				TransactionId: 2,
-			}},
-		},
+		Session:       &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -186,8 +164,9 @@ func TestQueryShard(t *testing.T) {
 func TestQueryResult(t *testing.T) {
 	// We can't do the reflection test because bson
 	// doesn't do it correctly for embedded fields.
-	want := "^\x01\x00\x00" +
-		"\x04Fields\x00*\x00\x00\x00\x030\x00\"\x00\x00\x00" +
+	want := "o\x01\x00\x00" +
+		"\x04Fields\x00*\x00\x00\x00" +
+		"\x030\x00\"\x00\x00\x00" +
 		"\x05Name\x00\x04\x00\x00\x00\x00name" +
 		"\x12Type\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
 		"\x12RowsAffected\x00\x02\x00\x00\x00\x00\x00\x00\x00" +
@@ -211,7 +190,9 @@ func TestQueryResult(t *testing.T) {
 		"\x05Shard\x00\x01\x00\x00\x00\x001" +
 		"\x05TabletType\x00\x06\x00\x00\x00\x00master" +
 		"\x12TransactionId\x00\x02\x00\x00\x00\x00\x00\x00\x00" +
-		"\x00\x00\x00\x00"
+		"\x00\x00\x00" +
+		"\x05Error\x00\x05\x00\x00\x00\x00error" +
+		"\x00"
 
 	custom := QueryResult{
 		Fields:       []mproto.Field{{"name", 1}},
@@ -220,19 +201,8 @@ func TestQueryResult(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			{{sqltypes.String("1")}, {sqltypes.String("aa")}},
 		},
-		Session: &Session{InTransaction: true,
-			ShardSessions: []*ShardSession{{
-				Keyspace:      "a",
-				Shard:         "0",
-				TabletType:    topo.TabletType("replica"),
-				TransactionId: 1,
-			}, {
-				Keyspace:      "b",
-				Shard:         "1",
-				TabletType:    topo.TabletType("master"),
-				TransactionId: 2,
-			}},
-		},
+		Session: &commonSession,
+		Error:   "error",
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -309,19 +279,7 @@ func TestBatchQueryShard(t *testing.T) {
 		}},
 		Keyspace: "keyspace",
 		Shards:   []string{"shard1", "shard2"},
-		Session: &Session{InTransaction: true,
-			ShardSessions: []*ShardSession{{
-				Keyspace:      "a",
-				Shard:         "0",
-				TabletType:    topo.TabletType("replica"),
-				TransactionId: 1,
-			}, {
-				Keyspace:      "b",
-				Shard:         "1",
-				TabletType:    topo.TabletType("master"),
-				TransactionId: 2,
-			}},
-		},
+		Session:  &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -368,6 +326,78 @@ func TestBatchQueryShardBadType(t *testing.T) {
 	var unmarshalled BatchQueryShard
 	err = bson.Unmarshal(unexpected, &unmarshalled)
 	want := "Unexpected data type 5 for Queries"
+	if err == nil || want != err.Error() {
+		t.Errorf("want %v, got %v", want, err)
+	}
+}
+
+type reflectQueryResultList struct {
+	List    []mproto.QueryResult
+	Session *Session
+	Error   string
+}
+
+type badQueryResultList struct {
+	Extra   int
+	List    []mproto.QueryResult
+	Session *Session
+	Error   string
+}
+
+func TestQueryResultList(t *testing.T) {
+	reflected, err := bson.Marshal(&reflectQueryResultList{
+		List: []mproto.QueryResult{{
+			Fields:       []mproto.Field{{"name", 1}},
+			RowsAffected: 2,
+			InsertId:     3,
+			Rows: [][]sqltypes.Value{
+				{{sqltypes.String("1")}, {sqltypes.String("aa")}},
+			},
+		}},
+		Session: &commonSession,
+		Error:   "error",
+	})
+	if err != nil {
+		t.Error(err)
+	}
+	want := string(reflected)
+
+	custom := QueryResultList{
+		List: []mproto.QueryResult{{
+			Fields:       []mproto.Field{{"name", 1}},
+			RowsAffected: 2,
+			InsertId:     3,
+			Rows: [][]sqltypes.Value{
+				{{sqltypes.String("1")}, {sqltypes.String("aa")}},
+			},
+		}},
+		Session: &commonSession,
+		Error:   "error",
+	}
+	encoded, err := bson.Marshal(&custom)
+	if err != nil {
+		t.Error(err)
+	}
+	got := string(encoded)
+	if want != got {
+		t.Errorf("want\n%#v, got\n%#v", want, got)
+	}
+
+	var unmarshalled QueryResultList
+	err = bson.Unmarshal(encoded, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+	}
+
+	unexpected, err := bson.Marshal(&badQueryResultList{})
+	if err != nil {
+		t.Error(err)
+	}
+	err = bson.Unmarshal(unexpected, &unmarshalled)
+	want = "Unrecognized tag Extra"
 	if err == nil || want != err.Error() {
 		t.Errorf("want %v, got %v", want, err)
 	}
