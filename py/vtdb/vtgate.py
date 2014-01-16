@@ -77,7 +77,8 @@ class TabletConnection(object):
       raise convert_exception(e, str(self))
 
   def close(self):
-    self.session = None
+    if self.session:
+      self.rollback()
     self.client.close()
 
   def is_closed(self):
