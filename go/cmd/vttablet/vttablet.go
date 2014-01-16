@@ -13,7 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vttablet"
@@ -30,7 +30,7 @@ var (
 	key        = flag.String("key", "", "key file")
 	caCert     = flag.String("ca-cert", "", "ca-cert file")
 
-	agent *tm.ActionAgent
+	agent *tabletmanager.ActionAgent
 )
 
 func main() {

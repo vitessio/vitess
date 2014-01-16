@@ -10,7 +10,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -267,7 +267,7 @@ func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*mysqlctl.ReplicationPosi
 	return wr.ai.MasterPosition(ti, wr.actionTimeout())
 }
 
-func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *tm.RestartSlaveData, err error) {
+func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *tabletmanager.RestartSlaveData, err error) {
 	log.Infof("promote slave %v", ti.Alias)
 	actionPath, err := wr.ai.PromoteSlave(ti.Alias)
 	if err != nil {
@@ -277,11 +277,11 @@ func (wr *Wrangler) promoteSlave(ti *topo.TabletInfo) (rsd *tm.RestartSlaveData,
 	if err != nil {
 		return
 	}
-	rsd = result.(*tm.RestartSlaveData)
+	rsd = result.(*tabletmanager.RestartSlaveData)
 	return
 }
 
-func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, rsd *tm.RestartSlaveData) (majorityRestart bool, err error) {
+func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.TabletInfo, rsd *tabletmanager.RestartSlaveData) (majorityRestart bool, err error) {
 	wg := new(sync.WaitGroup)
 	slaves := CopyMapValues(slaveTabletMap, []*topo.TabletInfo{}).([]*topo.TabletInfo)
 	errs := make([]error, len(slaveTabletMap))
@@ -326,7 +326,7 @@ func (wr *Wrangler) restartSlaves(slaveTabletMap map[topo.TabletAlias]*topo.Tabl
 	return
 }
 
-func (wr *Wrangler) restartSlave(ti *topo.TabletInfo, rsd *tm.RestartSlaveData) (err error) {
+func (wr *Wrangler) restartSlave(ti *topo.TabletInfo, rsd *tabletmanager.RestartSlaveData) (err error) {
 	log.Infof("restart slave %v", ti.Alias)
 	actionPath, err := wr.ai.RestartSlave(ti.Alias, rsd)
 	if err != nil {

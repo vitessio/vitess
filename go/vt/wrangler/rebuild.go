@@ -11,7 +11,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -183,7 +183,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 			locationAddrsMap[location] = addrs
 		}
 
-		entry, err := tm.EndPointForTablet(tablet.Tablet)
+		entry, err := tabletmanager.EndPointForTablet(tablet.Tablet)
 		if err != nil {
 			log.Warningf("EndPointForTablet failed for tablet %v: %v", tablet.Alias, err)
 			continue

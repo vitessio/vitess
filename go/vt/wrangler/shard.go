@@ -6,29 +6,29 @@ package wrangler
 
 import (
 	log "github.com/golang/glog"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // shard related methods for Wrangler
 
-func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *tm.ActionNode) (lockPath string, err error) {
+func (wr *Wrangler) lockShard(keyspace, shard string, actionNode *tabletmanager.ActionNode) (lockPath string, err error) {
 	log.Infof("Locking shard %v/%v for action %v", keyspace, shard, actionNode.Action)
-	return wr.ts.LockShardForAction(keyspace, shard, tm.ActionNodeToJson(actionNode), wr.lockTimeout, interrupted)
+	return wr.ts.LockShardForAction(keyspace, shard, tabletmanager.ActionNodeToJson(actionNode), wr.lockTimeout, interrupted)
 }
 
-func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tm.ActionNode, lockPath string, actionError error) error {
+func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *tabletmanager.ActionNode, lockPath string, actionError error) error {
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking shard %v/%v for action %v with error %v", keyspace, shard, actionNode.Action, actionError)
 		actionNode.Error = actionError.Error()
-		actionNode.State = tm.ACTION_STATE_FAILED
+		actionNode.State = tabletmanager.ACTION_STATE_FAILED
 	} else {
 		log.Infof("Unlocking shard %v/%v for successful action %v", keyspace, shard, actionNode.Action)
 		actionNode.Error = ""
-		actionNode.State = tm.ACTION_STATE_DONE
+		actionNode.State = tabletmanager.ACTION_STATE_DONE
 	}
-	err := wr.ts.UnlockShardForAction(keyspace, shard, lockPath, tm.ActionNodeToJson(actionNode))
+	err := wr.ts.UnlockShardForAction(keyspace, shard, lockPath, tabletmanager.ActionNodeToJson(actionNode))
 	if actionError != nil {
 		if err != nil {
 			// this will be masked

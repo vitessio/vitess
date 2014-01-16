@@ -10,7 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -106,7 +106,7 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	recorder := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
-	swrd := tm.SlaveWasRestartedData{
+	swrd := tabletmanager.SlaveWasRestartedData{
 		Parent:               masterElectTablet.Alias,
 		ExpectedMasterAddr:   masterElectTablet.GetMysqlAddr(),
 		ExpectedMasterIpAddr: masterElectTablet.GetMysqlIpAddr(),
@@ -182,7 +182,7 @@ func (wr *Wrangler) slaveWasPromoted(ti *topo.TabletInfo) error {
 	return nil
 }
 
-func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tm.SlaveWasRestartedData) (err error) {
+func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *tabletmanager.SlaveWasRestartedData) (err error) {
 	log.Infof("slaveWasRestarted(%v)", ti.Alias)
 	if wr.UseRPCs {
 		return wr.ai.RpcSlaveWasRestarted(ti, swrd, wr.actionTimeout())

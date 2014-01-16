@@ -28,7 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -332,10 +332,10 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.Alias, keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr, fmtMapAwkable(ti.Tags))
 }
 
-func fmtAction(action *tm.ActionNode) string {
+func fmtAction(action *tabletmanager.ActionNode) string {
 	state := string(action.State)
 	// FIXME(msolomon) The default state should really just have the value "queued".
-	if action.State == tm.ACTION_STATE_QUEUED {
+	if action.State == tabletmanager.ACTION_STATE_QUEUED {
 		state = "queued"
 	}
 	return fmt.Sprintf("%v %v %v %v %v", action.Path(), action.Action, state, action.ActionGuid, action.Error)
@@ -1563,7 +1563,7 @@ func installSignalHandlers() {
 		// - tm will interrupt anything waiting on a tablet action
 		// - wr will interrupt anything waiting on a shard or
 		//   keyspace lock
-		tm.SignalInterrupt()
+		tabletmanager.SignalInterrupt()
 		wrangler.SignalInterrupt()
 	}()
 }
