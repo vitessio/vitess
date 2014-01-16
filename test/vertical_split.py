@@ -260,6 +260,15 @@ index by_msg (msg)
     self._check_values_timeout(destination_master, 'vt_destination_keyspace',
                                'moving2', moving2_first_add1, 100)
 
+    # use the vtworker checker to compare the data
+    logging.debug("Running vtworker VerticalSplitDiff")
+    utils.run_vtworker(['-cell', 'test_nj', 'VerticalSplitDiff', 'destination_keyspace/0'],
+                       auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', source_rdonly.tablet_alias, 'rdonly'],
+                    auto_log=True)
+    utils.run_vtctl(['ChangeSlaveType', destination_rdonly.tablet_alias,
+                     'rdonly'], auto_log=True)
+
     utils.pause("Good time to test vtworker for diffs")
 
     # check we can't migrate the master just yet

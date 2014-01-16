@@ -99,10 +99,20 @@ func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
 	return "0x" + hex + strings.Repeat("0", 16-len(hex))
 }
 
-// FullTableScan returns a QueryResultReader that gets all the rows from a table
-// that match the supplied KeyRange, ordered by Primary Key. The returned
-// columns are ordered with the Primary Key columns in front.
-func FullTableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
+// TableScan returns a QueryResultReader that gets all the rows from a
+// table, ordered by Primary Key. The returned columns are ordered
+// with the Primary Key columns in front.
+func TableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition) (*QueryResultReader, error) {
+	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
+	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
+	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
+}
+
+// TableScanByKeyRange returns a QueryResultReader that gets all the
+// rows from a table that match the supplied KeyRange, ordered by
+// Primary Key. The returned columns are ordered with the Primary Key
+// columns in front.
+func TableScanByKeyRange(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	switch keyspaceIdType {
 	case key.KIT_UINT64:

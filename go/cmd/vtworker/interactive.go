@@ -76,8 +76,11 @@ func initInteractiveMode(wr *wrangler.Wrangler) {
 		})
 
 		for _, c := range cg.Commands {
+			// keep a local copy of the Command pointer for the
+			// closure.
+			pc := c
 			http.HandleFunc("/"+cg.Name+"/"+c.Name, func(w http.ResponseWriter, r *http.Request) {
-				c.interactive(wr, w, r)
+				pc.interactive(wr, w, r)
 			})
 		}
 	}
