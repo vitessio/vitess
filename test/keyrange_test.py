@@ -34,7 +34,7 @@ int_shard_kid_map = {('', '10'):[1, 100, 1000, 100000, 527875958493693904, 62675
 # by generating bin-packed strings from the int keyspace_id values.
 str_shard_kid_map = dict([(shard_name, [pkid_pack(kid) for kid in kid_list]) for shard_name, kid_list in int_shard_kid_map.iteritems()])
 
-class TestKeyrange(unittest.TestCase):
+class TestKeyRange(unittest.TestCase):
   def test_incorrect_tasks(self):
     global_shard_count = 16
     with self.assertRaises(dbexceptions.ProgrammingError):

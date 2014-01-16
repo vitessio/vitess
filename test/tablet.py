@@ -373,6 +373,54 @@ class Tablet(object):
       self.proc.wait()
       self.proc = None
 
+  def wait_for_binlog_server_state(self, expected, timeout=30.0):
+    while True:
+      v = utils.get_vars(self.port)
+      if v == None:
+        logging.debug("  vttablet not answering at /debug/vars, waiting...")
+      else:
+        if 'UpdateStreamState' not in v:
+          logging.debug("  vttablet not exporting BinlogServerState, waiting...")
+        else:
+          s = v['UpdateStreamState']
+          if s != expected:
+            logging.debug("  vttablet's binlog server in state %s != %s", s,
+                          expected)
+          else:
+            break
+
+      logging.debug("sleeping a bit while we wait")
+      time.sleep(0.5)
+      timeout -= 0.5
+      if timeout <= 0:
+        raise utils.TestError("timeout waiting for binlog server state %s" % expected)
+    logging.debug("tablet %s binlog service is in state %s",
+                  self.tablet_alias, expected)
+
+  def wait_for_binlog_player_count(self, expected, timeout=30.0):
+    while True:
+      v = utils.get_vars(self.port)
+      if v == None:
+        logging.debug("  vttablet not answering at /debug/vars, waiting...")
+      else:
+        if 'BinlogPlayerMapSize' not in v:
+          logging.debug("  vttablet not exporting BinlogPlayerMapSize, waiting...")
+        else:
+          s = v['BinlogPlayerMapSize']
+          if s != expected:
+            logging.debug("  vttablet's binlog player map has count %u != %u",
+                          s, expected)
+          else:
+            break
+
+      logging.debug("sleeping a bit while we wait")
+      time.sleep(0.5)
+      timeout -= 0.5
+      if timeout <= 0:
+        raise utils.TestError("timeout waiting for binlog player count %d" % expected)
+    logging.debug("tablet %s binlog player has %d players",
+                  self.tablet_alias, expected)
+
   @classmethod
   def check_vttablet_count(klass):
     if Tablet.tablets_running > 0:

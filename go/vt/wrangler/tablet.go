@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -173,7 +173,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 	wasMaster := ti.Type == topo.TYPE_MASTER
 
 	if force {
-		err = tm.Scrap(wr.ts, ti.Alias, force)
+		err = tabletmanager.Scrap(wr.ts, ti.Alias, force)
 	} else {
 		actionPath, err = wr.ai.Scrap(ti.Alias)
 	}
@@ -270,7 +270,7 @@ func (wr *Wrangler) ChangeTypeNoRebuild(tabletAlias topo.TabletAlias, tabletType
 	}
 
 	if force {
-		if err := tm.ChangeType(wr.ts, tabletAlias, tabletType, false); err != nil {
+		if err := tabletmanager.ChangeType(wr.ts, tabletAlias, tabletType, false); err != nil {
 			return false, "", "", "", err
 		}
 	} else {

@@ -340,58 +340,10 @@ primary key (name)
                         'msg-range2-%u' % i, 0xE000000000000000 + base + i,
                         should_be_here=False)
 
-  def _wait_for_binlog_server_state(self, tablet, expected, timeout=30.0):
-    while True:
-      v = utils.get_vars(tablet.port)
-      if v == None:
-        logging.debug("  vttablet not answering at /debug/vars, waiting...")
-      else:
-        if 'UpdateStreamState' not in v:
-          logging.debug("  vttablet not exporting BinlogServerState, waiting...")
-        else:
-          s = v['UpdateStreamState']
-          if s != expected:
-            logging.debug("  vttablet's binlog server in state %s != %s", s,
-                          expected)
-          else:
-            break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.1)
-      timeout -= 0.1
-      if timeout <= 0:
-        self.fail("timeout waiting for binlog server state %s" % expected)
-    logging.debug("tablet %s binlog service is in state %s",
-                  tablet.tablet_alias, expected)
-
   def _check_binlog_server_vars(self, tablet, timeout=5.0):
     v = utils.get_vars(tablet.port)
-    self.assertTrue("UpdateStreamKeyrangeStatements" in v)
-    self.assertTrue("UpdateStreamKeyrangeTransactions" in v)
-
-  def _wait_for_binlog_player_count(self, tablet, expected, timeout=30.0):
-    while True:
-      v = utils.get_vars(tablet.port)
-      if v == None:
-        logging.debug("  vttablet not answering at /debug/vars, waiting...")
-      else:
-        if 'BinlogPlayerMapSize' not in v:
-          logging.debug("  vttablet not exporting BinlogPlayerMapSize, waiting...")
-        else:
-          s = v['BinlogPlayerMapSize']
-          if s != expected:
-            logging.debug("  vttablet's binlog player map has count %u != %u",
-                          s, expected)
-          else:
-            break
-
-      logging.debug("sleeping a bit while we wait")
-      time.sleep(0.1)
-      timeout -= 0.1
-      if timeout <= 0:
-        self.fail("timeout waiting for binlog player count %d" % expected)
-    logging.debug("tablet %s binlog player has %d players",
-                  tablet.tablet_alias, expected)
+    self.assertTrue("UpdateStreamKeyRangeStatements" in v)
+    self.assertTrue("UpdateStreamKeyRangeTransactions" in v)
 
   def test_resharding(self):
     utils.run_vtctl(['CreateKeyspace',
@@ -475,7 +427,7 @@ primary key (name)
 
     # wait for tablet's binlog server service to be enabled after snapshot,
     # and check all the others while we're at it
-    self._wait_for_binlog_server_state(shard_1_slave1, "Enabled")
+    shard_1_slave1.wait_for_binlog_server_state("Enabled")
 
     # perform the restore.
     utils.run_vtctl(['ShardMultiRestore', '-strategy=populateBlpCheckpoint',
@@ -492,8 +444,8 @@ primary key (name)
     utils.run_vtctl(['ValidateSchemaKeyspace', 'test_keyspace'], auto_log=True)
 
     # check the binlog players are running
-    self._wait_for_binlog_player_count(shard_2_master, 1)
-    self._wait_for_binlog_player_count(shard_3_master, 1)
+    shard_2_master.wait_for_binlog_player_count(1)
+    shard_3_master.wait_for_binlog_player_count(1)
 
     # check that binlog server exported the stats vars
     self._check_binlog_server_vars(shard_1_slave1)
@@ -622,8 +574,8 @@ primary key (name)
                              'TabletTypes: master,rdonly,replica')
 
     # check the binlog players are gone now
-    self._wait_for_binlog_player_count(shard_2_master, 0)
-    self._wait_for_binlog_player_count(shard_3_master, 0)
+    shard_2_master.wait_for_binlog_player_count(0)
+    shard_3_master.wait_for_binlog_player_count(0)
 
     # kill everything
     tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,

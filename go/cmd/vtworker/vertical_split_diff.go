@@ -16,38 +16,38 @@ import (
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
 
-const splitDiffHTML = `
+const verticalSplitDiffHTML = `
 <!DOCTYPE html>
 <head>
-  <title>Split Diff Action</title>
+  <title>Vertical Split Diff Action</title>
 </head>
 <body>
-  <h1>Split Diff Action</h1>
+  <h1>Vertical Split Diff Action</h1>
 
     {{if .Error}}
       <b>Error:</b> {{.Error}}</br>
     {{else}}
       {{range $i, $si := .Shards}}
-        <li><a href="/Diffs/SplitDiff?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
+        <li><a href="/Diffs/VerticalSplitDiff?keyspace={{$si.Keyspace}}&shard={{$si.Shard}}">{{$si.Keyspace}}/{{$si.Shard}}</a></li>
       {{end}}
     {{end}}
 </body>
 `
 
-var splitDiffTemplate = loadTemplate("splitdiff", splitDiffHTML)
+var verticalSplitDiffTemplate = loadTemplate("verticalSplitdiff", verticalSplitDiffHTML)
 
-func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
+func commandVerticalSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) worker.Worker {
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
-		log.Fatalf("command SplitDiff requires <keyspace/shard|zk shard path>")
+		log.Fatalf("command VerticalSplitDiff requires <keyspace/shard|zk shard path>")
 	}
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
-	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
+	return worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard)
 }
 
-// shardsWithSources returns all the shards that have SourceShards set
-// with no Tables list.
-func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
+// shardsWithTablesSources returns all the shards that have SourceShards set
+// to one value, with an array of Tables.
+func shardsWithTablesSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 	keyspaces, err := wr.TopoServer().GetKeyspaces()
 	if err != nil {
 		return nil, err
@@ -76,7 +76,7 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 						return
 					}
 
-					if len(si.SourceShards) > 0 && len(si.SourceShards[0].Tables) == 0 {
+					if len(si.SourceShards) == 1 && len(si.SourceShards[0].Tables) > 0 {
 						mu.Lock()
 						result = append(result, map[string]string{
 							"Keyspace": keyspace,
@@ -99,7 +99,7 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 	return result, nil
 }
 
-func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
+func interactiveVerticalSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		httpError(w, "cannot parse form: %s", err)
 		return
@@ -110,17 +110,17 @@ func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.
 	if keyspace == "" || shard == "" {
 		// display the list of possible shards to chose from
 		result := make(map[string]interface{})
-		shards, err := shardsWithSources(wr)
+		shards, err := shardsWithTablesSources(wr)
 		if err != nil {
 			result["Error"] = err.Error()
 		} else {
 			result["Shards"] = shards
 		}
 
-		executeTemplate(w, splitDiffTemplate, result)
+		executeTemplate(w, verticalSplitDiffTemplate, result)
 	} else {
 		// start the diff job
-		wrk := worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
+		wrk := worker.NewVerticalSplitDiffWorker(wr, *cell, keyspace, shard)
 		if _, err := setAndStartWorker(wrk); err != nil {
 			httpError(w, "cannot set worker: %s", err)
 			return
@@ -131,8 +131,8 @@ func interactiveSplitDiff(wr *wrangler.Wrangler, w http.ResponseWriter, r *http.
 }
 
 func init() {
-	addCommand("Diffs", command{"SplitDiff",
-		commandSplitDiff, interactiveSplitDiff,
+	addCommand("Diffs", command{"VerticalSplitDiff",
+		commandVerticalSplitDiff, interactiveVerticalSplitDiff,
 		"<keyspace/shard|zk shard path>",
-		"Diffs a rdonly destination shard against its SourceShards"})
+		"Diffs a rdonly destination keyspace against its SourceShard for a vertical split"})
 }

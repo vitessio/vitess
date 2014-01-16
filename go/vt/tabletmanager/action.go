@@ -113,9 +113,10 @@ const (
 	// These are just descriptive and used for locking / logging.
 	//
 
-	KEYSPACE_ACTION_REBUILD           = "RebuildKeyspace"
-	KEYSPACE_ACTION_APPLY_SCHEMA      = "ApplySchemaKeyspace"
-	KEYSPACE_ACTION_SET_SHARDING_INFO = "SetKeyspaceShardingInfo"
+	KEYSPACE_ACTION_REBUILD             = "RebuildKeyspace"
+	KEYSPACE_ACTION_APPLY_SCHEMA        = "ApplySchemaKeyspace"
+	KEYSPACE_ACTION_SET_SHARDING_INFO   = "SetKeyspaceShardingInfo"
+	KEYSPACE_ACTION_MIGRATE_SERVED_FROM = "MigrateServedFrom"
 
 	ACTION_STATE_QUEUED  = ActionState("")        // All actions are queued initially
 	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process
@@ -217,6 +218,8 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case KEYSPACE_ACTION_APPLY_SCHEMA:
 		node.args = &ApplySchemaKeyspaceArgs{}
 	case KEYSPACE_ACTION_SET_SHARDING_INFO:
+	case KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
+		node.args = &MigrateServedFromArgs{}
 
 	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,

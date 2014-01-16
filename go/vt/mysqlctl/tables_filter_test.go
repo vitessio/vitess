@@ -5,19 +5,19 @@
 package mysqlctl
 
 import (
-	"fmt"
+	//"fmt"
 	"testing"
 
-	"github.com/youtube/vitess/go/vt/key"
+	//	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
-var testKeyRange = key.KeyRange{
-	Start: key.KeyspaceId(key.Uint64Key(0).String()),
-	End:   key.KeyspaceId(key.Uint64Key(10).String()),
+var testTables = []string{
+	"included1",
+	"included2",
 }
 
-func TestKeyRangeFilterPass(t *testing.T) {
+func TestTablesFilterPass(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -25,27 +25,27 @@ func TestKeyRangeFilterPass(t *testing.T) {
 				Sql:      []byte("set1"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
+				Sql:      []byte("dml1 /* _stream included1 (id ) (500 ); */"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml2 /* EMD keyspace_id:2 */"),
+				Sql:      []byte("dml2 /* _stream included2 (id ) (500 ); */"),
 			},
 		},
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
 	f(&input)
-	want := `statement: <6, "set1"> statement: <4, "dml2 /* EMD keyspace_id:2 */"> position: "1" `
+	want := `statement: <6, "set1"> statement: <4, "dml1 /* _stream included1 (id ) (500 ); */"> statement: <4, "dml2 /* _stream included2 (id ) (500 ); */"> position: "1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
 }
 
-func TestKeyRangeFilterSkip(t *testing.T) {
+func TestTablesFilterSkip(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -53,13 +53,13 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 				Sql:      []byte("set1"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20 */"),
+				Sql:      []byte("dml1 /* _stream excluded1 (id ) (500 ); */"),
 			},
 		},
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -70,7 +70,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 	}
 }
 
-func TestKeyRangeFilterDDL(t *testing.T) {
+func TestTablesFilterDDL(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -84,7 +84,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -95,7 +95,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 	}
 }
 
-func TestKeyRangeFilterMalformed(t *testing.T) {
+func TestTablesFilterMalformed(t *testing.T) {
 	input := proto.BinlogTransaction{
 		Statements: []proto.Statement{
 			{
@@ -106,16 +106,13 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 				Sql:      []byte("ddl"),
 			}, {
 				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:20*/"),
-			}, {
-				Category: proto.BL_DML,
-				Sql:      []byte("dml1 /* EMD keyspace_id:2a */"),
+				Sql:      []byte("dml1 /* _stream excluded1*/"),
 			},
 		},
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := TablesFilterFunc(testTables, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -124,13 +121,4 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
 	}
-}
-
-func bltToString(tx *proto.BinlogTransaction) string {
-	result := ""
-	for _, statement := range tx.Statements {
-		result += fmt.Sprintf("statement: <%d, \"%s\"> ", statement.Category, statement.Sql)
-	}
-	result += fmt.Sprintf("position: \"%v\" ", tx.GroupId)
-	return result
 }

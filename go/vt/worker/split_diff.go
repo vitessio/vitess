@@ -411,16 +411,16 @@ func (sdw *SplitDiffWorker) diff() error {
 				sdw.diffLog("Source shard doesn't overlap with destination????: " + err.Error())
 				return
 			}
-			sourceQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
+			sourceQueryResultReader, err := TableScanByKeyRange(sdw.wr.TopoServer(), sdw.sourceAliases[0], &tableDefinition, overlap, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
-				sdw.diffLog("FullTableScan(source) failed: " + err.Error())
+				sdw.diffLog("TableScanByKeyRange(source) failed: " + err.Error())
 				return
 			}
 			defer sourceQueryResultReader.Close()
 
-			destinationQueryResultReader, err := FullTableScan(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
+			destinationQueryResultReader, err := TableScanByKeyRange(sdw.wr.TopoServer(), sdw.destinationAlias, &tableDefinition, key.KeyRange{}, sdw.keyspaceInfo.ShardingColumnType)
 			if err != nil {
-				sdw.diffLog("FullTableScan(destination) failed: " + err.Error())
+				sdw.diffLog("TableScanByKeyRange(destination) failed: " + err.Error())
 				return
 			}
 			defer destinationQueryResultReader.Close()

@@ -67,8 +67,8 @@ func multisnapshotCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []st
 }
 
 func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []string) {
-	start := subFlags.String("start", "", "start of the key range")
-	end := subFlags.String("end", "", "end of the key range")
+	starts := subFlags.String("starts", "", "starts of the key range")
+	ends := subFlags.String("ends", "", "ends of the key range")
 	fetchRetryCount := subFlags.Int("fetch-retry-count", 3, "how many times to retry a failed transfer")
 	concurrency := subFlags.Int("concurrency", 8, "how many concurrent db inserts to run simultaneously")
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
@@ -81,15 +81,25 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		"    writeBinLogs: write all operations to the binlogs")
 
 	subFlags.Parse(args)
-
-	keyRange, err := key.ParseKeyRangeParts(*start, *end)
-	if err != nil {
-		log.Fatalf("Invalid start or end: %v", err)
-	}
-
 	if subFlags.NArg() < 2 {
 		log.Fatalf("multirestore requires <destination_dbname> <source_host>[/<source_dbname>]... %v", args)
 	}
+
+	startArray := strings.Split(*starts, ",")
+	endArray := strings.Split(*ends, ",")
+	if len(startArray) != len(endArray) || len(startArray) != subFlags.NArg()-1 {
+		log.Fatalf("Need as many starts and ends as source URLs")
+	}
+
+	keyRanges := make([]key.KeyRange, len(startArray))
+	for i, s := range startArray {
+		var err error
+		keyRanges[i], err = key.ParseKeyRangeParts(s, endArray[i])
+		if err != nil {
+			log.Fatalf("Invalid start or end: %v", err)
+		}
+	}
+
 	dbName, dbis := subFlags.Arg(0), subFlags.Args()[1:]
 	sources := make([]*url.URL, len(dbis))
 	for i, dbi := range dbis {
@@ -102,7 +112,7 @@ func multiRestoreCmd(mysqld *mysqlctl.Mysqld, subFlags *flag.FlagSet, args []str
 		}
 		sources[i] = dbUrl
 	}
-	if err := mysqld.MultiRestore(dbName, keyRange, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
+	if err := mysqld.MultiRestore(dbName, keyRanges, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy); err != nil {
 		log.Fatalf("multirestore failed: %v", err)
 	}
 }
@@ -225,7 +235,7 @@ var commands = []command{
 		"[-fetch-concurrency=3] [-fetch-retry-count=3] [-dont-wait-for-slave-start] <snapshot manifest file>",
 		"Restores a full snapshot"},
 	command{"multirestore", multiRestoreCmd,
-		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-start=''] [-end=''] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
+		"[-force] [-concurrency=3] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-starts=start1,start2,...] [-ends=end1,end2,...] [-strategy=] <destination_dbname> <source_host>[/<source_dbname>]...",
 		"Restores a snapshot form multiple hosts"},
 	command{"multisnapshot", multisnapshotCmd, "[-concurrency=8] [-spec='-'] [-tables=''] [-skip-slave-restart] [-maximum-file-size=134217728] <db name> <key name>",
 		"Makes a complete snapshot using 'select * into' commands."},

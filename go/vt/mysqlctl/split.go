@@ -511,8 +511,9 @@ func (mysqld *Mysqld) dumpTableFull(td TableDefinition, dbName, mainCloneSourceP
 // - for a resharding snapshot, keyRanges+keyName+keyType are set,
 //   and tables is empty. This action will create multiple snapshots,
 //   one per keyRange.
-// - for a vertical split, tables is set, and keyRanges+keyName+keyType are
-//   empty. It will create a single snapshot of the contents of the tables.
+// - for a vertical split, tables is set, keyRanges = [KeyRange{}] and
+//   keyName+keyType are empty. It will create a single snapshot of
+//   the contents of the tables.
 // Note combinations of table subset and keyranges are not supported.
 func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
@@ -520,11 +521,8 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 		return
 	}
 	if len(tables) > 0 {
-		if len(keyRanges) > 1 {
-			return nil, fmt.Errorf("Cannot have both tables and keyranges")
-		}
-		if len(keyRanges) == 1 && keyRanges[0].IsPartial() {
-			return nil, fmt.Errorf("Cannot have both tables and keyranges")
+		if len(keyRanges) != 1 || keyRanges[0].IsPartial() {
+			return nil, fmt.Errorf("With tables specified, can only have one full KeyRange")
 		}
 	}
 
@@ -536,12 +534,8 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 
 	// clean out and start fresh
 	cloneSourcePaths := make(map[key.KeyRange]string)
-	if len(tables) > 0 {
-		cloneSourcePaths[key.KeyRange{}] = path.Join(mysqld.SnapshotDir, dataDir, dbName+"-tables")
-	} else {
-		for _, keyRange := range keyRanges {
-			cloneSourcePaths[keyRange] = path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+string(keyRange.Start.Hex())+","+string(keyRange.End.Hex()))
-		}
+	for _, keyRange := range keyRanges {
+		cloneSourcePaths[keyRange] = path.Join(mysqld.SnapshotDir, dataDir, dbName+"-"+string(keyRange.Start.Hex())+","+string(keyRange.End.Hex()))
 	}
 	for _, _path := range cloneSourcePaths {
 		if err = os.RemoveAll(_path); err != nil {
@@ -740,7 +734,7 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 //   also write to the binary logs.
 // - If the strategy contains the command 'populateBlpCheckpoint' then we
 //   will populate the blp_checkpoint table with master positions to start from
-func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
@@ -760,7 +754,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 			} else {
 				sourceDbName = sourceAddr.Path[1:]
 			}
-			ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRange, fetchRetryCount)
+			ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRanges[i], fetchRetryCount)
 			manifests[i] = ssm
 			rc.RecordError(e)
 		}(sourceAddr, i)
