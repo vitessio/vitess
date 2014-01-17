@@ -46,6 +46,8 @@ func CheckTablet(t *testing.T, ts topo.Server) {
 		Type:     topo.TYPE_MASTER,
 		State:    topo.STATE_READ_WRITE,
 		KeyRange: newKeyRange("-10"),
+
+		BlacklistedTables: []string{"black1", "black2"},
 	}
 	if err := ts.CreateTablet(tablet); err != nil {
 		t.Errorf("CreateTablet: %v", err)
