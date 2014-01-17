@@ -248,7 +248,7 @@ func TestScatterConnClose(t *testing.T) {
 		// Flaky: This test should be run manually.
 		runtime.Gosched()
 		if sbc.CloseCount != 1 {
-			t.Errorf("want 1, got %d", sbc.CommitCount)
+			t.Errorf("want 1, got %d", sbc.CloseCount)
 		}
 	*/
 }
