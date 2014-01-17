@@ -323,6 +323,15 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
 
+    # check 'vtctl SetBlacklistedTables' command works as expected
+    utils.run_vtctl(['SetBlacklistedTables', source_master.tablet_alias,
+                     'moving1,moving2,view1'], auto_log=True)
+    self._check_blacklisted_tables(source_master, ['moving1', 'moving2',
+                                                   'view1'])
+    utils.run_vtctl(['SetBlacklistedTables', source_master.tablet_alias],
+                    auto_log=True)
+    self._check_blacklisted_tables(source_master, None)
+
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)
 

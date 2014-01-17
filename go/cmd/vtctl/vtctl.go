@@ -74,6 +74,9 @@ var commands = []commandGroup{
 			command{"SetReadWrite", commandSetReadWrite,
 				"[<tablet alias|zk tablet path>]",
 				"Sets the tablet as ReadWrite."},
+			command{"SetBlacklistedTables", commandSetBlacklistedTables,
+				"[<tablet alias|zk tablet path>] [table1,table2,...]",
+				"Sets the list of blacklisted tables for a tablet. Use no tables to clear the list."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
 				"[-force] [-dry-run] <tablet alias|zk tablet path> <tablet type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
@@ -683,6 +686,24 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	return wr.ActionInitiator().SetReadWrite(tabletAlias)
+}
+
+func commandSetBlacklistedTables(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 && subFlags.NArg() != 2 {
+		log.Fatalf("action SetBlacklistedTables requires <tablet alias|zk tablet path> [table1,table2,...]")
+	}
+
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	var tables []string
+	if subFlags.NArg() == 2 {
+		tables = strings.Split(subFlags.Arg(1), ",")
+	}
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		log.Fatalf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return "", wr.ActionInitiator().SetBlacklistedTables(ti, tables, *waitTime)
 }
 
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
