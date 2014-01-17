@@ -49,8 +49,7 @@ def convert_exception(exc, *args):
 # This is shard-unaware and only handles the most basic communication.
 # If something goes wrong, this object should be thrown away and a new one instantiated.
 class TabletConnection(object):
-  in_transaction = False
-  session_id = 0
+  session = None
   tablet_type = None
   cursorclass = cursor.TabletCursor
   _stream_fields = None
@@ -71,84 +70,74 @@ class TabletConnection(object):
 
   def dial(self):
     try:
-      if self.session_id:
+      if not self.is_closed():
         self.close()
-
       self.client.dial()
-      params = {'TabletType': self.tablet_type}
-      response = self.client.call('VTGate.GetSessionId', params)
-      self.session_id = response.reply['SessionId']
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def close(self):
-    session_id = self.session_id
-    self.in_transaction = False
-    self.session_id = 0
-    try:
-      self.client.call('VTGate.CloseSession', {'SessionId': session_id})
-    except gorpc.GoRpcError:
-      # ignore the exception as it raises if connection is broken
-      pass
+    if self.session:
+      self.rollback()
     self.client.close()
 
   def is_closed(self):
     return self.client.is_closed()
 
-  def _make_req(self):
-    return {'SessionId': self.session_id,
-            'Keyspace': self.keyspace,
-            'Shards': [self.shard]}
-
   def begin(self):
-    if self.in_transaction:
-      raise dbexceptions.NotSupportedError('Cannot begin: Already in a transaction')
-
     try:
-      self.client.call('VTGate.Begin', {'SessionId': self.session_id})
-      self.in_transaction = True
+      response = self.client.call('VTGate.Begin', None)
+      self.session = response.reply
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def commit(self):
-    if not self.in_transaction:
-      return
-
-    # in_transaction has to be reset irrespective of outcome.
-    self.in_transaction = False
-
     try:
-      self.client.call('VTGate.Commit', {'SessionId': self.session_id})
+      session = self.session
+      self.session = None
+      self.client.call('VTGate.Commit', session)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def rollback(self):
-    if not self.in_transaction:
-      return
-
-    # in_transaction has to be reset irrespective of outcome.
-    self.in_transaction = False
-
     try:
-      self.client.call('VTGate.Rollback', {'SessionId': self.session_id})
+      session = self.session
+      self.session = None
+      self.client.call('VTGate.Rollback', session)
     except gorpc.GoRpcError as e:
       raise convert_exception(e, str(self))
 
   def cursor(self, cursorclass=None, **kargs):
     return (cursorclass or self.cursorclass)(self, **kargs)
 
+  def _add_session(self, req):
+    if self.session:
+      req['Session'] = self.session
+
+  def _update_session(self, response):
+    if 'Session' in response.reply:
+      self.session = response.reply['Session']
+
   def _execute(self, sql, bind_variables):
     new_binds = field_types.convert_bind_vars(bind_variables)
-    req = self._make_req()
-    req['Sql'] = sql
-    req['BindVariables'] = new_binds
+    req = {
+        'Sql': sql,
+        'BindVariables': new_binds,
+        'Keyspace': self.keyspace,
+        'TabletType': self.tablet_type,
+        'Shards': [self.shard],
+    }
+    self._add_session(req)
 
     fields = []
     conversions = []
     results = []
     try:
       response = self.client.call('VTGate.ExecuteShard', req)
+      self._update_session(response)
       reply = response.reply
+      if 'Error' in response.reply:
+        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteShard')
 
       for field in reply['Fields']:
         fields.append((field['Name'], field['Type']))
@@ -177,9 +166,17 @@ class TabletConnection(object):
     rowsets = []
 
     try:
-      req = self._make_req()
-      req['Queries'] = query_list
+      req = {
+          'Queries': query_list,
+          'Keyspace': self.keyspace,
+          'TabletType': self.tablet_type,
+          'Shards': [self.shard],
+      }
+      self._add_session(req)
       response = self.client.call('VTGate.ExecuteBatchShard', req)
+      self._update_session(response)
+      if 'Error' in response.reply:
+        raise gorpc.AppError(response.reply['Error'], 'VTGate.ExecuteBatchShard')
       for reply in response.reply['List']:
         fields = []
         conversions = []
@@ -208,9 +205,14 @@ class TabletConnection(object):
   # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(self, sql, bind_variables):
     new_binds = field_types.convert_bind_vars(bind_variables)
-    req = self._make_req()
-    req['Sql'] = sql
-    req['BindVariables'] = new_binds
+    req = {
+        'Sql': sql,
+        'BindVariables': new_binds,
+        'Keyspace': self.keyspace,
+        'TabletType': self.tablet_type,
+        'Shards': [self.shard],
+    }
+    self._add_session(req)
 
     self._stream_fields = []
     self._stream_conversions = []
@@ -237,12 +239,17 @@ class TabletConnection(object):
       return None
 
     # See if we need to read more or whether we just pop the next row.
-    if self._stream_result is None:
+    while self._stream_result is None:
       try:
         self._stream_result = self.client.stream_next()
         if self._stream_result is None:
           self._stream_result_index = None
           return None
+        # A session message, if any comes separately with no rows
+        if 'Session' in self._stream_result.reply:
+          self.session = self._stream_result.reply['Session']
+          self._stream_result = None
+          continue
       except gorpc.GoRpcError as e:
         raise convert_exception(e, str(self))
       except:

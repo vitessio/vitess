@@ -9,12 +9,14 @@ import logging
 import os
 import signal
 from subprocess import PIPE
+import threading
 import time
 import unittest
 
 import environment
 import utils
 import tablet
+from vtdb import dbexceptions
 from vtdb import vtgate
 
 tablet_62344 = tablet.Tablet(62344)
@@ -176,11 +178,39 @@ class TestTabletManager(unittest.TestCase):
     (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
     self.assertEqual(count, 5, "want 5, got %d" % (count))
 
+    # error on dml. We still need to get a transaction id
+    conn.begin()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      conn._execute("insert into vt_select_test values(:id, :msg)", {"id": 5, "msg": "test4"})
+    self.assertTrue(conn.session["ShardSessions"][0]["TransactionId"] != 0)
+    conn.commit()
+
+    # interleaving
+    conn2 = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
+    thd = threading.Thread(target=self._query_lots, args=(conn2,))
+    thd.start()
+    for i in xrange(250):
+      (result, count, lastrow, fields) = conn._execute("select id from vt_select_test where id = 2", {})
+      self.assertEqual(result, [(2,)])
+      if i % 10 == 0:
+        conn._stream_execute("select id from vt_select_test where id = 3", {})
+        while 1:
+          result = conn._stream_next()
+          if not result:
+            break
+          self.assertEqual(result, (3,))
+    thd.join()
+
     # close
     conn.close()
 
     utils.vtgate_kill(gate_proc)
     tablet_62344.kill_vttablet()
+
+  def _query_lots(self, conn2):
+    for i in xrange(500):
+      (result, count, lastrow, fields) = conn2._execute("select id from vt_select_test where id = 1", {})
+      self.assertEqual(result, [(1,)])
 
   def test_scrap(self):
     # Start up a master mysql and vttablet

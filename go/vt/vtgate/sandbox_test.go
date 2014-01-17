@@ -54,8 +54,10 @@ func resetSandbox() {
 	endPointCounter = 0
 	dialCounter = 0
 	dialMustFail = 0
+	transactionId.Set(0)
 }
 
+// sandboxTopo satisfies the SrvTopoServer interface
 type sandboxTopo struct {
 }
 
@@ -98,10 +100,13 @@ func sandboxDialer(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, 
 	if tconn == nil {
 		panic(fmt.Sprintf("can't find conn %v", endPoint.Uid))
 	}
+	tconn.(*sandboxConn).endPoint = endPoint
 	return tconn, nil
 }
 
+// sandboxConn satisfies the TabletConn interface
 type sandboxConn struct {
+	endPoint       topo.EndPoint
 	mustFailRetry  int
 	mustFailFatal  int
 	mustFailServer int
@@ -112,14 +117,11 @@ type sandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount     int
-	BeginCount    int
-	CommitCount   int
-	RollbackCount int
-	CloseCount    int
-
-	// TransactionId is auto-generated on Begin
-	transactionId int64
+	ExecCount     sync2.AtomicInt64
+	BeginCount    sync2.AtomicInt64
+	CommitCount   sync2.AtomicInt64
+	RollbackCount sync2.AtomicInt64
+	CloseCount    sync2.AtomicInt64
 }
 
 func (sbc *sandboxConn) getError() error {
@@ -150,8 +152,8 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
-	sbc.ExecCount++
+func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
+	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -161,23 +163,24 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}) (
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery) (*tproto.QueryResultList, error) {
-	sbc.ExecCount++
+func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
+	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	if err := sbc.getError(); err != nil {
 		return nil, err
 	}
-	qrl := &tproto.QueryResultList{List: make([]mproto.QueryResult, 0, len(queries))}
+	qrl := &tproto.QueryResultList{}
+	qrl.List = make([]mproto.QueryResult, 0, len(queries))
 	for _ = range queries {
 		qrl.List = append(qrl.List, *singleRowResult)
 	}
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
-	sbc.ExecCount++
+func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc) {
+	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
@@ -188,46 +191,44 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 	return ch, func() error { return err }
 }
 
-func (sbc *sandboxConn) Begin() error {
-	sbc.ExecCount++
-	sbc.BeginCount++
+func (sbc *sandboxConn) Begin() (int64, error) {
+	sbc.ExecCount.Add(1)
+	sbc.BeginCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	err := sbc.getError()
-	if err == nil {
-		sbc.transactionId = transactionId.Add(1)
+	if err != nil {
+		return 0, err
 	}
-	return err
+	return transactionId.Add(1), nil
 }
 
-func (sbc *sandboxConn) Commit() error {
-	sbc.ExecCount++
-	sbc.CommitCount++
-	sbc.transactionId = 0
+func (sbc *sandboxConn) Commit(transactionId int64) error {
+	sbc.ExecCount.Add(1)
+	sbc.CommitCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) Rollback() error {
-	sbc.ExecCount++
-	sbc.RollbackCount++
-	sbc.transactionId = 0
+func (sbc *sandboxConn) Rollback(transactionId int64) error {
+	sbc.ExecCount.Add(1)
+	sbc.RollbackCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
 	}
 	return sbc.getError()
-}
-
-func (sbc *sandboxConn) TransactionId() int64 {
-	return sbc.transactionId
 }
 
 // Close does not change ExecCount
 func (sbc *sandboxConn) Close() {
-	sbc.CloseCount++
+	sbc.CloseCount.Add(1)
+}
+
+func (sbc *sandboxConn) EndPoint() topo.EndPoint {
+	return sbc.endPoint
 }
 
 var singleRowResult = &mproto.QueryResult{
