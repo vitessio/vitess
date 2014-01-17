@@ -158,9 +158,10 @@ index by_msg (msg)
     keyspace = 'destination_keyspace'
     ks = utils.run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
     result = ""
-    for served_from in sorted(ks['ServedFrom'].keys()):
-      result += "ServedFrom(%s): %s\n" % (served_from,
-                                          ks['ServedFrom'][served_from])
+    if 'ServedFrom' in ks and ks['ServedFrom']:
+      for served_from in sorted(ks['ServedFrom'].keys()):
+        result += "ServedFrom(%s): %s\n" % (served_from,
+                                            ks['ServedFrom'][served_from])
     logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
     self.assertEqual(expected, result,
                      "Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (
