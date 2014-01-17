@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"sync"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
@@ -28,6 +29,14 @@ func init() {
 	RegisterDialer("bson", DialTablet)
 }
 
+// TabletBson implements a bson rpcplus implementation for TabletConn
+type TabletBson struct {
+	mu        sync.RWMutex
+	endPoint  topo.EndPoint
+	rpcClient *rpcplus.Client
+	sessionId int64
+}
+
 func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error) {
 	var addr string
 	var config *tls.Config
@@ -39,7 +48,7 @@ func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, err
 		addr = fmt.Sprintf("%v:%v", endPoint.Host, endPoint.NamedPortMap["_vtocc"])
 	}
 
-	conn := new(TabletBson)
+	conn := &TabletBson{endPoint: endPoint}
 	var err error
 	if *tabletBsonUsername != "" {
 		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", addr, *tabletBsonUsername, *tabletBsonPassword, 0, config)
@@ -54,22 +63,22 @@ func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, err
 	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
 		return nil, tabletError(err)
 	}
-	conn.session.SessionId = sessionInfo.SessionId
+	conn.sessionId = sessionInfo.SessionId
 	return conn, nil
 }
 
-// TabletBson implements a bson rpcplus implementation for TabletConn
-type TabletBson struct {
-	rpcClient *rpcplus.Client
-	session   tproto.Session
-}
+func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, CONN_CLOSED
+	}
 
-func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error) {
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
-		TransactionId: conn.session.TransactionId,
-		SessionId:     conn.session.SessionId,
+		TransactionId: transactionId,
+		SessionId:     conn.sessionId,
 	}
 	qr := new(mproto.QueryResult)
 	if err := conn.rpcClient.Call("SqlQuery.Execute", req, qr); err != nil {
@@ -78,11 +87,17 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}) (
 	return qr, nil
 }
 
-func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery) (*tproto.QueryResultList, error) {
+func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return nil, CONN_CLOSED
+	}
+
 	req := tproto.QueryList{
 		Queries:       queries,
-		TransactionId: conn.session.TransactionId,
-		SessionId:     conn.session.SessionId,
+		TransactionId: transactionId,
+		SessionId:     conn.sessionId,
 	}
 	qrs := new(tproto.QueryResultList)
 	if err := conn.rpcClient.Call("SqlQuery.ExecuteBatch", req, qrs); err != nil {
@@ -91,48 +106,86 @@ func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery) (*tproto.Query
 	return qrs, nil
 }
 
-func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc) {
+func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		sr := make(chan *mproto.QueryResult, 1)
+		close(sr)
+		return sr, func() error { return CONN_CLOSED }
+	}
+
 	req := &tproto.Query{
 		Sql:           query,
 		BindVariables: bindVars,
-		TransactionId: conn.session.TransactionId,
-		SessionId:     conn.session.SessionId,
+		TransactionId: transactionId,
+		SessionId:     conn.sessionId,
 	}
 	sr := make(chan *mproto.QueryResult, 10)
 	c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
 	return sr, func() error { return tabletError(c.Error) }
 }
 
-func (conn *TabletBson) Begin() error {
-	var txInfo tproto.TransactionInfo
-	err := conn.rpcClient.Call("SqlQuery.Begin", &conn.session, &txInfo)
-	if err == nil {
-		conn.session.TransactionId = txInfo.TransactionId
+func (conn *TabletBson) Begin() (transactionId int64, err error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return 0, CONN_CLOSED
 	}
-	return tabletError(err)
+
+	req := &tproto.Session{
+		SessionId: conn.sessionId,
+	}
+	var txInfo tproto.TransactionInfo
+	err = conn.rpcClient.Call("SqlQuery.Begin", req, &txInfo)
+	return txInfo.TransactionId, tabletError(err)
 }
 
-func (conn *TabletBson) Commit() error {
-	defer func() { conn.session.TransactionId = 0 }()
+func (conn *TabletBson) Commit(transactionId int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return CONN_CLOSED
+	}
+
+	req := &tproto.Session{
+		SessionId:     conn.sessionId,
+		TransactionId: transactionId,
+	}
 	var noOutput rpc.UnusedResponse
-	return tabletError(conn.rpcClient.Call("SqlQuery.Commit", &conn.session, &noOutput))
+	return tabletError(conn.rpcClient.Call("SqlQuery.Commit", req, &noOutput))
 }
 
-func (conn *TabletBson) Rollback() error {
-	defer func() { conn.session.TransactionId = 0 }()
+func (conn *TabletBson) Rollback(transactionId int64) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.rpcClient == nil {
+		return CONN_CLOSED
+	}
+
+	req := &tproto.Session{
+		SessionId:     conn.sessionId,
+		TransactionId: transactionId,
+	}
 	var noOutput rpc.UnusedResponse
-	return tabletError(conn.rpcClient.Call("SqlQuery.Rollback", &conn.session, &noOutput))
-}
-
-func (conn *TabletBson) TransactionId() int64 {
-	return conn.session.TransactionId
+	return tabletError(conn.rpcClient.Call("SqlQuery.Rollback", req, &noOutput))
 }
 
 func (conn *TabletBson) Close() {
-	conn.session = tproto.Session{TransactionId: 0, SessionId: 0}
+	conn.mu.Lock()
+	defer conn.mu.Unlock()
+	if conn.rpcClient == nil {
+		return
+	}
+
+	conn.sessionId = 0
 	rpcClient := conn.rpcClient
 	conn.rpcClient = nil
-	tabletError(rpcClient.Close())
+	rpcClient.Close()
+}
+
+func (conn *TabletBson) EndPoint() topo.EndPoint {
+	return conn.endPoint
 }
 
 func tabletError(err error) error {

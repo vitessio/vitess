@@ -6,6 +6,7 @@ package vtgate
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
@@ -14,8 +15,9 @@ import (
 )
 
 // ShardConn represents a load balanced connection to a group
-// of vttablets that belong to the same shard. ShardConn should
-// not be concurrently used across goroutines.
+// of vttablets that belong to the same shard. ShardConn can
+// be concurrently used across goroutines. Such requests are
+// interleaved on the same underlying connection.
 type ShardConn struct {
 	keyspace   string
 	shard      string
@@ -23,58 +25,157 @@ type ShardConn struct {
 	retryDelay time.Duration
 	retryCount int
 	balancer   *Balancer
-	endPoint   topo.EndPoint
-	conn       TabletConn
+
+	// conn needs a mutex because it can change during the lifetime of ShardConn.
+	mu   sync.Mutex
+	conn TabletConn
 }
 
-// NewShardConn creates a new ShardConn. It creates or reuses a Balancer from
-// the supplied BalancerMap. retryDelay is as specified by Balancer. retryCount
-// is the max number of retries before a ShardConn returns an error on an operation.
-func NewShardConn(blm *BalancerMap, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
+// NewShardConn creates a new ShardConn. It creates a Balancer using
+// serv, cell, keyspace, tabletType and retryDelay. retryCount is the max
+// number of retries before a ShardConn returns an error on an operation.
+func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType topo.TabletType, retryDelay time.Duration, retryCount int) *ShardConn {
+	getAddresses := func() (*topo.EndPoints, error) {
+		endpoints, err := serv.GetEndPoints(cell, keyspace, shard, tabletType)
+		if err != nil {
+			return nil, fmt.Errorf("endpoints fetch error: %v", err)
+		}
+		return endpoints, nil
+	}
+	blc := NewBalancer(getAddresses, retryDelay)
 	return &ShardConn{
 		keyspace:   keyspace,
 		shard:      shard,
 		tabletType: tabletType,
 		retryDelay: retryDelay,
 		retryCount: retryCount,
-		balancer:   blm.Balancer(keyspace, shard, tabletType, retryDelay),
+		balancer:   blc,
 	}
+}
+
+// Execute executes a non-streaming query on vttablet. If there are connection errors,
+// it retries retryCount times before failing. It does not retry if the connection is in
+// the middle of a transaction.
+func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (qr *mproto.QueryResult, err error) {
+	err = sdc.withRetry(func(conn TabletConn) error {
+		var innerErr error
+		qr, innerErr = conn.Execute(query, bindVars, transactionId)
+		return innerErr
+	}, transactionId)
+	return qr, err
+}
+
+// ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
+func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (qrs *tproto.QueryResultList, err error) {
+	err = sdc.withRetry(func(conn TabletConn) error {
+		var innerErr error
+		qrs, innerErr = conn.ExecuteBatch(queries, transactionId)
+		return innerErr
+	}, transactionId)
+	return qrs, err
+}
+
+// StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
+func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
+	var usedConn TabletConn
+	var erFunc ErrFunc
+	err := sdc.withRetry(func(conn TabletConn) error {
+		results, erFunc = conn.StreamExecute(query, bindVars, transactionId)
+		usedConn = conn
+		return erFunc()
+	}, transactionId)
+	if err != nil {
+		return results, func() error { return err }
+	}
+	return results, func() error { return sdc.WrapError(erFunc(), usedConn) }
+}
+
+// Begin begins a transaction. The retry rules are the same as Execute.
+func (sdc *ShardConn) Begin() (transactionId int64, err error) {
+	err = sdc.withRetry(func(conn TabletConn) error {
+		var innerErr error
+		transactionId, innerErr = conn.Begin()
+		return innerErr
+	}, 0)
+	return transactionId, err
+}
+
+// Commit commits the current transaction. The retry rules are the same as Execute.
+func (sdc *ShardConn) Commit(transactionId int64) (err error) {
+	return sdc.withRetry(func(conn TabletConn) error {
+		return conn.Commit(transactionId)
+	}, transactionId)
+}
+
+// Rollback rolls back the current transaction. The retry rules are the same as Execute.
+func (sdc *ShardConn) Rollback(transactionId int64) (err error) {
+	return sdc.withRetry(func(conn TabletConn) error {
+		return conn.Rollback(transactionId)
+	}, transactionId)
+}
+
+// Close closes the underlying TabletConn. ShardConn can be
+// reused after this because it opens connections on demand.
+func (sdc *ShardConn) Close() {
+	sdc.mu.Lock()
+	defer sdc.mu.Unlock()
+	if sdc.conn == nil {
+		return
+	}
+	sdc.conn.Close()
+	sdc.conn = nil
 }
 
 // withRetry sets up the connection and exexutes the action. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
-func (sdc *ShardConn) withRetry(action func() error) error {
+func (sdc *ShardConn) withRetry(action func(conn TabletConn) error, transactionId int64) error {
+	var conn TabletConn
 	var err error
+	var retry bool
 	for i := 0; i < sdc.retryCount; i++ {
-		if sdc.conn == nil {
-			var endPoint topo.EndPoint
-			endPoint, err = sdc.balancer.Get()
-			if err != nil {
-				return sdc.WrapError(err)
-			}
-			var conn TabletConn
-			conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
-			if err != nil {
-				sdc.balancer.MarkDown(endPoint.Uid)
+		conn, err, retry = sdc.getConn()
+		if err != nil {
+			if retry {
 				continue
 			}
-			sdc.endPoint = endPoint
-			sdc.conn = conn
+			return sdc.WrapError(err, conn)
 		}
-		err = action()
-		if sdc.canRetry(err) {
+		if err = action(conn); sdc.canRetry(err, transactionId, conn) {
 			continue
 		}
-		return sdc.WrapError(err)
+		return sdc.WrapError(err, conn)
 	}
-	return sdc.WrapError(err)
+	return sdc.WrapError(err, conn)
+}
+
+// getConn reuses an existing connection if possible. Otherwise
+// it returns a connection which it will save for future reuse.
+// If it returns an error,  retry will tell you if getConn can be retried.
+func (sdc *ShardConn) getConn() (conn TabletConn, err error, retry bool) {
+	sdc.mu.Lock()
+	defer sdc.mu.Unlock()
+	if sdc.conn != nil {
+		return sdc.conn, nil, false
+	}
+
+	endPoint, err := sdc.balancer.Get()
+	if err != nil {
+		return nil, err, false
+	}
+	conn, err = GetDialer()(endPoint, sdc.keyspace, sdc.shard)
+	if err != nil {
+		sdc.balancer.MarkDown(endPoint.Uid)
+		return nil, err, true
+	}
+	sdc.conn = conn
+	return sdc.conn, nil, false
 }
 
 // canRetry determines whether a query can be retried or not.
 // OperationalErrors like retry/fatal cause a reconnect and retry if query is not in a txn.
 // TxPoolFull causes a retry and all other errors are non-retry.
-func (sdc *ShardConn) canRetry(err error) bool {
+func (sdc *ShardConn) canRetry(err error, transactionId int64, conn TabletConn) bool {
 	if err == nil {
 		return false
 	}
@@ -92,102 +193,36 @@ func (sdc *ShardConn) canRetry(err error) bool {
 		}
 	}
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
-	inTransaction := (sdc.TransactionId() != 0)
-	sdc.balancer.MarkDown(sdc.endPoint.Uid)
-	sdc.Close()
+	sdc.markDown(conn)
+	inTransaction := (transactionId != 0)
 	return !inTransaction
 }
 
-// Execute executes a non-streaming query on vttablet. If there are connection errors,
-// it retries retryCount times before failing. It does not retry if the connection is in
-// the middle of a transaction.
-func (sdc *ShardConn) Execute(query string, bindVars map[string]interface{}) (qr *mproto.QueryResult, err error) {
-	err = sdc.withRetry(func() error {
-		var innerErr error
-		qr, innerErr = sdc.conn.Execute(query, bindVars)
-		return innerErr
-	})
-	return qr, err
-}
-
-// ExecuteBatch executes a group of queries. The retry rules are the same as Execute.
-func (sdc *ShardConn) ExecuteBatch(queries []tproto.BoundQuery) (qrs *tproto.QueryResultList, err error) {
-	err = sdc.withRetry(func() error {
-		var innerErr error
-		qrs, innerErr = sdc.conn.ExecuteBatch(queries)
-		return innerErr
-	})
-	return qrs, err
-}
-
-// StreamExecute executes a streaming query on vttablet. The retry rules are the same as Execute.
-// Calling other functions while streaming is not recommended.
-func (sdc *ShardConn) StreamExecute(query string, bindVars map[string]interface{}) (results <-chan *mproto.QueryResult, errFunc ErrFunc) {
-	err := sdc.withRetry(func() error {
-		var innerErrFunc ErrFunc
-		results, innerErrFunc = sdc.conn.StreamExecute(query, bindVars)
-		return innerErrFunc()
-	})
-	if results == nil {
-		r := make(chan *mproto.QueryResult)
-		close(r)
-		results = r
-	}
-	return results, func() error { return err }
-}
-
-// Begin begins a transaction. The retry rules are the same as Execute.
-func (sdc *ShardConn) Begin() (err error) {
-	if sdc.TransactionId() != 0 {
-		return sdc.WrapError(fmt.Errorf("cannot begin: already in transaction"))
-	}
-	return sdc.withRetry(func() error {
-		return sdc.conn.Begin()
-	})
-}
-
-// Commit commits the current transaction. There are no retries on this operation.
-func (sdc *ShardConn) Commit() (err error) {
-	if sdc.TransactionId() == 0 {
-		return sdc.WrapError(fmt.Errorf("cannot commit: not in transaction"))
-	}
-	return sdc.WrapError(sdc.conn.Commit())
-}
-
-// Rollback rolls back the current transaction. There are no retries on this operation.
-func (sdc *ShardConn) Rollback() (err error) {
-	if sdc.TransactionId() == 0 {
-		return sdc.WrapError(fmt.Errorf("cannot rollback: not in transaction"))
-	}
-	return sdc.WrapError(sdc.conn.Rollback())
-}
-
-func (sdc *ShardConn) TransactionId() int64 {
-	if sdc.conn == nil {
-		return 0
-	}
-	return sdc.conn.TransactionId()
-}
-
-// Close closes the underlying vttablet connection.
-func (sdc *ShardConn) Close() {
-	if sdc.conn == nil {
+// markDown closes conn and temporarily marks the associated
+// end point as unusable.
+func (sdc *ShardConn) markDown(conn TabletConn) {
+	sdc.mu.Lock()
+	defer sdc.mu.Unlock()
+	if conn != sdc.conn {
 		return
 	}
-	if sdc.TransactionId() != 0 {
-		sdc.conn.Rollback()
-	}
-	sdc.conn.Close()
-	sdc.endPoint = topo.EndPoint{}
+	sdc.balancer.MarkDown(conn.EndPoint().Uid)
+
+	// Launch as goroutine so we don't block
+	go sdc.conn.Close()
 	sdc.conn = nil
 }
 
 // WrapError adds the connection context to an error.
-func (sdc *ShardConn) WrapError(in error) (wrapped error) {
+func (sdc *ShardConn) WrapError(in error, conn TabletConn) (wrapped error) {
 	if in == nil {
 		return nil
 	}
+	var endPoint topo.EndPoint
+	if conn != nil {
+		endPoint = conn.EndPoint()
+	}
 	return fmt.Errorf(
 		"%v, shard: (%s.%s.%s), host: %s",
-		in, sdc.keyspace, sdc.shard, sdc.tabletType, sdc.endPoint.Host)
+		in, sdc.keyspace, sdc.shard, sdc.tabletType, endPoint.Host)
 }

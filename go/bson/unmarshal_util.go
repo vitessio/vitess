@@ -147,18 +147,17 @@ func DecodeStringArray(buf *bytes.Buffer, kind byte) []string {
 func DecodeBool(buf *bytes.Buffer, kind byte) bool {
 	switch kind {
 	case Boolean:
-		// valid
+		b, _ := buf.ReadByte()
+		return (b != 0)
+	case Int:
+		return (Pack.Uint32(buf.Next(4)) != 0)
+	case Long, Ulong:
+		return (Pack.Uint64(buf.Next(8)) != 0)
 	case Null:
 		return false
 	default:
 		panic(NewBsonError("Unexpected data type %v for boolean", kind))
 	}
-
-	b, _ := buf.ReadByte()
-	if b == 1 {
-		return true
-	}
-	return false
 }
 
 func ExpectIndex(buf *bytes.Buffer, index int) {

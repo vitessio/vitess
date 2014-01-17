@@ -40,8 +40,7 @@ func main() {
 	topoReader = NewTopoReader(rts)
 	topo.RegisterTopoReader(topoReader)
 
-	blm := vtgate.NewBalancerMap(rts, *cell)
-	vtgate.Init(blm, *retryDelay, *retryCount)
+	vtgate.Init(rts, *cell, *retryDelay, *retryCount)
 	log.Infof("vtgate listening to port %v", *port)
 	servenv.Run(*port)
 }

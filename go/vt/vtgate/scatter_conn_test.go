@@ -6,29 +6,30 @@ package vtgate
 
 import (
 	"fmt"
+	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
 // This file uses the sandbox_test framework.
 
 func TestScatterConnExecute(t *testing.T) {
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-		return stc.Execute("query", nil, "", shards)
+		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
+		return stc.Execute("query", nil, "", shards, "", nil)
 	})
 }
 
 func TestScatterConnExecuteBatch(t *testing.T) {
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
+		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		qrs, err := stc.ExecuteBatch(queries, "", shards)
+		qrs, err := stc.ExecuteBatch(queries, "", shards, "", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -37,11 +38,10 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 }
 
 func TestScatterConnStreamExecute(t *testing.T) {
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
-		stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
+		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute("query", nil, "", shards, func(r interface{}) error {
+		err := stc.StreamExecute("query", nil, "", shards, "", nil, func(r interface{}) error {
 			appendResult(qr, r.(*mproto.QueryResult))
 			return nil
 		})
@@ -129,111 +129,12 @@ func testScatterConnGeneric(t *testing.T, f func(shards []string) (*mproto.Query
 	}
 }
 
-func TestScatterConnExecuteTxTimeout(t *testing.T) {
-	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
-	sbc0 := &sandboxConn{}
-	testConns[0] = sbc0
-	sbc1 := &sandboxConn{mustFailTxPool: 1}
-	testConns[1] = sbc1
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-
-	for i := 0; i < 2; i++ {
-		stc.Begin()
-		stc.Execute("query", nil, "", []string{"0"})
-		// Shard 0 must be in transaction
-		if sbc0.TransactionId() == 0 {
-			t.Errorf("want non-zero, got 0")
-		}
-		if len(stc.commitOrder) != 1 {
-			t.Errorf("want 2, got %d", len(stc.commitOrder))
-		}
-
-		var want string
-		switch i {
-		case 0:
-			sbc1.mustFailTxPool = 3
-			want = "tx_pool_full: err, shard: (.1.), host: 1"
-		case 1:
-			sbc1.mustFailNotTx = 1
-			want = "not_in_tx: err, shard: (.1.), host: 1"
-		}
-		_, err := stc.Execute("query1", nil, "", []string{"1"})
-		// All transactions must be rolled back.
-		if err == nil || err.Error() != want {
-			t.Errorf("want %s, got %v", want, err)
-		}
-		if sbc0.TransactionId() != 0 {
-			t.Errorf("want 0, got %v", sbc0.TransactionId())
-		}
-		if len(stc.commitOrder) != 0 {
-			t.Errorf("want 0, got %d", len(stc.commitOrder))
-		}
-	}
-}
-
-func TestScatterConnExecuteTxChange(t *testing.T) {
-	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
-	sbc := &sandboxConn{}
-	testConns[0] = sbc
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-	stc.Begin()
-	stc.Execute("query", nil, "", []string{"0"})
-	sbc.Rollback()
-	sbc.Begin()
-	_, err := stc.Execute("query", nil, "", []string{"0"})
-	want := "not_in_tx: connection is in a different transaction, shard: (.0.), host: 0"
-	// Ensure that we detect the case where the underlying
-	// connection is in a different
-	// transaction than the one we started.
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
-}
-
-func TestScatterConnExecuteUnexpectedTx(t *testing.T) {
-	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
-	sbc := &sandboxConn{}
-	testConns[0] = sbc
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-	// This call is to make sure shard_conn points to a real connection.
-	stc.Execute("query", nil, "", []string{"0"})
-
-	sbc.Begin()
-	_, err := stc.Execute("query", nil, "", []string{"0"})
-	if err != nil {
-		t.Errorf("want nil, got %v", err)
-	}
-	// Ensure that rollback was called on the underlying connection.
-	if sbc.RollbackCount != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount)
-	}
-}
-
-func TestScatterConnStreamExecuteTx(t *testing.T) {
-	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-	stc.Begin()
-	err := stc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
-		return nil
-	})
-	// No support for streaming in a transaction.
-	want := "cannot stream in a transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
-}
-
 func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
 	sbc := &sandboxConn{}
 	testConns[0] = sbc
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-	err := stc.StreamExecute("query", nil, "", []string{"0"}, func(interface{}) error {
+	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
+	err := stc.StreamExecute("query", nil, "", []string{"0"}, "", nil, func(interface{}) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
@@ -243,41 +144,57 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	}
 }
 
-func TestScatterConnBeginFail(t *testing.T) {
-	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
-	sbc := &sandboxConn{}
-	testConns[0] = sbc
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-	stc.Begin()
-	err := stc.Begin()
-	// Disallow Begin if we're already in a transaction.
-	want := "cannot begin: already in a transaction"
-	if err == nil || err.Error() != want {
-		t.Errorf("want %s, got %v", want, err)
-	}
-}
-
 func TestScatterConnCommitSuccess(t *testing.T) {
 	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
 	sbc0 := &sandboxConn{}
 	testConns[0] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns[1] = sbc1
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 
-	stc.Begin()
 	// Sequence the executes to ensure commit order
-	stc.Execute("query1", nil, "", []string{"0"})
-	stc.Execute("query1", nil, "", []string{"1"})
-	sbc0.mustFailServer = 1
-	stc.Commit()
-	if sbc0.TransactionId() != 0 {
-		t.Errorf("want 0, got %d", sbc0.TransactionId())
+	session := NewSafeSession(&proto.Session{InTransaction: true})
+	stc.Execute("query1", nil, "", []string{"0"}, "", session)
+	wantSession := proto.Session{
+		InTransaction: true,
+		ShardSessions: []*proto.ShardSession{{
+			Keyspace:      "",
+			Shard:         "0",
+			TabletType:    "",
+			TransactionId: 1,
+		}},
 	}
-	if sbc1.TransactionId() != 0 {
-		t.Errorf("want 0, got %d", sbc1.TransactionId())
+	if !reflect.DeepEqual(wantSession, *session.Session) {
+		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
+	}
+	stc.Execute("query1", nil, "", []string{"0", "1"}, "", session)
+	wantSession = proto.Session{
+		InTransaction: true,
+		ShardSessions: []*proto.ShardSession{{
+			Keyspace:      "",
+			Shard:         "0",
+			TabletType:    "",
+			TransactionId: 1,
+		}, {
+			Keyspace:      "",
+			Shard:         "1",
+			TabletType:    "",
+			TransactionId: 2,
+		}},
+	}
+	if !reflect.DeepEqual(wantSession, *session.Session) {
+		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
+	}
+	sbc0.mustFailServer = 1
+	err := stc.Commit(session)
+	// wait for rollback goroutines to complete.
+	runtime.Gosched()
+	if err == nil {
+		t.Errorf("want error, got nil")
+	}
+	wantSession = proto.Session{}
+	if !reflect.DeepEqual(wantSession, *session.Session) {
+		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
 	}
 	if sbc0.CommitCount != 1 {
 		t.Errorf("want 1, got %d", sbc0.CommitCount)
@@ -287,49 +204,45 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	}
 }
 
-func TestScatterConnBeginRetry(t *testing.T) {
+func TestScatterConnRollback(t *testing.T) {
 	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
 	sbc0 := &sandboxConn{}
 	testConns[0] = sbc0
 	sbc1 := &sandboxConn{mustFailTxPool: 1}
 	testConns[1] = sbc1
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
+	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 
-	stc.Begin()
-	stc.Execute("query1", nil, "", []string{"0", "1"})
-	if sbc0.TransactionId() == 0 {
-		t.Errorf("want non-zero, got 0")
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&proto.Session{InTransaction: true})
+	stc.Execute("query1", nil, "", []string{"0"}, "", session)
+	stc.Execute("query1", nil, "", []string{"0", "1"}, "", session)
+	err := stc.Rollback(session)
+	// wait for rollback goroutines to complete.
+	runtime.Gosched()
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
 	}
-	// sbc1 should still be in a transaction because
-	// tx_pool_full should cause a transparent retry
-	// without aborting the transaction.
-	if sbc1.TransactionId() == 0 {
-		t.Errorf("want non-zero, got 0")
+	wantSession := proto.Session{}
+	if !reflect.DeepEqual(wantSession, *session.Session) {
+		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
 	}
-	stc.Commit()
-	if sbc0.TransactionId() != 0 {
-		t.Errorf("want 0, got %d", sbc0.TransactionId())
+	if sbc0.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc0.RollbackCount)
 	}
-	if sbc1.TransactionId() != 0 {
-		t.Errorf("want 0, got %d", sbc1.TransactionId())
-	}
-	if sbc0.CommitCount != 1 {
-		t.Errorf("want 1, got %d", sbc0.CommitCount)
-	}
-	if sbc1.CommitCount != 1 {
-		t.Errorf("want 1, got %d", sbc1.CommitCount)
+	if sbc1.RollbackCount != 1 {
+		t.Errorf("want 1, got %d", sbc1.RollbackCount)
 	}
 }
 
 func TestScatterConnClose(t *testing.T) {
 	resetSandbox()
-	blm := NewBalancerMap(new(sandboxTopo), "aa")
 	sbc := &sandboxConn{}
 	testConns[0] = sbc
-	stc := NewScatterConn(blm, "", 1*time.Millisecond, 3)
-	stc.Execute("query1", nil, "", []string{"0"})
+	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
+	stc.Execute("query1", nil, "", []string{"0"}, "", nil)
 	stc.Close()
+	// wait for Close goroutines to complete.
+	runtime.Gosched()
 	if sbc.CloseCount != 1 {
 		t.Errorf("want 1, got %d", sbc.CommitCount)
 	}
