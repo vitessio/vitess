@@ -520,6 +520,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	if len(si.SourceShards) != 1 {
 		return fmt.Errorf("Destination shard %v/%v is not a vertical split target", si.Keyspace(), si.ShardName())
 	}
+	tables := si.SourceShards[0].Tables
 
 	// read the source shard, we'll need its master
 	sourceShard, err := wr.ts.GetShard(si.SourceShards[0].Keyspace, si.SourceShards[0].Shard)
@@ -532,6 +533,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 	// - gather the replication point
 	// - wait for filtered replication to catch up before we continue
 	// - disable filtered replication after the fact
+	var sourceMasterTabletInfo *topo.TabletInfo
 	if servedType == topo.TYPE_MASTER {
 		// set master to read-only
 		actionPath, err := wr.ai.SetReadOnly(sourceShard.MasterAlias)
@@ -543,11 +545,11 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		}
 
 		// get the position
-		ti, err := wr.ts.GetTablet(sourceShard.MasterAlias)
+		sourceMasterTabletInfo, err = wr.ts.GetTablet(sourceShard.MasterAlias)
 		if err != nil {
 			return err
 		}
-		masterPosition, err := wr.ai.MasterPosition(ti, wr.actionTimeout())
+		masterPosition, err := wr.ai.MasterPosition(sourceMasterTabletInfo, wr.actionTimeout())
 		if err != nil {
 			return err
 		}
@@ -574,7 +576,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		}
 	}
 
-	// And tell the new shards masters they can now be read-write.
+	// Tell the new shards masters they can now be read-write.
 	// Invoking a remote action will also make the tablet stop filtered
 	// replication.
 	if servedType == topo.TYPE_MASTER {
@@ -582,6 +584,57 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 			return err
 		}
 	}
+
+	// Now blacklist the table list on the right servers
+	if servedType == topo.TYPE_MASTER {
+		if err := wr.ai.SetBlacklistedTables(sourceMasterTabletInfo, tables, wr.actionTimeout()); err != nil {
+			return err
+		}
+	} else {
+		// We use the list of tables that are replicating
+		// for the blacklist. In case of a reverse move, we clear the
+		// blacklist.
+		if reverse {
+			tables = nil
+		}
+		if err := wr.SetBlacklistedTablesByShard(sourceShard.Keyspace(), sourceShard.ShardName(), servedType, tables); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// SetBlacklistedTablesByShard sets the blacklisted table list of all
+// tablets of a given type in a shard. It would work for the master,
+// but it wouldn't be very efficient.
+func (wr *Wrangler) SetBlacklistedTablesByShard(keyspace, shard string, tabletType topo.TabletType, tables []string) error {
+	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	switch err {
+	case nil:
+		// keep going
+	case topo.ErrPartialResult:
+		log.Warningf("SetBlacklistedTablesByShard: got partial result, may not blacklist everything everywhere")
+	default:
+		return err
+	}
+
+	// ignore errors in this phase
+	wg := sync.WaitGroup{}
+	for _, ti := range tabletMap {
+		if ti.Type != tabletType {
+			continue
+		}
+
+		wg.Add(1)
+		go func(ti *topo.TabletInfo) {
+			if err := wr.ai.SetBlacklistedTables(ti, tables, wr.actionTimeout()); err != nil {
+				log.Warningf("SetBlacklistedTablesByShard: failed to set tables for %v: %v", ti.Alias, err)
+			}
+			wg.Done()
+		}(ti)
+	}
+	wg.Wait()
 
 	return nil
 }

@@ -34,6 +34,10 @@ type TabletManagerConn interface {
 	// ChangeType asks the remote tablet to change its type
 	ChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error
 
+	// SetBlacklistedTables asks the remote tablet to change its
+	// blacklisted tables list
+	SetBlacklistedTables(tablet *topo.TabletInfo, tables []string, waitTime time.Duration) error
+
 	//
 	// Replication related methods
 	//

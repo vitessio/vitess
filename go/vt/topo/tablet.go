@@ -323,7 +323,10 @@ type Tablet struct {
 	MysqlAddr   string      // host:port for the mysql instance. DEPRECATED: use Hostname and Portmap
 	MysqlIpAddr string      // ip:port for the mysql instance - needed to match slaves with tablets and preferable to relying on reverse dns. DEPRECATED: use IPAddr and Portmap
 
-	Alias    TabletAlias
+	// What is this tablet?
+	Alias TabletAlias
+
+	// Locaiton of the tablet
 	Hostname string
 	IPAddr   string
 
@@ -331,11 +334,15 @@ type Tablet struct {
 	// mysql.
 	Portmap map[string]int
 
-	Tags     map[string]string // contains freeform information about the tablet.
+	// Tags contain freeform information about the tablet.
+	Tags map[string]string
+
+	// Information about the tablet inside a keyspace/shard
 	Keyspace string
 	Shard    string
 	Type     TabletType
 
+	// Is the tablet read-only?
 	State TabletState
 
 	// Normally the database name is implied by "vt_" + keyspace. I
@@ -343,6 +350,10 @@ type Tablet struct {
 	// hard to rename.
 	DbNameOverride string
 	KeyRange       key.KeyRange
+
+	// BlacklistedTables is a list of tables we're not going to serve
+	// data for. This is used in vertical splits.
+	BlacklistedTables []string
 }
 
 // ValidatePortmap returns an error if the tablet's portmap doesn't

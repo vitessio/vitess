@@ -59,6 +59,9 @@ var commands = []commandGroup{
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type>:\n" +
 					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
+			command{"GetTablet", commandGetTablet,
+				"<tablet alias|zk tablet path>",
+				"Outputs the json version of Tablet to stdout."},
 			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-vts-port <vts port>] <tablet alias|zk tablet path> ",
 				"Updates the addresses of a tablet."},
@@ -578,6 +581,20 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	}
 
 	return "", wr.InitTablet(tablet, *force, *parent, *update)
+}
+
+func commandGetTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action GetTablet requires <tablet alias|zk tablet path>")
+	}
+
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(tabletInfo))
+	}
+	return "", err
 }
 
 func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

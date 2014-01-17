@@ -172,6 +172,14 @@ index by_msg (msg)
                      "Got wrong ShardingColumnType in SrvKeyspace: %s" %
                      str(ks))
 
+  def _check_blacklisted_tables(self, tablet, expected):
+    ti = utils.run_vtctl_json(['GetTablet', tablet.tablet_alias])
+    logging.debug("Tablet %s has balcklisted tables: %s", tablet.tablet_alias,
+                  ti['BlacklistedTables'])
+    self.assertEqual(ti['BlacklistedTables'], expected,
+                     "Got unexpected BlacklistedTables: %s (expecting %s)" %(
+                         ti['BlacklistedTables'], expected))
+
   def test_vertical_split(self):
     utils.run_vtctl(['CreateKeyspace',
                      'source_keyspace'])
@@ -280,25 +288,40 @@ index by_msg (msg)
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
                              'ServedFrom(replica): source_keyspace\n')
+    self._check_blacklisted_tables(source_master, None)
+    self._check_blacklisted_tables(source_replica, None)
+    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
 
     # then serve replica from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
+    self._check_blacklisted_tables(source_master, None)
+    self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
 
     # move replica back and forth
     utils.run_vtctl(['MigrateServedFrom', '-reverse', 'destination_keyspace/0', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n' +
                              'ServedFrom(replica): source_keyspace\n')
+    self._check_blacklisted_tables(source_master, None)
+    self._check_blacklisted_tables(source_replica, None)
+    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
                     auto_log=True)
     self._check_srv_keyspace('ServedFrom(master): source_keyspace\n')
+    self._check_blacklisted_tables(source_master, None)
+    self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
 
     # then serve master from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
                     auto_log=True)
     self._check_srv_keyspace('')
+    self._check_blacklisted_tables(source_master, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
+    self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
 
     # check the binlog player is gone now
     destination_master.wait_for_binlog_player_count(0)

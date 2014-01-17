@@ -211,7 +211,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
 
-	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
+	case TABLET_ACTION_SET_BLACKLISTED_TABLES, TABLET_ACTION_GET_SCHEMA,
+		TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
 		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,
@@ -937,5 +938,16 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}
 	}
+	return topo.UpdateTablet(ts, tablet)
+}
+
+// Make this external, since these transitions need to be forced from time to time.
+func SetBlacklistedTables(ts topo.Server, tabletAlias topo.TabletAlias, tables []string) error {
+	tablet, err := ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	tablet.BlacklistedTables = tables
 	return topo.UpdateTablet(ts, tablet)
 }

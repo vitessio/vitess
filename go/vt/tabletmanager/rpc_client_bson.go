@@ -90,6 +90,11 @@ func (client *GoRpcTabletManagerConn) ChangeType(tablet *topo.TabletInfo, dbType
 	return client.rpcCallTablet(tablet, TABLET_ACTION_CHANGE_TYPE, &dbType, &noOutput, waitTime)
 }
 
+func (client *GoRpcTabletManagerConn) SetBlacklistedTables(tablet *topo.TabletInfo, tables []string, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, TABLET_ACTION_SET_BLACKLISTED_TABLES, &SetBlacklistedTablesArgs{Tables: tables}, &noOutput, waitTime)
+}
+
 //
 // Replication related methods
 //
