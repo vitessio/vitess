@@ -63,4 +63,6 @@ This flexibility generally results in more efficient storage as piece of data is
 only once, and fetched only if needed.
 
 ### The Vitess spectrum
+The following diagram illustrates where vitess fits in the spectrum of storage solutions:
+
 ![Spectrum](https://raw.github.com/youtube/vitess/master/doc/VitessSpectrum.png)
