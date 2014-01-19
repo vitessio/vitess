@@ -1,3 +1,5 @@
+# Motivation and Vision
+
 MySQL is an easy relational database to get started with.
 It's easy to setup and has a short learning curve.
 However, as your system starts to scale, it begins to run out of steam.
@@ -14,7 +16,7 @@ Vitess tries to bring the best of both worlds by trading off
 some of MySQL's consistency features in order to achieve the
 kind of scalability that NoSQL databases provide.
 
-The main priorities of Vitess are:
+### Priorities
 * *Scalability*: This is achieved by replication and sharding.
 * *Efficiency*: This is achieved by a proxy server (vttablet) that mediates
 all queries and connections.
@@ -29,6 +31,7 @@ from the application.
 The vtgate servers give you a unified view of the fleet that makes
 it feel like you're just interacting with one database.
 
+### Trade-offs
 Scalability and availability require some trade-offs:
 * *Consistency*: In a typical web application, not all reads have to be
 fully consistent.
@@ -48,3 +51,16 @@ in the middle.
 * *Latency*: There is some negligible latency introduced by the proxy servers.
 However, they make up for the fact that you can extract more throughput from
 MySQL than you would otherwise be able to without them.
+
+### Preserved MySQL features
+Since the underlying storage layer is still MySQL, we still get to preserve
+its other important features:
+* *Indexes*: You can create secondary indexes on your tables. This allows you
+to efficiently query rows using more than one key.
+* *Joins*:  MySQL allows you to split one-to-many and many-to-many relational data
+into separate tables, and lets you join them on demand.
+This flexibility generally results in more efficient storage as piece of data is stored
+only once, and fetched only if needed.
+
+### The Vitess spectrum
+![Spectrum](https://raw.github.com/youtube/vitess/master/doc/VitessSpectrum.png)
