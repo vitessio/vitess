@@ -35,3 +35,18 @@ vttablet is also capable of executing necessary management
 tasks initiated from vtctl.
 It also provides streaming services that are used for
 filtered replication and data export.
+
+### vtgate
+vtgate's goal is to provide a unified view of the entire fleet.
+It will be the server that applications will connect to for
+queries. It will analyze, rewrite and route queries to various
+vttablets, and return the consolidated results back to the client.
+
+### vtctld
+vtctld is an HTTP server that lets you browse the information stored
+in the lockserver.
+This is useful for trouble-shooting, or to get a good high
+level picture of all the servers and their current state.
+
+### Other support tools
+Vitess also has other support tools for diagnostics and repair.
