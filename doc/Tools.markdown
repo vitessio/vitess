@@ -8,8 +8,6 @@ efficiency features of vttablet help you get more from your
 existing hardware.
 As things scale out, the automation tools start to become handy.
 
-![Journey](https://raw.github.com/youtube/vitess/master/doc/VitessJourney.png)
-
 ### vtctl
 vtctl is the main vitess tool that for initiatiing most
 administrative operations.
