@@ -35,7 +35,21 @@ Other data types are not allowed because of ambiguous equality or inequality rul
 TODO: The keyspace id rules need to be solidified once VTGate features are finalized.
 
 ### Shard graph
-The shard graph defines how a keyspace has been sharded. It's basically a list
-of non-intersecting ranges that cover all possible values a keyspace id can cover.
+The shard graph defines how a keyspace has been sharded. It's basically a per-keyspace
+list of non-intersecting ranges that cover all possible values a keyspace id can cover.
 In other words, any given keypsace id is guaranteed to map to one and only one
 shard of the shard graph.
+
+### Replication graph
+The replication graph represents the relationships between the master
+databases and their respective replicas.
+This data is particularly useful during a master failover.
+Once a new master has been designated, all existing replicas have to
+repointed to the new master so that replication can resume.
+
+### Serving graph
+The serving graph is typically derived from the shard and replication graph.
+It represens the list of active servers that are available to serve
+queries.
+VTGate (or smart clients) query the serving graph to find out which servers
+they are allowed to send queries to.
