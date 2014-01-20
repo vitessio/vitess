@@ -5,7 +5,7 @@ A keyspace is a logical database.
 In its simplest form, it directly maps to a MySQL database name.
 When you read data from a keyspace, it is as if you read from a MySQL database.
 Vitess could fetch that data from a master or a replica depending
-on the consistency requirements of a read.
+on the consistency requirements of the read.
 
 When a database gets [sharded](http://en.wikipedia.org/wiki/Shard_(database_architecture\)),
 a keyspace maps to multiple MySQL databases,
@@ -15,17 +15,21 @@ a single MySQL database.
 
 ### Keyspace id
 A keyspace id (keyspace_id) is a column that is used to identify a primary entity
-of a keyspace, like user, video, or items.
+of a keyspace, like user, video, order, etc.
 In order to shard a database, all tables in a keyspace need to
 contain a keyspace id column.
 Vitess sharding ensures that all rows that have a common keyspace id are
 always together.
 
 It's recommended, but not necessary, that the keyspace id be the leading primary
-key column of all tables in a keyspace. If you do not intend to shard a database,
-you do not have to designate a keyspace id.
+key column of all tables in a keyspace.
 
-A keyspace id can be an unsigned number or a binary character column.
+If you do not intend to shard a database, you do not have to
+designate a keyspace_id.
+However, you'll be required to designate a keyspace_id
+if you decide to shard a currently unsharded database.
+
+A keyspace_id can be an unsigned number or a binary character column.
 Other data types are not allowed because of ambiguous equality or inequality rules.
 
 TODO: The keyspace id rules need to be solidified once VTGate features are finalized.
