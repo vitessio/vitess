@@ -50,3 +50,6 @@ level picture of all the servers and their current state.
 
 ### Other support tools
 Vitess also has other support tools for diagnostics and repair.
+
+## Vitess components block diagram
+![Components](https://raw.github.com/youtube/vitess/master/doc/VitessComponents.png)
