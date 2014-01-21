@@ -33,9 +33,10 @@ const (
 	TABLET_ACTION_PING  = "Ping"
 	TABLET_ACTION_SLEEP = "Sleep"
 
-	TABLET_ACTION_SET_RDONLY  = "SetReadOnly"
-	TABLET_ACTION_SET_RDWR    = "SetReadWrite"
-	TABLET_ACTION_CHANGE_TYPE = "ChangeType"
+	TABLET_ACTION_SET_RDONLY             = "SetReadOnly"
+	TABLET_ACTION_SET_RDWR               = "SetReadWrite"
+	TABLET_ACTION_CHANGE_TYPE            = "ChangeType"
+	TABLET_ACTION_SET_BLACKLISTED_TABLES = "SetBlacklistedTables"
 
 	TABLET_ACTION_DEMOTE_MASTER = "DemoteMaster"
 	TABLET_ACTION_PROMOTE_SLAVE = "PromoteSlave"
@@ -113,9 +114,10 @@ const (
 	// These are just descriptive and used for locking / logging.
 	//
 
-	KEYSPACE_ACTION_REBUILD           = "RebuildKeyspace"
-	KEYSPACE_ACTION_APPLY_SCHEMA      = "ApplySchemaKeyspace"
-	KEYSPACE_ACTION_SET_SHARDING_INFO = "SetKeyspaceShardingInfo"
+	KEYSPACE_ACTION_REBUILD             = "RebuildKeyspace"
+	KEYSPACE_ACTION_APPLY_SCHEMA        = "ApplySchemaKeyspace"
+	KEYSPACE_ACTION_SET_SHARDING_INFO   = "SetKeyspaceShardingInfo"
+	KEYSPACE_ACTION_MIGRATE_SERVED_FROM = "MigrateServedFrom"
 
 	ACTION_STATE_QUEUED  = ActionState("")        // All actions are queued initially
 	ACTION_STATE_RUNNING = ActionState("Running") // Running inside vtaction process
@@ -217,8 +219,11 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case KEYSPACE_ACTION_APPLY_SCHEMA:
 		node.args = &ApplySchemaKeyspaceArgs{}
 	case KEYSPACE_ACTION_SET_SHARDING_INFO:
+	case KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
+		node.args = &MigrateServedFromArgs{}
 
-	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
+	case TABLET_ACTION_SET_BLACKLISTED_TABLES, TABLET_ACTION_GET_SCHEMA,
+		TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
 		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,

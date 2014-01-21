@@ -11,13 +11,13 @@ import time
 import unittest
 import urllib2
 
+from zk import zkocc
 from vtdb import vtclient
 
 import environment
 import framework
 import tablet
 import utils
-from zk import zkocc
 
 master_tablet = tablet.Tablet()
 replica_tablet = tablet.Tablet()
@@ -36,38 +36,42 @@ def setUpModule():
   global vtgate_server
   global vtgate_port
 
-  environment.topo_server_setup()
+  try:
+    environment.topo_server_setup()
 
-  # start mysql instance external to the test
-  setup_procs = [master_tablet.init_mysql(),
-                 replica_tablet.init_mysql()]
-  utils.wait_procs(setup_procs)
+    # start mysql instance external to the test
+    setup_procs = [master_tablet.init_mysql(),
+                   replica_tablet.init_mysql()]
+    utils.wait_procs(setup_procs)
 
-  # Start up a master mysql and vttablet
-  logging.debug("Setting up tablets")
-  utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
-  master_tablet.init_tablet('master', 'test_keyspace', '0')
-  replica_tablet.init_tablet('replica', 'test_keyspace', '0')
-  utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
-  utils.validate_topology()
+    # Start up a master mysql and vttablet
+    logging.debug("Setting up tablets")
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    master_tablet.init_tablet('master', 'test_keyspace', '0')
+    replica_tablet.init_tablet('replica', 'test_keyspace', '0')
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
+    utils.validate_topology()
 
-  master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
-  replica_tablet.populate('vt_test_keyspace', create_vt_insert_test)
+    master_tablet.populate('vt_test_keyspace', create_vt_insert_test)
+    replica_tablet.populate('vt_test_keyspace', create_vt_insert_test)
 
-  vtgate_server, vtgate_port = utils.vtgate_start()
+    vtgate_server, vtgate_port = utils.vtgate_start()
 
-  master_tablet.start_vttablet(memcache=True, wait_for_state=None)
-  replica_tablet.start_vttablet(memcache=True, wait_for_state=None)
-  master_tablet.wait_for_vttablet_state('SERVING')
-  replica_tablet.wait_for_vttablet_state('SERVING')
+    master_tablet.start_vttablet(memcache=True, wait_for_state=None)
+    replica_tablet.start_vttablet(memcache=True, wait_for_state=None)
+    master_tablet.wait_for_vttablet_state('SERVING')
+    replica_tablet.wait_for_vttablet_state('SERVING')
 
-  utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
-                   master_tablet.tablet_alias], auto_log=True)
-  utils.validate_topology()
+    utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+                     master_tablet.tablet_alias], auto_log=True)
+    utils.validate_topology()
 
-  # restart the replica tablet so the stats are reset
-  replica_tablet.kill_vttablet()
-  replica_tablet.start_vttablet(memcache=True)
+    # restart the replica tablet so the stats are reset
+    replica_tablet.kill_vttablet()
+    replica_tablet.start_vttablet(memcache=True)
+  except:
+    tearDownModule()
+    raise
 
 def tearDownModule():
   if utils.options.skip_teardown:
@@ -104,12 +108,10 @@ class RowCacheInvalidator(unittest.TestCase):
 
   def perform_insert(self, count):
     for i in xrange(count):
-      self._exec_vt_txn("localhost:%u" % master_tablet.port,
-                    ["insert into vt_insert_test (msg) values ('test %s')" % i])
+      self._exec_vt_txn(["insert into vt_insert_test (msg) values ('test %s')" % i])
 
   def perform_delete(self):
-    self._exec_vt_txn("localhost:%u" % master_tablet.port,
-                      ['delete from vt_insert_test',])
+    self._exec_vt_txn(['delete from vt_insert_test',])
 
   def test_cache_invalidation(self):
     master_position = utils.mysql_query(master_tablet.tablet_uid,
@@ -249,16 +251,16 @@ class RowCacheInvalidator(unittest.TestCase):
     # and restore the type
     utils.run_vtctl(['ChangeSlaveType', replica_tablet.tablet_alias, 'replica'])
 
-  def _vtdb_conn(self, host):
+  def _vtdb_conn(self):
     conn = vtclient.VtOCCConnection(self.vtgate_client, 'test_keyspace', '0',
                                     'master', 30)
     conn.connect()
     return conn
 
-  def _exec_vt_txn(self, host, query_list=None):
+  def _exec_vt_txn(self, query_list=None):
     if query_list is None:
       return
-    vtdb_conn = self._vtdb_conn(host)
+    vtdb_conn = self._vtdb_conn()
     vtdb_cursor = vtdb_conn.cursor()
     vtdb_conn.begin()
     for q in query_list:

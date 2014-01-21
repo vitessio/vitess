@@ -35,14 +35,22 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace"}, keyspaces)
 	}
 
-	if err := ts.CreateKeyspace("test_keyspace2", &topo.Keyspace{ShardingColumnName: "user_id", ShardingColumnType: key.KIT_UINT64}); err != nil {
+	if err := ts.CreateKeyspace("test_keyspace2", &topo.Keyspace{
+		ShardingColumnName: "user_id",
+		ShardingColumnType: key.KIT_UINT64,
+		ServedFrom: map[topo.TabletType]string{
+			topo.TYPE_MASTER: "test_keyspace3",
+		},
+	}); err != nil {
 		t.Errorf("CreateKeyspace: %v", err)
 	}
 	keyspaces, err = ts.GetKeyspaces()
 	if err != nil {
 		t.Errorf("GetKeyspaces: %v", err)
 	}
-	if len(keyspaces) != 2 || keyspaces[0] != "test_keyspace" || keyspaces[1] != "test_keyspace2" {
+	if len(keyspaces) != 2 ||
+		keyspaces[0] != "test_keyspace" ||
+		keyspaces[1] != "test_keyspace2" {
 		t.Errorf("GetKeyspaces: want %v, got %v", []string{"test_keyspace", "test_keyspace2"}, keyspaces)
 	}
 
@@ -50,12 +58,16 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if ki.ShardingColumnName != "user_id" || ki.ShardingColumnType != key.KIT_UINT64 {
-		t.Errorf("GetKeyspace: want user_id/uint64, got %v/%v", ki.ShardingColumnName, ki.ShardingColumnType)
+	if ki.ShardingColumnName != "user_id" ||
+		ki.ShardingColumnType != key.KIT_UINT64 ||
+		ki.ServedFrom[topo.TYPE_MASTER] != "test_keyspace3" {
+		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *ki)
 	}
 
 	ki.ShardingColumnName = "other_id"
 	ki.ShardingColumnType = key.KIT_BYTES
+	delete(ki.ServedFrom, topo.TYPE_MASTER)
+	ki.ServedFrom[topo.TYPE_REPLICA] = "test_keyspace4"
 	err = ts.UpdateKeyspace(ki)
 	if err != nil {
 		t.Fatalf("UpdateKeyspace: %v", err)
@@ -64,7 +76,9 @@ func CheckKeyspace(t *testing.T, ts topo.Server) {
 	if err != nil {
 		t.Fatalf("GetKeyspace: %v", err)
 	}
-	if ki.ShardingColumnName != "other_id" || ki.ShardingColumnType != key.KIT_BYTES {
-		t.Errorf("GetKeyspace: want other_id/bytes, got %v/%v", ki.ShardingColumnName, ki.ShardingColumnType)
+	if ki.ShardingColumnName != "other_id" ||
+		ki.ShardingColumnType != key.KIT_BYTES ||
+		ki.ServedFrom[topo.TYPE_REPLICA] != "test_keyspace4" {
+		t.Errorf("GetKeyspace: unexpected keyspace, got %v", *ki)
 	}
 }

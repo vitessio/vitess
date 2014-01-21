@@ -43,6 +43,7 @@ func CheckShard(t *testing.T, ts topo.Server) {
 			Keyspace: "source_ks",
 			Shard:    "B8-C0",
 			KeyRange: newKeyRange("B8-C0"),
+			Tables:   []string{"table1", "table2"},
 		},
 	}
 
@@ -63,7 +64,14 @@ func CheckShard(t *testing.T, ts topo.Server) {
 	if len(shardInfo.ServedTypes) != 3 || shardInfo.ServedTypes[0] != topo.TYPE_MASTER || shardInfo.ServedTypes[1] != topo.TYPE_REPLICA || shardInfo.ServedTypes[2] != topo.TYPE_RDONLY {
 		t.Errorf("after UpdateShard: shardInfo.ServedTypes got %v", shardInfo.ServedTypes)
 	}
-	if len(shardInfo.SourceShards) != 1 || shardInfo.SourceShards[0].Uid != 1 || shardInfo.SourceShards[0].Keyspace != "source_ks" || shardInfo.SourceShards[0].Shard != "B8-C0" || shardInfo.SourceShards[0].KeyRange != newKeyRange("B8-C0") {
+	if len(shardInfo.SourceShards) != 1 ||
+		shardInfo.SourceShards[0].Uid != 1 ||
+		shardInfo.SourceShards[0].Keyspace != "source_ks" ||
+		shardInfo.SourceShards[0].Shard != "B8-C0" ||
+		shardInfo.SourceShards[0].KeyRange != newKeyRange("B8-C0") ||
+		len(shardInfo.SourceShards[0].Tables) != 2 ||
+		shardInfo.SourceShards[0].Tables[0] != "table1" ||
+		shardInfo.SourceShards[0].Tables[1] != "table2" {
 		t.Errorf("after UpdateShard: shardInfo.SourceShards got %v", shardInfo.SourceShards)
 	}
 

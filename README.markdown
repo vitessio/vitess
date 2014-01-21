@@ -4,6 +4,9 @@ Vitess
 Vitess is a set of servers and tools meant to facilitate scaling of MySQL databases for the web.
 It's currently used as a fundamental component of YouTube's MySQL infrastructure.
 
+[sougou](https://github.com/sougou) will be presenting Vitess at [Fosdem '14 in the go devroom](https://fosdem.org/2014/schedule/track/go/). Feel free to drop by if you're planning
+on attending.
+
 Features
 --------
 
@@ -30,15 +33,14 @@ requests.
 * Query consolidation: reuse the results of an in-flight query to any
   subsequent requests that were received while the query was still
   executing.
-* Row cache: the mysql buffer cache is optimized for range scans over
-  indices and tables, particularly when data is densely
-  packed. Unfortunately, it’s not good for random access tables. The
-  rowcache will instead maintain row based caches (using
-  [memcached](http://memcached.org/) as its backend) and keep them
+* Rowcache: the mysql buffer cache is optimized for range scans over
+  indices and tables. Unfortunately, it’s not good for random access
+  by primary key. The rowcache will instead maintain a row based cache
+  (using [memcached](http://memcached.org/) as its backend) and keep it
   consistent by fielding all DMLs that could potentially affect them.
-* DML annotation: Every DML is rewritten to include a comment field at
-  the end of a query identifying the primary key of the rows it
-  changed.
+* Update stream: A server that streams the list of rows that are changing
+  in the database, which can be used as a mechanism to continuously export
+  the data to another data store.
 * Integrated query killer for queries that take too long to return
   data.
 * Discard idle backend connections to avoid offline db errors.

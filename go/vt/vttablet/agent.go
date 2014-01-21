@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -42,7 +42,7 @@ func InitAgent(
 	mycnf *mysqlctl.Mycnf,
 	dbCredentialsFile string,
 	port, securePort int,
-	mycnfFile, overridesFile string) (agent *tm.ActionAgent, err error) {
+	mycnfFile, overridesFile string) (agent *tabletmanager.ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
@@ -54,14 +54,14 @@ func InitAgent(
 	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
 	statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
 
-	agent, err = tm.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbCredentialsFile)
+	agent, err = tabletmanager.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbCredentialsFile)
 	if err != nil {
 		return nil, err
 	}
 
 	// Start the binlog player services, not playing at start.
-	agent.BinlogPlayerMap = tm.NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
-	tm.RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
+	agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
+	tabletmanager.RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
 	// Action agent listens to changes in zookeeper and makes
 	// modifications to this tablet.

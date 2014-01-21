@@ -165,21 +165,21 @@ class TestClone(unittest.TestCase):
       if sepPos != -1:
         results[name] = err[sepPos+len(name)+2:].splitlines()[0]
     if "Manifest" not in results:
-      raise utils.TestError("Snapshot didn't echo Manifest file", err)
+      self.fail("Snapshot didn't echo Manifest file: %s" % str(err))
     if "ParentAlias" not in results:
-      raise utils.TestError("Snapshot didn't echo ParentAlias", err)
+      self.fail("Snapshot didn't echo ParentAlias: %s" % str(err))
     utils.pause("snapshot finished: " + results['Manifest'] + " " + results['ParentAlias'])
     if server_mode:
       if "SlaveStartRequired" not in results:
-        raise utils.TestError("Snapshot didn't echo SlaveStartRequired", err)
+        self.fail("Snapshot didn't echo SlaveStartRequired: %s" % err)
       if "ReadOnly" not in results:
-        raise utils.TestError("Snapshot didn't echo ReadOnly", err)
+        self.fail("Snapshot didn't echo ReadOnly %s" % err)
       if "OriginalType" not in results:
-        raise utils.TestError("Snapshot didn't echo OriginalType", err)
+        self.fail("Snapshot didn't echo OriginalType: %s" % err)
       if (results['SlaveStartRequired'] != 'false' or
           results['ReadOnly'] != 'true' or
           results['OriginalType'] != 'master'):
-        raise utils.TestError("Bad values returned by Snapshot", err)
+        self.fail("Bad values returned by Snapshot: %s" % err)
     tablet_62044.init_tablet('idle', start=True)
 
     # do not specify a MANIFEST, see if 'default' works
@@ -244,9 +244,9 @@ class TestClone(unittest.TestCase):
                                 tablet_62044.tablet_alias],
                                log_level='INFO', expect_fail=True)
     if "Cannot validate snapshot directory" not in err:
-      raise utils.TestError("expected validation error", err)
+      self.fail("expected validation error: %s" % err)
     if "Un-reserved test_nj-0000062044" not in err:
-      raise utils.TestError("expected Un-reserved", err)
+      self.fail("expected Un-reserved: %s" % err)
     logging.debug("Failed Clone output: " + err)
     utils.run("chmod +w %s" % snapshot_dir)
 
@@ -268,45 +268,6 @@ class TestClone(unittest.TestCase):
 
   def test_vtctl_clone_server(self):
     self._test_vtctl_clone(server_mode=True)
-
-  # this test is useful to validate the table specification code works.
-  # it will be replaced soon by a vertical split test in resharding.
-  def test_multisnapshot_vtctl(self):
-    populate = sum([[
-      "insert into vt_insert_test_%s (msg) values ('test %s')" % (i, x)
-      for x in xrange(4)] for i in range(6)], [])
-    create = ['''create table vt_insert_test_%s (
-  id bigint auto_increment,
-  msg varchar(64),
-  primary key (id)
-  ) Engine=InnoDB''' % i for i in range(6)]
-
-    # Start up a master mysql and vttablet
-    utils.run_vtctl(['CreateKeyspace',
-                     '--sharding_column_name', 'id',
-                     '--sharding_column_type', 'uint64',
-                     'test_keyspace'])
-
-    tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'])
-    utils.validate_topology()
-
-    tablet_62344.populate('vt_test_keyspace', create,
-                          populate)
-
-    tablet_62344.start_vttablet()
-
-    utils.run_vtctl(['MultiSnapshot', '--force', '--tables=vt_insert_test_1,vt_insert_test_2,vt_insert_test_3', '--spec=-0000000000000003-', tablet_62344.tablet_alias])
-
-    if os.path.exists(os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/vt_test_keyspace-,0000000000000003/vt_insert_test_4.0.csv.gz')):
-      raise utils.TestError("Table vt_insert_test_4 wasn't supposed to be dumped.")
-    for kr in 'vt_test_keyspace-,0000000000000003', 'vt_test_keyspace-0000000000000003,':
-      path = os.path.join(environment.vtdataroot, 'snapshot/vt_0000062344/data/', kr, 'vt_insert_test_1.0.csv.gz')
-      with gzip.open(path) as f:
-        if len(f.readlines()) != 2:
-          raise utils.TestError("Data looks wrong in %s" % path)
-
-    tablet_62344.kill_vttablet()
 
 if __name__ == '__main__':
   utils.main()

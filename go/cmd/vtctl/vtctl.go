@@ -28,7 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -59,6 +59,9 @@ var commands = []commandGroup{
 				"Initializes a tablet in the topology.\n" +
 					"Valid <tablet type>:\n" +
 					"  " + strings.Join(topo.MakeStringTypeList(topo.AllTabletTypes), " ")},
+			command{"GetTablet", commandGetTablet,
+				"<tablet alias|zk tablet path>",
+				"Outputs the json version of Tablet to stdout."},
 			command{"UpdateTabletAddrs", commandUpdateTabletAddrs,
 				"[-hostname <hostname>] [-ip-addr <ip addr>] [-mysql-port <mysql port>] [-vt-port <vt port>] [-vts-port <vts port>] <tablet alias|zk tablet path> ",
 				"Updates the addresses of a tablet."},
@@ -71,6 +74,9 @@ var commands = []commandGroup{
 			command{"SetReadWrite", commandSetReadWrite,
 				"[<tablet alias|zk tablet path>]",
 				"Sets the tablet as ReadWrite."},
+			command{"SetBlacklistedTables", commandSetBlacklistedTables,
+				"[<tablet alias|zk tablet path>] [table1,table2,...]",
+				"Sets the list of blacklisted tables for a tablet. Use no tables to clear the list."},
 			command{"ChangeSlaveType", commandChangeSlaveType,
 				"[-force] [-dry-run] <tablet alias|zk tablet path> <tablet type>",
 				"Change the db type for this tablet if possible. This is mostly for arranging replicas - it will not convert a master.\n" +
@@ -142,7 +148,7 @@ var commands = []commandGroup{
 				"<keyspace/shard|zk shard path> [<served type1>,<served type2>,...]",
 				"Sets a given shard's served types. Does not rebuild any serving graph."},
 			command{"ShardMultiRestore", commandShardMultiRestore,
-				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] <keyspace/shard|zk shard path> <source zk path>...",
+				"[-force] [-concurrency=4] [-fetch-concurrency=4] [-insert-table-concurrency=4] [-fetch-retry-count=3] [-strategy=] [-tables=<table1>,<table2>,...] <keyspace/shard|zk shard path> <source zk path>...",
 				"Restore multi-snapshots on all the tablets of a shard."},
 			command{"ShardReplicationAdd", commandShardReplicationAdd,
 				"<keyspace/shard|zk shard path> <tablet alias|zk tablet path> <parent tablet alias|zk parent tablet path>",
@@ -158,7 +164,7 @@ var commands = []commandGroup{
 	commandGroup{
 		"Keyspaces", []command{
 			command{"CreateKeyspace", commandCreateKeyspace,
-				"[-sharding_column_name=name] [-sharding_column_type=type] [-force] <keyspace name|zk keyspace path>",
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-served-from=tablettype1:ks1,tablettype2,ks2,...] [-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
 			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
 				"[-force] <keyspace name|zk keyspace path> <column name> <column type>",
@@ -170,8 +176,11 @@ var commands = []commandGroup{
 				"[-ping-tablets] <keyspace name|zk keyspace path>",
 				"Validate all nodes reachable from this keyspace are consistent."},
 			command{"MigrateServedTypes", commandMigrateServedTypes,
-				"[-reverse] <keyspace/source shard|zk source shard path> <served type>",
+				"[-reverse] <source keyspace/shard|zk source shard path> <served type>",
 				"Migrates a serving type from the source shard to the shards it replicates to. Will also rebuild the serving graph."},
+			command{"MigrateServedFrom", commandMigrateServedFrom,
+				"[-reverse] <destination keyspace/shard|zk destination shard path> <served type>",
+				"Makes the destination keyspace/shard serve the given type. Will also rebuild the serving graph."},
 		},
 	},
 	commandGroup{
@@ -329,10 +338,10 @@ func fmtTabletAwkable(ti *topo.TabletInfo) string {
 	return fmt.Sprintf("%v %v %v %v %v %v %v", ti.Alias, keyspace, shard, ti.Type, ti.Addr, ti.MysqlAddr, fmtMapAwkable(ti.Tags))
 }
 
-func fmtAction(action *tm.ActionNode) string {
+func fmtAction(action *tabletmanager.ActionNode) string {
 	state := string(action.State)
 	// FIXME(msolomon) The default state should really just have the value "queued".
-	if action.State == tm.ACTION_STATE_QUEUED {
+	if action.State == tabletmanager.ACTION_STATE_QUEUED {
 		state = "queued"
 	}
 	return fmt.Sprintf("%v %v %v %v %v", action.Path(), action.Action, state, action.ActionGuid, action.Error)
@@ -577,6 +586,20 @@ func commandInitTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []str
 	return "", wr.InitTablet(tablet, *force, *parent, *update)
 }
 
+func commandGetTablet(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action GetTablet requires <tablet alias|zk tablet path>")
+	}
+
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	tabletInfo, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err == nil {
+		fmt.Println(jscfg.ToJson(tabletInfo))
+	}
+	return "", err
+}
+
 func commandUpdateTabletAddrs(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	hostname := subFlags.String("hostname", "", "fully qualified host name")
 	ipAddr := subFlags.String("ip-addr", "", "IP address")
@@ -663,6 +686,24 @@ func commandSetReadWrite(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	return wr.ActionInitiator().SetReadWrite(tabletAlias)
+}
+
+func commandSetBlacklistedTables(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 && subFlags.NArg() != 2 {
+		log.Fatalf("action SetBlacklistedTables requires <tablet alias|zk tablet path> [table1,table2,...]")
+	}
+
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	var tables []string
+	if subFlags.NArg() == 2 {
+		tables = strings.Split(subFlags.Arg(1), ",")
+	}
+	ti, err := wr.TopoServer().GetTablet(tabletAlias)
+	if err != nil {
+		log.Fatalf("failed reading tablet %v: %v", tabletAlias, err)
+	}
+	return "", wr.ActionInitiator().SetBlacklistedTables(ti, tables, *waitTime)
 }
 
 func commandChangeSlaveType(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1023,6 +1064,7 @@ func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	fetchConcurrency := subFlags.Int("fetch-concurrency", 4, "how many files to fetch simultaneously")
 	insertTableConcurrency := subFlags.Int("insert-table-concurrency", 4, "how many tables to load into a single destination table simultaneously")
 	strategy := subFlags.String("strategy", "", "which strategy to use for restore, use 'mysqlctl multirestore -help' for more info")
+	tables := subFlags.String("tables", "", "comma separated list of tables to replicate (used for vertical split)")
 	subFlags.Parse(args)
 
 	if subFlags.NArg() < 2 {
@@ -1033,7 +1075,11 @@ func commandShardMultiRestore(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 	for i := 1; i < subFlags.NArg(); i++ {
 		sources[i-1] = tabletParamToTabletAlias(subFlags.Arg(i))
 	}
-	err = wr.ShardMultiRestore(keyspace, shard, sources, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
+	var tableArray []string
+	if *tables != "" {
+		tableArray = strings.Split(*tables, ",")
+	}
+	err = wr.ShardMultiRestore(keyspace, shard, sources, tableArray, *concurrency, *fetchConcurrency, *insertTableConcurrency, *fetchRetryCount, *strategy)
 	return
 }
 
@@ -1075,6 +1121,8 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	shardingColumnName := subFlags.String("sharding_column_name", "", "column to use for sharding operations")
 	shardingColumnType := subFlags.String("sharding_column_type", "", "type of the column to use for sharding operations")
 	force := subFlags.Bool("force", false, "will keep going even if the keyspace already exists")
+	var servedFrom flagutil.StringMapValue
+	subFlags.Var(&servedFrom, "served-from", "comma separated list of dbtype:keyspace pairs used to serve traffic")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		log.Fatalf("action CreateKeyspace requires <keyspace name|zk keyspace path>")
@@ -1088,6 +1136,16 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 	ki := &topo.Keyspace{
 		ShardingColumnName: *shardingColumnName,
 		ShardingColumnType: kit,
+	}
+	if len(servedFrom) > 0 {
+		ki.ServedFrom = make(map[topo.TabletType]string, len(servedFrom))
+		for name, value := range servedFrom {
+			tt := topo.TabletType(name)
+			if !topo.IsInServingGraph(tt) {
+				log.Fatalf("Cannot use tablet type that is not in serving graph: %v", tt)
+			}
+			ki.ServedFrom[tt] = value
+		}
 	}
 	err := wr.TopoServer().CreateKeyspace(keyspace, ki)
 	if *force && err == topo.ErrNodeExists {
@@ -1158,12 +1216,24 @@ func commandMigrateServedTypes(wr *wrangler.Wrangler, subFlags *flag.FlagSet, ar
 	reverse := subFlags.Bool("reverse", false, "move the served type back instead of forward, use in case of trouble")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
-		log.Fatalf("action MigrateServedTypes requires <keyspace/source shard|zk source shard path> <served type>")
+		log.Fatalf("action MigrateServedTypes requires <source keyspace/shard|zk source shard path> <served type>")
 	}
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	servedType := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
 	return "", wr.MigrateServedTypes(keyspace, shard, servedType, *reverse)
+}
+
+func commandMigrateServedFrom(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	reverse := subFlags.Bool("reverse", false, "move the served from back instead of forward, use in case of trouble")
+	subFlags.Parse(args)
+	if subFlags.NArg() != 2 {
+		log.Fatalf("action MigrateServedFrom requires <destination keyspace/shard|zk source shard path> <served type>")
+	}
+
+	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
+	servedType := parseTabletType(subFlags.Arg(1), []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY})
+	return "", wr.MigrateServedFrom(keyspace, shard, servedType, *reverse)
 }
 
 func commandWaitForAction(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
@@ -1531,7 +1601,7 @@ func installSignalHandlers() {
 		// - tm will interrupt anything waiting on a tablet action
 		// - wr will interrupt anything waiting on a shard or
 		//   keyspace lock
-		tm.SignalInterrupt()
+		tabletmanager.SignalInterrupt()
 		wrangler.SignalInterrupt()
 	}()
 }

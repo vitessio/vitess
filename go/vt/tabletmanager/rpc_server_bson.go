@@ -89,6 +89,16 @@ func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.Tablet
 	})
 }
 
+type SetBlacklistedTablesArgs struct {
+	Tables []string
+}
+
+func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *SetBlacklistedTablesArgs, reply *rpc.UnusedResponse) error {
+	return tm.rpcWrapLockAction(context.RemoteAddr, TABLET_ACTION_SET_BLACKLISTED_TABLES, args, reply, func() error {
+		return SetBlacklistedTables(tm.agent.ts, tm.agent.tabletAlias, args.Tables)
+	})
+}
+
 //
 // Replication related methods
 //

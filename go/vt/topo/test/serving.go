@@ -7,6 +7,7 @@ package test
 import (
 	"testing"
 
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -103,7 +104,12 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 				},
 			},
 		},
-		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
+		TabletTypes:        []topo.TabletType{topo.TYPE_MASTER},
+		ShardingColumnName: "video_id",
+		ShardingColumnType: key.KIT_UINT64,
+		ServedFrom: map[topo.TabletType]string{
+			topo.TYPE_REPLICA: "other_keyspace",
+		},
 	}
 	if err := ts.UpdateSrvKeyspace(cell, "test_keyspace", &srvKeyspace); err != nil {
 		t.Errorf("UpdateSrvKeyspace(1): %v", err)
@@ -117,7 +123,10 @@ func CheckServingGraph(t *testing.T, ts topo.Server) {
 		len(s.Partitions) != 1 ||
 		len(s.Partitions[topo.TYPE_MASTER].Shards) != 1 ||
 		len(s.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes) != 1 ||
-		s.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER {
+		s.Partitions[topo.TYPE_MASTER].Shards[0].ServedTypes[0] != topo.TYPE_MASTER ||
+		s.ShardingColumnName != "video_id" ||
+		s.ShardingColumnType != key.KIT_UINT64 ||
+		s.ServedFrom[topo.TYPE_REPLICA] != "other_keyspace" {
 		t.Errorf("GetSrvKeyspace(valid): %v", err)
 	}
 	if k, err := ts.GetSrvKeyspaceNames(cell); err != nil || len(k) != 1 || k[0] != "test_keyspace" {

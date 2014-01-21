@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import datetime
+import json
 import logging
 import re
 import tempfile
@@ -14,7 +15,7 @@ from zk import zkocc
 
 def setUpModule():
   try:
-    utils.zk_setup()
+    environment.topo_server_setup()
 
   except:
     tearDownModule()
@@ -25,25 +26,27 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
 
-  utils.zk_teardown()
+  environment.topo_server_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
 
 class TopoOccTest(unittest.TestCase):
   def setUp(self):
-    utils.zk_wipe()
-    self.zkocc_server = utils.zkocc_start()
-    # the default topo implementation for vtgate is zookeeper
+    environment.topo_server_wipe()
     self.vtgate_zk, self.vtgate_zk_port = utils.vtgate_start()
-    self.vtgate_zkocc, self.vtgate_zkocc_port = utils.vtgate_start(topo_impl="zkocc")
-    self.topo = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base, 'test_nj', 30)
-    self.topo.dial()
+    if environment.topo_server_implementation == 'zookeeper':
+      self.zkocc_server = utils.zkocc_start()
+      self.vtgate_zkocc, self.vtgate_zkocc_port = utils.vtgate_start(topo_impl="zkocc")
+      self.topo = zkocc.ZkOccConnection("localhost:%u" % environment.zkocc_port_base, 'test_nj', 30)
+      self.topo.dial()
 
   def tearDown(self):
-    utils.zkocc_kill(self.zkocc_server)
     utils.vtgate_kill(self.vtgate_zk)
-    utils.vtgate_kill(self.vtgate_zkocc)
+    if environment.topo_server_implementation == 'zookeeper':
+      self.topo.close()
+      utils.zkocc_kill(self.zkocc_server)
+      utils.vtgate_kill(self.vtgate_zkocc)
 
   def rebuild(self, use_served_types=False):
     flags = ""
@@ -60,23 +63,25 @@ class TopoOccTest(unittest.TestCase):
     t2 = tablet.Tablet(tablet_uid=2, cell="nj")
     t2.init_tablet("master", "test_keyspace2", "0")
     t2.update_addrs()
-    utils.run_vtctl('RebuildKeyspaceGraph /zk/global/vt/keyspaces/*', auto_log=True)
-    self.assertItemsEqual(self.topo.get_srv_keyspace_names('local'), ["test_keyspace1", "test_keyspace2"])
+    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace1 test_keyspace2', auto_log=True)
 
-    # zkocc API test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspaceNames test_nj' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
-                          "KeyspaceNames[1] = test_keyspace2\n")
-
-    # vtgate zk API test
+    # vtgate API test
     out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspaceNames test_nj' % self.vtgate_zk_port, trap_output=True)
     self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
                           "KeyspaceNames[1] = test_keyspace2\n")
 
-    # vtgate zkocc API test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspaceNames test_nj' % self.vtgate_zkocc_port, trap_output=True)
-    self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
-                          "KeyspaceNames[1] = test_keyspace2\n")
+    if environment.topo_server_implementation == 'zookeeper':
+      self.assertItemsEqual(self.topo.get_srv_keyspace_names('local'), ["test_keyspace1", "test_keyspace2"])
+
+      # zkocc API test
+      out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspaceNames test_nj' % environment.zkocc_port_base, trap_output=True)
+      self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
+                       "KeyspaceNames[1] = test_keyspace2\n")
+
+      # vtgate zkocc API test
+      out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspaceNames test_nj' % self.vtgate_zkocc_port, trap_output=True)
+      self.assertEqual(err, "KeyspaceNames[0] = test_keyspace1\n" +
+                       "KeyspaceNames[1] = test_keyspace2\n")
 
 
   def test_get_srv_keyspace(self):
@@ -85,20 +90,6 @@ class TopoOccTest(unittest.TestCase):
     t.init_tablet("master", "test_keyspace", "0")
     utils.run_vtctl('UpdateTabletAddrs -hostname localhost -ip-addr 127.0.0.1 -mysql-port %s -vts-port %s %s' % (t.mysql_port, t.port + 500, t.tablet_alias))
     self.rebuild(use_served_types=True)
-    reply = self.topo.get_srv_keyspace("test_nj", "test_keyspace")
-    self.assertEqual(reply['TabletTypes'], ['master'])
-
-    # zkocc API test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqual(err,
-                     "Partitions[master] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
-                     "Partitions[rdonly] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
-                     "Partitions[replica] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
-                     "Shards[0]={Start: , End: }\n" +
-                     "TabletTypes[0] = master\n")
 
     # vtgate zk API test
     out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % self.vtgate_zk_port, trap_output=True)
@@ -109,18 +100,37 @@ class TopoOccTest(unittest.TestCase):
                      "Partitions[replica] =\n" +
                      "  Shards[0]={Start: , End: }\n" +
                      "Shards[0]={Start: , End: }\n" +
-                     "TabletTypes[0] = master\n")
+                     "TabletTypes[0] = master\n",
+                     "Got wrong content: %s" % err)
 
-    # vtgate zkocc API test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % self.vtgate_zkocc_port, trap_output=True)
-    self.assertEqual(err, "Partitions[master] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
-                     "Partitions[rdonly] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
-                     "Partitions[replica] =\n" +
-                     "  Shards[0]={Start: , End: }\n" +
-                     "Shards[0]={Start: , End: }\n" +
-                     "TabletTypes[0] = master\n")
+    if environment.topo_server_implementation == 'zookeeper':
+      reply = self.topo.get_srv_keyspace("test_nj", "test_keyspace")
+      self.assertEqual(reply['TabletTypes'], ['master'])
+
+      # zkocc API test
+      out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % environment.zkocc_port_base, trap_output=True)
+      self.assertEqual(err,
+                       "Partitions[master] =\n" +
+                       "  Shards[0]={Start: , End: }\n" +
+                       "Partitions[rdonly] =\n" +
+                       "  Shards[0]={Start: , End: }\n" +
+                       "Partitions[replica] =\n" +
+                       "  Shards[0]={Start: , End: }\n" +
+                       "Shards[0]={Start: , End: }\n" +
+                       "TabletTypes[0] = master\n",
+                       "Got wrong content: %s" % err)
+
+      # vtgate zkocc API test
+      out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % self.vtgate_zkocc_port, trap_output=True)
+      self.assertEqual(err, "Partitions[master] =\n" +
+                       "  Shards[0]={Start: , End: }\n" +
+                       "Partitions[rdonly] =\n" +
+                       "  Shards[0]={Start: , End: }\n" +
+                       "Partitions[replica] =\n" +
+                       "  Shards[0]={Start: , End: }\n" +
+                       "Shards[0]={Start: , End: }\n" +
+                       "TabletTypes[0] = master\n",
+                       "Got wrong content: %s" % err)
 
 
   def test_get_srv_keyspace_local(self):
@@ -138,19 +148,21 @@ class TopoOccTest(unittest.TestCase):
     t.init_tablet("master", "test_keyspace", "0")
     t.update_addrs()
     self.rebuild()
-    self.assertEqual(len(self.topo.get_end_points("test_nj", "test_keyspace", "0", "master")['Entries']), 1)
-
-    # zkocc API test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % utils.zkocc_port_base, trap_output=True)
-    self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
     # vtgate zk API test
     out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % self.vtgate_zk_port, trap_output=True)
     self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
-    # vtgate zkocc API test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % self.vtgate_zkocc_port, trap_output=True)
-    self.assertEqual(err, "Entries[0] = 1 localhost\n")
+    if environment.topo_server_implementation == 'zookeeper':
+      self.assertEqual(len(self.topo.get_end_points("test_nj", "test_keyspace", "0", "master")['Entries']), 1)
+
+      # zkocc API test
+      out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % environment.zkocc_port_base, trap_output=True)
+      self.assertEqual(err, "Entries[0] = 1 localhost\n")
+
+      # vtgate zkocc API test
+      out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getEndPoints test_nj test_keyspace 0 master' % self.vtgate_zkocc_port, trap_output=True)
+      self.assertEqual(err, "Entries[0] = 1 localhost\n")
 
 
 def _format_time(timeFromBson):
@@ -162,26 +174,27 @@ def _format_time(timeFromBson):
 class TestZkocc(unittest.TestCase):
   longMessage = True
   def setUp(self):
-    utils.zk_wipe()
-    utils.run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt/zkocc1')
-    utils.run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt/zkocc2')
-    fd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)
-    filename1 = fd.name
-    fd.write("Test data 1")
-    fd.close()
-    utils.run(environment.binary_path('zk')+' cp '+filename1+' /zk/test_nj/vt/zkocc1/data1')
+    environment.topo_server_wipe()
+    if environment.topo_server_implementation == 'zookeeper':
+      utils.run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt/zkocc1')
+      utils.run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt/zkocc2')
+      fd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)
+      filename1 = fd.name
+      fd.write("Test data 1")
+      fd.close()
+      utils.run(environment.binary_path('zk')+' cp '+filename1+' /zk/test_nj/vt/zkocc1/data1')
 
-    fd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)
-    filename2 = fd.name
-    fd.write("Test data 2")
-    fd.close()
-    utils.run(environment.binary_path('zk')+' cp '+filename2+' /zk/test_nj/vt/zkocc1/data2')
+      fd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)
+      filename2 = fd.name
+      fd.write("Test data 2")
+      fd.close()
+      utils.run(environment.binary_path('zk')+' cp '+filename2+' /zk/test_nj/vt/zkocc1/data2')
 
-    fd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)
-    filename3 = fd.name
-    fd.write("Test data 3")
-    fd.close()
-    utils.run(environment.binary_path('zk')+' cp '+filename3+' /zk/test_nj/vt/zkocc1/data3')
+      fd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)
+      filename3 = fd.name
+      fd.write("Test data 3")
+      fd.close()
+      utils.run(environment.binary_path('zk')+' cp '+filename3+' /zk/test_nj/vt/zkocc1/data3')
 
   def _check_zk_output(self, cmd, expected):
     # directly for sanity
@@ -189,7 +202,7 @@ class TestZkocc(unittest.TestCase):
     self.assertEqualNormalized(out, expected, 'unexpected direct zk output')
 
     # using zkocc
-    out, err = utils.run(environment.binary_path('zk')+' --zk.zkocc-addr=localhost:%u %s' % (utils.zkocc_port_base, cmd), trap_output=True)
+    out, err = utils.run(environment.binary_path('zk')+' --zk.zkocc-addr=localhost:%u %s' % (environment.zkocc_port_base, cmd), trap_output=True)
     self.assertEqualNormalized(out, expected, 'unexpected zk zkocc output')
     logging.debug("Matched: %s", out)
 
@@ -204,17 +217,17 @@ class TestZkocc(unittest.TestCase):
 
     # create a python client. The first address is bad, will test the retry logic
     bad_port = environment.reserve_ports(3)
-    zkocc_client = zkocc.ZkOccConnection("localhost:%u,localhost:%u,localhost:%u" % (bad_port, utils.zkocc_port_base, bad_port+1), "test_nj", 30)
+    zkocc_client = zkocc.ZkOccConnection("localhost:%u,localhost:%u,localhost:%u" % (bad_port, environment.zkocc_port_base, bad_port+1), "test_nj", 30)
     zkocc_client.dial()
 
     # test failure for a python client that cannot connect
     bad_zkocc_client = zkocc.ZkOccConnection("localhost:%u,localhost:%u" % (bad_port+2, bad_port), "test_nj", 30)
     try:
       bad_zkocc_client.dial()
-      raise utils.TestError('exception expected')
+      self.fail('exception expected')
     except zkocc.ZkOccError as e:
-      if str(e) != "Cannot dial to any server":
-        raise
+      if not str(e).startswith("Cannot dial to any server, tried: "):
+        self.fail('unexpected exception: %s' % str(e))
     level = logging.getLogger().getEffectiveLevel()
     logging.getLogger().setLevel(logging.ERROR)
 
@@ -223,13 +236,13 @@ class TestZkocc(unittest.TestCase):
       bad_zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
       self.fail('exception expected')
     except zkocc.ZkOccError as e:
-      if str(e) != "Cannot dial to any server":
-        raise
+      if not str(e).startswith("Cannot dial to any server, tried: "):
+        self.fail('unexpected exception: %s' % str(e))
 
     logging.getLogger().setLevel(level)
 
     # get test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u /zk/test_nj/vt/zkocc1/data1' % utils.zkocc_port_base, trap_output=True)
+    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u /zk/test_nj/vt/zkocc1/data1' % environment.zkocc_port_base, trap_output=True)
     self.assertEqual(err, "/zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=false, Stale=false)\n")
 
     zk_data = zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
@@ -240,7 +253,7 @@ class TestZkocc(unittest.TestCase):
     self.assertDictContainsSubset({'NumChildren': 0, 'Version': 0}, zk_data['Stat'])
 
     # getv test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u /zk/test_nj/vt/zkocc1/data1 /zk/test_nj/vt/zkocc1/data2 /zk/test_nj/vt/zkocc1/data3' % utils.zkocc_port_base, trap_output=True)
+    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u /zk/test_nj/vt/zkocc1/data1 /zk/test_nj/vt/zkocc1/data2 /zk/test_nj/vt/zkocc1/data3' % environment.zkocc_port_base, trap_output=True)
     self.assertEqualNormalized(err, """[0] /zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=false)
   [1] /zk/test_nj/vt/zkocc1/data2 = Test data 2 (NumChildren=0, Version=0, Cached=false, Stale=false)
   [2] /zk/test_nj/vt/zkocc1/data3 = Test data 3 (NumChildren=0, Version=0, Cached=false, Stale=false)
@@ -254,7 +267,7 @@ class TestZkocc(unittest.TestCase):
       self.assertDictContainsSubset({'NumChildren': 0, 'Version': 0}, d['Stat'])
 
     # children test
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode children /zk/test_nj/vt' % utils.zkocc_port_base, trap_output=True)
+    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode children /zk/test_nj/vt' % environment.zkocc_port_base, trap_output=True)
     self.assertEqualNormalized(err, """Path = /zk/test_nj/vt
   Child[0] = zkocc1
   Child[1] = zkocc2
@@ -275,21 +288,21 @@ class TestZkocc(unittest.TestCase):
          _format_time(zk_data[2]['Stat']['MTime'])))
 
     # test /zk/local is not resolved and rejected
-    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u /zk/local/vt/zkocc1/data1' % utils.zkocc_port_base, trap_output=True, raise_on_error=False)
+    out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u /zk/local/vt/zkocc1/data1' % environment.zkocc_port_base, trap_output=True, raise_on_error=False)
     self.assertIn("zkocc: cannot resolve local cell", err)
 
     # start a background process to query the same value over and over again
     # while we kill the zk server and restart it
     outfd = tempfile.NamedTemporaryFile(dir=environment.tmproot, delete=False)
     filename = outfd.name
-    querier = utils.run_bg('/bin/bash -c "while true ; do '+environment.binary_path('zkclient2')+' -server localhost:%u /zk/test_nj/vt/zkocc1/data1 ; sleep 0.1 ; done"' % utils.zkocc_port_base, stderr=outfd.file)
+    querier = utils.run_bg('/bin/bash -c "while true ; do '+environment.binary_path('zkclient2')+' -server localhost:%u /zk/test_nj/vt/zkocc1/data1 ; sleep 0.1 ; done"' % environment.zkocc_port_base, stderr=outfd.file)
     outfd.close()
     time.sleep(1)
 
     # kill zk server, sleep a bit, restart zk server, sleep a bit
-    utils.run(environment.binary_path('zkctl')+' -zk.cfg 1@'+utils.hostname+':%u:%u:%u shutdown' % (utils.zk_port_base, utils.zk_port_base+1, utils.zk_port_base+2))
+    utils.run(environment.binary_path('zkctl')+' -zk.cfg 1@'+utils.hostname+':%u:%u:%u shutdown' % (environment.zk_port_base, environment.zk_port_base+1, environment.zk_port_base+2))
     time.sleep(3)
-    utils.run(environment.binary_path('zkctl')+' -zk.cfg 1@'+utils.hostname+':%u:%u:%u start' % (utils.zk_port_base, utils.zk_port_base+1, utils.zk_port_base+2))
+    utils.run(environment.binary_path('zkctl')+' -zk.cfg 1@'+utils.hostname+':%u:%u:%u start' % (environment.zk_port_base, environment.zk_port_base+1, environment.zk_port_base+2))
     time.sleep(3)
 
     utils.kill_sub_process(querier)
@@ -303,7 +316,7 @@ class TestZkocc(unittest.TestCase):
       elif line == "/zk/test_nj/vt/zkocc1/data1 = Test data 1 (NumChildren=0, Version=0, Cached=true, Stale=true)\n":
         stale = True
       else:
-        raise utils.TestError('unexpected line: ', line)
+        self.fail('unexpected line: %s' % line)
       if state == 0:
         if stale:
           state = 1
@@ -325,22 +338,22 @@ class TestZkocc(unittest.TestCase):
       zkocc_client.get("/zk/test_nj/vt/zkocc1/data1")
       self.fail('exception expected')
     except zkocc.ZkOccError as e:
-      if str(e) != "Cannot dial to any server":
-        raise
+      if not str(e).startswith("Cannot dial to any server, tried: "):
+        self.fail('unexpected exception: %s', str(e))
     logging.getLogger().setLevel(level)
 
   def test_zkocc_qps(self):
     # preload the test_nj cell
     zkocc_14850 = utils.zkocc_start()
 
-    qpser = utils.run_bg(environment.binary_path('zkclient2')+' -server localhost:%u -mode qps /zk/test_nj/vt/zkocc1/data1 /zk/test_nj/vt/zkocc1/data2' % utils.zkocc_port_base)
+    qpser = utils.run_bg(environment.binary_path('zkclient2')+' -server localhost:%u -mode qps /zk/test_nj/vt/zkocc1/data1 /zk/test_nj/vt/zkocc1/data2' % environment.zkocc_port_base)
     time.sleep(10)
     utils.kill_sub_process(qpser)
 
     # get the zkocc vars, make sure we have what we need
-    v = utils.get_vars(utils.zkocc_port_base)
+    v = utils.get_vars(environment.zkocc_port_base)
     if v['ZkReader']['test_nj']['State'] != 'Connected':
-      raise utils.TestError('invalid zk global state: ', v['ZkReader']['test_nj']['State'])
+      self.fail('invalid zk global state: ' + v['ZkReader']['test_nj']['State'])
 
     # some checks on performance / stats
     # a typical workstation will do 45-47k QPS, check we have more than 15k
@@ -392,7 +405,18 @@ class TestZkocc(unittest.TestCase):
     keyspaces = fkc.children("/zk/testing/vt/ns")
     self.assertEqual(keyspaces['Children'], ["test_keyspace"], "children doesn't work")
     entry = fkc.get("/zk/testing/vt/ns/test_keyspace/0/master")
-    self.assertEqual('{"entries": [{"host": "my.cool.hostname", "named_port_map": {"_mysql": 3310, "_vtocc": 6711}, "uid": 0, "port": 0}]}', entry['Data'], 'Entry fix-up is wrong')
+    jentry = json.loads(entry['Data'])
+    self.assertEqual({
+        "entries": [{
+            "host": "my.cool.hostname",
+            "named_port_map": {
+                "_mysql": 3310,
+                "_vtocc": 6711,
+                },
+            "uid": 0,
+            "port": 0,
+            }],
+        }, jentry, 'Entry fix-up is wrong: %s' % entry['Data'])
 
     # new style API tests
     keyspaces = fkc.get_srv_keyspace_names('testing')

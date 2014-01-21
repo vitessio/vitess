@@ -212,6 +212,7 @@ type SrvKeyspace struct {
 	// Copied from Keyspace
 	ShardingColumnName string
 	ShardingColumnType key.KeyspaceIdType
+	ServedFrom         map[TabletType]string
 
 	// For atomic updates
 	version int64

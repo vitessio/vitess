@@ -21,6 +21,10 @@ const (
 	ERR_NOT_IN_TX
 )
 
+const (
+	CONN_CLOSED = OperationalError("vttablet: Connection Closed")
+)
+
 var (
 	tabletProtocol = flag.String("tablet-protocol", "bson", "how to talk to the vttablets")
 )
@@ -47,26 +51,27 @@ type TabletDialer func(endPoint topo.EndPoint, keyspace, shard string) (TabletCo
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(query string, bindVars map[string]interface{}) (*mproto.QueryResult, error)
+	Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(queries []tproto.BoundQuery) (*tproto.QueryResultList, error)
+	ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
 
 	// StreamExecute exectutes a streaming query on vttablet. It returns a channel that will stream results.
 	// It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called
 	// immediately after StreamExecute returns to check if there were errors sending the call. It should also
 	// be called after finishing the iteration over the channel to see if there were other errors.
-	StreamExecute(query string, bindVars map[string]interface{}) (<-chan *mproto.QueryResult, ErrFunc)
+	StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc)
 
 	// Transaction support
-	Begin() error
-	Commit() error
-	Rollback() error
-	// TransactionId returns 0 if there is no transaction.
-	TransactionId() int64
+	Begin() (transactionId int64, err error)
+	Commit(transactionId int64) error
+	Rollback(transactionId int64) error
 
 	// Close must be called for releasing resources.
 	Close()
+
+	// GetEndPoint returns the end point info.
+	EndPoint() topo.EndPoint
 }
 
 type ErrFunc func() error

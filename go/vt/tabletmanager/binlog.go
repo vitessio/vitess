@@ -186,15 +186,22 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	newServerIndex := rand.Intn(len(addrs.Entries))
 	addr := fmt.Sprintf("%v:%v", addrs.Entries[newServerIndex].Host, addrs.Entries[newServerIndex].NamedPortMap["_vtocc"])
 
-	// the data we have to replicate is the intersection of the
-	// source keyrange and our keyrange
-	overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
-	if err != nil {
-		return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
-	}
+	// check which kind of replication we're doing, tables or keyrange
+	if len(bpc.sourceShard.Tables) > 0 {
+		// tables, just get them
+		player := mysqlctl.NewBinlogPlayerTables(vtClient, addr, bpc.sourceShard.Tables, startPosition, bpc.stopAtGroupId)
+		return player.ApplyBinlogEvents(bpc.interrupted)
+	} else {
+		// the data we have to replicate is the intersection of the
+		// source keyrange and our keyrange
+		overlap, err := key.KeyRangesOverlap(bpc.sourceShard.KeyRange, bpc.keyRange)
+		if err != nil {
+			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
+		}
 
-	player := mysqlctl.NewBinlogPlayer(vtClient, addr, overlap, startPosition, bpc.stopAtGroupId)
-	return player.ApplyBinlogEvents(bpc.interrupted)
+		player := mysqlctl.NewBinlogPlayerKeyRange(vtClient, addr, overlap, startPosition, bpc.stopAtGroupId)
+		return player.ApplyBinlogEvents(bpc.interrupted)
+	}
 }
 
 func (bpc *BinlogPlayerController) BlpPosition(vtClient *mysqlctl.DBClient) (*mysqlctl.BlpPosition, error) {
@@ -211,7 +218,7 @@ type BinlogPlayerMap struct {
 
 	// This mutex protects the map and the state
 	mu      sync.Mutex
-	players map[topo.SourceShard]*BinlogPlayerController
+	players map[uint32]*BinlogPlayerController
 	state   int64
 }
 
@@ -225,7 +232,7 @@ func NewBinlogPlayerMap(ts topo.Server, dbConfig mysql.ConnectionParams, mysqld 
 		ts:       ts,
 		dbConfig: dbConfig,
 		mysqld:   mysqld,
-		players:  make(map[topo.SourceShard]*BinlogPlayerController),
+		players:  make(map[uint32]*BinlogPlayerController),
 		state:    BPM_STATE_RUNNING,
 	}
 }
@@ -243,14 +250,14 @@ func (blm *BinlogPlayerMap) size() int64 {
 
 // addPlayer adds a new player to the map. It assumes we have the lock.
 func (blm *BinlogPlayerMap) addPlayer(cell string, keyRange key.KeyRange, sourceShard topo.SourceShard) {
-	bpc, ok := blm.players[sourceShard]
+	bpc, ok := blm.players[sourceShard.Uid]
 	if ok {
 		log.Infof("Already playing logs for %v", sourceShard)
 		return
 	}
 
 	bpc = NewBinlogPlayerController(blm.ts, &blm.dbConfig, blm.mysqld, cell, keyRange, sourceShard)
-	blm.players[sourceShard] = bpc
+	blm.players[sourceShard.Uid] = bpc
 	if blm.state == BPM_STATE_RUNNING {
 		bpc.Start()
 	}
@@ -267,7 +274,7 @@ func (blm *BinlogPlayerMap) StopAllPlayersAndReset() {
 		}
 		hadPlayers = true
 	}
-	blm.players = make(map[topo.SourceShard]*BinlogPlayerController)
+	blm.players = make(map[uint32]*BinlogPlayerController)
 	blm.mu.Unlock()
 
 	if hadPlayers {
@@ -287,7 +294,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, shardInfo *topo.Shard
 	blm.mu.Lock()
 
 	// get the existing sources and build a map of sources to remove
-	toRemove := make(map[topo.SourceShard]bool)
+	toRemove := make(map[uint32]bool)
 	hadPlayers := false
 	for source := range blm.players {
 		toRemove[source] = true
@@ -297,7 +304,7 @@ func (blm *BinlogPlayerMap) RefreshMap(tablet topo.Tablet, shardInfo *topo.Shard
 	// for each source, add it if not there, and delete from toRemove
 	for _, sourceShard := range shardInfo.SourceShards {
 		blm.addPlayer(tablet.Alias.Cell, tablet.KeyRange, sourceShard)
-		delete(toRemove, sourceShard)
+		delete(toRemove, sourceShard.Uid)
 	}
 	hasPlayers := len(shardInfo.SourceShards) > 0
 

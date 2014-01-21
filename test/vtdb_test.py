@@ -4,10 +4,7 @@
 import hmac
 import json
 import logging
-import optparse
 import os
-import sys
-import time
 import traceback
 import unittest
 
@@ -16,7 +13,6 @@ import tablet
 import utils
 
 from net import gorpc
-from net import bsonrpc
 from vtdb import cursor
 from vtdb import tablet as tablet3
 from vtdb import vtclient
@@ -29,9 +25,8 @@ shard_0_replica = tablet.Tablet()
 shard_1_master = tablet.Tablet()
 shard_1_replica = tablet.Tablet()
 
-TEST_KEYSPACE = "test_keyspace"
-zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
-                                     "test_nj", 30.0)
+vtgate_server = None
+vtgate_port = None
 
 create_vt_insert_test = '''create table vt_insert_test (
 id bigint auto_increment,
@@ -39,40 +34,17 @@ msg varchar(64),
 primary key (id)
 ) Engine=InnoDB'''
 
-drop_vt_insert_test = '''drop table vt_insert_test'''
-
-populate_vt_insert_test = [
-    "insert into vt_insert_test (msg) values ('test %s')" % x
-    for x in xrange(4)]
-
 create_vt_a = '''create table vt_a (
 eid bigint,
 id int,
 primary key(eid, id)
 ) Engine=InnoDB'''
 
-drop_vt_a = '''drop table vt_a'''
-
-def populate_vt_a(count):
-  return ["insert into vt_a (eid, id) values (%d, %d)" % (x, x)
-    for x in xrange(count+1) if x >0]
-
-create_vt_b = '''create table vt_b (
-eid bigint,
-name varchar(128),
-foo varbinary(128),
-primary key(eid, name)
-) Engine=InnoDB'''
-
-def populate_vt_b(count):
-  return ["insert into vt_b (eid, name, foo) values (%d, 'name %s', 'foo %s')" % (x, x, x)
-    for x in xrange(count)]
-
 
 def setUpModule():
   logging.debug("in setUpModule")
   try:
-    utils.zk_setup()
+    environment.topo_server_setup()
 
     # start mysql instance external to the test
     setup_procs = [shard_0_master.init_mysql(),
@@ -91,6 +63,9 @@ def tearDownModule():
   if utils.options.skip_teardown:
     return
   logging.debug("Tearing down the servers and setup")
+  utils.vtgate_kill(vtgate_server)
+  tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
+                       shard_1_replica])
   teardown_procs = [shard_0_master.teardown_mysql(),
                     shard_0_replica.teardown_mysql(),
                     shard_1_master.teardown_mysql(),
@@ -98,10 +73,7 @@ def tearDownModule():
                    ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
-                       shard_1_replica])
-
-  utils.zk_teardown()
+  environment.topo_server_teardown()
 
   utils.kill_sub_processes()
   utils.remove_tmp_files()
@@ -112,65 +84,61 @@ def tearDownModule():
   shard_1_replica.remove_tree()
 
 def setup_tablets():
+  global vtgate_server
+  global vtgate_port
+
   # Start up a master mysql and vttablet
   logging.debug("Setting up tablets")
-  utils.run_vtctl('CreateKeyspace %s' % TEST_KEYSPACE)
-  shard_0_master.init_tablet('master', keyspace=TEST_KEYSPACE, shard='0')
-  shard_0_replica.init_tablet('replica', keyspace=TEST_KEYSPACE, shard='0')
-  shard_1_master.init_tablet('master', keyspace=TEST_KEYSPACE, shard='1')
-  shard_1_replica.init_tablet('replica', keyspace=TEST_KEYSPACE, shard='1')
+  utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+  shard_0_master.init_tablet('master', keyspace='test_keyspace', shard='0')
+  shard_0_replica.init_tablet('replica', keyspace='test_keyspace', shard='0')
+  shard_1_master.init_tablet('master', keyspace='test_keyspace', shard='1')
+  shard_1_replica.init_tablet('replica', keyspace='test_keyspace', shard='1')
 
-  utils.run_vtctl('RebuildShardGraph %s/0' % TEST_KEYSPACE, auto_log=True)
-  utils.run_vtctl('RebuildShardGraph %s/1' % TEST_KEYSPACE, auto_log=True)
+  utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/0'], auto_log=True)
+  utils.run_vtctl(['RebuildShardGraph', 'test_keyspace/1'], auto_log=True)
   utils.validate_topology()
   shard_0_master.create_db(shard_0_master.dbname)
   shard_0_replica.create_db(shard_0_master.dbname)
   shard_1_master.create_db(shard_0_master.dbname)
   shard_1_replica.create_db(shard_0_master.dbname)
 
-  utils.run_vtctl('RebuildKeyspaceGraph %s' % TEST_KEYSPACE, auto_log=True)
+  for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
+    t.mquery(shard_0_master.dbname, create_vt_insert_test)
+    t.mquery(shard_0_master.dbname, create_vt_a)
 
-  zkocc_server = utils.zkocc_start()
+  utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
+  vtgate_server, vtgate_port = utils.vtgate_start()
 
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.start_vttablet(wait_for_state=None)
   for t in [shard_0_master, shard_0_replica, shard_1_master, shard_1_replica]:
     t.wait_for_vttablet_state('SERVING')
 
-  utils.run_vtctl('SetReadWrite ' + shard_0_master.tablet_alias)
-  utils.run_vtctl('SetReadWrite ' + shard_1_master.tablet_alias)
-  utils.check_db_read_write(62344)
-
-
-  for t in [shard_0_master, shard_0_replica]:
-    t.reset_replication()
-  utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
-
-  for t in [shard_1_master, shard_1_replica]:
-    t.reset_replication()
-  utils.run_vtctl('ReparentShard -force test_keyspace/1 ' + shard_1_master.tablet_alias, auto_log=True)
-  setup_schema()
-  shard_0_master.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
-  shard_1_master.vquery("set vt_schema_reload_time=86400", path="test_keyspace/1")
-  shard_0_replica.vquery("set vt_schema_reload_time=86400", path="test_keyspace/0")
-  shard_1_replica.vquery("set vt_schema_reload_time=86400", path="test_keyspace/1")
-
-def setup_schema():
-  shard_0_master.mquery(shard_0_master.dbname, create_vt_insert_test)
-  shard_0_master.mquery(shard_0_master.dbname, create_vt_a)
-  shard_1_master.mquery(shard_0_master.dbname, create_vt_insert_test)
-  shard_1_master.mquery(shard_0_master.dbname, create_vt_a)
+  utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
+                   shard_0_master.tablet_alias], auto_log=True)
+  utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/1',
+                   shard_1_master.tablet_alias], auto_log=True)
 
 
 def get_master_connection(shard='1', user=None, password=None):
   logging.debug("connecting to master with params")
-  master_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "master", 10.0, user=user, password=password)  
+  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                        "test_nj", 30.0)
+  master_conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
+                                         "master", 10.0,
+                                         user=user, password=password)
   master_conn.connect()
   return master_conn
 
 def get_replica_connection(shard='1', user=None, password=None):
   logging.debug("connecting to replica with params %s %s", user, password)
-  replica_conn = vtclient.VtOCCConnection(zkocc_client, TEST_KEYSPACE, shard, "replica", 10.0, user=user, password=password) 
+  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
+                                        "test_nj", 30.0)
+  replica_conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
+                                          "replica", 10.0,
+                                          user=user, password=password)
   replica_conn.connect()
   return replica_conn
 
@@ -179,7 +147,8 @@ def do_write(count):
   master_conn.begin()
   master_conn._execute("delete from vt_insert_test", {})
   for x in xrange(count):
-    master_conn._execute("insert into vt_insert_test (msg) values (%(msg)s)", {'msg': 'test %s' % x})
+    master_conn._execute("insert into vt_insert_test (msg) values (%(msg)s)",
+                         {'msg': 'test %s' % x})
   master_conn.commit()
 
 
@@ -190,14 +159,17 @@ class TestTabletFunctions(unittest.TestCase):
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     self.assertNotEqual(master_conn, None)
-    self.assertIsInstance(master_conn, vtclient.VtOCCConnection, "Invalid master connection")
+    self.assertIsInstance(master_conn, vtclient.VtOCCConnection,
+                          "Invalid master connection")
     try:
       replica_conn = get_replica_connection()
     except Exception, e:
-      logging.debug("Connection to shard0 replica failed with error %s" % str(e))
+      logging.debug("Connection to shard0 replica failed with error %s" %
+                    str(e))
       raise
     self.assertNotEqual(replica_conn, None)
-    self.assertIsInstance(replica_conn, vtclient.VtOCCConnection, "Invalid replica connection")
+    self.assertIsInstance(replica_conn, vtclient.VtOCCConnection,
+                          "Invalid replica connection")
 
   def test_writes(self):
     try:
@@ -208,7 +180,8 @@ class TestTabletFunctions(unittest.TestCase):
       for x in xrange(count):
         master_conn._execute("insert into vt_insert_test (msg) values (%(msg)s)", {'msg': 'test %s' % x})
       master_conn.commit()
-      results, rowcount = master_conn._execute("select * from vt_insert_test", {})[:2]
+      results, rowcount = master_conn._execute("select * from vt_insert_test",
+                                               {})[:2]
       self.assertEqual(rowcount, count, "master fetch works")
     except Exception, e:
       logging.debug("Write failed with error %s" % str(e))
@@ -228,11 +201,13 @@ class TestTabletFunctions(unittest.TestCase):
       for x in xrange(count):
         master_conn._execute("insert into vt_a (eid, id) values (%(eid)s, %(id)s)", {'eid': x, 'id': x})
       master_conn.commit()
-      rowsets = master_conn._execute_batch(["select * from vt_insert_test", "select * from vt_a"], [{}, {}])
+      rowsets = master_conn._execute_batch(["select * from vt_insert_test",
+                                            "select * from vt_a"], [{}, {}])
       self.assertEqual(rowsets[0][1], count)
       self.assertEqual(rowsets[1][1], count)
     except Exception, e:
-      self.fail("Write failed with error %s %s" % (str(e), traceback.print_exc()))
+      self.fail("Write failed with error %s %s" % (str(e),
+                                                   traceback.print_exc()))
 
   def test_batch_write(self):
     try:
@@ -284,7 +259,7 @@ class TestTabletFunctions(unittest.TestCase):
       do_write(count)
       # Fetch all.
       master_conn = get_master_connection()
-      stream_cursor = cursor.StreamCursor(master_conn) 
+      stream_cursor = cursor.StreamCursor(master_conn)
       stream_cursor.execute("select * from vt_insert_test", {})
       rows = stream_cursor.fetchall()
       rowcount = 0
@@ -301,7 +276,7 @@ class TestTabletFunctions(unittest.TestCase):
       do_write(count)
       # Fetch one.
       master_conn = get_master_connection()
-      stream_cursor = cursor.StreamCursor(master_conn) 
+      stream_cursor = cursor.StreamCursor(master_conn)
       stream_cursor.execute("select * from vt_insert_test", {})
       rows = stream_cursor.fetchone()
       self.assertTrue(type(rows) == tuple, "Received a valid row")
@@ -316,7 +291,7 @@ class TestTabletFunctions(unittest.TestCase):
       master_conn._execute("delete from vt_insert_test", {})
       master_conn.commit()
       # After deletion, should result zero.
-      stream_cursor = cursor.StreamCursor(master_conn) 
+      stream_cursor = cursor.StreamCursor(master_conn)
       stream_cursor.execute("select * from vt_insert_test", {})
       rows = stream_cursor.fetchall()
       rowcount = 0
@@ -355,7 +330,8 @@ class TestFailures(unittest.TestCase):
     try:
       stream_cursor.execute("select * from vt_insert_test", {})
     except Exception, e:
-      self.fail("Communication with shard0 replica failed with error %s" % str(e))
+      self.fail("Communication with shard0 replica failed with error %s" %
+                str(e))
 
   def test_tablet_restart_begin(self):
     try:
@@ -431,7 +407,8 @@ class TestAuthentication(unittest.TestCase):
   def setUp(self):
     shard_1_replica.kill_vttablet()
     shard_1_replica.start_vttablet(auth=True)
-    credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')
+    credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data',
+                                         'authcredentials_test.json')
     credentials_file = open(credentials_file_name, 'r')
     credentials = json.load(credentials_file)
     self.user = str(credentials.keys()[0])
@@ -440,14 +417,16 @@ class TestAuthentication(unittest.TestCase):
 
   def test_correct_credentials(self):
     try:
-      replica_conn = get_replica_connection(user=self.user, password=self.password)
+      replica_conn = get_replica_connection(user=self.user,
+                                            password=self.password)
       replica_conn.connect()
     finally:
       replica_conn.close()
 
   def test_secondary_credentials(self):
     try:
-      replica_conn = get_replica_connection(user=self.user, password=self.secondary_password)
+      replica_conn = get_replica_connection(user=self.user,
+                                            password=self.secondary_password)
       replica_conn.connect()
     finally:
       replica_conn.close()
@@ -459,22 +438,27 @@ class TestAuthentication(unittest.TestCase):
 
   def test_incorrect_credentials(self):
     with self.assertRaises(dbexceptions.OperationalError):
-      replica_conn = get_replica_connection(user="romek", password="ma raka")
+      replica_conn = get_replica_connection(user=self.user, password="ma raka")
       replica_conn.connect()
 
   def test_challenge_is_used(self):
-    replica_conn = get_replica_connection(user=self.user, password=self.password)
+    replica_conn = get_replica_connection(user=self.user,
+                                          password=self.password)
     replica_conn.connect()
     challenge = ""
-    proof =  "%s %s" %(self.user, hmac.HMAC(self.password, challenge).hexdigest())
-    self.assertRaises(gorpc.AppError, replica_conn.conn.client.call, 'AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
+    proof =  "%s %s" %(self.user, hmac.HMAC(self.password,
+                                            challenge).hexdigest())
+    self.assertRaises(gorpc.AppError, replica_conn.conn.client.call,
+                      'AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
 
   def test_only_few_requests_are_allowed(self):
-    replica_conn = get_replica_connection(user=self.user, password=self.password)
+    replica_conn = get_replica_connection(user=self.user,
+                                          password=self.password)
     replica_conn.connect()
     for i in range(4):
       try:
-        replica_conn.conn.client.call('AuthenticatorCRAMMD5.GetNewChallenge', "")
+        replica_conn.conn.client.call('AuthenticatorCRAMMD5.GetNewChallenge',
+                                      "")
       except gorpc.GoRpcError:
         break
     else:

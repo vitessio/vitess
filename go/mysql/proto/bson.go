@@ -44,16 +44,16 @@ func UnmarshalFieldBson(field *Field, buf *bytes.Buffer) {
 func (qr *QueryResult) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
-	encodeFieldsBson(qr.Fields, "Fields", buf)
+	EncodeFieldsBson(qr.Fields, "Fields", buf)
 	bson.EncodeInt64(buf, "RowsAffected", int64(qr.RowsAffected))
 	bson.EncodeInt64(buf, "InsertId", int64(qr.InsertId))
-	encodeRowsBson(qr.Rows, "Rows", buf)
+	EncodeRowsBson(qr.Rows, "Rows", buf)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func encodeFieldsBson(fields []Field, key string, buf *bytes2.ChunkedWriter) {
+func EncodeFieldsBson(fields []Field, key string, buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range fields {
@@ -63,17 +63,17 @@ func encodeFieldsBson(fields []Field, key string, buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func encodeRowsBson(rows [][]sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
+func EncodeRowsBson(rows [][]sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range rows {
-		encodeRowBson(v, bson.Itoa(i), buf)
+		EncodeRowBson(v, bson.Itoa(i), buf)
 	}
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
 }
 
-func encodeRowBson(row []sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
+func EncodeRowBson(row []sqltypes.Value, key string, buf *bytes2.ChunkedWriter) {
 	bson.EncodePrefix(buf, bson.Array, key)
 	lenWriter := bson.NewLenWriter(buf)
 	for i, v := range row {
@@ -95,13 +95,13 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		key := bson.ReadCString(buf)
 		switch key {
 		case "Fields":
-			qr.Fields = decodeFieldsBson(buf, kind)
+			qr.Fields = DecodeFieldsBson(buf, kind)
 		case "RowsAffected":
 			qr.RowsAffected = bson.DecodeUint64(buf, kind)
 		case "InsertId":
 			qr.InsertId = bson.DecodeUint64(buf, kind)
 		case "Rows":
-			qr.Rows = decodeRowsBson(buf, kind)
+			qr.Rows = DecodeRowsBson(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
@@ -109,7 +109,7 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 	}
 }
 
-func decodeFieldsBson(buf *bytes.Buffer, kind byte) []Field {
+func DecodeFieldsBson(buf *bytes.Buffer, kind byte) []Field {
 	switch kind {
 	case bson.Array:
 		// valid
@@ -135,7 +135,7 @@ func decodeFieldsBson(buf *bytes.Buffer, kind byte) []Field {
 	return fields
 }
 
-func decodeRowsBson(buf *bytes.Buffer, kind byte) [][]sqltypes.Value {
+func DecodeRowsBson(buf *bytes.Buffer, kind byte) [][]sqltypes.Value {
 	switch kind {
 	case bson.Array:
 		// valid
@@ -150,13 +150,13 @@ func decodeRowsBson(buf *bytes.Buffer, kind byte) [][]sqltypes.Value {
 	kind = bson.NextByte(buf)
 	for i := 0; kind != bson.EOO; i++ {
 		bson.ExpectIndex(buf, i)
-		rows = append(rows, decodeRowBson(buf, kind))
+		rows = append(rows, DecodeRowBson(buf, kind))
 		kind = bson.NextByte(buf)
 	}
 	return rows
 }
 
-func decodeRowBson(buf *bytes.Buffer, kind byte) []sqltypes.Value {
+func DecodeRowBson(buf *bytes.Buffer, kind byte) []sqltypes.Value {
 	switch kind {
 	case bson.Array:
 		// valid

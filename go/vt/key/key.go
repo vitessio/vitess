@@ -197,7 +197,7 @@ func KeyRangesIntersect(first, second KeyRange) bool {
 // They need to overlap, otherwise an error is returned.
 func KeyRangesOverlap(first, second KeyRange) (KeyRange, error) {
 	if !KeyRangesIntersect(first, second) {
-		return KeyRange{}, fmt.Errorf("Keyranges %v and %v don't overlap", first, second)
+		return KeyRange{}, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
 	}
 	// compute max(c,a) and min(b,d)
 	// start with (a,b)

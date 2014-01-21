@@ -18,6 +18,10 @@ type Keyspace struct {
 	// type of the column used for sharding
 	// KIT_UNSET if the keyspace is not sharded
 	ShardingColumnType key.KeyspaceIdType
+
+	// ServedFrom will redirect the appropriate traffic to
+	// another keyspace
+	ServedFrom map[TabletType]string
 }
 
 // KeyspaceInfo is a meta struct that contains metadata to give the
@@ -34,7 +38,7 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 }
 
 // NewKeyspaceInfo returns a KeyspaceInfo basing on keyspace with the
-// keyspace / keyspace. This function should be only used by Server
+// keyspace. This function should be only used by Server
 // implementations.
 func NewKeyspaceInfo(keyspace string, value *Keyspace) *KeyspaceInfo {
 	return &KeyspaceInfo{

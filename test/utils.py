@@ -218,10 +218,8 @@ def run_procs(cmds, raise_on_error=True):
 # background zk process
 # (note the zkocc addresses will only work with an extra zkocc process)
 zk_port_base = environment.reserve_ports(3)
-zkocc_port_base = environment.reserve_ports(3)
 def zk_setup(add_bad_host=False):
   global zk_port_base
-  global zkocc_port_base
   zk_ports = ":".join([str(zk_port_base), str(zk_port_base+1), str(zk_port_base+2)])
   run('%s -log_dir %s -zk.cfg 1@%s:%s init' % (environment.binary_path('zkctl'), environment.vtlogroot, hostname, zk_ports))
   config = environment.tmproot+'/test-zk-client-conf.json'
@@ -233,10 +231,10 @@ def zk_setup(add_bad_host=False):
                        'test_ny': 'localhost:%u'%(zk_port_base+2),
                        'test_ca': ca_server,
                        'global': 'localhost:%u'%(zk_port_base+2),
-                       'test_nj:_zkocc': 'localhost:%u,localhost:%u,localhost:%u'%(zkocc_port_base,zkocc_port_base+1,zkocc_port_base+2),
-                       'test_ny:_zkocc': 'localhost:%u'%(zkocc_port_base),
-                       'test_ca:_zkocc': 'localhost:%u'%(zkocc_port_base),
-                       'global:_zkocc': 'localhost:%u'%(zkocc_port_base),}
+                       'test_nj:_zkocc': 'localhost:%u,localhost:%u,localhost:%u'%(environment.zkocc_port_base,environment.zkocc_port_base+1,environment.zkocc_port_base+2),
+                       'test_ny:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),
+                       'test_ca:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),
+                       'global:_zkocc': 'localhost:%u'%(environment.zkocc_port_base),}
     json.dump(zk_cell_mapping, f)
   os.putenv('ZK_CLIENT_CONFIG', config)
   run(environment.binary_path('zk')+' touch -p /zk/test_nj/vt')
@@ -312,13 +310,12 @@ def wait_for_vars(name, port):
 
 # zkocc helpers
 def zkocc_start(cells=['test_nj'], extra_params=[]):
-  global zkocc_port_base
   args = [environment.binary_path('zkocc'),
-          '-port', str(zkocc_port_base),
+          '-port', str(environment.zkocc_port_base),
           '-stderrthreshold=ERROR',
           ] + extra_params + cells
   sp = run_bg(args)
-  wait_for_vars("zkocc", zkocc_port_base)
+  wait_for_vars("zkocc", environment.zkocc_port_base)
   return sp
 
 def zkocc_kill(sp):
@@ -383,7 +380,9 @@ def run_vtctl_json(clargs):
 
 # vtworker helpers
 def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs):
-  args = [environment.binary_path('vtworker'), '-log_dir', environment.vtlogroot]
+  args = [environment.binary_path('vtworker'),
+          '-log_dir', environment.vtlogroot,
+          '-port', str(environment.reserve_ports(1))]
 
   if auto_log:
     if options.verbose == 2:
@@ -392,15 +391,10 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
       log_level='WARNING'
     else:
       log_level='ERROR'
-
   if log_level:
     args.append('--stderrthreshold=%s' % log_level)
 
-  if isinstance(clargs, str):
-    cmd = " ".join(args) + ' ' + clargs
-  else:
-    cmd = args + clargs
-
+  cmd = args + clargs
   if expect_fail:
     return run_fail(cmd, **kwargs)
   return run(cmd, **kwargs)

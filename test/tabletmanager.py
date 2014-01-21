@@ -9,12 +9,14 @@ import logging
 import os
 import signal
 from subprocess import PIPE
+import threading
 import time
 import unittest
 
 import environment
 import utils
 import tablet
+from vtdb import dbexceptions
 from vtdb import vtgate
 
 tablet_62344 = tablet.Tablet(62344)
@@ -176,11 +178,39 @@ class TestTabletManager(unittest.TestCase):
     (result, count, lastrow, fields) = conn._execute("select * from vt_select_test", {})
     self.assertEqual(count, 5, "want 5, got %d" % (count))
 
+    # error on dml. We still need to get a transaction id
+    conn.begin()
+    with self.assertRaises(dbexceptions.IntegrityError):
+      conn._execute("insert into vt_select_test values(:id, :msg)", {"id": 5, "msg": "test4"})
+    self.assertTrue(conn.session["ShardSessions"][0]["TransactionId"] != 0)
+    conn.commit()
+
+    # interleaving
+    conn2 = vtgate.connect("localhost:%s"%(gate_port), "master", "test_keyspace", "0", 2.0)
+    thd = threading.Thread(target=self._query_lots, args=(conn2,))
+    thd.start()
+    for i in xrange(250):
+      (result, count, lastrow, fields) = conn._execute("select id from vt_select_test where id = 2", {})
+      self.assertEqual(result, [(2,)])
+      if i % 10 == 0:
+        conn._stream_execute("select id from vt_select_test where id = 3", {})
+        while 1:
+          result = conn._stream_next()
+          if not result:
+            break
+          self.assertEqual(result, (3,))
+    thd.join()
+
     # close
     conn.close()
 
     utils.vtgate_kill(gate_proc)
     tablet_62344.kill_vttablet()
+
+  def _query_lots(self, conn2):
+    for i in xrange(500):
+      (result, count, lastrow, fields) = conn2._execute("select id from vt_select_test where id = 1", {})
+      self.assertEqual(result, [(1,)])
 
   def test_scrap(self):
     # Start up a master mysql and vttablet
@@ -250,16 +280,16 @@ class TestTabletManager(unittest.TestCase):
 
       # then the Zookeeper connections
       if v['ZkMetaConn']['test_nj']['Current'] != 'Connected':
-        raise utils.TestError('invalid zk test_nj state: ',
-                              v['ZkMetaConn']['test_nj']['Current'])
+        self.fail('invalid zk test_nj state: %s' %
+                  v['ZkMetaConn']['test_nj']['Current'])
       if v['ZkMetaConn']['global']['Current'] != 'Connected':
-        raise utils.TestError('invalid zk global state: ',
-                              v['ZkMetaConn']['global']['Current'])
+        self.fail('invalid zk global state: %s' %
+                  v['ZkMetaConn']['global']['Current'])
       if v['ZkMetaConn']['test_nj']['DurationConnected'] < 10e9:
-        raise utils.TestError('not enough time in Connected state',
-                              v['ZkMetaConn']['test_nj']['DurationConnected'])
+        self.fail('not enough time in Connected state: %u',
+                  v['ZkMetaConn']['test_nj']['DurationConnected'])
       if v['TabletType'] != 'master':
-        raise utils.TestError('TabletType not exported correctly')
+        self.fail('TabletType not exported correctly')
 
     tablet_62344.kill_vttablet()
 
@@ -280,7 +310,7 @@ class TestTabletManager(unittest.TestCase):
                                    user='ala', password=r'ma kota')
     logging.debug("Got rows: " + out)
     if 'Row count: ' not in out:
-      raise utils.TestError("query didn't go through: %s, %s" % (err, out))
+      self.fail("query didn't go through: %s, %s" % (err, out))
 
     tablet_62344.kill_vttablet()
     # TODO(szopa): Test that non-authenticated queries do not pass
@@ -293,7 +323,7 @@ class TestTabletManager(unittest.TestCase):
       if exp in text:
         return
     logging.warning("ExecuteHook output:\n%s", text)
-    raise utils.TestError("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
+    self.fail("ExecuteHook returned unexpected result, no string: '" + "', '".join(expected) + "'")
 
   def _run_hook(self, params, expectedStrings):
     out, err = utils.run_vtctl('--alsologtostderr ExecuteHook %s %s' % (tablet_62344.tablet_alias, params), trap_output=True, raise_on_error=False)
@@ -363,13 +393,13 @@ class TestTabletManager(unittest.TestCase):
     sp = utils.run_bg(args, stdout=PIPE, stderr=PIPE)
 
     # wait for it to start, and let's kill it
-    time.sleep(2.0)
+    time.sleep(4.0)
     utils.run(['pkill', 'vtaction'])
     out, err = sp.communicate()
 
     # check the vtctl command got the right remote error back
     if "vtaction interrupted by signal" not in err:
-      raise utils.TestError("cannot find expected output in error:", err)
+      self.fail("cannot find expected output in error: " + err)
     logging.debug("vtaction was interrupted correctly:\n" + err)
 
     tablet_62344.kill_vttablet()
@@ -390,7 +420,7 @@ class TestTabletManager(unittest.TestCase):
       if proc1.returncode is not None:
         break
     if proc1.returncode is None:
-      raise utils.TestError("proc1 still running")
+      self.fail("proc1 still running")
     tablet_62344.kill_vttablet()
 
   def test_scrap_and_reinit(self):

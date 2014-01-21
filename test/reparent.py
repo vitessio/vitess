@@ -59,13 +59,16 @@ def tearDownModule():
   tablet_41983.remove_tree()
   tablet_31981.remove_tree()
 
+
 class TestReparent(unittest.TestCase):
+
   def tearDown(self):
     tablet.Tablet.check_vttablet_count()
     environment.topo_server_wipe()
     for t in [tablet_62344, tablet_62044, tablet_41983, tablet_31981]:
       t.reset_replication()
       t.clean_dbs()
+    super(TestReparent, self).tearDown()
 
   def _check_db_addr(self, shard, db_type, expected_port):
     ep = utils.run_vtctl_json(['GetEndPoints', 'test_nj', 'test_keyspace/'+shard, db_type])
@@ -74,7 +77,18 @@ class TestReparent(unittest.TestCase):
     self.assertEqual(port, expected_port, 'Unexpected port: %u != %u from %s' % (port, expected_port, str(ep)))
     host = ep['entries'][0]['host']
     if not host.startswith(utils.hostname):
-      self.fail('Invalid hostname %s was expecting something starting with %s' % host, utils.hostname)
+      self.fail('Invalid hostname %s was expecting something starting with %s' % (host, utils.hostname))
+
+  def test_master_to_spare_state_change_impossible(self):
+    utils.run_vtctl('CreateKeyspace test_keyspace')
+
+    # create the database so vttablets start, as they are serving
+    tablet_62344.create_db('vt_test_keyspace')
+    tablet_62344.init_tablet('master', 'test_keyspace', '0', start=True, wait_for_start=True)
+
+    utils.run_vtctl('ChangeSlaveType %s spare' % tablet_62344.tablet_alias, expect_fail=True)
+    utils.run_vtctl('ChangeSlaveType --force %s spare' % tablet_62344.tablet_alias, expect_fail=True)
+    tablet_62344.kill_vttablet()
 
   def test_reparent_down_master(self):
     utils.run_vtctl('CreateKeyspace test_keyspace')
@@ -118,13 +132,13 @@ class TestReparent(unittest.TestCase):
     stdout, stderr = utils.run_vtctl('-wait-time 5s ReparentShard test_keyspace/0 ' + tablet_62044.tablet_alias, expect_fail=True)
     logging.debug("Failed ReparentShard output:\n" + stderr)
     if 'ValidateShard verification failed' not in stderr:
-      raise utils.TestError("didn't find the right error strings in failed ReparentShard: " + stderr)
+      self.fail("didn't find the right error strings in failed ReparentShard: " + stderr)
 
     # Should timeout and fail
     stdout, stderr = utils.run_vtctl('-wait-time 5s ScrapTablet ' + tablet_62344.tablet_alias, expect_fail=True)
     logging.debug("Failed ScrapTablet output:\n" + stderr)
     if 'deadline exceeded' not in stderr:
-      raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
+      self.fail("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
     # Should interrupt and fail
     args = [environment.binary_path('vtctl'),
@@ -141,7 +155,7 @@ class TestReparent(unittest.TestCase):
 
     logging.debug("Failed ScrapTablet output:\n" + stderr)
     if 'interrupted' not in stderr:
-      raise utils.TestError("didn't find the right error strings in failed ScrapTablet: " + stderr)
+      self.fail("didn't find the right error strings in failed ScrapTablet: " + stderr)
 
     # Force the scrap action in zk even though tablet is not accessible.
     tablet_62344.scrap(force=True)
@@ -163,7 +177,7 @@ class TestReparent(unittest.TestCase):
 
     idle_tablets, _ = utils.run_vtctl('ListAllTablets test_nj', trap_output=True)
     if '0000062344 <null> <null> idle' not in idle_tablets:
-      raise utils.TestError('idle tablet not found', idle_tablets)
+      self.fail('idle tablet not found: %s' % idle_tablets)
 
     tablet.kill_tablets([tablet_62044, tablet_41983, tablet_31981])
 
@@ -449,7 +463,7 @@ class TestReparent(unittest.TestCase):
 
     result = tablet_41983.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
     if len(result) != 1:
-      raise utils.TestError('expected 1 row from vt_insert_test', result)
+      self.fail('expected 1 row from vt_insert_test: %s' % str(result))
 
     utils.pause("check lag reparent")
 

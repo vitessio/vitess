@@ -376,7 +376,9 @@ func (nhw *namedHasherWriter) SnapshotFiles() ([]SnapshotFile, error) {
 	return nhw.snapshotFiles, nil
 }
 
-func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
+// dumpTableSplit will dump a table, and then split it according to keyspace_id
+// into multiple files.
+func (mysqld *Mysqld) dumpTableSplit(td TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
@@ -451,10 +453,77 @@ func (mysqld *Mysqld) dumpTable(td TableDefinition, dbName, keyName string, keyT
 	return snapshotFiles, nil
 }
 
+// dumpTableFull will dump the contents of a full table, and then
+// chunk it up in multiple compressed files.
+func (mysqld *Mysqld) dumpTableFull(td TableDefinition, dbName, mainCloneSourcePath string, cloneSourcePath string, maximumFilesize uint64) ([]SnapshotFile, error) {
+	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
+	selectIntoOutfile := `SELECT {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
+	queryParams := map[string]string{
+		"TableName":       dbName + "." + td.Name,
+		"Columns":         strings.Join(td.Columns, ", "),
+		"TableOutputPath": filename,
+	}
+	sio, err := fillStringTemplate(selectIntoOutfile, queryParams)
+	if err != nil {
+		return nil, err
+	}
+	if err := mysqld.executeSuperQuery(sio); err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		file.Close()
+		if e := os.Remove(filename); e != nil {
+			log.Errorf("Cannot remove %v: %v", filename, e)
+		}
+	}()
+
+	filenamePattern := path.Join(cloneSourcePath, td.Name+".%v.csv.gz")
+	hasherWriter, err := newCompressedNamedHasherWriter(filenamePattern, mysqld.SnapshotDir, td.Name, maximumFilesize)
+	if err != nil {
+		return nil, err
+	}
+
+	splitter := csvsplitter.NewCSVReader(file, ',')
+	for {
+		line, err := splitter.ReadRecord()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		_, err = hasherWriter.Write(line)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return hasherWriter.SnapshotFiles()
+}
+
+// CreateMultiSnapshot create snapshots of the data.
+// - for a resharding snapshot, keyRanges+keyName+keyType are set,
+//   and tables is empty. This action will create multiple snapshots,
+//   one per keyRange.
+// - for a vertical split, tables is set, keyRanges = [KeyRange{}] and
+//   keyName+keyType are empty. It will create a single snapshot of
+//   the contents of the tables.
+// Note combinations of table subset and keyranges are not supported.
 func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyName string, keyType key.KeyspaceIdType, sourceAddr string, allowHierarchicalReplication bool, snapshotConcurrency int, tables []string, skipSlaveRestart bool, maximumFilesize uint64, hookExtraEnv map[string]string) (snapshotManifestFilenames []string, err error) {
 	if dbName == "" {
 		err = fmt.Errorf("no database name provided")
 		return
+	}
+	if len(tables) > 0 {
+		if len(keyRanges) != 1 || keyRanges[0].IsPartial() {
+			return nil, fmt.Errorf("With tables specified, can only have one full KeyRange")
+		}
 	}
 
 	// same logic applies here
@@ -516,12 +585,18 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 			// we just skip views here
 			return nil
 		}
-		snapshotFiles, err := mysqld.dumpTable(table, dbName, keyName, keyType, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
-		if err != nil {
-			return
+		if len(tables) > 0 {
+			sfs, err := mysqld.dumpTableFull(table, dbName, mainCloneSourcePath, cloneSourcePaths[key.KeyRange{}], maximumFilesize)
+			if err != nil {
+				return err
+			}
+			datafiles[i] = map[key.KeyRange][]SnapshotFile{
+				key.KeyRange{}: sfs,
+			}
+		} else {
+			datafiles[i], err = mysqld.dumpTableSplit(table, dbName, keyName, keyType, mainCloneSourcePath, cloneSourcePaths, maximumFilesize)
 		}
-		datafiles[i] = snapshotFiles
-		return nil
+		return
 	}
 	if err = ConcurrentMap(snapshotConcurrency, len(sd.TableDefinitions), dumpTableWorker); err != nil {
 		return
@@ -659,7 +734,7 @@ func buildQueryList(destinationDbName, query string, writeBinLogs bool) []string
 //   also write to the binary logs.
 // - If the strategy contains the command 'populateBlpCheckpoint' then we
 //   will populate the blp_checkpoint table with master positions to start from
-func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
+func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.KeyRange, sourceAddrs []*url.URL, snapshotConcurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) (err error) {
 	writeBinLogs := strings.Contains(strategy, "writeBinLogs")
 
 	manifests := make([]*SplitSnapshotManifest, len(sourceAddrs))
@@ -679,7 +754,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRange key.KeyRan
 			} else {
 				sourceDbName = sourceAddr.Path[1:]
 			}
-			ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRange, fetchRetryCount)
+			ssm, e := fetchSnapshotManifestWithRetry("http://"+sourceAddr.Host, sourceDbName, keyRanges[i], fetchRetryCount)
 			manifests[i] = ssm
 			rc.RecordError(e)
 		}(sourceAddr, i)

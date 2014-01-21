@@ -29,20 +29,31 @@ class VtctldError(Exception): pass
 
 class Vtctld(object):
 
+  def __init__(self):
+    self.port = environment.reserve_ports(1)
+
   def dbtopo(self):
-    data = json.load(urllib2.urlopen('http://localhost:8080/dbtopo?format=json'))
+    data = json.load(urllib2.urlopen('http://localhost:%u/dbtopo?format=json' %
+                                     self.port))
     if data["Error"]:
       raise VtctldError(data)
     return data["Topology"]
 
   def serving_graph(self):
-    data = json.load(urllib2.urlopen('http://localhost:8080/serving_graph/test_nj?format=json'))
+    data = json.load(urllib2.urlopen('http://localhost:%u/serving_graph/test_nj?format=json' % self.port))
     if data["Error"]:
       raise VtctldError(data)
     return data["ServingGraph"]["Keyspaces"]
 
   def start(self):
-    args = [environment.binary_path('vtctld'), '-debug', '-templates', environment.vttop + '/go/cmd/vtctld/templates', '-log_dir', environment.vtlogroot]
+    args = [environment.binary_path('vtctld'),
+            '-debug',
+            '-templates', environment.vttop + '/go/cmd/vtctld/templates',
+            '-log_dir', environment.vtlogroot,
+            '-port', str(self.port),
+            ] + \
+            environment.topo_server_flags() + \
+            environment.tablet_manager_protocol_flags()
     stderr_fd = open(os.path.join(environment.tmproot, "vtctld.stderr"), "w")
     self.proc = utils.run_bg(args, stderr=stderr_fd)
     return self.proc
@@ -52,7 +63,7 @@ vtctld = Vtctld()
 
 def setUpModule():
   try:
-    utils.zk_setup()
+    environment.topo_server_setup()
 
     setup_procs = [t.init_mysql() for t in tablets]
     utils.wait_procs(setup_procs)
@@ -69,7 +80,7 @@ def tearDownModule():
   teardown_procs = [t.teardown_mysql() for t in tablets]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
-  utils.zk_teardown()
+  environment.topo_server_teardown()
   utils.kill_sub_processes()
   utils.remove_tmp_files()
 
@@ -126,26 +137,27 @@ class TestVtctld(unittest.TestCase):
     self.assertEqual(len(self.data["Scrap"]), 1)
 
   def test_partial(self):
-    utils.pause("You can now run a browser and connect to http://localhost:8080 to manually check topology")
+    utils.pause("You can now run a browser and connect to http://localhost:%u to manually check topology" % vtctld.port)
     self.assertEqual(self.data["Partial"], True)
 
   def test_explorer_redirects(self):
-    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
-                     'http://localhost:8080/zk/global/vt/keyspaces/test_keyspace')
-    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=shard&explorer=zk&keyspace=test_keyspace&shard=-80').geturl(),
-                     'http://localhost:8080/zk/global/vt/keyspaces/test_keyspace/shards/-80')
-    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=tablet&explorer=zk&alias=%s' % shard_0_replica.tablet_alias).geturl(),
-                     'http://localhost:8080' + shard_0_replica.zk_tablet_path)
+    base = 'http://localhost:%u' % vtctld.port
+    self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=keyspace&explorer=zk&keyspace=test_keyspace').geturl(),
+                     base + '/zk/global/vt/keyspaces/test_keyspace')
+    self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=shard&explorer=zk&keyspace=test_keyspace&shard=-80').geturl(),
+                     base + '/zk/global/vt/keyspaces/test_keyspace/shards/-80')
+    self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=tablet&explorer=zk&alias=%s' % shard_0_replica.tablet_alias).geturl(),
+                     base + shard_0_replica.zk_tablet_path)
 
-    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=srv_keyspace&explorer=zk&keyspace=test_keyspace&cell=test_nj').geturl(),
-                     'http://localhost:8080/zk/test_nj/vt/ns/test_keyspace')
-    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=srv_shard&explorer=zk&keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
-                     'http://localhost:8080/zk/test_nj/vt/ns/test_keyspace/-80')
-    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=srv_type&explorer=zk&keyspace=test_keyspace&shard=-80&tablet_type=replica&cell=test_nj').geturl(),
-                     'http://localhost:8080/zk/test_nj/vt/ns/test_keyspace/-80/replica')
+    self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=srv_keyspace&explorer=zk&keyspace=test_keyspace&cell=test_nj').geturl(),
+                     base + '/zk/test_nj/vt/ns/test_keyspace')
+    self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=srv_shard&explorer=zk&keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
+                     base + '/zk/test_nj/vt/ns/test_keyspace/-80')
+    self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=srv_type&explorer=zk&keyspace=test_keyspace&shard=-80&tablet_type=replica&cell=test_nj').geturl(),
+                     base + '/zk/test_nj/vt/ns/test_keyspace/-80/replica')
 
-    self.assertEqual(urllib2.urlopen('http://localhost:8080/explorers/redirect?type=replication&explorer=zk&keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
-                     'http://localhost:8080/zk/test_nj/vt/replication/test_keyspace/-80')
+    self.assertEqual(urllib2.urlopen(base + '/explorers/redirect?type=replication&explorer=zk&keyspace=test_keyspace&shard=-80&cell=test_nj').geturl(),
+                     base + '/zk/test_nj/vt/replication/test_keyspace/-80')
 
 
   def test_serving_graph(self):

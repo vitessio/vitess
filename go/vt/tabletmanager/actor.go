@@ -211,7 +211,8 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
 
-	case TABLET_ACTION_GET_SCHEMA, TABLET_ACTION_GET_PERMISSIONS,
+	case TABLET_ACTION_SET_BLACKLISTED_TABLES, TABLET_ACTION_GET_SCHEMA,
+		TABLET_ACTION_GET_PERMISSIONS,
 		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
 		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
 		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,
@@ -792,12 +793,17 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 
 	// get source tablets addresses
 	sourceAddrs := make([]*url.URL, len(args.SrcTabletAliases))
+	keyRanges := make([]key.KeyRange, len(args.SrcTabletAliases))
 	for i, alias := range args.SrcTabletAliases {
 		t, e := ta.ts.GetTablet(alias)
 		if e != nil {
 			return e
 		}
 		sourceAddrs[i] = &url.URL{Host: t.GetAddr(), Path: "/" + t.DbName()}
+		keyRanges[i], e = key.KeyRangesOverlap(tablet.KeyRange, t.KeyRange)
+		if e != nil {
+			return e
+		}
 	}
 
 	// change type to restore, no change to replication graph
@@ -809,7 +815,7 @@ func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
 	}
 
 	// run the action, scrap if it fails
-	if err := ta.mysqld.MultiRestore(tablet.DbName(), tablet.KeyRange, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
+	if err := ta.mysqld.MultiRestore(tablet.DbName(), keyRanges, sourceAddrs, args.Concurrency, args.FetchConcurrency, args.InsertTableConcurrency, args.FetchRetryCount, args.Strategy); err != nil {
 		if e := Scrap(ta.ts, ta.tabletAlias, false); e != nil {
 			log.Errorf("Failed to Scrap after failed RestoreFromMultiSnapshot: %v", e)
 		}
@@ -932,5 +938,16 @@ func ChangeType(ts topo.Server, tabletAlias topo.TabletAlias, newType topo.Table
 		tablet.Shard = ""
 		tablet.KeyRange = key.KeyRange{}
 	}
+	return topo.UpdateTablet(ts, tablet)
+}
+
+// Make this external, since these transitions need to be forced from time to time.
+func SetBlacklistedTables(ts topo.Server, tabletAlias topo.TabletAlias, tables []string) error {
+	tablet, err := ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	tablet.BlacklistedTables = tables
 	return topo.UpdateTablet(ts, tablet)
 }

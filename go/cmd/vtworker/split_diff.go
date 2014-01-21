@@ -45,7 +45,8 @@ func commandSplitDiff(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 	return worker.NewSplitDiffWorker(wr, *cell, keyspace, shard)
 }
 
-// shardsWithSources returns all the shards that have SourceShards set.
+// shardsWithSources returns all the shards that have SourceShards set
+// with no Tables list.
 func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 	keyspaces, err := wr.TopoServer().GetKeyspaces()
 	if err != nil {
@@ -75,7 +76,7 @@ func shardsWithSources(wr *wrangler.Wrangler) ([]map[string]string, error) {
 						return
 					}
 
-					if len(si.SourceShards) > 0 {
+					if len(si.SourceShards) > 0 && len(si.SourceShards[0].Tables) == 0 {
 						mu.Lock()
 						result = append(result, map[string]string{
 							"Keyspace": keyspace,

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/youtube/vitess/go/rpcplus"
@@ -115,9 +116,14 @@ func getSrvKeyspace(rpcClient *rpcplus.Client, cell, keyspace string, verbose bo
 		log.Fatalf("TopoReader.GetSrvKeyspace error: %v", err)
 	}
 	if verbose {
-		for t, p := range reply.Partitions {
+		tabletTypes := make([]string, 0, len(reply.Partitions))
+		for t, _ := range reply.Partitions {
+			tabletTypes = append(tabletTypes, string(t))
+		}
+		sort.Strings(tabletTypes)
+		for _, t := range tabletTypes {
 			println(fmt.Sprintf("Partitions[%v] =", t))
-			for i, s := range p.Shards {
+			for i, s := range reply.Partitions[topo.TabletType(t)].Shards {
 				println(fmt.Sprintf("  Shards[%v]=%v", i, s.KeyRange.String()))
 			}
 		}

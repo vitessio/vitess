@@ -5,12 +5,13 @@
 package wrangler
 
 import (
+	"fmt"
 	"sync"
 
 	log "github.com/golang/glog"
 	cc "github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
-	tm "github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -72,7 +73,7 @@ func (wr *Wrangler) prepareToSnapshot(tabletAlias topo.TabletAlias, forceMasterS
 }
 
 func (wr *Wrangler) MultiRestore(dstTabletAlias topo.TabletAlias, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
-	actionPath, err := wr.ai.MultiRestore(dstTabletAlias, &tm.MultiRestoreArgs{
+	actionPath, err := wr.ai.MultiRestore(dstTabletAlias, &tabletmanager.MultiRestoreArgs{
 		SrcTabletAliases:       sources,
 		Concurrency:            concurrency,
 		FetchConcurrency:       fetchConcurrency,
@@ -95,7 +96,7 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 		err = replaceError(err, restoreAfterSnapshot())
 	}()
 
-	actionPath, err := wr.ai.MultiSnapshot(tabletAlias, &tm.MultiSnapshotArgs{KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, SkipSlaveRestart: skipSlaveRestart, MaximumFilesize: maximumFilesize})
+	actionPath, err := wr.ai.MultiSnapshot(tabletAlias, &tabletmanager.MultiSnapshotArgs{KeyRanges: keyRanges, Concurrency: concurrency, Tables: tables, SkipSlaveRestart: skipSlaveRestart, MaximumFilesize: maximumFilesize})
 	if err != nil {
 		return
 	}
@@ -105,14 +106,20 @@ func (wr *Wrangler) MultiSnapshot(keyRanges []key.KeyRange, tabletAlias topo.Tab
 		return
 	}
 
-	reply := results.(*tm.MultiSnapshotReply)
+	reply := results.(*tabletmanager.MultiSnapshotReply)
 
 	return reply.ManifestPaths, reply.ParentAlias, nil
 }
 
-func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, tables []string, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+
+	// check parameters
+	if len(tables) > 0 && len(sources) > 1 {
+		return fmt.Errorf("ShardMultiRestore can only handle one source when tables are specified")
+	}
+
 	// lock the shard to perform the changes we need done
-	actionNode := wr.ai.ShardMultiRestore(&tm.MultiRestoreArgs{
+	actionNode := wr.ai.ShardMultiRestore(&tabletmanager.MultiRestoreArgs{
 		SrcTabletAliases:       sources,
 		Concurrency:            concurrency,
 		FetchConcurrency:       fetchConcurrency,
@@ -124,7 +131,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 		return err
 	}
 
-	mrErr := wr.shardMultiRestore(keyspace, shard, sources, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
+	mrErr := wr.shardMultiRestore(keyspace, shard, sources, tables, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount, strategy)
 	err = wr.unlockShard(keyspace, shard, actionNode, lockPath, mrErr)
 	if err != nil {
 		return err
@@ -157,7 +164,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 	return rec.Error()
 }
 
-func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
+func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.TabletAlias, tables []string, concurrency, fetchConcurrency, insertTableConcurrency, fetchRetryCount int, strategy string) error {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
@@ -181,6 +188,7 @@ func (wr *Wrangler) shardMultiRestore(keyspace, shard string, sources []topo.Tab
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
 			KeyRange: ti.KeyRange,
+			Tables:   tables,
 		}
 		i++
 	}
