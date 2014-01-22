@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -78,8 +80,8 @@ func TestVTGateExecuteShard(t *testing.T) {
 
 func TestVTGateExecuteBatchShard(t *testing.T) {
 	resetSandbox()
-	testConns[0] = &sandboxConn{}
-	testConns[1] = &sandboxConn{}
+	mapTestConn("-20", &sandboxConn{})
+	mapTestConn("20-40", &sandboxConn{})
 	q := proto.BatchQueryShard{
 		Queries: []tproto.BoundQuery{{
 			"query",
@@ -88,7 +90,7 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 			"query",
 			nil,
 		}},
-		Shards: []string{"0", "1"},
+		Shards:    []string{"-20", "20-40"},
 	}
 	qrl := new(proto.QueryResultList)
 	err := RpcVTGate.ExecuteBatchShard(nil, &q, qrl)
@@ -113,16 +115,18 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 	}
 }
 
-func TestVTGateStreamExecuteShard(t *testing.T) {
+func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 	resetSandbox()
 	sbc := &sandboxConn{}
-	testConns[0] = sbc
-	q := proto.QueryShard{
-		Sql:    "query",
-		Shards: []string{"0"},
+	mapTestConn("-20", sbc)
+	sq := proto.StreamQueryKeyRange{
+		Sql:        "query",
+		KeyRanges:  []key.KeyRange{{Start: "", End: "20"}},
+		TabletType: topo.TYPE_MASTER,
 	}
+	// Test for successful execution
 	var qrs []*proto.QueryResult
-	err := RpcVTGate.StreamExecuteShard(nil, &q, func(r *proto.QueryResult) error {
+	err := RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -136,10 +140,10 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", want, qrs)
 	}
 
-	q.Session = new(proto.Session)
+	sq.Session = new(proto.Session)
 	qrs = nil
-	RpcVTGate.Begin(nil, q.Session)
-	err = RpcVTGate.StreamExecuteShard(nil, &q, func(r *proto.QueryResult) error {
+	RpcVTGate.Begin(nil, sq.Session)
+	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r *proto.QueryResult) error {
 		qrs = append(qrs, r)
 		return nil
 	})
@@ -157,5 +161,33 @@ func TestVTGateStreamExecuteShard(t *testing.T) {
 	}
 	if !reflect.DeepEqual(want, qrs) {
 		t.Errorf("want \n%#v, got \n%#v", want, qrs)
+	}
+
+	// Test for error condition - multiple KeyRanges
+	sq.KeyRanges = []key.KeyRange{{Start: "", End: "20"}, {Start: "20", End: "40"}}
+	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
+		qrs = append(qrs, r.(*proto.QueryResult))
+		return nil
+	})
+	if err == nil {
+		t.Errorf("want not nil, got %v", err)
+	}
+	// Test for error condition - multiple shards
+	sq.KeyRanges = []key.KeyRange{{Start: "10", End: "40"}}
+	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
+		qrs = append(qrs, r.(*proto.QueryResult))
+		return nil
+	})
+	if err == nil {
+		t.Errorf("want not nil, got %v", err)
+	}
+	// Test for error condition - multiple shards, non-partial keyspace
+	sq.KeyRanges = []key.KeyRange{{Start: "", End: ""}}
+	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
+		qrs = append(qrs, r.(*proto.QueryResult))
+		return nil
+	})
+	if err == nil {
+		t.Errorf("want not nil, got %v", err)
 	}
 }

@@ -25,8 +25,8 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 	return vtg.server.ExecuteBatchShard(context, batchQuery, reply)
 }
 
-func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
-	return vtg.server.StreamExecuteShard(context, query, func(value *proto.QueryResult) error {
+func (vtg *VTGate) StreamExecuteKeyRange(context *rpcproto.Context, query *proto.StreamQueryKeyRange, sendReply func(interface{}) error) error {
+	return vtg.server.StreamExecuteKeyRange(context, query, func(value *proto.QueryResult) error {
 		return sendReply(value)
 	})
 }

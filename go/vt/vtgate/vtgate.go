@@ -11,6 +11,8 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -78,16 +80,52 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 	return nil
 }
 
-// StreamExecuteShard executes a streaming query on the specified shards.
-func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+// This function implements the restriction of handling one keyrange
+// and one shard since streaming doesn't support merge sorting the results.
+// The input/output api is generic though.
+func (vtg *VTGate) mapKrToShardsForStreaming(cell, keyspace string, tabletType topo.TabletType, keyRanges []key.KeyRange) ([]string, error) {
+	if len(keyRanges) != 1 {
+		return nil, fmt.Errorf("Streaming doesn't support zero or multiple keyRanges %v", keyRanges)
+	}
+
+	krShardMap, err := resolveKeyRangesToShards(vtg.balancerMap.Toposerv, cell, keyspace, tabletType, keyRanges)
+	if err != nil {
+		return nil, err
+	}
+
+	kr := keyRanges[0]
+	shards, ok := krShardMap[kr]
+	if !ok {
+		return nil, fmt.Errorf("Illegal keyrange %v, doesn't map to any shard %v", kr)
+	}
+
+	if len(shards) != 1 {
+		return nil, fmt.Errorf("KeyRange cannot map to more than one shard")
+	}
+
+	return shards, nil
+}
+
+// StreamExecuteKeyRange executes a streaming query on the specified KeyRanges.
+// The KeyRanges are resolved to shards using the serving graph.
+// This function currently temporarily enforces the restriction of executing on one keyrange
+// and one shard since it cannot merge-sort the results to guarantee ordering of
+// response which is needed for checkpointing. The api supports supplying multiple keyranges
+// to make it future proof.
+func (vtg *VTGate) StreamExecuteKeyRange(context *rpcproto.Context, streamQuery *proto.StreamQueryKeyRange, sendReply func(*proto.QueryResult) error) error {
+	shards, err := vtg.mapKrToShardsForStreaming(vtg.balancerMap.Cell, streamQuery.Keyspace, streamQuery.TabletType, streamQuery.KeyRanges)
+	if err != nil {
+		return err
+	}
+
 	err := vtg.scatterConn.StreamExecute(
 		context,
-		query.Sql,
-		query.BindVariables,
-		query.Keyspace,
-		query.Shards,
-		query.TabletType,
-		NewSafeSession(query.Session),
+		streamQuery.Sql,
+		streamQuery.BindVariables,
+		streamQuery.Keyspace,
+		shards,
+		streamQuery.TabletType,
+		NewSafeSession(streamQuery.Session),
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			proto.PopulateQueryResult(mreply, reply)
@@ -96,12 +134,13 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 			// are sent.
 			return sendReply(reply)
 		})
+
 	if err != nil {
-		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
+		log.Errorf("StreamExecuteKeyRange: %v, query: %#v", err, streamQuery)
 	}
 	// now we can send the final Session info.
-	if query.Session != nil {
-		sendReply(&proto.QueryResult{Session: query.Session})
+	if streamQuery.Session != nil {
+		sendReply(&proto.QueryResult{Session: streamQuery.Session})
 	}
 	return err
 }

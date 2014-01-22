@@ -6,12 +6,14 @@ package vtgate
 
 import (
 	"flag"
+	"fmt"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -218,4 +220,46 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 	entry.insertionTime = time.Now()
 	entry.value = result
 	return result, nil
+}
+
+// This maps a list of keyranges to shard names.
+func resolveKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krList []key.KeyRange) (map[key.KeyRange][]string, error) {
+	srvKeyspace, err := topoServer.GetSrvKeyspace(cell, keyspace)
+	if err != nil {
+		return nil, fmt.Errorf("Error in reading the keyspace %v", err)
+	}
+
+	tabletTypePartition, ok := srvKeyspace.Partitions[tabletType]
+	if !ok {
+		return nil, fmt.Errorf("No shards available for tablet type '%v' in keyspace '%v'", tabletType, keyspace)
+	}
+
+	topo.SrvShardArray(tabletTypePartition.Shards).Sort()
+	key.KeyRangeArray(krList).Sort()
+
+	krShardMap := make(map[key.KeyRange][]string)
+	shardMatch := 0
+	for _, kr := range krList {
+		shards := make([]string, 0, 1)
+		if !kr.IsPartial() {
+			for j := 0; j < len(tabletTypePartition.Shards); j++ {
+				shards = append(shards, tabletTypePartition.Shards[j].ShardName())
+			}
+		} else {
+			for j := shardMatch; j < len(tabletTypePartition.Shards); j++ {
+				shard := tabletTypePartition.Shards[j]
+				if key.KeyRangesIntersect(kr, shard.KeyRange) {
+					shardMatch = j
+					shards = append(shards, shard.ShardName())
+				}
+				if kr.End < shard.KeyRange.Start {
+					break
+				}
+			}
+		}
+		if len(shards) > 0 {
+			krShardMap[kr] = shards
+		}
+	}
+	return krShardMap, nil
 }
