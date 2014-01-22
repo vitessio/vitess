@@ -47,7 +47,9 @@ This is useful for trouble-shooting, or to get a good high
 level picture of all the servers and their current state.
 
 ### Other support tools
-Vitess also has other support tools for diagnostics and repair.
+* *mysqlctl*: manage MySQL instances.
+* *zkctl*: manage ZooKeeper instances.
+* *zk*: command line ZooKeeper client and explorer.
 
 ## Vitess components block diagram
 ![Components](https://raw.github.com/youtube/vitess/master/doc/VitessComponents.png)
