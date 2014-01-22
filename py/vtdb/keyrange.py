@@ -8,6 +8,22 @@ from vtdb import dbexceptions
 # bind_vars for distrubuting the workload of streaming queries.
 
 
+class KeyRange(object):
+  kr_min = None
+  kr_max = None
+
+  def __init__(self, kr):
+    if isinstance(kr, str):
+      kr = kr.split('-')
+    if not isinstance(kr, tuple) and not isinstance(kr, list) or len(kr) != 2:
+      raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)
+    self.kr_min = kr[0].strip()
+    self.kr_max = kr[1].strip()
+
+  def __str__(self):
+    return '%s-%s' % (self.kr_min, self.kr_max)
+
+
 class StreamingTaskMap(object):
   keyrange_list = None
 
@@ -27,7 +43,7 @@ class StreamingTaskMap(object):
       #kr_chunks.append(hex(kr).split('0x')[1])
       kr_chunks.append('%x' % kr)
     kr_chunks[-1] = ''
-    self.keyrange_list = [(kr_chunks[i], kr_chunks[i+1]) for i in xrange(len(kr_chunks) - 1)]
+    self.keyrange_list = [str(KeyRange((kr_chunks[i], kr_chunks[i+1],))) for i in xrange(len(kr_chunks) - 1)]
 
 
 # Compute the task map for a streaming query.
