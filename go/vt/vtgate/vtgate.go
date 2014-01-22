@@ -7,12 +7,11 @@
 package vtgate
 
 import (
+	"fmt"
 	"time"
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -83,17 +82,21 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 // This function implements the restriction of handling one keyrange
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
-func (vtg *VTGate) mapKrToShardsForStreaming(cell, keyspace string, tabletType topo.TabletType, keyRanges []key.KeyRange) ([]string, error) {
-	if len(keyRanges) != 1 {
-		return nil, fmt.Errorf("Streaming doesn't support zero or multiple keyRanges %v", keyRanges)
+func (vtg *VTGate) mapKrToShardsForStreaming(streamQuery *proto.StreamQueryKeyRange) ([]string, error) {
+	if len(streamQuery.KeyRanges) != 1 {
+		return nil, fmt.Errorf("Streaming doesn't support zero or multiple keyRanges %v", streamQuery.KeyRanges)
 	}
 
-	krShardMap, err := resolveKeyRangesToShards(vtg.balancerMap.Toposerv, cell, keyspace, tabletType, keyRanges)
+	krShardMap, err := resolveKeyRangesToShards(vtg.scatterConn.toposerv,
+		vtg.scatterConn.cell,
+		streamQuery.Keyspace,
+		streamQuery.TabletType,
+		streamQuery.KeyRanges)
 	if err != nil {
 		return nil, err
 	}
 
-	kr := keyRanges[0]
+	kr := streamQuery.KeyRanges[0]
 	shards, ok := krShardMap[kr]
 	if !ok {
 		return nil, fmt.Errorf("Illegal keyrange %v, doesn't map to any shard %v", kr)
@@ -113,7 +116,7 @@ func (vtg *VTGate) mapKrToShardsForStreaming(cell, keyspace string, tabletType t
 // response which is needed for checkpointing. The api supports supplying multiple keyranges
 // to make it future proof.
 func (vtg *VTGate) StreamExecuteKeyRange(context *rpcproto.Context, streamQuery *proto.StreamQueryKeyRange, sendReply func(*proto.QueryResult) error) error {
-	shards, err := vtg.mapKrToShardsForStreaming(vtg.balancerMap.Cell, streamQuery.Keyspace, streamQuery.TabletType, streamQuery.KeyRanges)
+	shards, err := vtg.mapKrToShardsForStreaming(streamQuery)
 	if err != nil {
 		return err
 	}

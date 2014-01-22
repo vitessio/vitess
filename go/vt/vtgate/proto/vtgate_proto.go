@@ -364,7 +364,6 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 type StreamQueryKeyRange struct {
 	Sql           string
 	BindVariables map[string]interface{}
-	SessionId     int64
 	Keyspace      string
 	KeyRange      string
 	TabletType    topo.TabletType
@@ -376,10 +375,14 @@ func (sqs *StreamQueryKeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 	bson.EncodeString(buf, "Sql", sqs.Sql)
 	tproto.EncodeBindVariablesBson(buf, "BindVariables", sqs.BindVariables)
-	bson.EncodeInt64(buf, "SessionId", sqs.SessionId)
 	bson.EncodeString(buf, "Keyspace", sqs.Keyspace)
 	bson.EncodeString(buf, "KeyRange", sqs.KeyRange)
 	bson.EncodeString(buf, "TabletType", string(sqs.TabletType))
+
+	if sqs.Session != nil {
+		bson.EncodePrefix(buf, bson.Object, "Session")
+		sqs.Session.MarshalBson(buf)
+	}
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -396,14 +399,15 @@ func (sqs *StreamQueryKeyRange) UnmarshalBson(buf *bytes.Buffer) {
 			sqs.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":
 			sqs.BindVariables = tproto.DecodeBindVariablesBson(buf, kind)
-		case "SessionId":
-			sqs.SessionId = bson.DecodeInt64(buf, kind)
 		case "Keyspace":
 			sqs.Keyspace = bson.DecodeString(buf, kind)
 		case "KeyRange":
 			sqs.KeyRange = bson.DecodeString(buf, kind)
 		case "TabletType":
 			sqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
+		case "Session":
+			sqs.Session = new(Session)
+			sqs.Session.UnmarshalBson(buf)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}

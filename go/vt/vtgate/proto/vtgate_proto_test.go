@@ -407,30 +407,30 @@ func TestQueryResultList(t *testing.T) {
 type reflectStreamQueryKeyRange struct {
 	Sql           string
 	BindVariables map[string]interface{}
-	SessionId     int64
 	Keyspace      string
 	KeyRange      string
 	TabletType    topo.TabletType
+	Session       *Session
 }
 
 type badStreamQueryKeyRange struct {
 	Extra         int
 	Sql           string
 	BindVariables map[string]interface{}
-	SessionId     int64
 	Keyspace      string
 	KeyRange      string
 	TabletType    topo.TabletType
+	Session       *Session
 }
 
 func TestStreamQueryKeyRange(t *testing.T) {
 	reflected, err := bson.Marshal(&reflectStreamQueryKeyRange{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
-		SessionId:     1,
 		Keyspace:      "keyspace",
 		KeyRange:      "10-18",
 		TabletType:    "replica",
+		Session:       &commonSession,
 	})
 
 	if err != nil {
@@ -441,10 +441,10 @@ func TestStreamQueryKeyRange(t *testing.T) {
 	custom := StreamQueryKeyRange{
 		Sql:           "query",
 		BindVariables: map[string]interface{}{"val": int64(1)},
-		SessionId:     1,
 		Keyspace:      "keyspace",
 		KeyRange:      "10-18",
 		TabletType:    "replica",
+		Session:       &commonSession,
 	}
 	encoded, err := bson.Marshal(&custom)
 	if err != nil {
@@ -474,4 +474,3 @@ func TestStreamQueryKeyRange(t *testing.T) {
 		t.Errorf("want %v, got %v", want, err)
 	}
 }
-

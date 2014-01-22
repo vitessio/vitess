@@ -90,7 +90,7 @@ func TestVTGateExecuteBatchShard(t *testing.T) {
 			"query",
 			nil,
 		}},
-		Shards:    []string{"-20", "20-40"},
+		Shards: []string{"-20", "20-40"},
 	}
 	qrl := new(proto.QueryResultList)
 	err := RpcVTGate.ExecuteBatchShard(nil, &q, qrl)
@@ -153,8 +153,9 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 			Session: &proto.Session{
 				InTransaction: true,
 				ShardSessions: []*proto.ShardSession{{
-					Shard:         "0",
+					Shard:         "-20",
 					TransactionId: 1,
+					TabletType:    topo.TYPE_MASTER,
 				}},
 			},
 		},
