@@ -24,7 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -366,7 +366,7 @@ func updateReplicationGraphForPromotedSlave(ts topo.Server, mysqlDaemon mysqlctl
 }
 
 func (ta *TabletActor) reparentPosition(actionNode *actionnode.ActionNode) error {
-	slavePos := actionNode.Args.(*mysqlctl.ReplicationPosition)
+	slavePos := actionNode.Args.(*myproto.ReplicationPosition)
 
 	replicationState, waitPosition, timePromoted, err := ta.mysqld.ReparentPosition(slavePos)
 	if err != nil {
@@ -437,7 +437,7 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 		if err != nil {
 			return fmt.Errorf("cannot verify replication for slave: %v", err)
 		}
-		if replicationPos.SecondsBehindMaster == mysqlctl.InvalidLagSeconds {
+		if replicationPos.SecondsBehindMaster == myproto.InvalidLagSeconds {
 			return fmt.Errorf("replication not running for slave")
 		}
 	}
@@ -516,7 +516,7 @@ func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error 
 }
 
 func (ta *TabletActor) applySchema(actionNode *actionnode.ActionNode) error {
-	sc := actionNode.Args.(*proto.SchemaChange)
+	sc := actionNode.Args.(*myproto.SchemaChange)
 
 	// read the tablet to get the dbname
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)

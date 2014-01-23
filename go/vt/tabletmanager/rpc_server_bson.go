@@ -105,7 +105,7 @@ func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *S
 // Replication related methods
 //
 
-func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) error {
+func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_POSITION, args, reply, func() error {
 		position, err := tm.mysqld.SlaveStatus()
 		if err == nil {
@@ -116,11 +116,11 @@ func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.Unus
 }
 
 type SlavePositionReq struct {
-	ReplicationPosition mysqlctl.ReplicationPosition
+	ReplicationPosition myproto.ReplicationPosition
 	WaitTimeout         time.Duration // pass in zero to wait indefinitely
 }
 
-func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *SlavePositionReq, reply *mysqlctl.ReplicationPosition) error {
+func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *SlavePositionReq, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
 		if err := tm.mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {
 			return err
@@ -134,7 +134,7 @@ func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *Slav
 	})
 }
 
-func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.ReplicationPosition) error {
+func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_MASTER_POSITION, args, reply, func() error {
 		position, err := tm.mysqld.MasterStatus()
 		if err == nil {
@@ -155,7 +155,7 @@ type StopSlaveMinimumArgs struct {
 	WaitTime time.Duration
 }
 
-func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopSlaveMinimumArgs, reply *mysqlctl.ReplicationPosition) error {
+func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopSlaveMinimumArgs, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, func() error {
 		if err := tm.mysqld.WaitForMinimumReplicationPosition(args.GroupdId, args.WaitTime); err != nil {
 			return err
@@ -223,7 +223,7 @@ type RunBlpUntilArgs struct {
 	WaitTimeout     time.Duration
 }
 
-func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUntilArgs, reply *mysqlctl.ReplicationPosition) error {
+func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUntilArgs, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_RUN_BLP_UNTIL, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")

@@ -138,7 +138,7 @@ type SplitSnapshotManifest struct {
 // masterAddr is the address of the server to use as master.
 // pos is the replication position to use on that master.
 // myMasterPos is the local server master position
-func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, keyRange key.KeyRange, sd *proto.SchemaDefinition) (*SplitSnapshotManifest, error) {
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *proto.ReplicationPosition, keyRange key.KeyRange, sd *proto.SchemaDefinition) (*SplitSnapshotManifest, error) {
 	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func SanityCheckManifests(ssms []*SplitSnapshotManifest) error {
 	return nil
 }
 
-func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *ReplicationPosition, masterAddr string, err error) {
+func (mysqld *Mysqld) prepareToSnapshot(allowHierarchicalReplication bool, hookExtraEnv map[string]string) (slaveStartRequired, readOnly bool, replicationPosition, myMasterPosition *proto.ReplicationPosition, masterAddr string, err error) {
 	// save initial state so we can restore on Start()
 	if slaveStatus, slaveErr := mysqld.slaveStatus(); slaveErr == nil {
 		slaveStartRequired = (slaveStatus["Slave_IO_Running"] == "Yes" && slaveStatus["Slave_SQL_Running"] == "Yes")

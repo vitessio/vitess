@@ -10,7 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -67,8 +67,8 @@ func (client *GoRpcTabletManagerConn) Ping(tablet *topo.TabletInfo, waitTime tim
 	return nil
 }
 
-func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*proto.SchemaDefinition, error) {
-	var sd proto.SchemaDefinition
+func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {
+	var sd myproto.SchemaDefinition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_GET_SCHEMA, &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}, &sd, waitTime); err != nil {
 		return nil, err
 	}
@@ -101,16 +101,16 @@ func (client *GoRpcTabletManagerConn) SetBlacklistedTables(tablet *topo.TabletIn
 // Replication related methods
 //
 
-func (client *GoRpcTabletManagerConn) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
-	var rp mysqlctl.ReplicationPosition
+func (client *GoRpcTabletManagerConn) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SLAVE_POSITION, "", &rp, waitTime); err != nil {
 		return nil, err
 	}
 	return &rp, nil
 }
 
-func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
-	var rp mysqlctl.ReplicationPosition
+func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, &SlavePositionReq{
 		ReplicationPosition: *replicationPosition,
 		WaitTimeout:         waitTime,
@@ -120,8 +120,8 @@ func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo,
 	return &rp, nil
 }
 
-func (client *GoRpcTabletManagerConn) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
-	var rp mysqlctl.ReplicationPosition
+func (client *GoRpcTabletManagerConn) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+	var rp myproto.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_MASTER_POSITION, "", &rp, waitTime); err != nil {
 		return nil, err
 	}
@@ -133,8 +133,8 @@ func (client *GoRpcTabletManagerConn) StopSlave(tablet *topo.TabletInfo, waitTim
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_STOP_SLAVE, "", &noOutput, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) StopSlaveMinimum(tablet *topo.TabletInfo, groupId int64, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
-	var pos mysqlctl.ReplicationPosition
+func (client *GoRpcTabletManagerConn) StopSlaveMinimum(tablet *topo.TabletInfo, groupId int64, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+	var pos myproto.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, &StopSlaveMinimumArgs{
 		GroupdId: groupId,
 		WaitTime: waitTime,
@@ -178,8 +178,8 @@ func (client *GoRpcTabletManagerConn) StartBlp(tablet *topo.TabletInfo, waitTime
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_START_BLP, "", &noOutput, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
-	var pos mysqlctl.ReplicationPosition
+func (client *GoRpcTabletManagerConn) RunBlpUntil(tablet *topo.TabletInfo, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+	var pos myproto.ReplicationPosition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RUN_BLP_UNTIL, &RunBlpUntilArgs{
 		BlpPositionList: positions,
 		WaitTimeout:     waitTime,

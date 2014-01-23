@@ -9,7 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -24,7 +24,7 @@ type TabletManagerConn interface {
 	Ping(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*proto.SchemaDefinition, error)
+	GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.Permissions, error)
@@ -45,21 +45,21 @@ type TabletManagerConn interface {
 	//
 
 	// SlavePosition returns the tablet's mysql slave position
-	SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
+	SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error)
 
 	// WaitSlavePosition asks the tablet to wait until it reaches that
 	// position in mysql replication
-	WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
+	WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error)
 
 	// MasterPosition returns the tablet's master position
-	MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
+	MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error)
 
 	// StopSlave stops the mysql replication
 	StopSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// StopSlaveMinimum stops the mysql replication after it reaches
 	// the provided minimum point
-	StopSlaveMinimum(tablet *topo.TabletInfo, groupId int64, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
+	StopSlaveMinimum(tablet *topo.TabletInfo, groupId int64, waitTime time.Duration) (*myproto.ReplicationPosition, error)
 
 	// StartSlave starts the mysql replication
 	StartSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
@@ -80,7 +80,7 @@ type TabletManagerConn interface {
 
 	// RunBlpUntil asks the tablet to restart its binlog players until
 	// it reaches the given positions, if not there yet.
-	RunBlpUntil(tablet *topo.TabletInfo, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error)
+	RunBlpUntil(tablet *topo.TabletInfo, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error)
 
 	//
 	// Reparenting related functions

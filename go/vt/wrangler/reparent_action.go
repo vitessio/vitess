@@ -9,7 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -17,7 +17,7 @@ import (
 // helper struct to queue up results
 type rpcContext struct {
 	tablet   *topo.TabletInfo
-	position *mysqlctl.ReplicationPosition
+	position *myproto.ReplicationPosition
 	err      error
 }
 
@@ -90,7 +90,7 @@ func (wr *Wrangler) checkSlaveReplication(tabletMap map[topo.TabletAlias]*topo.T
 // Check all the tablets to see if we can proceed with reparenting.
 // masterPosition is supplied from the demoted master if we are doing
 // this gracefully.
-func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo, masterPosition *mysqlctl.ReplicationPosition) error {
+func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo, masterPosition *myproto.ReplicationPosition) error {
 	log.V(6).Infof("checkSlaveConsistency %v %#v", mapKeys(tabletMap), masterPosition)
 
 	// FIXME(msolomon) Something still feels clumsy here and I can't put my finger on it.
@@ -101,7 +101,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 			calls <- ctx
 		}()
 
-		var args *mysqlctl.ReplicationPosition
+		var args *myproto.ReplicationPosition
 		if masterPosition != nil {
 			// If the master position is known, do our best to wait for replication to catch up.
 			args = masterPosition
@@ -113,7 +113,7 @@ func (wr *Wrangler) checkSlaveConsistency(tabletMap map[uint32]*topo.TabletInfo,
 				ctx.err = err
 				return
 			}
-			args = &mysqlctl.ReplicationPosition{
+			args = &myproto.ReplicationPosition{
 				MasterLogFile:       replPos.MasterLogFileIo,
 				MasterLogPositionIo: replPos.MasterLogPositionIo,
 			}
@@ -206,7 +206,7 @@ func (wr *Wrangler) stopSlaves(tabletMap map[topo.TabletAlias]*topo.TabletInfo) 
 // Return a list of corresponding replication positions.
 // Handles masters and slaves, but it's up to the caller to guarantee
 // all tablets are in the same shard.
-func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*myproto.ReplicationPosition, error) {
 	log.V(6).Infof("tabletReplicationPositions %v", tablets)
 	calls := make([]*rpcContext, len(tablets))
 	wg := sync.WaitGroup{}
@@ -236,7 +236,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*m
 	wg.Wait()
 
 	someErrors := false
-	positions := make([]*mysqlctl.ReplicationPosition, len(tablets))
+	positions := make([]*myproto.ReplicationPosition, len(tablets))
 	for i, ctx := range calls {
 		if ctx == nil {
 			continue
@@ -254,7 +254,7 @@ func (wr *Wrangler) tabletReplicationPositions(tablets []*topo.TabletInfo) ([]*m
 	return positions, nil
 }
 
-func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) demoteMaster(ti *topo.TabletInfo) (*myproto.ReplicationPosition, error) {
 	log.Infof("demote master %v", ti.Alias)
 	actionPath, err := wr.ai.DemoteMaster(ti.Alias)
 	if err != nil {

@@ -25,6 +25,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/cgzip"
 	"github.com/youtube/vitess/go/vt/key"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 // Use this to simulate failures in tests
@@ -284,16 +285,16 @@ type SnapshotManifest struct {
 	DbName string
 	Files  SnapshotFiles
 
-	ReplicationState *ReplicationState
-	MasterState      *ReplicationState
+	ReplicationState *proto.ReplicationState
+	MasterState      *proto.ReplicationState
 }
 
-func newSnapshotManifest(addr, mysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, masterPos *ReplicationPosition) (*SnapshotManifest, error) {
-	nrs, err := NewReplicationState(masterAddr)
+func newSnapshotManifest(addr, mysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, masterPos *proto.ReplicationPosition) (*SnapshotManifest, error) {
+	nrs, err := proto.NewReplicationState(masterAddr)
 	if err != nil {
 		return nil, err
 	}
-	mrs, err := NewReplicationState(mysqlAddr)
+	mrs, err := proto.NewReplicationState(mysqlAddr)
 	if err != nil {
 		return nil, err
 	}

@@ -17,6 +17,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/ioutil2"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 // These methods deal with cloning a running instance of mysql.
@@ -264,7 +265,7 @@ func (mysqld *Mysqld) CreateSnapshot(dbName, sourceAddr string, allowHierarchica
 	// If the source is a slave use the master replication position
 	// unless we are allowing hierachical replicas.
 	masterAddr := ""
-	var replicationPosition *ReplicationPosition
+	var replicationPosition *proto.ReplicationPosition
 	if sourceIsMaster {
 		if err = mysqld.SetReadOnly(true); err != nil {
 			return

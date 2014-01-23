@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -26,8 +26,8 @@ Note it's OK to rename the structures as the type name is not saved in json.
 // tablet action node structures
 
 type RestartSlaveData struct {
-	ReplicationState *mysqlctl.ReplicationState
-	WaitPosition     *mysqlctl.ReplicationPosition
+	ReplicationState *myproto.ReplicationState
+	WaitPosition     *myproto.ReplicationPosition
 	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
 	Parent           topo.TabletAlias
 	Force            bool

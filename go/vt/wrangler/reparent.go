@@ -68,7 +68,7 @@ import (
 	"fmt"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -134,7 +134,7 @@ func (wr *Wrangler) reparentShardLocked(keyspace, shard string, masterElectTable
 	return err
 }
 
-func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.TabletInfo, []*myproto.ReplicationPosition, error) {
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
 		return nil, nil, err
@@ -151,7 +151,7 @@ func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.T
 	return tabletMap, posMap, wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardReplicationPositions(shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) shardReplicationPositions(shardInfo *topo.ShardInfo) ([]*topo.TabletInfo, []*myproto.ReplicationPosition, error) {
 	// FIXME(msolomon) this assumes no hierarchical replication, which is currently the case.
 	tabletMap, err := GetTabletMapForShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
 	if err != nil {

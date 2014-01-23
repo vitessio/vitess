@@ -27,7 +27,6 @@ import (
 	hk "github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	_ "github.com/youtube/vitess/go/vt/logutil"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -1684,7 +1683,7 @@ func main() {
 
 type rTablet struct {
 	*topo.TabletInfo
-	*mysqlctl.ReplicationPosition
+	*myproto.ReplicationPosition
 }
 
 type rTablets []*rTablet
@@ -1729,7 +1728,7 @@ func (rts rTablets) Less(i, j int) bool {
 	return false
 }
 
-func sortReplicatingTablets(tablets []*topo.TabletInfo, positions []*mysqlctl.ReplicationPosition) []*rTablet {
+func sortReplicatingTablets(tablets []*topo.TabletInfo, positions []*myproto.ReplicationPosition) []*rTablet {
 	rtablets := make([]*rTablet, len(tablets))
 	for i, pos := range positions {
 		rtablets[i] = &rTablet{tablets[i], pos}

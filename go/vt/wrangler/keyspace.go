@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -231,9 +232,9 @@ func (wr *Wrangler) makeMastersReadOnly(shards []*topo.ShardInfo) error {
 	return rec.Error()
 }
 
-func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.ShardInfo]*mysqlctl.ReplicationPosition, error) {
+func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.ShardInfo]*myproto.ReplicationPosition, error) {
 	mu := sync.Mutex{}
-	result := make(map[*topo.ShardInfo]*mysqlctl.ReplicationPosition)
+	result := make(map[*topo.ShardInfo]*myproto.ReplicationPosition)
 
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
@@ -264,7 +265,7 @@ func (wr *Wrangler) getMastersPosition(shards []*topo.ShardInfo) (map[*topo.Shar
 	return result, rec.Error()
 }
 
-func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardInfo]*mysqlctl.ReplicationPosition, destinationShards []*topo.ShardInfo) error {
+func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardInfo]*myproto.ReplicationPosition, destinationShards []*topo.ShardInfo) error {
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	for _, si := range destinationShards {

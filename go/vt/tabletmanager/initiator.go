@@ -20,7 +20,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -152,19 +152,19 @@ func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *a
 	return ai.rpc.SlaveWasRestarted(tablet, args, waitTime)
 }
 
-func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
+func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos *myproto.ReplicationPosition) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_REPARENT_POSITION, Args: slavePos})
 }
 
-func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	return ai.rpc.MasterPosition(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+func (ai *ActionInitiator) SlavePosition(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	return ai.rpc.SlavePosition(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *mysqlctl.ReplicationPosition, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+func (ai *ActionInitiator) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	return ai.rpc.WaitSlavePosition(tablet, replicationPosition, waitTime)
 }
 
@@ -172,7 +172,7 @@ func (ai *ActionInitiator) StopSlave(tablet *topo.TabletInfo, waitTime time.Dura
 	return ai.rpc.StopSlave(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, groupId int64, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+func (ai *ActionInitiator) StopSlaveMinimum(tabletAlias topo.TabletAlias, groupId int64, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -217,7 +217,7 @@ func (ai *ActionInitiator) StartBlp(tabletAlias topo.TabletAlias, waitTime time.
 	return ai.rpc.StartBlp(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
+func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -238,7 +238,7 @@ func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath strin
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SCRAP})
 }
 
-func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*proto.SchemaDefinition, error) {
+func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error) {
 	return ai.rpc.GetSchema(tablet, tables, includeViews, waitTime)
 }
 
@@ -246,7 +246,7 @@ func (ai *ActionInitiator) PreflightSchema(tabletAlias topo.TabletAlias, change 
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, Args: &change})
 }
 
-func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *proto.SchemaChange) (actionPath string, err error) {
+func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.SchemaChange) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_APPLY_SCHEMA, Args: sc})
 }
 

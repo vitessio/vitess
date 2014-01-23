@@ -21,73 +21,14 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql/proto"
+	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/hook"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 const (
 	SlaveStartDeadline = 30
-	InvalidLagSeconds  = 0xFFFFFFFF
 )
-
-// ReplicationPosition tracks the replication position on both a master
-// and a slave.
-type ReplicationPosition struct {
-	// MasterLogFile, MasterLogPosition and MasterLogGroupId are
-	// the position on the logs for transactions that have been
-	// applied (SQL position):
-	// - on the master, it's File, Position and Group_ID from
-	//   'show master status'.
-	// - on the slave, it's Relay_Master_Log_File, Exec_Master_Log_Pos
-	//   and Exec_Master_Group_ID from 'show slave status'.
-	MasterLogFile     string
-	MasterLogPosition uint
-	MasterLogGroupId  int64
-
-	// MasterLogFileIo and MasterLogPositionIo are the position on the logs
-	// that have been downloaded from the master (IO position),
-	// but not necessarely applied yet:
-	// - on the master, same as MasterLogFile and MasterLogPosition.
-	// - on the slave, it's Master_Log_File and Read_Master_Log_Pos
-	//   from 'show slave status'.
-	MasterLogFileIo     string
-	MasterLogPositionIo uint
-
-	// SecondsBehindMaster is how far behind we are in applying logs in
-	// replication. If equal to InvalidLagSeconds, it means replication
-	// is not running.
-	SecondsBehindMaster uint
-}
-
-func (rp ReplicationPosition) MapKey() string {
-	return fmt.Sprintf("%v:%d", rp.MasterLogFile, rp.MasterLogPosition)
-}
-
-func (rp ReplicationPosition) MapKeyIo() string {
-	return fmt.Sprintf("%v:%d", rp.MasterLogFileIo, rp.MasterLogPositionIo)
-}
-
-type ReplicationState struct {
-	// ReplicationPosition is not anonymous because the default json encoder has begun to fail here.
-	ReplicationPosition ReplicationPosition
-	MasterHost          string
-	MasterPort          int
-	MasterConnectRetry  int
-}
-
-func (rs ReplicationState) MasterAddr() string {
-	return fmt.Sprintf("%v:%v", rs.MasterHost, rs.MasterPort)
-}
-
-func NewReplicationState(masterAddr string) (*ReplicationState, error) {
-	addrPieces := strings.Split(masterAddr, ":")
-	port, err := strconv.Atoi(addrPieces[1])
-	if err != nil {
-		return nil, err
-	}
-	return &ReplicationState{MasterConnectRetry: 10,
-		MasterHost: addrPieces[0], MasterPort: port}, nil
-}
 
 var changeMasterCmd = `CHANGE MASTER TO
   MASTER_HOST = '{{.ReplicationState.MasterHost}}',
@@ -100,12 +41,12 @@ var changeMasterCmd = `CHANGE MASTER TO
 `
 
 type newMasterData struct {
-	ReplicationState *ReplicationState
+	ReplicationState *proto.ReplicationState
 	MasterUser       string
 	MasterPassword   string
 }
 
-func StartReplicationCommands(mysqld *Mysqld, replState *ReplicationState) ([]string, error) {
+func StartReplicationCommands(mysqld *Mysqld, replState *proto.ReplicationState) ([]string, error) {
 	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
 	cmc, err := fillStringTemplate(changeMasterCmd, nmd)
 	if err != nil {
@@ -264,7 +205,7 @@ func (mysqld *Mysqld) slaveStatus() (map[string]string, error) {
 
 // Return a replication state that will reparent a slave to the
 // correct master for a specified position.
-func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *ReplicationState, waitPosition *ReplicationPosition, reparentTime int64, err error) {
+func (mysqld *Mysqld) ReparentPosition(slavePosition *proto.ReplicationPosition) (rs *proto.ReplicationState, waitPosition *proto.ReplicationPosition, reparentTime int64, err error) {
 	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SELECT time_created_ns, new_addr, new_position, wait_position FROM _vt.reparent_log WHERE last_position = '%v'", slavePosition.MapKey()))
 	if err != nil {
 		return
@@ -284,7 +225,7 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *
 	if err != nil {
 		return
 	}
-	rs, err = NewReplicationState(qr.Rows[0][1].String())
+	rs, err = proto.NewReplicationState(qr.Rows[0][1].String())
 	if err != nil {
 		return
 	}
@@ -295,7 +236,7 @@ func (mysqld *Mysqld) ReparentPosition(slavePosition *ReplicationPosition) (rs *
 	if err != nil {
 		return
 	}
-	waitPosition = new(ReplicationPosition)
+	waitPosition = new(proto.ReplicationPosition)
 	waitPosition.MasterLogFile = file
 	waitPosition.MasterLogPosition = pos
 	return
@@ -315,7 +256,7 @@ func parseReplicationPosition(rpos string) (filename string, pos uint, err error
 	return
 }
 
-func (mysqld *Mysqld) WaitMasterPos(rp *ReplicationPosition, waitTimeout time.Duration) error {
+func (mysqld *Mysqld) WaitMasterPos(rp *proto.ReplicationPosition, waitTimeout time.Duration) error {
 	var timeToWait int
 	if waitTimeout > 0 {
 		timeToWait = int(waitTimeout / time.Second)
@@ -354,12 +295,12 @@ func (mysqld *Mysqld) WaitForMinimumReplicationPosition(groupId int64, waitTimeo
 	return fmt.Errorf("Time out waiting for group_id %v", groupId)
 }
 
-func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
+func (mysqld *Mysqld) SlaveStatus() (*proto.ReplicationPosition, error) {
 	fields, err := mysqld.slaveStatus()
 	if err != nil {
 		return nil, err
 	}
-	pos := new(ReplicationPosition)
+	pos := new(proto.ReplicationPosition)
 	// Use Relay_Master_Log_File for the SQL thread postion.
 	pos.MasterLogFile = fields["Relay_Master_Log_File"]
 	pos.MasterLogFileIo = fields["Master_Log_File"]
@@ -374,7 +315,7 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
 		pos.SecondsBehindMaster = uint(temp)
 	} else {
 		// replications isn't running - report it as invalid since it won't resolve itself.
-		pos.SecondsBehindMaster = InvalidLagSeconds
+		pos.SecondsBehindMaster = proto.InvalidLagSeconds
 	}
 	return pos, nil
 }
@@ -388,7 +329,7 @@ func (mysqld *Mysqld) SlaveStatus() (*ReplicationPosition, error) {
  Binlog_Ignore_DB:
  Group_ID:
 */
-func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
+func (mysqld *Mysqld) MasterStatus() (rp *proto.ReplicationPosition, err error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW MASTER STATUS")
 	if err != nil {
 		return
@@ -399,7 +340,7 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	if len(qr.Rows[0]) < 5 {
 		return nil, fmt.Errorf("this db does not support group id")
 	}
-	rp = &ReplicationPosition{}
+	rp = &proto.ReplicationPosition{}
 	rp.MasterLogFile = qr.Rows[0][0].String()
 	utemp, err := qr.Rows[0][1].ParseUint64()
 	if err != nil {
@@ -424,7 +365,7 @@ func (mysqld *Mysqld) MasterStatus() (rp *ReplicationPosition, err error) {
 	Pos: 1194
 	Server_ID: 41983
 */
-func (mysqld *Mysqld) BinlogInfo(groupId int64) (rp *ReplicationPosition, err error) {
+func (mysqld *Mysqld) BinlogInfo(groupId int64) (rp *proto.ReplicationPosition, err error) {
 	qr, err := mysqld.fetchSuperQuery(fmt.Sprintf("SHOW BINLOG INFO FOR %v", groupId))
 	if err != nil {
 		return nil, err
@@ -432,7 +373,7 @@ func (mysqld *Mysqld) BinlogInfo(groupId int64) (rp *ReplicationPosition, err er
 	if len(qr.Rows) != 1 {
 		return nil, fmt.Errorf("no binlogs")
 	}
-	rp = &ReplicationPosition{}
+	rp = &proto.ReplicationPosition{}
 	rp.MasterLogFile = qr.Rows[0][0].String()
 	temp, err := qr.Rows[0][1].ParseUint64()
 	if err != nil {
@@ -577,7 +518,7 @@ func (mysqld *Mysqld) executeSuperQuery(query string) error {
 
 // FIXME(msolomon) should there be a query lock so we only
 // run one admin action at a time?
-func (mysqld *Mysqld) fetchSuperQuery(query string) (*proto.QueryResult, error) {
+func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
 	conn, connErr := mysqld.createConnection()
 	if connErr != nil {
 		return nil, connErr

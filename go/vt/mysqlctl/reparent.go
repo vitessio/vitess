@@ -9,11 +9,12 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 // if the master is still alive, then we need to demote it gracefully
 // make it read-only, flush the writes and get the position
-func (mysqld *Mysqld) DemoteMaster() (*ReplicationPosition, error) {
+func (mysqld *Mysqld) DemoteMaster() (*proto.ReplicationPosition, error) {
 	// label as TYPE_REPLICA
 	mysqld.SetReadOnly(true)
 	cmds := []string{
@@ -31,7 +32,7 @@ func (mysqld *Mysqld) DemoteMaster() (*ReplicationPosition, error) {
 // replicationState: info slaves need to reparent themselves
 // waitPosition: slaves can wait for this position when restarting replication
 // timePromoted: this timestamp (unix nanoseconds) is inserted into _vt.replication_log to verify the replication config
-func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]string) (replicationState *ReplicationState, waitPosition *ReplicationPosition, timePromoted int64, err error) {
+func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]string) (replicationState *proto.ReplicationState, waitPosition *proto.ReplicationPosition, timePromoted int64, err error) {
 	if err = mysqld.StopSlave(hookExtraEnv); err != nil {
 		return
 	}
@@ -58,7 +59,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 		return
 	}
 	mysqldAddr := mysqld.IpAddr()
-	replicationState, err = NewReplicationState(mysqldAddr)
+	replicationState, err = proto.NewReplicationState(mysqldAddr)
 	if err != nil {
 		return
 	}
@@ -100,7 +101,7 @@ func (mysqld *Mysqld) PromoteSlave(setReadWrite bool, hookExtraEnv map[string]st
 	return
 }
 
-func (mysqld *Mysqld) RestartSlave(replicationState *ReplicationState, waitPosition *ReplicationPosition, timeCheck int64) error {
+func (mysqld *Mysqld) RestartSlave(replicationState *proto.ReplicationState, waitPosition *proto.ReplicationPosition, timeCheck int64) error {
 	log.Infof("Restart Slave")
 	cmds, err := StartReplicationCommands(mysqld, replicationState)
 	if err != nil {

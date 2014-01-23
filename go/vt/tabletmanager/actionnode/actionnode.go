@@ -19,8 +19,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -178,15 +177,15 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 		node.Args = &SlaveWasRestartedArgs{}
 	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_REPARENT_POSITION:
-		node.Args = &mysqlctl.ReplicationPosition{}
+		node.Args = &myproto.ReplicationPosition{}
 		node.Reply = &RestartSlaveData{}
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		node.Args = new(string)
-		node.Reply = &proto.SchemaChangeResult{}
+		node.Reply = &myproto.SchemaChangeResult{}
 	case TABLET_ACTION_APPLY_SCHEMA:
-		node.Args = &proto.SchemaChange{}
-		node.Reply = &proto.SchemaChangeResult{}
+		node.Args = &myproto.SchemaChange{}
+		node.Reply = &myproto.SchemaChangeResult{}
 	case TABLET_ACTION_EXECUTE_HOOK:
 		node.Args = &hook.Hook{}
 		node.Reply = &hook.HookResult{}
