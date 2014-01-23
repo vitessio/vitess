@@ -199,6 +199,21 @@ func (mysqld *Mysqld) GetMasterAddr() (string, error) {
 	return masterAddr, nil
 }
 
+func (mysqld *Mysqld) GetMysqlPort() (int, error) {
+	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'port'")
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 {
+		return 0, errors.New("no port variable in mysql")
+	}
+	utemp, err := strconv.ParseUint(qr.Rows[0][1].String(), 10, 16)
+	if err != nil {
+		return 0, err
+	}
+	return int(utemp), nil
+}
+
 func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW VARIABLES LIKE 'read_only'")
 	if err != nil {

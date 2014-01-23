@@ -179,7 +179,7 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 		// Just an end-to-end verification that we got the message.
 		err = nil
 	case TABLET_ACTION_PROMOTE_SLAVE:
-		err = ta.promoteSlave(actionNode)
+		err = ta.promoteSlave(ta.mysqlDaemon, actionNode)
 	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
 		err = slaveWasPromoted(ta.ts, ta.mysqlDaemon, ta.tabletAlias)
 	case TABLET_ACTION_RESTART_SLAVE:
@@ -292,7 +292,7 @@ func (ta *TabletActor) demoteMaster() error {
 	return topo.UpdateTablet(ta.ts, tablet)
 }
 
-func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
+func (ta *TabletActor) promoteSlave(mysqlDaemon mysqlctl.MysqlDaemon, actionNode *ActionNode) error {
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
 		return err
@@ -307,7 +307,7 @@ func (ta *TabletActor) promoteSlave(actionNode *ActionNode) error {
 	log.Infof("PromoteSlave %v", rsd.String())
 	actionNode.reply = rsd
 
-	return updateReplicationGraphForPromotedSlave(ta.ts, tablet)
+	return updateReplicationGraphForPromotedSlave(ta.ts, mysqlDaemon, tablet)
 }
 
 func slaveWasPromoted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias) error {
@@ -324,28 +324,40 @@ func slaveWasPromoted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAl
 		return err
 	}
 
-	return updateReplicationGraphForPromotedSlave(ts, tablet)
+	return updateReplicationGraphForPromotedSlave(ts, mysqlDaemon, tablet)
 }
 
-func updateReplicationGraphForPromotedSlave(ts topo.Server, tablet *topo.TabletInfo) error {
+func updateReplicationGraphForPromotedSlave(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tablet *topo.TabletInfo) error {
 	// Remove tablet from the replication graph if this is not already the master.
 	if tablet.Parent.Uid != topo.NO_TABLET {
 		if err := topo.DeleteTabletReplicationData(ts, tablet.Tablet); err != nil && err != topo.ErrNoNode {
 			return err
 		}
 	}
+
+	// get the current mysql port
+	mport, err := mysqlDaemon.GetMysqlPort()
+	if err != nil {
+		return err
+	}
+	if mport != tablet.Portmap["mysql"] {
+		log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
+		tablet.Portmap["mysql"] = mport
+	}
+
 	// Update tablet regardless - trend towards consistency.
 	tablet.State = topo.STATE_READ_WRITE
 	tablet.Type = topo.TYPE_MASTER
 	tablet.Parent.Cell = ""
 	tablet.Parent.Uid = topo.NO_TABLET
-	err := topo.UpdateTablet(ts, tablet)
+	err = topo.UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
 	}
-	// NOTE(msolomon) A serving graph update is required, but in order for the
-	// shard to be consistent the master must be scrapped first. That is
-	// externally coordinated by the wrangler reparent action.
+	// NOTE(msolomon) A serving graph update is required, but in
+	// order for the shard to be consistent the old master must be
+	// scrapped first. That is externally coordinated by the
+	// wrangler reparent action.
 
 	// Insert the new tablet location in the replication graph now that
 	// we've updated the tablet.
