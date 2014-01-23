@@ -83,23 +83,13 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
 func (vtg *VTGate) mapKrToShardsForStreaming(streamQuery *proto.StreamQueryKeyRange) ([]string, error) {
-	if len(streamQuery.KeyRanges) != 1 {
-		return nil, fmt.Errorf("Streaming doesn't support zero or multiple keyRanges %v", streamQuery.KeyRanges)
-	}
-
-	krShardMap, err := resolveKeyRangesToShards(vtg.scatterConn.toposerv,
+	shards, err := resolveKeyRangeToShards(vtg.scatterConn.toposerv,
 		vtg.scatterConn.cell,
 		streamQuery.Keyspace,
 		streamQuery.TabletType,
-		streamQuery.KeyRanges)
+		streamQuery.KeyRange)
 	if err != nil {
 		return nil, err
-	}
-
-	kr := streamQuery.KeyRanges[0]
-	shards, ok := krShardMap[kr]
-	if !ok {
-		return nil, fmt.Errorf("Illegal keyrange %v, doesn't map to any shard %v", kr)
 	}
 
 	if len(shards) != 1 {
@@ -109,8 +99,8 @@ func (vtg *VTGate) mapKrToShardsForStreaming(streamQuery *proto.StreamQueryKeyRa
 	return shards, nil
 }
 
-// StreamExecuteKeyRange executes a streaming query on the specified KeyRanges.
-// The KeyRanges are resolved to shards using the serving graph.
+// StreamExecuteKeyRange executes a streaming query on the specified KeyRange.
+// The KeyRange is resolved to shards using the serving graph.
 // This function currently temporarily enforces the restriction of executing on one keyrange
 // and one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing. The api supports supplying multiple keyranges

@@ -223,7 +223,7 @@ func (server *ResilientSrvTopoServer) GetEndPoints(cell, keyspace, shard string,
 }
 
 // This maps a list of keyranges to shard names.
-func resolveKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, krList []key.KeyRange) (map[key.KeyRange][]string, error) {
+func resolveKeyRangeToShards(topoServer SrvTopoServer, cell, keyspace string, tabletType topo.TabletType, kr key.KeyRange) ([]string, error) {
 	srvKeyspace, err := topoServer.GetSrvKeyspace(cell, keyspace)
 	if err != nil {
 		return nil, fmt.Errorf("Error in reading the keyspace %v", err)
@@ -235,31 +235,22 @@ func resolveKeyRangesToShards(topoServer SrvTopoServer, cell, keyspace string, t
 	}
 
 	topo.SrvShardArray(tabletTypePartition.Shards).Sort()
-	key.KeyRangeArray(krList).Sort()
 
-	krShardMap := make(map[key.KeyRange][]string)
-	shardMatch := 0
-	for _, kr := range krList {
-		shards := make([]string, 0, 1)
-		if !kr.IsPartial() {
-			for j := 0; j < len(tabletTypePartition.Shards); j++ {
-				shards = append(shards, tabletTypePartition.Shards[j].ShardName())
-			}
-		} else {
-			for j := shardMatch; j < len(tabletTypePartition.Shards); j++ {
-				shard := tabletTypePartition.Shards[j]
-				if key.KeyRangesIntersect(kr, shard.KeyRange) {
-					shardMatch = j
-					shards = append(shards, shard.ShardName())
-				}
-				if kr.End < shard.KeyRange.Start {
-					break
-				}
-			}
+	shards := make([]string, 0, 1)
+	if !kr.IsPartial() {
+		for j := 0; j < len(tabletTypePartition.Shards); j++ {
+			shards = append(shards, tabletTypePartition.Shards[j].ShardName())
 		}
-		if len(shards) > 0 {
-			krShardMap[kr] = shards
+		return shards, nil
+	}
+	for j := 0; j < len(tabletTypePartition.Shards); j++ {
+		shard := tabletTypePartition.Shards[j]
+		if key.KeyRangesIntersect(kr, shard.KeyRange) {
+			shards = append(shards, shard.ShardName())
+		}
+		if kr.End < shard.KeyRange.Start {
+			break
 		}
 	}
-	return krShardMap, nil
+	return shards, nil
 }

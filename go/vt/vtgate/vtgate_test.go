@@ -121,7 +121,7 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 	mapTestConn("-20", sbc)
 	sq := proto.StreamQueryKeyRange{
 		Sql:        "query",
-		KeyRanges:  []key.KeyRange{{Start: "", End: "20"}},
+		KeyRange:   key.KeyRange{Start: "", End: "20"},
 		TabletType: topo.TYPE_MASTER,
 	}
 	// Test for successful execution
@@ -164,17 +164,8 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 		t.Errorf("want \n%#v, got \n%#v", want, qrs)
 	}
 
-	// Test for error condition - multiple KeyRanges
-	sq.KeyRanges = []key.KeyRange{{Start: "", End: "20"}, {Start: "20", End: "40"}}
-	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
-		qrs = append(qrs, r.(*proto.QueryResult))
-		return nil
-	})
-	if err == nil {
-		t.Errorf("want not nil, got %v", err)
-	}
 	// Test for error condition - multiple shards
-	sq.KeyRanges = []key.KeyRange{{Start: "10", End: "40"}}
+	sq.KeyRange = key.KeyRange{Start: "10", End: "40"}
 	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
 		qrs = append(qrs, r.(*proto.QueryResult))
 		return nil
@@ -183,7 +174,7 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 		t.Errorf("want not nil, got %v", err)
 	}
 	// Test for error condition - multiple shards, non-partial keyspace
-	sq.KeyRanges = []key.KeyRange{{Start: "", End: ""}}
+	sq.KeyRange = key.KeyRange{Start: "", End: ""}
 	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
 		qrs = append(qrs, r.(*proto.QueryResult))
 		return nil

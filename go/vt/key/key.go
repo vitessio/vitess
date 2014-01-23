@@ -164,17 +164,6 @@ func (kr *KeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter.RecordLen()
 }
 
-func EncodeKeyRanges(buf *bytes2.ChunkedWriter, keyName string, keyranges []KeyRange) {
-	bson.EncodePrefix(buf, bson.Array, keyName)
-	lenWriter := bson.NewLenWriter(buf)
-	for i, kr := range keyranges {
-		bson.EncodePrefix(buf, bson.Object, bson.Itoa(i))
-		kr.MarshalBson(buf)
-	}
-	buf.WriteByte(0)
-	lenWriter.RecordLen()
-}
-
 func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
 
@@ -191,29 +180,6 @@ func (kr *KeyRange) UnmarshalBson(buf *bytes.Buffer) {
 		}
 		kind = bson.NextByte(buf)
 	}
-}
-
-func DecodeKeyRanges(buf *bytes.Buffer, kind byte) (keyranges []KeyRange) {
-	switch kind {
-	case bson.Array:
-		// valid
-	case bson.Null:
-		return nil
-	default:
-		panic(bson.NewBsonError("Unexpected data type %v for Keyranges", kind))
-	}
-
-	bson.Next(buf, 4)
-	keyranges = make([]KeyRange, 0, 10)
-	kind = bson.NextByte(buf)
-	var kr KeyRange
-	for i := 0; kind != bson.EOO; i++ {
-		bson.ExpectIndex(buf, i)
-		kr.UnmarshalBson(buf)
-		keyranges = append(keyranges, kr)
-		kind = bson.NextByte(buf)
-	}
-	return keyranges
 }
 
 // KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
