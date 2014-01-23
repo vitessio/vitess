@@ -71,7 +71,7 @@ func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArg
 	})
 }
 
-func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.Permissions) error {
+func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.Permissions) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_PERMISSIONS, args, reply, func() error {
 		p, err := tm.mysqld.GetPermissions()
 		if err == nil {

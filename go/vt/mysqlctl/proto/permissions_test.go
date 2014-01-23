@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mysqlctl
+package proto
 
 import (
 	"testing"
@@ -48,9 +48,9 @@ func testPermissionsDiff(t *testing.T, left, right *Permissions, leftName, right
 func TestPermissionsDiff(t *testing.T) {
 
 	p1 := &Permissions{}
-	p1.UserPermissions = append(p1.UserPermissions, newUserPermission(mapToSqlResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "N"})))
-	p1.DbPermissions = append(p1.DbPermissions, newDbPermission(mapToSqlResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "N", "Insert_priv": "Y"})))
-	p1.HostPermissions = append(p1.HostPermissions, newHostPermission(mapToSqlResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "N", "Insert_priv": "N"})))
+	p1.UserPermissions = append(p1.UserPermissions, NewUserPermission(mapToSqlResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "N"})))
+	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSqlResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "N", "Insert_priv": "Y"})))
+	p1.HostPermissions = append(p1.HostPermissions, NewHostPermission(mapToSqlResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "N", "Insert_priv": "N"})))
 
 	if p1.String() !=
 		"User Permissions:\n"+
@@ -80,9 +80,9 @@ func TestPermissionsDiff(t *testing.T) {
 		"p1 has an extra host localhost:mysql",
 	})
 
-	p2.UserPermissions = append(p2.UserPermissions, newUserPermission(mapToSqlResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "Y"})))
-	p1.DbPermissions = append(p1.DbPermissions, newDbPermission(mapToSqlResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "Y", "Insert_priv": "N"})))
-	p2.HostPermissions = append(p2.HostPermissions, newHostPermission(mapToSqlResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "Y", "Insert_priv": "N"})))
+	p2.UserPermissions = append(p2.UserPermissions, NewUserPermission(mapToSqlResults(map[string]string{"Host": "%", "User": "vt", "Password": "p1", "Select_priv": "Y", "Insert_priv": "Y"})))
+	p1.DbPermissions = append(p1.DbPermissions, NewDbPermission(mapToSqlResults(map[string]string{"Host": "%", "Db": "vt_live", "User": "vt", "Select_priv": "Y", "Insert_priv": "N"})))
+	p2.HostPermissions = append(p2.HostPermissions, NewHostPermission(mapToSqlResults(map[string]string{"Host": "localhost", "Db": "mysql", "Select_priv": "Y", "Insert_priv": "N"})))
 	testPermissionsDiff(t, p1, p2, "p1", "p2", []string{
 		"p1 and p2 disagree on user %:vt:\n" +
 			"UserPermission PasswordChecksum(4831957779889520640) Insert_priv(N) Select_priv(Y)\n" +

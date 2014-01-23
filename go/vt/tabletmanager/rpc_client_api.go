@@ -27,7 +27,7 @@ type TabletManagerConn interface {
 	GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*myproto.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
-	GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.Permissions, error)
+	GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.Permissions, error)
 
 	//
 	// Various read-write methods

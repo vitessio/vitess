@@ -75,8 +75,8 @@ func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables 
 	return &sd, nil
 }
 
-func (client *GoRpcTabletManagerConn) GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.Permissions, error) {
-	var p mysqlctl.Permissions
+func (client *GoRpcTabletManagerConn) GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*myproto.Permissions, error) {
+	var p myproto.Permissions
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_GET_PERMISSIONS, "", &p, waitTime); err != nil {
 		return nil, err
 	}

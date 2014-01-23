@@ -11,16 +11,16 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*mysqlctl.Permissions, error) {
+func (wr *Wrangler) GetPermissions(tabletAlias topo.TabletAlias) (*myproto.Permissions, error) {
 	return wr.ai.GetPermissions(tabletAlias, wr.actionTimeout())
 }
 
 // helper method to asynchronously diff a permissions
-func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffPermissions(masterPermissions *myproto.Permissions, masterAlias topo.TabletAlias, alias topo.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering permissions for %v", alias)
 	slavePermissions, err := wr.GetPermissions(alias)
@@ -30,7 +30,7 @@ func (wr *Wrangler) diffPermissions(masterPermissions *mysqlctl.Permissions, mas
 	}
 
 	log.Infof("Diffing permissions for %v", alias)
-	mysqlctl.DiffPermissions(masterAlias.String(), masterPermissions, alias.String(), slavePermissions, er)
+	myproto.DiffPermissions(masterAlias.String(), masterPermissions, alias.String(), slavePermissions, er)
 }
 
 func (wr *Wrangler) ValidatePermissionsShard(keyspace, shard string) error {
