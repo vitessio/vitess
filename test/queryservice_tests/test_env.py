@@ -30,7 +30,7 @@ class EnvironmentError(Exception):
 class TestEnv(object):
 
   def connect(self):
-    c = tablet_conn.connect("localhost:%s" % self.tablet.port, 'test_keyspace', '0', 2)
+    c = tablet_conn.connect("localhost:%s" % self.tablet.port, '', 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 
@@ -367,7 +367,7 @@ class VtoccTestEnv(TestEnv):
       pass
     
   def connect(self):
-    c = tablet_conn.connect("localhost:9461", 'test_keyspace', '0', 2)
+    c = tablet_conn.connect("localhost:9461", '', 'test_keyspace', '0', 2)
     c.max_attempts = 1
     return c
 

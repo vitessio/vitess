@@ -14,7 +14,6 @@ import utils
 
 from net import gorpc
 from vtdb import cursor
-from vtdb import tablet as tablet3
 from vtdb import vtclient
 from vtdb import dbexceptions
 from zk import zkocc
@@ -366,14 +365,14 @@ class TestFailures(unittest.TestCase):
       replica_conn = get_replica_connection()
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
-    with self.assertRaises(tablet3.TimeoutError):
+    with self.assertRaises(dbexceptions.TimeoutError):
       replica_conn._execute("select sleep(12) from dual", {})
 
     try:
       master_conn = get_master_connection()
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
-    with self.assertRaises(tablet3.TimeoutError):
+    with self.assertRaises(dbexceptions.TimeoutError):
       master_conn._execute("select sleep(12) from dual", {})
 
   def test_restart_mysql_failure(self):
