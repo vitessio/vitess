@@ -43,7 +43,7 @@ func (wr *Wrangler) unlockShard(keyspace, shard string, actionNode *actionnode.A
 // It does not rebuild any serving graph or do any consistency check (yet).
 func (wr *Wrangler) SetShardServedTypes(keyspace, shard string, servedTypes []topo.TabletType) error {
 
-	actionNode := wr.ai.SetShardServedTypes(servedTypes)
+	actionNode := actionnode.SetShardServedTypes(servedTypes)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err

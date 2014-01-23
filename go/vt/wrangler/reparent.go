@@ -87,7 +87,7 @@ const (
 //   cause data loss.
 func (wr *Wrangler) ReparentShard(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, leaveMasterReadOnly, forceReparentToCurrentMaster bool) error {
 	// lock the shard
-	actionNode := wr.ai.ReparentShard(masterElectTabletAlias)
+	actionNode := actionnode.ReparentShard(masterElectTabletAlias)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
@@ -141,7 +141,7 @@ func (wr *Wrangler) ShardReplicationPositions(keyspace, shard string) ([]*topo.T
 	}
 
 	// lock the shard
-	actionNode := wr.ai.CheckShard()
+	actionNode := actionnode.CheckShard()
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return nil, nil, err

@@ -9,6 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -70,7 +71,7 @@ func (wr *Wrangler) InitTablet(tablet *topo.Tablet, force, createShardAndKeyspac
 		}
 
 		if shardUpdateRequired {
-			actionNode := wr.ai.UpdateShard()
+			actionNode := actionnode.UpdateShard()
 			lockPath, err := wr.lockShard(tablet.Keyspace, tablet.Shard, actionNode)
 			if err != nil {
 				return err
@@ -200,7 +201,7 @@ func (wr *Wrangler) Scrap(tabletAlias topo.TabletAlias, force, skipRebuild bool)
 
 	// update the Shard object if the master was scrapped
 	if wasMaster {
-		actionNode := wr.ai.UpdateShard()
+		actionNode := actionnode.UpdateShard()
 		lockPath, err := wr.lockShard(ti.Keyspace, ti.Shard, actionNode)
 		if err != nil {
 			return "", err

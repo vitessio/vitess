@@ -46,7 +46,7 @@ func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.Actio
 }
 
 func (wr *Wrangler) SetKeyspaceShardingInfo(keyspace, shardingColumnName string, shardingColumnType key.KeyspaceIdType, force bool) error {
-	actionNode := wr.ai.SetKeyspaceShardingInfo()
+	actionNode := actionnode.SetKeyspaceShardingInfo()
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return err
@@ -151,7 +151,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 
 	// lock the shards: sources, then destinations
 	// (note they're all ordered by shard name)
-	actionNode := wr.ai.MigrateServedTypes(servedType)
+	actionNode := actionnode.MigrateServedTypes(servedType)
 	sourceLockPath := make([]string, len(sourceShards))
 	for i, si := range sourceShards {
 		sourceLockPath[i], err = wr.lockShard(si.Keyspace(), si.ShardName(), actionNode)
@@ -462,7 +462,7 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 	}
 
 	// lock the keyspace and shard
-	actionNode := wr.ai.MigrateServedFrom(servedType)
+	actionNode := actionnode.MigrateServedFrom(servedType)
 	keyspaceLockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		log.Errorf("Failed to lock destination keyspace %v", keyspace)

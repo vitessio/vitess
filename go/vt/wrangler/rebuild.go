@@ -12,13 +12,14 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // Rebuild the serving and replication rollup data data while locking
 // out other changes.
 func (wr *Wrangler) RebuildShardGraph(keyspace, shard string, cells []string) error {
-	actionNode := wr.ai.RebuildShard()
+	actionNode := actionnode.RebuildShard()
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err
@@ -283,7 +284,7 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 
 // Rebuild the serving graph data while locking out other changes.
 func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, useServedTypes bool) error {
-	actionNode := wr.ai.RebuildKeyspace()
+	actionNode := actionnode.RebuildKeyspace()
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return err

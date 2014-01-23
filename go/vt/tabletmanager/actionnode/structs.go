@@ -125,3 +125,106 @@ type ApplySchemaKeyspaceArgs struct {
 type MigrateServedFromArgs struct {
 	ServedType topo.TabletType
 }
+
+// methods to build the shard action nodes
+
+func ReparentShard(tabletAlias topo.TabletAlias) *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_REPARENT,
+		Args:   &tabletAlias,
+	}).SetGuid()
+}
+
+func ShardExternallyReparented(tabletAlias topo.TabletAlias) *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_EXTERNALLY_REPARENTED,
+		Args:   &tabletAlias,
+	}).SetGuid()
+}
+
+func RebuildShard() *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_REBUILD,
+	}).SetGuid()
+}
+
+func CheckShard() *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_CHECK,
+	}).SetGuid()
+}
+
+func ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_APPLY_SCHEMA,
+		Args: &ApplySchemaShardArgs{
+			MasterTabletAlias: masterTabletAlias,
+			Change:            change,
+			Simple:            simple,
+		},
+	}).SetGuid()
+}
+
+func SetShardServedTypes(servedTypes []topo.TabletType) *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_SET_SERVED_TYPES,
+		Args: &SetShardServedTypesArgs{
+			ServedTypes: servedTypes,
+		},
+	}).SetGuid()
+}
+
+func ShardMultiRestore(args *MultiRestoreArgs) *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_MULTI_RESTORE,
+		Args:   args,
+	}).SetGuid()
+}
+
+func MigrateServedTypes(servedType topo.TabletType) *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_MIGRATE_SERVED_TYPES,
+		Args: &MigrateServedTypesArgs{
+			ServedType: servedType,
+		},
+	}).SetGuid()
+}
+
+func UpdateShard() *ActionNode {
+	return (&ActionNode{
+		Action: SHARD_ACTION_UPDATE_SHARD,
+	}).SetGuid()
+}
+
+// methods to build the keyspace action nodes
+
+func RebuildKeyspace() *ActionNode {
+	return (&ActionNode{
+		Action: KEYSPACE_ACTION_REBUILD,
+	}).SetGuid()
+}
+
+func SetKeyspaceShardingInfo() *ActionNode {
+	return (&ActionNode{
+		Action: KEYSPACE_ACTION_SET_SHARDING_INFO,
+	}).SetGuid()
+}
+
+func ApplySchemaKeyspace(change string, simple bool) *ActionNode {
+	return (&ActionNode{
+		Action: KEYSPACE_ACTION_APPLY_SCHEMA,
+		Args: &ApplySchemaKeyspaceArgs{
+			Change: change,
+			Simple: simple,
+		},
+	}).SetGuid()
+}
+
+func MigrateServedFrom(servedType topo.TabletType) *ActionNode {
+	return (&ActionNode{
+		Action: KEYSPACE_ACTION_MIGRATE_SERVED_FROM,
+		Args: &MigrateServedFromArgs{
+			ServedType: servedType,
+		},
+	}).SetGuid()
+}

@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -217,7 +218,7 @@ func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTa
 
 func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *topo.ShardInfo, preflight *mysqlctl.SchemaChangeResult, keyspace, shard string, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
 	// get a shard lock
-	actionNode := wr.ai.ApplySchemaShard(masterTabletAlias, change, simple)
+	actionNode := actionnode.ApplySchemaShard(masterTabletAlias, change, simple)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return nil, err
@@ -405,7 +406,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 // if simple, we just do it on all masters.
 // if complex, we do the shell game in parallel on all shards
 func (wr *Wrangler) ApplySchemaKeyspace(keyspace string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
-	actionNode := wr.ai.ApplySchemaKeyspace(change, simple)
+	actionNode := actionnode.ApplySchemaKeyspace(change, simple)
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return nil, err

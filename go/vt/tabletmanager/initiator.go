@@ -270,105 +270,6 @@ func (ai *ActionInitiator) GetSlaves(tablet *topo.TabletInfo, waitTime time.Dura
 	return ai.rpc.GetSlaves(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) ReparentShard(tabletAlias topo.TabletAlias) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_REPARENT,
-		Args:   &tabletAlias,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) ShardExternallyReparented(tabletAlias topo.TabletAlias) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_EXTERNALLY_REPARENTED,
-		Args:   &tabletAlias,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) RebuildShard() *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_REBUILD,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) CheckShard() *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_CHECK,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_APPLY_SCHEMA,
-		Args: &actionnode.ApplySchemaShardArgs{
-			MasterTabletAlias: masterTabletAlias,
-			Change:            change,
-			Simple:            simple,
-		},
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) SetShardServedTypes(servedTypes []topo.TabletType) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_SET_SERVED_TYPES,
-		Args: &actionnode.SetShardServedTypesArgs{
-			ServedTypes: servedTypes,
-		},
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) ShardMultiRestore(args *actionnode.MultiRestoreArgs) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_MULTI_RESTORE,
-		Args:   args,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) MigrateServedTypes(servedType topo.TabletType) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_MIGRATE_SERVED_TYPES,
-		Args: &actionnode.MigrateServedTypesArgs{
-			ServedType: servedType,
-		},
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) UpdateShard() *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.SHARD_ACTION_UPDATE_SHARD,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) RebuildKeyspace() *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.KEYSPACE_ACTION_REBUILD,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) SetKeyspaceShardingInfo() *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.KEYSPACE_ACTION_SET_SHARDING_INFO,
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) ApplySchemaKeyspace(change string, simple bool) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.KEYSPACE_ACTION_APPLY_SCHEMA,
-		Args: &actionnode.ApplySchemaKeyspaceArgs{
-			Change: change,
-			Simple: simple,
-		},
-	}).SetGuid()
-}
-
-func (ai *ActionInitiator) MigrateServedFrom(servedType topo.TabletType) *actionnode.ActionNode {
-	return (&actionnode.ActionNode{
-		Action: actionnode.KEYSPACE_ACTION_MIGRATE_SERVED_FROM,
-		Args: &actionnode.MigrateServedFromArgs{
-			ServedType: servedType,
-		},
-	}).SetGuid()
-}
-
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
 	_, err := WaitForCompletion(ai.ts, actionPath, waitTime)
 	return err
@@ -379,7 +280,7 @@ func (ai *ActionInitiator) WaitForCompletionReply(actionPath string, waitTime ti
 }
 
 func WaitForCompletion(ts topo.Server, actionPath string, waitTime time.Duration) (interface{}, error) {
-	// If there is no duration specified, block for a sufficiently long time.
+	// If there is no duration specified, block for a sufficiently long time
 	if waitTime <= 0 {
 		waitTime = 24 * time.Hour
 	}

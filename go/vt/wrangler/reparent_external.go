@@ -16,7 +16,7 @@ import (
 
 func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool, acceptSuccessPercents int) error {
 	// grab the shard lock
-	actionNode := wr.ai.ShardExternallyReparented(masterElectTabletAlias)
+	actionNode := actionnode.ShardExternallyReparented(masterElectTabletAlias)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
 	if err != nil {
 		return err

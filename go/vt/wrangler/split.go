@@ -119,7 +119,7 @@ func (wr *Wrangler) ShardMultiRestore(keyspace, shard string, sources []topo.Tab
 	}
 
 	// lock the shard to perform the changes we need done
-	actionNode := wr.ai.ShardMultiRestore(&actionnode.MultiRestoreArgs{
+	actionNode := actionnode.ShardMultiRestore(&actionnode.MultiRestoreArgs{
 		SrcTabletAliases:       sources,
 		Concurrency:            concurrency,
 		FetchConcurrency:       fetchConcurrency,
