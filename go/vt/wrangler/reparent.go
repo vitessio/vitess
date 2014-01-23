@@ -69,7 +69,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -212,7 +212,7 @@ func (wr *Wrangler) ReparentTablet(tabletAlias topo.TabletAlias) error {
 	if err != nil {
 		return err
 	}
-	rsd := result.(*tabletmanager.RestartSlaveData)
+	rsd := result.(*actionnode.RestartSlaveData)
 
 	log.Infof("master tablet position: %v %v %v", shardInfo.MasterAlias, masterTi.GetMysqlAddr(), rsd.ReplicationState.ReplicationPosition.MapKey())
 	// An orphan is already in the replication graph but it is

@@ -10,7 +10,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -43,20 +43,20 @@ func (wr *Wrangler) Snapshot(tabletAlias topo.TabletAlias, forceMasterSnapshot b
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.Snapshot(tabletAlias, &tabletmanager.SnapshotArgs{Concurrency: snapshotConcurrency, ServerMode: serverMode})
+	actionPath, err = wr.ai.Snapshot(tabletAlias, &actionnode.SnapshotArgs{Concurrency: snapshotConcurrency, ServerMode: serverMode})
 	if err != nil {
 		return
 	}
 
 	// wait for completion, and save the error
 	results, actionErr := wr.ai.WaitForCompletionReply(actionPath, wr.actionTimeout())
-	var reply *tabletmanager.SnapshotReply
+	var reply *actionnode.SnapshotReply
 	newType := originalType
 	if actionErr != nil {
 		log.Errorf("snapshot failed, still restoring tablet type: %v", actionErr)
-		reply = &tabletmanager.SnapshotReply{}
+		reply = &actionnode.SnapshotReply{}
 	} else {
-		reply = results.(*tabletmanager.SnapshotReply)
+		reply = results.(*actionnode.SnapshotReply)
 		if serverMode {
 			log.Infof("server mode specified, switching tablet to snapshot_source mode")
 			newType = topo.TYPE_SNAPSHOT_SOURCE
@@ -88,7 +88,7 @@ func (wr *Wrangler) SnapshotSourceEnd(tabletAlias topo.TabletAlias, slaveStartRe
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.SnapshotSourceEnd(tabletAlias, &tabletmanager.SnapshotSourceEndArgs{SlaveStartRequired: slaveStartRequired, ReadOnly: !readWrite})
+	actionPath, err = wr.ai.SnapshotSourceEnd(tabletAlias, &actionnode.SnapshotSourceEndArgs{SlaveStartRequired: slaveStartRequired, ReadOnly: !readWrite})
 	if err != nil {
 		return
 	}
@@ -122,7 +122,7 @@ func (wr *Wrangler) ReserveForRestore(srcTabletAlias, dstTabletAlias topo.Tablet
 	}
 
 	var actionPath string
-	actionPath, err = wr.ai.ReserveForRestore(dstTabletAlias, &tabletmanager.ReserveForRestoreArgs{SrcTabletAlias: srcTabletAlias})
+	actionPath, err = wr.ai.ReserveForRestore(dstTabletAlias, &actionnode.ReserveForRestoreArgs{SrcTabletAlias: srcTabletAlias})
 	if err != nil {
 		return
 	}
@@ -161,7 +161,7 @@ func (wr *Wrangler) Restore(srcTabletAlias topo.TabletAlias, srcFilePath string,
 	}
 
 	// do the work
-	actionPath, err := wr.ai.Restore(dstTabletAlias, &tabletmanager.RestoreArgs{SrcTabletAlias: srcTabletAlias, SrcFilePath: srcFilePath, ParentAlias: parentAlias, FetchConcurrency: fetchConcurrency, FetchRetryCount: fetchRetryCount, WasReserved: wasReserved, DontWaitForSlaveStart: dontWaitForSlaveStart})
+	actionPath, err := wr.ai.Restore(dstTabletAlias, &actionnode.RestoreArgs{SrcTabletAlias: srcTabletAlias, SrcFilePath: srcFilePath, ParentAlias: parentAlias, FetchConcurrency: fetchConcurrency, FetchRetryCount: fetchRetryCount, WasReserved: wasReserved, DontWaitForSlaveStart: dontWaitForSlaveStart})
 	if err != nil {
 		return err
 	}

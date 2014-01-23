@@ -14,15 +14,13 @@ package tabletmanager
 
 import (
 	"fmt"
-	"os"
-	"os/user"
 	"sync"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -63,27 +61,13 @@ func NewActionInitiator(ts topo.Server, tabletManagerProtocol string) *ActionIni
 	return &ActionInitiator{ts, f(ts)}
 }
 
-func actionGuid() string {
-	now := time.Now().Format(time.RFC3339)
-	username := "unknown"
-	if u, err := user.Current(); err == nil {
-		username = u.Username
-	}
-	hostname := "unknown"
-	if h, err := os.Hostname(); err == nil {
-		hostname = h
-	}
-	return fmt.Sprintf("%v-%v-%v", now, username, hostname)
-}
-
-func (ai *ActionInitiator) writeTabletAction(tabletAlias topo.TabletAlias, node *ActionNode) (actionPath string, err error) {
-	node.ActionGuid = actionGuid()
-	data := ActionNodeToJson(node)
+func (ai *ActionInitiator) writeTabletAction(tabletAlias topo.TabletAlias, node *actionnode.ActionNode) (actionPath string, err error) {
+	data := node.SetGuid().ToJson()
 	return ai.ts.WriteTabletAction(tabletAlias, data)
 }
 
 func (ai *ActionInitiator) Ping(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_PING})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PING})
 }
 
 func (ai *ActionInitiator) RpcPing(tabletAlias topo.TabletAlias, waitTime time.Duration) error {
@@ -96,11 +80,11 @@ func (ai *ActionInitiator) RpcPing(tabletAlias topo.TabletAlias, waitTime time.D
 }
 
 func (ai *ActionInitiator) Sleep(tabletAlias topo.TabletAlias, duration time.Duration) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SLEEP, args: &duration})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SLEEP, Args: &duration})
 }
 
 func (ai *ActionInitiator) ChangeType(tabletAlias topo.TabletAlias, dbType topo.TabletType) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_CHANGE_TYPE, args: &dbType})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_CHANGE_TYPE, Args: &dbType})
 }
 
 func (ai *ActionInitiator) RpcChangeType(tablet *topo.TabletInfo, dbType topo.TabletType, waitTime time.Duration) error {
@@ -112,111 +96,63 @@ func (ai *ActionInitiator) SetBlacklistedTables(tablet *topo.TabletInfo, tables 
 }
 
 func (ai *ActionInitiator) SetReadOnly(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SET_RDONLY})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SET_RDONLY})
 }
 
 func (ai *ActionInitiator) SetReadWrite(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SET_RDWR})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SET_RDWR})
 }
 
 func (ai *ActionInitiator) DemoteMaster(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_DEMOTE_MASTER})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_DEMOTE_MASTER})
 }
 
-type SnapshotArgs struct {
-	Concurrency int
-	ServerMode  bool
+func (ai *ActionInitiator) Snapshot(tabletAlias topo.TabletAlias, args *actionnode.SnapshotArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SNAPSHOT, Args: args})
 }
 
-type SnapshotReply struct {
-	ParentAlias  topo.TabletAlias
-	ManifestPath string
-
-	// these two are only used for ServerMode=true full snapshot
-	SlaveStartRequired bool
-	ReadOnly           bool
+func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias topo.TabletAlias, args *actionnode.SnapshotSourceEndArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END, Args: args})
 }
 
-type MultiSnapshotReply struct {
-	ParentAlias   topo.TabletAlias
-	ManifestPaths []string
+func (ai *ActionInitiator) MultiSnapshot(tabletAlias topo.TabletAlias, args *actionnode.MultiSnapshotArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_MULTI_SNAPSHOT, Args: args})
 }
 
-func (ai *ActionInitiator) Snapshot(tabletAlias topo.TabletAlias, args *SnapshotArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SNAPSHOT, args: args})
-}
-
-type SnapshotSourceEndArgs struct {
-	SlaveStartRequired bool
-	ReadOnly           bool
-}
-
-func (ai *ActionInitiator) SnapshotSourceEnd(tabletAlias topo.TabletAlias, args *SnapshotSourceEndArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SNAPSHOT_SOURCE_END, args: args})
-}
-
-type MultiSnapshotArgs struct {
-	KeyRanges        []key.KeyRange
-	Tables           []string
-	Concurrency      int
-	SkipSlaveRestart bool
-	MaximumFilesize  uint64
-}
-
-type MultiRestoreArgs struct {
-	SrcTabletAliases       []topo.TabletAlias
-	Concurrency            int
-	FetchConcurrency       int
-	InsertTableConcurrency int
-	FetchRetryCount        int
-	Strategy               string
-}
-
-func (ai *ActionInitiator) MultiSnapshot(tabletAlias topo.TabletAlias, args *MultiSnapshotArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_MULTI_SNAPSHOT, args: args})
-}
-
-func (ai *ActionInitiator) MultiRestore(tabletAlias topo.TabletAlias, args *MultiRestoreArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_MULTI_RESTORE, args: args})
+func (ai *ActionInitiator) MultiRestore(tabletAlias topo.TabletAlias, args *actionnode.MultiRestoreArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_MULTI_RESTORE, Args: args})
 }
 
 func (ai *ActionInitiator) BreakSlaves(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_BREAK_SLAVES})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_BREAK_SLAVES})
 }
 
 func (ai *ActionInitiator) PromoteSlave(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_PROMOTE_SLAVE})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PROMOTE_SLAVE})
 }
 
 func (ai *ActionInitiator) SlaveWasPromoted(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_PROMOTED})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED})
 }
 
 func (ai *ActionInitiator) RpcSlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error {
 	return ai.rpc.SlaveWasPromoted(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) RestartSlave(tabletAlias topo.TabletAlias, args *RestartSlaveData) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_RESTART_SLAVE, args: args})
+func (ai *ActionInitiator) RestartSlave(tabletAlias topo.TabletAlias, args *actionnode.RestartSlaveData) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESTART_SLAVE, Args: args})
 }
 
-type SlaveWasRestartedData struct {
-	Parent               topo.TabletAlias
-	ExpectedMasterAddr   string
-	ExpectedMasterIpAddr string
-	ScrapStragglers      bool
+func (ai *ActionInitiator) SlaveWasRestarted(tabletAlias topo.TabletAlias, args *actionnode.SlaveWasRestartedArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, Args: args})
 }
 
-func (ai *ActionInitiator) SlaveWasRestarted(tabletAlias topo.TabletAlias, args *SlaveWasRestartedData) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SLAVE_WAS_RESTARTED, args: args})
-}
-
-func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *SlaveWasRestartedData, waitTime time.Duration) error {
+func (ai *ActionInitiator) RpcSlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error {
 	return ai.rpc.SlaveWasRestarted(tablet, args, waitTime)
 }
 
 func (ai *ActionInitiator) ReparentPosition(tabletAlias topo.TabletAlias, slavePos *mysqlctl.ReplicationPosition) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_REPARENT_POSITION, args: slavePos})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_REPARENT_POSITION, Args: slavePos})
 }
 
 func (ai *ActionInitiator) MasterPosition(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.ReplicationPosition, error) {
@@ -289,30 +225,16 @@ func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *
 	return ai.rpc.RunBlpUntil(tablet, positions, waitTime)
 }
 
-type ReserveForRestoreArgs struct {
-	SrcTabletAlias topo.TabletAlias
+func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias topo.TabletAlias, args *actionnode.ReserveForRestoreArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(dstTabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE, Args: args})
 }
 
-func (ai *ActionInitiator) ReserveForRestore(dstTabletAlias topo.TabletAlias, args *ReserveForRestoreArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESERVE_FOR_RESTORE, args: args})
-}
-
-type RestoreArgs struct {
-	SrcTabletAlias        topo.TabletAlias
-	SrcFilePath           string
-	ParentAlias           topo.TabletAlias
-	FetchConcurrency      int
-	FetchRetryCount       int
-	WasReserved           bool
-	DontWaitForSlaveStart bool
-}
-
-func (ai *ActionInitiator) Restore(dstTabletAlias topo.TabletAlias, args *RestoreArgs) (actionPath string, err error) {
-	return ai.writeTabletAction(dstTabletAlias, &ActionNode{Action: TABLET_ACTION_RESTORE, args: args})
+func (ai *ActionInitiator) Restore(dstTabletAlias topo.TabletAlias, args *actionnode.RestoreArgs) (actionPath string, err error) {
+	return ai.writeTabletAction(dstTabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_RESTORE, Args: args})
 }
 
 func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_SCRAP})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SCRAP})
 }
 
 func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
@@ -320,11 +242,11 @@ func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, i
 }
 
 func (ai *ActionInitiator) PreflightSchema(tabletAlias topo.TabletAlias, change string) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_PREFLIGHT_SCHEMA, args: &change})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, Args: &change})
 }
 
 func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_APPLY_SCHEMA, args: sc})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_APPLY_SCHEMA, Args: sc})
 }
 
 func (ai *ActionInitiator) GetPermissions(tabletAlias topo.TabletAlias, waitTime time.Duration) (*mysqlctl.Permissions, error) {
@@ -337,7 +259,7 @@ func (ai *ActionInitiator) GetPermissions(tabletAlias topo.TabletAlias, waitTime
 }
 
 func (ai *ActionInitiator) ExecuteHook(tabletAlias topo.TabletAlias, _hook *hook.Hook) (actionPath string, err error) {
-	return ai.writeTabletAction(tabletAlias, &ActionNode{Action: TABLET_ACTION_EXECUTE_HOOK, args: _hook})
+	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_EXECUTE_HOOK, Args: _hook})
 }
 
 type SlaveList struct {
@@ -348,144 +270,103 @@ func (ai *ActionInitiator) GetSlaves(tablet *topo.TabletInfo, waitTime time.Dura
 	return ai.rpc.GetSlaves(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) ReparentShard(tabletAlias topo.TabletAlias) *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_REPARENT,
-		ActionGuid: actionGuid(),
-		args:       &tabletAlias,
-	}
+func (ai *ActionInitiator) ReparentShard(tabletAlias topo.TabletAlias) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_REPARENT,
+		Args:   &tabletAlias,
+	}).SetGuid()
 }
 
-func (ai *ActionInitiator) ShardExternallyReparented(tabletAlias topo.TabletAlias) *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_EXTERNALLY_REPARENTED,
-		ActionGuid: actionGuid(),
-		args:       &tabletAlias,
-	}
+func (ai *ActionInitiator) ShardExternallyReparented(tabletAlias topo.TabletAlias) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_EXTERNALLY_REPARENTED,
+		Args:   &tabletAlias,
+	}).SetGuid()
 }
 
-func (ai *ActionInitiator) RebuildShard() *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_REBUILD,
-		ActionGuid: actionGuid(),
-	}
+func (ai *ActionInitiator) RebuildShard() *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_REBUILD,
+	}).SetGuid()
 }
 
-func (ai *ActionInitiator) CheckShard() *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_CHECK,
-		ActionGuid: actionGuid(),
-	}
+func (ai *ActionInitiator) CheckShard() *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_CHECK,
+	}).SetGuid()
 }
 
-// parameters are stored for debug purposes
-type ApplySchemaShardArgs struct {
-	MasterTabletAlias topo.TabletAlias
-	Change            string
-	Simple            bool
-}
-
-func (ai *ActionInitiator) ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_APPLY_SCHEMA,
-		ActionGuid: actionGuid(),
-		args: &ApplySchemaShardArgs{
+func (ai *ActionInitiator) ApplySchemaShard(masterTabletAlias topo.TabletAlias, change string, simple bool) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_APPLY_SCHEMA,
+		Args: &actionnode.ApplySchemaShardArgs{
 			MasterTabletAlias: masterTabletAlias,
 			Change:            change,
 			Simple:            simple,
 		},
-	}
+	}).SetGuid()
 }
 
-// parameters are stored for debug purposes
-type SetShardServedTypesArgs struct {
-	ServedTypes []topo.TabletType
-}
-
-func (ai *ActionInitiator) SetShardServedTypes(servedTypes []topo.TabletType) *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_SET_SERVED_TYPES,
-		ActionGuid: actionGuid(),
-		args: &SetShardServedTypesArgs{
+func (ai *ActionInitiator) SetShardServedTypes(servedTypes []topo.TabletType) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_SET_SERVED_TYPES,
+		Args: &actionnode.SetShardServedTypesArgs{
 			ServedTypes: servedTypes,
 		},
-	}
+	}).SetGuid()
 }
 
-func (ai *ActionInitiator) ShardMultiRestore(args *MultiRestoreArgs) *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_MULTI_RESTORE,
-		ActionGuid: actionGuid(),
-		args:       args,
-	}
+func (ai *ActionInitiator) ShardMultiRestore(args *actionnode.MultiRestoreArgs) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_MULTI_RESTORE,
+		Args:   args,
+	}).SetGuid()
 }
 
-// parameters are stored for debug purposes
-type MigrateServedTypesArgs struct {
-	ServedType topo.TabletType
-}
-
-func (ai *ActionInitiator) MigrateServedTypes(servedType topo.TabletType) *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_MIGRATE_SERVED_TYPES,
-		ActionGuid: actionGuid(),
-		args: &MigrateServedTypesArgs{
+func (ai *ActionInitiator) MigrateServedTypes(servedType topo.TabletType) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_MIGRATE_SERVED_TYPES,
+		Args: &actionnode.MigrateServedTypesArgs{
 			ServedType: servedType,
 		},
-	}
+	}).SetGuid()
 }
 
-func (ai *ActionInitiator) UpdateShard() *ActionNode {
-	return &ActionNode{
-		Action:     SHARD_ACTION_UPDATE_SHARD,
-		ActionGuid: actionGuid(),
-	}
+func (ai *ActionInitiator) UpdateShard() *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.SHARD_ACTION_UPDATE_SHARD,
+	}).SetGuid()
 }
 
-func (ai *ActionInitiator) RebuildKeyspace() *ActionNode {
-	return &ActionNode{
-		Action:     KEYSPACE_ACTION_REBUILD,
-		ActionGuid: actionGuid(),
-	}
+func (ai *ActionInitiator) RebuildKeyspace() *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.KEYSPACE_ACTION_REBUILD,
+	}).SetGuid()
 }
 
-func (ai *ActionInitiator) SetKeyspaceShardingInfo() *ActionNode {
-	return &ActionNode{
-		Action:     KEYSPACE_ACTION_SET_SHARDING_INFO,
-		ActionGuid: actionGuid(),
-	}
+func (ai *ActionInitiator) SetKeyspaceShardingInfo() *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.KEYSPACE_ACTION_SET_SHARDING_INFO,
+	}).SetGuid()
 }
 
-// parameters are stored for debug purposes
-type ApplySchemaKeyspaceArgs struct {
-	Change string
-	Simple bool
-}
-
-func (ai *ActionInitiator) ApplySchemaKeyspace(change string, simple bool) *ActionNode {
-	return &ActionNode{
-		Action:     KEYSPACE_ACTION_APPLY_SCHEMA,
-		ActionGuid: actionGuid(),
-		args: &ApplySchemaKeyspaceArgs{
+func (ai *ActionInitiator) ApplySchemaKeyspace(change string, simple bool) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.KEYSPACE_ACTION_APPLY_SCHEMA,
+		Args: &actionnode.ApplySchemaKeyspaceArgs{
 			Change: change,
 			Simple: simple,
 		},
-	}
+	}).SetGuid()
 }
 
-// parameters are stored for debug purposes
-type MigrateServedFromArgs struct {
-	ServedType topo.TabletType
-}
-
-func (ai *ActionInitiator) MigrateServedFrom(servedType topo.TabletType) *ActionNode {
-	return &ActionNode{
-		Action:     KEYSPACE_ACTION_MIGRATE_SERVED_FROM,
-		ActionGuid: actionGuid(),
-		args: &MigrateServedFromArgs{
+func (ai *ActionInitiator) MigrateServedFrom(servedType topo.TabletType) *actionnode.ActionNode {
+	return (&actionnode.ActionNode{
+		Action: actionnode.KEYSPACE_ACTION_MIGRATE_SERVED_FROM,
+		Args: &actionnode.MigrateServedFromArgs{
 			ServedType: servedType,
 		},
-	}
+	}).SetGuid()
 }
 
 func (ai *ActionInitiator) WaitForCompletion(actionPath string, waitTime time.Duration) error {
@@ -509,12 +390,12 @@ func WaitForCompletion(ts topo.Server, actionPath string, waitTime time.Duration
 	}
 
 	// parse it
-	actionNode, dataErr := ActionNodeFromJson(data, "")
+	actionNode, dataErr := actionnode.ActionNodeFromJson(data, "")
 	if dataErr != nil {
 		return nil, fmt.Errorf("action data error: %v %v %#v", actionPath, dataErr, data)
 	} else if actionNode.Error != "" {
 		return nil, fmt.Errorf("action failed: %v %v", actionPath, actionNode.Error)
 	}
 
-	return actionNode.reply, nil
+	return actionNode.Reply, nil
 }

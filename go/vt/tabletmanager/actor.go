@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -40,18 +41,6 @@ type TabletActorError string
 
 func (e TabletActorError) Error() string {
 	return string(e)
-}
-
-type RestartSlaveData struct {
-	ReplicationState *mysqlctl.ReplicationState
-	WaitPosition     *mysqlctl.ReplicationPosition
-	TimePromoted     int64 // used to verify replication - a row will be inserted with this timestamp
-	Parent           topo.TabletAlias
-	Force            bool
-}
-
-func (rsd *RestartSlaveData) String() string {
-	return fmt.Sprintf("RestartSlaveData{ReplicationState:%#v WaitPosition:%#v TimePromoted:%v Parent:%v Force:%v}", rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, rsd.Parent, rsd.Force)
 }
 
 type TabletActor struct {
@@ -71,14 +60,14 @@ func NewTabletActor(mysqld *mysqlctl.Mysqld, mysqlDaemon mysqlctl.MysqlDaemon, t
 func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, forceRerun bool) error {
 	tabletAlias, data, version, err := ta.ts.ReadTabletActionPath(actionPath)
 	ta.tabletAlias = tabletAlias
-	actionNode, err := ActionNodeFromJson(data, actionPath)
+	actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
 	if err != nil {
 		log.Errorf("HandleAction failed unmarshaling %v: %v", actionPath, err)
 		return err
 	}
 
 	switch actionNode.State {
-	case ACTION_STATE_RUNNING:
+	case actionnode.ACTION_STATE_RUNNING:
 		// see if the process is still running, and if so, wait for it
 		proc, _ := os.FindProcess(actionNode.Pid)
 		if proc.Signal(syscall.Signal(0)) == syscall.ESRCH {
@@ -95,20 +84,20 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			_, err := WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		}
-	case ACTION_STATE_FAILED:
+	case actionnode.ACTION_STATE_FAILED:
 		// this happens only in a couple cases:
 		// - vtaction was killed by a signal and we caught it
 		// - vtaction died unexpectedly, and the next vtaction run detected it
 		return fmt.Errorf(actionNode.Error)
-	case ACTION_STATE_DONE:
+	case actionnode.ACTION_STATE_DONE:
 		// this is bad
 		return fmt.Errorf("Unexpected finished ActionNode in action queue: %v", actionPath)
 	}
 
 	// Claim the action by this process.
-	actionNode.State = ACTION_STATE_RUNNING
+	actionNode.State = actionnode.ACTION_STATE_RUNNING
 	actionNode.Pid = os.Getpid()
-	newData := ActionNodeToJson(actionNode)
+	newData := actionNode.ToJson()
 	err = ta.ts.UpdateTabletAction(actionPath, newData, version)
 	if err != nil {
 		if err == topo.ErrBadVersion {
@@ -157,7 +146,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 	return actionErr
 }
 
-func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
+func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = tb.Errorf("dispatchAction panic %v", x)
@@ -165,60 +154,66 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 	}()
 
 	switch actionNode.Action {
-	case TABLET_ACTION_BREAK_SLAVES:
+	case actionnode.TABLET_ACTION_BREAK_SLAVES:
 		err = ta.mysqld.BreakSlaves()
-	case TABLET_ACTION_CHANGE_TYPE:
+	case actionnode.TABLET_ACTION_CHANGE_TYPE:
 		err = ta.changeType(actionNode)
-	case TABLET_ACTION_DEMOTE_MASTER:
+	case actionnode.TABLET_ACTION_DEMOTE_MASTER:
 		err = ta.demoteMaster()
-	case TABLET_ACTION_MULTI_SNAPSHOT:
+	case actionnode.TABLET_ACTION_MULTI_SNAPSHOT:
 		err = ta.multiSnapshot(actionNode)
-	case TABLET_ACTION_MULTI_RESTORE:
+	case actionnode.TABLET_ACTION_MULTI_RESTORE:
 		err = ta.multiRestore(actionNode)
-	case TABLET_ACTION_PING:
+	case actionnode.TABLET_ACTION_PING:
 		// Just an end-to-end verification that we got the message.
 		err = nil
-	case TABLET_ACTION_PROMOTE_SLAVE:
+	case actionnode.TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(ta.mysqlDaemon, actionNode)
-	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
+	case actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED:
 		err = slaveWasPromoted(ta.ts, ta.mysqlDaemon, ta.tabletAlias)
-	case TABLET_ACTION_RESTART_SLAVE:
+	case actionnode.TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
-	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		err = slaveWasRestarted(ta.ts, ta.mysqlDaemon, ta.tabletAlias, actionNode.args.(*SlaveWasRestartedData))
-	case TABLET_ACTION_RESERVE_FOR_RESTORE:
+	case actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED:
+		err = slaveWasRestarted(ta.ts, ta.mysqlDaemon, ta.tabletAlias, actionNode.Args.(*actionnode.SlaveWasRestartedArgs))
+	case actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
-	case TABLET_ACTION_RESTORE:
+	case actionnode.TABLET_ACTION_RESTORE:
 		err = ta.restore(actionNode)
-	case TABLET_ACTION_SCRAP:
+	case actionnode.TABLET_ACTION_SCRAP:
 		err = ta.scrap()
-	case TABLET_ACTION_PREFLIGHT_SCHEMA:
+	case actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA:
 		err = ta.preflightSchema(actionNode)
-	case TABLET_ACTION_APPLY_SCHEMA:
+	case actionnode.TABLET_ACTION_APPLY_SCHEMA:
 		err = ta.applySchema(actionNode)
-	case TABLET_ACTION_EXECUTE_HOOK:
+	case actionnode.TABLET_ACTION_EXECUTE_HOOK:
 		err = ta.executeHook(actionNode)
-	case TABLET_ACTION_SET_RDONLY:
+	case actionnode.TABLET_ACTION_SET_RDONLY:
 		err = ta.setReadOnly(true)
-	case TABLET_ACTION_SET_RDWR:
+	case actionnode.TABLET_ACTION_SET_RDWR:
 		err = ta.setReadOnly(false)
-	case TABLET_ACTION_SLEEP:
+	case actionnode.TABLET_ACTION_SLEEP:
 		err = ta.sleep(actionNode)
-	case TABLET_ACTION_REPARENT_POSITION:
+	case actionnode.TABLET_ACTION_REPARENT_POSITION:
 		err = ta.reparentPosition(actionNode)
-	case TABLET_ACTION_SNAPSHOT:
+	case actionnode.TABLET_ACTION_SNAPSHOT:
 		err = ta.snapshot(actionNode)
-	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
+	case actionnode.TABLET_ACTION_SNAPSHOT_SOURCE_END:
 		err = ta.snapshotSourceEnd(actionNode)
 
-	case TABLET_ACTION_SET_BLACKLISTED_TABLES, TABLET_ACTION_GET_SCHEMA,
-		TABLET_ACTION_GET_PERMISSIONS,
-		TABLET_ACTION_SLAVE_POSITION, TABLET_ACTION_WAIT_SLAVE_POSITION,
-		TABLET_ACTION_MASTER_POSITION, TABLET_ACTION_STOP_SLAVE,
-		TABLET_ACTION_STOP_SLAVE_MINIMUM, TABLET_ACTION_START_SLAVE,
-		TABLET_ACTION_GET_SLAVES, TABLET_ACTION_WAIT_BLP_POSITION,
-		TABLET_ACTION_STOP_BLP, TABLET_ACTION_START_BLP,
-		TABLET_ACTION_RUN_BLP_UNTIL:
+	case actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES,
+		actionnode.TABLET_ACTION_GET_SCHEMA,
+		actionnode.TABLET_ACTION_GET_PERMISSIONS,
+		actionnode.TABLET_ACTION_SLAVE_POSITION,
+		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,
+		actionnode.TABLET_ACTION_MASTER_POSITION,
+		actionnode.TABLET_ACTION_STOP_SLAVE,
+		actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM,
+		actionnode.TABLET_ACTION_START_SLAVE,
+		actionnode.TABLET_ACTION_GET_SLAVES,
+		actionnode.TABLET_ACTION_WAIT_BLP_POSITION,
+		actionnode.TABLET_ACTION_STOP_BLP,
+		actionnode.TABLET_ACTION_START_BLP,
+		actionnode.TABLET_ACTION_RUN_BLP_UNTIL:
 		err = TabletActorError("Operation " + actionNode.Action + "  only supported as RPC")
 	default:
 		err = TabletActorError("invalid action: " + actionNode.Action)
@@ -228,26 +223,26 @@ func (ta *TabletActor) dispatchAction(actionNode *ActionNode) (err error) {
 }
 
 // Write the result of an action into topology server
-func StoreActionResponse(ts topo.Server, actionNode *ActionNode, actionPath string, actionErr error) error {
+func StoreActionResponse(ts topo.Server, actionNode *actionnode.ActionNode, actionPath string, actionErr error) error {
 	// change our state
 	if actionErr != nil {
 		// on failure, set an error field on the node
 		actionNode.Error = actionErr.Error()
-		actionNode.State = ACTION_STATE_FAILED
+		actionNode.State = actionnode.ACTION_STATE_FAILED
 	} else {
 		actionNode.Error = ""
-		actionNode.State = ACTION_STATE_DONE
+		actionNode.State = actionnode.ACTION_STATE_DONE
 	}
 	actionNode.Pid = 0
 
 	// Write the data first to our action node, then to the log.
 	// In the error case, this node will be left behind to debug.
-	data := ActionNodeToJson(actionNode)
+	data := actionNode.ToJson()
 	return ts.StoreTabletActionResponse(actionPath, data)
 }
 
-func (ta *TabletActor) sleep(actionNode *ActionNode) error {
-	duration := actionNode.args.(*time.Duration)
+func (ta *TabletActor) sleep(actionNode *actionnode.ActionNode) error {
+	duration := actionNode.Args.(*time.Duration)
 	time.Sleep(*duration)
 	return nil
 }
@@ -270,8 +265,8 @@ func (ta *TabletActor) setReadOnly(rdonly bool) error {
 	return topo.UpdateTablet(ta.ts, tablet)
 }
 
-func (ta *TabletActor) changeType(actionNode *ActionNode) error {
-	dbType := actionNode.args.(*topo.TabletType)
+func (ta *TabletActor) changeType(actionNode *actionnode.ActionNode) error {
+	dbType := actionNode.Args.(*topo.TabletType)
 	return ChangeType(ta.ts, ta.tabletAlias, *dbType, true /*runHooks*/)
 }
 
@@ -292,20 +287,20 @@ func (ta *TabletActor) demoteMaster() error {
 	return topo.UpdateTablet(ta.ts, tablet)
 }
 
-func (ta *TabletActor) promoteSlave(mysqlDaemon mysqlctl.MysqlDaemon, actionNode *ActionNode) error {
+func (ta *TabletActor) promoteSlave(mysqlDaemon mysqlctl.MysqlDaemon, actionNode *actionnode.ActionNode) error {
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
 		return err
 	}
 
 	// Perform the action.
-	rsd := &RestartSlaveData{Parent: tablet.Alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
+	rsd := &actionnode.RestartSlaveData{Parent: tablet.Alias, Force: (tablet.Parent.Uid == topo.NO_TABLET)}
 	rsd.ReplicationState, rsd.WaitPosition, rsd.TimePromoted, err = ta.mysqld.PromoteSlave(false, ta.hookExtraEnv())
 	if err != nil {
 		return err
 	}
 	log.Infof("PromoteSlave %v", rsd.String())
-	actionNode.reply = rsd
+	actionNode.Reply = rsd
 
 	return updateReplicationGraphForPromotedSlave(ta.ts, mysqlDaemon, tablet)
 }
@@ -369,25 +364,25 @@ func updateReplicationGraphForPromotedSlave(ts topo.Server, mysqlDaemon mysqlctl
 	return nil
 }
 
-func (ta *TabletActor) reparentPosition(actionNode *ActionNode) error {
-	slavePos := actionNode.args.(*mysqlctl.ReplicationPosition)
+func (ta *TabletActor) reparentPosition(actionNode *actionnode.ActionNode) error {
+	slavePos := actionNode.Args.(*mysqlctl.ReplicationPosition)
 
 	replicationState, waitPosition, timePromoted, err := ta.mysqld.ReparentPosition(slavePos)
 	if err != nil {
 		return err
 	}
-	rsd := new(RestartSlaveData)
+	rsd := new(actionnode.RestartSlaveData)
 	rsd.ReplicationState = replicationState
 	rsd.TimePromoted = timePromoted
 	rsd.WaitPosition = waitPosition
 	rsd.Parent = ta.tabletAlias
 	log.V(6).Infof("reparentPosition %v", rsd.String())
-	actionNode.reply = rsd
+	actionNode.Reply = rsd
 	return nil
 }
 
-func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
-	rsd := actionNode.args.(*RestartSlaveData)
+func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
+	rsd := actionNode.Args.(*actionnode.RestartSlaveData)
 
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
@@ -456,7 +451,7 @@ func (ta *TabletActor) restartSlave(actionNode *ActionNode) error {
 	return nil
 }
 
-func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias, swrd *SlaveWasRestartedData) error {
+func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias, swrd *actionnode.SlaveWasRestartedArgs) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -501,8 +496,8 @@ func (ta *TabletActor) scrap() error {
 	return Scrap(ta.ts, ta.tabletAlias, false)
 }
 
-func (ta *TabletActor) preflightSchema(actionNode *ActionNode) error {
-	change := actionNode.args.(*string)
+func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error {
+	change := actionNode.Args.(*string)
 
 	// read the tablet to get the dbname
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
@@ -515,12 +510,12 @@ func (ta *TabletActor) preflightSchema(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	actionNode.reply = scr
+	actionNode.Reply = scr
 	return nil
 }
 
-func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
-	sc := actionNode.args.(*mysqlctl.SchemaChange)
+func (ta *TabletActor) applySchema(actionNode *actionnode.ActionNode) error {
+	sc := actionNode.Args.(*mysqlctl.SchemaChange)
 
 	// read the tablet to get the dbname
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
@@ -533,7 +528,7 @@ func (ta *TabletActor) applySchema(actionNode *ActionNode) error {
 	if err != nil {
 		return err
 	}
-	actionNode.reply = scr
+	actionNode.Reply = scr
 	return nil
 }
 
@@ -545,11 +540,11 @@ func configureTabletHook(hk *hook.Hook, tabletAlias topo.TabletAlias) {
 	hk.ExtraEnv["TABLET_ALIAS"] = tabletAlias.String()
 }
 
-func (ta *TabletActor) executeHook(actionNode *ActionNode) (err error) {
+func (ta *TabletActor) executeHook(actionNode *actionnode.ActionNode) (err error) {
 	// FIXME(msolomon) should't the reply get distilled into an error?
-	h := actionNode.args.(*hook.Hook)
+	h := actionNode.Args.(*hook.Hook)
 	configureTabletHook(h, ta.tabletAlias)
-	actionNode.reply = h.Execute()
+	actionNode.Reply = h.Execute()
 	return nil
 }
 
@@ -558,8 +553,8 @@ func (ta *TabletActor) hookExtraEnv() map[string]string {
 }
 
 // Operate on a backup tablet. Shutdown mysqld and copy the data files aside.
-func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
-	args := actionNode.args.(*SnapshotArgs)
+func (ta *TabletActor) snapshot(actionNode *actionnode.ActionNode) error {
+	args := actionNode.Args.(*actionnode.SnapshotArgs)
 
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
@@ -575,7 +570,7 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	sr := &SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
+	sr := &actionnode.SnapshotReply{ManifestPath: filename, SlaveStartRequired: slaveStartRequired, ReadOnly: readOnly}
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doesn't work in hierarchical replication.
@@ -583,12 +578,12 @@ func (ta *TabletActor) snapshot(actionNode *ActionNode) error {
 	} else {
 		sr.ParentAlias = tablet.Parent
 	}
-	actionNode.reply = sr
+	actionNode.Reply = sr
 	return nil
 }
 
-func (ta *TabletActor) snapshotSourceEnd(actionNode *ActionNode) error {
-	args := actionNode.args.(*SnapshotSourceEndArgs)
+func (ta *TabletActor) snapshotSourceEnd(actionNode *actionnode.ActionNode) error {
+	args := actionNode.Args.(*actionnode.SnapshotSourceEndArgs)
 
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
@@ -654,12 +649,12 @@ func (ta *TabletActor) changeTypeToRestore(tablet, sourceTablet *topo.TabletInfo
 
 // Reserve a tablet for restore.
 // Can be called remotely
-func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
+func (ta *TabletActor) reserveForRestore(actionNode *actionnode.ActionNode) error {
 	// first check mysql, no need to go further if we can't restore
 	if err := ta.mysqld.ValidateCloneTarget(ta.hookExtraEnv()); err != nil {
 		return err
 	}
-	args := actionNode.args.(*ReserveForRestoreArgs)
+	args := actionNode.Args.(*actionnode.ReserveForRestoreArgs)
 
 	// read our current tablet, verify its state
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
@@ -695,8 +690,8 @@ func (ta *TabletActor) reserveForRestore(actionNode *ActionNode) error {
 // Load the snapshot from source tablet.
 // Restart mysqld and replication.
 // Put tablet into the replication graph as a spare.
-func (ta *TabletActor) restore(actionNode *ActionNode) error {
-	args := actionNode.args.(*RestoreArgs)
+func (ta *TabletActor) restore(actionNode *actionnode.ActionNode) error {
+	args := actionNode.Args.(*actionnode.RestoreArgs)
 
 	// read our current tablet, verify its state
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
@@ -757,8 +752,8 @@ func (ta *TabletActor) restore(actionNode *ActionNode) error {
 	return ChangeType(ta.ts, ta.tabletAlias, topo.TYPE_SPARE, true)
 }
 
-func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
-	args := actionNode.args.(*MultiSnapshotArgs)
+func (ta *TabletActor) multiSnapshot(actionNode *actionnode.ActionNode) error {
+	args := actionNode.Args.(*actionnode.MultiSnapshotArgs)
 
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)
 	if err != nil {
@@ -778,7 +773,7 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 		return err
 	}
 
-	sr := &MultiSnapshotReply{ManifestPaths: filenames}
+	sr := &actionnode.MultiSnapshotReply{ManifestPaths: filenames}
 	if tablet.Parent.Uid == topo.NO_TABLET {
 		// If this is a master, this will be the new parent.
 		// FIXME(msolomon) this doens't work in hierarchical replication.
@@ -786,12 +781,12 @@ func (ta *TabletActor) multiSnapshot(actionNode *ActionNode) error {
 	} else {
 		sr.ParentAlias = tablet.Parent
 	}
-	actionNode.reply = sr
+	actionNode.Reply = sr
 	return nil
 }
 
-func (ta *TabletActor) multiRestore(actionNode *ActionNode) (err error) {
-	args := actionNode.args.(*MultiRestoreArgs)
+func (ta *TabletActor) multiRestore(actionNode *actionnode.ActionNode) (err error) {
+	args := actionNode.Args.(*actionnode.MultiRestoreArgs)
 
 	// read our current tablet, verify its state
 	// we only support restoring to the master or spare replicas
@@ -860,7 +855,7 @@ func Scrap(ts topo.Server, tabletAlias topo.TabletAlias, force bool) error {
 	// Remove any pending actions. Presumably forcing a scrap means you don't
 	// want the agent doing anything and the machine requires manual attention.
 	if force {
-		err := ts.PurgeTabletActions(tabletAlias, ActionNodeCanBePurged)
+		err := ts.PurgeTabletActions(tabletAlias, actionnode.ActionNodeCanBePurged)
 		if err != nil {
 			log.Warningf("purge actions failed: %v", err)
 		}

@@ -9,6 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -88,7 +89,7 @@ type TabletManagerConn interface {
 	SlaveWasPromoted(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
-	SlaveWasRestarted(tablet *topo.TabletInfo, args *SlaveWasRestartedData, waitTime time.Duration) error
+	SlaveWasRestarted(tablet *topo.TabletInfo, args *actionnode.SlaveWasRestartedArgs, waitTime time.Duration) error
 }
 
 type TabletManagerConnFactory func(topo.Server) TabletManagerConn

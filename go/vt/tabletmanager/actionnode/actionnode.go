@@ -6,12 +6,13 @@
 //
 // They are currenty managed through a series of queues stored in topology server.
 
-package tabletmanager
+package actionnode
 
 import (
 	"encoding/json"
 	"fmt"
-	"io"
+	"os"
+	"os/user"
 	"strings"
 	"time"
 
@@ -125,8 +126,11 @@ const (
 	ACTION_STATE_DONE    = ActionState("Done")    // Ended with no failure
 )
 
+// ActionState is the state an ActionNode
 type ActionState string
 
+// ActionNode describes a long-running action on a tablet, or an action
+// on a shard or keyspace that locks it.
 type ActionNode struct {
 	Action     string
 	ActionGuid string
@@ -135,11 +139,13 @@ type ActionNode struct {
 	Pid        int // only != 0 if State == ACTION_STATE_RUNNING
 
 	// do not serialize the next fields
-	path  string // path in topology server representing this action
-	args  interface{}
-	reply interface{}
+	// path in topology server representing this action
+	Path  string      `json:"-"`
+	Args  interface{} `json:"-"`
+	Reply interface{} `json:"-"`
 }
 
+// ActionNodeFromJson interprets the data from JSON.
 func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	decoder := json.NewDecoder(strings.NewReader(data))
 
@@ -149,78 +155,78 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	if err != nil {
 		return nil, err
 	}
-	node.path = path
+	node.Path = path
 
 	// figure out our args and reply types
 	switch node.Action {
 	case TABLET_ACTION_PING:
 	case TABLET_ACTION_SLEEP:
-		node.args = new(time.Duration)
+		node.Args = new(time.Duration)
 	case TABLET_ACTION_SET_RDONLY:
 	case TABLET_ACTION_SET_RDWR:
 	case TABLET_ACTION_CHANGE_TYPE:
-		node.args = new(topo.TabletType)
+		node.Args = new(topo.TabletType)
 
 	case TABLET_ACTION_DEMOTE_MASTER:
 	case TABLET_ACTION_PROMOTE_SLAVE:
-		node.reply = &RestartSlaveData{}
+		node.Reply = &RestartSlaveData{}
 	case TABLET_ACTION_SLAVE_WAS_PROMOTED:
 	case TABLET_ACTION_RESTART_SLAVE:
-		node.args = &RestartSlaveData{}
+		node.Args = &RestartSlaveData{}
 	case TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		node.args = &SlaveWasRestartedData{}
+		node.Args = &SlaveWasRestartedArgs{}
 	case TABLET_ACTION_BREAK_SLAVES:
 	case TABLET_ACTION_REPARENT_POSITION:
-		node.args = &mysqlctl.ReplicationPosition{}
-		node.reply = &RestartSlaveData{}
+		node.Args = &mysqlctl.ReplicationPosition{}
+		node.Reply = &RestartSlaveData{}
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
-		node.args = new(string)
-		node.reply = &mysqlctl.SchemaChangeResult{}
+		node.Args = new(string)
+		node.Reply = &mysqlctl.SchemaChangeResult{}
 	case TABLET_ACTION_APPLY_SCHEMA:
-		node.args = &mysqlctl.SchemaChange{}
-		node.reply = &mysqlctl.SchemaChangeResult{}
+		node.Args = &mysqlctl.SchemaChange{}
+		node.Reply = &mysqlctl.SchemaChangeResult{}
 	case TABLET_ACTION_EXECUTE_HOOK:
-		node.args = &hook.Hook{}
-		node.reply = &hook.HookResult{}
+		node.Args = &hook.Hook{}
+		node.Reply = &hook.HookResult{}
 
 	case TABLET_ACTION_SNAPSHOT:
-		node.args = &SnapshotArgs{}
-		node.reply = &SnapshotReply{}
+		node.Args = &SnapshotArgs{}
+		node.Reply = &SnapshotReply{}
 	case TABLET_ACTION_SNAPSHOT_SOURCE_END:
-		node.args = &SnapshotSourceEndArgs{}
+		node.Args = &SnapshotSourceEndArgs{}
 	case TABLET_ACTION_RESERVE_FOR_RESTORE:
-		node.args = &ReserveForRestoreArgs{}
+		node.Args = &ReserveForRestoreArgs{}
 	case TABLET_ACTION_RESTORE:
-		node.args = &RestoreArgs{}
+		node.Args = &RestoreArgs{}
 	case TABLET_ACTION_MULTI_SNAPSHOT:
-		node.args = &MultiSnapshotArgs{}
-		node.reply = &MultiSnapshotReply{}
+		node.Args = &MultiSnapshotArgs{}
+		node.Reply = &MultiSnapshotReply{}
 	case TABLET_ACTION_MULTI_RESTORE:
-		node.args = &MultiRestoreArgs{}
+		node.Args = &MultiRestoreArgs{}
 
 	case SHARD_ACTION_REPARENT:
-		node.args = &topo.TabletAlias{}
+		node.Args = &topo.TabletAlias{}
 	case SHARD_ACTION_EXTERNALLY_REPARENTED:
-		node.args = &topo.TabletAlias{}
+		node.Args = &topo.TabletAlias{}
 	case SHARD_ACTION_REBUILD:
 	case SHARD_ACTION_CHECK:
 	case SHARD_ACTION_APPLY_SCHEMA:
-		node.args = &ApplySchemaShardArgs{}
+		node.Args = &ApplySchemaShardArgs{}
 	case SHARD_ACTION_SET_SERVED_TYPES:
-		node.args = &SetShardServedTypesArgs{}
+		node.Args = &SetShardServedTypesArgs{}
 	case SHARD_ACTION_MULTI_RESTORE:
-		node.args = &MultiRestoreArgs{}
+		node.Args = &MultiRestoreArgs{}
 	case SHARD_ACTION_MIGRATE_SERVED_TYPES:
-		node.args = &MigrateServedTypesArgs{}
+		node.Args = &MigrateServedTypesArgs{}
 	case SHARD_ACTION_UPDATE_SHARD:
 
 	case KEYSPACE_ACTION_REBUILD:
 	case KEYSPACE_ACTION_APPLY_SCHEMA:
-		node.args = &ApplySchemaKeyspaceArgs{}
+		node.Args = &ApplySchemaKeyspaceArgs{}
 	case KEYSPACE_ACTION_SET_SHARDING_INFO:
 	case KEYSPACE_ACTION_MIGRATE_SERVED_FROM:
-		node.args = &MigrateServedFromArgs{}
+		node.Args = &MigrateServedFromArgs{}
 
 	case TABLET_ACTION_SET_BLACKLISTED_TABLES, TABLET_ACTION_GET_SCHEMA,
 		TABLET_ACTION_GET_PERMISSIONS,
@@ -237,55 +243,64 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	}
 
 	// decode the args
-	if node.args != nil {
-		err = decoder.Decode(node.args)
+	if node.Args != nil {
+		err = decoder.Decode(node.Args)
 	} else {
 		var a interface{}
 		err = decoder.Decode(&a)
 	}
-	if err == io.EOF {
-		// no args, no reply, we're done (backward compatible mode)
-		return node, nil
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 
 	// decode the reply
-	if node.reply != nil {
-		err = decoder.Decode(node.reply)
+	if node.Reply != nil {
+		err = decoder.Decode(node.Reply)
 	} else {
 		var a interface{}
 		err = decoder.Decode(&a)
 	}
-	if err == io.EOF {
-		// no reply, we're done (backward compatible mode)
-		return node, nil
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 
 	return node, nil
 }
 
-func (n *ActionNode) Path() string {
-	return n.path
-}
-
-func ActionNodeToJson(n *ActionNode) string {
+// ToJson returns a JSON representation of the object.
+func (n *ActionNode) ToJson() string {
 	result := jscfg.ToJson(n) + "\n"
-	if n.args == nil {
+	if n.Args == nil {
 		result += "{}\n"
 	} else {
-		result += jscfg.ToJson(n.args) + "\n"
+		result += jscfg.ToJson(n.Args) + "\n"
 	}
-	if n.reply == nil {
+	if n.Reply == nil {
 		result += "{}\n"
 	} else {
-		result += jscfg.ToJson(n.reply) + "\n"
+		result += jscfg.ToJson(n.Reply) + "\n"
 	}
 	return result
 }
 
+// SetGuid will set the ActionGuid field for the action node
+// and return the action node.
+func (n *ActionNode) SetGuid() *ActionNode {
+	now := time.Now().Format(time.RFC3339)
+	username := "unknown"
+	if u, err := user.Current(); err == nil {
+		username = u.Username
+	}
+	hostname := "unknown"
+	if h, err := os.Hostname(); err == nil {
+		hostname = h
+	}
+	n.ActionGuid = fmt.Sprintf("%v-%v-%v", now, username, hostname)
+	return n
+}
+
+// ActionNodeCanBePurged returns true if that ActionNode can be purged
+// from the topology server.
 func ActionNodeCanBePurged(data string) bool {
 	actionNode, err := ActionNodeFromJson(data, "")
 	if err != nil {
@@ -301,6 +316,7 @@ func ActionNodeCanBePurged(data string) bool {
 	return true
 }
 
+// ActionNodeIsStale returns true if that ActionNode is not Running
 func ActionNodeIsStale(data string) bool {
 	actionNode, err := ActionNodeFromJson(data, "")
 	if err != nil {

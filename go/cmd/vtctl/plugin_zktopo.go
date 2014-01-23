@@ -17,7 +17,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 	"github.com/youtube/vitess/go/vt/zktopo"
@@ -90,7 +90,7 @@ func commandPurgeActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 		return "", err
 	}
 	for _, zkActionPath := range zkActionPaths {
-		err := zkts.PurgeActions(zkActionPath, tabletmanager.ActionNodeCanBePurged)
+		err := zkts.PurgeActions(zkActionPath, actionnode.ActionNodeCanBePurged)
 		if err != nil {
 			return "", err
 		}
@@ -98,17 +98,17 @@ func commandPurgeActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 	return "", nil
 }
 
-func staleActions(zkts *zktopo.Server, zkActionPath string, maxStaleness time.Duration) ([]*tabletmanager.ActionNode, error) {
+func staleActions(zkts *zktopo.Server, zkActionPath string, maxStaleness time.Duration) ([]*actionnode.ActionNode, error) {
 	// get the stale strings
-	actionNodes, err := zkts.StaleActions(zkActionPath, maxStaleness, tabletmanager.ActionNodeIsStale)
+	actionNodes, err := zkts.StaleActions(zkActionPath, maxStaleness, actionnode.ActionNodeIsStale)
 	if err != nil {
 		return nil, err
 	}
 
 	// convert to ActionNode
-	staleActions := make([]*tabletmanager.ActionNode, len(actionNodes))
+	staleActions := make([]*actionnode.ActionNode, len(actionNodes))
 	for i, actionNodeStr := range actionNodes {
-		actionNode, err := tabletmanager.ActionNodeFromJson(actionNodeStr, "")
+		actionNode, err := actionnode.ActionNodeFromJson(actionNodeStr, "")
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +149,7 @@ func commandStaleActions(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []s
 				fmt.Println(fmtAction(action))
 			}
 			if *purge && len(staleActions) > 0 {
-				err := zkts.PurgeActions(zkActionPath, tabletmanager.ActionNodeCanBePurged)
+				err := zkts.PurgeActions(zkActionPath, actionnode.ActionNodeCanBePurged)
 				if err != nil {
 					errCount.Add(1)
 					log.Errorf("can't purge stale actions: %v %v", zkActionPath, err)
@@ -223,7 +223,7 @@ func commandExportZknsForKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet,
 	return "", wr.ExportZknsForKeyspace(keyspace)
 }
 
-func getActions(zconn zk.Conn, actionPath string) ([]*tabletmanager.ActionNode, error) {
+func getActions(zconn zk.Conn, actionPath string) ([]*actionnode.ActionNode, error) {
 	actions, _, err := zconn.Children(actionPath)
 	if err != nil {
 		return nil, fmt.Errorf("getActions failed: %v %v", actionPath, err)
@@ -231,7 +231,7 @@ func getActions(zconn zk.Conn, actionPath string) ([]*tabletmanager.ActionNode, 
 	sort.Strings(actions)
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	nodes := make([]*tabletmanager.ActionNode, 0, len(actions))
+	nodes := make([]*actionnode.ActionNode, 0, len(actions))
 	for _, action := range actions {
 		wg.Add(1)
 		go func(action string) {
@@ -242,7 +242,7 @@ func getActions(zconn zk.Conn, actionPath string) ([]*tabletmanager.ActionNode, 
 				log.Warningf("getActions: %v %v", actionNodePath, err)
 				return
 			}
-			actionNode, err := tabletmanager.ActionNodeFromJson(data, actionNodePath)
+			actionNode, err := actionnode.ActionNodeFromJson(data, actionNodePath)
 			if err != nil {
 				log.Warningf("getActions: %v %v", actionNodePath, err)
 				return
@@ -277,7 +277,7 @@ func listActionsByShard(ts topo.Server, keyspace, shard string) error {
 	// get and print the tablet action nodes
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
-	actionMap := make(map[string]*tabletmanager.ActionNode)
+	actionMap := make(map[string]*actionnode.ActionNode)
 
 	f := func(actionPath string) {
 		defer wg.Done()
@@ -288,7 +288,7 @@ func listActionsByShard(ts topo.Server, keyspace, shard string) error {
 		}
 		mu.Lock()
 		for _, node := range actionNodes {
-			actionMap[node.Path()] = node
+			actionMap[node.Path] = node
 		}
 		mu.Unlock()
 	}
