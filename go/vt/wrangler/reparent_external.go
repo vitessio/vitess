@@ -98,6 +98,13 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[to
 	delete(slaveTabletMap, masterElectTablet.Alias)
 	delete(masterTabletMap, masterElectTablet.Alias)
 
+	// Re-read the master elect tablet as its mysql port
+	// may have been updated
+	masterElectTablet, err = wr.TopoServer().GetTablet(masterElectTablet.Alias)
+	if err != nil {
+		return fmt.Errorf("cannot re-read the master record, something is seriously wrong: %v", err)
+	}
+
 	// then fix all the slaves, including the old master
 	return wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, acceptSuccessPercents)
 }
