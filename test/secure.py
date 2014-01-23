@@ -10,6 +10,7 @@ import subprocess
 import time
 import unittest
 
+from vtdb import dbexceptions
 from vtdb import tablet as tablet3
 from vtdb import topology
 from vtdb import vtgate
@@ -226,7 +227,7 @@ class TestSecure(unittest.TestCase):
     utils.run_vtctl('ReparentShard -force test_keyspace/0 ' + shard_0_master.tablet_alias, auto_log=True)
 
     # then get the topology and check it
-    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % environment.zkocc_port_base,
                                          "test_nj", 30.0)
     topology.read_keyspaces(zkocc_client)
 
@@ -245,10 +246,10 @@ class TestSecure(unittest.TestCase):
     # try to connect with regular client
     try:
       conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
-                                      "test_keyspace", "0", 10.0)
+                                      "", "test_keyspace", "0", 10.0)
       conn.dial()
       self.fail("No exception raised to secure port")
-    except tablet3.FatalError as e:
+    except dbexceptions.FatalError as e:
       if not e.args[0][0].startswith('Unexpected EOF in handshake to'):
         self.fail("Unexpected exception: %s" % str(e))
 
@@ -258,7 +259,7 @@ class TestSecure(unittest.TestCase):
 
     # connect to encrypted port
     conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0], shard_0_master_addrs[0][1]),
-                                    "test_keyspace", "0", 5.0, encrypted=True)
+                                    "", "test_keyspace", "0", 5.0, encrypted=True)
     conn.dial()
     (results, rowcount, lastrowid, fields) = conn._execute("select 1 from dual", {})
     self.assertEqual(results, [(1,),], 'wrong conn._execute output: %s' % str(results))
@@ -274,7 +275,7 @@ class TestSecure(unittest.TestCase):
     try:
       conn._execute("select sleep(100) from dual", {})
       self.fail("No timeout exception")
-    except tablet3.TimeoutError as e:
+    except dbexceptions.TimeoutError as e:
       logging.debug("Got the right exception for SSL timeout: %s", str(e))
 
     # start a vtgate to connect to that tablet

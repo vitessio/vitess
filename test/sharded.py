@@ -217,7 +217,7 @@ class TestSharded(unittest.TestCase):
     # now try to connect using the python client and shard-aware connection
     # to both shards
     # first get the topology and check it
-    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+    zkocc_client = zkocc.ZkOccConnection("localhost:%u" % environment.zkocc_port_base,
                                          "test_nj", 30.0)
     topology.read_keyspaces(zkocc_client)
 
@@ -229,7 +229,7 @@ class TestSharded(unittest.TestCase):
     # connect to shard -80
     conn = tablet3.TabletConnection("%s:%u" % (shard_0_master_addrs[0][0],
                                                shard_0_master_addrs[0][1]),
-                                    "test_keyspace", "-80", 10.0)
+                                    "", "test_keyspace", "-80", 10.0)
     conn.dial()
     (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
     self.assertEqual(results, [(1, 'test 1'), (2, 'test 2'), ],
@@ -239,7 +239,7 @@ class TestSharded(unittest.TestCase):
     shard_1_master_addrs = topology.get_host_port_by_name(zkocc_client, "test_keyspace.80-.master:_vtocc")
     conn = tablet3.TabletConnection("%s:%u" % (shard_1_master_addrs[0][0],
                                                shard_1_master_addrs[0][1]),
-                                    "test_keyspace", "80-", 10.0)
+                                    "", "test_keyspace", "80-", 10.0)
     conn.dial()
     (results, rowcount, lastrowid, fields) = conn._execute("select id, msg from vt_select_test order by id", {})
     self.assertEqual(results, [(10, 'test 10'), ],
@@ -248,7 +248,7 @@ class TestSharded(unittest.TestCase):
     # try to connect with bad shard
     try:
       conn = tablet3.TabletConnection("localhost:%u" % shard_0_master.port,
-                                      "test_keyspace", "-90", 10.0)
+                                      "", "test_keyspace", "-90", 10.0)
       conn.dial()
       self.fail('expected an exception')
     except Exception as e:

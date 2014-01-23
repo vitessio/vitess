@@ -27,7 +27,7 @@ master_tablet = tablet.Tablet(62344)
 replica_tablet = tablet.Tablet(62345)
 master_host = "localhost:%u" % master_tablet.port
 replica_host = "localhost:%u" % replica_tablet.port
-zkocc_client = zkocc.ZkOccConnection("localhost:%u" % utils.zkocc_port_base,
+zkocc_client = zkocc.ZkOccConnection("localhost:%u" % environment.zkocc_port_base,
                                      "test_nj", 30.0)
 master_start_position = None
 
