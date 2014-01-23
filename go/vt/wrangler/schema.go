@@ -12,12 +12,12 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, includeViews bool) (*mysqlctl.SchemaDefinition, error) {
+func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, includeViews bool) (*myproto.SchemaDefinition, error) {
 	ti, err := wr.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -27,7 +27,7 @@ func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, inc
 }
 
 // helper method to asynchronously diff a schema
-func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, masterTabletAlias, alias topo.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
+func (wr *Wrangler) diffSchema(masterSchema *myproto.SchemaDefinition, masterTabletAlias, alias topo.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()
 	log.Infof("Gathering schema for %v", alias)
 	slaveSchema, err := wr.GetSchema(alias, nil, includeViews)
@@ -37,7 +37,7 @@ func (wr *Wrangler) diffSchema(masterSchema *mysqlctl.SchemaDefinition, masterTa
 	}
 
 	log.Infof("Diffing schema for %v", alias)
-	mysqlctl.DiffSchema(masterTabletAlias.String(), masterSchema, alias.String(), slaveSchema, er)
+	myproto.DiffSchema(masterTabletAlias.String(), masterSchema, alias.String(), slaveSchema, er)
 }
 
 func (wr *Wrangler) ValidateSchemaShard(keyspace, shard string, includeViews bool) error {
@@ -162,7 +162,7 @@ func (wr *Wrangler) ValidateSchemaKeyspace(keyspace string, includeViews bool) e
 	return nil
 }
 
-func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string) (*myproto.SchemaChangeResult, error) {
 	actionPath, err := wr.ai.PreflightSchema(tabletAlias, change)
 	if err != nil {
 		return nil, err
@@ -172,10 +172,10 @@ func (wr *Wrangler) PreflightSchema(tabletAlias topo.TabletAlias, change string)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*mysqlctl.SchemaChangeResult), nil
+	return result.(*myproto.SchemaChangeResult), nil
 }
 
-func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *mysqlctl.SchemaChange) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto.SchemaChange) (*myproto.SchemaChangeResult, error) {
 	actionPath, err := wr.ai.ApplySchema(tabletAlias, sc)
 
 	// the timeout is for the entire action, so it might be too big
@@ -184,7 +184,7 @@ func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *mysqlctl.Schem
 	if err != nil {
 		return nil, err
 	}
-	return results.(*mysqlctl.SchemaChangeResult), nil
+	return results.(*myproto.SchemaChangeResult), nil
 }
 
 // Note for 'complex' mode (the 'simple' mode is easy enough that we
@@ -192,7 +192,7 @@ func (wr *Wrangler) ApplySchema(tabletAlias topo.TabletAlias, sc *mysqlctl.Schem
 // recover if interrupted in the middle, because it knows which server
 // has the schema change already applied, and will just pass through them
 // very quickly.
-func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*myproto.SchemaChangeResult, error) {
 	// read the shard
 	shardInfo, err := wr.ts.GetShard(keyspace, shard)
 	if err != nil {
@@ -216,7 +216,7 @@ func (wr *Wrangler) ApplySchemaShard(keyspace, shard, change string, newParentTa
 	return wr.lockAndApplySchemaShard(shardInfo, preflight, keyspace, shard, shardInfo.MasterAlias, change, newParentTabletAlias, simple, force)
 }
 
-func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *topo.ShardInfo, preflight *mysqlctl.SchemaChangeResult, keyspace, shard string, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, keyspace, shard string, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*myproto.SchemaChangeResult, error) {
 	// get a shard lock
 	actionNode := actionnode.ApplySchemaShard(masterTabletAlias, change, simple)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
@@ -232,10 +232,10 @@ func (wr *Wrangler) lockAndApplySchemaShard(shardInfo *topo.ShardInfo, preflight
 type TabletStatus struct {
 	ti           *topo.TabletInfo
 	lastError    error
-	beforeSchema *mysqlctl.SchemaDefinition
+	beforeSchema *myproto.SchemaDefinition
 }
 
-func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, simple, force bool) (*myproto.SchemaChangeResult, error) {
 
 	// find all the shards we need to handle
 	aliases, err := topo.FindAllTabletAliasesInShard(wr.ts, shardInfo.Keyspace(), shardInfo.ShardName())
@@ -297,12 +297,12 @@ func (wr *Wrangler) applySchemaShard(shardInfo *topo.ShardInfo, preflight *mysql
 	return wr.applySchemaShardComplex(statusArray, shardInfo, preflight, masterTabletAlias, change, newParentTabletAlias, force)
 }
 
-func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, preflight *myproto.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, force bool) (*myproto.SchemaChangeResult, error) {
 	// check all tablets have the same schema as the master's
 	// BeforeSchema. If not, we shouldn't proceed
 	log.Infof("Checking schema on all tablets")
 	for _, status := range statusArray {
-		diffs := mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
+		diffs := myproto.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))
@@ -314,22 +314,22 @@ func (wr *Wrangler) applySchemaShardSimple(statusArray []*TabletStatus, prefligh
 
 	// we're good, just send to the master
 	log.Infof("Applying schema change to master in simple mode")
-	sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: true, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
+	sc := &myproto.SchemaChange{Sql: change, Force: force, AllowReplication: true, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
 	return wr.ApplySchema(masterTabletAlias, sc)
 }
 
-func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardInfo *topo.ShardInfo, preflight *mysqlctl.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardInfo *topo.ShardInfo, preflight *myproto.SchemaChangeResult, masterTabletAlias topo.TabletAlias, change string, newParentTabletAlias topo.TabletAlias, force bool) (*myproto.SchemaChangeResult, error) {
 	// apply the schema change to all replica / slave tablets
 	for _, status := range statusArray {
 		// if already applied, we skip this guy
-		diffs := mysqlctl.DiffSchemaToArray("after", preflight.AfterSchema, status.ti.Alias.String(), status.beforeSchema)
+		diffs := myproto.DiffSchemaToArray("after", preflight.AfterSchema, status.ti.Alias.String(), status.beforeSchema)
 		if len(diffs) == 0 {
 			log.Infof("Tablet %v already has the AfterSchema, skipping", status.ti.Alias)
 			continue
 		}
 
 		// make sure the before schema matches
-		diffs = mysqlctl.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
+		diffs = myproto.DiffSchemaToArray("master", preflight.BeforeSchema, status.ti.Alias.String(), status.beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				log.Warningf("Tablet %v has inconsistent schema, ignoring: %v", status.ti.Alias, strings.Join(diffs, "\n"))
@@ -354,7 +354,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 
 		// apply the schema change
 		log.Infof("Applying schema change to slave %v in complex mode", status.ti.Alias)
-		sc := &mysqlctl.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
+		sc := &myproto.SchemaChange{Sql: change, Force: force, AllowReplication: false, BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}
 		_, err = wr.ApplySchema(status.ti.Alias, sc)
 		if err != nil {
 			return nil, err
@@ -396,7 +396,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 		// too.
 		log.Infof("Skipping schema change on old master %v in complex mode, it's been Scrapped", masterTabletAlias)
 	}
-	return &mysqlctl.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
+	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }
 
 // apply a schema change to an entire keyspace.
@@ -405,7 +405,7 @@ func (wr *Wrangler) applySchemaShardComplex(statusArray []*TabletStatus, shardIn
 // and fail if not (unless force is specified)
 // if simple, we just do it on all masters.
 // if complex, we do the shell game in parallel on all shards
-func (wr *Wrangler) ApplySchemaKeyspace(keyspace string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) ApplySchemaKeyspace(keyspace string, change string, simple, force bool) (*myproto.SchemaChangeResult, error) {
 	actionNode := actionnode.ApplySchemaKeyspace(change, simple)
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
@@ -416,7 +416,7 @@ func (wr *Wrangler) ApplySchemaKeyspace(keyspace string, change string, simple, 
 	return scr, wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, force bool) (*mysqlctl.SchemaChangeResult, error) {
+func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, force bool) (*myproto.SchemaChangeResult, error) {
 	shards, err := wr.ts.GetShardNames(keyspace)
 	if err != nil {
 		return nil, err
@@ -433,7 +433,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 
 	// Get schema on all shard masters in parallel
 	log.Infof("Getting schema on all shards")
-	beforeSchemas := make([]*mysqlctl.SchemaDefinition, len(shards))
+	beforeSchemas := make([]*myproto.SchemaDefinition, len(shards))
 	shardInfos := make([]*topo.ShardInfo, len(shards))
 	wg := sync.WaitGroup{}
 	mu := sync.Mutex{}
@@ -470,7 +470,7 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 		if i == 0 {
 			continue
 		}
-		diffs := mysqlctl.DiffSchemaToArray("shard 0", beforeSchemas[0], fmt.Sprintf("shard %v", i), beforeSchema)
+		diffs := myproto.DiffSchemaToArray("shard 0", beforeSchemas[0], fmt.Sprintf("shard %v", i), beforeSchema)
 		if len(diffs) > 0 {
 			if force {
 				log.Warningf("Shard %v has inconsistent schema, ignoring: %v", i, strings.Join(diffs, "\n"))
@@ -511,5 +511,5 @@ func (wr *Wrangler) applySchemaKeyspace(keyspace string, change string, simple, 
 		return nil, applyErr
 	}
 
-	return &mysqlctl.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
+	return &myproto.SchemaChangeResult{BeforeSchema: preflight.BeforeSchema, AfterSchema: preflight.AfterSchema}, nil
 }

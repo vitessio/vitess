@@ -99,6 +99,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl/csvsplitter"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 const (
@@ -129,7 +130,7 @@ type SplitSnapshotManifest struct {
 	KeyRange key.KeyRange
 
 	// The schema for this server
-	SchemaDefinition *SchemaDefinition
+	SchemaDefinition *proto.SchemaDefinition
 }
 
 // NewSplitSnapshotManifest creates a new SplitSnapshotManifest.
@@ -137,7 +138,7 @@ type SplitSnapshotManifest struct {
 // masterAddr is the address of the server to use as master.
 // pos is the replication position to use on that master.
 // myMasterPos is the local server master position
-func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, keyRange key.KeyRange, sd *SchemaDefinition) (*SplitSnapshotManifest, error) {
+func NewSplitSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName string, files []SnapshotFile, pos, myMasterPos *ReplicationPosition, keyRange key.KeyRange, sd *proto.SchemaDefinition) (*SplitSnapshotManifest, error) {
 	sm, err := newSnapshotManifest(myAddr, myMysqlAddr, masterAddr, dbName, files, pos, myMasterPos)
 	if err != nil {
 		return nil, err
@@ -378,7 +379,7 @@ func (nhw *namedHasherWriter) SnapshotFiles() ([]SnapshotFile, error) {
 
 // dumpTableSplit will dump a table, and then split it according to keyspace_id
 // into multiple files.
-func (mysqld *Mysqld) dumpTableSplit(td TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTableSplit(td proto.TableDefinition, dbName, keyName string, keyType key.KeyspaceIdType, mainCloneSourcePath string, cloneSourcePaths map[key.KeyRange]string, maximumFilesize uint64) (map[key.KeyRange][]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.KeyspaceIdColumnName}}, {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
@@ -455,7 +456,7 @@ func (mysqld *Mysqld) dumpTableSplit(td TableDefinition, dbName, keyName string,
 
 // dumpTableFull will dump the contents of a full table, and then
 // chunk it up in multiple compressed files.
-func (mysqld *Mysqld) dumpTableFull(td TableDefinition, dbName, mainCloneSourcePath string, cloneSourcePath string, maximumFilesize uint64) ([]SnapshotFile, error) {
+func (mysqld *Mysqld) dumpTableFull(td proto.TableDefinition, dbName, mainCloneSourcePath string, cloneSourcePath string, maximumFilesize uint64) ([]SnapshotFile, error) {
 	filename := path.Join(mainCloneSourcePath, td.Name+".csv")
 	selectIntoOutfile := `SELECT {{.Columns}} INTO OUTFILE "{{.TableOutputPath}}" CHARACTER SET binary FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '"' ESCAPED BY '\\' LINES TERMINATED BY '\n' FROM {{.TableName}}`
 	queryParams := map[string]string{
@@ -581,7 +582,7 @@ func (mysqld *Mysqld) CreateMultiSnapshot(keyRanges []key.KeyRange, dbName, keyN
 	datafiles := make([]map[key.KeyRange][]SnapshotFile, len(sd.TableDefinitions))
 	dumpTableWorker := func(i int) (err error) {
 		table := sd.TableDefinitions[i]
-		if table.Type != TABLE_BASE_TABLE {
+		if table.Type != proto.TABLE_BASE_TABLE {
 			// we just skip views here
 			return nil
 		}
@@ -822,7 +823,7 @@ func (mysqld *Mysqld) MultiRestore(destinationDbName string, keyRanges []key.Key
 	createDbCmds = append(createDbCmds, "USE `"+destinationDbName+"`")
 	createViewCmds := make([]string, 0, 16)
 	for _, td := range manifest.SchemaDefinition.TableDefinitions {
-		if td.Type == TABLE_BASE_TABLE {
+		if td.Type == proto.TABLE_BASE_TABLE {
 			createDbCmd, alterTable, err := makeCreateTableSql(td.Schema, td.Name, strategy)
 			if err != nil {
 				return err

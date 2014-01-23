@@ -20,6 +20,7 @@ import (
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -182,10 +183,10 @@ func ActionNodeFromJson(data, path string) (*ActionNode, error) {
 	case TABLET_ACTION_SCRAP:
 	case TABLET_ACTION_PREFLIGHT_SCHEMA:
 		node.Args = new(string)
-		node.Reply = &mysqlctl.SchemaChangeResult{}
+		node.Reply = &proto.SchemaChangeResult{}
 	case TABLET_ACTION_APPLY_SCHEMA:
-		node.Args = &mysqlctl.SchemaChange{}
-		node.Reply = &mysqlctl.SchemaChangeResult{}
+		node.Args = &proto.SchemaChange{}
+		node.Reply = &proto.SchemaChangeResult{}
 	case TABLET_ACTION_EXECUTE_HOOK:
 		node.Args = &hook.Hook{}
 		node.Reply = &hook.HookResult{}

@@ -15,6 +15,7 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -58,8 +59,8 @@ type SplitDiffWorker struct {
 
 	// populated during stateSDDiff
 	diffLogs                    []string
-	sourceSchemaDefinitions     []*mysqlctl.SchemaDefinition
-	destinationSchemaDefinition *mysqlctl.SchemaDefinition
+	sourceSchemaDefinitions     []*myproto.SchemaDefinition
+	destinationSchemaDefinition *myproto.SchemaDefinition
 }
 
 // NewSplitDiff returns a new SplitDiffWorker object.
@@ -350,7 +351,7 @@ func (sdw *SplitDiffWorker) diff() error {
 	sdw.setState(stateSDDiff)
 
 	sdw.diffLog("Gathering schema information...")
-	sdw.sourceSchemaDefinitions = make([]*mysqlctl.SchemaDefinition, len(sdw.sourceAliases))
+	sdw.sourceSchemaDefinitions = make([]*myproto.SchemaDefinition, len(sdw.sourceAliases))
 	wg := sync.WaitGroup{}
 	rec := concurrency.AllErrorRecorder{}
 	wg.Add(1)
@@ -382,7 +383,7 @@ func (sdw *SplitDiffWorker) diff() error {
 	rec = concurrency.AllErrorRecorder{}
 	for i, sourceSchemaDefinition := range sdw.sourceSchemaDefinitions {
 		sourceName := fmt.Sprintf("source[%v]", i)
-		mysqlctl.DiffSchema("destination", sdw.destinationSchemaDefinition, sourceName, sourceSchemaDefinition, &rec)
+		myproto.DiffSchema("destination", sdw.destinationSchemaDefinition, sourceName, sourceSchemaDefinition, &rec)
 	}
 	if rec.HasErrors() {
 		sdw.diffLog("Different schemas: " + rec.Error().Error())
@@ -395,7 +396,7 @@ func (sdw *SplitDiffWorker) diff() error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range sdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition mysqlctl.TableDefinition) {
+		go func(tableDefinition myproto.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()

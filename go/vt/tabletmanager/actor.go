@@ -24,6 +24,7 @@ import (
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -515,7 +516,7 @@ func (ta *TabletActor) preflightSchema(actionNode *actionnode.ActionNode) error 
 }
 
 func (ta *TabletActor) applySchema(actionNode *actionnode.ActionNode) error {
-	sc := actionNode.Args.(*mysqlctl.SchemaChange)
+	sc := actionNode.Args.(*proto.SchemaChange)
 
 	// read the tablet to get the dbname
 	tablet, err := ta.ts.GetTablet(ta.tabletAlias)

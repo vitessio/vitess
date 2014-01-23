@@ -16,7 +16,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -74,7 +74,7 @@ func NewQueryResultReaderForTablet(ts topo.Server, tabletAlias topo.TabletAlias,
 // orderedColumns returns the list of columns:
 // - first the primary key columns in the right order
 // - then the rest of the columns
-func orderedColumns(tableDefinition *mysqlctl.TableDefinition) []string {
+func orderedColumns(tableDefinition *myproto.TableDefinition) []string {
 	result := make([]string, 0, len(tableDefinition.Columns))
 	result = append(result, tableDefinition.PrimaryKeyColumns...)
 	for _, column := range tableDefinition.Columns {
@@ -102,7 +102,7 @@ func uint64FromKeyspaceId(keyspaceId key.KeyspaceId) string {
 // TableScan returns a QueryResultReader that gets all the rows from a
 // table, ordered by Primary Key. The returned columns are ordered
 // with the Primary Key columns in front.
-func TableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition) (*QueryResultReader, error) {
+func TableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition) (*QueryResultReader, error) {
 	sql := fmt.Sprintf("SELECT %v FROM %v ORDER BY (%v)", strings.Join(orderedColumns(tableDefinition), ", "), tableDefinition.Name, strings.Join(tableDefinition.PrimaryKeyColumns, ", "))
 	log.Infof("SQL query for %v/%v: %v", tabletAlias, tableDefinition.Name, sql)
 	return NewQueryResultReaderForTablet(ts, tabletAlias, sql)
@@ -112,7 +112,7 @@ func TableScan(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *my
 // rows from a table that match the supplied KeyRange, ordered by
 // Primary Key. The returned columns are ordered with the Primary Key
 // columns in front.
-func TableScanByKeyRange(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *mysqlctl.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
+func TableScanByKeyRange(ts topo.Server, tabletAlias topo.TabletAlias, tableDefinition *myproto.TableDefinition, keyRange key.KeyRange, keyspaceIdType key.KeyspaceIdType) (*QueryResultReader, error) {
 	where := ""
 	switch keyspaceIdType {
 	case key.KIT_UINT64:
@@ -310,7 +310,7 @@ type RowDiffer struct {
 }
 
 // NewRowDiffer returns a new RowDiffer
-func NewRowDiffer(left, right *QueryResultReader, tableDefinition *mysqlctl.TableDefinition) (*RowDiffer, error) {
+func NewRowDiffer(left, right *QueryResultReader, tableDefinition *myproto.TableDefinition) (*RowDiffer, error) {
 	if len(left.Fields) != len(right.Fields) {
 		return nil, fmt.Errorf("Cannot diff inputs with different types")
 	}

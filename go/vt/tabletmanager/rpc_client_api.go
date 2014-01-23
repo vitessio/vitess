@@ -9,6 +9,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -23,7 +24,7 @@ type TabletManagerConn interface {
 	Ping(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// GetSchema asks the remote tablet for its database schema
-	GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error)
+	GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*proto.SchemaDefinition, error)
 
 	// GetPermissions asks the remote tablet for its permissions list
 	GetPermissions(tablet *topo.TabletInfo, waitTime time.Duration) (*mysqlctl.Permissions, error)

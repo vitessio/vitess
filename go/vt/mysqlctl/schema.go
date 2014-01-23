@@ -5,162 +5,20 @@
 package mysqlctl
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
-	"github.com/youtube/vitess/go/vt/concurrency"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
-
-const (
-	TABLE_BASE_TABLE = "BASE TABLE"
-	TABLE_VIEW       = "VIEW"
-)
-
-type TableDefinition struct {
-	Name              string   // the table name
-	Schema            string   // the SQL to run to create the table
-	Columns           []string // the columns in the order that will be used to dump and load the data
-	PrimaryKeyColumns []string // the columns used by the primary key, in order
-	Type              string   // TABLE_BASE_TABLE or TABLE_VIEW
-	DataLength        uint64   // how much space the data file takes.
-}
-
-// helper methods for sorting
-type TableDefinitions []TableDefinition
-
-func (tds TableDefinitions) Len() int {
-	return len(tds)
-}
-
-func (tds TableDefinitions) Swap(i, j int) {
-	tds[i], tds[j] = tds[j], tds[i]
-}
-
-// sort by reverse DataLength
-type ByReverseDataLength struct {
-	TableDefinitions
-}
-
-func (bdl ByReverseDataLength) Less(i, j int) bool {
-	return bdl.TableDefinitions[j].DataLength < bdl.TableDefinitions[i].DataLength
-}
-
-type SchemaDefinition struct {
-	// the 'CREATE DATABASE...' statement, with db name as {{.DatabaseName}}
-	DatabaseSchema string
-
-	// ordered by TableDefinition.Name by default
-	TableDefinitions TableDefinitions
-
-	// the md5 of the concatenation of TableDefinition.Schema
-	Version string
-}
-
-func (sd *SchemaDefinition) String() string {
-	return jscfg.ToJson(sd)
-}
-
-func (sd *SchemaDefinition) SortByReverseDataLength() {
-	sort.Sort(ByReverseDataLength{sd.TableDefinitions})
-}
-
-func (sd *SchemaDefinition) generateSchemaVersion() {
-	hasher := md5.New()
-	for _, td := range sd.TableDefinitions {
-		if _, err := hasher.Write([]byte(td.Schema)); err != nil {
-			panic(err) // extremely unlikely
-		}
-	}
-	sd.Version = hex.EncodeToString(hasher.Sum(nil))
-}
-
-func (sd *SchemaDefinition) GetTable(table string) (td *TableDefinition, ok bool) {
-	for _, td := range sd.TableDefinitions {
-		if td.Name == table {
-			return &td, true
-		}
-	}
-	return nil, false
-}
-
-// generates a report on what's different between two SchemaDefinition
-// for now, we skip the VIEW entirely.
-func DiffSchema(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition, er concurrency.ErrorRecorder) {
-	if left.DatabaseSchema != right.DatabaseSchema {
-		er.RecordError(fmt.Errorf("%v and %v don't agree on database creation command:\n%v\n differs from:\n%v", leftName, rightName, left.DatabaseSchema, right.DatabaseSchema))
-	}
-
-	leftIndex := 0
-	rightIndex := 0
-	for leftIndex < len(left.TableDefinitions) && rightIndex < len(right.TableDefinitions) {
-		// skip views
-		if left.TableDefinitions[leftIndex].Type == TABLE_VIEW {
-			leftIndex++
-			continue
-		}
-		if right.TableDefinitions[rightIndex].Type == TABLE_VIEW {
-			rightIndex++
-			continue
-		}
-
-		// extra table on the left side
-		if left.TableDefinitions[leftIndex].Name < right.TableDefinitions[rightIndex].Name {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
-			leftIndex++
-			continue
-		}
-
-		// extra table on the right side
-		if left.TableDefinitions[leftIndex].Name > right.TableDefinitions[rightIndex].Name {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
-			rightIndex++
-			continue
-		}
-
-		// same name, let's see content
-		if left.TableDefinitions[leftIndex].Schema != right.TableDefinitions[rightIndex].Schema {
-			er.RecordError(fmt.Errorf("%v and %v disagree on schema for table %v:\n%v\n differs from:\n%v", leftName, rightName, left.TableDefinitions[leftIndex].Name, left.TableDefinitions[leftIndex].Schema, right.TableDefinitions[rightIndex].Schema))
-		}
-		leftIndex++
-		rightIndex++
-	}
-
-	for leftIndex < len(left.TableDefinitions) {
-		if left.TableDefinitions[leftIndex].Type == TABLE_BASE_TABLE {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", leftName, left.TableDefinitions[leftIndex].Name))
-		}
-		leftIndex++
-	}
-	for rightIndex < len(right.TableDefinitions) {
-		if right.TableDefinitions[rightIndex].Type == TABLE_BASE_TABLE {
-			er.RecordError(fmt.Errorf("%v has an extra table named %v", rightName, right.TableDefinitions[rightIndex].Name))
-		}
-		rightIndex++
-	}
-}
-
-func DiffSchemaToArray(leftName string, left *SchemaDefinition, rightName string, right *SchemaDefinition) (result []string) {
-	er := concurrency.AllErrorRecorder{}
-	DiffSchema(leftName, left, rightName, right, &er)
-	if er.HasErrors() {
-		return er.Errors
-	} else {
-		return nil
-	}
-}
 
 var autoIncr = regexp.MustCompile(" AUTO_INCREMENT=\\d+")
 
 // GetSchema returns the schema for database for tables listed in
 // tables. If tables is empty, return the schema for all tables.
-func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews bool) (*SchemaDefinition, error) {
-	sd := &SchemaDefinition{}
+func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews bool) (*proto.SchemaDefinition, error) {
+	sd := &proto.SchemaDefinition{}
 
 	// get the database creation command
 	qr, fetchErr := mysqld.fetchSuperQuery("SHOW CREATE DATABASE " + dbName)
@@ -178,7 +36,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		sql += " AND table_name IN ('" + strings.Join(tables, "','") + "')"
 	}
 	if !includeViews {
-		sql += " AND table_type = '" + TABLE_BASE_TABLE + "'"
+		sql += " AND table_type = '" + proto.TABLE_BASE_TABLE + "'"
 	}
 	qr, err := mysqld.fetchSuperQuery(sql)
 	if err != nil {
@@ -188,7 +46,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		return sd, nil
 	}
 
-	sd.TableDefinitions = make([]TableDefinition, len(qr.Rows))
+	sd.TableDefinitions = make([]proto.TableDefinition, len(qr.Rows))
 	for i, row := range qr.Rows {
 		tableName := row[0].String()
 		tableType := row[1].String()
@@ -214,7 +72,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		// vt/tabletserver/table_info.go:162
 		norm := qr.Rows[0][1].String()
 		norm = autoIncr.ReplaceAllLiteralString(norm, "")
-		if tableType == TABLE_VIEW {
+		if tableType == proto.TABLE_VIEW {
 			// Views will have the dbname in there, replace it
 			// with {{.DatabaseName}}
 			norm = strings.Replace(norm, "`"+dbName+"`", "`{{.DatabaseName}}`", -1)
@@ -235,7 +93,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 		sd.TableDefinitions[i].DataLength = dataLength
 	}
 
-	sd.generateSchemaVersion()
+	sd.GenerateSchemaVersion()
 	return sd, nil
 }
 
@@ -309,24 +167,7 @@ func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, erro
 	return columns, err
 }
 
-type SchemaChange struct {
-	Sql              string
-	Force            bool
-	AllowReplication bool
-	BeforeSchema     *SchemaDefinition
-	AfterSchema      *SchemaDefinition
-}
-
-type SchemaChangeResult struct {
-	BeforeSchema *SchemaDefinition
-	AfterSchema  *SchemaDefinition
-}
-
-func (scr *SchemaChangeResult) String() string {
-	return jscfg.ToJson(scr)
-}
-
-func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*SchemaChangeResult, error) {
+func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*proto.SchemaChangeResult, error) {
 	// gather current schema on real database
 	beforeSchema, err := mysqld.GetSchema(dbName, nil, true)
 	if err != nil {
@@ -339,7 +180,7 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*Sche
 	sql += "CREATE DATABASE _vt_preflight;\n"
 	sql += "USE _vt_preflight;\n"
 	for _, td := range beforeSchema.TableDefinitions {
-		if td.Type == TABLE_BASE_TABLE {
+		if td.Type == proto.TABLE_BASE_TABLE {
 			sql += td.Schema + ";\n"
 		}
 	}
@@ -368,17 +209,17 @@ func (mysqld *Mysqld) PreflightSchemaChange(dbName string, change string) (*Sche
 		return nil, err
 	}
 
-	return &SchemaChangeResult{beforeSchema, afterSchema}, nil
+	return &proto.SchemaChangeResult{beforeSchema, afterSchema}, nil
 }
 
-func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*SchemaChangeResult, error) {
+func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *proto.SchemaChange) (*proto.SchemaChangeResult, error) {
 	// check current schema matches
 	beforeSchema, err := mysqld.GetSchema(dbName, nil, false)
 	if err != nil {
 		return nil, err
 	}
 	if change.BeforeSchema != nil {
-		schemaDiffs := DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
+		schemaDiffs := proto.DiffSchemaToArray("actual", beforeSchema, "expected", change.BeforeSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				log.Warningf("BeforeSchema differs: %v", msg)
@@ -386,12 +227,12 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 
 			// let's see if the schema was already applied
 			if change.AfterSchema != nil {
-				schemaDiffs = DiffSchemaToArray("actual", beforeSchema, "expected", change.AfterSchema)
+				schemaDiffs = proto.DiffSchemaToArray("actual", beforeSchema, "expected", change.AfterSchema)
 				if len(schemaDiffs) == 0 {
 					// no diff between the schema we expect
 					// after the change and the current
 					// schema, we already applied it
-					return &SchemaChangeResult{beforeSchema, beforeSchema}, nil
+					return &proto.SchemaChangeResult{beforeSchema, beforeSchema}, nil
 				}
 			}
 
@@ -425,7 +266,7 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 
 	// compare to the provided AfterSchema
 	if change.AfterSchema != nil {
-		schemaDiffs := DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
+		schemaDiffs := proto.DiffSchemaToArray("actual", afterSchema, "expected", change.AfterSchema)
 		if len(schemaDiffs) > 0 {
 			for _, msg := range schemaDiffs {
 				log.Warningf("AfterSchema differs: %v", msg)
@@ -438,5 +279,5 @@ func (mysqld *Mysqld) ApplySchemaChange(dbName string, change *SchemaChange) (*S
 		}
 	}
 
-	return &SchemaChangeResult{beforeSchema, afterSchema}, nil
+	return &proto.SchemaChangeResult{beforeSchema, afterSchema}, nil
 }

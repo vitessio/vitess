@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -53,7 +54,7 @@ type GetSchemaArgs struct {
 	IncludeViews bool
 }
 
-func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArgs, reply *mysqlctl.SchemaDefinition) error {
+func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArgs, reply *myproto.SchemaDefinition) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
 		// read the tablet to get the dbname
 		tablet, err := tm.agent.ts.GetTablet(tm.agent.tabletAlias)

@@ -28,6 +28,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -1412,7 +1413,7 @@ func commandApplySchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []st
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
 	change := getFileParam(*sql, *sqlFile, "sql")
 
-	sc := &mysqlctl.SchemaChange{}
+	sc := &myproto.SchemaChange{}
 	sc.Sql = change
 	sc.AllowReplication = !(*stopReplication)
 

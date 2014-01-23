@@ -10,6 +10,7 @@ import (
 
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -66,8 +67,8 @@ func (client *GoRpcTabletManagerConn) Ping(tablet *topo.TabletInfo, waitTime tim
 	return nil
 }
 
-func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
-	var sd mysqlctl.SchemaDefinition
+func (client *GoRpcTabletManagerConn) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*proto.SchemaDefinition, error) {
+	var sd proto.SchemaDefinition
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_GET_SCHEMA, &GetSchemaArgs{Tables: tables, IncludeViews: includeViews}, &sd, waitTime); err != nil {
 		return nil, err
 	}

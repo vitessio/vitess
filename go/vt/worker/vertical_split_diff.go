@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -57,8 +58,8 @@ type VerticalSplitDiffWorker struct {
 
 	// populated during stateVSDDiff
 	diffLogs                    []string
-	sourceSchemaDefinition      *mysqlctl.SchemaDefinition
-	destinationSchemaDefinition *mysqlctl.SchemaDefinition
+	sourceSchemaDefinition      *myproto.SchemaDefinition
+	destinationSchemaDefinition *myproto.SchemaDefinition
 }
 
 // NewVerticalSplitDiff returns a new VerticalSplitDiffWorker object.
@@ -375,7 +376,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	}
 
 	// Remove the tables we don't need from the source schema
-	newSourceTableDefinitions := make([]mysqlctl.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
+	newSourceTableDefinitions := make([]myproto.TableDefinition, 0, len(vsdw.destinationSchemaDefinition.TableDefinitions))
 	for _, tableDefinition := range vsdw.sourceSchemaDefinition.TableDefinitions {
 		found := false
 		for _, t := range vsdw.shardInfo.SourceShards[0].Tables {
@@ -395,7 +396,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	// Check the schema
 	vsdw.diffLog("Diffing the schema...")
 	rec = concurrency.AllErrorRecorder{}
-	mysqlctl.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
+	myproto.DiffSchema("destination", vsdw.destinationSchemaDefinition, "source", vsdw.sourceSchemaDefinition, &rec)
 	if rec.HasErrors() {
 		vsdw.diffLog("Different schemas: " + rec.Error().Error())
 	} else {
@@ -407,7 +408,7 @@ func (vsdw *VerticalSplitDiffWorker) diff() error {
 	sem := sync2.NewSemaphore(8, 0)
 	for _, tableDefinition := range vsdw.destinationSchemaDefinition.TableDefinitions {
 		wg.Add(1)
-		go func(tableDefinition mysqlctl.TableDefinition) {
+		go func(tableDefinition myproto.TableDefinition) {
 			defer wg.Done()
 			sem.Acquire()
 			defer sem.Release()

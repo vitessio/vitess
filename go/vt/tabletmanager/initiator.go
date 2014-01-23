@@ -20,6 +20,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
+	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -237,7 +238,7 @@ func (ai *ActionInitiator) Scrap(tabletAlias topo.TabletAlias) (actionPath strin
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_SCRAP})
 }
 
-func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*mysqlctl.SchemaDefinition, error) {
+func (ai *ActionInitiator) GetSchema(tablet *topo.TabletInfo, tables []string, includeViews bool, waitTime time.Duration) (*proto.SchemaDefinition, error) {
 	return ai.rpc.GetSchema(tablet, tables, includeViews, waitTime)
 }
 
@@ -245,7 +246,7 @@ func (ai *ActionInitiator) PreflightSchema(tabletAlias topo.TabletAlias, change 
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_PREFLIGHT_SCHEMA, Args: &change})
 }
 
-func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *mysqlctl.SchemaChange) (actionPath string, err error) {
+func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *proto.SchemaChange) (actionPath string, err error) {
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_APPLY_SCHEMA, Args: sc})
 }
 
