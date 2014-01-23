@@ -8,13 +8,18 @@ import time
 from vtdb import cursor
 from vtdb import dbapi
 from vtdb import dbexceptions
-from vtdb import tablet
 from vtdb import topology
-from vtdb import vtgate
 
 RECONNECT_DELAY = 0.002 # 2 ms
 BEGIN_RECONNECT_DELAY = 0.2 # 200 ms
 MAX_RETRY_ATTEMPTS = 2
+
+
+vtclient_conn_classes = dict()  # mapping from vtgate_protocol to python Class
+
+def register_conn_class(protocol, c):
+  vtclient_conn_classes[protocol] = c
+
 
 def get_vt_connection_params_list(zkocc_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
   db_params_list = []
@@ -28,8 +33,7 @@ def get_vt_connection_params_list(zkocc_client, keyspace, shard, db_type, timeou
     vt_params['encrypted'] = encrypted
     vt_params['user'] = user
     vt_params['password'] = password
-    if vtgate_protocol != 'v0':
-      vt_params['tablet_type'] = db_type
+    vt_params['tablet_type'] = db_type
     db_params_list.append(vt_params)
   return db_params_list
 
@@ -39,22 +43,22 @@ def reconnect(method):
     while True:
       try:
         return method(self, *args, **kargs)
-      except (tablet.RetryError, tablet.FatalError, tablet.TxPoolFull) as e:
+      except (dbexceptions.RetryError, dbexceptions.FatalError, dbexceptions.TxPoolFull) as e:
         attempt += 1
         if attempt >= self.max_attempts or self.in_txn:
           self.close()
-          raise tablet.FatalError(*e.args)
+          raise dbexceptions.FatalError(*e.args)
         if method.__name__ == 'begin':
           time.sleep(BEGIN_RECONNECT_DELAY)
         else:
           time.sleep(RECONNECT_DELAY)
-        if not isinstance(e, tablet.TxPoolFull):
+        if not isinstance(e, dbexceptions.TxPoolFull):
           logging.info("Attempting to reconnect, %d", attempt)
           self.close()
           self.connect()
           logging.info("Successfully reconnected to %s", str(self.conn))
         else:
-          logging.info("Waiting to retry for tablet.TxPoolFull to %s, attempt %d", str(self.conn), attempt)
+          logging.info("Waiting to retry for dbexceptions.TxPoolFull to %s, attempt %d", str(self.conn), attempt)
   return _run_with_reconnect
 
 # Provide compatibility with the MySQLdb query param style and prune bind_vars
@@ -100,10 +104,8 @@ class VtOCCConnection(object):
     for params in db_params_list:
       try:
         db_params = params.copy()
-        if self.vtgate_protocol == 'v0':
-          self.conn = tablet.TabletConnection(**db_params)
-        elif self.vtgate_protocol == 'v1bson':
-          self.conn = vtgate.TabletConnection(**db_params)
+        if self.vtgate_protocol in vtclient_conn_classes:
+          self.conn = vtclient_conn_classes[self.vtgate_protocol](**db_params)
         else:
           raise dbexceptions.OperationalError('unknown vtgate protocol: %s' % self.vtgate_protocol)
         self.conn.dial()

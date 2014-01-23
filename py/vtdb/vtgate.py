@@ -11,13 +11,6 @@ from net import gorpc
 from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
-from vtdb import tablet
-
-
-# This failure is operational in the sense that we must teardown the connection to
-# ensure future RPCs are handled correctly.
-class TimeoutError(dbexceptions.OperationalError):
-  pass
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
@@ -30,9 +23,15 @@ _errno_map = {
 def convert_exception(exc, *args):
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
-    return TimeoutError(new_args)
+    return dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):
     msg = str(exc[0]).lower()
+    if msg.startswith('retry'):
+      return dbexceptions.RetryError(new_args)
+    if msg.startswith('fatal'):
+      return dbexceptions.FatalError(new_args)
+    if msg.startswith('tx_pool_full'):
+      return dbexceptions.TxPoolFull(new_args)
     match = _errno_pattern.search(msg)
     if match:
       mysql_errno = int(match.group(1))
@@ -41,14 +40,14 @@ def convert_exception(exc, *args):
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):
-    return tablet.FatalError(new_args)
+    return dbexceptions.FatalError(new_args)
   return exc
 
 
 # A simple, direct connection to the vttablet query server.
 # This is shard-unaware and only handles the most basic communication.
 # If something goes wrong, this object should be thrown away and a new one instantiated.
-class TabletConnection(object):
+class VtgateConnection(object):
   session = None
   tablet_type = None
   cursorclass = cursor.TabletCursor
@@ -66,7 +65,7 @@ class TabletConnection(object):
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def __str__(self):
-    return '<TabletConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)
+    return '<VtgateConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)
 
   def dial(self):
     try:
@@ -281,6 +280,6 @@ def _make_row(row, conversions):
 
 
 def connect(*pargs, **kargs):
-  conn = TabletConnection(*pargs, **kargs)
+  conn = VtgateConnection(*pargs, **kargs)
   conn.dial()
   return conn

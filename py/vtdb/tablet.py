@@ -12,31 +12,6 @@ from vtdb import dbexceptions
 from vtdb import field_types
 
 
-# Retry means a simple and immediate reconnect to the same host/port
-# will likely fix things. This is initiated by a graceful restart on
-# the server side. In general this can be handled transparently
-# unless the error is within a transaction.
-class RetryError(dbexceptions.OperationalError):
-  pass
-
-
-# This failure is "permanent" - retrying on this host is futile. Push the error
-# up in case the upper layers can gracefully recover by reresolving a suitable
-# endpoint.
-class FatalError(dbexceptions.OperationalError):
-  pass
-
-
-# This failure is operational in the sense that we must teardown the connection to
-# ensure future RPCs are handled correctly.
-class TimeoutError(dbexceptions.OperationalError):
-  pass
-
-
-class TxPoolFull(dbexceptions.DatabaseError):
-  pass
-
-
 _errno_pattern = re.compile('\(errno (\d+)\)')
 # Map specific errors to specific classes.
 _errno_map = {
@@ -47,15 +22,15 @@ _errno_map = {
 def convert_exception(exc, *args):
   new_args = exc.args + args
   if isinstance(exc, gorpc.TimeoutError):
-    return TimeoutError(new_args)
+    return dbexceptions.TimeoutError(new_args)
   elif isinstance(exc, gorpc.AppError):
     msg = str(exc[0]).lower()
     if msg.startswith('retry'):
-      return RetryError(new_args)
+      return dbexceptions.RetryError(new_args)
     if msg.startswith('fatal'):
-      return FatalError(new_args)
+      return dbexceptions.FatalError(new_args)
     if msg.startswith('tx_pool_full'):
-      return TxPoolFull(new_args)
+      return dbexceptions.TxPoolFull(new_args)
     match = _errno_pattern.search(msg)
     if match:
       mysql_errno = int(match.group(1))
@@ -64,7 +39,7 @@ def convert_exception(exc, *args):
   elif isinstance(exc, gorpc.ProgrammingError):
     return dbexceptions.ProgrammingError(new_args)
   elif isinstance(exc, gorpc.GoRpcError):
-    return FatalError(new_args)
+    return dbexceptions.FatalError(new_args)
   return exc
 
 
@@ -79,15 +54,16 @@ class TabletConnection(object):
   _stream_result = None
   _stream_result_index = None
 
-  def __init__(self, addr, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
+  def __init__(self, addr, tablet_type, keyspace, shard, timeout, user=None, password=None, encrypted=False, keyfile=None, certfile=None):
     self.addr = addr
+    self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
     self.timeout = timeout
     self.client = bsonrpc.BsonRpcClient(addr, timeout, user, password, encrypted=encrypted, keyfile=keyfile, certfile=certfile)
 
   def __str__(self):
-    return '<TabletConnection %s %s/%s>' % (self.addr, self.keyspace, self.shard)
+    return '<TabletConnection %s %s %s/%s>' % (self.addr, self.tablet_type, self.keyspace, self.shard)
 
   def dial(self):
     try:
