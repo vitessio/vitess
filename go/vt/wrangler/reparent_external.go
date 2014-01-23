@@ -102,7 +102,7 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[to
 	// may have been updated
 	masterElectTablet, err = wr.TopoServer().GetTablet(masterElectTablet.Alias)
 	if err != nil {
-		return fmt.Errorf("Cannot re-read the master record, something is seriously wrong")
+		return fmt.Errorf("cannot re-read the master record, something is seriously wrong: %v", err)
 	}
 
 	// then fix all the slaves, including the old master
