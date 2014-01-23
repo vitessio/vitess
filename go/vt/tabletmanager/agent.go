@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
 )
@@ -151,7 +152,7 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	defer agent.actionMutex.Unlock()
 
 	log.Infof("action dispatch %v", actionPath)
-	actionNode, err := ActionNodeFromJson(data, actionPath)
+	actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
 	if err != nil {
 		log.Errorf("action decode failed: %v %v", actionPath, err)
 		return nil
@@ -181,7 +182,7 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	}
 
 	log.Infof("Agent action completed %v %s", actionPath, stdOut)
-	agent.afterAction(actionPath, actionNode.Action == TABLET_ACTION_APPLY_SCHEMA)
+	agent.afterAction(actionPath, actionNode.Action == actionnode.TABLET_ACTION_APPLY_SCHEMA)
 	return nil
 }
 

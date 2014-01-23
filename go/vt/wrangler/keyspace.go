@@ -12,29 +12,29 @@ import (
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // keyspace related methods for Wrangler
 
-func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *tabletmanager.ActionNode) (lockPath string, err error) {
+func (wr *Wrangler) lockKeyspace(keyspace string, actionNode *actionnode.ActionNode) (lockPath string, err error) {
 	log.Infof("Locking keyspace %v for action %v", keyspace, actionNode.Action)
-	return wr.ts.LockKeyspaceForAction(keyspace, tabletmanager.ActionNodeToJson(actionNode), wr.lockTimeout, interrupted)
+	return wr.ts.LockKeyspaceForAction(keyspace, actionNode.ToJson(), wr.lockTimeout, interrupted)
 }
 
-func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *tabletmanager.ActionNode, lockPath string, actionError error) error {
+func (wr *Wrangler) unlockKeyspace(keyspace string, actionNode *actionnode.ActionNode, lockPath string, actionError error) error {
 	// first update the actionNode
 	if actionError != nil {
 		log.Infof("Unlocking keyspace %v for action %v with error %v", keyspace, actionNode.Action, actionError)
 		actionNode.Error = actionError.Error()
-		actionNode.State = tabletmanager.ACTION_STATE_FAILED
+		actionNode.State = actionnode.ACTION_STATE_FAILED
 	} else {
 		log.Infof("Unlocking keyspace %v for successful action %v", keyspace, actionNode.Action)
 		actionNode.Error = ""
-		actionNode.State = tabletmanager.ACTION_STATE_DONE
+		actionNode.State = actionnode.ACTION_STATE_DONE
 	}
-	err := wr.ts.UnlockKeyspaceForAction(keyspace, lockPath, tabletmanager.ActionNodeToJson(actionNode))
+	err := wr.ts.UnlockKeyspaceForAction(keyspace, lockPath, actionNode.ToJson())
 	if actionError != nil {
 		if err != nil {
 			// this will be masked

@@ -13,6 +13,7 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
@@ -55,7 +56,7 @@ func createTestTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, table
 func startFakeTabletActionLoop(t *testing.T, wr *Wrangler, tabletAlias topo.TabletAlias, mysqlDaemon mysqlctl.MysqlDaemon, done chan struct{}) {
 	go func() {
 		f := func(actionPath, data string) error {
-			actionNode, err := tabletmanager.ActionNodeFromJson(data, actionPath)
+			actionNode, err := actionnode.ActionNodeFromJson(data, actionPath)
 			if err != nil {
 				t.Fatalf("ActionNodeFromJson failed: %v\n%v", err, data)
 			}
