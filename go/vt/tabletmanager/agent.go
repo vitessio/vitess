@@ -46,8 +46,8 @@ type tabletChangeItem struct {
 }
 
 type ActionAgent struct {
-	ts                topo.Server
-	tabletAlias       topo.TabletAlias
+	TopoServer        topo.Server
+	TabletAlias       topo.TabletAlias
 	vtActionBinFile   string // path to vtaction binary
 	Mysqld            *mysqlctl.Mysqld
 	DbCredentialsFile string           // File that contains db credentials
@@ -69,8 +69,8 @@ type ActionAgent struct {
 
 func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mysqld *mysqlctl.Mysqld, dbCredentialsFile string) (*ActionAgent, error) {
 	return &ActionAgent{
-		ts:                topoServer,
-		tabletAlias:       tabletAlias,
+		TopoServer:        topoServer,
+		TabletAlias:       tabletAlias,
 		Mysqld:            mysqld,
 		DbCredentialsFile: dbCredentialsFile,
 		done:              make(chan struct{}),
@@ -117,7 +117,7 @@ func (agent *ActionAgent) executeCallbacksLoop() {
 }
 
 func (agent *ActionAgent) readTablet() error {
-	tablet, err := agent.ts.GetTablet(agent.tabletAlias)
+	tablet, err := agent.TopoServer.GetTablet(agent.TabletAlias)
 	if err != nil {
 		return err
 	}
@@ -223,7 +223,7 @@ func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
 	if err := agent.readTablet(); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
 	} else {
-		if updatedTablet := CheckTabletMysqlPort(agent.ts, agent.Mysqld, agent.Tablet()); updatedTablet != nil {
+		if updatedTablet := CheckTabletMysqlPort(agent.TopoServer, agent.Mysqld, agent.Tablet()); updatedTablet != nil {
 			agent.mutex.Lock()
 			agent._tablet = updatedTablet
 			agent.mutex.Unlock()
@@ -248,12 +248,12 @@ func (agent *ActionAgent) verifyTopology() error {
 		return fmt.Errorf("agent._tablet is nil")
 	}
 
-	if err := topo.Validate(agent.ts, agent.tabletAlias); err != nil {
+	if err := topo.Validate(agent.TopoServer, agent.TabletAlias); err != nil {
 		// Don't stop, it's not serious enough, this is likely transient.
-		log.Warningf("tablet validate failed: %v %v", agent.tabletAlias, err)
+		log.Warningf("tablet validate failed: %v %v", agent.TabletAlias, err)
 	}
 
-	return agent.ts.ValidateTabletActions(agent.tabletAlias)
+	return agent.TopoServer.ValidateTabletActions(agent.TabletAlias)
 }
 
 func (agent *ActionAgent) verifyServingAddrs() error {
@@ -266,7 +266,7 @@ func (agent *ActionAgent) verifyServingAddrs() error {
 	if err != nil {
 		return err
 	}
-	return agent.ts.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
+	return agent.TopoServer.UpdateTabletEndpoint(agent.Tablet().Tablet.Alias.Cell, agent.Tablet().Keyspace, agent.Tablet().Shard, agent.Tablet().Type, addr)
 }
 
 func EndPointForTablet(tablet *topo.Tablet) (*topo.EndPoint, error) {
@@ -333,7 +333,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 		}
 		return nil
 	}
-	if err := agent.ts.UpdateTabletFields(agent.Tablet().Alias, f); err != nil {
+	if err := agent.TopoServer.UpdateTabletFields(agent.Tablet().Alias, f); err != nil {
 		return err
 	}
 
@@ -344,7 +344,7 @@ func (agent *ActionAgent) Start(mysqlPort, vtPort, vtsPort int) error {
 
 	data := fmt.Sprintf("host:%v\npid:%v\n", hostname, os.Getpid())
 
-	if err := agent.ts.CreateTabletPidNode(agent.tabletAlias, data, agent.done); err != nil {
+	if err := agent.TopoServer.CreateTabletPidNode(agent.TabletAlias, data, agent.done); err != nil {
 		return err
 	}
 
@@ -375,5 +375,5 @@ func (agent *ActionAgent) actionEventLoop() {
 	f := func(actionPath, data string) error {
 		return agent.dispatchAction(actionPath, data)
 	}
-	agent.ts.ActionEventLoop(agent.tabletAlias, f, agent.done)
+	agent.TopoServer.ActionEventLoop(agent.TabletAlias, f, agent.done)
 }

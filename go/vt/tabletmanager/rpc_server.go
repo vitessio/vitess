@@ -47,7 +47,7 @@ func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{},
 
 	if err = f(); err != nil {
 		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, from, err.Error())
-		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.tabletAlias, err)
+		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.TabletAlias, err)
 	}
 	log.Infof("TabletManager.%v(%v)(from %v): %v", name, args, from, reply)
 	if runAfterAction {
@@ -89,13 +89,13 @@ func (agent *ActionAgent) RpcWrapLockActionSchema(from, name string, args, reply
 // Glue to delay registration of RPC servers until we have all the objects
 //
 
-type registerQueryService func(*ActionAgent)
+type RegisterQueryService func(*ActionAgent)
 
-var registerQueryServices []registerQueryService
+var RegisterQueryServices []RegisterQueryService
 
 // RegisterQueryService will register all the instances
 func (agent *ActionAgent) RegisterQueryService() {
-	for _, f := range registerQueryServices {
+	for _, f := range RegisterQueryServices {
 		f(agent)
 	}
 }

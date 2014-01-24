@@ -22,19 +22,19 @@ type TabletManager struct {
 	agent *ActionAgent
 }
 
-var TabletManagerRpcService *TabletManager
+var TabletManagerGoRpcService *TabletManager
 
 func init() {
-	registerQueryServices = append(registerQueryServices, registerBsonQueryService)
+	RegisterQueryServices = append(RegisterQueryServices, registerBsonQueryService)
 }
 
 func registerBsonQueryService(agent *ActionAgent) {
-	if TabletManagerRpcService != nil {
-		log.Warningf("RPC service already up %v", TabletManagerRpcService)
+	if TabletManagerGoRpcService != nil {
+		log.Warningf("RPC service already up %v", TabletManagerGoRpcService)
 		return
 	}
-	TabletManagerRpcService = &TabletManager{agent}
-	rpcwrap.RegisterAuthenticated(TabletManagerRpcService)
+	TabletManagerGoRpcService = &TabletManager{agent}
+	rpcwrap.RegisterAuthenticated(TabletManagerGoRpcService)
 }
 
 //
@@ -56,7 +56,7 @@ type GetSchemaArgs struct {
 func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArgs, reply *myproto.SchemaDefinition) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
 		// read the tablet to get the dbname
-		tablet, err := tm.agent.ts.GetTablet(tm.agent.tabletAlias)
+		tablet, err := tm.agent.TopoServer.GetTablet(tm.agent.TabletAlias)
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.Unu
 
 func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_CHANGE_TYPE, args, reply, func() error {
-		return ChangeType(tm.agent.ts, tm.agent.tabletAlias, *args, true /*runHooks*/)
+		return ChangeType(tm.agent.TopoServer, tm.agent.TabletAlias, *args, true /*runHooks*/)
 	})
 }
 
@@ -96,7 +96,7 @@ type SetBlacklistedTablesArgs struct {
 
 func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *SetBlacklistedTablesArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES, args, reply, func() error {
-		return SetBlacklistedTables(tm.agent.ts, tm.agent.tabletAlias, args.Tables)
+		return SetBlacklistedTables(tm.agent.TopoServer, tm.agent.TabletAlias, args.Tables)
 	})
 }
 
@@ -145,7 +145,7 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE, args, reply, func() error {
-		return tm.agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
+		return tm.agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()})
 	})
 }
 
@@ -169,7 +169,7 @@ func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopS
 
 func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_START_SLAVE, args, reply, func() error {
-		return tm.agent.Mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
+		return tm.agent.Mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.TabletAlias.String()})
 	})
 }
 
@@ -244,12 +244,12 @@ func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUnti
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
-		return slaveWasPromoted(tm.agent.ts, tm.agent.Mysqld, tm.agent.tabletAlias)
+		return slaveWasPromoted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias)
 	})
 }
 
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
-		return slaveWasRestarted(tm.agent.ts, tm.agent.Mysqld, tm.agent.tabletAlias, args)
+		return slaveWasRestarted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias, args)
 	})
 }
