@@ -11,13 +11,14 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 func init() {
-	RegisterTabletManagerConnFactory("bson", func(ts topo.Server) TabletManagerConn {
+	tabletmanager.RegisterTabletManagerConnFactory("bson", func(ts topo.Server) tabletmanager.TabletManagerConn {
 		return &GoRpcTabletManagerConn{ts}
 	})
 }
