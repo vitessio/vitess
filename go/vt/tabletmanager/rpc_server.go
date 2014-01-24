@@ -11,7 +11,7 @@ import (
 	log "github.com/golang/glog"
 )
 
-// This file contains the RPC methods for the tablet manager.
+// This file contains the RPC method helpers for the tablet manager.
 
 // rpcTimeout is used for timing out the queries on the server in a
 // reasonable amount of time. The actions are stored in the
@@ -27,15 +27,8 @@ const rpcTimeout = time.Second * 30
 // Utility functions for RPC service
 //
 
-// we keep track of the agent so we can use its tabletAlias, ts, ...
-type tabletManager struct {
-	agent *ActionAgent
-}
-
-// rpcWrapper handles all the logic for rpc calls. Do not use directly,
-// instead call one of rpcWrap, rpcWrapLock, rpcWrapLockAction,
-// rpcWrapLockActionSchema
-func (tm *tabletManager) rpcWrapper(from, name string, args, reply interface{}, f func() error, lock, runAfterAction, reloadSchema bool) (err error) {
+// rpcWrapper handles all the logic for rpc calls.
+func (agent *ActionAgent) rpcWrapper(from, name string, args, reply interface{}, f func() error, lock, runAfterAction, reloadSchema bool) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("TabletManager.%v(%v) panic: %v", name, args, x)
@@ -45,8 +38,8 @@ func (tm *tabletManager) rpcWrapper(from, name string, args, reply interface{}, 
 
 	if lock {
 		beforeLock := time.Now()
-		tm.agent.actionMutex.Lock()
-		defer tm.agent.actionMutex.Unlock()
+		agent.actionMutex.Lock()
+		defer agent.actionMutex.Unlock()
 		if time.Now().Sub(beforeLock) > rpcTimeout {
 			return fmt.Errorf("server timeout for " + name)
 		}
@@ -54,11 +47,11 @@ func (tm *tabletManager) rpcWrapper(from, name string, args, reply interface{}, 
 
 	if err = f(); err != nil {
 		log.Warningf("TabletManager.%v(%v)(from %v) error: %v", name, args, from, err.Error())
-		return fmt.Errorf("TabletManager.%v on %v error: %v", name, tm.agent.tabletAlias, err)
+		return fmt.Errorf("TabletManager.%v on %v error: %v", name, agent.tabletAlias, err)
 	}
 	log.Infof("TabletManager.%v(%v)(from %v): %v", name, args, from, reply)
 	if runAfterAction {
-		tm.agent.afterAction("RPC("+name+")", reloadSchema)
+		agent.afterAction("RPC("+name+")", reloadSchema)
 	}
 	return
 }
@@ -72,23 +65,23 @@ func (tm *tabletManager) rpcWrapper(from, name string, args, reply interface{}, 
 // 4 - read-write actions that need to take the action lock, need to
 //     reload the tablet state, and reload the schema afterwards.
 
-func (tm *tabletManager) rpcWrap(from, name string, args, reply interface{}, f func() error) error {
-	return tm.rpcWrapper(from, name, args, reply, f,
+func (agent *ActionAgent) RpcWrap(from, name string, args, reply interface{}, f func() error) error {
+	return agent.rpcWrapper(from, name, args, reply, f,
 		false /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (tm *tabletManager) rpcWrapLock(from, name string, args, reply interface{}, f func() error) error {
-	return tm.rpcWrapper(from, name, args, reply, f,
+func (agent *ActionAgent) RpcWrapLock(from, name string, args, reply interface{}, f func() error) error {
+	return agent.rpcWrapper(from, name, args, reply, f,
 		true /*lock*/, false /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (tm *tabletManager) rpcWrapLockAction(from, name string, args, reply interface{}, f func() error) error {
-	return tm.rpcWrapper(from, name, args, reply, f,
+func (agent *ActionAgent) RpcWrapLockAction(from, name string, args, reply interface{}, f func() error) error {
+	return agent.rpcWrapper(from, name, args, reply, f,
 		true /*lock*/, true /*runAfterAction*/, false /*reloadSchema*/)
 }
 
-func (tm *tabletManager) rpcWrapLockActionSchema(from, name string, args, reply interface{}, f func() error) error {
-	return tm.rpcWrapper(from, name, args, reply, f,
+func (agent *ActionAgent) RpcWrapLockActionSchema(from, name string, args, reply interface{}, f func() error) error {
+	return agent.rpcWrapper(from, name, args, reply, f,
 		true /*lock*/, true /*runAfterAction*/, true /*reloadSchema*/)
 }
 
