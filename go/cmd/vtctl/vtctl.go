@@ -28,8 +28,8 @@ import (
 	"github.com/youtube/vitess/go/vt/key"
 	_ "github.com/youtube/vitess/go/vt/logutil"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
 )
@@ -1602,7 +1602,7 @@ func installSignalHandlers() {
 		// - tm will interrupt anything waiting on a tablet action
 		// - wr will interrupt anything waiting on a shard or
 		//   keyspace lock
-		tabletmanager.SignalInterrupt()
+		initiator.SignalInterrupt()
 		wrangler.SignalInterrupt()
 	}()
 }

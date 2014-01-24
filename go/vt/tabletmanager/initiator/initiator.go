@@ -10,7 +10,7 @@
 // The creation, deletion and modifaction of an action node may be used as
 // a signal to other components in the system.
 
-package tabletmanager
+package initiator
 
 import (
 	"fmt"

@@ -8,7 +8,7 @@ import (
 	"flag"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -21,7 +21,7 @@ var tabletManagerProtocol = flag.String("tablet_manager_protocol", "bson", "the 
 
 type Wrangler struct {
 	ts          topo.Server
-	ai          *tabletmanager.ActionInitiator
+	ai          *initiator.ActionInitiator
 	deadline    time.Time
 	lockTimeout time.Duration
 
@@ -39,7 +39,7 @@ type Wrangler struct {
 //   know that out action will fail. However, automated action will need some time to
 //   arbitrate the locks.
 func New(ts topo.Server, actionTimeout, lockTimeout time.Duration) *Wrangler {
-	return &Wrangler{ts, tabletmanager.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
+	return &Wrangler{ts, initiator.NewActionInitiator(ts, *tabletManagerProtocol), time.Now().Add(actionTimeout), lockTimeout, true}
 }
 
 func (wr *Wrangler) actionTimeout() time.Duration {
@@ -50,7 +50,7 @@ func (wr *Wrangler) TopoServer() topo.Server {
 	return wr.ts
 }
 
-func (wr *Wrangler) ActionInitiator() *tabletmanager.ActionInitiator {
+func (wr *Wrangler) ActionInitiator() *initiator.ActionInitiator {
 	return wr.ai
 }
 

@@ -3,12 +3,31 @@
 // license that can be found in the LICENSE file.
 
 /*
-The agent listens on an action node for new actions to perform.
+The agent handles local execution of actions triggered remotely.
+It has two execution models:
 
-It passes them off to a separate action process. Even though some
-actions could be completed inline very quickly, the external process
-makes it easy to track and interrupt complex actions that may wedge
-due to external circumstances.
+- listening on an action path for ActionNode objects.  When receiving
+  an action, it will forward it to vtaction to perform it (vtaction
+  uses the actor code). We usually use this model for long-running
+  queries where an RPC would time out.
+
+  All vtaction calls lock the actionMutex.
+
+  After executing vtaction, we always call the ChangeCallbacks.
+  Additionnally, for TABLET_ACTION_APPLY_SCHEMA, we will force a schema
+  reload.
+
+- listening as an RPC server. The agent performs the action itself,
+  calling the actor code directly. We use this for short lived actions.
+
+  Most RPC calls lock the actionMutex, except the easy read-donly ones.
+
+  We will not call the ChangeCallbacks for all actions, just for the ones
+  that are relevant. Same for schema reload.
+
+  See rpc_server.go for all cases, and which action takes the actionMutex,
+  runs the ChangeCallbacks, and reloads the schema.
+
 */
 
 package tabletmanager

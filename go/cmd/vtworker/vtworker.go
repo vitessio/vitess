@@ -23,7 +23,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/servenv"
-	"github.com/youtube/vitess/go/vt/tabletmanager"
+	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/worker"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -44,7 +44,7 @@ func installSignalHandlers() {
 		// - tm will interrupt anything waiting on a tablet action
 		// - wr will interrupt anything waiting on a shard or
 		//   keyspace lock
-		tabletmanager.SignalInterrupt()
+		initiator.SignalInterrupt()
 		wrangler.SignalInterrupt()
 		worker.SignalInterrupt()
 	}()

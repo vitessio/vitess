@@ -26,6 +26,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/initiator"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -82,7 +83,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			}
 		} else {
 			log.Warningf("HandleAction waiting for running action: %v", actionPath)
-			_, err := WaitForCompletion(ta.ts, actionPath, 0)
+			_, err := initiator.WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		}
 	case actionnode.ACTION_STATE_FAILED:
@@ -106,7 +107,7 @@ func (ta *TabletActor) HandleAction(actionPath, action, actionGuid string, force
 			// actor. Most likely the tablet restarted
 			// during an action. Just wait for completion.
 			log.Warningf("HandleAction waiting for scheduled action: %v", actionPath)
-			_, err = WaitForCompletion(ta.ts, actionPath, 0)
+			_, err = initiator.WaitForCompletion(ta.ts, actionPath, 0)
 			return err
 		} else {
 			return err
