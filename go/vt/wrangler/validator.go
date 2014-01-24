@@ -204,7 +204,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 		results <- vresult{shardInfo.MasterAlias.String(), err}
 		return
 	}
-	if len(slaveList.Addrs) == 0 {
+	if len(slaveList) == 0 {
 		results <- vresult{shardInfo.MasterAlias.String(), fmt.Errorf("no slaves found")}
 		return
 	}
@@ -221,7 +221,7 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 	}
 
 	// See if every slave is in the replication graph.
-	for _, slaveAddr := range slaveList.Addrs {
+	for _, slaveAddr := range slaveList {
 		if tabletIpMap[slaveAddr] == nil {
 			results <- vresult{shardInfo.Keyspace() + "/" + shardInfo.ShardName(), fmt.Errorf("slave not in replication graph: %v (mysql instance without vttablet?)", slaveAddr)}
 		}
@@ -233,8 +233,8 @@ func (wr *Wrangler) validateReplication(shardInfo *topo.ShardInfo, tabletMap map
 			continue
 		}
 
-		if !strInList(slaveList.Addrs, tablet.IPAddr) {
-			results <- vresult{tablet.Alias.String(), fmt.Errorf("slave not replicating: %v %q", tablet.IPAddr, slaveList.Addrs)}
+		if !strInList(slaveList, tablet.IPAddr) {
+			results <- vresult{tablet.Alias.String(), fmt.Errorf("slave not replicating: %v %q", tablet.IPAddr, slaveList)}
 		}
 	}
 }

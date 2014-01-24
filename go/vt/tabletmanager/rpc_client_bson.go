@@ -111,7 +111,7 @@ func (client *GoRpcTabletManagerConn) SlavePosition(tablet *topo.TabletInfo, wai
 
 func (client *GoRpcTabletManagerConn) WaitSlavePosition(tablet *topo.TabletInfo, replicationPosition *myproto.ReplicationPosition, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	var rp myproto.ReplicationPosition
-	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, &gorpcproto.SlavePositionReq{
+	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, &gorpcproto.WaitSlavePositionArgs{
 		ReplicationPosition: *replicationPosition,
 		WaitTimeout:         waitTime,
 	}, &rp, waitTime); err != nil {
@@ -149,12 +149,12 @@ func (client *GoRpcTabletManagerConn) StartSlave(tablet *topo.TabletInfo, waitTi
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_START_SLAVE, "", &noOutput, waitTime)
 }
 
-func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error) {
-	var sl SlaveList
+func (client *GoRpcTabletManagerConn) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error) {
+	var sl gorpcproto.GetSlavesReply
 	if err := client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_GET_SLAVES, "", &sl, waitTime); err != nil {
 		return nil, err
 	}
-	return &sl, nil
+	return sl.Addrs, nil
 }
 
 func (client *GoRpcTabletManagerConn) WaitBlpPosition(tablet *topo.TabletInfo, blpPosition myproto.BlpPosition, waitTime time.Duration) error {

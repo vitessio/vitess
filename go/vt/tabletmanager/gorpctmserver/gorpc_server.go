@@ -106,7 +106,7 @@ func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.Unus
 	})
 }
 
-func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *gorpcproto.SlavePositionReq, reply *myproto.ReplicationPosition) error {
+func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *gorpcproto.WaitSlavePositionArgs, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
 		if err := tm.agent.Mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {
 			return err
@@ -155,7 +155,7 @@ func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedR
 	})
 }
 
-func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *tabletmanager.SlaveList) error {
+func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *gorpcproto.GetSlavesReply) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
 		reply.Addrs, err = tm.agent.Mysqld.FindSlaves()

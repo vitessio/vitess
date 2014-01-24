@@ -64,7 +64,7 @@ type TabletManagerConn interface {
 	StartSlave(tablet *topo.TabletInfo, waitTime time.Duration) error
 
 	// GetSlaves returns the addresses of the slaves
-	GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error)
+	GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error)
 
 	// WaitBlpPosition asks the tablet to wait until it reaches that
 	// position in replication

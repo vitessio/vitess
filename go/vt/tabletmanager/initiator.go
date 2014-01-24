@@ -262,11 +262,7 @@ func (ai *ActionInitiator) ExecuteHook(tabletAlias topo.TabletAlias, _hook *hook
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_EXECUTE_HOOK, Args: _hook})
 }
 
-type SlaveList struct {
-	Addrs []string
-}
-
-func (ai *ActionInitiator) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) (*SlaveList, error) {
+func (ai *ActionInitiator) GetSlaves(tablet *topo.TabletInfo, waitTime time.Duration) ([]string, error) {
 	return ai.rpc.GetSlaves(tablet, waitTime)
 }
 
