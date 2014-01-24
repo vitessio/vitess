@@ -7,6 +7,10 @@ It's currently used as a fundamental component of YouTube's MySQL infrastructure
 [sougou](https://github.com/sougou) will be presenting Vitess at [Fosdem '14 in the go devroom](https://fosdem.org/2014/schedule/track/go/). Feel free to drop by if you're planning
 on attending.
 
+* [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown)
+* [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown)
+* [Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
+
 Features
 --------
 
