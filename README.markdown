@@ -1,5 +1,4 @@
-Vitess
-======
+# Vitess
 
 Vitess is a set of servers and tools meant to facilitate scaling of MySQL databases for the web.
 It's currently used as a fundamental component of YouTube's MySQL infrastructure.
@@ -10,9 +9,9 @@ on attending.
 * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown)
 * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown)
 * [Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
+* [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
 
-Features
---------
+## Features
 
 This is an incomplete list of Vitess features.
 
@@ -83,52 +82,7 @@ requests.
   basing on provided criteria (useful for vertical or horizontal
   resharding).
 
-### Tools
-
-* *zkocc*: ZooKeeper connection pooler and cache.
-* *zkctl*: manage ZooKeeper instances.
-* *mysqlctl*: manage MySQL instances.
-* *zk*: command line ZooKeeper client and explorer.
-
-Dependencies
-------------
-
-* [Go](http://golang.org)
-* [Google MySQL](https://code.google.com/r/sougou-vitess-mysql/), we are working on
-  [MariaDB](https://mariadb.org/) compatibility.
-* [ZooKeeper](http://zookeeper.apache.org/) or another lock service implementation.
-* [Memcached](http://memcached.org)
-* [Python](http://python.org) (for the client and testing).
-
-Development
------------
-
-[Install Go](http://golang.org/doc/install).
-
-``` sh
-cd $WORKSPACE
-sudo apt-get install automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git
-git clone git@github.com:youtube/vitess.git src/github.com/youtube/vitess
-cd src/github.com/youtube/vitess
-./bootstrap.sh
-. ./dev.env
-```
-
-Optionally:
-
-``` sh
-VTDATAROOT=... #  $VTROOT/vt if not set
-VTPORTSTART=15000
-```
-
-To run the tests:
-
-``` sh
-make  # run the tests
-```
-
-License
--------
+## License
 
 Unless otherwise noted, the vitess source files are distributed
 under the BSD-style license found in the LICENSE file.
