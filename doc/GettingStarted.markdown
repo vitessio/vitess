@@ -42,6 +42,7 @@ make  # run the tests
 ```
 
 ## Setting up a cluster
+TODO: Expand on all sections
 ### Setup zookeeper
 ### Start a MySql instance
 ### Start vttablet
