@@ -2,33 +2,34 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package tabletmanager
+package gorpctmserver
 
 import (
 	"fmt"
-	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
+	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	"github.com/youtube/vitess/go/vt/tabletmanager/gorpcproto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // TabletManager is the Go RPC implementation of the RPC service
 type TabletManager struct {
-	agent *ActionAgent
+	agent *tabletmanager.ActionAgent
 }
 
 var TabletManagerGoRpcService *TabletManager
 
 func init() {
-	RegisterQueryServices = append(RegisterQueryServices, registerBsonQueryService)
+	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, registerBsonQueryService)
 }
 
-func registerBsonQueryService(agent *ActionAgent) {
+func registerBsonQueryService(agent *tabletmanager.ActionAgent) {
 	if TabletManagerGoRpcService != nil {
 		log.Warningf("RPC service already up %v", TabletManagerGoRpcService)
 		return
@@ -48,12 +49,7 @@ func (tm *TabletManager) Ping(context *rpcproto.Context, args, reply *string) er
 	})
 }
 
-type GetSchemaArgs struct {
-	Tables       []string
-	IncludeViews bool
-}
-
-func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArgs, reply *myproto.SchemaDefinition) error {
+func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *gorpcproto.GetSchemaArgs, reply *myproto.SchemaDefinition) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SCHEMA, args, reply, func() error {
 		// read the tablet to get the dbname
 		tablet, err := tm.agent.TopoServer.GetTablet(tm.agent.TabletAlias)
@@ -86,17 +82,13 @@ func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.Unu
 
 func (tm *TabletManager) ChangeType(context *rpcproto.Context, args *topo.TabletType, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_CHANGE_TYPE, args, reply, func() error {
-		return ChangeType(tm.agent.TopoServer, tm.agent.TabletAlias, *args, true /*runHooks*/)
+		return tabletmanager.ChangeType(tm.agent.TopoServer, tm.agent.TabletAlias, *args, true /*runHooks*/)
 	})
 }
 
-type SetBlacklistedTablesArgs struct {
-	Tables []string
-}
-
-func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *SetBlacklistedTablesArgs, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *gorpcproto.SetBlacklistedTablesArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES, args, reply, func() error {
-		return SetBlacklistedTables(tm.agent.TopoServer, tm.agent.TabletAlias, args.Tables)
+		return tabletmanager.SetBlacklistedTables(tm.agent.TopoServer, tm.agent.TabletAlias, args.Tables)
 	})
 }
 
@@ -114,12 +106,7 @@ func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.Unus
 	})
 }
 
-type SlavePositionReq struct {
-	ReplicationPosition myproto.ReplicationPosition
-	WaitTimeout         time.Duration // pass in zero to wait indefinitely
-}
-
-func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *SlavePositionReq, reply *myproto.ReplicationPosition) error {
+func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *gorpcproto.SlavePositionReq, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
 		if err := tm.agent.Mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {
 			return err
@@ -149,12 +136,7 @@ func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRe
 	})
 }
 
-type StopSlaveMinimumArgs struct {
-	GroupdId int64
-	WaitTime time.Duration
-}
-
-func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopSlaveMinimumArgs, reply *myproto.ReplicationPosition) error {
+func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *gorpcproto.StopSlaveMinimumArgs, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, func() error {
 		if err := tm.agent.Mysqld.WaitForMinimumReplicationPosition(args.GroupdId, args.WaitTime); err != nil {
 			return err
@@ -173,7 +155,7 @@ func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedR
 	})
 }
 
-func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *SlaveList) error {
+func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *tabletmanager.SlaveList) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
 		reply.Addrs, err = tm.agent.Mysqld.FindSlaves()
@@ -181,12 +163,7 @@ func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRe
 	})
 }
 
-type WaitBlpPositionArgs struct {
-	BlpPosition myproto.BlpPosition
-	WaitTimeout time.Duration
-}
-
-func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
+func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *gorpcproto.WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_BLP_POSITION, args, reply, func() error {
 		return tm.agent.Mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout)
 	})
@@ -217,12 +194,7 @@ func (tm *TabletManager) StartBlp(context *rpcproto.Context, args *rpc.UnusedReq
 	})
 }
 
-type RunBlpUntilArgs struct {
-	BlpPositionList *myproto.BlpPositionList
-	WaitTimeout     time.Duration
-}
-
-func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUntilArgs, reply *myproto.ReplicationPosition) error {
+func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *gorpcproto.RunBlpUntilArgs, reply *myproto.ReplicationPosition) error {
 	return tm.agent.RpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_RUN_BLP_UNTIL, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")
@@ -244,12 +216,12 @@ func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUnti
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
-		return slaveWasPromoted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias)
+		return tabletmanager.SlaveWasPromoted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias)
 	})
 }
 
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
-		return slaveWasRestarted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias, args)
+		return tabletmanager.SlaveWasRestarted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias, args)
 	})
 }

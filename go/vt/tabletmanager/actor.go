@@ -171,11 +171,11 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 	case actionnode.TABLET_ACTION_PROMOTE_SLAVE:
 		err = ta.promoteSlave(ta.mysqlDaemon, actionNode)
 	case actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED:
-		err = slaveWasPromoted(ta.ts, ta.mysqlDaemon, ta.tabletAlias)
+		err = SlaveWasPromoted(ta.ts, ta.mysqlDaemon, ta.tabletAlias)
 	case actionnode.TABLET_ACTION_RESTART_SLAVE:
 		err = ta.restartSlave(actionNode)
 	case actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED:
-		err = slaveWasRestarted(ta.ts, ta.mysqlDaemon, ta.tabletAlias, actionNode.Args.(*actionnode.SlaveWasRestartedArgs))
+		err = SlaveWasRestarted(ta.ts, ta.mysqlDaemon, ta.tabletAlias, actionNode.Args.(*actionnode.SlaveWasRestartedArgs))
 	case actionnode.TABLET_ACTION_RESERVE_FOR_RESTORE:
 		err = ta.reserveForRestore(actionNode)
 	case actionnode.TABLET_ACTION_RESTORE:
@@ -306,7 +306,7 @@ func (ta *TabletActor) promoteSlave(mysqlDaemon mysqlctl.MysqlDaemon, actionNode
 	return updateReplicationGraphForPromotedSlave(ta.ts, mysqlDaemon, tablet)
 }
 
-func slaveWasPromoted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias) error {
+func SlaveWasPromoted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias) error {
 	// We first check we don't have a master any more.
 	// If we do, it probably means we're not *the* master, and something
 	// is really wrong.
@@ -442,7 +442,7 @@ func (ta *TabletActor) restartSlave(actionNode *actionnode.ActionNode) error {
 	return nil
 }
 
-func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias, swrd *actionnode.SlaveWasRestartedArgs) error {
+func SlaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletAlias topo.TabletAlias, swrd *actionnode.SlaveWasRestartedArgs) error {
 	tablet, err := ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -454,7 +454,7 @@ func slaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 		return err
 	}
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
-		log.Errorf("slaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
+		log.Errorf("SlaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
 		if swrd.ScrapStragglers {
 			return Scrap(ts, tablet.Alias, false)
 		} else {
