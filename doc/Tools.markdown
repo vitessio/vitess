@@ -9,11 +9,10 @@ existing hardware.
 As things scale out, the automation tools start to become handy.
 
 ### vtctl
-vtctl is the main vitess tool that for initiatiing most
-administrative operations.
+vtctl is the main tool for performing administrative operations.
 It can be used to track shards, replication graphs and
 db categories.
-It's also used to initiate failovers, resharding, etc.
+It's also used to initiate failovers, reshard, etc.
 
 As vtctl performs operations, it updates the necessary
 changes to the lockserver (zookeeper).
