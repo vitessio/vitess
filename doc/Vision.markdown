@@ -59,8 +59,8 @@ its other important features:
 to efficiently query rows using more than one key.
 * *Joins*:  MySQL allows you to split one-to-many and many-to-many relational data
 into separate tables, and lets you join them on demand.
-This flexibility generally results in more efficient storage as piece of data is stored
-only once, and fetched only if needed.
+This flexibility generally results in more efficient storage as each piece of
+data is stored only once, and fetched only if needed.
 
 ### The Vitess spectrum
 The following diagram illustrates where vitess fits in the spectrum of storage solutions:
