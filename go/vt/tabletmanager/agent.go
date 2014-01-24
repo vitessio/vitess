@@ -49,7 +49,6 @@ type ActionAgent struct {
 	ts                topo.Server
 	tabletAlias       topo.TabletAlias
 	vtActionBinFile   string // path to vtaction binary
-	MycnfFile         string // my.cnf file
 	Mysqld            *mysqlctl.Mysqld
 	DbCredentialsFile string           // File that contains db credentials
 	BinlogPlayerMap   *BinlogPlayerMap // optional
@@ -68,11 +67,10 @@ type ActionAgent struct {
 	_tablet         *topo.TabletInfo
 }
 
-func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfFile string, mysqld *mysqlctl.Mysqld, dbCredentialsFile string) (*ActionAgent, error) {
+func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mysqld *mysqlctl.Mysqld, dbCredentialsFile string) (*ActionAgent, error) {
 	return &ActionAgent{
 		ts:                topoServer,
 		tabletAlias:       tabletAlias,
-		MycnfFile:         mycnfFile,
 		Mysqld:            mysqld,
 		DbCredentialsFile: dbCredentialsFile,
 		done:              make(chan struct{}),
@@ -166,7 +164,7 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 		"-action", actionNode.Action,
 		"-action-node", actionPath,
 		"-action-guid", actionNode.ActionGuid,
-		"-mycnf-file", agent.MycnfFile,
+		"-mycnf-file", agent.Mysqld.MycnfPath(),
 	}
 	cmd = append(cmd, logutil.GetSubprocessFlags()...)
 	cmd = append(cmd, topo.GetSubprocessFlags()...)

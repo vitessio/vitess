@@ -59,7 +59,7 @@ func main() {
 	mysqlctl.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *mycnfFile, *overridesFile)
+	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *overridesFile)
 	if err != nil {
 		log.Fatal(err)
 	}

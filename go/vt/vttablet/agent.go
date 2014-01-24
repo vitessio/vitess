@@ -42,7 +42,7 @@ func InitAgent(
 	mycnf *mysqlctl.Mycnf,
 	dbCredentialsFile string,
 	port, securePort int,
-	mycnfFile, overridesFile string) (agent *tabletmanager.ActionAgent, err error) {
+	overridesFile string) (agent *tabletmanager.ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
@@ -54,7 +54,7 @@ func InitAgent(
 	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
 	statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
 
-	agent, err = tabletmanager.NewActionAgent(topoServer, tabletAlias, mycnfFile, mysqld, dbCredentialsFile)
+	agent, err = tabletmanager.NewActionAgent(topoServer, tabletAlias, mysqld, dbCredentialsFile)
 	if err != nil {
 		return nil, err
 	}
