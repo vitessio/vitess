@@ -107,8 +107,7 @@ Development
 
 ``` sh
 cd $WORKSPACE
-sudo apt-get install automake libtool flex bison memcached python-dev python-mysqldb libssl-dev g++ mercurial git
-go get code.google.com/p/opts-go
+sudo apt-get install automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git
 git clone git@github.com:youtube/vitess.git src/github.com/youtube/vitess
 cd src/github.com/youtube/vitess
 ./bootstrap.sh
