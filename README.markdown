@@ -94,7 +94,7 @@ Dependencies
 ------------
 
 * [Go](http://golang.org)
-* [MySQL](http://mysql.com), we are working on
+* [Google MySQL](https://code.google.com/r/sougou-vitess-mysql/), we are working on
   [MariaDB](https://mariadb.org/) compatibility.
 * [ZooKeeper](http://zookeeper.apache.org/) or another lock service implementation.
 * [Memcached](http://memcached.org)
