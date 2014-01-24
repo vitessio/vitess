@@ -14,6 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
+	_ "github.com/youtube/vitess/go/vt/tabletmanager/gorpctmclient"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 )
