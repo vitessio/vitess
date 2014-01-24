@@ -13,7 +13,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -273,8 +272,8 @@ func (vsdw *VerticalSplitDiffWorker) synchronizeReplication() error {
 
 	// 2 - stop the source 'checker' at a binlog position
 	//     higher than the destination master
-	stopPositionList := mysqlctl.BlpPositionList{
-		Entries: make([]mysqlctl.BlpPosition, 1),
+	stopPositionList := myproto.BlpPositionList{
+		Entries: make([]myproto.BlpPosition, 1),
 	}
 	ss := vsdw.shardInfo.SourceShards[0]
 	// find where we should be stopping

@@ -14,7 +14,6 @@ import (
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/wrangler"
@@ -271,8 +270,8 @@ func (sdw *SplitDiffWorker) synchronizeReplication() error {
 
 	// 2 - stop all the source 'checker' at a binlog position
 	//     higher than the destination master
-	stopPositionList := mysqlctl.BlpPositionList{
-		Entries: make([]mysqlctl.BlpPosition, len(sdw.shardInfo.SourceShards)),
+	stopPositionList := myproto.BlpPositionList{
+		Entries: make([]myproto.BlpPosition, len(sdw.shardInfo.SourceShards)),
 	}
 	for i, ss := range sdw.shardInfo.SourceShards {
 		// find where we should be stopping

@@ -630,25 +630,7 @@ func (mysqld *Mysqld) ValidateSnapshotPath() error {
 
 // The following types and methods are used to watch binlog_player replication
 
-type BlpPosition struct {
-	Uid     uint32
-	GroupId int64
-}
-
-type BlpPositionList struct {
-	Entries []BlpPosition
-}
-
-func (bpl *BlpPositionList) FindBlpPositionById(id uint32) (*BlpPosition, error) {
-	for _, pos := range bpl.Entries {
-		if pos.Uid == id {
-			return &pos, nil
-		}
-	}
-	return nil, fmt.Errorf("BlpPosition for id %v not found", id)
-}
-
-func (mysqld *Mysqld) WaitBlpPos(bp *BlpPosition, waitTimeout time.Duration) error {
+func (mysqld *Mysqld) WaitBlpPos(bp *proto.BlpPosition, waitTimeout time.Duration) error {
 	timeOut := time.Now().Add(waitTimeout)
 	for {
 		if time.Now().After(timeOut) {

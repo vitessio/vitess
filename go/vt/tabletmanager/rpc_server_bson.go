@@ -183,7 +183,7 @@ func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRe
 }
 
 type WaitBlpPositionArgs struct {
-	BlpPosition mysqlctl.BlpPosition
+	BlpPosition myproto.BlpPosition
 	WaitTimeout time.Duration
 }
 
@@ -193,7 +193,7 @@ func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBl
 	})
 }
 
-func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *mysqlctl.BlpPositionList) error {
+func (tm *TabletManager) StopBlp(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.BlpPositionList) error {
 	return tm.rpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_BLP, args, reply, func() error {
 		if tm.agent.BinlogPlayerMap == nil {
 			return fmt.Errorf("No BinlogPlayerMap configured")
@@ -219,7 +219,7 @@ func (tm *TabletManager) StartBlp(context *rpcproto.Context, args *rpc.UnusedReq
 }
 
 type RunBlpUntilArgs struct {
-	BlpPositionList *mysqlctl.BlpPositionList
+	BlpPositionList *myproto.BlpPositionList
 	WaitTimeout     time.Duration
 }
 

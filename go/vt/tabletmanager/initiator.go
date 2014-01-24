@@ -19,7 +19,6 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/hook"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -190,7 +189,7 @@ func (ai *ActionInitiator) StartSlave(tabletAlias topo.TabletAlias, waitTime tim
 	return ai.rpc.StartSlave(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition mysqlctl.BlpPosition, waitTime time.Duration) error {
+func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosition myproto.BlpPosition, waitTime time.Duration) error {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return err
@@ -199,7 +198,7 @@ func (ai *ActionInitiator) WaitBlpPosition(tabletAlias topo.TabletAlias, blpPosi
 	return ai.rpc.WaitBlpPosition(tablet, blpPosition, waitTime)
 }
 
-func (ai *ActionInitiator) StopBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) (*mysqlctl.BlpPositionList, error) {
+func (ai *ActionInitiator) StopBlp(tabletAlias topo.TabletAlias, waitTime time.Duration) (*myproto.BlpPositionList, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err
@@ -217,7 +216,7 @@ func (ai *ActionInitiator) StartBlp(tabletAlias topo.TabletAlias, waitTime time.
 	return ai.rpc.StartBlp(tablet, waitTime)
 }
 
-func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *mysqlctl.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
+func (ai *ActionInitiator) RunBlpUntil(tabletAlias topo.TabletAlias, positions *myproto.BlpPositionList, waitTime time.Duration) (*myproto.ReplicationPosition, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {
 		return nil, err

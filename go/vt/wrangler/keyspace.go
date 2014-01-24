@@ -11,7 +11,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -273,7 +272,7 @@ func (wr *Wrangler) waitForFilteredReplication(sourcePositions map[*topo.ShardIn
 		go func(si *topo.ShardInfo) {
 			for _, sourceShard := range si.SourceShards {
 				// we're waiting on this guy
-				blpPosition := mysqlctl.BlpPosition{
+				blpPosition := myproto.BlpPosition{
 					Uid: sourceShard.Uid,
 				}
 
@@ -556,7 +555,7 @@ func (wr *Wrangler) migrateServedFrom(ki *topo.KeyspaceInfo, si *topo.ShardInfo,
 		}
 
 		// wait for it
-		if err := wr.ai.WaitBlpPosition(si.MasterAlias, mysqlctl.BlpPosition{
+		if err := wr.ai.WaitBlpPosition(si.MasterAlias, myproto.BlpPosition{
 			Uid:     0,
 			GroupId: masterPosition.MasterLogGroupId,
 		}, wr.actionTimeout()); err != nil {
