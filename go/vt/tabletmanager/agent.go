@@ -27,6 +27,7 @@ import (
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/logutil"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/tabletserver"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -47,8 +48,9 @@ type tabletChangeItem struct {
 type ActionAgent struct {
 	ts                topo.Server
 	tabletAlias       topo.TabletAlias
-	vtActionBinFile   string           // path to vtaction binary
-	MycnfFile         string           // my.cnf file
+	vtActionBinFile   string // path to vtaction binary
+	MycnfFile         string // my.cnf file
+	Mysqld            *mysqlctl.Mysqld
 	DbCredentialsFile string           // File that contains db credentials
 	BinlogPlayerMap   *BinlogPlayerMap // optional
 
@@ -66,11 +68,12 @@ type ActionAgent struct {
 	_tablet         *topo.TabletInfo
 }
 
-func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfFile, dbCredentialsFile string) (*ActionAgent, error) {
+func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mycnfFile string, mysqld *mysqlctl.Mysqld, dbCredentialsFile string) (*ActionAgent, error) {
 	return &ActionAgent{
 		ts:                topoServer,
 		tabletAlias:       tabletAlias,
 		MycnfFile:         mycnfFile,
+		Mysqld:            mysqld,
 		DbCredentialsFile: dbCredentialsFile,
 		done:              make(chan struct{}),
 		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
@@ -186,6 +189,29 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	return nil
 }
 
+// ChecktabletMysqlPort will check the mysql port for the tablet is good,
+// and if not will try to update it
+func CheckTabletMysqlPort(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tablet *topo.TabletInfo) *topo.TabletInfo {
+	mport, err := mysqlDaemon.GetMysqlPort()
+	if err != nil {
+		log.Warningf("Cannot get current mysql port, not checking it: %v", err)
+		return nil
+	}
+
+	if mport == tablet.Portmap["mysql"] {
+		return nil
+	}
+
+	log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
+	tablet.Portmap["mysql"] = mport
+	if err := topo.UpdateTablet(ts, tablet); err != nil {
+		log.Warningf("Failed to update tablet record, may use old mysql port")
+		return nil
+	}
+
+	return tablet
+}
+
 // afterAction needs to be run after an action may have changed the current
 // state of the tablet.
 func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
@@ -199,6 +225,12 @@ func (agent *ActionAgent) afterAction(context string, reloadSchema bool) {
 	if err := agent.readTablet(); err != nil {
 		log.Warningf("Failed rereading tablet after %v - services may be inconsistent: %v", context, err)
 	} else {
+		if updatedTablet := CheckTabletMysqlPort(agent.ts, agent.Mysqld, agent.Tablet()); updatedTablet != nil {
+			agent.mutex.Lock()
+			agent._tablet = updatedTablet
+			agent.mutex.Unlock()
+		}
+
 		agent.runChangeCallbacks(oldTablet, context)
 	}
 

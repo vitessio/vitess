@@ -331,22 +331,12 @@ func updateReplicationGraphForPromotedSlave(ts topo.Server, mysqlDaemon mysqlctl
 		}
 	}
 
-	// get the current mysql port
-	mport, err := mysqlDaemon.GetMysqlPort()
-	if err != nil {
-		return err
-	}
-	if mport != tablet.Portmap["mysql"] {
-		log.Warningf("MySQL port has changed from %v to %v, updating it in tablet record", tablet.Portmap["mysql"], mport)
-		tablet.Portmap["mysql"] = mport
-	}
-
 	// Update tablet regardless - trend towards consistency.
 	tablet.State = topo.STATE_READ_WRITE
 	tablet.Type = topo.TYPE_MASTER
 	tablet.Parent.Cell = ""
 	tablet.Parent.Uid = topo.NO_TABLET
-	err = topo.UpdateTablet(ts, tablet)
+	err := topo.UpdateTablet(ts, tablet)
 	if err != nil {
 		return err
 	}

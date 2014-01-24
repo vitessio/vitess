@@ -11,7 +11,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
@@ -29,12 +28,12 @@ func init() {
 	registerQueryServices = append(registerQueryServices, registerBsonQueryService)
 }
 
-func registerBsonQueryService(agent *ActionAgent, mysqld *mysqlctl.Mysqld) {
+func registerBsonQueryService(agent *ActionAgent) {
 	if TabletManagerRpcService != nil {
 		log.Warningf("RPC service already up %v", TabletManagerRpcService)
 		return
 	}
-	TabletManagerRpcService = &TabletManager{tabletManager{agent, mysqld}}
+	TabletManagerRpcService = &TabletManager{tabletManager{agent}}
 	rpcwrap.RegisterAuthenticated(TabletManagerRpcService)
 }
 
@@ -63,7 +62,7 @@ func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArg
 		}
 
 		// and get the schema
-		sd, err := tm.mysqld.GetSchema(tablet.DbName(), args.Tables, args.IncludeViews)
+		sd, err := tm.agent.Mysqld.GetSchema(tablet.DbName(), args.Tables, args.IncludeViews)
 		if err == nil {
 			*reply = *sd
 		}
@@ -73,7 +72,7 @@ func (tm *TabletManager) GetSchema(context *rpcproto.Context, args *GetSchemaArg
 
 func (tm *TabletManager) GetPermissions(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.Permissions) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_PERMISSIONS, args, reply, func() error {
-		p, err := tm.mysqld.GetPermissions()
+		p, err := tm.agent.Mysqld.GetPermissions()
 		if err == nil {
 			*reply = *p
 		}
@@ -107,7 +106,7 @@ func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *S
 
 func (tm *TabletManager) SlavePosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_POSITION, args, reply, func() error {
-		position, err := tm.mysqld.SlaveStatus()
+		position, err := tm.agent.Mysqld.SlaveStatus()
 		if err == nil {
 			*reply = *position
 		}
@@ -122,11 +121,11 @@ type SlavePositionReq struct {
 
 func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *SlavePositionReq, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION, args, reply, func() error {
-		if err := tm.mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {
+		if err := tm.agent.Mysqld.WaitMasterPos(&args.ReplicationPosition, args.WaitTimeout); err != nil {
 			return err
 		}
 
-		position, err := tm.mysqld.SlaveStatus()
+		position, err := tm.agent.Mysqld.SlaveStatus()
 		if err == nil {
 			*reply = *position
 		}
@@ -136,7 +135,7 @@ func (tm *TabletManager) WaitSlavePosition(context *rpcproto.Context, args *Slav
 
 func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.UnusedRequest, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_MASTER_POSITION, args, reply, func() error {
-		position, err := tm.mysqld.MasterStatus()
+		position, err := tm.agent.Mysqld.MasterStatus()
 		if err == nil {
 			*reply = *position
 		}
@@ -146,7 +145,7 @@ func (tm *TabletManager) MasterPosition(context *rpcproto.Context, args *rpc.Unu
 
 func (tm *TabletManager) StopSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE, args, reply, func() error {
-		return tm.mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
+		return tm.agent.Mysqld.StopSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
 	})
 }
 
@@ -157,10 +156,10 @@ type StopSlaveMinimumArgs struct {
 
 func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopSlaveMinimumArgs, reply *myproto.ReplicationPosition) error {
 	return tm.rpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_STOP_SLAVE_MINIMUM, args, reply, func() error {
-		if err := tm.mysqld.WaitForMinimumReplicationPosition(args.GroupdId, args.WaitTime); err != nil {
+		if err := tm.agent.Mysqld.WaitForMinimumReplicationPosition(args.GroupdId, args.WaitTime); err != nil {
 			return err
 		}
-		position, err := tm.mysqld.SlaveStatus()
+		position, err := tm.agent.Mysqld.SlaveStatus()
 		if err == nil {
 			*reply = *position
 		}
@@ -170,14 +169,14 @@ func (tm *TabletManager) StopSlaveMinimum(context *rpcproto.Context, args *StopS
 
 func (tm *TabletManager) StartSlave(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrapLock(context.RemoteAddr, actionnode.TABLET_ACTION_START_SLAVE, args, reply, func() error {
-		return tm.mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
+		return tm.agent.Mysqld.StartSlave(map[string]string{"TABLET_ALIAS": tm.agent.tabletAlias.String()})
 	})
 }
 
 func (tm *TabletManager) GetSlaves(context *rpcproto.Context, args *rpc.UnusedRequest, reply *SlaveList) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_GET_SLAVES, args, reply, func() error {
 		var err error
-		reply.Addrs, err = tm.mysqld.FindSlaves()
+		reply.Addrs, err = tm.agent.Mysqld.FindSlaves()
 		return err
 	})
 }
@@ -189,7 +188,7 @@ type WaitBlpPositionArgs struct {
 
 func (tm *TabletManager) WaitBlpPosition(context *rpcproto.Context, args *WaitBlpPositionArgs, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrap(context.RemoteAddr, actionnode.TABLET_ACTION_WAIT_BLP_POSITION, args, reply, func() error {
-		return tm.mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout)
+		return tm.agent.Mysqld.WaitBlpPos(&args.BlpPosition, args.WaitTimeout)
 	})
 }
 
@@ -231,7 +230,7 @@ func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUnti
 		if err := tm.agent.BinlogPlayerMap.RunUntil(args.BlpPositionList, args.WaitTimeout); err != nil {
 			return err
 		}
-		position, err := tm.mysqld.MasterStatus()
+		position, err := tm.agent.Mysqld.MasterStatus()
 		if err == nil {
 			*reply = *position
 		}
@@ -245,12 +244,12 @@ func (tm *TabletManager) RunBlpUntil(context *rpcproto.Context, args *RunBlpUnti
 
 func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_PROMOTED, args, reply, func() error {
-		return slaveWasPromoted(tm.agent.ts, tm.mysqld, tm.agent.tabletAlias)
+		return slaveWasPromoted(tm.agent.ts, tm.agent.Mysqld, tm.agent.tabletAlias)
 	})
 }
 
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
 	return tm.rpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
-		return slaveWasRestarted(tm.agent.ts, tm.mysqld, tm.agent.tabletAlias, args)
+		return slaveWasRestarted(tm.agent.ts, tm.agent.Mysqld, tm.agent.tabletAlias, args)
 	})
 }

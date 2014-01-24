@@ -65,6 +65,17 @@ func startFakeTabletActionLoop(t *testing.T, wr *Wrangler, tabletAlias topo.Tabl
 				// action may just fail for any good reason
 				t.Logf("HandleAction failed for %v: %v", actionNode.Action, err)
 			}
+
+			// this part would also be done by the agent
+			tablet, err := wr.ts.GetTablet(tabletAlias)
+			if err != nil {
+				t.Logf("Cannot get tablet: %v", err)
+			} else {
+				updatedTablet := tabletmanager.CheckTabletMysqlPort(wr.ts, mysqlDaemon, tablet)
+				if updatedTablet != nil {
+					t.Logf("Updated tablet record")
+				}
+			}
 			return nil
 		}
 		wr.ts.ActionEventLoop(tabletAlias, f, done)

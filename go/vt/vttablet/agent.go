@@ -54,7 +54,7 @@ func InitAgent(
 	statsKeyRangeStart := stats.NewString("TabletKeyRangeStart")
 	statsKeyRangeEnd := stats.NewString("TabletKeyRangeEnd")
 
-	agent, err = tabletmanager.NewActionAgent(topoServer, tabletAlias, mycnfFile, dbCredentialsFile)
+	agent, err = tabletmanager.NewActionAgent(topoServer, tabletAlias, mycnfFile, mysqld, dbCredentialsFile)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func InitAgent(
 	}
 
 	// register the RPC services from the agent
-	agent.RegisterQueryService(mysqld)
+	agent.RegisterQueryService()
 
 	return agent, nil
 }

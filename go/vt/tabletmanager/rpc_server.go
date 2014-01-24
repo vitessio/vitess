@@ -9,7 +9,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 // This file contains the RPC methods for the tablet manager.
@@ -30,8 +29,7 @@ const rpcTimeout = time.Second * 30
 
 // we keep track of the agent so we can use its tabletAlias, ts, ...
 type tabletManager struct {
-	agent  *ActionAgent
-	mysqld *mysqlctl.Mysqld
+	agent *ActionAgent
 }
 
 // rpcWrapper handles all the logic for rpc calls. Do not use directly,
@@ -98,13 +96,13 @@ func (tm *tabletManager) rpcWrapLockActionSchema(from, name string, args, reply 
 // Glue to delay registration of RPC servers until we have all the objects
 //
 
-type registerQueryService func(*ActionAgent, *mysqlctl.Mysqld)
+type registerQueryService func(*ActionAgent)
 
 var registerQueryServices []registerQueryService
 
 // RegisterQueryService will register all the instances
-func (agent *ActionAgent) RegisterQueryService(mysqld *mysqlctl.Mysqld) {
+func (agent *ActionAgent) RegisterQueryService() {
 	for _, f := range registerQueryServices {
-		f(agent, mysqld)
+		f(agent)
 	}
 }
