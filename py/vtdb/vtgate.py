@@ -11,6 +11,11 @@ from net import gorpc
 from vtdb import cursor
 from vtdb import dbexceptions
 from vtdb import field_types
+from vtdb import keyrange
+
+// This is the shard name for when the keyrange covers the entire space
+// for unsharded database.
+SHARD_ZERO = "0"
 
 
 _errno_pattern = re.compile('\(errno (\d+)\)')
@@ -204,12 +209,19 @@ class VtgateConnection(object):
   # (that way we avoid using a member variable here for such a corner case)
   def _stream_execute(self, sql, bind_variables):
     new_binds = field_types.convert_bind_vars(bind_variables)
+    keyrange = None
+    # For the unsharded keyspace, the keyrange should cover the
+    # entire space.
+      keyrange =  keyrange.KeyRange("")
+    else:
+      keyrange = keyrange.KeyRange(self.shard)
+
     req = {
         'Sql': sql,
         'BindVariables': new_binds,
         'Keyspace': self.keyspace,
+        'KeyRange': keyrange,
         'TabletType': self.tablet_type,
-        'Shards': [self.shard],
     }
     self._add_session(req)
 
@@ -218,7 +230,7 @@ class VtgateConnection(object):
     self._stream_result = None
     self._stream_result_index = 0
     try:
-      self.client.stream_call('VTGate.StreamExecuteShard', req)
+      self.client.stream_call('VTGate.StreamExecuteKeyRange', req)
       first_response = self.client.stream_next()
       reply = first_response.reply
 
