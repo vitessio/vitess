@@ -8,20 +8,38 @@ from vtdb import dbexceptions
 # bind_vars for distrubuting the workload of streaming queries.
 
 
+# Keyrange that spans the entire space, used
+# for unsharded database.
+NON_PARTIAL_KEYRANGE = ""
+MIN_KEY = ''
+MAX_KEY = ''
+
+KIT_UNSET = ""
+KIT_UINT64 = "uint64"
+KIT_BYTES = "bytes"
+
+
 class KeyRange(object):
-  kr_min = None
-  kr_max = None
+  Start = None
+  End = None
 
   def __init__(self, kr):
     if isinstance(kr, str):
-      kr = kr.split('-')
+      if kr == NON_PARTIAL_KEYRANGE:
+        self.Start = ""
+        self.End = ""
+        return
+      else:
+        kr = kr.split('-')
     if not isinstance(kr, tuple) and not isinstance(kr, list) or len(kr) != 2:
       raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)
-    self.kr_min = kr[0].strip()
-    self.kr_max = kr[1].strip()
+    self.Start = kr[0].strip()
+    self.End = kr[1].strip()
 
   def __str__(self):
-    return '%s-%s' % (self.kr_min, self.kr_max)
+    if self.Start == MIN_KEY and self.End == MAX_KEY:
+      return NON_PARTIAL_KEYRANGE
+    return '%s-%s' % (self.Start, self.End)
 
 
 class StreamingTaskMap(object):
@@ -70,17 +88,13 @@ def _true_int_kr_value(kr_value):
   return int(kr_value, base=16)
 
 
-MIN_KEY = ''
-MAX_KEY = ''
-
-KIT_UNSET = ""
-KIT_UINT64 = "uint64"
-KIT_BYTES = "bytes"
-
-
 # Compute the where clause and bind_vars for a given keyrange.
 def create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=KIT_UINT64):
   if isinstance(keyrange, str):
+    # If the keyrange is for unsharded db, there is no
+    # where clause to add to or bind_vars to add to.
+    if keyrange == NON_PARTIAL_KEYRANGE:
+      return "", {}
     keyrange = keyrange.split('-')
 
   if not isinstance(keyrange, tuple) and not isinstance(keyrange, list) or len(keyrange) != 2:
