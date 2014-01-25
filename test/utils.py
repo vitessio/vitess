@@ -138,6 +138,8 @@ def kill_sub_processes():
         logging.debug("kill_sub_processes: %s", str(e))
 
 def kill_sub_process(proc):
+  if proc is None:
+    return
   pid = proc.pid
   proc.kill()
   if pid and pid in pid_map:
@@ -343,6 +345,8 @@ def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, t
   return sp, port
 
 def vtgate_kill(sp):
+  if sp is None:
+    return
   kill_sub_process(sp)
   sp.wait()
 
