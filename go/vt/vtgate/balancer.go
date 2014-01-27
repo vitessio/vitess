@@ -111,6 +111,8 @@ func (blc *Balancer) refresh() error {
 					balancer: blc,
 				}
 				blc.addressNodes = append(blc.addressNodes, addrNode)
+			} else {
+				blc.addressNodes[index].endPoint = endPoint
 			}
 		}
 	}
