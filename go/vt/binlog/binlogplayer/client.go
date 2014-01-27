@@ -30,6 +30,9 @@ type BinlogPlayerClient interface {
 	// Close the connection
 	Close()
 
+	// Ask the server to stream binlog updates
+	ServeUpdateStream(*proto.UpdateStreamRequest, chan *proto.StreamEvent) BinlogPlayerResponse
+
 	// Ask the server to stream updates related to the provided tables
 	StreamTables(*proto.TablesRequest, chan *proto.BinlogTransaction) BinlogPlayerResponse
 

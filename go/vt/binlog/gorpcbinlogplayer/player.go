@@ -34,13 +34,18 @@ func (client *GoRpcBinlogPlayerClient) Close() {
 	client.Client.Close()
 }
 
-func (client *GoRpcBinlogPlayerClient) StreamTables(req *proto.TablesRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
-	resp := client.Client.StreamGo("UpdateStream.StreamTables", req, responseChan)
+func (client *GoRpcBinlogPlayerClient) ServeUpdateStream(req *proto.UpdateStreamRequest, responseChan chan *proto.StreamEvent) binlogplayer.BinlogPlayerResponse {
+	resp := client.Client.StreamGo("UpdateStream.ServeUpdateStream", req, responseChan)
 	return &GoRpcBinlogPlayerResponse{resp}
 }
 
 func (client *GoRpcBinlogPlayerClient) StreamKeyRange(req *proto.KeyRangeRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
 	resp := client.Client.StreamGo("UpdateStream.StreamKeyRange", req, responseChan)
+	return &GoRpcBinlogPlayerResponse{resp}
+}
+
+func (client *GoRpcBinlogPlayerClient) StreamTables(req *proto.TablesRequest, responseChan chan *proto.BinlogTransaction) binlogplayer.BinlogPlayerResponse {
+	resp := client.Client.StreamGo("UpdateStream.StreamTables", req, responseChan)
 	return &GoRpcBinlogPlayerResponse{resp}
 }
 
