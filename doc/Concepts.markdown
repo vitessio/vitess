@@ -40,6 +40,12 @@ list of non-intersecting ranges that cover all possible values a keyspace id can
 In other words, any given keypsace id is guaranteed to map to one and only one
 shard of the shard graph.
 
+We are going with range based sharding.
+The main advantage of this scheme is that the shard map is a simple in-memory lookup.
+The downside of this scheme is that it creates hot-spots for sequentially increasing keys.
+In such cases, we recommend that the application hash the keys so they
+distribute more randomly.
+
 ### Replication graph
 The replication graph represents the relationships between the master
 databases and their respective replicas.
@@ -48,7 +54,7 @@ Once a new master has been designated, all existing replicas have to
 repointed to the new master so that replication can resume.
 
 ### Serving graph
-The serving graph is typically derived from the shard and replication graph.
+The serving graph is derived from the shard and replication graph.
 It represens the list of active servers that are available to serve
 queries.
 VTGate (or smart clients) query the serving graph to find out which servers
