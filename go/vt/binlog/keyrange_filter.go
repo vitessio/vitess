@@ -2,15 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mysqlctl
+package binlog
 
 import (
 	"bytes"
 	"strconv"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var KEYSPACE_ID_COMMENT = []byte("/* EMD keyspace_id:")

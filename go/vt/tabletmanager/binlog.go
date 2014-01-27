@@ -16,6 +16,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/binlog/binlogplayer"
 	"github.com/youtube/vitess/go/vt/concurrency"
 	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
@@ -164,14 +165,14 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	bpc.DisableSuperToSetTimestamp()
 
 	// create the db connection, connect it
-	vtClient := mysqlctl.NewDbClient(bpc.dbConfig)
+	vtClient := binlogplayer.NewDbClient(bpc.dbConfig)
 	if err := vtClient.Connect(); err != nil {
 		return fmt.Errorf("can't connect to database: %v", err)
 	}
 	defer vtClient.Close()
 
 	// Read the start position
-	startPosition, err := mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+	startPosition, err := binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 	if err != nil {
 		return fmt.Errorf("can't read startPosition: %v", err)
 	}
@@ -190,7 +191,7 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 	// check which kind of replication we're doing, tables or keyrange
 	if len(bpc.sourceShard.Tables) > 0 {
 		// tables, just get them
-		player := mysqlctl.NewBinlogPlayerTables(vtClient, addr, bpc.sourceShard.Tables, startPosition, bpc.stopAtGroupId)
+		player := binlogplayer.NewBinlogPlayerTables(vtClient, addr, bpc.sourceShard.Tables, startPosition, bpc.stopAtGroupId)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	} else {
 		// the data we have to replicate is the intersection of the
@@ -200,13 +201,13 @@ func (bpc *BinlogPlayerController) Iteration() (err error) {
 			return fmt.Errorf("Source shard %v doesn't overlap destination shard %v", bpc.sourceShard.KeyRange, bpc.keyRange)
 		}
 
-		player := mysqlctl.NewBinlogPlayerKeyRange(vtClient, addr, overlap, startPosition, bpc.stopAtGroupId)
+		player := binlogplayer.NewBinlogPlayerKeyRange(vtClient, addr, overlap, startPosition, bpc.stopAtGroupId)
 		return player.ApplyBinlogEvents(bpc.interrupted)
 	}
 }
 
-func (bpc *BinlogPlayerController) BlpPosition(vtClient *mysqlctl.DBClient) (*myproto.BlpPosition, error) {
-	return mysqlctl.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
+func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) (*myproto.BlpPosition, error) {
+	return binlogplayer.ReadStartPosition(vtClient, bpc.sourceShard.Uid)
 }
 
 // BinlogPlayerMap controls all the players.
@@ -366,7 +367,7 @@ func (blm *BinlogPlayerMap) Start() {
 // BlpPositionList returns the current position of all the players
 func (blm *BinlogPlayerMap) BlpPositionList() (*myproto.BlpPositionList, error) {
 	// create a db connection for this purpose
-	vtClient := mysqlctl.NewDbClient(&blm.dbConfig)
+	vtClient := binlogplayer.NewDbClient(&blm.dbConfig)
 	if err := vtClient.Connect(); err != nil {
 		return nil, fmt.Errorf("can't connect to database: %v", err)
 	}

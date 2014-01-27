@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/servenv"
@@ -56,7 +57,7 @@ func main() {
 	}
 
 	ts.InitQueryService()
-	mysqlctl.RegisterUpdateStreamService(mycnf)
+	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
 	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *overridesFile)
@@ -68,7 +69,7 @@ func main() {
 	servenv.OnClose(func() {
 		time.Sleep(5 * time.Millisecond)
 		ts.DisallowQueries()
-		mysqlctl.DisableUpdateStreamService()
+		binlog.DisableUpdateStreamService()
 		topo.CloseServers()
 		agent.Stop()
 	})

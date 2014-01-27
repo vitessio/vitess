@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mysqlctl
+package binlogplayer
 
 import (
 	"bufio"
@@ -17,8 +17,9 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var (
@@ -192,7 +193,7 @@ type BinlogPlayer struct {
 	dbClient      VtClient
 	keyRange      key.KeyRange
 	tables        []string
-	blpPos        proto.BlpPosition
+	blpPos        myproto.BlpPosition
 	stopAtGroupId int64
 	blplStats     *blplStats
 }
@@ -201,7 +202,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *proto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *myproto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:          addr,
 		dbClient:      dbClient,
@@ -216,7 +217,7 @@ func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyRange key.KeyRan
 // replicating the provided tables, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *proto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient VtClient, addr string, tables []string, startPosition *myproto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
 	return &BinlogPlayer{
 		addr:          addr,
 		dbClient:      dbClient,
@@ -249,7 +250,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(groupId int64) error {
 	return nil
 }
 
-func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, error) {
+func ReadStartPosition(dbClient VtClient, uid uint32) (*myproto.BlpPosition, error) {
 	selectRecovery := fmt.Sprintf(
 		"select group_id from _vt.blp_checkpoint where source_shard_uid=%v",
 		uid)
@@ -264,7 +265,7 @@ func ReadStartPosition(dbClient VtClient, uid uint32) (*proto.BlpPosition, error
 	if err != nil {
 		return nil, err
 	}
-	return &proto.BlpPosition{
+	return &myproto.BlpPosition{
 		Uid:     uid,
 		GroupId: temp,
 	}, nil

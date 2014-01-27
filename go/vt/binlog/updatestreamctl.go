@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package mysqlctl
+package binlog
 
 import (
 	"fmt"
@@ -11,8 +11,9 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 )
 
 /* API and config for UpdateStream Service */
@@ -38,11 +39,11 @@ var (
 )
 
 type UpdateStream struct {
-	mycnf *Mycnf
+	mycnf *mysqlctl.Mycnf
 
 	actionLock     sync.Mutex
 	state          sync2.AtomicInt64
-	mysqld         *Mysqld
+	mysqld         *mysqlctl.Mysqld
 	stateWaitGroup sync.WaitGroup
 	dbname         string
 	streams        streamList
@@ -85,7 +86,7 @@ func (sl *streamList) Stop() {
 
 var UpdateStreamRpcService *UpdateStream
 
-func RegisterUpdateStreamService(mycnf *Mycnf) {
+func RegisterUpdateStreamService(mycnf *mysqlctl.Mycnf) {
 	if UpdateStreamRpcService != nil {
 		panic("Update Stream service already initialized")
 	}
@@ -148,7 +149,7 @@ func (updateStream *UpdateStream) enable(dbcfgs dbconfigs.DBConfigs) {
 	}
 
 	updateStream.state.Set(ENABLED)
-	updateStream.mysqld = NewMysqld(updateStream.mycnf, dbcfgs.Dba, dbcfgs.Repl)
+	updateStream.mysqld = mysqlctl.NewMysqld(updateStream.mycnf, dbcfgs.Dba, dbcfgs.Repl)
 	updateStream.dbname = dbcfgs.App.DbName
 	updateStream.streams.Init()
 	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)

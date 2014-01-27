@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/binlog"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/sqlparser"
@@ -103,15 +104,15 @@ func InitAgent(
 			}
 			ts.AllowQueries(dbcfgs.App, schemaOverrides, qrs)
 			// Disable before enabling to force existing streams to stop.
-			mysqlctl.DisableUpdateStreamService()
-			mysqlctl.EnableUpdateStreamService(dbcfgs)
+			binlog.DisableUpdateStreamService()
+			binlog.EnableUpdateStreamService(dbcfgs)
 			if newTablet.Type != topo.TYPE_MASTER {
 				ts.StartRowCacheInvalidation()
 			}
 		} else {
 			ts.DisallowQueries()
 			ts.StopRowCacheInvalidation()
-			mysqlctl.DisableUpdateStreamService()
+			binlog.DisableUpdateStreamService()
 		}
 
 		statsType.Set(string(newTablet.Type))
