@@ -84,18 +84,33 @@ func (sl *streamList) Stop() {
 	sl.Unlock()
 }
 
+// UpdateStreamRpcService is the singleton that gets initialized during
+// startup and that gets called by all RPC server implementations
 var UpdateStreamRpcService *UpdateStream
 
+// Glue to delay registration of RPC servers until we have all the objects
+type RegisterUpdateStreamServiceFunc func(*UpdateStream)
+
+var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
+
+// RegisterUpdateStreamService needs to be called to start listening
+// to clients
 func RegisterUpdateStreamService(mycnf *mysqlctl.Mycnf) {
+	// check we haven't been called already
 	if UpdateStreamRpcService != nil {
 		panic("Update Stream service already initialized")
 	}
 
+	// create the singleton
 	UpdateStreamRpcService = &UpdateStream{mycnf: mycnf}
 	stats.Publish("UpdateStreamState", stats.StringFunc(func() string {
 		return usStateNames[UpdateStreamRpcService.state.Get()]
 	}))
-	proto.RegisterAuthenticated(UpdateStreamRpcService)
+
+	// and register all the instances
+	for _, f := range RegisterUpdateStreamServices {
+		f(UpdateStreamRpcService)
+	}
 }
 
 func logError() {

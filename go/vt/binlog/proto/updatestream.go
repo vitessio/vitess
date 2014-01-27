@@ -5,7 +5,6 @@
 package proto
 
 import (
-	"github.com/youtube/vitess/go/rpcwrap"
 	"github.com/youtube/vitess/go/vt/key"
 )
 
@@ -31,10 +30,4 @@ type UpdateStream interface {
 	ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply interface{}) error) (err error)
 	StreamKeyRange(req *KeyRangeRequest, sendReply func(reply interface{}) error) (err error)
 	StreamTables(req *TablesRequest, sendReply func(reply interface{}) error) (err error)
-}
-
-// RegisterAuthenticated registers a variable that satisfies the UpdateStream interface
-// as an rpc service that requires authentication.
-func RegisterAuthenticated(service UpdateStream) {
-	rpcwrap.RegisterAuthenticated(service)
 }
