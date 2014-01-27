@@ -178,14 +178,23 @@ func endPointsMorph() (*topo.EndPoints, error) {
 			topo.EndPoint{
 				Uid:  addrNum,
 				Host: fmt.Sprintf("%d", addrNum),
+				NamedPortMap: map[string]int{
+					"vt": 1,
+				},
 			},
 			topo.EndPoint{
 				Uid:  1,
 				Host: "1",
+				NamedPortMap: map[string]int{
+					"vt": int(addrNum),
+				},
 			},
 			topo.EndPoint{
 				Uid:  2,
 				Host: "2",
+				NamedPortMap: map[string]int{
+					"vt": 3,
+				},
 			},
 		},
 	}, nil
@@ -198,6 +207,11 @@ func TestRefresh(t *testing.T) {
 	// "11" should be found in the list.
 	if index == -1 {
 		t.Errorf("want other than -1: %v", index)
+	}
+	// "1" should be in the list with port 11
+	port_start := b.addressNodes[findAddrNode(b.addressNodes, 1)].endPoint.NamedPortMap["vt"]
+	if port_start != 11 {
+		t.Errorf("want 11, got %v", port_start)
 	}
 	b.MarkDown(1)
 	b.refresh()
@@ -214,5 +228,10 @@ func TestRefresh(t *testing.T) {
 	// "1" should be marked down (non-zero timeRetry)
 	if b.addressNodes[index].timeRetry.IsZero() {
 		t.Errorf("want non-zero, got 0")
+	}
+	// "1" should have the updated port 12
+	port_new := b.addressNodes[index].endPoint.NamedPortMap["vt"]
+	if port_new != 12 {
+		t.Errorf("want 12, got %v", port_new)
 	}
 }
