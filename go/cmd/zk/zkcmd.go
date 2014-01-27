@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	opts "code.google.com/p/opts-go"
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/terminal"
 	"github.com/youtube/vitess/go/zk"
 
@@ -131,7 +131,6 @@ func init() {
 		"watch": cmdWatch,
 		"zip":   cmdZip,
 	}
-	log.SetFlags(0)
 
 	zconn = zk.NewMetaConn(false)
 }
@@ -259,7 +258,7 @@ func cmdElock(args []string) {
 				zconn.Delete(zkPath, -1)
 				return
 			case event := <-watch:
-				log.Printf("elock: event %v: %v", zkPath, event)
+				log.Infof("elock: event %v: %v", zkPath, event)
 				if !event.Ok() {
 					//log.Fatalf("elock: error %v: %v", zkPath, event)
 					break watchLoop
@@ -293,13 +292,13 @@ func cmdWatch(args []string) {
 		case <-sigRecv:
 			return
 		case event := <-eventChan:
-			log.Printf("watch: event %v: %v", event.Path, event)
+			log.Infof("watch: event %v: %v", event.Path, event)
 			if event.Type == zookeeper.EVENT_CHANGED {
 				data, stat, watch, err := zconn.GetW(event.Path)
 				if err != nil {
 					log.Fatalf("ERROR: failed to watch %v", err)
 				}
-				log.Printf("watch: %v %v\n", event.Path, stat)
+				log.Infof("watch: %v %v\n", event.Path, stat)
 				println(data)
 				go func() {
 					eventChan <- <-watch
@@ -307,7 +306,7 @@ func cmdWatch(args []string) {
 			} else if event.State == zookeeper.STATE_CLOSED {
 				return
 			} else if event.Type == zookeeper.EVENT_DELETED {
-				log.Printf("watch: %v deleted\n", event.Path)
+				log.Infof("watch: %v deleted\n", event.Path)
 			} else {
 				// Most likely a session event - try t
 				_, _, watch, err := zconn.GetW(event.Path)
@@ -358,7 +357,7 @@ func cmdLs(args []string) {
 		if err != nil {
 			hasError = true
 			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
-				log.Printf("ls: cannot access %v: %v", zkPath, err)
+				log.Warningf("ls: cannot access %v: %v", zkPath, err)
 			}
 		}
 
@@ -384,7 +383,7 @@ func cmdLs(args []string) {
 				stat, err := zconn.Exists(localPath)
 				if err != nil {
 					if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
-						log.Printf("ls: cannot access: %v: %v", localPath, err)
+						log.Warningf("ls: cannot access: %v: %v", localPath, err)
 					}
 				} else {
 					stats[i] = stat
@@ -521,7 +520,7 @@ func cmdRm(args []string) {
 		if err != nil {
 			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
 				hasError = true
-				log.Printf("rm: cannot delete %v: %v", zkPath, err)
+				log.Warningf("rm: cannot delete %v: %v", zkPath, err)
 			}
 		}
 	}
@@ -552,7 +551,7 @@ func cmdCat(args []string) {
 		if err != nil {
 			hasError = true
 			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
-				log.Printf("cat: cannot access %v: %v", zkPath, err)
+				log.Warningf("cat: cannot access %v: %v", zkPath, err)
 			}
 		} else {
 			if *longListing {
@@ -578,7 +577,7 @@ func cmdEdit(args []string) {
 	data, stat, err := zconn.Get(zkPath)
 	if err != nil {
 		if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
-			log.Printf("edit: cannot access %v: %v", zkPath, err)
+			log.Warningf("edit: cannot access %v: %v", zkPath, err)
 		}
 		os.Exit(1)
 	}
@@ -591,7 +590,7 @@ func cmdEdit(args []string) {
 		f.Close()
 	}
 	if err != nil {
-		log.Printf("edit: cannot write file %v", err)
+		log.Warningf("edit: cannot write file %v", err)
 		os.Exit(1)
 	}
 
@@ -602,15 +601,13 @@ func cmdEdit(args []string) {
 	err = cmd.Run()
 	if err != nil {
 		os.Remove(tmpPath)
-		log.Printf("edit: cannot start $EDITOR: %v", err)
-		os.Exit(1)
+		log.Fatalf("edit: cannot start $EDITOR: %v", err)
 	}
 
 	fileData, err := ioutil.ReadFile(tmpPath)
 	if err != nil {
 		os.Remove(tmpPath)
-		log.Printf("edit: cannot read file %v", err)
-		os.Exit(1)
+		log.Fatalf("edit: cannot read file %v", err)
 	}
 
 	if string(fileData) != data {
@@ -618,8 +615,7 @@ func cmdEdit(args []string) {
 		_, err = zconn.Set(zkPath, string(fileData), stat.Version())
 		if err != nil {
 			os.Remove(tmpPath)
-			log.Printf("edit: cannot write zk file %v", err)
-			os.Exit(1)
+			log.Fatalf("edit: cannot write zk file %v", err)
 		}
 	}
 	os.Remove(tmpPath)
@@ -648,7 +644,7 @@ func cmdStat(args []string) {
 		if err != nil {
 			hasError = true
 			if !*force || !zookeeper.IsError(err, zookeeper.ZNONODE) {
-				log.Printf("stat: cannot access %v: %v", zkPath, err)
+				log.Warningf("stat: cannot access %v: %v", zkPath, err)
 			}
 			continue
 		}
@@ -735,7 +731,7 @@ func cmdChmod(args []string) {
 		aclv, _, err := zconn.ACL(zkPath)
 		if err != nil {
 			hasError = true
-			log.Printf("chmod: cannot set access %v: %v", zkPath, err)
+			log.Warningf("chmod: cannot set access %v: %v", zkPath, err)
 			continue
 		}
 		if addPerms {
@@ -746,7 +742,7 @@ func cmdChmod(args []string) {
 		err = zconn.SetACL(zkPath, aclv, -1)
 		if err != nil {
 			hasError = true
-			log.Printf("chmod: cannot set access %v: %v", zkPath, err)
+			log.Warningf("chmod: cannot set access %v: %v", zkPath, err)
 			continue
 		}
 	}

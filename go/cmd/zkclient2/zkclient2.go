@@ -7,11 +7,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/sync2"

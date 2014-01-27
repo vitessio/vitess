@@ -8,11 +8,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
 	_ "github.com/youtube/vitess/go/vt/client2"
 	_ "github.com/youtube/vitess/go/vt/client2/tablet"
@@ -105,7 +105,7 @@ func main() {
 		log.Fatalf("client error: %v", err)
 	}
 
-	log.Println("Sending the query...")
+	log.Infof("Sending the query...")
 	now := time.Now()
 
 	// handle dml
@@ -126,7 +126,7 @@ func main() {
 		}
 
 		n, err := r.RowsAffected()
-		log.Println("Total time:", time.Now().Sub(now), "Rows affected:", n)
+		log.Infof("Total time:", time.Now().Sub(now), "Rows affected:", n)
 	} else {
 
 		// launch the query
@@ -147,7 +147,7 @@ func main() {
 			for _, field := range cols {
 				line += "\t" + field
 			}
-			log.Println(line)
+			log.Infof(line)
 		}
 
 		// get the rows
@@ -168,13 +168,13 @@ func main() {
 						line += "\t"
 					}
 				}
-				log.Println(line)
+				log.Infof(line)
 			}
 			rowIndex++
 		}
 		if err := r.Err(); err != nil {
 			log.Fatalf("Error %v\n", err)
 		}
-		log.Println("Total time:", time.Now().Sub(now), "Row count:", rowIndex)
+		log.Infof("Total time:", time.Now().Sub(now), "Row count:", rowIndex)
 	}
 }

@@ -16,7 +16,7 @@ import (
 
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/testfiles"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/binlog/proto"
 )
 
 func TestPosParse(t *testing.T) {

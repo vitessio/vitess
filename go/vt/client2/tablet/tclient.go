@@ -11,10 +11,10 @@ package tablet
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
 
+	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/rpcplus"
@@ -315,7 +315,7 @@ func (sr *StreamResult) Next() (row []interface{}) {
 		qr, ok := <-sr.sr
 		if !ok {
 			if sr.call.Error != nil {
-				log.Printf("vt: error reading the next value %v", sr.call.Error.Error())
+				log.Warningf("vt: error reading the next value %v", sr.call.Error.Error())
 				sr.err = sr.call.Error
 			}
 			return nil

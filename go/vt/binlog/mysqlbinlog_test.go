@@ -112,7 +112,7 @@ func TestWarning(t *testing.T) {
 	ioutil.ReadAll(out)
 	mbl.Wait()
 	logutil.Flush()
-	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "mysqlctl.test.WARNING"))
+	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "binlog.test.WARNING"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -135,7 +135,7 @@ func TestError(t *testing.T) {
 	ioutil.ReadAll(out)
 	mbl.Wait()
 	logutil.Flush()
-	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "mysqlctl.test.ERROR"))
+	warnbytes, err := ioutil.ReadFile(path.Join(os.TempDir(), "binlog.test.ERROR"))
 	if err != nil {
 		t.Error(err)
 	}
