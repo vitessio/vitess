@@ -5,17 +5,14 @@
 package binlogplayer
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcplus"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
@@ -27,130 +24,6 @@ var (
 	BLPL_STREAM_COMMENT_START = []byte("/* _stream ")
 	BLPL_SPACE                = []byte(" ")
 )
-
-// VtClient is a high level interface to the database
-type VtClient interface {
-	Connect() error
-	Begin() error
-	Commit() error
-	Rollback() error
-	Close()
-	ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error)
-}
-
-// DummyVtClient is a VtClient that writes to a writer instead of executing
-// anything
-type DummyVtClient struct {
-	stdout *bufio.Writer
-}
-
-func NewDummyVtClient() *DummyVtClient {
-	stdout := bufio.NewWriterSize(os.Stdout, 16*1024)
-	return &DummyVtClient{stdout}
-}
-
-func (dc DummyVtClient) Connect() error {
-	return nil
-}
-
-func (dc DummyVtClient) Begin() error {
-	dc.stdout.WriteString("BEGIN;\n")
-	return nil
-}
-func (dc DummyVtClient) Commit() error {
-	dc.stdout.WriteString("COMMIT;\n")
-	return nil
-}
-func (dc DummyVtClient) Rollback() error {
-	dc.stdout.WriteString("ROLLBACK;\n")
-	return nil
-}
-func (dc DummyVtClient) Close() {
-	return
-}
-
-func (dc DummyVtClient) ExecuteFetch(query string, maxrows int, wantfields bool) (qr *mproto.QueryResult, err error) {
-	dc.stdout.WriteString(string(query) + ";\n")
-	return &mproto.QueryResult{Fields: nil, RowsAffected: 1, InsertId: 0, Rows: nil}, nil
-}
-
-// DBClient is a real VtClient backed by a mysql connection
-type DBClient struct {
-	dbConfig *mysql.ConnectionParams
-	dbConn   *mysql.Connection
-}
-
-func NewDbClient(dbConfig *mysql.ConnectionParams) *DBClient {
-	dbClient := &DBClient{}
-	dbClient.dbConfig = dbConfig
-	return dbClient
-}
-
-func (dc *DBClient) handleError(err error) {
-	// log.Errorf("in DBClient handleError %v", err.(error))
-	if sqlErr, ok := err.(*mysql.SqlError); ok {
-		if sqlErr.Number() >= 2000 && sqlErr.Number() <= 2018 { // mysql connection errors
-			dc.Close()
-		}
-		if sqlErr.Number() == 1317 { // Query was interrupted
-			dc.Close()
-		}
-	}
-}
-
-func (dc *DBClient) Connect() error {
-	var err error
-	dc.dbConn, err = mysql.Connect(*dc.dbConfig)
-	if err != nil {
-		return fmt.Errorf("error in connecting to mysql db, err %v", err)
-	}
-	return nil
-}
-
-func (dc *DBClient) Begin() error {
-	_, err := dc.dbConn.ExecuteFetch("begin", 1, false)
-	if err != nil {
-		log.Errorf("BEGIN failed w/ error %v", err)
-		dc.handleError(err)
-	}
-	return err
-}
-
-func (dc *DBClient) Commit() error {
-	_, err := dc.dbConn.ExecuteFetch("commit", 1, false)
-	if err != nil {
-		log.Errorf("COMMIT failed w/ error %v", err)
-		dc.dbConn.Close()
-	}
-	return err
-}
-
-func (dc *DBClient) Rollback() error {
-	_, err := dc.dbConn.ExecuteFetch("rollback", 1, false)
-	if err != nil {
-		log.Errorf("ROLLBACK failed w/ error %v", err)
-		dc.dbConn.Close()
-	}
-	return err
-}
-
-func (dc *DBClient) Close() {
-	if dc.dbConn != nil {
-		dc.dbConn.Close()
-		dc.dbConn = nil
-	}
-}
-
-func (dc *DBClient) ExecuteFetch(query string, maxrows int, wantfields bool) (*mproto.QueryResult, error) {
-	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, wantfields)
-	if err != nil {
-		log.Errorf("ExecuteFetch failed w/ error %v", err)
-		dc.handleError(err)
-		return nil, err
-	}
-	qr := mproto.QueryResult(*mqr)
-	return &qr, nil
-}
 
 // blplStats is the internal stats of this player
 type blplStats struct {
@@ -345,27 +218,33 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		}
 		log.Infof("Will stop player when reaching %v", blp.stopAtGroupId)
 	}
-	rpcClient, err := rpcplus.DialHTTP("tcp", blp.addr)
-	defer rpcClient.Close()
+
+	binlogPlayerClientFactory, ok := binlogPlayerClientFactories[*binlogPlayerProtocol]
+	if !ok {
+		return fmt.Errorf("no binlog player client factory named %v", *binlogPlayerProtocol)
+	}
+	rpcClient := binlogPlayerClientFactory()
+	err := rpcClient.Dial(blp.addr)
 	if err != nil {
 		log.Errorf("Error dialing binlog server: %v", err)
 		return fmt.Errorf("error dialing binlog server: %v", err)
 	}
+	defer rpcClient.Close()
 
 	responseChan := make(chan *proto.BinlogTransaction)
-	var resp *rpcplus.Call
+	var resp BinlogPlayerResponse
 	if len(blp.tables) > 0 {
 		req := &proto.TablesRequest{
 			Tables:  blp.tables,
 			GroupId: blp.blpPos.GroupId,
 		}
-		resp = rpcClient.StreamGo("UpdateStream.StreamTables", req, responseChan)
+		resp = rpcClient.StreamTables(req, responseChan)
 	} else {
 		req := &proto.KeyRangeRequest{
 			KeyRange: blp.keyRange,
 			GroupId:  blp.blpPos.GroupId,
 		}
-		resp = rpcClient.StreamGo("UpdateStream.StreamKeyRange", req, responseChan)
+		resp = rpcClient.StreamKeyRange(req, responseChan)
 	}
 
 processLoop:
@@ -394,8 +273,8 @@ processLoop:
 			return nil
 		}
 	}
-	if resp.Error != nil {
-		return fmt.Errorf("Error received from ServeBinlog %v", resp.Error)
+	if resp.Error() != nil {
+		return fmt.Errorf("Error received from ServeBinlog %v", resp.Error())
 	}
 	return io.EOF
 }
