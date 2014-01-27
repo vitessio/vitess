@@ -129,7 +129,7 @@ func DisableUpdateStreamService() {
 	UpdateStreamRpcService.disable()
 }
 
-func ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply interface{}) error) error {
+func ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) error {
 	return UpdateStreamRpcService.ServeUpdateStream(req, sendReply)
 }
 
@@ -187,7 +187,7 @@ func (updateStream *UpdateStream) isEnabled() bool {
 	return updateStream.state.Get() == ENABLED
 }
 
-func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply interface{}) error) (err error) {
+func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamRequest, sendReply func(reply *proto.StreamEvent) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
@@ -228,7 +228,7 @@ func (updateStream *UpdateStream) ServeUpdateStream(req *proto.UpdateStreamReque
 	})
 }
 
-func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply interface{}) error) (err error) {
+func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)
@@ -267,7 +267,7 @@ func (updateStream *UpdateStream) StreamKeyRange(req *proto.KeyRangeRequest, sen
 	return bls.Stream(rp.MasterLogFile, int64(rp.MasterLogPosition), f)
 }
 
-func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply interface{}) error) (err error) {
+func (updateStream *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply func(reply *proto.BinlogTransaction) error) (err error) {
 	defer func() {
 		if x := recover(); x != nil {
 			err = x.(error)

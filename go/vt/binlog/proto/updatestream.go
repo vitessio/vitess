@@ -24,10 +24,3 @@ type TablesRequest struct {
 	GroupId int64
 	Tables  []string
 }
-
-// UpdateStream defines the rpc API for the update stream service.
-type UpdateStream interface {
-	ServeUpdateStream(req *UpdateStreamRequest, sendReply func(reply interface{}) error) (err error)
-	StreamKeyRange(req *KeyRangeRequest, sendReply func(reply interface{}) error) (err error)
-	StreamTables(req *TablesRequest, sendReply func(reply interface{}) error) (err error)
-}

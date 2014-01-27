@@ -83,8 +83,8 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 
 	log.Infof("Starting rowcache invalidator")
 	req := &blproto.UpdateStreamRequest{GroupId: groupId}
-	err = binlog.ServeUpdateStream(req, func(reply interface{}) error {
-		return rowCache.processEvent(reply.(*blproto.StreamEvent))
+	err = binlog.ServeUpdateStream(req, func(reply *blproto.StreamEvent) error {
+		return rowCache.processEvent(reply)
 	})
 	if err != nil {
 		log.Errorf("mysqlctl.ServeUpdateStream returned err '%v'", err.Error())
