@@ -87,7 +87,7 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		return rowCache.processEvent(reply)
 	})
 	if err != nil {
-		log.Errorf("mysqlctl.ServeUpdateStream returned err '%v'", err.Error())
+		log.Errorf("binlog.ServeUpdateStream returned err '%v'", err.Error())
 	}
 	log.Infof("Rowcache invalidator stopped")
 }
