@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
 
 var testKeyRange = key.KeyRange{

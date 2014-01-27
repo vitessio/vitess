@@ -5,11 +5,9 @@
 package binlog
 
 import (
-	//"fmt"
 	"testing"
 
-	//	"github.com/youtube/vitess/go/vt/key"
-	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
+	"github.com/youtube/vitess/go/vt/binlog/proto"
 )
 
 var testTables = []string{
