@@ -113,13 +113,16 @@ class RowCacheInvalidator(unittest.TestCase):
   def perform_delete(self):
     self._exec_vt_txn(['delete from vt_insert_test',])
 
-  def test_cache_invalidation(self):
+  def _wait_for_replica(self):
     master_position = utils.mysql_query(master_tablet.tablet_uid,
                                         'vt_test_keyspace',
                                         'show master status')
     replica_tablet.mquery('vt_test_keyspace',
                           "select MASTER_POS_WAIT('%s', %d)" %
                           (master_position[0][0], master_position[0][1]), 5)
+
+  def test_cache_invalidation(self):
+    self._wait_for_replica()
     invalidations = self.replica_stats()['Totals']['Invalidations']
     invalidatorStats = self.replica_vars()
     logging.debug("Invalidations %d InvalidatorStats %s" %
@@ -147,6 +150,24 @@ class RowCacheInvalidator(unittest.TestCase):
     stats_dict = self.replica_stats()['vt_insert_test']
     self.assertEqual(stats_dict['Hits'] - hits, 1,
                      "This should have hit the cache")
+
+  def test_invalidation_failure(self):
+    start = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
+    self.perform_insert(10)
+    utils.mysql_write_query(master_tablet.tablet_uid,
+                            'vt_test_keyspace',
+                            "update vt_insert_test set msg = 'foo' where id = 1")
+    self._wait_for_replica()
+    time.sleep(1.0)
+    end1 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
+    self.assertEqual(start+1, end1)
+    utils.mysql_query(master_tablet.tablet_uid,
+                      'vt_test_keyspace',
+                       "truncate table vt_insert_test")
+    self._wait_for_replica()
+    time.sleep(1.0)
+    end2 = self.replica_vars()['InternalErrors'].get('Invalidation', 0)
+    self.assertEqual(end1+1, end2)
 
   def test_stop_replication(self):
     # restart the replica tablet so the stats are reset

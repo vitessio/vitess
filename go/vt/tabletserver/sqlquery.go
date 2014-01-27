@@ -240,10 +240,24 @@ func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, 
 	return nil
 }
 
+func handleInvalidationError(request interface{}) {
+	if x := recover(); x != nil {
+		terr, ok := x.(*TabletError)
+		if !ok {
+			log.Errorf("Uncaught panic for %v:\n%v\n%s", request, x, tb.Stack(4))
+			internalErrors.Add("Panic", 1)
+			return
+		}
+		log.Errorf("%s: %v", terr.Message, request)
+		internalErrors.Add("Invalidation", 1)
+	}
+}
+
 func (sq *SqlQuery) invalidateForDml(dml *proto.DmlType) {
 	if sq.state.Get() != SERVING {
 		return
 	}
+	defer handleInvalidationError(dml)
 	sq.qe.InvalidateForDml(dml)
 }
 
@@ -251,6 +265,7 @@ func (sq *SqlQuery) invalidateForDDL(ddlInvalidate *proto.DDLInvalidate) {
 	if sq.state.Get() != SERVING {
 		return
 	}
+	defer handleInvalidationError(ddlInvalidate)
 	sq.qe.InvalidateForDDL(ddlInvalidate)
 }
 
