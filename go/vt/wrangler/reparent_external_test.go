@@ -143,7 +143,7 @@ func TestShardExternallyReparented(t *testing.T) {
 
 	// First test: reparent to the same master, make sure it works
 	// as expected.
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", oldMasterAlias, false, 80); err == nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", oldMasterAlias, false, false, 80); err == nil {
 		t.Fatalf("ShardExternallyReparented(same master) should have failed")
 	} else {
 		if !strings.Contains(err.Error(), "already master") {
@@ -168,6 +168,7 @@ func TestShardExternallyReparented(t *testing.T) {
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
 	oldMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
 		MasterAddr: "101.0.0.1:3301",
+		MysqlPort:  3300,
 	}
 	startFakeTabletActionLoop(t, wr, oldMasterAlias, oldMasterMysqlDaemon, done)
 
@@ -175,10 +176,12 @@ func TestShardExternallyReparented(t *testing.T) {
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
 	goodSlaveMysqlDaemon1 := &mysqlctl.FakeMysqlDaemon{
 		MasterAddr: "101.0.0.1:3301",
+		MysqlPort:  3302,
 	}
 	startFakeTabletActionLoop(t, wr, goodSlaveAlias1, goodSlaveMysqlDaemon1, done)
 	goodSlaveMysqlDaemon2 := &mysqlctl.FakeMysqlDaemon{
 		MasterAddr: "101.0.0.1:3301",
+		MysqlPort:  3303,
 	}
 	startFakeTabletActionLoop(t, wr, goodSlaveAlias2, goodSlaveMysqlDaemon2, done)
 
@@ -186,12 +189,13 @@ func TestShardExternallyReparented(t *testing.T) {
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED.
 	badSlaveMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
 		MasterAddr: "234.0.0.1:3301",
+		MysqlPort:  3304,
 	}
 	startFakeTabletActionLoop(t, wr, badSlaveAlias, badSlaveMysqlDaemon, done)
 
 	// This tests a bad case; the new designated master is a slave!!
 	t.Logf("ShardExternallyReparented(slave) expecting an error")
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", goodSlaveAlias1, false, 60); err == nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", goodSlaveAlias1, false, false, 60); err == nil {
 		t.Fatalf("ShardExternallyReparented(slave) should have failed")
 	} else {
 		if !strings.Contains(err.Error(), "new master is a slave") {
@@ -201,7 +205,7 @@ func TestShardExternallyReparented(t *testing.T) {
 
 	// This tests the good case, where everything works as planned
 	t.Logf("ShardExternallyReparented(new master) expecting success")
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias, false, 60); err != nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias, false, false, 60); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
 	close(done)
@@ -247,6 +251,7 @@ func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to the new mysql port
 	oldMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
 		MasterAddr: "101.0.0.1:3302",
+		MysqlPort:  3300,
 	}
 	startFakeTabletActionLoop(t, wr, oldMasterAlias, oldMasterMysqlDaemon, done)
 
@@ -254,12 +259,59 @@ func TestShardExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to the new mysql port
 	goodSlaveMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
 		MasterAddr: "101.0.0.1:3302",
+		MysqlPort:  3302,
 	}
 	startFakeTabletActionLoop(t, wr, goodSlaveAlias, goodSlaveMysqlDaemon, done)
 
 	// This tests the good case, where everything works as planned
 	t.Logf("ShardExternallyReparented(new master) expecting success")
-	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias, false, 60); err != nil {
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias, false, false, 60); err != nil {
+		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
+	}
+	close(done)
+}
+
+// TestShardExternallyReparentedContinueOnUnexpectedMaster makes sure
+// that we ignore mysql's master if the flag is set
+func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	wr := New(ts, time.Minute, time.Second)
+	wr.UseRPCs = false
+
+	// Create an old master, a new master, two good slaves, one bad slave
+	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
+	goodSlaveAlias := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
+	done := make(chan struct{}, 1)
+
+	// On the elected master, we will respond to
+	// TABLET_ACTION_SLAVE_WAS_PROMOTED, so we need a MysqlDaemon
+	// that returns no master, and the new port (as returned by mysql)
+	newMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "",
+		MysqlPort:  3301,
+	}
+	startFakeTabletActionLoop(t, wr, newMasterAlias, newMasterMysqlDaemon, done)
+
+	// On the old master, we will only respond to
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to a bad host
+	oldMasterMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "1.2.3.4:6666",
+		MysqlPort:  3300,
+	}
+	startFakeTabletActionLoop(t, wr, oldMasterAlias, oldMasterMysqlDaemon, done)
+
+	// On the good slaves, we will respond to
+	// TABLET_ACTION_SLAVE_WAS_RESTARTED and point to a bad host
+	goodSlaveMysqlDaemon := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "1.2.3.4:6666",
+		MysqlPort:  3302,
+	}
+	startFakeTabletActionLoop(t, wr, goodSlaveAlias, goodSlaveMysqlDaemon, done)
+
+	// This tests the good case, where everything works as planned
+	t.Logf("ShardExternallyReparented(new master) expecting success")
+	if err := wr.ShardExternallyReparented("test_keyspace", "0", newMasterAlias, false, true, 60); err != nil {
 		t.Fatalf("ShardExternallyReparented(replica) failed: %v", err)
 	}
 	close(done)

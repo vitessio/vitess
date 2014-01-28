@@ -14,7 +14,7 @@ import (
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool, acceptSuccessPercents int) error {
+func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
 	// grab the shard lock
 	actionNode := actionnode.ShardExternallyReparented(masterElectTabletAlias)
 	lockPath, err := wr.lockShard(keyspace, shard, actionNode)
@@ -23,13 +23,13 @@ func (wr *Wrangler) ShardExternallyReparented(keyspace, shard string, masterElec
 	}
 
 	// do the work
-	err = wr.shardExternallyReparentedLocked(keyspace, shard, masterElectTabletAlias, scrapStragglers, acceptSuccessPercents)
+	err = wr.shardExternallyReparentedLocked(keyspace, shard, masterElectTabletAlias, scrapStragglers, continueOnUnexpectedMaster, acceptSuccessPercents)
 
 	// release the lock in any case
 	return wr.unlockShard(keyspace, shard, actionNode, lockPath, err)
 }
 
-func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers bool, acceptSuccessPercents int) error {
+func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, masterElectTabletAlias topo.TabletAlias, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
 	// read the shard, make sure the master is not already good.
 	// critical read, we want up to date info (and the shard is locked).
 	shardInfo, err := wr.ts.GetShardCritical(keyspace, shard)
@@ -66,7 +66,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 
 	// sort the tablets, and handle them
 	slaveTabletMap, masterTabletMap := sortedTabletMap(tabletMap)
-	err = wr.reparentShardExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, acceptSuccessPercents)
+	err = wr.reparentShardExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, continueOnUnexpectedMaster, acceptSuccessPercents)
 	if err != nil {
 		log.Infof("Skipping shard rebuild with failed reparent")
 		return err
@@ -86,7 +86,7 @@ func (wr *Wrangler) shardExternallyReparentedLocked(keyspace, shard string, mast
 		rebuildShardOptions{IgnorePartialResult: partialTopology, Critical: true})
 }
 
-func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers bool, acceptSuccessPercents int) error {
+func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
 	// we fix the new master in the replication graph
 	err := wr.slaveWasPromoted(masterElectTablet)
 	if err != nil {
@@ -106,18 +106,19 @@ func (wr *Wrangler) reparentShardExternal(slaveTabletMap, masterTabletMap map[to
 	}
 
 	// then fix all the slaves, including the old master
-	return wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, acceptSuccessPercents)
+	return wr.restartSlavesExternal(slaveTabletMap, masterTabletMap, masterElectTablet, scrapStragglers, continueOnUnexpectedMaster, acceptSuccessPercents)
 }
 
-func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers bool, acceptSuccessPercents int) error {
+func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[topo.TabletAlias]*topo.TabletInfo, masterElectTablet *topo.TabletInfo, scrapStragglers, continueOnUnexpectedMaster bool, acceptSuccessPercents int) error {
 	recorder := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 
 	swrd := actionnode.SlaveWasRestartedArgs{
-		Parent:               masterElectTablet.Alias,
-		ExpectedMasterAddr:   masterElectTablet.GetMysqlAddr(),
-		ExpectedMasterIpAddr: masterElectTablet.GetMysqlIpAddr(),
-		ScrapStragglers:      scrapStragglers,
+		Parent:                     masterElectTablet.Alias,
+		ExpectedMasterAddr:         masterElectTablet.GetMysqlAddr(),
+		ExpectedMasterIpAddr:       masterElectTablet.GetMysqlIpAddr(),
+		ScrapStragglers:            scrapStragglers,
+		ContinueOnUnexpectedMaster: continueOnUnexpectedMaster,
 	}
 
 	// The following two blocks of actions are very likely to time

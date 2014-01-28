@@ -983,6 +983,7 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 
 func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	scrapStragglers := subFlags.Bool("scrap-stragglers", false, "will scrap the hosts that haven't been reparented")
+	continueOnUnexpectedMaster := subFlags.Bool("continue_on_unexpected_master", false, "if a slave has the wrong master, we'll just log the error and keep going")
 	acceptSuccessPercents := subFlags.Int("accept-success-percents", 80, "will declare success if more than that many slaves can be reparented")
 	subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
@@ -991,7 +992,7 @@ func commandShardExternallyReparented(wr *wrangler.Wrangler, subFlags *flag.Flag
 
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(0))
 	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(1))
-	return "", wr.ShardExternallyReparented(keyspace, shard, tabletAlias, *scrapStragglers, *acceptSuccessPercents)
+	return "", wr.ShardExternallyReparented(keyspace, shard, tabletAlias, *scrapStragglers, *continueOnUnexpectedMaster, *acceptSuccessPercents)
 }
 
 func commandValidateShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
