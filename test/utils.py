@@ -423,7 +423,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
   if driver:
     cmdline.extend(['-driver', driver])
   if verbose:
-    cmdline.append('-verbose')
+    cmdline.append('-alsologtostderr')
   cmdline.append(query)
 
   return run(cmdline, raise_on_error=raise_on_error, trap_output=True)

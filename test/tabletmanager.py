@@ -305,11 +305,11 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.start_vttablet(auth=True)
     utils.run_vtctl('SetReadWrite ' + tablet_62344.tablet_alias)
 
-    err, out = tablet_62344.vquery('select * from vt_select_test',
-                                   path='test_keyspace/0',
+    out, err = tablet_62344.vquery('select * from vt_select_test',
+                                   path='test_keyspace/0', verbose=True,
                                    user='ala', password=r'ma kota')
-    logging.debug("Got rows: " + out)
-    if 'Row count: ' not in out:
+    logging.debug("Got rows: " + err)
+    if 'Row count:' not in err:
       self.fail("query didn't go through: %s, %s" % (err, out))
 
     tablet_62344.kill_vttablet()
