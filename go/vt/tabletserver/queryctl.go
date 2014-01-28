@@ -127,13 +127,21 @@ var qsConfig Config
 
 var SqlQueryRpcService *SqlQuery
 
+// registration service for all server protocols
+
+type SqlQueryRegisterFunction func(*SqlQuery)
+
+var SqlQueryRegisterFunctions []SqlQueryRegisterFunction
+
 func RegisterQueryService() {
 	if SqlQueryRpcService != nil {
 		log.Warningf("RPC service already up %v", SqlQueryRpcService)
 		return
 	}
 	SqlQueryRpcService = NewSqlQuery(qsConfig)
-	proto.RegisterAuthenticated(SqlQueryRpcService)
+	for _, f := range SqlQueryRegisterFunctions {
+		f(SqlQueryRpcService)
+	}
 	http.HandleFunc("/debug/health", healthCheck)
 }
 
