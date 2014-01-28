@@ -175,6 +175,6 @@ func main() {
 		if err := r.Err(); err != nil {
 			log.Fatalf("Error %v\n", err)
 		}
-		log.Infof("Total time:", time.Now().Sub(now), "Row count:", rowIndex)
+		log.Infof("Total time: %v / Row count: %v", time.Now().Sub(now), rowIndex)
 	}
 }

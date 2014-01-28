@@ -309,7 +309,7 @@ class TestTabletManager(unittest.TestCase):
                                    path='test_keyspace/0', verbose=True,
                                    user='ala', password=r'ma kota')
     logging.debug("Got rows: " + err)
-    if 'Row count:' not in err:
+    if 'Row count: 4' not in err:
       self.fail("query didn't go through: %s, %s" % (err, out))
 
     tablet_62344.kill_vttablet()
