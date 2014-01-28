@@ -127,7 +127,7 @@ func main() {
 		}
 
 		n, err := r.RowsAffected()
-		log.Infof("Total time:", time.Now().Sub(now), "Rows affected:", n)
+		log.Infof("Total time: %v / Row affected: %v", time.Now().Sub(now), n)
 	} else {
 
 		// launch the query
