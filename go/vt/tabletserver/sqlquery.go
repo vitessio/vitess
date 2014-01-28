@@ -15,7 +15,6 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
 	"github.com/youtube/vitess/go/tb"
@@ -48,6 +47,11 @@ var stateName = map[int64]string{
 
 //-----------------------------------------------
 // RPC API
+type Context struct {
+	RemoteAddr string
+	Username   string
+}
+
 type SqlQuery struct {
 	// We use a hybrid locking scheme to control state transitions. This is
 	// optimal for frequent reads and infrequent state changes.
@@ -210,7 +214,7 @@ func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo
 	return nil
 }
 
-func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
+func (sq *SqlQuery) Begin(context *Context, session *proto.Session, txInfo *proto.TransactionInfo) (err error) {
 	logStats := newSqlQueryStats("Begin", context)
 	logStats.OriginalSql = "begin"
 	defer handleError(&err, logStats)
@@ -220,7 +224,7 @@ func (sq *SqlQuery) Begin(context *rpcproto.Context, session *proto.Session, txI
 	return nil
 }
 
-func (sq *SqlQuery) Commit(context *rpcproto.Context, session *proto.Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Commit(context *Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Commit", context)
 	logStats.OriginalSql = "commit"
 	defer handleError(&err, logStats)
@@ -230,7 +234,7 @@ func (sq *SqlQuery) Commit(context *rpcproto.Context, session *proto.Session, no
 	return nil
 }
 
-func (sq *SqlQuery) Rollback(context *rpcproto.Context, session *proto.Session, noOutput *string) (err error) {
+func (sq *SqlQuery) Rollback(context *Context, session *proto.Session) (err error) {
 	logStats := newSqlQueryStats("Rollback", context)
 	logStats.OriginalSql = "rollback"
 	defer handleError(&err, logStats)
@@ -291,7 +295,7 @@ func handleExecError(query *proto.Query, err *error, logStats *sqlQueryStats) {
 	}
 }
 
-func (sq *SqlQuery) Execute(context *rpcproto.Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
+func (sq *SqlQuery) Execute(context *Context, query *proto.Query, reply *mproto.QueryResult) (err error) {
 	logStats := newSqlQueryStats("Execute", context)
 	defer handleExecError(query, &err, logStats)
 
@@ -305,7 +309,7 @@ func (sq *SqlQuery) Execute(context *rpcproto.Context, query *proto.Query, reply
 
 // the first QueryResult will have Fields set (and Rows nil)
 // the subsequent QueryResult will have Rows set (and Fields nil)
-func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query, sendReply func(reply interface{}) error) (err error) {
+func (sq *SqlQuery) StreamExecute(context *Context, query *proto.Query, sendReply func(*mproto.QueryResult) error) (err error) {
 	logStats := newSqlQueryStats("StreamExecute", context)
 	defer handleExecError(query, &err, logStats)
 
@@ -319,14 +323,13 @@ func (sq *SqlQuery) StreamExecute(context *rpcproto.Context, query *proto.Query,
 	return nil
 }
 
-func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
+func (sq *SqlQuery) ExecuteBatch(context *Context, queryList *proto.QueryList, reply *proto.QueryResultList) (err error) {
 	defer handleError(&err, nil)
 	if len(queryList.Queries) == 0 {
 		panic(NewTabletError(FAIL, "Empty query list"))
 	}
 	sq.checkState(queryList.SessionId, false)
 	begin_called := false
-	var noOutput string
 	session := proto.Session{
 		TransactionId: queryList.TransactionId,
 		SessionId:     queryList.SessionId,
@@ -350,7 +353,7 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 			if !begin_called {
 				panic(NewTabletError(FAIL, "Cannot commit without begin"))
 			}
-			if err = sq.Commit(context, &session, &noOutput); err != nil {
+			if err = sq.Commit(context, &session); err != nil {
 				return err
 			}
 			session.TransactionId = 0
@@ -366,7 +369,7 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 			var localReply mproto.QueryResult
 			if err = sq.Execute(context, &query, &localReply); err != nil {
 				if begin_called {
-					sq.Rollback(context, &session, &noOutput)
+					sq.Rollback(context, &session)
 				}
 				return err
 			}
@@ -374,7 +377,7 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 		}
 	}
 	if begin_called {
-		sq.Rollback(context, &session, &noOutput)
+		sq.Rollback(context, &session)
 		panic(NewTabletError(FAIL, "begin called with no commit"))
 	}
 	return nil

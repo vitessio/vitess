@@ -291,7 +291,7 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 
 // the first QueryResult will have Fields set (and Rows nil)
 // the subsequent QueryResult will have Rows set (and Fields nil)
-func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query, sendReply func(reply interface{}) error) {
+func (qe *QueryEngine) StreamExecute(logStats *sqlQueryStats, query *proto.Query, sendReply func(*mproto.QueryResult) error) {
 	qe.mu.RLock()
 	defer qe.mu.RUnlock()
 
@@ -734,7 +734,7 @@ func (qe *QueryEngine) fullFetch(logStats *sqlQueryStats, conn PoolConnection, p
 	return result
 }
 
-func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(interface{}) error) {
+func (qe *QueryEngine) fullStreamFetch(logStats *sqlQueryStats, conn PoolConnection, parsed_query *sqlparser.ParsedQuery, bindVars map[string]interface{}, listVars []sqltypes.Value, buildStreamComment []byte, callback func(*mproto.QueryResult) error) {
 	sql := qe.generateFinalSql(parsed_query, bindVars, listVars, buildStreamComment)
 	qe.executeStreamSql(logStats, conn, sql, callback)
 }
@@ -775,7 +775,7 @@ func (qe *QueryEngine) executeSql(logStats *sqlQueryStats, conn PoolConnection, 
 	return result, nil
 }
 
-func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(interface{}) error) {
+func (qe *QueryEngine) executeStreamSql(logStats *sqlQueryStats, conn PoolConnection, sql string, callback func(*mproto.QueryResult) error) {
 	logStats.QuerySources |= QUERY_SOURCE_MYSQL
 	logStats.NumberOfQueries += 1
 	logStats.AddRewrittenSql(sql)

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/streamlog"
 )
@@ -43,10 +42,10 @@ type sqlQueryStats struct {
 	CacheInvalidations   int64
 	QuerySources         byte
 	Rows                 [][]sqltypes.Value
-	context              *proto.Context
+	context              *Context
 }
 
-func newSqlQueryStats(methodName string, context *proto.Context) *sqlQueryStats {
+func newSqlQueryStats(methodName string, context *Context) *sqlQueryStats {
 	s := &sqlQueryStats{Method: methodName, StartTime: time.Now(), context: context}
 	return s
 }

@@ -12,7 +12,6 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
@@ -195,7 +194,7 @@ func GetQueryRules() (qrs *QueryRules) {
 // the unhealthiness otherwise.
 func IsHealthy() error {
 	return SqlQueryRpcService.Execute(
-		new(rpcproto.Context),
+		new(Context),
 		&proto.Query{Sql: "select 1 from dual", SessionId: SqlQueryRpcService.sessionId},
 		new(mproto.QueryResult),
 	)

@@ -22,7 +22,7 @@ func init() {
 
 type PoolConnection interface {
 	ExecuteFetch(query string, maxrows int, wantfields bool) (*proto.QueryResult, error)
-	ExecuteStreamFetch(query string, callback func(interface{}) error, streamBufferSize int) error
+	ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error
 	VerifyStrict() bool
 	Id() int64
 	Close()
@@ -61,7 +61,7 @@ func (dbc *DBConnection) ExecuteFetch(query string, maxrows int, wantfields bool
 	return &qr, nil
 }
 
-func (conn *DBConnection) ExecuteStreamFetch(query string, callback func(interface{}) error, streamBufferSize int) error {
+func (conn *DBConnection) ExecuteStreamFetch(query string, callback func(*proto.QueryResult) error, streamBufferSize int) error {
 	start := time.Now()
 
 	err := conn.Connection.ExecuteStreamFetch(query)
