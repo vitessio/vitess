@@ -14,7 +14,7 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
-	_ "github.com/youtube/vitess/go/vt/client2"
+	"github.com/youtube/vitess/go/vt/client2"
 	_ "github.com/youtube/vitess/go/vt/client2/tablet"
 )
 
@@ -100,6 +100,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	client2.RegisterShardedDrivers()
 	conn, err := db.Open(*driver, *server)
 	if err != nil {
 		log.Fatalf("client error: %v", err)

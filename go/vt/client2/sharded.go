@@ -12,15 +12,11 @@ import (
 	"time"
 
 	"github.com/youtube/vitess/go/db"
-	// FIXME(msolomon) needed for the field mapping. Probably should be part of
-	// tablet, or moved.
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/client2/tablet"
 	"github.com/youtube/vitess/go/vt/key"
-	// FIXME(msolomon) zk indirect dependency
-	"github.com/youtube/vitess/go/vt/topo"
-	// FIXME(msolomon) seems like a subpackage
 	"github.com/youtube/vitess/go/vt/sqlparser"
+	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/zktopo"
 	"github.com/youtube/vitess/go/zk"
 )
@@ -604,14 +600,21 @@ func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 	return Dial(driver.ts, cell, keyspace, topo.TabletType(tabletType), driver.stream, tablet.DefaultTimeout, user, password)
 }
 
-func init() {
+func RegisterShardedDrivers() {
+	// default topo server
+	ts := topo.GetServer()
+	db.Register("vtdb", &sDriver{ts, false})
+	db.Register("vtdb-streaming", &sDriver{ts, true})
+
+	// forced zk topo server
 	zconn := zk.NewMetaConn(false)
 	zkts := zktopo.NewServer(zconn)
+	db.Register("vtdb-zk", &sDriver{zkts, false})
+	db.Register("vtdb-zk-streaming", &sDriver{zkts, true})
+
+	// forced zkocc topo server
 	zkoccconn := zk.NewMetaConn(true)
 	zktsro := zktopo.NewServer(zkoccconn)
-	db.Register("vtdb", &sDriver{zkts, false})
 	db.Register("vtdb-zkocc", &sDriver{zktsro, false})
-	db.Register("vtdb-streaming", &sDriver{zkts, true})
 	db.Register("vtdb-zkocc-streaming", &sDriver{zktsro, true})
-	db.Register("vtdb-streaming-zkocc", &sDriver{zktsro, true})
 }

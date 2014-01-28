@@ -402,8 +402,9 @@ def run_vtworker(clargs, log_level='', auto_log=False, expect_fail=False, **kwar
 # vtclient2 helpers
 # driver is one of:
 # - vttablet (default), vttablet-streaming
-# - vtdb, vtdb-streaming
-# - vtdb-zkocc, vtdb-streaming-zkocc
+# - vtdb, vtdb-streaming (default topo server)
+# - vtdb-zk, vtdb-zk-streaming (forced zk topo server)
+# - vtdb-zkocc, vtdb-zkocc-streaming (forced zkocc topo server)
 # path is either: keyspace/shard for vttablet* or zk path for vtdb*
 def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=None,
               verbose=False, raise_on_error=True):
@@ -418,6 +419,7 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
     server = "%s:%s@%s" % (user, password, server)
 
   cmdline = [environment.binary_path('vtclient2'), '-server', server]
+  cmdline += environment.topo_server_flags()
   if bindvars:
     cmdline.extend(['-bindvars', bindvars])
   if driver:
