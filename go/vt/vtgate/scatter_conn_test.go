@@ -20,7 +20,7 @@ import (
 func TestScatterConnExecute(t *testing.T) {
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
-		return stc.Execute("query", nil, "", shards, "", nil)
+		return stc.Execute(nil, "query", nil, "", shards, "", nil)
 	})
 }
 
@@ -28,7 +28,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 		queries := []tproto.BoundQuery{{"query", nil}}
-		qrs, err := stc.ExecuteBatch(queries, "", shards, "", nil)
+		qrs, err := stc.ExecuteBatch(nil, queries, "", shards, "", nil)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +40,7 @@ func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute("query", nil, "", shards, "", nil, func(r *mproto.QueryResult) error {
+		err := stc.StreamExecute(nil, "query", nil, "", shards, "", nil, func(r *mproto.QueryResult) error {
 			appendResult(qr, r)
 			return nil
 		})
@@ -133,7 +133,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sbc := &sandboxConn{}
 	testConns[0] = sbc
 	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
-	err := stc.StreamExecute("query", nil, "", []string{"0"}, "", nil, func(*mproto.QueryResult) error {
+	err := stc.StreamExecute(nil, "query", nil, "", []string{"0"}, "", nil, func(*mproto.QueryResult) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
@@ -153,7 +153,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute("query1", nil, "", []string{"0"}, "", session)
+	stc.Execute(nil, "query1", nil, "", []string{"0"}, "", session)
 	wantSession := proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -166,7 +166,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 	if !reflect.DeepEqual(wantSession, *session.Session) {
 		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
 	}
-	stc.Execute("query1", nil, "", []string{"0", "1"}, "", session)
+	stc.Execute(nil, "query1", nil, "", []string{"0", "1"}, "", session)
 	wantSession = proto.Session{
 		InTransaction: true,
 		ShardSessions: []*proto.ShardSession{{
@@ -185,7 +185,7 @@ func TestScatterConnCommitSuccess(t *testing.T) {
 		t.Errorf("want\n%#v, got\n%#v", wantSession, *session.Session)
 	}
 	sbc0.mustFailServer = 1
-	err := stc.Commit(session)
+	err := stc.Commit(nil, session)
 	if err == nil {
 		t.Errorf("want error, got nil")
 	}
@@ -215,9 +215,9 @@ func TestScatterConnRollback(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&proto.Session{InTransaction: true})
-	stc.Execute("query1", nil, "", []string{"0"}, "", session)
-	stc.Execute("query1", nil, "", []string{"0", "1"}, "", session)
-	err := stc.Rollback(session)
+	stc.Execute(nil, "query1", nil, "", []string{"0"}, "", session)
+	stc.Execute(nil, "query1", nil, "", []string{"0", "1"}, "", session)
+	err := stc.Rollback(nil, session)
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
@@ -242,7 +242,7 @@ func TestScatterConnClose(t *testing.T) {
 	sbc := &sandboxConn{}
 	testConns[0] = sbc
 	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
-	stc.Execute("query1", nil, "", []string{"0"}, "", nil)
+	stc.Execute(nil, "query1", nil, "", []string{"0"}, "", nil)
 	stc.Close()
 	/*
 		// Flaky: This test should be run manually.

@@ -89,7 +89,7 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 
 var testConns map[uint32]tabletconn.TabletConn
 
-func sandboxDialer(endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
+func sandboxDialer(context interface{}, endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
 	sandmu.Lock()
 	defer sandmu.Unlock()
 	dialCounter++
@@ -153,7 +153,7 @@ func (sbc *sandboxConn) getError() error {
 	return nil
 }
 
-func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
+func (sbc *sandboxConn) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -164,7 +164,7 @@ func (sbc *sandboxConn) Execute(query string, bindVars map[string]interface{}, t
 	return singleRowResult, nil
 }
 
-func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
+func (sbc *sandboxConn) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -180,7 +180,7 @@ func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
@@ -192,7 +192,7 @@ func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interfac
 	return ch, func() error { return err }
 }
 
-func (sbc *sandboxConn) Begin() (int64, error) {
+func (sbc *sandboxConn) Begin(context interface{}) (int64, error) {
 	sbc.ExecCount.Add(1)
 	sbc.BeginCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -205,7 +205,7 @@ func (sbc *sandboxConn) Begin() (int64, error) {
 	return transactionId.Add(1), nil
 }
 
-func (sbc *sandboxConn) Commit(transactionId int64) error {
+func (sbc *sandboxConn) Commit(context interface{}, transactionId int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.CommitCount.Add(1)
 	if sbc.mustDelay != 0 {
@@ -214,7 +214,7 @@ func (sbc *sandboxConn) Commit(transactionId int64) error {
 	return sbc.getError()
 }
 
-func (sbc *sandboxConn) Rollback(transactionId int64) error {
+func (sbc *sandboxConn) Rollback(context interface{}, transactionId int64) error {
 	sbc.ExecCount.Add(1)
 	sbc.RollbackCount.Add(1)
 	if sbc.mustDelay != 0 {
