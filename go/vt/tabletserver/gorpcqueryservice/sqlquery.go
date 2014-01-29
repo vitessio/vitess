@@ -16,8 +16,6 @@ type SqlQuery struct {
 	server *tabletserver.SqlQuery
 }
 
-var sqlQuery *SqlQuery
-
 func (sq *SqlQuery) GetSessionId(sessionParams *proto.SessionParams, sessionInfo *proto.SessionInfo) error {
 	return sq.server.GetSessionId(sessionParams, sessionInfo)
 }
@@ -68,7 +66,6 @@ func (sq *SqlQuery) ExecuteBatch(context *rpcproto.Context, queryList *proto.Que
 
 func init() {
 	tabletserver.SqlQueryRegisterFunctions = append(tabletserver.SqlQueryRegisterFunctions, func(sq *tabletserver.SqlQuery) {
-		sqlQuery = &SqlQuery{sq}
-		rpcwrap.RegisterAuthenticated(sqlQuery)
+		rpcwrap.RegisterAuthenticated(&SqlQuery{sq})
 	})
 }

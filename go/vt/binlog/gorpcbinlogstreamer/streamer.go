@@ -34,11 +34,8 @@ func (server *UpdateStream) StreamTables(req *proto.TablesRequest, sendReply fun
 
 // registration mechanism
 
-var server *UpdateStream
-
 func init() {
 	binlog.RegisterUpdateStreamServices = append(binlog.RegisterUpdateStreamServices, func(updateStream *binlog.UpdateStream) {
-		server = &UpdateStream{updateStream}
-		rpcwrap.RegisterAuthenticated(server)
+		rpcwrap.RegisterAuthenticated(&UpdateStream{updateStream})
 	})
 }

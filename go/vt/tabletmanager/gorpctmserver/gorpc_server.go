@@ -7,7 +7,6 @@ package gorpctmserver
 import (
 	"fmt"
 
-	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/rpcwrap"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	myproto "github.com/youtube/vitess/go/vt/mysqlctl/proto"
@@ -21,21 +20,6 @@ import (
 // TabletManager is the Go RPC implementation of the RPC service
 type TabletManager struct {
 	agent *tabletmanager.ActionAgent
-}
-
-var TabletManagerGoRpcService *TabletManager
-
-func init() {
-	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, registerBsonQueryService)
-}
-
-func registerBsonQueryService(agent *tabletmanager.ActionAgent) {
-	if TabletManagerGoRpcService != nil {
-		log.Warningf("RPC service already up %v", TabletManagerGoRpcService)
-		return
-	}
-	TabletManagerGoRpcService = &TabletManager{agent}
-	rpcwrap.RegisterAuthenticated(TabletManagerGoRpcService)
 }
 
 //
@@ -223,5 +207,13 @@ func (tm *TabletManager) SlaveWasPromoted(context *rpcproto.Context, args *rpc.U
 func (tm *TabletManager) SlaveWasRestarted(context *rpcproto.Context, args *actionnode.SlaveWasRestartedArgs, reply *rpc.UnusedResponse) error {
 	return tm.agent.RpcWrapLockAction(context.RemoteAddr, actionnode.TABLET_ACTION_SLAVE_WAS_RESTARTED, args, reply, func() error {
 		return tabletmanager.SlaveWasRestarted(tm.agent.TopoServer, tm.agent.Mysqld, tm.agent.TabletAlias, args)
+	})
+}
+
+// registration glue
+
+func init() {
+	tabletmanager.RegisterQueryServices = append(tabletmanager.RegisterQueryServices, func(agent *tabletmanager.ActionAgent) {
+		rpcwrap.RegisterAuthenticated(&TabletManager{agent})
 	})
 }
