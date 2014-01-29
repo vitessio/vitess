@@ -300,30 +300,6 @@ cases = [
          'commit']),
 
     MultiCase(
-        'expressions',
-        ['begin',
-         Case(sql="insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')",
-              rewritten="insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')"),
-         'commit',
-         Case('select * from vtocc_a where eid = 7',
-              result=[(7L, 2L, '', '')]),
-         'begin',
-         'delete from vtocc_a where eid>1',
-         'commit']),
-
-    MultiCase(
-        'no index',
-        ['begin',
-         Case(sql="insert into vtocc_d(eid, id) values (1, 1)",
-              rewritten="insert into vtocc_d(eid, id) values (1, 1)"),
-         'commit',
-         Case(sql='select * from vtocc_d',
-              result=[(1L, 1L)]),
-         'begin',
-         'delete from vtocc_d',
-         'commit']),
-
-    MultiCase(
         'on duplicate key',
         ['begin',
          Case(sql="insert into vtocc_a(eid, id, name, foo) values (8, 1, '', '') on duplicate key update name = 'foo'",
@@ -343,12 +319,6 @@ cases = [
          'commit',
          Case(sql='select * from vtocc_a where eid = 8',
               result=[(8L, 2L, 'foo', '')]),
-         'begin',
-         Case(sql="insert into vtocc_a(eid, id, name, foo) values (8, 2, '', '') on duplicate key update id = 2+1",
-              rewritten="insert into vtocc_a(eid, id, name, foo) values (8, 2, '', '') on duplicate key update id = 2+1"),
-         'commit',
-         Case(sql='select * from vtocc_a where eid = 8',
-              result=[(8L, 3L, 'foo', '')]),
          'begin',
          'delete from vtocc_a where eid>1',
          'commit']),
@@ -480,30 +450,6 @@ cases = [
        'commit']),
 
   MultiCase(
-      'complex pk change',
-      ['begin',
-       Case(sql="update vtocc_a set eid = 1+1 where eid = 1 and id = 1",
-            rewritten="update vtocc_a set eid = 1+1 where eid = 1 and id = 1"),
-       'commit',
-       Case(sql='select eid from vtocc_a where id = 1',
-            result=[(2L,)]),
-       'begin',
-       "update vtocc_a set eid=1 where id=1",
-       'commit']),
-
-  MultiCase(
-      'complex where',
-      ['begin',
-       Case(sql="update vtocc_a set eid = 1+1 where eid = 1 and id = 1+0",
-            rewritten="update vtocc_a set eid = 1+1 where eid = 1 and id = 1+0"),
-       'commit',
-       Case(sql='select eid from vtocc_a where id = 1',
-            result=[(2L,)]),
-       'begin',
-       "update vtocc_a set eid=1 where id=1",
-       'commit']),
-
-  MultiCase(
       'partial pk',
       ['begin',
        Case(sql="update /* pk */ vtocc_a set foo='bar' where id = 1",
@@ -559,19 +505,6 @@ cases = [
        'begin',
        "update vtocc_a set foo='efgh' where id=1",
        "update vtocc_a set foo='fghi' where id=2",
-       'commit']),
-
-  MultiCase(
-      'no index',
-      ['begin',
-       "insert into vtocc_d(eid, id) values (1, 1)",
-       Case(sql="update vtocc_d set id = 2 where eid = 1",
-            rewritten="update vtocc_d set id = 2 where eid = 1"),
-       'commit',
-       Case(sql='select * from vtocc_d',
-            result=[(1L, 2L)]),
-       'begin',
-       'delete from vtocc_d',
        'commit']),
 
   MultiCase(
