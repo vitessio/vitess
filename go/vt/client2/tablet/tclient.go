@@ -114,7 +114,7 @@ func (conn *Conn) dial() (err error) {
 	}
 
 	// and dial
-	tabletConn, err := tabletconn.GetDialer()(endPoint, conn.keyspace(), conn.shard())
+	tabletConn, err := tabletconn.GetDialer()(nil, endPoint, conn.keyspace(), conn.shard())
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func (conn *Conn) Close() error {
 
 func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result, error) {
 	if conn.stream {
-		sr, errFunc := conn.tabletConn.StreamExecute(query, bindVars, conn.TransactionId)
+		sr, errFunc := conn.tabletConn.StreamExecute(nil, query, bindVars, conn.TransactionId)
 		if errFunc() != nil {
 			return nil, errFunc()
 		}
@@ -141,7 +141,7 @@ func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result
 		return &StreamResult{errFunc, sr, cols, nil, 0, nil}, nil
 	}
 
-	qr, err := conn.tabletConn.Execute(query, bindVars, conn.TransactionId)
+	qr, err := conn.tabletConn.Execute(nil, query, bindVars, conn.TransactionId)
 	if err != nil {
 		return nil, conn.fmtErr(err)
 	}
@@ -152,7 +152,7 @@ func (conn *Conn) Begin() (db.Tx, error) {
 	if conn.TransactionId != 0 {
 		return &Tx{}, ErrNoNestedTxn
 	}
-	if transactionId, err := conn.tabletConn.Begin(); err != nil {
+	if transactionId, err := conn.tabletConn.Begin(nil); err != nil {
 		return &Tx{}, conn.fmtErr(err)
 	} else {
 		conn.TransactionId = transactionId
@@ -172,7 +172,7 @@ func (conn *Conn) Commit() error {
 	// called concurrently.  Defer this because we this affects the
 	// session referenced in the request.
 	defer func() { conn.TransactionId = 0 }()
-	return conn.fmtErr(conn.tabletConn.Commit(conn.TransactionId))
+	return conn.fmtErr(conn.tabletConn.Commit(nil, conn.TransactionId))
 }
 
 func (conn *Conn) Rollback() error {
@@ -181,7 +181,7 @@ func (conn *Conn) Rollback() error {
 	}
 	// See note in Commit about the behavior of TransactionId.
 	defer func() { conn.TransactionId = 0 }()
-	return conn.fmtErr(conn.tabletConn.Rollback(conn.TransactionId))
+	return conn.fmtErr(conn.tabletConn.Rollback(nil, conn.TransactionId))
 }
 
 // driver.Tx interface (forwarded to Conn)

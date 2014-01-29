@@ -11,7 +11,6 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -41,8 +40,9 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 }
 
 // ExecuteShard executes a non-streaming query on the specified shards.
-func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QueryShard, reply *proto.QueryResult) error {
+func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, reply *proto.QueryResult) error {
 	qr, err := vtg.scatterConn.Execute(
+		context,
 		query.Sql,
 		query.BindVariables,
 		query.Keyspace,
@@ -60,8 +60,9 @@ func (vtg *VTGate) ExecuteShard(context *rpcproto.Context, query *proto.QuerySha
 }
 
 // ExecuteBatchShard executes a group of queries on the specified shards.
-func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
+func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.BatchQueryShard, reply *proto.QueryResultList) error {
 	qrs, err := vtg.scatterConn.ExecuteBatch(
+		context,
 		batchQuery.Queries,
 		batchQuery.Keyspace,
 		batchQuery.Shards,
@@ -78,8 +79,9 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 }
 
 // StreamExecuteShard executes a streaming query on the specified shards.
-func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
 	err := vtg.scatterConn.StreamExecute(
+		context,
 		query.Sql,
 		query.BindVariables,
 		query.Keyspace,
@@ -105,17 +107,17 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(context *rpcproto.Context, outSession *proto.Session) error {
+func (vtg *VTGate) Begin(context interface{}, outSession *proto.Session) error {
 	outSession.InTransaction = true
 	return nil
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(context *rpcproto.Context, inSession *proto.Session) error {
-	return vtg.scatterConn.Commit(NewSafeSession(inSession))
+func (vtg *VTGate) Commit(context interface{}, inSession *proto.Session) error {
+	return vtg.scatterConn.Commit(context, NewSafeSession(inSession))
 }
 
 // Rollback rolls back a transaction.
-func (vtg *VTGate) Rollback(context *rpcproto.Context, inSession *proto.Session) error {
-	return vtg.scatterConn.Rollback(NewSafeSession(inSession))
+func (vtg *VTGate) Rollback(context interface{}, inSession *proto.Session) error {
+	return vtg.scatterConn.Rollback(context, NewSafeSession(inSession))
 }

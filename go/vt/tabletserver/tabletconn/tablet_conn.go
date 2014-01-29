@@ -44,28 +44,34 @@ type OperationalError string
 
 func (e OperationalError) Error() string { return string(e) }
 
+// In all the following calls, context is an opaque structure that may
+// carry data related to the call. For instance, if an incoming RPC
+// call is responsible for these outgoing calls, and the incoming
+// protocol and outgoing protocols support forwarding information, use
+// context.
+
 // TabletDialer represents a function that will return a TabletConn object that can communicate with a tablet.
-type TabletDialer func(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error)
+type TabletDialer func(context interface{}, endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error)
 
 // TabletConn defines the interface for a vttablet client. It should
 // not be concurrently used across goroutines.
 type TabletConn interface {
 	// Execute executes a non-streaming query on vttablet.
-	Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
+	Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error)
 
 	// ExecuteBatch executes a group of queries.
-	ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
+	ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error)
 
 	// StreamExecute exectutes a streaming query on vttablet. It returns a channel that will stream results.
 	// It also returns an ErrFunc that can be called to check if there were any errors. ErrFunc can be called
 	// immediately after StreamExecute returns to check if there were errors sending the call. It should also
 	// be called after finishing the iteration over the channel to see if there were other errors.
-	StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc)
+	StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc)
 
 	// Transaction support
-	Begin() (transactionId int64, err error)
-	Commit(transactionId int64) error
-	Rollback(transactionId int64) error
+	Begin(context interface{}) (transactionId int64, err error)
+	Commit(context interface{}, transactionId int64) error
+	Rollback(context interface{}, transactionId int64) error
 
 	// Close must be called for releasing resources.
 	Close()

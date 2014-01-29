@@ -53,6 +53,7 @@ func NewScatterConn(serv SrvTopoServer, cell string, retryDelay time.Duration, r
 
 // Execute executes a non-streaming query on the specified shards.
 func (stc *ScatterConn) Execute(
+	context interface{},
 	query string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -61,12 +62,13 @@ func (stc *ScatterConn) Execute(
 	session *SafeSession,
 ) (*mproto.QueryResult, error) {
 	results, allErrors := stc.multiGo(
+		context,
 		keyspace,
 		shards,
 		tabletType,
 		session,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			innerqr, err := sdc.Execute(query, bindVars, transactionId)
+			innerqr, err := sdc.Execute(context, query, bindVars, transactionId)
 			if err != nil {
 				return err
 			}
@@ -87,6 +89,7 @@ func (stc *ScatterConn) Execute(
 
 // ExecuteBatch executes a batch of non-streaming queries on the specified shards.
 func (stc *ScatterConn) ExecuteBatch(
+	context interface{},
 	queries []tproto.BoundQuery,
 	keyspace string,
 	shards []string,
@@ -94,12 +97,13 @@ func (stc *ScatterConn) ExecuteBatch(
 	session *SafeSession,
 ) (qrs *tproto.QueryResultList, err error) {
 	results, allErrors := stc.multiGo(
+		context,
 		keyspace,
 		shards,
 		tabletType,
 		session,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			innerqrs, err := sdc.ExecuteBatch(queries, transactionId)
+			innerqrs, err := sdc.ExecuteBatch(context, queries, transactionId)
 			if err != nil {
 				return err
 			}
@@ -123,6 +127,7 @@ func (stc *ScatterConn) ExecuteBatch(
 
 // StreamExecute executes a streaming query on vttablet. The retry rules are the same.
 func (stc *ScatterConn) StreamExecute(
+	context interface{},
 	query string,
 	bindVars map[string]interface{},
 	keyspace string,
@@ -132,12 +137,13 @@ func (stc *ScatterConn) StreamExecute(
 	sendReply func(reply *mproto.QueryResult) error,
 ) error {
 	results, allErrors := stc.multiGo(
+		context,
 		keyspace,
 		shards,
 		tabletType,
 		session,
 		func(sdc *ShardConn, transactionId int64, sResults chan<- interface{}) error {
-			sr, errFunc := sdc.StreamExecute(query, bindVars, transactionId)
+			sr, errFunc := sdc.StreamExecute(context, query, bindVars, transactionId)
 			for qr := range sr {
 				sResults <- qr
 			}
@@ -158,7 +164,7 @@ func (stc *ScatterConn) StreamExecute(
 }
 
 // Commit commits the current transaction. There are no retries on this operation.
-func (stc *ScatterConn) Commit(session *SafeSession) (err error) {
+func (stc *ScatterConn) Commit(context interface{}, session *SafeSession) (err error) {
 	if !session.InTransaction() {
 		return fmt.Errorf("cannot commit: not in transaction")
 	}
@@ -166,10 +172,10 @@ func (stc *ScatterConn) Commit(session *SafeSession) (err error) {
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
 		if !committing {
-			go sdc.Rollback(shardSession.TransactionId)
+			go sdc.Rollback(context, shardSession.TransactionId)
 			continue
 		}
-		if err = sdc.Commit(shardSession.TransactionId); err != nil {
+		if err = sdc.Commit(context, shardSession.TransactionId); err != nil {
 			committing = false
 		}
 	}
@@ -178,10 +184,10 @@ func (stc *ScatterConn) Commit(session *SafeSession) (err error) {
 }
 
 // Rollback rolls back the current transaction. There are no retries on this operation.
-func (stc *ScatterConn) Rollback(session *SafeSession) (err error) {
+func (stc *ScatterConn) Rollback(context interface{}, session *SafeSession) (err error) {
 	for _, shardSession := range session.ShardSessions {
 		sdc := stc.getConnection(shardSession.Keyspace, shardSession.Shard, shardSession.TabletType)
-		go sdc.Rollback(shardSession.TransactionId)
+		go sdc.Rollback(context, shardSession.TransactionId)
 	}
 	session.Reset()
 	return nil
@@ -207,6 +213,7 @@ func (stc *ScatterConn) Close() error {
 // rolls back the transaction for all shards.
 // The action function must match the shardActionFunc signature.
 func (stc *ScatterConn) multiGo(
+	context interface{},
 	keyspace string,
 	shards []string,
 	tabletType topo.TabletType,
@@ -222,7 +229,7 @@ func (stc *ScatterConn) multiGo(
 		go func(shard string) {
 			defer wg.Done()
 			sdc := stc.getConnection(keyspace, shard, tabletType)
-			transactionId, err := stc.updateSession(sdc, keyspace, shard, tabletType, session)
+			transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
 			if err != nil {
 				allErrors.RecordError(err)
 				return
@@ -243,7 +250,7 @@ func (stc *ScatterConn) multiGo(
 				errstr := allErrors.Error().Error()
 				// We cannot recover from these errors
 				if strings.Contains(errstr, "tx_pool_full") || strings.Contains(errstr, "not_in_tx") {
-					stc.Rollback(session)
+					stc.Rollback(context, session)
 				}
 			}
 		}
@@ -266,6 +273,7 @@ func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.Ta
 }
 
 func (stc *ScatterConn) updateSession(
+	context interface{},
 	sdc *ShardConn,
 	keyspace, shard string,
 	tabletType topo.TabletType,
@@ -282,7 +290,7 @@ func (stc *ScatterConn) updateSession(
 	if transactionId != 0 {
 		return transactionId, nil
 	}
-	transactionId, err = sdc.Begin()
+	transactionId, err = sdc.Begin(context)
 	if err != nil {
 		return 0, err
 	}

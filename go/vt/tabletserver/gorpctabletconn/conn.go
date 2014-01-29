@@ -38,7 +38,7 @@ type TabletBson struct {
 	sessionId int64
 }
 
-func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
+func DialTablet(context interface{}, endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
 	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
@@ -68,7 +68,7 @@ func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (tabletconn.Tabl
 	return conn, nil
 }
 
-func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
+func (conn *TabletBson) Execute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (*mproto.QueryResult, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -88,7 +88,7 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}, t
 	return qr, nil
 }
 
-func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
+func (conn *TabletBson) ExecuteBatch(context interface{}, queries []tproto.BoundQuery, transactionId int64) (*tproto.QueryResultList, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -107,7 +107,7 @@ func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 	return qrs, nil
 }
 
-func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
+func (conn *TabletBson) StreamExecute(context interface{}, query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -127,7 +127,7 @@ func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interfac
 	return sr, func() error { return tabletError(c.Error) }
 }
 
-func (conn *TabletBson) Begin() (transactionId int64, err error) {
+func (conn *TabletBson) Begin(context interface{}) (transactionId int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -142,7 +142,7 @@ func (conn *TabletBson) Begin() (transactionId int64, err error) {
 	return txInfo.TransactionId, tabletError(err)
 }
 
-func (conn *TabletBson) Commit(transactionId int64) error {
+func (conn *TabletBson) Commit(context interface{}, transactionId int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
@@ -157,7 +157,7 @@ func (conn *TabletBson) Commit(transactionId int64) error {
 	return tabletError(conn.rpcClient.Call("SqlQuery.Commit", req, &noOutput))
 }
 
-func (conn *TabletBson) Rollback(transactionId int64) error {
+func (conn *TabletBson) Rollback(context interface{}, transactionId int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
