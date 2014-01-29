@@ -15,14 +15,15 @@ import (
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
 // sandbox_test.go provides a sandbox for unit testing Barnacle.
 
 func init() {
-	RegisterDialer("sandbox", sandboxDialer)
-	flag.Set("tablet-protocol", "sandbox")
+	tabletconn.RegisterDialer("sandbox", sandboxDialer)
+	flag.Set("tablet_protocol", "sandbox")
 }
 
 var (
@@ -50,7 +51,7 @@ var (
 func resetSandbox() {
 	sandmu.Lock()
 	defer sandmu.Unlock()
-	testConns = make(map[uint32]TabletConn)
+	testConns = make(map[uint32]tabletconn.TabletConn)
 	endPointCounter = 0
 	dialCounter = 0
 	dialMustFail = 0
@@ -86,15 +87,15 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 	}}, nil
 }
 
-var testConns map[uint32]TabletConn
+var testConns map[uint32]tabletconn.TabletConn
 
-func sandboxDialer(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error) {
+func sandboxDialer(endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
 	sandmu.Lock()
 	defer sandmu.Unlock()
 	dialCounter++
 	if dialMustFail > 0 {
 		dialMustFail--
-		return nil, OperationalError(fmt.Sprintf("conn error"))
+		return nil, tabletconn.OperationalError(fmt.Sprintf("conn error"))
 	}
 	tconn := testConns[endPoint.Uid]
 	if tconn == nil {
@@ -127,27 +128,27 @@ type sandboxConn struct {
 func (sbc *sandboxConn) getError() error {
 	if sbc.mustFailRetry > 0 {
 		sbc.mustFailRetry--
-		return &ServerError{Code: ERR_RETRY, Err: "retry: err"}
+		return &tabletconn.ServerError{Code: tabletconn.ERR_RETRY, Err: "retry: err"}
 	}
 	if sbc.mustFailFatal > 0 {
 		sbc.mustFailFatal--
-		return &ServerError{Code: ERR_FATAL, Err: "fatal: err"}
+		return &tabletconn.ServerError{Code: tabletconn.ERR_FATAL, Err: "fatal: err"}
 	}
 	if sbc.mustFailServer > 0 {
 		sbc.mustFailServer--
-		return &ServerError{Code: ERR_NORMAL, Err: "error: err"}
+		return &tabletconn.ServerError{Code: tabletconn.ERR_NORMAL, Err: "error: err"}
 	}
 	if sbc.mustFailConn > 0 {
 		sbc.mustFailConn--
-		return OperationalError(fmt.Sprintf("error: conn"))
+		return tabletconn.OperationalError(fmt.Sprintf("error: conn"))
 	}
 	if sbc.mustFailTxPool > 0 {
 		sbc.mustFailTxPool--
-		return &ServerError{Code: ERR_TX_POOL_FULL, Err: "tx_pool_full: err"}
+		return &tabletconn.ServerError{Code: tabletconn.ERR_TX_POOL_FULL, Err: "tx_pool_full: err"}
 	}
 	if sbc.mustFailNotTx > 0 {
 		sbc.mustFailNotTx--
-		return &ServerError{Code: ERR_NOT_IN_TX, Err: "not_in_tx: err"}
+		return &tabletconn.ServerError{Code: tabletconn.ERR_NOT_IN_TX, Err: "not_in_tx: err"}
 	}
 	return nil
 }
@@ -179,7 +180,7 @@ func (sbc *sandboxConn) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 	return qrl, nil
 }
 
-func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc) {
+func (sbc *sandboxConn) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	sbc.ExecCount.Add(1)
 	if sbc.mustDelay != 0 {
 		time.Sleep(sbc.mustDelay)
