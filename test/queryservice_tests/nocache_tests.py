@@ -128,6 +128,22 @@ class TestNocache(framework.TestCase):
     self.assertEqual(vstart.mget("Voltron.QueryCache.Length", 0)+1, vend.Voltron.QueryCache.Length)
     self.assertEqual(vstart.mget("QueryCacheLength", 0)+1, vend.QueryCacheLength)
 
+  def test_complex_dmls(self):
+    self.env.conn.begin()
+    try:
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into vtocc_a(eid, id, name, foo) values (7, 1+1, '', '')")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into vtocc_a(eid, id, name, foo) values (8, 2, '', '') on duplicate key update id = 2+1")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("update vtocc_a set eid = 1+1 where eid = 1 and id = 1")
+      with self.assertRaises(dbexceptions.DatabaseError):
+        self.env.execute("insert into vtocc_d(eid, id) values (1, 1)")
+    finally:
+      self.env.conn.rollback()
+
   def test_for_update(self):
     try:
       self.env.execute("select * from vtocc_test where intval=2 for update")
