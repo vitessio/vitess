@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package vtgate
+package tabletconn
 
 import (
 	"flag"
@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	tabletProtocol = flag.String("tablet-protocol", "bson", "how to talk to the vttablets")
+	tabletProtocol = flag.String("tablet_protocol", "gorpc", "how to talk to the vttablets")
 )
 
 // ServerError represents an error that was returned from

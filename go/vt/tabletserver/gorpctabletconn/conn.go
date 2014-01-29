@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
 	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
@@ -26,7 +27,7 @@ var (
 )
 
 func init() {
-	RegisterDialer("bson", DialTablet)
+	tabletconn.RegisterDialer("gorpc", DialTablet)
 }
 
 // TabletBson implements a bson rpcplus implementation for TabletConn
@@ -37,7 +38,7 @@ type TabletBson struct {
 	sessionId int64
 }
 
-func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (TabletConn, error) {
+func DialTablet(endPoint topo.EndPoint, keyspace, shard string) (tabletconn.TabletConn, error) {
 	var addr string
 	var config *tls.Config
 	if *tabletBsonEncrypted {
@@ -71,7 +72,7 @@ func (conn *TabletBson) Execute(query string, bindVars map[string]interface{}, t
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return nil, CONN_CLOSED
+		return nil, tabletconn.CONN_CLOSED
 	}
 
 	req := &tproto.Query{
@@ -91,7 +92,7 @@ func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return nil, CONN_CLOSED
+		return nil, tabletconn.CONN_CLOSED
 	}
 
 	req := tproto.QueryList{
@@ -106,13 +107,13 @@ func (conn *TabletBson) ExecuteBatch(queries []tproto.BoundQuery, transactionId 
 	return qrs, nil
 }
 
-func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, ErrFunc) {
+func (conn *TabletBson) StreamExecute(query string, bindVars map[string]interface{}, transactionId int64) (<-chan *mproto.QueryResult, tabletconn.ErrFunc) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
 		sr := make(chan *mproto.QueryResult, 1)
 		close(sr)
-		return sr, func() error { return CONN_CLOSED }
+		return sr, func() error { return tabletconn.CONN_CLOSED }
 	}
 
 	req := &tproto.Query{
@@ -130,7 +131,7 @@ func (conn *TabletBson) Begin() (transactionId int64, err error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return 0, CONN_CLOSED
+		return 0, tabletconn.CONN_CLOSED
 	}
 
 	req := &tproto.Session{
@@ -145,7 +146,7 @@ func (conn *TabletBson) Commit(transactionId int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return CONN_CLOSED
+		return tabletconn.CONN_CLOSED
 	}
 
 	req := &tproto.Session{
@@ -160,7 +161,7 @@ func (conn *TabletBson) Rollback(transactionId int64) error {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.rpcClient == nil {
-		return CONN_CLOSED
+		return tabletconn.CONN_CLOSED
 	}
 
 	req := &tproto.Session{
@@ -197,17 +198,17 @@ func tabletError(err error) error {
 		errStr := err.Error()
 		switch {
 		case strings.HasPrefix(errStr, "fatal"):
-			code = ERR_FATAL
+			code = tabletconn.ERR_FATAL
 		case strings.HasPrefix(errStr, "retry"):
-			code = ERR_RETRY
+			code = tabletconn.ERR_RETRY
 		case strings.HasPrefix(errStr, "tx_pool_full"):
-			code = ERR_TX_POOL_FULL
+			code = tabletconn.ERR_TX_POOL_FULL
 		case strings.HasPrefix(errStr, "not_in_tx"):
-			code = ERR_NOT_IN_TX
+			code = tabletconn.ERR_NOT_IN_TX
 		default:
-			code = ERR_NORMAL
+			code = tabletconn.ERR_NORMAL
 		}
-		return &ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
+		return &tabletconn.ServerError{Code: code, Err: fmt.Sprintf("vttablet: %v", err)}
 	}
-	return OperationalError(fmt.Sprintf("vttablet: %v", err))
+	return tabletconn.OperationalError(fmt.Sprintf("vttablet: %v", err))
 }

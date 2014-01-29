@@ -124,7 +124,7 @@ def tablet_manager_protocol_flags():
   return ['-tablet_manager_protocol', 'bson']
 
 def vtgate_protocol_flags():
-  return ['-tablet-protocol', 'bson']
+  return ['-tablet_protocol', 'gorpc']
 
 def binlog_player_protocol_flags():
   return ['-binlog_player_protocol', 'gorpc']
