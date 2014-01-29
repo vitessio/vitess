@@ -12,7 +12,6 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
-	"github.com/youtube/vitess/go/vt/rpc"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -24,6 +23,11 @@ type VTGate struct {
 	scatterConn *ScatterConn
 }
 
+// registration mechanism
+type RegisterVTGate func(*VTGate)
+
+var RegisterVTGates []RegisterVTGate
+
 func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount int) {
 	if RpcVTGate != nil {
 		log.Fatalf("VTGate already initialized")
@@ -31,7 +35,9 @@ func Init(serv SrvTopoServer, cell string, retryDelay time.Duration, retryCount 
 	RpcVTGate = &VTGate{
 		scatterConn: NewScatterConn(serv, cell, retryDelay, retryCount),
 	}
-	proto.RegisterAuthenticated(RpcVTGate)
+	for _, f := range RegisterVTGates {
+		f(RpcVTGate)
+	}
 }
 
 // ExecuteShard executes a non-streaming query on the specified shards.
@@ -72,7 +78,7 @@ func (vtg *VTGate) ExecuteBatchShard(context *rpcproto.Context, batchQuery *prot
 }
 
 // StreamExecuteShard executes a streaming query on the specified shards.
-func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(interface{}) error) error {
+func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
 	err := vtg.scatterConn.StreamExecute(
 		query.Sql,
 		query.BindVariables,
@@ -80,14 +86,17 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 		query.Shards,
 		query.TabletType,
 		NewSafeSession(query.Session),
-		func(mreply interface{}) error {
+		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
-			proto.PopulateQueryResult(mreply.(*mproto.QueryResult), reply)
+			proto.PopulateQueryResult(mreply, reply)
+			// Need this?
+			//			reply.Session = query.Session
 			return sendReply(reply)
 		})
 	if err != nil {
 		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
 	}
+	// send this only if error != nil?
 	if query.Session != nil {
 		sendReply(&proto.QueryResult{Session: query.Session})
 	}
@@ -95,17 +104,17 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 }
 
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
-func (vtg *VTGate) Begin(context *rpcproto.Context, noInput *rpc.UnusedRequest, outSession *proto.Session) error {
+func (vtg *VTGate) Begin(context *rpcproto.Context, outSession *proto.Session) error {
 	outSession.InTransaction = true
 	return nil
 }
 
 // Commit commits a transaction.
-func (vtg *VTGate) Commit(context *rpcproto.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+func (vtg *VTGate) Commit(context *rpcproto.Context, inSession *proto.Session) error {
 	return vtg.scatterConn.Commit(NewSafeSession(inSession))
 }
 
 // Rollback rolls back a transaction.
-func (vtg *VTGate) Rollback(context *rpcproto.Context, inSession *proto.Session, noOutput *rpc.UnusedResponse) error {
+func (vtg *VTGate) Rollback(context *rpcproto.Context, inSession *proto.Session) error {
 	return vtg.scatterConn.Rollback(NewSafeSession(inSession))
 }

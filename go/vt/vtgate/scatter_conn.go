@@ -129,7 +129,7 @@ func (stc *ScatterConn) StreamExecute(
 	shards []string,
 	tabletType topo.TabletType,
 	session *SafeSession,
-	sendReply func(reply interface{}) error,
+	sendReply func(reply *mproto.QueryResult) error,
 ) error {
 	results, allErrors := stc.multiGo(
 		keyspace,

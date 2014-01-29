@@ -10,23 +10,10 @@ import (
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcwrap"
-	rpcproto "github.com/youtube/vitess/go/rpcwrap/proto"
 	"github.com/youtube/vitess/go/sqltypes"
-	"github.com/youtube/vitess/go/vt/rpc"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 )
-
-// VTGate defines the interface for the rpc service.
-type VTGate interface {
-	ExecuteShard(context *rpcproto.Context, query *QueryShard, reply *QueryResult) error
-	ExecuteBatchShard(context *rpcproto.Context, batchQuery *BatchQueryShard, reply *QueryResultList) error
-	StreamExecuteShard(context *rpcproto.Context, query *QueryShard, sendReply func(interface{}) error) error
-	Begin(context *rpcproto.Context, noInput *rpc.UnusedRequest, outSession *Session) error
-	Commit(context *rpcproto.Context, inSession *Session, noOutput *rpc.UnusedResponse) error
-	Rollback(context *rpcproto.Context, inSession *Session, noOutput *rpc.UnusedResponse) error
-}
 
 // Session represents the session state. It keeps track of
 // the shards on which transactions are in progress, along
@@ -372,9 +359,4 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 		}
 		kind = bson.NextByte(buf)
 	}
-}
-
-// RegisterAuthenticated registers the server.
-func RegisterAuthenticated(vtgate VTGate) {
-	rpcwrap.RegisterAuthenticated(vtgate)
 }
