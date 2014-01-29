@@ -61,9 +61,7 @@ type ShardedConn struct {
 	cell       string
 	keyspace   string
 	tabletType topo.TabletType
-	stream     bool   // Use streaming RPC
-	user       string // "" if not using auth
-	password   string // "" iff userName is ""
+	stream     bool // Use streaming RPC
 
 	srvKeyspace *topo.SrvKeyspace
 	// Keep a map per shard mapping tabletType to a real connection.
@@ -84,15 +82,13 @@ type ShardedConn struct {
 // that this is necessary.  You have to deal with transient failures
 // anyway, so the whole system degenerates to managing connections on
 // demand.
-func Dial(ts topo.Server, cell, keyspace string, tabletType topo.TabletType, stream bool, timeout time.Duration, user, password string) (*ShardedConn, error) {
+func Dial(ts topo.Server, cell, keyspace string, tabletType topo.TabletType, stream bool, timeout time.Duration) (*ShardedConn, error) {
 	sc := &ShardedConn{
 		ts:         ts,
 		cell:       cell,
 		keyspace:   keyspace,
 		tabletType: tabletType,
 		stream:     stream,
-		user:       user,
-		password:   password,
 	}
 	err := sc.readKeyspace()
 	if err != nil {
@@ -549,10 +545,6 @@ func (sc *ShardedConn) dial(shardIdx int) (conn *tablet.VtConn, err error) {
 	// Try to connect to any address.
 	for _, srv := range srvs {
 		name := topo.SrvAddr(srv) + "/" + sc.keyspace + "/" + shard
-		if sc.user != "" {
-			name = sc.user + ":" + sc.password + "@" + name
-		}
-
 		conn, err = tablet.DialVtdb(name, sc.stream, tablet.DefaultTimeout)
 		if err == nil {
 			return conn, nil
@@ -569,9 +561,6 @@ type sDriver struct {
 // for direct zk connection: vtzk://host:port/cell/keyspace/tabletType
 // we always use a MetaConn, host and port are ignored.
 // the driver name dictates if we use zk or zkocc, and streaming or not
-//
-// if user and password are specified in the URL, they will be used
-// for each DB connection to the tablet's vttablet processes
 func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 	if !strings.HasPrefix(name, "vtzk://") {
 		// add a default protocol talking to zk
@@ -588,16 +577,7 @@ func (driver *sDriver) Open(name string) (sc db.Conn, err error) {
 	cell, keyspace := path.Split(dbi)
 	cell = strings.Trim(cell, "/")
 	keyspace = strings.Trim(keyspace, "/")
-	var user, password string
-	if u.User != nil {
-		user = u.User.Username()
-		var ok bool
-		password, ok = u.User.Password()
-		if !ok {
-			return nil, fmt.Errorf("vt: need a password if a user is specified")
-		}
-	}
-	return Dial(driver.ts, cell, keyspace, topo.TabletType(tabletType), driver.stream, tablet.DefaultTimeout, user, password)
+	return Dial(driver.ts, cell, keyspace, topo.TabletType(tabletType), driver.stream, tablet.DefaultTimeout)
 }
 
 func RegisterShardedDrivers() {

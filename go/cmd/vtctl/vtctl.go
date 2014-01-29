@@ -91,7 +91,7 @@ var commands = []commandGroup{
 				"<tablet alias|zk tablet path>",
 				"Check that the agent is awake and responding to RPCs."},
 			command{"Query", commandQuery,
-				"<cell> <keyspace> [<user> <password>] <query>",
+				"<cell> <keyspace> <query>",
 				"Send a SQL query to a tablet."},
 			command{"Sleep", commandSleep,
 				"<tablet alias|zk tablet path> <duration>",
@@ -383,8 +383,8 @@ func dumpTablets(ts topo.Server, tabletAliases []topo.TabletAlias) error {
 	return nil
 }
 
-func kquery(ts topo.Server, cell, keyspace, user, password, query string) error {
-	sconn, err := client2.Dial(ts, cell, keyspace, "master", false, 5*time.Second, user, password)
+func kquery(ts topo.Server, cell, keyspace, query string) error {
+	sconn, err := client2.Dial(ts, cell, keyspace, "master", false, 5*time.Second)
 	if err != nil {
 		return err
 	}
@@ -754,14 +754,10 @@ func commandRpcPing(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string
 
 func commandQuery(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	subFlags.Parse(args)
-	if subFlags.NArg() != 3 && subFlags.NArg() != 5 {
-		log.Fatalf("action Query requires 3 or 5 args")
+	if subFlags.NArg() != 3 {
+		log.Fatalf("action Query requires 3")
 	}
-	if subFlags.NArg() == 3 {
-		return "", kquery(wr.TopoServer(), subFlags.Arg(0), subFlags.Arg(1), "", "", subFlags.Arg(2))
-	}
-
-	return "", kquery(wr.TopoServer(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2), subFlags.Arg(3), subFlags.Arg(4))
+	return "", kquery(wr.TopoServer(), subFlags.Arg(0), subFlags.Arg(1), subFlags.Arg(2))
 }
 
 func commandSleep(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
