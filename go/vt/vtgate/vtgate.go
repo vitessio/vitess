@@ -89,14 +89,15 @@ func (vtg *VTGate) StreamExecuteShard(context *rpcproto.Context, query *proto.Qu
 		func(mreply *mproto.QueryResult) error {
 			reply := new(proto.QueryResult)
 			proto.PopulateQueryResult(mreply, reply)
-			// Need this?
-			//			reply.Session = query.Session
+			// Note we don't populate reply.Session here,
+			// as it may change incrementaly as responses
+			// are sent.
 			return sendReply(reply)
 		})
 	if err != nil {
 		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
 	}
-	// send this only if error != nil?
+	// now we can send the final Session info.
 	if query.Session != nil {
 		sendReply(&proto.QueryResult{Session: query.Session})
 	}
