@@ -242,10 +242,9 @@ func (qe *QueryEngine) Execute(logStats *sqlQueryStats, query *proto.Query) (rep
 		}
 		switch plan.PlanId {
 		case sqlparser.PLAN_PASS_DML:
-			if plan.TableInfo != nil && plan.TableInfo.CacheType != schema.CACHE_NONE {
-				panic(NewTabletError(FAIL, "DML too complex for cached table"))
-			}
-			reply = qe.directFetch(logStats, conn, plan.FullQuery, plan.BindVars, nil, nil)
+			// TODO(sougou): Delete code path that leads here.
+			// We need to permanently disallow this plan.
+			panic(NewTabletError(FAIL, "DML too complex"))
 		case sqlparser.PLAN_INSERT_PK:
 			reply = qe.execInsertPK(logStats, conn, plan, invalidator)
 		case sqlparser.PLAN_INSERT_SUBQUERY:
