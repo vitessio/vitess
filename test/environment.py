@@ -123,7 +123,7 @@ def topo_server_flags():
 def tablet_manager_protocol_flags():
   return ['-tablet_manager_protocol', 'bson']
 
-def vtgate_protocol_flags():
+def tabletconn_protocol_flags():
   return ['-tablet_protocol', 'gorpc']
 
 def binlog_player_protocol_flags():

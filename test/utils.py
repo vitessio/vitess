@@ -331,7 +331,7 @@ def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, t
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
           '-log_dir', environment.vtlogroot,
-          ] + environment.vtgate_protocol_flags()
+          ] + environment.tabletconn_protocol_flags()
   if topo_impl:
     args.extend(['-topo_implementation', topo_impl])
   else:
@@ -351,6 +351,7 @@ def run_vtctl(clargs, log_level='', auto_log=False, expect_fail=False, **kwargs)
   args = [environment.binary_path('vtctl'), '-log_dir', environment.vtlogroot]
   args.extend(environment.topo_server_flags())
   args.extend(environment.tablet_manager_protocol_flags())
+  args.extend(environment.tabletconn_protocol_flags())
 
   if auto_log:
     if options.verbose == 2:
@@ -415,11 +416,13 @@ def vtclient2(uid, path, query, bindvars=None, user=None, password=None, driver=
   if path.startswith('/'):
     path = path[1:]
   server = "localhost:%u/%s" % (uid, path)
-  if user is not None:
-    server = "%s:%s@%s" % (user, password, server)
 
   cmdline = [environment.binary_path('vtclient2'), '-server', server]
   cmdline += environment.topo_server_flags()
+  cmdline += environment.tabletconn_protocol_flags()
+  if user is not None:
+    cmdline.extend(['-tablet-bson-username', user,
+                    '-tablet-bson-password', password])
   if bindvars:
     cmdline.extend(['-bindvars', bindvars])
   if driver:

@@ -17,10 +17,10 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/db"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
-	"github.com/youtube/vitess/go/rpcplus"
-	"github.com/youtube/vitess/go/rpcwrap/bsonrpc"
+	"github.com/youtube/vitess/go/netutil"
 	"github.com/youtube/vitess/go/sqltypes"
-	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
+	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
+	"github.com/youtube/vitess/go/vt/topo"
 )
 
 var (
@@ -43,10 +43,10 @@ func (te TabletError) Error() string {
 
 // Not thread safe, as per sql package.
 type Conn struct {
-	dbi       *url.URL
-	stream    bool
-	rpcClient *rpcplus.Client
-	tproto.Session
+	dbi           *url.URL
+	stream        bool
+	tabletConn    tabletconn.TabletConn
+	TransactionId int64
 }
 
 type Tx struct {
@@ -54,8 +54,8 @@ type Tx struct {
 }
 
 type StreamResult struct {
-	call    *rpcplus.Call
-	sr      chan *mproto.QueryResult
+	errFunc tabletconn.ErrFunc
+	sr      <-chan *mproto.QueryResult
 	columns *mproto.QueryResult
 	// current result and index on it
 	qr    *mproto.QueryResult
@@ -100,70 +100,49 @@ func (conn *Conn) fmtErr(err error) error {
 	return TabletError{err, conn.dbi.Host}
 }
 
-func (conn *Conn) authCredentials() (user, password string, useAuth bool, err error) {
-	if conn.dbi.User == nil {
-		useAuth = false
-		return
-	}
-	if password, passwordProvided := conn.dbi.User.Password(); passwordProvided {
-		return conn.dbi.User.Username(), password, true, nil
-	} else {
-		err = errors.New("username provided without a password")
-	}
-	return
-}
-
 func (conn *Conn) dial() (err error) {
-
-	user, password, useAuth, err := conn.authCredentials()
+	// build the endpoint in the right format
+	host, port, err := netutil.SplitHostPort(conn.dbi.Host)
 	if err != nil {
 		return err
 	}
-
-	if useAuth {
-		conn.rpcClient, err = bsonrpc.DialAuthHTTP("tcp", conn.dbi.Host, user, password, 0, nil)
-	} else {
-		conn.rpcClient, err = bsonrpc.DialHTTP("tcp", conn.dbi.Host, 0, nil)
+	endPoint := topo.EndPoint{
+		Host: host,
+		NamedPortMap: map[string]int{
+			"_vtocc": port,
+		},
 	}
 
+	// and dial
+	tabletConn, err := tabletconn.GetDialer()(endPoint, conn.keyspace(), conn.shard())
 	if err != nil {
-		return
+		return err
 	}
-
-	var sessionInfo tproto.SessionInfo
-	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: conn.keyspace(), Shard: conn.shard()}, &sessionInfo); err != nil {
-		return
-	}
-	conn.SessionId = sessionInfo.SessionId
+	conn.tabletConn = tabletConn
 	return
 }
 
 func (conn *Conn) Close() error {
-	conn.Session = tproto.Session{TransactionId: 0, SessionId: 0}
-	return conn.rpcClient.Close()
+	conn.tabletConn.Close()
+	return nil
 }
 
 func (conn *Conn) Exec(query string, bindVars map[string]interface{}) (db.Result, error) {
-	req := &tproto.Query{
-		Sql:           query,
-		BindVariables: bindVars,
-		TransactionId: conn.TransactionId,
-		SessionId:     conn.SessionId,
-	}
 	if conn.stream {
-		sr := make(chan *mproto.QueryResult, 10)
-		c := conn.rpcClient.StreamGo("SqlQuery.StreamExecute", req, sr)
-
+		sr, errFunc := conn.tabletConn.StreamExecute(query, bindVars, conn.TransactionId)
+		if errFunc() != nil {
+			return nil, errFunc()
+		}
 		// read the columns, or grab the error
 		cols, ok := <-sr
 		if !ok {
-			return nil, conn.fmtErr(c.Error)
+			return nil, conn.fmtErr(errFunc())
 		}
-		return &StreamResult{c, sr, cols, nil, 0, nil}, nil
+		return &StreamResult{errFunc, sr, cols, nil, 0, nil}, nil
 	}
 
-	qr := new(mproto.QueryResult)
-	if err := conn.rpcClient.Call("SqlQuery.Execute", req, qr); err != nil {
+	qr, err := conn.tabletConn.Execute(query, bindVars, conn.TransactionId)
+	if err != nil {
 		return nil, conn.fmtErr(err)
 	}
 	return &Result{qr, 0, nil}, nil
@@ -173,8 +152,10 @@ func (conn *Conn) Begin() (db.Tx, error) {
 	if conn.TransactionId != 0 {
 		return &Tx{}, ErrNoNestedTxn
 	}
-	if err := conn.rpcClient.Call("SqlQuery.Begin", &conn.Session, &conn.TransactionId); err != nil {
+	if transactionId, err := conn.tabletConn.Begin(); err != nil {
 		return &Tx{}, conn.fmtErr(err)
+	} else {
+		conn.TransactionId = transactionId
 	}
 	return &Tx{conn}, nil
 }
@@ -191,8 +172,7 @@ func (conn *Conn) Commit() error {
 	// called concurrently.  Defer this because we this affects the
 	// session referenced in the request.
 	defer func() { conn.TransactionId = 0 }()
-	var noOutput string
-	return conn.fmtErr(conn.rpcClient.Call("SqlQuery.Commit", &conn.Session, &noOutput))
+	return conn.fmtErr(conn.tabletConn.Commit(conn.TransactionId))
 }
 
 func (conn *Conn) Rollback() error {
@@ -201,8 +181,7 @@ func (conn *Conn) Rollback() error {
 	}
 	// See note in Commit about the behavior of TransactionId.
 	defer func() { conn.TransactionId = 0 }()
-	var noOutput string
-	return conn.fmtErr(conn.rpcClient.Call("SqlQuery.Rollback", &conn.Session, &noOutput))
+	return conn.fmtErr(conn.tabletConn.Rollback(conn.TransactionId))
 }
 
 // driver.Tx interface (forwarded to Conn)
@@ -314,9 +293,9 @@ func (sr *StreamResult) Next() (row []interface{}) {
 		// multiple rows
 		qr, ok := <-sr.sr
 		if !ok {
-			if sr.call.Error != nil {
-				log.Warningf("vt: error reading the next value %v", sr.call.Error.Error())
-				sr.err = sr.call.Error
+			if sr.errFunc() != nil {
+				log.Warningf("vt: error reading the next value %v", sr.errFunc())
+				sr.err = sr.errFunc()
 			}
 			return nil
 		}
