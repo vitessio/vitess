@@ -40,8 +40,8 @@ func TestScatterConnStreamExecute(t *testing.T) {
 	testScatterConnGeneric(t, func(shards []string) (*mproto.QueryResult, error) {
 		stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
 		qr := new(mproto.QueryResult)
-		err := stc.StreamExecute("query", nil, "", shards, "", nil, func(r interface{}) error {
-			appendResult(qr, r.(*mproto.QueryResult))
+		err := stc.StreamExecute("query", nil, "", shards, "", nil, func(r *mproto.QueryResult) error {
+			appendResult(qr, r)
 			return nil
 		})
 		return qr, err
@@ -133,7 +133,7 @@ func TestScatterConnStreamExecuteSendError(t *testing.T) {
 	sbc := &sandboxConn{}
 	testConns[0] = sbc
 	stc := NewScatterConn(new(sandboxTopo), "aa", 1*time.Millisecond, 3)
-	err := stc.StreamExecute("query", nil, "", []string{"0"}, "", nil, func(interface{}) error {
+	err := stc.StreamExecute("query", nil, "", []string{"0"}, "", nil, func(*mproto.QueryResult) error {
 		return fmt.Errorf("send error")
 	})
 	want := "send error"
