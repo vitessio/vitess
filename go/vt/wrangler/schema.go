@@ -26,6 +26,15 @@ func (wr *Wrangler) GetSchema(tabletAlias topo.TabletAlias, tables []string, inc
 	return wr.ai.GetSchema(ti, tables, includeViews, wr.actionTimeout())
 }
 
+func (wr *Wrangler) ReloadSchema(tabletAlias topo.TabletAlias) error {
+	ti, err := wr.ts.GetTablet(tabletAlias)
+	if err != nil {
+		return err
+	}
+
+	return wr.ai.ReloadSchema(ti, wr.actionTimeout())
+}
+
 // helper method to asynchronously diff a schema
 func (wr *Wrangler) diffSchema(masterSchema *myproto.SchemaDefinition, masterTabletAlias, alias topo.TabletAlias, includeViews bool, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {
 	defer wg.Done()

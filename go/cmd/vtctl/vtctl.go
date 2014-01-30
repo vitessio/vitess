@@ -209,6 +209,9 @@ var commands = []commandGroup{
 	commandGroup{
 		"Schema, Version, Permissions", []command{
 			command{"GetSchema", commandGetSchema,
+				"<tablet alias|zk tablet path>",
+				"Asks a remote tablet to reload its schema."},
+			command{"ReloadSchema", commandReloadSchema,
 				"[-tables=<table1>,<table2>,...] [-include-views] <tablet alias|zk tablet path>",
 				"Display the full schema for a tablet, or just the schema for the provided tables."},
 			command{"ValidateSchemaShard", commandValidateSchemaShard,
@@ -1354,6 +1357,15 @@ func commandGetSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []stri
 		log.Infof("%v", sd.String()) // they can contain %
 	}
 	return "", err
+}
+
+func commandReloadSchema(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() != 1 {
+		log.Fatalf("action ReloadSchema requires <tablet alias|zk tablet path>")
+	}
+	tabletAlias := tabletParamToTabletAlias(subFlags.Arg(0))
+	return "", wr.ReloadSchema(tabletAlias)
 }
 
 func commandValidateSchemaShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

@@ -204,6 +204,7 @@ func (ta *TabletActor) dispatchAction(actionNode *actionnode.ActionNode) (err er
 
 	case actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES,
 		actionnode.TABLET_ACTION_GET_SCHEMA,
+		actionnode.TABLET_ACTION_RELOAD_SCHEMA,
 		actionnode.TABLET_ACTION_GET_PERMISSIONS,
 		actionnode.TABLET_ACTION_SLAVE_POSITION,
 		actionnode.TABLET_ACTION_WAIT_SLAVE_POSITION,

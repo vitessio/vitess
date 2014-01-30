@@ -249,6 +249,10 @@ func (ai *ActionInitiator) ApplySchema(tabletAlias topo.TabletAlias, sc *myproto
 	return ai.writeTabletAction(tabletAlias, &actionnode.ActionNode{Action: actionnode.TABLET_ACTION_APPLY_SCHEMA, Args: sc})
 }
 
+func (ai *ActionInitiator) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	return ai.rpc.ReloadSchema(tablet, waitTime)
+}
+
 func (ai *ActionInitiator) GetPermissions(tabletAlias topo.TabletAlias, waitTime time.Duration) (*myproto.Permissions, error) {
 	tablet, err := ai.ts.GetTablet(tabletAlias)
 	if err != nil {

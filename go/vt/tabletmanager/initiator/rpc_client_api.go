@@ -39,6 +39,9 @@ type TabletManagerConn interface {
 	// blacklisted tables list
 	SetBlacklistedTables(tablet *topo.TabletInfo, tables []string, waitTime time.Duration) error
 
+	// ReloadSchema asks the remote tablet to reload its schema
+	ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error
+
 	//
 	// Replication related methods
 	//

@@ -98,6 +98,11 @@ func (client *GoRpcTabletManagerConn) SetBlacklistedTables(tablet *topo.TabletIn
 	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_SET_BLACKLISTED_TABLES, &gorpcproto.SetBlacklistedTablesArgs{Tables: tables}, &noOutput, waitTime)
 }
 
+func (client *GoRpcTabletManagerConn) ReloadSchema(tablet *topo.TabletInfo, waitTime time.Duration) error {
+	var noOutput rpc.UnusedResponse
+	return client.rpcCallTablet(tablet, actionnode.TABLET_ACTION_RELOAD_SCHEMA, "", &noOutput, waitTime)
+}
+
 //
 // Replication related methods
 //

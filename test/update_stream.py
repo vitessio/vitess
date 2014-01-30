@@ -111,10 +111,8 @@ def setUpModule():
     master_tablet.mquery('vt_test_keyspace', _create_vt_a)
     master_tablet.mquery('vt_test_keyspace', _create_vt_b)
 
-    master_tablet.vquery("set vt_schema_reload_time=86400",
-                         path="test_keyspace/0")
-    replica_tablet.vquery("set vt_schema_reload_time=86400",
-                          path="test_keyspace/0")
+    utils.run_vtctl(['ReloadSchema', master_tablet.tablet_alias])
+    utils.run_vtctl(['ReloadSchema', replica_tablet.tablet_alias])
 
   except:
     tearDownModule()

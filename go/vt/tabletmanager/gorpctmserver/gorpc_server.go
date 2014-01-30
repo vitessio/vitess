@@ -76,6 +76,13 @@ func (tm *TabletManager) SetBlacklistedTables(context *rpcproto.Context, args *g
 	})
 }
 
+func (tm *TabletManager) ReloadSchema(context *rpcproto.Context, args *rpc.UnusedRequest, reply *rpc.UnusedResponse) error {
+	return tm.agent.RpcWrapLockActionSchema(context.RemoteAddr, actionnode.TABLET_ACTION_RELOAD_SCHEMA, args, reply, func() error {
+		// no-op, the framework will force the schema reload
+		return nil
+	})
+}
+
 //
 // Replication related methods
 //
