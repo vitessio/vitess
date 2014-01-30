@@ -33,11 +33,11 @@ var DefaultDBConfig = dbconfigs.DBConfig{
 var schemaOverrides []ts.SchemaOverride
 
 func main() {
-	dbCredentialsFile := dbconfigs.RegisterAppFlags(DefaultDBConfig)
+	dbconfigs.RegisterAppFlags(DefaultDBConfig)
 	flag.Parse()
 	servenv.Init()
 
-	dbConfigs, _ := dbconfigs.Init("", *dbCredentialsFile)
+	dbConfigs, _ := dbconfigs.Init("")
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")

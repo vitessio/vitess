@@ -12,7 +12,6 @@ import (
 	"strconv"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/jscfg"
 	"github.com/youtube/vitess/go/mysql"
 )
 
@@ -41,17 +40,16 @@ func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultP
 
 }
 
-func RegisterAppFlags(defaultDBConfig DBConfig) *string {
+func RegisterAppFlags(defaultDBConfig DBConfig) {
 	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", defaultDBConfig.MysqlParams())
 	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", defaultDBConfig.Keyspace, "db app connection keyspace")
 	flag.StringVar(&dbConfigs.App.Shard, "db-config-app-shard", defaultDBConfig.Shard, "db app connection shard")
-	return flag.String("db-credentials-file", "", "db credentials file")
 }
 
-func RegisterCommonFlags() *string {
+func RegisterCommonFlags() {
 	registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
 	registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
-	return RegisterAppFlags(DefaultDBConfigs.App)
+	RegisterAppFlags(DefaultDBConfigs.App)
 }
 
 type DBConfig struct {
@@ -98,25 +96,30 @@ func (dbcfgs DBConfigs) Redacted() DBConfigs {
 	return dbcfgs
 }
 
-// Map user to a list of passwords. Right now we only use the first.
-type dbCredentials map[string][]string
-
-func Init(socketFile, dbCredentialsFile string) (DBConfigs, error) {
-	var err error
-	if dbCredentialsFile != "" {
-		dbCreds := make(dbCredentials)
-		if err = jscfg.ReadJson(dbCredentialsFile, &dbCreds); err != nil {
-			return dbConfigs, err
-		}
-		if passwd, ok := dbCreds[dbConfigs.App.Uname]; ok {
-			dbConfigs.App.Pass = passwd[0]
-		}
-		if passwd, ok := dbCreds[dbConfigs.Dba.Uname]; ok {
-			dbConfigs.Dba.Pass = passwd[0]
-		}
-		if passwd, ok := dbCreds[dbConfigs.Repl.Uname]; ok {
-			dbConfigs.Repl.Pass = passwd[0]
-		}
+func Init(socketFile string) (DBConfigs, error) {
+	passwd, err := GetCredentialsServer().GetPassword(dbConfigs.App.Uname)
+	switch err {
+	case nil:
+		dbConfigs.App.Pass = passwd
+	case ErrUnknownUser:
+	default:
+		return dbConfigs, err
+	}
+	passwd, err = GetCredentialsServer().GetPassword(dbConfigs.Dba.Uname)
+	switch err {
+	case nil:
+		dbConfigs.Dba.Pass = passwd
+	case ErrUnknownUser:
+	default:
+		return dbConfigs, err
+	}
+	passwd, err = GetCredentialsServer().GetPassword(dbConfigs.Repl.Uname)
+	switch err {
+	case nil:
+		dbConfigs.Repl.Pass = passwd
+	case ErrUnknownUser:
+	default:
+		return dbConfigs, err
 	}
 	if socketFile != "" {
 		dbConfigs.App.UnixSocket = socketFile
@@ -124,7 +127,7 @@ func Init(socketFile, dbCredentialsFile string) (DBConfigs, error) {
 		dbConfigs.Repl.UnixSocket = socketFile
 	}
 	log.Infof("DBConfigs: %s\n", dbConfigs.Redacted())
-	return dbConfigs, err
+	return dbConfigs, nil
 }
 
 func GetSubprocessFlags() []string {
@@ -173,5 +176,6 @@ func GetSubprocessFlags() []string {
 	}
 	f(&dbConfigs.Dba, "dba")
 	f(&dbConfigs.Repl, "repl")
+	cmd = append(cmd, getCredentialsServerSubprocessFlags()...)
 	return cmd
 }

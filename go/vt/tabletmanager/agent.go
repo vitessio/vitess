@@ -65,12 +65,11 @@ type tabletChangeItem struct {
 }
 
 type ActionAgent struct {
-	TopoServer        topo.Server
-	TabletAlias       topo.TabletAlias
-	vtActionBinFile   string // path to vtaction binary
-	Mysqld            *mysqlctl.Mysqld
-	DbCredentialsFile string           // File that contains db credentials
-	BinlogPlayerMap   *BinlogPlayerMap // optional
+	TopoServer      topo.Server
+	TabletAlias     topo.TabletAlias
+	vtActionBinFile string // path to vtaction binary
+	Mysqld          *mysqlctl.Mysqld
+	BinlogPlayerMap *BinlogPlayerMap // optional
 
 	done chan struct{} // closed when we are done.
 
@@ -86,15 +85,14 @@ type ActionAgent struct {
 	_tablet         *topo.TabletInfo
 }
 
-func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mysqld *mysqlctl.Mysqld, dbCredentialsFile string) (*ActionAgent, error) {
+func NewActionAgent(topoServer topo.Server, tabletAlias topo.TabletAlias, mysqld *mysqlctl.Mysqld) (*ActionAgent, error) {
 	return &ActionAgent{
-		TopoServer:        topoServer,
-		TabletAlias:       tabletAlias,
-		Mysqld:            mysqld,
-		DbCredentialsFile: dbCredentialsFile,
-		done:              make(chan struct{}),
-		changeCallbacks:   make([]TabletChangeCallback, 0, 8),
-		changeItems:       make(chan tabletChangeItem, 100),
+		TopoServer:      topoServer,
+		TabletAlias:     tabletAlias,
+		Mysqld:          mysqld,
+		done:            make(chan struct{}),
+		changeCallbacks: make([]TabletChangeCallback, 0, 8),
+		changeItems:     make(chan tabletChangeItem, 100),
 	}, nil
 }
 
@@ -188,9 +186,6 @@ func (agent *ActionAgent) dispatchAction(actionPath, data string) error {
 	cmd = append(cmd, logutil.GetSubprocessFlags()...)
 	cmd = append(cmd, topo.GetSubprocessFlags()...)
 	cmd = append(cmd, dbconfigs.GetSubprocessFlags()...)
-	if agent.DbCredentialsFile != "" {
-		cmd = append(cmd, "-db-credentials-file", agent.DbCredentialsFile)
-	}
 	log.Infof("action launch %v", cmd)
 	vtActionCmd := exec.Command(cmd[0], cmd[1:]...)
 

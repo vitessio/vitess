@@ -35,7 +35,7 @@ var (
 )
 
 func main() {
-	dbCredentialsFile := dbconfigs.RegisterCommonFlags()
+	dbconfigs.RegisterCommonFlags()
 	flag.Parse()
 
 	servenv.Init()
@@ -51,7 +51,7 @@ func main() {
 		log.Fatalf("mycnf read failed: %v", err)
 	}
 
-	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile, *dbCredentialsFile)
+	dbcfgs, err := dbconfigs.Init(mycnf.SocketFile)
 	if err != nil {
 		log.Warning(err)
 	}
@@ -60,7 +60,7 @@ func main() {
 	binlog.RegisterUpdateStreamService(mycnf)
 
 	// Depends on both query and updateStream.
-	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *dbCredentialsFile, *port, *securePort, *overridesFile)
+	agent, err = vttablet.InitAgent(tabletAlias, dbcfgs, mycnf, *port, *securePort, *overridesFile)
 	if err != nil {
 		log.Fatal(err)
 	}
