@@ -209,11 +209,11 @@ var commands = []commandGroup{
 	commandGroup{
 		"Schema, Version, Permissions", []command{
 			command{"GetSchema", commandGetSchema,
-				"<tablet alias|zk tablet path>",
-				"Asks a remote tablet to reload its schema."},
-			command{"ReloadSchema", commandReloadSchema,
 				"[-tables=<table1>,<table2>,...] [-include-views] <tablet alias|zk tablet path>",
 				"Display the full schema for a tablet, or just the schema for the provided tables."},
+			command{"ReloadSchema", commandReloadSchema,
+				"<tablet alias|zk tablet path>",
+				"Asks a remote tablet to reload its schema."},
 			command{"ValidateSchemaShard", commandValidateSchemaShard,
 				"[-include-views] <keyspace/shard|zk shard path>",
 				"Validate the master schema matches all the slaves."},
