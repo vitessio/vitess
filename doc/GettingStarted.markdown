@@ -23,7 +23,7 @@ If you run into issues or have questions, you can use our mailing list: vitess@g
 
 ``` sh
 cd $WORKSPACE
-sudo apt-get install automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git
+sudo apt-get install automake libtool memcached python-dev python-mysqldb libssl-dev g++ mercurial git pkg-config
 git clone git@github.com:youtube/vitess.git src/github.com/youtube/vitess
 cd src/github.com/youtube/vitess
 ./bootstrap.sh
