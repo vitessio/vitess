@@ -10,11 +10,11 @@ import (
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/hack"
+	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
-	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/schema"
 	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -108,12 +108,12 @@ func NewQueryEngine(config Config) *QueryEngine {
 	return qe
 }
 
-func (qe *QueryEngine) Open(dbconfig dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
+func (qe *QueryEngine) Open(info *mysql.ConnectionParams, schemaOverrides []SchemaOverride, qrs *QueryRules) {
 	// Wait for Close, in case it's running
 	qe.mu.Lock()
 	defer qe.mu.Unlock()
 
-	connFactory := GenericConnectionCreator(dbconfig.MysqlParams())
+	connFactory := GenericConnectionCreator(info)
 
 	start := time.Now().UnixNano()
 	qe.cachePool.Open()

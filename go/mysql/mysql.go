@@ -36,6 +36,8 @@ const (
 	DUP_ENTRY         = C.ER_DUP_ENTRY
 	LOCK_WAIT_TIMEOUT = C.ER_LOCK_WAIT_TIMEOUT
 	LOCK_DEADLOCK     = C.ER_LOCK_DEADLOCK
+
+	REDACTED_PASSWORD = "****"
 )
 
 type SqlError struct {
@@ -92,9 +94,8 @@ func (c *ConnectionParams) SslEnabled() bool {
 	return (c.Flags & C.CLIENT_SSL) != 0
 }
 
-func (c ConnectionParams) Redacted() ConnectionParams {
-	c.Pass = "****"
-	return c
+func (c *ConnectionParams) Redact() {
+	c.Pass = REDACTED_PASSWORD
 }
 
 type Connection struct {

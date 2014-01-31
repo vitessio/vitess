@@ -67,7 +67,7 @@ type SqlQuery struct {
 
 	qe        *QueryEngine
 	sessionId int64
-	dbconfig  dbconfigs.DBConfig
+	dbconfig  *dbconfigs.DBConfig
 }
 
 func NewSqlQuery(config Config) *SqlQuery {
@@ -90,7 +90,7 @@ func (sq *SqlQuery) setState(state int64) {
 	sq.state.Set(state)
 }
 
-func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
+func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
 	sq.statemu.Lock()
 	v := sq.state.Get()
 	switch v {
@@ -108,12 +108,17 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 	// Try connecting. disallowQueries can change the state to ABORT during this time.
 	waitTime := time.Second
 	for {
-		c, err := mysql.Connect(dbconfig.MysqlParams())
+		params, err := dbconfigs.MysqlParams(&dbconfig.ConnectionParams)
 		if err == nil {
-			c.Close()
-			break
+			c, err := mysql.Connect(params)
+			if err == nil {
+				c.Close()
+				break
+			}
+			log.Errorf("mysql.Connect() error: %v", err)
+		} else {
+			log.Errorf("dbconfigs.MysqlParams error: %v", err)
 		}
-		log.Errorf("%v", err)
 		time.Sleep(waitTime)
 		// Cap at 32 seconds
 		if waitTime < 30*time.Second {
@@ -146,7 +151,7 @@ func (sq *SqlQuery) allowQueries(dbconfig dbconfigs.DBConfig, schemaOverrides []
 		sq.setState(SERVING)
 	}()
 
-	sq.qe.Open(dbconfig, schemaOverrides, qrs)
+	sq.qe.Open(&dbconfig.ConnectionParams, schemaOverrides, qrs)
 	sq.dbconfig = dbconfig
 	sq.sessionId = Rand()
 	log.Infof("Session id: %d", sq.sessionId)
@@ -173,7 +178,7 @@ func (sq *SqlQuery) disallowQueries() {
 	log.Infof("Stopping query service: %d", sq.sessionId)
 	sq.qe.Close()
 	sq.sessionId = 0
-	sq.dbconfig = dbconfigs.DBConfig{}
+	sq.dbconfig = &dbconfigs.DBConfig{}
 }
 
 // checkState checks if we can serve queries. If not, it causes an

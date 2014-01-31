@@ -11,7 +11,6 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
-	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/servenv"
 	ts "github.com/youtube/vitess/go/vt/tabletserver"
@@ -22,22 +21,19 @@ var (
 	overridesFile = flag.String("schema-override", "", "schema overrides file")
 )
 
-var DefaultDBConfig = dbconfigs.DBConfig{
-	ConnectionParams: mysql.ConnectionParams{
-		Host:    "localhost",
-		Uname:   "vt_app",
-		Charset: "utf8",
-	},
-}
-
 var schemaOverrides []ts.SchemaOverride
 
 func main() {
-	dbconfigs.RegisterAppFlags(DefaultDBConfig)
+	defaultDBConfig := dbconfigs.DefaultDBConfigs.App
+	defaultDBConfig.Host = "localhost"
+	dbconfigs.RegisterAppFlags(defaultDBConfig)
 	flag.Parse()
 	servenv.Init()
 
-	dbConfigs, _ := dbconfigs.Init("")
+	dbConfig, err := dbconfigs.InitApp("")
+	if err != nil {
+		log.Fatalf("Cannot initialize App dbconfig: %v", err)
+	}
 
 	unmarshalFile(*overridesFile, &schemaOverrides)
 	data, _ := json.MarshalIndent(schemaOverrides, "", "  ")
@@ -45,7 +41,7 @@ func main() {
 
 	ts.InitQueryService()
 
-	ts.AllowQueries(dbConfigs.App, schemaOverrides, ts.LoadCustomRules())
+	ts.AllowQueries(dbConfig, schemaOverrides, ts.LoadCustomRules())
 
 	log.Infof("starting vtocc %v", *port)
 	servenv.OnClose(func() {

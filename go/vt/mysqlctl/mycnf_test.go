@@ -9,6 +9,7 @@ import (
 	"path"
 	"testing"
 
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/env"
 )
 
@@ -19,7 +20,9 @@ func TestMycnf(t *testing.T) {
 	vtRepl.StartKey = ""
 	vtRepl.EndKey = ""
 
-	tablet0 := NewMysqld(NewMycnf(0, 6802, vtRepl), DefaultDbaParams, DefaultReplParams)
+	dbaConfig := dbconfigs.DefaultDBConfigs.Dba
+	replConfig := dbconfigs.DefaultDBConfigs.Repl
+	tablet0 := NewMysqld(NewMycnf(0, 6802, vtRepl), &dbaConfig, &replConfig)
 	root, err := env.VtRoot()
 	if err != nil {
 		t.Errorf("err: %v", err)

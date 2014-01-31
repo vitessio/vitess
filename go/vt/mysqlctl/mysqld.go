@@ -25,6 +25,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	"github.com/youtube/vitess/go/netutil"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	vtenv "github.com/youtube/vitess/go/vt/env"
 	"github.com/youtube/vitess/go/vt/hook"
 )
@@ -33,46 +34,33 @@ const (
 	MysqlWaitTime = 120 * time.Second // default number of seconds to wait
 )
 
-type CreateConnection func() (*mysql.Connection, error)
-
-var DefaultDbaParams = mysql.ConnectionParams{
-	Uname:   "vt_dba",
-	Charset: "utf8",
-}
-
-var DefaultReplParams = mysql.ConnectionParams{
-	Uname:   "vt_repl",
-	Charset: "utf8",
-}
-
 type Mysqld struct {
-	config           *Mycnf
-	dbaParams        mysql.ConnectionParams
-	replParams       mysql.ConnectionParams
-	createConnection CreateConnection
-	TabletDir        string
-	SnapshotDir      string
+	config      *Mycnf
+	dbaParams   *mysql.ConnectionParams
+	replParams  *mysql.ConnectionParams
+	TabletDir   string
+	SnapshotDir string
 }
 
-func NewMysqld(config *Mycnf, dba, repl mysql.ConnectionParams) *Mysqld {
-	if dba == DefaultDbaParams {
+func NewMysqld(config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
+	if *dba == dbconfigs.DefaultDBConfigs.Dba {
 		dba.UnixSocket = config.SocketFile
 	}
 
-	// the super connection is not linked to a specific database
-	// (allows us to create them)
-	superParams := dba
-	superParams.DbName = ""
-	createSuperConnection := func() (*mysql.Connection, error) {
-		return mysql.Connect(superParams)
-	}
 	return &Mysqld{config,
 		dba,
 		repl,
-		createSuperConnection,
 		TabletDir(config.ServerId),
 		SnapshotDir(config.ServerId),
 	}
+}
+
+func (mt *Mysqld) createDbaConnection() (*mysql.Connection, error) {
+	params, err := dbconfigs.MysqlParams(mt.dbaParams)
+	if err != nil {
+		return nil, err
+	}
+	return mysql.Connect(params)
 }
 
 func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
@@ -123,7 +111,7 @@ func Start(mt *Mysqld, mysqlWaitTime time.Duration) error {
 		_, statErr := os.Stat(mt.config.SocketFile)
 		if statErr == nil {
 			// Make sure the socket file isn't stale.
-			conn, connErr := mt.createConnection()
+			conn, connErr := mt.createDbaConnection()
 			if connErr == nil {
 				conn.Close()
 				return nil

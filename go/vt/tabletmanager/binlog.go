@@ -215,7 +215,7 @@ func (bpc *BinlogPlayerController) BlpPosition(vtClient *binlogplayer.DBClient) 
 type BinlogPlayerMap struct {
 	// Immutable, set at construction time
 	ts       topo.Server
-	dbConfig mysql.ConnectionParams
+	dbConfig *mysql.ConnectionParams
 	mysqld   *mysqlctl.Mysqld
 
 	// This mutex protects the map and the state
@@ -229,7 +229,7 @@ const (
 	BPM_STATE_STOPPED
 )
 
-func NewBinlogPlayerMap(ts topo.Server, dbConfig mysql.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
+func NewBinlogPlayerMap(ts topo.Server, dbConfig *mysql.ConnectionParams, mysqld *mysqlctl.Mysqld) *BinlogPlayerMap {
 	return &BinlogPlayerMap{
 		ts:       ts,
 		dbConfig: dbConfig,
@@ -258,7 +258,7 @@ func (blm *BinlogPlayerMap) addPlayer(cell string, keyRange key.KeyRange, source
 		return
 	}
 
-	bpc = NewBinlogPlayerController(blm.ts, &blm.dbConfig, blm.mysqld, cell, keyRange, sourceShard)
+	bpc = NewBinlogPlayerController(blm.ts, blm.dbConfig, blm.mysqld, cell, keyRange, sourceShard)
 	blm.players[sourceShard.Uid] = bpc
 	if blm.state == BPM_STATE_RUNNING {
 		bpc.Start()
@@ -367,7 +367,7 @@ func (blm *BinlogPlayerMap) Start() {
 // BlpPositionList returns the current position of all the players
 func (blm *BinlogPlayerMap) BlpPositionList() (*myproto.BlpPositionList, error) {
 	// create a db connection for this purpose
-	vtClient := binlogplayer.NewDbClient(&blm.dbConfig)
+	vtClient := binlogplayer.NewDbClient(blm.dbConfig)
 	if err := vtClient.Connect(); err != nil {
 		return nil, fmt.Errorf("can't connect to database: %v", err)
 	}

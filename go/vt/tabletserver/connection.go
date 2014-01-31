@@ -12,6 +12,7 @@ import (
 	"github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
 var mysqlStats *stats.Timings
@@ -130,12 +131,16 @@ func (conn *DBConnection) VerifyStrict() bool {
 	return strings.Contains(qr.Rows[0][0].String(), "STRICT_TRANS_TABLES")
 }
 
-func CreateGenericConnection(info mysql.ConnectionParams) (*DBConnection, error) {
-	c, err := mysql.Connect(info)
+func CreateGenericConnection(info *mysql.ConnectionParams) (*DBConnection, error) {
+	params, err := dbconfigs.MysqlParams(info)
+	if err != nil {
+		return nil, err
+	}
+	c, err := mysql.Connect(params)
 	return &DBConnection{c}, err
 }
 
-func GenericConnectionCreator(info mysql.ConnectionParams) CreateConnectionFunc {
+func GenericConnectionCreator(info *mysql.ConnectionParams) CreateConnectionFunc {
 	return func() (connection *DBConnection, err error) {
 		return CreateGenericConnection(info)
 	}

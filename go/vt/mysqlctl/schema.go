@@ -99,7 +99,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables []string, includeViews boo
 
 // GetColumns returns the columns of table.
 func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.createConnection()
+	conn, err := mysqld.createDbaConnection()
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
 
 // GetPrimaryKeyColumns returns the primary key columns of table.
 func (mysqld *Mysqld) GetPrimaryKeyColumns(dbName, table string) ([]string, error) {
-	conn, err := mysqld.createConnection()
+	conn, err := mysqld.createDbaConnection()
 	if err != nil {
 		return nil, err
 	}

@@ -39,14 +39,14 @@ func loadSchemaOverrides(overridesFile string) []ts.SchemaOverride {
 // InitAgent initializes the agent within vttablet.
 func InitAgent(
 	tabletAlias topo.TabletAlias,
-	dbcfgs dbconfigs.DBConfigs,
+	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, securePort int,
 	overridesFile string) (agent *tabletmanager.ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
-	mysqld := mysqlctl.NewMysqld(mycnf, dbcfgs.Dba, dbcfgs.Repl)
+	mysqld := mysqlctl.NewMysqld(mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 
 	statsType := stats.NewString("TabletType")
 	statsKeyspace := stats.NewString("TabletKeyspace")
@@ -60,7 +60,7 @@ func InitAgent(
 	}
 
 	// Start the binlog player services, not playing at start.
-	agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(topoServer, dbcfgs.App.MysqlParams(), mysqld)
+	agent.BinlogPlayerMap = tabletmanager.NewBinlogPlayerMap(topoServer, &dbcfgs.App.ConnectionParams, mysqld)
 	tabletmanager.RegisterBinlogPlayerMap(agent.BinlogPlayerMap)
 
 	// Action agent listens to changes in zookeeper and makes
@@ -101,7 +101,7 @@ func InitAgent(
 					qrs.Add(qr)
 				}
 			}
-			ts.AllowQueries(dbcfgs.App, schemaOverrides, qrs)
+			ts.AllowQueries(&dbcfgs.App, schemaOverrides, qrs)
 			// Disable before enabling to force existing streams to stop.
 			binlog.DisableUpdateStreamService()
 			binlog.EnableUpdateStreamService(dbcfgs)

@@ -10,6 +10,7 @@ import (
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/mysql"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 )
 
 // DBClient is a real VtClient backed by a mysql connection
@@ -18,10 +19,10 @@ type DBClient struct {
 	dbConn   *mysql.Connection
 }
 
-func NewDbClient(dbConfig *mysql.ConnectionParams) *DBClient {
-	dbClient := &DBClient{}
-	dbClient.dbConfig = dbConfig
-	return dbClient
+func NewDbClient(params *mysql.ConnectionParams) *DBClient {
+	return &DBClient{
+		dbConfig: params,
+	}
 }
 
 func (dc *DBClient) handleError(err error) {
@@ -37,8 +38,11 @@ func (dc *DBClient) handleError(err error) {
 }
 
 func (dc *DBClient) Connect() error {
-	var err error
-	dc.dbConn, err = mysql.Connect(*dc.dbConfig)
+	params, err := dbconfigs.MysqlParams(dc.dbConfig)
+	if err != nil {
+		return err
+	}
+	dc.dbConn, err = mysql.Connect(params)
 	if err != nil {
 		return fmt.Errorf("error in connecting to mysql db, err %v", err)
 	}

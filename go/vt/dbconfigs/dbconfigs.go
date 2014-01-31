@@ -17,13 +17,27 @@ import (
 
 // Offer a default config.
 var DefaultDBConfigs = DBConfigs{
-	App:  DBConfig{ConnectionParams: mysql.ConnectionParams{Uname: "vt_app", Charset: "utf8"}},
-	Dba:  mysql.ConnectionParams{Uname: "vt_dba", Charset: "utf8"},
-	Repl: mysql.ConnectionParams{Uname: "vt_repl", Charset: "utf8"},
+	App: DBConfig{
+		ConnectionParams: mysql.ConnectionParams{
+			Uname:   "vt_app",
+			Charset: "utf8",
+		},
+	},
+	Dba: mysql.ConnectionParams{
+		Uname:   "vt_dba",
+		Charset: "utf8",
+	},
+	Repl: mysql.ConnectionParams{
+		Uname:   "vt_repl",
+		Charset: "utf8",
+	},
 }
 
+// We keep a global singleton for the db configs, and that's the one
+// the flags will change
 var dbConfigs DBConfigs
 
+// The flags will change the global singleton
 func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultParams mysql.ConnectionParams) {
 	flag.StringVar(&connParams.Host, "db-config-"+name+"-host", defaultParams.Host, "db "+name+" connection host")
 	flag.IntVar(&connParams.Port, "db-config-"+name+"-port", defaultParams.Port, "db "+name+" connection port")
@@ -40,25 +54,63 @@ func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultP
 
 }
 
+// vtocc will only register the app flags, it doesn't do any dba or repl
+// access.
 func RegisterAppFlags(defaultDBConfig DBConfig) {
-	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", defaultDBConfig.MysqlParams())
+	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", defaultDBConfig.ConnectionParams)
 	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", defaultDBConfig.Keyspace, "db app connection keyspace")
 	flag.StringVar(&dbConfigs.App.Shard, "db-config-app-shard", defaultDBConfig.Shard, "db app connection shard")
 }
 
+// vttablet will register client, dba and repl.
 func RegisterCommonFlags() {
 	registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
 	registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
 	RegisterAppFlags(DefaultDBConfigs.App)
 }
 
+// InitConnectionParams may overwrite the socket file,
+// and refresh the password to check that works.
+func InitConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
+	if socketFile != "" {
+		cp.UnixSocket = socketFile
+	}
+	params := *cp
+	return refreshPassword(&params)
+}
+
+// refreshPassword uses the CredentialServer to refresh the password
+// to use.
+func refreshPassword(params *mysql.ConnectionParams) error {
+	user, passwd, err := GetCredentialsServer().GetPassword(params.Uname)
+	switch err {
+	case nil:
+		params.Uname = user
+		params.Pass = passwd
+	case ErrUnknownUser:
+	default:
+		return err
+	}
+	return nil
+}
+
+// returns a copy of our ConnectionParams that we can use to connect,
+// after going through the CredentialsServer.
+func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
+	params := *cp
+	err := refreshPassword(&params)
+	return params, err
+}
+
+// DBConfig encapsulates a ConnectionParams object and adds a keyspace and a
+// shard.
 type DBConfig struct {
 	mysql.ConnectionParams
 	Keyspace string `json:"keyspace"`
 	Shard    string `json:"shard"`
 }
 
-func (d DBConfig) String() string {
+func (d *DBConfig) String() string {
 	data, err := json.MarshalIndent(d, "", " ")
 	if err != nil {
 		return err.Error()
@@ -66,22 +118,20 @@ func (d DBConfig) String() string {
 	return string(data)
 }
 
-func (d DBConfig) Redacted() DBConfig {
-	d.Pass = "****"
-	return d
-}
-
-func (d DBConfig) MysqlParams() mysql.ConnectionParams {
-	return d.ConnectionParams
-}
-
+// DBConfigs is all we need for a smart tablet server:
+// - DBConfig for the query engine, running for the specified keyspace / shard
+// - Dba access for any dba-type operation (db creation, replication, ...)
+// - Replication access to change master
 type DBConfigs struct {
 	App  DBConfig               `json:"app"`
 	Dba  mysql.ConnectionParams `json:"dba"`
 	Repl mysql.ConnectionParams `json:"repl"`
 }
 
-func (dbcfgs DBConfigs) String() string {
+func (dbcfgs *DBConfigs) String() string {
+	if dbcfgs.App.ConnectionParams.Pass != "****" {
+		panic("Cannot log a non-redacted DBConfig")
+	}
 	data, err := json.MarshalIndent(dbcfgs, "", "  ")
 	if err != nil {
 		return err.Error()
@@ -89,45 +139,43 @@ func (dbcfgs DBConfigs) String() string {
 	return string(data)
 }
 
-func (dbcfgs DBConfigs) Redacted() DBConfigs {
-	dbcfgs.App = dbcfgs.App.Redacted()
-	dbcfgs.Dba = dbcfgs.Dba.Redacted()
-	dbcfgs.Repl = dbcfgs.Repl.Redacted()
-	return dbcfgs
+// This will remove the password, so the object can be logged
+func (dbcfgs *DBConfigs) Redact() {
+	dbcfgs.App.ConnectionParams.Redact()
+	dbcfgs.Dba.Redact()
+	dbcfgs.Repl.Redact()
 }
 
-func Init(socketFile string) (DBConfigs, error) {
-	passwd, err := GetCredentialsServer().GetPassword(dbConfigs.App.Uname)
-	switch err {
-	case nil:
-		dbConfigs.App.Pass = passwd
-	case ErrUnknownUser:
-	default:
-		return dbConfigs, err
+// Initialize only the app side of the db configs (for vtocc)
+func InitApp(socketFile string) (*DBConfig, error) {
+	if err := InitConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
+		return nil, err
 	}
-	passwd, err = GetCredentialsServer().GetPassword(dbConfigs.Dba.Uname)
-	switch err {
-	case nil:
-		dbConfigs.Dba.Pass = passwd
-	case ErrUnknownUser:
-	default:
-		return dbConfigs, err
+	return &dbConfigs.App, nil
+}
+
+// Initialize app, dba and repl configs
+func Init(socketFile string) (*DBConfigs, error) {
+	if _, err := InitApp(socketFile); err != nil {
+		return nil, err
 	}
-	passwd, err = GetCredentialsServer().GetPassword(dbConfigs.Repl.Uname)
-	switch err {
-	case nil:
-		dbConfigs.Repl.Pass = passwd
-	case ErrUnknownUser:
-	default:
-		return dbConfigs, err
+
+	// init configs
+	if err := InitConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
+		return nil, err
 	}
-	if socketFile != "" {
-		dbConfigs.App.UnixSocket = socketFile
-		dbConfigs.Dba.UnixSocket = socketFile
-		dbConfigs.Repl.UnixSocket = socketFile
+	if err := InitConnectionParams(&dbConfigs.Repl, socketFile); err != nil {
+		return nil, err
 	}
-	log.Infof("DBConfigs: %s\n", dbConfigs.Redacted())
-	return dbConfigs, nil
+
+	// the Dba connection is not linked to a specific database
+	// (allows us to create them)
+	dbConfigs.Dba.DbName = ""
+
+	toLog := dbConfigs
+	toLog.Redact()
+	log.Infof("DBConfigs: %s\n", toLog)
+	return &dbConfigs, nil
 }
 
 func GetSubprocessFlags() []string {

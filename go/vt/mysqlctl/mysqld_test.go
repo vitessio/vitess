@@ -5,6 +5,7 @@
 package mysqlctl
 
 import (
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"testing"
 )
 
@@ -13,9 +14,14 @@ import (
 
 func TestStartShutdown(t *testing.T) {
 	mycnf0 := NewMycnf(0, 3700, VtReplParams{})
+	dbaConfig0 := dbconfigs.DefaultDBConfigs.Dba
+	replConfig0 := dbconfigs.DefaultDBConfigs.Repl
+	tablet0 := NewMysqld(mycnf0, &dbaConfig0, &replConfig0)
+
 	mycnf1 := NewMycnf(1, 3701, VtReplParams{})
-	tablet0 := NewMysqld(mycnf0, DefaultDbaParams, DefaultReplParams)
-	tablet1 := NewMysqld(mycnf1, DefaultDbaParams, DefaultReplParams)
+	dbaConfig1 := dbconfigs.DefaultDBConfigs.Dba
+	replConfig1 := dbconfigs.DefaultDBConfigs.Repl
+	tablet1 := NewMysqld(mycnf1, &dbaConfig1, &replConfig1)
 	var err error
 
 	err = Init(tablet0, MysqlWaitTime)

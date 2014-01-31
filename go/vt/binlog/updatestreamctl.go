@@ -119,7 +119,7 @@ func logError() {
 	}
 }
 
-func EnableUpdateStreamService(dbcfgs dbconfigs.DBConfigs) {
+func EnableUpdateStreamService(dbcfgs *dbconfigs.DBConfigs) {
 	defer logError()
 	UpdateStreamRpcService.enable(dbcfgs)
 }
@@ -141,7 +141,7 @@ func GetReplicationPosition() (int64, error) {
 	return UpdateStreamRpcService.getReplicationPosition()
 }
 
-func (updateStream *UpdateStream) enable(dbcfgs dbconfigs.DBConfigs) {
+func (updateStream *UpdateStream) enable(dbcfgs *dbconfigs.DBConfigs) {
 	updateStream.actionLock.Lock()
 	defer updateStream.actionLock.Unlock()
 	if updateStream.isEnabled() {
@@ -164,7 +164,7 @@ func (updateStream *UpdateStream) enable(dbcfgs dbconfigs.DBConfigs) {
 	}
 
 	updateStream.state.Set(ENABLED)
-	updateStream.mysqld = mysqlctl.NewMysqld(updateStream.mycnf, dbcfgs.Dba, dbcfgs.Repl)
+	updateStream.mysqld = mysqlctl.NewMysqld(updateStream.mycnf, &dbcfgs.Dba, &dbcfgs.Repl)
 	updateStream.dbname = dbcfgs.App.DbName
 	updateStream.streams.Init()
 	log.Infof("Enabling update stream, dbname: %s, binlogpath: %s", updateStream.dbname, updateStream.mycnf.BinLogPath)

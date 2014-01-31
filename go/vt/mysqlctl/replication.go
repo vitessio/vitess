@@ -22,6 +22,7 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/dbconfigs"
 	"github.com/youtube/vitess/go/vt/hook"
 	"github.com/youtube/vitess/go/vt/mysqlctl/proto"
 )
@@ -40,6 +41,9 @@ var changeMasterCmd = `CHANGE MASTER TO
   MASTER_CONNECT_RETRY = {{.ReplicationState.MasterConnectRetry}}
 `
 
+var masterPasswordStart = "  MASTER_PASSWORD = '"
+var masterPasswordEnd = "',\n"
+
 type newMasterData struct {
 	ReplicationState *proto.ReplicationState
 	MasterUser       string
@@ -47,25 +51,33 @@ type newMasterData struct {
 }
 
 func StartReplicationCommands(mysqld *Mysqld, replState *proto.ReplicationState) ([]string, error) {
-	nmd := &newMasterData{ReplicationState: replState, MasterUser: mysqld.replParams.Uname, MasterPassword: mysqld.replParams.Pass}
+	params, err := dbconfigs.MysqlParams(mysqld.replParams)
+	if err != nil {
+		return nil, err
+	}
+	nmd := &newMasterData{
+		ReplicationState: replState,
+		MasterUser:       params.Uname,
+		MasterPassword:   params.Pass,
+	}
 	cmc, err := fillStringTemplate(changeMasterCmd, nmd)
 	if err != nil {
 		return nil, err
 	}
-	if mysqld.replParams.SslEnabled() {
+	if params.SslEnabled() {
 		cmc += ",\n  MASTER_SSL = 1"
 	}
-	if mysqld.replParams.SslCa != "" {
-		cmc += ",\n  MASTER_SSL_CA = '" + mysqld.replParams.SslCa + "'"
+	if params.SslCa != "" {
+		cmc += ",\n  MASTER_SSL_CA = '" + params.SslCa + "'"
 	}
-	if mysqld.replParams.SslCaPath != "" {
-		cmc += ",\n  MASTER_SSL_CAPATH = '" + mysqld.replParams.SslCaPath + "'"
+	if params.SslCaPath != "" {
+		cmc += ",\n  MASTER_SSL_CAPATH = '" + params.SslCaPath + "'"
 	}
-	if mysqld.replParams.SslCert != "" {
-		cmc += ",\n  MASTER_SSL_CERT = '" + mysqld.replParams.SslCert + "'"
+	if params.SslCert != "" {
+		cmc += ",\n  MASTER_SSL_CERT = '" + params.SslCert + "'"
 	}
-	if mysqld.replParams.SslKey != "" {
-		cmc += ",\n  MASTER_SSL_KEY = '" + mysqld.replParams.SslKey + "'"
+	if params.SslKey != "" {
+		cmc += ",\n  MASTER_SSL_KEY = '" + params.SslKey + "'"
 	}
 
 	return []string{
@@ -519,7 +531,7 @@ func (mysqld *Mysqld) executeSuperQuery(query string) error {
 // FIXME(msolomon) should there be a query lock so we only
 // run one admin action at a time?
 func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error) {
-	conn, connErr := mysqld.createConnection()
+	conn, connErr := mysqld.createDbaConnection()
 	if connErr != nil {
 		return nil, connErr
 	}
@@ -532,17 +544,28 @@ func (mysqld *Mysqld) fetchSuperQuery(query string) (*mproto.QueryResult, error)
 	return qr, nil
 }
 
+func redactMasterPassword(input string) string {
+	i := strings.Index(input, masterPasswordStart)
+	if i == -1 {
+		return input
+	}
+	j := strings.Index(input[i+len(masterPasswordStart):], masterPasswordEnd)
+	if j == -1 {
+		return input
+	}
+	return input[:i+len(masterPasswordStart)] + strings.Repeat("*", j) + input[i+len(masterPasswordStart)+j:]
+}
+
 func (mysqld *Mysqld) executeSuperQueryList(queryList []string) error {
-	conn, connErr := mysqld.createConnection()
+	conn, connErr := mysqld.createDbaConnection()
 	if connErr != nil {
 		return connErr
 	}
 	defer conn.Close()
 	for _, query := range queryList {
-		toLog := strings.Replace(query, mysqld.replParams.Pass, strings.Repeat("*", len(mysqld.replParams.Pass)), -1)
-		log.Infof("exec %v", toLog)
+		log.Infof("exec %v", redactMasterPassword(query))
 		if _, err := conn.ExecuteFetch(query, 10000, false); err != nil {
-			return fmt.Errorf("ExecuteFetch(%v) failed: %v", query, err.Error())
+			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), err.Error())
 		}
 	}
 	return nil
@@ -587,11 +610,11 @@ const (
 )
 
 const (
+	// this is the command used by mysql slaves
 	binlogDumpCommand = "Binlog Dump"
 )
 
 // Get IP addresses for all currently connected slaves.
-// FIXME(msolomon) use command instead of user to find "rogue" slaves?
 func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	qr, err := mysqld.fetchSuperQuery("SHOW PROCESSLIST")
 	if err != nil {
@@ -599,7 +622,7 @@ func (mysqld *Mysqld) FindSlaves() ([]string, error) {
 	}
 	addrs := make([]string, 0, 32)
 	for _, row := range qr.Rows {
-		if row[colUsername].String() == mysqld.replParams.Uname {
+		if row[colCommand].String() == binlogDumpCommand {
 			host, _, err := net.SplitHostPort(row[colClientAddr].String())
 			if err != nil {
 				return nil, fmt.Errorf("FindSlaves: malformed addr %v", err)

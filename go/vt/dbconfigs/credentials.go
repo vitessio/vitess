@@ -12,6 +12,7 @@ package dbconfigs
 import (
 	"errors"
 	"flag"
+	"sync"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/jscfg"
@@ -30,9 +31,12 @@ var (
 
 // CredentialsServer is the interface for a credential server
 type CredentialsServer interface {
-	// GetPassword returns the password for a given user. May
-	// return ErrUnknownUser.
-	GetPassword(user string) (string, error)
+	// GetPassword returns the user / password to use for a given
+	// user. May return ErrUnknownUser. The user might be altered
+	// to support versioned users.
+	// Note this call needs to be thread safe, as we may call this from
+	// multiple go routines.
+	GetPassword(user string) (string, string, error)
 
 	// GetSubprocessFlags returns the flags to send to a subprocess
 	// to initialize the exact same CredentialsServer
@@ -66,30 +70,33 @@ func getCredentialsServerSubprocessFlags() []string {
 }
 
 // FileCredentialsServer is a simple implementation of CredentialsServer using
-// a json file.
+// a json file. Protected by mu.
 type FileCredentialsServer struct {
+	mu            sync.Mutex
 	dbCredentials map[string][]string
 }
 
-func (fcs *FileCredentialsServer) GetPassword(user string) (string, error) {
+func (fcs *FileCredentialsServer) GetPassword(user string) (string, string, error) {
+	fcs.mu.Lock()
+	defer fcs.mu.Unlock()
+
 	if *dbCredentialsFile == "" {
-		return "", ErrUnknownUser
+		return "", "", ErrUnknownUser
 	}
 
 	// read the json file only once
 	if fcs.dbCredentials == nil {
-		dbCredentials := make(map[string][]string)
-		if err := jscfg.ReadJson(*dbCredentialsFile, &dbCredentials); err != nil {
+		fcs.dbCredentials = make(map[string][]string)
+		if err := jscfg.ReadJson(*dbCredentialsFile, &fcs.dbCredentials); err != nil {
 			log.Warningf("Failed to read dbCredentials file: %v", *dbCredentialsFile)
-			return "", err
+			return "", "", err
 		}
-		fcs.dbCredentials = dbCredentials
 	}
 
 	if passwd, ok := fcs.dbCredentials[user]; !ok {
-		return "", ErrUnknownUser
+		return "", "", ErrUnknownUser
 	} else {
-		return passwd[0], nil
+		return user, passwd[0], nil
 	}
 }
 
