@@ -127,7 +127,7 @@ func (sdc *ShardConn) Close() {
 	sdc.conn = nil
 }
 
-// withRetry sets up the connection and exexutes the action. If there are connection errors,
+// withRetry sets up the connection and executes the action. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
 func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn.TabletConn) error, transactionId int64) error {

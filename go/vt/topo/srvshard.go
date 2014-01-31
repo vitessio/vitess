@@ -129,7 +129,7 @@ func (ss *SrvShard) ShardName() string {
 	if !ss.KeyRange.IsPartial() {
 		return SHARD_ZERO
 	}
-	return fmt.Sprintf("%v-%v", ss.KeyRange.Start, ss.KeyRange.End)
+	return fmt.Sprintf("%v-%v", string(ss.KeyRange.Start.Hex()), string(ss.KeyRange.End.Hex()))
 }
 
 // KeyspacePartition represents a continuous set of shards to

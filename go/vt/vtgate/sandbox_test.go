@@ -68,37 +68,40 @@ func resetSandbox() {
 type sandboxTopo struct {
 }
 
-var ShardedKrArray = []key.KeyRange{
-	{Start: "", End: "20"},
-	{Start: "20", End: "40"},
-	{Start: "40", End: "60"},
-	{Start: "60", End: "80"},
-	{Start: "80", End: "a0"},
-	{Start: "a0", End: "c0"},
-	{Start: "c0", End: "e0"},
-	{Start: "e0", End: ""},
-}
+var ShardSpec = "-20-40-60-80-a0-c0-e0-"
+var ShardedKrArray key.KeyRangeArray
 
-func getAllShardNames() []string {
-	shardNames := make([]string, 0, len(ShardedKrArray))
-	for _, kr := range ShardedKrArray {
-		shardNames = append(shardNames, fmt.Sprintf("%v-%v", kr.Start, kr.End))
+func getAllShards() (key.KeyRangeArray, error) {
+	if ShardedKrArray != nil {
+		return ShardedKrArray, nil
 	}
-	return shardNames
+	ShardedKrArray, err := key.ParseShardingSpec(ShardSpec)
+	if err != nil {
+		return nil, err
+	}
+	return ShardedKrArray, nil
 }
 
-func getUidForShard(shard string) (int, error) {
+func getKeyRangeName(kr key.KeyRange) string {
+	return fmt.Sprintf("%v-%v", string(kr.Start.Hex()), string(kr.End.Hex()))
+}
+
+func getUidForShard(shardName string) (int, error) {
 	// Try simple unsharded case first
-	uid, err := strconv.Atoi(shard)
+	uid, err := strconv.Atoi(shardName)
 	if err == nil {
 		return uid, nil
 	}
-	for i, sn := range getAllShardNames() {
-		if shard == sn {
+	shards, err := getAllShards()
+	if err != nil {
+		return 0, fmt.Errorf("shard not found %v", shardName)
+	}
+	for i, s := range shards {
+		if shardName == getKeyRangeName(s) {
 			return i, nil
 		}
 	}
-	return 0, fmt.Errorf("shard not found %v", shard)
+	return 0, fmt.Errorf("shard not found %v", shardName)
 }
 
 func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
@@ -106,10 +109,14 @@ func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
 }
 
 func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
-	shards := make([]topo.SrvShard, 0, len(ShardedKrArray))
-	for i := 0; i < len(ShardedKrArray); i++ {
+	shardKrArray, err := getAllShards()
+	if err != nil {
+		return nil, err
+	}
+	shards := make([]topo.SrvShard, 0, len(shardKrArray))
+	for i := 0; i < len(shardKrArray); i++ {
 		shard := topo.SrvShard{
-			KeyRange:    ShardedKrArray[i],
+			KeyRange:    shardKrArray[i],
 			ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
 			TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
 		}

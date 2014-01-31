@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/topo"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
@@ -121,7 +120,7 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 	mapTestConn("-20", sbc)
 	sq := proto.StreamQueryKeyRange{
 		Sql:        "query",
-		KeyRange:   key.KeyRange{Start: "", End: "20"},
+		KeyRange:   "-20",
 		TabletType: topo.TYPE_MASTER,
 	}
 	// Test for successful execution
@@ -165,7 +164,7 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 	}
 
 	// Test for error condition - multiple shards
-	sq.KeyRange = key.KeyRange{Start: "10", End: "40"}
+	sq.KeyRange = "10-40"
 	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
 		qrs = append(qrs, r.(*proto.QueryResult))
 		return nil
@@ -174,7 +173,7 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 		t.Errorf("want not nil, got %v", err)
 	}
 	// Test for error condition - multiple shards, non-partial keyspace
-	sq.KeyRange = key.KeyRange{Start: "", End: ""}
+	sq.KeyRange = ""
 	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
 		qrs = append(qrs, r.(*proto.QueryResult))
 		return nil

@@ -83,11 +83,22 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 // and one shard since streaming doesn't support merge sorting the results.
 // The input/output api is generic though.
 func (vtg *VTGate) mapKrToShardsForStreaming(streamQuery *proto.StreamQueryKeyRange) ([]string, error) {
+	var keyRange key.KeyRange
+	var err error
+	if streamQuery.KeyRange == "" {
+		keyRange = key.KeyRange{Start: "", End: ""}
+	} else {
+		krArray, err := key.ParseShardingSpec(streamQuery.KeyRange)
+		if err != nil {
+			return nil, err
+		}
+		keyRange = krArray[0]
+	}
 	shards, err := resolveKeyRangeToShards(vtg.scatterConn.toposerv,
 		vtg.scatterConn.cell,
 		streamQuery.Keyspace,
 		streamQuery.TabletType,
-		streamQuery.KeyRange)
+		keyRange)
 	if err != nil {
 		return nil, err
 	}
