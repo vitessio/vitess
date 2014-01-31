@@ -129,7 +129,7 @@ type DBConfigs struct {
 }
 
 func (dbcfgs *DBConfigs) String() string {
-	if dbcfgs.App.ConnectionParams.Pass != "****" {
+	if dbcfgs.App.ConnectionParams.Pass != mysql.REDACTED_PASSWORD {
 		panic("Cannot log a non-redacted DBConfig")
 	}
 	data, err := json.MarshalIndent(dbcfgs, "", "  ")
