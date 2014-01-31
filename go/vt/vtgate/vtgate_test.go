@@ -165,8 +165,8 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 
 	// Test for error condition - multiple shards
 	sq.KeyRange = "10-40"
-	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
-		qrs = append(qrs, r.(*proto.QueryResult))
+	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r *proto.QueryResult) error {
+		qrs = append(qrs, r)
 		return nil
 	})
 	if err == nil {
@@ -174,8 +174,8 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 	}
 	// Test for error condition - multiple shards, non-partial keyspace
 	sq.KeyRange = ""
-	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r interface{}) error {
-		qrs = append(qrs, r.(*proto.QueryResult))
+	err = RpcVTGate.StreamExecuteKeyRange(nil, &sq, func(r *proto.QueryResult) error {
+		qrs = append(qrs, r)
 		return nil
 	})
 	if err == nil {

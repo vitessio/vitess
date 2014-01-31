@@ -189,7 +189,7 @@ func sandboxDialer(context interface{}, endPoint topo.EndPoint, keyspace, shard 
 	return tconn, nil
 }
 
-func mapTestConn(shard string, conn TabletConn) {
+func mapTestConn(shard string, conn tabletconn.TabletConn) {
 	uid, err := getUidForShard(shard)
 	if err != nil {
 		panic(err)

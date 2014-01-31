@@ -12,6 +12,7 @@ import (
 
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
+	"github.com/youtube/vitess/go/vt/key"
 	"github.com/youtube/vitess/go/vt/vtgate/proto"
 )
 
@@ -116,13 +117,13 @@ func (vtg *VTGate) mapKrToShardsForStreaming(streamQuery *proto.StreamQueryKeyRa
 // and one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing. The api supports supplying multiple keyranges
 // to make it future proof.
-func (vtg *VTGate) StreamExecuteKeyRange(context *rpcproto.Context, streamQuery *proto.StreamQueryKeyRange, sendReply func(*proto.QueryResult) error) error {
+func (vtg *VTGate) StreamExecuteKeyRange(context interface{}, streamQuery *proto.StreamQueryKeyRange, sendReply func(*proto.QueryResult) error) error {
 	shards, err := vtg.mapKrToShardsForStreaming(streamQuery)
 	if err != nil {
 		return err
 	}
 
-	err := vtg.scatterConn.StreamExecute(
+	err = vtg.scatterConn.StreamExecute(
 		context,
 		streamQuery.Sql,
 		streamQuery.BindVariables,
