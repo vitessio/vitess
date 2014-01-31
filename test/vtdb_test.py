@@ -180,7 +180,7 @@ def get_replica_connection(shard_index=0, user=None, password=None):
     vtgate_addrs = ["localhost:%s"%(vtgate_port),]
   else:
     raise Exception("Unknown vtgate_protocol %s", vtgate_protocol)
- 
+
 
   vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                         "test_nj", 30.0)
@@ -220,8 +220,8 @@ class TestTabletFunctions(unittest.TestCase):
     try:
       replica_conn = get_replica_connection(shard_index=self.shard_index)
     except Exception, e:
-      logging.debug("Connection to shard0 replica failed with error %s" %
-                    str(e))
+      logging.debug("Connection to %s replica failed with error %s" %
+                    (shard_names[self.shard_index], str(e)))
       raise
     self.assertNotEqual(replica_conn, None)
     if vtgate_protocol == VTGATE_PROTOCOL_TABLET:
@@ -390,12 +390,8 @@ class TestFailures(unittest.TestCase):
     except Exception, e:
       self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
     self.replica_tablet.kill_vttablet()
-    #with self.assertRaises(dbexceptions.OperationalError):
-    try:
+    with self.assertRaises(dbexceptions.OperationalError):
       replica_conn._execute("select 1 from vt_insert_test", {})
-    except Exception, e:
-      logging.debug("Communication with shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e),
-                                                   traceback.print_exc()))
     proc = self.replica_tablet.start_vttablet()
     try:
       results = replica_conn._execute("select 1 from vt_insert_test", {})
@@ -406,12 +402,13 @@ class TestFailures(unittest.TestCase):
     try:
       replica_conn = get_replica_connection(shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard0 replica failed with error %s" % str(e))
+      self.fail("Connection to %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
     stream_cursor = cursor.StreamCursor(replica_conn)
     self.replica_tablet.kill_vttablet()
     with self.assertRaises(dbexceptions.OperationalError):
       stream_cursor.execute("select * from vt_insert_test", {})
     proc = self.replica_tablet.start_vttablet()
+    self.replica_tablet.wait_for_vttablet_state('SERVING')
     try:
       stream_cursor.execute("select * from vt_insert_test", {})
     except Exception, e:
