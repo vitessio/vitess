@@ -138,6 +138,8 @@ def kill_sub_processes():
         logging.debug("kill_sub_processes: %s", str(e))
 
 def kill_sub_process(proc):
+  if proc is None:
+    return
   pid = proc.pid
   proc.kill()
   if pid and pid in pid_map:
@@ -343,6 +345,8 @@ def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, t
   return sp, port
 
 def vtgate_kill(sp):
+  if sp is None:
+    return
   kill_sub_process(sp)
   sp.wait()
 
@@ -483,3 +487,25 @@ def wait_db_read_only(uid):
       logging.warning("wait_db_read_only: %s", str(e))
       time.sleep(1.0)
   raise e
+
+def check_srv_keyspace(cell, keyspace, expected, keyspace_id_type='uint64'):
+  ks = run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
+  result = ""
+  for tablet_type in sorted(ks['TabletTypes']):
+    result += "Partitions(%s):" % tablet_type
+    partition = ks['Partitions'][tablet_type]
+    for shard in partition['Shards']:
+      result = result + " %s-%s" % (shard['KeyRange']['Start'],
+                                    shard['KeyRange']['End'])
+    result += "\n"
+  result += "TabletTypes: " + ",".join(sorted(ks['TabletTypes']))
+  logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
+  if expected != result:
+    raise Exception("Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (
+                   cell, keyspace, expected, result))
+  if 'keyspace_id' != ks.get('ShardingColumnName'):
+    raise Exception("Got wrong ShardingColumnName in SrvKeyspace: %s" %
+                   str(ks))
+  if keyspace_id_type != ks.get('ShardingColumnType'):
+    raise Exception("Got wrong ShardingColumnType in SrvKeyspace: %s" %
+                   str(ks))

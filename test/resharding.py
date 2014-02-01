@@ -415,7 +415,7 @@ primary key (name)
 
     utils.run_vtctl(['RebuildKeyspaceGraph', '-use-served-types', 'test_keyspace'],
                     auto_log=True)
-    self._check_srv_keyspace('test_nj', 'test_keyspace',
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -80 80-\n' +
@@ -501,7 +501,7 @@ primary key (name)
     # now serve rdonly from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'rdonly'],
                     auto_log=True)
-    self._check_srv_keyspace('test_nj', 'test_keyspace',
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-\n' +
@@ -510,7 +510,7 @@ primary key (name)
     # then serve replica from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
-    self._check_srv_keyspace('test_nj', 'test_keyspace',
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
@@ -519,14 +519,14 @@ primary key (name)
     # move replica back and forth
     utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
-    self._check_srv_keyspace('test_nj', 'test_keyspace',
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-\n' +
                              'TabletTypes: master,rdonly,replica')
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
-    self._check_srv_keyspace('test_nj', 'test_keyspace',
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
@@ -567,7 +567,7 @@ primary key (name)
     # then serve master from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'master'],
                     auto_log=True)
-    self._check_srv_keyspace('test_nj', 'test_keyspace',
+    utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-C0 C0-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
@@ -582,28 +582,6 @@ primary key (name)
                          shard_1_slave1, shard_1_slave2, shard_1_rdonly,
                          shard_2_master, shard_2_replica1, shard_2_replica2,
                          shard_3_master, shard_3_replica, shard_3_rdonly])
-
-  def _check_srv_keyspace(self, cell, keyspace, expected):
-    ks = utils.run_vtctl_json(['GetSrvKeyspace', cell, keyspace])
-    result = ""
-    for tablet_type in sorted(ks['Partitions'].keys()):
-      result += "Partitions(%s):" % tablet_type
-      partition = ks['Partitions'][tablet_type]
-      for shard in partition['Shards']:
-        result = result + " %s-%s" % (shard['KeyRange']['Start'],
-                                      shard['KeyRange']['End'])
-      result += "\n"
-    result += "TabletTypes: " + ",".join(sorted(ks['TabletTypes']))
-    logging.debug("Cell %s keyspace %s has data:\n%s", cell, keyspace, result)
-    self.assertEqual(expected, result,
-                     "Mismatch in srv keyspace for cell %s keyspace %s, expected:\n%s\ngot:\n%s" % (
-                     cell, keyspace, expected, result))
-    self.assertEqual('keyspace_id', ks.get('ShardingColumnName'),
-                     "Got wrong ShardingColumnName in SrvKeyspace: %s" %
-                     str(ks))
-    self.assertEqual(keyspace_id_type, ks.get('ShardingColumnType'),
-                     "Got wrong ShardingColumnType in SrvKeyspace: %s" %
-                     str(ks))
 
 if __name__ == '__main__':
   utils.main()

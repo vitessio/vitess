@@ -393,6 +393,78 @@ func TestQueryResultList(t *testing.T) {
 	}
 
 	unexpected, err := bson.Marshal(&badQueryResultList{})
+
+	if err != nil {
+		t.Error(err)
+	}
+	err = bson.Unmarshal(unexpected, &unmarshalled)
+	want = "Unrecognized tag Extra"
+	if err == nil || want != err.Error() {
+		t.Errorf("want %v, got %v", want, err)
+	}
+}
+
+type reflectStreamQueryKeyRange struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyRange      string
+	TabletType    topo.TabletType
+	Session       *Session
+}
+
+type badStreamQueryKeyRange struct {
+	Extra         int
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyRange      string
+	TabletType    topo.TabletType
+	Session       *Session
+}
+
+func TestStreamQueryKeyRange(t *testing.T) {
+	reflected, err := bson.Marshal(&reflectStreamQueryKeyRange{
+		Sql:           "query",
+		BindVariables: map[string]interface{}{"val": int64(1)},
+		Keyspace:      "keyspace",
+		KeyRange:      "10-18",
+		TabletType:    "replica",
+		Session:       &commonSession,
+	})
+
+	if err != nil {
+		t.Error(err)
+	}
+	want := string(reflected)
+
+	custom := StreamQueryKeyRange{
+		Sql:           "query",
+		BindVariables: map[string]interface{}{"val": int64(1)},
+		Keyspace:      "keyspace",
+		KeyRange:      "10-18",
+		TabletType:    "replica",
+		Session:       &commonSession,
+	}
+	encoded, err := bson.Marshal(&custom)
+	if err != nil {
+		t.Error(err)
+	}
+	got := string(encoded)
+	if want != got {
+		t.Errorf("want\n%#v, got\n%#v", want, got)
+	}
+
+	var unmarshalled StreamQueryKeyRange
+	err = bson.Unmarshal(encoded, &unmarshalled)
+	if err != nil {
+		t.Error(err)
+	}
+	if !reflect.DeepEqual(custom, unmarshalled) {
+		t.Errorf("want \n%#v, got \n%#v", custom, unmarshalled)
+	}
+
+	unexpected, err := bson.Marshal(&badStreamQueryKeyRange{})
 	if err != nil {
 		t.Error(err)
 	}

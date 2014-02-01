@@ -72,14 +72,14 @@ func (session *Session) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "InTransaction":
 			session.InTransaction = bson.DecodeBool(buf, kind)
 		case "ShardSessions":
 			session.ShardSessions = decodeShardSessionsBson(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -117,8 +117,8 @@ func (shardSession *ShardSession) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "Keyspace":
 			shardSession.Keyspace = bson.DecodeString(buf, kind)
 		case "Shard":
@@ -128,7 +128,7 @@ func (shardSession *ShardSession) UnmarshalBson(buf *bytes.Buffer) {
 		case "TransactionId":
 			shardSession.TransactionId = bson.DecodeInt64(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -170,8 +170,8 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "Sql":
 			qrs.Sql = bson.DecodeString(buf, kind)
 		case "BindVariables":
@@ -186,7 +186,7 @@ func (qrs *QueryShard) UnmarshalBson(buf *bytes.Buffer) {
 			qrs.Session = new(Session)
 			qrs.Session.UnmarshalBson(buf)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -237,8 +237,8 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "Fields":
 			qr.Fields = mproto.DecodeFieldsBson(buf, kind)
 		case "RowsAffected":
@@ -253,7 +253,7 @@ func (qr *QueryResult) UnmarshalBson(buf *bytes.Buffer) {
 		case "Error":
 			qr.Error = bson.DecodeString(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -293,8 +293,8 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "Queries":
 			bqs.Queries = tproto.DecodeQueriesBson(buf, kind)
 		case "Keyspace":
@@ -307,7 +307,7 @@ func (bqs *BatchQueryShard) UnmarshalBson(buf *bytes.Buffer) {
 			bqs.Session = new(Session)
 			bqs.Session.UnmarshalBson(buf)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -345,8 +345,8 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "List":
 			qrl.List = tproto.DecodeResultsBson(buf, kind)
 		case "Session":
@@ -355,7 +355,61 @@ func (qrl *QueryResultList) UnmarshalBson(buf *bytes.Buffer) {
 		case "Error":
 			qrl.Error = bson.DecodeString(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
+		}
+		kind = bson.NextByte(buf)
+	}
+}
+
+type StreamQueryKeyRange struct {
+	Sql           string
+	BindVariables map[string]interface{}
+	Keyspace      string
+	KeyRange      string
+	TabletType    topo.TabletType
+	Session       *Session
+}
+
+func (sqs *StreamQueryKeyRange) MarshalBson(buf *bytes2.ChunkedWriter) {
+	lenWriter := bson.NewLenWriter(buf)
+
+	bson.EncodeString(buf, "Sql", sqs.Sql)
+	tproto.EncodeBindVariablesBson(buf, "BindVariables", sqs.BindVariables)
+	bson.EncodeString(buf, "Keyspace", sqs.Keyspace)
+	bson.EncodeString(buf, "KeyRange", sqs.KeyRange)
+	bson.EncodeString(buf, "TabletType", string(sqs.TabletType))
+
+	if sqs.Session != nil {
+		bson.EncodePrefix(buf, bson.Object, "Session")
+		sqs.Session.MarshalBson(buf)
+	}
+
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func (sqs *StreamQueryKeyRange) UnmarshalBson(buf *bytes.Buffer) {
+	bson.Next(buf, 4)
+
+	kind := bson.NextByte(buf)
+	for kind != bson.EOO {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
+		case "Sql":
+			sqs.Sql = bson.DecodeString(buf, kind)
+		case "BindVariables":
+			sqs.BindVariables = tproto.DecodeBindVariablesBson(buf, kind)
+		case "Keyspace":
+			sqs.Keyspace = bson.DecodeString(buf, kind)
+		case "KeyRange":
+			sqs.KeyRange = bson.DecodeString(buf, kind)
+		case "TabletType":
+			sqs.TabletType = topo.TabletType(bson.DecodeString(buf, kind))
+		case "Session":
+			sqs.Session = new(Session)
+			sqs.Session.UnmarshalBson(buf)
+		default:
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}

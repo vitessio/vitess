@@ -6,12 +6,17 @@ package topo
 
 import (
 	"bytes"
+	"fmt"
 	"sort"
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
 	"github.com/youtube/vitess/go/vt/key"
 )
+
+// This is the shard name for when the keyrange covers the entire space
+// for unsharded database.
+const SHARD_ZERO = "0"
 
 // SrvShard contains a roll-up of the shard in the local namespace.
 // In zk, it is under /zk/local/vt/ns/<keyspace>/<shard>
@@ -118,6 +123,13 @@ func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
 		}
 		kind = bson.NextByte(buf)
 	}
+}
+
+func (ss *SrvShard) ShardName() string {
+	if !ss.KeyRange.IsPartial() {
+		return SHARD_ZERO
+	}
+	return fmt.Sprintf("%v-%v", string(ss.KeyRange.Start.Hex()), string(ss.KeyRange.End.Hex()))
 }
 
 // KeyspacePartition represents a continuous set of shards to

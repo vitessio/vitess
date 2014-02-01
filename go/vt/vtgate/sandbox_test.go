@@ -14,12 +14,13 @@ import (
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/vt/key"
 	tproto "github.com/youtube/vitess/go/vt/tabletserver/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/tabletconn"
 	"github.com/youtube/vitess/go/vt/topo"
 )
 
-// sandbox_test.go provides a sandbox for unit testing Barnacle.
+// sandbox_test.go provides a sandbox for unit testing VTGate.
 
 func init() {
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
@@ -48,6 +49,11 @@ var (
 	transactionId sync2.AtomicInt64
 )
 
+const (
+	TEST_SHARDED   = "TestSharded"
+	TEST_UNSHARDED = "TestUnshared"
+)
+
 func resetSandbox() {
 	sandmu.Lock()
 	defer sandmu.Unlock()
@@ -62,12 +68,90 @@ func resetSandbox() {
 type sandboxTopo struct {
 }
 
+var ShardSpec = "-20-40-60-80-a0-c0-e0-"
+var ShardedKrArray key.KeyRangeArray
+
+func getAllShards() (key.KeyRangeArray, error) {
+	if ShardedKrArray != nil {
+		return ShardedKrArray, nil
+	}
+	ShardedKrArray, err := key.ParseShardingSpec(ShardSpec)
+	if err != nil {
+		return nil, err
+	}
+	return ShardedKrArray, nil
+}
+
+func getKeyRangeName(kr key.KeyRange) string {
+	return fmt.Sprintf("%v-%v", string(kr.Start.Hex()), string(kr.End.Hex()))
+}
+
+func getUidForShard(shardName string) (int, error) {
+	// Try simple unsharded case first
+	uid, err := strconv.Atoi(shardName)
+	if err == nil {
+		return uid, nil
+	}
+	shards, err := getAllShards()
+	if err != nil {
+		return 0, fmt.Errorf("shard not found %v", shardName)
+	}
+	for i, s := range shards {
+		if shardName == getKeyRangeName(s) {
+			return i, nil
+		}
+	}
+	return 0, fmt.Errorf("shard not found %v", shardName)
+}
+
 func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
-	panic(fmt.Errorf("not implemented"))
+	return []string{TEST_SHARDED, TEST_UNSHARDED}, nil
 }
 
 func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
-	panic(fmt.Errorf("not implemented"))
+	shardKrArray, err := getAllShards()
+	if err != nil {
+		return nil, err
+	}
+	shards := make([]topo.SrvShard, 0, len(shardKrArray))
+	for i := 0; i < len(shardKrArray); i++ {
+		shard := topo.SrvShard{
+			KeyRange:    shardKrArray[i],
+			ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
+			TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
+		}
+		shards = append(shards, shard)
+	}
+	shardedSrvKeyspace := &topo.SrvKeyspace{
+		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
+			topo.TYPE_MASTER: &topo.KeyspacePartition{
+				Shards: shards,
+			},
+		},
+		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
+	}
+
+	unshardedSrvKeyspace := &topo.SrvKeyspace{
+		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
+			topo.TYPE_MASTER: &topo.KeyspacePartition{
+				Shards: []topo.SrvShard{
+					{KeyRange: key.KeyRange{Start: "", End: ""},
+						ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
+						TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
+					},
+				},
+			},
+		},
+		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
+	}
+
+	// Return unsharded SrvKeyspace record if asked
+	// By default return the sharded keyspace
+	if keyspace == TEST_UNSHARDED {
+		return unshardedSrvKeyspace, nil
+	}
+
+	return shardedSrvKeyspace, nil
 }
 
 func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {
@@ -78,7 +162,7 @@ func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType to
 		endPointMustFail--
 		return nil, fmt.Errorf("topo error")
 	}
-	uid, err := strconv.Atoi(shard)
+	uid, err := getUidForShard(shard)
 	if err != nil {
 		panic(err)
 	}
@@ -103,6 +187,14 @@ func sandboxDialer(context interface{}, endPoint topo.EndPoint, keyspace, shard 
 	}
 	tconn.(*sandboxConn).endPoint = endPoint
 	return tconn, nil
+}
+
+func mapTestConn(shard string, conn tabletconn.TabletConn) {
+	uid, err := getUidForShard(shard)
+	if err != nil {
+		panic(err)
+	}
+	testConns[uint32(uid)] = conn
 }
 
 // sandboxConn satisfies the TabletConn interface
