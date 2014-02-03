@@ -18,7 +18,7 @@ This is an incomplete list of Vitess features.
 
 * A Python DBAPI 2.0 compliant client interface.
 * A go client interface.
-* Simple [BSON](http://http://bsonspec.org/) based protocol with SASL
+* Simple [BSON](http://bsonspec.org/) based protocol with SASL
   authentication.
 
 ### vttablet
