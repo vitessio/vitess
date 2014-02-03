@@ -114,11 +114,12 @@ func (wr *Wrangler) restartSlavesExternal(slaveTabletMap, masterTabletMap map[to
 	wg := sync.WaitGroup{}
 
 	swrd := actionnode.SlaveWasRestartedArgs{
-		Parent:                     masterElectTablet.Alias,
-		ExpectedMasterAddr:         masterElectTablet.GetMysqlAddr(),
-		ExpectedMasterIpAddr:       masterElectTablet.GetMysqlIpAddr(),
-		ScrapStragglers:            scrapStragglers,
-		ContinueOnUnexpectedMaster: continueOnUnexpectedMaster,
+		Parent:               masterElectTablet.Alias,
+		ExpectedMasterAddr:   masterElectTablet.GetMysqlAddr(),
+		ExpectedMasterIpAddr: masterElectTablet.GetMysqlIpAddr(),
+		ScrapStragglers:      scrapStragglers,
+		// Disabled for now
+		// ContinueOnUnexpectedMaster: continueOnUnexpectedMaster,
 	}
 
 	// The following two blocks of actions are very likely to time

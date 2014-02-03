@@ -38,11 +38,13 @@ func (rsd *RestartSlaveData) String() string {
 }
 
 type SlaveWasRestartedArgs struct {
-	Parent                     topo.TabletAlias
-	ExpectedMasterAddr         string
-	ExpectedMasterIpAddr       string
-	ScrapStragglers            bool
-	ContinueOnUnexpectedMaster bool
+	Parent               topo.TabletAlias
+	ExpectedMasterAddr   string
+	ExpectedMasterIpAddr string
+	ScrapStragglers      bool
+
+	// Temporarely disable this flag
+	// ContinueOnUnexpectedMaster bool
 }
 
 type SnapshotArgs struct {

@@ -457,9 +457,11 @@ func SlaveWasRestarted(ts topo.Server, mysqlDaemon mysqlctl.MysqlDaemon, tabletA
 	}
 	if masterAddr != swrd.ExpectedMasterAddr && masterAddr != swrd.ExpectedMasterIpAddr {
 		log.Errorf("SlaveWasRestarted found unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)
-		if swrd.ContinueOnUnexpectedMaster {
-			log.Errorf("ContinueOnUnexpectedMaster is set, we keep going anyway")
-		} else if swrd.ScrapStragglers {
+		// Disabled for now
+		// if swrd.ContinueOnUnexpectedMaster {
+		//	log.Errorf("ContinueOnUnexpectedMaster is set, we keep going anyway")
+		// } else
+		if swrd.ScrapStragglers {
 			return Scrap(ts, tablet.Alias, false)
 		} else {
 			return fmt.Errorf("Unexpected master %v for %v (was expecting %v or %v)", masterAddr, tabletAlias, swrd.ExpectedMasterAddr, swrd.ExpectedMasterIpAddr)

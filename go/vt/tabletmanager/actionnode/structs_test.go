@@ -47,10 +47,11 @@ func TestExtraFieldsJson(t *testing.T) {
 			Uid:  1,
 			Cell: "aa",
 		},
-		ExpectedMasterAddr:         "a1",
-		ExpectedMasterIpAddr:       "i1",
-		ScrapStragglers:            true,
-		ContinueOnUnexpectedMaster: true,
+		ExpectedMasterAddr:   "a1",
+		ExpectedMasterIpAddr: "i1",
+		ScrapStragglers:      true,
+		// Disabled for now
+		// ContinueOnUnexpectedMaster: true,
 	}
 	data := jscfg.ToJson(swra)
 
@@ -90,10 +91,11 @@ func TestExtraFieldsBson(t *testing.T) {
 			Uid:  1,
 			Cell: "aa",
 		},
-		ExpectedMasterAddr:         "a1",
-		ExpectedMasterIpAddr:       "i1",
-		ScrapStragglers:            true,
-		ContinueOnUnexpectedMaster: true,
+		ExpectedMasterAddr:   "a1",
+		ExpectedMasterIpAddr: "i1",
+		ScrapStragglers:      true,
+		// Disabled for now
+		// ContinueOnUnexpectedMaster: true,
 	}
 	data, err := bson.Marshal(swra)
 	if err != nil {
