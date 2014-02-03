@@ -8,7 +8,7 @@ import time
 from vtdb import cursor
 from vtdb import dbapi
 from vtdb import dbexceptions
-from vtdb import topology
+from vtdb import topo_utils
 
 RECONNECT_DELAY = 0.002 # 2 ms
 BEGIN_RECONNECT_DELAY = 0.2 # 200 ms
@@ -21,21 +21,14 @@ def register_conn_class(protocol, c):
   vtclient_conn_classes[protocol] = c
 
 
-def get_vt_connection_params_list(zkocc_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
-  db_params_list = []
-  db_key = "%s.%s.%s" % (keyspace, shard, db_type)
-  for host, port, encrypted in topology.get_host_port_by_name(zkocc_client, db_key+":_vtocc", encrypted, vtgate_protocol, vtgate_addrs):
-    vt_params = dict()
-    vt_params['keyspace'] = keyspace
-    vt_params['shard'] = shard
-    vt_params['addr'] = "%s:%s" % (host, port)
-    vt_params['timeout'] = timeout
-    vt_params['encrypted'] = encrypted
-    vt_params['user'] = user
-    vt_params['password'] = password
-    vt_params['tablet_type'] = db_type
-    db_params_list.append(vt_params)
-  return db_params_list
+def get_vt_connection_params_list(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password, vtgate_protocol, vtgate_addrs):
+  if vtgate_protocol != 'v0':
+    if vtgate_addrs is None:
+      return []
+    return topo_utils.get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeout, encrypted, user, password)
+
+  return topo_utils.get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password)
+
 
 def reconnect(method):
   def _run_with_reconnect(self, *args, **kargs):
@@ -100,10 +93,12 @@ class VtOCCConnection(object):
     if not db_params_list:
       raise dbexceptions.OperationalError("empty db params list - no db instance available for key %s" % db_key)
     db_exception = None
+    host_addr = None
     # no retries here, since there is a higher level retry with reconnect.
     for params in db_params_list:
       try:
         db_params = params.copy()
+        host_addr = db_params['addr']
         if self.vtgate_protocol in vtclient_conn_classes:
           self.conn = vtclient_conn_classes[self.vtgate_protocol](**db_params)
         else:
@@ -113,10 +108,10 @@ class VtOCCConnection(object):
         return self.conn
       except Exception as e:
         db_exception = e
-        logging.warning('db connection failed: %s %s, %s', db_key, db_params['addr'], e)
+        logging.warning('db connection failed: %s %s, %s', db_key, host_addr, e)
 
     raise dbexceptions.OperationalError(
-      'unable to create vt connection', db_key, db_params['addr'], db_exception)
+      'unable to create vt connection', db_key, host_addr, db_exception)
 
   def cursor(self, cursorclass=None, **kargs):
     return (cursorclass or self.cursorclass)(self, **kargs)

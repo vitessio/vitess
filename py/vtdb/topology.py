@@ -83,7 +83,7 @@ def read_topology(zkocc_client, read_fqdb_keys=True):
 # db_key is <keyspace>.<shard_name>.<db_type>[:<service>]
 # returns a list of entries to try, which is an array of tuples
 # (host, port, encrypted)
-def get_host_port_by_name(zkocc_client, db_key, encrypted=False, vtgate_protocol='v0', vtgate_addrs=None):
+def get_host_port_by_name(topo_client, db_key, encrypted=False):
   parts = db_key.split(':')
   if len(parts) == 2:
     service = parts[1]
@@ -92,22 +92,13 @@ def get_host_port_by_name(zkocc_client, db_key, encrypted=False, vtgate_protocol
 
   host_port_list = []
   encrypted_host_port_list = []
-  # use given vtgate addrs if vtgate is enabled and requested as service
-  if vtgate_addrs is None:
-    vtgate_addrs = []
-  if vtgate_protocol != 'v0' and service != '_mysql':
-    for addr in vtgate_addrs:
-      host_port = addr.split(':')
-      host_port_list.append((host_port[0], long(host_port[1]), service == '_vts'))
-    random.shuffle(host_port_list)
-    return host_port_list
 
   if service == '_vtocc' and encrypted:
     encrypted_service = '_vts'
   db_key = parts[0]
   ks, shard, tablet_type = db_key.split('.')
   try:
-    data = zkocc_client.get_end_points('local', ks, shard, tablet_type)
+    data = topo_client.get_end_points('local', ks, shard, tablet_type)
   except zkocc.ZkOccError as e:
     logging.warning('no data for %s: %s', db_key, e)
     return []
