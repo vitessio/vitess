@@ -419,7 +419,8 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-\n' +
                              'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica')
+                             'TabletTypes: master,rdonly,replica',
+                             keyspace_id_type=keyspace_id_type)
 
     # take the snapshot for the split
     utils.run_vtctl(['MultiSnapshot', '--spec=80-C0-',
@@ -505,7 +506,8 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica')
+                             'TabletTypes: master,rdonly,replica',
+                             keyspace_id_type=keyspace_id_type)
 
     # then serve replica from the split shards
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
@@ -514,7 +516,8 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
-                             'TabletTypes: master,rdonly,replica')
+                             'TabletTypes: master,rdonly,replica',
+                             keyspace_id_type=keyspace_id_type)
 
     # move replica back and forth
     utils.run_vtctl(['MigrateServedTypes', '-reverse', 'test_keyspace/80-', 'replica'],
@@ -523,14 +526,16 @@ primary key (name)
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-\n' +
-                             'TabletTypes: master,rdonly,replica')
+                             'TabletTypes: master,rdonly,replica',
+                             keyspace_id_type=keyspace_id_type)
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/80-', 'replica'],
                     auto_log=True)
     utils.check_srv_keyspace('test_nj', 'test_keyspace',
                              'Partitions(master): -80 80-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
-                             'TabletTypes: master,rdonly,replica')
+                             'TabletTypes: master,rdonly,replica',
+                             keyspace_id_type=keyspace_id_type)
 
     # reparent shard_2 to shard_2_replica1, then insert more data and
     # see it flow through still
@@ -571,7 +576,8 @@ primary key (name)
                              'Partitions(master): -80 80-C0 C0-\n' +
                              'Partitions(rdonly): -80 80-C0 C0-\n' +
                              'Partitions(replica): -80 80-C0 C0-\n' +
-                             'TabletTypes: master,rdonly,replica')
+                             'TabletTypes: master,rdonly,replica',
+                             keyspace_id_type=keyspace_id_type)
 
     # check the binlog players are gone now
     shard_2_master.wait_for_binlog_player_count(0)
