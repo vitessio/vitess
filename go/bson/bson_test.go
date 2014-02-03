@@ -356,6 +356,36 @@ func TestIgnorePrivateFields(t *testing.T) {
 	}
 }
 
+type LotsMoreFields struct {
+	CommonField1 string
+	ExtraField1  string
+	ExtraField2  HasPrivate
+	ExtraField3  []string
+	CommonField2 string
+	ExtraField4  uint64
+}
+
+type LotsFewerFields struct {
+	CommonField1 string
+	CommonField2 string
+}
+
+func TestSkipUnknownFields(t *testing.T) {
+	v := LotsMoreFields{
+		CommonField1: "value1",
+		ExtraField1:  "value2",
+		ExtraField2:  HasPrivate{private: "private", Public: "public"},
+		ExtraField3:  []string{"s1", "s2"},
+		CommonField2: "value3",
+		ExtraField4:  6455,
+	}
+	marshaled := VerifyMarshal(t, v)
+	unmarshaled := new(LotsFewerFields)
+	if err := Unmarshal(marshaled, unmarshaled); err != nil {
+		t.Errorf("Unmarshal should have worked but returned: %v", err)
+	}
+}
+
 func compare(t *testing.T, encoded []byte, expected []byte) {
 	if len(encoded) != len(expected) {
 		t.Errorf("encoding mismatch:\n%#v\n%#v\n", string(encoded), string(expected))

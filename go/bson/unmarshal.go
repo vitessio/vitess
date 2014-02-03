@@ -14,6 +14,8 @@ import (
 	"reflect"
 	"strconv"
 	"time"
+
+	log "github.com/golang/glog"
 )
 
 // BSON documents are lttle endian
@@ -328,7 +330,8 @@ func (builder *valueBuilder) Key(k string) *valueBuilder {
 				return ValueBuilder(builder.val.Field(i))
 			}
 		}
-		panic(NewBsonError("Could not find field '%s' in struct object", k))
+		log.Warningf("Could not find field '%s' in struct object, skipping it", k)
+		return nil
 	case reflect.Map:
 		t := builder.val.Type()
 		if t.Key() != reflect.TypeOf(k) {
@@ -418,55 +421,95 @@ func Parse(buf *bytes.Buffer, builder *valueBuilder) {
 
 	for kind != EOO {
 		b2 := builder.Key(ReadCString(buf))
-
-		switch kind {
-		case Number:
-			ui64 := Pack.Uint64(buf.Next(8))
-			fl64 := math.Float64frombits(ui64)
-			b2.Float64(fl64)
-		case String:
-			l := int(Pack.Uint32(buf.Next(4)))
-			s := buf.Next(l - 1)
-			buf.ReadByte()
-			b2.String(s)
-		case Object:
-			b2.Object()
-			buf.Next(4)
-			Parse(buf, b2)
-		case Array:
-			b2.Array()
-			buf.Next(4)
-			Parse(buf, b2)
-		case Binary:
-			l := int(Pack.Uint32(buf.Next(4)))
-			buf.Next(1) // Skip the subtype, we don't care
-			b2.Binary(buf.Next(l))
-		case Boolean:
-			b, _ := buf.ReadByte()
-			if b == 1 {
-				b2.Bool(true)
-			} else {
-				b2.Bool(false)
+		if b2 == nil {
+			Skip(buf, kind)
+		} else {
+			switch kind {
+			case Number:
+				ui64 := Pack.Uint64(buf.Next(8))
+				fl64 := math.Float64frombits(ui64)
+				b2.Float64(fl64)
+			case String:
+				l := int(Pack.Uint32(buf.Next(4)))
+				s := buf.Next(l - 1)
+				buf.ReadByte()
+				b2.String(s)
+			case Object:
+				b2.Object()
+				buf.Next(4)
+				Parse(buf, b2)
+			case Array:
+				b2.Array()
+				buf.Next(4)
+				Parse(buf, b2)
+			case Binary:
+				l := int(Pack.Uint32(buf.Next(4)))
+				buf.Next(1) // Skip the subtype, we don't care
+				b2.Binary(buf.Next(l))
+			case Boolean:
+				b, _ := buf.ReadByte()
+				if b == 1 {
+					b2.Bool(true)
+				} else {
+					b2.Bool(false)
+				}
+			case Datetime:
+				ui64 := Pack.Uint64(buf.Next(8))
+				b2.Datetime(time.Unix(0, int64(ui64)*1e6).UTC())
+			case Int:
+				ui32 := Pack.Uint32(buf.Next(4))
+				b2.Int32(int32(ui32))
+			case Long:
+				ui64 := Pack.Uint64(buf.Next(8))
+				b2.Int64(int64(ui64))
+			case Ulong:
+				ui64 := Pack.Uint64(buf.Next(8))
+				b2.Uint64(ui64)
+			case Null:
+				// no op
+			default:
+				panic(NewBsonError("don't know how to handle kind %v yet", kind))
 			}
-		case Datetime:
-			ui64 := Pack.Uint64(buf.Next(8))
-			b2.Datetime(time.Unix(0, int64(ui64)*1e6).UTC())
-		case Int:
-			ui32 := Pack.Uint32(buf.Next(4))
-			b2.Int32(int32(ui32))
-		case Long:
-			ui64 := Pack.Uint64(buf.Next(8))
-			b2.Int64(int64(ui64))
-		case Ulong:
-			ui64 := Pack.Uint64(buf.Next(8))
-			b2.Uint64(ui64)
-		case Null:
-			// no op
-		default:
-			panic(NewBsonError("don't know how to handle kind %v yet", kind))
+			b2.Flush()
 		}
-		b2.Flush()
 
 		kind, _ = buf.ReadByte()
+	}
+}
+
+// Skip will skip a field we don't want to read
+func Skip(buf *bytes.Buffer, kind byte) {
+	switch kind {
+	case Number:
+		buf.Next(8)
+	case String:
+		// length of a string includes the 0 at the end, but not the size
+		l := int(Pack.Uint32(buf.Next(4)))
+		buf.Next(l)
+	case Object, Array:
+		// the encoded length includes the 4 bytes for the size
+		l := int(Pack.Uint32(buf.Next(4)))
+		if l < 4 {
+			panic(NewBsonError("Object or Array should at least be 4 bytes long"))
+		}
+		buf.Next(l - 4)
+	case Binary:
+		// length of a binary doesn't include the subtype
+		l := int(Pack.Uint32(buf.Next(4)))
+		buf.Next(l + 1)
+	case Boolean:
+		buf.ReadByte()
+	case Datetime:
+		buf.Next(8)
+	case Int:
+		buf.Next(4)
+	case Long:
+		buf.Next(8)
+	case Ulong:
+		buf.Next(8)
+	case Null:
+		// no op
+	default:
+		panic(NewBsonError("don't know how to skip kind %v yet", kind))
 	}
 }
