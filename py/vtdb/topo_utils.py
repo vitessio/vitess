@@ -56,9 +56,8 @@ def get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout
   served_from = keyspace_data.get('ServedFrom', None)
   if served_from is not None:
     new_keyspace = served_from.get(db_type, None)
-  if new_keyspace is not None:
-    keyspace = new_keyspace
-    #keyspace_data = topo_client.get_srv_keyspace('local', new_keyspace) 
+    if new_keyspace is not None:
+      keyspace = new_keyspace
 
   try:
     end_points_data = topo_client.get_end_points('local', keyspace, shard, db_type)
