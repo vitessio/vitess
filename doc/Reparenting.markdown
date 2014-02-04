@@ -27,5 +27,16 @@ The flow for that command is as follows:
 - we then update the Shard object with the new master.
 - we rebuild the serving graph for that shard. This will update the 'master' record for sure, and also keep all the tablets that have successfully reparented.
 
+Optional Flags:
+- -accept-success-percents=80: will declare success if more than that many slaves can be reparented
+- -continue_on_unexpected_master=false: if a slave has the wrong master, we'll just log the error and keep going
+- -scrap-stragglers=false: will scrap bad hosts
+
 Failure cases:
 - The global topology server has to be available for locking and modification during this operation. If not, the operation will just fail.
+- If scrap-straggler is false (the default), a tablet that has the wrong master will be kept in the replication graph with its original master. When we rebuild the serving graph, that tablet won't be added, as it doesn't have the right master.
+- if more than 20% of the tablets fails, we don't update the Shard object, and don't rebuild. We assume something is seriously wrong, and it might be our process, not the servers. Figuring out the cause and re-running 'vtctl ShardExternallyReparented' should work.
+- if for some reasons none of the slaves report the right master (replication is going through a proxy for instance, and the master address is not what the clients are showing in 'show slave status'), the result is pretty bad. All slaves are kept in the replication graph, but with their old (incorrect) master. Next time a Shard rebuild happens, all the servers will disappear. At that point, fixing the issue and then re-parenting will work.
+
+
+
