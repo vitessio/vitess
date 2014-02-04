@@ -10,7 +10,7 @@ internal state.
 
 ## Active Reparents
 
-They are triggered by using the 'vtctl ReparentShard' command. See the help for that command.
+They are triggered by using the 'vtctl ReparentShard' command. See the help for that command. It currently doesn't use GroupId.
 
 ## External Reparents
 
@@ -34,9 +34,8 @@ Optional Flags:
 
 Failure cases:
 - The global topology server has to be available for locking and modification during this operation. If not, the operation will just fail.
+- If a single topology server is down in one data center 9and it's nto the master data center), the tablets in that data center will be ignored by the reparent. Provided it doesn't trigger the 80% threshold, this is not a big deal. When the topology server comes back up, just re-run 'vtctl InitTablet' on the tablets, and that will fix their master record.
 - If scrap-straggler is false (the default), a tablet that has the wrong master will be kept in the replication graph with its original master. When we rebuild the serving graph, that tablet won't be added, as it doesn't have the right master.
 - if more than 20% of the tablets fails, we don't update the Shard object, and don't rebuild. We assume something is seriously wrong, and it might be our process, not the servers. Figuring out the cause and re-running 'vtctl ShardExternallyReparented' should work.
 - if for some reasons none of the slaves report the right master (replication is going through a proxy for instance, and the master address is not what the clients are showing in 'show slave status'), the result is pretty bad. All slaves are kept in the replication graph, but with their old (incorrect) master. Next time a Shard rebuild happens, all the servers will disappear. At that point, fixing the issue and then re-parenting will work.
-
-
 
