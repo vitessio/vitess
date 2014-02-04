@@ -32,7 +32,7 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_read(self):
     try:
-      replica_conn = vtdb_test.get_replica_connection(shard_index=self.shard_index)
+      replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
     self.replica_tablet.kill_vttablet()
@@ -46,7 +46,7 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_stream_execute(self):
     try:
-      replica_conn = vtdb_test.get_replica_connection(shard_index=self.shard_index)
+      replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
     stream_cursor = cursor.StreamCursor(replica_conn)
@@ -68,7 +68,7 @@ class TestFailures(unittest.TestCase):
   # vttablet so the kill and restart shouldn't have any effect.
   def test_tablet_restart_begin(self):
     try:
-      master_conn = vtdb_test.get_master_connection()
+      master_conn = vtdb_test.get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     self.master_tablet.kill_vttablet()
@@ -78,7 +78,7 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_fail_write(self):
     try:
-      master_conn = vtdb_test.get_master_connection()
+      master_conn = vtdb_test.get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.DatabaseError):
@@ -93,14 +93,14 @@ class TestFailures(unittest.TestCase):
 
   def test_query_timeout(self):
     try:
-      replica_conn = vtdb_test.get_replica_connection(shard_index=self.shard_index)
+      replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
       replica_conn._execute("select sleep(12) from dual", {})
 
     try:
-      master_conn = vtdb_test.get_master_connection()
+      master_conn = vtdb_test.get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
@@ -110,7 +110,7 @@ class TestFailures(unittest.TestCase):
   def test_restart_mysql_failure(self):
     return
     try:
-      replica_conn = vtdb_test.get_replica_connection(shard_index=self.shard_index)
+      replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
@@ -127,10 +127,10 @@ class TestFailures(unittest.TestCase):
   # vtgate retries for this condition. Not a very high value
   # test at this point, could be removed if there is coverage at vtgate level.
   def test_retry_txn_pool_full(self):
-    master_conn = vtdb_test.get_master_connection()
+    master_conn = vtdb_test.get_connection(db_type='master')
     master_conn._execute("set vt_transaction_cap=1", {})
     master_conn.begin()
-    master_conn2 = vtdb_test.get_master_connection()
+    master_conn2 = vtdb_test.get_connection(db_type='master')
     master_conn2.begin()
     master_conn.commit()
     master_conn._execute("set vt_transaction_cap=20", {})

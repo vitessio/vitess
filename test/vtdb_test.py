@@ -145,11 +145,11 @@ def setup_tablets():
   vtgate_server, vtgate_port = utils.vtgate_start()
 
 
-def get_master_connection(shard_index=0, user=None, password=None):
+def get_connection(db_type='master', shard_index=0, user=None, password=None):
   global vtgate_protocol
   global vtgate_port
   timeout = 10.0
-  master_conn = None
+  conn = None
   shard = shard_names[shard_index]
   if vtgate_protocol == VTGATE_PROTOCOL_TABLET:
     vtgate_addrs = []
@@ -160,40 +160,16 @@ def get_master_connection(shard_index=0, user=None, password=None):
 
   vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                         "test_nj", 30.0)
-  master_conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
-                                         "master", timeout,
-                                          user=user, password=password,
-                                          vtgate_protocol=vtgate_protocol,
-                                          vtgate_addrs=vtgate_addrs)
-  master_conn.connect()
-  return master_conn
-
-def get_replica_connection(shard_index=0, user=None, password=None):
-  global vtgate_protocol
-  global vtgate_port
-  logging.debug("connecting to replica with params %s %s", user, password)
-  timeout = 10.0
-  shard = shard_names[shard_index]
-  if vtgate_protocol == VTGATE_PROTOCOL_TABLET:
-    vtgate_addrs = []
-  elif vtgate_protocol == VTGATE_PROTOCOL_V1BSON:
-    vtgate_addrs = ["localhost:%s"%(vtgate_port),]
-  else:
-    raise Exception("Unknown vtgate_protocol %s", vtgate_protocol)
-
-
-  vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
-                                        "test_nj", 30.0)
-  replica_conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
-                                          "replica", timeout,
-                                           user=user, password=password,
-                                           vtgate_protocol=vtgate_protocol,
-                                           vtgate_addrs=vtgate_addrs)
-  replica_conn.connect()
-  return replica_conn
+  conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
+                                  db_type, timeout,
+                                  user=user, password=password,
+                                  vtgate_protocol=vtgate_protocol,
+                                  vtgate_addrs=vtgate_addrs)
+  conn.connect()
+  return conn
 
 def do_write(count):
-  master_conn = get_master_connection()
+  master_conn = get_connection(db_type='master')
   master_conn.begin()
   master_conn._execute("delete from vt_insert_test", {})
   kid_list = shard_kid_map[master_conn.shard]
@@ -213,12 +189,12 @@ class TestTabletFunctions(unittest.TestCase):
   def test_connect(self):
     global vtgate_protocol
     try:
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     self.assertNotEqual(master_conn, None)
     try:
-      replica_conn = get_replica_connection(shard_index=self.shard_index)
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       logging.debug("Connection to %s replica failed with error %s" %
                     (shard_names[self.shard_index], str(e)))
@@ -237,7 +213,7 @@ class TestTabletFunctions(unittest.TestCase):
 
   def test_writes(self):
     try:
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
       count = 10
       master_conn.begin()
       master_conn._execute("delete from vt_insert_test", {})
@@ -256,7 +232,7 @@ class TestTabletFunctions(unittest.TestCase):
 
   def test_batch_read(self):
     try:
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
       count = 10
       master_conn.begin()
       master_conn._execute("delete from vt_insert_test", {})
@@ -284,7 +260,7 @@ class TestTabletFunctions(unittest.TestCase):
 
   def test_batch_write(self):
     try:
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
       count = 10
       query_list = []
       bind_vars_list = []
@@ -316,7 +292,7 @@ class TestTabletFunctions(unittest.TestCase):
       count = 100
       do_write(count)
       # Fetch a subset of the total size.
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
       stream_cursor = cursor.StreamCursor(master_conn) 
       stream_cursor.execute("select * from vt_insert_test", {})
       fetch_size = 10
@@ -334,7 +310,7 @@ class TestTabletFunctions(unittest.TestCase):
       count = 100
       do_write(count)
       # Fetch all.
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
       stream_cursor = cursor.StreamCursor(master_conn)
       stream_cursor.execute("select * from vt_insert_test", {})
       rows = stream_cursor.fetchall()
@@ -351,7 +327,7 @@ class TestTabletFunctions(unittest.TestCase):
       count = 100
       do_write(count)
       # Fetch one.
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
       stream_cursor = cursor.StreamCursor(master_conn)
       stream_cursor.execute("select * from vt_insert_test", {})
       rows = stream_cursor.fetchone()
@@ -362,7 +338,7 @@ class TestTabletFunctions(unittest.TestCase):
 
   def test_streaming_zero_results(self):
     try:
-      master_conn = get_master_connection(shard_index=self.shard_index)
+      master_conn = get_connection(db_type='master', shard_index=self.shard_index)
       master_conn.begin()
       master_conn._execute("delete from vt_insert_test", {})
       master_conn.commit()
@@ -386,7 +362,7 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_read(self):
     try:
-      replica_conn = get_replica_connection(shard_index=self.shard_index)
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
     self.replica_tablet.kill_vttablet()
@@ -400,7 +376,7 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_stream_execute(self):
     try:
-      replica_conn = get_replica_connection(shard_index=self.shard_index)
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
     stream_cursor = cursor.StreamCursor(replica_conn)
@@ -417,7 +393,7 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_restart_begin(self):
     try:
-      master_conn = get_master_connection()
+      master_conn = get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     self.master_tablet.kill_vttablet()
@@ -428,7 +404,7 @@ class TestFailures(unittest.TestCase):
 
   def test_tablet_fail_write(self):
     try:
-      master_conn = get_master_connection()
+      master_conn = get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.OperationalError):
@@ -438,7 +414,7 @@ class TestFailures(unittest.TestCase):
       master_conn.commit()
     proc = self.master_tablet.start_vttablet()
     try:
-      master_conn = get_master_connection()
+      master_conn = get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     master_conn.begin()
@@ -447,14 +423,14 @@ class TestFailures(unittest.TestCase):
 
   def test_query_timeout(self):
     try:
-      replica_conn = get_replica_connection(shard_index=self.shard_index)
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
       replica_conn._execute("select sleep(12) from dual", {})
 
     try:
-      master_conn = get_master_connection()
+      master_conn = get_connection(db_type='master')
     except Exception, e:
       self.fail("Connection to shard0 master failed with error %s" % str(e))
     with self.assertRaises(dbexceptions.TimeoutError):
@@ -462,7 +438,7 @@ class TestFailures(unittest.TestCase):
 
   def test_restart_mysql_failure(self):
     try:
-      replica_conn = get_replica_connection(shard_index=self.shard_index)
+      replica_conn = get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
       self.fail("Connection to shard0 replica failed with error %s" % str(e))
     utils.wait_procs([self.replica_tablet.shutdown_mysql(),])
@@ -474,11 +450,11 @@ class TestFailures(unittest.TestCase):
     replica_conn._execute("select 1 from vt_insert_test", {})
 
   def test_retry_txn_pool_full(self):
-    master_conn = get_master_connection()
+    master_conn = get_connection(db_type='master')
     master_conn._execute("set vt_transaction_cap=1", {})
     master_conn.begin()
     with self.assertRaises(dbexceptions.OperationalError):
-      master_conn2 = get_master_connection()
+      master_conn2 = get_connection(db_type='master')
       master_conn2.begin()
     master_conn.commit()
     master_conn._execute("set vt_transaction_cap=20", {})
@@ -503,15 +479,15 @@ class TestAuthentication(unittest.TestCase):
 
   def test_correct_credentials(self):
     try:
-      replica_conn = get_replica_connection(shard_index = self.shard_index, user=self.user,
-                                            password=self.password)
+      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
+                                    password=self.password)
       replica_conn.connect()
     finally:
       replica_conn.close()
 
   def test_secondary_credentials(self):
     try:
-      replica_conn = get_replica_connection(shard_index = self.shard_index, user=self.user,
+      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
                                             password=self.secondary_password)
       replica_conn.connect()
     finally:
@@ -519,16 +495,16 @@ class TestAuthentication(unittest.TestCase):
 
   def test_incorrect_user(self):
     with self.assertRaises(dbexceptions.OperationalError):
-      replica_conn = get_replica_connection(shard_index = self.shard_index, user="romek", password="ma raka")
+      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user="romek", password="ma raka")
       replica_conn.connect()
 
   def test_incorrect_credentials(self):
     with self.assertRaises(dbexceptions.OperationalError):
-      replica_conn = get_replica_connection(shard_index = self.shard_index, user=self.user, password="ma raka")
+      replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user, password="ma raka")
       replica_conn.connect()
 
   def test_challenge_is_used(self):
-    replica_conn = get_replica_connection(shard_index = self.shard_index, user=self.user,
+    replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
                                           password=self.password)
     replica_conn.connect()
     challenge = ""
@@ -538,7 +514,7 @@ class TestAuthentication(unittest.TestCase):
                       'AuthenticatorCRAMMD5.Authenticate', {"Proof": proof})
 
   def test_only_few_requests_are_allowed(self):
-    replica_conn = get_replica_connection(shard_index = self.shard_index, user=self.user,
+    replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
                                           password=self.password)
     replica_conn.connect()
     for i in range(4):
