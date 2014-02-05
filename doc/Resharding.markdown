@@ -15,7 +15,6 @@ The process to achieve this goal is composed of the following steps:
 - merge and import the data on the destination shard(s)
 - start and run filtered replication from original to destination shard(s), catch up
 - move the read-only traffic to the destination shard(s), stop serving read-only traffic from original shard(s). This transition can take a few hours. We might want to move rdonly separately from replica traffic.
-convert all batch job / update stream checkpoints to the new shards.
 - in quick succession:
  - make original master(s) read-only
  - flush filtered replication on all filtered replication source servers (after making sure they were caught up with their masters)
