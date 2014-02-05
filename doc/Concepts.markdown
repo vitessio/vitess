@@ -47,7 +47,7 @@ In such cases, we recommend that the application hash the keys so they
 distribute more randomly.
 
 ### Replication graph
-The replication graph represents the relationships between the master
+The [replication graph](ReplicationGraph.markdown) represents the relationships between the master
 databases and their respective replicas.
 This data is particularly useful during a master failover.
 Once a new master has been designated, all existing replicas have to
