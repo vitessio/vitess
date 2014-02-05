@@ -29,8 +29,9 @@ designate a keyspace_id.
 However, you'll be required to designate a keyspace_id
 if you decide to shard a currently unsharded database.
 
-A keyspace_id can be an unsigned number or a binary character column.
-Other data types are not allowed because of ambiguous equality or inequality rules.
+A keyspace_id can be an unsigned number or a binary character column (unsigned bigint
+or varbinary in mysql tables). Other data types are not allowed because of ambiguous
+equality or inequality rules.
 
 TODO: The keyspace id rules need to be solidified once VTGate features are finalized.
 
@@ -45,6 +46,10 @@ The main advantage of this scheme is that the shard map is a simple in-memory lo
 The downside of this scheme is that it creates hot-spots for sequentially increasing keys.
 In such cases, we recommend that the application hash the keys so they
 distribute more randomly.
+
+For instance, an application may use an incrementing UserId as a primary key for user records,
+and a hashed version of that UserId as a keyspace_id. All data related to one user will be on
+the same shard, as all rows will share that keyspace_id.
 
 ### Replication graph
 The [Replication Graph](ReplicationGraph.markdown) represents the relationships between the master
