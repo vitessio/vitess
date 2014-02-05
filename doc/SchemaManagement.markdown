@@ -51,11 +51,11 @@ type SchemaChangeResult struct {
 The ApplySchema action applies a schema change. It is described by the following structure (also returns a SchemaChangeResult):
 ```go
 type SchemaChange struct {
- Sql        string
- Force        bool
- AllowReplication        bool
- BeforeSchema *SchemaDefinition
- AfterSchema  *SchemaDefinition
+ Sql              string
+ Force            bool
+ AllowReplication bool
+ BeforeSchema     *SchemaDefinition
+ AfterSchema      *SchemaDefinition
 }
 ```
 
@@ -91,7 +91,9 @@ We will return the following information:
 
 This translates into the following vtctl commands:
 
+```
 PreflightSchema {-sql=<sql> || -sql_file=<filename>} <zk tablet path> 
+```
 apply the schema change to a temporary database to gather before and after schema and validate the change. The sql can be inlined or read from a file.
 This will create a temporary database, copy the existing keyspace schema into it, apply the schema change, and re-read the resulting schema.
 
