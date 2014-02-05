@@ -20,9 +20,12 @@ modulo some replication lag).
 
 A Keyspace usually has one shard when not using any sharding (we name it '0' by convention). When sharded, a Keyspace will have N shards (usually, N is a power of 2) with non-overlapping data.
 
-We support dynamic resharding, when one shard is split into 2 shards for instance. In this case, the data in the
+We support [dynamic resharding](Resharding.markdown), when one shard is split into 2 shards for instance. In this case, the data in the
 source shard is duplicated into the 2 destination shards, but only during the transition. Afterwards, the source shard is
 deleted.
+
+A shard usually contains one MySQL master, and many MySQL slaves. The slaves are used to serve read-only traffic (with
+eventual consistency guarantees), run data analysis tools that take a long time to run, or perform administrative tasks (backups, restore, diffs, ...)
 
 ### Tablet
 
