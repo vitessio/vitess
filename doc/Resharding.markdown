@@ -17,11 +17,11 @@ The process to achieve this goal is composed of the following steps:
 - move the read-only traffic to the destination shard(s), stop serving read-only traffic from original shard(s). This transition can take a few hours. We might want to move rdonly separately from replica traffic.
 convert all batch job / update stream checkpoints to the new shards.
 - in quick succession:
--- make original master(s) read-only
--- flush filtered replication on all filtered replication source servers (after making sure they were caught up with their masters)
--- wait until replication is caught up on all destination shard(s) masters
--- move the write traffic to the destination shard(s)
--- make destination master(s) read-write
+ - make original master(s) read-only
+ - flush filtered replication on all filtered replication source servers (after making sure they were caught up with their masters)
+ - wait until replication is caught up on all destination shard(s) masters
+ - move the write traffic to the destination shard(s)
+ - make destination master(s) read-write
 - scrap the original shard(s)
 
 ## Applications
