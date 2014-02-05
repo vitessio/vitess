@@ -27,7 +27,7 @@ The process to achieve this goal is composed of the following steps:
 
 The main application we currently support:
 - in a sharded keyspace, split or merge shards (horizontal sharding)
-- in a non-sharded keyspace, break out some tables into a different keyspace.
+- in a non-sharded keyspace, break out some tables into a different keyspace (vertical sharding)
 
 With these supported features, it is very easy to start with a single keyspace containing all the data (multiple tables),
 and then as the data grows, move tables to different keyspaces, start sharding some keyspaces, ... without any real
