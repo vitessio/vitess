@@ -18,6 +18,12 @@ when loosing a data center, the replication graph for other data centers is not 
 
 When creating a slave (using 'vtctl InitTablet ... replica' for instance), we get the master record (if not specified) from the MasterAlias of the Shard. We then add an entry in the ReplicationLinks list of the ShardReplication object for the tablet’s cell (we create ShardReplication if it doesn’t exist yet).
 
+## Discovery
+
+When looking for all the tablets in a Shard, we look for the Shard record, start the list with the MasterAlias, and read the 'Cells' list. Then for each Cell, we get the ShardReplication object, and find all the tablets, and add them to the list.
+
+If a cell is down, the result is partial. Some actions are resilient to partial results, like reparenting.
+
 ## Reparenting
 
 Reparenting will update the MasterAlias record in the Shard (after having acquired the Shard lock). See the Reparenting doc for more information.
