@@ -45,6 +45,13 @@ in the lockserver.
 This is useful for trouble-shooting, or to get a good high
 level picture of all the servers and their current state.
 
+### vtworker
+vtworker is meant to host long-running processes. It supports a plugin infrastructure, and offers libraries to easily pick tablets to use. We have developped:
+- resharding differ jobs: meant to check data integrity during shard splits and joins.
+- vertical split differ jobs: meant to check data integrity during vertical splits and joins.
+
+It is very easy to add other checker processes for in-tablet integrity checks (verifying foreign key-like relationships), and cross shard data integrity (for instance, if a keyspace contains an index table referencing data in another keyspace).
+
 ### Other support tools
 * *mysqlctl*: manage MySQL instances.
 * *zkctl*: manage ZooKeeper instances.
