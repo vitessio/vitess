@@ -13,6 +13,17 @@ and the necessary data is fetched from one of the shards.
 Reading from a keyspace gives you the impression that the data is read from
 a single MySQL database.
 
+### Shard
+
+A division within a Keyspace. All the instances inside a Shard have the same data (or should have the same data,
+modulo some replication lag).
+
+A Keyspace usually has one shard when not using any sharding (we name it '0' by convention). When sharded, a Keyspace will have N shards (usually, N is a power of 2) with non-overlapping data.
+
+We support dynamic resharding, when one shard is split into 2 shards for instance. In this case, the data in the
+source shard is duplicated into the 2 destination shards, but only during the transition. Afterwards, the source shard is
+deleted.
+
 ### Tablet
 
 A tablet is a single server that runs:
