@@ -96,12 +96,12 @@ VTGate (or smart clients) query the serving graph to find out which servers
 they are allowed to send queries to.
 
 ### Topology Server
-The Topology Server is the backend service used to store the Topology data, and provide a locking service. The implementation we use in the tree is based on Zookeeper.
+The Topology Server is the backend service used to store the Topology data, and provide a locking service. The implementation we use in the tree is based on Zookeeper. Each Zookeeper process is run on a single server, but may share that server with other processes.
 
-There is a global instance of that service. It contains data that doesn't change often, and references other local instances. It may be replicated locally in each Data Center as read-only copies.
+There is a global instance of that service. It contains data that doesn't change often, and references other local instances. It may be replicated locally in each Data Center as read-only copies. (a Zookeeper instance with two master instances per cell and one or two replicas per cell is a good configuration).
 
 There is one local instance of that service per Cell (Data Center). The goal is to transparently support a Cell going down. When that happens, we assume the client traffic is drained out of that Cell, and the system can survive
-using the remaining Cells.
+using the remaining Cells. (a Zookeeper instance running on 3 or 5 hosts locally is a good configuration).
 
 The data is partitioned as follows:
 - Keyspaces: global instance
