@@ -33,6 +33,15 @@ With these supported features, it is very easy to start with a single keyspace c
 and then as the data grows, move tables to different keyspaces, start sharding some keyspaces, ... without any real
 downtime for the application.
 
+## Scaling Up and Down
+
+Here is a quick table of what to do with Vitess when a change is required:
+- uniformly increase read capacity: add replicas, or split shards
+- uniformly increase write capacity: split shards
+- reclaim free space: merge shards / keyspaces
+- increase geo-diversity: add new cells and new replicas
+- cool a hot tablet: if read access, add replicas or split shards, if write access, split shards.
+
 ## Filtered Replication
 
 The cornerstone of Resharding is being able to replicate the right data. Mysql doesn't support any filtering, so the
