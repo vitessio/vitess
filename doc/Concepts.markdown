@@ -47,14 +47,14 @@ In such cases, we recommend that the application hash the keys so they
 distribute more randomly.
 
 ### Replication graph
-The [replication graph](ReplicationGraph.markdown) represents the relationships between the master
+The [Replication Graph](ReplicationGraph.markdown) represents the relationships between the master
 databases and their respective replicas.
 This data is particularly useful during a master failover.
 Once a new master has been designated, all existing replicas have to
 repointed to the new master so that replication can resume.
 
 ### Serving graph
-The serving graph is derived from the shard and replication graph.
+The [Serving Graph](ServingGraph.markdown) is derived from the shard and replication graph.
 It represens the list of active servers that are available to serve
 queries.
 VTGate (or smart clients) query the serving graph to find out which servers
