@@ -1,5 +1,5 @@
 # Concepts
-We need to introduce some common terminolgies that are used in Vitess:
+We need to introduce some common terminologies that are used in Vitess:
 ### Keyspace
 A keyspace is a logical database.
 In its simplest form, it directly maps to a MySQL database name.
