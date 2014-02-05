@@ -277,6 +277,41 @@ func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*Ke
 	return values
 }
 
+func EncodeServedFrom(buf *bytes2.ChunkedWriter, name string, servedFrom map[TabletType]string) {
+	bson.EncodePrefix(buf, bson.Object, name)
+	lenWriter := bson.NewLenWriter(buf)
+	for k, v := range servedFrom {
+		bson.EncodeString(buf, string(k), v)
+	}
+	buf.WriteByte(0)
+	lenWriter.RecordLen()
+}
+
+func DecodeServedFrom(buf *bytes.Buffer, kind byte) map[TabletType]string {
+	switch kind {
+	case bson.Object:
+		//valid
+	case bson.Null:
+		return nil
+	default:
+		panic(bson.NewBsonError("Unexpected data type %v for ServedFrom map", kind))
+	}
+
+	bson.Next(buf, 4)
+	values := make(map[TabletType]string)
+	kind = bson.NextByte(buf)
+	for kind != bson.EOO {
+		if kind != bson.String {
+			panic(bson.NewBsonError("Unexpected data type %v for ServedFrom map", kind))
+		}
+		key := bson.ReadCString(buf)
+		value := bson.ReadCString(buf)
+		values[TabletType(key)] = value
+		kind = bson.NextByte(buf)
+	}
+	return values
+}
+
 func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
 	lenWriter := bson.NewLenWriter(buf)
 
@@ -285,6 +320,9 @@ func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
 	EncodeSrvShardArray(buf, "Shards", sk.Shards)
 
 	EncodeTabletTypeArray(buf, "TabletTypes", sk.TabletTypes)
+	bson.EncodeString(buf, "ShardingColumnName", sk.ShardingColumnName)
+	bson.EncodeString(buf, "ShardingColumnType", string(sk.ShardingColumnType))
+	EncodeServedFrom(buf, "ServedFrom", sk.ServedFrom)
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
@@ -292,6 +330,7 @@ func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
+	var strVal string
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
@@ -303,9 +342,16 @@ func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
 			sk.Shards = DecodeSrvShardArray(buf, kind)
 		case "TabletTypes":
 			sk.TabletTypes = DecodeTabletTypeArray(buf, kind)
+		case "ShardingColumnName":
+			sk.ShardingColumnName = bson.DecodeString(buf, kind)
+		case "ShardingColumnType":
+			strVal = bson.DecodeString(buf, kind)
+		case "ServedFrom":
+			sk.ServedFrom = DecodeServedFrom(buf, kind)
 		default:
 			panic(bson.NewBsonError("Unrecognized tag %s", key))
 		}
 		kind = bson.NextByte(buf)
 	}
+	sk.ShardingColumnType = key.KeyspaceIdType(strVal)
 }

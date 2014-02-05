@@ -325,7 +325,7 @@ def zkocc_kill(sp):
   sp.wait()
 
 # vtgate helpers
-def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False):
+def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s'):
   port = environment.reserve_ports(1)
   args = [environment.binary_path('vtgate'),
           '-port', str(port),
@@ -333,6 +333,7 @@ def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, t
           '-retry-delay', '%ss' % (str(retry_delay)),
           '-retry-count', str(retry_count),
           '-log_dir', environment.vtlogroot,
+          '-srv_topo_cache_ttl', cache_ttl,
           ] + environment.tabletconn_protocol_flags()
   if topo_impl:
     args.extend(['-topo_implementation', topo_impl])
