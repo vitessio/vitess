@@ -13,6 +13,25 @@ and the necessary data is fetched from one of the shards.
 Reading from a keyspace gives you the impression that the data is read from
 a single MySQL database.
 
+### Tablet
+
+A tablet is a single server that runs:
+- a MySQL instance
+- a vttablet instance
+- a local row cache instance
+- an other per-db process that is necessary for operational purposes
+
+It can be idle (not assigned to any keyspace), or assigned to a keyspace/shard. If it becomes unhealthy, it is usually changed to scrap.
+
+It has a type. The commonly used types are:
+- master: for the mysql master, RW database.
+- replica: for a mysql slave that serves read-only traffic, with guaranteed low replication latency.
+- rdonly: for a mysql slave that serves read-only traffic for backend processing jobs (like map-reduce type jobs). It has no real guaranteed replication latency.
+- spare: for a mysql slave not use at the moment (hot spare).
+- experimental, schema, lag, backup, restore, checker, ... : various types for specific purposes.
+
+Only master, replica and rdonly are advertised in the Serving Graph.
+
 ### Keyspace id
 A keyspace id (keyspace_id) is a column that is used to identify a primary entity
 of a keyspace, like user, video, order, etc.
