@@ -26,4 +26,4 @@ If a cell is down, the result is partial. Some actions are resilient to partial 
 
 ## Reparenting
 
-Reparenting will update the MasterAlias record in the Shard (after having acquired the Shard lock). See the Reparenting doc for more information.
+[Reparenting](Reparenting.markdown) will update the MasterAlias record in the Shard (after having acquired the Shard lock). See the Reparenting doc for more information.
