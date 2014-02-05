@@ -31,12 +31,8 @@ class VTConnParams(object):
 
 def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeout, encrypted, user, password):
   db_params_list = []
-  vtgate_host_port_list = []
+  random.shuffle(vtgate_addrs)
   for addr in vtgate_addrs:
-    host_port = addr.split(':')
-    vtgate_host_port_list.append((host_port[0], long(host_port[1])))
-  random.shuffle(vtgate_host_port_list)
-  for host, port in vtgate_host_port_list:
     vt_params = VTConnParams(keyspace, shard, db_type, addr, timeout, encrypted, user, password).__dict__
     db_params_list.append(vt_params)
   return db_params_list
@@ -44,11 +40,12 @@ def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeou
 
 def get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password):
   db_params_list = []
-  db_key = "%s.%s.%s:_vtocc" % (keyspace, shard, db_type)
+  encrypted_service = '_vts'
   if encrypted:
-    service = '_vts'
+    service = encrypted_service
   else:
     service = '_vtocc'
+  db_key = "%s.%s.%s:%s" % (keyspace, shard, db_type, service)
   keyspace_data = topo_client.get_srv_keyspace('local', keyspace) 
 
   # Handle vertical split by checking 'ServedFrom' field.

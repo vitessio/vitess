@@ -110,8 +110,8 @@ func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "KeyRange":
 			ss.KeyRange.UnmarshalBson(buf)
 		case "ServedTypes":
@@ -119,7 +119,7 @@ func (ss *SrvShard) UnmarshalBson(buf *bytes.Buffer) {
 		case "TabletTypes":
 			ss.TabletTypes = DecodeTabletTypeArray(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -194,12 +194,12 @@ func (kp *KeyspacePartition) UnmarshalBson(buf *bytes.Buffer) {
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "Shards":
 			kp.Shards = DecodeSrvShardArray(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
@@ -268,10 +268,10 @@ func DecodeKeyspacePartitionMap(buf *bytes.Buffer, kind byte) map[TabletType]*Ke
 		if kind != bson.Object {
 			panic(bson.NewBsonError("Unexpected data type %v for KeyspacePartition map", kind))
 		}
-		key := bson.ReadCString(buf)
+		keyName := bson.ReadCString(buf)
 		value := &KeyspacePartition{}
 		value.UnmarshalBson(buf)
-		values[TabletType(key)] = value
+		values[TabletType(keyName)] = value
 		kind = bson.NextByte(buf)
 	}
 	return values
@@ -297,19 +297,16 @@ func DecodeServedFrom(buf *bytes.Buffer, kind byte) map[TabletType]string {
 		panic(bson.NewBsonError("Unexpected data type %v for ServedFrom map", kind))
 	}
 
+	servedFrom := make(map[TabletType]string)
 	bson.Next(buf, 4)
-	values := make(map[TabletType]string)
-	kind = bson.NextByte(buf)
-	for kind != bson.EOO {
-		if kind != bson.String {
-			panic(bson.NewBsonError("Unexpected data type %v for ServedFrom map", kind))
+	for kind = bson.NextByte(buf); kind != bson.EOO; kind = bson.NextByte(buf) {
+		keyName := bson.ReadCString(buf)
+		switch kind {
+		case bson.String, bson.Binary:
+			servedFrom[TabletType(keyName)] = bson.DecodeString(buf, kind)
 		}
-		key := bson.ReadCString(buf)
-		value := bson.ReadCString(buf)
-		values[TabletType(key)] = value
-		kind = bson.NextByte(buf)
 	}
-	return values
+	return servedFrom
 }
 
 func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
@@ -330,12 +327,11 @@ func (sk *SrvKeyspace) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
 	bson.Next(buf, 4)
-	var strVal string
 
 	kind := bson.NextByte(buf)
 	for kind != bson.EOO {
-		key := bson.ReadCString(buf)
-		switch key {
+		keyName := bson.ReadCString(buf)
+		switch keyName {
 		case "Partitions":
 			sk.Partitions = DecodeKeyspacePartitionMap(buf, kind)
 		case "Shards":
@@ -345,13 +341,12 @@ func (sk *SrvKeyspace) UnmarshalBson(buf *bytes.Buffer) {
 		case "ShardingColumnName":
 			sk.ShardingColumnName = bson.DecodeString(buf, kind)
 		case "ShardingColumnType":
-			strVal = bson.DecodeString(buf, kind)
+			sk.ShardingColumnType = key.KeyspaceIdType(bson.DecodeString(buf, kind))
 		case "ServedFrom":
 			sk.ServedFrom = DecodeServedFrom(buf, kind)
 		default:
-			panic(bson.NewBsonError("Unrecognized tag %s", key))
+			panic(bson.NewBsonError("Unrecognized tag %s", keyName))
 		}
 		kind = bson.NextByte(buf)
 	}
-	sk.ShardingColumnType = key.KeyspaceIdType(strVal)
 }
