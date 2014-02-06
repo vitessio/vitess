@@ -128,7 +128,7 @@ class RowCacheInvalidator(unittest.TestCase):
     logging.debug("Invalidations %d InvalidatorStats %s" %
                   (invalidations,
                    invalidatorStats['RowcacheInvalidationCheckPoint']))
-    self.assertTrue(invalidations > 0, "Invalidations are flowing through.")
+    self.assertTrue(invalidations > 0, "Invalidations are not flowing through.")
 
     res = replica_tablet.mquery('vt_test_keyspace',
                                 "select min(id) from vt_insert_test")
