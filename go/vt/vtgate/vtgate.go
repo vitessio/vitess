@@ -150,6 +150,35 @@ func (vtg *VTGate) StreamExecuteKeyRange(context interface{}, streamQuery *proto
 	return err
 }
 
+// StreamExecuteShard executes a streaming query on the specified shards.
+func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QueryShard, sendReply func(*proto.QueryResult) error) error {
+	err := vtg.scatterConn.StreamExecute(
+		context,
+		query.Sql,
+		query.BindVariables,
+		query.Keyspace,
+		query.Shards,
+		query.TabletType,
+		NewSafeSession(query.Session),
+		func(mreply *mproto.QueryResult) error {
+			reply := new(proto.QueryResult)
+			proto.PopulateQueryResult(mreply, reply)
+			// Note we don't populate reply.Session here,
+			// as it may change incrementaly as responses
+			// are sent.
+			return sendReply(reply)
+		})
+
+	if err != nil {
+		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
+	}
+	// now we can send the final Session info.
+	if query.Session != nil {
+		sendReply(&proto.QueryResult{Session: query.Session})
+	}
+	return err
+}
+
 // Begin begins a transaction. It has to be concluded by a Commit or Rollback.
 func (vtg *VTGate) Begin(context interface{}, outSession *proto.Session) error {
 	outSession.InTransaction = true

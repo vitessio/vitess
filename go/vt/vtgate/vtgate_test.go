@@ -182,3 +182,54 @@ func TestVTGateStreamExecuteKeyRange(t *testing.T) {
 		t.Errorf("want not nil, got %v", err)
 	}
 }
+
+func TestVTGateStreamExecuteShard(t *testing.T) {
+	resetSandbox()
+	sbc := &sandboxConn{}
+	testConns[0] = sbc
+	q := proto.QueryShard{
+		Sql:        "query",
+		Shards:     []string{"0"},
+		TabletType: topo.TYPE_MASTER,
+	}
+	// Test for successful execution
+	var qrs []*proto.QueryResult
+	err := RpcVTGate.StreamExecuteShard(nil, &q, func(r *proto.QueryResult) error {
+		qrs = append(qrs, r)
+		return nil
+	})
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+	row := new(proto.QueryResult)
+	proto.PopulateQueryResult(singleRowResult, row)
+	want := []*proto.QueryResult{row}
+	if !reflect.DeepEqual(want, qrs) {
+		t.Errorf("want \n%#v, got \n%#v", want, qrs)
+	}
+
+	q.Session = new(proto.Session)
+	qrs = nil
+	RpcVTGate.Begin(nil, q.Session)
+	err = RpcVTGate.StreamExecuteShard(nil, &q, func(r *proto.QueryResult) error {
+		qrs = append(qrs, r)
+		return nil
+	})
+	want = []*proto.QueryResult{
+		row,
+		&proto.QueryResult{
+			Session: &proto.Session{
+				InTransaction: true,
+				ShardSessions: []*proto.ShardSession{{
+					Shard:         "0",
+					TransactionId: 1,
+					TabletType:    topo.TYPE_MASTER,
+				}},
+			},
+		},
+	}
+	if !reflect.DeepEqual(want, qrs) {
+		t.Errorf("want \n%#v, got \n%#v", want, qrs)
+	}
+
+}
