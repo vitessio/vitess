@@ -7,11 +7,13 @@ package tabletserver
 import (
 	"fmt"
 	"io"
+	"time"
 
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/sqltypes"
 	"github.com/youtube/vitess/go/stats"
 	"github.com/youtube/vitess/go/sync2"
+	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
@@ -72,7 +74,6 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 
 	defer func() {
 		rowCache.state.Set(RCINV_DISABLED)
-		DisallowQueries()
 	}()
 
 	groupId, err := binlog.GetReplicationPosition()
@@ -81,13 +82,29 @@ func (rowCache *InvalidationProcessor) runInvalidationLoop() {
 		return
 	}
 
-	log.Infof("Starting rowcache invalidator")
-	req := &blproto.UpdateStreamRequest{GroupId: groupId}
-	err = binlog.ServeUpdateStream(req, func(reply *blproto.StreamEvent) error {
-		return rowCache.processEvent(reply)
-	})
-	if err != nil {
+	rowCache.GroupId.Set(groupId)
+	log.Infof("Starting rowcache invalidator at: %d", groupId)
+	for {
+		// We wrap this code in a func so we can catch all panics.
+		// If an error is returned, we log it, wait 1 second, and retry.
+		// Rowcache can only be stopped by calling StopRowCacheInvalidation.
+		err := func() (inner error) {
+			defer func() {
+				if x := recover(); x != nil {
+					inner = fmt.Errorf("%v: uncaught panic:\n%s", x, tb.Stack(4))
+				}
+			}()
+			req := &blproto.UpdateStreamRequest{GroupId: rowCache.GroupId.Get()}
+			return binlog.ServeUpdateStream(req, func(reply *blproto.StreamEvent) error {
+				return rowCache.processEvent(reply)
+			})
+		}()
+		if err == nil {
+			break
+		}
 		log.Errorf("binlog.ServeUpdateStream returned err '%v'", err.Error())
+		internalErrors.Add("Invalidation", 1)
+		time.Sleep(1 * time.Second)
 	}
 	log.Infof("Rowcache invalidator stopped")
 }
@@ -107,7 +124,8 @@ func (rowCache *InvalidationProcessor) processEvent(event *blproto.StreamEvent) 
 	case "POS":
 		rowCache.GroupId.Set(event.GroupId)
 	default:
-		panic(fmt.Errorf("unknown event: %#v", event))
+		log.Errorf("unknown event: %#v", event)
+		internalErrors.Add("Invalidation", 1)
 	}
 	return nil
 }
