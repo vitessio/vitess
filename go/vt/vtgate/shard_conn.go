@@ -54,6 +54,17 @@ func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType t
 	}
 }
 
+type ShardConnError struct {
+	Code              int
+	ShardIdentifier   string
+	connErrResolvable bool
+	Err               string
+}
+
+func (e *ShardConnError) Error() string {
+	return fmt.Sprintf("%v, shard, host: %s", e.Err, e.ShardIdentifier)
+}
+
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
@@ -88,7 +99,8 @@ func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars 
 	if err != nil {
 		return results, func() error { return err }
 	}
-	return results, func() error { return sdc.WrapError(erFunc(), usedConn) }
+	inTransaction := (transactionId != 0)
+	return results, func() error { return sdc.WrapError(erFunc(), usedConn, isConnErrResolvable(err, inTransaction)) }
 }
 
 // Begin begins a transaction. The retry rules are the same as Execute.
@@ -134,20 +146,21 @@ func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn
 	var conn tabletconn.TabletConn
 	var err error
 	var retry bool
+	inTransaction := (transactionId != 0)
 	for i := 0; i < sdc.retryCount; i++ {
 		conn, err, retry = sdc.getConn(context)
 		if err != nil {
 			if retry {
 				continue
 			}
-			return sdc.WrapError(err, conn)
+			return sdc.WrapError(err, conn, isConnErrResolvable(err, inTransaction))
 		}
-		if err = action(conn); sdc.canRetry(err, transactionId, conn) {
+		if err = action(conn); !isConnErrResolvable(err, inTransaction) && sdc.canRetry(err, transactionId, conn) {
 			continue
 		}
-		return sdc.WrapError(err, conn)
+		return sdc.WrapError(err, conn, isConnErrResolvable(err, inTransaction))
 	}
-	return sdc.WrapError(err, conn)
+	return sdc.WrapError(err, conn, isConnErrResolvable(err, inTransaction))
 }
 
 // getConn reuses an existing connection if possible. Otherwise
@@ -194,9 +207,22 @@ func (sdc *ShardConn) canRetry(err error, transactionId int64, conn tabletconn.T
 		}
 	}
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
-	sdc.markDown(conn)
 	inTransaction := (transactionId != 0)
+	sdc.markDown(conn)
 	return !inTransaction
+}
+
+func isConnErrResolvable(err error, inTransaction bool) bool {
+	if err == nil {
+		return false
+	}
+	if serverError, ok := err.(*tabletconn.ServerError); ok {
+		switch serverError.Code {
+		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
+			return !inTransaction
+		}
+	}
+	return false
 }
 
 // markDown closes conn and temporarily marks the associated
@@ -215,15 +241,25 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn) {
 }
 
 // WrapError adds the connection context to an error.
-func (sdc *ShardConn) WrapError(in error, conn tabletconn.TabletConn) (wrapped error) {
+func (sdc *ShardConn) WrapError(in error, conn tabletconn.TabletConn, connErrResolvable bool) (wrapped error) {
 	if in == nil {
 		return nil
 	}
-	var endPoint topo.EndPoint
+	shardIdentifier := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, sdc.tabletType)
 	if conn != nil {
-		endPoint = conn.EndPoint()
+		shardIdentifier += fmt.Sprintf(", %s", conn.EndPoint().Host)
 	}
-	return fmt.Errorf(
-		"%v, shard: (%s.%s.%s), host: %s",
-		in, sdc.keyspace, sdc.shard, sdc.tabletType, endPoint.Host)
+
+	code := tabletconn.ERR_NORMAL
+	serverError, ok := in.(*tabletconn.ServerError)
+	if ok {
+		code = serverError.Code
+	}
+
+	shardConnErr := &ShardConnError{Code: code,
+		ShardIdentifier:   shardIdentifier,
+		connErrResolvable: connErrResolvable,
+		Err:               in.Error(),
+	}
+	return shardConnErr
 }

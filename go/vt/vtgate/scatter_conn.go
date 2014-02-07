@@ -228,16 +228,31 @@ func (stc *ScatterConn) multiGo(
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			sdc := stc.getConnection(keyspace, shard, tabletType)
-			transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
-			if err != nil {
-				allErrors.RecordError(err)
-				return
-			}
-			err = action(sdc, transactionId, results)
-			if err != nil {
-				allErrors.RecordError(err)
-				return
+			for {
+				sdc := stc.getConnection(keyspace, shard, tabletType)
+				transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
+				if err != nil {
+					allErrors.RecordError(err)
+					return
+				}
+				err = action(sdc, transactionId, results)
+				// If a transaction is in progress, the lower layers ensure we don't set re-resolve,
+				// but double-checking here again.
+				if shouldResolveKeyspace(err, transactionId) {
+					newKeyspace, err := getKeyspaceAlias(stc.toposerv, stc.cell, keyspace, tabletType)
+					if err == nil && newKeyspace != keyspace {
+						sdc.Close()
+						key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
+						delete(stc.shardConns, key)
+						keyspace = newKeyspace
+						continue
+					}
+				}
+				if err != nil {
+					allErrors.RecordError(err)
+					return
+				}
+				break
 			}
 		}(shard)
 	}
@@ -320,4 +335,14 @@ func unique(in []string) map[string]struct{} {
 		out[v] = struct{}{}
 	}
 	return out
+}
+
+func shouldResolveKeyspace(err error, transactionId int64) bool {
+	if err == nil || transactionId != 0 {
+		return false
+	}
+	if shardConnErr, ok := err.(*ShardConnError); ok {
+		return shardConnErr.connErrResolvable
+	}
+	return false
 }

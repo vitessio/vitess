@@ -64,7 +64,7 @@ func testScatterConnGeneric(t *testing.T, f func(shards []string) (*mproto.Query
 	sbc := &sandboxConn{mustFailServer: 1}
 	testConns[0] = sbc
 	qr, err = f([]string{"0"})
-	want := "error: err, shard: (.0.), host: 0"
+	want := "error: err, shard, host: .0., 0"
 	// Verify server error string.
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
@@ -82,7 +82,7 @@ func testScatterConnGeneric(t *testing.T, f func(shards []string) (*mproto.Query
 	testConns[1] = sbc1
 	_, err = f([]string{"0", "1"})
 	// Verify server errors are consolidated.
-	want = "error: err, shard: (.0.), host: 0\nerror: err, shard: (.1.), host: 1"
+	want = "error: err, shard, host: .0., 0\nerror: err, shard, host: .1., 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("\nwant\n%s\ngot\n%v", want, err)
 	}
