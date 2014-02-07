@@ -62,6 +62,7 @@ func DialTablet(context interface{}, endPoint topo.EndPoint, keyspace, shard str
 
 	var sessionInfo tproto.SessionInfo
 	if err = conn.rpcClient.Call("SqlQuery.GetSessionId", tproto.SessionParams{Keyspace: keyspace, Shard: shard}, &sessionInfo); err != nil {
+		conn.rpcClient.Close()
 		return nil, tabletError(err)
 	}
 	conn.sessionId = sessionInfo.SessionId
