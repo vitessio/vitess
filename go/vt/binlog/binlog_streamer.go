@@ -167,8 +167,6 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 		}
 		prefix := string(bytes.ToLower(bytes.SplitN(sql, SPACE, 2)[0]))
 		switch category := statementPrefixes[prefix]; category {
-		case proto.BL_UNRECOGNIZED:
-			return fmt.Errorf("unrecognized: %s", sql)
 		// We trust that mysqlbinlog doesn't send proto.BL_DMLs withot a proto.BL_BEGIN
 		case proto.BL_BEGIN, proto.BL_ROLLBACK:
 			statements = nil
@@ -187,7 +185,7 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 				return fmt.Errorf("send reply error: %v", err)
 			}
 			statements = nil
-		// proto.BL_DML & proto.BL_SET
+		// proto.BL_DML, proto.BL_SET or proto.BL_UNRECOGNIZED
 		default:
 			statements = append(statements, proto.Statement{Category: category, Sql: sql})
 		}

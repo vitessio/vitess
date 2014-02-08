@@ -56,6 +56,10 @@ func KeyRangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) se
 				}
 				filtered = append(filtered, statement)
 				matched = true
+			case proto.BL_UNRECOGNIZED:
+				updateStreamErrors.Add("KeyRangeStream", 1)
+				log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+				continue
 			}
 		}
 		if matched {

@@ -50,6 +50,10 @@ func TablesFilterFunc(tables []string, sendReply sendTransactionFunc) sendTransa
 						break
 					}
 				}
+			case proto.BL_UNRECOGNIZED:
+				updateStreamErrors.Add("TablesStream", 1)
+				log.Errorf("Error parsing table name: %s", string(statement.Sql))
+				continue
 			}
 		}
 		if matched {

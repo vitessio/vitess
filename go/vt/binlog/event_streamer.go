@@ -71,8 +71,21 @@ func (evs *EventStreamer) transactionToEvent(trans *proto.BinlogTransaction) err
 				return err
 			}
 		case proto.BL_DDL:
-			ddlEvent := &proto.StreamEvent{Category: "DDL", Sql: string(stmt.Sql), Timestamp: timestamp}
+			ddlEvent := &proto.StreamEvent{
+				Category:  "DDL",
+				Sql:       string(stmt.Sql),
+				Timestamp: timestamp,
+			}
 			if err = evs.sendEvent(ddlEvent); err != nil {
+				return err
+			}
+		case proto.BL_UNRECOGNIZED:
+			unrecognized := &proto.StreamEvent{
+				Category:  "ERR",
+				Sql:       string(stmt.Sql),
+				Timestamp: timestamp,
+			}
+			if err = evs.sendEvent(unrecognized); err != nil {
 				return err
 			}
 		}
