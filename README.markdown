@@ -6,22 +6,21 @@ It's currently used as a fundamental component of YouTube's MySQL infrastructure
 [sougou](https://github.com/sougou) presented Vitess at Fosdem '14 in the go devroom. [Here are the slides](https://github.com/youtube/vitess/blob/master/doc/Vitess2014.pdf?raw=true). We'll share the video links when they become available.
 
 * [Vision](https://github.com/youtube/vitess/blob/master/doc/Vision.markdown)
+* Concepts 
+ * [General Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
+ * [Replication Graph](https://github.com/youtube/vitess/blob/master/doc/ReplicationGraph.markdown)
+ * [Serving graph](https://github.com/youtube/vitess/blob/master/doc/ServingGraph.markdown)
 * [Tools](https://github.com/youtube/vitess/blob/master/doc/Tools.markdown)
-* [Concepts](https://github.com/youtube/vitess/blob/master/doc/Concepts.markdown)
 * [Getting Started](https://github.com/youtube/vitess/blob/master/doc/GettingStarted.markdown)
-
-## Features
-
-This is an incomplete list of Vitess features.
-
-### Clients
-
-* A Python DBAPI 2.0 compliant client interface.
-* A go client interface.
-* Simple [BSON](http://bsonspec.org/) based protocol with SASL
-  authentication.
+* Operations
+ * [Preparing for production](https://github.com/youtube/vitess/blob/master/doc/Production.markdown)
+ * [Reparenting](https://github.com/youtube/vitess/blob/master/doc/Reparenting.markdown)
+ * [Resharding](https://github.com/youtube/vitess/blob/master/doc/Resharding.markdown)
+ * [Schema management](https://github.com/youtube/vitess/blob/master/doc/SchemaManagement.markdown)
+ * [Zookeeper data](https://github.com/youtube/vitess/blob/master/doc/ZookeeperData.markdown)
 
 ### vttablet
+TODO: Move this content to its own markdown.
 
 Smart middleware sitting in front of MySQL and serving clients
 requests.
@@ -48,38 +47,6 @@ requests.
 * Discard idle backend connections to avoid offline db errors.
 * Transaction management: Ability to limit the number of concurrent
   transactions and manage deadlines.
-	  
-### Management
-
-* Cluster configuration is stored using pluggable lock service
-  backends, with the [ZooKeeper](http://zookeeper.apache.org/) enabled
-  by default.
-* *vtctl*: command line tool that allows to do most management
-  operations, like initializing a server, changing its type, etc.
-* Separate replication and serving graph management.
-* *vtctld*: HTTP daemon giving an overview of the configuration
-   (there's also a JSON API available).
-* Fast database snaphsotting and reloading (much faster than mysqldump
-  and LOAD DATA INFILE).
-
-### Sharding 
-
-* Keyspaces: All tables in a sharded database need to contain a “key”
-  column. Vitess will use these values to decide the target shard for
-  such data. All tables that are indexed by a set of keys are known as
-  a *keyspace*, which basically represents the logical database that
-  combines all the shards that store them.
-* Range based sharding: The main advantage of this scheme is that the
-  shard map is a simple in-memory lookup. The downside of this scheme
-  is that it creates hot-spots for sequentially increasing keys. In
-  such cases, we recommend that the application hash the keys so they
-  distribute more randomly.
-
-### Replication
-
-* Split replication: replicate only part of the replication stream
-  basing on provided criteria (useful for vertical or horizontal
-  resharding).
 
 ## License
 
