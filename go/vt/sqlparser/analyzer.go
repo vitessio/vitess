@@ -5,26 +5,37 @@
 package sqlparser
 
 // analyzer.go contains utility analysis functions.
-// TODO(sougou): Move some generic functions out of exection.go
+// TODO(sougou): Move some generic functions out of execution.go
 // and router.go into this file.
 
 import "fmt"
 
-// IsCrossDB returns true if the DML uses
-// schema qualifier for table names.
-// It returns an error if parsing fails.
-func IsCrossDB(sql string) (bool, error) {
+// GetDBName parses the specified DML and returns the
+// db name if it was used to qualify the table name.
+// It returns an error if parsing fails or if the statement
+// is not a DML.
+func GetDBName(sql string) (string, error) {
 	rootNode, err := Parse(sql)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	switch rootNode.Type {
 	case INSERT:
-		return rootNode.At(INSERT_TABLE_OFFSET).Type == '.', nil
+		return extractDBName(rootNode.At(INSERT_TABLE_OFFSET)), nil
 	case UPDATE:
-		return rootNode.At(UPDATE_TABLE_OFFSET).Type == '.', nil
+		return extractDBName(rootNode.At(UPDATE_TABLE_OFFSET)), nil
 	case DELETE:
-		return rootNode.At(DELETE_TABLE_OFFSET).Type == '.', nil
+		return extractDBName(rootNode.At(DELETE_TABLE_OFFSET)), nil
 	}
-	return false, fmt.Errorf("statement '%s' is not a dml", sql)
+	return "", fmt.Errorf("statement '%s' is not a dml", sql)
+}
+
+func extractDBName(node *Node) string {
+	if node.Type != '.' {
+		return ""
+	}
+	if node.At(0).Type != ID {
+		return ""
+	}
+	return string(node.At(0).Value)
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/youtube/vitess/go/tb"
 	"github.com/youtube/vitess/go/vt/binlog"
 	blproto "github.com/youtube/vitess/go/vt/binlog/proto"
+	"github.com/youtube/vitess/go/vt/sqlparser"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -119,8 +120,15 @@ func (rowCache *InvalidationProcessor) processEvent(event *blproto.StreamEvent) 
 	case "DML":
 		rowCache.handleDmlEvent(event)
 	case "ERR":
-		log.Errorf("Unrecognized: %s", event.Sql)
-		internalErrors.Add("Invalidation", 1)
+		dbname, err := sqlparser.GetDBName(event.Sql)
+		// TODO(sougou): Also check if dbname matches current db name
+		if err != nil || dbname == "" {
+			log.Errorf("Unrecognized: %s", event.Sql)
+			internalErrors.Add("Invalidation", 1)
+		} else {
+			log.Warningf("Ignoring cross-db statement: %s", event.Sql)
+			infoErrors.Add("Invalidation", 1)
+		}
 	case "POS":
 		rowCache.GroupId.Set(event.GroupId)
 	default:

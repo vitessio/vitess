@@ -6,20 +6,20 @@ package sqlparser
 
 import "testing"
 
-func TestIsCrossDB(t *testing.T) {
+func TestGetDBName(t *testing.T) {
 	wantYes := []string{
 		"insert into a.b values(1)",
 		"update a.b set c=1",
 		"delete from a.b where c=d",
 	}
 	for _, stmt := range wantYes {
-		result, err := IsCrossDB(stmt)
+		result, err := GetDBName(stmt)
 		if err != nil {
 			t.Errorf("error %v on %s", err, stmt)
 			continue
 		}
-		if !result {
-			t.Errorf("want true, got false")
+		if result != "a" {
+			t.Errorf("want a, got %s", result)
 		}
 	}
 
@@ -29,13 +29,13 @@ func TestIsCrossDB(t *testing.T) {
 		"delete from a where c=d",
 	}
 	for _, stmt := range wantNo {
-		result, err := IsCrossDB(stmt)
+		result, err := GetDBName(stmt)
 		if err != nil {
 			t.Errorf("error %v on %s", err, stmt)
 			continue
 		}
-		if result {
-			t.Errorf("want false, got true")
+		if result != "" {
+			t.Errorf("want '', got %s", result)
 		}
 	}
 
@@ -44,7 +44,7 @@ func TestIsCrossDB(t *testing.T) {
 		"syntax error",
 	}
 	for _, stmt := range wantErr {
-		_, err := IsCrossDB(stmt)
+		_, err := GetDBName(stmt)
 		if err == nil {
 			t.Errorf("want error, got nil")
 		}
