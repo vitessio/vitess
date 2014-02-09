@@ -129,7 +129,7 @@ const (
 %type <node> comment_opt comment_list
 %type <node> union_op distinct_opt
 %type <node> select_expression_list select_expression expression as_opt
-%type <node> table_expression_list table_expression join_type simple_table_expression index_hint_list
+%type <node> table_expression_list table_expression join_type simple_table_expression dml_table_expression index_hint_list
 %type <node> where_expression_opt boolean_expression condition compare
 %type <node> values parenthesised_lists parenthesised_list value_expression_list value_expression keyword_as_func
 %type <node> unary_operator case_expression when_expression_list when_expression column_name value
@@ -178,7 +178,7 @@ select_statement:
 	}
 
 insert_statement:
-	INSERT comment_opt INTO ID column_list_opt values on_dup_opt
+	INSERT comment_opt INTO dml_table_expression column_list_opt values on_dup_opt
 	{
 		$$ = $1
 		$$.Push($2) // 0: comment_opt
@@ -189,7 +189,7 @@ insert_statement:
 	}
 
 update_statement:
-	UPDATE comment_opt ID SET update_list where_expression_opt order_by_opt limit_opt
+	UPDATE comment_opt dml_table_expression SET update_list where_expression_opt order_by_opt limit_opt
 	{
 		$$ = $1
 		$$.Push($2) // 0: comment_opt
@@ -201,7 +201,7 @@ update_statement:
 	}
 
 delete_statement:
-	DELETE comment_opt FROM ID where_expression_opt order_by_opt limit_opt
+	DELETE comment_opt FROM dml_table_expression where_expression_opt order_by_opt limit_opt
 	{
 		$$ = $1
 		$$.Push($2) // 0: comment_opt
@@ -418,6 +418,13 @@ ID
 | '(' select_statement ')'
 	{
 		$$ = $1.Push($2)
+	}
+
+dml_table_expression:
+ID
+| ID '.' ID
+	{
+		$$ = $2.PushTwo($1, $3)
 	}
 
 index_hint_list:

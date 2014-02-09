@@ -110,6 +110,7 @@ select /* order by desc */ 1 from t order by a desc
 select /* limit a */ 1 from t limit a
 select /* limit a,b */ 1 from t limit a, b
 insert /* simple */ into a values (1)
+insert /* a.b */ into a.b values (1)
 insert /* multi-value */ into a values (1, 2)
 insert /* multi-value list */ into a values (1, 2), (3, 4)
 insert /* value expression list */ into a values (a+1, 2*3)
@@ -117,12 +118,14 @@ insert /* column list */ into a(a, b) values (1, 2)
 insert /* select */ into a select b, c from d
 insert /* on duplicate */ into a values (1, 2) on duplicate key update b = values(a), c = d
 update /* simple */ a set b = 3
+update /* a.b */ a.b set b = 3
 update /* list */ a set b = 3, c = 4
 update /* expression */ a set b = 3+4
 update /* where */ a set b = 3 where a = b
 update /* order */ a set b = 3 order by c desc
 update /* limit */ a set b = 3 limit c
 delete /* simple */ from a
+delete /* a.b */ from a.b
 delete /* where */ from a where a = b
 delete /* order */ from a order by b desc
 delete /* limit */ from a limit b

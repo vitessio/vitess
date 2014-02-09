@@ -348,7 +348,11 @@ func (node *Node) execAnalyzeSelect(getTable TableGetter) (plan *ExecPlan) {
 
 func (node *Node) execAnalyzeInsert(getTable TableGetter) (plan *ExecPlan) {
 	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: node.GenerateFullQuery()}
-	tableName := string(node.At(INSERT_TABLE_OFFSET).Value)
+	tableName := node.At(INSERT_TABLE_OFFSET).collectTableName()
+	if tableName == "" {
+		plan.Reason = REASON_TABLE
+		return plan
+	}
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -398,7 +402,11 @@ func (node *Node) execAnalyzeUpdate(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: node.GenerateFullQuery()}
 
-	tableName := string(node.At(UPDATE_TABLE_OFFSET).Value)
+	tableName := node.At(UPDATE_TABLE_OFFSET).collectTableName()
+	if tableName == "" {
+		plan.Reason = REASON_TABLE
+		return plan
+	}
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -437,7 +445,11 @@ func (node *Node) execAnalyzeDelete(getTable TableGetter) (plan *ExecPlan) {
 	// Default plan
 	plan = &ExecPlan{PlanId: PLAN_PASS_DML, FullQuery: node.GenerateFullQuery()}
 
-	tableName := string(node.At(DELETE_TABLE_OFFSET).Value)
+	tableName := node.At(DELETE_TABLE_OFFSET).collectTableName()
+	if tableName == "" {
+		plan.Reason = REASON_TABLE
+		return plan
+	}
 	tableInfo := plan.setTableInfo(tableName, getTable)
 
 	if len(tableInfo.Indexes) == 0 || tableInfo.Indexes[0].Name != "PRIMARY" {
@@ -564,15 +576,10 @@ func (node *Node) execAnalyzeFrom() (tablename string, hasHints bool) {
 }
 
 func (node *Node) collectTableName() string {
-	switch node.Type {
-	case AS:
-		return node.At(0).collectTableName()
-	case ID:
+	if node.Type == ID {
 		return string(node.Value)
-	case '.':
-		return string(node.At(1).Value)
 	}
-	// sub-select
+	// sub-select or '.' expression
 	return ""
 }
 

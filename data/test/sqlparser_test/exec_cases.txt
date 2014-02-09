@@ -98,6 +98,25 @@ select * from a limit 5
   "SetValue": null
 }
 
+# cross-db
+select * from a.b
+{
+  "PlanId": "PASS_SELECT",
+  "Reason": "TABLE",
+  "TableName": "",
+  "FieldQuery": "select * from a.b where 1 != 1",
+  "FullQuery": "select * from a.b limit :_vtMaxResultSize",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # multi-table
 select * from a,b
 {
@@ -1005,6 +1024,25 @@ select * from d force index(d_bar_never) where bar = 'foo'
   "SetValue": null
 }
 
+# insert cross-db
+insert into b.a (eid, id) values (1, :a)
+{
+  "PlanId": "PASS_DML",
+  "Reason": "TABLE",
+  "TableName": "",
+  "FieldQuery": null,
+  "FullQuery": "insert into b.a(eid, id) values (1, :a)",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # insert with bind value
 insert into a (eid, id) values (1, :a)
 {
@@ -1316,6 +1354,25 @@ insert into b (eid, id) values (1, 2), (3, 4)
   "SetValue": null
 }
 
+# update cross-db
+update b.a set name='foo' where eid=1 and id=1
+{
+  "PlanId": "PASS_DML",
+  "Reason": "TABLE",
+  "TableName": "",
+  "FieldQuery": null,
+  "FullQuery": "update b.a set name = 'foo' where eid = 1 and id = 1",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
 # pk changed
 update b set eid=1
 {
@@ -1480,6 +1537,25 @@ update c set eid=1
   "TableName": "c",
   "FieldQuery": null,
   "FullQuery": "update c set eid = 1",
+  "OuterQuery": null,
+  "Subquery": null,
+  "IndexUsed": "",
+  "ColumnNumbers": null,
+  "PKValues": null,
+  "SecondaryPKValues": null,
+  "SubqueryPKColumns": null,
+  "SetKey": "",
+  "SetValue": null
+}
+
+# delete cross-db
+delete from b.a where eid=1 and id=1
+{
+  "PlanId": "PASS_DML",
+  "Reason": "TABLE",
+  "TableName": "",
+  "FieldQuery": null,
+  "FullQuery": "delete from b.a where eid = 1 and id = 1",
   "OuterQuery": null,
   "Subquery": null,
   "IndexUsed": "",
