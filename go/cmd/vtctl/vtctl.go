@@ -168,7 +168,7 @@ var commands = []commandGroup{
 				"[-sharding_column_name=name] [-sharding_column_type=type] [-served-from=tablettype1:ks1,tablettype2,ks2,...] [-force] <keyspace name|zk keyspace path>",
 				"Creates the given keyspace"},
 			command{"SetKeyspaceShardingInfo", commandSetKeyspaceShardingInfo,
-				"[-force] <keyspace name|zk keyspace path> <column name> <column type>",
+				"[-force] <keyspace name|zk keyspace path> [<column name>] [<column type>]",
 				"Updates the sharding info for a keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
 				"[-cells=a,b] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
@@ -1159,17 +1159,24 @@ func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args [
 func commandSetKeyspaceShardingInfo(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	force := subFlags.Bool("force", false, "will update the fields even if they're already set, use with care")
 	subFlags.Parse(args)
-	if subFlags.NArg() != 3 {
-		log.Fatalf("action SetKeyspaceShardingInfo requires <keyspace name|zk keyspace path> <column name> <column type>")
+	if subFlags.NArg() > 3 || subFlags.NArg() < 1 {
+		log.Fatalf("action SetKeyspaceShardingInfo requires <keyspace name|zk keyspace path> [<column name>] [<column type>]")
 	}
 
 	keyspace := keyspaceParamToKeyspace(subFlags.Arg(0))
-	kit := key.KeyspaceIdType(subFlags.Arg(2))
-	if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
-		log.Fatalf("invalid sharding_column_type")
+	columnName := ""
+	if subFlags.NArg() >= 2 {
+		columnName = subFlags.Arg(1)
+	}
+	kit := key.KIT_UNSET
+	if subFlags.NArg() >= 3 {
+		kit = key.KeyspaceIdType(subFlags.Arg(2))
+		if !key.IsKeyspaceIdTypeInList(kit, key.AllKeyspaceIdTypes) {
+			log.Fatalf("invalid sharding_column_type")
+		}
 	}
 
-	return "", wr.SetKeyspaceShardingInfo(keyspace, subFlags.Arg(1), kit, *force)
+	return "", wr.SetKeyspaceShardingInfo(keyspace, columnName, kit, *force)
 }
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
