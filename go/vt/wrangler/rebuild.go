@@ -283,14 +283,14 @@ func (wr *Wrangler) rebuildShardSrvGraph(shardInfo *topo.ShardInfo, tablets []*t
 }
 
 // Rebuild the serving graph data while locking out other changes.
-func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, useServedTypes bool) error {
+func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string) error {
 	actionNode := actionnode.RebuildKeyspace()
 	lockPath, err := wr.lockKeyspace(keyspace, actionNode)
 	if err != nil {
 		return err
 	}
 
-	err = wr.rebuildKeyspace(keyspace, cells, useServedTypes)
+	err = wr.rebuildKeyspace(keyspace, cells)
 	return wr.unlockKeyspace(keyspace, actionNode, lockPath, err)
 }
 
@@ -300,7 +300,7 @@ func (wr *Wrangler) RebuildKeyspaceGraph(keyspace string, cells []string, useSer
 //
 // Take data from the global keyspace and rebuild the local serving
 // copies in each cell.
-func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTypes bool) error {
+func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string) error {
 	log.Infof("rebuildKeyspace %v", keyspace)
 
 	ki, err := wr.ts.GetKeyspace(keyspace)
@@ -373,62 +373,6 @@ func (wr *Wrangler) rebuildKeyspace(keyspace string, cells []string, useServedTy
 		}
 	}
 
-	if useServedTypes {
-		// Use the new code. Only works in ServeTypes in
-		// Shard objects are populated and correct.
-		return wr.rebuildKeyspaceWithServedTypes(shards, srvKeyspaceMap)
-	}
-
-	// for each entry in the srvKeyspaceMap map, we do the following:
-	// - read the ShardInfo structures for each shard
-	// - compute the union of the db types (replica, master, ...)
-	// - sort the shards in the list by range
-	// - check the ranges are compatible (no hole, covers everything)
-	for ck, srvKeyspace := range srvKeyspaceMap {
-		keyspaceDbTypes := make(map[topo.TabletType]bool)
-		for _, shard := range shards {
-			srvShard, err := wr.ts.GetSrvShard(ck.cell, ck.keyspace, shard)
-			if err != nil {
-				return err
-			}
-			for _, tabletType := range srvShard.TabletTypes {
-				keyspaceDbTypes[tabletType] = true
-			}
-			srvKeyspace.Shards = append(srvKeyspace.Shards, *srvShard)
-		}
-		tabletTypes := make([]topo.TabletType, 0, len(keyspaceDbTypes))
-		for dbType := range keyspaceDbTypes {
-			tabletTypes = append(tabletTypes, dbType)
-		}
-		srvKeyspace.TabletTypes = tabletTypes
-		// FIXME(msolomon) currently this only works when the shards are range-based
-		topo.SrvShardArray(srvKeyspace.Shards).Sort()
-
-		// check the first Start is MinKey, the last End is MaxKey,
-		// and the values in between match: End[i] == Start[i+1]
-		if srvKeyspace.Shards[0].KeyRange.Start != key.MinKey {
-			return fmt.Errorf("Keyspace does not start with %v", key.MinKey)
-		}
-		if srvKeyspace.Shards[len(srvKeyspace.Shards)-1].KeyRange.End != key.MaxKey {
-			return fmt.Errorf("Keyspace does not end with %v", key.MaxKey)
-		}
-		for i := range srvKeyspace.Shards[0 : len(srvKeyspace.Shards)-1] {
-			if srvKeyspace.Shards[i].KeyRange.End != srvKeyspace.Shards[i+1].KeyRange.Start {
-				return fmt.Errorf("Non-contiguous KeyRange values at shard %v to %v: %v != %v", i, i+1, srvKeyspace.Shards[i].KeyRange.End.Hex(), srvKeyspace.Shards[i+1].KeyRange.Start.Hex())
-			}
-		}
-	}
-
-	// and then finally save the keyspace objects
-	for ck, srvKeyspace := range srvKeyspaceMap {
-		if err := wr.ts.UpdateSrvKeyspace(ck.cell, ck.keyspace, srvKeyspace); err != nil {
-			return fmt.Errorf("writing serving data failed: %v", err)
-		}
-	}
-	return nil
-}
-
-func (wr *Wrangler) rebuildKeyspaceWithServedTypes(shards []string, srvKeyspaceMap map[cellKeyspace]*topo.SrvKeyspace) error {
 	// for each entry in the srvKeyspaceMap map, we do the following:
 	// - read the ShardInfo structures for each shard
 	// - compute the union of the db types (replica, master, ...)
@@ -568,7 +512,7 @@ func (wr *Wrangler) RebuildReplicationGraph(cells []string, keyspaces []string) 
 		wg.Add(1)
 		go func(keyspace string) {
 			defer wg.Done()
-			if err := wr.RebuildKeyspaceGraph(keyspace, nil, false); err != nil {
+			if err := wr.RebuildKeyspaceGraph(keyspace, nil); err != nil {
 				mu.Lock()
 				hasErr = true
 				mu.Unlock()

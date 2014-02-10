@@ -134,7 +134,7 @@ def setup_tablets():
   utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/80-',
                    shard_1_master.tablet_alias], auto_log=True)
 
-  utils.run_vtctl(['RebuildKeyspaceGraph', '-use-served-types', 'test_keyspace'],
+  utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'],
                    auto_log=True)
 
   utils.check_srv_keyspace('test_nj', 'test_keyspace',

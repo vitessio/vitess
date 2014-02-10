@@ -185,7 +185,7 @@ func (wr *Wrangler) MigrateServedTypes(keyspace, shard string, servedType topo.T
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, true))
+		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil))
 	}
 
 	return rec.Error()
@@ -486,7 +486,7 @@ func (wr *Wrangler) MigrateServedFrom(keyspace, shard string, servedType topo.Ta
 
 	// rebuild the keyspace serving graph if there was no error
 	if rec.Error() == nil {
-		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil, true))
+		rec.RecordError(wr.RebuildKeyspaceGraph(keyspace, nil))
 	}
 
 	return rec.Error()

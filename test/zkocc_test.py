@@ -48,11 +48,8 @@ class TopoOccTest(unittest.TestCase):
       utils.zkocc_kill(self.zkocc_server)
       utils.vtgate_kill(self.vtgate_zkocc)
 
-  def rebuild(self, use_served_types=False):
-    flags = ""
-    if use_served_types:
-      flags = "--use-served-types"
-    utils.run_vtctl('RebuildKeyspaceGraph %s test_keyspace' % flags, auto_log=True)
+  def rebuild(self):
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
   def test_get_srv_keyspace_names(self):
     utils.run_vtctl('CreateKeyspace test_keyspace1')
@@ -89,7 +86,7 @@ class TopoOccTest(unittest.TestCase):
     t = tablet.Tablet(tablet_uid=1, cell="nj")
     t.init_tablet("master", "test_keyspace", "0")
     utils.run_vtctl('UpdateTabletAddrs -hostname localhost -ip-addr 127.0.0.1 -mysql-port %s -vts-port %s %s' % (t.mysql_port, t.port + 500, t.tablet_alias))
-    self.rebuild(use_served_types=True)
+    self.rebuild()
 
     # vtgate zk API test
     out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspace test_nj test_keyspace' % self.vtgate_zk_port, trap_output=True)

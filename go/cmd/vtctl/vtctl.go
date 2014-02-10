@@ -171,7 +171,7 @@ var commands = []commandGroup{
 				"[-force] <keyspace name|zk keyspace path> <column name> <column type>",
 				"Updates the sharding info for a keyspace"},
 			command{"RebuildKeyspaceGraph", commandRebuildKeyspaceGraph,
-				"[-cells=a,b] [-use-served-types] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
+				"[-cells=a,b] <zk keyspace path> ... (/zk/global/vt/keyspaces/<keyspace>)",
 				"Rebuild the serving data for all shards in this keyspace. This may trigger an update to all connected clients."},
 			command{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name|zk keyspace path>",
@@ -1174,7 +1174,6 @@ func commandSetKeyspaceShardingInfo(wr *wrangler.Wrangler, subFlags *flag.FlagSe
 
 func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {
 	cells := subFlags.String("cells", "", "comma separated list of cells to update")
-	useServedTypes := subFlags.Bool("use-served-types", false, "supports overlapping shards for resharding (experimental, do not use yet)")
 	subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		log.Fatalf("action RebuildKeyspaceGraph requires at least one <zk keyspace path>")
@@ -1195,7 +1194,7 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 
 	for _, zkPath := range zkPaths {
 		keyspace := keyspaceParamToKeyspace(zkPath)
-		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray, *useServedTypes); err != nil {
+		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
 			return "", err
 		}
 	}
