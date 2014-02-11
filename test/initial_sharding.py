@@ -19,11 +19,13 @@ import struct
 import time
 import unittest
 
+from vtdb import keyrange
+
 import environment
 import utils
 import tablet
 
-keyspace_id_type = "uint64"
+keyspace_id_type = keyrange.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
 # initial shard, covers everything
@@ -100,10 +102,10 @@ class TestInitialSharding(unittest.TestCase):
   # create_schema will create the same schema on the keyspace
   # then insert some values
   def _create_schema(self):
-    if keyspace_id_type == "uint64":
-      t = 'bigint(20) unsigned'
-    else:
+    if keyspace_id_type == 'bytes':
       t = 'varbinary(64)'
+    else:
+      t = 'bigint(20) unsigned'
     create_table_template = '''create table %s(
 id bigint auto_increment,
 msg varchar(64),
@@ -144,7 +146,7 @@ index by_msg (msg)
   def _check_value(self, tablet, table, id, msg, keyspace_id,
                    should_be_here=True):
     result = self._get_value(tablet, table, id)
-    if keyspace_id_type == "bytes":
+    if keyspace_id_type == keyrange.KIT_BYTES:
       fmt = "%s"
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
@@ -168,7 +170,7 @@ index by_msg (msg)
     result = self._get_value(tablet, table, id)
     if len(result) == 0:
       return False
-    if keyspace_id_type == "bytes":
+    if keyspace_id_type == keyrange.KIT_BYTES:
       fmt = "%s"
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
