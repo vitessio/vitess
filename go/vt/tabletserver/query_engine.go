@@ -80,6 +80,8 @@ type CacheInvalidator interface {
 
 func NewQueryEngine(config Config) *QueryEngine {
 	qe := &QueryEngine{}
+
+	// services
 	qe.cachePool = NewCachePool("RowcachePool", config.RowCache, time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.schemaInfo = NewSchemaInfo(config.QueryCacheSize, time.Duration(config.SchemaReloadTime*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.connPool = NewConnectionPool("ConnPool", config.PoolSize, time.Duration(config.IdleTimeout*1e9))
@@ -88,9 +90,13 @@ func NewQueryEngine(config Config) *QueryEngine {
 	qe.activeTxPool = NewActiveTxPool("ActiveTransactionPool", time.Duration(config.TransactionTimeout*1e9))
 	qe.activePool = NewActivePool("ActivePool", time.Duration(config.QueryTimeout*1e9), time.Duration(config.IdleTimeout*1e9))
 	qe.consolidator = NewConsolidator()
+
+	// vars
 	qe.spotCheckFreq = sync2.AtomicInt64(config.SpotCheckRatio * SPOT_CHECK_MULTIPLIER)
 	qe.maxResultSize = sync2.AtomicInt64(config.MaxResultSize)
 	qe.streamBufferSize = sync2.AtomicInt64(config.StreamBufferSize)
+
+	// stats
 	stats.Publish("MaxResultSize", stats.IntFunc(qe.maxResultSize.Get))
 	stats.Publish("StreamBufferSize", stats.IntFunc(qe.streamBufferSize.Get))
 	queryStats = stats.NewTimings("Queries")
@@ -105,6 +111,7 @@ func NewQueryEngine(config Config) *QueryEngine {
 		return float64(qe.spotCheckFreq.Get()) / SPOT_CHECK_MULTIPLIER
 	}))
 	spotCheckCount = stats.NewInt("SpotCheckCount")
+
 	return qe
 }
 
@@ -115,10 +122,10 @@ func (qe *QueryEngine) Open(info *mysql.ConnectionParams, schemaOverrides []Sche
 
 	connFactory := GenericConnectionCreator(info)
 
-	start := time.Now().UnixNano()
 	qe.cachePool.Open()
+	start := time.Now()
 	qe.schemaInfo.Open(connFactory, schemaOverrides, qe.cachePool, qrs)
-	log.Infof("Time taken to load the schema: %v ms", (time.Now().UnixNano()-start)/1e6)
+	log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
 	qe.connPool.Open(connFactory)
 	qe.streamConnPool.Open(connFactory)
 	qe.txPool.Open(connFactory)

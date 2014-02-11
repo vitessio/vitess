@@ -145,6 +145,7 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("%s", x.(*TabletError).Message)
+			sq.qe.Close()
 			sq.setState(NOT_SERVING)
 			return
 		}
