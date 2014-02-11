@@ -146,7 +146,7 @@ func DiffSchemaToArray(leftName string, left *SchemaDefinition, rightName string
 	er := concurrency.AllErrorRecorder{}
 	DiffSchema(leftName, left, rightName, right, &er)
 	if er.HasErrors() {
-		return er.Errors
+		return er.ErrorAsStringArray()
 	} else {
 		return nil
 	}

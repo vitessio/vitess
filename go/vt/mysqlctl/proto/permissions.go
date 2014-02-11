@@ -249,7 +249,7 @@ func DiffPermissionsToArray(leftName string, left *Permissions, rightName string
 	er := concurrency.AllErrorRecorder{}
 	DiffPermissions(leftName, left, rightName, right, &er)
 	if er.HasErrors() {
-		return er.Errors
+		return er.ErrorAsStringArray()
 	} else {
 		return nil
 	}

@@ -64,7 +64,7 @@ func (fer *FirstErrorRecorder) Error() error {
 // AllErrorRecorder records all the errors.
 type AllErrorRecorder struct {
 	mu     sync.Mutex
-	Errors []string
+	Errors []error
 }
 
 // RecordError records a possible error:
@@ -74,7 +74,7 @@ func (aer *AllErrorRecorder) RecordError(err error) {
 		return
 	}
 	aer.mu.Lock()
-	aer.Errors = append(aer.Errors, err.Error())
+	aer.Errors = append(aer.Errors, err)
 	aer.mu.Unlock()
 }
 
@@ -85,12 +85,40 @@ func (aer *AllErrorRecorder) HasErrors() bool {
 	return len(aer.Errors) > 0
 }
 
-// Error() returns an aggregate of all errors.
-func (aer *AllErrorRecorder) Error() error {
+type AllErrorAggregator func(errors []error) error
+
+// AggrError() runs the provided aggregator over all errors
+// and returns the error from aggregator.
+func (aer *AllErrorRecorder) AggrError(aggr AllErrorAggregator) error {
 	aer.mu.Lock()
 	defer aer.mu.Unlock()
 	if len(aer.Errors) == 0 {
 		return nil
 	}
-	return fmt.Errorf("%v", strings.Join(aer.Errors, "\n"))
+	return aggr(aer.Errors)
+}
+
+// Error() returns an aggregate of all errors by concatenation.
+func (aer *AllErrorRecorder) Error() error {
+	return aer.AggrError(func(errors []error) error {
+		errs := make([]string, 0, len(aer.Errors))
+		for _, e := range aer.Errors {
+			errs = append(errs, e.Error())
+		}
+		return fmt.Errorf("%v", strings.Join(errs, "\n"))
+	})
+}
+
+// ErrorAsStringArray() returns all errors as string array.
+func (aer *AllErrorRecorder) ErrorAsStringArray() []string {
+	aer.mu.Lock()
+	defer aer.mu.Unlock()
+	if len(aer.Errors) == 0 {
+		return nil
+	}
+	errs := make([]string, 0, len(aer.Errors))
+	for _, e := range aer.Errors {
+		errs = append(errs, e.Error())
+	}
+	return errs
 }
