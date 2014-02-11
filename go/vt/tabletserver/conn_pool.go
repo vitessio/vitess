@@ -12,6 +12,10 @@ import (
 	"github.com/youtube/vitess/go/stats"
 )
 
+var (
+	CONN_POOL_CLOSED_ERR = NewTabletError(FATAL, "connection pool is closed")
+)
+
 // ConnectionPool re-exposes ResourcePool as a pool of DBConnection objects
 type ConnectionPool struct {
 	mu          sync.Mutex
@@ -55,9 +59,13 @@ func (cp *ConnectionPool) Open(connFactory CreateConnectionFunc) {
 }
 
 func (cp *ConnectionPool) Close() {
+	p := cp.pool()
+	if p == nil {
+		return
+	}
 	// We should not hold the lock while calling Close
-	// because it could be long-running.
-	cp.pool().Close()
+	// because it waits for connections to be returned.
+	p.Close()
 	cp.mu.Lock()
 	cp.connections = nil
 	cp.mu.Unlock()
@@ -65,7 +73,11 @@ func (cp *ConnectionPool) Close() {
 
 // You must call Recycle on the PoolConnection once done.
 func (cp *ConnectionPool) Get() PoolConnection {
-	r, err := cp.pool().Get()
+	p := cp.pool()
+	if p == nil {
+		panic(CONN_POOL_CLOSED_ERR)
+	}
+	r, err := p.Get()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -74,7 +86,11 @@ func (cp *ConnectionPool) Get() PoolConnection {
 
 // You must call Recycle on the PoolConnection once done.
 func (cp *ConnectionPool) SafeGet() (PoolConnection, error) {
-	r, err := cp.pool().Get()
+	p := cp.pool()
+	if p == nil {
+		return nil, CONN_POOL_CLOSED_ERR
+	}
+	r, err := p.Get()
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +99,11 @@ func (cp *ConnectionPool) SafeGet() (PoolConnection, error) {
 
 // You must call Recycle on the PoolConnection once done.
 func (cp *ConnectionPool) TryGet() PoolConnection {
-	r, err := cp.pool().TryGet()
+	p := cp.pool()
+	if p == nil {
+		panic(CONN_POOL_CLOSED_ERR)
+	}
+	r, err := p.TryGet()
 	if err != nil {
 		panic(NewTabletErrorSql(FATAL, err))
 	}
@@ -94,15 +114,21 @@ func (cp *ConnectionPool) TryGet() PoolConnection {
 }
 
 func (cp *ConnectionPool) Put(conn PoolConnection) {
-	cp.pool().Put(conn)
+	p := cp.pool()
+	if p == nil {
+		panic(CONN_POOL_CLOSED_ERR)
+	}
+	p.Put(conn)
 }
 
 func (cp *ConnectionPool) SetCapacity(capacity int) (err error) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	err = cp.connections.SetCapacity(capacity)
-	if err != nil {
-		return err
+	if cp.connections != nil {
+		err = cp.connections.SetCapacity(capacity)
+		if err != nil {
+			return err
+		}
 	}
 	cp.capacity = capacity
 	return nil
@@ -111,36 +137,66 @@ func (cp *ConnectionPool) SetCapacity(capacity int) (err error) {
 func (cp *ConnectionPool) SetIdleTimeout(idleTimeout time.Duration) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
-	cp.connections.SetIdleTimeout(idleTimeout)
+	if cp.connections != nil {
+		cp.connections.SetIdleTimeout(idleTimeout)
+	}
 	cp.idleTimeout = idleTimeout
 }
 
 func (cp *ConnectionPool) StatsJSON() string {
-	return cp.pool().StatsJSON()
+	p := cp.pool()
+	if p == nil {
+		return "{}"
+	}
+	return p.StatsJSON()
 }
 
 func (cp *ConnectionPool) Capacity() int64 {
-	return cp.pool().Capacity()
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.Capacity()
 }
 
 func (cp *ConnectionPool) Available() int64 {
-	return cp.pool().Available()
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.Available()
 }
 
 func (cp *ConnectionPool) MaxCap() int64 {
-	return cp.pool().MaxCap()
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.MaxCap()
 }
 
 func (cp *ConnectionPool) WaitCount() int64 {
-	return cp.pool().WaitCount()
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.WaitCount()
 }
 
 func (cp *ConnectionPool) WaitTime() time.Duration {
-	return cp.pool().WaitTime()
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.WaitTime()
 }
 
 func (cp *ConnectionPool) IdleTimeout() time.Duration {
-	return cp.pool().IdleTimeout()
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.IdleTimeout()
 }
 
 // pooledConnection re-exposes DBConnection as a PoolConnection
