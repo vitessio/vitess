@@ -131,6 +131,8 @@ func (cp *CachePool) startMemcache() {
 			attempts++
 			if attempts >= 30 {
 				cp.cmd.Process.Kill()
+				// Avoid zombies
+				go cp.cmd.Wait()
 				// FIXME(sougou): Throw proper error if we can recover
 				log.Fatal("Can't connect to memcache")
 			}
@@ -155,6 +157,8 @@ func (cp *CachePool) Close() {
 	}
 	cp.pool.Close()
 	cp.cmd.Process.Kill()
+	// Avoid zombies
+	go cp.cmd.Wait()
 	cp.pool = nil
 }
 
