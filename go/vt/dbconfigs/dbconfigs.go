@@ -82,7 +82,7 @@ func InitConnectionParams(cp *mysql.ConnectionParams, socketFile string) error {
 // refreshPassword uses the CredentialServer to refresh the password
 // to use.
 func refreshPassword(params *mysql.ConnectionParams) error {
-	user, passwd, err := GetCredentialsServer().GetPassword(params.Uname)
+	user, passwd, err := GetCredentialsServer().GetUserAndPassword(params.Uname)
 	switch err {
 	case nil:
 		params.Uname = user

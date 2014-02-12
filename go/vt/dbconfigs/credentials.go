@@ -31,12 +31,12 @@ var (
 
 // CredentialsServer is the interface for a credential server
 type CredentialsServer interface {
-	// GetPassword returns the user / password to use for a given
+	// GetUserAndPassword returns the user / password to use for a given
 	// user. May return ErrUnknownUser. The user might be altered
 	// to support versioned users.
 	// Note this call needs to be thread safe, as we may call this from
 	// multiple go routines.
-	GetPassword(user string) (string, string, error)
+	GetUserAndPassword(user string) (string, string, error)
 
 	// GetSubprocessFlags returns the flags to send to a subprocess
 	// to initialize the exact same CredentialsServer
@@ -46,7 +46,7 @@ type CredentialsServer interface {
 // AllCredentialsServers contains all the known CredentialsServer
 // implementations.  Note we will only access this after flags have
 // been parsed.
-var AllCredentialsServers map[string]CredentialsServer = make(map[string]CredentialsServer)
+var AllCredentialsServers = make(map[string]CredentialsServer)
 
 // GetCredentialsServer returns the current CredentialsServer. Only valid
 // after flag.Init was called.
@@ -76,7 +76,7 @@ type FileCredentialsServer struct {
 	dbCredentials map[string][]string
 }
 
-func (fcs *FileCredentialsServer) GetPassword(user string) (string, string, error) {
+func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, string, error) {
 	fcs.mu.Lock()
 	defer fcs.mu.Unlock()
 
