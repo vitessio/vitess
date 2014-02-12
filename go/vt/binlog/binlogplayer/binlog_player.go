@@ -62,10 +62,17 @@ func (bs *blplStats) statsJSON() string {
 
 // BinlogPlayer is handling reading a stream of updates from BinlogServer
 type BinlogPlayer struct {
-	addr          string
-	dbClient      VtClient
-	keyRange      key.KeyRange
-	tables        []string
+	addr     string
+	dbClient VtClient
+
+	// for key range base requests
+	keyspaceIdType key.KeyspaceIdType
+	keyRange       key.KeyRange
+
+	// for table base requests
+	tables []string
+
+	// common to all
 	blpPos        myproto.BlpPosition
 	stopAtGroupId int64
 	blplStats     *blplStats
@@ -75,14 +82,15 @@ type BinlogPlayer struct {
 // replicating the provided keyrange, starting at the startPosition.GroupId,
 // and updating _vt.blp_checkpoint with uid=startPosition.Uid.
 // If stopAtGroupId != 0, it will stop when reaching that GroupId.
-func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyRange key.KeyRange, startPosition *myproto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient VtClient, addr string, keyspaceIdType key.KeyspaceIdType, keyRange key.KeyRange, startPosition *myproto.BlpPosition, stopAtGroupId int64) *BinlogPlayer {
 	return &BinlogPlayer{
-		addr:          addr,
-		dbClient:      dbClient,
-		keyRange:      keyRange,
-		blpPos:        *startPosition,
-		stopAtGroupId: stopAtGroupId,
-		blplStats:     NewBlplStats(),
+		addr:           addr,
+		dbClient:       dbClient,
+		keyspaceIdType: keyspaceIdType,
+		keyRange:       keyRange,
+		blpPos:         *startPosition,
+		stopAtGroupId:  stopAtGroupId,
+		blplStats:      NewBlplStats(),
 	}
 }
 
@@ -241,8 +249,9 @@ func (blp *BinlogPlayer) ApplyBinlogEvents(interrupted chan struct{}) error {
 		resp = rpcClient.StreamTables(req, responseChan)
 	} else {
 		req := &proto.KeyRangeRequest{
-			KeyRange: blp.keyRange,
-			GroupId:  blp.blpPos.GroupId,
+			KeyspaceIdType: blp.keyspaceIdType,
+			KeyRange:       blp.keyRange,
+			GroupId:        blp.blpPos.GroupId,
 		}
 		resp = rpcClient.StreamKeyRange(req, responseChan)
 	}
