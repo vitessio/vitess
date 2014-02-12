@@ -228,32 +228,7 @@ func (stc *ScatterConn) multiGo(
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			for {
-				sdc := stc.getConnection(keyspace, shard, tabletType)
-				transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
-				if err != nil {
-					allErrors.RecordError(err)
-					return
-				}
-				err = action(sdc, transactionId, results)
-				// If a transaction is in progress, the lower layers ensure we don't set re-resolve,
-				// but double-checking here again.
-				if shouldResolveKeyspace(err, transactionId) {
-					newKeyspace, err := getKeyspaceAlias(stc.toposerv, stc.cell, keyspace, tabletType)
-					if err == nil && newKeyspace != keyspace {
-						sdc.Close()
-						key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
-						delete(stc.shardConns, key)
-						keyspace = newKeyspace
-						continue
-					}
-				}
-				if err != nil {
-					allErrors.RecordError(err)
-					return
-				}
-				break
-			}
+			stc.execShardAction(context, keyspace, shard, tabletType, session, action, allErrors, results)
 		}(shard)
 	}
 	go func() {
@@ -272,6 +247,47 @@ func (stc *ScatterConn) multiGo(
 		close(results)
 	}()
 	return results, allErrors
+}
+
+// execShardAction executes the action on a particular shard.
+// If the action fails, it determines whether the keyspace/shard
+// have moved, re-resolves the topology and tries again, if it is
+// not executing a transaction.
+func (stc *ScatterConn) execShardAction(
+	context interface{},
+	keyspace string,
+	shard string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+	action shardActionFunc,
+	allErrors *concurrency.AllErrorRecorder,
+	results chan interface{},
+) {
+	for {
+		sdc := stc.getConnection(keyspace, shard, tabletType)
+		transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
+		if err != nil {
+			allErrors.RecordError(err)
+			return
+		}
+		err = action(sdc, transactionId, results)
+		// Determine whether keyspace can be re-resolved
+		if shouldResolveKeyspace(err, transactionId) {
+			newKeyspace, err := getKeyspaceAlias(stc.toposerv, stc.cell, keyspace, tabletType)
+			if err == nil && newKeyspace != keyspace {
+				sdc.Close()
+				key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
+				delete(stc.shardConns, key)
+				keyspace = newKeyspace
+				continue
+			}
+		}
+		if err != nil {
+			allErrors.RecordError(err)
+			return
+		}
+		break
+	}
 }
 
 func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.TabletType) *ShardConn {
@@ -342,7 +358,7 @@ func shouldResolveKeyspace(err error, transactionId int64) bool {
 		return false
 	}
 	if shardConnErr, ok := err.(*ShardConnError); ok {
-		return shardConnErr.connErrResolvable
+		return shardConnErr.topoReResolve
 	}
 	return false
 }

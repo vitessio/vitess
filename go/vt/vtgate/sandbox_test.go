@@ -50,8 +50,9 @@ var (
 )
 
 const (
-	TEST_SHARDED   = "TestSharded"
-	TEST_UNSHARDED = "TestUnshared"
+	TEST_SHARDED               = "TestSharded"
+	TEST_UNSHARDED             = "TestUnshared"
+	TEST_UNSHARDED_SERVED_FROM = "TestUnshardedServedFrom"
 )
 
 func resetSandbox() {
@@ -75,11 +76,11 @@ func getAllShards() (key.KeyRangeArray, error) {
 	if ShardedKrArray != nil {
 		return ShardedKrArray, nil
 	}
-	ShardedKrArray, err := key.ParseShardingSpec(ShardSpec)
+	shardedKrArray, err := key.ParseShardingSpec(ShardSpec)
 	if err != nil {
 		return nil, err
 	}
-	return ShardedKrArray, nil
+	return shardedKrArray, nil
 }
 
 func getKeyRangeName(kr key.KeyRange) string {
@@ -104,21 +105,18 @@ func getUidForShard(shardName string) (int, error) {
 	return 0, fmt.Errorf("shard not found %v", shardName)
 }
 
-func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
-	return []string{TEST_SHARDED, TEST_UNSHARDED}, nil
-}
-
-func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+func createShardedSrvKeyspace() (*topo.SrvKeyspace, error) {
 	shardKrArray, err := getAllShards()
 	if err != nil {
 		return nil, err
 	}
+	allTabletTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
 	shards := make([]topo.SrvShard, 0, len(shardKrArray))
 	for i := 0; i < len(shardKrArray); i++ {
 		shard := topo.SrvShard{
 			KeyRange:    shardKrArray[i],
-			ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
-			TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
+			ServedTypes: allTabletTypes,
+			TabletTypes: allTabletTypes,
 		}
 		shards = append(shards, shard)
 	}
@@ -128,30 +126,56 @@ func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace
 				Shards: shards,
 			},
 		},
-		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
+		TabletTypes: allTabletTypes,
+	}
+	return shardedSrvKeyspace, nil
+}
+
+func createUnshardedKeyspace() (*topo.SrvKeyspace, error) {
+	allTabletTypes := []topo.TabletType{topo.TYPE_MASTER, topo.TYPE_REPLICA, topo.TYPE_RDONLY}
+	shard := topo.SrvShard{
+		KeyRange:    key.KeyRange{Start: "", End: ""},
+		ServedTypes: allTabletTypes,
+		TabletTypes: allTabletTypes,
 	}
 
 	unshardedSrvKeyspace := &topo.SrvKeyspace{
 		Partitions: map[topo.TabletType]*topo.KeyspacePartition{
 			topo.TYPE_MASTER: &topo.KeyspacePartition{
-				Shards: []topo.SrvShard{
-					{KeyRange: key.KeyRange{Start: "", End: ""},
-						ServedTypes: []topo.TabletType{topo.TYPE_MASTER},
-						TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
-					},
-				},
+				Shards: []topo.SrvShard{shard},
+			},
+			topo.TYPE_REPLICA: &topo.KeyspacePartition{
+				Shards: []topo.SrvShard{shard},
+			},
+			topo.TYPE_RDONLY: &topo.KeyspacePartition{
+				Shards: []topo.SrvShard{shard},
 			},
 		},
 		TabletTypes: []topo.TabletType{topo.TYPE_MASTER},
 	}
+	return unshardedSrvKeyspace, nil
+}
 
-	// Return unsharded SrvKeyspace record if asked
-	// By default return the sharded keyspace
-	if keyspace == TEST_UNSHARDED {
-		return unshardedSrvKeyspace, nil
+func (sct *sandboxTopo) GetSrvKeyspaceNames(cell string) ([]string, error) {
+	return []string{TEST_SHARDED, TEST_UNSHARDED}, nil
+}
+
+func (sct *sandboxTopo) GetSrvKeyspace(cell, keyspace string) (*topo.SrvKeyspace, error) {
+	switch keyspace {
+	case TEST_UNSHARDED_SERVED_FROM:
+		servedFromKeyspace, err := createUnshardedKeyspace()
+		if err != nil {
+			return nil, err
+		}
+		servedFromKeyspace.ServedFrom = map[topo.TabletType]string{
+			topo.TYPE_RDONLY: TEST_UNSHARDED,
+			topo.TYPE_MASTER: TEST_UNSHARDED}
+		return servedFromKeyspace, nil
+	case TEST_UNSHARDED:
+		return createUnshardedKeyspace()
 	}
 
-	return shardedSrvKeyspace, nil
+	return createShardedSrvKeyspace()
 }
 
 func (sct *sandboxTopo) GetEndPoints(cell, keyspace, shard string, tabletType topo.TabletType) (*topo.EndPoints, error) {

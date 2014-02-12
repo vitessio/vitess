@@ -75,7 +75,7 @@ func resolveKeyRangeToShards(topoServer SrvTopoServer, cell, keyspace string, ta
 		if key.KeyRangesIntersect(kr, shard.KeyRange) {
 			shards = append(shards, shard.ShardName())
 		}
-		if kr.End < shard.KeyRange.Start {
+		if kr.End != key.MaxKey && kr.End < shard.KeyRange.Start {
 			break
 		}
 	}
