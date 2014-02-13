@@ -203,3 +203,22 @@ func (wr *Wrangler) slaveWasRestarted(ti *topo.TabletInfo, swrd *actionnode.Slav
 		return wr.ai.WaitForCompletion(actionPath, wr.actionTimeout())
 	}
 }
+
+// SlaveWasRestarted notifies the tablet identified by tablet that its
+// master has changed to masterAlias.
+func (wr *Wrangler) SlaveWasRestarted(alias, masterAlias topo.TabletAlias, scrapStragglers bool) error {
+	master, err := wr.TopoServer().GetTablet(masterAlias)
+	if err != nil {
+		return err
+	}
+	tablet, err := wr.TopoServer().GetTablet(alias)
+	if err != nil {
+		return err
+	}
+	return wr.slaveWasRestarted(tablet, &actionnode.SlaveWasRestartedArgs{
+		Parent:               masterAlias,
+		ExpectedMasterAddr:   master.GetMysqlAddr(),
+		ExpectedMasterIpAddr: master.GetMysqlIpAddr(),
+		ScrapStragglers:      scrapStragglers,
+	})
+}

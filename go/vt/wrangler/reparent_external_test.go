@@ -320,3 +320,33 @@ func TestShardExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 	// }
 	close(done)
 }
+
+func TestSlaveWasRestarted(t *testing.T) {
+	ts := zktopo.NewTestServer(t, []string{"cell1"})
+	wr := New(ts, time.Minute, time.Second)
+	wr.UseRPCs = false
+
+	// Create an old master, a new master, two good slaves, one bad slave
+	oldMasterAlias := createTestTablet(t, wr, "cell1", 0, topo.TYPE_MASTER, topo.TabletAlias{})
+	newMasterAlias := createTestTablet(t, wr, "cell1", 1, topo.TYPE_REPLICA, oldMasterAlias)
+	slaveAlias := createTestTablet(t, wr, "cell1", 2, topo.TYPE_REPLICA, oldMasterAlias)
+
+	slaveMySQLDaemon := &mysqlctl.FakeMysqlDaemon{
+		MasterAddr: "101.0.0.1:3301",
+		MysqlPort:  3302,
+	}
+	done := make(chan struct{}, 1)
+	startFakeTabletActionLoop(t, wr, slaveAlias, slaveMySQLDaemon, done)
+	defer close(done)
+
+	if err := wr.SlaveWasRestarted(slaveAlias, newMasterAlias, false); err != nil {
+		t.Fatalf("SlaveWasRestarted %v: %v", slaveAlias, err)
+	}
+	tablet, err := wr.ts.GetTablet(slaveAlias)
+	if err != nil {
+		t.Fatalf("GetTablet %v: %v", slaveAlias, err)
+	}
+	if want, got := newMasterAlias, tablet.Parent; want != got {
+		t.Errorf("parent of %v: want %v, got %v", tablet, want, got)
+	}
+}
