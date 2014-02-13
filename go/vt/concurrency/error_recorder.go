@@ -109,8 +109,8 @@ func (aer *AllErrorRecorder) Error() error {
 	})
 }
 
-// ErrorAsStringArray() returns all errors as string array.
-func (aer *AllErrorRecorder) ErrorAsStringArray() []string {
+// ErrorStrings() returns all errors as string array.
+func (aer *AllErrorRecorder) ErrorStrings() []string {
 	aer.mu.Lock()
 	defer aer.mu.Unlock()
 	if len(aer.Errors) == 0 {
