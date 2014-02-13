@@ -15,8 +15,9 @@ type UpdateStreamRequest struct {
 
 // KeyRangeRequest is used to make a request for StreamKeyRange.
 type KeyRangeRequest struct {
-	GroupId  int64
-	KeyRange key.KeyRange
+	GroupId        int64
+	KeyspaceIdType key.KeyspaceIdType
+	KeyRange       key.KeyRange
 }
 
 // TablesRequest is used to make a request for StreamTables.

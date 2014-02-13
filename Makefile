@@ -41,4 +41,9 @@ integration_test:
 	cd test ; echo "resharding test"; time ./resharding.py $$VT_TEST_FLAGS
 	cd test ; echo "resharding_bytes test"; time ./resharding_bytes.py $$VT_TEST_FLAGS
 	cd test ; echo "vtdb test"; time ./vtdb_test.py $$VT_TEST_FLAGS
+	cd test ; echo "vtgate test"; time ./vtgate_test.py $$VT_TEST_FLAGS
 	cd test ; echo "keyrange test"; time ./keyrange_test.py $$VT_TEST_FLAGS
+	cd test ; echo "vertical_split test"; time ./vertical_split.py $$VT_TEST_FLAGS
+	cd test ; echo "vertical_split_vtgate test"; time ./vertical_split_vtgate.py $$VT_TEST_FLAGS
+	cd test ; echo "initial_sharding test"; time ./initial_sharding.py $$VT_TEST_FLAGS
+	cd test ; echo "initial_sharding_bytes test"; time ./initial_sharding_bytes.py $$VT_TEST_FLAGS

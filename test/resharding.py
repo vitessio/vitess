@@ -4,17 +4,20 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
+import base64
 import logging
 import threading
 import struct
 import time
 import unittest
 
+from vtdb import keyrange
+
 import environment
 import utils
 import tablet
 
-keyspace_id_type = "uint64"
+keyspace_id_type = keyrange.KIT_UINT64
 pack_keyspace_id = struct.Struct('!Q').pack
 
 # initial shards
@@ -110,12 +113,17 @@ class InsertThread(threading.Thread):
     self.object_name = object_name
     self.user_id = user_id
     self.keyspace_id = keyspace_id
+    if keyspace_id_type == keyrange.KIT_BYTES:
+      self.str_keyspace_id = base64.b64encode(pack_keyspace_id(keyspace_id))
+    else:
+      self.str_keyspace_id = "%u" % keyspace_id
     self.done = False
+
     self.tablet.mquery('vt_test_keyspace', [
         'begin',
-        'insert into timestamps(name, time_milli, keyspace_id) values("%s", %u, 0x%x) /* EMD keyspace_id:%u user_id:%u */' %
+        'insert into timestamps(name, time_milli, keyspace_id) values("%s", %u, 0x%x) /* EMD keyspace_id:%s user_id:%u */' %
         (self.object_name, long(time.time() * 1000), self.keyspace_id,
-         self.keyspace_id, self.user_id),
+         self.str_keyspace_id, self.user_id),
         'commit'
         ], write=True, user='vt_app')
     self.start()
@@ -125,7 +133,7 @@ class InsertThread(threading.Thread):
       while not self.done:
         self.tablet.mquery('vt_test_keyspace', [
             'begin',
-            'update timestamps set time_milli=%u where name="%s" /* EMD keyspace_id:%u user_id:%u */' % (long(time.time() * 1000), self.object_name, self.keyspace_id, self.user_id),
+            'update timestamps set time_milli=%u where name="%s" /* EMD keyspace_id:%s user_id:%u */' % (long(time.time() * 1000), self.object_name, self.str_keyspace_id, self.user_id),
             'commit'
             ], write=True, user='vt_app')
         time.sleep(0.2)
@@ -169,10 +177,10 @@ class TestResharding(unittest.TestCase):
   # create_schema will create the same schema on the keyspace
   # then insert some values
   def _create_schema(self):
-    if keyspace_id_type == "uint64":
-      t = 'bigint(20) unsigned'
-    else:
+    if keyspace_id_type == keyrange.KIT_BYTES:
       t = 'varbinary(64)'
+    else:
+      t = 'bigint(20) unsigned'
     create_table_template = '''create table %s(
 id bigint auto_increment,
 msg varchar(64),
@@ -212,9 +220,13 @@ primary key (name)
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
   def _insert_value(self, tablet, table, id, msg, keyspace_id):
+    if keyspace_id_type == keyrange.KIT_BYTES:
+      k = base64.b64encode(pack_keyspace_id(keyspace_id))
+    else:
+      k = "%u" % keyspace_id
     tablet.mquery('vt_test_keyspace', [
         'begin',
-        'insert into %s(id, msg, keyspace_id) values(%u, "%s", 0x%x) /* EMD keyspace_id:%u user_id:%u */' % (table, id, msg, keyspace_id, keyspace_id, id),
+        'insert into %s(id, msg, keyspace_id) values(%u, "%s", 0x%x) /* EMD keyspace_id:%s user_id:%u */' % (table, id, msg, keyspace_id, k, id),
         'commit'
         ], write=True)
 
@@ -224,7 +236,7 @@ primary key (name)
   def _check_value(self, tablet, table, id, msg, keyspace_id,
                    should_be_here=True):
     result = self._get_value(tablet, table, id)
-    if keyspace_id_type == "bytes":
+    if keyspace_id_type == keyrange.KIT_BYTES:
       fmt = "%s"
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:
@@ -248,7 +260,7 @@ primary key (name)
     result = self._get_value(tablet, table, id)
     if len(result) == 0:
       return False
-    if keyspace_id_type == "bytes":
+    if keyspace_id_type == keyrange.KIT_BYTES:
       fmt = "%s"
       keyspace_id = pack_keyspace_id(keyspace_id)
     else:

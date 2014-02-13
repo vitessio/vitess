@@ -4,13 +4,13 @@
 # Use of this source code is governed by a BSD-style license that can
 # be found in the LICENSE file.
 
-import resharding
+import initial_sharding
 import utils
 
 from vtdb import keyrange
 
-# this test is just re-running an entire resharding.py with a
+# this test is just re-running an entire initial_sharding.py with a
 # varbinary keyspace_id
 if __name__ == '__main__':
-  resharding.keyspace_id_type = keyrange.KIT_BYTES
-  utils.main(resharding)
+  initial_sharding.keyspace_id_type = keyrange.KIT_BYTES
+  utils.main(initial_sharding)

@@ -34,7 +34,7 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -59,7 +59,7 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -84,7 +84,7 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})
@@ -115,7 +115,7 @@ func TestKeyRangeFilterMalformed(t *testing.T) {
 		GroupId: 1,
 	}
 	var got string
-	f := KeyRangeFilterFunc(testKeyRange, func(reply *proto.BinlogTransaction) error {
+	f := KeyRangeFilterFunc(key.KIT_UINT64, testKeyRange, func(reply *proto.BinlogTransaction) error {
 		got = bltToString(reply)
 		return nil
 	})

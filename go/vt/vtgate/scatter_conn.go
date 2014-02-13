@@ -228,17 +228,7 @@ func (stc *ScatterConn) multiGo(
 		wg.Add(1)
 		go func(shard string) {
 			defer wg.Done()
-			sdc := stc.getConnection(keyspace, shard, tabletType)
-			transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
-			if err != nil {
-				allErrors.RecordError(err)
-				return
-			}
-			err = action(sdc, transactionId, results)
-			if err != nil {
-				allErrors.RecordError(err)
-				return
-			}
+			stc.execShardAction(context, keyspace, shard, tabletType, session, action, allErrors, results)
 		}(shard)
 	}
 	go func() {
@@ -257,6 +247,54 @@ func (stc *ScatterConn) multiGo(
 		close(results)
 	}()
 	return results, allErrors
+}
+
+// execShardAction executes the action on a particular shard.
+// If the action fails, it determines whether the keyspace/shard
+// have moved, re-resolves the topology and tries again, if it is
+// not executing a transaction.
+func (stc *ScatterConn) execShardAction(
+	context interface{},
+	keyspace string,
+	shard string,
+	tabletType topo.TabletType,
+	session *SafeSession,
+	action shardActionFunc,
+	allErrors *concurrency.AllErrorRecorder,
+	results chan interface{},
+) {
+	for {
+		sdc := stc.getConnection(keyspace, shard, tabletType)
+		transactionId, err := stc.updateSession(context, sdc, keyspace, shard, tabletType, session)
+		if err != nil {
+			allErrors.RecordError(err)
+			return
+		}
+		err = action(sdc, transactionId, results)
+		// Determine whether keyspace can be re-resolved
+		if shouldResolveKeyspace(err, transactionId) {
+			newKeyspace, err := getKeyspaceAlias(stc.toposerv, stc.cell, keyspace, tabletType)
+			if err == nil && newKeyspace != keyspace {
+				sdc.Close()
+				stc.cleanupShardConn(keyspace, shard, tabletType)
+				keyspace = newKeyspace
+				continue
+			}
+		}
+		if err != nil {
+			allErrors.RecordError(err)
+			return
+		}
+		break
+	}
+}
+
+func (stc *ScatterConn) cleanupShardConn(keyspace, shard string, tabletType topo.TabletType) {
+	stc.mu.Lock()
+	defer stc.mu.Unlock()
+
+	key := fmt.Sprintf("%s.%s.%s", keyspace, shard, tabletType)
+	delete(stc.shardConns, key)
 }
 
 func (stc *ScatterConn) getConnection(keyspace, shard string, tabletType topo.TabletType) *ShardConn {
@@ -320,4 +358,14 @@ func unique(in []string) map[string]struct{} {
 		out[v] = struct{}{}
 	}
 	return out
+}
+
+func shouldResolveKeyspace(err error, transactionId int64) bool {
+	if err == nil || transactionId != 0 {
+		return false
+	}
+	if shardConnErr, ok := err.(*ShardConnError); ok {
+		return shardConnErr.topoReResolve
+	}
+	return false
 }

@@ -6,6 +6,7 @@ package binlog
 
 import (
 	"bytes"
+	"encoding/base64"
 	"strconv"
 
 	log "github.com/golang/glog"
@@ -20,7 +21,12 @@ var SPACE = []byte(" ")
 // in the transaction match the specified keyrange. The resulting function can be
 // passed into the BinlogStreamer: bls.Stream(file, pos, sendTransaction) ->
 // bls.Stream(file, pos, KeyRangeFilterFunc(sendTransaction))
-func KeyRangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+func KeyRangeFilterFunc(kit key.KeyspaceIdType, keyrange key.KeyRange, sendReply sendTransactionFunc) sendTransactionFunc {
+	isInteger := true
+	if kit == key.KIT_BYTES {
+		isInteger = false
+	}
+
 	return func(reply *proto.BinlogTransaction) error {
 		matched := false
 		filtered := make([]proto.Statement, 0, len(reply.Statements))
@@ -45,14 +51,27 @@ func KeyRangeFilterFunc(keyrange key.KeyRange, sendReply sendTransactionFunc) se
 					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
 					continue
 				}
-				id, err := strconv.ParseUint(string(statement.Sql[idstart:idstart+idend]), 10, 64)
-				if err != nil {
-					updateStreamErrors.Add("KeyRangeStream", 1)
-					log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
-					continue
-				}
-				if !keyrange.Contains(key.Uint64Key(id).KeyspaceId()) {
-					continue
+				textId := string(statement.Sql[idstart : idstart+idend])
+				if isInteger {
+					id, err := strconv.ParseUint(textId, 10, 64)
+					if err != nil {
+						updateStreamErrors.Add("KeyRangeStream", 1)
+						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+						continue
+					}
+					if !keyrange.Contains(key.Uint64Key(id).KeyspaceId()) {
+						continue
+					}
+				} else {
+					data, err := base64.StdEncoding.DecodeString(textId)
+					if err != nil {
+						updateStreamErrors.Add("KeyRangeStream", 1)
+						log.Errorf("Error parsing keyspace id: %s", string(statement.Sql))
+						continue
+					}
+					if !keyrange.Contains(key.KeyspaceId(data)) {
+						continue
+					}
 				}
 				filtered = append(filtered, statement)
 				matched = true

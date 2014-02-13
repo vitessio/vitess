@@ -54,6 +54,17 @@ func NewShardConn(serv SrvTopoServer, cell, keyspace, shard string, tabletType t
 	}
 }
 
+type ShardConnError struct {
+	Code            int
+	ShardIdentifier string
+	topoReResolve   bool
+	Err             string
+}
+
+func (e *ShardConnError) Error() string {
+	return fmt.Sprintf("%v, shard, host: %s", e.Err, e.ShardIdentifier)
+}
+
 // Execute executes a non-streaming query on vttablet. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
 // the middle of a transaction.
@@ -88,7 +99,8 @@ func (sdc *ShardConn) StreamExecute(context interface{}, query string, bindVars 
 	if err != nil {
 		return results, func() error { return err }
 	}
-	return results, func() error { return sdc.WrapError(erFunc(), usedConn) }
+	inTransaction := (transactionId != 0)
+	return results, func() error { return sdc.WrapError(erFunc(), usedConn, inTransaction) }
 }
 
 // Begin begins a transaction. The retry rules are the same as Execute.
@@ -129,11 +141,14 @@ func (sdc *ShardConn) Close() {
 
 // withRetry sets up the connection and executes the action. If there are connection errors,
 // it retries retryCount times before failing. It does not retry if the connection is in
-// the middle of a transaction.
+// the middle of a transaction. While returning the error check if it maybe a result of
+// a resharding event, and set the re-resolve bit and let the upper layers
+// re-resolve and retry.
 func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn.TabletConn) error, transactionId int64) error {
 	var conn tabletconn.TabletConn
 	var err error
 	var retry bool
+	inTransaction := (transactionId != 0)
 	// execute the action at least once even without retrying
 	for i := 0; i < sdc.retryCount+1; i++ {
 		conn, err, retry = sdc.getConn(context)
@@ -141,14 +156,14 @@ func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn
 			if retry {
 				continue
 			}
-			return sdc.WrapError(err, conn)
+			return sdc.WrapError(err, conn, inTransaction)
 		}
 		if err = action(conn); sdc.canRetry(err, transactionId, conn) {
 			continue
 		}
-		return sdc.WrapError(err, conn)
+		return sdc.WrapError(err, conn, inTransaction)
 	}
-	return sdc.WrapError(err, conn)
+	return sdc.WrapError(err, conn, inTransaction)
 }
 
 // getConn reuses an existing connection if possible. Otherwise
@@ -195,9 +210,22 @@ func (sdc *ShardConn) canRetry(err error, transactionId int64, conn tabletconn.T
 		}
 	}
 	// Non-server errors or fatal/retry errors. Retry if we're not in a transaction.
-	sdc.markDown(conn)
 	inTransaction := (transactionId != 0)
+	sdc.markDown(conn)
 	return !inTransaction
+}
+
+func shouldResolveTopo(err error, inTransaction bool) bool {
+	if err == nil {
+		return false
+	}
+	if serverError, ok := err.(*tabletconn.ServerError); ok {
+		switch serverError.Code {
+		case tabletconn.ERR_RETRY, tabletconn.ERR_FATAL:
+			return !inTransaction
+		}
+	}
+	return false
 }
 
 // markDown closes conn and temporarily marks the associated
@@ -215,16 +243,31 @@ func (sdc *ShardConn) markDown(conn tabletconn.TabletConn) {
 	sdc.conn = nil
 }
 
-// WrapError adds the connection context to an error.
-func (sdc *ShardConn) WrapError(in error, conn tabletconn.TabletConn) (wrapped error) {
+// WrapError returns ShardConnError which preserves the original error code if possible,
+// adds the connection context
+// and adds a bit to determine whether the keyspace/shard needs to be
+// re-resolved for a potential sharding event.
+func (sdc *ShardConn) WrapError(in error, conn tabletconn.TabletConn, inTransaction bool) (wrapped error) {
 	if in == nil {
 		return nil
 	}
-	var endPoint topo.EndPoint
+	shardIdentifier := fmt.Sprintf("%s.%s.%s", sdc.keyspace, sdc.shard, sdc.tabletType)
 	if conn != nil {
-		endPoint = conn.EndPoint()
+		shardIdentifier += fmt.Sprintf(", %+v", conn.EndPoint())
 	}
-	return fmt.Errorf(
-		"%v, shard: (%s.%s.%s), host: %+v",
-		in, sdc.keyspace, sdc.shard, sdc.tabletType, endPoint)
+
+	code := tabletconn.ERR_NORMAL
+	serverError, ok := in.(*tabletconn.ServerError)
+	if ok {
+		code = serverError.Code
+	}
+
+	topoReResolve := shouldResolveTopo(in, inTransaction)
+
+	shardConnErr := &ShardConnError{Code: code,
+		ShardIdentifier: shardIdentifier,
+		topoReResolve:   topoReResolve,
+		Err:             in.Error(),
+	}
+	return shardConnErr
 }

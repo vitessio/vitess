@@ -81,7 +81,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	resetSandbox()
 	endPointMustFail = 1
 	err := f()
-	want := "endpoints fetch error: topo error, shard: (.0.), host: "
+	want := "endpoints fetch error: topo error, shard, host: .0."
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -93,7 +93,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	resetSandbox()
 	dialMustFail = 3
 	err = f()
-	want = "conn error, shard: (.0.), host: "
+	want = "conn error, shard, host: .0."
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -107,7 +107,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	testConns[0] = sbc
 	err = f()
-	want = "retry: err, shard: (.0.), host: 0"
+	want = "retry: err, shard, host: .0., 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -159,7 +159,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	sbc = &sandboxConn{mustFailServer: 1}
 	testConns[0] = sbc
 	err = f()
-	want = "error: err, shard: (.0.), host: 0"
+	want = "error: err, shard, host: .0., 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -211,7 +211,7 @@ func testShardConnTransact(t *testing.T, f func() error) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	testConns[0] = sbc
 	err := f()
-	want := "retry: err, shard: (.0.), host: 0"
+	want := "retry: err, shard, host: .0., 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -225,7 +225,7 @@ func testShardConnTransact(t *testing.T, f func() error) {
 	sbc = &sandboxConn{mustFailConn: 3}
 	testConns[0] = sbc
 	err = f()
-	want = "error: conn, shard: (.0.), host: 0"
+	want = "error: conn, shard, host: .0., 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}

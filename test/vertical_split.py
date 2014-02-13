@@ -17,6 +17,10 @@ import environment
 import utils
 import tablet
 
+VTGATE_PROTOCOL_TABLET = 'v0'
+VTGATE_PROTOCOL_V1BSON = 'v1bson'
+vtgate_protocol = VTGATE_PROTOCOL_TABLET
+
 # source keyspace, with 4 tables
 source_master = tablet.Tablet()
 source_replica = tablet.Tablet()
@@ -76,6 +80,11 @@ class TestVerticalSplit(unittest.TestCase):
     self.vtgate_server, self.vtgate_port = utils.vtgate_start(cache_ttl='0s')
     self.vtgate_client = zkocc.ZkOccConnection("localhost:%u"%self.vtgate_port,
                                                "test_nj", 30.0)
+    self.vtgate_addrs = None
+    if vtgate_protocol == VTGATE_PROTOCOL_V1BSON:
+      global vtgate_addrs
+      self.vtgate_addrs = ["localhost:%s"%(self.vtgate_port),]
+
     self.insert_index = 0
 
   def tearDown(self):
@@ -106,13 +115,14 @@ index by_msg (msg)
                      'source_keyspace'],
                     auto_log=True)
 
-  def _vtdb_conn(self, db_type='master', keyspace='source_keyspace', vtgate_protocol='v0', vtgate_addrs=None):
-    if vtgate_addrs is None:
-      vtgate_addrs = []
+  def _vtdb_conn(self, db_type='master', keyspace='source_keyspace'):
+    global vtgate_protocol
+    if self.vtgate_addrs is None:
+      self.vtgate_addrs = []
     conn = vtclient.VtOCCConnection(self.vtgate_client, keyspace, '0',
                                     db_type, 30,
                                     vtgate_protocol=vtgate_protocol,
-                                    vtgate_addrs=vtgate_addrs)
+                                    vtgate_addrs=self.vtgate_addrs)
     conn.connect()
     return conn
 
@@ -185,7 +195,7 @@ index by_msg (msg)
                      "Got unexpected BlacklistedTables: %s (expecting %s)" %(
                          ti['BlacklistedTables'], expected))
 
-  def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types):
+  def _check_client_conn_redirection(self, source_ks, destination_ks, db_types, servedfrom_db_types, moved_tables=None):
     # check that the ServedFrom indirection worked correctly.
     for db_type in servedfrom_db_types:
       conn = self._vtdb_conn(db_type, keyspace=destination_ks)
@@ -307,7 +317,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, None)
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['rdonly'], ['master', 'replica'])
+    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['rdonly'], ['master', 'replica'], ['moving1', 'moving2'])
 
     # then serve replica from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'replica'],
@@ -316,7 +326,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'])
+    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
 
     # move replica back and forth
     utils.run_vtctl(['MigrateServedFrom', '-reverse', 'destination_keyspace/0', 'replica'],
@@ -332,7 +342,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, None)
     self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'])
+    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly'], ['master'], ['moving1', 'moving2'])
 
     # then serve master from the destination shards
     utils.run_vtctl(['MigrateServedFrom', 'destination_keyspace/0', 'master'],
@@ -341,7 +351,7 @@ index by_msg (msg)
     self._check_blacklisted_tables(source_master, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_replica, ['moving1', 'moving2'])
     self._check_blacklisted_tables(source_rdonly, ['moving1', 'moving2'])
-    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly', 'master'], [])
+    self._check_client_conn_redirection('source_keyspace', 'destination_keyspace', ['replica', 'rdonly', 'master'], [], ['moving1', 'moving2'])
 
     # check 'vtctl SetBlacklistedTables' command works as expected
     utils.run_vtctl(['SetBlacklistedTables', source_master.tablet_alias,

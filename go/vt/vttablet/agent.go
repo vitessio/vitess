@@ -68,6 +68,7 @@ func InitAgent(
 	agent.AddChangeCallback(func(oldTablet, newTablet topo.Tablet) {
 		allowQuery := true
 		var shardInfo *topo.ShardInfo
+		var keyspaceInfo *topo.KeyspaceInfo
 		if newTablet.Type == topo.TYPE_MASTER {
 			// read the shard to get SourceShards
 			shardInfo, err = topoServer.GetShard(newTablet.Keyspace, newTablet.Shard)
@@ -75,6 +76,19 @@ func InitAgent(
 				log.Errorf("Cannot read shard for this tablet %v: %v", newTablet.Alias, err)
 			} else {
 				allowQuery = len(shardInfo.SourceShards) == 0
+			}
+
+			// read the keyspace to get ShardingColumnType
+			keyspaceInfo, err = topoServer.GetKeyspace(newTablet.Keyspace)
+			switch err {
+			case nil:
+				// continue
+			case topo.ErrNoNode:
+				// backward compatible mode
+				keyspaceInfo = topo.NewKeyspaceInfo(newTablet.Keyspace, &topo.Keyspace{})
+			default:
+				log.Errorf("Cannot read keyspace for this tablet %v: %v", newTablet.Alias, err)
+				keyspaceInfo = nil
 			}
 		}
 
@@ -122,7 +136,7 @@ func InitAgent(
 
 		// See if we need to start or stop any binlog player
 		if newTablet.Type == topo.TYPE_MASTER {
-			agent.BinlogPlayerMap.RefreshMap(newTablet, shardInfo)
+			agent.BinlogPlayerMap.RefreshMap(newTablet, keyspaceInfo, shardInfo)
 		} else {
 			agent.BinlogPlayerMap.StopAllPlayersAndReset()
 		}
