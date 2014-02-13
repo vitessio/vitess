@@ -324,9 +324,9 @@ def zkocc_kill(sp):
   kill_sub_process(sp)
   sp.wait()
 
-# vtgate helpers
-def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s'):
-  port = environment.reserve_ports(1)
+# vtgate helpers, assuming it always restarts on the same port
+def vtgate_start(vtport=None, cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, tablet_bson_encrypted=False, cache_ttl='1s', auth=False):
+  port = vtport or environment.reserve_ports(1)
   args = [environment.binary_path('vtgate'),
           '-port', str(port),
           '-cell', cell,
@@ -341,6 +341,8 @@ def vtgate_start(cell='test_nj', retry_delay=1, retry_count=1, topo_impl=None, t
     args.extend(environment.topo_server_flags())
   if tablet_bson_encrypted:
     args.append('-tablet-bson-encrypted')
+  if auth:
+    args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])
   sp = run_bg(args)
   wait_for_vars("vtgate", port)
   return sp, port

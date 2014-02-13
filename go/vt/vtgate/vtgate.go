@@ -55,7 +55,7 @@ func (vtg *VTGate) ExecuteShard(context interface{}, query *proto.QueryShard, re
 		proto.PopulateQueryResult(qr, reply)
 	} else {
 		reply.Error = err.Error()
-		log.Errorf("ExecuteShard: %v, query: %#v", err, query)
+		log.Errorf("ExecuteShard: %v, query: %+v", err, query)
 	}
 	reply.Session = query.Session
 	return nil
@@ -74,7 +74,7 @@ func (vtg *VTGate) ExecuteBatchShard(context interface{}, batchQuery *proto.Batc
 		reply.List = qrs.List
 	} else {
 		reply.Error = err.Error()
-		log.Errorf("ExecuteBatchShard: %v, queries: %#v", err, batchQuery)
+		log.Errorf("ExecuteBatchShard: %v, queries: %+v", err, batchQuery)
 	}
 	reply.Session = batchQuery.Session
 	return nil
@@ -141,7 +141,7 @@ func (vtg *VTGate) StreamExecuteKeyRange(context interface{}, streamQuery *proto
 		})
 
 	if err != nil {
-		log.Errorf("StreamExecuteKeyRange: %v, query: %#v", err, streamQuery)
+		log.Errorf("StreamExecuteKeyRange: %v, query: %+v", err, streamQuery)
 	}
 	// now we can send the final Session info.
 	if streamQuery.Session != nil {
@@ -170,7 +170,7 @@ func (vtg *VTGate) StreamExecuteShard(context interface{}, query *proto.QuerySha
 		})
 
 	if err != nil {
-		log.Errorf("StreamExecuteShard: %v, query: %#v", err, query)
+		log.Errorf("StreamExecuteShard: %v, query: %+v", err, query)
 	}
 	// now we can send the final Session info.
 	if query.Session != nil {

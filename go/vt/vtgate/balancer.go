@@ -92,7 +92,7 @@ func (blc *Balancer) MarkDown(uid uint32) {
 	blc.mu.Lock()
 	defer blc.mu.Unlock()
 	if index := findAddrNode(blc.addressNodes, uid); index != -1 {
-		log.Infof("Marking down %v at %v", uid, blc.addressNodes[index].endPoint.Host)
+		log.Infof("Marking down %v at %+v", uid, blc.addressNodes[index].endPoint)
 		blc.addressNodes[index].timeRetry = time.Now().Add(blc.retryDelay)
 	}
 }

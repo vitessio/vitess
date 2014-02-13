@@ -6,6 +6,7 @@ package proto
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/youtube/vitess/go/bson"
 	"github.com/youtube/vitess/go/bytes2"
@@ -40,6 +41,10 @@ func (session *Session) MarshalBson(buf *bytes2.ChunkedWriter) {
 
 	buf.WriteByte(0)
 	lenWriter.RecordLen()
+}
+
+func (session *Session) String() string {
+	return fmt.Sprintf("InTransaction: %v, ShardSession: %+v", session.InTransaction, session.ShardSessions)
 }
 
 func encodeShardSessionsBson(shardSessions []*ShardSession, key string, buf *bytes2.ChunkedWriter) {

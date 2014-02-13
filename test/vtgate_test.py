@@ -11,6 +11,7 @@ import utils
 
 from vtdb import cursor
 from vtdb import dbexceptions
+from vtdb import vtgate
 
 def setUpModule():
   vtdb_test.setUpModule()
@@ -19,7 +20,7 @@ def tearDownModule():
   vtdb_test.tearDownModule()
 
 
-class TestClientApi(vtdb_test.TestTabletFunctions):
+class TestVtgateFunctions(vtdb_test.TestTabletFunctions):
   pass
 
 # FIXME(shrutip): this class needs reworking once
@@ -34,7 +35,7 @@ class TestFailures(unittest.TestCase):
     try:
       replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail("Connection to shard %s replica failed with error %s" % (vtdb_test.shard_names[self.shard_index], str(e)))
     self.replica_tablet.kill_vttablet()
     with self.assertRaises(dbexceptions.DatabaseError):
       replica_conn._execute("select 1 from vt_insert_test", {})
@@ -42,23 +43,51 @@ class TestFailures(unittest.TestCase):
     try:
       results = replica_conn._execute("select 1 from vt_insert_test", {})
     except Exception, e:
-      self.fail("Communication with shard %s replica failed with error %s" % (shard_names[self.shard_index], str(e)))
+      self.fail("Communication with shard %s replica failed with error %s" % (vtdb_test.shard_names[self.shard_index], str(e)))
+
+  def test_vtgate_restart_read(self):
+    try:
+      replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to shard %s replica failed with error %s" % (vtdb_test.shard_names[self.shard_index], str(e)))
+    utils.vtgate_kill(vtdb_test.vtgate_server)
+    with self.assertRaises(dbexceptions.OperationalError):
+      replica_conn._execute("select 1 from vt_insert_test", {})
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    try:
+      results = replica_conn._execute("select 1 from vt_insert_test", {})
+    except Exception, e:
+      self.fail("Communication with shard %s replica failed with error %s" % (vtdb_test.shard_names[self.shard_index], str(e)))
+
 
   def test_tablet_restart_stream_execute(self):
     try:
       replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
-      self.fail("Connection to shard0 replica failed with error %s" % str(e))
+      self.fail("Connection to %s replica failed with error %s" % (vtdb_test.shard_names[self.shard_index], str(e)))
     stream_cursor = cursor.StreamCursor(replica_conn)
     self.replica_tablet.kill_vttablet()
-	# FIXME(shrutip): this sometimes throws a TimeoutError but catching
-    # DatabaseError as that is a superclass anyways.
     with self.assertRaises(dbexceptions.DatabaseError):
       stream_cursor.execute("select * from vt_insert_test", {})
     proc = self.replica_tablet.start_vttablet()
+    self.replica_tablet.wait_for_vttablet_state('SERVING')
     try:
-	  # This goes through a reconnect loop since connection to vtgate is closed
-      # by the timeout error above.
+      stream_cursor.execute("select * from vt_insert_test", {})
+    except Exception, e:
+      self.fail("Communication with shard0 replica failed with error %s" %
+                str(e))
+
+  def test_vtgate_restart_stream_execute(self):
+    try:
+      replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
+    except Exception, e:
+      self.fail("Connection to %s replica failed with error %s" % (vtdb_test.shard_names[self.shard_index], str(e)))
+    stream_cursor = cursor.StreamCursor(replica_conn)
+    utils.vtgate_kill(vtdb_test.vtgate_server)
+    with self.assertRaises(dbexceptions.OperationalError):
+      stream_cursor.execute("select * from vt_insert_test", {})
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    try:
       stream_cursor.execute("select * from vt_insert_test", {})
     except Exception, e:
       self.fail("Communication with shard0 replica failed with error %s" %
@@ -75,6 +104,20 @@ class TestFailures(unittest.TestCase):
     master_conn.begin()
     proc = self.master_tablet.start_vttablet()
     master_conn.begin()
+    # this succeeds only if retry_count > 0
+    master_conn._execute("delete from vt_insert_test", {})
+    master_conn.commit()
+
+  def test_vtgate_restart_begin(self):
+    try:
+      master_conn = vtdb_test.get_connection(db_type='master')
+    except Exception, e:
+      self.fail("Connection to shard0 master failed with error %s" % str(e))
+    utils.vtgate_kill(vtdb_test.vtgate_server)
+    with self.assertRaises(dbexceptions.OperationalError):
+      master_conn.begin()
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    master_conn.begin()
 
   def test_tablet_fail_write(self):
     try:
@@ -87,6 +130,25 @@ class TestFailures(unittest.TestCase):
       master_conn._execute("delete from vt_insert_test", {})
       master_conn.commit()
     proc = self.master_tablet.start_vttablet()
+    master_conn.begin()
+    master_conn._execute("delete from vt_insert_test", {})
+    master_conn.commit()
+
+  def test_vtgate_fail_write(self):
+    try:
+      master_conn = vtdb_test.get_connection(db_type='master')
+    except Exception, e:
+      self.fail("Connection to shard0 master failed with error %s" % str(e))
+    with self.assertRaises(dbexceptions.OperationalError):
+      master_conn.begin()
+      utils.vtgate_kill(vtdb_test.vtgate_server)
+      master_conn._execute("delete from vt_insert_test", {})
+      master_conn.commit()
+    vtdb_test.vtgate_server, vtdb_test.vtgate_port = utils.vtgate_start(vtdb_test.vtgate_port)
+    try:
+      master_conn = vtdb_test.get_connection(db_type='master')
+    except Exception, e:
+      self.fail("Connection to shard0 master failed with error %s" % str(e))
     master_conn.begin()
     master_conn._execute("delete from vt_insert_test", {})
     master_conn.commit()
@@ -106,9 +168,7 @@ class TestFailures(unittest.TestCase):
     with self.assertRaises(dbexceptions.TimeoutError):
       master_conn._execute("select sleep(12) from dual", {})
 
-  # FIXME(shrutip): flaky test, making it NOP for now
   def test_restart_mysql_failure(self):
-    return
     try:
       replica_conn = vtdb_test.get_connection(db_type='replica', shard_index=self.shard_index)
     except Exception, e:
@@ -139,8 +199,13 @@ class TestFailures(unittest.TestCase):
     master_conn.commit()
 
 
+class TestAuthentication(vtdb_test.TestAuthentication):
+  pass
+
+
 # this test is just re-running an entire vtdb_test.py with a
 # client type VTGate
 if __name__ == '__main__':
-  vtdb_test.vtgate_protocol = vtdb_test.VTGATE_PROTOCOL_V1BSON
+  vtdb_test.vtgate_protocol = 'v1bson'
+  vtdb_test.conn_class = vtgate.VtgateConnection
   utils.main()

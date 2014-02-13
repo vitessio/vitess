@@ -16,13 +16,12 @@ from net import gorpc
 from vtdb import tablet as tablet3
 from vtdb import cursor
 from vtdb import vtclient
-from vtdb import vtgate
 from vtdb import dbexceptions
 from zk import zkocc
 
-VTGATE_PROTOCOL_TABLET = 'v0'
-VTGATE_PROTOCOL_V1BSON = 'v1bson'
-vtgate_protocol = VTGATE_PROTOCOL_TABLET
+# default the test to use vttablet connection
+vtgate_protocol = 'v0'
+conn_class = tablet3.TabletConnection
 
 shard_0_master = tablet.Tablet()
 shard_0_replica = tablet.Tablet()
@@ -151,13 +150,7 @@ def get_connection(db_type='master', shard_index=0, user=None, password=None):
   timeout = 10.0
   conn = None
   shard = shard_names[shard_index]
-  if vtgate_protocol == VTGATE_PROTOCOL_TABLET:
-    vtgate_addrs = []
-  elif vtgate_protocol == VTGATE_PROTOCOL_V1BSON:
-    vtgate_addrs = ["localhost:%s"%(vtgate_port),]
-  else:
-    raise Exception("Unknown vtgate_protocol %s", vtgate_protocol)
-
+  vtgate_addrs = ["localhost:%s" % (vtgate_port),]
   vtgate_client = zkocc.ZkOccConnection("localhost:%u" % vtgate_port,
                                         "test_nj", 30.0)
   conn = vtclient.VtOCCConnection(vtgate_client, 'test_keyspace', shard,
@@ -187,7 +180,6 @@ class TestTabletFunctions(unittest.TestCase):
     self.replica_tablet = shard_0_replica
 
   def test_connect(self):
-    global vtgate_protocol
     try:
       master_conn = get_connection(db_type='master', shard_index=self.shard_index)
     except Exception, e:
@@ -200,16 +192,10 @@ class TestTabletFunctions(unittest.TestCase):
                     (shard_names[self.shard_index], str(e)))
       raise
     self.assertNotEqual(replica_conn, None)
-    if vtgate_protocol == VTGATE_PROTOCOL_TABLET:
-      self.assertIsInstance(master_conn.conn, tablet3.TabletConnection,
-                            "Invalid master connection")
-      self.assertIsInstance(replica_conn.conn, tablet3.TabletConnection,
-                            "Invalid replica connection")
-    elif vtgate_protocol == VTGATE_PROTOCOL_V1BSON:
-      self.assertIsInstance(master_conn.conn, vtgate.VtgateConnection,
-                            "Invalid master connection")
-      self.assertIsInstance(replica_conn.conn, vtgate.VtgateConnection,
-                            "Invalid replica connection")
+    self.assertIsInstance(master_conn.conn, conn_class,
+                          "Invalid master connection")
+    self.assertIsInstance(replica_conn.conn, conn_class,
+                          "Invalid replica connection")
 
   def test_writes(self):
     try:
@@ -293,7 +279,7 @@ class TestTabletFunctions(unittest.TestCase):
       do_write(count)
       # Fetch a subset of the total size.
       master_conn = get_connection(db_type='master', shard_index=self.shard_index)
-      stream_cursor = cursor.StreamCursor(master_conn) 
+      stream_cursor = cursor.StreamCursor(master_conn)
       stream_cursor.execute("select * from vt_insert_test", {})
       fetch_size = 10
       rows = stream_cursor.fetchmany(size=fetch_size)
@@ -465,10 +451,13 @@ class TestFailures(unittest.TestCase):
 class TestAuthentication(unittest.TestCase):
 
   def setUp(self):
+    global vtgate_server, vtgate_port
     self.shard_index = 0
     self.replica_tablet = shard_0_replica
     self.replica_tablet.kill_vttablet()
     self.replica_tablet.start_vttablet(auth=True)
+    utils.vtgate_kill(vtgate_server)
+    vtgate_server, vtgate_port = utils.vtgate_start(auth=True)
     credentials_file_name = os.path.join(environment.vttop, 'test', 'test_data',
                                          'authcredentials_test.json')
     credentials_file = open(credentials_file_name, 'r')
@@ -488,7 +477,7 @@ class TestAuthentication(unittest.TestCase):
   def test_secondary_credentials(self):
     try:
       replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
-                                            password=self.secondary_password)
+                                    password=self.secondary_password)
       replica_conn.connect()
     finally:
       replica_conn.close()
@@ -505,7 +494,7 @@ class TestAuthentication(unittest.TestCase):
 
   def test_challenge_is_used(self):
     replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
-                                          password=self.password)
+                                  password=self.password)
     replica_conn.connect()
     challenge = ""
     proof =  "%s %s" %(self.user, hmac.HMAC(self.password,
@@ -515,7 +504,7 @@ class TestAuthentication(unittest.TestCase):
 
   def test_only_few_requests_are_allowed(self):
     replica_conn = get_connection(db_type='replica', shard_index = self.shard_index, user=self.user,
-                                          password=self.password)
+                                  password=self.password)
     replica_conn.connect()
     for i in range(4):
       try:

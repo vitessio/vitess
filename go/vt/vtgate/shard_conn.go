@@ -134,7 +134,8 @@ func (sdc *ShardConn) withRetry(context interface{}, action func(conn tabletconn
 	var conn tabletconn.TabletConn
 	var err error
 	var retry bool
-	for i := 0; i < sdc.retryCount; i++ {
+	// execute the action at least once even without retrying
+	for i := 0; i < sdc.retryCount+1; i++ {
 		conn, err, retry = sdc.getConn(context)
 		if err != nil {
 			if retry {
@@ -224,6 +225,6 @@ func (sdc *ShardConn) WrapError(in error, conn tabletconn.TabletConn) (wrapped e
 		endPoint = conn.EndPoint()
 	}
 	return fmt.Errorf(
-		"%v, shard: (%s.%s.%s), host: %s",
-		in, sdc.keyspace, sdc.shard, sdc.tabletType, endPoint.Host)
+		"%v, shard: (%s.%s.%s), host: %+v",
+		in, sdc.keyspace, sdc.shard, sdc.tabletType, endPoint)
 }
