@@ -91,33 +91,33 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 
 	// Connect failure
 	resetSandbox()
-	dialMustFail = 3
+	dialMustFail = 4
 	err = f()
 	want = "conn error, shard, host: .0."
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
-	// Ensure we dialed 3 times before failing.
-	if dialCounter != 3 {
-		t.Errorf("want 3, got %v", dialCounter)
+	// Ensure we dialed 4 times before failing.
+	if dialCounter != 4 {
+		t.Errorf("want 4, got %v", dialCounter)
 	}
 
 	// retry error (multiple failure)
 	resetSandbox()
-	sbc := &sandboxConn{mustFailRetry: 3}
+	sbc := &sandboxConn{mustFailRetry: 4}
 	testConns[0] = sbc
 	err = f()
-	want = "retry: err, shard, host: .0., 0"
+	want = "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
-	// Ensure we dialed 3 times before failing.
-	if dialCounter != 3 {
-		t.Errorf("want 3, got %v", dialCounter)
+	// Ensure we dialed 4 times before failing.
+	if dialCounter != 4 {
+		t.Errorf("want 4, got %v", dialCounter)
 	}
-	// Ensure we executed 3 times before failing.
-	if sbc.ExecCount != 3 {
-		t.Errorf("want 3, got %v", sbc.ExecCount)
+	// Ensure we executed 4 times before failing.
+	if sbc.ExecCount != 4 {
+		t.Errorf("want 4, got %v", sbc.ExecCount)
 	}
 
 	// retry error (one failure)
@@ -159,7 +159,7 @@ func testShardConnGeneric(t *testing.T, f func() error) {
 	sbc = &sandboxConn{mustFailServer: 1}
 	testConns[0] = sbc
 	err = f()
-	want = "error: err, shard, host: .0., 0"
+	want = "error: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -211,7 +211,7 @@ func testShardConnTransact(t *testing.T, f func() error) {
 	sbc := &sandboxConn{mustFailRetry: 3}
 	testConns[0] = sbc
 	err := f()
-	want := "retry: err, shard, host: .0., 0"
+	want := "retry: err, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
@@ -225,7 +225,7 @@ func testShardConnTransact(t *testing.T, f func() error) {
 	sbc = &sandboxConn{mustFailConn: 3}
 	testConns[0] = sbc
 	err = f()
-	want = "error: conn, shard, host: .0., 0"
+	want = "error: conn, shard, host: .0., {Uid:0 Host:0 NamedPortMap:map[vt:1]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("want %s, got %v", want, err)
 	}
