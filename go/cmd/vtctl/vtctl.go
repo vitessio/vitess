@@ -446,6 +446,38 @@ func keyspaceParamToKeyspace(param string) string {
 	return param
 }
 
+// keyspaceParamsToKeyspaces builds a list of keyspaces.
+// It supports topology-based wildcards, and plain wildcards.
+// For instance:
+// /zk/global/vt/keyspaces/one     // using plugin_zktopo
+// /zk/global/vt/keyspaces/*       // using plugin_zktopo
+// us*                             // using plain matching
+// *                               // using plain matching
+func keyspaceParamsToKeyspaces(wr *wrangler.Wrangler, params []string) []string {
+	result := make([]string, 0, len(params))
+	for _, param := range params {
+		if param[0] == '/' {
+			// this is a topology-specific path
+			zkPaths, err := resolveWildcards(wr, params)
+			if err != nil {
+				log.Fatalf("Failed to resolve wildcard: %v", err)
+			}
+			for _, zkPath := range zkPaths {
+				result = append(result, keyspaceParamToKeyspace(zkPath))
+			}
+		} else {
+			// this is not a path, so assume a keyspace name,
+			// possibly with wildcards
+			keyspaces, err := topo.ResolveKeyspaceWildcard(wr.TopoServer(), param)
+			if err != nil {
+				log.Fatalf("Failed to resolve keyspace wildcard %v: %v", param, err)
+			}
+			result = append(result, keyspaces...)
+		}
+	}
+	return result
+}
+
 func shardParamToKeyspaceShard(param string) (string, string) {
 	if param[0] == '/' {
 		// old zookeeper path, convert to new-style
@@ -460,6 +492,38 @@ func shardParamToKeyspaceShard(param string) (string, string) {
 		log.Fatalf("Invalid shard path: %v", param)
 	}
 	return zkPathParts[0], zkPathParts[1]
+}
+
+// shardParamsToKeyspaceShards builds a list of keyspace/shard pairs.
+// It supports topology-based wildcards, and plain wildcards.
+// For instance:
+// /zk/global/vt/keyspaces/*/shards/* // using plugin_zktopo
+// user/*                             // using plain matching
+// */0                                // using plain matching
+func shardParamsToKeyspaceShards(wr *wrangler.Wrangler, params []string) []topo.KeyspaceShard {
+	result := make([]topo.KeyspaceShard, 0, len(params))
+	for _, param := range params {
+		if param[0] == '/' {
+			// this is a topology-specific path
+			zkPaths, err := resolveWildcards(wr, params)
+			if err != nil {
+				log.Fatalf("Failed to resolve wildcard: %v", err)
+			}
+			for _, zkPath := range zkPaths {
+				keyspace, shard := shardParamToKeyspaceShard(zkPath)
+				result = append(result, topo.KeyspaceShard{keyspace, shard})
+			}
+		} else {
+			// this is not a path, so assume a keyspace
+			// name / shard name, each possibly with wildcards
+			keyspaceShards, err := topo.ResolveShardWildcard(wr.TopoServer(), param)
+			if err != nil {
+				log.Fatalf("Failed to resolve keyspace/shard wildcard %v: %v", param, err)
+			}
+			result = append(result, keyspaceShards...)
+		}
+	}
+	return result
 }
 
 // tabletParamToTabletAlias takes either an old style ZK tablet path or a
@@ -963,17 +1027,9 @@ func commandRebuildShardGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, arg
 		cellArray = strings.Split(*cells, ",")
 	}
 
-	zkPaths, err := resolveWildcards(wr, subFlags.Args())
-	if err != nil {
-		return "", err
-	}
-	if len(zkPaths) == 0 {
-		return "", nil
-	}
-
-	for _, zkPath := range zkPaths {
-		keyspace, shard := shardParamToKeyspaceShard(zkPath)
-		if err := wr.RebuildShardGraph(keyspace, shard, cellArray); err != nil {
+	keyspaceShards := shardParamsToKeyspaceShards(wr, subFlags.Args())
+	for _, ks := range keyspaceShards {
+		if err := wr.RebuildShardGraph(ks.Keyspace, ks.Shard, cellArray); err != nil {
 			return "", err
 		}
 	}
@@ -1191,16 +1247,8 @@ func commandRebuildKeyspaceGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSet, 
 		cellArray = strings.Split(*cells, ",")
 	}
 
-	zkPaths, err := resolveWildcards(wr, subFlags.Args())
-	if err != nil {
-		return "", err
-	}
-	if len(zkPaths) == 0 {
-		return "", nil
-	}
-
-	for _, zkPath := range zkPaths {
-		keyspace := keyspaceParamToKeyspace(zkPath)
+	keyspaces := keyspaceParamsToKeyspaces(wr, subFlags.Args())
+	for _, keyspace := range keyspaces {
 		if err := wr.RebuildKeyspaceGraph(keyspace, cellArray); err != nil {
 			return "", err
 		}
@@ -1306,15 +1354,7 @@ func commandRebuildReplicationGraph(wr *wrangler.Wrangler, subFlags *flag.FlagSe
 	}
 
 	keyspaceParams := strings.Split(subFlags.Arg(1), ",")
-	resolvedKeyspaces, err := resolveWildcards(wr, keyspaceParams)
-	if err != nil {
-		return "", err
-	}
-	keyspaces := make([]string, 0, len(keyspaceParams))
-	for _, keyspace := range resolvedKeyspaces {
-		keyspaces = append(keyspaces, keyspaceParamToKeyspace(keyspace))
-	}
-
+	keyspaces := keyspaceParamsToKeyspaces(wr, keyspaceParams)
 	return "", wr.RebuildReplicationGraph(cells, keyspaces)
 }
 

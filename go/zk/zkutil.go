@@ -15,6 +15,7 @@ import (
 	"time"
 
 	log "github.com/golang/glog"
+	"github.com/youtube/vitess/go/fileutil"
 	"launchpad.net/gozk/zookeeper"
 )
 
@@ -174,27 +175,9 @@ func ResolveWildcards(zconn Conn, zkPaths []string) ([]string, error) {
 	return result, nil
 }
 
-// checks if a string has a wildcard in it. In the cases we detect a bad
-// pattern, we return 'true', and let the path.Match function find it.
-func hasWildcard(path string) bool {
-	for i := 0; i < len(path); i++ {
-		switch path[i] {
-		case '\\':
-			if i+1 >= len(path) {
-				return true
-			} else {
-				i++
-			}
-		case '*', '?', '[':
-			return true
-		}
-	}
-	return false
-}
-
 func resolveRecursive(zconn Conn, parts []string, toplevel bool) ([]string, error) {
 	for i, part := range parts {
-		if hasWildcard(part) {
+		if fileutil.HasWildcard(part) {
 			var children []string
 			if i == 2 {
 				children = ZkKnownCells(false)
