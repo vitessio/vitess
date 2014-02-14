@@ -466,9 +466,8 @@ index by_msg (msg)
     utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], expect_fail=True)
 
     # scrap the original tablets in the original shard
-    utils.run_vtctl(['ScrapTablet', shard_rdonly.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ScrapTablet', shard_replica.tablet_alias], auto_log=True)
-    utils.run_vtctl(['ScrapTablet', shard_master.tablet_alias], auto_log=True)
+    for t in [shard_master, shard_replica, shard_rdonly]:
+      utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
     tablet.kill_tablets([shard_master, shard_replica, shard_rdonly])
 
     # rebuild the serving graph, all mentions of the old shards shoud be gone

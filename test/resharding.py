@@ -595,9 +595,20 @@ primary key (name)
     shard_2_master.wait_for_binlog_player_count(0)
     shard_3_master.wait_for_binlog_player_count(0)
 
+    # scrap the original tablets in the original shard
+    for t in [shard_1_master, shard_1_slave1, shard_1_slave2, shard_1_rdonly]:
+      utils.run_vtctl(['ScrapTablet', t.tablet_alias], auto_log=True)
+    tablet.kill_tablets([shard_1_master, shard_1_slave1, shard_1_slave2,
+                         shard_1_rdonly])
+
+    # rebuild the serving graph, all mentions of the old shards shoud be gone
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
+    # delete the original shard
+    utils.run_vtctl(['DeleteShard', 'test_keyspace/80-'], auto_log=True)
+
     # kill everything
-    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_1_master,
-                         shard_1_slave1, shard_1_slave2, shard_1_rdonly,
+    tablet.kill_tablets([shard_0_master, shard_0_replica,
                          shard_2_master, shard_2_replica1, shard_2_replica2,
                          shard_3_master, shard_3_replica, shard_3_rdonly])
 
