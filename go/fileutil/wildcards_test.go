@@ -6,14 +6,8 @@ import (
 
 func testWildcard(t *testing.T, pattern string, expected bool) {
 	result := HasWildcard(pattern)
-	if result {
-		if !expected {
-			t.Errorf("HasWildcard(%v) returned true but expected false", pattern)
-		}
-	} else {
-		if expected {
-			t.Errorf("HasWildcard(%v) returned false but expected true", pattern)
-		}
+	if result != expected {
+		t.Errorf("HasWildcard(%v) returned %v but expected %v", pattern, result, expected)
 	}
 }
 

@@ -33,15 +33,15 @@ type WildcardBackend interface {
 // - If the param is a wildcard, it will get all keyspaces and returns
 //   the ones which match the wildcard (which may be an empty list).
 func ResolveKeyspaceWildcard(server WildcardBackend, param string) ([]string, error) {
-	result := make([]string, 0)
-
 	if !fileutil.HasWildcard(param) {
 		return []string{param}, nil
 	}
 
+	result := make([]string, 0)
+
 	keyspaces, err := server.GetKeyspaces()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read keyspaces from topo: %v", err)
 	}
 	for _, k := range keyspaces {
 		matched, err := path.Match(param, k)
@@ -78,23 +78,9 @@ func ResolveShardWildcard(server WildcardBackend, param string) ([]KeyspaceShard
 
 	// get all the matched keyspaces first, remember if it was a wildcard
 	keyspaceHasWildcards := fileutil.HasWildcard(parts[0])
-	var matchedKeyspaces []string
-	if keyspaceHasWildcards {
-		keyspaces, err := server.GetKeyspaces()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read keyspaces from topo: %v", err)
-		}
-		for _, k := range keyspaces {
-			matched, err := path.Match(parts[0], k)
-			if err != nil {
-				return nil, fmt.Errorf("invalid pattern: %v", err)
-			}
-			if matched {
-				matchedKeyspaces = append(matchedKeyspaces, k)
-			}
-		}
-	} else {
-		matchedKeyspaces = []string{parts[0]}
+	matchedKeyspaces, err := ResolveKeyspaceWildcard(server, parts[0])
+	if err != nil {
+		return nil, err
 	}
 
 	// for each matched keyspace, get the shards
