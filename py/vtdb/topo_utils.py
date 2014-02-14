@@ -6,6 +6,7 @@ import logging
 import random
 
 from zk import zkocc
+from vtdb import keyspace
 
 
 class VTConnParams(object):
@@ -18,8 +19,8 @@ class VTConnParams(object):
   user = None
   password = None
 
-  def __init__(self, keyspace, shard, db_type, addr, timeout, encrypted, user, password):
-    self.keyspace = keyspace
+  def __init__(self, keyspace_name, shard, db_type, addr, timeout, encrypted, user, password):
+    self.keyspace = keyspace_name
     self.shard = shard
     self.tablet_type = db_type
     self.addr = addr
@@ -29,35 +30,35 @@ class VTConnParams(object):
     self.password = password
 
 
-def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace, shard, db_type, timeout, encrypted, user, password):
+def get_db_params_for_vtgate_conn(vtgate_addrs, keyspace_name, shard, db_type, timeout, encrypted, user, password):
   db_params_list = []
   random.shuffle(vtgate_addrs)
   for addr in vtgate_addrs:
-    vt_params = VTConnParams(keyspace, shard, db_type, addr, timeout, encrypted, user, password).__dict__
+    vt_params = VTConnParams(keyspace_name, shard, db_type, addr, timeout, encrypted, user, password).__dict__
     db_params_list.append(vt_params)
   return db_params_list
 
 
-def get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout, encrypted, user, password):
+def get_db_params_for_tablet_conn(topo_client, keyspace_name, shard, db_type, timeout, encrypted, user, password):
   db_params_list = []
   encrypted_service = '_vts'
   if encrypted:
     service = encrypted_service
   else:
     service = '_vtocc'
-  db_key = "%s.%s.%s:%s" % (keyspace, shard, db_type, service)
-  keyspace_data = topo_client.get_srv_keyspace('local', keyspace) 
+  db_key = "%s.%s.%s:%s" % (keyspace_name, shard, db_type, service)
+  keyspace_object = keyspace.read_keyspace(topo_client, keyspace_name)
 
   # Handle vertical split by checking 'ServedFrom' field.
   new_keyspace = None
-  served_from = keyspace_data.get('ServedFrom', None)
+  served_from = keyspace_object.served_from
   if served_from is not None:
     new_keyspace = served_from.get(db_type, None)
     if new_keyspace is not None:
-      keyspace = new_keyspace
+      keyspace_name = new_keyspace
 
   try:
-    end_points_data = topo_client.get_end_points('local', keyspace, shard, db_type)
+    end_points_data = topo_client.get_end_points('local', keyspace_name, shard, db_type)
   except zkocc.ZkOccError as e:
     logging.warning('no data for %s: %s', db_key, e)
     return []
@@ -89,6 +90,6 @@ def get_db_params_for_tablet_conn(topo_client, keyspace, shard, db_type, timeout
 
 
   for host, port, encrypted in end_points_list:
-    vt_params = VTConnParams(keyspace, shard, db_type, "%s:%s" % (host, port), timeout, encrypted, user, password).__dict__
+    vt_params = VTConnParams(keyspace_name, shard, db_type, "%s:%s" % (host, port), timeout, encrypted, user, password).__dict__
     db_params_list.append(vt_params)
   return db_params_list

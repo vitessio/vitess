@@ -3,20 +3,10 @@
 # be found in the LICENSE file.
 
 from vtdb import dbexceptions
+from vtdb import keyrange_constants
 
 # This module computes task map and query where clause and
 # bind_vars for distrubuting the workload of streaming queries.
-
-
-# Keyrange that spans the entire space, used
-# for unsharded database.
-NON_PARTIAL_KEYRANGE = ""
-MIN_KEY = ''
-MAX_KEY = ''
-
-KIT_UNSET = ""
-KIT_UINT64 = "uint64"
-KIT_BYTES = "bytes"
 
 
 class KeyRange(object):
@@ -25,7 +15,7 @@ class KeyRange(object):
 
   def __init__(self, kr):
     if isinstance(kr, str):
-      if kr == NON_PARTIAL_KEYRANGE:
+      if kr == keyrange_constants.NON_PARTIAL_KEYRANGE:
         self.Start = ""
         self.End = ""
         return
@@ -37,8 +27,8 @@ class KeyRange(object):
     self.End = kr[1].strip()
 
   def __str__(self):
-    if self.Start == MIN_KEY and self.End == MAX_KEY:
-      return NON_PARTIAL_KEYRANGE
+    if self.Start == keyrange_constants.MIN_KEY and self.End == keyrange_constants.MAX_KEY:
+      return keyrange_constants.NON_PARTIAL_KEYRANGE
     return '%s-%s' % (self.Start, self.End)
 
 
@@ -89,20 +79,20 @@ def _true_int_kr_value(kr_value):
 
 
 # Compute the where clause and bind_vars for a given keyrange.
-def create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=KIT_UINT64):
+def create_where_clause_for_keyrange(keyrange, keyspace_col_name='keyspace_id', keyspace_col_type=keyrange_constants.KIT_UINT64):
   if isinstance(keyrange, str):
     # If the keyrange is for unsharded db, there is no
     # where clause to add to or bind_vars to add to.
-    if keyrange == NON_PARTIAL_KEYRANGE:
+    if keyrange == keyrange_constants.NON_PARTIAL_KEYRANGE:
       return "", {}
     keyrange = keyrange.split('-')
 
   if not isinstance(keyrange, tuple) and not isinstance(keyrange, list) or len(keyrange) != 2:
     raise dbexceptions.ProgrammingError("keyrange must be a list or tuple or a '-' separated str %s" % keyrange)
 
-  if keyspace_col_type == KIT_UINT64:
+  if keyspace_col_type == keyrange_constants.KIT_UINT64:
     return _create_where_clause_for_int_keyspace(keyrange, keyspace_col_name)
-  elif keyspace_col_type == KIT_BYTES:
+  elif keyspace_col_type == keyrange_constants.KIT_BYTES:
     return _create_where_clause_for_str_keyspace(keyrange, keyspace_col_name)
   else:
     raise dbexceptions.ProgrammingError("Illegal type for keyspace_col_type %d" % keyspace_col_type)
@@ -117,12 +107,12 @@ def _create_where_clause_for_str_keyspace(keyrange, keyspace_col_name):
   where_clause = ''
   bind_vars = {}
   i = 0
-  if kr_min != MIN_KEY:
+  if kr_min != keyrange_constants.MIN_KEY:
     bind_name = "%s%d" % (keyspace_col_name, i)
     where_clause = "hex(%s) >= " % keyspace_col_name + "%(" + bind_name + ")s"
     i += 1
     bind_vars[bind_name] = kr_min
-  if kr_max != MAX_KEY:
+  if kr_max != keyrange_constants.MAX_KEY:
     if where_clause != '':
       where_clause += ' AND '
     bind_name = "%s%d" % (keyspace_col_name, i)

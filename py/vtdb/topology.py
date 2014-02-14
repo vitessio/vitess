@@ -18,6 +18,11 @@ from zk import zkocc
 # keeps a global version of the topology
 __keyspace_map = {}
 
+__topo_client = None
+
+def set_topo_client(topo_client):
+  global __topo_client
+  __topo_client = topo_client
 
 def read_and_get_keyspace(zkocc_client, name):
   ks = None
@@ -33,7 +38,11 @@ def read_and_get_keyspace(zkocc_client, name):
 
 
 def get_keyspace(name):
-  return __keyspace_map[name]
+  try:
+    return __keyspace_map[name]
+  except KeyError:
+    global __topo_client
+    return keyspace.read_keyspace(__topo_client, name)
 
 
 def __add_keyspace(ks):
