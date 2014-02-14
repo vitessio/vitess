@@ -218,7 +218,7 @@ class TestTabletManager(unittest.TestCase):
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     tablet_62044.init_tablet('replica', 'test_keyspace', '0')
-    utils.run_vtctl('RebuildShardGraph test_keyspace/0')
+    utils.run_vtctl('RebuildShardGraph test_keyspace/*')
     utils.validate_topology()
 
     tablet_62044.scrap(force=True)

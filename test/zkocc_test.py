@@ -60,7 +60,7 @@ class TopoOccTest(unittest.TestCase):
     t2 = tablet.Tablet(tablet_uid=2, cell="nj")
     t2.init_tablet("master", "test_keyspace2", "0")
     t2.update_addrs()
-    utils.run_vtctl('RebuildKeyspaceGraph test_keyspace1 test_keyspace2', auto_log=True)
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace*'], auto_log=True)
 
     # vtgate API test
     out, err = utils.run(environment.binary_path('zkclient2')+' -server localhost:%u -mode getSrvKeyspaceNames test_nj' % self.vtgate_zk_port, trap_output=True)
