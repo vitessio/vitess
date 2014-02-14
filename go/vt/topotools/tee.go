@@ -192,6 +192,19 @@ func (tee *Tee) GetShardNames(keyspace string) ([]string, error) {
 	return tee.readFrom.GetShardNames(keyspace)
 }
 
+func (tee *Tee) DeleteShard(keyspace, shard string) error {
+	err := tee.primary.DeleteShard(keyspace, shard)
+	if err != nil && err != topo.ErrNoNode {
+		return err
+	}
+
+	if err := tee.secondary.DeleteShard(keyspace, shard); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteShard(%v, %v) failed: %v", keyspace, shard, err)
+	}
+	return err
+}
+
 //
 // Tablet management, per cell.
 //
@@ -394,7 +407,8 @@ func (tee *Tee) GetEndPoints(cell, keyspace, shard string, tabletType topo.Table
 }
 
 func (tee *Tee) DeleteSrvTabletType(cell, keyspace, shard string, tabletType topo.TabletType) error {
-	if err := tee.primary.DeleteSrvTabletType(cell, keyspace, shard, tabletType); err != nil {
+	err := tee.primary.DeleteSrvTabletType(cell, keyspace, shard, tabletType)
+	if err != nil && err != topo.ErrNoNode {
 		return err
 	}
 
@@ -402,7 +416,7 @@ func (tee *Tee) DeleteSrvTabletType(cell, keyspace, shard string, tabletType top
 		// not critical enough to fail
 		log.Warningf("secondary.DeleteSrvTabletType(%v, %v, %v, %v) failed: %v", cell, keyspace, shard, tabletType, err)
 	}
-	return nil
+	return err
 }
 
 func (tee *Tee) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvShard) error {
@@ -419,6 +433,19 @@ func (tee *Tee) UpdateSrvShard(cell, keyspace, shard string, srvShard *topo.SrvS
 
 func (tee *Tee) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, error) {
 	return tee.readFrom.GetSrvShard(cell, keyspace, shard)
+}
+
+func (tee *Tee) DeleteSrvShard(cell, keyspace, shard string) error {
+	err := tee.primary.DeleteSrvShard(cell, keyspace, shard)
+	if err != nil && err != topo.ErrNoNode {
+		return err
+	}
+
+	if err := tee.secondary.DeleteSrvShard(cell, keyspace, shard); err != nil {
+		// not critical enough to fail
+		log.Warningf("secondary.DeleteSrvShard(%v, %v, %v) failed: %v", cell, keyspace, shard, err)
+	}
+	return err
 }
 
 func (tee *Tee) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {

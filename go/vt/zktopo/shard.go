@@ -110,3 +110,14 @@ func (zkts *Server) GetShardNames(keyspace string) ([]string, error) {
 	sort.Strings(children)
 	return children, nil
 }
+
+func (zkts *Server) DeleteShard(keyspace, shard string) error {
+	shardPath := path.Join(globalKeyspacesPath, keyspace, "shards", shard)
+	err := zk.DeleteRecursive(zkts.zconn, shardPath, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+	}
+	return err
+}

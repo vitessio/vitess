@@ -160,6 +160,9 @@ var commands = []commandGroup{
 			command{"ShardReplicationFix", commandShardReplicationFix,
 				"<cell> <keyspace/shard|zk shard path>",
 				"Walks through a ShardReplication object and fixes the first error it encrounters"},
+			command{"DeleteShard", commandDeleteShard,
+				"<keyspace/shard|zk shard path> ...",
+				"Deletes the given shard(s)"},
 		},
 	},
 	commandGroup{
@@ -1172,6 +1175,27 @@ func commandShardReplicationFix(wr *wrangler.Wrangler, subFlags *flag.FlagSet, a
 	cell := subFlags.Arg(0)
 	keyspace, shard := shardParamToKeyspaceShard(subFlags.Arg(1))
 	return "", topo.FixShardReplication(wr.TopoServer(), cell, keyspace, shard)
+}
+
+func commandDeleteShard(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (status string, err error) {
+	subFlags.Parse(args)
+	if subFlags.NArg() == 0 {
+		log.Fatalf("action DeleteShard requires <keyspace/shard|zk shard path> ...")
+	}
+
+	keyspaceShards := shardParamsToKeyspaceShards(wr, subFlags.Args())
+	for _, ks := range keyspaceShards {
+		err := wr.DeleteShard(ks.Keyspace, ks.Shard)
+		switch err {
+		case nil:
+			// keep going
+		case topo.ErrNoNode:
+			log.Infof("Shard %v/%v doesn't exist, skipping it", ks.Keyspace, ks.Shard)
+		default:
+			return "", err
+		}
+	}
+	return "", nil
 }
 
 func commandCreateKeyspace(wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) (string, error) {

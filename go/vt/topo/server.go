@@ -127,6 +127,10 @@ type Server interface {
 	// or if DeleteKeyspaceShards was called. They shall be sorted.
 	GetShardNames(keyspace string) ([]string, error)
 
+	// DeleteShard deletes the provided shard.
+	// Can return ErrNoNode if the shard doesn't exist.
+	DeleteShard(keyspace, shard string) error
+
 	//
 	// Tablet management, per cell.
 	//
@@ -216,6 +220,10 @@ type Server interface {
 	// GetSrvShard reads a SrvShard record.
 	// Can return ErrNoNode.
 	GetSrvShard(cell, keyspace, shard string) (*SrvShard, error)
+
+	// DeleteSrvShard deletes a SrvShard record.
+	// Can return ErrNoNode.
+	DeleteSrvShard(cell, keyspace, shard string) error
 
 	// UpdateSrvKeyspace updates the serving records for a cell, keyspace.
 	UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *SrvKeyspace) error

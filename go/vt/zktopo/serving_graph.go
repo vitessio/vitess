@@ -123,6 +123,18 @@ func (zkts *Server) GetSrvShard(cell, keyspace, shard string) (*topo.SrvShard, e
 	return srvShard, nil
 }
 
+func (zkts *Server) DeleteSrvShard(cell, keyspace, shard string) error {
+	path := zkPathForVtShard(cell, keyspace, shard)
+	err := zkts.zconn.Delete(path, -1)
+	if err != nil {
+		if zookeeper.IsError(err, zookeeper.ZNONODE) {
+			err = topo.ErrNoNode
+		}
+		return err
+	}
+	return nil
+}
+
 func (zkts *Server) UpdateSrvKeyspace(cell, keyspace string, srvKeyspace *topo.SrvKeyspace) error {
 	path := zkPathForVtKeyspace(cell, keyspace)
 	data := jscfg.ToJson(srvKeyspace)

@@ -5,6 +5,8 @@
 package wrangler
 
 import (
+	"fmt"
+
 	log "github.com/golang/glog"
 	"github.com/youtube/vitess/go/vt/tabletmanager/actionnode"
 	"github.com/youtube/vitess/go/vt/topo"
@@ -61,4 +63,45 @@ func (wr *Wrangler) setShardServedTypes(keyspace, shard string, servedTypes []to
 
 	shardInfo.ServedTypes = servedTypes
 	return wr.ts.UpdateShard(shardInfo)
+}
+
+// DeleteShard will do all the necessary changes in the topology server
+// to entirely remove a shard. It can only work if there are no tablets
+// in that shard.
+func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
+	shardInfo, err := wr.ts.GetShard(keyspace, shard)
+	if err != nil {
+		return err
+	}
+
+	tabletMap, err := GetTabletMapForShard(wr.ts, keyspace, shard)
+	if err != nil {
+		return err
+	}
+	if len(tabletMap) > 0 {
+		return fmt.Errorf("shard %v/%v still has %v tablets", len(tabletMap))
+	}
+
+	// remove the replication graph and serving graph in each cell
+	for _, cell := range shardInfo.Cells {
+		if err := wr.ts.DeleteShardReplication(cell, keyspace, shard); err != nil {
+			log.Warningf("Cannot delete ShardReplication in cell %v for %v/%v: %v", cell, keyspace, shard, err)
+		}
+
+		for _, t := range topo.AllTabletTypes {
+			if !topo.IsInServingGraph(t) {
+				continue
+			}
+
+			if err := wr.ts.DeleteSrvTabletType(cell, keyspace, shard, t); err != nil && err != topo.ErrNoNode {
+				log.Warningf("Cannot delete EndPoints in cell %v for %v/%v/%v: %v", cell, keyspace, shard, t, err)
+			}
+		}
+
+		if err := wr.ts.DeleteSrvShard(cell, keyspace, shard); err != nil && err != topo.ErrNoNode {
+			log.Warningf("Cannot delete SrvShard in cell %v for %v/%v: %v", cell, keyspace, shard, err)
+		}
+	}
+
+	return wr.ts.DeleteShard(keyspace, shard)
 }

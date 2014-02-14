@@ -5,13 +5,14 @@
 # be found in the LICENSE file.
 
 # This test simulates the first time a database has to be split:
-# - we start with a keyspace with a single shard and a couple tables
+# - we start with a keyspace with a single shard and a single table
 # - we add and populate the sharding key
 # - we set the sharding key in the topology
 # - we backup / restore into 2 instances
 # - we enable filtered replication
 # - we move all serving types
 # - we scrap the source tablets
+# - we remove the original shard
 
 import base64
 import logging
@@ -101,36 +102,66 @@ def tearDownModule():
 class TestInitialSharding(unittest.TestCase):
 
   # create_schema will create the same schema on the keyspace
-  # then insert some values
   def _create_schema(self):
-    if keyspace_id_type == 'bytes':
-      t = 'varbinary(64)'
-    else:
-      t = 'bigint(20) unsigned'
     create_table_template = '''create table %s(
 id bigint auto_increment,
 msg varchar(64),
-keyspace_id ''' + t + ''' not null,
 primary key (id),
 index by_msg (msg)
 ) Engine=InnoDB'''
-    create_view_template = '''create view %s(id, msg, keyspace_id) as select id, msg, keyspace_id from %s'''
 
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
                      '-sql=' + create_table_template % ("resharding1"),
                      'test_keyspace'],
                     auto_log=True)
+
+  def _add_sharding_key_to_schema(self):
+    if keyspace_id_type == keyrange.KIT_BYTES:
+      t = 'varbinary(64)'
+    else:
+      t = 'bigint(20) unsigned'
+    sql = 'alter table %s add keyspace_id ' + t
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
-                     '-sql=' + create_table_template % ("resharding2"),
+                     '-sql=' + sql % ("resharding1"),
                      'test_keyspace'],
                     auto_log=True)
+
+  def _mark_sharding_key_not_null(self):
+    if keyspace_id_type == keyrange.KIT_BYTES:
+      t = 'varbinary(64)'
+    else:
+      t = 'bigint(20) unsigned'
+    sql = 'alter table %s modify keyspace_id ' + t + ' not null'
     utils.run_vtctl(['ApplySchemaKeyspace',
                      '-simple',
-                     '-sql=' + create_view_template % ("view1", "resharding1"),
+                     '-sql=' + sql % ("resharding1"),
                      'test_keyspace'],
                     auto_log=True)
+
+  # _insert_startup_value inserts a value in the MySQL database before it
+  # is sharded
+  def _insert_startup_value(self, tablet, table, id, msg):
+    tablet.mquery('vt_test_keyspace', [
+        'begin',
+        'insert into %s(id, msg) values(%u, "%s")' % (table, id, msg),
+        'commit'
+        ], write=True)
+
+  def _insert_startup_values(self):
+    self._insert_startup_value(shard_master, 'resharding1', 1, 'msg1')
+    self._insert_startup_value(shard_master, 'resharding1', 2, 'msg2')
+    self._insert_startup_value(shard_master, 'resharding1', 3, 'msg3')
+
+  def _backfill_keyspace_id(self, tablet):
+    tablet.mquery('vt_test_keyspace', [
+        'begin',
+        'update resharding1 set keyspace_id=0x1000000000000000 where id=1',
+        'update resharding1 set keyspace_id=0x9000000000000000 where id=2',
+        'update resharding1 set keyspace_id=0xD000000000000000 where id=3',
+        'commit'
+        ], write=True)
 
   # _insert_value inserts a value in the MySQL database along with the comments
   # required for routing.
@@ -184,14 +215,6 @@ index by_msg (msg)
                      ("Bad row in tablet %s for id=%u, keyspace_id=" + fmt) % (
                          tablet.tablet_alias, id, keyspace_id))
     return True
-
-  def _insert_startup_values(self):
-    self._insert_value(shard_master, 'resharding1', 1, 'msg1',
-                       0x1000000000000000)
-    self._insert_value(shard_master, 'resharding1', 2, 'msg2',
-                       0x9000000000000000)
-    self._insert_value(shard_master, 'resharding1', 3, 'msg3',
-                       0xD000000000000000)
 
   def _check_startup_values(self):
     # check first value is in the right shard
@@ -287,9 +310,14 @@ index by_msg (msg)
     utils.run_vtctl(['ReparentShard', '-force', 'test_keyspace/0',
                      shard_master.tablet_alias], auto_log=True)
 
-    # create the tables
+    # create the tables and add startup values
     self._create_schema()
     self._insert_startup_values()
+
+    # change the schema, backfill keyspace_id, and change schema again
+    self._add_sharding_key_to_schema()
+    self._backfill_keyspace_id(shard_master)
+    self._mark_sharding_key_not_null()
 
     # create the split shards
     shard_0_master.init_tablet( 'master',  'test_keyspace', '-80')
@@ -434,9 +462,23 @@ index by_msg (msg)
     shard_0_master.wait_for_binlog_player_count(0)
     shard_1_master.wait_for_binlog_player_count(0)
 
-    # kill everything
-    tablet.kill_tablets([shard_master, shard_replica, shard_rdonly,
-                         shard_0_master, shard_0_replica, shard_0_rdonly,
+    # make sure we can't delete a shard with tablets
+    utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], expect_fail=True)
+
+    # scrap the original tablets in the original shard
+    utils.run_vtctl(['ScrapTablet', shard_rdonly.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ScrapTablet', shard_replica.tablet_alias], auto_log=True)
+    utils.run_vtctl(['ScrapTablet', shard_master.tablet_alias], auto_log=True)
+    tablet.kill_tablets([shard_master, shard_replica, shard_rdonly])
+
+    # rebuild the serving graph, all mentions of the old shards shoud be gone
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
+    # delete the original shard
+    utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], auto_log=True)
+
+    # kill everything else
+    tablet.kill_tablets([shard_0_master, shard_0_replica, shard_0_rdonly,
                          shard_1_master, shard_1_replica, shard_1_rdonly])
 
 if __name__ == '__main__':
