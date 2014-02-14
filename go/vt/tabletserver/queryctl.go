@@ -13,6 +13,7 @@ import (
 	log "github.com/golang/glog"
 	mproto "github.com/youtube/vitess/go/mysql/proto"
 	"github.com/youtube/vitess/go/vt/dbconfigs"
+	"github.com/youtube/vitess/go/vt/mysqlctl"
 	"github.com/youtube/vitess/go/vt/tabletserver/proto"
 )
 
@@ -146,9 +147,9 @@ func RegisterQueryService() {
 
 // AllowQueries can take an indefinite amount of time to return because
 // it keeps retrying until it obtains a valid connection to the database.
-func AllowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules) {
+func AllowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides []SchemaOverride, qrs *QueryRules, mysqld *mysqlctl.Mysqld) {
 	defer logError()
-	SqlQueryRpcService.allowQueries(dbconfig, schemaOverrides, qrs)
+	SqlQueryRpcService.allowQueries(dbconfig, schemaOverrides, qrs, mysqld)
 }
 
 // DisallowQueries can take a long time to return (not indefinite) because

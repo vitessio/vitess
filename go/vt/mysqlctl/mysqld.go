@@ -55,6 +55,10 @@ func NewMysqld(config *Mycnf, dba, repl *mysql.ConnectionParams) *Mysqld {
 	}
 }
 
+func (mt *Mysqld) Cnf() *Mycnf {
+	return mt.config
+}
+
 func (mt *Mysqld) createDbaConnection() (*mysql.Connection, error) {
 	params, err := dbconfigs.MysqlParams(mt.dbaParams)
 	if err != nil {

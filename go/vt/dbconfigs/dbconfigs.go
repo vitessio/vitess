@@ -54,19 +54,13 @@ func registerConnFlags(connParams *mysql.ConnectionParams, name string, defaultP
 
 }
 
-// vtocc will only register the app flags, it doesn't do any dba or repl
-// access.
-func RegisterAppFlags(defaultDBConfig DBConfig) {
-	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", defaultDBConfig.ConnectionParams)
-	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", defaultDBConfig.Keyspace, "db app connection keyspace")
-	flag.StringVar(&dbConfigs.App.Shard, "db-config-app-shard", defaultDBConfig.Shard, "db app connection shard")
-}
-
 // vttablet will register client, dba and repl.
-func RegisterCommonFlags() {
+func RegisterFlags() {
 	registerConnFlags(&dbConfigs.Dba, "dba", DefaultDBConfigs.Dba)
 	registerConnFlags(&dbConfigs.Repl, "repl", DefaultDBConfigs.Repl)
-	RegisterAppFlags(DefaultDBConfigs.App)
+	registerConnFlags(&dbConfigs.App.ConnectionParams, "app", DefaultDBConfigs.App.ConnectionParams)
+	flag.StringVar(&dbConfigs.App.Keyspace, "db-config-app-keyspace", DefaultDBConfigs.App.Keyspace, "db app connection keyspace")
+	flag.StringVar(&dbConfigs.App.Shard, "db-config-app-shard", DefaultDBConfigs.App.Shard, "db app connection shard")
 }
 
 // InitConnectionParams may overwrite the socket file,
@@ -106,8 +100,10 @@ func MysqlParams(cp *mysql.ConnectionParams) (mysql.ConnectionParams, error) {
 // shard.
 type DBConfig struct {
 	mysql.ConnectionParams
-	Keyspace string `json:"keyspace"`
-	Shard    string `json:"shard"`
+	Keyspace          string `json:"keyspace"`
+	Shard             string `json:"shard"`
+	EnableRowcache    bool   `json:"enable_rowcache"`
+	EnableInvalidator bool   `json:"enable_invalidator"`
 }
 
 func (d *DBConfig) String() string {
@@ -146,21 +142,11 @@ func (dbcfgs *DBConfigs) Redact() {
 	dbcfgs.Repl.Redact()
 }
 
-// Initialize only the app side of the db configs (for vtocc)
-func InitApp(socketFile string) (*DBConfig, error) {
+// Initialize app, dba and repl configs
+func Init(socketFile string) (*DBConfigs, error) {
 	if err := InitConnectionParams(&dbConfigs.App.ConnectionParams, socketFile); err != nil {
 		return nil, err
 	}
-	return &dbConfigs.App, nil
-}
-
-// Initialize app, dba and repl configs
-func Init(socketFile string) (*DBConfigs, error) {
-	if _, err := InitApp(socketFile); err != nil {
-		return nil, err
-	}
-
-	// init configs
 	if err := InitConnectionParams(&dbConfigs.Dba, socketFile); err != nil {
 		return nil, err
 	}

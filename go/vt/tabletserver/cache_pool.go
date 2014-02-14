@@ -97,8 +97,7 @@ func NewCachePool(name string, rowCacheConfig RowCacheConfig, queryTimeout time.
 
 func (cp *CachePool) Open() {
 	if cp.rowCacheConfig.Binary == "" {
-		log.Infof("rowcache not enabled")
-		return
+		panic(NewTabletError(FATAL, "rowcache binary not specified"))
 	}
 	cp.startMemcache()
 	log.Infof("rowcache is enabled")

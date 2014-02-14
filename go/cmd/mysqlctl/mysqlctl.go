@@ -258,7 +258,7 @@ func main() {
 		}
 		fmt.Fprintf(os.Stderr, "\n")
 	}
-	dbconfigs.RegisterCommonFlags()
+	dbconfigs.RegisterFlags()
 	flag.Parse()
 
 	tabletAddr = fmt.Sprintf("%v:%v", "localhost", *port)

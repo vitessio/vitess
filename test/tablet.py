@@ -301,6 +301,7 @@ class Tablet(object):
         args.extend(["-rowcache-bin", "memcached"])
       memcache_socket = os.path.join(self.tablet_dir, "memcache.sock")
       args.extend(["-rowcache-socket", memcache_socket])
+      args.extend(["-enable-rowcache"])
 
     if auth:
       args.extend(['-auth-credentials', os.path.join(environment.vttop, 'test', 'test_data', 'authcredentials_test.json')])

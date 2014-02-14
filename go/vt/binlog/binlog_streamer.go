@@ -74,8 +74,7 @@ type BinlogStreamer struct {
 	dbname string
 	dir    string
 
-	// running is set when streaming begins.
-	running sync2.AtomicInt32
+	svm sync2.ServiceManager
 
 	// file, blPos & delim are updated during streaming.
 	file  fileInfo
@@ -99,27 +98,26 @@ func NewBinlogStreamer(dbname, binlogPrefix string) *BinlogStreamer {
 
 // Stream starts streaming binlog events from file & pos by repeatedly calling sendTransaction.
 func (bls *BinlogStreamer) Stream(file string, pos int64, sendTransaction sendTransactionFunc) (err error) {
-	if !bls.running.CompareAndSwap(0, 1) {
-		return fmt.Errorf("already streaming or stopped.")
-	}
 	if err = bls.file.Init(path.Join(bls.dir, file), pos); err != nil {
 		return err
 	}
-	defer func() {
-		bls.file.Close()
-		bls.Stop()
-	}()
+	defer bls.file.Close()
 
-	for {
-		if err = bls.run(sendTransaction); err != nil {
-			goto end
+	// Launch using service manager so we can stop this
+	// as needed.
+	bls.svm.Go(func(_ *sync2.ServiceManager) {
+		for {
+			if err = bls.run(sendTransaction); err != nil {
+				return
+			}
+			if err = bls.file.WaitForChange(&bls.svm); err != nil {
+				return
+			}
 		}
-		if err = bls.file.WaitForChange(&bls.running); err != nil {
-			goto end
-		}
-	}
+	})
 
-end:
+	// Wait for service to exit, and handle errors if any.
+	bls.svm.Wait()
 	if err == io.EOF {
 		log.Infof("Stream ended @ %#v", bls.file)
 		return nil
@@ -129,9 +127,8 @@ end:
 }
 
 // Stop stops the currently executing Stream if there is one.
-// You cannot resume with the current BinlogStreamer after you've stopped.
 func (bls *BinlogStreamer) Stop() {
-	bls.running.Set(-1)
+	bls.svm.Stop()
 }
 
 // run launches mysqlbinlog and starts the stream. It takes care of
@@ -199,7 +196,8 @@ func (bls *BinlogStreamer) parseEvents(sendTransaction sendTransactionFunc, read
 func (bls *BinlogStreamer) nextStatement(bufReader *bufio.Reader) (stmt []byte, err error) {
 eventLoop:
 	for {
-		if bls.running.Get() != 1 {
+		// Stop processing if we're shutting down
+		if bls.svm.State() != sync2.SERVICE_RUNNING {
 			return nil, io.EOF
 		}
 		event, err := bls.readEvent(bufReader)
@@ -316,9 +314,10 @@ func (f *fileInfo) Set(pos int64) {
 	f.pos = pos
 }
 
-func (f *fileInfo) WaitForChange(running *sync2.AtomicInt32) error {
+func (f *fileInfo) WaitForChange(svm *sync2.ServiceManager) error {
 	for {
-		if running.Get() != 1 {
+		// Stop waiting if we're shutting down
+		if svm.State() != sync2.SERVICE_RUNNING {
 			return io.EOF
 		}
 		time.Sleep(100 * time.Millisecond)

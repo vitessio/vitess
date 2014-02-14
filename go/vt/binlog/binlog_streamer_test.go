@@ -83,10 +83,10 @@ func TestFileInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	ch := make(chan []byte, 10)
-	var running = sync2.AtomicInt32(1)
-	go func() {
-		for {
-			file.WaitForChange(&running)
+	var svm = sync2.ServiceManager{}
+	svm.Go(func(_ *sync2.ServiceManager) {
+		for svm.State() == sync2.SERVICE_RUNNING {
+			file.WaitForChange(&svm)
 			b := make([]byte, 128)
 			n, err := file.handle.Read(b)
 			if err != nil {
@@ -95,7 +95,7 @@ func TestFileInfo(t *testing.T) {
 			file.Set(file.pos + int64(n))
 			ch <- b[:n]
 		}
-	}()
+	})
 
 	want := "Message1"
 	writer.WriteString(want)
@@ -123,7 +123,7 @@ func TestFileInfo(t *testing.T) {
 	}
 
 	want = "EOF"
-	running.Set(-1)
+	svm.Stop()
 	got = string(<-ch)
 	if want != got {
 		t.Errorf("want %v, got %v", want, got)
@@ -319,7 +319,8 @@ func TestStream(t *testing.T) {
 		}
 		curTransaction++
 		if curTransaction == len(transactions) {
-			bls.Stop()
+			// Launch as goroutine to prevent deadlock.
+			go bls.Stop()
 		}
 		// Uncomment the following lines to produce a different set of
 		// expected outputs. You'll need to massage the file a bit afterwards.
@@ -350,7 +351,8 @@ func TestRotation(t *testing.T) {
 
 	bls := NewBinlogStreamer("db", testfiles.Locate("mysqlctl_test/vt-0000041983-bin"))
 	err := bls.Stream("vt-0000041983-bin.000004", 2682, func(tx *proto.BinlogTransaction) error {
-		bls.Stop()
+		// Launch as goroutine to prevent deadlock.
+		go bls.Stop()
 		return nil
 	})
 	if err != nil {
