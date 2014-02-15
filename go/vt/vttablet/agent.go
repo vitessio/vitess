@@ -42,7 +42,8 @@ func InitAgent(
 	dbcfgs *dbconfigs.DBConfigs,
 	mycnf *mysqlctl.Mycnf,
 	port, securePort int,
-	overridesFile string) (agent *tabletmanager.ActionAgent, err error) {
+	overridesFile string,
+) (agent *tabletmanager.ActionAgent, err error) {
 	schemaOverrides := loadSchemaOverrides(overridesFile)
 
 	topoServer := topo.GetServer()
@@ -98,6 +99,11 @@ func InitAgent(
 			}
 			dbcfgs.App.Keyspace = newTablet.Keyspace
 			dbcfgs.App.Shard = newTablet.Shard
+			if newTablet.Type != topo.TYPE_MASTER {
+				dbcfgs.App.EnableInvalidator = true
+			} else {
+				dbcfgs.App.EnableInvalidator = false
+			}
 			// Transitioning from replica to master, first disconnect
 			// existing connections. "false" indicateds that clients must
 			// re-resolve their endpoint before reconnecting.
@@ -115,16 +121,12 @@ func InitAgent(
 					qrs.Add(qr)
 				}
 			}
-			ts.AllowQueries(&dbcfgs.App, schemaOverrides, qrs)
+			ts.AllowQueries(&dbcfgs.App, schemaOverrides, qrs, mysqld)
 			// Disable before enabling to force existing streams to stop.
 			binlog.DisableUpdateStreamService()
 			binlog.EnableUpdateStreamService(dbcfgs)
-			if newTablet.Type != topo.TYPE_MASTER {
-				ts.StartRowCacheInvalidation()
-			}
 		} else {
 			ts.DisallowQueries()
-			ts.StopRowCacheInvalidation()
 			binlog.DisableUpdateStreamService()
 		}
 

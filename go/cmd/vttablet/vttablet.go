@@ -21,10 +21,11 @@ import (
 )
 
 var (
-	port          = flag.Int("port", 6509, "port for the server")
-	tabletPath    = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
-	mycnfFile     = flag.String("mycnf-file", "", "my.cnf file")
-	overridesFile = flag.String("schema-override", "", "schema overrides file")
+	port           = flag.Int("port", 6509, "port for the server")
+	tabletPath     = flag.String("tablet-path", "", "tablet alias or path to zk node representing the tablet")
+	mycnfFile      = flag.String("mycnf-file", "", "my.cnf file")
+	enableRowcache = flag.Bool("enable-rowcache", false, "enable rowcacche")
+	overridesFile  = flag.String("schema-override", "", "schema overrides file")
 
 	securePort = flag.Int("secure-port", 0, "port for the secure server")
 	cert       = flag.String("cert", "", "cert file")
@@ -35,7 +36,7 @@ var (
 )
 
 func main() {
-	dbconfigs.RegisterCommonFlags()
+	dbconfigs.RegisterFlags()
 	flag.Parse()
 
 	servenv.Init()
@@ -55,6 +56,7 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
+	dbcfgs.App.EnableRowcache = *enableRowcache
 
 	ts.InitQueryService()
 	binlog.RegisterUpdateStreamService(mycnf)
