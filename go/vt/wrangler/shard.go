@@ -79,7 +79,7 @@ func (wr *Wrangler) DeleteShard(keyspace, shard string) error {
 		return err
 	}
 	if len(tabletMap) > 0 {
-		return fmt.Errorf("shard %v/%v still has %v tablets", len(tabletMap))
+		return fmt.Errorf("shard %v/%v still has %v tablets", keyspace, shard, len(tabletMap))
 	}
 
 	// remove the replication graph and serving graph in each cell
