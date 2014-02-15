@@ -318,7 +318,7 @@ func (si *SchemaInfo) GetPlan(logStats *sqlQueryStats, sql string) (plan *ExecPl
 		panic(NewTabletError(FAIL, "%s", err))
 	}
 	plan = &ExecPlan{ExecPlan: splan, TableInfo: tableInfo}
-	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId)
+	plan.Rules = si.rules.filterByPlan(sql, plan.PlanId, plan.TableName)
 	if plan.PlanId.IsSelect() {
 		if plan.FieldQuery == nil {
 			log.Warningf("Cannot cache field info: %s", sql)
