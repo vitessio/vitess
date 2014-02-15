@@ -153,7 +153,7 @@ func (sq *SqlQuery) allowQueries(dbconfig *dbconfigs.DBConfig, schemaOverrides [
 		sq.setState(SERVING)
 	}()
 
-	sq.qe.Open(&dbconfig.ConnectionParams, schemaOverrides, qrs, dbconfig.EnableRowcache)
+	sq.qe.Open(dbconfig, schemaOverrides, qrs)
 	if dbconfig.EnableRowcache && dbconfig.EnableInvalidator {
 		sq.rci.Open(dbconfig.DbName, mysqld)
 	}
